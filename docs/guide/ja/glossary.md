@@ -1,5 +1,6 @@
 ---
-title: 用語集
+title: 用語集 — 並列エージェント・worktree・バイブコーディング
+nav_title: 用語集
 layout: default
 parent: 日本語
 nav_order: 12

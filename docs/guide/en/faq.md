@@ -1,5 +1,6 @@
 ---
-title: FAQ
+title: FAQ — how it compares to VS Code, Cursor, tmux, Claude Squad, Conductor
+nav_title: FAQ
 layout: default
 parent: English
 nav_order: 3

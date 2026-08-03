@@ -1,5 +1,6 @@
 ---
-title: 機能一覧
+title: 機能リファレンス — 並列ターミナル・worktree・コスト・スマホ
+nav_title: 機能リファレンス
 layout: default
 parent: 日本語
 nav_order: 5

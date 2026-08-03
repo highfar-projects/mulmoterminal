@@ -1,5 +1,6 @@
 ---
-title: 応用編
+title: git worktree で並列エージェントを隔離する（と、その他の使い方）
+nav_title: 応用編
 layout: default
 parent: 日本語
 nav_order: 4

@@ -1,5 +1,6 @@
 ---
-title: Glossary
+title: Glossary — parallel agents, worktrees, vibe coding
+nav_title: Glossary
 layout: default
 parent: English
 nav_order: 12

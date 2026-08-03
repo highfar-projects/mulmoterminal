@@ -1,5 +1,6 @@
 ---
-title: GitHub — cross-repo PRs & Issues
+title: From a GitHub issue to a running agent in one click
+nav_title: GitHub
 layout: default
 parent: English
 nav_order: 9

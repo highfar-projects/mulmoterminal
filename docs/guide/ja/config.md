@@ -1,5 +1,6 @@
 ---
-title: 設定方法
+title: 設定 — 色・音・ランチャ・プロジェクト別の設定
+nav_title: 設定
 layout: default
 parent: 日本語
 nav_order: 6

@@ -1,5 +1,6 @@
 ---
-title: よくある質問（FAQ）
+title: FAQ — VS Code / Cursor / tmux / Claude Squad / Conductor との違い
+nav_title: FAQ
 layout: default
 parent: 日本語
 nav_order: 3

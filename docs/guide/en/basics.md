@@ -1,5 +1,6 @@
 ---
-title: Basics
+title: Run multiple Claude Code sessions in parallel
+nav_title: Basics
 layout: default
 parent: English
 nav_order: 2

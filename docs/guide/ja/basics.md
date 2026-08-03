@@ -1,5 +1,6 @@
 ---
-title: 基本編
+title: Claude Code を複数同時に動かす
+nav_title: 基本
 layout: default
 parent: 日本語
 nav_order: 2

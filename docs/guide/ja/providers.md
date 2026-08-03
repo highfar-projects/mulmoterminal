@@ -1,5 +1,6 @@
 ---
-title: OpenRouter で別のモデルを使う
+title: Claude Code を別のモデルで動かす（OpenRouter / ローカル）
+nav_title: 他のモデル
 layout: default
 parent: 日本語
 nav_order: 10

@@ -1,5 +1,6 @@
 ---
-title: スマホ通知（Web Push）
+title: エージェントが呼んだらスマホに通知する
+nav_title: スマホ通知
 layout: default
 parent: 日本語
 nav_order: 7
