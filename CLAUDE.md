@@ -114,10 +114,18 @@ Deliberate divergence is fine — say so in a comment with the reason, and flag 
 
 The same tool is called `mcp__mt__presentChart` in a workspace cell and
 `mcp__mulmoterminal-render__presentChart` in a project cell. Both are current. The branch is
-`carriesFullGuiMcp()` in `server/session/spawn-claude.ts`: a workspace cell / single view / cell-less
-chat gets a **generated** `--mcp-config` carrying every tool under `GUI_SERVER_ID`; a project cell is
+`carriesFullGuiMcp()` in `server/session/mcp-config.ts`: the workspace / single view / cell-less chat
+gets a **generated** `--mcp-config` carrying every tool under `GUI_SERVER_ID`; a project cell is
 handed **no `--mcp-config` at all** and reaches the tools through the user's own `.mcp.json` under the
 per-group ids from `toolGroupServerId()`. Both constants live in `common/toolGroups.ts`.
+
+**Ask that predicate from every new spawn path.** It is deliberately agent-agnostic: claude cells,
+codex cells and the launcher chips that run either all consult it, so two terminals in the workspace
+reach the same tools however they were started. It sat in `spawn-claude.ts` while claude was the only
+caller, and the drift that produced — a codex cell and a `claude` chip silently getting less than the
+cell beside them — is exactly what a new path re-creates by not asking. A chip's only lever is the
+command line, so its injection lives in `launcher-gui-mcp.ts` and recognises **only** a bare `claude`
+or `codex`: it is rewriting text the user wrote, and an unrecognised shape must be left alone.
 
 The ids differ in **who owns them**, which is what decides whether a rename is free:
 
