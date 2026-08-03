@@ -10,6 +10,8 @@ UI stays correct — the shot comes out with a giant terminal beside normal chro
 `deviceScaleFactor: 1` and accept 1× resolution. The two `worktree-close-*.png` are 1280×540 at 1×
 for this reason.
 
+**Or don't emulate the scale factor at all.** A headful browser with `defaultViewport: null`, sized to 1440×900 through CDP `Browser.setWindowBounds`, screenshots at the display's own retina ratio — xterm scales its canvas by the same ratio the rest of the page uses, so nothing bakes in at double size. Downscale the 2880×1800 result to 1440×900 afterwards. The three `v4.2.0-*.png` were captured this way.
+
 | File | Shows |
 |---|---|
 | `single-view.png` | The single view (chat + GUI panel) |
@@ -26,13 +28,15 @@ for this reason.
 | `grid-colors.png` | Four projects color-coded via per-dir `.mulmoterminal.json` (Mondrian / Van Gogh / Picasso / Matisse). Real Claude cells in throwaway `/tmp` demo repos on untrusted dirs (so the trust prompt shows, no account/email leaks). |
 | `worktree-close-keep.png` | Closing a worktree cell with nothing unsaved — Keep worktree / Remove worktree / Cancel |
 | `worktree-close-discard.png` | The same dialog when the worktree has unpushed commits + uncommitted changes — the button becomes `Discard & remove` |
+| `v4.2.0-pane-split.png` | The Canvas pane in SPLIT view beside an enlarged terminal — a wide table with its last four columns cut off at the pane's edge |
+| `v4.2.0-pane-full.png` | The same table after the pane's expand button — full terminal row, every column visible, cockpit roster unmoved |
+| `v4.2.0-done-green.png` | A 3×3 grid holding all three active states at once: five working (blue), two done (green), two waiting (amber) |
 
 ## Not yet captured (need a live Claude/Codex session)
 
 These states need a real agent turn (cost/time) to look right, so they aren't referenced in the guide yet.
 Capture from the demo instance while a Claude session runs, then add them:
 
-- Working / needs-attention status colors on a cell.
 - The model / context badge (`Opus · ctx 35%`).
 - A worktree cell's diff PANEL (the badge itself is in `worktree-close-discard.png` as `+2 ●5`).
 - The activity timeline (🕘) modal.
