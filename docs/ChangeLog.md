@@ -8,18 +8,153 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.3.0 — 2026-08-04
+
+> **Setup guide:** [The workspace is where every GUI tool lives, and an Enter that means 変換](https://receptron.github.io/mulmoterminal/guide/en/v4.3.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.3.0.html))
+
+Two things you can see. **The workspace now behaves as one place** rather than four: whichever way
+you start a terminal there — a claude cell, a codex cell, or a launcher chip — it reaches the same
+GUI tools, and the launcher always offers the workspace as its first chip instead of leaving it to
+the recently-used list. And **an Enter that confirms a Japanese IME candidate stays with the IME**,
+in the session note and in the terminal, on every browser.
+
+### Added
+
+- **The launcher always offers the workspace, and says what it is** ([#1359](https://github.com/receptron/mulmoterminal/pull/1359)).
+  The chip row was `cwdPresets` verbatim — a list `recordPreset` fills in as you launch things, and
+  one the user can delete entries from. So the single most important directory was **missing until
+  you had launched there once, and gone for good if you ever pressed its ×**. It is now synthesised
+  in front of the list: always first (outside `orderByDirPriority`, which ranks the directories a
+  user configured against each other — the workspace is not in that competition), never duplicated
+  when it is already a preset, and keeping the label the user gave it. With `defaultCwd` unresolved
+  it adds nothing, rather than offering a click to a directory nobody chose.
+
+
+  It carries the `workspaces` icon and no × — a synthesised entry has nothing to remove, and
+  removing it would only bring it back on the next render. The frame and background are deliberately
+  **untouched**: those already mean "a session is running here", and [#1106](https://github.com/receptron/mulmoterminal/issues/1106)
+  was that exact doubling-up reported as a bug.
+
+### Changed
+
+- **In the workspace, every way of starting a terminal reaches the same GUI tools** ([#1358](https://github.com/receptron/mulmoterminal/pull/1358)).
+  `carriesFullGuiMcp` only looked at claude cells, so four terminals in **the same workspace
+  directory** had four different tool sets depending on how they were started — a codex cell got
+  only the groups registered for the directory, and a `claude` launcher chip got **nothing at all**,
+  so the Canvas never appeared. The cell beside you had tools you did not, for no reason you could
+  see.
+
+
+  The predicate moved from `spawn-claude.ts` to `mcp-config.ts` — it now has three callers (claude's
+  argv, codex's `-c`, a chip's command line), and living inside the claude spawner is what let the
+  drift happen. Two costs are accepted rather than hidden: codex approves MCP servers **per server**,
+  so an all-tools URL auto-approves external accounts and paid generation in one go (already true
+  for claude in the same cell — what closed is the asymmetry); and a `claude` chip is given
+  `--strict-mcp-config`, so **that terminal does not load the user's own MCP servers**. Both are in
+  the README.
+
+- **The single-view GUI MCP server id is `mt`** ([#1355](https://github.com/receptron/mulmoterminal/pull/1355)).
+  An MCP client always qualifies a tool with its server id — `mcp__mulmoterminal-gui__presentChart`
+  for Claude Code, `mcp-mulmoterminal_gui-presentChart` for Codex — and that id is paid **once per
+  tool, on every listing, for the life of the session**. Seventeen characters repeating what the
+  surrounding config already said.
+
+  Only this id moved. The per-group ids (`mulmoterminal-render`, …) are **keys in `.mcp.json` files
+  users wrote**, and renaming those breaks working setups silently; that needs a migration, not an
+  edit. So the same tool is `mcp__mt__presentChart` in a workspace cell and
+  `mcp__mulmoterminal-render__presentChart` in a project cell — deliberate, and now written down in
+  the README, in both constants, and in CLAUDE.md so it is not "fixed" later.
+  `LEGACY_GUI_SERVER_IDS` keeps recognising our own past output, which matters in two places: the
+  reserved-id list, and the Antigravity config merge that deletes our entry by id (without it,
+  `mulmoterminal-gui` would sit in `.agents/mcp_config.json` forever).
+
+### Fixed
+
+- **Enter confirms the IME candidate instead of saving the note half-converted** ([#1353](https://github.com/receptron/mulmoterminal/issues/1353)).
+  Typing れびゅー, converting to レビュー and pressing Enter to accept it saved the **unconverted**
+  text and closed the box — and with the box gone there was no second chance. Reported by
+  @mikkegt, who also spotted that Escape had the same hole; it did, and it was worse, since Escape
+  mid-composition means "drop this candidate" and it was discarding the whole sentence.
+
+  The `isComposing` guard the rest of the repository uses is not enough on its own: **Safari fires
+  `compositionend` BEFORE the confirming keydown**, so the flag is already false when the handler
+  runs. Chrome and Firefox fire it after, which is why they looked correct. MulmoClaude had answered
+  this already with a short window after `compositionend`; that composable is ported here with its
+  shape and constant intact, so someone running both apps does not get two behaviours from one
+  keypress.
+
+- **The same gap in the terminal, where it cost more** ([#1364](https://github.com/receptron/mulmoterminal/pull/1364)).
+  The four guards the report pointed at — `terminalSubmit`, `keymap`, `terminalClipboard`,
+  `gridShortcut` — are pure `(keymap, event)` functions, so `e.isComposing` is all they can see and
+  Safari's ordering is invisible to them by construction. On Safari an Enter meant to accept 変換
+  **submitted the half-converted line to the agent**. Composition is now tracked at the DOM boundary
+  (`imeComposition.ts`, capture-phase on `window`) and the call sites ask; two insertions cover all
+  four, because three funnel through one xterm handler. The pure guards stay — they are right for
+  Chrome and Firefox, and this sits in front of them.
+
+  A first cut of that tracker had a worse failure than the bug: module-level state that never reset,
+  so a composition abandoned without its `compositionend` (a tab switch, an input torn down
+  mid-word) left every later keystroke suppressed — no shortcuts, no terminal Enter — until reload.
+  Caught in review; it resets on losing focus now, with a regression test for each path.
+
+- **The test suite stopped leaving temp directories behind** ([#1345](https://github.com/receptron/mulmoterminal/issues/1345)).
+  Measured at **51 per full run, now 0**. The machine it was found on had 42,000 `mt-*` entries in
+  `$TMPDIR`, enough that `readdir` on it took 5.4s. `makeTempDir` only ever created, so all twenty
+  callers leaked by construction; it records what it hands out and a setup file removes the lot when
+  the spec file finishes. Two leaks the registry could not reach were traced individually: the
+  rate-limit probe's directory is created by PRODUCTION code (which removes it correctly — the tests
+  asserting the probe is still running never stopped it), and one spec's HOME **came back after
+  deletion**, because `appendSessionToolGroup` is fire-and-forget and begins with `mkdir` recursive.
+  `registry.ts` gained `whenToolGroupsPersisted()` so a caller can wait for a queue it otherwise had
+  no handle on.
+
 ### Changed — tooling
+
+- **Three files belonged to no tsconfig project at all** ([#1348](https://github.com/receptron/mulmoterminal/issues/1348)).
+  `scripts/model-trials.ts`, `test/helpers/appRequest.spec.ts` and `vitest.config.ts` were checked
+  by nothing — not `yarn typecheck`, not `build`, not CI. `tsconfig.node.json` naming `vite.config.ts`
+  by filename was the cause, so it takes a pattern instead, and `test/helpers` is claimed as a
+  directory (its browser half excluded by name, since it wants DOM types). Checking the orphaned
+  spec immediately found four unused parameters in it. Verified by planting a type error in each of
+  the three and confirming it is caught — 1,173 tracked files, 0 uncovered, because clean is not
+  evidence of checked.
+
+  `noImplicitReturns` goes on for app and node, measured at 0. It stays **off** for the server,
+  decided rather than deferred again: 31 findings here and 27 more in test-server re-checking the
+  same files — #1301's recorded 58, unchanged — across 33 Express handlers, every one of them
+  `if (bad) return res.status(400).json(…)`. That is how an Express handler is written; rewriting 33
+  of them to silence a house-style report buys no safety. `tsconfig.server.json` says so in place.
 
 - **`sonarjs/void-use` is an error, and the reason it was off was not true** ([#1362](https://github.com/receptron/mulmoterminal/issues/1362)).
   It had been off since 4.2.0 on the reasoning that it forbids the `void` that `no-floating-promises`
   asks for. It does not: S3735 returns early for a thenable, for `void 0`, for an IIFE, and for a
-  call it cannot type — and with no type information at all, for any call. Turning it on across the
-  repository reported **three** findings, all in `tmux-size-sync.ts` and none of them a promise:
-  `void map.delete(…)`, written to squeeze a statement into an arrow's `: void` expression body.
-  Those are block bodies now and the rule is an error. It reported nothing against the **163** other
-  uses of the operator in `server/`, `src/` and `common/` (88 in `.ts`, 75 in `.vue` script blocks,
-  counted on the AST), the sixty-six from #1300 among them — which is the point: the two rules never
-  fought, so nothing had to be chosen between them.
+  call it cannot type — and with no type information at all, for any call. Turning it on reported
+  **three** findings, all in `tmux-size-sync.ts` and none of them a promise. Those are block bodies
+  now and the rule is an error. It reported nothing against the **163** other uses of the operator
+  in `server/`, `src/` and `common/`, the sixty-six from #1300 among them — which is the point: the
+  two rules never fought, so nothing had to be chosen between them.
+
+### Docs
+
+- **The pages are named for what people search for** ([#1352](https://github.com/receptron/mulmoterminal/pull/1352)). The
+  content was already there and the titles were not: "Basics" is where
+  `run multiple Claude Code sessions` is answered, "Scenarios" is where
+  `Claude Code worktrees` is. Nine pages per language retitled in frontmatter only — **not one word
+  of body text changed** — plus a comparison page and a `facts.json`.
+- **Every cell is a real pty** ([#1360](https://github.com/receptron/mulmoterminal/pull/1360)). The app is a terminal and an
+  agent is one of the things you run in it; the code says so and the README did not. Which is also
+  the missing explanation for why the one-session-per-worktree limit applies to **agents only** — a
+  shell or a `yarn dev` can sit in the same worktree an agent is working in. Added to the README and
+  to the FAQ's tmux answer, in both languages, without touching the existing headings.
+- **Which Claude sessions carry the whole GUI MCP** ([#1354](https://github.com/receptron/mulmoterminal/pull/1354)). The README read as
+  though every spawn got it. The guide had been corrected in #1309; the README had not.
+- **How the workspace directory is settled** ([#1346](https://github.com/receptron/mulmoterminal/pull/1346)): `--cwd`, then
+  `CLAUDE_CWD`, then where you ran it — written as an order rather than a list of things that "take
+  precedence", in both languages.
+- **Who builds this** ([#1349](https://github.com/receptron/mulmoterminal/pull/1349)), which the README never said.
+- **The 4.2.0 guide's two visual changes have screenshots** ([#1344](https://github.com/receptron/mulmoterminal/issues/1344)),
+  the pane expansion as a before/after pair because a single frame cannot show a width change. The
+  hero GIF was retaken now that `done` is green on a tile too ([#1340](https://github.com/receptron/mulmoterminal/issues/1340)).
 
 ## mulmoterminal@4.2.0 — 2026-08-03
 

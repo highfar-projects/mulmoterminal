@@ -3,7 +3,7 @@ title: Glossary — parallel agents, worktrees, vibe coding
 nav_title: Glossary
 layout: default
 parent: English
-nav_order: 12
+nav_order: 13
 description: Vibe coding, parallel agents, AI coding agents, git worktrees, the cockpit roster — the words this guide uses, tied to what you actually see on screen in MulmoTerminal.
 ---
 
