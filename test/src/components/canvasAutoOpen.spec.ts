@@ -144,7 +144,10 @@ describe("the canvas opening itself when the agent draws", () => {
     expect(canvasOpen(w)).toBe(false);
   });
 
-  // Nothing is enlarged, so there is no slot to put it in.
+  // Nothing is enlarged, so there is no slot to put it in — and this component cannot make one:
+  // un-zoomed it is handed a single PAGE of cells, while the drawing may be on another. GridView
+  // owns that case (enlarge the drawing cell, then open the pane here); see
+  // gridCanvasAutoExpand.spec.ts.
   it("does nothing while no cell is enlarged", async () => {
     const w = mountGrid([cell(1, "s1")], null);
     await flushPromises();

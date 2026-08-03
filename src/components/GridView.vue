@@ -68,6 +68,7 @@ import { usePubSub } from "../composables/usePubSub";
 import type { LaunchAgent } from "../../common/launchAgent";
 import type { LaunchPick } from "./launchers";
 import { isRecord } from "../../common/isRecord";
+import { isDrawnResult } from "../utils/drawnResult";
 
 // The multi-terminal grid view, shown at /terminals. Leaving the grid is just a
 // route push from the shared toolbar (Chat / Collections / a favorite), so there's
@@ -665,6 +666,61 @@ onBeforeUnmount(() => {
   unsubscribeSessions();
   offReconnect();
 });
+
+// An agent drew something while NOTHING is enlarged: enlarge that cell and open its Canvas beside
+// it, the same reveal the unseen-canvas chip performs on click.
+//
+// The other half of this lives in TerminalGrid, which handles a drawing that lands on the cell
+// ALREADY enlarged. That one deliberately refuses to enlarge a background cell — it would take the
+// screen away from the terminal being worked in. On the tiled grid there is no such terminal: every
+// cell is a thumbnail, so the drawing is the only thing asking for attention and the answer to a
+// tool call has somewhere to be read. This side needs GridView because un-zoomed TerminalGrid is
+// handed one page of cells, and a cell on another page can draw too — `toggleExpand` already turns
+// the page for it.
+//
+// Not while the grid is behind a full-screen overlay: the user is somewhere else in the app, so
+// nothing here is being read, and rearranging the grid they left would greet them on the way back
+// with a zoom they did not ask for. That drawing keeps the chip, which is where it was already.
+const drawnUnsubscribes = new Map<string, () => void>();
+const { subscribe: subscribeDrawn } = usePubSub();
+function stopWatchingDrawing(): void {
+  for (const off of drawnUnsubscribes.values()) off();
+  drawnUnsubscribes.clear();
+}
+watch(
+  // Keyed by the session ids themselves: cells come and go, and a cell gets its session id well
+  // after it appears (onSession), so watching the cell list alone would miss the moment a fresh
+  // terminal becomes subscribable.
+  [expandedUid, () => state.value.cells.map((c) => c.session ?? "").join(",")],
+  () => {
+    // While something IS enlarged, TerminalGrid owns this. Nothing to watch for here.
+    if (expandedUid.value !== null) return stopWatchingDrawing();
+    const live = new Set(state.value.cells.map((c) => c.session).filter((s): s is string => s !== null));
+    for (const [id, off] of drawnUnsubscribes) {
+      if (live.has(id)) continue;
+      off();
+      drawnUnsubscribes.delete(id);
+    }
+    for (const id of live) {
+      if (drawnUnsubscribes.has(id)) continue;
+      drawnUnsubscribes.set(
+        id,
+        subscribeDrawn(`session:${id}`, (data) => {
+          // Re-checked at fire time, not just at subscribe time: a zoom or a route change between
+          // the two is exactly the state this must not fight.
+          if (expandedUid.value !== null || !onTerminalsRoute()) return;
+          if (!isDrawnResult(data)) return;
+          const uid = state.value.cells.find((cell) => cell.session === id)?.uid;
+          // Through the grid's own reveal (files-buffer flush included) rather than setting the
+          // zoom and the pane from here, as placeChat does above and for the same reason.
+          if (uid !== undefined) void gridRef.value?.openCanvasFor(uid);
+        }),
+      );
+    }
+  },
+  { immediate: true },
+);
+onBeforeUnmount(stopWatchingDrawing);
 
 // Registered for the life of the component, like the new-terminal opener above and for the same
 // reason: this is the only grid there is.

@@ -234,15 +234,18 @@ export function moveZoom(state: GridState, order: readonly number[], dir: -1 | 1
 //     focus disagree the moment the selection moves, and then expanding jumps somewhere the
 //     user was not.
 //
-//  5. Entering the zoom needs two running cells (toggleExpand's rule, #374); LEAVING it is
-//     never refused, whatever state the grid got into.
+//  5. Entering the zoom is never refused for a cell that exists, and LEAVING it is never
+//     refused either, whatever state the grid got into. It USED to need two running cells
+//     (#374). Do not restore that: the zoomed row is the only place the Canvas / Tools / Files
+//     panes exist, so the rule made them unreachable on a one-terminal grid, silently. The full
+//     account, and the tests that hold it, are at toggleExpand below.
 // ---------------------------------------------------------------------------------------
 
-// Zoom `order[at]`, honouring invariant 5. Shared by every action that ENTERS the zoom so the
-// rule cannot be forgotten at one entry point.
+// Zoom `order[at]`. Shared by every action that ENTERS the zoom, so what entering means cannot
+// drift between entry points.
 function zoomAt(state: GridState, order: readonly number[], at: number): GridState {
   const uid = order[at];
-  if (uid === undefined || runningCount(state.cells) < 2) return state;
+  if (uid === undefined) return state;
   if (!state.cells.some((c) => c.uid === uid)) return state;
   return { ...state, expanded: uid };
 }
@@ -343,15 +346,35 @@ function nextCandidate(state: GridState, order: readonly number[], statusByUid: 
   return undefined;
 }
 
-// Zooming shows one cell big with the others as a filmstrip beside it, so it only means
-// anything when there IS another cell to switch to. With a single occupied cell the expand button
-// used to swap a working layout for a filmstrip containing nothing, and squeeze the
-// terminal's status bar and input off the bottom of the viewport for no gain (#374).
+// ENTERING THE ZOOM IS NOT GATED ON A SECOND CELL. Do not put that rule back (2026-08-03).
 //
-// Collapsing is never refused: whatever a state got into, ⤡ has to get out of it.
+// It was here from #374, which read zooming as only "one cell big, the rest as a filmstrip": with
+// nothing to switch to, the button swapped a working layout for an empty filmstrip and squeezed the
+// terminal's status bar off the bottom of the viewport, for no gain. On that reading the refusal is
+// right, and that is exactly why it is worth writing down why it is nevertheless gone — the issue
+// still reads as sound, and re-deriving it from the issue alone lands straight back on the guard.
+//
+// What the reading missed: the zoomed row is ALSO the only place the right-hand panes exist
+// (Canvas, Tools, Files — see TerminalGrid.vue's .zoom-row). Nothing sits beside a tiled cell. So on
+// a one-terminal grid the refusal did not merely decline a layout, it locked those panes away
+// entirely: the unread-canvas chip did nothing when clicked, and an agent drawing to the Canvas had
+// nowhere to be shown. That is how it was found — the owner ran the new auto-reveal (an agent's
+// drawing enlarges its cell and opens the Canvas) on a grid with one terminal, and NOTHING
+// happened. There is no error in that failure mode, on either side: the reveal asks for the zoom,
+// the state politely declines, and the feature simply appears not to work.
+//
+// The cost #374 weighed is also smaller than it looked: the thing beside the enlarged cell is the
+// roster/filmstrip, which is a mode the user toggles, and enlarging your one terminal turns out to
+// be a thing to want on its own terms. Owner's call, after hitting it live.
+//
+// Pinned by "zooms the only occupied cell" / "ENTERS the zoom with one running cell" in
+// gridTabs.spec.ts and "enlarges even when that terminal is the only one" in
+// gridCanvasAutoExpand.spec.ts. A change that reinstates the guard fails all three.
+//
+// Collapsing is never refused either: whatever a state got into, ⤡ has to get out of it.
 export function toggleExpand(state: GridState, uid: number, order: readonly number[] = []): GridState {
   if (state.expanded === uid) return { ...state, expanded: null, page: pageHolding(order, uid, state.page) };
-  if (runningCount(state.cells) < 2) return state;
+  if (!state.cells.some((c) => c.uid === uid)) return state;
   return { ...state, expanded: uid };
 }
 
