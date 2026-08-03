@@ -33,6 +33,7 @@ import { readTextFile } from "../infra/read-text-file.js";
 import { writeFileAtomicSync } from "../files/atomic-write.js";
 import { isRepoEntry } from "../../common/repoEntry.js";
 import { sanitizeGitlabHosts } from "../../common/gitlabHosts.js";
+import { GUI_SERVER_ID } from "../../common/toolGroups.js";
 
 export interface AppConfig {
   cwdPresets: CwdPreset[];
@@ -153,9 +154,19 @@ export function sanitizeCustomThemes(input: unknown): CustomTheme[] {
 const MCP_ID_RE = /^[A-Za-z0-9_-]+$/;
 const MCP_URL_RE = /^https?:\/\/\S+$/;
 const MCP_SERVERS_MAX = 20;
-// The built-in GUI MCP server name — reserved so a user entry can't shadow it and
-// break mcp__mulmoterminal-gui__* tool routing.
-const RESERVED_MCP_IDS = new Set(["mulmoterminal-gui"]);
+// A user entry named like the built-in GUI MCP server is KEPT, not dropped. Dropping it was the
+// obvious implementation and it destroys data: the sanitized config is what gets written back on
+// the next save, so a user whose own server happened to be called `mt` would lose the entry from
+// their config file for good, having changed some unrelated setting. `mt` is short enough to be a
+// name someone had already chosen (Codex review on #1355), and it was a legal id before this
+// release. Their entry survives; the collision is settled at spawn instead, where mcpConfigJson
+// writes the built-in last and so overwrites the clashing key.
+//
+// Exactly ONE id is in that position, and it is deliberately not the LEGACY list: mcpConfigJson
+// writes `GUI_SERVER_ID` and nothing else, so a user server still called `mulmoterminal-gui` is
+// reachable and works. Warning about it would be telling someone to rename a server that is fine
+// (Codex review, second pass). The legacy ids remain meaningful only where we still WRITE them —
+// the Antigravity config merge.
 export function sanitizeUserMcpServers(input: unknown): UserMcpServer[] {
   if (!Array.isArray(input)) return [];
   const seen = new Set<string>();
@@ -165,7 +176,16 @@ export function sanitizeUserMcpServers(input: unknown): UserMcpServer[] {
     if (!parsed.success) continue;
     const id = parsed.data.id.trim();
     const url = parsed.data.url.trim();
-    if (!MCP_ID_RE.test(id) || RESERVED_MCP_IDS.has(id) || !MCP_URL_RE.test(url) || seen.has(id)) continue;
+    if (!MCP_ID_RE.test(id) || !MCP_URL_RE.test(url) || seen.has(id)) continue;
+    // Said out loud because this is the one entry that is well-formed and still will not work: the
+    // built-in overwrites it at spawn, so without a line in the log the symptom is a server that is
+    // present in the config and absent in the session. The rejections above are visibly malformed
+    // and stay silent.
+    if (id === GUI_SERVER_ID) {
+      console.warn(
+        `[mcp] userMcpServers: "${id}" is MulmoTerminal's own GUI MCP server id, so that entry is unreachable — the built-in wins. Rename it to use it.`,
+      );
+    }
     seen.add(id);
     out.push({ id, url });
     if (out.length >= MCP_SERVERS_MAX) break;

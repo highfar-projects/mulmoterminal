@@ -125,6 +125,7 @@ import { initMulmoScriptBackend } from "./backends/mulmoscript.js";
 import { createSessionLifecycle, SESSIONS_CHANNEL } from "./session/lifecycle.js";
 import { mountAppRoutes } from "./routes/app-routes.js";
 import { allowedToolNames, autoAllowedToolNames } from "./infra/plugins-registry.js";
+import { GUI_SERVER_ID } from "../common/toolGroups.js";
 
 import { resumableSessionPredicate } from "./session/resumable-sessions.js";
 import { installProcessGuards } from "./infra/process-guards.js";
@@ -188,7 +189,7 @@ const sessionChannel = (id: string) => `session:${id}`;
 // The worker-only `submitTranslation` tool is allowed for every session (harmless —
 // only hidden translation workers are actually shown it, see the /mcp route) so the
 // worker can call it without a permission prompt.
-const GUI_MCP_TOOLS = [...allowedToolNames(), "mcp__mulmoterminal-gui__submitTranslation"].join(",");
+const GUI_MCP_TOOLS = [...allowedToolNames(), `mcp__${GUI_SERVER_ID}__submitTranslation`].join(",");
 
 // What a GRID cell pre-approves. A grid cell is never handed --mcp-config: its GUI tools come
 // from the user's OWN per-folder MCP config (`claude mcp add -s local`, `.mcp.json`), so

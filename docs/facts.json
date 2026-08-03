@@ -11,10 +11,7 @@
   "install": "npx mulmoterminal@latest",
   "requires": {
     "node": ">=22.9",
-    "agentCli": [
-      "claude",
-      "codex"
-    ],
+    "agentCli": ["claude", "codex"],
     "tmux": "optional — required for session persistence"
   },
   "interface": {
@@ -23,16 +20,8 @@
     "tui": false,
     "note": "Real ptys rendered in a browser tab; several live terminals visible at once rather than one row per session."
   },
-  "agents": [
-    "claude-code",
-    "codex",
-    "antigravity"
-  ],
-  "agentsNotSupported": [
-    "gemini-cli",
-    "opencode",
-    "amp"
-  ],
+  "agents": ["claude-code", "codex", "antigravity"],
+  "agentsNotSupported": ["gemini-cli", "opencode", "amp"],
   "os": {
     "macOS": "CI on every PR",
     "linux": "CI on every PR",

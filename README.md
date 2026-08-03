@@ -1046,11 +1046,39 @@ GUI-protocol tools the agent calls — documents (`presentDocument`), forms (`pr
 generated images, charts, HTML, and collection cards. Each result is drawn by its plugin's
 own Vue view inside a Shadow-DOM `PluginFrame` (so a plugin's bundled CSS can't leak),
 mirrors the active session, and replays history on re-select. Plugins reach the agent over
-an **in-process MCP server** served per session at `POST /api/mcp/:sessionId` (server name
-`mulmoterminal-gui`). Which plugins load is gated by `plugins/plugins.json`; the shipped
-set includes markdown, form, image generation (needs `GEMINI_API_KEY`), chart, HTML,
-collection, and mulmoscript (MulmoCast video/slides/PDF playback) views. You can also merge
-your **own HTTP MCP servers** into a workspace session via Settings → `userMcpServers`.
+an **in-process MCP server** served per session at `POST /api/mcp/:sessionId`. Which plugins
+load is gated by `plugins/plugins.json`; the shipped set includes markdown, form, image
+generation (needs `GEMINI_API_KEY`), chart, HTML, collection, and mulmoscript (MulmoCast
+video/slides/PDF playback) views. You can also merge your **own HTTP MCP servers** into a
+workspace session via Settings → `userMcpServers`.
+
+### MCP server ids: why a workspace cell and a project cell disagree
+
+A tool is never called by its own name. Every MCP client prefixes it with the id of the server
+it came from — `mcp__<id>__presentChart` in Claude Code, `mcp-<id>-presentChart` in Codex (which
+also rewrites `-` in the id to `_`). So the id you register under is repeated on every tool, in
+every listing, for the life of the session.
+
+MulmoTerminal delivers the GUI MCP by **two different routes**, and they do not share an id:
+
+| | Workspace cell / single view | Project-directory grid cell |
+|---|---|---|
+| How it arrives | generated per spawn into `--mcp-config` (Claude) or `-c mcp_servers.<id>.url=` (Codex) | the user's OWN per-folder config — `.mcp.json`, `claude mcp add -s local` |
+| Server id | **`mt`** | **`mulmoterminal-render`**, `-data`, `-media`, `-external` — one per tool group |
+| Tools carried | all of them, on one URL | only the groups that directory registered |
+| Tool name looks like | `mcp__mt__presentChart` | `mcp__mulmoterminal-render__presentChart` |
+
+Which route a session takes is decided by `carriesFullGuiMcp()` in
+`server/session/spawn-claude.ts` — the single view, a cell-less chat, or a cell whose cwd **is**
+the workspace take the first; anything in a project directory takes the second.
+
+**The asymmetry is deliberate.** `mt` is ours to name: nothing on disk holds it, it is
+regenerated on every spawn, so it was shortened to stop paying 17 characters per tool name. The
+group ids are the opposite — they are keys in config files **users wrote**, they are what the
+launcher's per-group switch reads back, and they are documented in the setup guide. Renaming
+them breaks working setups silently, and would need a migration that rewrites existing
+per-folder configs. Both live in [`common/toolGroups.ts`](common/toolGroups.ts), where the
+constants carry the same warning.
 
 **Wiki.** The toolbar **Wiki** button opens a read-only browser over `<workspace>/data/wiki/`
 — an **index** (tag-filterable page catalog), rendered **pages** with `[[wiki links]]` and

@@ -28,7 +28,7 @@ import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprot
 import { randomUUID } from "node:crypto";
 import { toolDefinitions } from "../infra/plugins-registry.js";
 import { offeredTools, routeToolCall, SUBMIT_TRANSLATION_TOOL_NAME } from "./tool-gate.js";
-import { toolGroupServerId, type ToolGroup } from "../../common/toolGroups.js";
+import { toolGroupServerId, GUI_SERVER_ID, type ToolGroup } from "../../common/toolGroups.js";
 import { interpretToolEnvelope } from "./tool-envelope.js";
 import { isRecord } from "../../common/isRecord.js";
 import { SESSION_HEADER } from "../backends/presentPathRoot.js";
@@ -90,7 +90,7 @@ export function buildGuiMcpServer(
   const group = opts.group ?? null;
   // The advertised server name follows the id a group is expected to be registered under, so
   // what a user sees in `claude mcp list` matches what they wrote in their own config.
-  const serverName = group === null ? "mulmoterminal-gui" : toolGroupServerId(group);
+  const serverName = group === null ? GUI_SERVER_ID : toolGroupServerId(group);
   const server = new Server({ name: serverName, version: "0.0.0" }, { capabilities: { tools: {} } });
 
   // Both layers of the worker AND group gates live in mcp/tool-gate.ts (pure/tested): the
