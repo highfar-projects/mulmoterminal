@@ -12,7 +12,7 @@ import { isSameDirPath } from "../../common/dirPathKey";
 import { TOOL_GROUPS, TOOL_GROUP_HEADINGS, toolGroupServerId, toolsInGroup, type ToolGroup } from "../../common/toolGroups";
 import type { LaunchAgent } from "../../common/launchAgent";
 import type { TerminalAgent } from "../../common/sessionAgent";
-import type { CwdPreset } from "./presets";
+import { launchChips, type CwdPreset, type LaunchChip } from "./presets";
 import type { Launcher, LaunchPick } from "./launchers";
 import type { LaunchChoice } from "./wsUrl";
 import type { RunCommand } from "./runCommand";
@@ -87,13 +87,25 @@ const dirField = computed({
 // Each recent-dir chip wears its directory's configured colour, so picking one is the same visual
 // decision as finding its cell in the grid. The subscriptions are dropped when this form unmounts
 // (useDirConfig disposes with the scope), which is also the moment the chips leave the screen.
-const presetPaths = computed(() => props.presets.map((p) => p.path));
-const { colors: presetColors } = useDirColors(presetPaths);
 // Chips follow the same rank the grid sorts by, so a project sits in the same place on both
 // screens. The stored list stays most-recently-used (recordPreset depends on that) — only the
 // display is reordered, which is also what keeps unranked directories where they were.
-const { priorities: presetPriorities } = useDirPriorities(presetPaths);
-const orderedPresets = computed(() => orderByDirPriority(props.presets, (p) => p.path, presetPriorities.value));
+const { priorities: presetPriorities } = useDirPriorities(computed(() => props.presets.map((p) => p.path)));
+// The workspace rides in front, whether or not it was ever recorded as a recent dir — it is the one
+// directory where every GUI tool is reachable, so it must be one click away (see launchChips).
+//
+// Declared BEFORE the colours below, which subscribe eagerly: reading `chips` from above its own
+// `const` is a temporal-dead-zone throw at mount, not a lint nit.
+const chips = computed(() =>
+  launchChips(
+    orderByDirPriority(props.presets, (p) => p.path, presetPriorities.value),
+    props.defaultCwd,
+  ),
+);
+// The workspace is coloured like any other directory — it has a `.mulmoterminal.json` too, and the
+// stripe means the same thing there as everywhere else.
+const presetPaths = computed(() => chips.value.map((p) => p.path));
+const { colors: presetColors } = useDirColors(presetPaths);
 
 // A preset dir that already has a running session in another cell — the launcher tints its chip
 // so the user can tell it's in use before double-launching there.
@@ -209,6 +221,14 @@ function selectPreset(p: CwdPreset): void {
   emit("update:dir", p.path);
   emit("start", p.path);
 }
+
+// The hover on the chip's main (fill-the-field) half. The workspace says what makes it worth
+// picking, because nothing else on screen does: it is the one directory where a session reaches
+// every GUI tool, and the icon alone cannot say that.
+const chipTitle = (p: LaunchChip): string => {
+  const running = isCwdRunning(p.path) ? " — a session is already running here" : "";
+  return p.isWorkspace ? `${p.path}${running} — the workspace: every GUI tool is available here` : `${p.path}${running}`;
+};
 
 const chipLaunchTitle = (p: CwdPreset): string => {
   const taken = takenWorktreeAt(p.path);
@@ -346,9 +366,9 @@ async function removeWorktree(w: Worktree): Promise<void> {
     >
       <span class="material-symbols-outlined" aria-hidden="true">close</span>
     </button>
-    <div v-if="presets.length" class="flex max-w-[360px] flex-wrap justify-center gap-1.5">
+    <div v-if="chips.length" class="flex max-w-[360px] flex-wrap justify-center gap-1.5">
       <span
-        v-for="p in orderedPresets"
+        v-for="p in chips"
         :key="p.label + p.path"
         data-testid="cell-chip"
         class="inline-flex items-stretch overflow-hidden rounded-[14px] border"
@@ -370,8 +390,8 @@ async function removeWorktree(w: Worktree): Promise<void> {
           data-testid="cell-chip-main"
           class="cursor-pointer border-none bg-transparent px-2.5 py-1 font-sans text-[12px] hover:bg-hover hover:text-fg"
           :class="isCwdRunning(p.path) ? 'text-fg' : 'text-secondary'"
-          :title="isCwdRunning(p.path) ? `${p.path} — a session is already running here` : p.path"
-          :aria-label="`Use ${p.label} — fill the field to browse / resume here (without launching)${isCwdRunning(p.path) ? '. A session is already running here.' : ''}`"
+          :title="chipTitle(p)"
+          :aria-label="`Use ${p.label} — fill the field to browse / resume here (without launching)${isCwdRunning(p.path) ? '. A session is already running here.' : ''}${p.isWorkspace ? '. This is the workspace: every GUI tool is available here.' : ''}`"
           @click="fillDir(p.path)"
         >
           <span
@@ -379,7 +399,12 @@ async function removeWorktree(w: Worktree): Promise<void> {
             data-testid="cell-chip-dot"
             :class="`mr-[5px] inline-block h-1.5 w-1.5 rounded-full align-middle ${CHIP_DOT_RUNNING}`"
             aria-hidden="true"
-          />{{ p.label }}
+          /><!-- The workspace is marked, not restyled: the chip's border and background already
+               mean "a session is running here" (#1106), and a second meaning on the same two
+               would put us back where that bug came from. -->
+          <span v-if="p.isWorkspace" data-testid="cell-chip-workspace" class="material-symbols-outlined mr-[4px] text-[13px] align-middle" aria-hidden="true"
+            >workspaces</span
+          >{{ p.label }}
         </button>
         <button
           type="button"
@@ -391,7 +416,11 @@ async function removeWorktree(w: Worktree): Promise<void> {
         >
           <span class="material-symbols-outlined text-[14px]" aria-hidden="true">play_arrow</span>
         </button>
+        <!-- No remove button on the workspace. It is not a recorded preset, so there is nothing to
+             remove: dropping it would only make it reappear on the next render, and it is the one
+             directory the launcher is supposed to always offer. -->
         <button
+          v-if="!p.isWorkspace"
           type="button"
           data-testid="cell-chip-del"
           class="cursor-pointer border-0 border-l border-l-border bg-transparent px-[7px] text-[11px] text-secondary hover:bg-hover hover:text-[var(--danger,#e5484d)]"

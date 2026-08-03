@@ -101,6 +101,17 @@ function mountCell(
   });
 }
 
+// The chip pointing at a given directory. The workspace chip always leads the list (launchChips),
+// so selecting a chip by position picks the wrong one — and it is matched on the PATH rather than
+// the label because the demo workspace is `my-project`, which a substring match on "proj" finds
+// first. Throws when nothing matches, so a stale selector fails as a selector rather than as a
+// puzzling assertion about `undefined`.
+function chipForPath(w: ReturnType<typeof mountCell>, path: string) {
+  const chip = w.findAll('[data-testid="cell-chip"]').find((c) => c.find('[data-testid="cell-chip-main"]').attributes("title")?.startsWith(path));
+  if (!chip) throw new Error(`no chip for ${path}`);
+  return chip;
+}
+
 describe("TerminalCell", () => {
   // #965: the whole cell — header included — sits in one wrapper, so the focus zoom can be
   // cancelled about the cell's own centre. A second element child, or content left outside the
@@ -1801,7 +1812,9 @@ describe("TerminalCell", () => {
       ],
     });
     await flushPromises();
-    expect(w.findAll('[data-testid="cell-chip-main"]').map((b) => b.text())).toEqual(["c", "b", "a", "d"]);
+    // The workspace leads, outside the ranking — it is not one of the directories being ranked
+    // against each other (see launchChips). Its label carries the icon's ligature text.
+    expect(w.findAll('[data-testid="cell-chip-main"]').map((b) => b.text())).toEqual(["workspacesmy-project", "c", "b", "a", "d"]);
   });
 
   it("tints a preset chip whose dir already has a running session elsewhere", () => {
@@ -1838,7 +1851,7 @@ describe("TerminalCell", () => {
     const w = mountCell(null, { presets: [{ label: "busy", path: "/chip/busy" }], openCwds: ["/chip/busy"] });
     await flushPromises();
 
-    const chip = w.find('[data-testid="cell-chip"]');
+    const chip = chipForPath(w, "/chip/busy");
     expect(chip.classes()).toContain("is-running");
     expect(chip.attributes("style") ?? "").not.toContain("#aa1122"); // the blue keeps the background
     expect(chip.find('[data-testid="cell-chip-color"]').attributes("style")).toContain("rgb(170, 17, 34)");
@@ -2300,7 +2313,7 @@ describe("TerminalCell launch target — the OS default shell (#1114)", () => {
     const w = mountCell(null, { presets: [{ label: "proj", path: "/home/me/proj" }] });
     await flushPromises();
     await pick(w, "shell");
-    await w.find('[data-testid="cell-chip-launch"]').trigger("click");
+    await chipForPath(w, "/home/me/proj").find('[data-testid="cell-chip-launch"]').trigger("click");
     expect(w.emitted("launch")).toEqual([[SHELL_PICK]]);
     expect(w.emitted("agent")).toBeUndefined();
   });

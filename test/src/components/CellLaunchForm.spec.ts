@@ -21,11 +21,22 @@ function mockFetch(worktrees: WorktreeRow[] = [], sessions: SessionRow[] = []) {
   }) as unknown as typeof fetch;
 }
 
-const mountForm = (openSessionIds: string[] = [], over: { dir?: string; presets?: { label: string; path: string }[]; target?: LaunchAgent } = {}) =>
+const mountForm = (
+  openSessionIds: string[] = [],
+  over: { dir?: string; presets?: { label: string; path: string }[]; target?: LaunchAgent; defaultCwd?: string | null } = {},
+) =>
   mount(CellLaunchForm, {
     props: { dir: "/repo", target: "claude" as LaunchAgent, choice: null, defaultCwd: "/repo", presets: [], openSessionIds, ...over },
     global: { stubs: { ModelPicker: true } },
   });
+
+// The launch button of the chip for a given directory. The workspace chip is always first now, so
+// selecting a chip by position picks the wrong one.
+const launchButtonFor = (w: ReturnType<typeof mountForm>, path: string) => {
+  const chip = w.findAll('[data-testid="cell-chip"]').find((c) => c.find('[data-testid="cell-chip-main"]').attributes("title")?.startsWith(path));
+  if (!chip) throw new Error(`no chip for ${path}`);
+  return chip.find('[data-testid="cell-chip-launch"]');
+};
 
 const worktree = (over: Partial<WorktreeRow> = {}): WorktreeRow => ({ path: "/wt/fix-login", branch: "fix-login", task: "fix-login", dirty: false, ...over });
 
@@ -162,7 +173,9 @@ describe("a worktree reached without its row", () => {
     mockFetch([taken()]);
     const w = mountForm([], { presets: [{ label: "fix-login", path: "/wt/fix-login" }] });
     await flushPromises();
-    await w.find('[data-testid="cell-chip-launch"]').trigger("click");
+    // By path, not by position: the workspace chip leads the list, so the first launch button is
+    // no longer the worktree's.
+    await launchButtonFor(w, "/wt/fix-login").trigger("click");
     expect(w.emitted("start")).toBeUndefined();
     expect(w.emitted("update:dir")?.at(-1)).toEqual(["/wt/fix-login"]);
   });
@@ -173,7 +186,7 @@ describe("a worktree reached without its row", () => {
     mockFetch([taken()]);
     const w = mountForm([], { presets: [{ label: "fix-login", path: "/wt/fix-login" }] });
     await flushPromises();
-    const label = w.find('[data-testid="cell-chip-launch"]').attributes("aria-label") ?? "";
+    const label = launchButtonFor(w, "/wt/fix-login").attributes("aria-label") ?? "";
     expect(label).toContain("fix-login");
     expect(label).toContain("open in another terminal");
   });
@@ -252,5 +265,49 @@ describe("an MCP group row whose write failed", () => {
     expect(failed[0].text()).toBe("failed");
     expect(failed[0].attributes("title")).toBe("HTTP 500");
     expect(toggle.element.checked).toBe(false);
+  });
+});
+
+// The workspace is where every GUI tool is reachable, so the launcher offers it whether or not it
+// has ever been recorded as a recent directory — the recorded list is auto-populated by launching,
+// which made the one directory that matters most the one you might not be able to click.
+describe("the workspace chip", () => {
+  // A Material Symbols icon IS its ligature text, so the glyph's name is part of the button's
+  // text() — the chip reads "workspacesws" unless the icon is subtracted. Subtracted by element
+  // rather than by the literal, so renaming the icon does not quietly stop stripping it.
+  const chipLabels = (w: ReturnType<typeof mountForm>) =>
+    w.findAll('[data-testid="cell-chip-main"]').map((chip) => {
+      const icon = chip.find('[data-testid="cell-chip-workspace"]');
+      return icon.exists() ? chip.text().replace(icon.text(), "") : chip.text();
+    });
+
+  it("is offered with no presets recorded at all", async () => {
+    const w = mountForm([], { presets: [], defaultCwd: "/home/me/ws" });
+    await flushPromises();
+    expect(chipLabels(w)).toEqual(["ws"]);
+    expect(w.find('[data-testid="cell-chip-workspace"]').exists()).toBe(true);
+  });
+
+  it("leads the recorded directories, and only it is marked", async () => {
+    const w = mountForm([], { presets: [{ label: "one", path: "/a/one" }], defaultCwd: "/home/me/ws" });
+    await flushPromises();
+    expect(chipLabels(w)).toEqual(["ws", "one"]);
+    expect(w.findAll('[data-testid="cell-chip-workspace"]')).toHaveLength(1);
+  });
+
+  // Nothing to remove: it is synthesised, so a delete would only put it back on the next render.
+  // The recorded chip beside it keeps its own.
+  it("has no remove button, while an ordinary chip does", async () => {
+    const w = mountForm([], { presets: [{ label: "one", path: "/a/one" }], defaultCwd: "/home/me/ws" });
+    await flushPromises();
+    expect(w.findAll('[data-testid="cell-chip"]')).toHaveLength(2);
+    expect(w.findAll('[data-testid="cell-chip-del"]')).toHaveLength(1);
+  });
+
+  // The icon cannot say WHY it is special, and nothing else on screen does.
+  it("says on hover what makes it worth picking", async () => {
+    const w = mountForm([], { presets: [], defaultCwd: "/home/me/ws" });
+    await flushPromises();
+    expect(w.find('[data-testid="cell-chip-main"]').attributes("title")).toContain("every GUI tool is available here");
   });
 });
