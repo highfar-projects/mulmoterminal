@@ -22,6 +22,7 @@ import {
   glabMrUpdateBodyArgs,
   glabMrViewArgs,
   glabIssueNoteArgs,
+  glabIssueNoteEditArgs,
   glabIssueNotesArgs,
   glabIssueViewArgs,
   glabMrListArgs,
@@ -322,6 +323,29 @@ describe("glab issue write arguments", () => {
   // duplicate check misses it and comments again (Codex review).
   it("always paginates, so an old comment on a long thread is still found", () => {
     expect(glabIssueNotesArgs(targetFor("gitlab.com/group/project"), 1)).toContain("--paginate");
+  });
+
+  // `glab issue` has a subcommand to ADD a note and none to change one, so editing goes through
+  // the REST endpoint the reader above already talks to. `--method` is explicit because passing a
+  // field otherwise switches glab to POST, and `--raw-field` rather than `--field` because the
+  // typed one converts `@file` and the bare words true/false/null — a comment body is neither.
+  it("edits a note through the REST endpoint, with the project encoded", () => {
+    expect(glabIssueNoteEditArgs(targetFor("gitlab.com/group/sub/project"), 7, "42", "updated")).toEqual([
+      "api",
+      "--hostname",
+      "gitlab.com",
+      "--method",
+      "PUT",
+      "projects/group%2Fsub%2Fproject/issues/7/notes/42",
+      "--raw-field",
+      "body=updated",
+    ]);
+  });
+
+  // A self-hosted host must be addressed by --hostname, or the request goes to gitlab.com and the
+  // 404 that comes back is another server's answer (#1332).
+  it("edits on the host the entry names", () => {
+    expect(glabIssueNoteEditArgs(targetFor("gitlab.example.com/group/project"), 1, "2", "x")).toContain("gitlab.example.com");
   });
 });
 
