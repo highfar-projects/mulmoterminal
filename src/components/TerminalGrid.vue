@@ -38,8 +38,7 @@ import { setFilesPaneOpener } from "../composables/filesPaneOpener";
 import { paneCanShowClick } from "./paneClickTarget";
 import { onToolGroupsAnnounced } from "../composables/useToolGroupsAnnounce";
 import { usePubSub } from "../composables/usePubSub";
-import { getPlugin } from "../plugins-registry";
-import { isRecord } from "../../common/isRecord";
+import { isDrawnResult } from "../utils/drawnResult";
 import { hasCanvasGroup } from "../../common/toolGroups";
 import type { RightPane } from "./gridCell";
 import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
@@ -264,8 +263,23 @@ async function toggleFiles(): Promise<void> {
 // cell you are looking at means "put it beside what is already there" — if the user has walked the
 // zoom away in the meantime, enlarging the drawing cell back would be exactly the takeover that
 // case refuses to do, so it gives up instead. Caught by Codex on PR #1227.
-async function openCanvasFor(uid: number, enlarge = true): Promise<void> {
+//
+// `stillWanted` is the same worry as `enlarge` for a caller that DOES enlarge but was not asked
+// for by a click. The flush is a network save, and the files pane stays mounted while the grid is
+// tiled (the zoom row is hidden, not unmounted), so an automatic reveal can be several hundred ms
+// away from its own preconditions by the time it lands — the user may have zoomed a cell by hand or
+// walked off to an overlay in between, and taking the screen back then is precisely the takeover
+// this path exists to avoid. Re-asked AFTER the await, so it sees the world the enlargement would
+// actually happen in. A click passes nothing: "bring that cell here" survives whatever moved.
+// Raised by Codex on this PR, the same race it caught in #1227.
+//
+// The enlargement is the ordinary `toggle-expand`, and it is only ever an ENLARGEMENT: the guard
+// below means the cell asked for is never the one already enlarged, so the toggle cannot collapse
+// the zoom out from under a drawing. It reaches a single-terminal grid too — that used to be
+// refused (#374), which made the pane unreachable there; see toggleExpand in gridTabs.ts.
+async function openCanvasFor(uid: number, enlarge = true, stillWanted?: () => boolean): Promise<void> {
   if (filesOpen.value && (await filesPane.value?.flush()) === false) return;
+  if (stillWanted && !stillWanted()) return;
   if (props.expandedUid !== uid) {
     if (!enlarge) return;
     emit("toggle-expand", uid);
@@ -300,23 +314,16 @@ const expandedSessionId = computed(() => props.cells.find((c) => c.uid === props
 // left no trace but a count on a chip, which reads as a notification rather than as the reply, and
 // the user had to know that a pane exists and which button opens it.
 //
-// Scoped to the ENLARGED cell, deliberately. A background cell drawing must NOT seize the screen
-// away from whatever is being done in another one, so that case keeps exactly what it has today:
-// TerminalCell's unseen-canvas chip, which enlarges and opens on click. Owner's call.
+// Scoped to the ENLARGED cell. A background cell drawing while ANOTHER is enlarged must not seize
+// the screen away from what is being done in that one — that case keeps TerminalCell's unseen-canvas
+// chip, which enlarges and opens on click. The case where NOTHING is enlarged is not that: there is
+// no work being taken away, so the grid enlarges the drawing cell by itself. That lives in GridView,
+// which is the only side that knows every cell (un-zoomed, this component is handed one page).
 //
 // It re-opens every time, including after the user closed the pane by hand: closing is how you
 // dismiss the drawing in front of you, not a standing preference against the next one.
 const { subscribe: subscribeSession } = usePubSub();
 let unsubscribeDrawn: (() => void) | undefined;
-
-// Only a result that will actually RENDER counts. Every GUI tool result publishes on this channel,
-// including ones with no view of their own (manageCollection, google) — taking over the pane for
-// those would be a switch with nothing behind it to explain itself. Same question the panel asks
-// before rendering a card, so the two cannot disagree about what "drew something" means.
-function isDrawnResult(data: unknown): boolean {
-  if (!isRecord(data)) return false;
-  return typeof data.toolName === "string" && Boolean(getPlugin(data.toolName));
-}
 
 watch(
   expandedSessionId,
