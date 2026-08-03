@@ -437,6 +437,10 @@ describe("what the workspace chip is called", () => {
 // directory's name, and a click resumed exactly the session it offered.
 describe("changing the directory", () => {
   const oldSession = { id: "s-old", title: "an old chat", mtime: 1 };
+  // Comfortably over the form's own 300ms debounce: the wait is real time, and on a runner also
+  // building it is the load spike rather than any one test that decides how long this takes.
+  const UNTIL_LOADED_TIMEOUT_MS = 3000;
+  const POLL_MS = 25;
 
   // A server that answers per directory, so "the rows came back" can be told from "the rows never
   // left" — the default mock replies the same thing whatever it is asked about.
@@ -452,13 +456,17 @@ describe("changing the directory", () => {
   }
 
   // Real timers: the debounce is what this is about, and faking it here would only pin that the
-  // reload is scheduled — which the two specs above already cover.
+  // reload is scheduled — which the spec above already covers. Gives up LOUDLY rather than falling
+  // through, so a loaded runner that never finished loading says so instead of failing on the row
+  // assertion below, which would read as "the fix regressed" (#1314).
   const untilLoaded = async (w: ReturnType<typeof mountForm>): Promise<void> => {
     await flushPromises(); // a mount's own load is in flight before the row it renders exists
-    for (let i = 0; i < 40 && w.find('[data-testid="cell-dir-loading"]').exists(); i++) {
-      await new Promise((resolve) => setTimeout(resolve, 25));
+    for (let waited_ms = 0; waited_ms < UNTIL_LOADED_TIMEOUT_MS; waited_ms += POLL_MS) {
+      if (!w.find('[data-testid="cell-dir-loading"]').exists()) return;
+      await new Promise((resolve) => setTimeout(resolve, POLL_MS));
       await flushPromises();
     }
+    throw new Error(`the launcher was still loading ${UNTIL_LOADED_TIMEOUT_MS}ms after the directory changed`);
   };
 
   it("drops the previous directory's rows in the same tick, before the debounce has even elapsed", async () => {
