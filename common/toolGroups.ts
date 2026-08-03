@@ -126,10 +126,13 @@ export const toolGroupServerId = (group: ToolGroup): string => `mulmoterminal-${
 // the UI-facing config validation decide from it — see the `common/` rule in CLAUDE.md.
 export const GUI_SERVER_ID = "mt";
 
-// Ids this project has shipped for the SAME single-view server before. Not live: kept so the two
-// places that must recognise our own past output still do — the reserved-id list (a user must not
-// be able to claim an id we may have written) and the Antigravity config merge, which deletes our
-// entries by id and would otherwise leave a stale `mulmoterminal-gui` behind forever.
+// Ids this project has shipped for the SAME single-view server before. Not live: kept so the place
+// that must recognise our own past output still does — the Antigravity config merge, which deletes
+// our entries by id and would otherwise leave a stale `mulmoterminal-gui` behind forever.
+//
+// Only where we WROTE them, though. A legacy id is not reserved against the user's own
+// `userMcpServers`: nothing writes it any more, so a server someone names `mulmoterminal-gui`
+// today is reachable and works, and treating it as ours would be claiming a name we abandoned.
 export const LEGACY_GUI_SERVER_IDS: readonly string[] = ["mulmoterminal-gui"];
 
 // The tools MulmoTerminal pre-approves via `--allowedTools`, so they run without a permission

@@ -280,13 +280,19 @@ describe("sanitizeUserMcpServers", () => {
   // Well-formed and still unreachable is the one case worth a line in the log: the symptom is a
   // server that is present in the config and absent in the session. The other rejections are
   // visibly malformed and stay silent.
-  it("says so when a reserved id makes an entry unreachable, and stays quiet otherwise", () => {
+  //
+  // And the LEGACY id must stay silent too (Codex review, second pass): mcpConfigJson overwrites
+  // GUI_SERVER_ID and nothing else, so a server someone still calls `mulmoterminal-gui` is
+  // reachable and works. Warning there tells them to rename something that is fine.
+  it("says so only for the id the built-in actually overwrites", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       sanitizeUserMcpServers([{ id: "mt", url: "https://mine/mcp" }]);
       expect(warn).toHaveBeenCalledTimes(1);
       expect(String(warn.mock.calls[0]?.[0])).toContain("mt");
       warn.mockClear();
+      sanitizeUserMcpServers([{ id: "mulmoterminal-gui", url: "https://mine/mcp" }]);
+      expect(warn).not.toHaveBeenCalled();
       sanitizeUserMcpServers([
         { id: "bad id", url: "https://mine/mcp" },
         { id: "ok", url: "not-a-url" },
