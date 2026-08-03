@@ -112,6 +112,15 @@ function chipForPath(w: ReturnType<typeof mountCell>, path: string) {
   return chip;
 }
 
+// An empty cell pointed at a PROJECT directory — deliberately NOT the workspace. Two parts of the
+// launcher are absent there: the per-directory tool-group switches (the workspace is TOLD it has
+// every tool, since it is handed the whole GUI MCP at spawn whatever agent runs there) and the
+// worktree section (a worktree isolates work on one codebase; the workspace is what a session
+// works FROM). So a test about either has to stand somewhere else — `mountCell` with no initialCwd
+// points the field at defaultCwd, which IS the workspace.
+const WORKSPACE = "/home/me/ws";
+const mountProjectCell = (dir: string) => mountCell(null, { initialCwd: dir, defaultCwd: WORKSPACE });
+
 describe("TerminalCell", () => {
   // #965: the whole cell — header included — sits in one wrapper, so the focus zoom can be
   // cancelled about the cell's own centre. A second element child, or content left outside the
@@ -1053,7 +1062,7 @@ describe("TerminalCell", () => {
 
   it("shows the worktree section and lists existing worktrees when the dir is a git repo", async () => {
     mockFetchWithWorktrees([{ path: "/wt/fix-login", branch: "agent/fix-login", task: "fix-login", dirty: false }]);
-    const w = mountCell(null, { defaultCwd: "/home/me/repo" });
+    const w = mountProjectCell("/home/me/repo");
     await flushPromises();
     expect(w.find('[data-testid="cell-worktrees"]').exists()).toBe(true);
     const rows = w.findAll('[data-testid="worktree-reuse"]');
@@ -1070,7 +1079,7 @@ describe("TerminalCell", () => {
 
   it("creates a worktree for the typed task and launches claude in it", async () => {
     const posts = mockFetchWithWorktrees([], { path: "/wt/fix-login", branch: "agent/fix-login" });
-    const w = mountCell(null, { defaultCwd: "/home/me/repo" });
+    const w = mountProjectCell("/home/me/repo");
     await flushPromises();
     await w.find('[data-testid="wt-task"]').setValue("fix login");
     await w.find('[data-testid="wt-start"]').trigger("click");
@@ -1085,7 +1094,7 @@ describe("TerminalCell", () => {
 
   it("reuses an existing worktree by launching claude in its path", async () => {
     mockFetchWithWorktrees([{ path: "/wt/old-task", branch: "agent/old-task", task: "old-task", dirty: false }]);
-    const w = mountCell(null, { defaultCwd: "/home/me/repo" });
+    const w = mountProjectCell("/home/me/repo");
     await flushPromises();
     await w.find('[data-testid="worktree-reuse"]').trigger("click");
     // The launch waits on the tool-group sync — one read of the worktree's registrations, plus a
@@ -1098,7 +1107,7 @@ describe("TerminalCell", () => {
 
   it("removes a clean worktree (deleteBranch, no force) without confirming", async () => {
     const posts = mockFetchWithWorktrees([{ path: "/wt/done", branch: "agent/done", task: "done", dirty: false }]);
-    const w = mountCell(null, { defaultCwd: "/home/me/repo" });
+    const w = mountProjectCell("/home/me/repo");
     await flushPromises();
     await w.find('[data-testid="wt-del"]').trigger("click");
     await flushPromises();
@@ -1110,7 +1119,7 @@ describe("TerminalCell", () => {
   it("confirms before removing a DIRTY worktree, and forces when confirmed", async () => {
     const posts = mockFetchWithWorktrees([{ path: "/wt/wip", branch: "agent/wip", task: "wip", dirty: true }]);
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    const w = mountCell(null, { defaultCwd: "/home/me/repo" });
+    const w = mountProjectCell("/home/me/repo");
     await flushPromises();
     expect(w.find('[data-testid="wt-dirty"]').exists()).toBe(true); // the ● uncommitted-changes marker
     await w.find('[data-testid="wt-del"]').trigger("click");
@@ -1125,7 +1134,7 @@ describe("TerminalCell", () => {
   it("does NOT remove a dirty worktree when the user cancels the confirm", async () => {
     const posts = mockFetchWithWorktrees([{ path: "/wt/wip", branch: "agent/wip", task: "wip", dirty: true }]);
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
-    const w = mountCell(null, { defaultCwd: "/home/me/repo" });
+    const w = mountProjectCell("/home/me/repo");
     await flushPromises();
     await w.find('[data-testid="wt-del"]').trigger("click");
     await flushPromises();
@@ -1909,7 +1918,7 @@ describe("TerminalCell", () => {
       return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) };
     }) as unknown as typeof fetch;
 
-    const w = mountCell(null);
+    const w = mountProjectCell("/home/me/my-project");
     await flushPromises();
 
     const box = w.find('[data-testid="cell-mcp-toggle-render"]');
@@ -1939,7 +1948,7 @@ describe("TerminalCell", () => {
       return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) };
     }) as unknown as typeof fetch;
 
-    const w = mountCell(null);
+    const w = mountProjectCell("/home/me/my-project");
     await flushPromises();
     const box = w.find('[data-testid="cell-mcp-toggle-render"]');
     await box.setValue(true);
@@ -1973,7 +1982,7 @@ describe("TerminalCell", () => {
       return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) };
     }) as unknown as typeof fetch;
 
-    const w = mountCell(null, { defaultCwd: "/home/me/alpha" });
+    const w = mountProjectCell("/home/me/alpha");
     await flushPromises();
 
     // media goes first and hangs; render queues behind it, both flipped in alpha.
@@ -2014,7 +2023,7 @@ describe("TerminalCell", () => {
       return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) };
     }) as unknown as typeof fetch;
 
-    const w = mountCell(null);
+    const w = mountProjectCell("/home/me/my-project");
     await flushPromises();
     const codexButton = w.findAll('[role="radio"]').find((b) => b.text() === "Codex");
     expect(codexButton).toBeDefined();
@@ -2048,7 +2057,7 @@ describe("TerminalCell", () => {
       return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) };
     }) as unknown as typeof fetch;
 
-    const w = mountCell(null, { defaultCwd: "/home/me/alpha" });
+    const w = mountProjectCell("/home/me/alpha");
     await flushPromises();
 
     for (const group of TOOL_GROUPS) expect(w.find(`[data-testid="cell-mcp-toggle-${group}"]`).exists()).toBe(true);
@@ -2091,7 +2100,7 @@ describe("TerminalCell", () => {
       return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) };
     }) as unknown as typeof fetch;
 
-    const w = mountCell(null, { defaultCwd: "/home/me/repo" });
+    const w = mountProjectCell("/home/me/repo");
     await flushPromises();
     await w.find('[data-testid="worktree-reuse"]').trigger("click");
     await flushPromises();
@@ -2113,7 +2122,7 @@ describe("TerminalCell", () => {
       return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) };
     }) as unknown as typeof fetch;
 
-    const w = mountCell(null, { defaultCwd: "/home/me/alpha" });
+    const w = mountProjectCell("/home/me/alpha");
     await flushPromises();
     expect(w.find('[data-testid="cell-mcp-toggle-render"]').exists()).toBe(true);
 
@@ -2152,7 +2161,7 @@ describe("TerminalCell", () => {
       return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) };
     }) as unknown as typeof fetch;
 
-    const w = mountCell(null, { defaultCwd: "/home/me/proj" });
+    const w = mountProjectCell("/home/me/proj");
     await flushPromises();
     await w.find('[data-testid="cell-mcp-toggle-render"]').setValue(true);
     await w.find('[data-testid="cell-dir-input"]').trigger("keydown.enter");
@@ -2329,7 +2338,7 @@ describe("TerminalCell launch target — the OS default shell (#1114)", () => {
 
   it("hides the model / MCP / worktree options for a shell and brings them back for an agent", async () => {
     mockFetchWithAgentOptions();
-    const w = mountCell(null);
+    const w = mountProjectCell("/home/me/my-project");
     await flushPromises();
     expect(w.find('[data-testid="cell-model-help"]').exists()).toBe(true);
     expect(w.find('[data-testid="cell-mcp-toggle-render"]').exists()).toBe(true);

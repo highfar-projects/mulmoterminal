@@ -770,7 +770,18 @@ chip, or with the **📁 folder button** (a native OS folder dialog). The preset
 the directories you have launched in; the **workspace** leads them always, marked with an
 icon, whether or not you have ever launched there — it is the one directory where a
 session reaches every GUI tool, so it is never a click you can lose. It has no remove
-button for the same reason. It also offers a
+button for the same reason.
+
+**The launcher is shorter in the workspace**, because two of its choices do not apply
+there. The per-directory **Canvas switches** are replaced by a line saying every GUI tool
+is already available — a session there is handed the whole GUI MCP at spawn, so switches
+would write a registration that `--strict-mcp-config` then ignores. And the **worktree**
+section is hidden: a worktree isolates work on one codebase onto a branch, while the
+workspace is what a session works *from* (the shared wiki, collections and accounting
+live there), which is precisely what a detached branch would cut it off from. Both come
+back the moment you point the field at a project directory.
+
+It also offers a
 **run a script** row
 that launches project scripts (a dev server, tests, a build, …) **in that cell, in
 the directory the cell is pointed at** — so a whole workflow lives in one window

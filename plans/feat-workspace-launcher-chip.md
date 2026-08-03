@@ -59,7 +59,41 @@
 Material Symbols は**アイコン名がそのままリガチャのテキスト**なので、`text()` は
 `"workspacesws"` を返す。テスト側はアイコン要素を引いて差し引く。
 
+## workspace では選ばせるものが無い（追加）
+
+同じ理由がランチャーの他の 2 か所にも及ぶ。
+
+**1. GUI ツールグループのスイッチ 4 つを出さない。** workspace のセッションは、どのエージェントでも
+spawn 時に**全 GUI MCP を 1 本の URL で受け取る**（`carriesFullGuiMcp`）。ここでスイッチを出すのは
+冗長どころか有害で、書き込む先は per-folder のレジストレーションであり、`--strict-mcp-config` が
+それを無視する — つまり**見た目上何もしないコントロール**になる。代わりに「全部使える」と表示する:
+
+```
+GUI TOOLS
+(icon) All of them, automatically — Canvas, Workspace data, External accounts.
+       The workspace needs no per-directory registration.
+```
+
+グループ名は `TOOL_GROUP_HEADINGS` から導出し重複を除く（render と media はどちらも "Canvas"）ので、
+グループを足しても二重編集にならない。判定は**フィールドの文字列ではなく起動に使うディレクトリ**
+（`targetDir`）で行う — 空欄は workspace を意味するため、生の入力と比べると取りこぼす。
+
+**2. worktree セクションを出さない。** worktree は 1 つのコードベースの作業をブランチに隔離する
+仕組みで、workspace はセッションが**作業の拠点にする**場所（共有の wiki / collections / accounting が
+あるところ）。切り離されたブランチはまさにそこから切断する。git リポジトリであっても出さない。
+
+## 既存テストへの影響（追加）
+
+さらに 15 本が落ちた。いずれも `dir == defaultCwd` でマウントしており、**そのセルは workspace だった**
+ため。仕様変更が正しく現れたもので、対応は 2 つ:
+
+- `CellLaunchForm.spec` の `mountForm` の既定 `defaultCwd` を `/repo` から `/home/me/ws` に変更。
+  代表的なケースは「プロジェクトディレクトリ」であって workspace ではない
+- `TerminalCell.spec` に `mountProjectCell(dir)` を追加し、**ツールグループと worktree のテストだけ**
+  そこへ寄せた。最初は一括置換したが、7 本は MCP と無関係（セッション一覧・スクリプト・record-cwd）
+  で、それらの `defaultCwd` を変えるとテストの意味が変わるため戻して個別に当て直した
+
 ## 検証
 
-`yarn typecheck` / `format` / `lint`（0 errors）/ `yarn test` 7733 passed、`yarn build` 成功。
+`yarn typecheck` / `format` / `lint`（0 errors）/ `yarn test` 7751 passed、`yarn build` 成功。
 **実ブラウザでの確認は未実施**（この環境に Playwright が無いため）。

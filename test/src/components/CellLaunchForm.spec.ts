@@ -26,7 +26,10 @@ const mountForm = (
   over: { dir?: string; presets?: { label: string; path: string }[]; target?: LaunchAgent; defaultCwd?: string | null } = {},
 ) =>
   mount(CellLaunchForm, {
-    props: { dir: "/repo", target: "claude" as LaunchAgent, choice: null, defaultCwd: "/repo", presets: [], openSessionIds, ...over },
+    // defaultCwd is deliberately NOT "/repo": the launcher treats the workspace differently — it
+    // states that every GUI tool is available instead of offering the switches, and hides the
+    // worktree section — so the ordinary case to mount is a PROJECT directory.
+    props: { dir: "/repo", target: "claude" as LaunchAgent, choice: null, defaultCwd: "/home/me/ws", presets: [], openSessionIds, ...over },
     global: { stubs: { ModelPicker: true } },
   });
 
@@ -195,7 +198,8 @@ describe("a worktree reached without its row", () => {
     mockFetch([taken()]);
     const w = mountForm([], { presets: [{ label: "repo", path: "/repo" }] });
     await flushPromises();
-    await w.find('[data-testid="cell-chip-launch"]').trigger("click");
+    // The workspace chip leads the row, so reach the ordinary directory's by path.
+    await launchButtonFor(w, "/repo").trigger("click");
     expect(w.emitted("start")?.[0]).toEqual(["/repo"]);
   });
 });
@@ -309,5 +313,81 @@ describe("the workspace chip", () => {
     const w = mountForm([], { presets: [], defaultCwd: "/home/me/ws" });
     await flushPromises();
     expect(w.find('[data-testid="cell-chip-main"]').attributes("title")).toContain("every GUI tool is available here");
+  });
+});
+
+// The workspace is handed the WHOLE GUI MCP at spawn whatever agent runs there
+// (carriesFullGuiMcp), so there is no per-directory choice to offer. Four switches there would be
+// worse than redundant: they write a per-folder registration that --strict-mcp-config then
+// ignores, i.e. controls that visibly do nothing.
+describe("the GUI tool groups in the workspace", () => {
+  const guiMcpFetch = () => {
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/gui-mcp-groups")) return { ok: true, json: async () => ({ groups: [] }) };
+      if (u.includes("/api/worktrees")) return { ok: true, json: async () => ({ isGit: true, base: "main", worktrees: [] }) };
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ cwd: "/repo", sessions: [] }) };
+      return { ok: true, json: async () => ({}) };
+    }) as unknown as typeof fetch;
+  };
+
+  it("states that everything is available instead of offering the switches", async () => {
+    guiMcpFetch();
+    const w = mountForm([], { dir: "/home/me/ws", defaultCwd: "/home/me/ws" });
+    await flushPromises();
+    expect(w.find('[data-testid="cell-mcp-toggle-render"]').exists()).toBe(false);
+    expect(w.find('[data-testid="cell-mcp-all"]').exists()).toBe(true);
+  });
+
+  // Named, so the claim is checkable rather than a bare "all". Derived from TOOL_GROUP_HEADINGS,
+  // de-duplicated because render and media both read "Canvas".
+  it("names what 'all of them' covers", async () => {
+    guiMcpFetch();
+    const w = mountForm([], { dir: "/home/me/ws", defaultCwd: "/home/me/ws" });
+    await flushPromises();
+    const text = w.find('[data-testid="cell-mcp-all"]').text();
+    expect(text).toContain("Canvas");
+    expect(text).toContain("Workspace data");
+    expect(text).toContain("External accounts");
+  });
+
+  // An EMPTY field means the workspace (dirFor falls back to defaultCwd) — the case a comparison
+  // against the raw input would miss.
+  it("counts an empty directory field as the workspace", async () => {
+    guiMcpFetch();
+    const w = mountForm([], { dir: "", defaultCwd: "/home/me/ws" });
+    await flushPromises();
+    expect(w.find('[data-testid="cell-mcp-all"]').exists()).toBe(true);
+  });
+
+  // The invariant this must not break: a project directory still chooses, exactly as before.
+  it("still offers the switches in a project directory", async () => {
+    guiMcpFetch();
+    const w = mountForm([], { dir: "/repo", defaultCwd: "/home/me/ws" });
+    await flushPromises();
+    expect(w.find('[data-testid="cell-mcp-all"]').exists()).toBe(false);
+    expect(w.find('[data-testid="cell-mcp-toggle-render"]').exists()).toBe(true);
+    expect(w.find('[data-testid="cell-mcp-toggle-external"]').exists()).toBe(true);
+  });
+});
+
+// A worktree isolates work on ONE codebase onto a branch. The workspace is the hub a session works
+// FROM — where the shared wiki / collections / accounting state lives — which is exactly what a
+// detached branch would cut it off from, so offering the option there is offering a mistake.
+describe("worktrees in the workspace", () => {
+  it("hides the worktree section, git repo or not", async () => {
+    mockFetch([worktree({ session: null })]);
+    const w = mountForm([], { dir: "/home/me/ws", defaultCwd: "/home/me/ws" });
+    await flushPromises();
+    expect(w.find('[data-testid="cell-worktrees"]').exists()).toBe(false);
+    expect(w.find('[data-testid="worktree-reuse"]').exists()).toBe(false);
+  });
+
+  // The invariant: a project directory is untouched.
+  it("still offers it in a project directory", async () => {
+    mockFetch([worktree({ session: null })]);
+    const w = mountForm();
+    await flushPromises();
+    expect(w.find('[data-testid="cell-worktrees"]').exists()).toBe(true);
   });
 });
