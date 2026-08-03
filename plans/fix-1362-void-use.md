@@ -43,8 +43,19 @@ server/session/tmux-size-sync.ts:93:34
 → 3 errors
 ```
 
-`server/`・`src/`・`common/` にある `void` 演算子は約 200 箇所（#1308 の 66 件を含む）。
-**報告されたのは 3 件だけ**で、fire-and-forget は 1 件も報告されない。
+**報告されたのは 3 件だけ**で、fire-and-forget は 1 件も報告されない。3 件を直したあと、
+`server/`・`src/`・`common/` に残る `void` 演算子は **163 箇所**（`.ts` 88 + `.vue` の script 75、
+spec を除く。#1308 の 66 件を含む）で、そのどれも報告されない。
+TypeScript の AST で `VoidExpression` を数えた実測値（`void 0` は除外）。
+
+数え方で 2 度つまずいたので記録しておく。
+
+> **grep で数えると間違える。** `[ (,;{}=&|?:[]void ` のような文字クラスは `): void` の戻り値注釈にも
+> マッチするので、最初の見積り（約 200）は水増しだった。数えるなら AST。
+>
+> **この数は main をマージするたびに動く。** 161 → 163 と実際に動いた。だから
+> `eslint.config.js` のコメントには具体的な数を焼き込まず「160-odd」と書いてある
+> —— 腐ってからでは、直そうとしている嘘と見分けがつかない。
 
 > 注: 実測の前に `yarn install` が要る。pull 直後の stale な `node_modules` だと
 > `src/composables/pluginRuntime.ts` に `no-unsafe-*` が 4 件出て、ベースラインが赤に見える。
@@ -77,6 +88,6 @@ server/session/tmux-size-sync.ts:93:34
 - **「off に戻される」** → `test/scripts/eslint-void-use.spec.ts` が、解決後の設定で
   `sonarjs/void-use` が error であることを `calculateConfigForFile` で確かめる
   （型プログラムを作らないので速い）。`eslint-template-assertions.spec.ts` と同じ手口。
-- **「promise の除外が将来のバージョンで消える」** → 約 200 箇所が一斉に赤くなるので
+- **「promise の除外が将来のバージョンで消える」** → 161 箇所が一斉に赤くなるので
   `yarn lint` が CI で落ちる。リポジトリのソースそのものが ground truth なので、
   これを spec で写し取る必要はない（写せば型プログラムを 1 本余計に建てるだけになる）。

@@ -213,10 +213,10 @@ export default [
       "sonarjs/no-useless-intersection": "error",
       // It was off on the claim that it fights no-floating-promises. It does not (#1362): S3735
       // returns early for a thenable, for `void 0`, for an IIFE, and for a call whose type is
-      // any/unknown — and with no type info at all, for ANY call. So the ~200 `void`-marked
-      // fire-and-forget calls here, the 66 from #1300 among them, are invisible to it either way.
-      // What it catches is `void` on something that was never a promise: enabling it reported three
-      // sites, all `void map.delete(…)` squeezing a statement into an arrow's `: void` body.
+      // any/unknown — and with no type info at all, for ANY call. So every fire-and-forget `void` in
+      // server/src/common, 160-odd of them with the 66 from #1300 among those, is invisible to it.
+      // Turning the rule on reported THREE, all `void map.delete(…)` squeezing a statement into an
+      // arrow's `: void` body and none of them a promise; those are block bodies now.
       "sonarjs/void-use": "error",
       //
       // WARN — the findings are external APIs we use ON PURPOSE, so this cannot reach zero, but a

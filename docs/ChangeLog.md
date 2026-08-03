@@ -13,11 +13,13 @@ Entries here are folded into the next release's heading when it ships.
 - **`sonarjs/void-use` is an error, and the reason it was off was not true** ([#1362](https://github.com/receptron/mulmoterminal/issues/1362)).
   It had been off since 4.2.0 on the reasoning that it forbids the `void` that `no-floating-promises`
   asks for. It does not: S3735 returns early for a thenable, for `void 0`, for an IIFE, and for a
-  call it cannot type — and with no type information at all, for any call. So the roughly two hundred
-  `void`-marked fire-and-forget calls in this repository, the sixty-six from #1300 among them, were
-  never visible to it. Turning it on reported **three** sites, all in `tmux-size-sync.ts` and none of
-  them a promise: `void map.delete(…)` written to squeeze a statement into an arrow's `: void`
-  expression body. Those are block bodies now.
+  call it cannot type — and with no type information at all, for any call. Turning it on across the
+  repository reported **three** findings, all in `tmux-size-sync.ts` and none of them a promise:
+  `void map.delete(…)`, written to squeeze a statement into an arrow's `: void` expression body.
+  Those are block bodies now and the rule is an error. It reported nothing against the **163** other
+  uses of the operator in `server/`, `src/` and `common/` (88 in `.ts`, 75 in `.vue` script blocks,
+  counted on the AST), the sixty-six from #1300 among them — which is the point: the two rules never
+  fought, so nothing had to be chosen between them.
 
 ## mulmoterminal@4.2.0 — 2026-08-03
 
