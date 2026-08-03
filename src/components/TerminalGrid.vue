@@ -264,12 +264,22 @@ async function toggleFiles(): Promise<void> {
 // zoom away in the meantime, enlarging the drawing cell back would be exactly the takeover that
 // case refuses to do, so it gives up instead. Caught by Codex on PR #1227.
 //
+// `stillWanted` is the same worry as `enlarge` for a caller that DOES enlarge but was not asked
+// for by a click. The flush is a network save, and the files pane stays mounted while the grid is
+// tiled (the zoom row is hidden, not unmounted), so an automatic reveal can be several hundred ms
+// away from its own preconditions by the time it lands — the user may have zoomed a cell by hand or
+// walked off to an overlay in between, and taking the screen back then is precisely the takeover
+// this path exists to avoid. Re-asked AFTER the await, so it sees the world the enlargement would
+// actually happen in. A click passes nothing: "bring that cell here" survives whatever moved.
+// Raised by Codex on this PR, the same race it caught in #1227.
+//
 // The enlargement is the ordinary `toggle-expand`, and it is only ever an ENLARGEMENT: the guard
-// above means the cell asked for is never the one already enlarged, so the toggle cannot collapse
+// below means the cell asked for is never the one already enlarged, so the toggle cannot collapse
 // the zoom out from under a drawing. It reaches a single-terminal grid too — that used to be
 // refused (#374), which made the pane unreachable there; see toggleExpand in gridTabs.ts.
-async function openCanvasFor(uid: number, enlarge = true): Promise<void> {
+async function openCanvasFor(uid: number, enlarge = true, stillWanted?: () => boolean): Promise<void> {
   if (filesOpen.value && (await filesPane.value?.flush()) === false) return;
+  if (stillWanted && !stillWanted()) return;
   if (props.expandedUid !== uid) {
     if (!enlarge) return;
     emit("toggle-expand", uid);

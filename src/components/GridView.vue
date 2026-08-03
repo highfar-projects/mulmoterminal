@@ -713,7 +713,13 @@ watch(
           const uid = state.value.cells.find((cell) => cell.session === id)?.uid;
           // Through the grid's own reveal (files-buffer flush included) rather than setting the
           // zoom and the pane from here, as placeChat does above and for the same reason.
-          if (uid !== undefined) void gridRef.value?.openCanvasFor(uid);
+          //
+          // The same two conditions go along as `stillWanted`, because that flush is a network save
+          // this reveal then acts on the far side of: by the time it returns, the user may have
+          // zoomed a cell by hand or left for an overlay, and the checks made above would enlarge
+          // over the top of it. Nobody clicked, so a reveal that has been overtaken is simply
+          // dropped — the unread-canvas chip still reports the drawing. (Codex, this PR.)
+          if (uid !== undefined) void gridRef.value?.openCanvasFor(uid, true, () => expandedUid.value === null && onTerminalsRoute());
         }),
       );
     }
