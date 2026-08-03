@@ -296,14 +296,14 @@ describe("the workspace chip", () => {
   it("is offered with no presets recorded at all", async () => {
     const w = mountForm([], { presets: [], defaultCwd: "/home/me/ws" });
     await flushPromises();
-    expect(chipLabels(w)).toEqual(["ws"]);
+    expect(chipLabels(w)).toEqual(["WORKSPACE"]);
     expect(w.find('[data-testid="cell-chip-workspace"]').exists()).toBe(true);
   });
 
   it("leads the recorded directories, and only it is marked", async () => {
     const w = mountForm([], { presets: [{ label: "one", path: "/a/one" }], defaultCwd: "/home/me/ws" });
     await flushPromises();
-    expect(chipLabels(w)).toEqual(["ws", "one"]);
+    expect(chipLabels(w)).toEqual(["WORKSPACE", "one"]);
     expect(w.findAll('[data-testid="cell-chip-workspace"]')).toHaveLength(1);
   });
 
@@ -397,5 +397,36 @@ describe("worktrees in the workspace", () => {
     const w = mountForm();
     await flushPromises();
     expect(w.find('[data-testid="cell-worktrees"]').exists()).toBe(true);
+  });
+});
+
+// The label names a ROLE, not a directory, so what the chip is called out loud adds the path —
+// every other chip's label already IS its directory.
+describe("what the workspace chip is called", () => {
+  it("shows the role notation and speaks the directory", async () => {
+    mockFetch();
+    const w = mountForm([], { presets: [], defaultCwd: "/home/me/ws" });
+    await flushPromises();
+    const main = w.find('[data-testid="cell-chip-main"]');
+    expect(main.text()).toContain("WORKSPACE");
+    const spoken = main.attributes("aria-label") ?? "";
+    expect(spoken).toContain("the workspace, /home/me/ws");
+    expect(spoken).not.toContain("WORKSPACE");
+  });
+
+  it("keeps the real path on the hover, where the other chips keep theirs", async () => {
+    mockFetch();
+    const w = mountForm([], { presets: [], defaultCwd: "/home/me/ws" });
+    await flushPromises();
+    expect(w.find('[data-testid="cell-chip-main"]').attributes("title")).toContain("/home/me/ws");
+  });
+
+  it("speaks the launch button the same way", async () => {
+    mockFetch();
+    const w = mountForm([], { presets: [], defaultCwd: "/home/me/ws" });
+    await flushPromises();
+    const spoken = w.find('[data-testid="cell-chip-launch"]').attributes("aria-label") ?? "";
+    expect(spoken).toContain("the workspace, /home/me/ws");
+    expect(spoken).not.toContain("WORKSPACE");
   });
 });

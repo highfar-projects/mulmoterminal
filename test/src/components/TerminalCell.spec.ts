@@ -1828,7 +1828,7 @@ describe("TerminalCell", () => {
     await flushPromises();
     // The workspace leads, outside the ranking — it is not one of the directories being ranked
     // against each other (see launchChips). Its label carries the icon's ligature text.
-    expect(w.findAll('[data-testid="cell-chip-main"]').map((b) => b.text())).toEqual(["workspacesmy-project", "c", "b", "a", "d"]);
+    expect(w.findAll('[data-testid="cell-chip-main"]').map((b) => b.text())).toEqual(["workspacesWORKSPACE", "c", "b", "a", "d"]);
   });
 
   it("tints a preset chip whose dir already has a running session elsewhere", () => {

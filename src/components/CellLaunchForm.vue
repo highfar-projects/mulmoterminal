@@ -240,10 +240,16 @@ const chipLaunchTitle = (p: CwdPreset): string => {
 // afford a full path and a screen reader cannot. It has to carry the refusal too, or the one user
 // who cannot see the greyed-out field below is told the click launches a terminal when it does not
 // (raised by CodeRabbit on #1208).
-const chipLaunchLabel = (p: CwdPreset): string => {
+// What a chip is CALLED out loud. Every other chip's label IS its directory, so speaking the label
+// says where it goes; the workspace's label names a role instead, so the spoken form adds the path
+// the sighted user reads off the hover.
+const chipSpokenName = (p: LaunchChip): string => (p.isWorkspace ? `the workspace, ${p.path}` : p.label);
+
+const chipLaunchLabel = (p: LaunchChip): string => {
   const taken = takenWorktreeAt(p.path);
-  if (taken) return `${p.label} — ${taken}`;
-  return isCwdRunning(p.path) ? `${p.label} — a session is already running here in another terminal` : `Launch a new terminal in ${p.label} now`;
+  const name = chipSpokenName(p);
+  if (taken) return `${name} — ${taken}`;
+  return isCwdRunning(p.path) ? `${name} — a session is already running here in another terminal` : `Launch a new terminal in ${name} now`;
 };
 
 // Launch a configured program (shell/codex/…) in this cell's chosen dir. The parent turns the
@@ -405,7 +411,7 @@ async function removeWorktree(w: Worktree): Promise<void> {
           class="cursor-pointer border-none bg-transparent px-2.5 py-1 font-sans text-[12px] hover:bg-hover hover:text-fg"
           :class="isCwdRunning(p.path) ? 'text-fg' : 'text-secondary'"
           :title="chipTitle(p)"
-          :aria-label="`Use ${p.label} — fill the field to browse / resume here (without launching)${isCwdRunning(p.path) ? '. A session is already running here.' : ''}${p.isWorkspace ? '. This is the workspace: every GUI tool is available here.' : ''}`"
+          :aria-label="`Use ${chipSpokenName(p)} — fill the field to browse / resume here (without launching)${isCwdRunning(p.path) ? '. A session is already running here.' : ''}${p.isWorkspace ? '. Every GUI tool is available here.' : ''}`"
           @click="fillDir(p.path)"
         >
           <span

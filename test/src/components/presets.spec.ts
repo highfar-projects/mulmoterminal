@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { presetLabel, launchChips } from "../../../src/components/presets.js";
+import { presetLabel, launchChips, WORKSPACE_CHIP_LABEL } from "../../../src/components/presets.js";
 
 describe("presetLabel", () => {
   it("uses the trailing path segment (basename)", () => {
@@ -23,12 +23,12 @@ describe("launchChips", () => {
   const preset = (path: string) => ({ label: presetLabel(path), path });
 
   it("offers the workspace even when nothing has been recorded", () => {
-    expect(launchChips([], "/home/me/mulmoclaude")).toEqual([{ label: "mulmoclaude", path: "/home/me/mulmoclaude", isWorkspace: true }]);
+    expect(launchChips([], "/home/me/mulmoclaude")).toEqual([{ label: WORKSPACE_CHIP_LABEL, path: "/home/me/mulmoclaude", isWorkspace: true }]);
   });
 
   it("puts it first, ahead of the priority ordering the rest arrive in", () => {
     const chips = launchChips([preset("/a/one"), preset("/b/two")], "/home/me/ws");
-    expect(chips.map((c) => c.label)).toEqual(["ws", "one", "two"]);
+    expect(chips.map((c) => c.label)).toEqual([WORKSPACE_CHIP_LABEL, "one", "two"]);
     expect(chips.filter((c) => c.isWorkspace)).toHaveLength(1);
   });
 
@@ -47,9 +47,11 @@ describe("launchChips", () => {
     expect(launchChips([preset("/home/me/x/../ws")], "/home/me/ws")).toHaveLength(1);
   });
 
-  // A directory the user has named and colour-coded does not get renamed by being the workspace.
-  it("keeps the label a recorded preset already had", () => {
-    expect(launchChips([{ label: "My Hub", path: "/home/me/ws" }], "/home/me/ws")[0]?.label).toBe("My Hub");
+  // Named by its ROLE, not by its directory — and that wins over a label the user gave the same
+  // path as a recent dir, because on this chip the role is the thing worth saying. The path is
+  // still the hover.
+  it("labels it WORKSPACE even when the same path is a recorded preset", () => {
+    expect(launchChips([{ label: "My Hub", path: "/home/me/ws" }], "/home/me/ws")[0]?.label).toBe("WORKSPACE");
   });
 
   // Before /api/config resolves there is no workspace to offer, and inventing one would point a

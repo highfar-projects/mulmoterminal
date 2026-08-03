@@ -24,6 +24,20 @@ export interface LaunchChip extends CwdPreset {
 }
 
 /**
+ * What the workspace chip is CALLED, rather than what its directory is called.
+ *
+ * Every other chip is a place — the basename of somewhere you launched. This one is a ROLE: the
+ * directory a session works from, where every GUI tool is reachable and the shared wiki /
+ * collections / accounting live. Naming it `mulmoclaude` (or whatever the folder happens to be)
+ * says the least interesting true thing about it, and reads as one project among the others.
+ *
+ * Capitals because it is not a directory name and should not read as one — every neighbour is a
+ * lowercase basename. The real path has not gone anywhere: it is the chip's hover, which is where
+ * the other chips keep theirs too.
+ */
+export const WORKSPACE_CHIP_LABEL = "WORKSPACE";
+
+/**
  * The chips to render: the workspace FIRST and always, then the recent directories.
  *
  * The workspace is not an ordinary recent dir, and the launcher used to treat it as one — it
@@ -36,15 +50,14 @@ export interface LaunchChip extends CwdPreset {
  * Pinned ahead of the priority ordering on purpose. `orderByDirPriority` ranks the directories a
  * user configured against each other; the workspace is not competing in that ranking.
  *
- * Its existing label is kept when it IS among the presets, so a directory the user has colour-coded
- * and named does not get renamed by having become the workspace. Matched with `isSameDirPath`, the
- * same lexical comparison the worktree rows use: the browser cannot resolve a symlink, so this
- * folds only the spellings a person types (a trailing slash, a `..`). Getting it wrong shows the
- * directory twice — the server still decides what the workspace really is, with a realpath.
+ * It is labelled by its ROLE, not by its directory name — see WORKSPACE_CHIP_LABEL. Matched with
+ * `isSameDirPath`, the same lexical comparison the worktree rows use: the browser cannot resolve a
+ * symlink, so this folds only the spellings a person types (a trailing slash, a `..`). Getting it
+ * wrong shows the directory twice — the server still decides what the workspace really is, with a
+ * realpath.
  */
 export function launchChips(orderedPresets: readonly CwdPreset[], defaultCwd: string | null | undefined): LaunchChip[] {
   const rest = orderedPresets.filter((p) => !defaultCwd || !isSameDirPath(p.path, defaultCwd)).map((p) => ({ ...p, isWorkspace: false }));
   if (!defaultCwd) return rest;
-  const existing = orderedPresets.find((p) => isSameDirPath(p.path, defaultCwd));
-  return [{ label: existing?.label ?? presetLabel(defaultCwd), path: defaultCwd, isWorkspace: true }, ...rest];
+  return [{ label: WORKSPACE_CHIP_LABEL, path: defaultCwd, isWorkspace: true }, ...rest];
 }
