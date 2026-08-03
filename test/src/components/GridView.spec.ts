@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { router } from "../../../src/router";
 import { defineComponent, h, KeepAlive, type Component } from "vue";
@@ -328,6 +328,11 @@ describe("GridView keyboard shortcuts (#829)", () => {
   beforeEach(() => {
     focused.length = 0;
   });
+
+  // In a hook, not at the end of the test that opens a composition: the IME state is module-level,
+  // so a failing assertion before the reset would carry an open composition into the next test and
+  // silence its keys instead.
+  afterEach(() => resetImeComposition());
 
   it("does nothing at all when no keymap is configured — shortcuts are opt-in", async () => {
     // `null`, not `undefined` — passing undefined to a defaulted parameter selects the default.
