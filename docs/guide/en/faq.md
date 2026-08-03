@@ -73,7 +73,12 @@ What this does is the step before: **which agent is waiting on you right now**. 
 
 ### Why not just split a terminal with tmux?
 
-Splitting is easy in tmux. The difference is what comes after.
+**tmux was built for terminals that don't ask questions.** `make` finishes quietly, `tail -f`
+just runs — neither of them calls you. Agents do: they stop, ask permission, and wait. "Which of
+these six is waiting on me" isn't a question tmux was designed to answer, and that isn't a flaw.
+The question didn't used to exist.
+
+Splitting itself is easy in tmux. The difference is what comes after.
 
 - **State is visible as colour.** Six panes of scrolling text look identical. Which one has stopped and is waiting, and which one is still thinking, without reading any of it.
 - **Watching many and reading one stop competing.** Split six ways and each pane is one sixth the size. Grid ↔ enlarge lets you scan everything, then blow one up and read it properly.
@@ -184,6 +189,20 @@ Diff, commit, push and Open PR are all reachable from inside the cell (→ [Adva
 ### Can I use it as an ordinary terminal?
 
 **Yes.** Pick Shell in an empty cell and choose a directory. No launcher entry, no model, no configuration.
+
+### So it isn't only for agents?
+
+**No — it's a terminal.** Every cell is a real pty, and an agent is one of the things you can put
+in one.
+
+- **Shell** gives you your OS default `$SHELL`, with nothing to install or configure.
+- **Launch commands** run anything as a persistent terminal — `yarn dev`, `htop`, `lazygit`, a
+  `tail -f` you want to keep an eye on.
+- The **one-session-per-worktree** limit is on *agents*. A shell or a `yarn dev` launcher stays
+  free, because a worktree an agent is working in is exactly where you want those.
+
+So the grid ends up holding your whole working set, not just the agents — and the agents are the
+cells that get colour, a chime and a phone push, because they're the ones that stop and ask.
 
 ### Which directory should I launch a cell in?
 
