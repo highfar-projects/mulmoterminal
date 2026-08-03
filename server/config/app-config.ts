@@ -154,10 +154,17 @@ export function sanitizeCustomThemes(input: unknown): CustomTheme[] {
 const MCP_ID_RE = /^[A-Za-z0-9_-]+$/;
 const MCP_URL_RE = /^https?:\/\/\S+$/;
 const MCP_SERVERS_MAX = 20;
-// The built-in GUI MCP server name — reserved so a user entry can't shadow it and
-// break mcp__<GUI_SERVER_ID>__* tool routing. The ids we shipped BEFORE stay reserved
-// too: an old session or an old per-folder config may still name one, and letting a
-// user claim it would point that name at their URL.
+// The ids the built-in GUI MCP server answers to. A user entry naming one of these cannot WIN —
+// mcpConfigJson writes the built-in last, so it overwrites a clashing key — but the entry is KEPT
+// here rather than dropped, and that is the whole point of this comment.
+//
+// Dropping it was the obvious implementation and it destroys data: the sanitized config is what
+// gets written back on the next save, so a user whose own server happened to be called `mt` would
+// lose the entry from their config file for good, having changed some unrelated setting. `mt` is
+// short enough to be a name someone had already chosen (Codex review on #1355), and it was a legal
+// id before this release. Their entry survives, ours still wins at spawn, and the warning says
+// which one is unreachable and what to do — a rename is theirs to make, since whatever refers to
+// that id breaks with it.
 const RESERVED_MCP_IDS = new Set([GUI_SERVER_ID, ...LEGACY_GUI_SERVER_IDS]);
 export function sanitizeUserMcpServers(input: unknown): UserMcpServer[] {
   if (!Array.isArray(input)) return [];
@@ -168,7 +175,16 @@ export function sanitizeUserMcpServers(input: unknown): UserMcpServer[] {
     if (!parsed.success) continue;
     const id = parsed.data.id.trim();
     const url = parsed.data.url.trim();
-    if (!MCP_ID_RE.test(id) || RESERVED_MCP_IDS.has(id) || !MCP_URL_RE.test(url) || seen.has(id)) continue;
+    if (!MCP_ID_RE.test(id) || !MCP_URL_RE.test(url) || seen.has(id)) continue;
+    // Kept, not dropped — see RESERVED_MCP_IDS. Said out loud because this is the one entry that
+    // is well-formed and still will not work: the built-in overwrites it at spawn, so without a
+    // line in the log the symptom is a server that is present in the config and absent in the
+    // session. The other rejections above are visibly malformed and stay silent.
+    if (RESERVED_MCP_IDS.has(id)) {
+      console.warn(
+        `[mcp] userMcpServers: "${id}" is MulmoTerminal's own GUI MCP server id, so that entry is unreachable — the built-in wins. Rename it to use it.`,
+      );
+    }
     seen.add(id);
     out.push({ id, url });
     if (out.length >= MCP_SERVERS_MAX) break;

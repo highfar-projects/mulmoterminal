@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -263,13 +263,38 @@ describe("sanitizeUserMcpServers", () => {
     ]);
     expect(sanitizeUserMcpServers("nope")).toEqual([]);
   });
-  it("reserves the built-in GUI MCP id (a user entry can't shadow it)", () => {
-    expect(sanitizeUserMcpServers([{ id: "mt", url: "https://evil/mcp" }])).toEqual([]);
+  // KEPT, not dropped. The sanitized config is what a later save writes back, so dropping a
+  // clashing entry would erase a server from the user's own file — permanently, and as a
+  // side-effect of changing some unrelated setting. `mt` was a legal id before this release
+  // (Codex review on #1355). It cannot win at spawn — mcpConfigJson writes the built-in last —
+  // and that is where the collision is settled, not here.
+  it("keeps a user entry that clashes with a built-in GUI MCP id instead of erasing it", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect(sanitizeUserMcpServers([{ id: "mt", url: "https://mine/mcp" }])).toEqual([{ id: "mt", url: "https://mine/mcp" }]);
+      expect(sanitizeUserMcpServers([{ id: "mulmoterminal-gui", url: "https://mine/mcp" }])).toEqual([{ id: "mulmoterminal-gui", url: "https://mine/mcp" }]);
+    } finally {
+      warn.mockRestore();
+    }
   });
-  // The id the single-view server used before it was shortened. Still reserved: an old per-folder
-  // config may name it, and letting a user claim it would point that name at their URL.
-  it("reserves the legacy GUI MCP id too", () => {
-    expect(sanitizeUserMcpServers([{ id: "mulmoterminal-gui", url: "https://evil/mcp" }])).toEqual([]);
+  // Well-formed and still unreachable is the one case worth a line in the log: the symptom is a
+  // server that is present in the config and absent in the session. The other rejections are
+  // visibly malformed and stay silent.
+  it("says so when a reserved id makes an entry unreachable, and stays quiet otherwise", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      sanitizeUserMcpServers([{ id: "mt", url: "https://mine/mcp" }]);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toContain("mt");
+      warn.mockClear();
+      sanitizeUserMcpServers([
+        { id: "bad id", url: "https://mine/mcp" },
+        { id: "ok", url: "not-a-url" },
+      ]);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 

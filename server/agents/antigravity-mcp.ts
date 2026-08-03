@@ -21,7 +21,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { TOOL_GROUPS, toolGroupServerId, GUI_SERVER_ID, LEGACY_GUI_SERVER_IDS, type ToolGroup } from "../../common/toolGroups.js";
+import { TOOL_GROUPS, toolGroupServerId, LEGACY_GUI_SERVER_IDS, type ToolGroup } from "../../common/toolGroups.js";
 import { isRecord } from "../../common/isRecord.js";
 
 /** agy's workspace customization dir. `.agent`/`_agents`/`_agent` are also accepted by agy; we write one. */
@@ -43,11 +43,16 @@ export interface AntigravityMcpServer {
 }
 
 // Ours to rewrite, so an entry for a group that was switched OFF is removed rather than left
-// behind. GUI_SERVER_ID is not a group id: it is the all-tools entry an earlier version of this
-// wrote, and cleaning it up here is what stops it outliving the code that made it. The LEGACY ids
-// are in for exactly the same reason one step further back — the entry a still-older version wrote
-// under the id that server has since been renamed away from.
-const OUR_SERVER_IDS = new Set([GUI_SERVER_ID, ...LEGACY_GUI_SERVER_IDS, ...TOOL_GROUPS.map(toolGroupServerId)]);
+// behind. Exactly the ids this file has ever WRITTEN, and nothing else — an id in here is an id we
+// delete out of a file the user owns.
+//
+// So `GUI_SERVER_ID` is deliberately NOT in it. This path only ever writes per-group ids; the
+// all-tools entry belongs to the claude/codex spawn config, not to `.agents/mcp_config.json`.
+// Listing it would mean a user's own agy server called `mt` is deleted on the next sync, by code
+// that never created it (Codex review on #1355). The LEGACY ids stay because an older version of
+// THIS file really did write the all-tools entry, and cleaning that up is what stops it outliving
+// the code that made it.
+const OUR_SERVER_IDS = new Set([...LEGACY_GUI_SERVER_IDS, ...TOOL_GROUPS.map(toolGroupServerId)]);
 
 // The merged `mcpServers` map: the user's own entries untouched, ours replaced by exactly the
 // groups given. Pure, so the "never clobber a server we don't own" rule is testable without a

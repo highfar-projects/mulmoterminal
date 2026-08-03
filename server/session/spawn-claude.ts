@@ -121,9 +121,9 @@ function sessionAddDirs(sessionId: string, configured: string[] | null | undefin
  * This branch is also WHY THE TOOL NAMES DIFFER between cells, which looks like a bug until you
  * know it: true carries every tool under one generated server id (`mt`), so the agent sees
  * `mcp__mt__presentChart`; false carries no --mcp-config at all and picks the tools up from the
- * user's per-folder config under the group ids, so the SAME tool is `mcp__mulmoterminal-render__
- * presentChart`. Neither name is stale. See common/toolGroups.ts for why the two ids are not
- * unified, and README's "MCP server ids" section for the whole picture.
+ * user's per-folder config under the group ids, so the SAME tool is
+ * `mcp__mulmoterminal-render__presentChart`. Neither name is stale. See common/toolGroups.ts for
+ * why the two ids are not unified, and README's "MCP server ids" section for the whole picture.
  */
 export const carriesFullGuiMcp = (attachGuiMcp: boolean, cwd: string | undefined): boolean => attachGuiMcp || isWorkspaceCwd(cwd);
 
