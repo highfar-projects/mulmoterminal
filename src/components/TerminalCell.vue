@@ -2,6 +2,7 @@
 import { ref, computed, nextTick, watch, onMounted, onUnmounted, useTemplateRef } from "vue";
 import TerminalView from "./Terminal.vue";
 import { usePubSub } from "../composables/usePubSub";
+import { useImeAwareEnter } from "../composables/useImeAwareEnter";
 import { useCellChrome } from "../composables/useCellChrome";
 import { useGitStatus } from "../composables/useGitStatus";
 import { useWorkItem } from "../composables/useWorkItem";
@@ -763,6 +764,33 @@ function cancelMemoEdit() {
   memoEditing.value = false;
 }
 
+// Enter here has to mean "confirm the IME candidate" while a conversion is open, or a note typed in
+// Japanese is saved half-converted and the box closes on the first press with no way back (#1353).
+const memoIme = useImeAwareEnter(() => void saveMemo());
+
+// One plain `keydown` rather than Vue's `.enter` / `.escape` modifiers: the composable reads
+// `event.key` itself, which is what the modifiers do — but binding them here would put the
+// modifier's own `.prevent` ahead of the IME decision, and the whole point is that the decision
+// comes first.
+function onMemoKeydown(event: KeyboardEvent) {
+  if (event.key === "Escape") {
+    // Escape mid-composition drops the candidate. Closing the editor on it would throw away the
+    // sentence the user is still writing, which is worse than the Enter case it mirrors.
+    if (memoIme.isImeConfirmation(event)) return;
+    event.preventDefault();
+    cancelMemoEdit();
+    return;
+  }
+  memoIme.onKeydown(event);
+}
+
+// Blur still saves — clicking away is the ordinary way to leave a text field. The composable's own
+// blur only clears its composition state, so a stale "mid-composition" flag cannot outlive the box.
+function onMemoBlur() {
+  memoIme.onBlur();
+  void saveMemo();
+}
+
 // Save, then let the server's answer win: it normalizes and caps, so what is shown here after a
 // save is what a reload will show. Blur saves too — closing the box by clicking away is the
 // ordinary way to leave a text field, and losing the sentence to it would be the bug.
@@ -1082,9 +1110,10 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               aria-label="Note for this session"
               spellcheck="false"
               @click.stop
-              @keydown.enter.prevent="saveMemo"
-              @keydown.escape.prevent="cancelMemoEdit"
-              @blur="saveMemo"
+              @keydown="onMemoKeydown"
+              @compositionstart="memoIme.onCompositionStart"
+              @compositionend="memoIme.onCompositionEnd"
+              @blur="onMemoBlur"
             />
             <span
               v-else

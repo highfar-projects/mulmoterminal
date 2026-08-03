@@ -390,9 +390,10 @@ today — **Claude Code** (the default), **Codex**, and **Antigravity** (`agy`).
 
 - **Claude** — spawned as `claude` (override with `CLAUDE_BIN`). The server passes
   `--session-id <uuid>`, so it knows the live session's id even before its transcript
-  file exists, and injects activity hooks + the GUI MCP per spawn (see
+  file exists, and injects activity hooks per spawn (see
   [Claude hook injection](#claude-hook-injection)) plus the
   [closing summary](#closing-summary) instruction.
+  The **whole** GUI MCP (`--mcp-config` + `--strict-mcp-config`) goes only to a session that is not a grid cell, or to a grid cell whose cwd IS the workspace — `carriesFullGuiMcp` in `server/session/spawn-claude.ts`, which is what gives a workspace cell the tools the single view had before 4.0.0 removed it. That equivalence is about what the session *carries*: a workspace cell is still a grid cell in every other respect. A cell in a project directory attaches neither flag, so Claude Code loads MCP servers the ordinary way — the directory's own local scope, any `.mcp.json` up the tree, and your global ones — including whichever [Canvas switches](#wiki-collections--the-gui-panel) are registered for it.
 - **Codex** — spawned as `codex` (override with `CODEX_BIN`; `CODEX_MODEL` sets
   `--model`). Codex runs on its own WebSocket (`/ws/codex`) and its sessions appear in the
   cockpit roster next to Claude's. Because Codex only mints its rollout id **after** the first
@@ -551,7 +552,7 @@ The Settings modal (⚙) persists per-user UI choices to `~/.mulmoterminal/confi
 | `repoDirs`   | `{ "owner/repo": "/abs/path" }` — which local clone work on a repo starts in, when you keep several side by side. Only the *choice* is stored; which clones exist is re-derived from `cwdPresets` on every read, and an entry that no longer names a clone of that repo is ignored. |
 | `launchers`  | `{ label, command }` entries offered in a grid cell's launcher besides the agents — any interactive command. A plain shell needs no entry: the launch form's **Shell** toggle opens `$SHELL` unconfigured. |
 | `quickCommands` | `{ label, text, agents? }` phrases the **phone** offers as chips on a session's terminal view. Tapping one puts `text` in the input box; it is not sent until you press send. `agents` (`"claude"` / `"codex"` / `"shell"`) scopes a chip to session kinds — omit it to offer the chip everywhere. Empty by default. |
-| `userMcpServers` | `{ id, url }` HTTP MCP servers merged into the `--mcp-config` of the Claude sessions that carry the full GUI MCP — a cell whose working directory is the **workspace**, and any session the server starts itself (the phone, a scheduled task). A cell in a project directory loads its own MCP config instead. Takes effect on the next session. |
+| `userMcpServers` | `{ id, url }` HTTP MCP servers merged into the `--mcp-config` of the Claude sessions that carry the full GUI MCP — a cell whose working directory is the **workspace**, and a session the server starts itself (the phone, a scheduled task) unless it asks for a grid cell's shape, as an issue's seed session does (`issueSpawnOptions`). A cell in a project directory loads its own MCP config instead. Takes effect on the next session. |
 | `buttons`    | Header action buttons — see [Header buttons](#header-buttons). Omit to keep the defaults; set to replace them. |
 | `chips`      | Header info chips (`dir` / `git` / `work` / `diff` / `ctx` / `usage` / `status` / `tools`, or custom text). Omit to keep the default set; `[]` hides all built-ins. `work` shows which PR / issue the cell is on (`#977 → #966`) and clears itself when the PR merges — see the [Configuration guide](https://receptron.github.io/mulmoterminal/guide/en/config.html#work-chip). |
 | `pushEnabled` | `true` to send a **Web Push** to your registered devices. Off by default; only sends while the **RemoteHost** channel is connected (see below). The master switch — `pushKinds` picks which moments. |
