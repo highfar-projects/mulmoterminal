@@ -1069,8 +1069,27 @@ MulmoTerminal delivers the GUI MCP by **two different routes**, and they do not 
 | Tool name looks like | `mcp__mt__presentChart` | `mcp__mulmoterminal-render__presentChart` |
 
 Which route a session takes is decided by `carriesFullGuiMcp()` in
-`server/session/spawn-claude.ts` — the single view, a cell-less chat, or a cell whose cwd **is**
+`server/session/mcp-config.ts` — the single view, a cell-less chat, or anything whose cwd **is**
 the workspace take the first; anything in a project directory takes the second.
+
+**The workspace is agent-agnostic, and so is the way you start a terminal there.** All three
+agents and the launcher chips ask the same predicate, so two terminals in the workspace reach
+the same tools no matter how they were started:
+
+| Started as | In the workspace | In a project directory |
+|---|---|---|
+| claude cell (including `?gui=0`) | `mt`, every tool | the directory's registered groups |
+| codex cell | `mt`, every tool | the directory's registered groups |
+| launcher chip running `claude` | `mt`, every tool — flags inserted into the command line | nothing injected; its own `.mcp.json` loads |
+| launcher chip running `codex` | `mt`, every tool — `-c` overrides inserted | the directory's registered groups |
+| launcher chip running anything else | untouched | untouched |
+
+A chip is a command line the user wrote, so the injection is a **rewrite of their text** and is
+deliberately narrow: only a bare `claude` or `codex` is recognised, and anything else — a wrapper
+script, `FOO=1 claude` — is passed through unchanged. One consequence is worth knowing: a `claude`
+chip in the workspace is given `--strict-mcp-config`, which makes our config the only source, so
+**the user's own MCP servers do not load in that terminal**. That is the price of the chip and the
+cell carrying identical tools; a chip that needs the user's own servers should not run claude.
 
 **The asymmetry is deliberate.** `mt` is ours to name: nothing on disk holds it, it is
 regenerated on every spawn, so it was shortened to stop paying 17 characters per tool name. The

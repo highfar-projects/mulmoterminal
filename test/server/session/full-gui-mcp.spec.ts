@@ -1,10 +1,11 @@
 // @vitest-environment node
 // Which sessions carry the whole GUI MCP, and — the point of the file — which do NOT.
 //
-// PR2 gives a grid cell running in the workspace the surface the single view has always had. The
-// constraint it is written under is that a cell in a PROJECT directory keeps the behaviour it has
-// today, exactly. That is an invariant, and an invariant nothing asserts is just a hope: this is
-// the assertion.
+// PR2 gives a grid cell running in the workspace the surface the single view has always had, and
+// the follow-up extends that to every way of starting a terminal there — a codex cell, and a
+// launcher chip running either agent. The constraint all of it is written under is that anything in
+// a PROJECT directory keeps the behaviour it has today, exactly. That is an invariant, and an
+// invariant nothing asserts is just a hope: this is the assertion.
 import { describe, it, expect, afterAll } from "vitest";
 import { mkdtempSync, rmSync, mkdirSync } from "node:fs";
 import os from "node:os";
@@ -18,8 +19,9 @@ mkdirSync(PROJECT, { recursive: true });
 const REAL_CLAUDE_CWD = process.env.CLAUDE_CWD;
 process.env.CLAUDE_CWD = WORKSPACE;
 
-const { carriesFullGuiMcp } = await import("../../../server/session/spawn-claude.js");
+const { carriesFullGuiMcp } = await import("../../../server/session/mcp-config.js");
 const { buildClaudeArgs } = await import("../../../server/agents/claude-args.js");
+const { launcherCommandWithClaudeGuiMcp } = await import("../../../server/session/launcher-gui-mcp.js");
 
 afterAll(() => {
   if (REAL_CLAUDE_CWD === undefined) delete process.env.CLAUDE_CWD;
@@ -44,6 +46,14 @@ describe("carriesFullGuiMcp", () => {
 
   it("gives it to a grid cell that named no directory — that IS the workspace", () => {
     expect(carriesFullGuiMcp(GRID_CELL, undefined)).toBe(true);
+  });
+
+  // A LAUNCHER chip has no wire flag — it is never the single view — so the cwd is the only thing
+  // that can earn it, which is what the route passes `false` for. Same predicate, so a chip and the
+  // cell beside it agree about which directory is special.
+  it("answers for a launcher chip on the cwd alone", () => {
+    expect(carriesFullGuiMcp(false, WORKSPACE)).toBe(true);
+    expect(carriesFullGuiMcp(false, PROJECT)).toBe(false);
   });
 
   it("still gives it to everything that is not a grid cell, whatever the directory", () => {
@@ -93,5 +103,38 @@ describe("the argv each kind of session gets", () => {
     expect(argv).not.toContain("--mcp-config");
     expect(argv).not.toContain("--strict-mcp-config");
     expect(argv).toContain("GRID_TOOLS");
+  });
+});
+
+// The third shape: a launcher CHIP, where the same three flags have to be inserted into a command
+// line rather than appended to an argv. A chip running plain `claude` in the workspace had no
+// Canvas at all while the cell beside it had every tool — that gap is what this closes.
+describe("the command line a launcher chip ends up with", () => {
+  const GUI = { mcpConfigPath: "/home/u/.mulmoterminal/settings/s-mcp.json", allowedTools: "mcp__mt__presentChart" };
+  const rewrite = (command: string, gui: typeof GUI | null = GUI) => launcherCommandWithClaudeGuiMcp(command, gui, "darwin");
+
+  it("gives a claude chip the same three flags a claude cell is spawned with", () => {
+    expect(rewrite("claude")).toBe(
+      `claude --mcp-config '/home/u/.mulmoterminal/settings/s-mcp.json' --strict-mcp-config --allowedTools 'mcp__mt__presentChart'`,
+    );
+  });
+
+  // Directly after the program, never appended: claude's own trailing `--add-dir` is variadic, so
+  // a flag placed after it would be swallowed as one more directory.
+  it("inserts after the program and puts the user's own text back byte for byte", () => {
+    expect(rewrite("claude --model opus  --resume x")).toContain("claude --mcp-config");
+    expect(rewrite("claude --model opus  --resume x")).toMatch(/--strict-mcp-config --allowedTools '\S+' --model opus {2}--resume x$/);
+  });
+
+  // null is how a PROJECT-directory chip arrives — the route passes nothing there, so its claude
+  // reads the directory's own MCP config exactly as it did before.
+  it("leaves the command alone when there is no GUI MCP to give", () => {
+    expect(rewrite("claude", null)).toBe("claude");
+  });
+
+  // The same recogniser the codex rewriter uses, and the same refusal to see through a wrapper:
+  // this edits text the user wrote, so an unrecognised shape means leave it alone.
+  it.each([["codex"], ["zsh"], ["yarn dev"], ["FOO=1 claude"], [""], ["   "]])("leaves %s alone", (command) => {
+    expect(rewrite(command)).toBe(command);
   });
 });

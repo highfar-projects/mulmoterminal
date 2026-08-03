@@ -44,11 +44,33 @@ export function launcherAgent(command: string): SessionAgent {
 }
 
 /**
- * The command to actually run, with codex's MCP overrides inserted when this launcher runs codex.
+ * A launcher chip that runs CLAUDE, which reaches the GUI MCP through flags
+ * rather than `-c` overrides: `--mcp-config <path> --strict-mcp-config --allowedTools <list>`, the
+ * three a claude cell in the workspace is spawned with.
  *
- * The flags go directly after the program: codex's clap layout takes global options before the
- * subcommand, so appending them at the end would break `codex resume`-style invocations.
+ * `--strict-mcp-config` is in on purpose and it is the cost of exact parity: it makes our config
+ * the ONLY source, so the user's own MCP servers do not load in that terminal. Without it the chip
+ * and the cell would carry different tool sets, which is the confusion this closes (owner's call,
+ * 2026-08-03). A chip that wants the user's own servers is a chip that should not run claude.
+ *
+ * The config is a PATH, never inline JSON — see mcpConfigFileArgument.
+ *
+ * Only the workspace asks for this, and the caller decides that: a chip in a project directory is
+ * passed nothing, exactly as a project cell is, and its claude reads the directory's own config.
  */
+export function launcherCommandWithClaudeGuiMcp(
+  command: string,
+  gui: { mcpConfigPath: string; allowedTools: string } | null,
+  platform: NodeJS.Platform,
+): string {
+  if (gui === null || launcherProgram(command) !== "claude") return command;
+  const quote = shellQuoteFor(platform);
+  const flags = ["--mcp-config", quote(gui.mcpConfigPath), "--strict-mcp-config"];
+  if (gui.allowedTools) flags.push("--allowedTools", quote(gui.allowedTools));
+  return insertAfterProgram(command, flags);
+}
+
+/** The command to actually run, with codex's MCP overrides inserted when this launcher runs codex. */
 export function launcherCommandWithGuiMcp(command: string, servers: readonly GuiMcpServer[], platform: NodeJS.Platform): string {
   if (servers.length === 0 || launcherProgram(command) !== "codex") return command;
   const quote = shellQuoteFor(platform);
@@ -60,12 +82,22 @@ export function launcherCommandWithGuiMcp(command: string, servers: readonly Gui
     if (server.autoApprove) parts.push(`-c`, quote(`mcp_servers.${server.id}.default_tools_approval_mode="approve"`));
     return parts;
   });
-  // Scanned rather than split-and-rejoined: everything around the program is the user's text —
-  // quoting, spacing, and a trailing backslash-newline continuation included — and it is put back
-  // byte for byte. Trimming the tail would turn such a continuation into an unterminated command.
-  //
-  // Two index walks rather than one anchored regex: `^(\s*)(\S+)([\s\S]*)$` backtracks
-  // super-linearly on a long command (sonarjs flags it), and this says the same thing.
+  return insertAfterProgram(command, flags);
+}
+
+// Put `flags` directly after the program, leaving everything else byte for byte.
+//
+// Scanned rather than split-and-rejoined: everything around the program is the user's text —
+// quoting, spacing, and a trailing backslash-newline continuation included. Trimming the tail
+// would turn such a continuation into an unterminated command.
+//
+// Two index walks rather than one anchored regex: `^(\s*)(\S+)([\s\S]*)$` backtracks
+// super-linearly on a long command (sonarjs flags it), and this says the same thing.
+//
+// Directly after the program rather than appended, because BOTH agents need it there: codex's clap
+// layout takes global options before the subcommand (`codex resume`), and claude's own trailing
+// `--add-dir` is variadic, so a flag after it would be swallowed as one more directory.
+function insertAfterProgram(command: string, flags: readonly string[]): string {
   const isSpace = (index: number): boolean => /\s/.test(command[index] ?? "");
   let start = 0;
   while (start < command.length && isSpace(start)) start++;

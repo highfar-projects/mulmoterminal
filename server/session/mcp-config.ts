@@ -8,6 +8,7 @@
 // so the precedence rule below could not be tested without booting the server (#548).
 import type { UserMcpServer } from "../config/config-schema.js";
 import { toolGroupServerId, GUI_SERVER_ID, type ToolGroup } from "../../common/toolGroups.js";
+import { isWorkspaceCwd } from "../config/env.js";
 import type { GuiMcpServer } from "../agents/codex-args.js";
 
 export interface McpConfigInput {
@@ -21,6 +22,32 @@ export interface McpConfigInput {
 }
 
 const DEFAULT_HOST = "127.0.0.1";
+
+/**
+ * Does this session carry the WHOLE GUI MCP — every tool on the one `mt` URL — rather than the
+ * per-group URLs a directory registered for itself? Two ways to earn it, and they are different
+ * facts that used to be one flag:
+ *
+ *   `attachGuiMcp` — not a grid cell at all: the single view, or a chat spawned with no cell yet.
+ *   the CWD        — anything running in the workspace itself. Starting a terminal there is all
+ *                    but the same thing as running the single view, and that equivalence is what
+ *                    lets the single view eventually go.
+ *
+ * A session in a PROJECT directory is false on both counts and takes exactly the branch it took
+ * before any of this. Named and exported rather than left inline because that last sentence is the
+ * invariant the whole design is written around, and an invariant nothing can assert is just a hope.
+ *
+ * It lives HERE, next to the two payload builders, because all three agents now ask it — claude's
+ * argv, codex's `-c` overrides, and the launcher chip's rewritten command line. It was a local
+ * detail of spawn-claude.ts while claude was the only caller.
+ *
+ * This is also WHY THE TOOL NAMES DIFFER between cells, which looks like a bug until you know it:
+ * true carries every tool under one generated server id (`mt`), so the agent sees
+ * `mcp__mt__presentChart`; false picks the tools up from the user's per-folder config under the
+ * group ids, so the SAME tool is `mcp__mulmoterminal-render__presentChart`. Neither name is stale.
+ * See common/toolGroups.ts for why the two ids are not unified, and README's "MCP server ids".
+ */
+export const carriesFullGuiMcp = (attachGuiMcp: boolean, cwd: string | undefined): boolean => attachGuiMcp || isWorkspaceCwd(cwd);
 
 // The counterpart for GRID cells, which are handed no --mcp-config at all: their GUI tools
 // come from the user's OWN per-folder MCP config (`claude mcp add -s local`, `.mcp.json`),

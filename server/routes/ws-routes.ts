@@ -31,8 +31,9 @@ import {
 } from "../session/registry.js";
 import { SpawnRefusedError } from "../session/pty-spawn.js";
 import { bufferEarlyFrames, type EarlyFrames } from "../session/early-frames.js";
-import { launcherCommandWithGuiMcp, launcherRunsAgent } from "../session/launcher-gui-mcp.js";
-import { codexGuiMcpServers } from "../session/mcp-config.js";
+import { launcherCommandWithGuiMcp, launcherCommandWithClaudeGuiMcp, launcherRunsAgent } from "../session/launcher-gui-mcp.js";
+import { codexGuiMcpServers, carriesFullGuiMcp } from "../session/mcp-config.js";
+import { mcpConfigFileArgument } from "../session/session-settings.js";
 import { registeredGuiMcpGroups } from "../infra/gui-mcp-registration.js";
 import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups.js";
 import { parseTerminalSize, type TerminalSize } from "../../common/terminalSize.js";
@@ -65,6 +66,12 @@ export interface WsRouteDeps {
   spawnCommandPty: SpawnCommandPty;
   spawnLauncherPty: SpawnLauncherPty;
   resolveLauncher: ResolveLauncher;
+  /** The `--mcp-config` payload for a session, built per spawn (see session/mcp-config.ts). Needed
+   *  here, not only in the spawners, because a LAUNCHER chip running claude in the workspace gets
+   *  the same GUI MCP a claude cell there does — and its only lever is the command line. */
+  mcpConfigJson: (sessionId: string, host?: string) => string;
+  /** The fully-qualified GUI tool names such a chip pre-approves — the cell's `--allowedTools`. */
+  guiMcpTools: string;
 }
 
 // Pick the effective session id for a /ws connection: reattach a same-process live pty,
@@ -527,7 +534,23 @@ async function handleLaunchConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
   // never for the other reads as a broken feature. Only for a spawn, and only for codex — every
   // other command is passed through untouched (see launcher-gui-mcp.ts).
   const groups = live ? [] : await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []);
-  const launchCommand = launcherCommandWithGuiMcp(command, codexGuiMcpServers({ sessionId, port: PORT, groups, allTools: false }), process.platform);
+  // The same closing-of-the-gap for a chip that runs CLAUDE, one step further: a claude CELL in the
+  // workspace carries the whole GUI MCP, so a chip beside it that ran plain claude had no Canvas at
+  // all. `carriesFullGuiMcp` with `false` because a chip is never the single view — the cwd is the
+  // only thing that can earn it here, which keeps a chip in a project directory exactly as it was.
+  //
+  // Only on a fresh spawn: a tmux reattach picks the running program up and ignores `command`, so
+  // writing a config file for it would leave a file behind for a process that never reads it.
+  const claudeGui =
+    live || !carriesFullGuiMcp(false, cwd)
+      ? null
+      : {
+          mcpConfigPath: mcpConfigFileArgument(sessionId, deps.mcpConfigJson(sessionId, "127.0.0.1")),
+          allowedTools: deps.guiMcpTools,
+        };
+  const withCodexGui = launcherCommandWithGuiMcp(command, codexGuiMcpServers({ sessionId, port: PORT, groups, allTools: false }), process.platform);
+  // Both rewriters see the command; each recognises only its own program, so at most one fires.
+  const launchCommand = launcherCommandWithClaudeGuiMcp(withCodexGui, claudeGui, process.platform);
   if (!clientStillConnected(ws, "launch", sessionId, early)) return;
 
   // A launcher runs the user's own command line, so there is no binary pre-flight — but its cwd
