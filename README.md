@@ -8,6 +8,10 @@ coding with a single agent needs nothing but a shell — this is for when you ru
 track of which is waiting. Sessions survive a reload (tmux), work isolates in **git worktrees**,
 and a **phone push** reaches you when a turn finishes.
 
+**Every cell is a real pty.** `htop`, `lazygit`, a dev server and Claude Code are the same kind
+of object here — which is why the one-session-per-worktree limit applies to **agents only**, and
+a shell or a `yarn dev` launcher can sit in the same worktree an agent is working in.
+
 ### 📖 Documentation — **[receptron.github.io/mulmoterminal](https://receptron.github.io/mulmoterminal/)**
 
 - **User guide:** [English](https://receptron.github.io/mulmoterminal/guide/en/) — the grid
