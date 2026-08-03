@@ -389,7 +389,7 @@ today — **Claude Code** (the default), **Codex**, and **Antigravity** (`agy`).
   file exists, and injects activity hooks per spawn (see
   [Claude hook injection](#claude-hook-injection)) plus the
   [closing summary](#closing-summary) instruction.
-  The **whole** GUI MCP (`--mcp-config` + `--strict-mcp-config`) goes only to a session that is not a grid cell, or to a grid cell whose cwd IS the workspace — `carriesFullGuiMcp` in `server/session/spawn-claude.ts`, which is what makes a workspace cell equivalent to the single view 4.0.0 removed. A cell in a project directory attaches neither flag and loads that directory's own MCP config instead, including whichever [Canvas switches](#wiki-collections--the-gui-panel) are registered for it.
+  The **whole** GUI MCP (`--mcp-config` + `--strict-mcp-config`) goes only to a session that is not a grid cell, or to a grid cell whose cwd IS the workspace — `carriesFullGuiMcp` in `server/session/spawn-claude.ts`, which is what gives a workspace cell the tools the single view had before 4.0.0 removed it. That equivalence is about what the session *carries*: a workspace cell is still a grid cell in every other respect. A cell in a project directory attaches neither flag, so Claude Code loads MCP servers the ordinary way — the directory's own local scope, any `.mcp.json` up the tree, and your global ones — including whichever [Canvas switches](#wiki-collections--the-gui-panel) are registered for it.
 - **Codex** — spawned as `codex` (override with `CODEX_BIN`; `CODEX_MODEL` sets
   `--model`). Codex runs on its own WebSocket (`/ws/codex`) and its sessions appear in the
   cockpit roster next to Claude's. Because Codex only mints its rollout id **after** the first
