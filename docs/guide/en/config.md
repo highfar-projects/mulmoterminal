@@ -1,5 +1,6 @@
 ---
-title: Configuration
+title: Configuration — colours, sounds, launchers, per-project settings
+nav_title: Configuration
 layout: default
 parent: English
 nav_order: 6
