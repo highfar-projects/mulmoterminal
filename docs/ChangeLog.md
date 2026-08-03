@@ -8,6 +8,51 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.3.1 — 2026-08-04
+
+> **Setup guide:** [The workspace chip says WORKSPACE](https://receptron.github.io/mulmoterminal/guide/en/v4.3.1.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.3.1.html))
+
+A polish release on the day 4.3.0 shipped: the chip that release added now names its
+**role** instead of a folder, and a duplicated poll behind two header chips is one function.
+
+### Changed
+
+- **The workspace chip is labelled `WORKSPACE`** ([#1365](https://github.com/receptron/mulmoterminal/pull/1365)).
+  Every other chip is a *place* — the basename of a directory you have launched in. This one is a
+  *role*: the base a session works from, the only directory every GUI tool reaches, where the shared
+  wiki / collections / accounting live. Calling it `mulmoclaude` said the least interesting true
+  thing about it, and made it look like one project among the others. Upper-case because its
+  neighbours are lower-case basenames, so it does not read as a directory name either.
+
+  It overrides the "keep the user's label" rule 4.3.0 introduced — for this chip the role is worth
+  more than a name someone typed. The real path stays in the hover, where every other chip keeps it.
+  The **screen-reader name is separate from the label**: the other chips say where they go by saying
+  their directory, and this one does not, so it announces `the workspace, <path>`.
+
+### Fixed
+
+- **Two header chips shared a poll by copying it, and the copies had drifted** ([#141](https://github.com/receptron/mulmoterminal/security/code-scanning), the repository's only open code-scanning alert).
+  `useGitStatus` and `useWorkItem` each carried the same visibility-aware polling lifecycle — mount,
+  window focus, a tick, and the matching teardown. Extracted into `usePollWhileVisible` rather than
+  suppressed, because the drift was the interesting part: only `useWorkItem` listened for
+  `visibilitychange`, added there in review because switching browser **tabs** fires that and not
+  `focus`. So **the git chip showed a stale branch on a returning tab** until its next tick. One
+  definition fixes that as a side effect, which is the argument for extracting over ignoring.
+
+  `remoteHostSelfHeal.ts` keeps its own copy of the visibility check deliberately: it is not a
+  composable, it also heals on `online` and on a socket reconnect, and its tick is unconditional
+  because a heal is a no-op when already connected. Said so in the new file, so the next reader does
+  not fold it in.
+
+  Measured with the jscpd version CI pins (5.0.12 — the `npx` default reports a different set): one
+  clone on main at `useGitStatus.ts [30:69 - 43:56]`, 59 tokens, which is the alert's exact span, and
+  zero after. The alert closed on the first scan of main.
+
+### Docs
+
+- The 4.3.0 changelog's setup-guide link text now matches that page's own title, as every earlier
+  entry does.
+
 ## mulmoterminal@4.3.0 — 2026-08-04
 
 > **Setup guide:** [The workspace is one place, and an Enter that means 変換](https://receptron.github.io/mulmoterminal/guide/en/v4.3.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.3.0.html))

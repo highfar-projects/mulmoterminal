@@ -16,6 +16,8 @@ running grid. Already set up? `npx mulmoterminal@latest` is the whole thing.
 [Getting started — from zero to running](getting-started.html){: .btn .btn-purple .fs-5 .mb-4 .mb-md-0 .mr-2 }
 [Basics — how to read the screen](basics.html){: .btn .fs-5 .mb-4 .mb-md-0 }
 
+> **[What's new in 4.3.1](v4.3.1.html)** — the launcher's workspace chip is labelled **`WORKSPACE`** by its role rather than by its folder name, and the **git chip refreshes when you come back to the tab** instead of up to ten seconds later. Nothing to configure (as of 2026-08-04)
+>
 > **[What's new in 4.3.0](v4.3.0.html)** — the **workspace** reaches the same GUI tools however you start a terminal there, and the launcher **always offers it** as its first chip. The single-view GUI MCP server id is now **`mt`**, so tool names an agent sees are shorter. And an **Enter that confirms a Japanese IME candidate** stays with the IME, in the session note and in the terminal. Nothing to configure (as of 2026-08-04)
 >
 > **[What's new in 4.2.0](v4.2.0.html)** — a **self-hosted GitLab** works once you name it in `gitlabHosts`, the **Canvas and Tools panes** can take the whole terminal area, a new **worktree inherits its project's settings** one hue step off, and a terminal that stops taking input **repairs itself as you type** or says why it cannot. One key to configure (as of 2026-08-03)
