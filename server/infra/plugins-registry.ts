@@ -33,15 +33,13 @@ import { htmlByPath } from "../backends/openPath.js";
 import { createPluginRuntime } from "./pluginRuntime.js";
 import { resolvePluginTools } from "./tool-precedence.js";
 import { HOST_TOOL_DEFINITIONS } from "./host-tools.js";
-import { groupOfTool, toolGroupServerId, AUTO_ALLOWED_TOOLS, type ToolGroup } from "../../common/toolGroups.js";
+import { groupOfTool, toolGroupServerId, GUI_SERVER_ID, AUTO_ALLOWED_TOOLS, type ToolGroup } from "../../common/toolGroups.js";
 import { missingRequiredEnv, soleExecutor, isExecutor } from "./server-tool-load.js";
 import { isRecord } from "../../common/isRecord.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // ../.. climbs server/infra/ → server/ → package root, where plugins/ lives.
 const PLUGINS_DIR = path.join(__dirname, "..", "..", "plugins");
-
-const MCP_SERVER_NAME = "mulmoterminal-gui";
 
 // The gui-chat-protocol ToolContext.app — host-provided backends a plugin's
 // execute() may call (e.g. @mulmochat-plugin/generate-image calls
@@ -296,7 +294,7 @@ export function mountAllRoutes(app: Express) {
 // even have registered is harmless — an allowlist entry for a server that isn't there matches
 // nothing, which is exactly what lets the grid pass `render` unconditionally.
 export function allowedToolNames(group: ToolGroup | null = null) {
-  const serverId = group === null ? MCP_SERVER_NAME : toolGroupServerId(group);
+  const serverId = group === null ? GUI_SERVER_ID : toolGroupServerId(group);
   const defs = group === null ? toolDefinitions : toolDefinitions.filter((d) => groupOfTool(d.name) === group);
   return defs.map((d) => `mcp__${serverId}__${d.name}`);
 }

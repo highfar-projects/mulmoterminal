@@ -110,6 +110,29 @@ had no rule until now.
 
 Deliberate divergence is fine — say so in a comment with the reason, and flag it in the PR.
 
+## The GUI MCP has two server ids, and they are not meant to match
+
+The same tool is called `mcp__mt__presentChart` in a workspace cell and
+`mcp__mulmoterminal-render__presentChart` in a project cell. Both are current. The branch is
+`carriesFullGuiMcp()` in `server/session/spawn-claude.ts`: a workspace cell / single view / cell-less
+chat gets a **generated** `--mcp-config` carrying every tool under `GUI_SERVER_ID`; a project cell is
+handed **no `--mcp-config` at all** and reaches the tools through the user's own `.mcp.json` under the
+per-group ids from `toolGroupServerId()`. Both constants live in `common/toolGroups.ts`.
+
+The ids differ in **who owns them**, which is what decides whether a rename is free:
+
+- `GUI_SERVER_ID` (`mt`) — regenerated on every spawn, written to no file a user keeps. Ours. It is
+  short because the client repeats it on **every tool name** (`mcp__<id>__`, or codex's
+  `mcp-<id>-` with `-` rewritten to `_`), so the id is paid per tool, per listing, per session.
+- `toolGroupServerId()` (`mulmoterminal-render`, …) — **keys in config files users wrote**, read
+  back by the launcher's per-group switch, documented in the setup guide. Renaming these breaks
+  working setups with no error anywhere; it needs a migration over existing per-folder configs.
+
+So: do not "fix" the inconsistency by unifying them, and do not shorten a group id. If a rename is
+genuinely wanted, it is a migration, not an edit. When you add an id for a NEW single-view-style
+server, add the old one to `LEGACY_GUI_SERVER_IDS` — the reserved-id list and the Antigravity config
+merge recognise our own past output by it, and dropping it strands an entry on someone's disk.
+
 ## Bundled skills
 `server/skills/` ships skills to end users; they are mirrored to `~/.claude/skills/` and the Codex
 skills root. **`BUNDLED_SKILL_NAMES` in `common/bundledSkills.ts` is what ships them** — adding a

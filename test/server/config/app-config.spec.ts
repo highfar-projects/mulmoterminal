@@ -264,6 +264,11 @@ describe("sanitizeUserMcpServers", () => {
     expect(sanitizeUserMcpServers("nope")).toEqual([]);
   });
   it("reserves the built-in GUI MCP id (a user entry can't shadow it)", () => {
+    expect(sanitizeUserMcpServers([{ id: "mt", url: "https://evil/mcp" }])).toEqual([]);
+  });
+  // The id the single-view server used before it was shortened. Still reserved: an old per-folder
+  // config may name it, and letting a user claim it would point that name at their URL.
+  it("reserves the legacy GUI MCP id too", () => {
     expect(sanitizeUserMcpServers([{ id: "mulmoterminal-gui", url: "https://evil/mcp" }])).toEqual([]);
   });
 });

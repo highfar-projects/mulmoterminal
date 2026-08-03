@@ -21,7 +21,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { TOOL_GROUPS, toolGroupServerId, type ToolGroup } from "../../common/toolGroups.js";
+import { TOOL_GROUPS, toolGroupServerId, GUI_SERVER_ID, LEGACY_GUI_SERVER_IDS, type ToolGroup } from "../../common/toolGroups.js";
 import { isRecord } from "../../common/isRecord.js";
 
 /** agy's workspace customization dir. `.agent`/`_agents`/`_agent` are also accepted by agy; we write one. */
@@ -43,9 +43,11 @@ export interface AntigravityMcpServer {
 }
 
 // Ours to rewrite, so an entry for a group that was switched OFF is removed rather than left
-// behind. `mulmoterminal-gui` is not a group id: it is the all-tools entry an earlier version of
-// this wrote, and cleaning it up here is what stops it outliving the code that made it.
-const OUR_SERVER_IDS = new Set(["mulmoterminal-gui", ...TOOL_GROUPS.map(toolGroupServerId)]);
+// behind. GUI_SERVER_ID is not a group id: it is the all-tools entry an earlier version of this
+// wrote, and cleaning it up here is what stops it outliving the code that made it. The LEGACY ids
+// are in for exactly the same reason one step further back — the entry a still-older version wrote
+// under the id that server has since been renamed away from.
+const OUR_SERVER_IDS = new Set([GUI_SERVER_ID, ...LEGACY_GUI_SERVER_IDS, ...TOOL_GROUPS.map(toolGroupServerId)]);
 
 // The merged `mcpServers` map: the user's own entries untouched, ours replaced by exactly the
 // groups given. Pure, so the "never clobber a server we don't own" rule is testable without a

@@ -6,7 +6,7 @@ import { guiMcpUrlTemplate } from "../../../server/infra/gui-mcp-registration.js
 import { TOOL_GROUPS, toolsInGroup, toolGroupServerId, AUTO_ALLOWED_TOOLS, type ToolGroup } from "../../../common/toolGroups.js";
 
 const SESSION = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
-const GUI = "mulmoterminal-gui";
+const GUI = "mt";
 
 const config = (over: Partial<Parameters<typeof mcpConfigJson>[0]> = {}) =>
   JSON.parse(mcpConfigJson({ sessionId: SESSION, port: 34567, userMcpServers: [], ...over })).mcpServers as Record<string, { type: string; url: string }>;

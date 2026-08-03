@@ -33,6 +33,7 @@ import { readTextFile } from "../infra/read-text-file.js";
 import { writeFileAtomicSync } from "../files/atomic-write.js";
 import { isRepoEntry } from "../../common/repoEntry.js";
 import { sanitizeGitlabHosts } from "../../common/gitlabHosts.js";
+import { GUI_SERVER_ID, LEGACY_GUI_SERVER_IDS } from "../../common/toolGroups.js";
 
 export interface AppConfig {
   cwdPresets: CwdPreset[];
@@ -154,8 +155,10 @@ const MCP_ID_RE = /^[A-Za-z0-9_-]+$/;
 const MCP_URL_RE = /^https?:\/\/\S+$/;
 const MCP_SERVERS_MAX = 20;
 // The built-in GUI MCP server name — reserved so a user entry can't shadow it and
-// break mcp__mulmoterminal-gui__* tool routing.
-const RESERVED_MCP_IDS = new Set(["mulmoterminal-gui"]);
+// break mcp__<GUI_SERVER_ID>__* tool routing. The ids we shipped BEFORE stay reserved
+// too: an old session or an old per-folder config may still name one, and letting a
+// user claim it would point that name at their URL.
+const RESERVED_MCP_IDS = new Set([GUI_SERVER_ID, ...LEGACY_GUI_SERVER_IDS]);
 export function sanitizeUserMcpServers(input: unknown): UserMcpServer[] {
   if (!Array.isArray(input)) return [];
   const seen = new Set<string>();

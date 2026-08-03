@@ -7,7 +7,7 @@
 // Pure, with the port and the user's servers passed in: index.ts read both from module state,
 // so the precedence rule below could not be tested without booting the server (#548).
 import type { UserMcpServer } from "../config/config-schema.js";
-import { toolGroupServerId, type ToolGroup } from "../../common/toolGroups.js";
+import { toolGroupServerId, GUI_SERVER_ID, type ToolGroup } from "../../common/toolGroups.js";
 import type { GuiMcpServer } from "../agents/codex-args.js";
 
 export interface McpConfigInput {
@@ -21,7 +21,6 @@ export interface McpConfigInput {
 }
 
 const DEFAULT_HOST = "127.0.0.1";
-const GUI_SERVER_ID = "mulmoterminal-gui";
 
 // The counterpart for GRID cells, which are handed no --mcp-config at all: their GUI tools
 // come from the user's OWN per-folder MCP config (`claude mcp add -s local`, `.mcp.json`),

@@ -19,7 +19,7 @@ describe("plugins registry", () => {
 
   it("advertises the factory-loaded tool to the MCP broker", () => {
     expect(toolDefinitions.map((definition) => definition.name)).toContain("google");
-    expect(allowedToolNames()).toContain("mcp__mulmoterminal-gui__google");
+    expect(allowedToolNames()).toContain("mcp__mt__google");
   });
 
   it("loads every package in plugins.json without a duplicate tool name", () => {
