@@ -707,7 +707,7 @@ malformed file is ignored.
 | `theme`      | xterm palette for terminals in this directory (one of the built-in theme ids). |
 | `colors`     | Per-key xterm palette overrides applied on top of `theme` (or the app theme when `theme` is unset). Keys are xterm `ITheme` names (`background`, `foreground`, `cursor`, `selectionBackground`, the 16 ANSI colors, …); values are hex (`#rgb` / `#rrggbb` / `#rrggbbaa`). Unknown keys / bad values are dropped. |
 | `fontSize`   | Terminal font size in px for this directory (8–32), overriding the Settings value. A size outside the range is clamped; a non-number is ignored. Changing it re-fits the terminal, so the PTY learns the new width — unlike browser zoom, which leaves the two disagreeing. |
-| `orderPriority` | This directory's rank in the grid's **priority** ordering — the third mode on the toolbar's ordering button, next to auto (attention-first) and manual (the move buttons). Any integer, **lowest first**; negatives are allowed. Directories that set nothing sort last, keeping their existing order, so adding the key to one project doesn't shuffle the rest. The grid reads it in **priority** mode only; the launcher's directory chips always sort by it, so a project sits in the same place on both. |
+| `orderPriority` | This directory's rank in the grid's **priority** ordering — the third mode on the toolbar's ordering button, next to auto (attention-first) and manual (the move buttons). Any integer, **lowest first**; negatives are allowed. Directories that set nothing sort last, keeping their existing order, so adding the key to one project doesn't shuffle the rest. The grid reads it in **priority** mode only; the launcher's directory chips sort by it, so a project sits in the same place on both. The one exception is the **workspace** chip, which always leads the launcher's row regardless of any rank — it is not one of the directories being ranked against each other, and it is the one place every GUI tool is reachable (see [MCP server ids](#mcp-server-ids-why-a-workspace-cell-and-a-project-cell-disagree)). |
 | `fontFamily` | CSS font-family stack for this directory's terminals, overriding the global `fontFamily`. Use the names as your OS lists them (`"'Cica', 'MS Gothic', monospace"`). An unusable stack is ignored whole rather than half-applied; `monospace` is appended if you name no generic family. Prefer fonts whose fullwidth glyphs are exactly twice the Latin width, or box-drawing frames tear. |
 | `sound`      | Attention sound for this directory's sessions, a path **relative to the directory** (served at `GET /api/dir-sound`). The fallback for every kind. |
 | `sounds`     | Per-kind override of `sound`: `{ "command-failed": "preset:gong" }`. Each value is a `preset:<id>` or a directory-relative path, under the same confinement. |
@@ -766,7 +766,22 @@ In dev, open the Vite URL; its proxy forwards `/ws`, `/ws/pubsub`, and `/api` to
 ## Scripts (Run menu)
 
 An empty grid cell's launcher sets the **Working directory** by typing, by a preset
-chip, or with the **📁 folder button** (a native OS folder dialog). It also offers a
+chip, or with the **📁 folder button** (a native OS folder dialog). The preset chips are
+the directories you have launched in; the **workspace** leads them always, marked with an
+icon, whether or not you have ever launched there — it is the one directory where a
+session reaches every GUI tool, so it is never a click you can lose. It has no remove
+button for the same reason.
+
+**The launcher is shorter in the workspace**, because two of its choices do not apply
+there. The per-directory **Canvas switches** are replaced by a line saying every GUI tool
+is already available — a session there is handed the whole GUI MCP at spawn, so switches
+would write a registration that `--strict-mcp-config` then ignores. And the **worktree**
+section is hidden: a worktree isolates work on one codebase onto a branch, while the
+workspace is what a session works *from* (the shared wiki, collections and accounting
+live there), which is precisely what a detached branch would cut it off from. Both come
+back the moment you point the field at a project directory.
+
+It also offers a
 **run a script** row
 that launches project scripts (a dev server, tests, a build, …) **in that cell, in
 the directory the cell is pointed at** — so a whole workflow lives in one window
