@@ -1,7 +1,7 @@
 // What this cell is working on — the branch's PR and the issue behind it — for the header chip.
-// Same shape of poll as useGitStatus (mount, cwd change, window focus, a light interval while
-// visible), because it answers the same question about the same directory and a user who commits
-// or opens a PR expects both chips to catch up together.
+// Literally the same poll as useGitStatus now (usePollWhileVisible, plus a cwd watch), because it
+// answers the same question about the same directory and a user who commits or opens a PR expects
+// both chips to catch up together — which is only true if neither can drift from the other.
 //
 // The interval is slow on purpose: the server caches each (repo, branch) answer for 30s and the
 // call behind it shells out to `gh`, so polling faster buys nothing but subprocesses.

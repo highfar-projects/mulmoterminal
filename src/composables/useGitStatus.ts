@@ -1,7 +1,8 @@
 // Polls GET /api/git-status for a terminal's dir so the header can always show
-// branch / dirty / ahead·behind. Refreshes on mount, on cwd change, on window
-// focus, and on a light interval (only while the tab is visible). `refresh` is
-// exposed so a caller can force an update right after a turn finishes.
+// branch / dirty / ahead·behind. Refreshes on mount, on cwd change, and on the
+// shared visible-only poll (window focus, tab visibility, a light interval) —
+// see usePollWhileVisible. `refresh` is exposed so a caller can force an update
+// right after a turn finishes.
 import { ref, watch, type Ref } from "vue";
 import { usePollWhileVisible } from "./usePollWhileVisible";
 import type { GitStatus } from "../../common/gitStatus";
