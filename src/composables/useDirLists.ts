@@ -1,4 +1,4 @@
-import { shallowRef } from "vue";
+import { ref, shallowRef } from "vue";
 import type { PartialWorkerStatus } from "../../common/workerStatus";
 import type { PartialSessionOccupancy, SessionOccupancy } from "../../common/sessionOccupancy";
 import { isTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
@@ -14,7 +14,10 @@ import { jsonBody } from "../jsonBody";
 // - an answer for a directory the user has since typed their way off must not land under the new
 //   directory's name, so each list carries a request token and drops a superseded response;
 // - a read that fails clears the list, instead of leaving the previous directory's rows standing
-//   under a name they don't belong to.
+//   under a name they don't belong to;
+// - and the rows go the moment the directory changes rather than when the replacement lands
+//   (`forget`), because until then they are the previous directory's — offered under the new
+//   directory's name, and a click resumes exactly the session it says it will (#1372).
 
 /** A row the launcher can resume into a cell. `hidden` / `failed` / `attached` come from shared
  *  wire types the server fills — see common/workerStatus.ts and common/sessionOccupancy.ts for
@@ -106,14 +109,28 @@ function useDirList<T>(url: (dir: string) => string, parse: (body: ListBody, dir
   // shallowRef, not ref: the list is always replaced wholesale, and a generic `ref<T>` would need
   // a cast back out of UnwrapRef.
   const value = shallowRef<T>(empty());
+  // True from the moment the directory changes until that directory's list has landed — the
+  // debounce the form waits out included, since that is most of the wait. Without it an empty
+  // section and a section nobody has answered for yet look the same, and the form spends the
+  // fetch saying "this directory has none".
+  const loading = ref(false);
   let req = 0;
+
+  // The field just moved off this directory: drop its rows now, and say a replacement is coming.
+  function forget(): void {
+    req++; // an answer already in flight is the leaving directory's — it must not land
+    value.value = empty();
+    loading.value = true;
+  }
 
   async function load(dir: string | null): Promise<void> {
     const reqId = ++req;
-    if (!dir) {
-      value.value = empty();
-      return;
-    }
+    // Emptied here as well as in `forget`, so the guarantee doesn't depend on the caller having
+    // gone through it: a preset chip loads immediately without the watch (fillDir), and the
+    // worktree list is re-read after a removal.
+    value.value = empty();
+    loading.value = dir !== null;
+    if (!dir) return;
     try {
       const res = await fetch(url(dir));
       if (reqId !== req) return; // a newer request superseded this one
@@ -122,10 +139,14 @@ function useDirList<T>(url: (dir: string) => string, parse: (body: ListBody, dir
       value.value = parse(body, dir);
     } catch {
       if (reqId === req) value.value = empty();
+    } finally {
+      // Only the newest request owns the flag: a superseded one leaves it set for the request
+      // that replaced it, which is still in flight.
+      if (reqId === req) loading.value = false;
     }
   }
 
-  return { value, load };
+  return { value, loading, forget, load };
 }
 
 // Existing sessions for a directory, so an empty cell can resume one instead of starting fresh.
