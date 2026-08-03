@@ -199,14 +199,19 @@ export function ensureWorkComment(
   pr: number | null,
   options: { closeIssue?: boolean } & WorkCommentDeps = {},
 ): Promise<WorkCommentResult> {
-  const key = memoKey(repo, issue, kind, dir, pr);
+  // Starting work is not about a pull request, and the line it renders carries no number — but the
+  // client sends whatever the cell can currently see, which after a reload onto a branch that
+  // already has a PR is a number. Left on the event it would not match the `- started` line already
+  // in the comment, and every reload would add another one.
+  const eventPr = kind === "start" ? null : pr;
+  const key = memoKey(repo, issue, kind, dir, eventPr);
   if (posted.has(key)) return Promise.resolve({ posted: false, reason: "already" });
 
   return serializePerComment(commentKey(repo, issue, dir), () => {
     // Re-read after the wait: the run this one queued behind may have been the same milestone, in
     // which case there is nothing to say and no reason to ask the forge again.
     if (posted.has(key)) return Promise.resolve({ posted: false, reason: "already" });
-    return writeWorkComment(repo, issue, kind, dir, pr, options);
+    return writeWorkComment(repo, issue, kind, dir, eventPr, options);
   });
 }
 

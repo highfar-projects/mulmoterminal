@@ -162,6 +162,17 @@ describe("ensureWorkComment", () => {
     expect(gh.did("api")).toBe(0);
   });
 
+  // The client sends whatever the cell can currently see, so a reload onto a branch that already
+  // has a PR reports the start WITH a PR number. Starting work is not about that PR, and a comment
+  // that gained a second `- started` line on every reload is exactly what the marker exists to
+  // prevent (observed during review, not flagged by a bot).
+  it("does not add a second started line when the reload reports a PR alongside it", async () => {
+    const gh = fakeGh(issueView([renderWorkComment("mulmoterminal5", [STARTED])]));
+    expect(await ensureWorkComment("o/r", 966, "start", "mulmoterminal5", 983, { runGh: gh.run })).toEqual({ posted: false, reason: "already" });
+    expect(gh.did("comment")).toBe(0);
+    expect(gh.did("api")).toBe(0);
+  });
+
   it("treats another directory's comment as somebody else's", async () => {
     const gh = fakeGh(issueView([renderWorkComment("mulmoterminal2", [STARTED])]));
     expect((await ensureWorkComment("o/r", 966, "start", "mulmoterminal5", null, { runGh: gh.run })).posted).toBe(true);
