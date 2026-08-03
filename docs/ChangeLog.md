@@ -8,6 +8,19 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+### Changed — tooling
+
+- **`sonarjs/void-use` is an error, and the reason it was off was not true** ([#1362](https://github.com/receptron/mulmoterminal/issues/1362)).
+  It had been off since 4.2.0 on the reasoning that it forbids the `void` that `no-floating-promises`
+  asks for. It does not: S3735 returns early for a thenable, for `void 0`, for an IIFE, and for a
+  call it cannot type — and with no type information at all, for any call. Turning it on across the
+  repository reported **three** findings, all in `tmux-size-sync.ts` and none of them a promise:
+  `void map.delete(…)`, written to squeeze a statement into an arrow's `: void` expression body.
+  Those are block bodies now and the rule is an error. It reported nothing against the **163** other
+  uses of the operator in `server/`, `src/` and `common/` (88 in `.ts`, 75 in `.vue` script blocks,
+  counted on the AST), the sixty-six from #1300 among them — which is the point: the two rules never
+  fought, so nothing had to be chosen between them.
+
 ## mulmoterminal@4.2.0 — 2026-08-03
 
 > **Setup guide:** [Self-hosted GitLab, panes that take the whole terminal, and worktrees that keep their colours](https://receptron.github.io/mulmoterminal/guide/en/v4.2.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.2.0.html))
@@ -182,6 +195,9 @@ finally looks at the whole repository rather than two fifths of it.
 - **Sixty-six unawaited promises are marked `void`** (#1300), warnings 102 → 33. None was a real bug;
   the value is that the next floating-promise warning means somebody actually forgot an `await`.
   `sonarjs/void-use` is off, since it forbids exactly what `no-floating-promises` asks for.
+  **Corrected in [#1362](https://github.com/receptron/mulmoterminal/issues/1362):** that last sentence
+  was wrong. The rule excludes promises, so it never saw any of these sixty-six, and it is an error
+  again — see the Unreleased entry above.
 - **Type information reaches `.vue`** (#1300), which made `no-floating-promises` visible in SFCs for
   the first time (34 → 66 findings). The wiring is two edits and one of them is a trap: naming `.vue`
   in the type-aware block's `files` replaces `vue-eslint-parser` and every SFC fails to parse.

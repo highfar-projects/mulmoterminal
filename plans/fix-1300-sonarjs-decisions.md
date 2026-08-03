@@ -76,6 +76,11 @@ union が契約そのもの。潰すには全部を箱に入れることにな�
 
 `no-floating-promises` が求める `void` を禁じる。両立しないので、await 忘れを捕まえる方を採る。
 
+> **訂正 (#1362)**: この判断は誤り。S3735 は thenable・`void 0`・IIFE・型が付かない呼び出しを
+> 先に除外する（型情報が無い場合は呼び出し式を一律除外する）ので、`no-floating-promises` とは
+> 矛盾しない。ここで数えた 3 件は promise ではなく `void map.delete(…)` だった。
+> 3 件を直して **error** に変更済み。→ `plans/fix-1362-void-use.md`
+
 ## warn のまま残したもの — `deprecation`（5件）
 
 **意図的に使っている外部 API なので 0 にはならない**が、**新しい deprecation が出たときは見たい**。
