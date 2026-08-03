@@ -9,7 +9,7 @@ import {
   glabIssueIsOpen,
   glabMrBody,
   glabMrPhase,
-  glabNoteBodies,
+  glabNotes,
   normalizeGlabIssue,
   normalizeGlabIssueDetail,
   normalizeGlabMr,
@@ -237,29 +237,35 @@ describe("glabIssueViewArgs", () => {
 
 // Existing comments, for the duplicate check that keeps a work comment from being written twice.
 // These shapes were read back from gitlab.com after posting a real note.
-describe("glabNoteBodies", () => {
-  const userNote = { id: 1, body: "started work in mulmoterminal4", system: false };
+describe("glabNotes", () => {
+  const userNote = { id: 1, body: "started work in mulmoterminal4", system: false, created_at: "2026-08-04T14:20:31.000Z" };
   // GitLab writes its own notes for closing, labelling, editing the description. They are not
   // comments anyone left — counting them would let a closed-once issue read as already commented.
   const systemNote = { id: 2, body: "closed", system: true };
 
   it("keeps what a person wrote and drops what GitLab wrote", () => {
-    expect(glabNoteBodies([userNote, systemNote])).toEqual(["started work in mulmoterminal4"]);
+    expect(glabNotes([userNote, systemNote])).toEqual([{ id: "1", body: "started work in mulmoterminal4", createdAt: "2026-08-04T14:20:31.000Z" }]);
   });
 
   it("treats a note with no system flag as a person's", () => {
-    expect(glabNoteBodies([{ id: 3, body: "no flag here" }])).toEqual(["no flag here"]);
+    expect(glabNotes([{ id: 3, body: "no flag here" }])).toEqual([{ id: "3", body: "no flag here", createdAt: null }]);
   });
 
   it.each([
     ["not an array", { notes: [] }],
     ["null", null],
   ])("is empty for %s", (_case, raw) => {
-    expect(glabNoteBodies(raw)).toEqual([]);
+    expect(glabNotes(raw)).toEqual([]);
   });
 
   it("survives a note with no body", () => {
-    expect(glabNoteBodies([{ id: 4, system: false }])).toEqual([""]);
+    expect(glabNotes([{ id: 4, system: false }])).toEqual([{ id: "4", body: "", createdAt: null }]);
+  });
+
+  // The id is what the PUT that edits a note is addressed to. A note that arrives without a usable
+  // one can still be read — it just cannot be updated, and the caller has to be able to see that.
+  it("reports a note with no usable id rather than inventing one", () => {
+    expect(glabNotes([{ body: "who wrote this", system: false }])).toEqual([{ id: null, body: "who wrote this", createdAt: null }]);
   });
 });
 
