@@ -5,7 +5,8 @@
 //
 // The interval is slow on purpose: the server caches each (repo, branch) answer for 30s and the
 // call behind it shells out to `gh`, so polling faster buys nothing but subprocesses.
-import { ref, watch, onMounted, onUnmounted, type Ref } from "vue";
+import { ref, watch, type Ref } from "vue";
+import { usePollWhileVisible } from "./usePollWhileVisible";
 import { EMPTY_WORK_ITEM, isIssueNumber, isPrPhase, type WorkItem } from "../../common/prPhase";
 import { isRecord } from "../../common/isRecord";
 import { isIssueWorkCommentsEnabled } from "./issueWorkComments";
@@ -118,24 +119,7 @@ export function useWorkItem(cwd: Ref<string | null>) {
     }
   }
 
-  const refreshIfVisible = () => {
-    if (document.visibilityState === "visible") void refresh();
-  };
-
-  let timer: ReturnType<typeof setInterval> | undefined;
-  onMounted(() => {
-    void refresh();
-    window.addEventListener("focus", refreshIfVisible);
-    // Switching browser TABS fires this and not `focus`, and at a 30s cadence a returning tab
-    // would otherwise show the previous PR state for most of a minute (CodeRabbit review).
-    document.addEventListener("visibilitychange", refreshIfVisible);
-    timer = setInterval(refreshIfVisible, POLL_MS);
-  });
-  onUnmounted(() => {
-    window.removeEventListener("focus", refreshIfVisible);
-    document.removeEventListener("visibilitychange", refreshIfVisible);
-    if (timer) clearInterval(timer);
-  });
+  usePollWhileVisible(() => void refresh(), POLL_MS);
   watch(cwd, () => void refresh());
 
   return { item, refresh };

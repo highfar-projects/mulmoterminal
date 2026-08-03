@@ -10,7 +10,7 @@ Entries here are folded into the next release's heading when it ships.
 
 ## mulmoterminal@4.3.0 — 2026-08-04
 
-> **Setup guide:** [The workspace is where every GUI tool lives, and an Enter that means 変換](https://receptron.github.io/mulmoterminal/guide/en/v4.3.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.3.0.html))
+> **Setup guide:** [The workspace is one place, and an Enter that means 変換](https://receptron.github.io/mulmoterminal/guide/en/v4.3.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.3.0.html))
 
 Two things you can see. **The workspace now behaves as one place** rather than four: whichever way
 you start a terminal there — a claude cell, a codex cell, or a launcher chip — it reaches the same
