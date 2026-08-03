@@ -1,5 +1,6 @@
 ---
-title: Feature reference
+title: Feature reference — parallel terminals, worktrees, cost, phone
+nav_title: Feature reference
 layout: default
 parent: English
 nav_order: 5

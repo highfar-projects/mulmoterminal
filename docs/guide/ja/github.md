@@ -1,5 +1,6 @@
 ---
-title: GitHub — PR / Issue 横断ビュー
+title: GitHub の issue から、1クリックでエージェントを起動する
+nav_title: GitHub
 layout: default
 parent: 日本語
 nav_order: 9

@@ -1,5 +1,6 @@
 ---
-title: Using another model via OpenRouter
+title: Run Claude Code against another model (OpenRouter, local)
+nav_title: Other models
 layout: default
 parent: English
 nav_order: 10

@@ -1,5 +1,6 @@
 ---
-title: Scenarios
+title: Git worktrees for parallel AI agents, and other workflows
+nav_title: Scenarios
 layout: default
 parent: English
 nav_order: 4

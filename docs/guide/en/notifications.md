@@ -1,5 +1,6 @@
 ---
-title: Mobile notifications (Web Push)
+title: Phone notifications when a coding agent needs you
+nav_title: Mobile notifications
 layout: default
 parent: English
 nav_order: 7

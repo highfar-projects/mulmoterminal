@@ -1,5 +1,6 @@
 ---
-title: 用語集
+title: 用語集 — 並列エージェント・worktree・バイブコーディング
+nav_title: 用語集
 layout: default
 parent: 日本語
 nav_order: 12
@@ -73,6 +74,18 @@ MulmoTerminal はこのやり方を**ターミナルで**やるための画面�
 
 3.x までは `/chat` の**単一ビュー**が持っていました。4.0.0 でそのビューは廃止され、パネルは拡大した
 セルへ移りました。1 体がウィンドウを占有するという点で、指しているものは同じです。
+
+## ワークスペース（workspace） {#workspace}
+
+サーバの**既定の作業ディレクトリ**（`CLAUDE_CWD`）。
+決まり方は `--cwd` > 環境変数 `CLAUDE_CWD` > `npx mulmoterminal` を実行したディレクトリ の順で、サーバを直接起動したときは `~/mulmoclaude` です。
+起動時に `Workspace: …` と表示されるのがその答えです。
+Collections・Wiki・Accounting が読み書きするのはここで、MulmoClaude と併用するなら**両者で同じディレクトリ**（既定 `~/mulmoclaude`）にします。
+MulmoClaude を clone したディレクトリのことではありません。
+
+プロジェクトのディレクトリとは扱いが違い、**ワークスペースで起動した Claude のセルだけ**が GUI MCP をフルで持ちます（3.x までの単一ビューと同じ状態）。
+
+→ [どのディレクトリで起動するか](basics.html#launch-dir)
 
 ## git worktree
 

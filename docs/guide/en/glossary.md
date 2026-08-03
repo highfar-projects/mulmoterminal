@@ -1,5 +1,6 @@
 ---
-title: Glossary
+title: Glossary — parallel agents, worktrees, vibe coding
+nav_title: Glossary
 layout: default
 parent: English
 nav_order: 12
@@ -73,6 +74,16 @@ documents, HTML and slides rather than printed text.
 
 Until 3.x it belonged to a separate *single view* at `/chat`. That view was removed in 4.0.0 and the
 panel moved to the zoomed cell, which is the same thing — one agent with the window to itself.
+
+## Workspace {#workspace}
+
+The server's **default working directory** (`CLAUDE_CWD`) — settled in the order `--cwd`, the `CLAUDE_CWD` environment variable, then the directory you ran `npx mulmoterminal` in; a server started directly falls back to `~/mulmoclaude`.
+It is printed as `Workspace: …` at startup.
+Collections, Wiki and Accounting read and write there, and if you also run MulmoClaude it should be **the same directory for both** (`~/mulmoclaude` by default) — not the directory you cloned MulmoClaude into.
+
+It is treated differently from a project directory: **only a Claude cell launched in the workspace** carries the whole GUI MCP, the way the single view in 3.x did.
+
+→ [Which directory to launch in](basics.html#launch-dir)
 
 ## git worktree
 
