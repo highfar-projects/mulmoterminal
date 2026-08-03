@@ -54,6 +54,7 @@ import { TERMINAL_FONT_SIZE_DEFAULT } from "../../common/terminalFontSize";
 import { TERMINAL_FONT_FAMILY_DEFAULT } from "../../common/terminalFontFamily";
 import { getTerminalSubmitMode } from "./terminalSubmitMode";
 import { clipboardActionFor, selectionToCopy } from "../../common/terminalClipboard";
+import { isImeConfirming } from "./imeComposition";
 import { sendBytesFor, type Keymap, type KeymapKeyEvent } from "../../common/keymap";
 import { getActiveKeymap } from "./activeKeymap";
 import { isCopyOnSelectEnabled } from "./copyOnSelect";
@@ -426,6 +427,12 @@ function wireTerminalInput(term: Terminal, c: Conn): void {
   // the more specific binding should win: copy/paste answer for at most two keys, and a `send`
   // on Enter is someone deliberately overriding the submit behaviour for this one keystroke.
   term.attachCustomKeyEventHandler((e) => {
+    // Before any of the three: a key that is confirming an IME candidate belongs to the IME, and
+    // all three below would otherwise claim it. Each already refuses `e.isComposing`, which covers
+    // Chrome and Firefox — this is the Safari case, where compositionend has already fired and the
+    // flag is false by now (#1353). `true` hands the key back to xterm, which is what happens
+    // anyway when none of the three matches.
+    if (isImeConfirming(e)) return true;
     if (clipboardActionFor(getActiveKeymap(), e, term.hasSelection())) return false;
     if (!onSend(e)) return false;
     return onEnter(e);

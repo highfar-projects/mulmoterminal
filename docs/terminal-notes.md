@@ -86,7 +86,13 @@ so a seeded prompt was typed and never sent on an `esc-cr` host), scoped
 to Claude sessions only (shell/codex keep plain CR). See the [config guide](guide/en/config.html#terminal-submit).
 Anything auto-submitted also ends its line with a space (`submittableLine`, #1142), or an open
 `/command` / `@path` completion menu eats the submit — on **either** mapping.
-The `esc-cr` bare-Enter interception is guarded on `isComposing` so IME confirm isn't eaten.
+The `esc-cr` bare-Enter interception is guarded so IME confirm isn't eaten — in **two** places, and
+both are needed. `enterKeyOverride` refuses `e.isComposing`, which is the Chrome / Firefox shape; the
+custom key handler additionally refuses `isImeConfirming(e)` (`src/composables/imeComposition.ts`),
+because **Safari fires `compositionend` BEFORE the confirming keydown** and the flag is already false
+by then — so on Safari the pure guard alone submitted the half-converted line (#1353). The same
+handler covers the keymap and clipboard paths, and the grid's window-level shortcut listener asks the
+same question.
 
 ### Links — three independent mechanisms
 
@@ -347,7 +353,7 @@ looking) — flag them for QA on the release.
 | OSC 8 links | tmux `terminal-features '*:hyperlinks'` present; xterm `linkHandler` set | click Claude statusline `PR #NNNN` → opens the PR (no confirm dialog) |
 | OSC 52 clipboard | tmux `Ms` override + `set-clipboard on` present (`planMsOverride`) | Claude auto-copy reaches the browser clipboard |
 | File-path links | `registerFilePathLinks` order vs WebLinks; `/api/files/raw` cwd containment | click a generated file path → previews the file |
-| Enter / newline | `terminalSubmit` mapping + `isComposing` guard; `macOptionIsMeta` | Enter submits, Shift+Enter newlines; IME confirm not eaten; both `cr` and `esc-cr` |
+| Enter / newline | `terminalSubmit` mapping + `isComposing` guard + `isImeConfirming` (Safari's compositionend-first ordering); `macOptionIsMeta` | Enter submits, Shift+Enter newlines; IME confirm not eaten on any browser; both `cr` and `esc-cr` |
 | Mouse / wheel | `guardMouseTracking` swallow set (1000/1002/1003/1006); wheel→SGR in alt buffer; `wheelNotches` accumulation vs xterm's own `consumeWheelEvent` | wheel scrolls transcript (not prompt history); drag selects, doesn't emit mouse reports; a trackpad swipe moves a TUI about as far as it moves the scrollback |
 | Reattach | `stripTerminalQueries` patterns; replay buffer size; `tmuxTerminalModes` still reports `alternate_on` / `mouse_*_flag`, and `refresh-client` still forces a FULL repaint, on the installed tmux | reattaching a session doesn't leak `0;276;0c`-style junk; scrollback survives; after a reload the wheel still scrolls a Claude cell's transcript, and the screen matches `capture-pane` rather than showing spliced-together fragments (#1073) |
 
