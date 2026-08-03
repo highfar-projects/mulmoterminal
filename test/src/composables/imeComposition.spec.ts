@@ -53,4 +53,32 @@ describe("isImeConfirming", () => {
     await new Promise((r) => setTimeout(r, SAFARI_IME_RACE_WINDOW_MS + 20));
     expect(isImeConfirming(enter())).toBe(false);
   });
+
+  // The state is module-level, so it does NOT go away with a component the way per-instance state
+  // would. A composition abandoned without its `compositionend` — a tab switch, an input torn down
+  // mid-word — would otherwise leave the flag set and suppress every later keystroke: no grid
+  // shortcuts and no terminal Enter until reload. Worse than the bug this module prevents.
+  it("forgets a composition abandoned without compositionend, on losing focus", () => {
+    fire("compositionstart");
+    expect(isImeConfirming(enter())).toBe(true);
+
+    window.dispatchEvent(new Event("blur"));
+
+    expect(isImeConfirming(enter())).toBe(false);
+  });
+
+  // `blur` does not bubble; the listener is in capture on `window` so an element's blur is seen on
+  // the way down. Pinning it because a plain (bubbling) listener would silently miss this one.
+  it("forgets it when the element that was composing blurs", () => {
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+
+    fire("compositionstart");
+    expect(isImeConfirming(enter())).toBe(true);
+
+    input.dispatchEvent(new Event("blur")); // not bubbling — only capture on window sees it
+
+    expect(isImeConfirming(enter())).toBe(false);
+    input.remove();
+  });
 });

@@ -22,10 +22,20 @@ if (typeof window !== "undefined") {
   // handler already listens in capture — the flag has to be set before either of them reads it.
   window.addEventListener("compositionstart", shared.onCompositionStart, true);
   window.addEventListener("compositionend", shared.onCompositionEnd, true);
+  // A composition belongs to whatever element has focus, and `compositionend` is not guaranteed to
+  // arrive when that ends some other way — a tab switch, or the input being torn down mid-word.
+  // Per-component state would just go away with the component; this one does not, so a flag left
+  // set here suppresses EVERY later keystroke: no grid shortcuts and no terminal Enter, until the
+  // page is reloaded. That is a worse failure than the one this module exists to prevent.
+  //
+  // `blur` does not bubble, but a capture-phase listener on `window` still sees an element's blur
+  // on the way down, AND the window's own — one listener for both.
+  window.addEventListener("blur", shared.onBlur, true);
 }
 
 /** True while an IME candidate is open, and for a moment after Safari closes one. */
 export const isImeConfirming = (event: KeyboardEvent): boolean => shared.isImeConfirmation(event);
 
-/** Test seam: drop any composition state, as a real blur would. */
+/** Drop any composition state, as losing focus does. Exported for specs, which share this module's
+ *  state and would otherwise carry a composition from one test into the next. */
 export const resetImeComposition = (): void => shared.onBlur();
