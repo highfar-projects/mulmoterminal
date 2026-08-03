@@ -107,7 +107,12 @@ function mountCell(
 // first. Throws when nothing matches, so a stale selector fails as a selector rather than as a
 // puzzling assertion about `undefined`.
 function chipForPath(w: ReturnType<typeof mountCell>, path: string) {
-  const chip = w.findAll('[data-testid="cell-chip"]').find((c) => c.find('[data-testid="cell-chip-main"]').attributes("title")?.startsWith(path));
+  // A WHOLE-path match: the title is the path, optionally followed by " — " and a reason, so
+  // `startsWith(path)` alone would let a request for `/repo` select `/repo-backup` (CodeRabbit).
+  const chip = w.findAll('[data-testid="cell-chip"]').find((c) => {
+    const title = c.find('[data-testid="cell-chip-main"]').attributes("title") ?? "";
+    return title === path || title.startsWith(`${path} —`);
+  });
   if (!chip) throw new Error(`no chip for ${path}`);
   return chip;
 }

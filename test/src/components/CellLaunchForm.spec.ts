@@ -35,10 +35,18 @@ const mountForm = (
 
 // The launch button of the chip for a given directory. The workspace chip is always first now, so
 // selecting a chip by position picks the wrong one.
-const launchButtonFor = (w: ReturnType<typeof mountForm>, path: string) => {
-  const chip = w.findAll('[data-testid="cell-chip"]').find((c) => c.find('[data-testid="cell-chip-main"]').attributes("title")?.startsWith(path));
+const launchButtonFor = (w: ReturnType<typeof mountForm>, path: string) => chipForPath(w, path).find('[data-testid="cell-chip-launch"]');
+
+// The chip pointing at exactly this directory. The title is the path, optionally followed by " — "
+// and a reason (running here / the workspace), so a WHOLE-path match is required: `startsWith(path)`
+// alone would let a request for `/repo` select `/repo-backup` (CodeRabbit on #1359).
+const chipForPath = (w: ReturnType<typeof mountForm>, path: string) => {
+  const chip = w.findAll('[data-testid="cell-chip"]').find((c) => {
+    const title = c.find('[data-testid="cell-chip-main"]').attributes("title") ?? "";
+    return title === path || title.startsWith(`${path} —`);
+  });
   if (!chip) throw new Error(`no chip for ${path}`);
-  return chip.find('[data-testid="cell-chip-launch"]');
+  return chip;
 };
 
 const worktree = (over: Partial<WorktreeRow> = {}): WorktreeRow => ({ path: "/wt/fix-login", branch: "fix-login", task: "fix-login", dirty: false, ...over });
