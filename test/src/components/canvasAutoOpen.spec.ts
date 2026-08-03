@@ -144,7 +144,10 @@ describe("the canvas opening itself when the agent draws", () => {
     expect(canvasOpen(w)).toBe(false);
   });
 
-  // Nothing is enlarged, so there is no slot to put it in.
+  // Nothing is enlarged, so there is no slot to put it in — and this component cannot make one:
+  // un-zoomed it is handed a single PAGE of cells, while the drawing may be on another. GridView
+  // owns that case (enlarge the drawing cell, then open the pane here); see
+  // gridCanvasAutoExpand.spec.ts.
   it("does nothing while no cell is enlarged", async () => {
     const w = mountGrid([cell(1, "s1")], null);
     await flushPromises();
@@ -218,6 +221,47 @@ describe("the canvas opening itself when the agent draws", () => {
     expect(canvasOpen(w)).toBe(false);
     // And above all: no attempt to drag cell 1 back into the zoom.
     expect(w.emitted("toggle-expand")).toBeUndefined();
+  });
+
+  // The same race one step out, for the caller that DOES enlarge without a click: GridView's
+  // reveal of a drawing on the tiled grid. Its preconditions (nothing enlarged, still on the grid)
+  // are checked before a flush that then takes a network round trip, so they are re-asked through
+  // `stillWanted` on the far side of it — otherwise the reveal enlarges over a zoom the user made
+  // in the meantime, in exactly the situations it means to keep out of. Raised by Codex on PR #1371.
+  it("drops an un-clicked reveal whose conditions stopped holding during the flush", async () => {
+    const w = mountGrid([cell(1, "s1"), cell(2, "s2")], null);
+    await flushPromises();
+    w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-files");
+    await flushPromises();
+
+    let finishFlush: () => void = () => {};
+    filesStub.flush.mockReturnValue(new Promise<undefined>((resolve) => (finishFlush = () => resolve(undefined))));
+
+    // What GridView passes: "still tiled, still on the grid" — false by the time the save lands.
+    let wanted = true;
+    const opening = (w.vm as unknown as { openCanvasFor: (u: number, e?: boolean, s?: () => boolean) => Promise<void> }).openCanvasFor(1, true, () => wanted);
+    wanted = false;
+    finishFlush();
+    await opening;
+    await flushPromises();
+
+    expect(w.emitted("toggle-expand")).toBeUndefined();
+    expect(canvasOpen(w)).toBe(false);
+    // The files pane keeps the slot it had: nothing was taken from the user.
+    expect(w.find(".stub-files-pane").exists()).toBe(true);
+  });
+
+  // A CLICK passes no guard: "bring that cell here" is a request that survives whatever moved
+  // while the buffer was going down.
+  it("still enlarges for a click, which passes no condition to re-check", async () => {
+    const w = mountGrid([cell(1, "s1"), cell(2, "s2")], null);
+    await flushPromises();
+
+    // The unread-canvas chip on a tiled cell.
+    w.findComponent({ name: "TerminalCell" }).vm.$emit("open-canvas");
+    await flushPromises();
+
+    expect(w.emitted("toggle-expand")).toEqual([[1]]);
   });
 
   // The subscription follows the enlarged cell, so walking the zoom must not leave the old

@@ -112,9 +112,15 @@ const { colors: presetColors } = useDirColors(presetPaths);
 const runningCwds = computed(() => new Set(props.openCwds ?? []));
 const isCwdRunning = (path: string): boolean => runningCwds.value.has(path);
 
-const { value: resumable, load: loadResumable } = useResumableSessions();
-const { value: scriptList, load: loadScripts } = useDirScripts();
-const { value: worktreeList, load: loadWorktrees } = useDirWorktrees();
+const { value: resumable, loading: resumableLoading, forget: forgetResumable, load: loadResumable } = useResumableSessions();
+const { value: scriptList, loading: scriptsLoading, forget: forgetScripts, load: loadScripts } = useDirScripts();
+const { value: worktreeList, loading: worktreesLoading, forget: forgetWorktrees, load: loadWorktrees } = useDirWorktrees();
+
+// One row for the three, not one skeleton each: after the reset there is nothing clickable left to
+// mislabel, so its job is only to say why the space below is empty — and a per-section placeholder
+// would have to invent headings for sections this directory may not have at all (no git repo, no
+// worktree section).
+const dirListsLoading = computed(() => resumableLoading.value || scriptsLoading.value || worktreesLoading.value);
 
 // A worktree can be launched into without touching its row: pasted into the field, or reached by a
 // preset chip (launching in one records it as a recent directory, so worktree paths DO become
@@ -158,6 +164,16 @@ function loadForDir(dir: string | null): void {
   void loadWorktrees(dir);
   void loadMcpGroups(dir);
 }
+
+// …and dropped as one, the moment the field stops naming the directory they describe. Everything
+// here is offered under whatever the field now says, so a row that outlives the change is an offer
+// to open a session in a directory the form is no longer pointed at (#1372).
+function forgetForDir(): void {
+  forgetResumable();
+  forgetScripts();
+  forgetWorktrees();
+  forgetMcpGroups();
+}
 onMounted(() => loadForDir(targetDir.value));
 
 // A programmatic dir change (fillDir) loads the lists immediately, so the watch below must skip
@@ -175,10 +191,12 @@ watch([() => props.dir, () => props.defaultCwd], () => {
     skipDirWatch = false;
     return;
   }
-  // The tool-group switches belong to a directory, and this one just stopped being it. They go as
-  // soon as the field changes rather than 300ms later, so a flip cannot land on the directory the
-  // user has typed their way off. The reload below puts them back for the new one.
-  forgetMcpGroups();
+  // The lists and the tool-group switches belong to a directory, and this one just stopped being
+  // it. They go as soon as the field changes rather than when the reload finally answers: a flip
+  // must not land on the directory the user has typed their way off, and a resume row must not be
+  // clickable under a directory it has nothing to do with. The reload below puts back the new
+  // directory's own.
+  forgetForDir();
   reloadTimer = setTimeout(() => loadForDir(targetDir.value), DIR_RELOAD_DEBOUNCE_MS);
 });
 onUnmounted(() => {
@@ -568,6 +586,18 @@ async function removeWorktree(w: Worktree): Promise<void> {
         </label>
       </template>
     </template>
+    <!-- Everything below is per-directory and is dropped the moment the field changes, so without
+         this the sections read "this directory has no sessions, no worktrees, no scripts" for the
+         length of the debounce and the fetch — an answer, and a wrong one. -->
+    <div
+      v-if="dirListsLoading"
+      data-testid="cell-dir-loading"
+      class="flex w-full max-w-[360px] items-center justify-center gap-1.5 font-sans text-[11px] text-dim"
+      role="status"
+    >
+      <span class="material-symbols-outlined animate-spin text-[14px]" aria-hidden="true">progress_activity</span>
+      Loading this directory's sessions, worktrees and scripts…
+    </div>
     <!-- Not in the workspace, even when it happens to be a git repo. A worktree isolates work on
          ONE codebase onto a branch; the workspace is the hub a session works FROM — the place the
          agent reads and writes shared state (wiki, collections, accounting), which is exactly what

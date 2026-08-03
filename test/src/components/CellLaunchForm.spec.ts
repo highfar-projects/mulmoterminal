@@ -430,3 +430,74 @@ describe("what the workspace chip is called", () => {
     expect(spoken).not.toContain("WORKSPACE");
   });
 });
+
+// #1372: every list under the field describes the directory the field named when it was fetched,
+// and the field is editable the whole time. What used to happen is that the previous directory's
+// resume rows stayed clickable — through a 300ms debounce and a round trip — under the new
+// directory's name, and a click resumed exactly the session it offered.
+describe("changing the directory", () => {
+  const oldSession = { id: "s-old", title: "an old chat", mtime: 1 };
+  // Comfortably over the form's own 300ms debounce: the wait is real time, and on a runner also
+  // building it is the load spike rather than any one test that decides how long this takes.
+  const UNTIL_LOADED_TIMEOUT_MS = 3000;
+  const POLL_MS = 25;
+
+  // A server that answers per directory, so "the rows came back" can be told from "the rows never
+  // left" — the default mock replies the same thing whatever it is asked about.
+  function mockFetchPerDir(rows: Record<string, { worktrees: WorktreeRow[]; sessions: SessionRow[] }>) {
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      const cwd = new URL(u, "http://localhost").searchParams.get("cwd") ?? "";
+      const here = rows[cwd] ?? { worktrees: [], sessions: [] };
+      if (u.includes("/api/worktrees")) return { ok: true, json: async () => ({ isGit: true, base: "main", worktrees: here.worktrees }) };
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ cwd, sessions: here.sessions }) };
+      return { ok: true, json: async () => ({}) };
+    }) as unknown as typeof fetch;
+  }
+
+  // Real timers: the debounce is what this is about, and faking it here would only pin that the
+  // reload is scheduled — which the spec above already covers. Gives up LOUDLY rather than falling
+  // through, so a loaded runner that never finished loading says so instead of failing on the row
+  // assertion below, which would read as "the fix regressed" (#1314).
+  const untilLoaded = async (w: ReturnType<typeof mountForm>): Promise<void> => {
+    await flushPromises(); // a mount's own load is in flight before the row it renders exists
+    for (let waited_ms = 0; waited_ms < UNTIL_LOADED_TIMEOUT_MS; waited_ms += POLL_MS) {
+      if (!w.find('[data-testid="cell-dir-loading"]').exists()) return;
+      await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+      await flushPromises();
+    }
+    throw new Error(`the launcher was still loading ${UNTIL_LOADED_TIMEOUT_MS}ms after the directory changed`);
+  };
+
+  it("drops the previous directory's rows in the same tick, before the debounce has even elapsed", async () => {
+    mockFetch([worktree({ session: null })], [oldSession]);
+    const w = mountForm();
+    await flushPromises();
+    expect(w.find('[data-testid="cell-resume-item"]').exists()).toBe(true);
+    expect(w.find('[data-testid="worktree-reuse"]').exists()).toBe(true);
+    expect(w.find('[data-testid="cell-dir-loading"]').exists()).toBe(false);
+
+    await w.setProps({ dir: "/elsewhere" });
+
+    expect(w.find('[data-testid="cell-resume-item"]').exists()).toBe(false);
+    expect(w.find('[data-testid="worktree-reuse"]').exists()).toBe(false);
+    expect(w.find('[data-testid="cell-dir-loading"]').exists()).toBe(true);
+  });
+
+  it("shows the new directory's own rows once they land, and stops saying it is loading", async () => {
+    mockFetchPerDir({
+      "/repo": { worktrees: [worktree({ session: null })], sessions: [oldSession] },
+      "/elsewhere": { worktrees: [], sessions: [{ id: "s-new", title: "the other project", mtime: 2 }] },
+    });
+    const w = mountForm();
+    await untilLoaded(w);
+    expect(w.find('[data-testid="ri-title"]').text()).toBe("an old chat");
+
+    await w.setProps({ dir: "/elsewhere" });
+    await untilLoaded(w);
+
+    expect(w.find('[data-testid="cell-dir-loading"]').exists()).toBe(false);
+    expect(w.find('[data-testid="ri-title"]').text()).toBe("the other project");
+    expect(w.find('[data-testid="worktree-reuse"]').exists()).toBe(false);
+  });
+});
