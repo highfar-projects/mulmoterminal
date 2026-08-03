@@ -36,7 +36,11 @@
 
 **表示（`CellLaunchForm.vue`）:**
 
-- ラベルの前に Material Symbols の `workspaces` アイコン。**ラベル自体は変えない**
+- ラベルの前に Material Symbols の `workspaces` アイコン
+- ラベルは **`WORKSPACE`**（大文字）。当初は「ラベルはそのまま」で入れたが、オーナー判断で役割名に変更。
+  隣が全部小文字の basename なので、大文字はディレクトリ名として読まれないための区別でもある。
+  実パスは hover に残る（他のチップと同じ場所）。**読み上げ**だけは `the workspace, <path>` にする —
+  他のチップはラベルがそのままディレクトリだが、この 1 つだけは役割名で、行き先を言っていないため
 - **× ボタンを出さない** — 合成されたエントリなので消すものが無く、消しても次の描画で戻る
 - hover / aria-label に「the workspace: every GUI tool is available here」を足す。アイコンだけでは
   *なぜ*特別なのかが言えず、他にそれを言う場所が画面上に無いため

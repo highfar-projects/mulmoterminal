@@ -767,10 +767,12 @@ In dev, open the Vite URL; its proxy forwards `/ws`, `/ws/pubsub`, and `/api` to
 
 An empty grid cell's launcher sets the **Working directory** by typing, by a preset
 chip, or with the **📁 folder button** (a native OS folder dialog). The preset chips are
-the directories you have launched in; the **workspace** leads them always, marked with an
-icon, whether or not you have ever launched there — it is the one directory where a
-session reaches every GUI tool, so it is never a click you can lose. It has no remove
-button for the same reason.
+the directories you have launched in; the **workspace** leads them always, labelled
+**WORKSPACE** and marked with an icon, whether or not you have ever launched there — it is
+the one directory where a session reaches every GUI tool, so it is never a click you can
+lose. It has no remove button for the same reason. It is named for its role rather than its
+folder, because the folder name (`~/mulmoclaude` by default, or wherever `CLAUDE_CWD`
+points) says the least interesting true thing about it; the real path is on its hover.
 
 **The launcher is shorter in the workspace**, because two of its choices do not apply
 there. The per-directory **Canvas switches** are replaced by a line saying every GUI tool
