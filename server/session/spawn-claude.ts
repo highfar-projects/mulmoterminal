@@ -2,8 +2,8 @@
 // piece of index.ts (#548 step 3c): it spans the CLI args, the
 // sidebar's optimistic row, the draft typed into the input box, and teardown on exit.
 import type { WebSocket } from "ws";
-import { CLAUDE_CWD, PORT, isWorkspaceCwd } from "../config/env.js";
-import { guiMcpEnv } from "./mcp-config.js";
+import { CLAUDE_CWD, PORT } from "../config/env.js";
+import { guiMcpEnv, carriesFullGuiMcp, fullGuiAllowedTools } from "./mcp-config.js";
 import { getUserMcpServers, getPrWorkdirFooter, getAppendSystemPrompt, getTerminalSubmit } from "../config/config-routes.js";
 import { submitSequenceForAgent } from "../../common/terminalSubmit.js";
 import { buildClaudeArgs } from "../agents/claude-args.js";
@@ -105,28 +105,6 @@ function sessionAddDirs(sessionId: string, configured: string[] | null | undefin
   return dropsDirectory ? [...(configured ?? []), dropsDirectory] : configured;
 }
 
-/**
- * Does this session carry the WHOLE GUI MCP on `--mcp-config`, the way the single view always
- * has? Two ways to earn it, and they are different facts that used to be one flag:
- *
- *   `attachGuiMcp` — not a grid cell at all: the single view, or a chat spawned with no cell yet.
- *   the CWD        — a grid cell running in the workspace itself. Starting a terminal there is
- *                    all but the same thing as running the single view, and that equivalence is
- *                    what lets the single view eventually go.
- *
- * A cell in a PROJECT directory is false on both counts and takes exactly the branch it takes
- * today. Named and exported rather than left inline because that last sentence is the invariant
- * this whole change is written around, and an invariant nothing can assert is just a hope.
- *
- * This branch is also WHY THE TOOL NAMES DIFFER between cells, which looks like a bug until you
- * know it: true carries every tool under one generated server id (`mt`), so the agent sees
- * `mcp__mt__presentChart`; false carries no --mcp-config at all and picks the tools up from the
- * user's per-folder config under the group ids, so the SAME tool is
- * `mcp__mulmoterminal-render__presentChart`. Neither name is stale. See common/toolGroups.ts for
- * why the two ids are not unified, and README's "MCP server ids" section for the whole picture.
- */
-export const carriesFullGuiMcp = (attachGuiMcp: boolean, cwd: string | undefined): boolean => attachGuiMcp || isWorkspaceCwd(cwd);
-
 export function createClaudeSpawner(deps: SpawnDeps) {
   // Spawn a fresh claude PTY for this session, register it, and wire its output /
   // exit back to the browser socket. `ws` may be null for a session spawned without
@@ -168,7 +146,7 @@ export function createClaudeSpawner(deps: SpawnDeps) {
       // except the tool GROUPS the directory may have registered itself, which we pre-approve
       // blind (see GRID_MCP_TOOLS). The user's own servers keep their normal prompts there, since
       // that path never went through our allowlist before.
-      allowedTools: fullGuiMcp ? [deps.guiMcpTools, ...getUserMcpServers().map((s) => `mcp__${s.id}`)].join(",") : deps.gridMcpTools,
+      allowedTools: fullGuiMcp ? fullGuiAllowedTools(deps.guiMcpTools, getUserMcpServers()) : deps.gridMcpTools,
       addDirs,
       appendedPrompt: sessionAppendedPrompt(cwd, dir.appendSystemPrompt),
     });

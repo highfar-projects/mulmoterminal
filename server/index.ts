@@ -858,6 +858,8 @@ mountTerminalWebSockets({
   spawnCommandPty,
   spawnLauncherPty,
   resolveLauncher,
+  mcpConfigJson: (sessionId, host) => mcpConfigJson({ sessionId, host, port: PORT, userMcpServers: getUserMcpServers() }),
+  guiMcpTools: GUI_MCP_TOOLS,
 });
 
 // A bind failure (most often the port already in use) must not surface as an unhandled
