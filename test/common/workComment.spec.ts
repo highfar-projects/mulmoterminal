@@ -123,6 +123,9 @@ describe("parseWorkEvents", () => {
     ["a timestamp in another zone", "- started — 2026-08-04 14:20 JST"],
     ["prose that looks like a line", "- started — see the thread"],
     ["seconds nobody wrote", "- started — 2026-08-04 14:20:31 UTC"],
+    // `Number("9".repeat(20))` is 1e20, which would be written back as `- PR #1e+20`.
+    ["a PR number too large to be one", `- PR #${"9".repeat(20)} — 2026-08-04 15:05 UTC`],
+    ["a merge naming a PR number too large to be one", `- merged in #${"9".repeat(20)} — 2026-08-04 16:40 UTC`],
   ])("drops %s", (_case, line) => {
     expect(parseWorkEvents(`Working on this.\n\n${line}\n`)).toEqual([]);
   });

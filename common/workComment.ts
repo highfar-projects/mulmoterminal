@@ -3,6 +3,7 @@
 // body, reads it back on the next milestone, and appends to what it parsed. A mismatch between the
 // two halves would either lose the earlier milestones or post a second comment on every poll.
 import { GITHUB_REPO } from "./githubRepo.js";
+import { isIssueNumber } from "./prPhase.js";
 
 // A milestone worth telling the issue about. NOT every state the cell passes through: CI is on the
 // pull request already, and it flaps, so it is deliberately absent.
@@ -109,19 +110,30 @@ const MERGED_LINE = /^- merged(?: in #([1-9]\d*))? — (.+)$/;
 const timed = (kind: WorkCommentKind, pr: number | null, at: string | undefined): WorkEvent | null =>
   at !== undefined && TIME.test(at) ? { kind, at, pr } : null;
 
-const prNumber = (digits: string | undefined): number | null => (digits === undefined ? null : Number(digits));
+// Digits out of a body someone can edit are UNBOUNDED, and `Number("9".repeat(20))` is 1e20 —
+// which this would write back as `- PR #1e+20`. The same rule the chip applies to a number read
+// off a PR body.
+const prNumber = (digits: string): number | null => {
+  const parsed = Number(digits);
+  return isIssueNumber(parsed) ? parsed : null;
+};
 
 function parseEventLine(line: string): WorkEvent | null {
   const started = START_LINE.exec(line);
   if (started) return timed("start", null, started[1]);
   const pr = PR_LINE.exec(line);
-  if (pr) {
-    const number = prNumber(pr[1]);
-    return number === null ? null : timed("pr", number, pr[2]);
-  }
+  if (pr) return pr[1] === undefined ? null : withNumber("pr", pr[1], pr[2]);
   const merged = MERGED_LINE.exec(line);
-  return merged ? timed("merged", prNumber(merged[1]), merged[2]) : null;
+  if (!merged) return null;
+  // A merge with no number is a line render writes and reads back; a number that is not one it
+  // could have written makes the line unreadable rather than numberless.
+  return merged[1] === undefined ? timed("merged", null, merged[2]) : withNumber("merged", merged[1], merged[2]);
 }
+
+const withNumber = (kind: WorkCommentKind, digits: string, at: string | undefined): WorkEvent | null => {
+  const number = prNumber(digits);
+  return number === null ? null : timed(kind, number, at);
+};
 
 /** The milestones a comment body records, in the order it lists them. Empty for a comment written
  *  before #1369 — those carry the marker and the headline but no lines, and the caller supplies
