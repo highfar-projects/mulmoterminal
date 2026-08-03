@@ -1,8 +1,10 @@
 // Polls GET /api/git-status for a terminal's dir so the header can always show
-// branch / dirty / ahead·behind. Refreshes on mount, on cwd change, on window
-// focus, and on a light interval (only while the tab is visible). `refresh` is
-// exposed so a caller can force an update right after a turn finishes.
-import { ref, watch, onMounted, onUnmounted, type Ref } from "vue";
+// branch / dirty / ahead·behind. Refreshes on mount, on cwd change, and on the
+// shared visible-only poll (window focus, tab visibility, a light interval) —
+// see usePollWhileVisible. `refresh` is exposed so a caller can force an update
+// right after a turn finishes.
+import { ref, watch, type Ref } from "vue";
+import { usePollWhileVisible } from "./usePollWhileVisible";
 import type { GitStatus } from "../../common/gitStatus";
 import { isRecord } from "../../common/isRecord";
 
@@ -33,20 +35,7 @@ export function useGitStatus(cwd: Ref<string | null>) {
     }
   }
 
-  const refreshIfVisible = () => {
-    if (document.visibilityState === "visible") void refresh();
-  };
-
-  let timer: ReturnType<typeof setInterval> | undefined;
-  onMounted(() => {
-    void refresh();
-    window.addEventListener("focus", refreshIfVisible);
-    timer = setInterval(refreshIfVisible, POLL_MS);
-  });
-  onUnmounted(() => {
-    window.removeEventListener("focus", refreshIfVisible);
-    if (timer) clearInterval(timer);
-  });
+  usePollWhileVisible(() => void refresh(), POLL_MS);
   watch(cwd, refresh);
 
   return { status, refresh };
