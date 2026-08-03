@@ -12,7 +12,7 @@ import { randomUUID } from "node:crypto";
 import { messageOf } from "../errors.js";
 import { CLAUDE_CWD, PORT, SESSION_ID_RE } from "../config/env.js";
 import { workspaceRequest } from "../config/workspace.js";
-import { getHeaderConfig } from "../config/config-routes.js";
+import { getHeaderConfig, getUserMcpServers } from "../config/config-routes.js";
 import { buildHeaderContext, loadHeaderConfig } from "../config/header-context.js";
 import { resolveButtonCommand, shellQuoteFor } from "../config/header-resolve.js";
 import { resolveScript } from "../files/scripts.js";
@@ -31,9 +31,9 @@ import {
 } from "../session/registry.js";
 import { SpawnRefusedError } from "../session/pty-spawn.js";
 import { bufferEarlyFrames, type EarlyFrames } from "../session/early-frames.js";
-import { launcherCommandWithGuiMcp, launcherCommandWithClaudeGuiMcp, launcherRunsAgent } from "../session/launcher-gui-mcp.js";
-import { codexGuiMcpServers, carriesFullGuiMcp } from "../session/mcp-config.js";
-import { mcpConfigFileArgument } from "../session/session-settings.js";
+import { launcherCommandWithGuiMcp, launcherCommandWithClaudeGuiMcp, launcherProgram, launcherRunsAgent } from "../session/launcher-gui-mcp.js";
+import { codexGuiMcpServers, carriesFullGuiMcp, fullGuiAllowedTools } from "../session/mcp-config.js";
+import { mcpConfigFileArgument, withSettingsCleanup } from "../session/session-settings.js";
 import { registeredGuiMcpGroups } from "../infra/gui-mcp-registration.js";
 import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups.js";
 import { parseTerminalSize, type TerminalSize } from "../../common/terminalSize.js";
@@ -529,35 +529,42 @@ async function handleLaunchConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
   });
   if (!early) return;
 
-  // A launcher that runs codex gets the directory's registered tool groups too. The chip and the
-  // agent toggle land in the same cell and look the same, so a Canvas that lights up for one and
-  // never for the other reads as a broken feature. Only for a spawn, and only for codex — every
-  // other command is passed through untouched (see launcher-gui-mcp.ts).
-  const groups = live ? [] : await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []);
-  // The same closing-of-the-gap for a chip that runs CLAUDE, one step further: a claude CELL in the
-  // workspace carries the whole GUI MCP, so a chip beside it that ran plain claude had no Canvas at
-  // all. `carriesFullGuiMcp` with `false` because a chip is never the single view — the cwd is the
-  // only thing that can earn it here, which keeps a chip in a project directory exactly as it was.
+  // A launcher chip and the agent toggle land in the same cell and look the same, so a Canvas that
+  // lights up for one and never for the other reads as a broken feature. The chip has no argv, only
+  // the command line the user wrote, so each agent's MCP arrives as an insertion into that text.
   //
-  // Only on a fresh spawn: a tmux reattach picks the running program up and ignores `command`, so
-  // writing a config file for it would leave a file behind for a process that never reads it.
+  // `carriesFullGuiMcp` with `false`, for BOTH: a chip is never the single view, so the cwd is the
+  // only thing that can earn the full GUI MCP here — which keeps a chip in a project directory
+  // exactly as it was, on the groups its directory registered.
+  //
+  // Nothing at all on a tmux REATTACH: it picks the running program up and ignores `command`.
+  const fullGui = !live && carriesFullGuiMcp(false, cwd);
+  const groups = live ? [] : await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []);
+  const codexGui = live ? [] : codexGuiMcpServers({ sessionId, port: PORT, groups, allTools: fullGui });
+  // The config file is written ONLY once the command is known to be claude. Writing it up front
+  // left a `<session>-mcp.json` behind for every workspace chip — `zsh`, `yarn dev`, anything — that
+  // would never read it (Codex review on #1358).
   const claudeGui =
-    live || !carriesFullGuiMcp(false, cwd)
-      ? null
-      : {
+    fullGui && launcherProgram(command) === "claude"
+      ? {
           mcpConfigPath: mcpConfigFileArgument(sessionId, deps.mcpConfigJson(sessionId, "127.0.0.1")),
-          allowedTools: deps.guiMcpTools,
-        };
-  const withCodexGui = launcherCommandWithGuiMcp(command, codexGuiMcpServers({ sessionId, port: PORT, groups, allTools: false }), process.platform);
+          allowedTools: fullGuiAllowedTools(deps.guiMcpTools, getUserMcpServers()),
+        }
+      : null;
   // Both rewriters see the command; each recognises only its own program, so at most one fires.
-  const launchCommand = launcherCommandWithClaudeGuiMcp(withCodexGui, claudeGui, process.platform);
+  const launchCommand = launcherCommandWithClaudeGuiMcp(launcherCommandWithGuiMcp(command, codexGui, process.platform), claudeGui, process.platform);
   if (!clientStillConnected(ws, "launch", sessionId, early)) return;
 
   // A launcher runs the user's own command line, so there is no binary pre-flight — but its cwd
   // is checked like every other spawn's, and that refusal is already a sentence.
+  //
+  // withSettingsCleanup because this path can now WRITE a file before spawning: a spawn that throws
+  // never reaches reap, where the file is normally dropped, so without this a failed claude chip
+  // orphans its config until the next boot's prune (Codex review on #1358). startAndWire catches
+  // what this rethrows, so the failure still reaches the browser as a message.
   const startFailureMessage = startFailureMessageFor("the launch command");
   startAndWire(deps, ws, { id: sessionId, tag: "launch", early, startFailureMessage, size }, () =>
-    startLaunchEntry(deps, sessionId, ws, live, launchCommand, cwd),
+    withSettingsCleanup(sessionId, () => startLaunchEntry(deps, sessionId, ws, live, launchCommand, cwd)),
   );
 }
 

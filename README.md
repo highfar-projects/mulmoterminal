@@ -1086,10 +1086,13 @@ the same tools no matter how they were started:
 
 A chip is a command line the user wrote, so the injection is a **rewrite of their text** and is
 deliberately narrow: only a bare `claude` or `codex` is recognised, and anything else — a wrapper
-script, `FOO=1 claude` — is passed through unchanged. One consequence is worth knowing: a `claude`
-chip in the workspace is given `--strict-mcp-config`, which makes our config the only source, so
-**the user's own MCP servers do not load in that terminal**. That is the price of the chip and the
-cell carrying identical tools; a chip that needs the user's own servers should not run claude.
+script, `FOO=1 claude` — is passed through unchanged.
+
+A `claude` chip in the workspace is given `--strict-mcp-config`, same as the cell. That makes the
+generated config the only source — but it already contains your Settings `userMcpServers`, so
+**those still load and are still pre-approved**. What stops contributing is a project directory's
+per-folder `.mcp.json`, which in the workspace is the intent: that file is where the per-group URLs
+live, and the chip is being handed the all-tools URL instead.
 
 **The asymmetry is deliberate.** `mt` is ours to name: nothing on disk holds it, it is
 regenerated on every spawn, so it was shortened to stop paying 17 characters per tool name. The

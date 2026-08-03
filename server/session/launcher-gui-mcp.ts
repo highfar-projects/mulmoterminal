@@ -48,10 +48,13 @@ export function launcherAgent(command: string): SessionAgent {
  * rather than `-c` overrides: `--mcp-config <path> --strict-mcp-config --allowedTools <list>`, the
  * three a claude cell in the workspace is spawned with.
  *
- * `--strict-mcp-config` is in on purpose and it is the cost of exact parity: it makes our config
- * the ONLY source, so the user's own MCP servers do not load in that terminal. Without it the chip
- * and the cell would carry different tool sets, which is the confusion this closes (owner's call,
- * 2026-08-03). A chip that wants the user's own servers is a chip that should not run claude.
+ * `--strict-mcp-config` is in on purpose, and what it actually shuts out is narrower than it looks:
+ * the generated config is then the ONLY source, but that config already CONTAINS the user's
+ * Settings servers (mcpConfigJson merges them), so those still load and are still pre-approved. It
+ * is the per-folder `.mcp.json` of a project directory that stops contributing — which in the
+ * workspace is the point, since that is the config the group URLs live in and the chip is being
+ * given the all-tools URL instead. Same three flags as the cell, same result (owner's call,
+ * 2026-08-03); the flag was included because parity is the goal, not despite it.
  *
  * The config is a PATH, never inline JSON — see mcpConfigFileArgument.
  *

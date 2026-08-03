@@ -116,3 +116,19 @@ export function mcpConfigJson({ sessionId, host = DEFAULT_HOST, port, userMcpSer
   mcpServers[GUI_SERVER_ID] = { type: "http", url: `http://${host}:${port}/api/mcp/${sessionId}` };
   return JSON.stringify({ mcpServers });
 }
+
+/**
+ * What a full-GUI-MCP session pre-approves: our own tools, plus the user's Settings servers by id.
+ *
+ * Both halves matter, and the second is the one that surprises. `--strict-mcp-config` makes the
+ * generated `--mcp-config` the ONLY source — but that payload INCLUDES `userMcpServers` (above), so
+ * those servers still load; what strict shuts out is the per-folder `.mcp.json` a project directory
+ * would otherwise contribute. Pre-approving them here is what stops each of their tools raising a
+ * permission prompt, which is the behaviour the single view has always had.
+ *
+ * Shared rather than spelled out at each spawn because the two callers — a claude cell and a
+ * launcher chip running claude — are supposed to be indistinguishable, and this PR exists because
+ * they had drifted. Two copies of a join is exactly how they drift again.
+ */
+export const fullGuiAllowedTools = (guiMcpTools: string, userMcpServers: readonly UserMcpServer[]): string =>
+  [guiMcpTools, ...userMcpServers.map((server) => `mcp__${server.id}`)].join(",");

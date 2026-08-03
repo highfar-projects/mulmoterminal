@@ -55,6 +55,27 @@ claude --mcp-config <path> --strict-mcp-config --allowedTools <list>
 コマンド前にグローバルオプションを要求し、claude は末尾の `--add-dir` が可変長なので、どちらも
 「直後」でなければならない）。
 
+## レビュー指摘への対応（codex-review / CodeRabbit、いずれも同じ 2 点）
+
+**A. `codex` チップが `allTools: false` のままだった。** PR 説明の表では「workspace の codex チップも
+`mt`」と書いていたのに、コードを直していなかった。**説明と実装が食い違っていた**ので、
+`allTools: carriesFullGuiMcp(false, cwd)` に修正。
+
+**B. config ファイルを claude と確定する前に書いていた。** workspace のチップなら `zsh` でも
+`yarn dev` でも `<session>-mcp.json` を書いてしまい、さらに launch 経路は `withSettingsCleanup` を
+通っていないので spawn 失敗時に孤児になる。→ `launcherProgram(command) === "claude"` を確認して
+から書くようにし、spawn を `withSettingsCleanup` で包んだ（`startAndWire` が rethrow を捕まえるので
+ブラウザへのエラー表示はそのまま）。
+
+**C.（自分のドキュメントが嘘だった）** `--strict-mcp-config` は「ユーザー自身の MCP を無効化する」と
+書いていたが、`mcpConfigJson` は `userMcpServers` を**ペイロードに含めている**ので、それらは読まれる。
+実際に落ちるのは project ディレクトリの per-folder `.mcp.json` の方。
+
+修正方向として「GUI 専用ペイロードを作って除外する」案も提示されたが、**それは parity を壊す**
+（セルでは読まれるため）。したがって直したのは実装ではなく記述の方。あわせて、セル側だけが行っていた
+「ユーザーサーバーの id を `--allowedTools` に足す」処理を `fullGuiAllowedTools` として共通化し、
+チップでも同じ承認になるようにした — 2 箇所に同じ join を書くのは、まさに今回のドリフトの再生産なので。
+
 ## 変えていないもの
 
 project ディレクトリは**全経路で完全に据え置き**。`full-gui-mcp.spec.ts` がその不変条件を
