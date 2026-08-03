@@ -972,6 +972,14 @@ and refused, where before it could be confirmed away — which detached whoever 
 `mulmoterminal` process on this machine: the server answers from its own PTY table plus
 tmux, not from what one page can see.
 
+**Change the directory and those lists empty immediately**, replaced by a single
+`Loading this directory's sessions, worktrees and scripts…` row until the new ones arrive.
+Everything the launch form offers below the field — **OR RESUME HERE**, the worktrees and
+**OR RUN A SCRIPT** — belongs to the directory it was read for, and reading it costs a
+debounce plus a round trip. Rows left standing through that wait would be the previous
+directory's, listed under the new directory's name, and clicking one resumes exactly the
+session it offers.
+
 A worktree started **from an issue** gets an `issue/<N>-<slug>` branch instead. The number
 in the name is what later tells the app which issue the work belongs to: the ⧉ Open PR
 button puts `Fixes #<N>` in the PR body, and the branch chip, the issue work comment and
