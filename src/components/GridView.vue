@@ -45,6 +45,7 @@ import {
 } from "./gridTabs";
 import { activityStatus, type AttentionStatus } from "./attentionStatus";
 import { gridShortcutFor, isEditableTarget, type GridShortcut } from "../composables/gridShortcut";
+import { isImeConfirming } from "../composables/imeComposition";
 import { useCaptureKeydown } from "../composables/useCaptureKeydown";
 import { getActiveKeymap } from "../composables/activeKeymap";
 import { preferredLaunchDir } from "./launchDir";
@@ -453,6 +454,11 @@ function onShortcutKey(e: KeyboardEvent) {
   if (showSettings.value) return;
   const target = e.target instanceof HTMLElement ? e.target : null;
   if (target && isEditableTarget(target.tagName, Array.from(target.classList))) return;
+  // A key confirming an IME candidate is the IME's, not a shortcut. `gridShortcutFor` already
+  // refuses `e.isComposing` — this is the Safari case, where compositionend fires first and the
+  // flag is already false (#1353). Without it, confirming 変換 anywhere the grid can hear runs
+  // whatever that key is bound to.
+  if (isImeConfirming(e)) return;
   const shortcut = gridShortcutFor(getActiveKeymap(), e, expandedUid.value !== null);
   if (!shortcut) return;
   e.preventDefault();

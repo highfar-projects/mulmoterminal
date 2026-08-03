@@ -279,6 +279,7 @@ vi.mock("../../../src/composables/useTerminalConnections", async (orig) => ({
 }));
 
 import { setActiveKeymap } from "../../../src/composables/activeKeymap";
+import { resetImeComposition } from "../../../src/composables/imeComposition";
 import { PAGE_SIZE } from "../../../src/components/gridTabs";
 
 const uuid = (n: number) => `${String(n % 10).repeat(8)}-aaaa-aaaa-aaaa-aaaaaaaaaaaa`;
@@ -432,6 +433,28 @@ describe("GridView keyboard shortcuts (#829)", () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "PageDown", shiftKey: true, bubbles: true }));
     await flushPromises();
     expect(gridOf(w).props("expandedUid")).toBe(before);
+    w.unmount();
+  });
+
+  // A key confirming an IME candidate belongs to the IME, not to a shortcut. `gridShortcutFor`
+  // already refuses `isComposing`, so the case worth pinning is SAFARI's: compositionend fires
+  // BEFORE the confirming keydown, so the flag is false by then and the shortcut used to run
+  // (#1353). Anywhere the grid can hear — the shortcut listener is on `window`.
+  it("leaves the key that confirms an IME candidate alone", async () => {
+    const w = await mountShortcutGrid(4);
+    await press("F8"); // enlarge, so zoom-next has somewhere to go
+    const before = gridOf(w).props("expandedUid");
+
+    window.dispatchEvent(new Event("compositionstart"));
+    window.dispatchEvent(new Event("compositionend"));
+    await press("PageDown");
+
+    expect(gridOf(w).props("expandedUid")).toBe(before);
+
+    // And once the composition is behind us, the same key works again.
+    resetImeComposition();
+    await press("PageDown");
+    expect(gridOf(w).props("expandedUid")).not.toBe(before);
     w.unmount();
   });
 
