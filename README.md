@@ -34,7 +34,7 @@ ping to your phone when a task finishes. One `npx` command, no Electron, no conf
 npx mulmoterminal@latest        # starts on http://localhost:34567 and opens your browser
 ```
 
-Built by the **[Singularity Society](https://singularitysociety.org)** team, including
+Built by **[receptron](https://github.com/receptron)**, with
 **[Satoshi Nakajima](https://x.com/snakajima)** — software architect for **Windows 95** at
 Microsoft, still building from Seattle. [More ↓](#who-builds-this)
 
@@ -1816,8 +1816,8 @@ and `fetch` are mocked so the tests run without a server.
 
 ## Who builds this
 
-MulmoTerminal is built by the **[Singularity Society](https://singularitysociety.org)** team,
-including **[Satoshi Nakajima](https://x.com/snakajima)** — software architect for **Windows 95**,
+MulmoTerminal is built by **[receptron](https://github.com/receptron)**, with
+**[Satoshi Nakajima](https://x.com/snakajima)** — software architect for **Windows 95**,
 **Windows 98** and **Internet Explorer 3.0 / 4.0** at Microsoft, later founder of UIEvolution /
 Xevo, and still building from Seattle.
 
