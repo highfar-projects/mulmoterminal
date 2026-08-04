@@ -8,6 +8,151 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.4.0 — 2026-08-04
+
+> **Setup guide:** [Every cell keeps its own pane, and the Canvas opens a file on its own](https://receptron.github.io/mulmoterminal/guide/en/v4.4.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.4.0.html))
+
+The largest release since 4.0.0, and it pulls in two directions at once. The **right pane became
+per-cell** — walking the zoom now shows what *that* terminal had open — and the **Canvas learned to
+open a file on its own**, so reading a document no longer means asking an agent to show it to you.
+Underneath, the five places that re-read an entire transcript on every request now **resume a fold
+instead**: a 2.1 GB project's session list went from 8.7 s to 1 ms, and the numbers below are all
+measured against real transcripts on this machine, not estimated.
+
+It also restores something that had been quietly missing the whole time: **your claude.ai connectors
+and your own MCP servers work in the workspace cell and the single view**, which is where they were
+most expected and least available.
+
+### Added
+
+- **Every cell keeps its own right pane** ([#1397](https://github.com/receptron/mulmoterminal/pull/1397), closes [#1378](https://github.com/receptron/mulmoterminal/issues/1378)).
+  The pane already knew everything about a cell except whether to be there. *Which* file the tree had
+  open and which directories were expanded were per-cell; the canvas is read per session; but "is a
+  pane open, and which one" was **one value for the whole grid**. Opening the canvas on one terminal
+  opened it on the next, and closing it there closed it on the first.
+
+  Each cell now answers for itself. Walking the zoom shows that cell's pane — files, canvas, tools or
+  nothing. A cell that never asked for one arrives with none, and closing is an answer too, so it
+  stays closed. A pane can be asked for on a **tiled** cell, which is where the issue starts: the
+  canvas cannot open with nothing enlarged, so the press records what that terminal should have and
+  enlarging it opens it. A reload restores by **session** rather than by cell id — a uid is a
+  different number next time — capped at 40, LRU. Width and the full-width takeover stay shared.
+
+- **Open a document, an HTML page or a MulmoScript in the Canvas without an agent** ([#1380](https://github.com/receptron/mulmoterminal/pull/1380), [#1388](https://github.com/receptron/mulmoterminal/pull/1388), refs [#1374](https://github.com/receptron/mulmoterminal/issues/1374)).
+  The Canvas draws a session's **tool results**, so looking at a file already sitting on disk meant
+  asking an agent to present it. The Files pane's toolbar now has a Canvas button: press it and a
+  synthetic card is written through **the same route the agent's own tool posts to**. The card is
+  therefore stored, survives a reload, and folds together with the agent's card for the same file —
+  no reconciliation code and no new server route.
+
+  Markdown and HTML shipped first; MulmoScript stories followed, and they broke both assumptions the
+  first two were built on. The other tools take an absolute path and the View self-fetches; the story
+  tool **refuses** an absolute path and the card carries the **parsed script**. So its gate asks a
+  different question — *is this file in the workspace's story directory?* — rather than *can you
+  render this file?* The eligibility check is delegated to the plugins' own gates rather than a
+  home-grown extension test, which is what rejects `artifacts/documents/../../secrets.md`.
+
+  Two bugs here were caught only by opening a real browser, having passed lint, typecheck and 7,822
+  tests: the Files pane's rows are **cell-cwd relative** while the plugin's file layer is rooted at
+  the **workspace**, so a card was written, the pane opened, nothing rendered and nothing failed; and
+  the enable/disable gate existed in two places, so fixing the button left the panel still saying
+  "Canvas is not enabled for this session" on top of a perfectly good card.
+
+- **A drawing on the tiled grid reveals itself, and a single terminal can enlarge** ([#1371](https://github.com/receptron/mulmoterminal/pull/1371)).
+  An agent calling `presentDocument` / `presentChart` **is** its answer to what was asked. On the
+  tiled grid that answer left no trace but a count on a chip, because the Canvas pane exists only
+  beside an enlarged cell. Now the drawing cell enlarges itself and the Canvas opens beside it,
+  through the same `openCanvasFor` the unread-canvas chip uses. Nothing happens while a full-screen
+  overlay is up: the user is reading something else, and rearranging the grid behind them would greet
+  them with a zoom they never asked for.
+
+  Building it surfaced that [#374](https://github.com/receptron/mulmoterminal/issues/374)'s rule —
+  refuse to zoom with fewer than two running cells — had to go, and it is worth saying why, because
+  the rule still reads as sound. Zooming is "one big, the rest as a filmstrip", so with nothing to
+  switch to it trades a working layout for an empty one. What it missed is that the zoomed row is
+  **also the only place the Canvas / Tools / Files panes exist**. On a one-terminal grid it did not
+  merely decline a layout; it locked those panes away, so the chip did nothing when clicked and a
+  drawing had nowhere to go — with no error on either side. The reasoning is written down in three
+  places rather than left to be re-derived.
+
+- **One work comment per issue, edited as the work moves** ([#1376](https://github.com/receptron/mulmoterminal/pull/1376), refs [#1369](https://github.com/receptron/mulmoterminal/issues/1369)).
+  `issueWorkComments` (still **off by default**, still global) said two things and then went quiet —
+  *work started*, and *it merged* — each as a new comment, with silence in between. A clone now keeps
+  **one** comment per issue and edits it as the work moves through three milestones: started, PR
+  opened, merged.
+
+  **CI is deliberately absent**: it is on the PR already, and it flaps, and an issue reporting every
+  turn stops being readable. Times are **UTC** and they are the point — a claim posted three weeks
+  ago and never updated reads differently from one that moved this morning. The comment says it came
+  from MulmoTerminal, because these land on issues other people filed. Editing sends **no
+  notification**, on purpose: the first line is news, the rest is status.
+
+- **The work comment now says why it could not be written** ([#1403](https://github.com/receptron/mulmoterminal/pull/1403)).
+  It used to fail silently whichever way it failed — a `gh` logged in without write access did
+  nothing, forever, indistinguishable from leaving the setting off. Three layers were dropping the
+  cause: `ranOk` discarded the CLI's stderr, `ensureWorkComment` collapsed everything into one
+  `gh-failed`, and the client's `postWorkComment` swallowed the response in a bare `catch {}`.
+
+  The stderr is now classified into `cli-missing` / `auth` / `permission` / `unknown` — on the **HTTP
+  status, not the English**, since the three spellings agree on nothing else — warned once per (repo,
+  cause) in the server log, and shown in the cell header as a dismissible `issue not updated — …`
+  notice naming the fix. The work itself is unaffected, exactly as before: the comment is skipped and
+  the next milestone retries. A 404 is deliberately **not** treated as `permission`, because the
+  issue was read successfully moments earlier, so naming the wrong fix seemed worse than naming none.
+
+- **The cell header's path is a dropdown on row 2, and six permanent icons are gone** ([#1382](https://github.com/receptron/mulmoterminal/pull/1382)).
+  The two header rows are now organised by **scope** rather than by the "info or action" split they
+  claimed: row 1 is what you compare across nine cells at once, row 2 is what you read or do about
+  the one in front of you. The comment in `TerminalCell.vue` asserted the old rule; the code broke it
+  in both directions.
+
+  The path moved to row 2 and became a menu — reveal in the file manager, browse files in the app,
+  new terminal here, then repository / issues / pull requests when a GitHub URL resolves. `reveal`,
+  `files`, `terminal` and `gh` left `DEFAULT_BUTTONS`, and the GitHub SVG button left the header:
+  each was "do something to this directory", which is what the path itself now expresses — `reveal`
+  was byte-for-byte the same action as clicking the path. `pick-file` stays (it types into the
+  prompt, it does not go anywhere) and so does `pr` (it hides itself when there is no PR). If you
+  configure `buttons` yourself you are unaffected.
+
+### Changed
+
+- **A session started in the workspace is badged `WORKSPACE`, not by its folder name** ([#1389](https://github.com/receptron/mulmoterminal/pull/1389)).
+  The launcher's chip for that directory says `WORKSPACE`; starting a session from it produced a cell
+  badged with the `name` out of that folder's `.mulmoterminal.json` — so one directory wore two names
+  across a single click. The badge keeps the directory's **colours** and only the wording is
+  role-based, and the configured name moves to the hover tip. It renders even when the directory has
+  no `name` at all: the role does not come from the config, so the one cell that most needs
+  identifying must not be the one with no badge.
+
+  `defaultCwd` is bound once in `gridCellProps()` rather than threaded per cell type. "Remember to
+  pass it" is the design that produced the same omission three times already —
+  [#902](https://github.com/receptron/mulmoterminal/pull/902) (theme/font),
+  [#914](https://github.com/receptron/mulmoterminal/pull/914) (the name badge) and
+  [#1006](https://github.com/receptron/mulmoterminal/pull/1006) (the six chrome colours).
+
+- **A directory's Canvas tool groups stand down for a session that already has every tool.**
+  Fallout from the fix above, handled rather than left: with the isolating flag gone, a directory
+  that registered per-group MCP URLs could hand a workspace session a second copy of tools it
+  already reaches — `mcp__mt__presentChart` and `mcp__mulmoterminal-render__presentChart` for one
+  action. The session is now recorded as carrying the full GUI MCP **at spawn**, and the group URLs
+  serve it nothing. Deciding it at spawn is what makes it independent of which URL the agent's MCP
+  client happens to dial first.
+
+  The obvious alternative — withhold our GUI MCP when the directory registered groups — would have
+  re-broken [#1188](https://github.com/receptron/mulmoterminal/pull/1188): the groups do not cover
+  the tools that belong to no group, `spawnBackgroundChat` among them.
+
+  The record is also **released** when a session is respawned without the all-tools URL, which the
+  log it lives in could not express before — it was append-only on the stated grounds that "nothing
+  removes one". That stopped being true the moment a stale yes could stand a cell's groups down with
+  nothing to serve them: a session id outlives its process, and one opened in the single view can be
+  respawned as a project-directory cell. It now takes the same shape the tool-group log already uses
+  for the same reason — an append log with a release marker, replayed in order, and a bare id still
+  reads as a claim so existing files keep working.
+
+- **Workspace cells and the single view start slower if you have several MCP servers configured**,
+  because they now load them. The same trade MulmoClaude already makes on the same workspace.
+
 ### Fixed
 
 - **Your claude.ai connectors, and your own MCP servers, now work in the workspace cell and the single view** ([#1338](https://github.com/receptron/mulmoterminal/issues/1338), [#1385](https://github.com/receptron/mulmoterminal/issues/1385)).
@@ -35,31 +180,6 @@ Entries here are folded into the next release's heading when it ships.
   The rate-limit probe keeps its own `--strict-mcp-config`. That is a hidden session asking one
   question that needs no tools, where isolation buys 8.0 s to first window instead of 9–15 s.
 
-### Changed
-
-- **A directory's Canvas tool groups stand down for a session that already has every tool.**
-  Fallout from the fix above, handled rather than left: with the isolating flag gone, a directory
-  that registered per-group MCP URLs could hand a workspace session a second copy of tools it
-  already reaches — `mcp__mt__presentChart` and `mcp__mulmoterminal-render__presentChart` for one
-  action. The session is now recorded as carrying the full GUI MCP **at spawn**, and the group URLs
-  serve it nothing. Deciding it at spawn is what makes it independent of which URL the agent's MCP
-  client happens to dial first.
-
-  The obvious alternative — withhold our GUI MCP when the directory registered groups — would have
-  re-broken [#1188](https://github.com/receptron/mulmoterminal/pull/1188): the groups do not cover
-  the tools that belong to no group, `spawnBackgroundChat` among them.
-
-  The record is also **released** when a session is respawned without the all-tools URL, which the
-  log it lives in could not express before — it was append-only on the stated grounds that "nothing
-  removes one". That stopped being true the moment a stale yes could stand a cell's groups down with
-  nothing to serve them: a session id outlives its process, and one opened in the single view can be
-  respawned as a project-directory cell. It now takes the same shape the tool-group log already uses
-  for the same reason — an append log with a release marker, replayed in order, and a bare id still
-  reads as a claim so existing files keep working.
-
-- **Workspace cells and the single view start slower if you have several MCP servers configured**,
-  because they now load them. The same trade MulmoClaude already makes on the same workspace.
-
 - **A finished background task replaced the cell's task line with the harness's XML** ([#1384](https://github.com/receptron/mulmoterminal/issues/1384)).
   A session running a Monitor or a subagent showed `<task-notification> <task-id>…` on row 1 from the
   moment that task reported, and the AI title was then generated from it. "A harness-injected block
@@ -81,6 +201,156 @@ Entries here are folded into the next release's heading when it ships.
   The anchor is what makes that safe, and it is load-bearing: 591 of those lines *mention*
   `<task-notification` mid-sentence, and matching them would delete the prompt instead of the
   injection.
+
+- **Changing the directory in an empty cell's launcher no longer leaves the previous directory's sessions clickable** ([#1375](https://github.com/receptron/mulmoterminal/pull/1375), [#1372](https://github.com/receptron/mulmoterminal/issues/1372)).
+  Resume history, worktree rows and script chips stayed on screen showing the **old** directory's
+  entries until a new response arrived, roughly a 300 ms debounce plus a round trip. Those sessions
+  are real, so clicking one **opened exactly that session** — one having nothing to do with the
+  directory on screen.
+
+  The three lists are now emptied the instant the field changes, in-flight responses are dropped by
+  advancing a request token, and one `Loading this directory's sessions, worktrees and scripts…` line
+  stands in for all three. One line rather than three skeletons, because a per-section skeleton would
+  invent headings for sections this directory may not have — a non-git directory has no worktrees.
+  The launch button stays pressable while loading: the "this worktree is in use" warning needs the
+  worktree list, but it was previously judging against *another directory's* list, which was worse,
+  and the server refuses for real either way.
+
+- **A corrupt sidecar no longer makes a session vanish from the list** ([#1390](https://github.com/receptron/mulmoterminal/pull/1390)).
+  The new sidecar's `scannedTo` is untrusted JSON on disk, and it was validated with
+  `typeof === "number"` — which accepts negatives and fractions. That value becomes a file offset:
+  `createReadStream(file, { start: -1 })` throws `ERR_OUT_OF_RANGE`, the session list catches the
+  throw with `.catch(() => null)` and **drops that row**, and because the sidecar keeps being read the
+  session stays gone rather than being rebuilt. `size` and `scannedTo` must now be non-negative safe
+  integers and `mtimeMs` finite, folded into one named predicate so a reader can see what is being
+  rejected.
+
+- **The Windows daily CI is green again** ([#1400](https://github.com/receptron/mulmoterminal/pull/1400)).
+  Two separate causes, both of them a **rule copied instead of called**. `os.homedir()` reads
+  `USERPROFILE` on Windows, not `HOME`, so specs that redirected `HOME` to a temp directory had the
+  implementation writing to **the runner's real home** — and the specs that did not check paths
+  therefore *passed* while quietly polluting it, which is the worse half. And three specs built the
+  transcript directory name themselves with `CWD.replace(/\//g, "-")`, while `projectSessionsDir`
+  resolves the path first and folds every non-alphanumeric character, so `/Users/me/proj` is
+  `-Users-me-proj` on macOS and `D--Users-me-proj` on Windows: the specs wrote transcripts where the
+  reader never looks and then asserted on the empty result.
+
+  Both now go through one place — `test/support/scratchHome.ts`, which sets both variables and
+  **verifies `os.homedir()` actually returns the temp directory**, so a half-applied redirect fails
+  on the spot with a reason instead of surfacing later as an empty directory. Verified by dispatching
+  the Windows workflow at this branch twice: 10 → 7 failures after cause 1, green on 22.x and 24.x
+  after cause 2.
+
+- **Every request in `canvasOpenFile` has a deadline, and the plugin ordering is pinned** ([#1391](https://github.com/receptron/mulmoterminal/pull/1391)).
+  Carried forward from a review that finished after its PR had merged. The reopen call blocks the
+  Canvas from opening, so a server that never answers left the button pressed and nothing happening —
+  which a user cannot tell apart from "this file cannot be shown". Separately, markdown and HTML are
+  asked before the story branch in `buildCanvasCard`; if either ever accepted `.json`, **every story
+  in the workspace would quietly open as that other thing**, with no error anywhere. That order is
+  now pinned against the plugins themselves rather than against a reading of them, since a package
+  upgrade is exactly how it would change.
+
+- **The PR number in a work comment's own patterns is bounded** ([#1383](https://github.com/receptron/mulmoterminal/pull/1383)).
+  The milestone lines are read back out of a body **anyone on the issue can edit**, and the pattern
+  accepted a digit run of any length — `Number("9".repeat(20))` is `1e20`, which the next edit would
+  have written back as `- PR #1e+20`. The bound moved into the pattern (ten digits: far more than any
+  forge issues, still exact as a `Number`), so an oversized line now fails to match at all and is
+  dropped like any other line that is not what render wrote.
+
+### Performance
+
+Five call sites re-read whole transcripts on every request. All five now resume an **incremental
+fold** — memory, then a sidecar on disk, then only the bytes that were appended — through one shared
+`createTranscriptFold`. Every number below was measured on real transcripts on the development
+machine, against copies so the originals were untouched.
+
+- **The session list** ([#1379](https://github.com/receptron/mulmoterminal/pull/1379), [#1377](https://github.com/receptron/mulmoterminal/issues/1377)).
+  `/api/sessions` read the 50 most recent transcripts **in full on every request** to extract three
+  fields — 4.8 s on a 1.1 GB project, 8.7 s on a 2.1 GB one, to return 17 KB of JSON. The line count
+  never changed; the bytes behind the lines did, which is why it got slower the more you used it.
+  Unchanged file: **not one byte read**. Grown: only the new part. Shrunk or rewritten at the same
+  length: read from the start. The first read does not read everything either — large files are read
+  from **both ends** (256 KB head / 512 KB tail), but that window is a fast path and **not** the
+  answer: if the three fields are not all found it falls back to the whole file, because "not in the
+  window" and "not in the file" are different facts. The window is sized from measurement, not
+  instinct — across the 60 transcripts over 5 MB here, the first `user` record sits at most 26.6 KB
+  in and `ai-title` / `last-prompt` at most 52.8 KB from EOF; the window is about ten times that.
+
+  | project | 50 most recent | before (every time) | after, first | after, subsequent |
+  |---|---:|---:|---:|---:|
+  | mulmoterminal4 | 28 MB | 117 ms | 44 ms | **0–1 ms** |
+  | mulmoclaude3 | 1,135 MB | 4,670 ms | 492 ms | **1 ms** |
+  | mulmoclaude2 | 2,104 MB | 8,700 ms | 2,057 ms | **0–1 ms** |
+
+- **…and it survives a restart, and other processes** ([#1387](https://github.com/receptron/mulmoterminal/pull/1387), [#1386](https://github.com/receptron/mulmoterminal/issues/1386)).
+  The fold above lived in **one process's memory**, so two places still paid in full: a restart, and
+  every other copy of the app. On this machine eight MulmoTerminals run against the same
+  `~/.claude/projects`, each warming the same 500 MB separately. The fold and its offset are now
+  persisted to a small JSON beside the transcript. A second process sees 2,112 MB in **23 ms**
+  instead of 1,795 ms, and the whole index for two projects is 24 files / 96 KB.
+
+  The **10 MB threshold** comes from the distribution of 9,883 real transcripts / 9.6 GB: the median
+  is 93 KB, files over 10 MB are 82 of them but **82% of all bytes**. A sidecar is an invitation for a
+  *wrong* answer to survive a restart, so it is distrusted aggressively — version mismatch, file
+  shrunk, same size with a moved mtime, offset past EOF, value failing its type guard, malformed JSON:
+  each silently rebuilds. It also hashes the **first 256 bytes**, because `(mtime, size)` cannot tell
+  "appended to" from "replaced by something longer", and a sidecar may be reading a record written
+  days ago. Writes are tmp + rename, since eight processes share the directory.
+
+- **Cost and the timeline overlay** ([#1392](https://github.com/receptron/mulmoterminal/pull/1392)).
+  `/api/cost` summed up to 200 transcripts on every open — 2.4 s on a 1.1 GB project — and the
+  timeline read a whole transcript for its most recent 300 events, 2.2 s on a 508 MB session. Both
+  now resume: 0–1 ms warm, and 3–13 ms for a fresh process reading the sidecar. **The first read is
+  deliberately not faster**: unlike a title, a total cannot be answered from part of a file. What
+  changed is that "every time" became "once".
+
+- **The session summary, which every grid cell requests at the end of every turn** ([#1395](https://github.com/receptron/mulmoterminal/pull/1395)).
+  Its cache was keyed on `(mtime, size)`, which can only skip a file that has **not changed** — so the
+  session you are actually working in, the one most likely to be huge, re-read in full **every turn**.
+  On a 508 MB transcript that is 2.15 s with the event loop blocked, freezing every terminal in the
+  app. After one appended turn: **3 ms**. This fold was the last one that could not share the common
+  path, because it accumulated **raw records** — every `user` record (13,664 of them here) to pick the
+  most meaningful prompt at the end. The fix was to move the *rule* rather than re-derive its answer:
+  "last non-trivial prompt → last prompt → the `last-prompt` record" only ever needs **three strings**,
+  so it folds into a `PromptTrail` as records arrive.
+
+- **The decision scan** ([#1404](https://github.com/receptron/mulmoterminal/pull/1404), [#1402](https://github.com/receptron/mulmoterminal/issues/1402)).
+  The last one, behind `/api/decisions` (the `mulmoterminal-decisions` skill) and a six-hourly digest
+  tick. 484 MB re-read on each: 2.2 s, event loop blocked. After one appended turn, **1.3 ms**; a
+  second process resuming from the sidecar, **4.5 ms**. Across a whole 65-transcript / 2.4 GB project,
+  a cold-but-indexed process went from 5,547 ms to **66 ms**.
+
+### Internal
+
+- **One bounded fetch for the whole UI** ([#1398](https://github.com/receptron/mulmoterminal/pull/1398), [#1393](https://github.com/receptron/mulmoterminal/issues/1393)).
+  `src/` had **80 `fetch` calls and 10 deadlines**, and those 10 were the same
+  `AbortController` + `setTimeout` + `clearTimeout` written out in ten different files. A request with
+  no deadline does not fail — it does **nothing, forever**, and the screen cannot tell that apart from
+  "there was nothing to show". 79 of the 80 now go through one helper, in three tiers: 8 s for
+  ordinary `/api` reads and writes, 60 s for anything that shells out (git, `gh`, whisper), 300 s for
+  media bytes.
+
+  Reading the server changed the answer twice, and guessing would have got both backwards.
+  `/api/pick-file` looks like an ordinary POST but spawns a native dialog and answers when the
+  **user** finishes choosing — it is the one route deliberately left unbounded, since any number there
+  is a guess at how long a person takes. `/api/transcribe/model/download` looks like the slowest call
+  in the app, but it starts the download and returns the status immediately, so it takes the default.
+
+### Docs
+
+- **Who builds this, in the README, the FAQ and `facts.json`** ([#1405](https://github.com/receptron/mulmoterminal/pull/1405)).
+  It was not written down correctly anywhere, and `docs/facts.json` — the machine-readable file
+  comparison sites and language models read — named the wrong organisation entirely. It is
+  **receptron**: Satoshi Nakajima and Isamu Arimoto, who have been shipping open source together
+  since 2015. The FAQ gains "Who builds this, and will it still be here next year?", which answers by
+  pointing at the MIT licence rather than by promising anything.
+
+- README project-name formatting ([#1406](https://github.com/receptron/mulmoterminal/pull/1406)).
+
+### Chores
+
+- Dependency updates ([#1373](https://github.com/receptron/mulmoterminal/pull/1373)) — plugin
+  packages, security tooling, WebSocket support, TypeScript execution and lint utilities.
 
 ## mulmoterminal@4.3.1 — 2026-08-04
 

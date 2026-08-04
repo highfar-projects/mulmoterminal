@@ -20,6 +20,10 @@ defineEmits<{ (e: "launch-skill", skill: BundledSkillName): void }>();
     Anthropic-compatible backends a session can run on, from <code>providers</code> in <code>~/.mulmoterminal/config.json</code>. A directory can pin one with
     <code>provider</code> / <code>model</code> in its <code>.mulmoterminal.json</code>. A key lives in the environment, never in the config.
   </p>
+  <p class="mb-2 text-[12px] text-dim">
+    The skill also writes <code>customAgents</code> — your own command for starting Claude Code, offered in the Agent Picker. It is not a launcher: Claude
+    Code's own arguments are appended to what you write, so the cell resumes, reports cost and reaches the GUI tools like any other Claude session.
+  </p>
   <ul v-if="launchOptions.providers.length" :class="SETTINGS_LIST">
     <li v-for="p in launchOptions.providers" :key="p.id" class="flex items-baseline gap-2 rounded-md bg-elevated px-2 py-1.5">
       <span class="font-mono text-[12px] text-secondary">{{ p.label }}</span>

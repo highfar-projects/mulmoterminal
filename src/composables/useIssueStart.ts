@@ -13,6 +13,7 @@ import { issueStartPlan, type IssueStartPlan } from "../../common/issueStartPlan
 import { isRecord } from "../../common/isRecord";
 import { parseRepoDirsResponse, type RepoDirs } from "../../common/repoDirs";
 import { repoIdentity } from "../../common/repoEntry";
+import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 // Loaded once per view open, like the PR and issue lists beside it: resolving a directory's remote
 // is a `git` call per saved directory, and the answer only changes when the user edits Settings.
@@ -24,7 +25,7 @@ const keyOf = (repo: string, issue: number): string => `${repo}#${issue}`;
 
 export async function loadRepoDirs(): Promise<void> {
   try {
-    const res = await fetch("/api/repo-dirs");
+    const res = await fetchWithTimeout("/api/repo-dirs");
     if (!res.ok) return;
     repoDirs.value = parseRepoDirsResponse(await res.json());
   } catch {
@@ -75,11 +76,15 @@ const failureSentence = (data: unknown): string | null => {
 };
 
 async function requestStart(repo: string, issue: number, dir: string): Promise<boolean> {
-  const res = await fetch("/api/issues/start", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ repo, issue, dir }),
-  });
+  const res = await fetchWithTimeout(
+    "/api/issues/start",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ repo, issue, dir }),
+    },
+    SLOW_COMMAND_TIMEOUT_MS,
+  );
   const data: unknown = await res.json().catch(() => null);
   if (!res.ok) {
     startError.value = failureSentence(data) ?? `could not start work on ${repo}#${issue}`;

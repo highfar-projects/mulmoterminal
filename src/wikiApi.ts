@@ -5,6 +5,7 @@
 // in lockstep with the engine.
 import type { WikiPageEntry, WikiGraph } from "@mulmoclaude/core/wiki";
 import { isRecord } from "../common/isRecord";
+import { fetchWithTimeout } from "./utils/fetchWithTimeout";
 
 /** index.md raw content + its parsed page entries (GET /api/wiki). */
 export interface WikiIndex {
@@ -31,7 +32,7 @@ export interface WikiLint {
 // than named: the generic used to be satisfied by an assertion, which made `getJson<WikiIndex>`
 // a claim about the server rather than a question asked of it.
 async function getJson<T>(url: string, read: (raw: unknown) => T): Promise<T> {
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url);
   if (!res.ok) throw new Error(`${url} → ${res.status}`);
   return read(await res.json());
 }
@@ -101,7 +102,7 @@ export function fetchWikiIndex(): Promise<WikiIndex> {
 /** Fetch one page. A 404 resolves to an `exists: false` page rather than throwing,
  *  so the view can show "page not found"; other errors still throw. */
 export async function fetchWikiPage(slug: string): Promise<WikiPage> {
-  const res = await fetch(`/api/wiki?slug=${encodeURIComponent(slug)}`);
+  const res = await fetchWithTimeout(`/api/wiki?slug=${encodeURIComponent(slug)}`);
   if (res.status === 404) return { filePath: null, content: "", exists: false, resolvedTitle: slug };
   if (!res.ok) throw new Error(`/api/wiki?slug=${slug} → ${res.status}`);
   return readPage(await res.json(), slug);

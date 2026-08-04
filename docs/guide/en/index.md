@@ -16,6 +16,8 @@ running grid. Already set up? `npx mulmoterminal@latest` is the whole thing.
 [Getting started — from zero to running](getting-started.html){: .btn .btn-purple .fs-5 .mb-4 .mb-md-0 .mr-2 }
 [Basics — how to read the screen](basics.html){: .btn .fs-5 .mb-4 .mb-md-0 }
 
+> **[What's new in 4.4.0](v4.4.0.html)** — **every cell keeps its own right pane**, the Files pane can **open a document or a story in the Canvas without an agent**, your **claude.ai connectors work in the workspace** again, and the session list stops re-reading whole transcripts (8.7 s to 1 ms on a 2.1 GB project). The cell header's **path became a menu** and six permanent icons moved into it (as of 2026-08-04)
+>
 > **[What's new in 4.3.1](v4.3.1.html)** — the launcher's workspace chip is labelled **`WORKSPACE`** by its role rather than by its folder name, and the **git chip refreshes when you come back to the tab** instead of up to ten seconds later. Nothing to configure (as of 2026-08-04)
 >
 > **[What's new in 4.3.0](v4.3.0.html)** — the **workspace** reaches the same GUI tools however you start a terminal there, and the launcher **always offers it** as its first chip. The single-view GUI MCP server id is now **`mt`**, so tool names an agent sees are shorter. And an **Enter that confirms a Japanese IME candidate** stays with the IME, in the session note and in the terminal. Nothing to configure (as of 2026-08-04)

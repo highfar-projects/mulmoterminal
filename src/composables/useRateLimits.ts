@@ -11,6 +11,7 @@ import { ref } from "vue";
 import { parseRateLimits } from "../../common/rateLimits";
 import { isRecord } from "../../common/isRecord";
 import type { ClaudeProbeStall, ClaudeProbeState, RateLimitSnapshot } from "./rateLimitGauge";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 const FETCH_TIMEOUT_MS = 8000;
 // The server refuses to probe more often than its own staleness window, so a tighter poll here
@@ -35,10 +36,8 @@ const isProbeStall = (v: unknown): v is ClaudeProbeStall => typeof v === "string
 // A failure leaves the last known windows in place. Blanking them would read as "0% used", which
 // is the opposite of the truth we just failed to fetch.
 async function load(): Promise<boolean> {
-  const controller = new AbortController();
-  const abort = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch("/api/rate-limits/refresh", { method: "POST", signal: controller.signal });
+    const res = await fetchWithTimeout("/api/rate-limits/refresh", { method: "POST" }, FETCH_TIMEOUT_MS);
     if (!res.ok) return false;
     const data: unknown = await res.json();
     if (!isRecord(data)) return false;
@@ -54,8 +53,6 @@ async function load(): Promise<boolean> {
   } catch {
     // offline, aborted, or the route is not there — keep what we had
     return false;
-  } finally {
-    clearTimeout(abort);
   }
 }
 

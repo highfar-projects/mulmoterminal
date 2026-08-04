@@ -30,6 +30,7 @@ import { usePubSub } from "../composables/usePubSub";
 import type { RunnerHealth } from "../../common/remoteHostHealth";
 import { isRecord } from "../../common/isRecord";
 import { jsonBody } from "../jsonBody";
+import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 // Mobile companion PWA — shown in the dropdown as help text (not fetched here).
 const MOBILE_URL = "https://mulmoserver.web.app";
@@ -72,10 +73,14 @@ async function fetchStatus(url: string, method: "GET" | "POST", body?: unknown):
   try {
     // RequestInit spells its fields exact, and `body: undefined` is not the same as no body —
     // so a GET here has to omit both keys rather than send them empty.
-    const res = await fetch(url, {
-      method,
-      ...(body ? { headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : {}),
-    });
+    const res = await fetchWithTimeout(
+      url,
+      {
+        method,
+        ...(body ? { headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : {}),
+      },
+      SLOW_COMMAND_TIMEOUT_MS,
+    );
     if (!res.ok) {
       const detail = await jsonBody(res);
       return { ok: false, error: typeof detail.error === "string" && detail.error ? detail.error : `HTTP ${res.status}`, httpStatus: res.status };

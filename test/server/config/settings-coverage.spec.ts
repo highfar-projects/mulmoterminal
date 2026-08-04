@@ -32,6 +32,7 @@ const REACHABLE_BY: Record<string, ("ui" | "skill")[]> = {
   gitlabHosts: ["ui", "skill"],
   repoDirs: ["ui"],
   launchers: ["ui"],
+  customAgents: ["skill"],
   quickCommands: ["ui"],
   userMcpServers: ["ui"],
   themes: ["skill"],
@@ -57,7 +58,7 @@ const REACHABLE_BY: Record<string, ("ui" | "skill")[]> = {
 // underneath needs, a palette, a key in the wrong env var, a button whose command does nothing —
 // and each has a section in Settings that DISPLAYS it and launches its skill. Listed so that
 // moving one into the UI is a deliberate edit here rather than something that quietly lapses.
-const DELIBERATELY_SKILL_ONLY = ["keymap", "themes", "providers", "buttons", "chips"];
+const DELIBERATELY_SKILL_ONLY = ["keymap", "themes", "providers", "customAgents", "buttons", "chips"];
 
 const readAll = (dir: string, ext: string): string => {
   const entries = readdirSync(dir, { withFileTypes: true, recursive: true });

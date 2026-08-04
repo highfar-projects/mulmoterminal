@@ -1,6 +1,7 @@
 import { ref, type Ref } from "vue";
 import { presetLabel, type CwdPreset } from "../components/presets";
 import type { Launcher } from "../components/launchers";
+import { isCustomAgent, type CustomAgent } from "../../common/customAgents";
 import type { UserMcpServer } from "../components/userMcp";
 import type { QuickCommand } from "../../common/quickCommands";
 import { isPushKind, type PushKind } from "../../common/pushKinds";
@@ -24,6 +25,7 @@ import { setDecisionDigest } from "./decisionDigest";
 import { setWorklogEnabled, setWorklogIntervalHours } from "./worklog";
 import { setHeaderConfigSummary } from "./headerConfigSummary";
 import { postConfigField } from "./postConfigField";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 // The custom attention-sound file is a SINGLETON ref shared across every
 // useAppConfig() caller — the beep player lives in the single view while the
@@ -90,6 +92,10 @@ const repoDirs = ref<Record<string, string>>({});
 // Cell-launcher commands (shell/codex/…) — SINGLETON so the grid's cell launchers and
 // the settings editor (openable from either view) share one list.
 const launchers = ref<Launcher[]>([]);
+
+// The user's own ways of starting Claude Code, offered in the Agent Picker (#1414) — a SINGLETON
+// like the launchers above, and read-only here: config.json is the only place they can be set.
+const customAgents = ref<CustomAgent[]>([]);
 
 // User-added HTTP MCP servers merged into the single-view session's --mcp-config —
 // SINGLETON like the others.
@@ -205,7 +211,11 @@ function createPresetManager(presets: Ref<CwdPreset[]>, saving: Ref<boolean>, er
     saving.value = true;
     error.value = null;
     try {
-      const res = await fetch("/api/config", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ cwdPresets: next }) });
+      const res = await fetchWithTimeout("/api/config", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ cwdPresets: next }),
+      });
       if (!res.ok) throw new Error(`save failed (${res.status})`);
       const saved: unknown = await res.json();
       presets.value = isRecord(saved) && isUnknownArray(saved.cwdPresets) ? saved.cwdPresets.filter(isCwdPreset) : [];
@@ -293,6 +303,17 @@ function adoptServerSideSettings(c: Record<string, unknown>): void {
   setDecisionDigest(c.decisionDigest);
   setWorklogEnabled(c.worklogEnabled);
   setWorklogIntervalHours(c.worklogIntervalHours);
+}
+
+// The user's own lists, adopted together — grouped like the sound and repo fields above.
+//
+// Each is filtered by the SAME guard its own save path uses. They used to differ: a save
+// validated, the load on every page open did not.
+function adoptListConfig(c: Record<string, unknown>): void {
+  launchers.value = listOf(c.launchers, isLauncher);
+  customAgents.value = listOf(c.customAgents, isCustomAgent);
+  quickCommands.value = listOf(c.quickCommands, isQuickCommand);
+  userMcpServers.value = listOf(c.userMcpServers, isUserMcpServer);
 }
 
 // The repo fields, adopted together — like adoptSoundConfig, so loadConfig keeps reading as a list
@@ -384,7 +405,7 @@ export function useAppConfig() {
   async function loadConfig() {
     const version = snapshotVersion();
     try {
-      const res = await fetch("/api/config");
+      const res = await fetchWithTimeout("/api/config");
       if (!res.ok) return;
       const body: unknown = await res.json();
       if (!isRecord(body)) return;
@@ -394,13 +415,9 @@ export function useAppConfig() {
       adoptServerPresets(c.cwdPresets, version);
       adoptSoundConfig(c);
       pushEnabled.value = c.pushEnabled === true;
-      // Each list is filtered by the SAME guard its own save path uses (postConfigField below).
-      // They used to differ: a save validated, the load on every page open did not.
       pushKinds.value = listOf(c.pushKinds, isPushKind);
       adoptRepoConfig(c);
-      launchers.value = listOf(c.launchers, isLauncher);
-      quickCommands.value = listOf(c.quickCommands, isQuickCommand);
-      userMcpServers.value = listOf(c.userMcpServers, isUserMcpServer);
+      adoptListConfig(c);
       applyGlobalSettings(c);
       adoptServerSideSettings(c);
       await migrateLegacyRecents();
@@ -419,6 +436,7 @@ export function useAppConfig() {
     repoDirs,
     saveRepoDir,
     launchers,
+    customAgents,
     quickCommands,
     userMcpServers,
     ...soundSettings,

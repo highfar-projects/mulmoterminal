@@ -15,6 +15,7 @@ import type { RunCommand } from "./runCommand";
 import type { PrPhase, WorkPhase } from "./rosterPhase";
 import type { CwdPreset } from "./presets";
 import type { Launcher, LaunchPick } from "./launchers";
+import type { CustomAgent } from "../../common/customAgents";
 import { shouldFlipZoom } from "./cellChromeRules";
 import { rosterAlertClass } from "./rosterAlertClasses";
 import { useRosterAlert } from "../composables/useRosterAlert";
@@ -47,6 +48,7 @@ import type { TerminalAgent } from "../../common/sessionAgent";
 import { buildCanvasCard, seedCanvasCard, hasStoredCard, absoluteUnder } from "../composables/canvasOpenFile";
 import { jsonBody } from "../jsonBody";
 import { isUnknownArray } from "../../common/isUnknownArray";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 // Renders the grid, auto-sized to the cell count, fully controlled by GridView:
 // `cells` is the active page's slice (≤9) when nothing is zoomed, and `expandedUid`
@@ -81,6 +83,10 @@ const props = defineProps<{
   defaultCwd: string | null;
   presets: CwdPreset[];
   launchers: Launcher[];
+  // The user's own ways of starting Claude Code, for the Agent Picker in an empty cell (#1414).
+  // Optional, unlike `launchers`: an install with none configured is the normal case, and the
+  // picker's built-in options are the whole list then.
+  customAgents?: CustomAgent[];
   home: string | null;
   // Manual sort mode: each cell shows move buttons to reorder.
   reorderable?: boolean;
@@ -490,7 +496,7 @@ watch(
       if (sessionId === expandedSessionId.value) canvasHasCard.value = has;
     });
     try {
-      const res = await fetch(`/api/tools?sessionId=${encodeURIComponent(sessionId)}`);
+      const res = await fetchWithTimeout(`/api/tools?sessionId=${encodeURIComponent(sessionId)}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const body = await jsonBody(res);
       // THROWN rather than read as "no groups": jsonBody answers {} for a body that is truncated
@@ -1189,6 +1195,7 @@ watch(
           :initial-agent="cell.agent"
           :presets="presets"
           :launchers="launchers"
+          :custom-agents="customAgents ?? []"
           :open-session-ids="openSessionIds"
           :open-cwds="openCwds"
           :cancellable="cell.uid === cancelUid"

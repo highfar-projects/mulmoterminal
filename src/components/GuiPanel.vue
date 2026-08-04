@@ -11,6 +11,7 @@ import { useCanvasCardHeight } from "../composables/useCanvasCardHeight";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 // The GUI panel renders the toolResults produced by GUI-protocol plugins. It
 // mirrors the terminal's active session: live results arrive on that session's
@@ -114,7 +115,7 @@ async function onUpdateResult(existing: ToolResult, update: Partial<ToolResult>)
   upsert(merged);
   if (!props.sessionId) return;
   try {
-    await fetch("/api/agent/toolResult", {
+    await fetchWithTimeout("/api/agent/toolResult", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ ...merged, sessionId: props.sessionId, persistOnly: true }),
@@ -240,7 +241,7 @@ const availableTools = ref<string[] | null>(null);
 async function loadAvailableTools(sessionId: string | null) {
   availableTools.value = null;
   try {
-    const res = await fetch(sessionId ? `/api/tools?sessionId=${encodeURIComponent(sessionId)}` : "/api/tools");
+    const res = await fetchWithTimeout(sessionId ? `/api/tools?sessionId=${encodeURIComponent(sessionId)}` : "/api/tools");
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const body = await jsonBody(res);
     // Late reply for a session we have since walked away from would list another cell's tools.

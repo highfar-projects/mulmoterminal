@@ -342,6 +342,16 @@ If you are unsure where to start, try **Kimi K2.7 Code** (fast, coding-oriented)
 - An unresolvable key **refuses the launch**, so prompts never reach an unintended backend
 - `ANTHROPIC_API_KEY` is **removed** from a provider session's environment — left in place it would outrank the auth token
 
+## When the model is reached by a COMMAND, not a URL {#custom-agents}
+
+Everything above assumes a backend you can name with a base URL and a token. If instead your model
+is reached by **running something** — `ollama launch claude --model … --`, a wrapper script, a
+second Claude Code install — that is a **custom agent** rather than a provider: it puts your own
+command in the Agent Picker and hands it Claude Code's own arguments, so the cell is still a real
+session (resume, cost, context, GUI tools).
+
+→ [Custom agents](config.html#custom-agents)
+
 ## Running a local LLM (claude-ollama)
 
 To run Claude Code **fully locally against an Ollama model** — no cloud — use the bundled

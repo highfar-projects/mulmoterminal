@@ -1,4 +1,5 @@
 import { isRecord } from "../../common/isRecord";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 // POST a single config field as a partial update; the server keeps the other fields, so this
 // never clobbers them. Returns the server's echoed value for that field (or `{ ok: false }` on
@@ -13,7 +14,11 @@ import { isRecord } from "../../common/isRecord";
 // caller DECLARE the shape it wanted rather than check it.
 export async function postConfigField(field: string, value: unknown): Promise<{ ok: true; value: unknown } | { ok: false }> {
   try {
-    const res = await fetch("/api/config", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ [field]: value }) });
+    const res = await fetchWithTimeout("/api/config", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ [field]: value }),
+    });
     if (!res.ok) return { ok: false };
     const body: unknown = await res.json();
     return { ok: true, value: isRecord(body) ? body[field] : undefined };

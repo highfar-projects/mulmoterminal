@@ -7,7 +7,7 @@
   "documentation": "https://receptron.github.io/mulmoterminal/",
   "license": "MIT",
   "openSource": true,
-  "version": "4.2.0",
+  "version": "4.4.0",
   "install": "npx mulmoterminal@latest",
   "requires": {
     "node": ">=22.9",
@@ -49,9 +49,17 @@
     "running agents on someone else's machine"
   ],
   "maintainers": {
-    "org": "Singularity Society",
-    "url": "https://singularitysociety.org",
-    "notable": "Satoshi Nakajima — software architect for Windows 95, Windows 98 and Internet Explorer 3.0/4.0 at Microsoft"
+    "org": "receptron",
+    "url": "https://github.com/receptron",
+    "people": ["Satoshi Nakajima", "Isamu Arimoto"],
+    "notable": "Satoshi Nakajima — software architect for Windows 95, Windows 98 and Internet Explorer 3.0/4.0 at Microsoft",
+    "shippingOpenSourceTogetherSince": 2015,
+    "priorWork": [
+      "VideoShader (2015) — GPU video processing for iOS, built at Veemob",
+      "Swipe (2015) — an animation runtime that made manga move on phones, MIT",
+      "OwnPlate (2020) — takeout ordering for restaurants during COVID, run at the Singularity Society and launched with ITOCHU",
+      "SlashGPT (2023), GraphAI (2024), MulmoCast (2025)"
+    ]
   },
-  "updated": "2026-08-03"
+  "updated": "2026-08-04"
 }

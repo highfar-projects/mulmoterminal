@@ -1,25 +1,23 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { takeScratchHome, type ScratchHome } from "../../support/scratchHome.js";
+import { projectSessionsDir } from "../../../server/session/project-dir.js";
 
 // `/api/session/:id` is hit by every grid cell as its turn finishes, and a memo keyed on
 // (mtime, size) could only skip an UNCHANGED transcript — which the session being written to never
 // is. An active 508 MB session therefore paid a full 10.5 s read per turn (#1386). These pin what
 // changed: the summary is folded once and continued, and a big one is kept beside the file.
 
-// Restored after every test: vitest reuses a worker across FILES, and a leaked HOME would move the
-// next spec's idea of ~/.claude without it asking.
-const realHome = process.env.HOME;
+let scratch: ScratchHome;
 let home = "";
 let n = 0;
 
 const CWD = "/Users/me/proj";
 
 async function freshSummary() {
-  vi.resetModules();
-  process.env.HOME = home;
+  vi.resetModules(); // the scratch home is already in place; the module reads it at import
   const mod = await import("../../../server/session/session-reads.js");
   return mod.readSessionSummary;
 }
@@ -43,8 +41,12 @@ const filler = (bytes: number) => line({ type: "assistant", message: { role: "as
 
 const OVER_THRESHOLD_BYTES = 11 * 1024 * 1024;
 
+// projectSessionsDir, not a second copy of its rule: it resolves the cwd for the host platform and
+// folds EVERY non-alphanumeric character to "-", so "/Users/me/proj" is `-Users-me-proj` on macOS
+// and `D--Users-me-proj` on Windows. A spec that spelled the macOS answer wrote its transcript
+// where the reader would never look (#1396).
 function transcriptPath(id: string): string {
-  const dir = path.join(home, ".claude", "projects", CWD.replace(/\//g, "-"));
+  const dir = projectSessionsDir(CWD);
   mkdirSync(dir, { recursive: true });
   return path.join(dir, `${id}.jsonl`);
 }
@@ -69,13 +71,10 @@ const summarySidecars = (): string[] => {
 };
 
 beforeEach(() => {
-  home = mkdtempSync(path.join(tmpdir(), "mt-summary-"));
+  scratch = takeScratchHome("mt-summary-");
+  home = scratch.path;
 });
-afterEach(() => {
-  if (realHome === undefined) delete process.env.HOME;
-  else process.env.HOME = realHome;
-  rmSync(home, { recursive: true, force: true });
-});
+afterEach(() => scratch.release());
 
 describe("readSessionSummary", () => {
   it("reports the prompt, reply, turns, usage and phase of a session", async () => {

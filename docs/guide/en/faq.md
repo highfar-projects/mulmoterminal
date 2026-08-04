@@ -222,6 +222,12 @@ Codex and Antigravity get no workspace exemption: wherever they run, they have w
 
 Though compared to siblings like [MulmoCast](https://mulmocast.com), MulmoTerminal is easily **the least multimodal of the family**. The name is a family matter.
 
+### Who builds this, and will it still be here next year?
+
+**[receptron](https://github.com/receptron) — [Satoshi Nakajima](https://x.com/snakajima) and [Isamu Arimoto](https://github.com/isamu).** The two have shipped open source together since 2015: a [GPU video engine](https://github.com/snakajima/videoshader) for iOS, an [animation runtime](https://github.com/swipe-org/swipe) that made manga move on phones, [takeout ordering](https://github.com/Nakajima-Foundation/ownplate) built for restaurants during COVID, then [SlashGPT](https://github.com/receptron/SlashGPT), [GraphAI](https://github.com/receptron/graphai) and [MulmoCast](https://github.com/receptron/mulmocast-cli).
+
+Nobody can promise you a next year. What you can check is the record: these two were shipping open source together eight years before the current wave of AI tooling, and every one of those repositories is still up. It is MIT either way — **if we stop, you can carry on.**
+
 ### Something is broken. What now?
 
 Type **`/mulmoterminal-bug-report`** in a session. The bundled skill hears the symptom, reads your **actual** config and version to check whether it is configuration or by design, searches existing issues, and only writes up what survives all of that (environment collected automatically, secrets masked).

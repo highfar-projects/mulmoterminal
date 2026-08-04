@@ -4,6 +4,7 @@
 import { ref, type Ref } from "vue";
 import { useAutoRefresh } from "./useAutoRefresh";
 import { jsonBody } from "../jsonBody";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 export interface SessionContext {
   model: string | null;
@@ -33,7 +34,7 @@ export function useSessionContext(sessionId: Ref<string | null>, cwd: Ref<string
     const query = cwd.value ? `?cwd=${encodeURIComponent(cwd.value)}` : "";
     const seq = ++requestSeq;
     try {
-      const res = await fetch(`/api/session/${id}${query}`);
+      const res = await fetchWithTimeout(`/api/session/${id}${query}`);
       if (seq !== requestSeq || !res.ok) return;
       const data = await jsonBody(res);
       // Guard against a stale response: the terminal may have switched session mid-flight.

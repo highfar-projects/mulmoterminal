@@ -7,6 +7,7 @@ import { ref, watch, type Ref } from "vue";
 import { usePollWhileVisible } from "./usePollWhileVisible";
 import type { GitStatus } from "../../common/gitStatus";
 import { isRecord } from "../../common/isRecord";
+import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 const POLL_MS = 10_000;
 const isGitStatus = (v: unknown): v is GitStatus => isRecord(v) && typeof v.repo === "boolean";
@@ -26,7 +27,7 @@ export function useGitStatus(cwd: Ref<string | null>) {
       return;
     }
     try {
-      const res = await fetch(`/api/git-status?cwd=${encodeURIComponent(dir)}`);
+      const res = await fetchWithTimeout(`/api/git-status?cwd=${encodeURIComponent(dir)}`, undefined, SLOW_COMMAND_TIMEOUT_MS);
       if (!res.ok) return;
       const data: unknown = await res.json();
       if (my === req) status.value = isGitStatus(data) ? data : null;

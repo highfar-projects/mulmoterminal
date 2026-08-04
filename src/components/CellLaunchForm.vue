@@ -6,11 +6,11 @@ import { useMcpToolGroups } from "../composables/useMcpToolGroups";
 import { orderByDirPriority } from "../../common/dirPriorityOrder";
 import { CHIP_IDLE, CHIP_RUNNING, CHIP_DOT_RUNNING } from "./dirChipColor";
 import { relativeTime as relativeTimeFrom } from "./cellDisplay";
-import { LAUNCH_TARGETS } from "./launchTargets";
+import { agentPickerOptions } from "./agentPicker";
 import { worktreeAction, worktreeLimitReason } from "../../common/worktreeSession";
 import { isSameDirPath } from "../../common/dirPathKey";
 import { TOOL_GROUPS, TOOL_GROUP_HEADINGS, toolGroupServerId, toolsInGroup, type ToolGroup } from "../../common/toolGroups";
-import type { LaunchAgent } from "../../common/launchAgent";
+import { customAgentIdOf, type AgentPick, type CustomAgent } from "../../common/customAgents";
 import type { TerminalAgent } from "../../common/sessionAgent";
 import { launchChips, type CwdPreset, type LaunchChip } from "./presets";
 import type { Launcher, LaunchPick } from "./launchers";
@@ -20,6 +20,7 @@ import LaunchChipList from "./LaunchChipList.vue";
 import ModelPicker from "./ModelPicker.vue";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
+import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 // What an EMPTY grid cell shows: pick a directory, pick what to run in it, and start — or resume
 // a session that already exists there, run one of its scripts, or isolate the work in a worktree.
@@ -27,7 +28,7 @@ import { jsonBody } from "../jsonBody";
 // unmounts it and closing the session mounts a fresh one.
 //
 // Three things it decides outlive it and therefore belong to the CELL, arriving here as props:
-// the directory field, the launch target, and the model choice.
+// the directory field, the Agent Picker's choice, and the model choice.
 
 // Existing sessions, scripts and worktrees are re-read whenever the directory changes; typing is
 // debounced so a path is not fetched letter by letter.
@@ -35,7 +36,11 @@ const DIR_RELOAD_DEBOUNCE_MS = 300;
 
 const props = defineProps<{
   dir: string;
-  target: LaunchAgent;
+  // What the Agent Picker currently has selected: a built-in ("claude" … "shell") or
+  // `custom:<id>` for one of the user's own (common/customAgents.ts).
+  agent: AgentPick;
+  // The user's own ways of starting Claude Code, which the picker offers beside the built-ins.
+  customAgents?: CustomAgent[] | undefined;
   choice: LaunchChoice | null;
   defaultCwd: string | null;
   presets: CwdPreset[];
@@ -54,14 +59,14 @@ const props = defineProps<{
 const emit = defineEmits<{
   // `update:dir`: the field's new path. `remove-preset`: the path to drop from the shared list.
   (e: "update:dir" | "remove-preset", value: string): void;
-  (e: "update:target", value: LaunchAgent): void;
+  (e: "update:agent", value: AgentPick): void;
   (e: "update:choice", value: LaunchChoice | null): void;
-  // Start what the selector picked, in this dir. EVERY launch in this form goes through here —
+  // Start what the Agent Picker picked, in this dir. EVERY launch in this form goes through here —
   // the dir field, a preset chip and a worktree alike — so the cell decides once what the picked
-  // target means (a shell replaces the cell; an agent runs in it).
+  // agent means (a shell replaces the cell; an agent runs in it).
   (e: "start", dir: string | null): void;
   // Attach to an existing session, in the cwd its row was listed for. `agent` travels only for a
-  // worktree row, whose session may be one the cell's selector is not currently pointed at —
+  // worktree row, whose session may be one the Agent Picker is not currently pointed at —
   // resuming a codex conversation as Claude would connect the wrong endpoint to a live id.
   (e: "resume", value: { id: string; cwd: string | null; agent?: TerminalAgent }): void;
   (e: "run", value: RunCommand): void;
@@ -75,7 +80,16 @@ const targetDir = computed(() => dirFor(props.dir));
 
 // The agent-only parts of the form: a shell takes no model, registers no MCP servers, and is not
 // what the worktree row starts.
-const launchesAgent = computed(() => props.target !== "shell");
+const launchesAgent = computed(() => props.agent !== "shell");
+
+// The options the picker shows. A custom agent is one of them, so the row grows with the user's
+// config rather than being a fixed four.
+const pickerOptions = computed(() => agentPickerOptions(props.customAgents ?? []));
+
+// A custom agent runs Claude Code, so everything keyed on "is this a Claude session" — the model
+// picker below, and nothing else — has to say yes for it too. Asked of the PICK rather than of a
+// resolved agent name, which is the same rule the model picker already followed for Shell.
+const launchesClaude = computed(() => props.agent === "claude" || customAgentIdOf(props.agent) !== null);
 
 // v-model over a prop the cell owns: typing reports the new path up, and the field shows what
 // comes back down.
@@ -221,6 +235,8 @@ function fillDir(path: string): void {
 // (POST /api/pick-file { directory: true }). Fill the Working-directory field with the pick.
 async function pickDir(): Promise<void> {
   try {
+    // Deliberately unbounded: this route answers when the USER closes the native file dialog,
+    // so any deadline here is a guess at how long they will take to choose.
     const res = await fetch("/api/pick-file", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ directory: true }) });
     if (!res.ok) return;
     const data = await jsonBody(res);
@@ -338,11 +354,15 @@ async function createWorktreeAndLaunch(): Promise<void> {
   const task = worktreeTask.value.trim();
   if (!repoDir || !task) return;
   try {
-    const res = await fetch("/api/worktrees/create", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ repoDir, task }),
-    });
+    const res = await fetchWithTimeout(
+      "/api/worktrees/create",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ repoDir, task }),
+      },
+      SLOW_COMMAND_TIMEOUT_MS,
+    );
     if (!res.ok) return;
     const wt = await jsonBody(res);
     if (typeof wt.path === "string") {
@@ -379,11 +399,15 @@ async function removeWorktree(w: Worktree): Promise<void> {
   const repoDir = targetDir.value;
   if (w.dirty && !window.confirm(`"${w.task}" has uncommitted changes. Discard and remove it?`)) return;
   try {
-    await fetch("/api/worktrees/remove", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ repoDir, path: w.path, deleteBranch: true, force: w.dirty }),
-    });
+    await fetchWithTimeout(
+      "/api/worktrees/remove",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ repoDir, path: w.path, deleteBranch: true, force: w.dirty }),
+      },
+      SLOW_COMMAND_TIMEOUT_MS,
+    );
     void loadWorktrees(targetDir.value);
   } catch {
     // best-effort
@@ -470,26 +494,30 @@ async function removeWorktree(w: Worktree): Promise<void> {
         </button>
       </span>
     </div>
-    <!-- Wraps rather than overflowing: four options do not fit one row in a narrow cell, and
-         the one that would fall off the edge is the last, Shell. -->
+    <!-- The AGENT PICKER. Centred like everything else in this column — the directory field, the
+         model picker and the chips above it all sit on the centre line, so a left-aligned toggle
+         was the one thing off it. Wraps rather than overflowing: four options do not fit one row
+         in a narrow cell, and the one that would fall off the edge is the last, Shell — so the
+         wrapped row is centred too rather than hanging off the left. -->
     <div
-      class="inline-flex max-w-[360px] flex-wrap gap-0.5 self-start rounded-[7px] border border-border bg-deep p-0.5"
+      data-testid="agent-picker"
+      class="inline-flex max-w-[360px] flex-wrap justify-center gap-0.5 rounded-[7px] border border-border bg-deep p-0.5"
       role="radiogroup"
-      aria-label="What this terminal runs"
+      aria-label="Agent picker — what this terminal runs"
     >
       <button
-        v-for="t in LAUNCH_TARGETS"
-        :key="t.agent"
+        v-for="option in pickerOptions"
+        :key="option.agent"
         type="button"
-        :data-testid="`cell-target-${t.agent}`"
+        :data-testid="`agent-picker-${option.agent}`"
         class="cursor-pointer rounded-[5px] border-none px-3.5 py-1 font-sans text-[12px] font-medium"
-        :class="target === t.agent ? 'bg-elevated text-fg' : 'bg-transparent text-dim hover:text-fg'"
+        :class="agent === option.agent ? 'bg-elevated text-fg' : 'bg-transparent text-dim hover:text-fg'"
         role="radio"
-        :aria-checked="target === t.agent"
-        :title="t.title"
-        @click="emit('update:target', t.agent)"
+        :aria-checked="agent === option.agent"
+        :title="option.title"
+        @click="emit('update:agent', option.agent)"
       >
-        {{ t.label }}
+        {{ option.label }}
       </button>
     </div>
     <label class="flex w-full max-w-[360px] flex-col items-center gap-1.5">
@@ -531,10 +559,12 @@ async function removeWorktree(w: Worktree): Promise<void> {
         takenWorktreeAt(targetDir)
       }}</span>
     </label>
-    <!-- Codex has its own model configuration and doesn't read this one. Keyed on the SELECTOR,
-         not on the agent the cell will run: that reads "claude" while Shell is picked (a shell has
-         no agent), and a model picker over a shell would offer a choice nothing acts on. -->
-    <ModelPicker v-if="target === 'claude'" :model-value="choice" @update:model-value="(value) => emit('update:choice', value)" />
+    <!-- Codex has its own model configuration and doesn't read this one. Keyed on the AGENT
+         PICKER, not on the agent the cell will run: that reads "claude" while Shell is picked (a
+         shell has no agent), and a model picker over a shell would offer a choice nothing acts
+         on. A CUSTOM agent gets it too — it runs Claude Code, and the wrapper's own `--model`
+         is consumed by the wrapper (it sits before the `--`), so the two do not collide. -->
+    <ModelPicker v-if="launchesClaude" :model-value="choice" @update:model-value="(value) => emit('update:choice', value)" />
     <!-- A GUI tool group is a per-DIRECTORY registration in Claude Code's own MCP config, not
          a per-launch choice — but it only takes effect when a session starts, so this is
          where it belongs: decided before the thing it configures exists.

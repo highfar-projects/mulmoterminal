@@ -143,6 +143,9 @@ function reap(deps: SessionLifecycleDeps, id: string) {
   // visible via its on-disk record.
   knownSessions.delete(id);
   launchChoices.delete(id); // the picked backend dies with the session that used it
+  // NOT customAgentSessions: the transcript outlives the pty, and a resume ignores the picker, so
+  // dropping the mapping here would silently continue that conversation on plain claude (a
+  // different model). Persisted for the same reason — see custom-agent-log.ts.
   lastPrompts.delete(id); // don't leak prompt text for torn-down sessions
   lastResponses.delete(id); // ditto, and keep this map from growing across closed sessions
   // The transcript stops being frozen here: the next claude on this id (`--resume`, or a restart

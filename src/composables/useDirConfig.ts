@@ -10,6 +10,7 @@ import { normalizeFontFamily } from "../../common/terminalFontFamily";
 import { normalizeOrderPriority } from "../../common/orderPriority";
 import { isRecord } from "../../common/isRecord";
 import { dirChipColor } from "../components/dirChipColor";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 // The per-directory overrides a terminal adopts when its cwd holds a
 // `.mulmoterminal.json` (served by GET /api/dir-config). The raw sound path stays
@@ -86,7 +87,7 @@ export function fetchDirConfig(cwd: string): Promise<DirConfig> {
   if (cached) return cached;
   const pending = (async () => {
     try {
-      const res = await fetch(`/api/dir-config?cwd=${encodeURIComponent(cwd)}`);
+      const res = await fetchWithTimeout(`/api/dir-config?cwd=${encodeURIComponent(cwd)}`);
       const parsed = res.ok ? parse(await res.json()) : EMPTY;
       resolvedConfig.set(cwd, parsed); // remember the value so a re-mount seeds it synchronously
       return parsed;

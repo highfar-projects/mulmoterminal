@@ -59,6 +59,15 @@ opens another page (tab).
 
 → [Basics](basics.html)
 
+## Agent Picker
+
+The **Claude / Codex / Antigravity / Shell** toggle at the top of an empty cell's launcher form:
+what that cell will be started as. It is what starts a real **agent session** — resumable
+transcript, cost and context, a "waiting for you" status. Not to be confused with a **launch
+command** (a launcher chip), which runs your own command line verbatim, whatever it names.
+
+→ [Basics](basics.html)
+
 ## Cockpit roster
 
 The **one-row-per-session list** beside an enlarged cell: directory, AI summary, latest prompt,
