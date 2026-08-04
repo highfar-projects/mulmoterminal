@@ -5,7 +5,7 @@
 // alone would pass just as happily with the listeners on the wrong element or the wrong gate.
 import { describe, it, expect, beforeAll, afterEach } from "vitest";
 import { Terminal } from "@xterm/xterm";
-import { guardMouseClicks, guardMouseWheel } from "../../../src/composables/terminalMouseInput";
+import { GESTURE_END_MS, guardMouseClicks, guardMouseWheel } from "../../../src/composables/terminalMouseInput";
 import { recordSwallowedModes } from "../../../src/composables/mouseReports";
 import { swallowsMouseTracking } from "../../../src/composables/mouseTrackingModes";
 
@@ -262,5 +262,79 @@ describe("guardMouseWheel on a real terminal", () => {
     const { screen, sent } = await openWiredTerminal({ tracked: false });
     wheel(screen, 120, 115, 250);
     expect(sent).toEqual(["\x1b[B"]);
+  });
+});
+
+// Banking is right for a gesture that keeps going, and leaves a hole for one that stops short: the
+// sub-notch events are consumed and report nothing, so a gentle nudge does NOTHING — while the same
+// nudge scrolls a shell cell fine, because only an agent cell takes this path (#1200). The end of
+// the gesture is when the leftover has to be paid, and only a timer can tell the difference between
+// "stopped" and "still going".
+//
+// Real timers, not fake ones: xterm's own `write` callback is scheduled on a timer too, so faking
+// them here hangs the terminal setup these tests need. GESTURE_END_MS is 100ms, which is cheap
+// enough to actually wait out.
+describe("guardMouseWheel gesture-end flush", () => {
+  const wheel = (screen: HTMLElement, deltaY: number, clientX: number, clientY: number) =>
+    screen.dispatchEvent(new WheelEvent("wheel", { deltaY, clientX, clientY, bubbles: true, cancelable: true }));
+
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  // A margin over the gap, so a loaded runner cannot make "the gesture ended" arrive late.
+  const afterGesture = () => sleep(GESTURE_END_MS * 3);
+  // Comfortably inside the gap, so the gesture still counts as going.
+  const midGesture = () => sleep(GESTURE_END_MS / 4);
+
+  it("pays a nudge that never reached a whole notch, once it stops", async () => {
+    const { screen, sent } = await openWiredTerminal();
+    for (let i = 0; i < 5; i++) wheel(screen, 2, 115, 250); // 0.75 of a notch
+    expect(sent).toEqual([]);
+    await afterGesture();
+    expect(sent).toEqual(["\x1b[<65;12;13M"]);
+  });
+
+  // At the cell the gesture ended over, not a fixed 1;1 — the flush has no event of its own.
+  it("reports the flush at the last cell the pointer was over", async () => {
+    const { screen, sent } = await openWiredTerminal();
+    for (let i = 0; i < 4; i++) wheel(screen, -2, 5, 10); // col 1, row 1
+    wheel(screen, -2, 115, 250); // then col 12, row 13
+    await afterGesture();
+    expect(sent).toEqual(["\x1b[<64;12;13M"]);
+  });
+
+  // Restarted per event, so a swipe still in progress is never cut short.
+  it("does not fire while the gesture is still going", async () => {
+    const { screen, sent } = await openWiredTerminal();
+    for (let i = 0; i < 4; i++) {
+      wheel(screen, 2, 115, 250);
+      await midGesture();
+    }
+    expect(sent).toEqual([]);
+  });
+
+  it("pays nothing for a stray pixel", async () => {
+    const { screen, sent } = await openWiredTerminal();
+    wheel(screen, 2, 115, 250); // 0.15 of a notch
+    await afterGesture();
+    expect(sent).toEqual([]);
+  });
+
+  // The bank is scoped to one stretch of TRACKED scrolling, so a gesture interrupted by the app
+  // leaving the alternate buffer owes nothing — the same rule the reset in the handler keeps.
+  it("pays nothing once the app has stopped taking the mouse", async () => {
+    const { term, screen, sent } = await openWiredTerminal();
+    for (let i = 0; i < 5; i++) wheel(screen, 2, 115, 250);
+    await write(term, ALT_BUFFER_OFF);
+    await afterGesture();
+    expect(sent).toEqual([]);
+  });
+
+  // Nothing removes a pending timer when the terminal goes away, so the flush has to survive one
+  // firing after dispose. xterm keeps `buffer` readable there, which the gate reads as `normal`.
+  it("does nothing when the terminal was disposed inside the gap", async () => {
+    const { term, screen, sent } = await openWiredTerminal();
+    for (let i = 0; i < 5; i++) wheel(screen, 2, 115, 250);
+    term.dispose();
+    await afterGesture();
+    expect(sent).toEqual([]);
   });
 });

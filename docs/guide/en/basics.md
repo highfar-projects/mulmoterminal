@@ -57,7 +57,7 @@ Empty cells in the grid show a **launcher form**. This is where you choose **wha
 
 | Part | Role |
 |---|---|
-| **Claude / Codex / Antigravity / Shell** toggle | Choose what runs in this cell — an **agent**, or **Shell**: your OS default shell (`$SHELL`), with nothing to install and nothing to configure |
+| **Agent Picker** (**Claude / Codex / Antigravity / Shell**) | Choose what runs in this cell — an **agent**, or **Shell**: your OS default shell (`$SHELL`), with nothing to install and nothing to configure. This is the control that starts a real agent session; the **launch commands** below run your own command line verbatim |
 | **WORKING DIRECTORY** | Enter the working directory (the play button launches it). Frequently used directories are offered as clickable *cwd preset* **chips** that fill the field (the chip's play button launches right away). A **WORKSPACE** chip always leads that row (→ [which directory to launch in](#launch-dir)) |
 | **Model picker** (when Claude is selected) | Pick the backend / model for this session only (→ [providers](providers.html)) |
 | **Canvas / Workspace data / External accounts** toggles (with an agent selected) | Register a GUI tool group (`render` / `data` / `media` / `external`) as an MCP server **for the directory, not for this session**. **They are absent while the workspace is selected** — everything is available there without registering anything |
@@ -111,7 +111,8 @@ Your [MCP servers](config.html#settings-modal) (`userMcpServers`) are merged int
 
 **To keep doing what you did in the single view in 3.x, launch in the workspace.**
 That is the directory the single view ran in, so a Claude or Codex cell started there carries the same thing — drawing into the Canvas, working with collections, with no toggle to turn on.
-Claude or Codex, from a cell or from a launcher chip, all reach the same tools (→ [4.3.0 setup guide](v4.3.0.html)).
+Claude or Codex, it is the same — pick either in the **Agent Picker** and launch in the workspace (→ [4.3.0 setup guide](v4.3.0.html)).
+**A launch command is not one of these**, even when the command you typed is `claude`: a launch command runs verbatim, so it is a terminal with that program in it and carries no GUI tools. The Agent Picker is what starts an agent session.
 
 {: .note }
 > **If you also run MulmoClaude, make the workspace the directory MulmoClaude uses** (`~/mulmoclaude` by default).

@@ -359,11 +359,34 @@ describe("SettingsModal skill buttons", () => {
     ["Explain my settings…", "mulmoterminal-config"],
     ["Configure notifications…", "mulmoterminal-notify"],
     ["Set up shortcuts…", "mulmoterminal-keys"],
+    ["Add a backend…", "mulmoterminal-model"],
+    ["Set up header buttons…", "mulmoterminal-header"],
   ])("%s launches %s", async (label, skill) => {
     const w = mountModal();
     const button = buttons(w).find((b) => b.props("label") === label);
     if (!button) throw new Error(`no Settings button labelled "${label}"`);
     await button.find("button").trigger("click");
     expect(w.emitted("launch-skill")?.at(-1)?.[0]).toBe(skill);
+  });
+});
+
+// The sections that gave a config.json-only setting a control (#1401). Asserted through the MODAL
+// rather than each section alone: a section can mount perfectly and still be absent from the app,
+// which is the state every one of these keys was already in.
+describe("SettingsModal reaches the config-only settings", () => {
+  it.each([
+    ["Terminal font", "Terminal font family stack"],
+    ["Waiting rows", "Increase summary line count"],
+    ["GitHub and GitLab", "Comment on the issue a cell is working on"],
+    ["GitHub and GitLab", "End a created PR with the clone name"],
+    ["GitHub and GitLab", "Add a self-hosted GitLab host"],
+    ["Sessions and background tasks", "End replies with a closing summary"],
+    ["Sessions and background tasks", "Keep a digest of decisions"],
+    ["Sessions and background tasks", "Keep a periodic dev-work log"],
+    ["Sessions and background tasks", "Increase dev-work log interval"],
+    ["Terminal keys", "Copy a selection as soon as it settles"],
+    ["Terminal keys", "Which bytes submit in a Claude session"],
+  ])("%s offers %s", (_section, ariaLabel) => {
+    expect(mountModal().find(`[aria-label="${ariaLabel}"]`).exists()).toBe(true);
   });
 });

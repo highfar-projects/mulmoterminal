@@ -12,7 +12,7 @@ import { isSameDirPath } from "../../common/dirPathKey";
 import DirBadge from "./DirBadge.vue";
 import { isCellContext, isCellUsage, type CellContext, type CellUsage } from "./cellPayload";
 import { asTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
-import type { LaunchAgent } from "../../common/launchAgent";
+import { customAgentIdOf, type AgentPick, type CustomAgent } from "../../common/customAgents";
 import { unsavedWork } from "./unsavedWork";
 import { shouldPromptTidy } from "./mergedTidy";
 import { usageBadge } from "./cellDisplay";
@@ -96,6 +96,8 @@ const props = defineProps<
     presets: CwdPreset[];
     // Configured launch commands (shell/codex/…) offered next to Claude in this launcher.
     launchers?: Launcher[];
+    // The user's own ways of starting Claude Code, offered in this cell's Agent Picker (#1414).
+    customAgents?: CustomAgent[];
     // Session ids open in other grid cells. Resuming one of them would detach that
     // cell, so the launcher flags such rows and confirms before opening.
     openSessionIds?: string[];
@@ -134,16 +136,20 @@ const { chromeProps, chromeEvents } = cellChromeBinding(props, emit, () => void 
 // starts empty and lazy-launches when the user picks a dir and clicks Start.
 const launched = ref(props.initialSessionId !== null);
 const sessionId = ref<string | null>(props.initialSessionId);
-// What the launch form's selector will start here. "shell" is the OS default shell, which is a
+// What the launch form's AGENT PICKER will start here. "shell" is one of its options and is a
 // LAUNCHER, not an agent: the parent replaces this cell with a launcher cell, so it never becomes
 // the `agent` below.
-const launchTarget = ref<LaunchAgent>(asTerminalAgent(props.initialAgent));
+const pickedAgent = ref<AgentPick>(asTerminalAgent(props.initialAgent));
+// The custom agent this cell was started from, or null for a built-in (#1414). It rides alongside
+// `agent`, which stays "claude" for a custom one: a wrapper decides which command line starts
+// Claude Code, not what the session IS — see common/customAgents.ts.
+const customAgentId = computed<string | null>(() => customAgentIdOf(pickedAgent.value));
 // The agent this cell runs (Claude by default). Fixed once launched; restored from the
 // persisted cell on reload so a codex / antigravity cell reconnects to its WS endpoint.
-// Derived from the selector so ONE pick drives both — two refs holding the same choice is the
+// Derived from the picker so ONE pick drives both — two refs holding the same choice is the
 // kind of pair that drifts. asTerminalAgent maps "shell" to claude, which nothing reads: a shell
 // launch leaves this cell instead of running in it.
-const agent = computed<TerminalAgent>(() => asTerminalAgent(launchTarget.value));
+const agent = computed<TerminalAgent>(() => asTerminalAgent(pickedAgent.value));
 const connectKey = ref(0);
 
 // The directory this terminal runs in (shown in the header, sent to the server).
@@ -436,23 +442,23 @@ function launchIn(dir: string | null) {
 // life of the cell so a relaunch in the same cell repeats the choice.
 const launchChoice = ref<LaunchChoice | null>(null);
 
-// Start what the selector picked, in `dir`. EVERY launch in the form goes through here: the
-// selector decides for the dir field, for a preset chip, and for a worktree alike, and a rule
+// Start what the Agent Picker picked, in `dir`. EVERY launch in the form goes through here: the
+// picker decides for the dir field, for a preset chip, and for a worktree alike, and a rule
 // that has to hold at three call sites belongs in one of them.
-function startTarget(dir: string | null) {
-  if (launchTarget.value === "shell") emit("launch", { launcher: shellLauncher(), cwd: dir });
+function startPickedAgent(dir: string | null) {
+  if (pickedAgent.value === "shell") emit("launch", { launcher: shellLauncher(), cwd: dir });
   else launchIn(dir);
 }
 
 // Attach to a session the form listed, in the cwd those rows were fetched for (not the
 // possibly-changed input).
 //
-// `resumeAgent` is what the session IS, which a worktree row knows and the selector may disagree
-// with: connecting a live codex id to /ws because the picker still says Claude runs the wrong
-// endpoint against a real session. Absent (the resume list, all Claude) leaves the pick alone.
+// `resumeAgent` is what the session IS, which a worktree row knows and the Agent Picker may
+// disagree with: connecting a live codex id to /ws because the picker still says Claude runs the
+// wrong endpoint against a real session. Absent (the resume list, all Claude) leaves the pick alone.
 function resumeSession({ id, cwd: dir, agent: resumeAgent }: { id: string; cwd: string | null; agent?: TerminalAgent }) {
   if (resumeAgent) {
-    launchTarget.value = resumeAgent;
+    pickedAgent.value = resumeAgent;
     emit("agent", resumeAgent); // the grid persists which agent this cell runs
   }
   cwd.value = dir;
@@ -1230,6 +1236,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
           :connect-key="connectKey"
           :cwd="cwd"
           :agent="agent"
+          :custom-agent="customAgentId"
           :launch="launchChoice"
           :hide-header="filmstrip"
           :expanded="expanded"
@@ -1514,18 +1521,19 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
       <CellLaunchForm
         v-else
         :dir="dirInput"
-        :target="launchTarget"
+        :agent="pickedAgent"
         :choice="launchChoice"
         :default-cwd="defaultCwd"
         :presets="presets"
         :launchers="launchers"
+        :custom-agents="customAgents ?? []"
         :open-session-ids="openSessionIds"
         :open-cwds="openCwds"
         :cancellable="cancellable"
         @update:dir="onLaunchDir"
-        @update:target="(value) => (launchTarget = value)"
+        @update:agent="(value) => (pickedAgent = value)"
         @update:choice="(value) => (launchChoice = value)"
-        @start="startTarget"
+        @start="startPickedAgent"
         @resume="resumeSession"
         @run="(cmd) => emit('run', cmd)"
         @launch="(pick) => emit('launch', pick)"

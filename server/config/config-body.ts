@@ -18,6 +18,7 @@ export const ARRAY_FIELDS = [
   "prRepos",
   "gitlabHosts",
   "launchers",
+  "customAgents",
   "quickCommands",
   "pushKinds",
   "soundKinds",

@@ -10,9 +10,9 @@ import { WebSocketServer, WebSocket } from "ws";
 import type { Server } from "node:http";
 import { randomUUID } from "node:crypto";
 import { messageOf } from "../errors.js";
-import { CLAUDE_CWD, PORT, SESSION_ID_RE } from "../config/env.js";
+import { CLAUDE_CWD, SESSION_ID_RE } from "../config/env.js";
 import { workspaceRequest } from "../config/workspace.js";
-import { getHeaderConfig, getUserMcpServers } from "../config/config-routes.js";
+import { getHeaderConfig } from "../config/config-routes.js";
 import { buildHeaderContext, loadHeaderConfig } from "../config/header-context.js";
 import { resolveButtonCommand, shellQuoteFor } from "../config/header-resolve.js";
 import { resolveScript } from "../files/scripts.js";
@@ -24,23 +24,14 @@ import { codexRolloutExists } from "../agents/codex-sessions.js";
 import {
   antigravityConversations,
   antigravityConversationsHydrated,
-  claimFullGuiMcp,
+  customAgentSessionsHydrated,
   codexRolloutIds,
   markDevTerminalSession,
   markAttachedSessionPlaced,
   ptys,
 } from "../session/registry.js";
-import { SpawnRefusedError, ptyWouldReattach } from "../session/pty-spawn.js";
+import { SpawnRefusedError } from "../session/pty-spawn.js";
 import { bufferEarlyFrames, type EarlyFrames } from "../session/early-frames.js";
-import {
-  launcherCommandWithGuiMcp,
-  launcherCommandWithClaudeGuiMcp,
-  launcherProgram,
-  launcherRunsAgent,
-  launcherTakesGuiMcp,
-} from "../session/launcher-gui-mcp.js";
-import { codexGuiMcpServers, fullGuiAllowedTools } from "../session/mcp-config.js";
-import { mcpConfigFileArgument, withSettingsCleanup } from "../session/session-settings.js";
 import { registeredGuiMcpGroups } from "../infra/gui-mcp-registration.js";
 import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups.js";
 import { parseTerminalSize, type TerminalSize } from "../../common/terminalSize.js";
@@ -56,6 +47,7 @@ import { normalizeAgent, parseIndexParam } from "./routeParams.js";
 import { agentResumeId } from "../agents/agent-resume.js";
 import { claimLaunch, worktreeOccupancy } from "../session/worktree-session-limit.js";
 import { worktreeRefusal } from "../../common/worktreeSession.js";
+import { isCustomAgentId } from "../../common/customAgents.js";
 
 export interface WsRouteDeps {
   /** The http server these endpoints hang their `upgrade` handler off. */
@@ -237,8 +229,8 @@ async function admitAgentSession(
     cwd: string;
     /** A grid cell rather than the single view: keep it out of the chat sidebar. */
     devTerminal: boolean;
-    /** False only for a launcher that runs no agent — `yarn dev` is not an agent editing the tree
-     *  and stays free of the one-session-per-worktree rule (see launcherRunsAgent). */
+    /** False for a launcher, which runs a command rather than an agent session and so is free of
+     *  the one-session-per-worktree rule. Every agent path leaves it at the default. */
     worktreeLimited?: boolean;
   },
 ): Promise<EarlyFrames | null> {
@@ -403,6 +395,14 @@ async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
   // a reattach, where no spawn happens and the running session keeps what it started with.
   const launch = launchChoiceFromParams(url.searchParams);
 
+  // ?customAgent=<id> — the Agent Picker chose one of the user's OWN ways of starting Claude Code
+  // (#1414). Only the id travels: the configured list is the allowlist and it is resolved at spawn
+  // (see spawnClaudePty), so the browser can never name a program that is not in the config. A
+  // malformed id is dropped here rather than passed on, which starts plain claude — the same thing
+  // an entry the user has since deleted does.
+  const customAgentParam = url.searchParams.get("customAgent");
+  const customAgentId = isCustomAgentId(customAgentParam) ? customAgentParam : undefined;
+
   // Decide the effective session id BEFORE telling the browser. A requested id
   // is honored only if it can actually be served: a live pty (reattach) or an
   // on-disk transcript (`--resume`). A requested id that's neither — e.g. a cell
@@ -410,6 +410,11 @@ async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
   // exits with "session id already in use" if we retry `--session-id <same>`.
   // So mint a fresh id; the browser adopts it from this `session` message and
   // re-persists, so the reload just reopens a working terminal seamlessly.
+  // Before resolving, not after: which custom agent a session was started on lives on disk, and a
+  // resume that arrives while the log is still being read would see an empty map and continue the
+  // conversation on plain claude — a different model, mid-thread. Same guard the antigravity
+  // conversation map takes, for the same restart case.
+  await customAgentSessionsHydrated;
   const { reattachId, resume, sessionId } = resolveClaudeSession(requested, cwd);
   const live = reattachId ? ptys.get(reattachId) : undefined;
   // Buffered from the announcement on, like every other terminal endpoint: the browser's first
@@ -425,7 +430,7 @@ async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
     err instanceof ProviderRefusedError || err instanceof SpawnRefusedError ? err.message : `Failed to start Claude: ${messageOf(err)}`;
 
   startAndWire(deps, ws, { id: sessionId, tag: "claude", early, startFailureMessage, size }, () => {
-    const entry = live ? deps.reattachPty(live, ws, sessionId) : deps.spawnClaudePty(sessionId, resume, ws, { cwd, attachGuiMcp, launch });
+    const entry = live ? deps.reattachPty(live, ws, sessionId) : deps.spawnClaudePty(sessionId, resume, ws, { cwd, attachGuiMcp, launch, customAgentId });
     // Single view (gui) = the attached session IS the actively-viewed pane, so mark it
     // read. A grid dev-terminal cell (gui=0) is only "viewed" once focused/zoomed (the
     // client then sends a `view` frame), so it stays inactive here and can surface
@@ -524,65 +529,37 @@ async function handleLaunchConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
   const resolved = resolveLaunchSession(deps, requested, index, shell);
   if (!resolved) return closeWithError(ws, "Launcher not found — check Settings → Launch commands.");
   const { sessionId, live, command } = resolved;
-  // A launcher is a command line, so the limit follows what it RUNS: a launcher configured as
-  // `codex` is the agent toggle by another name and is held to the same rule, while `yarn dev` or
-  // a shell is not an agent editing the tree and stays free (see launcherRunsAgent).
-  const early = await admitAgentSession(ws, "launch", {
-    requested,
-    sessionId,
-    live,
-    cwd,
-    devTerminal: true,
-    worktreeLimited: launcherRunsAgent(command),
-  });
+  // Never worktree-limited. The rule is one AGENT SESSION per worktree, and a launcher is not one:
+  // it is a command line this app does not read. It used to read it — a command starting with the
+  // word `codex` was held to the limit (#1207, #1208) — but that is a guess about someone else's
+  // text, and the guess cuts both ways: it also refused `codex-review-notes.sh`. A worktree is
+  // exactly where someone wants `yarn dev` or `lazygit` open beside the agent.
+  //
+  // The hole this leaves is real and deliberate: a chip whose command is `codex` can start a second
+  // agent in a worktree the Agent Picker has already occupied. Nothing on the launcher side can
+  // close it without guessing again.
+  const early = await admitAgentSession(ws, "launch", { requested, sessionId, live, cwd, devTerminal: true, worktreeLimited: false });
   if (!early) return;
 
-  // A launcher chip and the agent toggle land in the same cell and look the same, so a Canvas that
-  // lights up for one and never for the other reads as a broken feature. The chip has no argv, only
-  // the command line the user wrote, so each agent's MCP arrives as an insertion into that text.
-  //
-  // `claimFullGuiMcp` with `false`, for BOTH: a chip is never the single view, so the cwd is the
-  // only thing that can earn the full GUI MCP here — which keeps a chip in a project directory
-  // exactly as it was, on the groups its directory registered.
-  //
-  // Nothing at all on a tmux REATTACH: it picks the running program up and ignores `command`.
-  //
-  // Gated on `launcherTakesGuiMcp` BEFORE the claim is recorded: a chip running `zsh`, `yarn dev`
-  // or `agy` has no rewriter, so it is handed no MCP — and recording it as carrying every GUI tool
-  // would misreport it to /api/tools (Codex review on #1399).
-  //
-  // The reattach answer is asked for rather than assumed from `live`: that is only "this process
-  // holds a pty", while a tmux session surviving a server RESTART reattaches with no pty here at
-  // all. Handing the claim a literal `false` would have told it "definitely a new process" in the
-  // one case where the command line is ignored entirely.
-  const fullGui = !live && launcherTakesGuiMcp(command) && claimFullGuiMcp(sessionId, false, cwd, ptyWouldReattach(sessionId, true));
-  const groups = live ? [] : await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []);
-  const codexGui = live ? [] : codexGuiMcpServers({ sessionId, port: PORT, groups, allTools: fullGui });
-  // The config file is written ONLY once the command is known to be claude. Writing it up front
-  // left a `<session>-mcp.json` behind for every workspace chip — `zsh`, `yarn dev`, anything — that
-  // would never read it (Codex review on #1358).
-  const claudeGui =
-    fullGui && launcherProgram(command) === "claude"
-      ? {
-          mcpConfigPath: mcpConfigFileArgument(sessionId, deps.mcpConfigJson(sessionId, "127.0.0.1")),
-          allowedTools: fullGuiAllowedTools(deps.guiMcpTools, getUserMcpServers()),
-        }
-      : null;
-  // Both rewriters see the command; each recognises only its own program, so at most one fires.
-  const launchCommand = launcherCommandWithClaudeGuiMcp(launcherCommandWithGuiMcp(command, codexGui, process.platform), claudeGui, process.platform);
   if (!clientStillConnected(ws, "launch", sessionId, early)) return;
 
+  // The command runs VERBATIM. A launcher is the user's own command line and nothing else, so
+  // nothing is inserted into it — no flags, no MCP, whatever program the line happens to name.
+  //
+  // It did once: a chip whose command was `claude` or `codex` was rewritten to carry the GUI MCP,
+  // for parity with the same agent started from the Agent Picker (#1040, #1358). That parity is
+  // deliberately gone. A chip is a command, the Agent Picker is a session — conflating the two is
+  // what made the two controls impossible to tell apart, and a chip that silently runs something
+  // other than what it says is the wrong half of the pair to keep. A chip that wants GUI tools
+  // now asks for them the way any other command would: in the flags the user writes.
+  //
+  // Consequence, stated so it is not rediscovered as a bug: a `codex` chip has no Canvas, and a
+  // `claude` chip reads only its directory's own MCP config.
+  //
   // A launcher runs the user's own command line, so there is no binary pre-flight — but its cwd
   // is checked like every other spawn's, and that refusal is already a sentence.
-  //
-  // withSettingsCleanup because this path can now WRITE a file before spawning: a spawn that throws
-  // never reaches reap, where the file is normally dropped, so without this a failed claude chip
-  // orphans its config until the next boot's prune (Codex review on #1358). startAndWire catches
-  // what this rethrows, so the failure still reaches the browser as a message.
   const startFailureMessage = startFailureMessageFor("the launch command");
-  startAndWire(deps, ws, { id: sessionId, tag: "launch", early, startFailureMessage, size }, () =>
-    withSettingsCleanup(sessionId, () => startLaunchEntry(deps, sessionId, ws, live, launchCommand, cwd)),
-  );
+  startAndWire(deps, ws, { id: sessionId, tag: "launch", early, startFailureMessage, size }, () => startLaunchEntry(deps, sessionId, ws, live, command, cwd));
 }
 
 // codex terminal (?cwd=<dir>, ?session=<id> to reattach/resume). ?gui=0 (grid dev terminal) runs

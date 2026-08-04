@@ -22,6 +22,7 @@ import {
 import { type HeaderConfig } from "./header-config.js";
 import { type CwdPreset, type Launcher, type Provider, type UserMcpServer } from "./config-schema.js";
 import type { QuickCommand } from "../../common/quickCommands.js";
+import type { CustomAgent } from "../../common/customAgents.js";
 import type { PushKind } from "../../common/pushKinds.js";
 import { type TerminalSubmitMode } from "../../common/terminalSubmit.js";
 import { launchOptions } from "./launch-options.js";
@@ -71,6 +72,13 @@ export function getRepoDirs(): Record<string, string> {
 // index against the current list without a restart.
 export function getLaunchers(): Launcher[] {
   return config.launchers;
+}
+
+// The user's own ways of starting Claude Code, offered in the Agent Picker — read live for the
+// same reason as the launchers above: /ws resolves `?customAgent=<id>` against the current list,
+// so adding one needs no restart. The LIST is the allowlist; the browser sends only an id.
+export function getCustomAgents(): CustomAgent[] {
+  return config.customAgents;
 }
 
 // The phrases the phone offers as chips — read live so a Settings edit reaches the next
@@ -142,20 +150,22 @@ export function getTerminalSubmit(): TerminalSubmitMode {
 
 // Whether a PR this app creates says which clone it came from (#872).
 //
-// Read from DISK, unlike every other accessor here, because this setting has no Settings
-// control: the only way to set it is to hand-edit config.json, and the in-memory copy is
-// refreshed only by POST /api/config. Served from memory it would need a server restart to
-// take effect — i.e. a user sets `false`, presses the button, still gets the line, and
-// concludes the switch is broken. One JSON read per PR creation, next to a push and three
-// gh calls, costs nothing. A missing or corrupt file yields the default (on), which is the
-// safe direction for a switch whose off state is invisible.
+// Read from DISK, unlike every other accessor here. The in-memory copy is refreshed only by a
+// POST to THIS server, and these two settings are read by the instance the user is not looking
+// at: several mulmoterminals share one config.json, and this is the app whose whole point is
+// running side-by-side clones. Served from memory, a user who turns the line off in one window
+// still gets it from the next window's PR — and both settings fail silently, so what they see is
+// a switch that does nothing rather than an error. One JSON read per PR creation, next to a push
+// and three gh calls, costs nothing. A missing or corrupt file yields the default (on), which is
+// the safe direction for a switch whose off state is invisible.
 export function getPrWorkdirFooter(): boolean {
   return loadAppConfig(CONFIG_FILE).prWorkdirFooter;
 }
 
 // Whether a spawned session carries the built-in closing-summary instructions (#1062). Read from
-// disk per spawn for the same reason as the footer above: it has no Settings control, so served
-// from memory a hand-edit would need a server restart to take effect.
+// disk per spawn for the same reason as the footer above, and one more: a session outlives the
+// write, so the cost of reading stale here is a cell that keeps the old answer until it is
+// reopened.
 export function getAppendSystemPrompt(): boolean {
   return loadAppConfig(CONFIG_FILE).appendSystemPrompt;
 }

@@ -23,6 +23,7 @@ import { normalizeOrderPriority } from "../../common/orderPriority.js";
 import { SESSION_AGENTS } from "../../common/sessionAgent.js";
 import { NOTIFY_KINDS } from "../../common/notifyKinds.js";
 import type { QuickCommand } from "../../common/quickCommands.js";
+import { CUSTOM_AGENT_KINDS, type CustomAgent } from "../../common/customAgents.js";
 
 // ---- shared constants ---------------------------------------------------------------------
 
@@ -113,6 +114,21 @@ export type CwdPreset = z.infer<typeof cwdPresetSchema>;
 // interactive command). `command` runs on the user's own machine as a persistent PTY.
 export const launcherSchema = z.object({ label: z.string(), command: z.string() });
 export type Launcher = z.infer<typeof launcherSchema>;
+
+// A CUSTOM AGENT — the user's own way of starting Claude Code, offered in the Agent Picker
+// (common/customAgents.ts, which is where the difference from a launcher is written out).
+// Claude Code's argv is APPENDED to `command`, so this is a real agent session, not a chip.
+//
+// `satisfies` pins the schema to the shared interface: the browser reads the same rows off
+// GET /api/config, so a field added to one alone would not reach the other.
+export const customAgentSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  // WHICH agent it launches as — whose arguments get appended. Declared, never inferred from the
+  // command text (common/customAgents.ts).
+  agent: z.enum(CUSTOM_AGENT_KINDS),
+  command: z.string(),
+}) satisfies z.ZodType<CustomAgent>;
 
 // Validation for common/quickCommands.ts's QuickCommand, which the settings UI edits and so
 // cannot live here. `satisfies` is what keeps the two from drifting: widen the schema without
