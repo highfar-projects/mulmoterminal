@@ -34,6 +34,10 @@ ping to your phone when a task finishes. One `npx` command, no Electron, no conf
 npx mulmoterminal@latest        # starts on http://localhost:34567 and opens your browser
 ```
 
+Built by the **[Singularity Society](https://singularitysociety.org)** team, including
+**[Satoshi Nakajima](https://x.com/snakajima)** — software architect for **Windows 95** at
+Microsoft, still building from Seattle. [More ↓](#who-builds-this)
+
 > **Something looks wrong?** Type `/mulmoterminal-bug-report` in any MulmoTerminal session. The
 > bundled skill hears the symptom out, checks your **real** config, schema and version to see
 > whether the behaviour is configuration or by design, searches the existing issues — and only
