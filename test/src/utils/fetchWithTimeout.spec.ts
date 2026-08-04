@@ -129,7 +129,13 @@ describe("fetchWithTimeout", () => {
     hangingFetch();
     const caller = new AbortController();
     const request = new Request("http://localhost/api/thing", { signal: caller.signal });
-    const settled = expect(fetchWithTimeout(request, { signal: undefined })).rejects.toThrow(/abort/i);
+    // Built at runtime rather than written as a literal: this repo has exactOptionalPropertyTypes,
+    // so a TypeScript caller CANNOT write `{ signal: undefined }` — which is precisely why the
+    // helper still has to handle it. The value reaches it from JS, or from a spread whose types
+    // were erased, and the type system is not there to stop it.
+    const init: RequestInit = {};
+    Object.defineProperty(init, "signal", { value: undefined, enumerable: true });
+    const settled = expect(fetchWithTimeout(request, init)).rejects.toThrow(/abort/i);
     caller.abort(); // must still reach us: nothing was detached
     await settled;
   });
