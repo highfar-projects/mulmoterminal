@@ -81,7 +81,7 @@ The server's **default working directory** (`CLAUDE_CWD`) — settled in the ord
 It is printed as `Workspace: …` at startup.
 Collections, Wiki and Accounting read and write there, and if you also run MulmoClaude it should be **the same directory for both** (`~/mulmoclaude` by default) — not the directory you cloned MulmoClaude into.
 
-It is treated differently from a project directory: **a session launched here has every GUI tool**, the way the single view in 3.x did — whichever agent it runs and however it was started (Antigravity aside).
+It is treated differently from a project directory: **a Claude or Codex session launched here has every GUI tool**, the way the single view in 3.x did — from a cell or from a launcher chip alike (not Antigravity, and a Shell or a launch command other than `claude` / `codex` carries no GUI tools at all).
 
 → [Which directory to launch in](basics.html#launch-dir)
 
