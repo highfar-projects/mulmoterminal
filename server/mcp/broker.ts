@@ -85,9 +85,12 @@ const SUBMIT_TRANSLATION_TOOL = {
 export function buildGuiMcpServer(
   sessionId: string,
   baseUrl: string,
-  opts: { submitTranslationTool?: boolean; group?: ToolGroup | null; history?: GuiCallRecorder | null } = {},
+  opts: { submitTranslationTool?: boolean; group?: ToolGroup | null; history?: GuiCallRecorder | null; carriesAllTools?: boolean } = {},
 ): Server {
   const group = opts.group ?? null;
+  // Whether this session already reaches every tool on the all-tools url, in which case a group
+  // url of ours has nothing left to add and stands down (see tool-gate.ts).
+  const carriesAllTools = !!opts.carriesAllTools;
   // The advertised server name follows the id a group is expected to be registered under, so
   // what a user sees in `claude mcp list` matches what they wrote in their own config.
   const serverName = group === null ? GUI_SERVER_ID : toolGroupServerId(group);
@@ -97,13 +100,13 @@ export function buildGuiMcpServer(
   // offer is filtered here, and anything outside it that gets named anyway is refused below.
   const isWorker = !!opts.submitTranslationTool;
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: offeredTools(isWorker, toolDefinitions, SUBMIT_TRANSLATION_TOOL, group),
+    tools: offeredTools(isWorker, toolDefinitions, SUBMIT_TRANSLATION_TOOL, group, carriesAllTools),
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
-    const route = routeToolCall(name, isWorker, group);
+    const route = routeToolCall(name, isWorker, group, carriesAllTools);
 
     // Worker-only result tool: deliver the structured translations back to the
     // waiting request (keyed by session id), bypassing the plugin dispatch path.

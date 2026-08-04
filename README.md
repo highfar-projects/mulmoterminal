@@ -393,7 +393,7 @@ today — **Claude Code** (the default), **Codex**, and **Antigravity** (`agy`).
   file exists, and injects activity hooks per spawn (see
   [Claude hook injection](#claude-hook-injection)) plus the
   [closing summary](#closing-summary) instruction.
-  The **whole** GUI MCP (`--mcp-config` + `--strict-mcp-config`) goes only to a session that is not a grid cell, or to a grid cell whose cwd IS the workspace — `carriesFullGuiMcp` in `server/session/spawn-claude.ts`, which is what gives a workspace cell the tools the single view had before 4.0.0 removed it. That equivalence is about what the session *carries*: a workspace cell is still a grid cell in every other respect. A cell in a project directory attaches neither flag, so Claude Code loads MCP servers the ordinary way — the directory's own local scope, any `.mcp.json` up the tree, and your global ones — including whichever [Canvas switches](#wiki-collections--the-gui-panel) are registered for it.
+  The **whole** GUI MCP (`--mcp-config`, on one all-tools URL) goes only to a session that is not a grid cell, or to a grid cell whose cwd IS the workspace — `claimFullGuiMcp` in `server/session/registry.ts`, which is what gives a workspace cell the tools the single view had before 4.0.0 removed it. That equivalence is about what the session *carries*: a workspace cell is still a grid cell in every other respect. A cell in a project directory attaches none of ours, so its GUI tools come from whichever [Canvas switches](#wiki-collections--the-gui-panel) are registered for it. **Either way, Claude Code loads your own MCP servers normally** — the directory's local scope, any `.mcp.json` up the tree, your global ones and your claude.ai connectors. It did not always: `--strict-mcp-config` used to ride along with `--mcp-config`, which hid all of that from the very sessions meant to be the most capable ([#1338](https://github.com/receptron/mulmoterminal/issues/1338), [#1385](https://github.com/receptron/mulmoterminal/issues/1385)).
 - **Codex** — spawned as `codex` (override with `CODEX_BIN`; `CODEX_MODEL` sets
   `--model`). Codex runs on its own WebSocket (`/ws/codex`) and its sessions appear in the
   cockpit roster next to Claude's. Because Codex only mints its rollout id **after** the first
@@ -781,8 +781,8 @@ points) says the least interesting true thing about it; the real path is on its 
 
 **The launcher is shorter in the workspace**, because two of its choices do not apply
 there. The per-directory **Canvas switches** are replaced by a line saying every GUI tool
-is already available — a session there is handed the whole GUI MCP at spawn, so switches
-would write a registration that `--strict-mcp-config` then ignores. And the **worktree**
+is already available — a session there is handed the whole GUI MCP at spawn, so a switch
+would register a group URL that then has nothing left to serve. And the **worktree**
 section is hidden: a worktree isolates work on one codebase onto a branch, while the
 workspace is what a session works *from* (the shared wiki, collections and accounting
 live there), which is precisely what a detached branch would cut it off from. Both come
@@ -1118,11 +1118,11 @@ A chip is a command line the user wrote, so the injection is a **rewrite of thei
 deliberately narrow: only a bare `claude` or `codex` is recognised, and anything else — a wrapper
 script, `FOO=1 claude` — is passed through unchanged.
 
-A `claude` chip in the workspace is given `--strict-mcp-config`, same as the cell. That makes the
-generated config the only source — but it already contains your Settings `userMcpServers`, so
-**those still load and are still pre-approved**. What stops contributing is a project directory's
-per-folder `.mcp.json`, which in the workspace is the intent: that file is where the per-group URLs
-live, and the chip is being handed the all-tools URL instead.
+A `claude` chip in the workspace is handed the all-tools URL, same as the cell, and like the cell it
+**does not** isolate the session: your own MCP servers and claude.ai connectors load as usual. Where
+a directory also registered per-group URLs in its `.mcp.json`, those groups stand down for that
+session rather than serving a second copy of the same tools — the session already reaches all of
+them under `mt`.
 
 **The asymmetry is deliberate.** `mt` is ours to name: nothing on disk holds it, it is
 regenerated on every spawn, so it was shortened to stop paying 17 characters per tool name. The

@@ -120,11 +120,15 @@ export function mcpConfigJson({ sessionId, host = DEFAULT_HOST, port, userMcpSer
 /**
  * What a full-GUI-MCP session pre-approves: our own tools, plus the user's Settings servers by id.
  *
- * Both halves matter, and the second is the one that surprises. `--strict-mcp-config` makes the
- * generated `--mcp-config` the ONLY source — but that payload INCLUDES `userMcpServers` (above), so
- * those servers still load; what strict shuts out is the per-folder `.mcp.json` a project directory
- * would otherwise contribute. Pre-approving them here is what stops each of their tools raising a
- * permission prompt, which is the behaviour the single view has always had.
+ * Both halves matter, and the second is the one that surprises. The generated `--mcp-config`
+ * INCLUDES `userMcpServers` (above), so those servers arrive through our payload rather than
+ * through the user's own config — and pre-approving them here is what stops each of their tools
+ * raising a permission prompt, which is the behaviour the single view has always had.
+ *
+ * Only what WE hand over is pre-approved. The servers Claude Code loads on its own — the
+ * directory's `.mcp.json`, the claude.ai connectors, `~/.claude.json` — prompt as they do in any
+ * other cell; they became reachable here when `--strict-mcp-config` was dropped (#1338, #1385),
+ * and that is a scoping fix, not a licence to auto-allow someone else's tools.
  *
  * Shared rather than spelled out at each spawn because the two callers — a claude cell and a
  * launcher chip running claude — are supposed to be indistinguishable, and this PR exists because
