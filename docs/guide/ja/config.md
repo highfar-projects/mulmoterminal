@@ -181,6 +181,34 @@ Anthropic のまま別のモデルを指定できます。→ [OpenRouter で別
 - ヘッダー**ボタン**の `icon` とは別物です。あちらは
   [Material Symbols](https://fonts.google.com/icons) のアイコン名で、画像ではありません
 
+### favicon は勝手に拾われます {#auto-dir-icon}
+
+たいていの場合 `icon` を書く必要はありません。**未設定**のディレクトリは、そのリポジトリが
+既に持っているアイコンを表示します。
+
+1. `public/favicon.svg` → `favicon.svg`
+2. `public/apple-touch-icon.png` → `apple-touch-icon.png`
+3. `public/favicon.png` → `favicon.png`
+4. `public/favicon.ico` → `favicon.ico`
+5. web manifest（`public/site.webmanifest` / `public/manifest.json` / ルートの同名）の
+   `maskable` でない最大のアイコン
+
+最初に見つかったものが勝ちます。並び順は「よくある順」ではなく「14px で描いたときに崩れない順」です。
+`docs/logo.png` や `assets/logo.*` は**あえて探しません** — 「ロゴ」は README 用の横長バナーであることも
+多く、それを 14px 四方に押し込むとただの染みになるからです。
+
+切り方は2つあり、意味が違います。
+
+- **`"icon": false`**（プロジェクトのファイル）— *そのプロジェクト*のセルにアイコンを出さない。
+  worktree にも引き継がれます
+- **`autoDirIcon: false`**（`~/.mulmoterminal/config.json`）または
+  設定 → *Directory appearance* のチェックボックス — 全体で off。挙動そのものが不要ならこちらです。
+  全リポジトリに `"icon": false` を書いて回るのは違います
+
+**書き間違えたキーは favicon にフォールバックしません。** `"icon": "logo.png"` の指す先が無い場合、
+セルにはアイコンが出ません（意図的です — 壊れた設定は壊れて見えるべきなので）。
+設定 → [設定が効かないときは](#dir-settings-preview) に、落ちたキーとして出ます。
+
 ### このディレクトリの通知音
 
 ```jsonc

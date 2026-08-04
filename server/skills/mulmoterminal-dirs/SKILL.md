@@ -153,14 +153,47 @@ BUTTON's `icon` is, and it is `mulmoterminal-header`'s key, not this one.
   rides in every cell's config fetch — point at a file for anything larger).
 - PNG, JPEG, **GIF (animated ones play)**, WebP, AVIF, SVG, ICO, BMP. Any other extension is dropped.
 
-Do not invent one. **Look for an image the repository already has** — `docs/logo.*`, `public/`,
-`assets/`, an `icon`/`favicon` in a `package.json`/manifest — and offer what you found. A project
-with no logo of its own is better served by the colour scheme; an icon that is not the project's
-own picture is one more thing to recognise, which is the opposite of the point.
+Do not invent one. **Look for an image the repository already has** — `public/favicon.svg`,
+`public/apple-touch-icon.png`, a web manifest — and offer what you found. A project with no logo
+of its own is better served by the colour scheme; an icon that is not the project's own picture is
+one more thing to recognise, which is the opposite of the point.
 
 Prefer a file over a URL: a remote image is a request per cell to somebody else's host, and it
 disappears when that host does. Prefer a **committed** file over a gitignored one — worktrees
 inherit the key as written, so only a committed image is found in the worktree too.
+
+**Usually you do not need to write this key at all.** MulmoTerminal already picks up a project's
+own favicon when the key is absent — see below — so writing `"icon": "public/favicon.ico"` sets by
+hand what was going to happen anyway. Write it when the repository's icon is somewhere the search
+does not look, or when the project should show a different picture from its favicon.
+
+### The favicon is picked up on its own — `autoDirIcon`
+
+A directory that sets **no** `icon` shows the icon its repository already ships. Searched in this
+order, first hit wins:
+
+1. `public/favicon.svg`, then `favicon.svg`
+2. `public/apple-touch-icon.png`, then `apple-touch-icon.png`
+3. `public/favicon.png`, then `favicon.png`
+4. `public/favicon.ico`, then `favicon.ico`
+5. a web manifest (`public/site.webmanifest`, `public/manifest.json`, or either at the root) — its
+   largest non-`maskable` icon
+
+Ordered by how the image survives being drawn at 14px, not by how common it is. `docs/logo.png`
+and `assets/logo.*` are deliberately NOT searched: a "logo" is as often a wide README banner as an
+icon, and one of those squeezed into 14 square pixels reads as a smudge.
+
+Two ways to turn it off, and they mean different things:
+
+- `"icon": false` in a project's own file — "no icon on THIS project's cells". Worktrees inherit it.
+- `autoDirIcon: false` in `~/.mulmoterminal/config.json` (or the checkbox in Settings → Directory
+  appearance) — off everywhere. This is the one to reach for if the behaviour itself is unwanted;
+  `"icon": false` in every repository is not.
+
+**A key that was written and got it wrong does NOT fall back to the favicon.** `"icon": "logo.png"`
+pointing at a file that isn't there leaves the cell with no icon at all, on purpose: a broken
+setting has to look broken. If a project shows nothing where you expected a picture, check
+`/api/dir-config-detail` (step 1) — the key will be in the `ignored` list.
 
 ### Terminal palette — `theme` and `colors`
 
