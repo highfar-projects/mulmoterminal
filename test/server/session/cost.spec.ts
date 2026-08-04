@@ -1,8 +1,9 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { takeScratchHome, type ScratchHome } from "../../support/scratchHome.js";
+import { projectSessionsDir } from "../../../server/session/project-dir.js";
 import { rateForModel, costForUsage, costFromJsonl } from "../../../server/session/cost.js";
 
 const line = (o: unknown) => JSON.stringify(o);
@@ -115,13 +116,14 @@ describe("costFromJsonl", () => {
 // folds each file once and resumes on what was appended, so what is pinned here is that a resumed
 // total is the same total.
 describe("a transcript's cost, folded across reads", () => {
-  const realHome = process.env.HOME;
-  let home = "";
+  let scratch: ScratchHome;
   let n = 0;
   const CWD = "/Users/me/proj";
 
+  // projectSessionsDir, not a second copy of its rule — it resolves the cwd for the host platform,
+  // so the encoded directory differs on Windows (#1396).
   const transcriptPath = (id: string): string => {
-    const dir = path.join(home, ".claude", "projects", CWD.replace(/\//g, "-"));
+    const dir = projectSessionsDir(CWD);
     mkdirSync(dir, { recursive: true });
     return path.join(dir, `${id}.jsonl`);
   };
@@ -130,20 +132,15 @@ describe("a transcript's cost, folded across reads", () => {
   const unpriced = () => `${assistant("some-unknown-model", { input_tokens: 10, output_tokens: 10 })}\n`;
 
   async function freshCost() {
-    vi.resetModules();
-    process.env.HOME = home;
+    vi.resetModules(); // the scratch home is already in place; the module reads it at import
     const mod = await import("../../../server/session/cost.js");
     return mod.sessionCost;
   }
 
   beforeEach(() => {
-    home = mkdtempSync(path.join(tmpdir(), "mt-cost-fold-"));
+    scratch = takeScratchHome("mt-cost-fold-");
   });
-  afterEach(() => {
-    if (realHome === undefined) delete process.env.HOME;
-    else process.env.HOME = realHome;
-    rmSync(home, { recursive: true, force: true });
-  });
+  afterEach(() => scratch.release());
 
   it("adds what was appended to the total it already had", async () => {
     const sessionCost = await freshCost();
