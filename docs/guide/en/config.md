@@ -1119,14 +1119,21 @@ Antigravity and Shell.
 }
 ```
 
-| Key | What it is |
-|---|---|
-| `id` | A short name in lowercase — letters, digits, `-` and `_`. It identifies the entry internally, so changing it later makes a **different** agent; rename the label instead. Cannot be `claude`, `codex`, `antigravity` or `shell` |
-| `label` | The button's text. Keep it short — it shares a row with the four built-in options |
-| `agent` | Which agent this launches **as**, i.e. whose arguments get appended. `"claude"` is the only value today, and it is **required** |
-| `command` | The command line to run. Claude Code's arguments are appended to it |
+| Key | What it is | Limit |
+|---|---|---|
+| `id` | A short name identifying the entry internally, so changing it later makes a **different** agent — rename the label instead | `^[a-z0-9][a-z0-9_-]{0,31}$` — lowercase letters, digits, `-` and `_`, up to 32 chars, not starting with `-`/`_`. Cannot be `claude`, `codex`, `antigravity` or `shell` |
+| `label` | The button's text | 24 characters |
+| `agent` | Which agent this launches **as**, i.e. whose arguments get appended | `"claude"` — the only value today, and **required** |
+| `command` | The command line to run, with Claude Code's arguments appended to it | 500 characters |
 
-Up to 8 entries. `config.json` only — there is no Settings control, so an edit made while the
+The two kinds of limit fail differently, and neither says anything on screen:
+
+- A bad `id` or `agent`, a blank `label` or `command`, or a duplicate `id` **drops the whole
+  entry** — no button appears.
+- An over-long `label` or `command` is **truncated** to the limit above, not dropped. A truncated
+  command is the worse of the two: it still runs, as a different command.
+
+Up to 8 entries; the 9th onwards are ignored. `config.json` only — there is no Settings control, so an edit made while the
 server is running needs a **restart**, then a tab reload.
 
 The picker decides what a **new** session starts as. Continuing one under *OR RESUME HERE* keeps
