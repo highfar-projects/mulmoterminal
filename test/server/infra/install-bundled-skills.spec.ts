@@ -193,10 +193,16 @@ describe("mulmoterminal-config routes to skills that exist", () => {
 
   // Each writing skill has to be reachable from the entry point, or the only way to find it is to
   // already know its name — which defeats having an entry point at all.
+  //
+  // A SUPERSET, not an equality. Equality was the convenient way to write "every writer is named",
+  // but it also forbade naming a non-writer, and the router has a real reason to: it owns
+  // `decisionDigest` (the switch) while `mulmoterminal-decisions` is what READS the digest, so a
+  // reader who turns it on needs to be told where the result is consumed. Naming a skill that does
+  // not ship is still caught, by the test above.
   it("routes to every skill that writes settings", () => {
     const writers = BUNDLED_SKILL_NAMES.filter(
       (name) => name !== "mulmoterminal-config" && name !== "mulmoterminal-bug-report" && name !== "mulmoterminal-decisions",
     );
-    expect(routed()).toEqual([...writers].sort());
+    expect(writers.filter((name) => !routed().includes(name))).toEqual([]);
   });
 });

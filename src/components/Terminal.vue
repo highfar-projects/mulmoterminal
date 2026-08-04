@@ -58,6 +58,9 @@ const props = defineProps<{
   // Which agent this terminal runs. Anything but "claude" connects to that agent's own
   // endpoint (/ws/codex, /ws/antigravity) instead of /ws. Absent means Claude.
   agent?: TerminalAgent;
+  // A custom agent's id (#1414), when the Agent Picker started this terminal from one of the
+  // user's own ways of running Claude Code. `agent` stays "claude" — that is what it runs.
+  customAgent?: string | null;
   // Provider/model picked in the launch form, for this session only (#584).
   launch?: LaunchChoice | null;
   runMenu?: boolean;
@@ -110,6 +113,7 @@ function currentTarget(): conn.ConnTarget {
     command: props.command ?? null,
     launcher: props.launcher ?? null,
     agent: props.agent ?? "claude",
+    customAgent: props.customAgent ?? null,
     launch: props.launch ?? null,
   };
 }

@@ -12,6 +12,7 @@ import { useModalKeyboard } from "../composables/useModalKeyboard";
 import SettingsButton from "./SettingsButton.vue";
 import ThemeSection from "./settings/ThemeSection.vue";
 import TerminalFontSizeSection from "./settings/TerminalFontSizeSection.vue";
+import TerminalFontFamilySection from "./settings/TerminalFontFamilySection.vue";
 import TerminalScrollSection from "./settings/TerminalScrollSection.vue";
 import WaitingRowsSection from "./settings/WaitingRowsSection.vue";
 import DirAppearanceSection from "./settings/DirAppearanceSection.vue";
@@ -25,6 +26,10 @@ import LaunchersSection from "./settings/LaunchersSection.vue";
 import QuickCommandsSection from "./settings/QuickCommandsSection.vue";
 import McpServersSection from "./settings/McpServersSection.vue";
 import CostSection from "./settings/CostSection.vue";
+import GitHubSection from "./settings/GitHubSection.vue";
+import SessionSection from "./settings/SessionSection.vue";
+import HeaderChromeSection from "./settings/HeaderChromeSection.vue";
+import ModelsSection from "./settings/ModelsSection.vue";
 import ShortcutsSection from "./settings/ShortcutsSection.vue";
 import HelpSection from "./settings/HelpSection.vue";
 import type { Launcher } from "./launchers";
@@ -101,6 +106,7 @@ useModalKeyboard({ modalEl, onClose: () => emit("close"), trapSelector: MODAL_FO
 
       <ThemeSection @launch-skill="emit('launch-skill', $event)" />
       <TerminalFontSizeSection />
+      <TerminalFontFamilySection />
       <TerminalScrollSection />
       <WaitingRowsSection />
       <DirAppearanceSection @launch-skill="emit('launch-skill', $event)" />
@@ -127,6 +133,10 @@ useModalKeyboard({ modalEl, onClose: () => emit("close"), trapSelector: MODAL_FO
       <QuickCommandsSection :quick-commands="quickCommands" @update-quick-commands="emit('update-quick-commands', $event)" />
       <McpServersSection :user-mcp-servers="userMcpServers" @update-user-mcp="emit('update-user-mcp', $event)" />
       <CostSection :cwd="cwd" :session-id="sessionId" />
+      <GitHubSection />
+      <SessionSection />
+      <ModelsSection @launch-skill="emit('launch-skill', $event)" />
+      <HeaderChromeSection @launch-skill="emit('launch-skill', $event)" />
       <ShortcutsSection @launch-skill="emit('launch-skill', $event)" />
       <HelpSection />
 

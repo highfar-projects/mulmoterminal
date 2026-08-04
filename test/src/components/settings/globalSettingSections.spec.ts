@@ -1,0 +1,171 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { mount } from "@vue/test-utils";
+import GitHubSection from "../../../../src/components/settings/GitHubSection.vue";
+import SessionSection from "../../../../src/components/settings/SessionSection.vue";
+import TerminalFontFamilySection from "../../../../src/components/settings/TerminalFontFamilySection.vue";
+import { setIssueWorkComments } from "../../../../src/composables/issueWorkComments";
+import { setPrWorkdirFooter } from "../../../../src/composables/prWorkdirFooter";
+import { setAppendSystemPrompt } from "../../../../src/composables/appendSystemPrompt";
+import { setDecisionDigest } from "../../../../src/composables/decisionDigest";
+import { setWorklogEnabled, setWorklogIntervalHours } from "../../../../src/composables/worklog";
+import { setGlobalFontFamily } from "../../../../src/composables/terminalFontFamily";
+
+// The sections that gave a config.json-only setting a control (#1401). What matters about each is
+// that flipping it POSTs the RIGHT FIELD: every one is a partial update, so a section naming the
+// wrong key writes a setting the user never touched and leaves theirs unchanged — and nothing in
+// the UI would show either half of that.
+
+// The POST bodies, in order. The echo answers with what was sent, which is what the server does.
+let posts: Record<string, unknown>[] = [];
+
+beforeEach(() => {
+  posts = [];
+  globalThis.fetch = vi.fn(async (_url: unknown, init?: { body?: string }) => {
+    const body: Record<string, unknown> = init?.body ? JSON.parse(init.body) : {};
+    posts.push(body);
+    return { ok: true, json: async () => body };
+  }) as unknown as typeof fetch;
+});
+
+const toggleAt = async (wrapper: ReturnType<typeof mount>, index: number, checked: boolean) => {
+  const box = wrapper.findAll("input[type=checkbox]")[index];
+  await box.setValue(checked);
+};
+
+describe("GitHubSection", () => {
+  beforeEach(() => {
+    setIssueWorkComments(true);
+    setPrWorkdirFooter(true);
+  });
+
+  it("posts issueWorkComments when the work-comment box is unticked", async () => {
+    const wrapper = mount(GitHubSection);
+    await toggleAt(wrapper, 0, false);
+    expect(posts).toEqual([{ issueWorkComments: false }]);
+  });
+
+  it("posts prWorkdirFooter when the footer box is unticked", async () => {
+    const wrapper = mount(GitHubSection);
+    await toggleAt(wrapper, 1, false);
+    expect(posts).toEqual([{ prWorkdirFooter: false }]);
+  });
+
+  // Normalized before it is stored, not merely before it is judged: the server would reduce a
+  // pasted URL to its hostname anyway, so a list showing the raw input would disagree with the
+  // config the moment it was saved.
+  it("stores a pasted GitLab URL as its hostname", async () => {
+    const wrapper = mount(GitHubSection);
+    await wrapper.find("input[type=text]").setValue("https://gitlab.example.com/");
+    await wrapper
+      .findAll("button")
+      .find((b) => b.text() === "Add")
+      ?.trigger("click");
+    expect(posts).toEqual([{ gitlabHosts: ["gitlab.example.com"] }]);
+  });
+
+  it("refuses a host that is not a hostname", async () => {
+    const wrapper = mount(GitHubSection);
+    await wrapper.find("input[type=text]").setValue("gitlab.example.com/group/project");
+    expect(
+      wrapper
+        .findAll("button")
+        .find((b) => b.text() === "Add")
+        ?.attributes("disabled"),
+    ).toBeDefined();
+  });
+});
+
+describe("SessionSection", () => {
+  beforeEach(() => {
+    setAppendSystemPrompt(true);
+    setDecisionDigest(false);
+    setWorklogEnabled(true);
+    setWorklogIntervalHours(6);
+  });
+
+  it("posts appendSystemPrompt when the closing-summary box is unticked", async () => {
+    const wrapper = mount(SessionSection);
+    await toggleAt(wrapper, 0, false);
+    expect(posts).toEqual([{ appendSystemPrompt: false }]);
+  });
+
+  it("posts decisionDigest when the digest box is ticked", async () => {
+    const wrapper = mount(SessionSection);
+    await toggleAt(wrapper, 1, true);
+    expect(posts).toEqual([{ decisionDigest: true }]);
+  });
+
+  it("posts worklogEnabled when the log box is unticked", async () => {
+    const wrapper = mount(SessionSection);
+    await toggleAt(wrapper, 2, false);
+    expect(posts).toEqual([{ worklogEnabled: false }]);
+  });
+
+  it("posts the new interval when the stepper is nudged", async () => {
+    const wrapper = mount(SessionSection);
+    await wrapper
+      .findAll("button")
+      .find((b) => b.attributes("aria-label") === "Increase dev-work log interval")
+      ?.trigger("click");
+    expect(posts).toEqual([{ worklogIntervalHours: 7 }]);
+  });
+
+  // Greying the row with `pointer-events-none` stops the mouse and nothing else. Without a real
+  // `disabled`, a keyboard user tabs into the stepper and saves an interval for a task that is not
+  // running — a POST the screen says cannot happen (Codex review on #1412).
+  it("cannot change the interval while the log is off", async () => {
+    setWorklogEnabled(false);
+    const wrapper = mount(SessionSection);
+    const up = wrapper.findAll("button").find((b) => b.attributes("aria-label") === "Increase dev-work log interval");
+    expect(up?.attributes("disabled")).toBeDefined();
+    await up?.trigger("click");
+    expect(posts).toEqual([]);
+  });
+
+  // The stepper offers the range the SERVER clamps to, so a value it lets the user reach always
+  // survives the save. One end is enough to pin that they are the same numbers.
+  it("stops at the interval the server clamps to", async () => {
+    setWorklogIntervalHours(168);
+    const wrapper = mount(SessionSection);
+    expect(
+      wrapper
+        .findAll("button")
+        .find((b) => b.attributes("aria-label") === "Increase dev-work log interval")
+        ?.attributes("disabled"),
+    ).toBeDefined();
+  });
+});
+
+describe("TerminalFontFamilySection", () => {
+  const apply = (w: ReturnType<typeof mount>) => w.findAll("button").find((b) => b.text() === "Apply");
+
+  beforeEach(() => setGlobalFontFamily(null));
+
+  it("posts the normalized stack, with monospace appended", async () => {
+    const wrapper = mount(TerminalFontFamilySection);
+    await wrapper.find("input").setValue("'Cica'");
+    await apply(wrapper)?.trigger("click");
+    expect(posts).toEqual([{ fontFamily: "'Cica', monospace" }]);
+  });
+
+  it("saves null when the field is cleared, which asks for the built-in stack", async () => {
+    setGlobalFontFamily("'Cica', monospace");
+    const wrapper = mount(TerminalFontFamilySection);
+    await wrapper.find("input").setValue("");
+    await apply(wrapper)?.trigger("click");
+    expect(posts).toEqual([{ fontFamily: null }]);
+  });
+
+  // Without the check this field eats the input in silence: the stack normalizes to null, which
+  // SAVES as "use the built-in", and with nothing configured before, the stored value does not
+  // change — so nothing re-renders, the text stays in the box, and pressing Apply again does
+  // nothing and explains nothing. Found reviewing this PR, not flagged by a bot.
+  it("refuses a stack the server would drop, and says why", async () => {
+    const wrapper = mount(TerminalFontFamilySection);
+    await wrapper.find("input").setValue("Menlo; }");
+    expect(apply(wrapper)?.attributes("disabled")).toBeDefined();
+    expect(wrapper.text()).toContain("Not a font stack");
+    await apply(wrapper)?.trigger("click");
+    expect(posts).toEqual([]);
+  });
+});

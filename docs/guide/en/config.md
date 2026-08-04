@@ -23,6 +23,7 @@ description: Configuring MulmoTerminal — the settings modal, per-project colou
 | A **worktree** looks like a different project | [Worktrees inherit this file](#worktree-inherit) |
 | **No Canvas** when you enlarge a cell / no GUI tools | [Which directory to launch in](basics.html#launch-dir) |
 | Run on **a model other than Claude** | [Providers](#providers) |
+| Start Claude Code through **your own command** (`ollama launch claude …`) | [Custom agents](#custom-agents) |
 | Add **your own button** to the header | [Customizing the header](#header) |
 | Recolour the whole app **your way** | [Make your own colour scheme](#custom-themes) |
 | Tell an issue **you have started on it** | [issueWorkComments](#issue-work-comments) |
@@ -53,7 +54,7 @@ Settings live in three places: the **settings modal (Settings)**, the **global c
 > | **`/mulmoterminal-theme`** | Your own [colour scheme](#custom-themes), appearing in Settings' picker. (Settings → **Create a theme…**) |
 > | **`/mulmoterminal-header`** | [Header buttons and chips](#header), global or per project |
 > | **`/mulmoterminal-keys`** | [`keymap`](#keymap), [`copyOnSelect`](#copy-on-select), [`terminalSubmit`](#terminal-submit) — the fix for "Shift+Enter submits instead of adding a line". (Settings → **Set up shortcuts…**) |
-> | **`/mulmoterminal-model`** | [`providers`](#providers) and a per-project model |
+> | **`/mulmoterminal-model`** | [`providers`](#providers), a per-project model, and [`customAgents`](#custom-agents) |
 > | **`/mulmoterminal-notify`** | [Which moments beep or push](#sounds), and what each plays. (Settings → **Configure notifications…**) |
 >
 > This is how you reach the settings that have **no UI at all**. Hand-editing works too — this page
@@ -72,15 +73,16 @@ Open it from **Settings** (the gear) in the toolbar.
 
 ![The Settings modal — Theme with its Create a theme… button, Terminal font size, Terminal scroll speed, Waiting rows with the blink checkbox, Directory appearance, and Directory settings with acme-web expanded](../images/config-settings-modal.png)
 
-Up to seventeen sections, in this order — **Voice input** is there only on a machine that can transcribe, so most
-setups see sixteen.
+Up to twenty-one sections, in this order — **Voice input** is there only on a machine that can transcribe, so most
+setups see twenty.
 
 | Item | Description |
 |---|---|
 | **Theme** | Midnight / Nord / Daylight / Solarized Light, plus [any you defined yourself](#custom-themes). Picks from what exists; "Create a theme…" starts the `mulmoterminal-theme` skill to write a new one |
 | **Terminal font size** | The xterm font size in px (8–32). Applies to every terminal **in this browser** — a phone and a desktop each keep their own. A directory can override it with `fontSize` ([below](#per-dir)) |
+| **Terminal font** | The font-family stack every terminal renders in (`fontFamily`) — **global**, unlike the size, because which fonts exist is a property of the machine. Empty means the built-in stack (→ [Terminal font](#font-family)) |
 | **Terminal scroll speed** | How far one wheel notch or trackpad swipe moves the terminal (1× is xterm's own). Per browser, like the font size, because it is a property of the pointing device |
-| **Waiting rows** | In the roster beside an enlarged cell, a row whose agent is **waiting on you** carries an amber ring and blinks; one that has merely **finished** is green and still. The checkbox turns off the movement, not the colour — and no row blinks when your system asks for reduced motion |
+| **Waiting rows** | In the roster beside an enlarged cell, a row whose agent is **waiting on you** carries an amber ring and blinks; one that has merely **finished** is green and still. The checkbox turns off the movement, not the colour — and no row blinks when your system asks for reduced motion. The three steppers below it set how many lines each row shows before clamping (`cockpitLines` → [Roster rows](#cockpit-lines)) |
 | **Directory appearance** | "Configure appearance…" — set a directory's name badge, colors, terminal palette, and grid position interactively, through the `mulmoterminal-dirs` skill |
 | **Directory settings** | What each directory's `.mulmoterminal.json` is **actually doing**. Expand a row for the values in force (colors with a swatch), **which file each came from**, **keys dropped in validation**, and **keys this app never reads**. Read-only — "Explain my settings…" starts the `mulmoterminal-config` skill to say why and fix it (→ [When a setting isn't working](#dir-settings-preview)) |
 | **Notification sounds** | Which moments beep and what each plays — one row per kind, with a preset picker and a play button. "Configure notifications…" starts the `mulmoterminal-notify` skill for a per-project sound and which moments push (→ [Notification sounds](#sounds)) |
@@ -92,6 +94,11 @@ setups see sixteen.
 | **Phone quick commands** | Phrases offered as chips on the **phone's** terminal view. Tapping one fills the input box; it is sent when you press send (`quickCommands`) |
 | **MCP servers** | Your own HTTP MCP servers (`userMcpServers`), merged into the sessions that carry the full GUI MCP — a cell whose working directory is the **workspace**, and any session the server starts on its own (the phone, a scheduled task). A cell in a project directory loads its own MCP config instead (→ [which directory to launch in](basics.html#launch-dir)) |
 | **Cost (estimated)** | Estimated cost readouts for Session / Today / Month |
+| **GitHub and GitLab** | What this app writes to a forge as you: whether a cell [says it has started on an issue](#issue-work-comments) (`issueWorkComments`, off by default) and whether a created PR [ends with the clone name](#pr-workdir-footer) (`prWorkdirFooter`, on). Below them, the [self-hosted GitLab hosts](github.html#a-gitlab-of-your-own-self-hosted) to read with `glab` (`gitlabHosts` — takes effect on the next start) |
+| **Sessions and background tasks** | Whether replies [end with a closing summary](#append-system-prompt) (`appendSystemPrompt`, on — a directory's own setting wins), whether to [keep a digest of decisions](#decision-digest) (`decisionDigest`, off), and the [periodic dev-work log](#all-keys) with its interval in hours (`worklogEnabled`, off — each run costs tokens) |
+| **Models and backends** | The backends a session can run on and whether each can be **reached right now**, read-only. "Add a backend…" starts the `mulmoterminal-model` skill (→ [Using another model](providers.html)) |
+| **Header buttons and chips** | How many buttons and chips your global config declares, read-only — "built-in" when you have configured none. "Set up header buttons…" starts the `mulmoterminal-header` skill (→ [Customizing the header](#header)) |
+| **Terminal keys** | [Copy on select](#copy-on-select) (`copyOnSelect`, off) and which bytes your Claude reads as **submit** ([Enter — submit vs. newline](#terminal-submit), `terminalSubmit`) |
 | **Keyboard shortcuts** | What is bound to what, read-only. **Everything starts as Not set** — "Set up shortcuts…" starts the `mulmoterminal-keys` skill to bind them in `keymap` (→ [Keyboard shortcuts](#keymap)) |
 | **Help & user guide** | Links into this guide |
 
@@ -639,6 +646,12 @@ the reversed binding. If you're unsure, keep `cr`; switch to `esc-cr` only if Sh
 
 ### How to set it
 
+The quick way is **Settings → Terminal keys**, which offers both modes worded as behaviour. It
+takes effect in this tab at once; the phone remote view still picks it up on the next server
+start (step 3 below).
+
+By hand instead:
+
 1. Open `~/.mulmoterminal/config.json` (create the file if it doesn't exist) and add the key at the
    top level — for the reversed binding:
    ```json
@@ -714,8 +727,8 @@ A kind with no `sounds` entry falls back to `soundFile`, and a project's own
 
 ## Terminal font — when CJK text looks wrong (`fontFamily`) {#font-family}
 
-The font every terminal renders in. There is **no Settings UI** — put a CSS font-family stack in
-`~/.mulmoterminal/config.json`:
+The font every terminal renders in. Set it in **Settings → Terminal font**, or put a CSS
+font-family stack in `~/.mulmoterminal/config.json`:
 
 ```json
 { "fontFamily": "'Cica', 'MS Gothic', monospace" }
@@ -771,7 +784,8 @@ highlight something while reading.
 { "copyOnSelect": true }
 ```
 
-Config file only — there is no Settings toggle. Restart the server to pick it up.
+There is a checkbox in **Settings → Terminal keys**, applied at once. A hand edit of the file
+instead needs a server restart.
 
 It coexists with the [`copy` keymap action](#keymap): keep `copy` bound as well if you also want a
 key for it, for instance to copy a selection made with the keyboard.
@@ -1033,6 +1047,8 @@ worth raising.
 { "cockpitLines": { "summary": 6, "prompt": 2, "response": 3 } }
 ```
 
+Or use the three steppers in **Settings → Waiting rows**.
+
 | Field | Clamps | Default |
 |---|---|---|
 | `summary` | What the session is doing now | `2` |
@@ -1092,6 +1108,109 @@ Note that `baseUrl` must not end in `/v1`, and `tokenEnv` is the **name** of a v
 → **Full walkthrough, the measured model list, how to add your own models, and troubleshooting:
 [Using another model via OpenRouter](providers.html).**
 
+## Your own way of starting Claude Code (`customAgents`) {#custom-agents}
+
+*A provider is a backend you reach over HTTP. This is the other case: the model is reached by
+**running a command**.*
+
+`ollama launch claude --model nemotron-3-ultra:cloud --` starts Claude Code against a local model.
+You could put that in a launcher chip — but then it is just a command in a terminal: no resumable
+transcript, no cost or context, no "waiting for you", no GUI tools. A **custom agent** runs the same
+command line and hands it **Claude Code's own arguments**, so the cell is a real session.
+
+It appears in the **Agent Picker** — the toggle at the top of an empty cell — beside Claude, Codex,
+Antigravity and Shell.
+
+```json
+{
+  "customAgents": [
+    {
+      "id": "nemotron",
+      "label": "Nemotron",
+      "agent": "claude",
+      "command": "ollama launch claude --model nemotron-3-ultra:cloud --"
+    }
+  ]
+}
+```
+
+| Key | What it is | Limit |
+|---|---|---|
+| `id` | A short name identifying the entry internally, so changing it later makes a **different** agent — rename the label instead | `^[a-z0-9][a-z0-9_-]{0,31}$` — lowercase letters, digits, `-` and `_`, up to 32 chars, not starting with `-`/`_`. Cannot be `claude`, `codex`, `antigravity` or `shell` |
+| `label` | The button's text | 24 characters |
+| `agent` | Which agent this launches **as**, i.e. whose arguments get appended | `"claude"` — the only value today, and **required** |
+| `command` | The command line to run, with Claude Code's arguments appended to it | 500 characters |
+
+The two kinds of limit fail differently, and neither says anything on screen:
+
+- A bad `id` or `agent`, a blank `label` or `command`, or a duplicate `id` **drops the whole
+  entry** — no button appears.
+- An over-long `label` or `command` is **truncated** to the limit above, not dropped. A truncated
+  command is the worse of the two: it still runs, as a different command.
+
+Up to 8 entries; the 9th onwards are ignored. `config.json` only — there is no Settings control, so an edit made while the
+server is running needs a **restart**, then a tab reload.
+
+The picker decides what a **new** session starts as. Continuing one under *OR RESUME HERE* keeps
+the agent that session began on, whatever the picker happens to show — the same rule the
+provider/model choice follows. Which agent each session started on is remembered on disk, so it
+survives closing the cell, exiting the session, and restarting the server.
+
+### Where your command ends and Claude Code's begins
+
+What actually runs is your command with Claude Code's entire argv after it:
+
+```
+ollama launch claude --model nemotron-3-ultra:cloud -- \
+  --session-id <uuid> --settings <hooks> --permission-mode … --mcp-config … --allowedTools …
+```
+
+So your command has to **stop taking arguments** where Claude Code's begin — that is what the
+trailing `--` is doing above: `ollama` consumes `--model nemotron-3-ultra:cloud`, and everything
+after `--` is passed through untouched.
+
+Two things that follow from this:
+
+- **The two `--model`s do not collide.** The one you wrote is before the `--` and belongs to
+  `ollama`; the launch form's MODEL choice arrives after it and belongs to Claude Code.
+- **A command that swallows what follows breaks the session quietly.** Without `--session-id` it
+  cannot be resumed, without `--settings` the cell never shows working / waiting, without
+  `--mcp-config` there are no GUI tools. If a custom agent's cell starts but stays grey, this is
+  why.
+
+Your command runs **as written, not through a shell**: quotes are honoured, but `$HOME`, `~`, pipes
+and `&&` are not expanded. If you want shell syntax, you want a launch command (a chip) instead.
+
+### If the button doesn't appear
+
+The entry was rejected on load, and a rejected entry is simply absent — it looks exactly like never
+having saved the file. In order of likelihood:
+
+1. **No `agent: "claude"`.** It is required: nothing in your command line says which CLI is on the
+   other side of the `--`, so MulmoTerminal will not guess.
+2. **The `id` is not a valid name** — an uppercase letter, a space, or one of the four built-in
+   names.
+3. **The server wasn't restarted**, or the tab wasn't reloaded.
+
+To check what was accepted, compare your file with what the app parsed:
+
+```sh
+curl -s "http://localhost:34567/api/config" | jq .customAgents
+```
+
+An entry in the file and missing from that output is one that was dropped.
+
+### Not the same as a launch command
+
+|  | Custom agent (Agent Picker) | Launch command (chip) |
+|---|---|---|
+| Runs | your command **+ Claude Code's arguments** | your command, exactly as written |
+| The cell is | a real agent session — resume, cost, context, waiting status | a plain terminal |
+| GUI tools | yes, like any Claude cell | only if your own command asks for them |
+| Shell syntax (`$VAR`, pipes) | no | yes |
+
+→ `/mulmoterminal-model` writes this for you, and knows the traps above.
+
 ## Which clone made this PR (`prWorkdirFooter`) {#pr-workdir-footer}
 
 If you keep several checkouts of the same repo side by side — `myrepo`, `myrepo2`, `myrepo3` —
@@ -1116,8 +1235,9 @@ the branch, which the PR already shows.
 }
 ```
 
-The next PR you create honours it — **no restart needed**. This setting has no Settings-modal
-control, so it is read from the file each time a PR is created.
+Or use the checkbox in **Settings → GitHub and GitLab**. The next PR you create honours it either
+way — **no restart needed**: it is read from the file each time a PR is created, so a second
+MulmoTerminal running beside this one sees your change too.
 
 Notes:
 
@@ -1143,6 +1263,8 @@ asked for and what came of it are only recoverable by scrolling back through the
   "appendSystemPrompt": false
 }
 ```
+
+Or use the checkbox in **Settings → Sessions and background tasks**.
 
 It applies to **sessions started from then on**. No server restart is needed, but **sessions
 already running keep it** — the instruction is handed over once, at spawn. To see the change,
@@ -1175,6 +1297,8 @@ person who filed it, and anyone else with a checkout, can see it is being worked
 ```json
 { "issueWorkComments": true }
 ```
+
+Or tick it in **Settings → GitHub and GitLab**.
 
 With it on, a cell leaves **one comment per issue** and keeps it up to date. Starting the work
 posts it:
@@ -1243,6 +1367,7 @@ which one you picked — so an agent can read it before asking something similar
 { "decisionDigest": true }
 ```
 
+- Or tick it in **Settings → Sessions and background tasks**.
 - Written to `~/.mulmoterminal/decisions/<project>.md`, **never into your repository**.
 - Refreshed **when the server starts and every 6 hours**, for the directories this host is
   actually working in.
@@ -1258,8 +1383,8 @@ which one you picked — so an agent can read it before asking something similar
 **Off by default.** It is a vision-stage idea, and it writes a file that would otherwise not
 exist.
 
-This key has **no Settings-modal switch** — it lives only in `~/.mulmoterminal/config.json`, which
-is read once when the server starts. Edit the file, then **restart `mulmoterminal`**.
+Tick it in **Settings → Sessions and background tasks**. If you edit `~/.mulmoterminal/config.json`
+by hand instead, **restart `mulmoterminal`** — that file is read once when the server starts.
 
 ## Put your common commands in the Run menu (`script.json`)
 
@@ -1306,16 +1431,19 @@ What you write here appears in an empty cell's launcher under **OR RUN A SCRIPT*
 | `launchers` | The launch commands that appear under "OR LAUNCH" in a grid cell. Only what you add — a plain shell is already the launcher's **Shell** toggle |
 | `quickCommands` | Phrases the **phone** offers as chips on a session (`{ label, text, agents? }`). Tapping one fills the input box — it is not sent until you press send. `agents` scopes a chip to `"claude"` / `"codex"` / `"shell"`; omit it to offer the chip everywhere. Editable in Settings → **Phone quick commands** |
 | `prRepos` | The repos targeted by the cross-repo PR/Issue view |
-| `gitlabHosts` | Hosts running a **self-hosted GitLab**, e.g. `["gitlab.example.com"]`. A URL does not say which forge a host runs, so declaring it is what lets `prRepos` entries on that host be read with `glab`. Needs `glab auth login --hostname <host>`. config.json only (no Settings control), so a hand edit takes effect on the next start (→ [A GitLab of your own](github.html#a-gitlab-of-your-own-self-hosted)) |
+| `gitlabHosts` | Hosts running a **self-hosted GitLab**, e.g. `["gitlab.example.com"]`. A URL does not say which forge a host runs, so declaring it is what lets `prRepos` entries on that host be read with `glab`. Needs `glab auth login --hostname <host>`. Editable in Settings → **GitHub and GitLab**; either way it takes effect on the next start (→ [A GitLab of your own](github.html#a-gitlab-of-your-own-self-hosted)) |
 | `repoDirs` | Which local clone work on a repo starts in, when you keep several side by side: `{ "acme/web": "/Users/you/src/web" }`. Only the choice is stored — which clones exist is re-derived from `cwdPresets`, so adding one needs no second edit, and an entry that no longer names a clone of that repo is ignored |
+| `userMcpServers` | Your own HTTP MCP servers (`{ id, url }`), merged into the sessions that carry the full GUI MCP. Editable in Settings → **MCP servers** |
+| `issueWorkComments` | Let a cell comment on the issue it is working on — once, edited as the PR opens and merges. **Off by default**; it writes to GitHub, often on somebody else's issue (→ [Telling the issue you are on it](#issue-work-comments)) |
 | `buttons` / `chips` | Header buttons / chips (merged with project settings → [Customizing the header](#header)) |
 | `providers` | Anthropic-compatible backends (→ [Using another model via OpenRouter](providers.html)) |
+| `customAgents` | Your own commands for starting Claude Code, offered in the Agent Picker (→ [Custom agents](#custom-agents)) |
 | `soundFile` | The fallback notification sound for every kind (absolute path to an audio file; also settable from the modal) |
 | `soundKinds` | Which moments beep. Omit to keep `["finished","waiting"]`; the four added in 2.2 are opt-in, `[]` for silence (→ [Notification sounds](#sounds)) |
 | `sounds` | Per-kind sound, e.g. `{ "waiting": "preset:coin" }` — a `preset:<id>` or an absolute path. A kind with no entry uses `soundFile` (→ [Notification sounds](#sounds)) |
 | `pushEnabled` | The Web Push master switch (default `false` → [Mobile notifications](notifications.html)) |
 | `pushKinds` | Which moments push: `"finished"` (a turn ended) and/or `"waiting"` (the agent stopped to ask). Omit to keep both; `[]` for none (→ [Which moments push](notifications.html#kinds)) |
-| `worklogEnabled` / `worklogIntervalHours` | The periodic dev-work log (default off / 6 hours) |
+| `worklogEnabled` / `worklogIntervalHours` | The periodic dev-work log — summarizes recent work across your saved directories into weekly wiki pages (default off / 6 hours, clamped to 1–168). Each run spawns an LLM session, so it costs tokens. Editable in Settings → **Sessions and background tasks** |
 | `decisionDigest` | Keep a Markdown digest of what this project already decided, for agents to read before asking again. **Off by default** (→ [What this project already decided](#decision-digest)) |
 | `terminalSubmit` | Which bytes mean **submit** vs **newline** — `"cr"` (default) or `"esc-cr"` (→ [Enter — submit vs. newline](#terminal-submit)) |
 | `themes` | Colour schemes you defined; they appear in Settings' theme picker (→ [Make your own colour scheme](#custom-themes)) |

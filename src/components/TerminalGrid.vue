@@ -15,6 +15,7 @@ import type { RunCommand } from "./runCommand";
 import type { PrPhase, WorkPhase } from "./rosterPhase";
 import type { CwdPreset } from "./presets";
 import type { Launcher, LaunchPick } from "./launchers";
+import type { CustomAgent } from "../../common/customAgents";
 import { shouldFlipZoom } from "./cellChromeRules";
 import { rosterAlertClass } from "./rosterAlertClasses";
 import { useRosterAlert } from "../composables/useRosterAlert";
@@ -82,6 +83,10 @@ const props = defineProps<{
   defaultCwd: string | null;
   presets: CwdPreset[];
   launchers: Launcher[];
+  // The user's own ways of starting Claude Code, for the Agent Picker in an empty cell (#1414).
+  // Optional, unlike `launchers`: an install with none configured is the normal case, and the
+  // picker's built-in options are the whole list then.
+  customAgents?: CustomAgent[];
   home: string | null;
   // Manual sort mode: each cell shows move buttons to reorder.
   reorderable?: boolean;
@@ -1190,6 +1195,7 @@ watch(
           :initial-agent="cell.agent"
           :presets="presets"
           :launchers="launchers"
+          :custom-agents="customAgents ?? []"
           :open-session-ids="openSessionIds"
           :open-cwds="openCwds"
           :cancellable="cell.uid === cancelUid"

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import CellLaunchForm from "../../../src/components/CellLaunchForm.vue";
-import type { LaunchAgent } from "../../../common/launchAgent";
+import type { AgentPick, CustomAgent } from "../../../common/customAgents";
 
 // The launcher's two "there is already a session here" surfaces, mounted directly: a worktree row
 // (one branch, one session) and a resume row. Both used to hand a running agent's terminal to a
@@ -23,13 +23,13 @@ function mockFetch(worktrees: WorktreeRow[] = [], sessions: SessionRow[] = []) {
 
 const mountForm = (
   openSessionIds: string[] = [],
-  over: { dir?: string; presets?: { label: string; path: string }[]; target?: LaunchAgent; defaultCwd?: string | null } = {},
+  over: { dir?: string; presets?: { label: string; path: string }[]; agent?: AgentPick; defaultCwd?: string | null; customAgents?: CustomAgent[] } = {},
 ) =>
   mount(CellLaunchForm, {
     // defaultCwd is deliberately NOT "/repo": the launcher treats the workspace differently — it
     // states that every GUI tool is available instead of offering the switches, and hides the
     // worktree section — so the ordinary case to mount is a PROJECT directory.
-    props: { dir: "/repo", target: "claude" as LaunchAgent, choice: null, defaultCwd: "/home/me/ws", presets: [], openSessionIds, ...over },
+    props: { dir: "/repo", agent: "claude" as AgentPick, choice: null, defaultCwd: "/home/me/ws", presets: [], openSessionIds, ...over },
     global: { stubs: { ModelPicker: true } },
   });
 
@@ -171,7 +171,7 @@ describe("a worktree reached without its row", () => {
   // shells out of the answer for the same reason — so it can still be opened there.
   it("lets a shell open in a worktree an agent is in", async () => {
     mockFetch([taken()]);
-    const w = mountForm([], { dir: "/wt/fix-login", target: "shell" });
+    const w = mountForm([], { dir: "/wt/fix-login", agent: "shell" });
     await flushPromises();
     expect(w.find('[data-testid="cell-dir-go"]').attributes("disabled")).toBeUndefined();
     await w.find('[data-testid="cell-dir-input"]').trigger("keydown.enter");
@@ -499,5 +499,49 @@ describe("changing the directory", () => {
     expect(w.find('[data-testid="cell-dir-loading"]').exists()).toBe(false);
     expect(w.find('[data-testid="ri-title"]').text()).toBe("the other project");
     expect(w.find('[data-testid="worktree-reuse"]').exists()).toBe(false);
+  });
+});
+
+// A CUSTOM AGENT is one of the user's own ways of starting Claude Code (#1414) — an Agent Picker
+// option, not a launcher chip. What that has to mean on this form: it is offered with the agents,
+// picking it still offers the model, and the agent-only sections stay.
+describe("the Agent Picker's custom agents (#1414)", () => {
+  const nemotron: CustomAgent = { id: "nemotron", label: "Nemotron", agent: "claude", command: "ollama launch claude --model nemotron-3-ultra:cloud --" };
+
+  it("offers one as a picker button, after the built-in agents and before Shell", async () => {
+    mockFetch();
+    const w = mountForm([], { customAgents: [nemotron] });
+    await flushPromises();
+    const labels = w
+      .find('[data-testid="agent-picker"]')
+      .findAll('[role="radio"]')
+      .map((b) => b.text());
+    expect(labels).toEqual(["Claude", "Codex", "Antigravity", "Nemotron", "Shell"]);
+  });
+
+  it("reports the pick as `custom:<id>`, which is what the cell sends to /ws", async () => {
+    mockFetch();
+    const w = mountForm([], { customAgents: [nemotron] });
+    await flushPromises();
+    await w.find('[data-testid="agent-picker-custom:nemotron"]').trigger("click");
+    expect(w.emitted("update:agent")?.[0]).toEqual(["custom:nemotron"]);
+  });
+
+  // It runs Claude Code, so the model picker and the agent-only sections stay — a Shell pick is
+  // what removes them, and a custom agent is not a shell. The wrapper's own `--model` sits before
+  // its `--`, so it is consumed by the wrapper and does not collide with this one.
+  it("keeps the model picker and the agent-only sections", async () => {
+    mockFetch();
+    const w = mountForm([], { agent: "custom:nemotron", customAgents: [nemotron] });
+    await flushPromises();
+    expect(w.findComponent({ name: "ModelPicker" }).exists()).toBe(true);
+    expect(w.find('[data-testid="cell-worktrees"]').exists()).toBe(true);
+  });
+
+  it("is just the built-in four when the user has configured none", async () => {
+    mockFetch();
+    const w = mountForm([]);
+    await flushPromises();
+    expect(w.find('[data-testid="agent-picker"]').findAll('[role="radio"]')).toHaveLength(4);
   });
 });

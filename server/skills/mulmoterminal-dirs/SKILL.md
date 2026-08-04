@@ -192,8 +192,10 @@ family is named.
 
 Most users want this **globally** instead — it is the same font everywhere unless one project's
 output is a different language. Both the global key and the per-directory one are covered here;
-the global one lives in `~/.mulmoterminal/config.json`, has no Settings UI, and **needs a server
-restart** (that file is read once at startup) — unlike this file, which applies instantly.
+the global one lives in `~/.mulmoterminal/config.json`. **Settings → Terminal font sets it and it
+applies at once** — point at that when the user just wants a different font. A HAND edit of that
+file while the server runs still needs a **restart** (it is read once at startup), unlike this
+file, which applies instantly.
 
 **Ask which fonts they actually have before writing one.** An uninstalled name silently does
 nothing, which reads as the setting being broken. For CJK, prefer a face whose fullwidth glyphs are

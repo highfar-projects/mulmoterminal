@@ -335,6 +335,16 @@ yarn tsx scripts/model-trials.ts --provider openrouter --trials 3 qwen/qwen3-cod
 - 鍵が解決できないときは**起動を拒否**します。意図しないバックエンドにプロンプトが流れないためです
 - プロバイダを使うセッションでは `ANTHROPIC_API_KEY` を子プロセスから**取り除きます**（残っていると認証トークンより優先されてしまうため）
 
+## URL ではなく「コマンド」でモデルに繋ぐ場合 {#custom-agents}
+
+ここまでは、ベース URL と鍵で指定できるバックエンドの話でした。そうではなく
+**何かを実行して**モデルに繋ぐ場合 — `ollama launch claude --model … --`、ラッパースクリプト、
+もう一つ入れた Claude Code — は、プロバイダではなく**カスタムエージェント**の出番です。
+自分のコマンドが Agent Picker に並び、そこに Claude Code 自身の引数が付くので、セルは
+本物のセッション（再開・コスト・コンテキスト・GUI ツール）のままです。
+
+→ [カスタムエージェント](config.html#custom-agents)
+
 ## ローカル LLM をローカルで動かす（claude-ollama）
 
 クラウドを一切使わず**手元の Ollama モデルで Claude Code を動かす**なら、同梱の `claude-ollama` コマンドが使えます（`npx -p mulmoterminal claude-ollama qwen3:4b`）。詳しくは **[claude-ollama でローカルモデルを動かす](claude-ollama.html)** を参照。

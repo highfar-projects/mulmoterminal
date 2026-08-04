@@ -8,13 +8,13 @@ import {
   sanitizeRepos,
   sanitizeRepoDirs,
   sanitizeLaunchers,
+  sanitizeCustomAgents,
   sanitizeQuickCommands,
   sanitizePushKinds,
   sanitizeUserMcpServers,
   sanitizePushEnabled,
   sanitizePrWorkdirFooter,
   sanitizeCopyOnSelect,
-  sanitizeWorklogIntervalHours,
   sanitizeTerminalSubmit,
   loadAppConfig,
   loadAppConfigResult,
@@ -27,6 +27,7 @@ import {
 import { DEFAULT_SOUND_KINDS } from "../../../common/notifyKinds.js";
 import { DEFAULT_PUSH_KINDS } from "../../../common/pushKinds.js";
 import { DEFAULT_COCKPIT_LINES } from "../../../common/cockpitLines.js";
+import { sanitizeWorklogIntervalHours } from "../../../common/worklogInterval.js";
 
 const tmp = () => mkdtempSync(path.join(tmpdir(), "mt-appcfg-"));
 
@@ -165,6 +166,39 @@ describe("sanitizeLaunchers", () => {
   it("caps the number of launchers", () => {
     const many = Array.from({ length: 30 }, (_, i) => ({ label: `L${i}`, command: `c${i}` }));
     expect(sanitizeLaunchers(many).length).toBeLessThanOrEqual(20);
+  });
+});
+
+describe("sanitizeCustomAgents (#1414)", () => {
+  it("keeps trimmed id+label+command triples, drops incomplete/dup/junk", () => {
+    expect(
+      sanitizeCustomAgents([
+        { id: " nemotron ", label: "  Nemotron ", agent: "claude", command: " ollama launch claude --model nemotron-3-ultra:cloud -- " },
+        { id: "kimi", label: "Kimi", agent: "claude", command: "kimi-claude" },
+        { id: "nemotron", label: "Again", agent: "claude", command: "x" }, // dup ID — dropped
+        { id: "noCmd", label: "NoCmd", agent: "claude", command: "" }, // no command — dropped
+        { id: "nolabel", label: "", agent: "claude", command: "x" }, // no label — dropped
+        { id: "noagent", label: "NoAgent", command: "x" }, // does not say WHICH agent — dropped
+        "junk",
+      ]),
+    ).toEqual([
+      { id: "nemotron", label: "Nemotron", agent: "claude" as const, command: "ollama launch claude --model nemotron-3-ultra:cloud --" },
+      { id: "kimi", label: "Kimi", agent: "claude", command: "kimi-claude" },
+    ]);
+    expect(sanitizeCustomAgents("nope")).toEqual([]);
+    expect(sanitizeCustomAgents(undefined)).toEqual([]);
+  });
+
+  // Its button would be shadowed by the built-in one and never reachable, which looks exactly
+  // like the entry having been ignored — so it is dropped where that can still be explained.
+  it("drops an entry that names itself after a built-in picker option", () => {
+    expect(sanitizeCustomAgents([{ id: "claude", label: "Mine", agent: "claude", command: "x" }])).toEqual([]);
+    expect(sanitizeCustomAgents([{ id: "shell", label: "Mine", agent: "claude", command: "x" }])).toEqual([]);
+  });
+
+  it("caps the number of custom agents", () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({ id: `a${i}`, label: `A${i}`, agent: "claude", command: `c${i}` }));
+    expect(sanitizeCustomAgents(many).length).toBeLessThanOrEqual(8);
   });
 });
 
@@ -340,6 +374,7 @@ describe("loadAppConfig / saveAppConfig", () => {
     gitlabHosts: [],
     repoDirs: {},
     launchers: [],
+    customAgents: [],
     quickCommands: [],
     userMcpServers: [],
     themes: [],
@@ -374,6 +409,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       gitlabHosts: ["gitlab.hogefuga.com"], // config.json-only, so the file is its only way home
       repoDirs: {},
       launchers: [{ label: "Shell", command: "$SHELL" }],
+      customAgents: [{ id: "nemotron", label: "Nemotron", agent: "claude" as const, command: "ollama launch claude --model nemotron-3-ultra:cloud --" }],
       quickCommands: [],
       userMcpServers: [{ id: "weather", url: "http://localhost:9000/mcp" }],
       themes: [],
@@ -435,6 +471,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       gitlabHosts: ["gitlab.hogefuga.com", "gitlab.two.example"],
       repoDirs: {},
       launchers: [{ label: "S", command: "sh" }],
+      customAgents: [],
       quickCommands: [],
       userMcpServers: [{ id: "ok", url: "https://x/mcp" }],
       themes: [],
@@ -545,6 +582,7 @@ describe("#741 corrupt config is not silently wiped by a partial update", () => 
     gitlabHosts: ["gitlab.hogefuga.com"],
     repoDirs: {},
     launchers: [{ label: "Shell", command: "$SHELL" }],
+    customAgents: [{ id: "nemotron", label: "Nemotron", agent: "claude" as const, command: "ollama launch claude --model nemotron-3-ultra:cloud --" }],
     quickCommands: [],
     userMcpServers: [{ id: "weather", url: "http://localhost:9000/mcp" }],
     themes: [],
@@ -611,6 +649,7 @@ describe("mergeConfigUpdate", () => {
     gitlabHosts: [],
     repoDirs: {},
     launchers: [],
+    customAgents: [],
     quickCommands: [],
     userMcpServers: [],
     themes: [],
