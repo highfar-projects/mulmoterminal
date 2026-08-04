@@ -34,13 +34,18 @@ export async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestI
   // A `Request` carries its own signal, so a caller that built the request up front rather than
   // passing an init here would otherwise lose its cancellation (CodeRabbit, #1398).
   //
-  // Keyed on whether `signal` is PRESENT, not on whether it is set: `{ signal: null }` is how
-  // `fetch` detaches a Request from its controller, and `??` would read that as "absent" and
-  // re-attach the very thing the caller asked to be rid of (Codex, #1398). Verified against the
-  // runtime — with `{ signal: null }` an abort on the original controller does not reach the new
-  // request, and with the key absent it does.
+  // Three cases, and `fetch` distinguishes all three — so this has to as well (Codex, #1398).
+  // Verified against the runtime rather than read off the spec: build a Request on a controller,
+  // abort it, and ask whether the derived request saw it.
+  //
+  //   { signal: someSignal }   the caller's own — compose with the deadline
+  //   { signal: null }         an explicit DETACH; the Request's controller must not be re-attached
+  //   { signal: undefined }    the same as absent, per WebIDL — inherit the Request's
+  //
+  // `??` collapsed the middle case into the last, and `"signal" in init` collapsed the last into
+  // the middle. Comparing against `undefined` is the one test that separates all three.
   const inherited = input instanceof Request ? input.signal : null;
-  const caller = init && "signal" in init ? init.signal : inherited;
+  const caller = init?.signal !== undefined ? init.signal : inherited;
   const signal = caller ? AbortSignal.any([caller, abort.signal]) : abort.signal;
   try {
     return await fetch(input, { ...init, signal });

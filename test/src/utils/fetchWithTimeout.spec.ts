@@ -122,6 +122,18 @@ describe("fetchWithTimeout", () => {
     expect(settled).toBe(true);
   });
 
+  // The third case. `{ signal: undefined }` is what a spread of optional options produces, and
+  // WebIDL reads it as absent — so the Request's own signal must survive it (Codex, #1398).
+  it("treats an undefined signal as absent, keeping the Request's own", async () => {
+    vi.useFakeTimers();
+    hangingFetch();
+    const caller = new AbortController();
+    const request = new Request("http://localhost/api/thing", { signal: caller.signal });
+    const settled = expect(fetchWithTimeout(request, { signal: undefined })).rejects.toThrow(/abort/i);
+    caller.abort(); // must still reach us: nothing was detached
+    await settled;
+  });
+
   it("passes the caller's method and body through untouched", async () => {
     const seen: RequestInit[] = [];
     vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
