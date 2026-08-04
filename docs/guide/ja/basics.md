@@ -104,7 +104,7 @@ Collections・Wiki・Accounting が読み書きするのは、どのセルにい
 | **プロジェクトのディレクトリ** | **そのディレクトリに登録されているツールグループだけ**です。GUI ツールが要るなら MCP トグルで登録します | 同じ |
 
 **Claude のセッションは、どちらのディレクトリでも自分の MCP 設定を読みます**（`.mcp.json`・`claude mcp add`・claude.ai のコネクタ）。4.4.0 より前はワークスペースのセルだけがそれを読めていませんでした（→ [4.4.0 セットアップガイド](v4.4.0.html)）。
-設定の [MCP servers](config.html#settings-modal)（`userMcpServers`）が合流するのも Claude のセッションだけです。Codex が受け取るのは MulmoTerminal の GUI ツールのほうで、Codex 自身の MCP 設定は `~/.codex` 側の話になります。
+設定の [MCP servers](config.html#settings-modal)（`userMcpServers`）が合流するのは、**ワークスペースで起動した Claude のセッションだけ**です。プロジェクトディレクトリのセルには合流しませんし、Codex にも合流しません（Codex が受け取るのは MulmoTerminal の GUI ツールのほうで、Codex 自身の MCP 設定は `~/.codex` 側の話になります）。
 
 **3.x までの単一ビューでしていたことを続けるなら、ワークスペースで起動します。**
 単一ビューはこのディレクトリで動いていたので、ここに起動したセルは同じものを持ちます。
