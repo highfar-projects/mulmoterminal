@@ -57,7 +57,10 @@ async function mountClaudeCell(cwd: string) {
       zoomed: false,
       initialSessionId: "11111111-1111-1111-1111-111111111111",
       initialCwd: cwd,
-      defaultCwd: cwd,
+      // Deliberately NOT `cwd`: a cell whose dir IS the workspace is badged WORKSPACE rather than
+      // with the directory's `name` (see dirBadgeCells.spec.ts), and the badge assertion below is
+      // about the name. The colours are the directory's either way.
+      defaultCwd: "/home/me/workspace",
       presets: [],
       home: "/home/me",
       cancellable: false,

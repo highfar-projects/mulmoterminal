@@ -24,7 +24,7 @@ export interface LaunchChip extends CwdPreset {
 }
 
 /**
- * What the workspace chip is CALLED, rather than what its directory is called.
+ * What the workspace is CALLED, rather than what its directory is called.
  *
  * Every other chip is a place — the basename of somewhere you launched. This one is a ROLE: the
  * directory a session works from, where every GUI tool is reachable and the shared wiki /
@@ -34,8 +34,13 @@ export interface LaunchChip extends CwdPreset {
  * Capitals because it is not a directory name and should not read as one — every neighbour is a
  * lowercase basename. The real path has not gone anywhere: it is the chip's hover, which is where
  * the other chips keep theirs too.
+ *
+ * Used by the launcher chip AND by a cell header's DirBadge, which is why it is not called
+ * CHIP_LABEL any more: the two used to disagree, so launching from a chip labelled WORKSPACE gave
+ * you a cell badged with whatever `name` that folder's `.mulmoterminal.json` happened to carry —
+ * one directory wearing two names across a single click.
  */
-export const WORKSPACE_CHIP_LABEL = "WORKSPACE";
+export const WORKSPACE_LABEL = "WORKSPACE";
 
 /**
  * The chips to render: the workspace FIRST and always, then the recent directories.
@@ -50,7 +55,7 @@ export const WORKSPACE_CHIP_LABEL = "WORKSPACE";
  * Pinned ahead of the priority ordering on purpose. `orderByDirPriority` ranks the directories a
  * user configured against each other; the workspace is not competing in that ranking.
  *
- * It is labelled by its ROLE, not by its directory name — see WORKSPACE_CHIP_LABEL. Matched with
+ * It is labelled by its ROLE, not by its directory name — see WORKSPACE_LABEL. Matched with
  * `isSameDirPath`, the same lexical comparison the worktree rows use: the browser cannot resolve a
  * symlink, so this folds only the spellings a person types (a trailing slash, a `..`). Getting it
  * wrong shows the directory twice — the server still decides what the workspace really is, with a
@@ -59,5 +64,5 @@ export const WORKSPACE_CHIP_LABEL = "WORKSPACE";
 export function launchChips(orderedPresets: readonly CwdPreset[], defaultCwd: string | null | undefined): LaunchChip[] {
   const rest = orderedPresets.filter((p) => !defaultCwd || !isSameDirPath(p.path, defaultCwd)).map((p) => ({ ...p, isWorkspace: false }));
   if (!defaultCwd) return rest;
-  return [{ label: WORKSPACE_CHIP_LABEL, path: defaultCwd, isWorkspace: true }, ...rest];
+  return [{ label: WORKSPACE_LABEL, path: defaultCwd, isWorkspace: true }, ...rest];
 }

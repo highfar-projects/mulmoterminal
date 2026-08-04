@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { presetLabel, launchChips, WORKSPACE_CHIP_LABEL } from "../../../src/components/presets.js";
+import { presetLabel, launchChips, WORKSPACE_LABEL } from "../../../src/components/presets.js";
 
 describe("presetLabel", () => {
   it("uses the trailing path segment (basename)", () => {
@@ -23,12 +23,12 @@ describe("launchChips", () => {
   const preset = (path: string) => ({ label: presetLabel(path), path });
 
   it("offers the workspace even when nothing has been recorded", () => {
-    expect(launchChips([], "/home/me/mulmoclaude")).toEqual([{ label: WORKSPACE_CHIP_LABEL, path: "/home/me/mulmoclaude", isWorkspace: true }]);
+    expect(launchChips([], "/home/me/mulmoclaude")).toEqual([{ label: WORKSPACE_LABEL, path: "/home/me/mulmoclaude", isWorkspace: true }]);
   });
 
   it("puts it first, ahead of the priority ordering the rest arrive in", () => {
     const chips = launchChips([preset("/a/one"), preset("/b/two")], "/home/me/ws");
-    expect(chips.map((c) => c.label)).toEqual([WORKSPACE_CHIP_LABEL, "one", "two"]);
+    expect(chips.map((c) => c.label)).toEqual([WORKSPACE_LABEL, "one", "two"]);
     expect(chips.filter((c) => c.isWorkspace)).toHaveLength(1);
   });
 

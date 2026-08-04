@@ -142,6 +142,7 @@ function copyPrompt() {
     :canvas-available="canvasAvailable"
     :home="home"
     :cwd="command.cwd"
+    :default-cwd="defaultCwd"
     :finished="finished"
     idle-title="Finished"
     icon="play_arrow"

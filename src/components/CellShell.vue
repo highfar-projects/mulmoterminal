@@ -16,6 +16,7 @@ import CellChromeButtons from "./CellChromeButtons.vue";
 import { cellChromeBinding, type CellChromeSource } from "./cellChromeBinding";
 import { useCellChrome } from "../composables/useCellChrome";
 import { formatCwd } from "./cwdDisplay";
+import { isSameDirPath } from "../../common/dirPathKey";
 import { HOVER_TIP_ID, useHoverTipAnchor } from "../composables/useHoverTip";
 import { textTip } from "./tipContent";
 import { shouldZoomOnHeaderClick } from "./cellHeaderZoom";
@@ -42,6 +43,10 @@ const props = defineProps<
   CellChromeSource & {
     home: string | null;
     cwd: string | null;
+    // The server's workspace dir, so the badge can say WORKSPACE rather than the folder's own name
+    // — the same thing TerminalCell does with the prop of the same name. A command or launcher cell
+    // running in the workspace is as much "the workspace" as an agent cell is.
+    defaultCwd?: string | null | undefined;
     // Whether the process has ended. Drives the dot only — what "ended" MEANS differs (a command
     // finishes, a launcher exits), which is why the word is the caller's.
     finished: boolean;
@@ -68,6 +73,8 @@ const { chromeProps, chromeEvents } = cellChromeBinding(props, emit);
 const { config: dirConfig, cellStyle, headerStyle } = useCellChrome(toRef(() => props.cwd));
 
 const dirDisplay = computed(() => formatCwd(props.cwd, props.home));
+
+const isWorkspace = computed(() => isSameDirPath(props.cwd, props.defaultCwd));
 
 // The header shows the path shortened to fit; the tip is the full one. Anchored on the dir span
 // only — the running/idle dot beside it keeps its `title`, since a two-word state does not need a
@@ -101,7 +108,7 @@ function onHeaderClick(event: MouseEvent) {
           @focusout="hideDirTip"
           ><span class="cell-dir-path" :class="CELL_DIR_PATH">{{ dirDisplay }}</span></span
         >
-        <DirBadge :name="dirConfig.name" :color="dirConfig.badgeColor" />
+        <DirBadge :name="dirConfig.name" :color="dirConfig.badgeColor" :workspace="isWorkspace" />
         <span class="cell-cmd" :class="CELL_CMD"
           ><span class="material-symbols-outlined" aria-hidden="true">{{ icon }}</span> {{ label }}</span
         >

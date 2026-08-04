@@ -461,6 +461,10 @@ const gridCellProps = (cell: Cell) => ({
   canvasAvailable: canvasOpenable.value,
   zoomed: zoomed.value,
   home: props.home,
+  // Grid-wide, so it is bound here rather than per cell type: every cell compares its own cwd
+  // against it to know whether IT is the workspace, and a cell type left out of that comparison is
+  // one that badges the workspace with the folder's name while its neighbour says WORKSPACE.
+  defaultCwd: props.defaultCwd,
   reorderable: props.reorderable ?? false,
 });
 const gridCellEvents = (cell: Cell) => ({
@@ -1088,7 +1092,6 @@ watch(
           :initial-session-id="cell.session"
           :initial-cwd="cell.cwd"
           :initial-agent="cell.agent"
-          :default-cwd="defaultCwd"
           :presets="presets"
           :launchers="launchers"
           :open-session-ids="openSessionIds"
