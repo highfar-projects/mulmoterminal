@@ -8,6 +8,7 @@ import {
   clearResetModes,
   clickReportSequences,
   createWheelTicker,
+  flushWheelResidual,
   isClickGesture,
   recordSwallowedModes,
   wantsMouseReports,
@@ -23,6 +24,12 @@ import type { GridCell, PointerPosition } from "./mouseReports";
 const LINK_HOVER_CLASS = "xterm-cursor-pointer";
 const MAIN_BUTTON = 0;
 const TOP_LEFT_CELL: GridCell = { col: 1, row: 1 };
+
+// How long without a wheel event means the gesture is over, and the banked fraction should be
+// paid out (flushWheelResidual). A trackpad's momentum tail thins out rather than stopping, so
+// this is a compromise: too short flushes mid-gesture, which costs less than one line of accuracy;
+// too long makes a gentle nudge feel like it was ignored, which is the bug being fixed.
+export const GESTURE_END_MS = 100;
 
 // The app hears the mouse only while it is the full-screen owner of the terminal AND asked for
 // tracking it never got (#729). Both halves below answer to this one gate.
@@ -59,12 +66,41 @@ function cellHeightOf(term: Terminal): number {
  *  so changing it in Settings applies to terminals that are already open. */
 export function guardMouseWheel(term: Terminal, swallowedMouseModes: ReadonlySet<number>, scrollSpeed: () => number): void {
   const ticker = createWheelTicker();
+  // The gesture-end flush, and where it aims. A flush has no event of its own, so it reports at the
+  // last cell the pointer was over — the same cell the gesture has been reporting at all along.
+  let pendingFlush: ReturnType<typeof setTimeout> | undefined;
+  let lastCell: GridCell = TOP_LEFT_CELL;
+
+  const cancelFlush = (): void => {
+    if (pendingFlush !== undefined) clearTimeout(pendingFlush);
+    pendingFlush = undefined;
+  };
+
+  const report = (notches: number, cell: GridCell): void => {
+    const seq = wheelReportSequence(notches, cell.col, cell.row);
+    if (seq) for (let i = 0; i < Math.abs(notches); i++) term.input(seq, false);
+  };
+
+  const flush = (): void => {
+    pendingFlush = undefined;
+    // Re-asked rather than assumed, which also settles the disposed-terminal case: nothing here
+    // removes a pending timer when the terminal goes away, and a terminal disposed inside the gap
+    // answers `normal` (xterm 6 keeps `buffer` readable after dispose rather than throwing), so a
+    // timer that outlived its terminal drops the fraction instead of writing to a dead one.
+    if (!reportsMouseToApp(term, swallowedMouseModes)) {
+      ticker.residual = 0;
+      return;
+    }
+    report(flushWheelResidual(ticker), lastCell);
+  };
+
   term.attachCustomWheelEventHandler((ev) => {
     if (!reportsMouseToApp(term, swallowedMouseModes)) {
       // The bank belongs to ONE stretch of tracked scrolling. Kept across the gap, a fraction left
       // over before an app exited (or before the buffer went back to normal) would pay out on the
       // first tiny event the NEXT app sees — a scroll it didn't ask for, from a gesture that was
       // over. Nothing is lost: an unpaid fraction is by definition less than one notch.
+      cancelFlush();
       ticker.residual = 0;
       return true;
     }
@@ -73,9 +109,13 @@ export function guardMouseWheel(term: Terminal, swallowedMouseModes: ReadonlySet
     // Consumed even at zero notches: this event's motion is banked, and handing the leftover
     // back to xterm would resurrect the ↑/↓ fallback #737 exists to replace.
     ev.preventDefault();
-    const cell = cellUnderPointer(term, ev);
-    const seq = wheelReportSequence(notches, cell.col, cell.row);
-    if (seq) for (let i = 0; i < Math.abs(notches); i++) term.input(seq, false);
+    lastCell = cellUnderPointer(term, ev);
+    report(notches, lastCell);
+    // Restarted on every event, so it only fires once the gesture has actually stopped. Without it
+    // a gesture worth less than one whole notch reports nothing at all, and since only an agent
+    // cell takes this path, the same nudge scrolls a shell cell fine (#1200).
+    cancelFlush();
+    pendingFlush = setTimeout(flush, GESTURE_END_MS);
     return false;
   });
 }
