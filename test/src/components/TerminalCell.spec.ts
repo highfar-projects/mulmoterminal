@@ -1030,7 +1030,10 @@ describe("TerminalCell", () => {
     expect(w.find('[data-testid="cell-path-menu"]').exists()).toBe(false);
     await w.find(".cell-dir").trigger("click");
     expect(w.find('[data-testid="cell-path-menu"]').exists()).toBe(true);
-    await w.find('[data-testid="cell-path-menu"]').trigger("keydown", { key: "Escape" });
+    // Escape is pressed ON THE TRIGGER, which is where focus actually is after opening the menu
+    // with the mouse or the keyboard. A handler bound to the menu itself passes a test that
+    // dispatches the key at the menu and does nothing at all for a real user (codex review, #1382).
+    await w.find(".cell-dir").trigger("keydown", { key: "Escape" });
     expect(w.find('[data-testid="cell-path-menu"]').exists()).toBe(false);
   });
 

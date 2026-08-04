@@ -535,9 +535,19 @@ function newTerminalHere() {
 // line up and the four navigations are told apart by glyph the way they were as buttons.
 const PATH_MENU_ITEM = `inline-flex items-center gap-2 whitespace-nowrap ${CELL_MENU_ITEM}`;
 
+// Closing puts focus back where it came from. The trigger is the only thing in this wrapper that
+// survives the close, and leaving focus on a removed menu item drops the keyboard to the top of the
+// document — which is why Escape has to do more than flip the flag.
+const pathTrigger = useTemplateRef<HTMLElement>("pathTrigger");
+function closePathMenu() {
+  if (!pathMenuOpen.value) return;
+  pathMenuOpen.value = false;
+  void nextTick(() => pathTrigger.value?.focus());
+}
+
 // Every item closes the menu, so no item has to remember to.
 function pathMenuAction(run: () => void) {
-  pathMenuOpen.value = false;
+  closePathMenu();
   run();
 }
 
@@ -1220,9 +1230,16 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
              icon in a tiled cell. Reveal stays first so the one gesture that already existed —
              click the path, get the folder — is still the shortest. -->
           <template #header-lead>
-            <span ref="pathWrap" class="relative flex min-w-0 flex-auto items-center">
+            <!-- Escape is bound on the WRAPPER, not on the menu. Opening the menu leaves focus on
+               the trigger button, so a handler on the menu itself only fires if something inside it
+               happens to be focused — which, in the ordinary flow of clicking the path and changing
+               your mind, is nothing. Keydown bubbles from the trigger to here, so this closes it
+               from wherever focus actually is. Focus returns to the trigger afterwards, or Escape
+               would strand the keyboard on a button that no longer exists. -->
+            <span ref="pathWrap" class="relative flex min-w-0 flex-auto items-center" @keydown.escape="closePathMenu">
               <button
                 v-if="headerDir"
+                ref="pathTrigger"
                 type="button"
                 data-testid="cell-dir"
                 class="cell-dir flex min-w-0 cursor-pointer items-center gap-0.5 border-none bg-transparent p-0 font-mono text-[11px] text-[var(--cell-header-fg,var(--text-dim))] hover:text-muted"
@@ -1243,7 +1260,6 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                 v-if="pathMenuOpen"
                 data-testid="cell-path-menu"
                 class="absolute left-0 top-full z-20 mt-1 flex min-w-[190px] flex-col rounded-md border border-border bg-panel p-1 shadow-[0_6px_18px_rgba(0,0,0,0.35)]"
-                @keydown.escape="pathMenuOpen = false"
               >
                 <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(openDir)">
                   <span class="material-symbols-outlined text-[15px]" aria-hidden="true">folder</span> Reveal in the file manager
