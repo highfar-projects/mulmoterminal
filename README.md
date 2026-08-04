@@ -404,15 +404,17 @@ today — **Claude Code** (the default), **Codex**, and **Antigravity** (`agy`).
   cockpit roster next to Claude's. Because Codex only mints its rollout id **after** the first
   turn, the server watches `~/.codex/sessions/**/rollout-*.jsonl` (home overridable via
   `CODEX_HOME`) and maps the new rollout to the session — attributed only when it's
-  unambiguous, never by "newest wins". Resume reattaches a live PTY, adopts a surviving
-  tmux session, or cold-resumes the rollout id.
+  unambiguous, never by "newest wins". That mapping is appended to
+  `~/.mulmoterminal/codex-rollouts.jsonl`, so a conversation is still resumable after the server
+  restarts — without it a session whose tmux is also gone came back as a fresh codex. Resume
+  reattaches a live PTY, adopts a surviving tmux session, or cold-resumes the rollout id.
 - **Antigravity** — spawned as `agy` (override with `ANTIGRAVITY_BIN`; `ANTIGRAVITY_MODEL` sets
   `--model`). Antigravity runs on its own WebSocket (`/ws/antigravity`). Like Codex it mints its
   own conversation id, so the server watches `~/.gemini/antigravity-cli/brain/` (home overridable
   via `ANTIGRAVITY_HOME`) for the directory the new conversation creates — attributed only when
   unambiguous — and cold-resumes it with `--conversation <id>`. That mapping is appended to
   `~/.mulmoterminal/antigravity-conversations.jsonl`, so a conversation is still resumable after
-  the server restarts.
+  the server restarts — the same log Codex keeps, in the same format.
 
   Its **GUI tools work differently**, because `agy` takes no MCP flag: it reads its servers from
   `.agents/mcp_config.json` in the working directory. MulmoTerminal writes that file from the
