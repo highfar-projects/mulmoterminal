@@ -858,12 +858,17 @@ describe("open-in-canvas", () => {
     return w;
   };
 
-  const pickFile = (w: ReturnType<typeof mount>) => w.findComponent({ name: "FilesPane" }).vm.$emit("open-in-canvas", "design.md");
+  // Awaited: the card is built before the write is even issued, so releasing the write any earlier
+  // releases nothing and the test proves whatever the timing happened to be.
+  const pickFile = async (w: ReturnType<typeof mount>) => {
+    w.findComponent({ name: "FilesPane" }).vm.$emit("open-in-canvas", "design.md");
+    await flushPromises();
+  };
 
   it("shows the Canvas beside the cell the file was picked in", async () => {
     const release = deferredWrite();
     const w = await gridWithPaneOpen();
-    pickFile(w);
+    await pickFile(w);
     release();
     await flushPromises();
     expect(w.find(".stub-gui-panel").exists()).toBe(true);
@@ -875,7 +880,7 @@ describe("open-in-canvas", () => {
   it("does not enable the Canvas button on the cell the zoom moved to", async () => {
     const release = deferredWrite();
     const w = await gridWithPaneOpen();
-    pickFile(w);
+    await pickFile(w);
     await w.setProps({ expandedUid: 2 });
     await flushPromises();
     release();

@@ -1,23 +1,35 @@
 // Open a file the user picked in the Canvas, without asking the agent for it (#1374).
 //
 // The Canvas renders a session's TOOL RESULTS, so the way in is to write one: a synthetic result
-// carrying nothing but the path, which the plugin's View then self-fetches from. `presentCollection`
-// has done exactly this since #1768 — see seedCollectionCanvas.ts, which this mirrors, including
-// POSTing to the same route so the card survives a reload and the agent's own card supersedes it.
+// standing in for the tool call nobody made. `presentCollection` has done exactly this since #1768
+// — see seedCollectionCanvas.ts, which this mirrors, including POSTing to the same route so the
+// card survives a reload and the agent's own card supersedes it.
 //
-// Which files qualify is decided by each PLUGIN's own gate rather than by an extension test here.
-// They are lexical guards their executors already run (`isDocumentPath` refuses a prefixed
-// traversal; `isPresentableHtmlPath` refuses a dotfile the iframe mount would deny), so a second
-// opinion in this file could only be a weaker one that reports success for a page that never
-// renders.
+// Which files qualify is decided by each PLUGIN rather than by an extension test here. A second
+// opinion in this file could only be a weaker one that reports success for a file that never
+// renders. How that decision is reached differs per tool, and the difference is the shape of this
+// module:
+//
+//   markdown, html   a lexical guard their executors already run (`isDocumentPath` refuses a
+//                    prefixed traversal; `isPresentableHtmlPath` refuses a dotfile the iframe
+//                    mount would deny). The card carries a path and the View self-fetches.
+//   mulmoScript      no absolute path is accepted at all, and the card needs the parsed script
+//                    rather than a path — so the question is WHERE the file is, and the card
+//                    comes from the plugin's own reopen. See storyWirePath / reopenStory.
 import { TOOL_NAME as DOCUMENT_TOOL, isDocumentPath } from "@mulmoclaude/markdown-plugin/vue";
 import { TOOL_NAME as HTML_TOOL, isPresentableHtmlPath, isHtmlArtifactPath, htmlArtifactPreviewUrl, htmlFileUrl } from "@mulmoclaude/html-plugin";
+import { TOOL_NAME as STORY_TOOL } from "@mulmoclaude/mulmoscript-plugin";
+import { dirPathKey } from "../../common/dirPathKey";
 import { isRecord } from "../../common/isRecord";
 
 export interface CanvasCard {
   toolName: string;
   data: Record<string, unknown>;
 }
+
+/** Where mulmoScript keeps its stories, under the workspace. Both halves are fixed by the plugin:
+ *  the artifacts area is its only file capability, and `stories/` is its wire prefix. */
+const STORY_DIR = "artifacts/stories";
 
 /**
  * The Canvas card that renders `path`, or null when no plugin here can show it.
@@ -62,8 +74,84 @@ export function absoluteUnder(cwd: string | null, relative: string): string {
   return `${base}/${relative}`;
 }
 
-/** Whether the Canvas can show `path` at all — what the Files pane's button is shown on. */
-export const canOpenInCanvas = (path: string | null): boolean => (path ? canvasCardForFile(path) !== null : false);
+/**
+ * The wire path a mulmoScript card carries for `absolutePath`, or null when it is not a story.
+ *
+ * mulmoScript is the one tool here that cannot be handed an absolute path: `normalizeStoryPath`
+ * refuses those (and backslashes) outright, taking only `stories/x.json` and its two historical
+ * spellings. So where markdown and html are asked "can you render this file", this asks the
+ * narrower question the plugin can actually act on — is this file in the WORKSPACE's story
+ * directory — and answers with the path it wants.
+ *
+ * That distinction is the point rather than a technicality: a project cell may well have an
+ * `artifacts/stories/` of its own, and those stories are not the ones the plugin would open.
+ *
+ * Lexical, on the same key the workspace chip compares with: a browser cannot resolve a symlink,
+ * and `..` folds away here, so a traversal simply fails to match the prefix. Nothing rests on it —
+ * the reopen below runs the plugin's own guard and a realpath check server-side, so a path this
+ * lets through still yields no card.
+ */
+export function storyWirePath(absolutePath: string, workspace: string | null): string | null {
+  if (!workspace) return null;
+  const root = dirPathKey(`${workspace}/${STORY_DIR}`);
+  const key = dirPathKey(absolutePath);
+  if (!root || !key.startsWith(`${root}/`)) return null;
+  const relative = key.slice(root.length + 1);
+  return relative.endsWith(".json") ? `stories/${relative}` : null;
+}
+
+/**
+ * Whether the Canvas can show `path` at all — what the Files pane's button is shown on.
+ *
+ * `workspace` is only consulted for stories; markdown and html are judged wherever they live.
+ */
+export const canOpenInCanvas = (path: string | null, workspace: string | null = null): boolean =>
+  path !== null && (canvasCardForFile(path) !== null || storyWirePath(path, workspace) !== null);
+
+/**
+ * The mulmoScript card for `wirePath`, built by the plugin's own reopen rather than here.
+ *
+ * `MulmoScriptData` requires the parsed `script`, not just a path — unlike markdown and html,
+ * whose Views self-fetch — and reading and validating it in the browser would be a second copy of
+ * logic this route already runs. What comes back is what the agent's own tool call produces,
+ * including the normalized `filePath` that `filePathIdentity` collapses the two cards on.
+ *
+ * The route narrates a missing or refused file as a 200 with no `data` (its spec pins this), so
+ * absence of `data` — not the status — is what "cannot open this" looks like.
+ */
+async function reopenStory(wirePath: string): Promise<CanvasCard | null> {
+  try {
+    const res = await fetch("/api/plugin/presentMulmoScript", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ filePath: wirePath }),
+    });
+    if (!res.ok) {
+      console.error(`[canvasOpenFile] reopen HTTP ${res.status}`);
+      return null;
+    }
+    const body: unknown = await res.json();
+    if (!isRecord(body) || !isRecord(body.data)) return null;
+    return { toolName: STORY_TOOL, data: body.data };
+  } catch (err) {
+    console.error("[canvasOpenFile] reopen failed", err);
+    return null;
+  }
+}
+
+/**
+ * The card to seed for `absolutePath`, or null when nothing here can show it.
+ *
+ * The async half of {@link canvasCardForFile}: markdown and html are decided in memory, and only a
+ * story needs the round trip. Callers use THIS and {@link canOpenInCanvas} with the same arguments
+ * — a button gated on one path while the card is built from another is a button that does nothing.
+ */
+export async function buildCanvasCard(absolutePath: string, workspace: string | null): Promise<CanvasCard | null> {
+  const direct = canvasCardForFile(absolutePath);
+  if (direct) return direct;
+  const wirePath = storyWirePath(absolutePath, workspace);
+  return wirePath ? await reopenStory(wirePath) : null;
+}
 
 /**
  * Write `card` into `sessionId`'s Canvas feed.
