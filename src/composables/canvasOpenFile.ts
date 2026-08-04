@@ -21,6 +21,7 @@ import { TOOL_NAME as HTML_TOOL, isPresentableHtmlPath, isHtmlArtifactPath, html
 import { TOOL_NAME as STORY_TOOL } from "@mulmoclaude/mulmoscript-plugin";
 import { dirPathKey } from "../../common/dirPathKey";
 import { isRecord } from "../../common/isRecord";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 export interface CanvasCard {
   toolName: string;
@@ -109,24 +110,11 @@ export const canOpenInCanvas = (path: string | null, workspace: string | null = 
   path !== null && (canvasCardForFile(path) !== null || storyWirePath(path, workspace) !== null);
 
 /**
- * Every request here bounded, per the repo's other API callers (useCost, useHandoff, …).
- *
- * Not a formality on this path: the reopen BLOCKS the Canvas from opening, so a server that never
- * answers leaves the button pressed and nothing happening, with no way for the user to tell that
- * from "this file cannot be shown". A rejection at least reaches the caller, which gives up
- * visibly.
+ * Longer than the shared default because the reopen reads and schema-completes a whole script,
+ * and it BLOCKS the Canvas from opening — giving up early here shows the user nothing, which they
+ * cannot tell apart from "this file cannot be shown".
  */
 const REQUEST_TIMEOUT_MS = 10_000;
-
-async function fetchBounded(url: string, init?: RequestInit): Promise<Response> {
-  const abort = new AbortController();
-  const timer = setTimeout(() => abort.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    return await fetch(url, { ...init, signal: abort.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 /**
  * The mulmoScript card for `wirePath`, built by the plugin's own reopen rather than here.
@@ -141,11 +129,11 @@ async function fetchBounded(url: string, init?: RequestInit): Promise<Response> 
  */
 async function reopenStory(wirePath: string): Promise<CanvasCard | null> {
   try {
-    const res = await fetchBounded("/api/plugin/presentMulmoScript", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ filePath: wirePath }),
-    });
+    const res = await fetchWithTimeout(
+      "/api/plugin/presentMulmoScript",
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ filePath: wirePath }) },
+      REQUEST_TIMEOUT_MS,
+    );
     if (!res.ok) {
       console.error(`[canvasOpenFile] reopen HTTP ${res.status}`);
       return null;
@@ -183,11 +171,11 @@ export async function buildCanvasCard(absolutePath: string, workspace: string | 
  */
 export async function seedCanvasCard(sessionId: string, card: CanvasCard): Promise<boolean> {
   try {
-    const res = await fetchBounded("/api/agent/toolResult", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ uuid: crypto.randomUUID(), ...card, sessionId }),
-    });
+    const res = await fetchWithTimeout(
+      "/api/agent/toolResult",
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ uuid: crypto.randomUUID(), ...card, sessionId }) },
+      REQUEST_TIMEOUT_MS,
+    );
     if (res.ok) return true;
     console.error(`[canvasOpenFile] HTTP ${res.status}`);
   } catch (err) {
@@ -206,7 +194,7 @@ export async function seedCanvasCard(sessionId: string, card: CanvasCard): Promi
  */
 export async function hasStoredCard(sessionId: string): Promise<boolean> {
   try {
-    const res = await fetchBounded(`/api/agent/toolResults/${encodeURIComponent(sessionId)}`);
+    const res = await fetchWithTimeout(`/api/agent/toolResults/${encodeURIComponent(sessionId)}`, undefined, REQUEST_TIMEOUT_MS);
     if (!res.ok) return false;
     const body: unknown = await res.json();
     return isRecord(body) && Array.isArray(body.toolResults) && body.toolResults.length > 0;
