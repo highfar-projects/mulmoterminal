@@ -109,6 +109,26 @@ export const canOpenInCanvas = (path: string | null, workspace: string | null = 
   path !== null && (canvasCardForFile(path) !== null || storyWirePath(path, workspace) !== null);
 
 /**
+ * Every request here bounded, per the repo's other API callers (useCost, useHandoff, …).
+ *
+ * Not a formality on this path: the reopen BLOCKS the Canvas from opening, so a server that never
+ * answers leaves the button pressed and nothing happening, with no way for the user to tell that
+ * from "this file cannot be shown". A rejection at least reaches the caller, which gives up
+ * visibly.
+ */
+const REQUEST_TIMEOUT_MS = 10_000;
+
+async function fetchBounded(url: string, init?: RequestInit): Promise<Response> {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: abort.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * The mulmoScript card for `wirePath`, built by the plugin's own reopen rather than here.
  *
  * `MulmoScriptData` requires the parsed `script`, not just a path — unlike markdown and html,
@@ -121,7 +141,7 @@ export const canOpenInCanvas = (path: string | null, workspace: string | null = 
  */
 async function reopenStory(wirePath: string): Promise<CanvasCard | null> {
   try {
-    const res = await fetch("/api/plugin/presentMulmoScript", {
+    const res = await fetchBounded("/api/plugin/presentMulmoScript", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ filePath: wirePath }),
@@ -163,7 +183,7 @@ export async function buildCanvasCard(absolutePath: string, workspace: string | 
  */
 export async function seedCanvasCard(sessionId: string, card: CanvasCard): Promise<boolean> {
   try {
-    const res = await fetch("/api/agent/toolResult", {
+    const res = await fetchBounded("/api/agent/toolResult", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ uuid: crypto.randomUUID(), ...card, sessionId }),
@@ -186,7 +206,7 @@ export async function seedCanvasCard(sessionId: string, card: CanvasCard): Promi
  */
 export async function hasStoredCard(sessionId: string): Promise<boolean> {
   try {
-    const res = await fetch(`/api/agent/toolResults/${encodeURIComponent(sessionId)}`);
+    const res = await fetchBounded(`/api/agent/toolResults/${encodeURIComponent(sessionId)}`);
     if (!res.ok) return false;
     const body: unknown = await res.json();
     return isRecord(body) && Array.isArray(body.toolResults) && body.toolResults.length > 0;
