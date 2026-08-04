@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-dirs
-description: Colour-code and order the directories you actually work in, from wherever you are. Writes each project's `<project>/.mulmoterminal.json` — name badge, the seven chrome colours, xterm palette (`theme` / `colors`), terminal font size, and `orderPriority` (where it sits in the grid and in the launcher's chips). Starts from your recent MulmoTerminal directories rather than just the current one, reads the configs you already have, works out the convention you have been following, and continues it for the ones that are unset or off-pattern — so a newly cloned repo gets the colour and rank it should have had. Use when the user wants to colour-code, theme, rename, reorder, or resize projects in MulmoTerminal — "give this project a colour", "colour-code my repos", "keep my main repos at the top", "the new clone has no colour", "make them consistent", "terminal text is too small". For inventing a NEW reusable colour scheme that shows up in Settings, use mulmoterminal-theme instead.
+description: Colour-code and order the directories you actually work in, from wherever you are. Writes each project's `<project>/.mulmoterminal.json` — name badge, project icon image, the seven chrome colours, xterm palette (`theme` / `colors`), terminal font size, and `orderPriority` (where it sits in the grid and in the launcher's chips). Starts from your recent MulmoTerminal directories rather than just the current one, reads the configs you already have, works out the convention you have been following, and continues it for the ones that are unset or off-pattern — so a newly cloned repo gets the colour and rank it should have had. Use when the user wants to colour-code, theme, rename, reorder, or resize projects in MulmoTerminal — "give this project a colour", "colour-code my repos", "keep my main repos at the top", "the new clone has no colour", "make them consistent", "terminal text is too small". For inventing a NEW reusable colour scheme that shows up in Settings, use mulmoterminal-theme instead.
 ---
 
 # Colour and order the directories you work in
@@ -134,12 +134,33 @@ was dropped rather than trusting the file.
 | Key | Meaning |
 |---|---|
 | `name` | Badge label (≤ 40 chars). |
+| `icon` | An image marking this directory (see below). |
 | `badgeColor` | Name-badge colour. |
 | `headerColor` / `headerTextColor` | The cell header's background / text. |
 | `cellColor` | Cell body background. |
 | `cellBorderColor` | Cell border. |
 | `dotColor` | Idle status dot. |
 | `buttonColor` | Header icon buttons. |
+
+### Project icon — `icon`
+
+An IMAGE beside the name badge, in the cell header, the cockpit roster, the filmstrip thumbnails
+and the launcher's directory chips. **Not** a Material Symbols name — that is what a header
+BUTTON's `icon` is, and it is `mulmoterminal-header`'s key, not this one.
+
+- **A path is relative to this directory**, and confined to it: an absolute path, or a `../` that
+  escapes, is dropped. Or an `http(s)://` URL, or a `data:image/…` URI (capped at 64 KB, since it
+  rides in every cell's config fetch — point at a file for anything larger).
+- PNG, JPEG, **GIF (animated ones play)**, WebP, AVIF, SVG, ICO, BMP. Any other extension is dropped.
+
+Do not invent one. **Look for an image the repository already has** — `docs/logo.*`, `public/`,
+`assets/`, an `icon`/`favicon` in a `package.json`/manifest — and offer what you found. A project
+with no logo of its own is better served by the colour scheme; an icon that is not the project's
+own picture is one more thing to recognise, which is the opposite of the point.
+
+Prefer a file over a URL: a remote image is a request per cell to somebody else's host, and it
+disappears when that host does. Prefer a **committed** file over a gitignored one — worktrees
+inherit the key as written, so only a committed image is found in the worktree too.
 
 ### Terminal palette — `theme` and `colors`
 
@@ -206,7 +227,7 @@ UDGothic); anything else tears the box-drawing frames an agent TUI is made of.
 
 A managed git worktree (`~/.mulmoterminal/worktrees/<repo>-<hash>/<task>`) gets its own
 `.mulmoterminal.json` when MulmoTerminal creates it, derived from the project's: identity keys
-(`name` / `theme` / `colors` / `fontSize` / `fontFamily` / `provider` / `model`) as written, the
+(`name` / `icon` / `theme` / `colors` / `fontSize` / `fontFamily` / `provider` / `model`) as written, the
 seven chrome colours rotated **12° further per worktree**, and `orderPriority` at the project's
 rank **+ 1**. `sound` / `sounds` / `addDirs` are not carried.
 

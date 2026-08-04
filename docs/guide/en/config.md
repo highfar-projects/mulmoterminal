@@ -154,6 +154,36 @@ pick a different model on Anthropic itself. → [Using another model via OpenRou
 
 All values are `#rrggbb`. The working / needs-you status colors take priority over these background colors (which show when idle).
 
+### Project icon (`icon`) {#dir-icon}
+
+`icon` puts an **image** next to the name badge — the project's own logo, so a cell is recognisable
+before you have read a word of it:
+
+```jsonc
+{
+  "icon": "docs/logo.png",                  // a file in this directory
+  // "icon": "https://example.com/logo.svg" // or a URL
+  // "icon": "data:image/png;base64,iVBO…"  // or an inline image
+}
+```
+
+It appears in the **cell header**, the **cockpit roster** and the **filmstrip thumbnails** while a
+cell is enlarged, and on the **launcher's directory chips** — so the same picture identifies the
+project everywhere it is offered or running.
+
+- **A path is relative to this directory.** An absolute path, or a `../` that escapes the
+  directory, is rejected — the same confinement `sound` has, so an opened project cannot point
+  MulmoTerminal at files elsewhere on your machine.
+- **Formats:** PNG, JPEG, **GIF (an animated one plays)**, WebP, AVIF, SVG, ICO, BMP. A file with
+  any other extension is ignored.
+- **Commit it to the repository.** That is what makes a fresh clone — and a
+  [worktree](#worktree-inherit) cut from it — arrive with the icon already set; the `icon` key is
+  carried over as written, so the same relative path resolves in the worktree's own tree.
+- An icon that stops resolving (a renamed file, a host that is down) simply doesn't appear. Check
+  what the app actually resolved in Settings → [When a setting isn't working](#dir-settings-preview).
+- Not to be confused with a header **button's** `icon`, which is a
+  [Material Symbols](https://fonts.google.com/icons) name rather than a picture.
+
 ### Sound for this directory
 
 ```jsonc
@@ -253,8 +283,10 @@ of the grid, looking like an unrelated project.
 
 Now a new worktree is given its own copy, derived from the project's:
 
-- **The identity is copied as written** — `name`, `theme`, `colors`, `fontSize`, `fontFamily`,
-  `provider`, `model`. Same project, same terminal, same model.
+- **The identity is copied as written** — `name`, `icon`, `theme`, `colors`, `fontSize`,
+  `fontFamily`, `provider`, `model`. Same project, same terminal, same model. `icon` is carried as
+  the path you typed rather than the file it resolved to, so a logo committed to the repository is
+  found again inside the worktree; one that is gitignored simply doesn't appear there.
 - **The chrome colours are rotated a little around the colour wheel** — `badgeColor`,
   `headerColor`, `headerTextColor`, `cellColor`, `cellBorderColor`, `dotColor`, `buttonColor`. Each
   worktree of a project sits one 12-degree step further round than the one before it, so a row of

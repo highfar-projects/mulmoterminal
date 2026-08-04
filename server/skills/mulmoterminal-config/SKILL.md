@@ -31,7 +31,7 @@ carry on there. Do not re-explain its contents here; the sibling skill is the so
 
 | They want | Skill |
 |---|---|
-| Colours for a project, colour-coding several, grid/launcher order, a name badge, terminal font size or font | `mulmoterminal-dirs` |
+| Colours for a project, colour-coding several, grid/launcher order, a name badge, a project icon image, terminal font size or font | `mulmoterminal-dirs` |
 | Their **own** colour scheme, appearing in Settings' picker | `mulmoterminal-theme` |
 | Header buttons or info chips, globally or per project | `mulmoterminal-header` |
 | Keyboard shortcuts, copy-on-select, Enter vs. newline | `mulmoterminal-keys` |
