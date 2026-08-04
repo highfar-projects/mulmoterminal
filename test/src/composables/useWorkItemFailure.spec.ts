@@ -106,6 +106,52 @@ describe("useWorkItem reports why the issue was not updated", () => {
     expect(commentFailure.value).toBeNull();
   });
 
+  // The notice is about an issue in a directory. Once the cell has neither, it would be claiming a
+  // problem the user cannot act on from there.
+  it("drops the cause when the cell loses its directory", async () => {
+    stubFetch({ posted: false, reason: "gh-failed", failure: "permission" });
+    const dir = ref<string | null>("/dir");
+    const { commentFailure, refresh } = useWorkItem(dir);
+    await refresh();
+    await vi.waitFor(() => expect(commentFailure.value).toBe("permission"));
+
+    dir.value = null;
+    await refresh();
+    expect(commentFailure.value).toBeNull();
+  });
+
+  it("drops the cause when the branch no longer has an issue", async () => {
+    let phase: unknown = PHASE;
+    globalThis.fetch = vi.fn((url: unknown) =>
+      Promise.resolve({
+        ok: true,
+        json: async () => (String(url).includes("/api/work-comment") ? { posted: false, reason: "gh-failed", failure: "auth" } : phase),
+      }),
+    ) as unknown as typeof fetch;
+
+    const { commentFailure, refresh } = useWorkItem(ref("/dir"));
+    await refresh();
+    await vi.waitFor(() => expect(commentFailure.value).toBe("auth"));
+
+    phase = { ...PHASE, issue: null, issueUrl: null };
+    await refresh();
+    expect(commentFailure.value).toBeNull();
+  });
+
+  // The guard against over-clearing. A cause is recorded on a MILESTONE, and every poll between
+  // milestones reports nothing — so clearing whenever no post is attempted would take the notice
+  // down one tick after it appeared, restoring the silence this whole feature removes.
+  it("keeps the cause through the ordinary polls that report nothing", async () => {
+    stubFetch({ posted: false, reason: "gh-failed", failure: "permission" });
+    const { commentFailure, refresh } = useWorkItem(ref("/dir"));
+    await refresh();
+    await vi.waitFor(() => expect(commentFailure.value).toBe("permission"));
+
+    await refresh(); // same issue, no new milestone: nothing to say, nothing to un-say
+    await refresh();
+    expect(commentFailure.value).toBe("permission");
+  });
+
   it("says nothing at all while the setting is off", async () => {
     setIssueWorkComments(false);
     stubFetch({ posted: false, reason: "gh-failed", failure: "permission" });

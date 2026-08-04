@@ -124,6 +124,9 @@ export function useWorkItem(cwd: Ref<string | null>) {
     const dir = cwd.value;
     if (!dir) {
       item.value = { ...EMPTY_WORK_ITEM };
+      // The notice belongs to an issue in a directory. With neither, it is about work this cell
+      // has left behind, and would sit there claiming a problem the user can no longer act on.
+      commentFailure.value = null;
       return;
     }
     try {
@@ -134,6 +137,12 @@ export function useWorkItem(cwd: Ref<string | null>) {
       const next = parseWorkItem(data);
       const kind = isIssueWorkCommentsEnabled() ? workCommentToPost(item.value, next) : null;
       item.value = next;
+      // Cleared when there is no longer an issue to comment on — NOT merely because this poll had
+      // nothing to report. A cause is recorded on a milestone, and every poll between milestones
+      // reports nothing; clearing on those would take the notice down about 30 seconds after it
+      // appeared, which is the same silence it exists to end. Moving to a DIFFERENT issue needs no
+      // case here: that is a `start` milestone, so the attempt below overwrites the cause anyway.
+      if (next.issue === null) commentFailure.value = null;
       // Assigned rather than only set on failure, so a milestone that lands after the setup was
       // fixed takes the notice back down without waiting for a reload. Guarded by the same request
       // token as the item above: this call outlives the fetch, and a cell that moved to another
