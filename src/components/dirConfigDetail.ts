@@ -83,7 +83,10 @@ function terminalRows(config: Record<string, unknown>): DirConfigRow[] {
 // A remote URL IS the answer for its case, so that one is shown — bounded, since nothing caps it.
 const ICON_URL_MAX_CHARS = 80;
 
-function describeIcon(iconUrl: string): string {
+function describeIcon(iconUrl: string, autoIcon: string | null): string {
+  // Named first, because it is the answer to the question that brings someone here: a picture
+  // appeared on a project whose config says nothing about one.
+  if (autoIcon) return `${autoIcon} (found automatically)`;
   if (iconUrl.startsWith(DIR_ICON_ROUTE)) return "a file in this directory";
   const inline = /^data:([^;,]+)/.exec(iconUrl);
   if (inline) return `inline image (${inline[1]})`;
@@ -126,7 +129,7 @@ export function dirConfigRows(config: unknown, extras: unknown = {}): DirConfigR
   const iconUrl = asString(config.iconUrl);
   return [
     ...(name ? [{ key: "name", label: "Name", value: name, color: null }] : []),
-    ...(iconUrl ? [{ key: "icon", label: "Icon", value: describeIcon(iconUrl), color: null }] : []),
+    ...(iconUrl ? [{ key: "icon", label: "Icon", value: describeIcon(iconUrl, isRecord(extras) ? asString(extras.autoIcon) : null), color: null }] : []),
     ...colorRows(config),
     ...terminalRows(config),
     ...(isRecord(extras) ? extraRows(extras) : []),

@@ -184,6 +184,35 @@ project everywhere it is offered or running.
 - Not to be confused with a header **button's** `icon`, which is a
   [Material Symbols](https://fonts.google.com/icons) name rather than a picture.
 
+### The favicon is picked up on its own {#auto-dir-icon}
+
+You usually do not need to write `icon` at all. A directory that sets **none** shows the icon its
+repository already ships:
+
+1. `public/favicon.svg`, then `favicon.svg`
+2. `public/apple-touch-icon.png`, then `apple-touch-icon.png`
+3. `public/favicon.png`, then `favicon.png`
+4. `public/favicon.ico`, then `favicon.ico`
+5. a web manifest (`public/site.webmanifest`, `public/manifest.json`, or either at the root) — its
+   largest non-`maskable` icon
+
+First hit wins, ordered by how the image survives being drawn at 14px rather than by how common it
+is. `docs/logo.png` and `assets/logo.*` are deliberately **not** searched: a "logo" is as often a
+wide README banner as an icon, and one of those at 14 square pixels is a smudge.
+
+Two ways to turn it off, meaning different things:
+
+- **`"icon": false`** in a project's own file — no icon on *this* project's cells. Worktrees
+  inherit it.
+- **`autoDirIcon: false`** in `~/.mulmoterminal/config.json`, or the checkbox in
+  Settings → *Directory appearance* — off everywhere. Reach for this if the behaviour itself is
+  unwanted; writing `"icon": false` into every repository is not the way.
+
+**A key written wrong does not fall back to the favicon.** `"icon": "logo.png"` pointing at a file
+that isn't there leaves the cell with no icon at all, on purpose — a broken setting has to look
+broken. Settings → [When a setting isn't working](#dir-settings-preview) lists the key under the
+ones that were dropped.
+
 ### Sound for this directory
 
 ```jsonc

@@ -125,6 +125,11 @@ export interface AppConfig {
   // it is a vision-stage idea rather than something every user needs, and it writes a file
   // (under ~/.mulmoterminal/decisions/) that would otherwise never exist.
   decisionDigest: boolean;
+  // Pick up a project's own favicon when its `.mulmoterminal.json` names no `icon` (#1428).
+  // ON unless turned off, unlike the opt-in flags above: it shows a picture the repository
+  // already ships rather than creating anything, and a project that doesn't want one says
+  // `"icon": false` in its own file. This is the switch for turning the whole behaviour off.
+  autoDirIcon: boolean;
   // Colour schemes the user defined, offered in Settings alongside the four built-ins (#996).
   // Server-side rather than per-browser (like `fontFamily`, unlike `fontSize`): a palette you
   // authored is an asset you want on every browser you open the app from. WHICH one is selected
@@ -409,6 +414,10 @@ export function sanitizeAppendSystemPrompt(input: unknown): boolean {
   return input !== false;
 }
 
+export function sanitizeAutoDirIcon(input: unknown): boolean {
+  return input !== false;
+}
+
 // Fresh object each call — callers hold and mutate the returned config in place, so a
 // shared default constant would be corrupted across loads. Exported so a write path can
 // use it as the base for a MISSING file WITHOUT a second disk read (that re-read could
@@ -440,6 +449,7 @@ export const emptyConfig = (): AppConfig => ({
   issueWorkComments: false,
   prWorkdirFooter: true,
   appendSystemPrompt: true,
+  autoDirIcon: true,
   cockpitLines: { ...DEFAULT_COCKPIT_LINES },
   fontFamily: null,
 });
@@ -486,6 +496,7 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     issueWorkComments: sanitizeIssueWorkComments(o.issueWorkComments),
     prWorkdirFooter: sanitizePrWorkdirFooter(o.prWorkdirFooter),
     appendSystemPrompt: sanitizeAppendSystemPrompt(o.appendSystemPrompt),
+    autoDirIcon: sanitizeAutoDirIcon(o.autoDirIcon),
     cockpitLines: sanitizeCockpitLines(o.cockpitLines),
     fontFamily: normalizeFontFamily(o.fontFamily),
   };
@@ -593,6 +604,7 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     fontFamily: updated("fontFamily", normalizeFontFamily, base.fontFamily),
     prWorkdirFooter: updated("prWorkdirFooter", sanitizePrWorkdirFooter, base.prWorkdirFooter),
     appendSystemPrompt: updated("appendSystemPrompt", sanitizeAppendSystemPrompt, base.appendSystemPrompt),
+    autoDirIcon: updated("autoDirIcon", sanitizeAutoDirIcon, base.autoDirIcon),
     cockpitLines: updated("cockpitLines", sanitizeCockpitLines, base.cockpitLines),
   };
 }
@@ -628,6 +640,7 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     issueWorkComments: config.issueWorkComments,
     prWorkdirFooter: config.prWorkdirFooter,
     appendSystemPrompt: config.appendSystemPrompt,
+    autoDirIcon: config.autoDirIcon,
     cockpitLines: config.cockpitLines,
     fontFamily: config.fontFamily,
   };

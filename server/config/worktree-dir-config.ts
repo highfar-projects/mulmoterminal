@@ -61,6 +61,8 @@ export function inheritedWorktreeConfig(parent: DirConfig, index: number): Recor
   // resolves to nothing there, which is the right answer rather than a broken image.
   const icon = dirIconRef(parent.icon);
   if (icon !== null) config.icon = icon;
+  // `false` travels too, and has to: a project that turned its icon OFF would otherwise have
+  // worktrees that go looking for its favicon and find one (#1428).
   const rank = worktreeRank(parent.orderPriority);
   if (rank !== null) config.orderPriority = rank;
   return config;

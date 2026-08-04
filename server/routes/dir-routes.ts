@@ -8,7 +8,7 @@ import { SESSION_ID_RE } from "../config/env.js";
 import { existingWorkspaceFromQuery } from "../config/workspace.js";
 import { normalizeAgent, workspaceForRoute } from "./routeParams.js";
 import { getHeaderConfig, getIssueWorkComments } from "../config/config-routes.js";
-import { publicDirConfig, dirSoundFor, loadDirConfig, dirConfigDetail, MISSING_DIR_CONFIG_DETAIL } from "../config/dir-config.js";
+import { publicDirConfig, dirSoundFor, loadDirConfig, dirIconFor, dirConfigDetail, MISSING_DIR_CONFIG_DETAIL } from "../config/dir-config.js";
 import { readSoundPreset } from "../config/sound-presets.js";
 import { isNotifyKind } from "../../common/notifyKinds.js";
 import { buildHeaderContext, loadHeaderConfig } from "../config/header-context.js";
@@ -94,7 +94,9 @@ const positiveInt = (v: unknown): number | null => (isIssueNumber(v) ? v : null)
 function dirIconHandler(req: Request, res: Response): void {
   const cwd = workspaceForRoute(req.query.cwd, res);
   if (cwd === null) return;
-  const icon = loadDirConfig(cwd).icon;
+  // dirIconFor, not the raw setting: an auto-detected favicon (#1428) is served through this
+  // route too, so the two must not disagree about which file the directory's icon is.
+  const icon = dirIconFor(cwd);
   if (!icon || icon.source !== "file") {
     res.status(404).end();
     return;

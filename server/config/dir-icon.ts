@@ -18,7 +18,7 @@ export type DirIcon = { source: "file"; path: string; ref: string; mime: string 
 // Confine a configured icon to a real image file INSIDE cwd — the same rule, and the same order
 // of checks, as resolveDirSound: relative only, no escaping via "../", and a realpath re-check so
 // a symlink inside the directory can't point out of it.
-function resolveIconFile(cwd: string, ref: string): DirIcon | null {
+export function resolveIconFile(cwd: string, ref: string): DirIcon | null {
   if (path.isAbsolute(ref)) return null;
   const mime = dirIconMime(ref);
   if (!mime) return null;
@@ -35,18 +35,45 @@ function resolveIconFile(cwd: string, ref: string): DirIcon | null {
   return { source: "file", path: resolved, ref, mime };
 }
 
-/** The icon a directory configured, or null when it configures none / the value is unusable. */
-export function resolveDirIcon(cwd: string, input: unknown): DirIcon | null {
-  if (typeof input !== "string") return null;
+// What the FILE said, before anything is looked for on disk. Four answers, because three
+// different callers need different cuts of them:
+//
+//   an icon    the file named a usable one
+//   "off"      an explicit `false` — no icon here, and do not go looking
+//   "invalid"  the file named something unusable (a typo, a file since renamed)
+//   null       the file said nothing about an icon
+//
+// Auto-detection (#1428) runs for `null` ALONE. `"invalid"` is deliberately not folded into it:
+// a broken setting has to look broken, and quietly showing the repository's favicon instead would
+// hide exactly the mistake the settings preview exists to surface. It is not folded into `"off"`
+// either, because that one WORKED and this one did not — which is the applied/ignored split the
+// preview reports.
+export type DirIconSetting = DirIcon | "off" | "invalid" | null;
+
+/** The icon a directory configured — see DirIconSetting for what each answer means. */
+export function resolveDirIcon(cwd: string, input: unknown): DirIconSetting {
+  if (input === false) return "off";
+  if (input === undefined) return null;
+  if (typeof input !== "string") return "invalid";
   const raw = input.trim();
-  if (!raw || raw.length > DIR_ICON_MAX_CHARS) return null;
+  if (!raw || raw.length > DIR_ICON_MAX_CHARS) return "invalid";
   if (isRemoteDirIconUrl(raw)) return { source: "url", url: raw };
-  return resolveIconFile(cwd, raw);
+  return resolveIconFile(cwd, raw) ?? "invalid";
 }
 
-/** What to write into a config file to mean this icon again — the relative path as the user
- *  typed it, or the remote URL. Null when there is no icon to carry. */
-export function dirIconRef(icon: DirIcon | null): string | null {
-  if (!icon) return null;
+/** Whether the file had its say about the icon — an image, an opt-out, or something broken. Only
+ *  a directory that said nothing at all gets searched. */
+export const dirIconNamed = (setting: DirIconSetting): boolean => setting !== null;
+
+/** The image out of a setting — null for everything that isn't one. */
+export const dirIconImage = (setting: DirIconSetting): DirIcon | null => (typeof setting === "object" ? setting : null);
+
+/** What to write into a config file to mean this setting again — the relative path as the user
+ *  typed it, the remote URL, or `false` for an explicit opt-out. Null when the file said nothing,
+ *  which a derived config expresses by omitting the key. */
+export function dirIconRef(setting: DirIconSetting): string | false | null {
+  if (setting === "off") return false;
+  const icon = dirIconImage(setting);
+  if (!icon) return null; // unset, or something the loader could not use — neither is worth copying
   return icon.source === "file" ? icon.ref : icon.url;
 }

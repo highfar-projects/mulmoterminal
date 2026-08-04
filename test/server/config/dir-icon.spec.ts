@@ -16,6 +16,12 @@ function withIcon(icon: unknown): { dir: string; cleanup: () => void } {
   return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
+// Since #1428 a refusal is `"invalid"`, not null: the file DID name something, and null is
+// reserved for "said nothing" — the only state that lets the repository's own favicon be picked
+// up instead. Asserted as the exact value below; `toBeNull()` would now pass for a bug that
+// silently made a broken path auto-detect.
+const REFUSED = "invalid";
+
 describe("resolveDirIcon — files inside the directory", () => {
   it("resolves a relative path, keeping the reference as written", () => {
     const dir = tmp();
@@ -40,8 +46,8 @@ describe("resolveDirIcon — files inside the directory", () => {
     const dir = path.join(parent, "proj");
     mkdirSync(dir);
     writeFileSync(path.join(parent, "outside.png"), "x");
-    expect(resolveDirIcon(dir, path.join(parent, "outside.png"))).toBeNull();
-    expect(resolveDirIcon(dir, "../outside.png")).toBeNull();
+    expect(resolveDirIcon(dir, path.join(parent, "outside.png"))).toBe(REFUSED);
+    expect(resolveDirIcon(dir, "../outside.png")).toBe(REFUSED);
     rmSync(parent, { recursive: true, force: true });
   });
 
@@ -53,7 +59,7 @@ describe("resolveDirIcon — files inside the directory", () => {
     mkdirSync(dir);
     writeFileSync(path.join(parent, "outside.png"), "x");
     symlinkSync(path.join(parent, "outside.png"), path.join(dir, "link.png"));
-    expect(resolveDirIcon(dir, "./link.png")).toBeNull();
+    expect(resolveDirIcon(dir, "./link.png")).toBe(REFUSED);
     rmSync(parent, { recursive: true, force: true });
   });
 
@@ -61,15 +67,18 @@ describe("resolveDirIcon — files inside the directory", () => {
     const dir = tmp();
     mkdirSync(path.join(dir, "assets"));
     writeFileSync(path.join(dir, "notes.md"), "x");
-    expect(resolveDirIcon(dir, "./missing.png")).toBeNull();
-    expect(resolveDirIcon(dir, "./assets")).toBeNull();
-    expect(resolveDirIcon(dir, "./notes.md")).toBeNull();
+    expect(resolveDirIcon(dir, "./missing.png")).toBe(REFUSED);
+    expect(resolveDirIcon(dir, "./assets")).toBe(REFUSED);
+    expect(resolveDirIcon(dir, "./notes.md")).toBe(REFUSED);
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("refuses a non-string, an empty string, and whitespace", () => {
+  // `undefined` is the ONE input that means "said nothing" — the key is absent. Everything else
+  // here is a key someone wrote and got wrong, which must not fall through to auto-detection.
+  it("separates an absent key from a key written wrong", () => {
     const dir = tmp();
-    [42, null, undefined, {}, "", "   "].forEach((input) => expect(resolveDirIcon(dir, input)).toBeNull());
+    expect(resolveDirIcon(dir, undefined)).toBeNull();
+    [42, null, {}, "", "   "].forEach((input) => expect(resolveDirIcon(dir, input)).toBe(REFUSED));
     rmSync(dir, { recursive: true, force: true });
   });
 });
@@ -85,13 +94,13 @@ describe("resolveDirIcon — remote sources", () => {
   // and is refused there — which is what keeps `file:` from ever reaching the browser.
   it.each(["file:///etc/passwd", "javascript:alert(1)", "data:text/html,<b>x</b>"])("refuses %s", (url) => {
     const dir = tmp();
-    expect(resolveDirIcon(dir, url)).toBeNull();
+    expect(resolveDirIcon(dir, url)).toBe(REFUSED);
     rmSync(dir, { recursive: true, force: true });
   });
 
   it("refuses a value past the length cap", () => {
     const dir = tmp();
-    expect(resolveDirIcon(dir, `data:image/png;base64,${"A".repeat(DIR_ICON_MAX_CHARS)}`)).toBeNull();
+    expect(resolveDirIcon(dir, `data:image/png;base64,${"A".repeat(DIR_ICON_MAX_CHARS)}`)).toBe(REFUSED);
     rmSync(dir, { recursive: true, force: true });
   });
 });
