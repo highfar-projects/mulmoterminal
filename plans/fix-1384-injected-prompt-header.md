@@ -119,8 +119,9 @@ just each side:
   that merely mention a marker.
 - `transcript.spec.ts` and `header-hook.spec.ts` both iterate **that same list**: every injected
   sample is `null` from `userPromptText` and `null` from `headerHookEffect("UserPromptSubmit", …)`;
-  every near-miss survives both. Adding a marker to one path and not the other fails the other's
-  spec.
+  every near-miss survives both. Sharing the predicate is what makes the two paths agree; sharing
+  the list is what holds each call site to it, so a path that stops consulting the predicate — an
+  early return, a re-inlined copy — fails its own spec against shapes the other still refuses.
 - A direct `isInjectedPrompt` spec for the boundaries the anchor decides: leading whitespace and
   newlines count as leading, mid-text mentions do not, a bare `<` does not.
 - The existing `header-hook.spec` cases stay as they are — a normal prompt, the cap, `/clear`,
