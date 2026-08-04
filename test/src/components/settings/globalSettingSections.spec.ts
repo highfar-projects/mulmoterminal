@@ -195,6 +195,20 @@ describe("TerminalFontFamilySection draft", () => {
     expect((wrapper.find("input").element as HTMLInputElement).value).toBe("'Menlo', monospace");
   });
 
+  // A failed POST is the moment the typed stack matters most: throwing it away leaves the user
+  // nothing to retry with, over a dropped request (Codex review on #1416).
+  it("keeps the typed stack when the save fails", async () => {
+    const wrapper = mount(TerminalFontFamilySection);
+    await wrapper.find("input").setValue("'Cica'");
+    globalThis.fetch = vi.fn(async () => ({ ok: false, json: async () => ({}) })) as unknown as typeof fetch;
+    await wrapper
+      .findAll("button")
+      .find((b) => b.text() === "Apply")
+      ?.trigger("click");
+    await flushPromises();
+    expect((wrapper.find("input").element as HTMLInputElement).value).toBe("'Cica'");
+  });
+
   // After a save the box is untouched again, so the server's normalized answer — the `monospace` it
   // appended — is what the user is left looking at.
   it("shows the normalized stack the server saved", async () => {

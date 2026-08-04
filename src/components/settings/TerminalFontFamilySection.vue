@@ -45,11 +45,16 @@ async function apply() {
   if (!usable.value || unchanged.value) return;
   saving.value = true;
   // Blank means "use the built-in" — the saver maps it to null rather than to an empty stack.
-  await saveGlobalFontFamily(trimmed.value || null);
-  // Saved is untouched again: the server's normalized answer should land in the box, and the next
-  // config load has nothing of the user's left to overwrite.
-  edited.value = false;
-  draft.value = configuredFontFamily.value ?? "";
+  const saved = await saveGlobalFontFamily(trimmed.value || null);
+  // ONLY on success. The box is what the user typed, and a failed POST is the moment they most
+  // need it kept — resetting there would throw the stack away over a dropped request and leave
+  // them nothing to retry with (Codex review on #1416).
+  if (saved) {
+    // Saved is untouched again: the server's normalized answer lands in the box, and the next
+    // config load has nothing of the user's left to overwrite.
+    edited.value = false;
+    draft.value = configuredFontFamily.value ?? "";
+  }
   saving.value = false;
 }
 </script>
