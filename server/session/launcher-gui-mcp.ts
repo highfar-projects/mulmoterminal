@@ -45,16 +45,14 @@ export function launcherAgent(command: string): SessionAgent {
 
 /**
  * A launcher chip that runs CLAUDE, which reaches the GUI MCP through flags
- * rather than `-c` overrides: `--mcp-config <path> --strict-mcp-config --allowedTools <list>`, the
- * three a claude cell in the workspace is spawned with.
+ * rather than `-c` overrides: `--mcp-config <path> --allowedTools <list>`, the same two a claude
+ * cell in the workspace is spawned with.
  *
- * `--strict-mcp-config` is in on purpose, and what it actually shuts out is narrower than it looks:
- * the generated config is then the ONLY source, but that config already CONTAINS the user's
- * Settings servers (mcpConfigJson merges them), so those still load and are still pre-approved. It
- * is the per-folder `.mcp.json` of a project directory that stops contributing — which in the
- * workspace is the point, since that is the config the group URLs live in and the chip is being
- * given the all-tools URL instead. Same three flags as the cell, same result (owner's call,
- * 2026-08-03); the flag was included because parity is the goal, not despite it.
+ * It used to pass `--strict-mcp-config` as well, for parity with the cell — and that was right
+ * about parity and wrong about the flag: both were hiding the user's claude.ai connectors and
+ * their own MCP servers (#1338, #1385). Parity is still the goal, so this drops the flag on the
+ * same commit the cell does. What keeps the chip from seeing a tool twice is not the flag; it is
+ * that the group urls stand down for a session holding the all-tools url (mcp/tool-gate.ts).
  *
  * The config is a PATH, never inline JSON — see mcpConfigFileArgument.
  *
@@ -68,7 +66,7 @@ export function launcherCommandWithClaudeGuiMcp(
 ): string {
   if (gui === null || launcherProgram(command) !== "claude") return command;
   const quote = shellQuoteFor(platform);
-  const flags = ["--mcp-config", quote(gui.mcpConfigPath), "--strict-mcp-config"];
+  const flags = ["--mcp-config", quote(gui.mcpConfigPath)];
   if (gui.allowedTools) flags.push("--allowedTools", quote(gui.allowedTools));
   return insertAfterProgram(command, flags);
 }

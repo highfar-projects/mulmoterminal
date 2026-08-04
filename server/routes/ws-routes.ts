@@ -24,6 +24,7 @@ import { codexRolloutExists } from "../agents/codex-sessions.js";
 import {
   antigravityConversations,
   antigravityConversationsHydrated,
+  claimFullGuiMcp,
   codexRolloutIds,
   markDevTerminalSession,
   markAttachedSessionPlaced,
@@ -32,7 +33,7 @@ import {
 import { SpawnRefusedError } from "../session/pty-spawn.js";
 import { bufferEarlyFrames, type EarlyFrames } from "../session/early-frames.js";
 import { launcherCommandWithGuiMcp, launcherCommandWithClaudeGuiMcp, launcherProgram, launcherRunsAgent } from "../session/launcher-gui-mcp.js";
-import { codexGuiMcpServers, carriesFullGuiMcp, fullGuiAllowedTools } from "../session/mcp-config.js";
+import { codexGuiMcpServers, fullGuiAllowedTools } from "../session/mcp-config.js";
 import { mcpConfigFileArgument, withSettingsCleanup } from "../session/session-settings.js";
 import { registeredGuiMcpGroups } from "../infra/gui-mcp-registration.js";
 import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups.js";
@@ -385,9 +386,10 @@ async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
   const rawSession = url.searchParams.get("session");
   if (rawSession && !requested) console.warn(`[ws] ignoring non-UUID session id: ${JSON.stringify(rawSession)} — starting fresh`);
 
-  // ?gui=0 (the grid's dev terminals) spawns claude WITHOUT the GUI plugin MCP /
-  // --strict-mcp-config, so the user's + project's MCP servers load normally. Absent
-  // (the single view) keeps main's behavior: GUI MCP attached + strict.
+  // ?gui=0 (the grid's dev terminals) spawns claude WITHOUT the GUI plugin MCP, so its GUI tools
+  // come from whatever the directory registered. Absent (the single view) attaches ours on the
+  // all-tools url. Either way the user's + project's MCP servers load — that is not what this
+  // switch decides, and welding it to one was #1338 / #1385.
   const attachGuiMcp = url.searchParams.get("gui") !== "0";
 
   // ?provider=/?model= — what the launch form picked for THIS session (#584). It replaces
@@ -533,12 +535,12 @@ async function handleLaunchConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
   // lights up for one and never for the other reads as a broken feature. The chip has no argv, only
   // the command line the user wrote, so each agent's MCP arrives as an insertion into that text.
   //
-  // `carriesFullGuiMcp` with `false`, for BOTH: a chip is never the single view, so the cwd is the
+  // `claimFullGuiMcp` with `false`, for BOTH: a chip is never the single view, so the cwd is the
   // only thing that can earn the full GUI MCP here — which keeps a chip in a project directory
   // exactly as it was, on the groups its directory registered.
   //
   // Nothing at all on a tmux REATTACH: it picks the running program up and ignores `command`.
-  const fullGui = !live && carriesFullGuiMcp(false, cwd);
+  const fullGui = !live && claimFullGuiMcp(sessionId, false, cwd);
   const groups = live ? [] : await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []);
   const codexGui = live ? [] : codexGuiMcpServers({ sessionId, port: PORT, groups, allTools: fullGui });
   // The config file is written ONLY once the command is known to be claude. Writing it up front

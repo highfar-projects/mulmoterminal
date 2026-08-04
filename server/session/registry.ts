@@ -28,6 +28,7 @@ import { forEachJsonlRecord } from "../infra/jsonl-file.js";
 import { devTerminalCwdLine, hydrateCwdsInto } from "./dev-terminal-cwds.js";
 import { parseSessionToolGroups, sessionToolGroupLine, TOOL_GROUP_RESET, type SessionToolGroup } from "./session-tool-groups.js";
 import type { ToolGroup } from "../../common/toolGroups.js";
+import { carriesFullGuiMcp } from "./mcp-config.js";
 import type { Activity, KnownSession, PtyEntry } from "./types.js";
 
 // Per-session "working" state, driven by Claude hooks (see /api/hook):
@@ -308,10 +309,13 @@ export function isPhoneListableSession(id: string): boolean {
   return devTerminalSessions.has(id) || (unplacedSessions.has(id) && !placedSessions.has(id));
 }
 
-// Sessions that connected on the ALL-TOOLS MCP url (`/api/mcp/:sessionId`). That url is handed
-// out by --mcp-config and by nothing else, so reaching it is proof the session carries the whole
-// GUI MCP — including the tools that belong to no group and are therefore unreachable through a
-// group url (spawnBackgroundChat).
+// Sessions handed the ALL-TOOLS MCP url (`/api/mcp/:sessionId`). That url comes from --mcp-config
+// and from nothing else, so it means the session carries the whole GUI MCP — including the tools
+// that belong to no group and are therefore unreachable through a group url (spawnBackgroundChat).
+//
+// Written at TWO moments, and the earlier one is what a decision can rely on. Connecting proves it
+// (below), but a group url may be the first to connect, and it has to know the answer already to
+// stand down (#1338) — so `claimFullGuiMcp` records it at spawn, before either client dials.
 //
 // Recorded as its own fact rather than inferred from "has all four groups", which is a different
 // statement: a directory that registered every group url really does have all four groups and
@@ -336,6 +340,21 @@ export function markAllToolsSession(id: string): void {
 /** Does this session carry the whole GUI MCP, rather than the subset its directory registered? */
 export function hasAllGuiTools(id: string): boolean {
   return allToolsSessions.has(id);
+}
+
+/**
+ * Decide whether a spawn carries the full GUI MCP AND record the answer, in one call.
+ *
+ * Every spawn path asks `carriesFullGuiMcp` — claude's argv, codex's `-c` overrides, the launcher
+ * chip — and each of them then hands out the all-tools url. Keeping the question and the record
+ * apart is how a fourth path would come to hand out the url without anyone knowing, which is the
+ * shape of the drift CLAUDE.md warns about around this predicate. So spawn paths call THIS; the
+ * pure predicate stays exported for the specs and for readers reasoning about the rule.
+ */
+export function claimFullGuiMcp(sessionId: string, attachGuiMcp: boolean, cwd: string | undefined): boolean {
+  const full = carriesFullGuiMcp(attachGuiMcp, cwd);
+  if (full) markAllToolsSession(sessionId);
+  return full;
 }
 
 // Sessions the SCHEDULER started — a user's own configured task, as opposed to a collection

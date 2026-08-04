@@ -41,6 +41,9 @@ vi.mock("../../../server/session/registry.js", () => ({
   // to decide it must NOT record them a second time — see mcp/gui-call-history.ts).
   hookedSessions: new Set(),
   resetSessionToolGroups: (id: string) => resetSessionToolGroups(id),
+  // Answered, not exercised: this spec is about the tool-group reset. What the claim itself does is
+  // pinned in full-gui-mcp.spec.ts, which checks every spawn path records the session.
+  claimFullGuiMcp: () => true,
 }));
 
 // The transcript check decides --resume; irrelevant here and it would touch the real disk.

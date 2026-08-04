@@ -326,7 +326,7 @@ describe("the workspace chip", () => {
 
 // The workspace is handed the WHOLE GUI MCP at spawn whatever agent runs there
 // (carriesFullGuiMcp), so there is no per-directory choice to offer. Four switches there would be
-// worse than redundant: they write a per-folder registration that --strict-mcp-config then
+// worse than redundant: they write a per-folder registration that a claimed session then
 // ignores, i.e. controls that visibly do nothing.
 describe("the GUI tool groups in the workspace", () => {
   const guiMcpFetch = () => {

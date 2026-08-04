@@ -6,11 +6,11 @@ import { PORT } from "../config/env.js";
 import { buildCodexArgs } from "../agents/codex-args.js";
 import { codexAdapter } from "../agents/codex.js";
 import type { ToolGroup } from "../../common/toolGroups.js";
-import { codexGuiMcpServers, carriesFullGuiMcp } from "./mcp-config.js";
+import { codexGuiMcpServers } from "./mcp-config.js";
 import { codexSessionsRoot, snapshotSessions, watchForCodexSession } from "../agents/codex-session.js";
 import { codexRolloutPath } from "../agents/codex-sessions.js";
 import { trackCodexActivity } from "./codex-activity-track.js";
-import { claimedCodexRollouts, codexRolloutIds, ptys } from "./registry.js";
+import { claimedCodexRollouts, claimFullGuiMcp, codexRolloutIds, ptys } from "./registry.js";
 import { ptySpawn } from "./pty-spawn.js";
 import { ptyStartLine } from "./pty-exit-log.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
@@ -83,7 +83,7 @@ export function createCodexSpawner(deps: SpawnDeps) {
     // spawnBackgroundChat, which belongs to no group and is therefore reachable ONLY this way. All
     // of it was already auto-allowed for claude in the same cell, which is the asymmetry this
     // closes; it is still the widest thing this flag does, and the reason it is spelled out here.
-    const guiMcpServers = codexGuiMcpServers({ sessionId, port: PORT, groups: mcpGroups, allTools: carriesFullGuiMcp(attachGuiMcp, cwd) });
+    const guiMcpServers = codexGuiMcpServers({ sessionId, port: PORT, groups: mcpGroups, allTools: claimFullGuiMcp(sessionId, attachGuiMcp, cwd) });
     const args = buildCodexArgs({ resume: resumeRolloutId, model: deps.codexModel, guiMcpServers });
     const { term, tmux, reattached } = ptySpawn(sessionId, deps.codexBin, args, cwd, true, { binEnvVar: codexAdapter.binEnvVar });
     const spawnedAtMs = Date.now();

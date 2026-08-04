@@ -87,18 +87,19 @@ describe("the argv each kind of session gets", () => {
       appendedPrompt: null,
     });
 
-  it("carries --mcp-config and --strict-mcp-config when it has the full GUI MCP", () => {
+  it("carries --mcp-config when it has the full GUI MCP, and nothing that isolates", () => {
     const argv = args(true);
     expect(argv).toContain("--mcp-config");
     expect(argv[argv.indexOf("--mcp-config") + 1]).toBe("MCP_CONFIG");
-    expect(argv).toContain("--strict-mcp-config");
     expect(argv).toContain("GUI_TOOLS");
+    // #1338 / #1385: our broker is ADDED to what the session reaches. Isolating to it took the
+    // user's claude.ai connectors and their own MCP servers away with the directory's .mcp.json.
+    expect(argv).not.toContain("--strict-mcp-config");
   });
 
-  it("carries NEITHER for a project-directory cell, so its own MCP config still loads", () => {
-    // --strict-mcp-config is what makes ours the only source. Withholding both is precisely how a
-    // grid cell keeps reaching the servers its directory registered — the mechanism the Canvas
-    // depends on there.
+  it("carries no --mcp-config for a project-directory cell, so its own MCP config supplies the tools", () => {
+    // Withholding ours is how a grid cell keeps reaching the servers its directory registered —
+    // the mechanism the Canvas depends on there.
     const argv = args(false);
     expect(argv).not.toContain("--mcp-config");
     expect(argv).not.toContain("--strict-mcp-config");
@@ -106,24 +107,28 @@ describe("the argv each kind of session gets", () => {
   });
 });
 
-// The third shape: a launcher CHIP, where the same three flags have to be inserted into a command
-// line rather than appended to an argv. A chip running plain `claude` in the workspace had no
-// Canvas at all while the cell beside it had every tool — that gap is what this closes.
+// The third shape: a launcher CHIP, where the same flags have to be inserted into a command line
+// rather than appended to an argv. A chip running plain `claude` in the workspace had no Canvas at
+// all while the cell beside it had every tool — that gap is what this closes.
 describe("the command line a launcher chip ends up with", () => {
   const GUI = { mcpConfigPath: "/home/u/.mulmoterminal/settings/s-mcp.json", allowedTools: "mcp__mt__presentChart" };
   const rewrite = (command: string, gui: typeof GUI | null = GUI) => launcherCommandWithClaudeGuiMcp(command, gui, "darwin");
 
-  it("gives a claude chip the same three flags a claude cell is spawned with", () => {
-    expect(rewrite("claude")).toBe(
-      `claude --mcp-config '/home/u/.mulmoterminal/settings/s-mcp.json' --strict-mcp-config --allowedTools 'mcp__mt__presentChart'`,
-    );
+  it("gives a claude chip the same flags a claude cell is spawned with", () => {
+    expect(rewrite("claude")).toBe(`claude --mcp-config '/home/u/.mulmoterminal/settings/s-mcp.json' --allowedTools 'mcp__mt__presentChart'`);
+  });
+
+  // The chip drops --strict-mcp-config on the same commit the cell does. Parity is the reason it
+  // carried the flag at all, so parity is the reason it stops (#1338).
+  it("does not isolate the chip's claude from the user's own MCP either", () => {
+    expect(rewrite("claude")).not.toContain("--strict-mcp-config");
   });
 
   // Directly after the program, never appended: claude's own trailing `--add-dir` is variadic, so
   // a flag placed after it would be swallowed as one more directory.
   it("inserts after the program and puts the user's own text back byte for byte", () => {
     expect(rewrite("claude --model opus  --resume x")).toContain("claude --mcp-config");
-    expect(rewrite("claude --model opus  --resume x")).toMatch(/--strict-mcp-config --allowedTools '\S+' --model opus {2}--resume x$/);
+    expect(rewrite("claude --model opus  --resume x")).toMatch(/--allowedTools '\S+' --model opus {2}--resume x$/);
   });
 
   // null is how a PROJECT-directory chip arrives — the route passes nothing there, so its claude

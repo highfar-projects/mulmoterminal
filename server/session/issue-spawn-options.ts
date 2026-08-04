@@ -12,8 +12,8 @@ import type { SpawnClaudeOptions } from "./spawn-claude.js";
 export function issueSpawnOptions(cwd: string, seed: string, run: boolean): SpawnClaudeOptions {
   return {
     cwd,
-    // A working session in a repository, the same shape as a grid dev terminal, so the project's
-    // own MCP servers load instead of being replaced by the GUI one under --strict-mcp-config.
+    // A working session in a repository, the same shape as a grid dev terminal: it takes its GUI
+    // tools from the project's own MCP config rather than from an all-tools url of ours.
     attachGuiMcp: false,
     ...(run ? { initialPrompt: seed } : { draft: seed }),
   };

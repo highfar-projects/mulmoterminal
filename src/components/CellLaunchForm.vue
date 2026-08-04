@@ -318,8 +318,8 @@ const mcpGroupFailure = (group: ToolGroup): string | undefined => mcpGroupFailed
 
 // The workspace has no per-directory choice to offer: a session started there is handed the WHOLE
 // GUI MCP on one URL, whatever agent runs it (`carriesFullGuiMcp`, server/session/mcp-config.ts).
-// The four switches are not merely redundant there — they write a per-folder registration that
-// `--strict-mcp-config` then ignores, so they would be controls that visibly do nothing.
+// The four switches are not merely redundant there — a group URL serves nothing to a session that
+// already carries every tool (server/mcp/tool-gate.ts), so they would visibly do nothing.
 //
 // Asked of the directory the launch will USE, not of the field: an empty field means the workspace
 // (see dirFor), which is exactly the case a comparison against the raw input would miss.
@@ -546,8 +546,8 @@ async function removeWorktree(w: Worktree): Promise<void> {
          media both draw but differ in what a call costs, and data and external do not draw at
          all — the split is exactly what the grouping exists for (common/toolGroups.ts). -->
     <template v-if="mcpGroupDir && launchesAgent">
-      <!-- The workspace gets every tool automatically, so it is TOLD, not asked. Switches here
-           would write a registration --strict-mcp-config ignores: controls that do nothing. -->
+      <!-- The workspace gets every tool automatically, so it is TOLD, not asked. A switch here
+           would register a group URL with nothing left to serve: a control that does nothing. -->
       <div v-if="inWorkspace" data-testid="cell-mcp-all" class="flex w-full max-w-[360px] flex-col gap-0.5">
         <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">GUI tools</span>
         <span class="font-sans text-[11px] leading-snug text-secondary">
