@@ -38,8 +38,9 @@ export function takeScratchHome(prefix: string): ScratchHome {
     else process.env.USERPROFILE = previousUserProfile;
   };
 
-  // macOS resolves /var/folders/… through a symlink, so compare what os.homedir() reports against
-  // what it reports for the same path rather than against the raw string.
+  // Asked, not assumed: the whole point is that "which variable moves os.homedir()" is
+  // platform-specific, so the answer is checked on the platform actually running. A raw string
+  // comparison is right here — os.homedir() hands back the variable verbatim, whichever one it read.
   if (os.homedir() !== home) {
     restore();
     rmSync(home, { recursive: true, force: true });
