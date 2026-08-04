@@ -152,6 +152,19 @@ describe("useWorkItem reports why the issue was not updated", () => {
     expect(commentFailure.value).toBe("permission");
   });
 
+  // Switching the setting off is exactly what a user reaches for when the notice tells them their
+  // login cannot write. Leaving it up afterwards would argue with the switch they just used.
+  it("drops the cause when the setting is switched off", async () => {
+    stubFetch({ posted: false, reason: "gh-failed", failure: "permission" });
+    const { commentFailure, refresh } = useWorkItem(ref("/dir"));
+    await refresh();
+    await vi.waitFor(() => expect(commentFailure.value).toBe("permission"));
+
+    setIssueWorkComments(false);
+    await refresh();
+    expect(commentFailure.value).toBeNull();
+  });
+
   it("says nothing at all while the setting is off", async () => {
     setIssueWorkComments(false);
     stubFetch({ posted: false, reason: "gh-failed", failure: "permission" });

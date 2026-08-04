@@ -135,14 +135,17 @@ export function useWorkItem(cwd: Ref<string | null>) {
       const data: unknown = await res.json();
       if (my !== req) return;
       const next = parseWorkItem(data);
-      const kind = isIssueWorkCommentsEnabled() ? workCommentToPost(item.value, next) : null;
+      const enabled = isIssueWorkCommentsEnabled();
+      const kind = enabled ? workCommentToPost(item.value, next) : null;
       item.value = next;
-      // Cleared when there is no longer an issue to comment on — NOT merely because this poll had
-      // nothing to report. A cause is recorded on a milestone, and every poll between milestones
-      // reports nothing; clearing on those would take the notice down about 30 seconds after it
-      // appeared, which is the same silence it exists to end. Moving to a DIFFERENT issue needs no
-      // case here: that is a `start` milestone, so the attempt below overwrites the cause anyway.
-      if (next.issue === null) commentFailure.value = null;
+      // Cleared when there is nothing left for a comment to be about — the setting is off, or the
+      // branch carries no issue. NOT merely because this poll had nothing to report: a cause is
+      // recorded on a milestone, and every poll between milestones reports nothing, so clearing on
+      // those would take the notice down about 30 seconds after it appeared — the same silence it
+      // exists to end. Switching the setting off is the case a user reaches FOR the notice, and
+      // leaving it up then would argue with the switch they just used. Moving to a DIFFERENT issue
+      // needs no case here: that is a `start` milestone, so the attempt below overwrites the cause.
+      if (!enabled || next.issue === null) commentFailure.value = null;
       // Assigned rather than only set on failure, so a milestone that lands after the setup was
       // fixed takes the notice back down without waiting for a reload. Guarded by the same request
       // token as the item above: this call outlives the fetch, and a cell that moved to another
