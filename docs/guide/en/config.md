@@ -287,7 +287,7 @@ With none set, you get a **built-in starter set**: **Insert a file path** · **O
 {
   "buttons": [
     { "id": "compact", "icon": "compress", "label": "Compact", "run": "input", "text": "/compact", "when": "agent == claude" },
-    { "id": "gh",      "icon": "public",   "label": "Open on GitHub", "run": "open", "open": { "url": "https://github.com/${repo}" }, "when": "isGitRepo" },
+    { "id": "gh",      "icon": "public",   "label": "Open on GitHub", "run": "open", "open": { "url": "https://github.com/${repo}" }, "when": "repo != " },
     { "id": "reveal",  "icon": "folder",   "label": "Reveal folder", "run": "open", "open": { "reveal": "${dir}" } },
     { "id": "build",   "icon": "build",    "label": "Build", "run": "shell", "cmd": "yarn build" }
   ]

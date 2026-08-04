@@ -148,8 +148,9 @@ always shown.
 agent == claude && isGitRepo
 ```
 
-`key !=` with the right-hand side left empty tests "resolves to something" — that is how the
-built-in GitHub button avoids rendering without a remote.
+`key !=` with the right-hand side left empty tests "resolves to something" — `"when": "repo != "`
+is what a GitHub button needs so it never renders as a bare `https://github.com/`. Use that rather
+than `isGitRepo`: a git repo with no remote, or one whose remote is not GitHub, is still a git repo.
 
 ## After writing
 
@@ -161,9 +162,10 @@ Then check the real header. A button that doesn't appear is nearly always `when`
 directory, an agent mismatch) or a `pr` button on a branch with no PR — both are working as
 designed, and both look like a broken config.
 
-## Example — trimming the defaults, globally
+## Example — pinning the defaults, globally
 
-Keeping everything except the GitHub button means listing the five that remain:
+The default set is short, so writing it out is the whole of it — this is the complete current
+default configuration, useful as the starting point for adding to or trimming:
 
 ```json
 {
