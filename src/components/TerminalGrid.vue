@@ -42,6 +42,7 @@ import { isDrawnResult } from "../utils/drawnResult";
 import { hasCanvasGroup } from "../../common/toolGroups";
 import type { RightPane } from "./gridCell";
 import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
+import { isRecord } from "../../common/isRecord";
 import type { TerminalAgent } from "../../common/sessionAgent";
 import { buildCanvasCard, seedCanvasCard, hasStoredCard, absoluteUnder } from "../composables/canvasOpenFile";
 import { jsonBody } from "../jsonBody";
@@ -150,9 +151,14 @@ onMounted(() => (mounted.value = true));
 const zoomed = computed(() => props.expandedUid !== null && mounted.value);
 
 // The file pane beside the enlarged cell. ONE pane, not one per cell: it re-roots to whichever
-// cell is enlarged, so walking the zoom doesn't accumulate editors. Open-state and width are
-// per-browser (localStorage), like the single view's splitter and the terminal font size.
-const PANE_OPEN_KEY = "files_pane_open";
+// cell is enlarged, so walking the zoom doesn't accumulate editors. WHICH pane a cell has open is
+// that cell's own (#1378, see paneByCell); the width is per-browser (localStorage), like the
+// single view's splitter and the terminal font size.
+//
+// Keyed by SESSION rather than by uid, which is the number the map below uses: a uid is not the
+// same number after a reload, and a session is what a cell still is (#958 does the same for the
+// files pane's contents, keyed by directory).
+const PANE_OPEN_KEY = "pane_open_by_session";
 const PANE_WIDTH_KEY = "files_pane_width";
 // What each directory had open, so a reload lands back on the file rather than the tree root (#958).
 const PANE_STATE_KEY = "files_pane_state";
@@ -176,15 +182,68 @@ const remember = (key: string, value: string): void => {
 //   files  — the file tree/editor (the original occupant).
 //   canvas — what the agent DREW: the GUI plugin views for this cell's session.
 //   tools  — which GUI tools this session actually has, read-only.
-const isRightPane = (value: string | null): value is RightPane => value === "files" || value === "canvas" || value === "tools";
-// The key used to hold a boolean, where "1" meant the files pane was open — so an existing
-// browser is migrated rather than silently starting closed.
-function restoredPane(value: string | null): RightPane | null {
-  if (isRightPane(value)) return value;
-  return value === "1" ? "files" : null;
+const isRightPane = (value: unknown): value is RightPane => value === "files" || value === "canvas" || value === "tools";
+
+// Which cell the pane is on — the identity everything else hangs off. The UID rather than the
+// directory: two terminals in the same repository is the ordinary case here, and keying on the
+// directory would leave the pane bound to the cell it started on while the zoom moved to its
+// neighbour. It TRAILS the enlarged cell rather than mirroring it: with nothing enlarged the row
+// is merely hidden (see the template) and the pane keeps the cell it was on, and it also stays
+// behind when a re-root could not be saved out of — so a snapshot is filed under the cell the
+// pane is on rather than the one it failed to reach.
+const paneUid = ref<number | null>(null);
+
+// Which pane each cell has open (#1378). ABSENT means never asked, which is where a cell starts
+// and what lets a reload restore one; an explicit `null` is a cell whose pane the user closed,
+// which has to stay closed. The pane itself is still ONE, because one cell is enlarged at a time
+// — what is per-cell is whether there is one and which.
+const paneByCell = ref(new Map<number, RightPane | null>());
+// The same, by session, so a reload lands each cell back on its own pane rather than on one value
+// for the whole grid. Written on every change, read once per cell.
+const paneBySession = new Map<string, RightPane>(readPaneBySession(stored(PANE_OPEN_KEY)));
+function readPaneBySession(raw: string | null): [string, RightPane][] {
+  try {
+    const parsed: unknown = raw === null ? null : JSON.parse(raw);
+    if (!isRecord(parsed)) return [];
+    return Object.entries(parsed).filter((entry): entry is [string, RightPane] => isRightPane(entry[1]));
+  } catch {
+    return []; // an older or hand-edited value: start closed rather than throw on mount
+  }
 }
-const rightPane = ref<RightPane | null>(restoredPane(stored(PANE_OPEN_KEY)));
+
+// What the pane is showing. Derived from the cell it is ON rather than from the enlarged one:
+// collapsing the zoom only HIDES the row (see the template), so the pane stays mounted with its
+// editor and buffer intact — reading the enlarged cell here would close it on every collapse.
+const rightPane = computed<RightPane | null>(() => (paneUid.value === null ? null : (paneByCell.value.get(paneUid.value) ?? null)));
 const filesOpen = computed(() => rightPane.value === "files");
+/** What a given cell has open, for its own header buttons. */
+const paneOf = (uid: number): RightPane | null => paneByCell.value.get(uid) ?? null;
+
+const sessionOf = (uid: number): string | null => props.cells.find((cell) => cell.uid === uid)?.session ?? null;
+
+// Sessions kept, newest last. A browser-wide cap for the same reason the files pane's store has
+// one: without it this grows for as long as the user starts terminals, and localStorage answers a
+// quota error by failing the whole write.
+const MAX_REMEMBERED_SESSIONS = 40;
+
+function persistPane(uid: number, pane: RightPane | null): void {
+  const session = sessionOf(uid);
+  if (!session) return; // a launcher or a cell still starting: nothing stable to file it under
+  paneBySession.delete(session); // re-inserted so the cap drops the least recently used
+  if (pane) paneBySession.set(session, pane);
+  const kept = [...paneBySession.entries()].slice(-MAX_REMEMBERED_SESSIONS);
+  remember(PANE_OPEN_KEY, JSON.stringify(Object.fromEntries(kept)));
+}
+
+// A cell shown for the first time takes the pane its SESSION had before the reload. Only when the
+// cell has no answer of its own: a pane the user closed is an answer, which is why the map holds
+// an explicit null rather than dropping the entry.
+function restoreSessionPane(uid: number): void {
+  if (paneByCell.value.has(uid)) return;
+  const session = sessionOf(uid);
+  const pane = session === null ? undefined : paneBySession.get(session);
+  if (pane) paneByCell.value = new Map(paneByCell.value).set(uid, pane);
+}
 // A pane taken full-width: it covers the enlarged terminal, NOT the roster — a document the agent
 // drew is read, and 480px of a split row is not a reading width. Canvas and Tools can ask for it;
 // the files pane is edited beside the terminal and does not.
@@ -220,33 +279,45 @@ const rowWidthNow = ref(0);
 const paneMax = computed(() => Math.max(0, rowWidthNow.value - MIN_TERMINAL));
 const paneMin = computed(() => Math.min(MIN_GUI, paneMax.value));
 
+// The pane's OWN close button, and the terminal-click entrance. Both act on the pane that is on
+// screen, which is `paneUid` — normally the enlarged cell, but not while the pane trails a re-root
+// it could not save out of.
 function setFilesOpen(open: boolean): void {
-  setRightPane(open ? "files" : null);
+  setRightPane(open ? "files" : null, paneUid.value ?? props.expandedUid);
 }
 
 // Switching panes is the same event as closing the files one, because the files pane unmounts
 // either way — so its buffer has to be saved on both paths, not just on close.
-function setRightPane(pane: RightPane | null): void {
-  const leavingFiles = filesOpen.value && pane !== "files";
+//
+// `uid` is which cell is being answered. It defaults to the enlarged one, and is passed
+// explicitly by the path that has just ASKED for an enlargement: the parent owns `expandedUid`,
+// so it is still the previous cell when openCanvasFor reaches here.
+function setRightPane(pane: RightPane | null, uid: number | null): void {
+  if (uid === null) return; // no cell to answer for: nothing is enlarged and the pane is on none
+  const leavingFiles = filesOpen.value && paneUid.value === uid && pane !== "files";
   if (leavingFiles) rememberPaneState(paneUid.value);
-  rightPane.value = pane;
+  // The pane moves to this cell only if it is the one on screen. A button pressed on a TILED cell
+  // records what that cell wants and nothing more: moving the pane there would unmount an editor
+  // that is merely hidden behind the grid, with a buffer nobody asked to close. The zoom watcher
+  // moves it — and flushes — when that cell is actually enlarged.
+  if (uid === props.expandedUid || paneUid.value === null) paneUid.value = uid;
+  paneByCell.value = new Map(paneByCell.value).set(uid, pane);
+  persistPane(uid, pane);
   // Every arrival at a pane is a split row. See paneExpanded: the takeover is asked for, never
   // inherited — including by the same pane reopened later.
   paneExpanded.value = false;
-  // Leaving files drops the cell it was on, so coming back lands on whichever cell is enlarged
-  // THEN rather than resuming a directory the user has since walked away from.
-  if (leavingFiles) {
-    paneCwd.value = null;
-    paneUid.value = null;
-  }
-  remember(PANE_OPEN_KEY, pane ?? "");
+  // Leaving files drops the directory it was on, so coming back re-roots to whichever cell is
+  // enlarged THEN rather than resuming a directory the user has since walked away from.
+  if (leavingFiles) paneCwd.value = null;
 }
 
-// The header toggle. Closing unmounts the pane, buffer and all, so the buffer is saved on the
-// way out — the pane's OWN close button has already flushed by the time it emits, which is why
-// that path stays separate rather than routing through here.
-async function toggleFiles(): Promise<void> {
-  await toggleRightPane("files");
+// A cell's header toggle, for the cell it was pressed on — which is not always the enlarged one:
+// pressed on a tiled cell it says what that terminal should have open when it IS enlarged (#1378).
+// Closing unmounts the pane, buffer and all, so the buffer is saved on the way out — the pane's
+// OWN close button has already flushed by the time it emits, which is why that path stays separate
+// rather than routing through here.
+async function toggleFiles(uid: number | null): Promise<void> {
+  await toggleRightPane("files", uid);
 }
 
 // The unread-canvas chip on a tiled cell: enlarge that cell AND put the pane beside it, in one
@@ -285,7 +356,9 @@ async function openCanvasFor(uid: number, enlarge = true, stillWanted?: () => bo
     if (!enlarge) return;
     emit("toggle-expand", uid);
   }
-  setRightPane("canvas");
+  // Named rather than left to default: the enlargement above is the PARENT's to apply, so
+  // `expandedUid` is still the previous cell when this runs.
+  setRightPane("canvas", uid);
 }
 
 // Show a file the user picked in the Canvas, without the agent having presented it (#1374). The
@@ -317,13 +390,18 @@ async function openFileInCanvas(path: string): Promise<void> {
 // beside them — so this is the seam rather than another prop to watch.
 defineExpose({ openCanvasFor });
 
-// A pane button: opens its pane, or closes it when it is already the one showing.
-async function toggleRightPane(pane: RightPane): Promise<void> {
+// A pane button: opens its pane on that cell, or closes it when it is already the one that cell
+// has. `uid` is the cell whose button was pressed.
+async function toggleRightPane(pane: RightPane, uid: number | null = props.expandedUid): Promise<void> {
+  if (uid === null) return;
   // Leaving files unmounts the buffer with the pane, so a buffer that could be neither saved
   // nor backed up keeps it open — the error is visible in it. Checked whichever pane was asked
   // for: files unmounts when another pane takes the slot exactly as it does when closed.
-  if (filesOpen.value && (await filesPane.value?.flush()) === false) return;
-  setRightPane(rightPane.value === pane ? null : pane);
+  //
+  // Only for the cell the pane is ON: a button pressed on a tiled cell changes that cell's answer
+  // and unmounts nothing, so there is no buffer in play.
+  if (filesOpen.value && paneUid.value === uid && (await filesPane.value?.flush()) === false) return;
+  setRightPane(paneOf(uid) === pane ? null : pane, uid);
 }
 
 // The enlarged cell's project dir — what the pane browses. A cell that hasn't reported one yet
@@ -456,8 +534,10 @@ const gridCellProps = (cell: Cell) => ({
   "data-uid": cell.uid,
   class: cellClass(cell.uid),
   expanded: cell.uid === props.expandedUid,
-  filesOpen: filesOpen.value,
-  rightPane: rightPane.value,
+  // THIS cell's pane, not the one on screen: the header buttons say what this terminal has open,
+  // and after #1378 two cells can disagree.
+  filesOpen: paneOf(cell.uid) === "files",
+  rightPane: paneOf(cell.uid),
   canvasAvailable: canvasOpenable.value,
   zoomed: zoomed.value,
   home: props.home,
@@ -465,10 +545,12 @@ const gridCellProps = (cell: Cell) => ({
 });
 const gridCellEvents = (cell: Cell) => ({
   "toggle-expand": () => emit("toggle-expand", cell.uid),
-  "toggle-files": toggleFiles,
-  "toggle-canvas": () => toggleRightPane("canvas"),
+  // Each carries the cell it was pressed on: a header button answers for ITS terminal, tiled or
+  // enlarged, and after #1378 two cells can want different panes.
+  "toggle-files": () => toggleFiles(cell.uid),
+  "toggle-canvas": () => toggleRightPane("canvas", cell.uid),
   "open-canvas": () => openCanvasFor(cell.uid),
-  "toggle-tools": () => toggleRightPane("tools"),
+  "toggle-tools": () => toggleRightPane("tools", cell.uid),
   close: () => emit("close", cell.uid),
   move: (dir: -1 | 1) => emit("move", cell.uid, dir),
   status: (value: AttentionStatus) => emit("status", cell.uid, value),
@@ -524,37 +606,42 @@ const paneState = ref<FilesPaneState | null>(null);
 // is declined over unsaved edits — and it, not `expandedCwd`, is what the pane is handed, so a
 // file opened from a tree that stayed put still resolves against the directory it came from.
 const paneCwd = ref<string | null>(null);
-// Which cell the pane is showing — the identity everything else hangs off. The UID rather than
-// the directory: two terminals in the same repository is the ordinary case here, and keying on
-// the directory would leave the pane bound to the cell it started on while the zoom moved to
-// its neighbour. It also trails `expandedUid` when a re-root could not be saved out of, so a
-// snapshot is filed under the cell the pane is on rather than the one it failed to reach.
-const paneUid = ref<number | null>(null);
 
-// Walking the zoom to another terminal has to re-root the pane: the pane deliberately ignores
-// its `cwd` prop (see its defineExpose contract), so nothing else would move it. The buffer is
-// saved first rather than asked about — the zoom moves from keys and filmstrip clicks, and a
-// dialog on each of those would interrupt the very flow the pane is meant to sit beside.
+// Walking the zoom to another terminal moves the pane to that cell: which pane it shows is that
+// cell's (paneByCell), and a files pane additionally re-roots — it deliberately ignores its `cwd`
+// prop (see its defineExpose contract), so nothing else would move it. The buffer is saved first
+// rather than asked about — the zoom moves from keys and filmstrip clicks, and a dialog on each of
+// those would interrupt the very flow the pane is meant to sit beside.
+//
+// `zoomed` is a GUARD, not an input: collapsing the zoom only hides the row, and the pane keeps
+// the cell it is on, buffer and all. Reading `expandedUid` here instead would close the pane on
+// every collapse — flushing an editor the user is coming straight back to.
+// `rightPane` is a dependency too, not just an input: reopening a files pane on the cell it was
+// closed on changes nothing else, and without it the pane would mount with no root and no
+// remembered tree.
 watch(
-  [filesOpen, zoomed, () => props.expandedUid, expandedCwd],
-  async ([open, isZoomed, uid]) => {
-    if (!open || !isZoomed) return;
+  [zoomed, () => props.expandedUid, expandedCwd, rightPane],
+  async ([isZoomed, uid]) => {
+    if (!isZoomed || uid === null) return;
+    const sameCell = paneUid.value === uid;
     // Nothing moved: same cell, and it still reports the same directory.
-    if (paneUid.value === uid && paneCwd.value === expandedCwd.value) return;
-    // First showing: the pane is about to mount against this cell, so there is nothing to re-read.
-    if (paneUid.value === null) {
-      paneUid.value = uid;
-      paneCwd.value = expandedCwd.value;
-      paneState.value = claimPaneState(uid, expandedCwd.value);
-      return;
-    }
-    // Re-rooting re-reads the tree and drops the buffer with it. Nothing to fall back on means
-    // staying put: the pane keeps the cell and root it is on, which its header names.
-    if ((await filesPane.value?.flush()) === false) return;
-    rememberPaneState(paneUid.value);
+    if (sameCell && paneCwd.value === expandedCwd.value) return;
+    // A pane with no root yet is about to mount against this cell: it reads the root and its
+    // `initial-state` on its own, and there is no buffer behind it to save.
+    const firstShowing = paneCwd.value === null;
+    // Leaving a files pane unmounts its editor whether the next cell shows another pane or none,
+    // so it is flushed on every path — the same rule as switching panes by hand. Nothing to fall
+    // back on means staying put: the pane keeps the cell and root it is on, which its header names.
+    const wasFiles = filesOpen.value && !firstShowing;
+    if (wasFiles && (await filesPane.value?.flush()) === false) return;
+    if (!sameCell) rememberPaneState(paneUid.value);
     paneUid.value = uid;
+    restoreSessionPane(uid);
     paneCwd.value = expandedCwd.value;
     paneState.value = claimPaneState(uid, expandedCwd.value);
+    // Only when the files pane STAYS the pane. Arriving at one mounts it fresh, which reads the
+    // new root and `initial-state` on its own; leaving one has nothing left to reload.
+    if (!wasFiles || !filesOpen.value) return;
     await nextTick(); // the pane reads its `cwd` prop when reloading, so let the new one land
     filesPane.value?.reload();
   },
@@ -1034,7 +1121,7 @@ watch(
           :expanded="paneFull"
           :style="{ flex: paneFull ? '1 1 0%' : `0 0 ${paneWidth}px` }"
           @toggle-expand="togglePaneExpanded"
-          @close="setRightPane(null)"
+          @close="setRightPane(null, paneUid)"
         />
         <!-- `width: auto` only while full: the pane sets its own w-[340px], and a fixed width
              beside `flex: 1` is the one combination where the class outlives the layout. -->
@@ -1045,7 +1132,7 @@ watch(
           :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
           class="border-l border-border"
           @toggle-expand="togglePaneExpanded"
-          @close="setRightPane(null)"
+          @close="setRightPane(null, paneUid)"
         />
       </template>
     </div>

@@ -458,6 +458,13 @@ describe("file pane beside the enlarged cell", () => {
     await w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-files");
     await nextTick();
   };
+  // The same for a cell that is NOT the enlarged one. Since #1378 each cell has its own answer,
+  // so a test that walks the zoom has to say what the cell it walks TO has open — otherwise the
+  // pane closes on arrival, which is the feature rather than a broken fixture.
+  const openPaneOnCell = async (w: ReturnType<typeof mount>, index: number) => {
+    await w.findAllComponents({ name: "TerminalCell" })[index].vm.$emit("toggle-files");
+    await nextTick();
+  };
 
   // The zoom FLIP asks for prefers-reduced-motion, which jsdom omits; these tests move the
   // enlargement, so they trip over it where the older ones never did.
@@ -518,6 +525,7 @@ describe("file pane beside the enlarged cell", () => {
     const cells = [cell(1, "s1", "/one"), cell(2, "s2", "/two")];
     const w = mountCockpit(cells, 1, []);
     await openPane(w);
+    await openPaneOnCell(w, 1); // cell 2 wants one too, or arriving there would close it
     expect(w.findAllComponents({ name: "FilesPane" })).toHaveLength(1);
     expect(paneOf(w).props("cwd")).toBe("/one");
     expect(paneStub.reload).not.toHaveBeenCalled(); // it mounted on /one; nothing to re-read
@@ -535,6 +543,7 @@ describe("file pane beside the enlarged cell", () => {
   it("saves the buffer before re-rooting, without asking", async () => {
     const w = mountCockpit([cell(1, "s1", "/one"), cell(2, "s2", "/two")], 1, []);
     await openPane(w);
+    await openPaneOnCell(w, 1);
     const confirmSpy = vi.spyOn(window, "confirm");
 
     await w.setProps({ expandedUid: 2 });
@@ -602,6 +611,7 @@ describe("file pane beside the enlarged cell", () => {
     const cells = [cell(1, "s1", "/one"), cell(2, "s2", "/two")];
     const w = mountCockpit(cells, 1, []);
     await openPane(w);
+    await openPaneOnCell(w, 1);
     expect(paneOf(w).props("initialState")).toBeNull(); // never visited
 
     paneStub.snapshot.mockReturnValueOnce({ openPath: "notes.md", expanded: ["docs"] });
@@ -620,6 +630,7 @@ describe("file pane beside the enlarged cell", () => {
   it("re-roots and re-binds between two cells sharing a directory", async () => {
     const w = mountCockpit([cell(1, "s1", "/same"), cell(2, "s2", "/same")], 1, []);
     await openPane(w);
+    await openPaneOnCell(w, 1);
     paneStub.snapshot.mockReturnValue({ openPath: "from-one.md", expanded: [] });
 
     await w.setProps({ expandedUid: 2 });
@@ -656,6 +667,7 @@ describe("file pane beside the enlarged cell", () => {
       seed("/same", { openPath: "notes.md", expanded: [] });
       const w = mountCockpit([cell(1, "s1", "/same"), cell(2, "s2", "/same")], 1, []);
       await openPane(w);
+      await openPaneOnCell(w, 1);
       expect(paneOf(w).props("initialState")).toEqual({ openPath: "notes.md", expanded: [] });
 
       paneStub.snapshot.mockReturnValue({ openPath: "from-one.md", expanded: [] });
@@ -702,6 +714,7 @@ describe("file pane beside the enlarged cell", () => {
   it("files a snapshot under the cell the pane is actually on", async () => {
     const w = mountCockpit([cell(1, "s1", "/one"), cell(2, "s2", "/two")], 1, []);
     await openPane(w);
+    await openPaneOnCell(w, 1);
 
     paneStub.flush.mockResolvedValueOnce(false as unknown as undefined);
     paneStub.snapshot.mockReturnValue({ openPath: "from-one.md", expanded: [] });
@@ -723,28 +736,84 @@ describe("file pane beside the enlarged cell", () => {
     expect(paneOf(w).props("initialState")).toEqual({ openPath: "from-one.md", expanded: [] });
   });
 
+  // What survives a reload is keyed by SESSION (#1378): a uid is a different number next time,
+  // and the pane is now that cell's rather than the grid's.
   it("remembers being open across a remount, and the pane's own close puts it away", async () => {
     const w = mountCockpit([cell(1, "s1", "/proj"), cell(2)], 1, []);
     await openPane(w);
-    // The key now names WHICH pane holds the slot, not just whether the files one is open.
-    expect(localStorage.getItem("files_pane_open")).toBe("files");
+    expect(JSON.parse(localStorage.getItem("pane_open_by_session") ?? "{}")).toEqual({ s1: "files" });
 
-    const reopened = mountCockpit([cell(1, "s1", "/proj"), cell(2)], 1, []);
+    // A reload: the same session, a uid it will not have again.
+    const reopened = mountCockpit([cell(7, "s1", "/proj"), cell(8)], 7, []);
+    await flushPromises();
     expect(paneOf(reopened).exists()).toBe(true);
 
     await paneOf(reopened).vm.$emit("close");
     await nextTick();
     expect(paneOf(reopened).exists()).toBe(false);
-    expect(localStorage.getItem("files_pane_open")).toBe("");
+    expect(JSON.parse(localStorage.getItem("pane_open_by_session") ?? "{}")).toEqual({});
   });
 
-  // The key held "1" before the slot could hold anything but files, so an existing browser
-  // would otherwise come back with the pane closed for no reason it could explain.
-  it("migrates the old boolean value", async () => {
-    localStorage.setItem("files_pane_open", "1");
-    const w = mountCockpit([cell(1, "s1", "/proj"), cell(2)], 1, []);
-    await flushPromises();
-    expect(paneOf(w).exists()).toBe(true);
+  // The whole point of #1378: two cells, two answers, and walking the zoom shows each cell what
+  // IT has open rather than carrying one pane across the grid.
+  describe("one answer per cell", () => {
+    it("starts closed on a cell that has never asked for a pane", async () => {
+      const w = mountCockpit([cell(1, "s1", "/one"), cell(2, "s2", "/two")], 1, []);
+      await openPane(w);
+      expect(paneOf(w).exists()).toBe(true);
+
+      await w.setProps({ expandedUid: 2 });
+      await flushPromises();
+      expect(paneOf(w).exists()).toBe(false); // cell 2 never asked
+    });
+
+    it("gives each cell back what it had, walking the zoom between them", async () => {
+      const w = mountCockpit([cell(1, "s1", "/one"), cell(2, "s2", "/two")], 1, []);
+      await openPane(w); // cell 1: files
+      await w.findAllComponents({ name: "TerminalCell" })[1].vm.$emit("toggle-canvas"); // cell 2: canvas
+      await flushPromises();
+      expect(paneOf(w).exists()).toBe(true); // still cell 1's, which is the one enlarged
+
+      await w.setProps({ expandedUid: 2 });
+      await flushPromises();
+      expect(paneOf(w).exists()).toBe(false);
+      expect(w.findComponent({ name: "GuiPanel" }).exists()).toBe(true);
+
+      await w.setProps({ expandedUid: 1 });
+      await flushPromises();
+      expect(paneOf(w).exists()).toBe(true);
+      expect(w.findComponent({ name: "GuiPanel" }).exists()).toBe(false);
+    });
+
+    // A pane asked for while the grid is tiled is that cell's answer for when it IS enlarged —
+    // which is the case the issue opens with (#1378): the canvas cannot open with nothing zoomed.
+    it("opens on enlarging a cell whose pane was asked for while tiled", async () => {
+      const w = mountCockpit([cell(1, "s1", "/one"), cell(2, "s2", "/two")], 1, []);
+      await openPane(w);
+      await w.setProps({ expandedUid: null });
+      await flushPromises();
+
+      await w.findAllComponents({ name: "TerminalCell" })[1].vm.$emit("toggle-canvas");
+      await flushPromises();
+      expect(paneOf(w).exists()).toBe(true); // the tiled press moved nothing: cell 1's pane stays
+
+      await w.setProps({ expandedUid: 2 });
+      await flushPromises();
+      expect(w.findComponent({ name: "GuiPanel" }).exists()).toBe(true);
+    });
+
+    // Closing is an answer, not the absence of one — a reload must not hand the cell back a pane
+    // it was told to put away.
+    it("keeps a cell closed after the user closes it", async () => {
+      const w = mountCockpit([cell(1, "s1", "/proj"), cell(2)], 1, []);
+      await openPane(w);
+      await w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-files");
+      await flushPromises();
+
+      const reopened = mountCockpit([cell(9, "s1", "/proj"), cell(10)], 9, []);
+      await flushPromises();
+      expect(paneOf(reopened).exists()).toBe(false);
+    });
   });
 });
 
@@ -779,7 +848,7 @@ describe("file pane width restored from storage", () => {
   });
 
   it("clamps to the terminal's floor as soon as the pane is on screen", async () => {
-    localStorage.setItem("files_pane_open", "1");
+    localStorage.setItem("pane_open_by_session", JSON.stringify({ s1: "files" }));
     localStorage.setItem("files_pane_width", "900");
     const w = mountCockpit([cell(1, "s1", "/proj"), cell(2)], 1, []);
     await flushPromises();
@@ -791,7 +860,7 @@ describe("file pane width restored from storage", () => {
   // The single view's splitter announces its range; a screen-reader user resizing this one gets
   // nothing without the same three attributes.
   it("announces its value and range on the separator", async () => {
-    localStorage.setItem("files_pane_open", "1");
+    localStorage.setItem("pane_open_by_session", JSON.stringify({ s1: "files" }));
     localStorage.setItem("files_pane_width", "400");
     const w = mountCockpit([cell(1, "s1", "/proj"), cell(2)], 1, []);
     await flushPromises();
@@ -802,7 +871,7 @@ describe("file pane width restored from storage", () => {
   });
 
   it("leaves a width that already fits alone", async () => {
-    localStorage.setItem("files_pane_open", "1");
+    localStorage.setItem("pane_open_by_session", JSON.stringify({ s1: "files" }));
     localStorage.setItem("files_pane_width", "400");
     const w = mountCockpit([cell(1, "s1", "/proj"), cell(2)], 1, []);
     await flushPromises();
