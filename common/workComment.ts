@@ -72,13 +72,23 @@ const displayDir = (dir: string): string =>
     .replace(/\s+/g, " ")
     .trim();
 
+// The widest number a milestone line can carry. Render and parse have to agree on it: a line this
+// side wrote and the parser could not read would vanish from the comment on the NEXT edit, taking
+// its milestone with it (Codex review). Ten digits is far more than any forge issues, and the
+// pattern below reads exactly that back.
+const MAX_LINE_PR = 9_999_999_999;
+
+const writablePr = (pr: number | null): pr is number => pr !== null && Number.isSafeInteger(pr) && pr > 0 && pr <= MAX_LINE_PR;
+
 // The wording of the two states, unchanged from the build that wrote one comment per state: an
 // issue that already carries "Working on this in `x`." must not read differently after an edit.
 function headline(dir: string, events: readonly WorkEvent[]): string {
   const shown = displayDir(dir);
   const merged = events.find((event) => event.kind === "merged");
   if (!merged) return `Working on this in \`${shown}\`.`;
-  const where = merged.pr === null ? "Merged." : `Merged in #${merged.pr}.`;
+  // The same bound as the line: the headline is not parsed, but naming a number the line beneath
+  // it had to drop would make the comment contradict itself.
+  const where = writablePr(merged.pr) ? `Merged in #${merged.pr}.` : "Merged.";
   return `${where} Work done in \`${shown}\`.`;
 }
 
@@ -86,8 +96,8 @@ function headline(dir: string, events: readonly WorkEvent[]): string {
 // with no number says nothing anyway.
 function eventLine(event: WorkEvent): string | null {
   if (event.kind === "start") return `- started — ${event.at}`;
-  if (event.kind === "pr") return event.pr === null ? null : `- PR #${event.pr} — ${event.at}`;
-  return event.pr === null ? `- merged — ${event.at}` : `- merged in #${event.pr} — ${event.at}`;
+  if (event.kind === "pr") return writablePr(event.pr) ? `- PR #${event.pr} — ${event.at}` : null;
+  return writablePr(event.pr) ? `- merged in #${event.pr} — ${event.at}` : `- merged — ${event.at}`;
 }
 
 const isLine = (line: string | null): line is string => line !== null;
@@ -99,11 +109,10 @@ export function renderWorkComment(dir: string, events: readonly WorkEvent[]): st
   return [headline(dir, events), "", ...lines, "", SIGNATURE, "", workAnchorMarker(dir)].join("\n");
 }
 
-// The number is bounded IN THE PATTERN, not only by the check below: ten digits is far more than
-// any forge issues and still exact as a `Number`, so a run of digits out of an edited body cannot
-// reach the parser as something that would print as `1e+20`. It also keeps `\d*` from sitting
-// inside an optional group, which `security/detect-unsafe-regex` reads as a backtracking risk —
-// measured as linear here, but a bound is a better answer than an exception.
+// MAX_LINE_PR, spelled as digits — the parse half of the same bound. It stops a run of digits out
+// of an edited body from reaching the parser as something that would print as `1e+20`, and it
+// keeps `\d*` from sitting inside an optional group, which `security/detect-unsafe-regex` reads as
+// a backtracking risk (measured as linear here, but a bound is a better answer than an exception).
 const PR_DIGITS = "[1-9]\\d{0,9}";
 const START_LINE = /^- started — (.+)$/;
 const PR_LINE = new RegExp(`^- PR #(${PR_DIGITS}) — (.+)$`);
@@ -145,7 +154,9 @@ export const parseWorkEvents = (body: string): WorkEvent[] =>
 /** `events` with `event` added, or null when the comment already records it — which is the normal
  *  answer, because the caller asks on every poll of every open tab. */
 export function withWorkEvent(events: readonly WorkEvent[], event: WorkEvent): WorkEvent[] | null {
-  if (event.kind === "pr" && event.pr === null) return null;
+  // A PR milestone is its number, and a number the line cannot carry is not a milestone this
+  // comment can record — refused here rather than added and then silently dropped by render.
+  if (event.kind === "pr" && !writablePr(event.pr)) return null;
   // Matched on the PR number too: a second pull request for the same issue from the same clone —
   // the first one closed unmerged, say — is a new milestone, not a repeat of the old one.
   if (events.some((known) => known.kind === event.kind && known.pr === event.pr)) return null;

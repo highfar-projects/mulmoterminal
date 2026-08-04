@@ -102,6 +102,30 @@ describe("render and parse are inverses", () => {
   it("keeps the order the milestones happened in", () => {
     expect(parseWorkEvents(renderWorkComment("d", [START, PR, MERGED])).map((e) => e.kind)).toEqual(["start", "pr", "merged"]);
   });
+
+  // The number the pattern reads back and the number render is willing to write are ONE bound. A
+  // line render emitted and parse dropped would disappear on the next edit, taking its milestone
+  // with it (Codex review of the bound itself).
+  it("round-trips the largest number a line can carry", () => {
+    const big: WorkEvent = { kind: "pr", at: "2026-08-04 15:05 UTC", pr: 9999999999 };
+    expect(parseWorkEvents(renderWorkComment("d", [START, big]))).toEqual([START, big]);
+  });
+
+  it("writes no PR line it could not read back", () => {
+    const tooBig: WorkEvent = { kind: "pr", at: "2026-08-04 15:05 UTC", pr: 10000000000 };
+    expect(renderWorkComment("d", [START, tooBig])).not.toContain("PR #");
+    expect(parseWorkEvents(renderWorkComment("d", [START, tooBig]))).toEqual([START]);
+  });
+
+  // The merge itself still happened, so the milestone stays and only the number goes — and the
+  // headline drops it too, or the comment would name a number the line beneath it does not.
+  it("keeps a merge whose number is too large, without the number", () => {
+    const merged: WorkEvent = { kind: "merged", at: "2026-08-04 16:40 UTC", pr: 10000000000 };
+    const body = renderWorkComment("d", [START, merged]);
+    expect(body).toContain("Merged. Work done in `d`.");
+    expect(body).not.toContain("10000000000");
+    expect(parseWorkEvents(body)).toEqual([START, { ...merged, pr: null }]);
+  });
 });
 
 describe("parseWorkEvents", () => {
@@ -160,6 +184,13 @@ describe("withWorkEvent", () => {
 
   it("refuses a PR milestone with no number, which has nothing to say", () => {
     expect(withWorkEvent([START], { kind: "pr", at: "2026-08-04 15:05 UTC", pr: null })).toBeNull();
+  });
+
+  // Refused here rather than added and then silently dropped by render, which would leave the
+  // caller believing a milestone was recorded.
+  it("refuses a PR number the line could not carry", () => {
+    expect(withWorkEvent([START], { kind: "pr", at: "2026-08-04 15:05 UTC", pr: 10000000000 })).toBeNull();
+    expect(withWorkEvent([START], { kind: "pr", at: "2026-08-04 15:05 UTC", pr: 9999999999 })).toHaveLength(2);
   });
 });
 
