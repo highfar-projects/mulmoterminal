@@ -30,7 +30,7 @@ import {
   markAttachedSessionPlaced,
   ptys,
 } from "../session/registry.js";
-import { SpawnRefusedError } from "../session/pty-spawn.js";
+import { SpawnRefusedError, ptyWouldReattach } from "../session/pty-spawn.js";
 import { bufferEarlyFrames, type EarlyFrames } from "../session/early-frames.js";
 import {
   launcherCommandWithGuiMcp,
@@ -550,7 +550,12 @@ async function handleLaunchConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
   // Gated on `launcherTakesGuiMcp` BEFORE the claim is recorded: a chip running `zsh`, `yarn dev`
   // or `agy` has no rewriter, so it is handed no MCP — and recording it as carrying every GUI tool
   // would misreport it to /api/tools (Codex review on #1399).
-  const fullGui = !live && launcherTakesGuiMcp(command) && claimFullGuiMcp(sessionId, false, cwd, false);
+  //
+  // The reattach answer is asked for rather than assumed from `live`: that is only "this process
+  // holds a pty", while a tmux session surviving a server RESTART reattaches with no pty here at
+  // all. Handing the claim a literal `false` would have told it "definitely a new process" in the
+  // one case where the command line is ignored entirely.
+  const fullGui = !live && launcherTakesGuiMcp(command) && claimFullGuiMcp(sessionId, false, cwd, ptyWouldReattach(sessionId, true));
   const groups = live ? [] : await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []);
   const codexGui = live ? [] : codexGuiMcpServers({ sessionId, port: PORT, groups, allTools: fullGui });
   // The config file is written ONLY once the command is known to be claude. Writing it up front
