@@ -7,6 +7,7 @@ import { useCellChrome } from "../composables/useCellChrome";
 import { useGitStatus } from "../composables/useGitStatus";
 import { useWorkItem } from "../composables/useWorkItem";
 import { formatCwd, worktreeLabel } from "./cwdDisplay";
+import { isSameDirPath } from "../../common/dirPathKey";
 import DirBadge from "./DirBadge.vue";
 import { isCellContext, isCellUsage, type CellContext, type CellUsage } from "./cellPayload";
 import { asTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
@@ -147,6 +148,9 @@ const cwd = ref<string | null>(props.initialCwd ?? props.defaultCwd);
 // Per-directory overrides (<cwd>/.mulmoterminal.json): pins this cell's terminal
 // palette and shows a project badge. Re-fetched when the effective cwd changes.
 const { config: dirConfig, cellStyle, headerStyle } = useCellChrome(cwd);
+// Whether this cell IS the workspace, for the header badge. Same lexical comparison the launcher
+// chip makes (`launchChips`), so a cell launched from the WORKSPACE chip is badged WORKSPACE.
+const isWorkspace = computed(() => isSameDirPath(cwd.value, props.defaultCwd));
 // What this cell is working on (PR + issue), for the `work` chip. Same directory, same kind of
 // poll as the git status below.
 const { item: workItem, refresh: refreshWorkItem } = useWorkItem(cwd);
@@ -1080,7 +1084,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
             <!-- Info (dir badge / git / diff / model / tokens) is dropped on a filmstrip
                thumbnail, leaving only dir + what it's doing + a zoom button. -->
             <template v-if="!filmstrip">
-              <DirBadge :name="dirConfig.name" :color="dirConfig.badgeColor" />
+              <DirBadge :name="dirConfig.name" :color="dirConfig.badgeColor" :workspace="isWorkspace" />
               <!-- Unread Canvas output. Same chip vocabulary as the branch / context / token
                    chips beside it, deliberately: this is one more thing to triage at a glance,
                    not a new kind of alert. Clicking expands the cell with the pane open. -->
