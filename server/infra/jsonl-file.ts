@@ -61,38 +61,53 @@ export interface JsonlRange {
   atLineStart?: boolean;
 }
 
-/** Fold the COMPLETE records inside a byte range, and answer where the scan stopped: the end of the
- *  last complete line. A file that is only ever appended to can be re-scanned from that offset and
- *  the two folds are the same fold — which is what lets a reader keep a derived value up to date
- *  without paying for the whole file again (#1377).
+/** Fold the records inside a byte range, and answer where the scan stopped. A file that is only ever
+ *  appended to can be re-scanned from that offset and the two folds are the same fold — which is
+ *  what lets a reader keep a derived value up to date without paying for the whole file again
+ *  (#1377).
  *
- *  A trailing partial line — the writer caught mid-append — is NOT folded and NOT counted, so it is
- *  picked up whole by the next scan rather than parsed as broken JSON. */
+ *  The last line of a range that runs to EOF has no newline to prove it finished, and it is two
+ *  different things: a record the writer wrote without a trailing newline, or half of one it is
+ *  still writing. JSON tells them apart — a truncated record does not parse — so a valid one is
+ *  folded (matching forEachJsonlRecord, which yields it) and a broken one is left uncounted for the
+ *  next scan to pick up whole. At a `to` boundary there is no such question: the cut is arbitrary
+ *  and its last line is never folded. */
 export async function forEachJsonlRecordIn(file: string, range: JsonlRange, onRecord: (record: Record<string, unknown>) => void): Promise<number> {
   const from = range.from ?? 0;
   let offset = from;
   let dropLeading = from > 0 && !(range.atLineStart ?? from === 0);
-  await forEachCompleteLine(file, range, (line, bytes) => {
+  await forEachCompleteLine(file, range, (line, bytes, unterminated) => {
+    const record = jsonlRecord(line);
+    if (unterminated && record === null) return; // half-written: not folded, and not counted
     offset += bytes;
     if (dropLeading) {
       dropLeading = false;
       return;
     }
-    if (!line.trim()) return;
-    try {
-      const parsed: unknown = JSON.parse(line);
-      if (isRecord(parsed)) onRecord(parsed);
-    } catch {
-      // Skip malformed lines, exactly as forEachJsonlRecord does.
-    }
+    if (record) onRecord(record);
   });
   return offset;
+}
+
+// A JSONL line's record, or null for a blank, malformed or non-object line — the same lines
+// forEachJsonlRecord skips.
+function jsonlRecord(line: string): Record<string, unknown> | null {
+  if (!line.trim()) return null;
+  try {
+    const parsed: unknown = JSON.parse(line);
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 // Split on the newline BYTE rather than decoding the range first: 0x0a cannot appear inside a
 // multi-byte UTF-8 sequence, so each complete line decodes on its own and the byte count handed to
 // the caller is the file's own, not a character count that would drift from it.
-async function forEachCompleteLine(file: string, range: JsonlRange, onLine: (line: string, bytes: number) => void): Promise<void> {
+//
+// The final line arrives flagged `unterminated` when the range ran to EOF and it had no newline;
+// the caller decides what that means.
+async function forEachCompleteLine(file: string, range: JsonlRange, onLine: (line: string, bytes: number, unterminated: boolean) => void): Promise<void> {
   const from = range.from ?? 0;
   if (range.to !== undefined && range.to <= from) return; // an empty range reads nothing
   const stream = createReadStream(file, { start: from, ...(range.to === undefined ? {} : { end: range.to - 1 }) });
@@ -104,11 +119,12 @@ async function forEachCompleteLine(file: string, range: JsonlRange, onLine: (lin
       const buf: Buffer = carry.length ? Buffer.concat([carry, asBuffer(chunk)]) : asBuffer(chunk);
       let start = 0;
       for (let nl = buf.indexOf(NEWLINE, start); nl !== -1; nl = buf.indexOf(NEWLINE, start)) {
-        onLine(buf.subarray(start, nl).toString("utf8"), nl - start + 1);
+        onLine(buf.subarray(start, nl).toString("utf8"), nl - start + 1, false);
         start = nl + 1;
       }
       carry = start === 0 ? buf : Buffer.from(buf.subarray(start));
     }
+    if (carry.length && range.to === undefined) onLine(carry.toString("utf8"), carry.length, true);
   } finally {
     stream.destroy();
   }

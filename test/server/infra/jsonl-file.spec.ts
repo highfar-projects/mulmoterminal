@@ -175,15 +175,37 @@ describe("forEachJsonlRecordIn", () => {
 
   // A writer caught mid-append leaves half a record. Folding it would be parsing broken JSON, and
   // counting it would move the resume point past a record that was never read.
-  it("leaves a trailing partial line for the next scan", async () => {
-    const file = write("partial.jsonl", '{"n":1}\n{"n":2}'); // no trailing newline
+  it("leaves a trailing HALF record for the next scan", async () => {
+    const file = write("partial.jsonl", '{"n":1}\n{"n":2'); // truncated mid-record
     const { seen, offset } = await foldAll(file);
     expect(seen).toEqual([{ n: 1 }]);
     expect(offset).toBe('{"n":1}\n'.length);
 
-    appendFileSync(file, "\n");
+    appendFileSync(file, "}\n");
     const rest = await foldAll(file, { from: offset, atLineStart: true });
     expect(rest.seen).toEqual([{ n: 2 }]);
+  });
+
+  // The other thing a newline-less last line can be: a record whose writer simply did not end the
+  // file with one. The unbounded reader yields it, so this one must too — and it must count, or an
+  // unchanged file would keep answering without its last record for as long as it is cached
+  // (CodeRabbit on #1379).
+  it("folds a valid final record that has no trailing newline, like the unbounded reader", async () => {
+    const file = write("nonl.jsonl", '{"n":1}\n{"n":2}');
+    const whole: Record<string, unknown>[] = [];
+    await forEachJsonlRecord(file, (r) => whole.push(r));
+    const { seen, offset } = await foldAll(file);
+    expect(seen).toEqual(whole);
+    expect(offset).toBe(statSync(file).size);
+  });
+
+  // A `to` cut is arbitrary — its last line is a fragment of the file, not a record the writer
+  // finished — so the same "does it parse?" question must not be asked there.
+  it("never folds the last line of a window that stops short of EOF", async () => {
+    const file = write("cut.jsonl", '{"n":1}\n{"n":2}\n');
+    const { seen, offset } = await foldAll(file, { to: 15 }); // ends right before the second newline
+    expect(seen).toEqual([{ n: 1 }]);
+    expect(offset).toBe(8);
   });
 
   // The difference between an offset a previous scan reported and one picked by arithmetic.

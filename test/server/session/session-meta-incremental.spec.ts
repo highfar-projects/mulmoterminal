@@ -120,6 +120,15 @@ describe("readSessionMeta", () => {
     expect(await titleOf(file)).toBe("titled at last");
   });
 
+  // The flip side of the half-written case: a transcript whose last record simply has no trailing
+  // newline. The unbounded reader yields that record, so dropping it here would show a stale title
+  // for as long as the file sits unchanged — which is forever, for a session that has ended
+  // (CodeRabbit on #1379).
+  it("reads a last record that has no trailing newline", async () => {
+    const { file } = writeTranscript(userLine("u") + promptLine("what I asked") + aiTitleLine("titled, unterminated").trimEnd());
+    expect(await titleOf(file)).toBe("titled, unterminated");
+  });
+
   // Clearing a transcript rewrites it shorter; resuming from the old offset would fold new records
   // onto a value describing a file that no longer exists.
   it("re-reads from the start when the transcript got shorter", async () => {

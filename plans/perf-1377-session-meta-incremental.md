@@ -63,12 +63,20 @@ can see what they have headroom over.
 
 ## Shape
 
-**`server/infra/jsonl-file.ts`** — `forEachJsonlRecordIn(file, range, onRecord)`: folds the complete
-records in `[from, to)` (EOF when `to` is omitted) and answers the offset it stopped at — the end of
-the last complete line. A trailing partial line (the writer caught mid-append) is left for the next
-call rather than parsed; a LEADING partial line is dropped unless the caller says `from` is a line
-boundary, which is exactly the difference between a resumed scan and a tail read. Byte accounting is
-done on the raw buffer, splitting on `\n`, so it cannot drift from what the caller stores.
+**`server/infra/jsonl-file.ts`** — `forEachJsonlRecordIn(file, range, onRecord)`: folds the records
+in `[from, to)` (EOF when `to` is omitted) and answers the offset it stopped at. A LEADING partial
+line is dropped unless the caller says `from` is a line boundary, which is exactly the difference
+between a resumed scan and a tail read. Byte accounting is done on the raw buffer, splitting on
+`\n`, so it cannot drift from what the caller stores.
+
+The last line of a range that ran to EOF is the interesting one, and it is two different things: a
+record written without a trailing newline, or half of one still being written. **JSON tells them
+apart** — a truncated record does not parse — so a valid one is folded and counted (which is what
+`forEachJsonlRecord` does, and equivalence is the whole point), and a broken one is left uncounted
+for the next scan to pick up whole. At a `to` boundary the cut is arbitrary, so its last line is
+never folded. Treating every newline-less last line as half-written was the first version, and it
+would have dropped the final record of any transcript that does not end in a newline — for as long
+as the file sat unchanged, which for a finished session is forever (found by CodeRabbit).
 
 **`server/session/file-cache.ts`** — `createAppendFileCache<T>()` beside the existing
 `createFileCache<T>()`, sharing its LRU store: `resume(key, stamp)` answers `{ from, value }` when
@@ -87,7 +95,10 @@ the finished row would freeze a memo edit or an activity flag behind an unchange
 - folding `[0, EOF)` equals the whole-file fold (the new reader is not a different rule)
 - **equivalence**: fold, append, resume from the returned offset → same result as folding the whole
   grown file in one pass (the check #998 asks for by name)
-- a trailing partial line is not folded, and is folded once its newline arrives
+- a trailing HALF record is not folded, and is folded once the rest of it arrives
+- a valid final record with no trailing newline IS folded, and counted, exactly as the unbounded
+  reader folds it
+- the last line of a window that stops short of EOF is never folded
 - a leading partial line is dropped for a window that starts mid-line, and kept when the caller says
   the offset is a line boundary
 - the returned offset is the end of the last complete line; CRLF; no trailing newline; empty file;
