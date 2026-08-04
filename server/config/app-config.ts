@@ -33,6 +33,7 @@ import { readTextFile } from "../infra/read-text-file.js";
 import { writeFileAtomicSync } from "../files/atomic-write.js";
 import { isRepoEntry } from "../../common/repoEntry.js";
 import { sanitizeGitlabHosts } from "../../common/gitlabHosts.js";
+import { DEFAULT_WORKLOG_INTERVAL_HOURS, sanitizeWorklogIntervalHours } from "../../common/worklogInterval.js";
 import { GUI_SERVER_ID } from "../../common/toolGroups.js";
 
 export interface AppConfig {
@@ -51,7 +52,7 @@ export interface AppConfig {
   prRepos: string[];
   // Hosts that run a self-hosted GitLab (#1332), e.g. "gitlab.hogefuga.com". A host named here is
   // read with `glab`, exactly as gitlab.com is; nothing else can tell them apart from the URL.
-  // config.json only — no Settings control, so a hand edit needs a restart like `prRepos` does.
+  // Takes effect on the next server start, like `prRepos` does.
   gitlabHosts: string[];
   // Which local clone work on a repo starts in, for the repos the user has chosen one for (#1172).
   // Only the CHOICE is stored: which clones exist at all is derived from `cwdPresets` on every
@@ -336,10 +337,6 @@ export function sanitizeTerminalSubmit(input: unknown): TerminalSubmitMode {
   return isTerminalSubmitMode(input) ? input : DEFAULT_TERMINAL_SUBMIT_MODE;
 }
 
-export const DEFAULT_WORKLOG_INTERVAL_HOURS = 6;
-const MIN_WORKLOG_INTERVAL_HOURS = 1;
-const MAX_WORKLOG_INTERVAL_HOURS = 168; // one week
-
 export function sanitizeWorklogEnabled(input: unknown): boolean {
   return input === true;
 }
@@ -368,12 +365,6 @@ export function sanitizePrWorkdirFooter(input: unknown): boolean {
 // the planned third value (a user's own wording) widens this one and not that one.
 export function sanitizeAppendSystemPrompt(input: unknown): boolean {
   return input !== false;
-}
-
-// Positive whole hours, clamped to [1, 168]. Anything else falls back to the default.
-export function sanitizeWorklogIntervalHours(input: unknown): number {
-  if (typeof input !== "number" || !Number.isFinite(input) || input <= 0) return DEFAULT_WORKLOG_INTERVAL_HOURS;
-  return Math.min(MAX_WORKLOG_INTERVAL_HOURS, Math.max(MIN_WORKLOG_INTERVAL_HOURS, Math.round(input)));
 }
 
 // Fresh object each call — callers hold and mutate the returned config in place, so a
