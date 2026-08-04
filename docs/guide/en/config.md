@@ -785,7 +785,8 @@ highlight something while reading.
 ```
 
 There is a checkbox in **Settings → Terminal keys**, applied at once. A hand edit of the file
-instead needs a server restart.
+instead needs a **server restart, then a tab reload** — the server reads this file once at startup,
+and the browser takes the value from the server when the page loads.
 
 It coexists with the [`copy` keymap action](#keymap): keep `copy` bound as well if you also want a
 key for it, for instance to copy a selection made with the keyboard.

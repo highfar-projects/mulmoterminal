@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-config
-description: The way into configuring MulmoTerminal, and the way to find out how it is configured now. Use for a broad or unsure request — "configure MulmoTerminal", "set this up", "customize this", "what can I change?", first-run setup — and route to the skill that owns the area. Also answers "how is this set up right now?", "why isn't my setting working?", "did that take effect?" by reading the live config: the global `~/.mulmoterminal/config.json`, each project's `.mulmoterminal.json`, and what the app ACTUALLY parsed from them — including keys it dropped in validation, which is the difference between a setting you never made and one that silently never applied. Owns the single-value global settings that have no skill of their own: work comments on an issue (issueWorkComments), the PR clone footer (prWorkdirFooter), the closing summary (appendSystemPrompt), the decision digest (decisionDigest), the periodic dev-work log (worklogEnabled), roster row length (cockpitLines), a self-hosted GitLab (gitlabHosts), and a project's Skill menu (skills). When the request names another area, go straight to that skill instead: mulmoterminal-dirs (colours, grid order, project names, font size), mulmoterminal-theme (your own colour scheme), mulmoterminal-header (buttons and chips), mulmoterminal-keys (shortcuts, copy-on-select, Enter behaviour), mulmoterminal-model (other models and backends, and your own command for starting Claude Code), mulmoterminal-notify (sounds and push).
+description: The way into configuring MulmoTerminal, and the way to find out how it is configured now. Use for a broad or unsure request — "configure MulmoTerminal", "set this up", "customize this", "what can I change?", first-run setup — and route to the skill that owns the area. Also answers "how is this set up right now?", "why isn't my setting working?", "did that take effect?" by reading the live config: the global `~/.mulmoterminal/config.json`, each project's `.mulmoterminal.json`, and what the app ACTUALLY parsed from them — including keys it dropped in validation, which is the difference between a setting you never made and one that silently never applied. Owns the global settings that have no skill of their own: work comments on an issue (issueWorkComments), the PR clone footer (prWorkdirFooter), the closing summary (appendSystemPrompt), the decision digest (decisionDigest), the periodic dev-work log (worklogEnabled), roster row length (cockpitLines), a self-hosted GitLab (gitlabHosts), and a project's Skill menu (skills). When the request names another area, go straight to that skill instead: mulmoterminal-dirs (colours, grid order, project names, font size), mulmoterminal-theme (your own colour scheme), mulmoterminal-header (buttons and chips), mulmoterminal-keys (shortcuts, copy-on-select, Enter behaviour), mulmoterminal-model (other models and backends, and your own command for starting Claude Code), mulmoterminal-notify (sounds and push).
 ---
 
 # Configuring MulmoTerminal — start here
@@ -14,14 +14,15 @@ sibling skill.
 | Place | What | Written by |
 |---|---|---|
 | Settings modal | Theme, terminal font size / family / scroll, roster rows, notification sounds, Push, PR repos, self-hosted GitLab, work comments, PR footer, closing summary, decision digest, dev-work log, copy-on-select, Enter behaviour, launch commands, phone quick commands, MCP servers | the user, in the UI |
-| `~/.mulmoterminal/config.json` | Everything global — including the four with no UI: `keymap`, `themes`, `providers`, `buttons` / `chips` | these skills, or by hand |
+| `~/.mulmoterminal/config.json` | Everything global — including the five Settings can only SHOW, never edit: `keymap`, `themes`, `providers`, `customAgents`, `buttons` / `chips` | these skills, or by hand |
 | `<project>/.mulmoterminal.json` | Per-project appearance and behaviour. **No UI writes this file** | these skills only |
 
-**Check Settings first when a request is one toggle.** A global setting that is a single value now
-has a control there, so "turn on work comments" is a click rather than a skill run — say where it is
-and let them choose. What Settings can only DISPLAY is the four above: a keymap binding, a colour
-scheme, a backend, a header button. Those are structured enough to need the questions a skill asks,
-and each has a button in its section that launches the skill that owns it.
+**Check Settings first when a request is one setting.** Most global settings now have a control
+there, so "turn on work comments" is a click rather than a skill run — say where it is and let them
+choose. The five above are the exception: a keymap binding, a colour scheme, a backend, your own
+Claude Code command, a header button. Settings SHOWS each of them — what is configured now, and for
+a backend whether it can be reached — but cannot edit them: they are structured enough to need the
+questions a skill asks. Every one of those sections carries a button that launches the owning skill.
 
 ## Routing
 
@@ -129,8 +130,7 @@ State these when they matter; they are the ones that cost people an afternoon.
 
 ## The settings that live here
 
-Each is a single value, so none warrants its own skill. **All but `skills` also have a Settings
-control** — offer that first, and use these when the user would rather be told the key, or is
+None is big enough to warrant its own skill. **All but `skills` also have a Settings control** — offer that first, and use these when the user would rather be told the key, or is
 setting up a machine without opening the browser.
 
 ### `skills` — the header's Skill menu, per project
