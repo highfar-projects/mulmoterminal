@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { configuredFontFamily, saveGlobalFontFamily } from "../../composables/terminalFontFamily";
-import { TERMINAL_FONT_FAMILY_DEFAULT } from "../../../common/terminalFontFamily";
+import { normalizeFontFamily, TERMINAL_FONT_FAMILY_DEFAULT } from "../../../common/terminalFontFamily";
 import SettingsButton from "../SettingsButton.vue";
 import SettingsField from "../SettingsField.vue";
 import { SECTION_HEADING } from "./sectionClasses";
@@ -14,11 +14,21 @@ import { SECTION_HEADING } from "./sectionClasses";
 const draft = ref(configuredFontFamily.value ?? "");
 watch(configuredFontFamily, (value) => (draft.value = value ?? ""));
 
+// Judged with the SAME function the server sanitizes with, the way the list sections judge a repo
+// or an MCP server. Without it this field silently eats the input: an unusable stack normalizes to
+// null, which saves as "use the built-in", and when nothing was configured before, the saved value
+// does not change — so the watch never fires, the text stays in the box, and pressing Apply again
+// does nothing and says nothing. Blank is not invalid; it is how you ask for the built-in stack.
+const trimmed = computed(() => draft.value.trim());
+const usable = computed(() => trimmed.value === "" || normalizeFontFamily(trimmed.value) !== null);
+const unchanged = computed(() => trimmed.value === (configuredFontFamily.value ?? ""));
+
 const saving = ref(false);
 async function apply() {
+  if (!usable.value || unchanged.value) return;
   saving.value = true;
   // Blank means "use the built-in" — the saver maps it to null rather than to an empty stack.
-  await saveGlobalFontFamily(draft.value.trim() || null);
+  await saveGlobalFontFamily(trimmed.value || null);
   saving.value = false;
 }
 </script>
@@ -39,9 +49,14 @@ async function apply() {
       spellcheck="false"
       @keydown.enter="apply"
     />
-    <SettingsButton :disabled="saving || draft.trim() === (configuredFontFamily ?? '')" @click="apply">Apply</SettingsButton>
+    <SettingsButton :disabled="saving || unchanged || !usable" @click="apply">Apply</SettingsButton>
   </div>
-  <p class="mb-3 mt-1.5 text-[12px] text-dim">
+  <p v-if="!usable" class="mb-3 mt-1.5 text-[12px] text-err-text">
+    Not a font stack. Separate names with commas — <code>'Cica', 'MS Gothic', monospace</code>. CSS syntax characters and unbalanced quotes are refused, because
+    one bad entry invalidates the whole declaration.
+  </p>
+  <p v-else class="mb-3 mt-1.5 text-[12px] text-dim">
     Open terminals re-fit as soon as this lands — a different face has a different advance width, so the grid would drift from the canvas otherwise.
+    <code>monospace</code> is appended when you name no generic family, so a stack that matches nothing still falls back to a fixed-width face.
   </p>
 </template>

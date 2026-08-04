@@ -2,11 +2,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount } from "@vue/test-utils";
 import GitHubSection from "../../../../src/components/settings/GitHubSection.vue";
 import SessionSection from "../../../../src/components/settings/SessionSection.vue";
+import TerminalFontFamilySection from "../../../../src/components/settings/TerminalFontFamilySection.vue";
 import { setIssueWorkComments } from "../../../../src/composables/issueWorkComments";
 import { setPrWorkdirFooter } from "../../../../src/composables/prWorkdirFooter";
 import { setAppendSystemPrompt } from "../../../../src/composables/appendSystemPrompt";
 import { setDecisionDigest } from "../../../../src/composables/decisionDigest";
 import { setWorklogEnabled, setWorklogIntervalHours } from "../../../../src/composables/worklog";
+import { setGlobalFontFamily } from "../../../../src/composables/terminalFontFamily";
 
 // The sections that gave a config.json-only setting a control (#1401). What matters about each is
 // that flipping it POSTs the RIGHT FIELD: every one is a partial update, so a section naming the
@@ -108,6 +110,18 @@ describe("SessionSection", () => {
     expect(posts).toEqual([{ worklogIntervalHours: 7 }]);
   });
 
+  // Greying the row with `pointer-events-none` stops the mouse and nothing else. Without a real
+  // `disabled`, a keyboard user tabs into the stepper and saves an interval for a task that is not
+  // running — a POST the screen says cannot happen (Codex review on #1412).
+  it("cannot change the interval while the log is off", async () => {
+    setWorklogEnabled(false);
+    const wrapper = mount(SessionSection);
+    const up = wrapper.findAll("button").find((b) => b.attributes("aria-label") === "Increase dev-work log interval");
+    expect(up?.attributes("disabled")).toBeDefined();
+    await up?.trigger("click");
+    expect(posts).toEqual([]);
+  });
+
   // The stepper offers the range the SERVER clamps to, so a value it lets the user reach always
   // survives the save. One end is enough to pin that they are the same numbers.
   it("stops at the interval the server clamps to", async () => {
@@ -119,5 +133,39 @@ describe("SessionSection", () => {
         .find((b) => b.attributes("aria-label") === "Increase dev-work log interval")
         ?.attributes("disabled"),
     ).toBeDefined();
+  });
+});
+
+describe("TerminalFontFamilySection", () => {
+  const apply = (w: ReturnType<typeof mount>) => w.findAll("button").find((b) => b.text() === "Apply");
+
+  beforeEach(() => setGlobalFontFamily(null));
+
+  it("posts the normalized stack, with monospace appended", async () => {
+    const wrapper = mount(TerminalFontFamilySection);
+    await wrapper.find("input").setValue("'Cica'");
+    await apply(wrapper)?.trigger("click");
+    expect(posts).toEqual([{ fontFamily: "'Cica', monospace" }]);
+  });
+
+  it("saves null when the field is cleared, which asks for the built-in stack", async () => {
+    setGlobalFontFamily("'Cica', monospace");
+    const wrapper = mount(TerminalFontFamilySection);
+    await wrapper.find("input").setValue("");
+    await apply(wrapper)?.trigger("click");
+    expect(posts).toEqual([{ fontFamily: null }]);
+  });
+
+  // Without the check this field eats the input in silence: the stack normalizes to null, which
+  // SAVES as "use the built-in", and with nothing configured before, the stored value does not
+  // change — so nothing re-renders, the text stays in the box, and pressing Apply again does
+  // nothing and explains nothing. Found reviewing this PR, not flagged by a bot.
+  it("refuses a stack the server would drop, and says why", async () => {
+    const wrapper = mount(TerminalFontFamilySection);
+    await wrapper.find("input").setValue("Menlo; }");
+    expect(apply(wrapper)?.attributes("disabled")).toBeDefined();
+    expect(wrapper.text()).toContain("Not a font stack");
+    await apply(wrapper)?.trigger("click");
+    expect(posts).toEqual([]);
   });
 });

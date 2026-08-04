@@ -60,6 +60,7 @@ function nudgeInterval(delta: number) {
       :max="MAX_WORKLOG_INTERVAL_HOURS"
       :step="WORKLOG_STEP_HOURS"
       label="dev-work log interval"
+      :disabled="!worklogEnabled"
       @nudge="nudgeInterval"
     />
   </div>
