@@ -435,7 +435,7 @@ onMounted(() => (offNewTerminal = registerNewTerminalHandler(openNewTerminal)));
 onBeforeUnmount(detachNewTerminal);
 
 // Server config: the default workspace dir + the auto-recorded dir presets + sound.
-const { defaultCwd, home, presets, launchers, loadConfig, recordPreset, removePreset } = useAppConfig();
+const { defaultCwd, home, presets, launchers, customAgents, loadConfig, recordPreset, removePreset } = useAppConfig();
 const showSettings = ref(false);
 onMounted(loadConfig);
 
@@ -778,6 +778,7 @@ onBeforeUnmount(detachSpawnedChat);
       :default-cwd="defaultCwd"
       :presets="presets"
       :launchers="launchers"
+      :custom-agents="customAgents"
       :home="home"
       :reorderable="reorderable"
       :open-session-ids="openSessionIds"

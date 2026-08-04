@@ -122,6 +122,9 @@ export interface ConnTarget {
   // The provider/model the launch form picked for this session (#584). Claude only —
   // it rides the /ws query and overrides the directory's default.
   launch?: LaunchChoice | null;
+  // The custom agent this session was started from (#1414) — one of the user's own ways of
+  // starting Claude Code. `agent` stays "claude" for it: that IS what runs.
+  customAgent?: string | null;
 }
 
 // The `terminalSubmit` mapping describes the user's CLAUDE binding, so it only applies to

@@ -22,6 +22,7 @@ import {
 import { type HeaderConfig } from "./header-config.js";
 import { type CwdPreset, type Launcher, type Provider, type UserMcpServer } from "./config-schema.js";
 import type { QuickCommand } from "../../common/quickCommands.js";
+import type { CustomAgent } from "../../common/customAgents.js";
 import type { PushKind } from "../../common/pushKinds.js";
 import { type TerminalSubmitMode } from "../../common/terminalSubmit.js";
 import { launchOptions } from "./launch-options.js";
@@ -71,6 +72,13 @@ export function getRepoDirs(): Record<string, string> {
 // index against the current list without a restart.
 export function getLaunchers(): Launcher[] {
   return config.launchers;
+}
+
+// The user's own ways of starting Claude Code, offered in the Agent Picker — read live for the
+// same reason as the launchers above: /ws resolves `?customAgent=<id>` against the current list,
+// so adding one needs no restart. The LIST is the allowlist; the browser sends only an id.
+export function getCustomAgents(): CustomAgent[] {
+  return config.customAgents;
 }
 
 // The phrases the phone offers as chips — read live so a Settings edit reaches the next

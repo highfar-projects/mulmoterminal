@@ -137,6 +137,15 @@ the cell (#1040, #1358), and a command starting with the word `codex` was held t
 what it says is what made the chips and the Agent Picker impossible to tell apart, and every one of
 those behaviours rested on guessing at text the user wrote.
 
+**A CUSTOM AGENT is the other side of that line, and it works because it is DECLARED.** A
+`customAgents` entry in the global config (`common/customAgents.ts`) is an Agent Picker option whose
+`command` the user writes — `ollama launch claude --model … --` — and Claude Code's whole argv is
+appended to it, so the session resumes, reports cost, and gets the GUI tools. The reason that is not
+the banned guessing above: the entry carries `agent: "claude"`, saying which CLI's arguments to
+append. It is required, and an entry omitting it is dropped on load. Nothing reads the command text
+to decide anything. Adding a second value to `CUSTOM_AGENT_KINDS` means teaching the spawn to build
+THAT agent's argv — it is not a label.
+
 So do not re-add a recogniser, however narrow, and do not "restore" the worktree limit for chips —
 that hole is known and accepted (a `codex` chip can occupy a worktree twice). A chip that wants GUI
 tools asks for them in the flags the user writes. Agent behaviour belongs to the Agent Picker.

@@ -8,6 +8,7 @@ import { sanitizePresets } from "./cwd-presets.js";
 import { sanitizeButtons, sanitizeChips } from "./header-config.js";
 import {
   launcherSchema,
+  customAgentSchema,
   quickCommandSchema,
   userMcpServerSchema,
   providerSchema,
@@ -22,6 +23,7 @@ import {
 } from "./config-schema.js";
 import { DEFAULT_TERMINAL_SUBMIT_MODE, isTerminalSubmitMode, type TerminalSubmitMode } from "../../common/terminalSubmit.js";
 import type { QuickCommand } from "../../common/quickCommands.js";
+import { isCustomAgentId, type CustomAgent } from "../../common/customAgents.js";
 import { DEFAULT_PUSH_KINDS, PUSH_KINDS, type PushKind } from "../../common/pushKinds.js";
 import { DEFAULT_SOUND_KINDS, NOTIFY_KINDS, type NotifyKind } from "../../common/notifyKinds.js";
 import { parsePresetRef } from "../../common/notifySounds.js";
@@ -59,6 +61,11 @@ export interface AppConfig {
   repoDirs: Record<string, string>;
   // User-defined launch commands offered in the grid cell launcher (label + command).
   launchers: Launcher[];
+  // The user's OWN ways of starting Claude Code, offered in the Agent Picker beside Claude /
+  // Codex / Antigravity / Shell (#1414). Not a launcher: Claude Code's argv is appended to the
+  // entry's command, so the session resumes, reports cost, and reaches the GUI tools like any
+  // other Claude cell — see common/customAgents.ts.
+  customAgents: CustomAgent[];
   // Phrases the phone offers as chips on a session's terminal view (#830), optionally
   // scoped to session kinds. Empty by default — no chips until the user adds one.
   quickCommands: QuickCommand[];
@@ -213,6 +220,41 @@ export function sanitizeLaunchers(input: unknown): Launcher[] {
     seen.add(label);
     out.push({ label, command });
     if (out.length >= LAUNCHERS_MAX) break;
+  }
+  return out;
+}
+
+const CUSTOM_AGENT_LABEL_MAX = 24;
+const CUSTOM_AGENT_COMMAND_MAX = 500;
+const CUSTOM_AGENTS_MAX = 8;
+
+// Same shape of rule as sanitizeLaunchers, with the ID as the identity rather than the label:
+// the id is what a running session is remembered by and what the browser sends back, so a
+// duplicate would make two entries indistinguishable on the wire while both still rendered.
+//
+// An id that is a BUILT-IN picker option ("claude", "shell", …) is dropped by `isCustomAgentId`
+// rather than kept: its button would be shadowed by the built-in one, which looks exactly like
+// the entry having been ignored.
+//
+// The label is short because it sits in the same one-line toggle as Claude / Codex /
+// Antigravity / Shell, and that row already wraps in a narrow cell.
+export function sanitizeCustomAgents(input: unknown): CustomAgent[] {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set<string>();
+  const out: CustomAgent[] = [];
+  for (const v of input) {
+    const parsed = customAgentSchema.safeParse(v);
+    if (!parsed.success) continue;
+    const id = parsed.data.id.trim();
+    const label = parsed.data.label.trim().slice(0, CUSTOM_AGENT_LABEL_MAX);
+    const command = parsed.data.command.trim().slice(0, CUSTOM_AGENT_COMMAND_MAX);
+    if (!isCustomAgentId(id) || !label || !command || seen.has(id)) continue;
+    seen.add(id);
+    // `agent` is already narrowed by the schema's enum — an entry that omits it, or names an
+    // agent whose argv this app cannot build, never reaches here. That is deliberate: without it
+    // nothing knows WHICH arguments to append, and appending none would start a bare wrapper.
+    out.push({ id, label, agent: parsed.data.agent, command });
+    if (out.length >= CUSTOM_AGENTS_MAX) break;
   }
   return out;
 }
@@ -389,6 +431,7 @@ export const emptyConfig = (): AppConfig => ({
   gitlabHosts: [],
   repoDirs: {},
   launchers: [],
+  customAgents: [],
   quickCommands: [],
   userMcpServers: [],
   themes: [],
@@ -434,6 +477,7 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     gitlabHosts: sanitizeGitlabHosts(o.gitlabHosts),
     repoDirs: sanitizeRepoDirs(o.repoDirs),
     launchers: sanitizeLaunchers(o.launchers),
+    customAgents: sanitizeCustomAgents(o.customAgents),
     quickCommands: sanitizeQuickCommands(o.quickCommands),
     userMcpServers: sanitizeUserMcpServers(o.userMcpServers),
     themes: sanitizeCustomThemes(o.themes),
@@ -539,6 +583,7 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     gitlabHosts: updated("gitlabHosts", sanitizeGitlabHosts, base.gitlabHosts),
     repoDirs: updated("repoDirs", sanitizeRepoDirs, base.repoDirs),
     launchers: updated("launchers", sanitizeLaunchers, base.launchers),
+    customAgents: updated("customAgents", sanitizeCustomAgents, base.customAgents),
     quickCommands: updated("quickCommands", sanitizeQuickCommands, base.quickCommands),
     userMcpServers: updated("userMcpServers", sanitizeUserMcpServers, base.userMcpServers),
     themes: updated("themes", sanitizeCustomThemes, base.themes),
@@ -575,6 +620,7 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     gitlabHosts: config.gitlabHosts,
     repoDirs: config.repoDirs,
     launchers: config.launchers,
+    customAgents: config.customAgents,
     quickCommands: config.quickCommands,
     userMcpServers: config.userMcpServers,
     themes: config.themes,

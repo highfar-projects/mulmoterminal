@@ -24,6 +24,7 @@ import { codexRolloutExists } from "../agents/codex-sessions.js";
 import {
   antigravityConversations,
   antigravityConversationsHydrated,
+  customAgentSessionsHydrated,
   codexRolloutIds,
   markDevTerminalSession,
   markAttachedSessionPlaced,
@@ -46,6 +47,7 @@ import { normalizeAgent, parseIndexParam } from "./routeParams.js";
 import { agentResumeId } from "../agents/agent-resume.js";
 import { claimLaunch, worktreeOccupancy } from "../session/worktree-session-limit.js";
 import { worktreeRefusal } from "../../common/worktreeSession.js";
+import { isCustomAgentId } from "../../common/customAgents.js";
 
 export interface WsRouteDeps {
   /** The http server these endpoints hang their `upgrade` handler off. */
@@ -393,6 +395,14 @@ async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
   // a reattach, where no spawn happens and the running session keeps what it started with.
   const launch = launchChoiceFromParams(url.searchParams);
 
+  // ?customAgent=<id> — the Agent Picker chose one of the user's OWN ways of starting Claude Code
+  // (#1414). Only the id travels: the configured list is the allowlist and it is resolved at spawn
+  // (see spawnClaudePty), so the browser can never name a program that is not in the config. A
+  // malformed id is dropped here rather than passed on, which starts plain claude — the same thing
+  // an entry the user has since deleted does.
+  const customAgentParam = url.searchParams.get("customAgent");
+  const customAgentId = isCustomAgentId(customAgentParam) ? customAgentParam : undefined;
+
   // Decide the effective session id BEFORE telling the browser. A requested id
   // is honored only if it can actually be served: a live pty (reattach) or an
   // on-disk transcript (`--resume`). A requested id that's neither — e.g. a cell
@@ -400,6 +410,11 @@ async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
   // exits with "session id already in use" if we retry `--session-id <same>`.
   // So mint a fresh id; the browser adopts it from this `session` message and
   // re-persists, so the reload just reopens a working terminal seamlessly.
+  // Before resolving, not after: which custom agent a session was started on lives on disk, and a
+  // resume that arrives while the log is still being read would see an empty map and continue the
+  // conversation on plain claude — a different model, mid-thread. Same guard the antigravity
+  // conversation map takes, for the same restart case.
+  await customAgentSessionsHydrated;
   const { reattachId, resume, sessionId } = resolveClaudeSession(requested, cwd);
   const live = reattachId ? ptys.get(reattachId) : undefined;
   // Buffered from the announcement on, like every other terminal endpoint: the browser's first
@@ -415,7 +430,7 @@ async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
     err instanceof ProviderRefusedError || err instanceof SpawnRefusedError ? err.message : `Failed to start Claude: ${messageOf(err)}`;
 
   startAndWire(deps, ws, { id: sessionId, tag: "claude", early, startFailureMessage, size }, () => {
-    const entry = live ? deps.reattachPty(live, ws, sessionId) : deps.spawnClaudePty(sessionId, resume, ws, { cwd, attachGuiMcp, launch });
+    const entry = live ? deps.reattachPty(live, ws, sessionId) : deps.spawnClaudePty(sessionId, resume, ws, { cwd, attachGuiMcp, launch, customAgentId });
     // Single view (gui) = the attached session IS the actively-viewed pane, so mark it
     // read. A grid dev-terminal cell (gui=0) is only "viewed" once focused/zoomed (the
     // client then sends a `view` frame), so it stays inactive here and can surface
