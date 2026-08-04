@@ -9,8 +9,9 @@ describe("headerHookEffect", () => {
     expect(headerHookEffect("UserPromptSubmit", { prompt: "  fix the login bug  " })).toEqual({ kind: "prompt", text: "fix the login bug" });
   });
 
-  // The same fixture list transcript.spec.ts iterates. Null and not a blank prompt: the task the
-  // user typed before the background task finished has to stay on the header (#1384).
+  // The same fixture list transcript.spec.ts iterates — this is the side that had no guard at all
+  // before #1384. Null and not a blank prompt: the task the user typed before the background task
+  // finished has to stay on the header.
   it.each(INJECTED_PROMPTS)("changes nothing on an injected %s", (_name, prompt) => {
     expect(headerHookEffect("UserPromptSubmit", { prompt })).toBeNull();
   });

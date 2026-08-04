@@ -1,8 +1,10 @@
-// Shared by the two specs that guard the same judgment — `userPromptText` (transcript) and
-// `headerHookEffect` (live hook). They iterate THIS list, so a marker added to one path and
-// forgotten on the other fails the other's spec. That drift is the bug being fixed: the
-// transcript side learned about `<task-notification>` in e1e19c66 and the hook side did not,
-// so the XML sat on the cell header for a year (#1384).
+// The single specification of what counts as harness-injected, iterated by BOTH specs that
+// guard it — `userPromptText` (transcript) and `headerHookEffect` (live hook). Sharing the
+// predicate is what makes the two agree; sharing this list is what holds each call site to
+// it, so a path that stops consulting the predicate — an early return, a re-inlined copy —
+// fails its own spec against shapes the other path still refuses. That is precisely what the
+// hook path would have failed on before #1384, when only the transcript side knew about
+// `<task-notification>`.
 //
 // Shapes are taken from real transcripts on disk, not invented.
 

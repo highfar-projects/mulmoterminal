@@ -27,8 +27,8 @@ import { INJECTED_PROMPTS, NEAR_MISS_PROMPTS } from "../../support/injectedPromp
 
 const line = (o: unknown) => JSON.stringify(o);
 
-// The same fixture list header-hook.spec.ts iterates. Both must agree, because a marker
-// known to only one of them is the whole of #1384.
+// The same fixture list header-hook.spec.ts iterates, so both call sites are held to one
+// specification of what counts as injected — the thing #1384 lacked.
 describe("isInjectedPrompt", () => {
   it.each(INJECTED_PROMPTS)("refuses the harness-injected %s", (_name, text) => {
     expect(isInjectedPrompt(text)).toBe(true);
