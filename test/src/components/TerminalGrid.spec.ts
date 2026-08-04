@@ -676,6 +676,21 @@ describe("file pane beside the enlarged cell", () => {
       expect(paneOf(w).props("initialState")).toBeNull();
     });
 
+    // A terminal that changed directory is leaving that tree behind exactly as a zoom to another
+    // cell does, so the snapshot has to be filed under the directory it is leaving — or coming
+    // back to it restores whatever was there before, which is the wrong tree or none (Codex review).
+    it("files the tree under the directory a cell is leaving when it cds", async () => {
+      const cells = [cell(1, "s1", "/one"), cell(2)];
+      const w = mountCockpit(cells, 1, []);
+      await openPane(w);
+      paneStub.snapshot.mockReturnValue({ openPath: "one.md", expanded: ["src"] });
+
+      await w.setProps({ cells: [cell(1, "s1", "/two"), cell(2)] });
+      await flushPromises();
+      expect(paneOf(w).props("cwd")).toBe("/two");
+      expect(JSON.parse(localStorage.getItem("files_pane_state") ?? "[]")).toEqual([{ cwd: "/one", state: { openPath: "one.md", expanded: ["src"] } }]);
+    });
+
     it("ignores a directory it has nothing stored for", async () => {
       seed("/elsewhere", { openPath: "notes.md", expanded: [] });
       const w = mountCockpit([cell(1, "s1", "/one"), cell(2)], 1, []);

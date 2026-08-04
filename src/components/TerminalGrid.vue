@@ -638,7 +638,10 @@ watch(
     // back on means staying put: the pane keeps the cell and root it is on, which its header names.
     const wasFiles = filesOpen.value && !firstShowing;
     if (wasFiles && (await filesPane.value?.flush()) === false) return;
-    if (!sameCell) rememberPaneState(paneUid.value);
+    // On EVERY re-root, not only a move to another cell: a terminal that changed directory is
+    // leaving that tree behind too, and the snapshot is what the directory layer restores from
+    // when anything comes back to it (Codex review). A pane with no root yet has nothing to file.
+    if (!firstShowing) rememberPaneState(paneUid.value);
     paneUid.value = uid;
     restoreSessionPane(uid);
     paneCwd.value = expandedCwd.value;
