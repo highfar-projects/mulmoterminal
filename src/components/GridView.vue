@@ -69,6 +69,7 @@ import type { LaunchAgent } from "../../common/launchAgent";
 import type { LaunchPick } from "./launchers";
 import { isRecord } from "../../common/isRecord";
 import { isDrawnResult } from "../utils/drawnResult";
+import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 // The multi-terminal grid view, shown at /terminals. Leaving the grid is just a
 // route push from the shared toolbar (Chat / Collections / a favorite), so there's
@@ -165,7 +166,7 @@ async function seedMeta(id: string, cwd: string | null) {
   latestMetaSeed.set(id, seed);
   try {
     const query = cwd ? `?cwd=${encodeURIComponent(cwd)}` : "";
-    const res = await fetch(`/api/session/${id}${query}`);
+    const res = await fetchWithTimeout(`/api/session/${id}${query}`);
     if (!res.ok || latestMetaSeed.get(id) !== seed) return;
     const d: unknown = await res.json();
     if (latestMetaSeed.get(id) !== seed) return;
@@ -184,7 +185,7 @@ async function seedPhase(cwd: string) {
   const seed = (latestPhaseSeed.get(cwd) ?? 0) + 1;
   latestPhaseSeed.set(cwd, seed);
   try {
-    const res = await fetch(`/api/pr-phase?cwd=${encodeURIComponent(cwd)}`);
+    const res = await fetchWithTimeout(`/api/pr-phase?cwd=${encodeURIComponent(cwd)}`, undefined, SLOW_COMMAND_TIMEOUT_MS);
     if (!res.ok || latestPhaseSeed.get(cwd) !== seed) return;
     const d: unknown = await res.json();
     if (latestPhaseSeed.get(cwd) !== seed) return;
@@ -599,7 +600,7 @@ async function adoptUnplacedSessions(): Promise<void> {
   }
   adoptingUnplaced = true;
   try {
-    const res = await fetch("/api/sessions/unplaced");
+    const res = await fetchWithTimeout("/api/sessions/unplaced");
     if (!res.ok) return;
     const body: unknown = await res.json();
     const rows = isRecord(body) && Array.isArray(body.sessions) ? body.sessions : [];

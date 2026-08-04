@@ -37,14 +37,20 @@ import accountingCss from "@mulmoclaude/accounting-plugin/style.css?inline";
 // against those packages' dists (see src/plugin-tailwind.css), supplying the
 // utilities their components use.
 import mulmochatPluginCss from "./plugin-tailwind.css?inline";
+import { fetchWithTimeout } from "./utils/fetchWithTimeout";
 
 // Movie/PDF bytes for the mulmoscript View's download / clip-play UI. A plain
 // <video src> can't ride the dispatch envelope, so the package asks the host for
 // bytes via this adapter capability; the server route realpath-contains the wire
 // path (see server/backends/mulmoscript.ts).
+// The download counterpart of dropUpload's own limit, and generous for the same reason: the
+// deadline covers the whole TRANSFER, not just the response headers — aborting mid-body would
+// truncate a long movie rather than fail it, and `res.blob()` reads it all.
+const MEDIA_FETCH_TIMEOUT_MS = 300_000;
+
 async function fetchMulmoMediaBlob(query: { moviePath?: string; pdfPath?: string }): Promise<Blob> {
   const params = new URLSearchParams(query.pdfPath ? { pdfPath: query.pdfPath } : { moviePath: query.moviePath ?? "" });
-  const res = await fetch(`/api/mulmoscript/media?${params}`);
+  const res = await fetchWithTimeout(`/api/mulmoscript/media?${params}`, undefined, MEDIA_FETCH_TIMEOUT_MS);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.blob();
 }

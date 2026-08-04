@@ -3,6 +3,7 @@ import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups";
 import { queueMcpWrite } from "../components/mcpWriteQueue";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 // Which GUI tool groups a directory hands its agents, one switch per group in TOOL_GROUPS
 // (render, data, media, external). NOT MulmoTerminal state: each is an MCP server registered in
@@ -46,7 +47,7 @@ async function load(switches: Switches, target: string | null): Promise<void> {
   switches.dir.value = null;
   if (!target) return;
   try {
-    const res = await fetch(`/api/gui-mcp-groups?cwd=${encodeURIComponent(target)}`);
+    const res = await fetchWithTimeout(`/api/gui-mcp-groups?cwd=${encodeURIComponent(target)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await jsonBody(res);
     // A slower reply for a directory the user has since moved off would show its answer under the
@@ -87,7 +88,7 @@ function apply(switches: Switches, group: ToolGroup): Promise<void> {
 
 async function write(switches: Switches, group: ToolGroup, target: string, wanted: boolean): Promise<void> {
   try {
-    const res = await fetch("/api/gui-mcp-groups", {
+    const res = await fetchWithTimeout("/api/gui-mcp-groups", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ cwd: target, group, enabled: wanted }),
@@ -142,7 +143,7 @@ async function syncInto(switches: Switches, worktreePath: string): Promise<void>
   for (const group of changed) {
     await queueMcpWrite(async () => {
       try {
-        await fetch("/api/gui-mcp-groups", {
+        await fetchWithTimeout("/api/gui-mcp-groups", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ cwd: worktreePath, group, enabled: wanted(group) }),
@@ -158,7 +159,7 @@ async function syncInto(switches: Switches, worktreePath: string): Promise<void>
 // caller reads as "write every group" rather than as "nothing is registered".
 async function registeredIn(dir: string): Promise<unknown[] | null> {
   try {
-    const res = await fetch(`/api/gui-mcp-groups?cwd=${encodeURIComponent(dir)}`);
+    const res = await fetchWithTimeout(`/api/gui-mcp-groups?cwd=${encodeURIComponent(dir)}`);
     if (!res.ok) return null;
     const data = await jsonBody(res);
     return isUnknownArray(data.groups) ? data.groups : null;

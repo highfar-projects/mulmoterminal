@@ -78,7 +78,7 @@ describe("useAppConfig — auto preset recording", () => {
   it("imports legacy localStorage recents (recent_dirs_v1) to the FRONT of presets on load, then clears the key", async () => {
     localStorage.setItem("recent_dirs_v1", JSON.stringify(["/r/one", "/r/two"]));
     globalThis.fetch = vi.fn(async (_url: string, init?: { body?: string }) => {
-      if (!init) return { ok: true, json: async () => ({ cwd: "/w", home: "/h", cwdPresets: [{ label: "kept", path: "/p/kept" }], soundFile: null }) };
+      if (!init?.body) return { ok: true, json: async () => ({ cwd: "/w", home: "/h", cwdPresets: [{ label: "kept", path: "/p/kept" }], soundFile: null }) };
       const body = init.body ? JSON.parse(init.body) : {};
       return { ok: true, json: async () => ({ cwdPresets: body.cwdPresets ?? [] }) };
     }) as unknown as typeof fetch;
@@ -95,7 +95,7 @@ describe("useAppConfig — auto preset recording", () => {
   it("does not duplicate a legacy recent already present, but still clears the key", async () => {
     localStorage.setItem("recent_dirs_v1", JSON.stringify(["/p/kept", "/r/new"]));
     globalThis.fetch = vi.fn(async (_url: string, init?: { body?: string }) => {
-      if (!init) return { ok: true, json: async () => ({ cwd: "/w", home: "/h", cwdPresets: [{ label: "kept", path: "/p/kept" }], soundFile: null }) };
+      if (!init?.body) return { ok: true, json: async () => ({ cwd: "/w", home: "/h", cwdPresets: [{ label: "kept", path: "/p/kept" }], soundFile: null }) };
       const body = init.body ? JSON.parse(init.body) : {};
       return { ok: true, json: async () => ({ cwdPresets: body.cwdPresets ?? [] }) };
     }) as unknown as typeof fetch;
@@ -111,7 +111,7 @@ describe("useAppConfig — auto preset recording", () => {
       releaseGet = r;
     });
     globalThis.fetch = vi.fn(async (_url: string, init?: { body?: string }) => {
-      if (!init) {
+      if (!init?.body) {
         await getGate; // the initial GET stalls until we release it
         return { ok: true, json: async () => ({ cwd: "/w", home: "/h", cwdPresets: [], soundFile: null }) };
       }

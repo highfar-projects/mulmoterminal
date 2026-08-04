@@ -62,6 +62,7 @@ import { worktreeFailureMessage } from "./cellChromeRules";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
+import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 // How long a handoff failure stays on the cell before it clears itself.
 const ASK_MSG_MS = 4000;
@@ -308,7 +309,7 @@ function activityPushOf(d: Record<string, unknown>): ActivityPush {
 async function fetchSessionDetail(id: string): Promise<Record<string, unknown> | null> {
   try {
     const q = cwd.value ? `?cwd=${encodeURIComponent(cwd.value)}` : "";
-    const res = await fetch(`/api/session/${id}${q}`);
+    const res = await fetchWithTimeout(`/api/session/${id}${q}`);
     if (!res.ok) return null;
     const data = await jsonBody(res);
     return id === sessionId.value ? data : null;
@@ -462,7 +463,7 @@ function resumeSession({ id, cwd: dir, agent: resumeAgent }: { id: string; cwd: 
 async function openDir() {
   if (!cwd.value) return;
   try {
-    await fetch("/api/open-dir", {
+    await fetchWithTimeout("/api/open-dir", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ path: cwd.value }),
@@ -502,11 +503,15 @@ async function refreshGithubUrl() {
     return;
   }
   try {
-    const res = await fetch("/api/git-remote", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ path: cwd.value }),
-    });
+    const res = await fetchWithTimeout(
+      "/api/git-remote",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path: cwd.value }),
+      },
+      SLOW_COMMAND_TIMEOUT_MS,
+    );
     if (reqId !== githubReq) return; // a newer cwd superseded this lookup
     const data = res.ok ? await jsonBody(res) : {};
     if (reqId !== githubReq) return; // re-check after awaiting the body
@@ -639,7 +644,7 @@ function teardown() {
   termRef.value?.terminate();
   // Reap on the server over HTTP too — the WS `terminate` only reaches the server while
   // the socket is open, so a disconnected cell's close button would otherwise leave its tmux alive.
-  if (id) fetch(`/api/session/${encodeURIComponent(id)}/terminate`, { method: "POST" }).catch(() => {});
+  if (id) fetchWithTimeout(`/api/session/${encodeURIComponent(id)}/terminate`, { method: "POST" }).catch(() => {});
   launched.value = false;
   recordNextCwd = false; // drop any pending fresh-launch record from a torn-down session
   sessionId.value = null;
@@ -711,11 +716,15 @@ async function removeAndClose() {
   closeError.value = null;
   termRef.value?.terminate(); // free the worktree dir first (Windows locks a process's cwd)
   try {
-    const res = await fetch("/api/worktrees/remove", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ repoDir: dir, path: dir, deleteBranch: true, force: true }),
-    });
+    const res = await fetchWithTimeout(
+      "/api/worktrees/remove",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ repoDir: dir, path: dir, deleteBranch: true, force: true }),
+      },
+      SLOW_COMMAND_TIMEOUT_MS,
+    );
     if (res.ok) return teardown();
     closeError.value = "Couldn't remove the worktree — it may need manual cleanup.";
   } catch {
@@ -853,7 +862,7 @@ async function saveMemo() {
   const previous = memo.value;
   memo.value = text || null;
   try {
-    const res = await fetch(`/api/session/${encodeURIComponent(id)}/memo`, {
+    const res = await fetchWithTimeout(`/api/session/${encodeURIComponent(id)}/memo`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
@@ -918,7 +927,7 @@ async function loadDiff() {
   }
   const reqId = ++diffReq;
   try {
-    const res = await fetch(`/api/worktrees/diff?cwd=${encodeURIComponent(cwd.value)}`);
+    const res = await fetchWithTimeout(`/api/worktrees/diff?cwd=${encodeURIComponent(cwd.value)}`, undefined, SLOW_COMMAND_TIMEOUT_MS);
     if (reqId !== diffReq) return;
     const data = res.ok ? await jsonBody(res) : {};
     if (reqId !== diffReq) return;
@@ -957,11 +966,15 @@ async function worktreeAction(endpoint: "push" | "pr"): Promise<Record<string, u
   prBusy.value = true;
   prMsg.value = endpoint === "push" ? "Pushing…" : "Creating PR…";
   try {
-    const res = await fetch(`/api/worktrees/${endpoint}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ cwd: cwd.value }),
-    });
+    const res = await fetchWithTimeout(
+      `/api/worktrees/${endpoint}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ cwd: cwd.value }),
+      },
+      SLOW_COMMAND_TIMEOUT_MS,
+    );
     // jsonBody answers {} for a non-JSON / empty body (e.g. a 403 from the origin guard); an
     // empty answer must not leave the UI stuck on the optimistic "Pushing…" text.
     const data = await jsonBody(res);

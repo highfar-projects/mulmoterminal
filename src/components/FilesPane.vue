@@ -17,6 +17,7 @@ import { FILE_WRITE_CHANNEL, isFileWriteEvent } from "../../common/fileWriteChan
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 interface Node {
   name: string;
@@ -102,7 +103,7 @@ function makeNode(e: Entry, parentPath: string): Node {
 }
 
 async function fetchEntries(pathRel: string): Promise<Entry[]> {
-  const res = await fetch(`/api/files/browse/list?${qs(pathRel)}`);
+  const res = await fetchWithTimeout(`/api/files/browse/list?${qs(pathRel)}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await jsonBody(res);
   // A directory with no children answers `{ entries: [] }`, so an ABSENT array is a body we could
@@ -156,7 +157,7 @@ type WriteOutcome = { status: "saved"; version: string | null } | { status: "con
 // an await may already be gone by then.
 async function writeBuffer(pathRel: string, text: string, base: string | null, keepalive = false): Promise<WriteOutcome> {
   try {
-    const res = await fetch(`/api/files/browse/write?${qs(pathRel)}`, {
+    const res = await fetchWithTimeout(`/api/files/browse/write?${qs(pathRel)}`, {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ text, baseVersion: base }),
@@ -175,7 +176,7 @@ async function writeBuffer(pathRel: string, text: string, base: string | null, k
 /** Hand a copy to the backup store — content that exists nowhere else once the editor is gone. */
 async function bankText(pathRel: string, text: string, keepalive = false): Promise<boolean> {
   try {
-    const res = await fetch(`/api/files/browse/backup?${qs(pathRel)}`, {
+    const res = await fetchWithTimeout(`/api/files/browse/backup?${qs(pathRel)}`, {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ text }),
@@ -239,7 +240,7 @@ async function loadFile(pathRel: string, force = false): Promise<void> {
   conflict.value = null;
   showPreview.value = false;
   try {
-    const res = await fetch(`/api/files/browse/text?${qs(pathRel)}`);
+    const res = await fetchWithTimeout(`/api/files/browse/text?${qs(pathRel)}`);
     const data = await jsonBody(res);
     if (!res.ok) throw new Error(failureReason(data, res.status));
     if (id !== fileReqId) return;
@@ -323,7 +324,7 @@ async function checkForExternalChange(): Promise<void> {
   if (!openPath.value || saving.value || conflict.value) return;
   const pathRel = openPath.value;
   try {
-    const res = await fetch(`/api/files/browse/version?${qs(pathRel)}`);
+    const res = await fetchWithTimeout(`/api/files/browse/version?${qs(pathRel)}`);
     if (!res.ok) return;
     const data = await jsonBody(res);
     const onDisk = typeof data.version === "string" ? data.version : null;

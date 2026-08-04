@@ -18,6 +18,7 @@ import { setActiveKeymap } from "./activeKeymap";
 import { setCockpitLines } from "./cockpitLines";
 import { setCopyOnSelect } from "./copyOnSelect";
 import { setIssueWorkComments } from "./issueWorkComments";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 // The custom attention-sound file is a SINGLETON ref shared across every
 // useAppConfig() caller — the beep player lives in the single view while the
@@ -113,7 +114,11 @@ function readLegacyRecents(): string[] {
 // `{ ok: false }` on failure) so each caller can update just its own singleton ref.
 async function postConfigField(field: string, value: unknown): Promise<{ ok: true; value: unknown } | { ok: false }> {
   try {
-    const res = await fetch("/api/config", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ [field]: value }) });
+    const res = await fetchWithTimeout("/api/config", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ [field]: value }),
+    });
     if (!res.ok) return { ok: false };
     const body: unknown = await res.json();
     // `unknown`, not a caller-named `T`: this is the server's echo, and the type argument used to
@@ -215,7 +220,11 @@ function createPresetManager(presets: Ref<CwdPreset[]>, saving: Ref<boolean>, er
     saving.value = true;
     error.value = null;
     try {
-      const res = await fetch("/api/config", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ cwdPresets: next }) });
+      const res = await fetchWithTimeout("/api/config", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ cwdPresets: next }),
+      });
       if (!res.ok) throw new Error(`save failed (${res.status})`);
       const saved: unknown = await res.json();
       presets.value = isRecord(saved) && isUnknownArray(saved.cwdPresets) ? saved.cwdPresets.filter(isCwdPreset) : [];
@@ -374,7 +383,7 @@ export function useAppConfig() {
   async function loadConfig() {
     const version = snapshotVersion();
     try {
-      const res = await fetch("/api/config");
+      const res = await fetchWithTimeout("/api/config");
       if (!res.ok) return;
       const body: unknown = await res.json();
       if (!isRecord(body)) return;

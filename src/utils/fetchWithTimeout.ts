@@ -13,6 +13,15 @@
 export const DEFAULT_REQUEST_TIMEOUT_MS = 8_000;
 
 /**
+ * For a route that shells out — `git worktree add`, a `gh` call, transcribing audio, spawning an
+ * agent. The work is real and its length depends on the repository, the network or the machine,
+ * so the default would abort a request that was going to succeed.
+ *
+ * Still bounded: an hour of nothing is not a better answer than a minute of nothing.
+ */
+export const SLOW_COMMAND_TIMEOUT_MS = 60_000;
+
+/**
  * `fetch`, but it gives up.
  *
  * A `signal` the caller passes in its `init` is kept: it is how a composable cancels on unmount,

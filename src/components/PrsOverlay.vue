@@ -13,6 +13,7 @@ import IssueStartButton from "./IssueStartButton.vue";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
+import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 const { isOpen, close } = usePrsView();
 const { loadRepoDirs, startError } = useIssueStart();
@@ -33,7 +34,7 @@ const isRepoIssues = (row: unknown): row is RepoIssues => isRecord(row) && typeo
 
 async function loadSection(path: string): Promise<{ rows: unknown[]; error: string | null }> {
   try {
-    const res = await fetch(path);
+    const res = await fetchWithTimeout(path, undefined, SLOW_COMMAND_TIMEOUT_MS);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await jsonBody(res);
     return { rows: isUnknownArray(data.repos) ? data.repos : [], error: null };

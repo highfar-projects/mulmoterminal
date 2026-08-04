@@ -20,6 +20,7 @@ import LaunchChipList from "./LaunchChipList.vue";
 import ModelPicker from "./ModelPicker.vue";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
+import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 // What an EMPTY grid cell shows: pick a directory, pick what to run in it, and start — or resume
 // a session that already exists there, run one of its scripts, or isolate the work in a worktree.
@@ -221,6 +222,8 @@ function fillDir(path: string): void {
 // (POST /api/pick-file { directory: true }). Fill the Working-directory field with the pick.
 async function pickDir(): Promise<void> {
   try {
+    // Deliberately unbounded: this route answers when the USER closes the native file dialog,
+    // so any deadline here is a guess at how long they will take to choose.
     const res = await fetch("/api/pick-file", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ directory: true }) });
     if (!res.ok) return;
     const data = await jsonBody(res);
@@ -338,11 +341,15 @@ async function createWorktreeAndLaunch(): Promise<void> {
   const task = worktreeTask.value.trim();
   if (!repoDir || !task) return;
   try {
-    const res = await fetch("/api/worktrees/create", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ repoDir, task }),
-    });
+    const res = await fetchWithTimeout(
+      "/api/worktrees/create",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ repoDir, task }),
+      },
+      SLOW_COMMAND_TIMEOUT_MS,
+    );
     if (!res.ok) return;
     const wt = await jsonBody(res);
     if (typeof wt.path === "string") {
@@ -379,11 +386,15 @@ async function removeWorktree(w: Worktree): Promise<void> {
   const repoDir = targetDir.value;
   if (w.dirty && !window.confirm(`"${w.task}" has uncommitted changes. Discard and remove it?`)) return;
   try {
-    await fetch("/api/worktrees/remove", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ repoDir, path: w.path, deleteBranch: true, force: w.dirty }),
-    });
+    await fetchWithTimeout(
+      "/api/worktrees/remove",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ repoDir, path: w.path, deleteBranch: true, force: w.dirty }),
+      },
+      SLOW_COMMAND_TIMEOUT_MS,
+    );
     void loadWorktrees(targetDir.value);
   } catch {
     // best-effort

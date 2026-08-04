@@ -46,6 +46,7 @@ import type { TerminalAgent } from "../../common/sessionAgent";
 import { buildCanvasCard, seedCanvasCard, hasStoredCard, absoluteUnder } from "../composables/canvasOpenFile";
 import { jsonBody } from "../jsonBody";
 import { isUnknownArray } from "../../common/isUnknownArray";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 // Renders the grid, auto-sized to the cell count, fully controlled by GridView:
 // `cells` is the active page's slice (≤9) when nothing is zoomed, and `expandedUid`
@@ -408,7 +409,7 @@ watch(
       if (sessionId === expandedSessionId.value) canvasHasCard.value = has;
     });
     try {
-      const res = await fetch(`/api/tools?sessionId=${encodeURIComponent(sessionId)}`);
+      const res = await fetchWithTimeout(`/api/tools?sessionId=${encodeURIComponent(sessionId)}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const body = await jsonBody(res);
       // THROWN rather than read as "no groups": jsonBody answers {} for a body that is truncated

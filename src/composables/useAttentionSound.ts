@@ -7,6 +7,7 @@ import { setAudioContextState } from "./audioUnlockState";
 import { createBeepQueue, shouldHoldBeep } from "./pendingBeep";
 import { missedMarkFor } from "./missedAttention";
 import { applyMissedMark } from "./useMissedAttention";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 // What the player needs from the user's config: which moments beep, and what each plays.
 // `soundFile` is the all-kind fallback a `sounds` entry overrides.
@@ -146,7 +147,7 @@ function loadBuffer(key: string, url: string): Promise<void> {
     if (!ctx) return; // no AudioContext yet — leave the key unknown so a later beep retries
     let response: Response;
     try {
-      response = await fetch(url);
+      response = await fetchWithTimeout(url);
     } catch {
       return; // the request never completed — unknown, so the next beep tries again
     }
