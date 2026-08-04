@@ -226,7 +226,7 @@ Though compared to siblings like [MulmoCast](https://mulmocast.com), MulmoTermin
 
 **[receptron](https://github.com/receptron) — [Satoshi Nakajima](https://x.com/snakajima) and [Isamu Arimoto](https://github.com/isamu).** The two have shipped open source together since 2015: a [GPU video engine](https://github.com/snakajima/videoshader) for iOS, an [animation runtime](https://github.com/swipe-org/swipe) that made manga move on phones, [takeout ordering](https://github.com/Nakajima-Foundation/ownplate) built for restaurants during COVID, then [SlashGPT](https://github.com/receptron/SlashGPT), [GraphAI](https://github.com/receptron/graphai) and [MulmoCast](https://github.com/receptron/mulmocast-cli).
 
-Nobody can promise you a next year. What you can check is the record: the first of those repositories predates the current wave of AI tooling by eight years, and [the JavaScript implementation of Swipe](https://github.com/isamu/swipejs), started in 2016, still took commits in 2026. It is MIT either way — **if we stop, you can carry on.**
+Nobody can promise you a next year. What you can check is the record: these two were shipping open source together eight years before the current wave of AI tooling, and every one of those repositories is still up. It is MIT either way — **if we stop, you can carry on.**
 
 ### Something is broken. What now?
 

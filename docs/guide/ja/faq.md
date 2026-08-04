@@ -221,7 +221,7 @@ Codex / Antigravity にはワークスペースの特例が無く、どこで起
 
 **[receptron](https://github.com/receptron) — [中島聡](https://x.com/snakajima) と [有本勇](https://github.com/isamu) の二人**です。2015年から一緒にオープンソースを出してきました。iOS 向けの [GPU 動画処理エンジン](https://github.com/snakajima/videoshader)、[漫画をスマホで動かすランタイム](https://github.com/swipe-org/swipe)、コロナ禍に飲食店向けに作った[テイクアウト注文サービス](https://github.com/Nakajima-Foundation/ownplate)、そして [SlashGPT](https://github.com/receptron/SlashGPT)・[GraphAI](https://github.com/receptron/graphai)・[MulmoCast](https://github.com/receptron/mulmocast-cli)。
 
-来年を約束できる人はいません。確認できるのは記録のほうです。この中で最初のリポジトリは、いまの AI ツールの波より8年前のものです。2016年に始まった [Swipe の JavaScript 実装](https://github.com/isamu/swipejs)には、2026年にもコミットが入っています。どちらにしても MIT なので、**私たちが止めても、あなたは続けられます。**
+来年を約束できる人はいません。確認できるのは記録のほうです。この二人は、いまの AI ツールの波より8年前から一緒にオープンソースを出していて、そのどれもがいまも公開されたままです。どちらにしても MIT なので、**私たちが止めても、あなたは続けられます。**
 
 ### 何か困ったときは？
 
