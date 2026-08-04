@@ -3,7 +3,6 @@
 // body, reads it back on the next milestone, and appends to what it parsed. A mismatch between the
 // two halves would either lose the earlier milestones or post a second comment on every poll.
 import { GITHUB_REPO } from "./githubRepo.js";
-import { isIssueNumber } from "./prPhase.js";
 
 // A milestone worth telling the issue about. NOT every state the cell passes through: CI is on the
 // pull request already, and it flaps, so it is deliberately absent.
@@ -73,13 +72,23 @@ const displayDir = (dir: string): string =>
     .replace(/\s+/g, " ")
     .trim();
 
+// The widest number a milestone line can carry. Render and parse have to agree on it: a line this
+// side wrote and the parser could not read would vanish from the comment on the NEXT edit, taking
+// its milestone with it (Codex review). Ten digits is far more than any forge issues, and the
+// pattern below reads exactly that back.
+const MAX_LINE_PR = 9_999_999_999;
+
+const writablePr = (pr: number | null): pr is number => pr !== null && Number.isSafeInteger(pr) && pr > 0 && pr <= MAX_LINE_PR;
+
 // The wording of the two states, unchanged from the build that wrote one comment per state: an
 // issue that already carries "Working on this in `x`." must not read differently after an edit.
 function headline(dir: string, events: readonly WorkEvent[]): string {
   const shown = displayDir(dir);
   const merged = events.find((event) => event.kind === "merged");
   if (!merged) return `Working on this in \`${shown}\`.`;
-  const where = merged.pr === null ? "Merged." : `Merged in #${merged.pr}.`;
+  // The same bound as the line: the headline is not parsed, but naming a number the line beneath
+  // it had to drop would make the comment contradict itself.
+  const where = writablePr(merged.pr) ? `Merged in #${merged.pr}.` : "Merged.";
   return `${where} Work done in \`${shown}\`.`;
 }
 
@@ -87,8 +96,8 @@ function headline(dir: string, events: readonly WorkEvent[]): string {
 // with no number says nothing anyway.
 function eventLine(event: WorkEvent): string | null {
   if (event.kind === "start") return `- started — ${event.at}`;
-  if (event.kind === "pr") return event.pr === null ? null : `- PR #${event.pr} — ${event.at}`;
-  return event.pr === null ? `- merged — ${event.at}` : `- merged in #${event.pr} — ${event.at}`;
+  if (event.kind === "pr") return writablePr(event.pr) ? `- PR #${event.pr} — ${event.at}` : null;
+  return writablePr(event.pr) ? `- merged in #${event.pr} — ${event.at}` : `- merged — ${event.at}`;
 }
 
 const isLine = (line: string | null): line is string => line !== null;
@@ -100,9 +109,14 @@ export function renderWorkComment(dir: string, events: readonly WorkEvent[]): st
   return [headline(dir, events), "", ...lines, "", SIGNATURE, "", workAnchorMarker(dir)].join("\n");
 }
 
+// MAX_LINE_PR, spelled as digits — the parse half of the same bound. It stops a run of digits out
+// of an edited body from reaching the parser as something that would print as `1e+20`, and it
+// keeps `\d*` from sitting inside an optional group, which `security/detect-unsafe-regex` reads as
+// a backtracking risk (measured as linear here, but a bound is a better answer than an exception).
+const PR_DIGITS = "[1-9]\\d{0,9}";
 const START_LINE = /^- started — (.+)$/;
-const PR_LINE = /^- PR #([1-9]\d*) — (.+)$/;
-const MERGED_LINE = /^- merged(?: in #([1-9]\d*))? — (.+)$/;
+const PR_LINE = new RegExp(`^- PR #(${PR_DIGITS}) — (.+)$`);
+const MERGED_LINE = new RegExp(`^- merged(?: in #(${PR_DIGITS}))? — (.+)$`);
 
 // Strict about the timestamp on purpose. The body is editable by anyone reading the issue, and
 // whatever this returns is written straight back into the next edit — so a line that is not
@@ -110,30 +124,21 @@ const MERGED_LINE = /^- merged(?: in #([1-9]\d*))? — (.+)$/;
 const timed = (kind: WorkCommentKind, pr: number | null, at: string | undefined): WorkEvent | null =>
   at !== undefined && TIME.test(at) ? { kind, at, pr } : null;
 
-// Digits out of a body someone can edit are UNBOUNDED, and `Number("9".repeat(20))` is 1e20 —
-// which this would write back as `- PR #1e+20`. The same rule the chip applies to a number read
-// off a PR body.
-const prNumber = (digits: string): number | null => {
-  const parsed = Number(digits);
-  return isIssueNumber(parsed) ? parsed : null;
-};
+// `Number` is exact for anything the patterns above admit, so there is no second check here: a
+// line whose number is longer than that does not match at all, and is dropped like every other
+// line that is not exactly what render wrote.
+const prNumber = (digits: string | undefined): number | null => (digits === undefined ? null : Number(digits));
 
 function parseEventLine(line: string): WorkEvent | null {
   const started = START_LINE.exec(line);
   if (started) return timed("start", null, started[1]);
   const pr = PR_LINE.exec(line);
-  if (pr) return pr[1] === undefined ? null : withNumber("pr", pr[1], pr[2]);
+  if (pr) return timed("pr", prNumber(pr[1]), pr[2]);
   const merged = MERGED_LINE.exec(line);
-  if (!merged) return null;
-  // A merge with no number is a line render writes and reads back; a number that is not one it
-  // could have written makes the line unreadable rather than numberless.
-  return merged[1] === undefined ? timed("merged", null, merged[2]) : withNumber("merged", merged[1], merged[2]);
+  // A merge with no number is a line render writes and reads back, so null is an answer here
+  // rather than a failure.
+  return merged ? timed("merged", prNumber(merged[1]), merged[2]) : null;
 }
-
-const withNumber = (kind: WorkCommentKind, digits: string, at: string | undefined): WorkEvent | null => {
-  const number = prNumber(digits);
-  return number === null ? null : timed(kind, number, at);
-};
 
 /** The milestones a comment body records, in the order it lists them. Empty for a comment written
  *  before #1369 — those carry the marker and the headline but no lines, and the caller supplies
@@ -149,7 +154,9 @@ export const parseWorkEvents = (body: string): WorkEvent[] =>
 /** `events` with `event` added, or null when the comment already records it — which is the normal
  *  answer, because the caller asks on every poll of every open tab. */
 export function withWorkEvent(events: readonly WorkEvent[], event: WorkEvent): WorkEvent[] | null {
-  if (event.kind === "pr" && event.pr === null) return null;
+  // A PR milestone is its number, and a number the line cannot carry is not a milestone this
+  // comment can record — refused here rather than added and then silently dropped by render.
+  if (event.kind === "pr" && !writablePr(event.pr)) return null;
   // Matched on the PR number too: a second pull request for the same issue from the same clone —
   // the first one closed unmerged, say — is a new milestone, not a repeat of the old one.
   if (events.some((known) => known.kind === event.kind && known.pr === event.pr)) return null;
