@@ -5,17 +5,31 @@
 import { isRecord } from "../../common/isRecord.js";
 import { readString } from "../../common/readString.js";
 
-// A real user prompt from a JSONL "user" line's content, or null if it's a
-// slash-/local-command wrapper rather than a typed prompt. Content may be a plain
-// string or an array of blocks (guard against null elements). `task-notification` is
-// in the list for the same reason as the rest: the harness writes it into the user
-// channel when a background task finishes, and it is no more a typed prompt than a
-// slash command is.
+// Text the HARNESS put in the user channel, rather than something a person typed:
+// slash-command wrappers, bash input, and the notification a finished background task
+// writes there — no more a typed prompt than a slash command is.
+//
+// Exported because TWO paths decide this and only one used to: the commit that added
+// `task-notification` (e1e19c66) taught the transcript reader, while the live
+// `UserPromptSubmit` hook went on taking the XML as the session's latest prompt and
+// putting it on the cell header (#1384). Both call this now, so a marker cannot be
+// added to one and forgotten on the other.
+//
+// The `^\s*` anchor is what keeps the list safe to widen: 591 user lines in the
+// transcripts on this machine MENTION `<task-notification` mid-sentence — the /loop
+// skill's own documentation among them — and matching those would delete the prompt
+// instead of the injection.
+const INJECTED_PROMPT_RE = /^\s*<(local-command|command-|bash-|task-notification|system-reminder)/;
+
+export const isInjectedPrompt = (text: string): boolean => INJECTED_PROMPT_RE.test(text);
+
+// A real user prompt from a JSONL "user" line's content, or null if it's injected.
+// Content may be a plain string or an array of blocks (guard against null elements).
 export function userPromptText(content: unknown): string | null {
   // `x: unknown` is load-bearing: Array.isArray narrows `unknown` to `any[]`, and an `any`
   // element puts every read below back outside the type checker's reach.
   const text = Array.isArray(content) ? content.map((x: unknown) => (isRecord(x) ? readString(x.text) : readString(x))).join(" ") : content;
-  if (typeof text === "string" && text.trim() && !/^\s*<(local-command|command-|bash-|task-notification)/.test(text)) {
+  if (typeof text === "string" && text.trim() && !isInjectedPrompt(text)) {
     return text.trim();
   }
   return null;
