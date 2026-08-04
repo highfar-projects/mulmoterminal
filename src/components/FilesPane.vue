@@ -12,6 +12,7 @@ import { createEditor, langKindForFilename, type CmEditor } from "./cmEditor";
 import { expandedPaths, restoreOrder } from "./filesTreeState";
 import { isWriteToOpenFile } from "../composables/fileWriteMatch";
 import { usePubSub } from "../composables/usePubSub";
+import { canOpenInCanvas } from "../composables/canvasOpenFile";
 import { FILE_WRITE_CHANNEL, isFileWriteEvent } from "../../common/fileWriteChannel";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
@@ -44,8 +45,8 @@ export interface FilesPaneState {
   expanded: string[];
 }
 
-const props = defineProps<{ cwd: string | null; requestedPath?: string | null; initialState?: FilesPaneState | null }>();
-const emit = defineEmits<{ close: []; dirty: [boolean] }>();
+const props = defineProps<{ cwd: string | null; requestedPath?: string | null; initialState?: FilesPaneState | null; canvasTarget?: boolean }>();
+const emit = defineEmits<{ close: []; dirty: [boolean]; "open-in-canvas": [path: string] }>();
 
 const roots = ref<Node[]>([]);
 const treeError = ref<string | null>(null);
@@ -61,6 +62,9 @@ const baseVersion = ref<string | null>(null);
 const conflict = ref<{ version: string | null } | null>(null);
 const showPreview = ref(false);
 const isMarkdown = computed(() => langKindForFilename(openName.value) === "markdown");
+// Whether the Canvas has a View for the open file — the plugins' own gates decide, not an
+// extension test here (see canvasOpenFile.ts).
+const canvasOpenable = computed(() => canOpenInCanvas(openPath.value));
 
 const editorHost = ref<HTMLDivElement>();
 let editor: CmEditor | null = null;
@@ -444,6 +448,18 @@ defineExpose({
         @click="showPreview = !showPreview"
       >
         {{ showPreview ? "Edit" : "Preview" }}
+      </button>
+      <!-- Only where there is a cell to open it beside: this pane is also mounted full-screen by
+           FilesOverlay, which has no enlarged terminal and so nothing to put a Canvas next to. -->
+      <button
+        v-if="canvasTarget && canvasOpenable"
+        type="button"
+        data-testid="files-canvas-btn"
+        class="h-[26px] cursor-pointer rounded-md border border-border bg-base px-2.5 py-1 text-[12px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-50"
+        title="Open this file in the Canvas"
+        @click="openPath && emit('open-in-canvas', openPath)"
+      >
+        Canvas
       </button>
       <button
         v-if="openPath"

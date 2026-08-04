@@ -43,6 +43,7 @@ import { hasCanvasGroup } from "../../common/toolGroups";
 import type { RightPane } from "./gridCell";
 import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
 import type { TerminalAgent } from "../../common/sessionAgent";
+import { canvasCardForFile, seedCanvasCard, hasStoredCard, absoluteUnder } from "../composables/canvasOpenFile";
 import { jsonBody } from "../jsonBody";
 import { isUnknownArray } from "../../common/isUnknownArray";
 
@@ -290,6 +291,25 @@ async function openCanvasFor(uid: number, enlarge = true, stillWanted?: () => bo
 // GridView drives this one from OUTSIDE a user gesture (placing a spawned chat whose Canvas is
 // already seeded). The pane is TerminalGrid's own state — GridView owns the cells, not what sits
 // beside them — so this is the seam rather than another prop to watch.
+// Show a file the user picked in the Canvas, without the agent having presented it (#1374). The
+// card is written the way the agent's own results arrive, so it is stored, replayed on reload, and
+// collapsed against the agent's card for the same file — see canvasOpenFile.ts.
+//
+// Revealed only if the write landed: enlarging a cell to show nothing is worse than not enlarging.
+async function openFileInCanvas(path: string): Promise<void> {
+  const uid = props.expandedUid;
+  const sessionId = expandedSessionId.value;
+  if (uid === null || !sessionId) return;
+  // The pane's rows are relative to the CELL's cwd; the plugins resolve against the workspace.
+  const card = canvasCardForFile(absoluteUnder(paneCwd.value, path));
+  if (!card) return; // the button is only shown for files that have one; a stale click is a no-op
+  if (!(await seedCanvasCard(sessionId, card))) return;
+  // The pane this came from is about to be replaced by the Canvas, so its buffer has to flush —
+  // openCanvasFor does that. Already enlarged, hence `false`.
+  canvasHasCard.value = true;
+  await openCanvasFor(uid, false);
+}
+
 defineExpose({ openCanvasFor });
 
 // A pane button: opens its pane, or closes it when it is already the one showing.
@@ -363,12 +383,25 @@ const canvasAvailable = ref(false);
 // "not enabled for this session" for the moment between switching cells and the reply landing
 // — a wrong explanation is worse than none, so nothing is claimed until it is known.
 const canvasChecked = ref(false);
+// A session can have something to SHOW without having the render MCP: a card the user opened
+// themselves (#1374). The disabled button's reason — "the pane would open empty and never fill" —
+// does not hold once one is there, so this re-opens the door in exactly that case, and only then.
+const canvasHasCard = ref(false);
+/** Whether the Canvas button can be pressed: the tools say so, or there is already a card. */
+const canvasOpenable = computed(() => canvasAvailable.value || canvasHasCard.value);
 watch(
   [expandedSessionId, () => props.expandedUid],
   async ([sessionId]) => {
     canvasAvailable.value = false;
     canvasChecked.value = false;
+    canvasHasCard.value = false;
     if (!sessionId) return;
+    // Asked beside the tools question rather than folded into it: `/api/tools` answers what the
+    // session CAN draw, this answers what it already HAS. A failure here leaves the flag false —
+    // the tools answer still decides, exactly as before this existed.
+    void hasStoredCard(sessionId).then((has) => {
+      if (sessionId === expandedSessionId.value) canvasHasCard.value = has;
+    });
     try {
       const res = await fetch(`/api/tools?sessionId=${encodeURIComponent(sessionId)}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -420,7 +453,7 @@ const gridCellProps = (cell: Cell) => ({
   expanded: cell.uid === props.expandedUid,
   filesOpen: filesOpen.value,
   rightPane: rightPane.value,
-  canvasAvailable: canvasAvailable.value,
+  canvasAvailable: canvasOpenable.value,
   zoomed: zoomed.value,
   home: props.home,
   reorderable: props.reorderable ?? false,
@@ -441,7 +474,11 @@ const gridCellEvents = (cell: Cell) => ({
 // it — a launcher or a command cell (no session), or a directory with no render MCP.
 const canvasUnavailable = computed<"no-session" | "no-canvas-mcp" | null>(() => {
   if (!expandedSessionId.value) return "no-session";
-  if (canvasChecked.value && !canvasAvailable.value) return "no-canvas-mcp";
+  // `canvasOpenable`, not `canvasAvailable`: a card the user opened themselves is a thing to
+  // render, and telling them the session cannot draw while their own document sits in the store
+  // is both wrong and unactionable. The button and this message have to agree about that — they
+  // did not, and the panel said "not enabled" over a card it had already been handed (#1374).
+  if (canvasChecked.value && !canvasOpenable.value) return "no-canvas-mcp";
   return null;
 });
 const filesPane = ref<InstanceType<typeof FilesPane> | null>(null);
@@ -967,9 +1004,11 @@ watch(
           ref="filesPane"
           :cwd="paneCwd"
           :initial-state="paneState"
+          :canvas-target="expandedUid !== null"
           :style="{ flex: `0 0 ${paneWidth}px` }"
           class="border-l border-border bg-deep"
           @close="setFilesOpen(false)"
+          @open-in-canvas="openFileInCanvas"
         >
           <!-- Which directory the tree is actually rooted at. It normally follows the enlarged
                cell, but declining a re-root leaves it behind — and then this is the only thing
