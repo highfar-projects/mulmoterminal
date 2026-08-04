@@ -73,14 +73,15 @@ description: MulmoTerminal の設定方法。設定モーダル、プロジェ�
 
 ![設定モーダル — Theme（Create a theme… ボタン付き）/ Terminal font size / Terminal scroll speed / Waiting rows（点滅のチェックボックス）/ Directory appearance / Directory settings（acme-web の行を開いた状態）](../images/config-settings-modal.png)
 
-上から順に、最大 17 セクションがあります（**Voice input** は文字起こしできるマシンでのみ出るので、多くの環境では 16）。
+上から順に、最大 21 セクションがあります（**Voice input** は文字起こしできるマシンでのみ出るので、多くの環境では 20）。
 
 | 項目 | 内容 |
 |---|---|
 | **Theme** | Midnight / Nord / Daylight / Solarized Light、および[自分で定義した配色](#custom-themes)。選ぶのは既にあるものだけで、新しく作るのは「Create a theme…」（`mulmoterminal-theme` スキルを起動） |
 | **Terminal font size** | ターミナル（xterm）のフォントサイズ（px, 8〜32）。**このブラウザ**の全ターミナルに適用され、スマホと PC でそれぞれ別の値を保持します。ディレクトリ側の `fontSize`（[後述](#per-dir)）が優先されます |
+| **Terminal font** | 全ターミナルの font-family スタック（`fontFamily`）。サイズと違い**グローバル** — どのフォントが入っているかはマシンの性質だからです。空欄なら内蔵スタック（→ [ターミナルのフォント](#font-family)） |
 | **Terminal scroll speed** | ホイール1ノッチ／トラックパッドの1スワイプでターミナルがどれだけ動くか（1× が xterm 既定）。フォントサイズと同じくブラウザ単位 — ポインティングデバイスの性質なので |
-| **Waiting rows** | 拡大したセルの横（下）に出る一覧で、**入力を待っている**行に琥珀色のリングが付いて点滅し、**終わっただけ**の行は緑で静止します。チェックを外すと止まるのは**動きだけ**で色は残ります。OS が「視差効果を減らす」設定のときは点滅しません |
+| **Waiting rows** | 拡大したセルの横（下）に出る一覧で、**入力を待っている**行に琥珀色のリングが付いて点滅し、**終わっただけ**の行は緑で静止します。チェックを外すと止まるのは**動きだけ**で色は残ります。OS が「視差効果を減らす」設定のときは点滅しません。下の 3 つのステッパーは各行を何行で打ち切るか（`cockpitLines` → [ロスターの行](#cockpit-lines)） |
 | **Directory appearance** | 「Configure appearance…」— ディレクトリの名前バッジ・色・ターミナルのパレット・グリッド上の位置を、`mulmoterminal-dirs` スキルで対話的に設定 |
 | **Directory settings** | 各ディレクトリの `.mulmoterminal.json` が**実際に何をしているか**。行を開くと、効いている値（色は見本付き）・**どのファイル由来か**・**検証で落ちたキー**・**このアプリが読まないキー**が出ます。読み取り専用 — 「Explain my settings…」で `mulmoterminal-config` スキルが同じものを読み、理由を説明して直します（→ [設定が効かないとき](#dir-settings-preview)） |
 | **Notification sounds** | どの瞬間に鳴らすか＋それぞれ何を鳴らすか。種類ごとに1行、プリセット選択と試聴ボタン付き。「Configure notifications…」で `mulmoterminal-notify` スキルを起動すると、プロジェクトごとの音やスマホに通知する瞬間まで設定できます（→ [通知音](#sounds)） |
@@ -92,6 +93,11 @@ description: MulmoTerminal の設定方法。設定モーダル、プロジェ�
 | **Phone quick commands** | **スマホ**のターミナル表示にチップとして並ぶ定型文。タップで入力欄に入るだけで、送信は送信ボタンを押したとき（`quickCommands`） |
 | **MCP servers** | 自分の HTTP MCP サーバ（`userMcpServers`）。GUI MCP をフルで持つセッション — 作業ディレクトリが**ワークスペース**のセル、およびサーバ自身が起こしたセッション（スマホ・スケジュールタスク）— にマージされます。プロジェクトディレクトリのセルは自前の MCP 設定を読みます（→ [どのディレクトリで起動するか](basics.html#launch-dir)） |
 | **Cost (estimated)** | Session / Today / Month の推定コスト表示 |
+| **GitHub and GitLab** | このアプリが**あなたの名前で** forge に書き込むもの。セルが [issue に着手を知らせるか](#issue-work-comments)（`issueWorkComments`、既定 OFF）と、作った PR の末尾に[クローン名を書くか](#pr-workdir-footer)（`prWorkdirFooter`、既定 ON）。その下は `glab` で読む[セルフホスト GitLab のホスト](github.html#自前ホスティングの-gitlab)（`gitlabHosts` — 反映は次回起動時） |
+| **Sessions and background tasks** | 返信を[まとめで終わらせるか](#append-system-prompt)（`appendSystemPrompt`、既定 ON — ディレクトリ側の設定が優先）、[決めたことの記録を残すか](#decision-digest)（`decisionDigest`、既定 OFF）、[定期の開発ログ](#all-keys)とその間隔（`worklogEnabled`、既定 OFF — 実行のたびにトークンを消費します） |
+| **Models and backends** | セッションを動かせるバックエンドと、**今それぞれ到達できるか**（読み取り専用）。「Add a backend…」で `mulmoterminal-model` スキルを起動（→ [別のモデルで動かす](providers.html)） |
+| **Header buttons and chips** | グローバル設定で宣言しているボタンとチップの数（読み取り専用）。未設定なら「built-in」。「Set up header buttons…」で `mulmoterminal-header` スキルを起動（→ [ヘッダーのカスタマイズ](#header)） |
+| **Terminal keys** | [選ぶだけでコピー](#copy-on-select)（`copyOnSelect`、既定 OFF）と、あなたの Claude が**送信**として読むバイト（[Enter — 送信と改行](#terminal-submit)、`terminalSubmit`） |
 | **Keyboard shortcuts** | 今どのキーに何が割り当たっているかの一覧（読み取り専用）。**既定は全部 Not set** — 「Set up shortcuts…」で `mulmoterminal-keys` スキルが `keymap` に書きます（→ [キーボードショートカット](#keymap)） |
 | **Help & user guide** | このガイドへのリンク集 |
 
@@ -621,6 +627,11 @@ Shift+Enter が改行ではなく*送信*になってしまう場合だけ**で�
 
 ### 設定方法
 
+手っ取り早いのは **Settings → Terminal keys** で、両モードが挙動の言葉で並んでいます。このタブには
+すぐ反映されますが、スマホのリモートビューは次回のサーバ起動で拾います（下の手順 3）。
+
+手で書く場合:
+
 1. `~/.mulmoterminal/config.json` を開き（無ければ作成）、トップレベルにキーを追加します。逆向きの
    割り当てなら次の通り:
    ```json
@@ -694,14 +705,15 @@ Shift+Enter が改行ではなく*送信*になってしまう場合だけ**で�
 
 ## ターミナルのフォント — 日本語が崩れるとき（`fontFamily`） {#font-family}
 
-全ターミナルが描画に使うフォントです。**設定モーダルに UI はありません**——
+全ターミナルが描画に使うフォントです。**Settings → Terminal font** で設定できます。あるいは
 `~/.mulmoterminal/config.json` に CSS の font-family スタックを書きます。
 
 ```json
 { "fontFamily": "'Cica', 'ＭＳ ゴシック', monospace" }
 ```
 
-書いたら **`mulmoterminal` を再起動**し、ブラウザのタブを再読み込みしてください。グローバル設定は
+設定モーダルから変えた場合は開いているターミナルにすぐ反映されます。**手で書いた**場合は
+**`mulmoterminal` を再起動**し、ブラウザのタブを再読み込みしてください。グローバル設定は
 サーバ起動時に一度だけ読まれるため、手編集は再起動するまでブラウザに届きません——[`keymap`](#keymap) や
 [`terminalSubmit`](#terminal-submit) と同じ注意点で、「設定したのに効かない」の典型的な原因です。
 **ディレクトリごと**の指定（[後述](#per-dir)）はサーバ再起動こそ不要ですが、ファイル監視で拾われる
@@ -750,7 +762,8 @@ PuTTY や iTerm2 が昔からそうなっている挙動で、Windows Terminal �
 { "copyOnSelect": true }
 ```
 
-設定ファイルのみで、設定モーダルにはありません。反映にはサーバの再起動が必要です。
+**Settings → Terminal keys** にチェックボックスがあり、こちらは即座に反映されます。ファイルを手で
+書いた場合はサーバの再起動が必要です。
 
 [`copy` のキーバインド](#keymap)とは併用できます。キーボードで選択したものをコピーしたい場合など、
 キーからも使いたければ `copy` の割り当ては残したままで構いません。
@@ -1007,6 +1020,8 @@ macOS は `Option` を代替文字やアクセントの入力に使うため、`
 { "cockpitLines": { "summary": 6, "prompt": 2, "response": 3 } }
 ```
 
+**Settings → Waiting rows** の 3 つのステッパーからも変えられます。
+
 | 項目 | 打ち切る対象 | 既定 |
 |---|---|---|
 | `summary` | そのセッションが今なにをしているか | `2` |
@@ -1188,8 +1203,9 @@ MulmoTerminal は各タスクを `~/.mulmoterminal/worktrees/` 以下の worktre
 }
 ```
 
-次に作成する PR から反映されます。**再起動は不要**です（この設定は設定モーダルに項目が無いため、
-PR 作成のたびにファイルから読み直しています）。
+**Settings → GitHub and GitLab** のチェックボックスでも切り替えられます。どちらの場合も次に作成する
+PR から反映され、**再起動は不要**です（PR 作成のたびにファイルから読み直しているので、隣で動いている
+別の MulmoTerminal からも変更が見えます）。
 
 補足:
 
@@ -1215,6 +1231,8 @@ MulmoTerminal は起動する Claude セッション全部に、**返信の最�
   "appendSystemPrompt": false
 }
 ```
+
+**Settings → Sessions and background tasks** のチェックボックスでも切り替えられます。
 
 **次に起動するセッションから**反映されます。サーバの再起動は要りませんが、**動いているセッションは
 そのまま**です（この指示はセッション起動時に一度だけ渡すため）。切ったことを確かめるには、セルを
@@ -1245,6 +1263,8 @@ MulmoTerminal は起動する Claude セッション全部に、**返信の最�
 ```json
 { "issueWorkComments": true }
 ```
+
+**Settings → GitHub and GitLab** のチェックボックスでも有効にできます。
 
 有効にすると、1 つの issue につき**コメントは 1 つ**で、それを更新し続けます。着手すると投稿されます。
 
@@ -1310,6 +1330,7 @@ posted by MulmoTerminal
 { "decisionDigest": true }
 ```
 
+- **Settings → Sessions and background tasks** のチェックボックスでも有効にできます。
 - 書き出し先は `~/.mulmoterminal/decisions/<project>.md` で、**リポジトリの中には書きません**。
 - 更新は**サーバ起動時と 6 時間ごと**。対象はこのホストが実際に作業しているディレクトリだけです。
 - エージェント側は同梱スキル **`mulmoterminal-decisions`** 経由で読みます。他のスキルと同じく
@@ -1322,8 +1343,9 @@ posted by MulmoTerminal
 
 **既定は off**。vision 段階のアイデアであり、放っておけば存在しないファイルを書くためです。
 
-このキーは **Settings に画面がありません**。`~/.mulmoterminal/config.json` だけにあり、この
-ファイルはサーバ起動時に一度だけ読まれます。書き換えたら **`mulmoterminal` を再起動**してください。
+**Settings → Sessions and background tasks** のチェックボックスで切り替えられます。
+`~/.mulmoterminal/config.json` を手で書き換えた場合は **`mulmoterminal` を再起動**してください
+（このファイルはサーバ起動時に一度だけ読まれます）。
 
 ## よく使うコマンドを Run メニューに（`script.json`）
 
@@ -1369,8 +1391,10 @@ posted by MulmoTerminal
 | `launchers` | グリッドセルの「OR LAUNCH」に並ぶ起動コマンド。自分で足したものだけ — 素のシェルはランチャの **Shell** トグルが担当 |
 | `quickCommands` | **スマホ**のターミナル表示にチップとして並ぶ定型文（`{ label, text, agents? }`）。タップすると `text` が入力欄に入るだけで、**送信されるのは送信ボタンを押したとき**。`agents` で `"claude"` / `"codex"` / `"shell"` に絞れる（省略＝全種別）。設定画面の **Phone quick commands** で編集 |
 | `prRepos` | 横断 PR/Issue ビューの対象リポ |
-| `gitlabHosts` | 自前ホスティングの GitLab のホスト名（例 `["gitlab.example.com"]`）。URL からは forge の種類が分からないので、宣言してはじめて `prRepos` のそのホストのエントリが `glab` で読まれる。`glab auth login --hostname <host>` が前提。設定画面は無く config.json のみなので、手で書いたら再起動（→ [自前ホスティングの GitLab](github.html#自前ホスティングの-gitlab)） |
+| `gitlabHosts` | 自前ホスティングの GitLab のホスト名（例 `["gitlab.example.com"]`）。URL からは forge の種類が分からないので、宣言してはじめて `prRepos` のそのホストのエントリが `glab` で読まれる。`glab auth login --hostname <host>` が前提。Settings → **GitHub and GitLab** で編集でき、どちらの場合も反映は次回起動時（→ [自前ホスティングの GitLab](github.html#自前ホスティングの-gitlab)） |
 | `repoDirs` | 同じリポのクローンを複数並べているとき、そのリポの作業をどれで始めるか: `{ "acme/web": "/Users/you/src/web" }`。保存されるのは**選択だけ**で、どのクローンがあるかは `cwdPresets` から毎回導出するのでクローンを増やしても二重管理にならない。そのリポのクローンでなくなったエントリは無視される |
+| `userMcpServers` | 自分の HTTP MCP サーバ（`{ id, url }`）。GUI MCP をフルで持つセッションにマージされる。Settings → **MCP servers** で編集可 |
+| `issueWorkComments` | 作業中の issue にセルがコメントするか — 1 つだけ投稿し、PR の作成・マージに合わせて編集する。**既定 OFF**（他人の issue に書き込むため → [issue に「やっています」と書く](#issue-work-comments)） |
 | `buttons` / `chips` | ヘッダーのボタン/チップ（プロジェクト設定とマージ。→ [ヘッダーのカスタマイズ](#header)） |
 | `providers` | Anthropic 互換の接続先（→ [OpenRouter で別のモデルを使う](providers.html)） |
 | `customAgents` | Claude Code を起動する自分のコマンド。Agent Picker に並びます（→ [カスタムエージェント](#custom-agents)） |
@@ -1379,7 +1403,7 @@ posted by MulmoTerminal
 | `sounds` | 種類ごとの音。例 `{ "waiting": "preset:coin" }` — `preset:<id>` か絶対パス。未指定の種類は `soundFile` を使う（→ [通知音](#sounds)） |
 | `pushEnabled` | Web Push の master スイッチ（既定 `false` → [スマホ通知](notifications.html)） |
 | `pushKinds` | どの瞬間に飛ばすか：`"finished"`（ターン完了）と `"waiting"`（質問して停止）。**書かなければ両方**、`[]` でどれも飛ばさない（→ [どの瞬間に飛ぶか](notifications.html#kinds)） |
-| `worklogEnabled` / `worklogIntervalHours` | 定期 dev-work ログ（既定 OFF / 6 時間） |
+| `worklogEnabled` / `worklogIntervalHours` | 定期 dev-work ログ — 保存済みディレクトリの最近の作業を週次の wiki ページにまとめる（既定 OFF / 6 時間、1〜168 に丸め）。実行のたびに LLM セッションを起こすのでトークンを消費する。Settings → **Sessions and background tasks** で編集可 |
 | `decisionDigest` | このプロジェクトで既に決めたことを Markdown にまとめ、エージェントが聞き直す前に読む。**既定 off**（→ [このプロジェクトで既に決めたこと](#decision-digest)） |
 | `terminalSubmit` | どのバイトを**送信**／**改行**とみなすか — `"cr"`（既定）または `"esc-cr"`（→ [Enter — 送信と改行](#terminal-submit)） |
 | `themes` | 自分で定義した配色。Settings のテーマ選択に並ぶ（→ [自分の配色を作る](#custom-themes)） |

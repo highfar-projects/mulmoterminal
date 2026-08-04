@@ -19,6 +19,12 @@ import { setActiveKeymap } from "./activeKeymap";
 import { setCockpitLines } from "./cockpitLines";
 import { setCopyOnSelect } from "./copyOnSelect";
 import { setIssueWorkComments } from "./issueWorkComments";
+import { setPrWorkdirFooter } from "./prWorkdirFooter";
+import { setAppendSystemPrompt } from "./appendSystemPrompt";
+import { setDecisionDigest } from "./decisionDigest";
+import { setWorklogEnabled, setWorklogIntervalHours } from "./worklog";
+import { setHeaderConfigSummary } from "./headerConfigSummary";
+import { postConfigField } from "./postConfigField";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 // The custom attention-sound file is a SINGLETON ref shared across every
@@ -66,9 +72,9 @@ const home = ref<string | null>(null);
 
 const prRepos = ref<string[]>([]);
 
-// The hosts declared as self-hosted GitLab (#1332). Read-only here — config.json is the only place
-// it can be set — but the browser needs it to know that a `gitlab.hogefuga.com/...` row can start
-// work, which is a decision this side makes on its own (common/issueStartPlan.ts).
+// The hosts declared as self-hosted GitLab (#1332). The browser needs it to know that a
+// `gitlab.hogefuga.com/...` row can start work, which is a decision this side makes on its own
+// (common/issueStartPlan.ts), and Settings now edits it too.
 const gitlabHosts = ref<string[]>([]);
 
 /** The declared hosts, for a reader outside the composable — same shape as `currentSoundConfig`
@@ -111,26 +117,6 @@ function readLegacyRecents(): string[] {
     return Array.isArray(parsed) ? parsed.filter((d): d is string => typeof d === "string" && d.length > 0) : [];
   } catch {
     return [];
-  }
-}
-
-// POST a single config field as a partial update; the server keeps the other fields, so
-// this never clobbers them. Returns the server's echoed value for that field (or
-// `{ ok: false }` on failure) so each caller can update just its own singleton ref.
-async function postConfigField(field: string, value: unknown): Promise<{ ok: true; value: unknown } | { ok: false }> {
-  try {
-    const res = await fetchWithTimeout("/api/config", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ [field]: value }),
-    });
-    if (!res.ok) return { ok: false };
-    const body: unknown = await res.json();
-    // `unknown`, not a caller-named `T`: this is the server's echo, and the type argument used to
-    // let each caller DECLARE the shape it wanted. Several already narrowed it anyway; now all do.
-    return { ok: true, value: isRecord(body) ? body[field] : undefined };
-  } catch {
-    return { ok: false };
   }
 }
 
@@ -271,13 +257,21 @@ async function savePrRepos(next: string[]): Promise<boolean> {
   if (r.ok) prRepos.value = stringsOf(r.value);
   return r.ok;
 }
+// Persist the self-hosted GitLab hosts. The server drops anything that is not a bare hostname, so
+// the echo is what lands here rather than what was sent — a rejected entry has to disappear from
+// the list, not sit there looking saved.
+async function saveGitlabHosts(next: string[]): Promise<boolean> {
+  const r = await postConfigField("gitlabHosts", next);
+  if (r.ok) gitlabHosts.value = stringsOf(r.value);
+  return r.ok;
+}
 
 // The settings that are PUSHED into other modules rather than held as refs here. Grouped for the
 // same reason as adoptSoundConfig: loadConfig should read as what the config decides, not as the
 // plumbing for each decision.
 function applyGlobalSettings(c: Record<string, unknown>): void {
-  // The Enter-key submit/newline byte mapping — read once so every terminal's key
-  // handler honours it (config.json-only; unset falls back to the standard binding).
+  // The Enter-key submit/newline byte mapping, so every terminal's key handler honours it.
+  // Unset falls back to the standard binding.
   setTerminalSubmitMode(isTerminalSubmitMode(c.terminalSubmit) ? c.terminalSubmit : DEFAULT_TERMINAL_SUBMIT_MODE);
   // Keyboard shortcuts are opt-in: no `keymap` in config.json leaves this empty and
   // every shortcut stays off.
@@ -289,14 +283,37 @@ function applyGlobalSettings(c: Record<string, unknown>): void {
   setIssueWorkComments(c.issueWorkComments);
   // How far the cockpit roster clamps each line. Absent `cockpitLines` keeps 2/2/3.
   setCockpitLines(c.cockpitLines);
-  // The terminal font stack (config.json-only, no Settings UI). Terminals already open
-  // re-fit when this lands — a different face means different cell metrics.
+  // The terminal font stack. Terminals already open re-fit when this lands — a different face
+  // means different cell metrics.
   setGlobalFontFamily(c.fontFamily);
   // The user's own colour schemes (#996). Re-applied after loading, because the selected id
   // may name one of these: until the config arrives it resolves to nothing, and the app is
   // painted with the default.
   setCustomThemes(c.themes);
   refreshTheme();
+}
+
+// The settings this browser only DISPLAYS — the server is what acts on each of them. They still
+// have to be adopted, because Settings shows and writes them; before there were controls, nothing
+// on this side had a reason to know their values.
+function adoptServerSideSettings(c: Record<string, unknown>): void {
+  setHeaderConfigSummary(c);
+  setPrWorkdirFooter(c.prWorkdirFooter);
+  setAppendSystemPrompt(c.appendSystemPrompt);
+  setDecisionDigest(c.decisionDigest);
+  setWorklogEnabled(c.worklogEnabled);
+  setWorklogIntervalHours(c.worklogIntervalHours);
+}
+
+// The user's own lists, adopted together — grouped like the sound and repo fields above.
+//
+// Each is filtered by the SAME guard its own save path uses. They used to differ: a save
+// validated, the load on every page open did not.
+function adoptListConfig(c: Record<string, unknown>): void {
+  launchers.value = listOf(c.launchers, isLauncher);
+  customAgents.value = listOf(c.customAgents, isCustomAgent);
+  quickCommands.value = listOf(c.quickCommands, isQuickCommand);
+  userMcpServers.value = listOf(c.userMcpServers, isUserMcpServer);
 }
 
 // The repo fields, adopted together — like adoptSoundConfig, so loadConfig keeps reading as a list
@@ -398,15 +415,11 @@ export function useAppConfig() {
       adoptServerPresets(c.cwdPresets, version);
       adoptSoundConfig(c);
       pushEnabled.value = c.pushEnabled === true;
-      // Each list is filtered by the SAME guard its own save path uses (postConfigField below).
-      // They used to differ: a save validated, the load on every page open did not.
       pushKinds.value = listOf(c.pushKinds, isPushKind);
       adoptRepoConfig(c);
-      launchers.value = listOf(c.launchers, isLauncher);
-      customAgents.value = listOf(c.customAgents, isCustomAgent);
-      quickCommands.value = listOf(c.quickCommands, isQuickCommand);
-      userMcpServers.value = listOf(c.userMcpServers, isUserMcpServer);
+      adoptListConfig(c);
       applyGlobalSettings(c);
+      adoptServerSideSettings(c);
       await migrateLegacyRecents();
     } catch {
       // the app still works; presets are just unavailable
@@ -418,6 +431,8 @@ export function useAppConfig() {
     home,
     presets,
     prRepos,
+    gitlabHosts,
+    saveGitlabHosts,
     repoDirs,
     saveRepoDir,
     launchers,

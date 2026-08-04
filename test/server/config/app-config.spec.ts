@@ -15,7 +15,6 @@ import {
   sanitizePushEnabled,
   sanitizePrWorkdirFooter,
   sanitizeCopyOnSelect,
-  sanitizeWorklogIntervalHours,
   sanitizeTerminalSubmit,
   loadAppConfig,
   loadAppConfigResult,
@@ -28,6 +27,7 @@ import {
 import { DEFAULT_SOUND_KINDS } from "../../../common/notifyKinds.js";
 import { DEFAULT_PUSH_KINDS } from "../../../common/pushKinds.js";
 import { DEFAULT_COCKPIT_LINES } from "../../../common/cockpitLines.js";
+import { sanitizeWorklogIntervalHours } from "../../../common/worklogInterval.js";
 
 const tmp = () => mkdtempSync(path.join(tmpdir(), "mt-appcfg-"));
 
