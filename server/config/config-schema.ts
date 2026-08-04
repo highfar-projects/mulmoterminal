@@ -371,7 +371,10 @@ const writableDirConfigSchema = z.object({
   // The IMAGE marking this directory's cells (#1421) — a path relative to this file's own
   // directory, an http(s) URL, or a data: image. NOT the Material Symbols name a header button
   // takes under the same key: this one is a picture the project ships, that one is a glyph id.
-  icon: nonEmptyText.max(DIR_ICON_MAX_CHARS).optional(),
+  //
+  // `false` means "no icon here" and, unlike omitting the key, stops MulmoTerminal looking for
+  // the favicon the repository already ships (#1428).
+  icon: z.union([nonEmptyText.max(DIR_ICON_MAX_CHARS), z.literal(false)]).optional(),
   badgeColor: z.string().regex(HEX_COLOR_RE).optional(),
   headerColor: z.string().regex(HEX_COLOR_RE).optional(),
   headerTextColor: z.string().regex(HEX_COLOR_RE).optional(),

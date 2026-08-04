@@ -17,7 +17,9 @@ import {
   type DirConfigExtras,
 } from "../../common/dirConfigSource.js";
 import { isWithin } from "../infra/path-within.js";
-import { resolveDirIcon, type DirIcon } from "./dir-icon.js";
+import { resolveDirIcon, dirIconImage, dirIconNamed, dirIconRef, type DirIcon, type DirIconSetting } from "./dir-icon.js";
+import { detectDirIcon } from "./dir-icon-detect.js";
+import { getAutoDirIcon } from "./config-routes.js";
 import { DIR_ICON_ROUTE } from "../../common/dirIcon.js";
 import { readJsonFile } from "../infra/read-text-file.js";
 import { isRecord } from "../../common/isRecord.js";
@@ -64,9 +66,11 @@ export interface DirConfig extends DirChrome {
   sound: string | null;
   // Per-kind overrides of `sound` (#873), each either a preset or a file inside cwd.
   sounds: Partial<Record<NotifyKind, DirSound>>;
-  // The image this directory's cells are marked with (#1421) — a file confined to cwd, or a
-  // remote/data URL the browser loads itself. null when unset or unusable.
-  icon: DirIcon | null;
+  // What the FILE said about this directory's image (#1421): an icon, `"off"` for an explicit
+  // `false`, or null for unset. Deliberately NOT the icon that ends up on screen — auto-detection
+  // (#1428) happens in dirIconFor, so that a worktree inherits what was written rather than what
+  // was found, and the settings preview can still report which keys the file actually set.
+  icon: DirIconSetting;
   // Per-project terminal-header action buttons (merged over the global ones by id).
   // null = this dir doesn't configure buttons.
   buttons: HeaderButton[] | null;
@@ -242,8 +246,19 @@ export function publicDirConfig(cwd: string): PublicDirConfig {
     theme,
     colors,
     hasSound: sound !== null || Object.keys(sounds).length > 0,
-    iconUrl: dirIconUrl(cwd, icon),
+    iconUrl: dirIconUrl(cwd, dirIconFor(cwd, icon)),
   };
+}
+
+/** The icon a directory's cells actually show: what its file named, else — when the file named
+ *  nothing at all — whatever the repository already carries (#1428).
+ *
+ *  Auto-detection is skipped for BOTH an explicit `icon: false` and a global `autoDirIcon: false`,
+ *  and also whenever the file named something: a written value that failed to resolve is a broken
+ *  setting, and quietly showing a different picture would hide it. */
+export function dirIconFor(cwd: string, setting: DirIconSetting = loadDirConfig(cwd).icon): DirIcon | null {
+  if (dirIconNamed(setting)) return dirIconImage(setting);
+  return getAutoDirIcon() ? detectDirIcon(cwd) : null;
 }
 
 // A directory's own file is served by us, so the browser gets a route rather than a path; a
@@ -276,7 +291,7 @@ export interface DirConfigDetail {
 const chipLabel = (chip: HeaderChip): string => (typeof chip === "string" ? chip : chip.label);
 
 function dirConfigExtras(cwd: string): DirConfigExtras {
-  const { provider, model, skills, addDirs, appendSystemPrompt, buttons, chips } = loadDirConfig(cwd);
+  const { provider, model, skills, addDirs, appendSystemPrompt, buttons, chips, icon } = loadDirConfig(cwd);
   return {
     provider,
     model,
@@ -285,7 +300,18 @@ function dirConfigExtras(cwd: string): DirConfigExtras {
     appendSystemPrompt,
     buttonLabels: (buttons ?? []).map((button) => button.label),
     chipLabels: (chips ?? []).map(chipLabel),
+    autoIcon: autoIconRef(cwd, icon),
   };
+}
+
+// Which file an auto-detected icon (#1428) came from, relative to the directory — null when the
+// icon is one the file named, or when there is none. The preview needs this because `iconUrl`
+// alone cannot tell "I set this" from "MulmoTerminal found this", and a picture appearing on a
+// project that configured nothing is exactly the thing someone opens this panel to explain.
+function autoIconRef(cwd: string, setting: DirIconSetting): string | null {
+  if (dirIconNamed(setting)) return null;
+  const detected = dirIconFor(cwd, null);
+  return detected?.source === "file" ? detected.ref : null;
 }
 
 // The file, when the directory has one at all. Null also covers an unreadable path — the
@@ -319,7 +345,12 @@ export function dirConfigDetail(cwd: string): DirConfigDetail {
   // at all would send the reader looking for one that is right there.
   const raw: unknown = tryReadJson(file);
   if (!isRecord(raw)) return { exists: true, file, config, extras, source: EMPTY_DIR_CONFIG_SOURCE };
-  return { exists: true, file, config, extras, source: describeDirConfig(raw, keysWithValue(loadDirConfig(cwd))) };
+  // `icon: "invalid"` is a VALUE to keysWithValue, which would report the key as applied — the one
+  // thing it must not say about a setting that did not take effect. Flattened to null here so the
+  // key lands in "ignored", where a mistyped path belongs.
+  const resolved = loadDirConfig(cwd);
+  const kept = keysWithValue({ ...resolved, icon: dirIconRef(resolved.icon) });
+  return { exists: true, file, config, extras, source: describeDirConfig(raw, kept) };
 }
 
 function tryReadJson(file: string): unknown {
