@@ -267,13 +267,15 @@ MulmoTerminal の「**拡張**」の柱がここ。稼働中ターミナルの�
 どんな開発者でも、よく使う操作をワンクリックにし、見たい情報だけを出せる——それがこの仕組みの狙いです。
 
 **ボタン**（`buttons`）— 稼働中セッションに効く操作ボタン。表示は `icon`（Material Symbol 名）＋ `label`、`order` で並び順を指定できます。
-未設定なら**組み込みの既定セット**が表示されます: **Insert a file path**・**Reveal in the file manager**・**Browse files in the app**・**New terminal here**・**Open this branch's PR**（git リポかつ PR がある時のみ）・**Open on GitHub**（git リポ）。`buttons` をどこかで書くと既定セットは**丸ごと置き換え**られます（マージ**されません**）。つまり自分のリストを書けば——**短い**リストでも——並べ替え・削減・差し替えができます。
+未設定なら**組み込みの既定セット**が表示されます: **Insert a file path**・**Open this branch's PR**（git リポかつ PR がある時のみ）。`buttons` をどこかで書くと既定セットは**丸ごと置き換え**られます（マージ**されません**）。つまり自分のリストを書けば——**短い**リストでも——並べ替え・削減・差し替えができます。
+
+*Reveal in the file manager*・*Browse files in the app*・*New terminal here*・*Open on GitHub* も以前は既定ボタンでした。今は**パスメニューの項目**です（ターミナルのヘッダー行にあるディレクトリのパスをクリック）。どれも「このディレクトリに対して何かする」で、それはパス自身が表していることなので、常設アイコン4つ分の場所に見合いませんでした。設定としては何も変わっていません。自分で書けば従来どおりボタンとして動きます——メニューは固定なので、その場合は両方に出ます。
 
 ```json
 {
   "buttons": [
     { "id": "compact", "icon": "compress", "label": "Compact", "run": "input", "text": "/compact", "when": "agent == claude" },
-    { "id": "gh",      "icon": "public",   "label": "Open on GitHub", "run": "open", "open": { "url": "https://github.com/${repo}" }, "when": "isGitRepo" },
+    { "id": "gh",      "icon": "public",   "label": "Open on GitHub", "run": "open", "open": { "url": "https://github.com/${repo}" }, "when": "repo != " },
     { "id": "reveal",  "icon": "folder",   "label": "Reveal folder", "run": "open", "open": { "reveal": "${dir}" } },
     { "id": "build",   "icon": "build",    "label": "Build", "run": "shell", "cmd": "yarn build" }
   ]

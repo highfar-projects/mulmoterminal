@@ -520,12 +520,24 @@ onUnmounted(() => {
 
 <template>
   <div class="relative flex h-full min-h-0 min-w-0 flex-1 flex-col bg-base">
+    <!-- Same height, padding and gap as the cell's own header row above it (CELL_HEADER), so the two
+         read as one 68px piece of chrome rather than two. The height is FIXED rather than left to
+         `py-*` + content: this row's tallest child is an 18px icon in a `p-0.5` button — 22px, since
+         `.material-symbols-outlined` sets `line-height: 1` — and the old `py-2` around that came to
+         38px, four more than row 1. Nothing here is taller than 34px, and `flex-none` keeps the
+         terminal below from compressing it.
+         Not the CELL_HEADER constant itself: that carries `border-b`, which belongs under the row
+         that has another row beneath it, not under the one the terminal starts below. -->
     <div
       v-if="!hideHeader"
-      class="flex items-center gap-3 bg-[var(--cell-header-bg,var(--bg-panel))] px-4 py-2 font-sans text-[14px] text-[var(--cell-header-fg,var(--text))]"
+      class="flex h-[34px] flex-none items-center gap-2 bg-[var(--cell-header-bg,var(--bg-panel))] px-2 font-sans text-[14px] text-[var(--cell-header-fg,var(--text))]"
       :style="headerStyle"
     >
-      <span class="font-semibold">Terminal</span>
+      <!-- No "Terminal" heading. It was the page title of the single view, which no longer exists
+           (the router has no route for it) — every caller now embeds this inside a cell whose own
+           header row already says which cell it is. It outlived its context as the largest, boldest
+           text in a cell while saying the least, and on a command or launcher cell it contradicted
+           the row above it, which names the program actually running. -->
       <span
         v-if="dirName"
         class="max-w-[16ch] truncate rounded-[10px] px-2 py-px text-[11px] font-semibold leading-[1.6]"
@@ -533,11 +545,26 @@ onUnmounted(() => {
         :title="dirName"
         >{{ dirName }}</span
       >
-      <GitBranchChip :status="gitStatus" />
-      <span class="rounded-[4px] px-2 py-0.5 text-[12px]" :class="statusClass">{{ status }}</span>
+      <!-- This row's LEADING context, opposite the actions in `ml-auto` below. A session cell fills
+           it with its path menu, which is the better place for a path than its own info row — that
+           row is what you scan across nine cells, this is what you read about the one in front of
+           you. The command and launcher cells fill nothing and keep the branch chip: their own
+           header (CellShell) carries no git, so it is the only place they have for it. A default
+           rather than a `hideGit` prop, so who owns this space is answered by whoever fills it. -->
+      <slot name="header-lead">
+        <GitBranchChip :status="gitStatus" />
+      </slot>
+      <!-- Only while something is wrong with the CONNECTION. This is the socket's state, not the
+           agent's — a cell's own dot already says whether the agent is working or waiting — and a
+           permanent green "connected" on every cell in the grid says nothing anyone reads. It has
+           to stay for the other values: "connecting" is why a terminal is blank, and the error
+           state is why it stopped taking input. -->
+      <span v-if="status !== 'connected'" data-testid="term-conn-status" class="rounded-[4px] px-2 py-0.5 text-[12px]" :class="statusClass">{{ status }}</span>
       <RunMenu v-if="runMenu" :cwd="serverCwd" @run="(c) => emit('run', c)" />
       <SkillMenu v-if="runMenu" :cwd="serverCwd" @skill="onSkill" />
-      <div class="ml-auto inline-flex items-center gap-1">
+      <!-- flex-none: the lead slot beside it now grows and truncates (a path), and without this the
+           actions would shrink to make room and clip their own icons. -->
+      <div class="ml-auto inline-flex flex-none items-center gap-1">
         <button
           v-for="b in headerButtons"
           :key="b.id"
@@ -568,8 +595,9 @@ onUnmounted(() => {
         </button>
         <!-- The file-path picker and file explorer are now DEFAULT_BUTTONS (server-resolved into
              headerButtons above), so the user can drop/reorder/replace them via config. -->
-        <!-- A grid cell injects its own actions (GitHub / timeline / reorder / zoom /
-             close) here, so all the icon buttons live on this one header row. -->
+        <!-- A grid cell injects its SESSION actions (GitHub / ask / copy / timeline) here, so they
+             sit with this row's own ones. Reorder / zoom / park / close are NOT here: they act on
+             the cell, not on the session, and stay on the cell's own header row. -->
         <slot name="header-actions" />
       </div>
     </div>
