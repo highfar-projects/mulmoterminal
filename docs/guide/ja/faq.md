@@ -217,6 +217,12 @@ Codex / Antigravity にはワークスペースの特例が無く、どこで起
 
 もっとも、[MulmoCast](https://mulmocast.com) のような兄弟プロジェクトと比べると、MulmoTerminal は**この一家で一番マルチモーダルでない**とも言えます。名前は一家の都合です。
 
+### 誰が作っているのですか？ 来年もありますか？
+
+**[receptron](https://github.com/receptron) — [中島聡](https://x.com/snakajima) と [有本至](https://github.com/isamu) の二人**です。2015年から一緒にオープンソースを出してきました。iOS 向けの [GPU 動画処理エンジン](https://github.com/snakajima/videoshader)、[漫画をスマホで動かすランタイム](https://github.com/swipe-org/swipe)、コロナ禍に飲食店向けに作った[テイクアウト注文サービス](https://github.com/Nakajima-Foundation/ownplate)、そして [SlashGPT](https://github.com/receptron/SlashGPT)・[GraphAI](https://github.com/receptron/graphai)・[MulmoCast](https://github.com/receptron/mulmocast-cli)。
+
+来年を約束できる人はいません。確認できるのは記録のほうです。この中で最初のリポジトリは、いまの AI ツールの波より8年前のものです。2016年に始まった [Swipe の JavaScript 実装](https://github.com/isamu/swipejs)には、2026年にもコミットが入っています。どちらにしても MIT なので、**私たちが止めても、あなたは続けられます。**
+
 ### 何か困ったときは？
 
 セッションで **`/mulmoterminal-bug-report`** と打ってください。同梱のスキルが症状を聞き、**実際の**設定とバージョンを読んで、仕様や設定で説明がつかないかを先に確かめ、既知の issue を検索し、それでも残ったものだけを報告にまとめます（環境情報は自動収集、鍵はマスクされます）。

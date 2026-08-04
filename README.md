@@ -1820,9 +1820,19 @@ MulmoTerminal is built by **[receptron](https://github.com/receptron)** —
 **[Satoshi Nakajima](https://x.com/snakajima)** and **[Isamu Arimoto](https://github.com/isamu)**.
 
 Satoshi was the software architect for **Windows 95**, **Windows 98** and **Internet Explorer
-3.0 / 4.0** at Microsoft, later founded UIEvolution / Xevo, and still builds from Seattle. The two
-of them also make **[GraphAI](https://github.com/receptron/graphai)**, a dataflow engine for
-agentic applications, and **[MulmoCast](https://github.com/receptron/mulmocast-cli)**.
+3.0 / 4.0** at Microsoft, later founded UIEvolution / Xevo, and still builds from Seattle.
+
+The two have shipped open source together since 2015, and the core of each venture has been
+public every time:
+
+| | |
+|---|---|
+| **[VideoShader](https://github.com/snakajima/videoshader)** (2015) | GPU video processing for iOS, built at Veemob |
+| **[Swipe](https://github.com/swipe-org/swipe)** (2015) | an animation runtime that made manga move on phones |
+| **[OwnPlate](https://github.com/Nakajima-Foundation/ownplate)** (2020) | takeout ordering for restaurants during COVID, run at the Singularity Society and launched with ITOCHU |
+| **[SlashGPT](https://github.com/receptron/SlashGPT)** (2023) · **[GraphAI](https://github.com/receptron/graphai)** (2024) · **[MulmoCast](https://github.com/receptron/mulmocast-cli)** (2025) | LLM agents, declarative dataflow, AI video |
+
+MulmoTerminal is the seventh.
 
 It exists because we run several coding agents every day and kept losing track of which one was
 waiting on us. Everything here was built for that, then kept because it worked. MIT licensed.
