@@ -35,9 +35,18 @@ export async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestI
   const signal = caller ? AbortSignal.any([caller, abort.signal]) : abort.signal;
   try {
     return await fetch(input, { ...init, signal });
-  } finally {
-    // In `finally` rather than after the await: a rejected request leaves the timer pending
-    // otherwise, and a long one would abort a controller nobody is listening to any more.
+  } catch (err) {
+    // Disarmed ONLY here. `fetch` resolves when the headers arrive, so clearing the timer on the
+    // way out would leave the body — `res.json()`, and `res.blob()` reading a whole movie —
+    // unbounded, and a transfer that stalls mid-body would hang exactly as before (Codex, #1398).
+    // Left armed, the deadline reaches the body too, because the signal is still the one the
+    // response's stream is attached to.
+    //
+    // What that costs is a timer handle living until the deadline even after a request that
+    // finished in milliseconds. The alternative — proxying the Response so a body reader disarms
+    // it — buys back a few timers at the price of wrapping every response this app makes, and
+    // `Response`'s accessors need their real receiver. Not worth it for a handle.
     clearTimeout(timer);
+    throw err;
   }
 }

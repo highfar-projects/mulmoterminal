@@ -44,8 +44,9 @@ import { fetchWithTimeout } from "./utils/fetchWithTimeout";
 // bytes via this adapter capability; the server route realpath-contains the wire
 // path (see server/backends/mulmoscript.ts).
 // The download counterpart of dropUpload's own limit, and generous for the same reason: the
-// deadline covers the whole TRANSFER, not just the response headers — aborting mid-body would
-// truncate a long movie rather than fail it, and `res.blob()` reads it all.
+// deadline covers the whole TRANSFER — `res.blob()` reads a whole movie, and the helper keeps its
+// signal armed past the headers precisely so that read is bounded too. Generous rather than tight
+// because aborting mid-body truncates the movie rather than failing the request.
 const MEDIA_FETCH_TIMEOUT_MS = 300_000;
 
 async function fetchMulmoMediaBlob(query: { moviePath?: string; pdfPath?: string }): Promise<Blob> {

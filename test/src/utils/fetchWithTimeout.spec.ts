@@ -95,6 +95,25 @@ describe("fetchWithTimeout", () => {
     expect(seen[0]?.body).toBe("{}");
   });
 
+  // Codex on #1398: the deadline has to cover the BODY, not just time-to-headers. A response whose
+  // headers arrive promptly and whose body then stalls is the shape that hangs — and it is the
+  // shape `fetchMulmoMediaBlob` is built on, where `res.blob()` reads a whole movie.
+  it("gives up on a body that stalls after the headers arrived", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      // headers now, body never
+      const body = new Promise<string>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+      });
+      return { ok: true, status: 200, text: () => body, json: () => body, blob: () => body } as unknown as Response;
+    });
+    const res = await fetchWithTimeout("/api/media");
+    expect(res.ok).toBe(true); // the headers were fine
+    const settled = expect(res.text()).rejects.toThrow(/abort/i);
+    await vi.advanceTimersByTimeAsync(DEFAULT_REQUEST_TIMEOUT_MS);
+    await settled;
+  });
+
   // A pending timer on a request that already failed would abort a controller nobody is listening
   // to, and on a long deadline it keeps a handle alive for that whole time.
   it("clears the timer when the request fails rather than times out", async () => {
@@ -109,7 +128,9 @@ describe("fetchWithTimeout", () => {
     cleared.mockRestore();
   });
 
-  it("clears the timer when the request succeeds", async () => {
+  // Deliberately NOT cleared on success: `fetch` resolves at the headers, and disarming there is
+  // what left the body unbounded. The armed timer is the thing the test above depends on.
+  it("leaves the deadline armed after the headers, so the body is still covered", async () => {
     vi.useFakeTimers();
     const cleared = vi.spyOn(globalThis, "clearTimeout");
     vi.stubGlobal(
@@ -117,7 +138,7 @@ describe("fetchWithTimeout", () => {
       vi.fn(async () => ok()),
     );
     await fetchWithTimeout("/api/thing");
-    expect(cleared).toHaveBeenCalled();
+    expect(cleared).not.toHaveBeenCalled();
     cleared.mockRestore();
   });
 });
