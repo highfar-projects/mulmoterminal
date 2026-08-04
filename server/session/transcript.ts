@@ -54,26 +54,43 @@ export function parseJsonl(raw: string): Record<string, unknown>[] {
 // several of them (readSessionSummary) parses the .jsonl ONCE. The `*FromJsonl` wrappers
 // (parse-then-derive) stay for one-off callers and existing tests.
 
-// Ordered user-typed prompts in a transcript + the "last-prompt" fallback record.
-function collectPrompts(records: Record<string, unknown>[]): { prompts: string[]; lastPromptRecord: string | null } {
-  const prompts: string[] = [];
-  let lastPromptRecord: string | null = null;
-  for (const o of records) {
-    if (o.type === "user") {
-      const prompt = userPromptText(isRecord(o.message) ? o.message.content : undefined);
-      if (prompt) prompts.push(prompt);
-    } else if (o.type === "last-prompt" && o.lastPrompt) {
-      lastPromptRecord = readString(o.lastPrompt);
-    }
-  }
-  return { prompts, lastPromptRecord };
+// What the two "latest prompt" rules actually need to remember. Both are a choice between the same
+// three things, and each is a LAST — which is why a streaming caller can keep three strings instead
+// of every user record it has ever seen (#1377). The rule itself stays in one place: the array
+// helpers below fold the same function over the same records.
+export interface PromptTrail {
+  /** The last prompt that was not a trivial ack. */
+  meaningful: string | null;
+  /** The last prompt of any kind, trivial or not. */
+  latest: string | null;
+  /** The `last-prompt` record a hook writes, for a transcript with no user lines at all. */
+  record: string | null;
 }
+
+export const emptyPromptTrail = (): PromptTrail => ({ meaningful: null, latest: null, record: null });
+
+export function foldPromptTrail(into: PromptTrail, o: Record<string, unknown>): void {
+  if (o.type === "user") {
+    const prompt = userPromptText(isRecord(o.message) ? o.message.content : undefined);
+    if (!prompt) return;
+    into.latest = prompt;
+    if (!isTrivialPrompt(prompt)) into.meaningful = prompt;
+  } else if (o.type === "last-prompt" && o.lastPrompt) {
+    into.record = readString(o.lastPrompt);
+  }
+}
+
+const promptTrailOf = (records: Record<string, unknown>[]): PromptTrail => {
+  const trail = emptyPromptTrail();
+  for (const o of records) foldPromptTrail(trail, o);
+  return trail;
+};
 
 // The most recent user-typed prompt in a transcript: the last "user" line with real
 // text, falling back to a "last-prompt" record if there are no user lines.
 export function latestUserPromptFromParsed(records: Record<string, unknown>[]): string | null {
-  const { prompts, lastPromptRecord } = collectPrompts(records);
-  return prompts[prompts.length - 1] ?? lastPromptRecord;
+  const trail = promptTrailOf(records);
+  return trail.latest ?? trail.record;
 }
 export const latestUserPromptFromJsonl = (raw: string): string | null => latestUserPromptFromParsed(parseJsonl(raw));
 
@@ -246,13 +263,12 @@ export function preferredHeaderPrompt(current: string | null, incoming: string):
 // one-word follow-up. Falls back to the latest prompt (then the record) if every
 // prompt is trivial.
 export function latestMeaningfulUserPromptFromParsed(records: Record<string, unknown>[]): string | null {
-  const { prompts, lastPromptRecord } = collectPrompts(records);
-  for (let i = prompts.length - 1; i >= 0; i--) {
-    const prompt = prompts[i];
-    if (prompt !== undefined && !isTrivialPrompt(prompt)) return prompt;
-  }
-  return prompts[prompts.length - 1] ?? lastPromptRecord;
+  return meaningfulPromptOf(promptTrailOf(records));
 }
+
+/** The rule itself: the last substantial prompt, else the last prompt at all, else the record a
+ *  hook left. One function, so a streaming caller and an array caller cannot answer differently. */
+export const meaningfulPromptOf = (trail: PromptTrail): string | null => trail.meaningful ?? trail.latest ?? trail.record;
 export const latestMeaningfulUserPromptFromJsonl = (raw: string): string | null => latestMeaningfulUserPromptFromParsed(parseJsonl(raw));
 
 // Cumulative token usage for a session — summed across every assistant turn's
@@ -371,19 +387,21 @@ export function currentTurnToolNamesFromParsed(records: Record<string, unknown>[
  *  them with a window. That matters: measured across the eight largest transcripts here, the
  *  longest single turn spans 3,615 records, so ANY fixed window would drop a turn's early edits and
  *  report `planning` for a turn that has already been implementing. */
+export function foldTurnToolNames(names: string[], o: Record<string, unknown>): void {
+  if (o.type === "user" && userPromptText(isRecord(o.message) ? o.message.content : undefined) !== null) {
+    names.length = 0; // a fresh user prompt starts a new turn
+    return;
+  }
+  if (o.type !== "assistant" || !isRecord(o.message) || !Array.isArray(o.message.content)) return;
+  for (const block of o.message.content) {
+    if (isRecord(block) && block.type === "tool_use" && typeof block.name === "string") names.push(block.name);
+  }
+}
+
 export function createCurrentTurnToolScan() {
-  let names: string[] = [];
+  const names: string[] = [];
   return {
-    add(o: Record<string, unknown>) {
-      if (o.type === "user" && userPromptText(isRecord(o.message) ? o.message.content : undefined) !== null) {
-        names = []; // a fresh user prompt starts a new turn
-        return;
-      }
-      if (o.type !== "assistant" || !isRecord(o.message) || !Array.isArray(o.message.content)) return;
-      for (const block of o.message.content) {
-        if (isRecord(block) && block.type === "tool_use" && typeof block.name === "string") names.push(block.name);
-      }
-    },
+    add: (o: Record<string, unknown>) => foldTurnToolNames(names, o),
     names: (): string[] => names,
   };
 }
