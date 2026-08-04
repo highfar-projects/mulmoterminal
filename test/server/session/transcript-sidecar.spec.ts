@@ -1,25 +1,22 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtempSync, mkdirSync, existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, appendFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, existsSync, readdirSync, readFileSync, statSync, writeFileSync, appendFileSync } from "node:fs";
 import path from "node:path";
+import { takeScratchHome, type ScratchHome } from "../../support/scratchHome.js";
 import { isRecord } from "../../../common/isRecord.js";
 
 // A sidecar answers for a file it is not part of, and it can be days old when it is read — so what
 // matters is every reason to DISTRUST it. Each check below is a case where answering from disk
 // would be wrong rather than merely slow (#1386).
 
-// Restored after every test: vitest reuses a worker across FILES, and a leaked HOME would move
-// the next spec's idea of ~/.mulmoterminal (and ~/.claude) without it asking.
-const realHome = process.env.HOME;
+let scratch: ScratchHome;
 let home = "";
 let projects = "";
 
 // MULMOTERMINAL_HOME is read at import time, so the module is imported per test run against a
 // scratch home rather than the developer's own.
 async function loadSidecar() {
-  vi.resetModules();
-  process.env.HOME = home;
+  vi.resetModules(); // the scratch home is already in place; the module reads it at import
   const mod = await import("../../../server/session/transcript-sidecar.js");
   return mod.createTranscriptSidecar;
 }
@@ -55,15 +52,12 @@ const settled = async () => {
 };
 
 beforeEach(() => {
-  home = mkdtempSync(path.join(tmpdir(), "mt-sidecar-home-"));
+  scratch = takeScratchHome("mt-sidecar-home-");
+  home = scratch.path;
   projects = path.join(home, ".claude", "projects");
   mkdirSync(projects, { recursive: true });
 });
-afterEach(() => {
-  if (realHome === undefined) delete process.env.HOME;
-  else process.env.HOME = realHome;
-  rmSync(home, { recursive: true, force: true });
-});
+afterEach(() => scratch.release());
 
 describe("createTranscriptSidecar", () => {
   it("reads back what it wrote, and resumes at the stored offset", async () => {

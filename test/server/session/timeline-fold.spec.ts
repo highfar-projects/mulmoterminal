@@ -1,25 +1,22 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, statSync, utimesSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { appendFileSync, mkdirSync, writeFileSync, statSync, utimesSync } from "node:fs";
 import path from "node:path";
+import { takeScratchHome, type ScratchHome } from "../../support/scratchHome.js";
 
 // The timeline overlay read the whole transcript every time it was opened — a payload capped at 300
 // events, paid for in hundreds of megabytes (#1386). It now folds once and resumes, so what matters
 // is that the window still means the same thing: the NEWEST 300, and `truncated` counting every
 // event the file ever had rather than the ones that survived the window.
 
-// Restored after every test: vitest reuses a worker across FILES, and a leaked HOME would move the
-// next spec's idea of ~/.claude without it asking.
-const realHome = process.env.HOME;
+let scratch: ScratchHome;
 let home = "";
 let n = 0;
 
 const CWD = "/Users/me/proj";
 
 async function freshTimeline() {
-  vi.resetModules();
-  process.env.HOME = home;
+  vi.resetModules(); // the scratch home is already in place; the module reads it at import
   const mod = await import("../../../server/session/session-reads.js");
   return mod.sessionTimeline;
 }
@@ -41,13 +38,10 @@ function writeTranscript(body: string): string {
 }
 
 beforeEach(() => {
-  home = mkdtempSync(path.join(tmpdir(), "mt-timeline-"));
+  scratch = takeScratchHome("mt-timeline-");
+  home = scratch.path;
 });
-afterEach(() => {
-  if (realHome === undefined) delete process.env.HOME;
-  else process.env.HOME = realHome;
-  rmSync(home, { recursive: true, force: true });
-});
+afterEach(() => scratch.release());
 
 describe("sessionTimeline", () => {
   it("lists the tool uses in order, and says nothing was dropped", async () => {

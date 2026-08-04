@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { appendFileSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { takeScratchHome, type ScratchHome } from "../../support/scratchHome.js";
 import { isRecord } from "../../../common/isRecord.js";
 
 // The machinery three readers share (title fields, cost, timeline): fold a transcript once, resume
@@ -10,9 +10,7 @@ import { isRecord } from "../../../common/isRecord.js";
 // is the part every caller depends on and none of them can see — that a resumed fold produces what
 // one uninterrupted pass would, and that it does not reach back into the value already handed out.
 
-// Restored after every test: vitest reuses a worker across FILES, and a leaked HOME would move the
-// next spec's idea of ~/.mulmoterminal without it asking.
-const realHome = process.env.HOME;
+let scratch: ScratchHome;
 let home = "";
 let projects = "";
 let n = 0;
@@ -37,8 +35,7 @@ const COUNTED = {
 };
 
 async function loadFold() {
-  vi.resetModules();
-  process.env.HOME = home;
+  vi.resetModules(); // the scratch home is already in place; the module reads it at import
   const mod = await import("../../../server/session/transcript-fold.js");
   return mod.createTranscriptFold;
 }
@@ -59,15 +56,12 @@ const stampOf = (file: string) => {
 };
 
 beforeEach(() => {
-  home = mkdtempSync(path.join(tmpdir(), "mt-fold-"));
+  scratch = takeScratchHome("mt-fold-");
+  home = scratch.path;
   projects = path.join(home, ".claude", "projects");
   mkdirSync(projects, { recursive: true });
 });
-afterEach(() => {
-  if (realHome === undefined) delete process.env.HOME;
-  else process.env.HOME = realHome;
-  rmSync(home, { recursive: true, force: true });
-});
+afterEach(() => scratch.release());
 
 describe("createTranscriptFold", () => {
   it("folds a transcript, and folds only the append the second time", async () => {

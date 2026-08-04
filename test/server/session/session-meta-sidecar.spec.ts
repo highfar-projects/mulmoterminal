@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { takeScratchHome, type ScratchHome } from "../../support/scratchHome.js";
 
 // #1379 made the session list resume its fold instead of repeating it, but that state lives in one
 // process's memory: a restart, and every other mulmoterminal on the machine, still paid for the
@@ -12,9 +12,7 @@ import path from "node:path";
 // reader whose in-memory cache has never seen the file, against the same home and the same
 // transcript on disk.
 
-// Restored after every test: vitest reuses a worker across FILES, and a leaked HOME would move
-// the next spec's idea of ~/.mulmoterminal (and ~/.claude) without it asking.
-const realHome = process.env.HOME;
+let scratch: ScratchHome;
 let home = "";
 let projects = "";
 let n = 0;
@@ -28,8 +26,7 @@ const fillerLine = (bytes: number) => line({ type: "assistant", text: "x".repeat
 const OVER_THRESHOLD_BYTES = 11 * 1024 * 1024;
 
 async function freshReader() {
-  vi.resetModules();
-  process.env.HOME = home;
+  vi.resetModules(); // the scratch home is already in place; the module reads it at import
   const mod = await import("../../../server/session/session-reads.js");
   return mod.readSessionMeta;
 }
@@ -63,15 +60,12 @@ const sidecarsWritten = (): string[] => {
 };
 
 beforeEach(() => {
-  home = mkdtempSync(path.join(tmpdir(), "mt-meta-sidecar-"));
+  scratch = takeScratchHome("mt-meta-sidecar-");
+  home = scratch.path;
   projects = path.join(home, ".claude", "projects");
   mkdirSync(projects, { recursive: true });
 });
-afterEach(() => {
-  if (realHome === undefined) delete process.env.HOME;
-  else process.env.HOME = realHome;
-  rmSync(home, { recursive: true, force: true });
-});
+afterEach(() => scratch.release());
 
 describe("the session list across processes", () => {
   it("answers a big transcript from the sidecar, without reading it again", async () => {
