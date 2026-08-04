@@ -9,14 +9,16 @@ import { readString } from "../../common/readString.js";
 // slash-command wrappers, bash input, and the notification a finished background task
 // writes there — no more a typed prompt than a slash command is.
 //
-// Exported because two paths decide this, and for a year only one of them did: the fix
-// that added `task-notification` (e1e19c66) touched the transcript reader, while the
-// live `UserPromptSubmit` hook kept taking the XML as the session's latest prompt and
-// putting it on the cell header (#1384). Both call this now.
+// Exported because TWO paths decide this and only one used to: the commit that added
+// `task-notification` (e1e19c66) taught the transcript reader, while the live
+// `UserPromptSubmit` hook went on taking the XML as the session's latest prompt and
+// putting it on the cell header (#1384). Both call this now, so a marker cannot be
+// added to one and forgotten on the other.
 //
-// The `^\s*` anchor is what keeps it safe to widen: 591 real user lines here MENTION
-// `<task-notification` mid-sentence — the /loop skill's own documentation among them —
-// and matching those would delete the prompt instead of the injection.
+// The `^\s*` anchor is what keeps the list safe to widen: 591 user lines in the
+// transcripts on this machine MENTION `<task-notification` mid-sentence — the /loop
+// skill's own documentation among them — and matching those would delete the prompt
+// instead of the injection.
 const INJECTED_PROMPT_RE = /^\s*<(local-command|command-|bash-|task-notification|system-reminder)/;
 
 export const isInjectedPrompt = (text: string): boolean => INJECTED_PROMPT_RE.test(text);
