@@ -9,7 +9,7 @@ import { submitSequenceForAgent } from "../../common/terminalSubmit.js";
 import { buildClaudeArgs } from "../agents/claude-args.js";
 import { claudeAdapter } from "../agents/claude.js";
 import { appendedSystemPrompt } from "../agents/appended-prompt.js";
-import { claimFullGuiMcp, hookedSessions, knownSessions, launchChoices, ptys, resetSessionToolGroups } from "./registry.js";
+import { claimFullGuiMcp, hookedSessions, knownSessions, launchChoices, ptys, releaseAllToolsSession, resetSessionToolGroups } from "./registry.js";
 import { ptySpawn, ptyWouldReattach } from "./pty-spawn.js";
 import { ptyExitLine, ptyStartLine } from "./pty-exit-log.js";
 import { attachDraftInjection } from "./draft-injection.js";
@@ -179,8 +179,15 @@ export function createClaudeSpawner(deps: SpawnDeps) {
     // remaining window is irreducible without tmux reporting which branch `-A` took, and what
     // survives it is an over-reported group on a session that lost it — the next genuinely new
     // process clears that, whereas the reverse mistake could not be undone at all.
+    //
+    // The all-tools claim is released on the same condition and for the same reason: a session id
+    // outlives its process, so one spawned as the single view and respawned as a project-directory
+    // cell would otherwise keep answering that it carries every tool — and its group urls would
+    // stand down for a process that has no all-tools url to fall back on.
     function resetToolGroupsUnlessReattaching(): void {
-      if (!ptyWouldReattach(sessionId, true)) resetSessionToolGroups(sessionId);
+      if (ptyWouldReattach(sessionId, true)) return;
+      resetSessionToolGroups(sessionId);
+      if (!fullGuiMcp) releaseAllToolsSession(sessionId);
     }
 
     function spawnEntry(): PtyEntry {

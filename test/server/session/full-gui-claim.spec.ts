@@ -19,7 +19,7 @@ const HOME = makeTempDir("mt-full-gui-claim-");
 const REAL_HOME = process.env.HOME;
 process.env.HOME = HOME;
 const { mountMcpRoutes } = await import("../../../server/routes/mcp-routes.js");
-const { claimFullGuiMcp, hasAllGuiTools, whenToolGroupsPersisted } = await import("../../../server/session/registry.js");
+const { claimFullGuiMcp, hasAllGuiTools, releaseAllToolsSession, whenToolGroupsPersisted } = await import("../../../server/session/registry.js");
 const { carriesFullGuiMcp } = await import("../../../server/session/mcp-config.js");
 const { CLAUDE_CWD } = await import("../../../server/config/env.js");
 
@@ -75,6 +75,34 @@ describe("claimFullGuiMcp", () => {
 // Nothing here asserts the id reaches disk. `markAllToolsSession` already persisted before this
 // change and its append queue is private to the appender; what moved is only WHEN the mark is
 // made, which the group-url cases below are what actually prove.
+
+// A session id outlives the process that earned the claim: one opened in the single view (which
+// takes the whole GUI MCP whatever its cwd) can be respawned as a project-directory grid cell. If
+// the claim survived that, the new process would have its group urls stood down AND no all-tools
+// url to fall back on — a cell with no GUI tools at all, which is worse than the duplicate the
+// standing-down exists to prevent. spawn-claude releases it wherever it resets the tool groups.
+describe("releaseAllToolsSession", () => {
+  it("takes the claim back", () => {
+    const id = randomUUID();
+    claimFullGuiMcp(id, true, "/some/project");
+    releaseAllToolsSession(id);
+    expect(hasAllGuiTools(id)).toBe(false);
+  });
+
+  it("hands the group its tools back", async () => {
+    const id = randomUUID();
+    claimFullGuiMcp(id, true, "/some/project");
+    expect(toolNamesFrom((await listTools(`/api/mcp/render/${id}`)).text)).toEqual([]);
+    releaseAllToolsSession(id);
+    expect(toolNamesFrom((await listTools(`/api/mcp/render/${id}`)).text).length).toBeGreaterThan(0);
+  });
+
+  it("is harmless on a session that never claimed", () => {
+    const id = randomUUID();
+    releaseAllToolsSession(id);
+    expect(hasAllGuiTools(id)).toBe(false);
+  });
+});
 
 describe("a group url once the session is claimed", () => {
   it("offers nothing, however early the group url connects", async () => {

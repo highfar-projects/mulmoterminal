@@ -105,6 +105,15 @@ The group server still connects and still reports itself; it simply has no tools
 exactly one name per action. Serving 404 instead would surface as "server failed to connect", which
 is a worse lie than "connected, nothing here".
 
+The record must also be **released**, which is the part the log could not express: it was append-only
+because "nothing removes one", and that stopped being true here. A session id outlives its process —
+one opened in the single view (full GUI MCP whatever its cwd) can be respawned as a
+project-directory cell — and a stale claim would stand that cell's groups down with no all-tools url
+to serve them instead. Worse than the duplicate. `all-tools-log.ts` gives the file a release marker
+replayed in order, the shape `session-tool-groups.ts` already uses; a bare id still reads as a claim,
+so existing files keep working. The release fires exactly where the tool-group reset already does,
+so a tmux reattach — same process, same url — keeps its claim.
+
 To keep the decision and the record from separating, the three spawn paths call one function that
 does both:
 

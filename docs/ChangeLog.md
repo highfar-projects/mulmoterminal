@@ -49,6 +49,14 @@ Entries here are folded into the next release's heading when it ships.
   re-broken [#1188](https://github.com/receptron/mulmoterminal/pull/1188): the groups do not cover
   the tools that belong to no group, `spawnBackgroundChat` among them.
 
+  The record is also **released** when a session is respawned without the all-tools URL, which the
+  log it lives in could not express before — it was append-only on the stated grounds that "nothing
+  removes one". That stopped being true the moment a stale yes could stand a cell's groups down with
+  nothing to serve them: a session id outlives its process, and one opened in the single view can be
+  respawned as a project-directory cell. It now takes the same shape the tool-group log already uses
+  for the same reason — an append log with a release marker, replayed in order, and a bare id still
+  reads as a claim so existing files keep working.
+
 - **Workspace cells and the single view start slower if you have several MCP servers configured**,
   because they now load them. The same trade MulmoClaude already makes on the same workspace.
 

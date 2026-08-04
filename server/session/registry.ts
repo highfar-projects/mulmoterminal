@@ -27,6 +27,7 @@ import { normalizeMemo } from "../../common/sessionMemo.js";
 import { forEachJsonlRecord } from "../infra/jsonl-file.js";
 import { devTerminalCwdLine, hydrateCwdsInto } from "./dev-terminal-cwds.js";
 import { parseSessionToolGroups, sessionToolGroupLine, TOOL_GROUP_RESET, type SessionToolGroup } from "./session-tool-groups.js";
+import { allToolsLogLine, parseAllToolsLog } from "./all-tools-log.js";
 import type { ToolGroup } from "../../common/toolGroups.js";
 import { carriesFullGuiMcp } from "./mcp-config.js";
 import type { Activity, KnownSession, PtyEntry } from "./types.js";
@@ -326,15 +327,43 @@ export function isPhoneListableSession(id: string): boolean {
 // the ListTools that would teach us again.
 const allToolsSessions = new Set<string>();
 const ALL_TOOLS_SESSIONS_FILE = path.join(MULMOTERMINAL_HOME, "all-tools-sessions.json");
-export const allToolsSessionsHydrated = hydrateIdLog(ALL_TOOLS_SESSIONS_FILE, allToolsSessions);
-const appendAllToolsSession = idLogAppender(ALL_TOOLS_SESSIONS_FILE, "all-tools-sessions");
+export const allToolsSessionsHydrated = (async () => {
+  try {
+    for (const id of parseAllToolsLog(await fs.readFile(ALL_TOOLS_SESSIONS_FILE, "utf8"), isValidSessionId)) allToolsSessions.add(id);
+  } catch {
+    // absent on first run / unreadable => nothing remembered
+  }
+})();
+let allToolsPersist: Promise<void> = Promise.resolve();
+function appendAllToolsEntry(id: string, carries: boolean): void {
+  allToolsPersist = allToolsPersist
+    .then(() => fs.mkdir(MULMOTERMINAL_HOME, { recursive: true }))
+    .then(() => fs.appendFile(ALL_TOOLS_SESSIONS_FILE, allToolsLogLine(id, carries)))
+    .catch((e) => console.error(`[all-tools-sessions] failed to persist: ${messageOf(e)}`));
+}
+export const whenAllToolsPersisted = (): Promise<void> => allToolsPersist;
 
 /** Note that a session reached us on the all-tools url. A no-op once known — one server is built
  *  per MCP request, so this is asked on every tool call. */
 export function markAllToolsSession(id: string): void {
   if (!isValidSessionId(id) || allToolsSessions.has(id)) return;
   allToolsSessions.add(id);
-  appendAllToolsSession(id);
+  appendAllToolsEntry(id, true);
+}
+
+/**
+ * The opposite, and the reason this log needed a release marker at all: a session id outlives the
+ * process that earned the claim. A new process given no all-tools url must stop answering yes, or
+ * its group urls stand down (mcp/tool-gate.ts) with nothing left to serve the tools — a cell with
+ * no GUI tools at all, which is worse than the duplicate the standing-down prevents.
+ *
+ * Called only where a genuinely NEW process is starting, never on a tmux reattach: there the
+ * original process is still running with whatever url it was given.
+ */
+export function releaseAllToolsSession(id: string): void {
+  if (!isValidSessionId(id) || !allToolsSessions.has(id)) return;
+  allToolsSessions.delete(id);
+  appendAllToolsEntry(id, false);
 }
 
 /** Does this session carry the whole GUI MCP, rather than the subset its directory registered? */
