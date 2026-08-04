@@ -15,6 +15,8 @@ import { asTerminalAgent, type TerminalAgent } from "../../common/sessionAgent.j
 import { messageOf } from "../errors.js";
 import { buildActivitySnapshot, mergeOwnedActivity, parseActivityState, type PersistedActivity } from "./activity-state.js";
 import { parseSessionIdLog, sessionIdLogLine } from "./session-id-log.js";
+import { applyCustomAgentSession, customAgentSessionLine, customAgentSessionRecord } from "./custom-agent-log.js";
+import { isCustomAgentId } from "../../common/customAgents.js";
 import {
   antigravityConversationLine,
   antigravityConversationRecord,
@@ -56,10 +58,14 @@ export const knownSessions = new Map<string, KnownSession>(); // id -> { created
 export const launchChoices = new Map<string, DirModelChoice>(); // id -> { provider, model }
 
 // Which CUSTOM AGENT each session was started on (#1414) — the Agent Picker's equivalent of
-// `launchChoices` above, and remembered for the same reason: a cell restored after a page reload
-// has forgotten its pick, and resuming as plain claude a conversation that began under a wrapper
-// would move it to another model mid-thread. Process-lifetime only, like the choices.
-export const customAgentSessions = new Map<string, string>(); // id -> custom agent id
+// `launchChoices` above, remembered because a resume must continue on the agent the session began
+// on rather than on whatever the picker currently shows.
+//
+// Unlike the choices, it is PERSISTED and survives reap: see custom-agent-log.ts. A transcript
+// outlives its pty, and the id is the only thing standing between resuming that conversation and
+// silently continuing it on a different model. Declared here; hydrated further down, next to the
+// other logs.
+export const customAgentSessions = new Map<string, string>(); // session id -> custom agent id
 
 // Sessions spawned as hidden background workers (spawnBackgroundChat hidden:true) that are
 // still LIVE. Process-lifetime only, and tied to `activity`'s lifecycle in reap(). Ask
@@ -556,6 +562,40 @@ export function rememberAntigravityConversation(sessionId: string, conversationI
     .then(() => fs.mkdir(MULMOTERMINAL_HOME, { recursive: true }))
     .then(() => fs.appendFile(ANTIGRAVITY_CONVERSATIONS_FILE, antigravityConversationLine(record)))
     .catch((e) => console.error(`[antigravity-conversations] failed to persist: ${messageOf(e)}`));
+}
+
+// The custom-agent mapping's own log (#1414). Same shape as the memos below and kept for the same
+// reason: it must survive reap and a restart, because the transcript it describes does.
+const CUSTOM_AGENT_SESSIONS_FILE = path.join(MULMOTERMINAL_HOME, "custom-agent-sessions.jsonl");
+
+// Ids this process has already written. Hydration reads the file as it was BEFORE our append could
+// reach it, so without this a session spawned during startup is overwritten by an older line — and
+// a cell that just moved to another agent would resume on the previous one.
+const customAgentWrittenIds = new Set<string>();
+
+export const customAgentSessionsHydrated: Promise<void> = (async () => {
+  try {
+    await forEachJsonlRecord(CUSTOM_AGENT_SESSIONS_FILE, (parsed) => {
+      const record = customAgentSessionRecord(parsed, isValidSessionId, isCustomAgentId);
+      if (record && !customAgentWrittenIds.has(record.sessionId)) applyCustomAgentSession(customAgentSessions, record);
+    });
+  } catch {
+    // absent on first run / unreadable => nothing remembered, and a resume falls back to plain claude
+  }
+})();
+
+let customAgentPersist: Promise<void> = Promise.resolve();
+
+/** Record that a session runs on a custom agent, and persist it. */
+export function rememberCustomAgentSession(sessionId: string, agentId: string): void {
+  if (!isValidSessionId(sessionId) || !isCustomAgentId(agentId)) return;
+  customAgentWrittenIds.add(sessionId);
+  if (customAgentSessions.get(sessionId) === agentId) return; // already the answer; appending would only grow the log
+  applyCustomAgentSession(customAgentSessions, { sessionId, agentId });
+  customAgentPersist = customAgentPersist
+    .then(() => fs.mkdir(MULMOTERMINAL_HOME, { recursive: true }))
+    .then(() => fs.appendFile(CUSTOM_AGENT_SESSIONS_FILE, customAgentSessionLine({ sessionId, agentId })))
+    .catch((e) => console.error(`[custom-agent-sessions] failed to persist: ${messageOf(e)}`));
 }
 
 // The one-line note the user wrote on a session (#1084). Their own words about what a cell is

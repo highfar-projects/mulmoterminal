@@ -9,7 +9,16 @@ import { submitSequenceForAgent } from "../../common/terminalSubmit.js";
 import { buildClaudeArgs } from "../agents/claude-args.js";
 import { claudeAdapter } from "../agents/claude.js";
 import { appendedSystemPrompt } from "../agents/appended-prompt.js";
-import { claimFullGuiMcp, customAgentSessions, hookedSessions, knownSessions, launchChoices, ptys, resetSessionToolGroups } from "./registry.js";
+import {
+  claimFullGuiMcp,
+  customAgentSessions,
+  hookedSessions,
+  knownSessions,
+  launchChoices,
+  ptys,
+  rememberCustomAgentSession,
+  resetSessionToolGroups,
+} from "./registry.js";
 import { ptySpawn, ptyWouldReattach, type PtySpawnEnv } from "./pty-spawn.js";
 import { ptyExitLine, ptyStartLine } from "./pty-exit-log.js";
 import { attachDraftInjection } from "./draft-injection.js";
@@ -119,22 +128,27 @@ function sessionAddDirs(sessionId: string, configured: string[] | null | undefin
 /**
  * Which custom agent, if any, this session runs — the request's, or the one it was STARTED on.
  *
- * Remembered exactly as the provider/model choice is (launchChoices, #584), and for the same
- * reason: the browser re-sends its cell's pick on every reconnect, but a cell restored after a
- * page reload has forgotten it, and a session resumed as plain claude when it began under a
- * wrapper would quietly move to a different model mid-conversation.
+ * Remembered exactly as the provider/model choice is (launchChoices, #584), and resolved by the
+ * same rule (effectiveChoice): **a resume ignores the picker entirely.** The browser re-sends
+ * whatever its cell still holds on every reconnect, and that value belongs to the session the cell
+ * launched, not to the one being resumed — so picking a custom agent and then clicking a plain
+ * Claude row in "or resume here" would otherwise continue that conversation under a wrapper, on a
+ * different model, mid-thread. What the session was started on is the only defensible answer.
  *
- * Process-lifetime only, like launchChoices. After a server restart the memory is gone and a cold
- * resume falls back to plain claude — the same limit the picked backend already has.
+ * PERSISTED, unlike launchChoices — it survives reap and a restart (custom-agent-log.ts). It has
+ * to: the transcript outlives the pty, and with the picker ignored on resume there would be
+ * nothing left to say how that conversation was being run. (A tmux REATTACH is unaffected either
+ * way: it picks up the running process and never re-reads argv.)
  */
-function resolveCustomAgent(sessionId: string, requestedId: string | undefined): CustomAgent | undefined {
-  const id = requestedId ?? customAgentSessions.get(sessionId);
+function resolveCustomAgent(sessionId: string, requestedId: string | undefined, resuming: boolean): CustomAgent | undefined {
+  const id = resuming ? customAgentSessions.get(sessionId) : requestedId;
   if (!id) return undefined;
   const agent = getCustomAgents().find((candidate) => candidate.id === id);
-  // An id that no longer names an entry is dropped rather than remembered: the user deleted it,
-  // and holding the memory would keep resuming a command the config no longer has.
-  if (agent) customAgentSessions.set(sessionId, agent.id);
-  else customAgentSessions.delete(sessionId);
+  // An id the config no longer has resolves to nothing and this session starts on plain claude —
+  // but the mapping is left alone rather than erased. The log only grows (it is shared between
+  // instances, so nothing rewrites it), and keeping the name costs nothing: re-adding the entry
+  // puts the session back on the agent it was started on, which is what its user chose.
+  if (agent) rememberCustomAgentSession(sessionId, agent.id);
   return agent;
 }
 
@@ -168,7 +182,9 @@ function sessionProgram(
   resume: string | null,
   unset: readonly string[],
 ): { file: string; prefixArgs: string[]; spawnEnv: PtySpawnEnv; note: string | null } {
-  const customAgent = resolveCustomAgent(sessionId, customAgentId);
+  // `resume` is non-null exactly when this is a continuation (the caller passes it only for a
+  // resumable transcript), which is the same signal effectiveChoice takes as `resuming`.
+  const customAgent = resolveCustomAgent(sessionId, customAgentId, resume !== null);
   const note = [customAgent ? `via ${customAgent.id}` : null, resume ? `resume ${resume}` : null].filter(Boolean).join(" ") || null;
   const env = { unset, env: guiMcpEnv(sessionId, PORT) };
   const launch = customAgent ? customAgentLaunch(customAgent.command) : null;

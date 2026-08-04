@@ -26,17 +26,26 @@ vi.mock("../../../server/session/pty-spawn.js", () => ({
   ptyWouldReattach: () => false,
 }));
 
+// The real map + writer, minus the disk: what a session was started on is persisted (it must
+// outlive the pty, since the transcript does), and these tests are about the resolution, not the
+// log format — which custom-agent-log.spec.ts covers.
+const customAgentSessions = new Map<string, string>();
+
 vi.mock("../../../server/session/registry.js", () => ({
   knownSessions: new Map(),
   launchChoices: new Map(),
-  customAgentSessions: new Map(),
+  customAgentSessions,
+  rememberCustomAgentSession: (sessionId: string, agentId: string) => customAgentSessions.set(sessionId, agentId),
   ptys: new Map(),
   hookedSessions: new Set(),
   resetSessionToolGroups: vi.fn(),
   claimFullGuiMcp: () => true,
 }));
 
-vi.mock("../../../server/session/session-reads.js", () => ({ sessionExistsOnDisk: () => false }));
+// Whether the session being asked for has a transcript — which is what makes a spawn a RESUME
+// rather than a fresh start, and the two follow opposite rules about the picker.
+let onDisk = false;
+vi.mock("../../../server/session/session-reads.js", () => ({ sessionExistsOnDisk: () => onDisk }));
 
 const nemotron: CustomAgent = { id: "nemotron", label: "Nemotron", agent: "claude", command: "ollama launch claude --model nemotron-3-ultra:cloud --" };
 let configured: CustomAgent[] = [nemotron];
@@ -79,8 +88,19 @@ const freshId = () => `11111111-2222-4333-8444-${String(++nextId).padStart(12, "
 const spawn = (options: Record<string, unknown>, id: string = ID) =>
   createClaudeSpawner(deps).spawnClaudePty(id, null, null, { cwd: process.cwd(), attachGuiMcp: false, ...options });
 
+// The same session id, continued: a transcript exists, so the spawn is a `--resume`.
+const resume = (options: Record<string, unknown>, id: string) => {
+  onDisk = true;
+  try {
+    return createClaudeSpawner(deps).spawnClaudePty(id, id, null, { cwd: process.cwd(), attachGuiMcp: false, ...options });
+  } finally {
+    onDisk = false;
+  }
+};
+
 beforeEach(() => {
   configured = [nemotron];
+  onDisk = false;
   spawnedFile = "";
   spawnedArgs = [];
   spawnedOptions = {};
@@ -129,19 +149,32 @@ describe("spawnClaudePty with a custom agent (#1414)", () => {
 
   // A cell restored after a page reload no longer sends the id, and a session resumed as plain
   // claude when it began under a wrapper would move to a different model mid-conversation.
-  it("remembers the wrapper for a later reconnect that sends no id", () => {
+  it("remembers the wrapper when resuming, even with no id in the request", () => {
     const id = freshId();
     spawn({ customAgentId: "nemotron" }, id);
-    spawn({}, id);
+    resume({}, id);
     expect(spawnedFile).toBe("ollama");
   });
 
-  // …and forgets it when the entry is gone, so the memory cannot outlive the config.
-  it("stops remembering one the user has deleted", () => {
+  // The other half of the same rule, and the one that bites: the browser re-sends whatever its
+  // cell still holds on every reconnect, and clicking a plain Claude row under "or resume here"
+  // does NOT change the picker. Honouring the request there would continue someone's
+  // conversation on a different model, mid-thread. Same rule as effectiveChoice (#584).
+  it("ignores the picker when resuming a session that began without a wrapper", () => {
+    const id = freshId();
+    spawn({}, id);
+    resume({ customAgentId: "nemotron" }, id);
+    expect(spawnedFile).toBe("claude");
+  });
+
+  // A session whose entry the user has since deleted resolves to nothing and starts on plain
+  // claude. The mapping itself is left alone — the log only grows — so re-adding the entry puts
+  // the session back on the agent it was started on.
+  it("falls back to plain claude when the entry it was started on is gone", () => {
     const id = freshId();
     spawn({ customAgentId: "nemotron" }, id);
     configured = [];
-    spawn({}, id);
+    resume({}, id);
     expect(spawnedFile).toBe("claude");
   });
 });

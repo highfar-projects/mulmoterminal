@@ -1129,6 +1129,11 @@ Antigravity and Shell.
 Up to 8 entries. `config.json` only — there is no Settings control, so an edit made while the
 server is running needs a **restart**, then a tab reload.
 
+The picker decides what a **new** session starts as. Continuing one under *OR RESUME HERE* keeps
+the agent that session began on, whatever the picker happens to show — the same rule the
+provider/model choice follows. Which agent each session started on is remembered on disk, so it
+survives closing the cell, exiting the session, and restarting the server.
+
 ### Where your command ends and Claude Code's begins
 
 What actually runs is your command with Claude Code's entire argv after it:

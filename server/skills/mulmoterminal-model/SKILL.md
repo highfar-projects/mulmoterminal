@@ -142,9 +142,14 @@ this key.
 - **A missing program is reported by the child**, not pre-flighted: `CLAUDE_BIN` cannot fix a
   command the user wrote, so the terminal shows the shell's own "command not found" rather than
   this app's binary diagnosis. Check the command exists on `PATH` when a cell dies instantly.
-- The pick is remembered **per session for the life of the server**, so a reconnecting cell keeps
-  its wrapper. After a server restart, resuming that conversation falls back to plain `claude` —
-  the same limit the provider/model pick already has.
+- **Which agent a session was started on is remembered on disk**
+  (`~/.mulmoterminal/custom-agent-sessions.jsonl`), so it survives the cell closing, the session
+  exiting and a server restart. Resuming a conversation months later still runs it the way it was
+  being run.
+- **Resuming a conversation keeps the agent it started on, whatever the picker currently says.**
+  Picking a custom agent and then clicking a row under *OR RESUME HERE* continues that session as
+  it was; the picker only decides what a NEW session starts as. Same rule as the provider/model
+  pick. To run an existing conversation on a different agent, start a new session instead.
 - Deleting an entry that a live session was started from leaves that session running; the next
   start falls back to plain `claude`.
 

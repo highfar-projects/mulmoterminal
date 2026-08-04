@@ -24,6 +24,7 @@ import { codexRolloutExists } from "../agents/codex-sessions.js";
 import {
   antigravityConversations,
   antigravityConversationsHydrated,
+  customAgentSessionsHydrated,
   codexRolloutIds,
   markDevTerminalSession,
   markAttachedSessionPlaced,
@@ -409,6 +410,11 @@ async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
   // exits with "session id already in use" if we retry `--session-id <same>`.
   // So mint a fresh id; the browser adopts it from this `session` message and
   // re-persists, so the reload just reopens a working terminal seamlessly.
+  // Before resolving, not after: which custom agent a session was started on lives on disk, and a
+  // resume that arrives while the log is still being read would see an empty map and continue the
+  // conversation on plain claude — a different model, mid-thread. Same guard the antigravity
+  // conversation map takes, for the same restart case.
+  await customAgentSessionsHydrated;
   const { reattachId, resume, sessionId } = resolveClaudeSession(requested, cwd);
   const live = reattachId ? ptys.get(reattachId) : undefined;
   // Buffered from the announcement on, like every other terminal endpoint: the browser's first
