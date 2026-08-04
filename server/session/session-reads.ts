@@ -26,7 +26,7 @@ import {
 import { createTranscriptFold, type FoldedAt } from "./transcript-fold.js";
 import { classifyWorkPhase, type WorkPhase } from "./workPhase.js";
 import { sessionListTitle } from "./sessionListTitle.js";
-import { activity, aiTitles, codexRolloutIds, isBackgroundSession, isFailedWorker, knownSessions, sessionMemos } from "./registry.js";
+import { activity, aiTitles, codexRollouts, codexRolloutsHydrated, isBackgroundSession, isFailedWorker, knownSessions, sessionMemos } from "./registry.js";
 import { projectSessionsDir } from "./project-dir.js";
 import { lastTurnFromClaudeParsed, lastTurnFromCodexRolloutDocs, EMPTY_TURN, type LastTurn } from "./last-turn.js";
 import { forEachJsonlRecordIn, readTailRecords } from "../infra/jsonl-file.js";
@@ -230,7 +230,11 @@ export async function sessionTimeline(cwd: string, id: string): Promise<{ events
 // mulmoterminal key the browser knows; the rollout it maps to is the one we recorded at
 // spawn, or the key itself when it came from the sidebar (which lists rollout ids).
 async function codexLastTurn(sessionKey: string): Promise<LastTurn> {
-  const rolloutId = codexRolloutIds.get(sessionKey) ?? sessionKey;
+  // The mapping is read off disk, so a request served during startup would see an empty map and
+  // fall through to the key — which is a mulmoterminal id, names no rollout, and reads as a
+  // session with no last turn at all.
+  await codexRolloutsHydrated;
+  const rolloutId = codexRollouts.get(sessionKey)?.conversationId ?? sessionKey;
   const file = codexRolloutPath(codexSessionsRoot(), rolloutId);
   if (!file) return EMPTY_TURN;
   try {
