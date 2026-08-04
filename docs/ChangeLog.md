@@ -114,6 +114,14 @@ most expected and least available.
   prompt, it does not go anywhere) and so does `pr` (it hides itself when there is no PR). If you
   configure `buttons` yourself you are unaffected.
 
+  **The GitHub menu did not go away — it moved.** That icon opened a menu of its own with three
+  items, and the same three sit below the separator in the path menu, with the same destinations and
+  the same `githubUrl` gate: **Repository**, **Issues**, **Pull requests**. Worth stating outright,
+  because the first person to go looking for that icon and conclude the feature had been deleted was
+  the maintainer. Nothing about it is configurable and nothing needs restoring — the
+  [setup guide](https://receptron.github.io/mulmoterminal/guide/en/v4.4.0.html#header-icons) now
+  shows the open menu ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.4.0.html#header-icons)).
+
 ### Changed
 
 - **A session started in the workspace is badged `WORKSPACE`, not by its folder name** ([#1389](https://github.com/receptron/mulmoterminal/pull/1389)).
