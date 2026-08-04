@@ -1,4 +1,4 @@
-# mulmoterminal
+# MulmoTerminal
 
 **Run multiple Claude Code and Codex sessions in parallel — and see which one needs you.**
 
