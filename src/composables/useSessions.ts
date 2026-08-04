@@ -4,6 +4,7 @@ import type { TerminalAgent } from "../../common/sessionAgent";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 // The rows arrive off /api/sessions, so a row becomes a Session only after its three
 // load-bearing fields are checked: `id` routes every later request, `title` is rendered, and
@@ -103,7 +104,7 @@ export function useSessions() {
   // failure never blocks the Claude list. codex activity isn't tracked, so they read as idle.
   async function fetchCodexSessions(): Promise<Session[]> {
     try {
-      const res = await fetch("/api/codex/sessions");
+      const res = await fetchWithTimeout("/api/codex/sessions");
       if (!res.ok) return [];
       const data = await jsonBody(res);
       return listOfSessionRows(data.sessions).map((s): Session => ({
@@ -133,7 +134,7 @@ export function useSessions() {
   async function load(resort = false) {
     const request = ++issuedRequests;
     try {
-      const [res, codex] = await Promise.all([fetch("/api/sessions"), fetchCodexSessions()]);
+      const [res, codex] = await Promise.all([fetchWithTimeout("/api/sessions"), fetchCodexSessions()]);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await jsonBody(res);
       if (request <= lastAppliedRequest) return; // an equal-or-newer answer is already on screen

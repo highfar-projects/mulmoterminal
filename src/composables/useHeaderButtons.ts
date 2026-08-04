@@ -9,6 +9,7 @@ import type { TerminalAgent } from "../../common/sessionAgent";
 import { isRecord, optionalBoolean, optionalString } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 export interface OpenTarget {
   url?: string;
@@ -90,7 +91,7 @@ export function useHeaderButtons(params: Params) {
     if (params.model?.value) query.set("model", params.model.value);
     const seq = ++requestSeq;
     try {
-      const res = await fetch(`/api/header?${query.toString()}`);
+      const res = await fetchWithTimeout(`/api/header?${query.toString()}`);
       if (seq !== requestSeq) return;
       const data = res.ok ? await jsonBody(res) : {};
       if (seq !== requestSeq) return;

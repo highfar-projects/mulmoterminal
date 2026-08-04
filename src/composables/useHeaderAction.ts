@@ -12,6 +12,7 @@ import { openTerminalAt } from "./useNewTerminal";
 import { toInsertText } from "../components/dropPaths";
 import type { HeaderButton, OpenTarget } from "./useHeaderButtons";
 import { isRecord } from "../../common/isRecord";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 const OPEN_URL_SCHEMES: ReadonlySet<string> = new Set(["http:", "https:"]);
 
@@ -20,6 +21,8 @@ const OPEN_URL_SCHEMES: ReadonlySet<string> = new Set(["http:", "https:"]);
 async function pickFileInto(slotKey: string | null): Promise<void> {
   if (!slotKey) return;
   try {
+    // Deliberately unbounded: this route answers when the USER closes the native file dialog,
+    // so any deadline here is a guess at how long they will take to choose.
     const res = await fetch("/api/pick-file", { method: "POST", headers: { "content-type": "application/json" } });
     if (!res.ok) return;
     const data: unknown = await res.json();
@@ -39,7 +42,9 @@ function openUrl(url: string): void {
 }
 
 function revealDir(dirPath: string): void {
-  fetch("/api/open-dir", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path: dirPath }) }).catch(() => {});
+  fetchWithTimeout("/api/open-dir", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path: dirPath }) }).catch(
+    () => {},
+  );
 }
 
 function openView(view: string, cwd: string | null): void {

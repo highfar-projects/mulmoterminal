@@ -11,6 +11,7 @@ import { EMPTY_WORK_ITEM, isIssueNumber, isPrPhase, type WorkItem } from "../../
 import { isRecord } from "../../common/isRecord";
 import { isIssueWorkCommentsEnabled } from "./issueWorkComments";
 import type { WorkCommentKind } from "../../common/workComment";
+import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 const POLL_MS = 30_000;
 
@@ -90,11 +91,15 @@ export function workCommentToPost(before: WorkItem, now: WorkItem): WorkCommentK
 
 async function postWorkComment(cwd: string, item: WorkItem, kind: WorkCommentKind): Promise<void> {
   try {
-    await fetch("/api/work-comment", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ cwd, issue: item.issue, pr: item.pr, kind }),
-    });
+    await fetchWithTimeout(
+      "/api/work-comment",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ cwd, issue: item.issue, pr: item.pr, kind }),
+      },
+      SLOW_COMMAND_TIMEOUT_MS,
+    );
   } catch {
     // Best-effort: the next transition (or the next reload) asks again, and the server dedupes.
   }
@@ -114,7 +119,7 @@ export function useWorkItem(cwd: Ref<string | null>) {
       return;
     }
     try {
-      const res = await fetch(`/api/pr-phase?cwd=${encodeURIComponent(dir)}`);
+      const res = await fetchWithTimeout(`/api/pr-phase?cwd=${encodeURIComponent(dir)}`, undefined, SLOW_COMMAND_TIMEOUT_MS);
       if (!res.ok) return;
       const data: unknown = await res.json();
       if (my !== req) return;

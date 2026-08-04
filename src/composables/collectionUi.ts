@@ -50,6 +50,7 @@ import PinToggle from "../components/PinToggle.vue";
 import { startCollectionChat } from "./useChatLauncher";
 import { browserLocale } from "../utils/browserLocale";
 import { isRecord } from "../../common/isRecord";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 // ── Modal teleport target (Shadow DOM) ──
 // PluginFrame mounts each card inside a per-instance shadow root, but
@@ -88,7 +89,7 @@ const apiPut = <T>(url: string, body: unknown) => apiSend<T>("PUT", url, body);
 // like "preset collections can't be deleted") instead of a bare status code.
 async function apiDelete(url: string): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    const res = await fetch(url, { method: "DELETE" });
+    const res = await fetchWithTimeout(url, { method: "DELETE" });
     if (res.ok) return { ok: true };
     return { ok: false, error: errorMessage(await readErrorBody(res), res.status) };
   } catch (err) {
@@ -104,7 +105,7 @@ async function apiDelete(url: string): Promise<{ ok: true } | { ok: false; error
 // falls back to the English source. English is short-circuited server-side.
 async function postTranslation(req: TranslateRequest): Promise<TranslateResponse | null> {
   try {
-    const res = await fetch("/api/translation", {
+    const res = await fetchWithTimeout("/api/translation", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(req),
@@ -170,7 +171,7 @@ configureCollectionUi({
   mintViewToken: (slug, viewId) => apiPost<CollectionViewToken>(`/api/collections/${encodeURIComponent(slug)}/view-token`, { viewId }),
   fetchViewHtml: async (slug, viewId) => {
     try {
-      const res = await fetch(`/api/collections/${encodeURIComponent(slug)}/view-file?id=${encodeURIComponent(viewId)}`);
+      const res = await fetchWithTimeout(`/api/collections/${encodeURIComponent(slug)}/view-file?id=${encodeURIComponent(viewId)}`);
       return res.ok ? { ok: true as const, html: await res.text() } : { ok: false as const, status: res.status };
     } catch {
       return { ok: false as const, status: 0 };

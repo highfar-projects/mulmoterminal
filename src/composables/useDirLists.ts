@@ -5,6 +5,7 @@ import { isTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { isRecord, optionalBoolean } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 // What the launch form can offer for the directory currently in its field: the sessions that can
 // be resumed there, the script.json entries that can be run there, and the worktrees the
@@ -132,7 +133,7 @@ function useDirList<T>(url: (dir: string) => string, parse: (body: ListBody, dir
     loading.value = dir !== null;
     if (!dir) return;
     try {
-      const res = await fetch(url(dir));
+      const res = await fetchWithTimeout(url(dir));
       if (reqId !== req) return; // a newer request superseded this one
       const body: ListBody = res.ok ? await jsonBody(res) : {};
       if (reqId !== req) return; // re-check after awaiting the body

@@ -1,4 +1,5 @@
 import { isRecord } from "../../common/isRecord";
+import { fetchWithTimeout } from "./fetchWithTimeout";
 
 export type FetchResult<T> = { ok: true; data: T } | { ok: false; error: string; status: number };
 
@@ -22,9 +23,12 @@ export type JsonReader<T> = (raw: unknown) => T;
  * a claim about the server rather than a question asked of it. Taking the reader from the caller
  * is the same fix wikiApi's `getJson` already uses.
  */
-export async function fetchJson<T>(input: RequestInfo | URL, read: JsonReader<T>, init?: RequestInit): Promise<FetchResult<T>> {
+export async function fetchJson<T>(input: RequestInfo | URL, read: JsonReader<T>, init?: RequestInit, timeout_ms?: number): Promise<FetchResult<T>> {
   try {
-    const res = await fetch(input, init);
+    // Bounded here so every caller of this helper is, without each one remembering to ask.
+    // A request with no deadline reports nothing at all rather than an error, and this function's
+    // whole contract is to turn a request into an answer the caller can act on.
+    const res = await fetchWithTimeout(input, init, timeout_ms);
     // `status` is the HTTP status on an HTTP failure, or 0 on a transport failure (no response).
     if (!res.ok) return { ok: false, error: errorMessage(await readErrorBody(res), res.status), status: res.status };
     const body: unknown = await res.json();

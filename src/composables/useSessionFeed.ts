@@ -6,6 +6,7 @@ import { usePubSub } from "./usePubSub";
 import { mergeLiveIntoSnapshot } from "./liveMerge";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 interface SessionFeedOptions<T> {
   sessionId: () => string | null;
@@ -107,7 +108,7 @@ export function useSessionFeed<T>(items: Ref<T[]>, options: SessionFeedOptions<T
     // switched away — nor an older response for the session they switched back to.
     const overtaken = () => id !== sessionId() || loadId !== latestLoad;
     try {
-      const res = await fetch(historyUrl(id));
+      const res = await fetchWithTimeout(historyUrl(id));
       if (overtaken()) return;
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await jsonBody(res);

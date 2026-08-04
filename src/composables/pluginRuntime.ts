@@ -16,6 +16,7 @@ import { defineComponent, h, markRaw, provide, ref, type Component, type Ref } f
 import { PLUGIN_RUNTIME_KEY, type BrowserPluginRuntime, type SubscribeOptions } from "gui-chat-protocol/vue";
 import { usePubSub } from "./usePubSub";
 import { isOpenablePluginUrl } from "./pluginUrlPolicy";
+import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 function pluginChannelName(scope: string, eventName: string): string {
   return `plugin:${scope}:${eventName}`;
@@ -36,11 +37,15 @@ function makeDispatch(toolName: string): BrowserPluginRuntime["dispatch"] {
   const url = `/api/plugin/${encodeURIComponent(toolName)}`;
 
   async function post(args: object): Promise<unknown> {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(args ?? {}),
-    });
+    const res = await fetchWithTimeout(
+      url,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(args ?? {}),
+      },
+      SLOW_COMMAND_TIMEOUT_MS,
+    );
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       throw new Error(`plugin/${toolName} dispatch failed (${res.status}): ${text || res.statusText}`);

@@ -93,6 +93,8 @@ function clearSound() {
 }
 async function browseSound() {
   try {
+    // Deliberately unbounded: this route answers when the USER closes the native file dialog,
+    // so any deadline here is a guess at how long they will take to choose.
     const res = await fetch("/api/pick-file", { method: "POST", headers: { "content-type": "application/json" } });
     if (!res.ok) return;
     const data: unknown = await res.json();

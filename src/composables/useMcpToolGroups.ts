@@ -3,6 +3,9 @@ import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups";
 import { queueMcpWrite } from "../components/mcpWriteQueue";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
+// The POST shells out to `claude mcp add` / `remove`; the GET only reads config files, so it
+// keeps the ordinary deadline.
+import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 // Which GUI tool groups a directory hands its agents, one switch per group in TOOL_GROUPS
 // (render, data, media, external). NOT MulmoTerminal state: each is an MCP server registered in
@@ -46,14 +49,19 @@ async function load(switches: Switches, target: string | null): Promise<void> {
   switches.dir.value = null;
   if (!target) return;
   try {
-    const res = await fetch(`/api/gui-mcp-groups?cwd=${encodeURIComponent(target)}`);
+    const res = await fetchWithTimeout(`/api/gui-mcp-groups?cwd=${encodeURIComponent(target)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await jsonBody(res);
     // A slower reply for a directory the user has since moved off would show its answer under the
     // new directory's name.
     if (reqId !== switches.req) return;
+    // THROWN, not defaulted to an empty list. The route always answers `{ groups: [...] }`, so a
+    // missing `groups` means the body could not be read — `jsonBody` absorbs a truncated or
+    // aborted one into `{}` and returns NORMALLY, which would walk straight past the catch below
+    // and paint every switch "off". That is the one position the catch exists to refuse.
+    if (!isUnknownArray(data.groups)) throw new Error("GET /api/gui-mcp-groups → body is not { groups }");
     switches.dir.value = target;
-    const registered: unknown[] = isUnknownArray(data.groups) ? data.groups : [];
+    const registered: unknown[] = data.groups;
     switches.enabled.value = byToolGroup(false);
     for (const group of TOOL_GROUPS) switches.enabled.value[group] = registered.includes(group);
     switches.failed.value = byToolGroup(null);
@@ -87,11 +95,15 @@ function apply(switches: Switches, group: ToolGroup): Promise<void> {
 
 async function write(switches: Switches, group: ToolGroup, target: string, wanted: boolean): Promise<void> {
   try {
-    const res = await fetch("/api/gui-mcp-groups", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ cwd: target, group, enabled: wanted }),
-    });
+    const res = await fetchWithTimeout(
+      "/api/gui-mcp-groups",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ cwd: target, group, enabled: wanted }),
+      },
+      SLOW_COMMAND_TIMEOUT_MS,
+    );
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await jsonBody(res);
     if (data.ok !== true) throw new Error(typeof data.message === "string" && data.message ? data.message : "claude mcp failed");
@@ -142,11 +154,15 @@ async function syncInto(switches: Switches, worktreePath: string): Promise<void>
   for (const group of changed) {
     await queueMcpWrite(async () => {
       try {
-        await fetch("/api/gui-mcp-groups", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ cwd: worktreePath, group, enabled: wanted(group) }),
-        });
+        await fetchWithTimeout(
+          "/api/gui-mcp-groups",
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ cwd: worktreePath, group, enabled: wanted(group) }),
+          },
+          SLOW_COMMAND_TIMEOUT_MS,
+        );
       } catch {
         // best-effort — a worktree without the registration still launches, just without the tools
       }
@@ -158,7 +174,7 @@ async function syncInto(switches: Switches, worktreePath: string): Promise<void>
 // caller reads as "write every group" rather than as "nothing is registered".
 async function registeredIn(dir: string): Promise<unknown[] | null> {
   try {
-    const res = await fetch(`/api/gui-mcp-groups?cwd=${encodeURIComponent(dir)}`);
+    const res = await fetchWithTimeout(`/api/gui-mcp-groups?cwd=${encodeURIComponent(dir)}`);
     if (!res.ok) return null;
     const data = await jsonBody(res);
     return isUnknownArray(data.groups) ? data.groups : null;
