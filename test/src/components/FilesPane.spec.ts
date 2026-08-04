@@ -532,9 +532,9 @@ describe("the Canvas button", () => {
     }) as unknown as typeof fetch;
   };
 
-  const openRow = async (name: string, cwd: string | null, canvasTarget = true) => {
+  const openRow = async (name: string, cwd: string | null, canvasTarget = true, workspace: string | null = null) => {
     withEntry(name);
-    const w = mount(FilesPane, { props: { cwd, canvasTarget } });
+    const w = mount(FilesPane, { props: { cwd, canvasTarget, workspace } });
     await flushPromises();
     await w.findAll('[data-testid="files-row"]')[0].trigger("click");
     await flushPromises();
@@ -559,6 +559,14 @@ describe("the Canvas button", () => {
   // beside — so the button must not appear even for a file that would render.
   it("is not offered without a cell to open it beside", async () => {
     expect(btn(await openRow("design.md", "/work/proj", false)).exists()).toBe(false);
+  });
+
+  // A story is the one file judged by WHERE it is rather than what it is called: the plugin only
+  // takes a workspace-relative `stories/…`, so a project cell's own artifacts/stories holds files
+  // it would not open. Same name, same shape, two different answers.
+  it("is offered for a story in the workspace and withheld for one outside it", async () => {
+    expect(btn(await openRow("tale.json", "/work/ws/artifacts/stories", true, "/work/ws")).exists()).toBe(true);
+    expect(btn(await openRow("tale.json", "/work/other/artifacts/stories", true, "/work/ws")).exists()).toBe(false);
   });
 
   // The gate runs on the JOINED path, not the row's. `p.html` passes on its own and fails under a

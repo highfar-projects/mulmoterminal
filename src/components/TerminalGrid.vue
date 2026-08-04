@@ -43,7 +43,7 @@ import { hasCanvasGroup } from "../../common/toolGroups";
 import type { RightPane } from "./gridCell";
 import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
 import type { TerminalAgent } from "../../common/sessionAgent";
-import { canvasCardForFile, seedCanvasCard, hasStoredCard, absoluteUnder } from "../composables/canvasOpenFile";
+import { buildCanvasCard, seedCanvasCard, hasStoredCard, absoluteUnder } from "../composables/canvasOpenFile";
 import { jsonBody } from "../jsonBody";
 import { isUnknownArray } from "../../common/isUnknownArray";
 
@@ -298,7 +298,7 @@ async function openFileInCanvas(path: string): Promise<void> {
   const sessionId = expandedSessionId.value;
   if (uid === null || !sessionId) return;
   // The pane's rows are relative to the CELL's cwd; the plugins resolve against the workspace.
-  const card = canvasCardForFile(absoluteUnder(paneCwd.value, path));
+  const card = await buildCanvasCard(absoluteUnder(paneCwd.value, path), props.defaultCwd);
   if (!card) return; // the button is only shown for files that have one; a stale click is a no-op
   if (!(await seedCanvasCard(sessionId, card))) return;
   // Re-asked after the await, like every other late reply here. openCanvasFor already refuses to
@@ -1010,6 +1010,7 @@ watch(
           :cwd="paneCwd"
           :initial-state="paneState"
           :canvas-target="expandedUid !== null"
+          :workspace="defaultCwd"
           :style="{ flex: `0 0 ${paneWidth}px` }"
           class="border-l border-border bg-deep"
           @close="setFilesOpen(false)"

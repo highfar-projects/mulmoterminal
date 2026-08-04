@@ -45,7 +45,13 @@ export interface FilesPaneState {
   expanded: string[];
 }
 
-const props = defineProps<{ cwd: string | null; requestedPath?: string | null; initialState?: FilesPaneState | null; canvasTarget?: boolean }>();
+const props = defineProps<{
+  cwd: string | null;
+  requestedPath?: string | null;
+  initialState?: FilesPaneState | null;
+  canvasTarget?: boolean;
+  workspace?: string | null;
+}>();
 const emit = defineEmits<{ close: []; dirty: [boolean]; "open-in-canvas": [path: string] }>();
 
 const roots = ref<Node[]>([]);
@@ -67,7 +73,7 @@ const isMarkdown = computed(() => langKindForFilename(openName.value) === "markd
 // Gated on the path the CARD will carry, not the row's relative one: a cell whose directory has a
 // dot segment (`~/.config/proj`) makes `p.html` pass here and the joined path fail the plugin's
 // own guard, which is a button that does nothing when pressed.
-const canvasOpenable = computed(() => canOpenInCanvas(openPath.value ? absoluteUnder(props.cwd, openPath.value) : null));
+const canvasOpenable = computed(() => canOpenInCanvas(openPath.value ? absoluteUnder(props.cwd, openPath.value) : null, props.workspace ?? null));
 
 const editorHost = ref<HTMLDivElement>();
 let editor: CmEditor | null = null;

@@ -4,9 +4,9 @@
 // here is that this module actually defers to them rather than re-deciding with a weaker extension
 // test — the traversal and dotfile cases below are the ones a hand-rolled `.endsWith(".md")` would
 // wave through.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 
-import { canvasCardForFile, canOpenInCanvas, absoluteUnder } from "../../../src/composables/canvasOpenFile";
+import { canvasCardForFile, canOpenInCanvas, absoluteUnder, storyWirePath, buildCanvasCard } from "../../../src/composables/canvasOpenFile";
 
 describe("canvasCardForFile", () => {
   it("renders a markdown document through presentDocument, keyed by its path", () => {
@@ -102,5 +102,106 @@ describe("the button's gate and the card's gate agree on the same path", () => {
     const joined = absoluteUnder("/home/me/proj", "p.html");
     expect(canOpenInCanvas(joined)).toBe(true);
     expect(canvasCardForFile(joined)?.toolName).toBe("presentHtml");
+  });
+});
+
+// mulmoScript, the one tool here that cannot be handed an absolute path — `normalizeStoryPath`
+// refuses those outright. So the question is not "does the extension match" but "is this file in
+// the WORKSPACE's story directory", and the answer is the wire path the plugin wants.
+describe("storyWirePath", () => {
+  const WS = "/work/ws";
+
+  it("turns a story under the workspace into the plugin's wire path", () => {
+    expect(storyWirePath(`${WS}/artifacts/stories/tale.json`, WS)).toBe("stories/tale.json");
+  });
+
+  it("keeps a story's own subdirectory", () => {
+    expect(storyWirePath(`${WS}/artifacts/stories/drafts/tale.json`, WS)).toBe("stories/drafts/tale.json");
+  });
+
+  // The reason this is rooted at the workspace rather than matched on shape: a project cell may
+  // have an artifacts/stories of its own, and those stories are not the ones the plugin opens.
+  it("refuses an identically-shaped path under another directory", () => {
+    expect(storyWirePath("/work/other/artifacts/stories/tale.json", WS)).toBeNull();
+  });
+
+  it("refuses a file in the story directory that is not a script", () => {
+    expect(storyWirePath(`${WS}/artifacts/stories/notes.md`, WS)).toBeNull();
+    expect(storyWirePath(`${WS}/artifacts/stories/tale.json.bak`, WS)).toBeNull();
+  });
+
+  // `..` folds away in the key, so a traversal stops matching the prefix rather than being
+  // spotted as a traversal — the same reason the workspace chip can compare paths at all.
+  it("refuses a path that climbs out of the story directory", () => {
+    expect(storyWirePath(`${WS}/artifacts/stories/../../../etc/passwd`, WS)).toBeNull();
+    expect(storyWirePath(`${WS}/artifacts/stories/../secrets.json`, WS)).toBeNull();
+  });
+
+  it("refuses the story directory itself, which is not a file", () => {
+    expect(storyWirePath(`${WS}/artifacts/stories`, WS)).toBeNull();
+  });
+
+  it("has no workspace to root against before the config lands", () => {
+    expect(storyWirePath(`${WS}/artifacts/stories/tale.json`, null)).toBeNull();
+  });
+
+  // Both separators fold, so the mixed path `absoluteUnder` produces on Windows still matches.
+  it("matches a Windows workspace against a mixed-separator path", () => {
+    const joined = absoluteUnder("C:\\Users\\me\\ws", "artifacts/stories/tale.json");
+    expect(storyWirePath(joined, "C:\\Users\\me\\ws")).toBe("stories/tale.json");
+  });
+
+  it("is what canOpenInCanvas answers on for a story", () => {
+    expect(canOpenInCanvas(`${WS}/artifacts/stories/tale.json`, WS)).toBe(true);
+    // Without the workspace a story is unrecognisable; markdown and html are judged anywhere.
+    expect(canOpenInCanvas(`${WS}/artifacts/stories/tale.json`, null)).toBe(false);
+    expect(canOpenInCanvas(`${WS}/notes.md`, null)).toBe(true);
+  });
+});
+
+// The card for a story comes from the plugin's own reopen: `MulmoScriptData` needs the parsed
+// script, and reading it here would be a second copy of what that route already does.
+describe("buildCanvasCard", () => {
+  const WS = "/work/ws";
+  afterEach(() => vi.unstubAllGlobals());
+
+  const mockReopen = (body: unknown, ok = true) => {
+    const fetchMock = vi.fn(async () => ({ ok, json: async () => body }) as Response);
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  };
+
+  it("builds a markdown card without asking the server anything", async () => {
+    const fetchMock = mockReopen({});
+    expect(await buildCanvasCard(`${WS}/docs/design.md`, WS)).toEqual({ toolName: "presentDocument", data: { markdown: "", docPath: `${WS}/docs/design.md` } });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("reopens a story through the plugin route and carries back what it returned", async () => {
+    const data = { script: { title: "Tale" }, filePath: "stories/tale.json" };
+    const fetchMock = mockReopen({ data, message: "Reopened" });
+    expect(await buildCanvasCard(`${WS}/artifacts/stories/tale.json`, WS)).toEqual({ toolName: "presentMulmoScript", data });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/plugin/presentMulmoScript");
+    // The wire path, not the absolute one the pane is holding — that spelling is refused.
+    expect(JSON.parse(String(init.body))).toEqual({ filePath: "stories/tale.json" });
+  });
+
+  // The route narrates a missing or refused file as a 200 with no `data`, so absence of `data`
+  // — not the status — is what "cannot open this" looks like.
+  it("has no card when the route narrates the file as missing", async () => {
+    mockReopen({ message: "Story not found" });
+    expect(await buildCanvasCard(`${WS}/artifacts/stories/gone.json`, WS)).toBeNull();
+  });
+
+  it("has no card when the route errors outright", async () => {
+    mockReopen({}, false);
+    expect(await buildCanvasCard(`${WS}/artifacts/stories/tale.json`, WS)).toBeNull();
+  });
+
+  it("does not reach the server for a file no plugin renders", async () => {
+    const fetchMock = mockReopen({});
+    expect(await buildCanvasCard(`${WS}/notes.txt`, WS)).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
