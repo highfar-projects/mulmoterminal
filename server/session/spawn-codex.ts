@@ -11,7 +11,7 @@ import { codexSessionsRoot, snapshotSessions, watchForCodexSession } from "../ag
 import { codexRolloutPath } from "../agents/codex-sessions.js";
 import { trackCodexActivity } from "./codex-activity-track.js";
 import { claimedCodexRollouts, claimFullGuiMcp, codexRolloutIds, ptys } from "./registry.js";
-import { ptySpawn } from "./pty-spawn.js";
+import { ptySpawn, ptyWouldReattach } from "./pty-spawn.js";
 import { ptyStartLine } from "./pty-exit-log.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
 import { attachCodexAutoRun } from "./draft-injection.js";
@@ -83,7 +83,12 @@ export function createCodexSpawner(deps: SpawnDeps) {
     // spawnBackgroundChat, which belongs to no group and is therefore reachable ONLY this way. All
     // of it was already auto-allowed for claude in the same cell, which is the asymmetry this
     // closes; it is still the widest thing this flag does, and the reason it is spelled out here.
-    const guiMcpServers = codexGuiMcpServers({ sessionId, port: PORT, groups: mcpGroups, allTools: claimFullGuiMcp(sessionId, attachGuiMcp, cwd) });
+    // The claim is RELEASED here as well as made — a codex session resumed into a project directory
+    // reuses the id, and a stale claim would stand its group urls down with nothing left to serve
+    // them (Codex review on #1399). claimFullGuiMcp owns both directions so neither spawn path can
+    // apply half the rule.
+    const allTools = claimFullGuiMcp(sessionId, attachGuiMcp, cwd, ptyWouldReattach(sessionId, true));
+    const guiMcpServers = codexGuiMcpServers({ sessionId, port: PORT, groups: mcpGroups, allTools });
     const args = buildCodexArgs({ resume: resumeRolloutId, model: deps.codexModel, guiMcpServers });
     const { term, tmux, reattached } = ptySpawn(sessionId, deps.codexBin, args, cwd, true, { binEnvVar: codexAdapter.binEnvVar });
     const spawnedAtMs = Date.now();

@@ -372,17 +372,28 @@ export function hasAllGuiTools(id: string): boolean {
 }
 
 /**
- * Decide whether a spawn carries the full GUI MCP AND record the answer, in one call.
+ * Decide whether a spawn carries the full GUI MCP AND bring the record in line, in one call.
  *
  * Every spawn path asks `carriesFullGuiMcp` — claude's argv, codex's `-c` overrides, the launcher
- * chip — and each of them then hands out the all-tools url. Keeping the question and the record
- * apart is how a fourth path would come to hand out the url without anyone knowing, which is the
- * shape of the drift CLAUDE.md warns about around this predicate. So spawn paths call THIS; the
- * pure predicate stays exported for the specs and for readers reasoning about the rule.
+ * chip — and each then hands out the all-tools url, or does not. Keeping the question and the record
+ * apart is how one of them comes to answer differently from what it handed over, which is the drift
+ * CLAUDE.md warns about around this predicate and is what happened twice in review on #1399: a chip
+ * running `zsh` claimed without being handed anything, and codex claimed without ever releasing.
+ * So spawn paths call THIS; the pure predicate stays exported for the specs and for readers.
+ *
+ * The two directions are NOT symmetric, and the asymmetry is the safety:
+ *
+ * - **Release unconditionally.** Releasing one that should have been kept only brings the duplicate
+ *   tool names back — cosmetic, and the next spawn corrects it. Keeping a stale claim leaves a cell
+ *   with its group urls stood down and no all-tools url to serve them: no GUI tools at all.
+ * - **Claim only for a genuinely new process.** A tmux reattach runs whatever the ORIGINAL spawn was
+ *   given, which may be no all-tools url — claiming on top of that is exactly the stale-claim
+ *   failure, arrived at from the other side.
  */
-export function claimFullGuiMcp(sessionId: string, attachGuiMcp: boolean, cwd: string | undefined): boolean {
+export function claimFullGuiMcp(sessionId: string, attachGuiMcp: boolean, cwd: string | undefined, wouldReattach: boolean): boolean {
   const full = carriesFullGuiMcp(attachGuiMcp, cwd);
-  if (full) markAllToolsSession(sessionId);
+  if (!full) releaseAllToolsSession(sessionId);
+  else if (!wouldReattach) markAllToolsSession(sessionId);
   return full;
 }
 

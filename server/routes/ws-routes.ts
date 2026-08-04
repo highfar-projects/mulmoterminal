@@ -550,7 +550,7 @@ async function handleLaunchConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
   // Gated on `launcherTakesGuiMcp` BEFORE the claim is recorded: a chip running `zsh`, `yarn dev`
   // or `agy` has no rewriter, so it is handed no MCP — and recording it as carrying every GUI tool
   // would misreport it to /api/tools (Codex review on #1399).
-  const fullGui = !live && launcherTakesGuiMcp(command) && claimFullGuiMcp(sessionId, false, cwd);
+  const fullGui = !live && launcherTakesGuiMcp(command) && claimFullGuiMcp(sessionId, false, cwd, false);
   const groups = live ? [] : await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []);
   const codexGui = live ? [] : codexGuiMcpServers({ sessionId, port: PORT, groups, allTools: fullGui });
   // The config file is written ONLY once the command is known to be claude. Writing it up front
