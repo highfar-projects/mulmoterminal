@@ -6,7 +6,15 @@
 // wave through.
 import { describe, it, expect, vi, afterEach } from "vitest";
 
-import { canvasCardForFile, canOpenInCanvas, absoluteUnder, storyWirePath, buildCanvasCard } from "../../../src/composables/canvasOpenFile";
+import {
+  canvasCardForFile,
+  canOpenInCanvas,
+  absoluteUnder,
+  storyWirePath,
+  buildCanvasCard,
+  seedCanvasCard,
+  hasStoredCard,
+} from "../../../src/composables/canvasOpenFile";
 
 describe("canvasCardForFile", () => {
   it("renders a markdown document through presentDocument, keyed by its path", () => {
@@ -203,5 +211,74 @@ describe("buildCanvasCard", () => {
     const fetchMock = mockReopen({});
     expect(await buildCanvasCard(`${WS}/notes.txt`, WS)).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+// The ordering inside buildCanvasCard is load-bearing and silent: markdown and html are asked
+// first, so if either ever started accepting `.json`, every story in the workspace would quietly
+// open as that other thing instead. Pinned against the plugins themselves, not against our own
+// reasoning about them — a package upgrade is exactly how this would change.
+describe("the three plugins do not claim each other's files", () => {
+  const WS = "/work/ws";
+
+  it("leaves a story's .json to the story branch", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ data: { script: {}, filePath: "stories/tale.json" } }) }) as Response);
+    vi.stubGlobal("fetch", fetchMock);
+    expect(canvasCardForFile(`${WS}/artifacts/stories/tale.json`)).toBeNull(); // no other plugin takes it
+    expect((await buildCanvasCard(`${WS}/artifacts/stories/tale.json`, WS))?.toolName).toBe("presentMulmoScript");
+    vi.unstubAllGlobals();
+  });
+
+  // The converse: a document that happens to live in the story directory is a document. It is not
+  // a story, and storyWirePath's `.json` requirement is what keeps it from being treated as one.
+  it("leaves a document in the story directory to the markdown branch", async () => {
+    expect(storyWirePath(`${WS}/artifacts/stories/notes.md`, WS)).toBeNull();
+    expect(canvasCardForFile(`${WS}/artifacts/stories/notes.md`)?.toolName).toBe("presentDocument");
+  });
+});
+
+// Bounded like the repo's other API callers. The reopen blocks the Canvas from opening, so a
+// server that never answers would otherwise leave the button pressed and nothing happening.
+describe("a request that never answers", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  const hangUntilAborted = () => {
+    const started: AbortSignal[] = [];
+    vi.stubGlobal("fetch", (_url: string, init?: RequestInit) => {
+      const signal = init?.signal;
+      if (signal) started.push(signal);
+      return new Promise<Response>((_resolve, reject) => {
+        signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+      });
+    });
+    return started;
+  };
+
+  it("gives up on the reopen instead of hanging forever", async () => {
+    vi.useFakeTimers();
+    const started = hangUntilAborted();
+    const pending = buildCanvasCard("/work/ws/artifacts/stories/tale.json", "/work/ws");
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await pending).toBeNull();
+    expect(started[0]?.aborted).toBe(true);
+  });
+
+  it("gives up on the seed, so the Canvas is not revealed over a card that never landed", async () => {
+    vi.useFakeTimers();
+    hangUntilAborted();
+    const pending = seedCanvasCard("s-1", { toolName: "presentDocument", data: {} });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await pending).toBe(false);
+  });
+
+  it("gives up on the stored-card check, answering no", async () => {
+    vi.useFakeTimers();
+    hangUntilAborted();
+    const pending = hasStoredCard("s-1");
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await pending).toBe(false);
   });
 });
