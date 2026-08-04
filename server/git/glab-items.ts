@@ -73,18 +73,32 @@ export function normalizeGlabIssueDetail(raw: unknown): { number: number; title:
   return number === null ? null : { number, title: text(raw.title), body: text(raw.description) };
 }
 
-/** Comment bodies from `GET /projects/:id/issues/:iid/notes`.
+/** One note from `GET /projects/:id/issues/:iid/notes`. The `id` is what the PUT that edits the
+ *  note is addressed to, and is null when the response did not carry a usable one — an
+ *  unaddressable note can still be read, just not updated. */
+export interface GlabNote {
+  id: string | null;
+  body: string;
+  /** ISO, as GitLab spells it (`created_at`). Null when absent. */
+  createdAt: string | null;
+}
+
+/** Comments from `GET /projects/:id/issues/:iid/notes`.
  *
  *  `system: true` marks a note GitLab wrote itself — "closed", "changed the description", a label
  *  edit. They are not comments anyone left, and a duplicate check that counted them would decide a
  *  comment already exists because the issue had been closed once (verified against real notes).
  */
-export function glabNoteBodies(raw: unknown): string[] {
+export function glabNotes(raw: unknown): GlabNote[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .filter(isRecord)
     .filter((note) => note.system !== true)
-    .map((note) => text(note.body));
+    .map((note) => ({
+      id: typeof note.id === "number" && Number.isSafeInteger(note.id) ? String(note.id) : null,
+      body: text(note.body),
+      createdAt: typeof note.created_at === "string" && note.created_at !== "" ? note.created_at : null,
+    }));
 }
 
 /** Whether an issue read from `glab issue view` is still open. GitLab spells it lowercase. */

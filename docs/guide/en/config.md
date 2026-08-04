@@ -1174,24 +1174,52 @@ person who filed it, and anyone else with a checkout, can see it is being worked
 { "issueWorkComments": true }
 ```
 
-With it on, a cell leaves at most two comments per issue:
+With it on, a cell leaves **one comment per issue** and keeps it up to date. Starting the work
+posts it:
 
 ```
-Working on this in `mulmoterminal5`.
+Working on this in `1234-fix-login`.
+
+- started — 2026-08-04 14:20 UTC
+
+posted by MulmoTerminal
 ```
 
+Opening the PR and merging it **edit that same comment** rather than adding new ones:
+
 ```
-Merged in #983. Work done in `mulmoterminal5`.
+Merged in #1240. Work done in `1234-fix-login`.
+
+- started — 2026-08-04 14:20 UTC
+- PR #1240 — 2026-08-04 15:05 UTC
+- merged in #1240 — 2026-08-04 16:40 UTC
+
+posted by MulmoTerminal
 ```
 
+- **Three milestones, and no more.** Starting, the pull request, the merge. CI going red and green
+  again is on the PR already, and it flaps — an issue that reported every turn would stop being
+  readable.
 - The directory is the **folder name only** — never the path above it. It answers "which of my
-  clones", and these land on public issues.
+  clones", and these land on public issues. With one worktree per issue it is also what tells two
+  terminals — or two people — that the work is already taken.
+- The **times are UTC**, and they are the point of the list: a claim posted three weeks ago and
+  never updated reads differently from one that moved this morning.
+- The comment **says it came from MulmoTerminal**. These land on issues other people filed, and a
+  reader should not have to guess what is claiming theirs.
 - On merge it also **closes the issue if it is still open**. A PR whose body says `Fixes #966`
   has already been closed by GitHub, so usually there is nothing to do.
 - **Once each.** Every open tab re-asks on every poll, and a reload asks again; the comment
-  carries an invisible marker that MulmoTerminal reads back, so the second ask writes nothing.
-  Work the same issue from a second clone and you get a second line, which is the honest answer.
-- Needs `gh` installed and logged in. Without it, nothing is written and nothing breaks.
+  carries an invisible marker that MulmoTerminal reads back, and the milestones are read out of the
+  comment itself, so the second ask writes nothing. Work the same issue from a second clone and you
+  get a second comment, which is the honest answer.
+- Only the milestones this cell **watched happen** are listed. Reloading onto a branch whose PR
+  opened last month adds no line for it — this side would only know when it noticed, not when it
+  happened.
+- Editing a comment sends **no notification**, on purpose: the first line is news, the rest is
+  status.
+- Needs `gh` installed and logged in (`glab` for GitLab). Without it, nothing is written and
+  nothing breaks.
 
 **Off by default**, because it writes to GitHub on your behalf — often on an issue somebody else
 filed. Turn it on per machine, not per project: it lives in the global config.

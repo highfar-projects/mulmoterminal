@@ -79,6 +79,24 @@ export const glabIssueNoteArgs = (target: GlabTarget, issue: number, body: strin
 
 export const glabIssueCloseArgs = (target: GlabTarget, issue: number): string[] => ["issue", "close", String(issue), "--repo", target.repo];
 
+// Editing a note has no `glab issue` subcommand at all (1.111.0 offers `note` to ADD one and
+// nothing to change it), so this goes through the REST API — `PUT .../notes/:id`, the endpoint the
+// notes reader above already talks to.
+//
+// `--raw-field` rather than `--field`: the typed one converts `@file` and the bare words
+// true/false/null, and a comment body is neither ours to convert nor guaranteed not to start with
+// an `@`. `--method` is explicit because passing a field otherwise switches glab to POST.
+export const glabIssueNoteEditArgs = (target: GlabTarget, issue: number, noteId: string, body: string): string[] => [
+  "api",
+  "--hostname",
+  target.host,
+  "--method",
+  "PUT",
+  `projects/${encodeURIComponent(target.project)}/issues/${issue}/notes/${noteId}`,
+  "--raw-field",
+  `body=${body}`,
+];
+
 // Existing comments do NOT come back from `issue view -F json`, and `--comments` only affects the
 // human-readable output. The REST notes endpoint is where they are, so this is one extra call that
 // the GitHub path does not make.
