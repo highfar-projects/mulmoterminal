@@ -2,10 +2,21 @@
 import { describe, it, expect } from "vitest";
 
 import { headerHookEffect, LAST_PROMPT_CAP } from "../../../server/session/header-hook.js";
+import { INJECTED_PROMPTS, NEAR_MISS_PROMPTS } from "../../support/injectedPrompts.js";
 
 describe("headerHookEffect", () => {
   it("records a submitted prompt as the session's query", () => {
     expect(headerHookEffect("UserPromptSubmit", { prompt: "  fix the login bug  " })).toEqual({ kind: "prompt", text: "fix the login bug" });
+  });
+
+  // The same fixture list transcript.spec.ts iterates. Null and not a blank prompt: the task the
+  // user typed before the background task finished has to stay on the header (#1384).
+  it.each(INJECTED_PROMPTS)("changes nothing on an injected %s", (_name, prompt) => {
+    expect(headerHookEffect("UserPromptSubmit", { prompt })).toBeNull();
+  });
+
+  it.each(NEAR_MISS_PROMPTS)("still records the typed prompt with a %s", (_name, prompt) => {
+    expect(headerHookEffect("UserPromptSubmit", { prompt })).toEqual({ kind: "prompt", text: prompt.trim() });
   });
 
   it("caps a pasted wall of text to one header line", () => {

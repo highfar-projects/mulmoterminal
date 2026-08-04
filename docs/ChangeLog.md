@@ -8,6 +8,30 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+### Fixed
+
+- **A finished background task replaced the cell's task line with the harness's XML** ([#1384](https://github.com/receptron/mulmoterminal/issues/1384)).
+  A session running a Monitor or a subagent showed `<task-notification> <task-id>…` on row 1 from the
+  moment that task reported, and the AI title was then generated from it. "A harness-injected block
+  is not a typed prompt" was already decided — but the commit that decided it touched only the path
+  that **reads a transcript**, and the live `UserPromptSubmit` hook, which is what actually writes the
+  header, never learned it. `preferredHeaderPrompt` could not save it either: its one guard drops
+  short acks like "ok", and a 200-character XML block is the opposite of trivial, so it was taken as
+  the session's most meaningful prompt and stayed.
+
+  The judgment is now one exported predicate that both paths call, and the hook refuses an injected
+  prompt before it becomes an effect — which covers the header text and the AI title together, and
+  through them the session list, the remote host's terminal screen, and the Web Push body. Refusing
+  means "change nothing", not "clear it", so the task the user actually typed stays on screen while
+  the background task reports.
+
+  `<system-reminder>` joins the list defensively. Across every transcript on the development machine
+  — 9,902 files, 26,465 user lines — it has never once led a user line, and running the new predicate
+  over all of them refuses exactly the same 4,832 lines as the old one: no real prompt changes hands.
+  The anchor is what makes that safe, and it is load-bearing: 591 of those lines *mention*
+  `<task-notification` mid-sentence, and matching them would delete the prompt instead of the
+  injection.
+
 ## mulmoterminal@4.3.1 — 2026-08-04
 
 > **Setup guide:** [The workspace chip says WORKSPACE](https://receptron.github.io/mulmoterminal/guide/en/v4.3.1.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.3.1.html))
