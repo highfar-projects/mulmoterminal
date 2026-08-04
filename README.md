@@ -687,7 +687,7 @@ malformed file is ignored.
 ```jsonc
 {
   "name": "PROD · payments",            // badge shown on this directory's terminals
-  "icon": "docs/logo.png",              // image marking this cells (path in this dir, URL, or data:); omit to use the repo's favicon
+  "icon": "docs/logo.png",              // image on this dir's cells (path here, URL, or data:); omit to use the repo's favicon
   "badgeColor": "#cf222e",              // badge color (hex #rrggbb)
   "headerColor": "#190a23",             // cell header background (hex #rrggbb)
   "headerTextColor": "#ffffff",         // cell header text color (hex #rrggbb)

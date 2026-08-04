@@ -6,8 +6,15 @@ import type { BundledSkillName } from "../../../common/bundledSkills";
 
 const emit = defineEmits<{ (e: "launch-skill", skill: BundledSkillName): void }>();
 
-function onAutoIconToggle(e: Event) {
-  if (e.target instanceof HTMLInputElement) void saveAutoDirIcon(e.target.checked);
+// The browser has already moved the checkbox by the time this runs, and a failed save leaves the
+// ref where it was — so Vue sees no change to patch and the box keeps showing a value that was
+// never stored. Putting it back is the only thing that says the save didn't happen (CodeRabbit
+// on #1429). The six older toggles in Settings share this shape and this gap; fixing them is its
+// own change, since it belongs in the shared helper rather than in one section.
+async function onAutoIconToggle(e: Event): Promise<void> {
+  if (!(e.target instanceof HTMLInputElement)) return;
+  const input = e.target;
+  if (!(await saveAutoDirIcon(input.checked))) input.checked = autoDirIcon.value;
 }
 </script>
 

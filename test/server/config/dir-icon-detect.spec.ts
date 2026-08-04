@@ -56,6 +56,34 @@ describe("detectDirIcon — which file wins", () => {
     cleanup();
   });
 
+  // Regression (Codex + CodeRabbit on #1429): the search used to stop at the first path that
+  // EXISTED, so one unusable high-priority entry buried every good one behind it.
+  it("keeps looking when a higher-priority candidate exists but is unusable", () => {
+    const parent = makeTempDir("mt-autoicon-shadow-");
+    dirs.push(parent);
+    const dir = path.join(parent, "proj");
+    mkdirSync(path.join(dir, "public"), { recursive: true });
+    // A directory where an icon should be, and a symlink that escapes the repository — both exist,
+    // neither is usable.
+    mkdirSync(path.join(dir, "public", "favicon.svg"));
+    writeFileSync(path.join(parent, "outside.png"), "x");
+    symlinkSync(path.join(parent, "outside.png"), path.join(dir, "public", "apple-touch-icon.png"));
+    writeFileSync(path.join(dir, "public", "favicon.png"), "x");
+    expect(refOf(dir)).toBe(path.join("public", "favicon.png"));
+    cleanup();
+  });
+
+  // The same rule at the boundary between the file list and the manifest.
+  it("falls through to the manifest when every candidate is unusable", () => {
+    const dir = project({
+      "public/manifest.json": JSON.stringify({ icons: [{ src: "real.png", sizes: "192x192" }] }),
+      "public/real.png": "x",
+    });
+    mkdirSync(path.join(dir, "public", "favicon.ico"));
+    expect(refOf(dir)).toBe(path.join("public", "real.png"));
+    cleanup();
+  });
+
   it("finds nothing in a directory that has nothing", () => {
     expect(detectDirIcon(project({ "README.md": "# hi" }))).toBeNull();
     cleanup();

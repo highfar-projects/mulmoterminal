@@ -38,13 +38,21 @@ const MANIFEST_CANDIDATES = ["public/site.webmanifest", "public/manifest.json", 
 /** The icon a directory carries without saying so, or null when it has none. */
 export function detectDirIcon(cwd: string): DirIcon | null {
   const base = path.resolve(cwd);
-  const found = ICON_CANDIDATES.find((ref) => fileExists(base, ref));
-  if (found) return resolveIconFile(base, found);
+  // Keep going until one RESOLVES, not until one exists. A path can exist and still be unusable —
+  // a directory named `favicon.svg`, or a symlink pointing out of the repository — and stopping
+  // there would let one bad high-priority entry hide the good `favicon.png` behind it
+  // (Codex + CodeRabbit on #1429). resolveIconFile does its own existence check, so this costs
+  // nothing extra for the candidates that simply aren't there.
+  for (const ref of ICON_CANDIDATES) {
+    const icon = resolveIconFile(base, ref);
+    if (icon) return icon;
+  }
   return manifestIcon(base);
 }
 
 // existsSync on a path built from a CONSTANT — the candidate list — so this cannot be reached
-// with a caller-supplied path. The real containment check still happens in resolveIconFile.
+// with a caller-supplied path. Used only to decide whether a manifest is worth PARSING; the
+// candidates above go straight through resolveIconFile, which checks existence itself.
 function fileExists(base: string, ref: string): boolean {
   try {
     return existsSync(path.join(base, ref));
