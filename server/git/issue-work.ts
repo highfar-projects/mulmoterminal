@@ -11,6 +11,7 @@ import { normalizeGlabIssueDetail } from "./glab-items.js";
 import { forgeFromRepoEntry, projectPath } from "./forge-host.js";
 import { createWorktree, issueWorktree } from "./worktrees.js";
 import { claimLaunch, worktreeOccupancy, type WorktreeClaim, type WorktreeOccupancy } from "../session/worktree-session-limit.js";
+import { createKeySerializer } from "../infra/serialize-per-key.js";
 import { isRecord } from "../../common/isRecord.js";
 import { worktreeAction, worktreeLimitReason, WORKTREE_LAUNCH_IN_FLIGHT } from "../../common/worktreeSession.js";
 
@@ -156,21 +157,7 @@ async function reopenIssueWorktree(
 // cover the case where the worktree does not exist yet: two starts for one issue would each look,
 // each find nothing, and each cut a tree — arriving at the same two-worktrees-for-one-issue this
 // change exists to prevent, by a different road. Keyed, so unrelated issues still start at once.
-const startsInFlight = new Map<string, Promise<unknown>>();
-function serializePerIssue<T>(key: string, task: () => Promise<T>): Promise<T> {
-  const run = (startsInFlight.get(key) ?? Promise.resolve()).then(task, task);
-  const settled = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  startsInFlight.set(key, settled);
-  // Dropped only if nothing queued behind it, so the map does not grow with every start and a
-  // later waiter is never orphaned.
-  void settled.then(() => {
-    if (startsInFlight.get(key) === settled) startsInFlight.delete(key);
-  });
-  return run;
-}
+const serializePerIssue = createKeySerializer();
 
 /** Read the issue, open the worktree it already has or cut one, and get a session into it. `dir`
  *  must already have been checked against the repo's known clones by the caller — this does not

@@ -80,6 +80,13 @@ stays free — a worktree an agent is working in is exactly where you want those
 refused, because opening it here would detach whoever has it. "Somewhere" includes another browser
 tab and a second `mulmoterminal` running on this machine.
 
+**Change the directory and these lists empty at once.** Everything under **WORKING DIRECTORY** —
+**OR RESUME HERE**, the worktree rows, **OR RUN A SCRIPT** — was read for the directory that was in
+the field at the time, so the moment you type or pick a different one they are replaced by a single
+`Loading this directory's sessions, worktrees and scripts…` row until the new ones arrive. Rows left
+standing through that wait would be the previous directory's under the new directory's name, and
+clicking one resumes exactly the session it offers.
+
 **Shell** takes the same working directory and the same play button as an agent. A shell has no
 model, no MCP registration and no worktree, so those rows disappear while it is picked — and the
 cell it opens is a persistent terminal (running / exited), not an agent session.

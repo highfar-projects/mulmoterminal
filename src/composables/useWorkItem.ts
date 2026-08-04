@@ -60,9 +60,10 @@ export function hasWorkToShow(item: WorkItem): boolean {
   return item.pr !== null || item.issue !== null;
 }
 
-// What the cell should tell the issue, comparing the poll before with the poll now (#979 Phase 2).
-// A cell arriving on an issue says so once; a PR turning `merged` reports the merge. Everything
-// else — an unchanged state, a phase moving inside the review loop — says nothing.
+// What the cell should tell the issue, comparing the poll before with the poll now (#979 Phase 2,
+// #1369). A cell arriving on an issue says so once; a PR appearing and a PR turning `merged` are
+// reported as they happen. Everything else — an unchanged state, a phase moving inside the review
+// loop, CI going red and green again — says nothing.
 //
 // "Arriving" includes the first poll after a reload, on purpose: this side cannot know what was
 // already said, only the issue can. The server is idempotent, so re-asking is the design, not a
@@ -77,7 +78,14 @@ export function workCommentToPost(before: WorkItem, now: WorkItem): WorkCommentK
   if (now.phase === "closed") return null;
   // "Start" is safe to repeat after a reload — it is a standing fact, not an event, and the
   // server writes it at most once per (issue, directory).
-  return before.issue === now.issue ? null : "start";
+  if (before.issue !== now.issue) return "start";
+  // The PR is reported under the merge's rule rather than the start's: the comment stamps a TIME
+  // against it, and a reload finding a month-old PR would stamp the reload. Only a PR that appears
+  // while this cell is watching the same issue has a time this side actually knows.
+  //
+  // Compared rather than tested for null, so a SECOND pull request — the first one closed unmerged
+  // — is reported too. It is a milestone of its own, and the server keys the line by number.
+  return now.pr !== null && before.pr !== now.pr ? "pr" : null;
 }
 
 async function postWorkComment(cwd: string, item: WorkItem, kind: WorkCommentKind): Promise<void> {
