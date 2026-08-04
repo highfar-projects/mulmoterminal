@@ -1,14 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mount } from "@vue/test-utils";
+import { mount, flushPromises } from "@vue/test-utils";
 import GitHubSection from "../../../../src/components/settings/GitHubSection.vue";
 import SessionSection from "../../../../src/components/settings/SessionSection.vue";
 import TerminalFontFamilySection from "../../../../src/components/settings/TerminalFontFamilySection.vue";
+import ModelsSection from "../../../../src/components/settings/ModelsSection.vue";
 import { setIssueWorkComments } from "../../../../src/composables/issueWorkComments";
 import { setPrWorkdirFooter } from "../../../../src/composables/prWorkdirFooter";
 import { setAppendSystemPrompt } from "../../../../src/composables/appendSystemPrompt";
 import { setDecisionDigest } from "../../../../src/composables/decisionDigest";
 import { setWorklogEnabled, setWorklogIntervalHours } from "../../../../src/composables/worklog";
 import { setGlobalFontFamily } from "../../../../src/composables/terminalFontFamily";
+import { useAppConfig } from "../../../../src/composables/useAppConfig";
 
 // The sections that gave a config.json-only setting a control (#1401). What matters about each is
 // that flipping it POSTs the RIGHT FIELD: every one is a partial update, so a section naming the
@@ -167,5 +169,77 @@ describe("TerminalFontFamilySection", () => {
     expect(wrapper.text()).toContain("Not a font stack");
     await apply(wrapper)?.trigger("click");
     expect(posts).toEqual([]);
+  });
+});
+
+// The draft must survive a config that lands late. /api/config is fetched asynchronously, so the
+// modal can open before it arrives, and a plain watch would wipe out whatever had been typed in the
+// meantime with no way to get it back (CodeRabbit on #1412).
+describe("TerminalFontFamilySection draft", () => {
+  beforeEach(() => setGlobalFontFamily(null));
+
+  it("keeps what the user is typing when the config arrives late", async () => {
+    const wrapper = mount(TerminalFontFamilySection);
+    await wrapper.find("input").setValue("'Cica'");
+    setGlobalFontFamily("'Menlo', monospace"); // the load resolving after the modal opened
+    await wrapper.vm.$nextTick();
+    expect((wrapper.find("input").element as HTMLInputElement).value).toBe("'Cica'");
+  });
+
+  // Untouched, it still has to follow the saved value — otherwise the box shows nothing on a modal
+  // opened before the config lands.
+  it("adopts the saved value while the box is untouched", async () => {
+    const wrapper = mount(TerminalFontFamilySection);
+    setGlobalFontFamily("'Menlo', monospace");
+    await wrapper.vm.$nextTick();
+    expect((wrapper.find("input").element as HTMLInputElement).value).toBe("'Menlo', monospace");
+  });
+
+  // A failed POST is the moment the typed stack matters most: throwing it away leaves the user
+  // nothing to retry with, over a dropped request (Codex review on #1416).
+  it("keeps the typed stack when the save fails", async () => {
+    const wrapper = mount(TerminalFontFamilySection);
+    await wrapper.find("input").setValue("'Cica'");
+    globalThis.fetch = vi.fn(async () => ({ ok: false, json: async () => ({}) })) as unknown as typeof fetch;
+    await wrapper
+      .findAll("button")
+      .find((b) => b.text() === "Apply")
+      ?.trigger("click");
+    await flushPromises();
+    expect((wrapper.find("input").element as HTMLInputElement).value).toBe("'Cica'");
+  });
+
+  // After a save the box is untouched again, so the server's normalized answer — the `monospace` it
+  // appended — is what the user is left looking at.
+  it("shows the normalized stack the server saved", async () => {
+    const wrapper = mount(TerminalFontFamilySection);
+    await wrapper.find("input").setValue("'Cica'");
+    await wrapper
+      .findAll("button")
+      .find((b) => b.text() === "Apply")
+      ?.trigger("click");
+    await flushPromises();
+    expect((wrapper.find("input").element as HTMLInputElement).value).toBe("'Cica', monospace");
+  });
+});
+
+// The section claims to show what is configured, and the settings-coverage spec leans on that for
+// every display-only setting. It listed providers and only DESCRIBED customAgents, so an agent the
+// user had configured was invisible (CodeRabbit on #1412).
+describe("ModelsSection", () => {
+  it("lists the custom agents the config declares", async () => {
+    const { customAgents } = useAppConfig();
+    customAgents.value = [{ id: "nemotron", label: "Nemotron", agent: "claude", command: "ollama launch claude --model nemotron --" }];
+    const wrapper = mount(ModelsSection);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.text()).toContain("Nemotron");
+    expect(wrapper.text()).toContain("ollama launch claude --model nemotron --");
+    customAgents.value = [];
+  });
+
+  it("says so when none are configured", async () => {
+    const wrapper = mount(ModelsSection);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.text()).toContain("None configured");
   });
 });
