@@ -208,7 +208,7 @@ cells that get colour, a chime and a phone push, because they're the ones that s
 
 **The repository, when you are working on that project — the workspace, when you want what the single view in 3.x gave you** (the server's default working directory, printed as `Workspace: …` at startup; if you also run MulmoClaude, the workspace you share with it, `~/mulmoclaude` by default).
 
-**A session launched in the workspace has every GUI tool** — drawing into the Canvas, working with collections, all of it available with nothing to register.
+**A Claude or Codex session launched in the workspace has every GUI tool** — drawing into the Canvas, working with collections, all of it available with nothing to register.
 Claude or Codex, from a cell or from the launcher's **WORKSPACE** chip, it is the same (Antigravity is the exception: wherever it runs, it gets what its directory registered).
 A cell in a project directory has only the tool groups registered for that directory, so register one with the launcher's MCP toggles when you want GUI tools there (→ [which directory to launch in](basics.html#launch-dir)).
 

@@ -110,7 +110,7 @@ Collections, Wiki and Accounting read and write there whichever cell you are in 
 Your [MCP servers](config.html#settings-modal) (`userMcpServers`) are merged into **a Claude session launched in the workspace, and only that**. A cell in a project directory does not get them, and neither does Codex (what Codex is handed is MulmoTerminal's own GUI tools; its own MCP config is a `~/.codex` matter).
 
 **To keep doing what you did in the single view in 3.x, launch in the workspace.**
-That is the directory the single view ran in, so a cell started there carries the same thing — drawing into the Canvas, working with collections, with no toggle to turn on.
+That is the directory the single view ran in, so a Claude or Codex cell started there carries the same thing — drawing into the Canvas, working with collections, with no toggle to turn on.
 Claude or Codex, from a cell or from a launcher chip, all reach the same tools (→ [4.3.0 setup guide](v4.3.0.html)).
 
 {: .note }
