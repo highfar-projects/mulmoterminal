@@ -135,8 +135,15 @@ export function useWorkItem(cwd: Ref<string | null>) {
       const kind = isIssueWorkCommentsEnabled() ? workCommentToPost(item.value, next) : null;
       item.value = next;
       // Assigned rather than only set on failure, so a milestone that lands after the setup was
-      // fixed takes the notice back down without waiting for a reload.
-      if (kind) void postWorkComment(dir, next, kind).then((failure) => (commentFailure.value = failure));
+      // fixed takes the notice back down without waiting for a reload. Guarded by the same request
+      // token as the item above: this call outlives the fetch, and a cell that moved to another
+      // directory meanwhile must not be told about the repository it left — `permission` is a
+      // per-repository answer.
+      if (kind) {
+        void postWorkComment(dir, next, kind).then((failure) => {
+          if (my === req) commentFailure.value = failure;
+        });
+      }
     } catch {
       // leave the last value; the next tick retries
     }

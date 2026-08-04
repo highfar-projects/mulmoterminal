@@ -85,6 +85,27 @@ describe("useWorkItem reports why the issue was not updated", () => {
     expect(commentFailure.value).toBeNull();
   });
 
+  // The POST outlives the phase fetch that started it, and `permission` is a per-repository
+  // answer — so a cell that moved on must not inherit a verdict about the repo it left.
+  it("ignores a cause for a directory the cell has already left", async () => {
+    let releaseComment: (body: unknown) => void = () => {};
+    const pending = new Promise<unknown>((resolve) => (releaseComment = resolve));
+    globalThis.fetch = vi.fn((url: unknown) =>
+      String(url).includes("/api/work-comment") ? Promise.resolve({ ok: true, json: () => pending }) : Promise.resolve({ ok: true, json: async () => PHASE }),
+    ) as unknown as typeof fetch;
+
+    const dir = ref<string | null>("/dir");
+    const { commentFailure, refresh } = useWorkItem(dir);
+    await refresh(); // the work-comment POST is now in flight
+    dir.value = "/somewhere-else";
+    await refresh(); // a newer request supersedes it
+
+    releaseComment({ posted: false, reason: "gh-failed", failure: "permission" });
+    await pending;
+    await Promise.resolve();
+    expect(commentFailure.value).toBeNull();
+  });
+
   it("says nothing at all while the setting is off", async () => {
     setIssueWorkComments(false);
     stubFetch({ posted: false, reason: "gh-failed", failure: "permission" });
