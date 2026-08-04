@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { takeScratchHome, type ScratchHome } from "../../support/scratchHome.js";
+import { projectSessionsDir } from "../../../server/session/project-dir.js";
 import { rateForModel, costForUsage, costFromJsonl } from "../../../server/session/cost.js";
 
 const line = (o: unknown) => JSON.stringify(o);
@@ -116,12 +117,13 @@ describe("costFromJsonl", () => {
 // total is the same total.
 describe("a transcript's cost, folded across reads", () => {
   let scratch: ScratchHome;
-  let home = "";
   let n = 0;
   const CWD = "/Users/me/proj";
 
+  // projectSessionsDir, not a second copy of its rule — it resolves the cwd for the host platform,
+  // so the encoded directory differs on Windows (#1396).
   const transcriptPath = (id: string): string => {
-    const dir = path.join(home, ".claude", "projects", CWD.replace(/\//g, "-"));
+    const dir = projectSessionsDir(CWD);
     mkdirSync(dir, { recursive: true });
     return path.join(dir, `${id}.jsonl`);
   };
@@ -137,7 +139,6 @@ describe("a transcript's cost, folded across reads", () => {
 
   beforeEach(() => {
     scratch = takeScratchHome("mt-cost-fold-");
-    home = scratch.path;
   });
   afterEach(() => scratch.release());
 

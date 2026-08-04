@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { appendFileSync, mkdirSync, writeFileSync, statSync, utimesSync } from "node:fs";
 import path from "node:path";
 import { takeScratchHome, type ScratchHome } from "../../support/scratchHome.js";
+import { projectSessionsDir } from "../../../server/session/project-dir.js";
 
 // The timeline overlay read the whole transcript every time it was opened — a payload capped at 300
 // events, paid for in hundreds of megabytes (#1386). It now folds once and resumes, so what matters
@@ -10,7 +11,6 @@ import { takeScratchHome, type ScratchHome } from "../../support/scratchHome.js"
 // event the file ever had rather than the ones that survived the window.
 
 let scratch: ScratchHome;
-let home = "";
 let n = 0;
 
 const CWD = "/Users/me/proj";
@@ -25,8 +25,12 @@ const toolUse = (name: string, ts: string) =>
   `${JSON.stringify({ type: "assistant", timestamp: ts, message: { content: [{ type: "tool_use", name, input: {} }] } })}\n`;
 const noise = () => `${JSON.stringify({ type: "user", message: { content: "hello" } })}\n`;
 
+// projectSessionsDir, not a second copy of its rule: it resolves the cwd for the host platform and
+// folds EVERY non-alphanumeric character to "-", so "/Users/me/proj" is `-Users-me-proj` on macOS
+// and `D--Users-me-proj` on Windows. A spec that spelled the macOS answer wrote its transcript
+// where the reader would never look (#1396).
 function transcriptPath(id: string): string {
-  const dir = path.join(home, ".claude", "projects", CWD.replace(/\//g, "-"));
+  const dir = projectSessionsDir(CWD);
   mkdirSync(dir, { recursive: true });
   return path.join(dir, `${id}.jsonl`);
 }
@@ -39,7 +43,6 @@ function writeTranscript(body: string): string {
 
 beforeEach(() => {
   scratch = takeScratchHome("mt-timeline-");
-  home = scratch.path;
 });
 afterEach(() => scratch.release());
 

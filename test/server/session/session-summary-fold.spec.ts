@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { takeScratchHome, type ScratchHome } from "../../support/scratchHome.js";
+import { projectSessionsDir } from "../../../server/session/project-dir.js";
 
 // `/api/session/:id` is hit by every grid cell as its turn finishes, and a memo keyed on
 // (mtime, size) could only skip an UNCHANGED transcript — which the session being written to never
@@ -40,8 +41,12 @@ const filler = (bytes: number) => line({ type: "assistant", message: { role: "as
 
 const OVER_THRESHOLD_BYTES = 11 * 1024 * 1024;
 
+// projectSessionsDir, not a second copy of its rule: it resolves the cwd for the host platform and
+// folds EVERY non-alphanumeric character to "-", so "/Users/me/proj" is `-Users-me-proj` on macOS
+// and `D--Users-me-proj` on Windows. A spec that spelled the macOS answer wrote its transcript
+// where the reader would never look (#1396).
 function transcriptPath(id: string): string {
-  const dir = path.join(home, ".claude", "projects", CWD.replace(/\//g, "-"));
+  const dir = projectSessionsDir(CWD);
   mkdirSync(dir, { recursive: true });
   return path.join(dir, `${id}.jsonl`);
 }
