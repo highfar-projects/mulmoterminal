@@ -35,9 +35,12 @@ describe("fetchWithTimeout", () => {
   it("gives up at the default deadline", async () => {
     vi.useFakeTimers();
     hangingFetch();
-    const pending = fetchWithTimeout("/api/thing");
+    // Asserted BEFORE the clock moves: attaching the handler afterwards leaves a moment where the
+    // promise rejects with nothing listening, which Node reports as an unhandled rejection. It
+    // survived locally and failed on CI, where the ordering is not the same.
+    const settled = expect(fetchWithTimeout("/api/thing")).rejects.toThrow(/abort/i);
     await vi.advanceTimersByTimeAsync(DEFAULT_REQUEST_TIMEOUT_MS);
-    await expect(pending).rejects.toThrow(/abort/i);
+    await settled;
   });
 
   // The reason this takes a parameter at all: the same codebase runs 90s for an LLM summary and
@@ -46,12 +49,16 @@ describe("fetchWithTimeout", () => {
     vi.useFakeTimers();
     hangingFetch();
     const pending = fetchWithTimeout("/api/slow", undefined, 90_000);
-    let settled = false;
-    void pending.catch(() => (settled = true));
+    let done = false;
+    const settled = pending.then(
+      () => (done = true),
+      () => (done = true),
+    );
     await vi.advanceTimersByTimeAsync(DEFAULT_REQUEST_TIMEOUT_MS + 1);
-    expect(settled).toBe(false); // still going, where the default would have given up
+    expect(done).toBe(false); // still going, where the default would have given up
     await vi.advanceTimersByTimeAsync(90_000);
-    await expect(pending).rejects.toThrow(/abort/i);
+    await settled;
+    expect(done).toBe(true);
   });
 
   // A composable cancels on unmount by passing its own signal. Overwriting it would leave the
@@ -63,18 +70,18 @@ describe("fetchWithTimeout", () => {
     vi.useFakeTimers();
     hangingFetch();
     const caller = new AbortController();
-    const pending = fetchWithTimeout("/api/thing", { signal: caller.signal });
+    const settled = expect(fetchWithTimeout("/api/thing", { signal: caller.signal })).rejects.toThrow(/abort/i);
     caller.abort();
-    await expect(pending).rejects.toThrow(/abort/i);
+    await settled;
   });
 
   it("keeps the caller's signal AND the deadline, whichever comes first", async () => {
     vi.useFakeTimers();
     hangingFetch();
     const caller = new AbortController(); // never fired
-    const pending = fetchWithTimeout("/api/thing", { signal: caller.signal });
+    const settled = expect(fetchWithTimeout("/api/thing", { signal: caller.signal })).rejects.toThrow(/abort/i);
     await vi.advanceTimersByTimeAsync(DEFAULT_REQUEST_TIMEOUT_MS);
-    await expect(pending).rejects.toThrow(/abort/i);
+    await settled;
   });
 
   it("passes the caller's method and body through untouched", async () => {
