@@ -47,6 +47,16 @@ describe("GET /api/dir-icon", () => {
     expect(res.headers["content-security-policy"]).toBe("sandbox");
   });
 
+  // The claim above — that the type is OURS — is only testable where the two disagree, and .svg
+  // isn't such a case. .ico is: our map says image/x-icon, express's mime-db says
+  // image/vnd.microsoft.icon. If a future express started overwriting a pre-set Content-Type,
+  // every other case would still pass and only this one would catch it.
+  it("keeps our type where express's own guess differs", async () => {
+    const dir = projectWith("favicon.ico", { "favicon.ico": "icobytes" });
+    const res = await request(app).get("/api/dir-icon").query({ cwd: dir });
+    expect(res.headers["content-type"]).toContain("image/x-icon");
+  });
+
   it("serves an image from a dot-directory", async () => {
     const dir = projectWith(".mulmoterminal/logo.png", { ".mulmoterminal/logo.png": "png-bytes" });
     const res = await request(app).get("/api/dir-icon").query({ cwd: dir }).buffer(true);
