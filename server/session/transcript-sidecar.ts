@@ -84,8 +84,8 @@ async function usableScan<T>(parsed: unknown, options: SidecarOptions<T>, transc
   const { size, mtimeMs, scannedTo, head, value } = parsed;
   if (!isByteCount(size) || !isByteCount(scannedTo) || typeof mtimeMs !== "number" || !Number.isFinite(mtimeMs) || typeof head !== "string") return null;
   if (!options.isValue(value)) return null;
-  // The same freshness rule createFileCache states: a shorter file was rewritten, and a same-size
-  // one whose mtime moved was rewritten in place.
+  // The same freshness rule the in-memory cache states: a shorter file was rewritten, and a
+  // same-size one whose mtime moved was rewritten in place.
   if (stamp.size < size || scannedTo > stamp.size) return null;
   if (stamp.size === size && stamp.mtimeMs !== mtimeMs) return null;
   // (mtime, size) cannot tell "appended to" from "replaced by something longer". In memory that gap

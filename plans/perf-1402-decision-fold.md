@@ -114,7 +114,29 @@ const decisionFold = createTranscriptFold<DecisionScanState>({
 - 新規: `decisionsForCwd` 経由で、ターンが追記されたあとの再開が一気読みと一致する／
   未変更なら読み直さない／大きいセッションは sidecar に書かれ、別プロセスがそこから続きを畳む
 
-## 実測での確認
+## 実測での確認（実施済み）
 
-484 MB の実 transcript のコピーに対して、cold / 未変更 / 1 ターン追記後 / 別プロセスの 4 点を測る
-（#1377 のクローズ時と同じ手順。scratch `HOME` を使い、実ファイルには触らない）。
+484 MB の実 transcript のコピー（scratch `HOME`、実ファイルは無傷）:
+
+| | before | after |
+|---|---:|---:|
+| 初回 | 2,164 ms | 2,096 ms |
+| 未変更 | 1 ms | 0.6 ms |
+| **1 ターン追記後** | **2,164 ms** | **1.3 ms** |
+| さらに 1 ターン後 | 2,164 ms | 0.5 ms |
+| 別プロセスの初回（sidecar から再開） | 2,164 ms | **4.5 ms** |
+
+プロジェクト全体（65 transcripts / 2.4 GB、実ディレクトリを symlink して read-only で走査）:
+
+| | before | after |
+|---|---:|---:|
+| cold（sidecar 無し） | 5,547 ms | 5,599 ms |
+| **cold（sidecar 有り = 2 回目のプロセス）** | 5,547 ms | **66 ms** |
+| warm | 1 ms | 2 ms |
+
+**初回が悪化していない**ことが、案B（全行 parse）の判断が正しかったことの実測での裏付け。
+
+### 正しさ: 実データで main と突き合わせ
+
+`decisionsForCwd` の出力（65 transcripts / 77 decisions / 110,812 bytes の JSON）を main の worktree と
+このブランチで dump して diff → **完全一致**。合成テストではなく実データでの等価確認。
