@@ -154,6 +154,47 @@ pick a different model on Anthropic itself. → [Using another model via OpenRou
 
 All values are `#rrggbb`. The working / needs-you status colors take priority over these background colors (which show when idle).
 
+### Several clones of one repository (`.mulmoterminal.local.json`) {#local-config}
+
+Working on one repository in several checkouts at once — `acme`, `acme2`, `acme3` — they are the
+same project and should differ in nothing but the colour that tells them apart in the grid. Put a
+`.mulmoterminal.local.json` beside the shared file:
+
+```jsonc
+// .mulmoterminal.json — the project. Complete on its own, colours included, so somebody with a
+// single clone needs nothing else. Safe to commit.
+{
+  "name": "acme-web",
+  "theme": "nord",
+  "badgeColor": "#1b3479",
+  "headerColor": "#2d4ea9",
+  "headerTextColor": "#ffffff",
+  "orderPriority": 30
+}
+
+// .mulmoterminal.local.json — this checkout only. Add it to .gitignore.
+{
+  "badgeColor": "#27b4a8",
+  "headerColor": "#4ed0c5",
+  "orderPriority": 65
+}
+```
+
+- **The local file wins, key by key.** Keys it does not name keep the shared value.
+- **Whole keys, not a deep merge.** A `colors` block in the local file replaces the shared one
+  entirely rather than merging into it — one key is one intent, and a palette assembled from two
+  files is harder to predict than one you can read in a single place.
+- **Everything is still validated.** A local file is not a way past the rules; a colour that isn't
+  `#rrggbb` is dropped there exactly as it would be in the shared file.
+- **A relative path means the same in both** (`icon`, `sound`, `addDirs`) — they resolve against
+  the directory, not against the file.
+- **Either file can stand alone.** A checkout may have only a local file, and a malformed one file
+  leaves the other still working.
+- **Both trigger the live reload**, so editing your own clone's colours recolours the cells at once.
+
+Settings → [Directory settings](#dir-settings-preview) names both paths and lists which keys the
+local file took over — which is the answer when you change something and the cell disagrees.
+
 ### Project icon (`icon`) {#dir-icon}
 
 `icon` puts an **image** next to the name badge — the project's own logo, so a cell is recognisable
