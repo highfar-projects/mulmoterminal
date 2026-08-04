@@ -122,6 +122,31 @@ describe("createTranscriptSidecar", () => {
     expect(await sidecar.read(file, stamp)).toBeUndefined();
   });
 
+  // A number that cannot be a file offset is not a smaller answer, it is a THROW: createReadStream
+  // rejects a negative or fractional `start`, and the session list turns that into a row that
+  // silently disappears — from a record it will keep reading (CodeRabbit).
+  it("refuses an offset that could not be a position in a file", async () => {
+    const create = await loadSidecar();
+    const sidecar = create<Fields>({ kind: "k", version: 1, isValue: isFields });
+    const file = writeTranscript("a");
+    const stamp = stampOf(file);
+    sidecar.write(file, stamp, 100, { title: "hello" });
+    await settled();
+    const onDisk = sidecarFile("k", file);
+    const parsed: unknown = JSON.parse(readFileSync(onDisk, "utf8"));
+    if (!isRecord(parsed)) throw new Error("the sidecar should be an object");
+    const rewrite = (patch: Record<string, unknown>) => writeFileSync(onDisk, JSON.stringify({ ...parsed, ...patch }));
+
+    for (const scannedTo of [-1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 2]) {
+      rewrite({ scannedTo });
+      expect(await sidecar.read(file, stamp)).toBeUndefined();
+    }
+    rewrite({ size: -1 });
+    expect(await sidecar.read(file, stamp)).toBeUndefined();
+    rewrite({ mtimeMs: Number.NaN });
+    expect(await sidecar.read(file, stamp)).toBeUndefined();
+  });
+
   // (mtime, size) cannot tell "appended to" from "replaced by something longer", and a sidecar can
   // be days old when it is read — so the first bytes are checked too.
   it("refuses a file whose head changed under a record that still looks fresh", async () => {

@@ -82,7 +82,7 @@ export function createTranscriptSidecar<T>(options: SidecarOptions<T>): Transcri
 async function usableScan<T>(parsed: unknown, options: SidecarOptions<T>, transcript: string, stamp: FileStamp): Promise<AppendScan<T> | null> {
   if (!isRecord(parsed) || parsed.v !== options.version) return null;
   const { size, mtimeMs, scannedTo, head, value } = parsed;
-  if (typeof size !== "number" || typeof mtimeMs !== "number" || typeof scannedTo !== "number" || typeof head !== "string") return null;
+  if (!isByteCount(size) || !isByteCount(scannedTo) || typeof mtimeMs !== "number" || !Number.isFinite(mtimeMs) || typeof head !== "string") return null;
   if (!options.isValue(value)) return null;
   // The same freshness rule createFileCache states: a shorter file was rewritten, and a same-size
   // one whose mtime moved was rewritten in place.
@@ -93,6 +93,13 @@ async function usableScan<T>(parsed: unknown, options: SidecarOptions<T>, transc
   if ((await headHash(transcript)) !== head) return null;
   return { from: scannedTo, value };
 }
+
+// A position in a file, as read back off disk. "typeof number" is not enough: a negative or
+// fractional one reaches createReadStream as `start`, which throws ERR_OUT_OF_RANGE — and the
+// session list turns a throw into a row that silently vanishes, from a sidecar that keeps being
+// read. A number that cannot be an offset means the record is corrupt, i.e. rebuild it
+// (CodeRabbit on #1387).
+const isByteCount = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 
 // Mirrors the transcript's own layout — <project dir>/<session>.jsonl — from BASENAMES only, so
 // nothing a caller passes can walk out of the sidecar root.
