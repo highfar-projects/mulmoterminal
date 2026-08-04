@@ -252,7 +252,8 @@ async function sessionList(req: Request, res: Response) {
 // NOTHING IN THIS REPO CALLS THIS, and the same is true of the agy route below. Both were built for
 // the single view's sidebar, which is gone (#1201 / #1202), so a past codex or agy conversation is
 // currently unreachable from any list — only Claude sessions reach the launcher's resume rows. They
-// are kept deliberately as the base for that list (#1417) rather than deleted and rewritten.
+// are kept deliberately as the base for that list (#1417) rather than deleted and rewritten, and
+// README documents both in the HTTP API table: no in-repo caller does not make them private.
 async function codexSessionList(req: Request, res: Response) {
   try {
     const cwd = workspaceForRoute(req.query.cwd, res);

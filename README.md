@@ -343,8 +343,8 @@ The launcher detects it and prints the exact, OS-appropriate removal command; ru
 ┌──────────────────────────────────────┐         ┌─────────────────────────────────────────────┐
 │ Browser (Vue 3 + xterm.js)            │         │ Server (Express + Node)                       │
 │                                       │         │                                               │
-│  Sidebar.vue ──subscribe("sessions")──┼──SIO───►│  socket.io  /ws/pubsub   ── publish ──┐       │
-│      ▲  refetch on any push           │         │                                       │       │
+│  App.vue ──────subscribe("sessions")──┼──SIO───►│  socket.io  /ws/pubsub   ── publish ──┐       │
+│      ▲  refetch on any push (favicon) │         │                                       │       │
 │      └──── GET /api/sessions ─────────┼──HTTP──►│  Express   /api/sessions              │       │
 │                                       │         │            /api/hook  ◄──curl── hooks │       │
 │  Terminal.vue ── ws JSON msgs ────────┼──WS────►│  ws        /ws  ──► node-pty ─► `claude`──hooks┘
@@ -353,7 +353,8 @@ The launcher detects it and prints the exact, OS-appropriate removal command; ru
 ```
 
 - **Terminal I/O** flows over a raw WebSocket (`/ws`), one PTY per session.
-- **Session list** is fetched over HTTP (`/api/sessions`).
+- **Session list** is fetched over HTTP (`/api/sessions`) — by `App.vue` for the tab favicon,
+  and by an empty cell's launch form (`?cwd=`) for its resume rows.
 - **Live activity** is pushed over a Socket.IO pub/sub channel (`/ws/pubsub`);
   the server learns of activity from **Claude hooks** that POST to `/api/hook`.
 - **Other terminals** run on their own raw WebSockets: **Codex** sessions on `/ws/codex`,
@@ -1767,11 +1768,10 @@ server/
                   -header, -keys, -model, -notify, -bug-report, -decisions
   fix-pty-perms.js              postinstall: fixes node-pty binary permissions
 src/
-  App.vue                       Layout; owns the active session + single/grid view
+  App.vue                       Layout; owns the grid, the overlays and the tab favicon
   router/                       Vue Router routes (/, /terminals, /collections,
                                 /accounting, /prs, /files, /wiki, …)
   components/
-    Sidebar.vue, SessionTabBar.vue           session list + tab bar (pub/sub driven)
     Terminal.vue                             xterm.js terminal; /ws, /ws/codex, /ws/run
     AppToolbar.vue                           shared header + toolbar buttons
     GridView.vue, TerminalGrid.vue, TerminalCell.vue, CommandCell.vue, LauncherCell.vue
