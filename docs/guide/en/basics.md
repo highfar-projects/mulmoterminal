@@ -103,14 +103,15 @@ Collections, Wiki and Accounting read and write there whichever cell you are in 
 
 | The cell's working directory | Claude / Codex | Antigravity |
 |---|---|---|
-| **The workspace itself** | **Every GUI tool, with nothing to register.** Your [MCP servers](config.html#settings-modal) (`userMcpServers`) are merged in too | No such rule. It gets **only the tool groups registered for that directory** |
+| **The workspace itself** | **Every GUI tool, with nothing to register** | No such rule. It gets **only the tool groups registered for that directory** |
 | **A project directory** | **Only the tool groups registered for that directory** — register one with the MCP toggles when you want GUI tools | Same |
 
-In either directory, **your own MCP servers** (`.mcp.json`, `claude mcp add`, your claude.ai connectors) load normally. Before 4.4.0 a workspace cell was the one place that could not see them (→ [4.4.0 setup guide](v4.4.0.html)).
+**A Claude session reads its own MCP config in either directory** (`.mcp.json`, `claude mcp add`, your claude.ai connectors). Before 4.4.0 a workspace cell was the one place that could not see them (→ [4.4.0 setup guide](v4.4.0.html)).
+Your [MCP servers](config.html#settings-modal) (`userMcpServers`) are merged into Claude sessions only. What Codex is handed is MulmoTerminal's own GUI tools; its own MCP config is a `~/.codex` matter.
 
 **To keep doing what you did in the single view in 3.x, launch in the workspace.**
 That is the directory the single view ran in, so a cell started there carries the same thing — drawing into the Canvas, working with collections, with no toggle to turn on.
-**The agent does not matter** — Claude or Codex, from a cell or from a launcher chip, all reach the same tools (→ [4.3.0 setup guide](v4.3.0.html)).
+Claude or Codex, from a cell or from a launcher chip, all reach the same tools (→ [4.3.0 setup guide](v4.3.0.html)).
 
 {: .note }
 > **If you also run MulmoClaude, make the workspace the directory MulmoClaude uses** (`~/mulmoclaude` by default).
@@ -124,7 +125,7 @@ A **WORKSPACE** chip always sits at the head of the launcher's chip row, apart f
 Its play button launches there; the chip itself only fills WORKING DIRECTORY.
 While the workspace is selected the MCP toggles are gone, replaced by `GUI TOOLS — All of them, automatically`, because there is nothing left to register.
 
-![The launcher's chip row — the workspace leads it](../images/v4.3.0-workspace-chip.png)
+![The launcher's chip row — the workspace leads it](../images/v4.3.1-workspace-chip.png)
 
 **Antigravity has no such rule.**
 Even in the workspace, its GUI tools are whatever that directory has registered (through `.agents/mcp_config.json` → [2.8.0 setup guide](v2.8.0.html)).
