@@ -469,7 +469,16 @@ describe("dirConfigDetail", () => {
     const dir = tmp();
     const { config, extras } = dirConfigDetail(dir);
     expect(Object.values(config).every((value) => value === null || value === false)).toBe(true);
-    expect(extras).toEqual({ provider: null, model: null, skills: null, addDirs: null, appendSystemPrompt: null, buttonLabels: [], chipLabels: [] });
+    expect(extras).toEqual({
+      provider: null,
+      model: null,
+      skills: null,
+      addDirs: null,
+      appendSystemPrompt: null,
+      buttonLabels: [],
+      chipLabels: [],
+      autoIcon: null,
+    });
     rmSync(dir, { recursive: true, force: true });
   });
 
