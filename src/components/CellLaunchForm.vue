@@ -11,6 +11,7 @@ import { worktreeAction, worktreeLimitReason } from "../../common/worktreeSessio
 import { isSameDirPath } from "../../common/dirPathKey";
 import { TOOL_GROUPS, TOOL_GROUP_HEADINGS, toolGroupServerId, toolsInGroup, type ToolGroup } from "../../common/toolGroups";
 import { customAgentIdOf, type AgentPick, type CustomAgent } from "../../common/customAgents";
+import { pickCarriesFullGuiMcp } from "../../common/guiMcpAgents";
 import type { TerminalAgent } from "../../common/sessionAgent";
 import { launchChips, type CwdPreset, type LaunchChip } from "./presets";
 import type { Launcher, LaunchPick } from "./launchers";
@@ -341,6 +342,15 @@ const mcpGroupFailure = (group: ToolGroup): string | undefined => mcpGroupFailed
 // (see dirFor), which is exactly the case a comparison against the raw input would miss.
 const inWorkspace = computed(() => isSameDirPath(targetDir.value, props.defaultCwd));
 
+// The workspace answers "every tool automatically" only for an agent that can RECEIVE a per-spawn
+// config — the directory alone is not enough. Antigravity reads a per-directory file instead, so it
+// gets what that directory registered wherever it runs, and telling it otherwise here both stated
+// something untrue and hid the toggles that were its only way to register anything (#1423).
+//
+// Kept apart from `inWorkspace` rather than folded into it: the worktree row below asks the
+// directory question and only that, and the two would have drifted the moment either changed.
+const workspaceGivesEveryTool = computed(() => inWorkspace.value && pickCarriesFullGuiMcp(props.agent, props.customAgents ?? []));
+
 // What "all of them" covers, named so the statement is checkable rather than a claim. Derived from
 // the headings and de-duplicated — render and media both read "Canvas" — so adding a group needs no
 // second edit here, the same rule mcpGroupTitle follows.
@@ -577,8 +587,10 @@ async function removeWorktree(w: Worktree): Promise<void> {
          all — the split is exactly what the grouping exists for (common/toolGroups.ts). -->
     <template v-if="mcpGroupDir && launchesAgent">
       <!-- The workspace gets every tool automatically, so it is TOLD, not asked. A switch here
-           would register a group URL with nothing left to serve: a control that does nothing. -->
-      <div v-if="inWorkspace" data-testid="cell-mcp-all" class="flex w-full max-w-[360px] flex-col gap-0.5">
+           would register a group URL with nothing left to serve: a control that does nothing.
+           Asked of the AGENT as well as the directory — Antigravity in the workspace takes the
+           `v-else` and gets the switches, because that is genuinely how it reaches any tool. -->
+      <div v-if="workspaceGivesEveryTool" data-testid="cell-mcp-all" class="flex w-full max-w-[360px] flex-col gap-0.5">
         <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">GUI tools</span>
         <span class="font-sans text-[11px] leading-snug text-secondary">
           <span class="material-symbols-outlined mr-[3px] align-middle text-[13px]" aria-hidden="true">workspaces</span>
