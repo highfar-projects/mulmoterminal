@@ -19,7 +19,7 @@ import { missingRepoReason, repoForDir } from "../git/forge-support.js";
 import { phaseForRepoBranch } from "../git/prPhase.js";
 import { EMPTY_WORK_ITEM, isIssueNumber } from "../../common/prPhase.js";
 import { ensureWorkComment } from "../git/work-comment.js";
-import { workCommentDirLabel } from "../../common/workComment.js";
+import { isWorkCommentKind, workCommentDirLabel } from "../../common/workComment.js";
 import { isRecord } from "../../common/isRecord.js";
 import { prUrlForBranch } from "../git/pr-for-branch.js";
 import { applySkillFilter, discoverSkills } from "../backends/remoteHost/skills.js";
@@ -36,10 +36,17 @@ async function workCommentHandler(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: "body must be an object" });
     return;
   }
-  const kind = body.kind === "start" || body.kind === "merged" ? body.kind : null;
+  const kind = isWorkCommentKind(body.kind) ? body.kind : null;
   const issue = positiveInt(body.issue);
   if (!kind || issue === null) {
-    res.status(400).json({ error: "kind must be start|merged and issue a positive integer" });
+    res.status(400).json({ error: "kind must be start|pr|merged and issue a positive integer" });
+    return;
+  }
+  const pr = positiveInt(body.pr);
+  // The whole content of the `pr` milestone is the number, so a request without one has nothing to
+  // record. A 400 rather than a quiet no-op: the only caller is this app's own client.
+  if (kind === "pr" && pr === null) {
+    res.status(400).json({ error: "kind pr requires a positive pr number" });
     return;
   }
   if (!getIssueWorkComments()) {
@@ -63,7 +70,7 @@ async function workCommentHandler(req: Request, res: Response): Promise<void> {
     return;
   }
   const repo = found.repo;
-  const result = await ensureWorkComment(repo, issue, kind, workCommentDirLabel(cwd), positiveInt(body.pr), { closeIssue: kind === "merged" });
+  const result = await ensureWorkComment(repo, issue, kind, workCommentDirLabel(cwd), pr, { closeIssue: kind === "merged" });
   res.json(result);
 }
 

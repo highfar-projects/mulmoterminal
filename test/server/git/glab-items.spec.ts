@@ -9,7 +9,7 @@ import {
   glabIssueIsOpen,
   glabMrBody,
   glabMrPhase,
-  glabNoteBodies,
+  glabNotes,
   normalizeGlabIssue,
   normalizeGlabIssueDetail,
   normalizeGlabMr,
@@ -22,6 +22,7 @@ import {
   glabMrUpdateBodyArgs,
   glabMrViewArgs,
   glabIssueNoteArgs,
+  glabIssueNoteEditArgs,
   glabIssueNotesArgs,
   glabIssueViewArgs,
   glabMrListArgs,
@@ -237,29 +238,35 @@ describe("glabIssueViewArgs", () => {
 
 // Existing comments, for the duplicate check that keeps a work comment from being written twice.
 // These shapes were read back from gitlab.com after posting a real note.
-describe("glabNoteBodies", () => {
-  const userNote = { id: 1, body: "started work in mulmoterminal4", system: false };
+describe("glabNotes", () => {
+  const userNote = { id: 1, body: "started work in mulmoterminal4", system: false, created_at: "2026-08-04T14:20:31.000Z" };
   // GitLab writes its own notes for closing, labelling, editing the description. They are not
   // comments anyone left — counting them would let a closed-once issue read as already commented.
   const systemNote = { id: 2, body: "closed", system: true };
 
   it("keeps what a person wrote and drops what GitLab wrote", () => {
-    expect(glabNoteBodies([userNote, systemNote])).toEqual(["started work in mulmoterminal4"]);
+    expect(glabNotes([userNote, systemNote])).toEqual([{ id: "1", body: "started work in mulmoterminal4", createdAt: "2026-08-04T14:20:31.000Z" }]);
   });
 
   it("treats a note with no system flag as a person's", () => {
-    expect(glabNoteBodies([{ id: 3, body: "no flag here" }])).toEqual(["no flag here"]);
+    expect(glabNotes([{ id: 3, body: "no flag here" }])).toEqual([{ id: "3", body: "no flag here", createdAt: null }]);
   });
 
   it.each([
     ["not an array", { notes: [] }],
     ["null", null],
   ])("is empty for %s", (_case, raw) => {
-    expect(glabNoteBodies(raw)).toEqual([]);
+    expect(glabNotes(raw)).toEqual([]);
   });
 
   it("survives a note with no body", () => {
-    expect(glabNoteBodies([{ id: 4, system: false }])).toEqual([""]);
+    expect(glabNotes([{ id: 4, system: false }])).toEqual([{ id: "4", body: "", createdAt: null }]);
+  });
+
+  // The id is what the PUT that edits a note is addressed to. A note that arrives without a usable
+  // one can still be read — it just cannot be updated, and the caller has to be able to see that.
+  it("reports a note with no usable id rather than inventing one", () => {
+    expect(glabNotes([{ body: "who wrote this", system: false }])).toEqual([{ id: null, body: "who wrote this", createdAt: null }]);
   });
 });
 
@@ -316,6 +323,29 @@ describe("glab issue write arguments", () => {
   // duplicate check misses it and comments again (Codex review).
   it("always paginates, so an old comment on a long thread is still found", () => {
     expect(glabIssueNotesArgs(targetFor("gitlab.com/group/project"), 1)).toContain("--paginate");
+  });
+
+  // `glab issue` has a subcommand to ADD a note and none to change one, so editing goes through
+  // the REST endpoint the reader above already talks to. `--method` is explicit because passing a
+  // field otherwise switches glab to POST, and `--raw-field` rather than `--field` because the
+  // typed one converts `@file` and the bare words true/false/null — a comment body is neither.
+  it("edits a note through the REST endpoint, with the project encoded", () => {
+    expect(glabIssueNoteEditArgs(targetFor("gitlab.com/group/sub/project"), 7, "42", "updated")).toEqual([
+      "api",
+      "--hostname",
+      "gitlab.com",
+      "--method",
+      "PUT",
+      "projects/group%2Fsub%2Fproject/issues/7/notes/42",
+      "--raw-field",
+      "body=updated",
+    ]);
+  });
+
+  // A self-hosted host must be addressed by --hostname, or the request goes to gitlab.com and the
+  // 404 that comes back is another server's answer (#1332).
+  it("edits on the host the entry names", () => {
+    expect(glabIssueNoteEditArgs(targetFor("gitlab.example.com/group/project"), 1, "2", "x")).toContain("gitlab.example.com");
   });
 });
 
