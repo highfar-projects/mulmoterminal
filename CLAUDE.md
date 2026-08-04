@@ -125,14 +125,21 @@ the same tools however they were started. It sat in `spawn-claude.ts` while clau
 caller, and the drift that produced — a codex cell silently getting less than the cell beside it —
 is exactly what a new path re-creates by not asking.
 
-**A launcher chip is not one of those paths.** A chip runs the user's command line verbatim: no
-flags are inserted, no MCP is attached, whatever program the line names. It did once — a chip whose
-command was `claude` or `codex` was rewritten for parity with the cell (#1040, #1358) — and that was
-removed deliberately, because a chip that silently runs something other than what it says is what
-made the chips and the Agent Picker impossible to tell apart. `launcher-program.ts` still *reads*
-which program a command names, but only for the worktree limit and the session record; it exports no
-rewriter, and a spec pins that. A chip that wants GUI tools asks for them in the flags the user
-writes.
+**A launcher chip is not one of those paths, and must never become one.** A chip runs the user's
+command line **verbatim, and nothing in this repo parses it**. There is no launcher command parser —
+if you are looking for one, it was deleted, not moved. Concretely: no flags are inserted, no MCP is
+attached, `handleLaunchConnection` passes `worktreeLimited: false` unconditionally, and
+`spawnLauncherPty` records `agent: "shell"` whatever the command names.
+
+It was not always so — a chip whose command was `claude` or `codex` was rewritten for parity with
+the cell (#1040, #1358), and a command starting with the word `codex` was held to the worktree limit
+(#1207, #1208). All of it was removed deliberately: a chip that silently runs something other than
+what it says is what made the chips and the Agent Picker impossible to tell apart, and every one of
+those behaviours rested on guessing at text the user wrote.
+
+So do not re-add a recogniser, however narrow, and do not "restore" the worktree limit for chips —
+that hole is known and accepted (a `codex` chip can occupy a worktree twice). A chip that wants GUI
+tools asks for them in the flags the user writes. Agent behaviour belongs to the Agent Picker.
 
 The ids differ in **who owns them**, which is what decides whether a rename is free:
 
