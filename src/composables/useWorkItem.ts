@@ -11,6 +11,7 @@ import { EMPTY_WORK_ITEM, isIssueNumber, isPrPhase, type WorkItem } from "../../
 import { isRecord } from "../../common/isRecord";
 import { isIssueWorkCommentsEnabled } from "./issueWorkComments";
 import type { WorkCommentKind } from "../../common/workComment";
+import { isWorkCommentFailure, type WorkCommentFailure } from "../../common/workCommentFailure";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 const POLL_MS = 30_000;
@@ -89,9 +90,12 @@ export function workCommentToPost(before: WorkItem, now: WorkItem): WorkCommentK
   return now.pr !== null && before.pr !== now.pr ? "pr" : null;
 }
 
-async function postWorkComment(cwd: string, item: WorkItem, kind: WorkCommentKind): Promise<void> {
+/** Why the issue could not be updated, or null — including when it WAS updated, when the server
+ *  had nothing to add, and when the setting is off. Only a cause the server actually named makes
+ *  a notice (#1369). */
+async function postWorkComment(cwd: string, item: WorkItem, kind: WorkCommentKind): Promise<WorkCommentFailure | null> {
   try {
-    await fetchWithTimeout(
+    const res = await fetchWithTimeout(
       "/api/work-comment",
       {
         method: "POST",
@@ -100,13 +104,23 @@ async function postWorkComment(cwd: string, item: WorkItem, kind: WorkCommentKin
       },
       SLOW_COMMAND_TIMEOUT_MS,
     );
+    if (!res.ok) return null;
+    const data: unknown = await res.json();
+    // A rejected request means this app called its own server wrongly, and a browser that cannot
+    // reach the server is already visible everywhere else — neither is the user's to fix here.
+    // The deadline above is still armed here on purpose (#1393), so this read is bounded too.
+    return isRecord(data) && isWorkCommentFailure(data.failure) ? data.failure : null;
   } catch {
     // Best-effort: the next transition (or the next reload) asks again, and the server dedupes.
+    return null;
   }
 }
 
 export function useWorkItem(cwd: Ref<string | null>) {
   const item = ref<WorkItem>({ ...EMPTY_WORK_ITEM });
+  // Why the last attempt to update the issue failed. Held rather than logged: the user turned the
+  // setting on and would otherwise see the same nothing as leaving it off (#1369).
+  const commentFailure = ref<WorkCommentFailure | null>(null);
   let req = 0;
 
   async function refresh(): Promise<void> {
@@ -116,6 +130,9 @@ export function useWorkItem(cwd: Ref<string | null>) {
     const dir = cwd.value;
     if (!dir) {
       item.value = { ...EMPTY_WORK_ITEM };
+      // The notice belongs to an issue in a directory. With neither, it is about work this cell
+      // has left behind, and would sit there claiming a problem the user can no longer act on.
+      commentFailure.value = null;
       return;
     }
     try {
@@ -124,9 +141,27 @@ export function useWorkItem(cwd: Ref<string | null>) {
       const data: unknown = await res.json();
       if (my !== req) return;
       const next = parseWorkItem(data);
-      const kind = isIssueWorkCommentsEnabled() ? workCommentToPost(item.value, next) : null;
+      const enabled = isIssueWorkCommentsEnabled();
+      const kind = enabled ? workCommentToPost(item.value, next) : null;
       item.value = next;
-      if (kind) void postWorkComment(dir, next, kind);
+      // Cleared when there is nothing left for a comment to be about — the setting is off, or the
+      // branch carries no issue. NOT merely because this poll had nothing to report: a cause is
+      // recorded on a milestone, and every poll between milestones reports nothing, so clearing on
+      // those would take the notice down about 30 seconds after it appeared — the same silence it
+      // exists to end. Switching the setting off is the case a user reaches FOR the notice, and
+      // leaving it up then would argue with the switch they just used. Moving to a DIFFERENT issue
+      // needs no case here: that is a `start` milestone, so the attempt below overwrites the cause.
+      if (!enabled || next.issue === null) commentFailure.value = null;
+      // Assigned rather than only set on failure, so a milestone that lands after the setup was
+      // fixed takes the notice back down without waiting for a reload. Guarded by the same request
+      // token as the item above: this call outlives the fetch, and a cell that moved to another
+      // directory meanwhile must not be told about the repository it left — `permission` is a
+      // per-repository answer.
+      if (kind) {
+        void postWorkComment(dir, next, kind).then((failure) => {
+          if (my === req) commentFailure.value = failure;
+        });
+      }
     } catch {
       // leave the last value; the next tick retries
     }
@@ -135,5 +170,5 @@ export function useWorkItem(cwd: Ref<string | null>) {
   usePollWhileVisible(() => void refresh(), POLL_MS);
   watch(cwd, () => void refresh());
 
-  return { item, refresh };
+  return { item, refresh, commentFailure };
 }

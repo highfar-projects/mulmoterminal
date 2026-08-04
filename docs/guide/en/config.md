@@ -1220,6 +1220,13 @@ posted by MulmoTerminal
   happened.
 - Editing a comment sends **no notification**, on purpose: the first line is news, the rest is
   status.
+- **It needs write access**, not just a login. Commenting on an issue is a write, so a `gh` set up
+  for reading only cannot do it — and neither can an account without write access to that
+  repository.
+- When it cannot write, **the cell says why**: a small `issue not updated` notice appears next to
+  the work chip, naming the fix (install `gh`, `gh auth login`, or write access). Dismiss it and no
+  cell reports that same cause again until you reload. The work itself is never affected — the
+  comment is simply skipped, and the next milestone tries again.
 - Needs `gh` installed and logged in (`glab` for GitLab). Without it, nothing is written and
   nothing breaks.
 

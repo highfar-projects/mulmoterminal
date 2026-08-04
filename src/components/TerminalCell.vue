@@ -6,6 +6,7 @@ import { useImeAwareEnter } from "../composables/useImeAwareEnter";
 import { useCellChrome } from "../composables/useCellChrome";
 import { useGitStatus } from "../composables/useGitStatus";
 import { useWorkItem } from "../composables/useWorkItem";
+import { dismissWorkCommentFailure, visibleWorkCommentFailure } from "../composables/workCommentNotice";
 import { formatCwd, worktreeLabel } from "./cwdDisplay";
 import { isSameDirPath } from "../../common/dirPathKey";
 import DirBadge from "./DirBadge.vue";
@@ -22,6 +23,7 @@ import CellLaunchForm from "./CellLaunchForm.vue";
 import GitBranchChip from "./GitBranchChip.vue";
 import WorkItemChip from "./WorkItemChip.vue";
 import CellTidyPrompt from "./CellTidyPrompt.vue";
+import WorkCommentNotice from "./WorkCommentNotice.vue";
 import ModelContextBadge from "./ModelContextBadge.vue";
 import type { LaunchChoice } from "./wsUrl";
 import type { RunCommand } from "./runCommand";
@@ -154,7 +156,10 @@ const { config: dirConfig, cellStyle, headerStyle } = useCellChrome(cwd);
 const isWorkspace = computed(() => isSameDirPath(cwd.value, props.defaultCwd));
 // What this cell is working on (PR + issue), for the `work` chip. Same directory, same kind of
 // poll as the git status below.
-const { item: workItem, refresh: refreshWorkItem } = useWorkItem(cwd);
+const { item: workItem, refresh: refreshWorkItem, commentFailure } = useWorkItem(cwd);
+// "issueWorkComments is on and the issue is NOT being updated" (#1369). Outside the chip loop for
+// the same reason as the tidy prompt below: it reports on a setting, not on the work.
+const workCommentNotice = computed(() => visibleWorkCommentFailure(commentFailure.value));
 // Live git status (branch/dirty/ahead·behind) for the header chip. `refreshGit`
 // is called alongside loadDiff() so a finished turn's changes show immediately.
 const { status: gitStatus, refresh: refreshGit } = useGitStatus(cwd);
@@ -1116,6 +1121,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               <!-- Outside the chip loop on purpose: a prompt rather than a configurable chip, so it
                    appears whether or not the user kept the `work` chip. -->
               <CellTidyPrompt v-if="promptTidy && workItem.pr !== null" :pr="workItem.pr" @tidy="close()" @dismiss="dismissTidy()" />
+              <WorkCommentNotice v-if="workCommentNotice" :failure="workCommentNotice" @dismiss="dismissWorkCommentFailure(workCommentNotice)" />
               <template v-for="chip in cellChips" :key="chip.key">
                 <GitBranchChip v-if="chip.builtin === 'git'" :status="gitStatus" :hide-dirty="isWorktreeCell" />
                 <WorkItemChip v-else-if="chip.builtin === 'work'" :item="workItem" />

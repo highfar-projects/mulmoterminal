@@ -8,8 +8,11 @@ import { spawnCollect } from "./spawn-collect.js";
 import type { GhResult } from "./gh.js";
 import { projectPath, type RemoteForge } from "./forge-host.js";
 
+/** The `gh.ts` sentinel's twin — see GH_MISSING_STDERR for why it is named. */
+export const GLAB_MISSING_STDERR = "glab not found (install the GitLab CLI and run `glab auth login`)";
+
 export function runGlab(args: string[]): Promise<GhResult> {
-  return spawnCollect("glab", args, { errorStderr: "glab not found (install the GitLab CLI and run `glab auth login`)" });
+  return spawnCollect("glab", args, { errorStderr: GLAB_MISSING_STDERR });
 }
 
 /** A GitLab project as `glab` has to be addressed about it. Two spellings, because the CLI wants a

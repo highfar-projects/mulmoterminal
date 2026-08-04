@@ -28,15 +28,17 @@ const issueView = (comments: (string | FakeComment)[], state = "OPEN") =>
     ),
   });
 
-// A `gh` stand-in that records what it was asked to do.
-function fakeGh(view: string, opts: { commentOk?: boolean; closeOk?: boolean; viewOk?: boolean; editOk?: boolean } = {}) {
+// A `gh` stand-in that records what it was asked to do. `stderr` is what a refusing call prints —
+// the only thing the cause is read from, so a case about causes sets it to real `gh` output.
+function fakeGh(view: string, opts: { commentOk?: boolean; closeOk?: boolean; viewOk?: boolean; editOk?: boolean; stderr?: string } = {}) {
   const calls: string[][] = [];
+  const err = opts.stderr ?? "";
   const run = async (args: string[]) => {
     calls.push(args);
-    if (args[0] === "api") return { ok: opts.editOk ?? true, stdout: "", stderr: "" };
-    if (args[1] === "view") return { ok: opts.viewOk ?? true, stdout: view, stderr: "" };
-    if (args[1] === "comment") return { ok: opts.commentOk ?? true, stdout: "", stderr: "" };
-    return { ok: opts.closeOk ?? true, stdout: "", stderr: "" };
+    if (args[0] === "api") return { ok: opts.editOk ?? true, stdout: "", stderr: err };
+    if (args[1] === "view") return { ok: opts.viewOk ?? true, stdout: view, stderr: err };
+    if (args[1] === "comment") return { ok: opts.commentOk ?? true, stdout: "", stderr: err };
+    return { ok: opts.closeOk ?? true, stdout: "", stderr: err };
   };
   const did = (verb: string) => calls.filter((c) => (verb === "api" ? c[0] === "api" : c[1] === verb)).length;
   const argsFor = (verb: string) => calls.find((c) => (verb === "api" ? c[0] === "api" : c[1] === verb));
@@ -148,8 +150,8 @@ describe("ensureWorkComment", () => {
     const second = ensureWorkComment("o/r", 966, "start", "d", null, { runGh: run });
     releaseView();
     expect(await Promise.all([first, second])).toEqual([
-      { posted: false, reason: "gh-failed" },
-      { posted: false, reason: "gh-failed" },
+      { posted: false, reason: "gh-failed", failure: "unknown" },
+      { posted: false, reason: "gh-failed", failure: "unknown" },
     ]);
   });
 
@@ -229,14 +231,18 @@ describe("ensureWorkComment", () => {
     // because one response arrived without a URL to address the edit to.
     it("reports a comment it cannot address, without remembering it", async () => {
       const gh = fakeGh(issueView([{ body: renderWorkComment("mulmoterminal5", [STARTED]), url: "https://github.com/o/r/issues/966" }]));
-      expect(await ensureWorkComment("o/r", 966, "pr", "mulmoterminal5", 1240, { runGh: gh.run })).toEqual({ posted: false, reason: "gh-failed" });
+      expect(await ensureWorkComment("o/r", 966, "pr", "mulmoterminal5", 1240, { runGh: gh.run })).toEqual({
+        posted: false,
+        reason: "gh-failed",
+        failure: "unknown",
+      });
       const working = fakeGh(issueView([renderWorkComment("mulmoterminal5", [STARTED])]));
       expect((await ensureWorkComment("o/r", 966, "pr", "mulmoterminal5", 1240, { runGh: working.run })).posted).toBe(true);
     });
 
     it("reports a failed edit without remembering it", async () => {
       const failing = fakeGh(issueView([renderWorkComment("d", [STARTED])]), { editOk: false });
-      expect(await ensureWorkComment("o/r", 966, "pr", "d", 1240, { runGh: failing.run })).toEqual({ posted: false, reason: "gh-failed" });
+      expect(await ensureWorkComment("o/r", 966, "pr", "d", 1240, { runGh: failing.run })).toEqual({ posted: false, reason: "gh-failed", failure: "unknown" });
       const working = fakeGh(issueView([renderWorkComment("d", [STARTED])]));
       expect((await ensureWorkComment("o/r", 966, "pr", "d", 1240, { runGh: working.run })).posted).toBe(true);
     });
@@ -278,16 +284,63 @@ describe("ensureWorkComment", () => {
   // record a failure as done.
   it("reports a failed lookup without remembering it", async () => {
     const failing = fakeGh("", { viewOk: false });
-    expect(await ensureWorkComment("o/r", 966, "start", "d", null, { runGh: failing.run })).toEqual({ posted: false, reason: "gh-failed" });
+    expect(await ensureWorkComment("o/r", 966, "start", "d", null, { runGh: failing.run })).toEqual({ posted: false, reason: "gh-failed", failure: "unknown" });
     const working = fakeGh(issueView([]));
     expect((await ensureWorkComment("o/r", 966, "start", "d", null, { runGh: working.run })).posted).toBe(true);
   });
 
   it("reports a failed write without remembering it", async () => {
     const failing = fakeGh(issueView([]), { commentOk: false });
-    expect(await ensureWorkComment("o/r", 966, "start", "d", null, { runGh: failing.run })).toEqual({ posted: false, reason: "gh-failed" });
+    expect(await ensureWorkComment("o/r", 966, "start", "d", null, { runGh: failing.run })).toEqual({ posted: false, reason: "gh-failed", failure: "unknown" });
     const working = fakeGh(issueView([]));
     expect((await ensureWorkComment("o/r", 966, "start", "d", null, { runGh: working.run })).posted).toBe(true);
+  });
+
+  // The whole point of #1369's remaining item: a read-only login used to be indistinguishable
+  // from the setting being off. The cause has to survive all the way to the caller, because the
+  // caller is the only one that can put it in front of the user.
+  describe("names why it could not write", () => {
+    const FORBIDDEN = "gh: Resource not accessible by personal access token (HTTP 403)";
+    const LOGGED_OUT = "To get started with GitHub CLI, please run:  gh auth login";
+
+    it("reports a refused write as a permission problem", async () => {
+      const gh = fakeGh(issueView([]), { commentOk: false, stderr: FORBIDDEN });
+      expect(await ensureWorkComment("o/r", 966, "start", "d", null, { runGh: gh.run })).toEqual({
+        posted: false,
+        reason: "gh-failed",
+        failure: "permission",
+      });
+    });
+
+    it("reports a refused edit as a permission problem", async () => {
+      const gh = fakeGh(issueView([renderWorkComment("d", [STARTED])]), { editOk: false, stderr: FORBIDDEN });
+      const result = await ensureWorkComment("o/r", 966, "pr", "d", 1240, { runGh: gh.run });
+      expect(result.failure).toBe("permission");
+    });
+
+    // The read fails for the same reasons as the write, and has the same fix.
+    it("reports a refused lookup with its own cause", async () => {
+      const gh = fakeGh("", { viewOk: false, stderr: LOGGED_OUT });
+      expect((await ensureWorkComment("o/r", 966, "start", "d", null, { runGh: gh.run })).failure).toBe("auth");
+    });
+
+    // Nothing failed, so there is nothing to explain — a `failure` on a success would put a
+    // notice on a cell whose issue was updated perfectly well.
+    it("names no cause when it wrote, or when there was nothing to say", async () => {
+      const wrote = await ensureWorkComment("o/r", 966, "start", "d", null, { runGh: fakeGh(issueView([])).run });
+      expect(wrote).toEqual({ posted: true, closed: false });
+      const again = await ensureWorkComment("o/r", 966, "start", "d", null, { runGh: fakeGh(issueView([])).run });
+      expect(again).toEqual({ posted: false, reason: "already" });
+    });
+
+    // A permission grant or a `gh auth login` fixes it from outside this process, so a failure
+    // must never be memoed as settled.
+    it("tries again after the cause is fixed", async () => {
+      const refused = fakeGh(issueView([]), { commentOk: false, stderr: FORBIDDEN });
+      expect((await ensureWorkComment("o/r", 966, "start", "d", null, { runGh: refused.run })).failure).toBe("permission");
+      const allowed = fakeGh(issueView([]));
+      expect((await ensureWorkComment("o/r", 966, "start", "d", null, { runGh: allowed.run })).posted).toBe(true);
+    });
   });
 
   it("keeps a failed close from failing the comment", async () => {
@@ -297,6 +350,6 @@ describe("ensureWorkComment", () => {
 
   it("survives a garbled issue view", async () => {
     const gh = fakeGh("not json");
-    expect(await ensureWorkComment("o/r", 966, "start", "d", null, { runGh: gh.run })).toEqual({ posted: false, reason: "gh-failed" });
+    expect(await ensureWorkComment("o/r", 966, "start", "d", null, { runGh: gh.run })).toEqual({ posted: false, reason: "gh-failed", failure: "unknown" });
   });
 });
