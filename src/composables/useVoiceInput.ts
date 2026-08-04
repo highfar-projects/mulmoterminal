@@ -16,6 +16,7 @@ import { modelReadiness, voiceAction } from "./voiceAction";
 import { browserVoiceLanguage, resolveVoiceLanguage, voiceLanguage } from "./voiceLanguage";
 import { fetchVoiceInputStatus } from "./voiceModelStatus";
 import { isRecord } from "../../common/isRecord";
+import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 export interface UseVoiceInput {
   /** Platform + binaries present — gate the mic button's visibility on this. */
@@ -43,11 +44,15 @@ export interface UseVoiceInputOptions {
 function createVoiceTransport(capable: Ref<boolean>, downloading: Ref<boolean>): VoiceCaptureTransport {
   return {
     async transcribe(dataUrl, language) {
-      const res = await fetch("/api/transcribe", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ dataUrl, language }),
-      });
+      const res = await fetchWithTimeout(
+        "/api/transcribe",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ dataUrl, language }),
+        },
+        SLOW_COMMAND_TIMEOUT_MS,
+      );
       if (!res.ok) throw new Error(`transcription failed (HTTP ${res.status})`);
       const body: unknown = await res.json();
       // The one field the caller inserts into the terminal — checked, so a malformed reply is a
@@ -100,7 +105,7 @@ export function useVoiceInput(opts: UseVoiceInputOptions): UseVoiceInput {
   async function requestDownload(): Promise<void> {
     downloading.value = true;
     try {
-      const res = await fetch("/api/transcribe/model/download", { method: "POST" });
+      const res = await fetchWithTimeout("/api/transcribe/model/download", { method: "POST" });
       if (!res.ok) throw new Error(`download failed (HTTP ${res.status})`);
     } catch (err) {
       downloading.value = false;

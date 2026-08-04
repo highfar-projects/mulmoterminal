@@ -12,6 +12,7 @@ import { isRecord } from "../../common/isRecord";
 import { isIssueWorkCommentsEnabled } from "./issueWorkComments";
 import type { WorkCommentKind } from "../../common/workComment";
 import { isWorkCommentFailure, type WorkCommentFailure } from "../../common/workCommentFailure";
+import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 const POLL_MS = 30_000;
 
@@ -94,15 +95,20 @@ export function workCommentToPost(before: WorkItem, now: WorkItem): WorkCommentK
  *  a notice (#1369). */
 async function postWorkComment(cwd: string, item: WorkItem, kind: WorkCommentKind): Promise<WorkCommentFailure | null> {
   try {
-    const res = await fetch("/api/work-comment", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ cwd, issue: item.issue, pr: item.pr, kind }),
-    });
+    const res = await fetchWithTimeout(
+      "/api/work-comment",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ cwd, issue: item.issue, pr: item.pr, kind }),
+      },
+      SLOW_COMMAND_TIMEOUT_MS,
+    );
     if (!res.ok) return null;
     const data: unknown = await res.json();
     // A rejected request means this app called its own server wrongly, and a browser that cannot
     // reach the server is already visible everywhere else — neither is the user's to fix here.
+    // The deadline above is still armed here on purpose (#1393), so this read is bounded too.
     return isRecord(data) && isWorkCommentFailure(data.failure) ? data.failure : null;
   } catch {
     // Best-effort: the next transition (or the next reload) asks again, and the server dedupes.
@@ -130,7 +136,7 @@ export function useWorkItem(cwd: Ref<string | null>) {
       return;
     }
     try {
-      const res = await fetch(`/api/pr-phase?cwd=${encodeURIComponent(dir)}`);
+      const res = await fetchWithTimeout(`/api/pr-phase?cwd=${encodeURIComponent(dir)}`, undefined, SLOW_COMMAND_TIMEOUT_MS);
       if (!res.ok) return;
       const data: unknown = await res.json();
       if (my !== req) return;

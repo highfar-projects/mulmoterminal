@@ -10,6 +10,7 @@ import type { ModelPreset, ModelTrials } from "../../common/modelPresets";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 // EVERY required field, not just the two the list renders. The guard asserts the whole
 // LaunchProviderOption, and the picker goes on to read the rest of it — `sortedModels(provider.
@@ -63,10 +64,8 @@ let inFlight: Promise<void> | null = null;
 let loaded = false;
 
 async function fetchOptions(): Promise<void> {
-  const abort = new AbortController();
-  const timer = setTimeout(() => abort.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch("/api/launch-options", { signal: abort.signal });
+    const res = await fetchWithTimeout("/api/launch-options", undefined, FETCH_TIMEOUT_MS);
     if (!res.ok) throw new Error(`GET /api/launch-options → ${res.status}`);
     const body = await jsonBody(res);
     // THROWN, not defaulted to EMPTY: `jsonBody` answers `{}` for a body that is truncated or not
@@ -85,7 +84,6 @@ async function fetchOptions(): Promise<void> {
     console.warn("[launch-options] falling back to the directory default:", err);
     options.value = EMPTY;
   } finally {
-    clearTimeout(timer);
     // Cleared here rather than in a .finally() on the returned promise, so it is already
     // null by the time anything awaiting this call resumes.
     inFlight = null;

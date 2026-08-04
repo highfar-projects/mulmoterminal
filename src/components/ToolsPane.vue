@@ -5,6 +5,7 @@ import { onToolGroupsAnnounced } from "../composables/useToolGroupsAnnounce";
 import { isRecord, optionalString } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 // The tools pane mirrors MulmoClaude's right sidebar: an "Available Tools" list
 // (the GUI plugin tools, with collapsible descriptions) and a "Tool Call History"
@@ -95,7 +96,7 @@ async function loadAvailableTools(sessionId: string | null) {
   // Overtaken: a load for another session (we switched away), or a newer load for this one.
   const overtaken = () => sessionId !== props.sessionId || loadId !== latestToolsLoad;
   try {
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const body = await jsonBody(res);
     if (overtaken()) return;

@@ -4,6 +4,7 @@ import { useDropdownMenu } from "../composables/useDropdownMenu";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 // A header dropdown that lists the open project's discoverable skills (user +
 // project `.claude/skills`) and emits the slug picked, so the parent can invoke it
@@ -39,7 +40,7 @@ async function loadSkills() {
     return;
   }
   try {
-    const res = await fetch(`/api/skills?cwd=${encodeURIComponent(dir)}`);
+    const res = await fetchWithTimeout(`/api/skills?cwd=${encodeURIComponent(dir)}`);
     const data = res.ok ? await jsonBody(res) : {};
     if (reqId !== req) return;
     // A skill with no slug cannot be launched, and one with no description renders a blank row.

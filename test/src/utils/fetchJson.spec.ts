@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 
+import { DEFAULT_REQUEST_TIMEOUT_MS } from "../../../src/utils/fetchWithTimeout";
 import { fetchJson, errorMessage } from "../../../src/utils/fetchJson";
 import { isRecord } from "../../../common/isRecord";
 import { jsonBody } from "../../../src/jsonBody";
@@ -91,11 +92,33 @@ describe("fetchJson", () => {
     expect(result).toMatchObject({ ok: false, status: 0 });
   });
 
-  it("passes the request options through", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
-    vi.stubGlobal("fetch", fetchMock);
+  it("passes the request options through, plus the deadline every call now carries", async () => {
+    const seen: RequestInit[] = [];
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init) seen.push(init);
+      return { ok: true, json: async () => ({}) };
+    });
     await fetchJson("/api/x", readAny, { method: "POST" });
-    expect(fetchMock).toHaveBeenCalledWith("/api/x", { method: "POST" });
+    expect(seen[0]?.method).toBe("POST");
+    // #1393: this helper bounds every request it makes, so a signal is always along for the ride.
+    expect(seen[0]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  // The point of routing through fetchWithTimeout: a caller of this helper does not have to ask.
+  it("gives up rather than waiting forever on a server that never answers", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      "fetch",
+      (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+        }),
+    );
+    const pending = fetchJson("/api/x", readAny);
+    await vi.advanceTimersByTimeAsync(DEFAULT_REQUEST_TIMEOUT_MS);
+    const result = await pending;
+    expect(result.ok).toBe(false);
+    vi.useRealTimers();
   });
 });
 

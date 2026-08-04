@@ -11,6 +11,7 @@ import { usePubSub } from "./usePubSub";
 import { applyLiveChanges, type LiveChange } from "./liveMerge";
 import { browseNavigateToRecord } from "./useCollectionBrowse";
 import { isRecord } from "../../common/isRecord";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 // Must match server/backends/notifier.ts NOTIFIER_CHANNEL.
 const NOTIFIER_CHANNEL = "notifications";
@@ -130,7 +131,7 @@ async function fetchActive(): Promise<void> {
   const changes: LiveChange<NotifierEntry>[] = [];
   changesDuringFetch = changes;
   try {
-    const res = await fetch("/api/notifications");
+    const res = await fetchWithTimeout("/api/notifications");
     // Overtaken while we waited: leave the list to the fetch that overtook us.
     if (fetchId !== latestFetch) return;
     if (!res.ok) {
@@ -192,7 +193,7 @@ export function useNotifications() {
   async function dismiss(id: string): Promise<void> {
     remove(id);
     try {
-      const res = await fetch(`/api/notifications/${encodeURIComponent(id)}/clear`, { method: "POST" });
+      const res = await fetchWithTimeout(`/api/notifications/${encodeURIComponent(id)}/clear`, { method: "POST" });
       if (!res.ok) {
         console.error(`[notifications] clear failed: HTTP ${res.status}`);
         await fetchActive();

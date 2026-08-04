@@ -2,6 +2,7 @@ import { reactive, watch, onMounted, onUnmounted, type Ref } from "vue";
 import { usePubSub } from "./usePubSub";
 import { parseSessionActivityPayload, readCellActivity, type CellActivity } from "./sessionActivity";
 import { jsonBody } from "../jsonBody";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 // Live attention state (working / waiting / event) for a set of grid cell sessions,
 // keyed by session id. Unlike the sidebar's /api/sessions list this includes
@@ -37,7 +38,7 @@ export function useGridActivity(sessionIds: Ref<string[]>) {
     const pushed: unknown[] = [];
     pushedDuringSeed = pushed;
     try {
-      const res = await fetch(`/api/activity?ids=${encodeURIComponent(ids.join(","))}`);
+      const res = await fetchWithTimeout(`/api/activity?ids=${encodeURIComponent(ids.join(","))}`);
       // Overtaken while we waited: this answer is older than what is on screen. Returning
       // also leaves the newer seed's record alone — it is the one that will replay.
       if (seedId !== latestSeed || !res.ok) return;
