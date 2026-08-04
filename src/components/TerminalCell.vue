@@ -1101,6 +1101,11 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
              push the actions past the cell's `overflow: hidden` edge — the buttons must
              stay reachable no matter how much a dir's config crams in here. -->
           <div data-testid="cell-header-main" class="flex min-w-0 flex-auto items-center gap-2 overflow-hidden">
+            <!-- Leading the row, ahead of the status dot: this is the browser-tab position, and a
+                 project icon is read the way a favicon is — you find the tab by its picture before
+                 you read anything. Everything after it says what the cell is DOING; the icon says
+                 which project it is, and that is the first question. -->
+            <DirIcon :src="dirConfig.iconUrl" />
             <span class="cell-dot" :class="[CELL_DOT, statusClass, dotStatusClass, dotMissedClass]" :title="statusLabel" />
             <!-- The path is NOT here any more — it is the lead item on row 2 (see the
                `header-lead` template below). It had `min-w-[16ch]`, a floor of roughly a third of
@@ -1110,9 +1115,6 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
             <!-- Info (dir badge / git / diff / model / tokens) is dropped on a filmstrip
                thumbnail, leaving only dir + what it's doing + a zoom button. -->
             <template v-if="!filmstrip">
-              <!-- Ahead of the name badge: it is the fastest thing on this row to recognise, and
-                   the two together are how a project reads at thumbnail size. -->
-              <DirIcon :src="dirConfig.iconUrl" />
               <DirBadge :name="dirConfig.name" :color="dirConfig.badgeColor" :workspace="isWorkspace" />
               <!-- Unread Canvas output. Same chip vocabulary as the branch / context / token
                    chips beside it, deliberately: this is one more thing to triage at a glance,

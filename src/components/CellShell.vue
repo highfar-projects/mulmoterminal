@@ -93,6 +93,8 @@ function onHeaderClick(event: MouseEvent) {
   <div class="cell" :class="CELL_FRAME" :style="cellStyle">
     <div :class="CELL_INNER">
       <div class="cell-header" :class="[CELL_HEADER, expanded ? '' : `is-zoomable ${CELL_HEADER_ZOOMABLE}`]" :style="headerStyle" @click="onHeaderClick">
+        <!-- Leads the row, ahead of the status dot — the browser-tab position (see TerminalCell). -->
+        <DirIcon :src="dirConfig.iconUrl" />
         <span
           class="cell-dot"
           :class="[CELL_DOT, finished ? `is-idle ${CELL_DOT_IDLE}` : `is-working ${CELL_DOT_WORKING}`]"
@@ -109,7 +111,6 @@ function onHeaderClick(event: MouseEvent) {
           @focusout="hideDirTip"
           ><span class="cell-dir-path" :class="CELL_DIR_PATH">{{ dirDisplay }}</span></span
         >
-        <DirIcon :src="dirConfig.iconUrl" />
         <DirBadge :name="dirConfig.name" :color="dirConfig.badgeColor" :workspace="isWorkspace" />
         <span class="cell-cmd" :class="CELL_CMD"
           ><span class="material-symbols-outlined" aria-hidden="true">{{ icon }}</span> {{ label }}</span

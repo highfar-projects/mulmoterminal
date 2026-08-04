@@ -35,6 +35,14 @@ function serveDirConfig(dirConfig: Record<string, unknown>) {
 
 const iconOf = (w: { find: (s: string) => { exists: () => boolean; attributes: (a: string) => string | undefined } }) => w.find('[data-testid="dir-icon"]');
 
+// The icon takes the browser-tab position — FIRST in its header, ahead of the status dot. Pinned
+// because it is a placement decision, not an accident: reading the row starts with which project
+// this is, and a later chip added at the front would quietly undo that.
+const leads = (w: { element: Element }): boolean => {
+  const icon = w.element.querySelector('img[data-testid="dir-icon"]');
+  return icon !== null && icon.parentElement?.firstElementChild === icon;
+};
+
 describe("DirIcon", () => {
   it("renders the image, and nothing at all without one", () => {
     expect(
@@ -90,6 +98,7 @@ describe("every grid cell shows the directory's icon", () => {
     });
     await flushPromises();
     expect(w.findComponent(DirIcon).get("img").attributes("src")).toBe(ICON);
+    expect(leads(w)).toBe(true);
     w.unmount();
   });
 
@@ -106,6 +115,7 @@ describe("every grid cell shows the directory's icon", () => {
     });
     await flushPromises();
     expect(w.findComponent(DirIcon).get("img").attributes("src")).toBe(ICON);
+    expect(leads(w)).toBe(true);
     w.unmount();
   });
 
@@ -128,6 +138,7 @@ describe("every grid cell shows the directory's icon", () => {
     });
     await flushPromises();
     expect(w.findComponent(DirIcon).get("img").attributes("src")).toBe(ICON);
+    expect(leads(w)).toBe(true);
     w.unmount();
   });
 });
@@ -138,12 +149,10 @@ describe("every grid cell shows the directory's icon", () => {
 describe("CockpitHeader", () => {
   const base = { status: "idle" as const, agent: "claude", cwd: "/home/me/proj", home: "/home/me", headerColor: null, headerTextColor: null };
 
-  it("shows the icon beside the path, and nothing when the directory sets none", () => {
-    expect(
-      mount(CockpitHeader, { props: { ...base, iconUrl: ICON } })
-        .get('[data-testid="dir-icon"]')
-        .attributes("src"),
-    ).toBe(ICON);
+  it("leads the bar with the icon, and shows nothing when the directory sets none", () => {
+    const w = mount(CockpitHeader, { props: { ...base, iconUrl: ICON } });
+    expect(w.get('[data-testid="dir-icon"]').attributes("src")).toBe(ICON);
+    expect(leads(w)).toBe(true);
     expect(iconOf(mount(CockpitHeader, { props: base })).exists()).toBe(false);
   });
 });

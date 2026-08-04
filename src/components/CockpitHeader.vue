@@ -74,6 +74,8 @@ const barStyle = computed(() => headerStyleFor(props.headerColor, props.headerTe
     class="flex min-w-0 items-center gap-1.5 bg-[var(--cell-header-bg,transparent)] px-2.5 py-1.5 text-[var(--cell-header-fg,inherit)]"
     :style="barStyle"
   >
+    <!-- Leads the bar, ahead of the status dot — the browser-tab position (see TerminalCell). -->
+    <DirIcon :src="iconUrl" />
     <span data-testid="cockpit-dot" class="h-2 w-2 flex-none rounded-full" :class="DOT_CLASS[status]" aria-hidden="true" />
     <span data-testid="cockpit-badge" class="flex-none rounded-full px-1.5 py-px text-[10px] font-bold" :class="BADGE_CLASS[status]">{{ badgeWord }}</span>
     <span
@@ -89,9 +91,6 @@ const barStyle = computed(() => headerStyleFor(props.headerColor, props.headerTe
       >{{ phaseInfo.label }}</span
     >
     <span v-if="badge" class="flex-none rounded-[4px] border border-border px-1 text-[10px] text-[#9ab]">{{ badge.full }}</span>
-    <!-- Directly before the path, which is the other thing on this bar that says WHICH directory
-         this is. The status chips lead, because a roster is scanned for what needs attention. -->
-    <DirIcon :src="iconUrl" />
     <span
       data-testid="cockpit-dir"
       class="min-w-0 flex-auto text-[11px] text-[var(--cell-header-fg,var(--text-dim))]"
