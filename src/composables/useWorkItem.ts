@@ -11,6 +11,7 @@ import { EMPTY_WORK_ITEM, isIssueNumber, isPrPhase, type WorkItem } from "../../
 import { isRecord } from "../../common/isRecord";
 import { isIssueWorkCommentsEnabled } from "./issueWorkComments";
 import type { WorkCommentKind } from "../../common/workComment";
+import { isWorkCommentFailure, type WorkCommentFailure } from "../../common/workCommentFailure";
 
 const POLL_MS = 30_000;
 
@@ -88,20 +89,32 @@ export function workCommentToPost(before: WorkItem, now: WorkItem): WorkCommentK
   return now.pr !== null && before.pr !== now.pr ? "pr" : null;
 }
 
-async function postWorkComment(cwd: string, item: WorkItem, kind: WorkCommentKind): Promise<void> {
+/** Why the issue could not be updated, or null — including when it WAS updated, when the server
+ *  had nothing to add, and when the setting is off. Only a cause the server actually named makes
+ *  a notice (#1369). */
+async function postWorkComment(cwd: string, item: WorkItem, kind: WorkCommentKind): Promise<WorkCommentFailure | null> {
   try {
-    await fetch("/api/work-comment", {
+    const res = await fetch("/api/work-comment", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ cwd, issue: item.issue, pr: item.pr, kind }),
     });
+    if (!res.ok) return null;
+    const data: unknown = await res.json();
+    // A rejected request means this app called its own server wrongly, and a browser that cannot
+    // reach the server is already visible everywhere else — neither is the user's to fix here.
+    return isRecord(data) && isWorkCommentFailure(data.failure) ? data.failure : null;
   } catch {
     // Best-effort: the next transition (or the next reload) asks again, and the server dedupes.
+    return null;
   }
 }
 
 export function useWorkItem(cwd: Ref<string | null>) {
   const item = ref<WorkItem>({ ...EMPTY_WORK_ITEM });
+  // Why the last attempt to update the issue failed. Held rather than logged: the user turned the
+  // setting on and would otherwise see the same nothing as leaving it off (#1369).
+  const commentFailure = ref<WorkCommentFailure | null>(null);
   let req = 0;
 
   async function refresh(): Promise<void> {
@@ -121,7 +134,9 @@ export function useWorkItem(cwd: Ref<string | null>) {
       const next = parseWorkItem(data);
       const kind = isIssueWorkCommentsEnabled() ? workCommentToPost(item.value, next) : null;
       item.value = next;
-      if (kind) void postWorkComment(dir, next, kind);
+      // Assigned rather than only set on failure, so a milestone that lands after the setup was
+      // fixed takes the notice back down without waiting for a reload.
+      if (kind) void postWorkComment(dir, next, kind).then((failure) => (commentFailure.value = failure));
     } catch {
       // leave the last value; the next tick retries
     }
@@ -130,5 +145,5 @@ export function useWorkItem(cwd: Ref<string | null>) {
   usePollWhileVisible(() => void refresh(), POLL_MS);
   watch(cwd, () => void refresh());
 
-  return { item, refresh };
+  return { item, refresh, commentFailure };
 }

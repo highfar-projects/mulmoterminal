@@ -25,8 +25,10 @@ import {
 } from "./glab.js";
 import { glabIssueIsOpen, glabNotes } from "./glab-items.js";
 import { forgeFromRepoEntry, projectPath, GITHUB_HOST } from "./forge-host.js";
+import { classifyForgeFailure } from "./forge-failure.js";
 import { createKeySerializer } from "../infra/serialize-per-key.js";
 import { isRecord } from "../../common/isRecord.js";
+import type { WorkCommentFailure } from "../../common/workCommentFailure.js";
 import {
   alreadyCommented,
   formatWorkTime,
@@ -50,6 +52,9 @@ export interface WorkCommentResult {
   // Why nothing was written, for the caller's log and the route's response. Never an error the
   // UI must handle: not commenting is a normal outcome.
   reason?: "already" | "gh-failed";
+  /** Which kind of `gh-failed`, so the cell can say whether to log in, or that it may not write
+   *  here at all (#1369). Absent on every other outcome. */
+  failure?: WorkCommentFailure;
   closed?: boolean;
 }
 
@@ -77,8 +82,11 @@ const memoKey = (repo: string, issue: number, kind: WorkCommentKind, dir: string
 const commentKey = (repo: string, issue: number, dir: string) => `${repo}#${issue}:${dir}`;
 
 // Test-only: the memo outlives a single case otherwise, and "already posted" would leak across.
+// The warn-once set goes with it, so a case that asserts on the log is not silenced by an earlier
+// one having already said the same thing.
 export function clearWorkCommentMemo(): void {
   posted.clear();
+  warned.clear();
 }
 
 /** A comment as this module needs it: what it says, how to address an edit to it, and when it was
@@ -95,16 +103,32 @@ interface IssueView {
   open: boolean;
 }
 
+/** The issue as read, or why it could not be — a read that fails on 401 has the same cause, and
+ *  the same fix, as a write that does. */
+type IssueViewResult = { ok: true; view: IssueView } | { ok: false; failure: WorkCommentFailure };
+
 // Reading and writing one forge's issue. Grouped rather than branched at each call site: they
 // always belong to the same host, and a mix would read one issue and write another.
 interface IssueOps {
-  view: () => Promise<IssueView | null>;
-  comment: (body: string) => Promise<boolean>;
-  edit: (ref: string, body: string) => Promise<boolean>;
+  view: () => Promise<IssueViewResult>;
+  /** Null when it worked, the reason it did not otherwise (#1369). */
+  comment: (body: string) => Promise<WorkCommentFailure | null>;
+  edit: (ref: string, body: string) => Promise<WorkCommentFailure | null>;
   close: () => Promise<boolean>;
 }
 
+// A write, with its stderr turned into a cause rather than dropped. `.catch` still guards a
+// rejection spawnCollect does not produce, and that path has no stderr to read — `unknown`.
+const ranWrite = async (call: Promise<{ ok: boolean; stderr: string }>): Promise<WorkCommentFailure | null> => {
+  const res = await call.catch(() => null);
+  return res?.ok === true ? null : classifyForgeFailure(res?.stderr ?? "");
+};
+
+// Closing is best-effort and reported on its own, so its failure needs no cause.
 const ranOk = async (call: Promise<{ ok: boolean }>): Promise<boolean> => (await call.catch(() => null))?.ok === true;
+
+// A body that came back unreadable is not a forge refusal — nothing here can say more than that.
+const UNREADABLE: IssueViewResult = { ok: false, failure: "unknown" };
 
 // The numeric id the REST API edits by. `--json comments` hands back a GraphQL node id, which that
 // endpoint does not accept — the number is only in the comment's own URL.
@@ -136,22 +160,22 @@ function githubApiTarget(repo: string): { host: string; project: string } {
 function githubIssueOps(run: typeof runGh, repo: string, issue: number): IssueOps {
   return {
     view: async () => {
+      const res = await run(["issue", "view", String(issue), "--repo", repo, "--json", "comments,state"]).catch(() => null);
+      if (!res || !res.ok) return { ok: false, failure: classifyForgeFailure(res?.stderr ?? "") };
       try {
-        const res = await run(["issue", "view", String(issue), "--repo", repo, "--json", "comments,state"]);
-        if (!res.ok) return null;
         const parsed: unknown = JSON.parse(res.stdout);
-        if (!isRecord(parsed)) return null;
-        return { comments: githubComments(parsed), open: parsed.state === "OPEN" };
+        if (!isRecord(parsed)) return UNREADABLE;
+        return { ok: true, view: { comments: githubComments(parsed), open: parsed.state === "OPEN" } };
       } catch {
-        return null;
+        return UNREADABLE;
       }
     },
-    comment: (body) => ranOk(run(["issue", "comment", String(issue), "--repo", repo, "--body", body])),
+    comment: (body) => ranWrite(run(["issue", "comment", String(issue), "--repo", repo, "--body", body])),
     edit: (ref, body) => {
       const { host, project } = githubApiTarget(repo);
       // `-f`, not `-F`: the typed flag reads `@…` as a filename and converts bare true/false/null,
       // neither of which is this app's decision to make about a comment body.
-      return ranOk(run(["api", "--hostname", host, "--method", "PATCH", `repos/${project}/issues/comments/${ref}`, "-f", `body=${body}`]));
+      return ranWrite(run(["api", "--hostname", host, "--method", "PATCH", `repos/${project}/issues/comments/${ref}`, "-f", `body=${body}`]));
     },
     close: () => ranOk(run(["issue", "close", String(issue), "--repo", repo])),
   };
@@ -163,17 +187,25 @@ function githubIssueOps(run: typeof runGh, repo: string, issue: number): IssueOp
 function gitlabIssueOps(target: GlabTarget, issue: number): IssueOps {
   return {
     view: async () => {
+      const [notes, view] = await Promise.all([
+        runGlab(glabIssueNotesArgs(target, issue)).catch(() => null),
+        runGlab(glabIssueViewArgs(target, issue)).catch(() => null),
+      ]);
+      // Whichever half refused carries the cause; both refuse the same way when it is the login,
+      // so the notes call answers for the pair when they both did.
+      if (!notes?.ok || !view?.ok) {
+        const refused = notes?.ok ? view : notes;
+        return { ok: false, failure: classifyForgeFailure(refused?.stderr ?? "") };
+      }
       try {
-        const [notes, view] = await Promise.all([runGlab(glabIssueNotesArgs(target, issue)), runGlab(glabIssueViewArgs(target, issue))]);
-        if (!notes.ok || !view.ok) return null;
         const comments = glabNotes(JSON.parse(notes.stdout)).map((note) => ({ body: note.body, ref: note.id, createdAt: note.createdAt }));
-        return { comments, open: glabIssueIsOpen(JSON.parse(view.stdout)) };
+        return { ok: true, view: { comments, open: glabIssueIsOpen(JSON.parse(view.stdout)) } };
       } catch {
-        return null;
+        return UNREADABLE;
       }
     },
-    comment: (body) => ranOk(runGlab(glabIssueNoteArgs(target, issue, body))),
-    edit: (ref, body) => ranOk(runGlab(glabIssueNoteEditArgs(target, issue, ref, body))),
+    comment: (body) => ranWrite(runGlab(glabIssueNoteArgs(target, issue, body))),
+    edit: (ref, body) => ranWrite(runGlab(glabIssueNoteEditArgs(target, issue, ref, body))),
     close: () => ranOk(runGlab(glabIssueCloseArgs(target, issue))),
   };
 }
@@ -215,6 +247,30 @@ export function ensureWorkComment(
   });
 }
 
+// What a server operator is told, once. The cell says the same thing to the user who turned the
+// setting on; this is for the person reading the log of a shared host, who never sees that chip.
+const WARNING: Record<WorkCommentFailure, string> = {
+  "cli-missing": "the forge CLI is not on PATH",
+  auth: "not logged in — run `gh auth login` (`glab auth login` for GitLab)",
+  permission: "the logged-in account may not write here",
+  unknown: "the forge CLI refused the call",
+};
+
+// (repo, cause). The caller is a poll from every open tab, so an unkeyed warn would print this
+// line every 30 seconds for as long as the setting is on.
+const warned = new Set<string>();
+
+// Never memoed as done: a login or a permission grant can fix it, and the next milestone should
+// find that out rather than stay silent for the life of the process.
+function writeFailed(repo: string, failure: WorkCommentFailure): WorkCommentResult {
+  const key = `${repo}:${failure}`;
+  if (!warned.has(key)) {
+    warned.add(key);
+    console.warn(`[work-comment] ${repo}: ${WARNING[failure]} — the issue is not being updated`);
+  }
+  return { posted: false, reason: "gh-failed", failure };
+}
+
 // What this clone's comment already records. A comment written before milestones existed carries
 // the marker and the headline but no lines, and its own creation time is the honest answer for
 // when the work started — dropping it would rewrite history as if the work began at the next
@@ -224,6 +280,15 @@ function knownEvents(anchor: IssueComment): WorkEvent[] {
   if (parsed.length > 0) return parsed;
   const at = anchor.createdAt === null ? null : new Date(anchor.createdAt);
   return at && !Number.isNaN(at.getTime()) ? [{ kind: "start", at: formatWorkTime(at), pr: null }] : [];
+}
+
+// Editing this clone's comment, or posting the first one. An anchor with no ref can be neither —
+// reported as a failure rather than remembered, so a later milestone tries again instead of the
+// issue freezing on its first line. The forge refused nothing there, so `unknown` is all it can
+// honestly be called.
+function writeBody(ops: IssueOps, anchor: IssueComment | null, body: string): Promise<WorkCommentFailure | null> {
+  if (!anchor) return ops.comment(body);
+  return anchor.ref === null ? Promise.resolve("unknown") : ops.edit(anchor.ref, body);
 }
 
 async function writeWorkComment(
@@ -238,8 +303,9 @@ async function writeWorkComment(
   const key = memoKey(repo, issue, kind, dir, pr);
 
   const ops = issueOpsFor(run, repo, issue);
-  const view = await ops.view();
-  if (!view) return { posted: false, reason: "gh-failed" };
+  const viewed = await ops.view();
+  if (!viewed.ok) return writeFailed(repo, viewed.failure);
+  const view = viewed.view;
 
   const anchor = view.comments.find((c) => c.body.includes(workAnchorMarker(dir))) ?? null;
   const known = anchor ? knownEvents(anchor) : [];
@@ -255,10 +321,8 @@ async function writeWorkComment(
   }
 
   const body = renderWorkComment(dir, next);
-  // An anchor with no ref cannot be edited — reported as a failure rather than remembered, so a
-  // later milestone tries again instead of the issue silently freezing on its first line.
-  const wrote = anchor ? anchor.ref !== null && (await ops.edit(anchor.ref, body)) : await ops.comment(body);
-  if (!wrote) return { posted: false, reason: "gh-failed" };
+  const failure = await writeBody(ops, anchor, body);
+  if (failure) return writeFailed(repo, failure);
   posted.add(key);
 
   // Closing is best-effort and reported separately: the comment landing is the part that matters,
