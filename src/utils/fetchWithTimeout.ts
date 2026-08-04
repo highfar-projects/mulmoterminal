@@ -31,10 +31,16 @@ export const SLOW_COMMAND_TIMEOUT_MS = 60_000;
 export async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit, timeout_ms: number = DEFAULT_REQUEST_TIMEOUT_MS): Promise<Response> {
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), timeout_ms);
-  // A `Request` carries its own signal, and passing `init` at all replaces it — so a caller that
-  // built the request up front, rather than passing an init here, would lose its cancellation
-  // (CodeRabbit, #1398). Read from whichever the caller actually used.
-  const caller = init?.signal ?? (input instanceof Request ? input.signal : null);
+  // A `Request` carries its own signal, so a caller that built the request up front rather than
+  // passing an init here would otherwise lose its cancellation (CodeRabbit, #1398).
+  //
+  // Keyed on whether `signal` is PRESENT, not on whether it is set: `{ signal: null }` is how
+  // `fetch` detaches a Request from its controller, and `??` would read that as "absent" and
+  // re-attach the very thing the caller asked to be rid of (Codex, #1398). Verified against the
+  // runtime — with `{ signal: null }` an abort on the original controller does not reach the new
+  // request, and with the key absent it does.
+  const inherited = input instanceof Request ? input.signal : null;
+  const caller = init && "signal" in init ? init.signal : inherited;
   const signal = caller ? AbortSignal.any([caller, abort.signal]) : abort.signal;
   try {
     return await fetch(input, { ...init, signal });

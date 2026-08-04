@@ -96,6 +96,32 @@ describe("fetchWithTimeout", () => {
     await settled;
   });
 
+  // `{ signal: null }` is how fetch DETACHES a request from its controller. Reading the caller's
+  // signal with `??` treated that as "absent" and re-attached it (Codex, #1398) — the opposite of
+  // what was asked for. Checked against the runtime: an abort on the original controller reaches
+  // a `new Request(req, {})` and does not reach a `new Request(req, { signal: null })`.
+  it("lets a caller detach a Request's signal with an explicit null", async () => {
+    vi.useFakeTimers();
+    hangingFetch();
+    const caller = new AbortController();
+    const request = new Request("http://localhost/api/thing", { signal: caller.signal });
+    let settled = false;
+    const pending = fetchWithTimeout(request, { signal: null }).then(
+      () => (settled = true),
+      () => (settled = true),
+    );
+    caller.abort();
+    // Flushed properly rather than one microtask: the rejection would travel through
+    // AbortSignal.any and the mock's listener, and checking too early passes either way — which
+    // it did, and the mutation went undetected until this line was fixed.
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(false); // detached, so the caller's abort is not ours to honour
+
+    await vi.advanceTimersByTimeAsync(DEFAULT_REQUEST_TIMEOUT_MS); // the deadline still applies
+    await pending;
+    expect(settled).toBe(true);
+  });
+
   it("passes the caller's method and body through untouched", async () => {
     const seen: RequestInit[] = [];
     vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
