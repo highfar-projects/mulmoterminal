@@ -108,8 +108,13 @@ function extraRows(extras: Record<string, unknown>): DirConfigRow[] {
 export function dirConfigRows(config: unknown, extras: unknown = {}): DirConfigRow[] {
   if (!isRecord(config)) return isRecord(extras) ? extraRows(extras) : [];
   const name = asString(config.name);
+  // The URL, not just "configured": an icon that resolved to a file reads as this app's own
+  // route, and one that didn't resolve at all is absent — which is the difference between a
+  // path that is wrong and a picture that failed to load.
+  const iconUrl = asString(config.iconUrl);
   return [
     ...(name ? [{ key: "name", label: "Name", value: name, color: null }] : []),
+    ...(iconUrl ? [{ key: "icon", label: "Icon", value: iconUrl, color: null }] : []),
     ...colorRows(config),
     ...terminalRows(config),
     ...(isRecord(extras) ? extraRows(extras) : []),

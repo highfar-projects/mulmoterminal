@@ -87,6 +87,32 @@ async function prPhaseHandler(req: Request, res: Response): Promise<void> {
 
 const positiveInt = (v: unknown): number | null => (isIssueNumber(v) ? v : null);
 
+// Stream a directory's icon image (#1421). Like /api/dir-sound, the path never comes from the
+// request — it is read from that dir's .mulmoterminal.json and confined to the dir — so there is
+// no traversal surface. 404 when the directory sets no icon, or sets a remote URL, which the
+// browser loads itself and never asks us for.
+function dirIconHandler(req: Request, res: Response): void {
+  const cwd = workspaceForRoute(req.query.cwd, res);
+  if (cwd === null) return;
+  const icon = loadDirConfig(cwd).icon;
+  if (!icon || icon.source !== "file") {
+    res.status(404).end();
+    return;
+  }
+  // The type comes from OUR extension map rather than express's sniffing, and `nosniff` holds the
+  // browser to it. `sandbox` is what makes SVG safe to allow at all: an <img> never runs its
+  // scripts, but this URL can also be opened directly, and a unique origin means a logo someone
+  // pasted into a repo cannot script the app it is displayed in.
+  res.setHeader("Content-Type", icon.mime);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Content-Security-Policy", "sandbox");
+  // dotfiles:"allow" for the same reason the sound route allows them — a hidden
+  // <cwd>/.mulmoterminal/ is a conventional place to keep this.
+  res.sendFile(icon.path, { dotfiles: "allow" }, (err) => {
+    if (err && !res.headersSent) res.status(404).end();
+  });
+}
+
 export function mountDirRoutes(app: Express): void {
   // GRID-ONLY (dev_tool): the `script.json` entries a cell's launcher offers for its
   // chosen directory (?cwd=<dir>, the default workspace when none is named). The browser shows
@@ -194,4 +220,6 @@ export function mountDirRoutes(app: Express): void {
       if (err && !res.headersSent) res.status(404).end();
     });
   });
+
+  app.get("/api/dir-icon", dirIconHandler);
 }

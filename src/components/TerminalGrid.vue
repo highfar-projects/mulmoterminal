@@ -72,6 +72,7 @@ export interface CockpitRow {
   workPhase: WorkPhase | null; // planning vs editing while working; null when unknown / not working
   headerColor: string | null; // the directory's configured header background, tinting the row
   headerTextColor: string | null; // and its text colour, so the row stays legible on that tint
+  iconUrl: string | null; // the directory's `icon` image (#1421), or null when it sets none
   parked: boolean; // set aside by the user (#992) — the row sinks, unless it is blocked
 }
 const props = defineProps<{
@@ -1016,6 +1017,7 @@ watch(
           :home="home"
           :header-color="row.headerColor"
           :header-text-color="row.headerTextColor"
+          :icon-url="row.iconUrl"
           :work-phase="row.workPhase"
           :phase="row.phase"
         >

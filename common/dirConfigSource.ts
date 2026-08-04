@@ -10,6 +10,7 @@
 // together so a field added to the loader can't quietly go missing here.
 export const DIR_CONFIG_KEYS = [
   "name",
+  "icon",
   "badgeColor",
   "headerColor",
   "headerTextColor",

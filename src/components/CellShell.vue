@@ -12,6 +12,7 @@
 // root would drop both — the same failure mode that made scoped CSS silently miss (#787).
 import { computed, toRef } from "vue";
 import DirBadge from "./DirBadge.vue";
+import DirIcon from "./DirIcon.vue";
 import CellChromeButtons from "./CellChromeButtons.vue";
 import { cellChromeBinding, type CellChromeSource } from "./cellChromeBinding";
 import { useCellChrome } from "../composables/useCellChrome";
@@ -108,6 +109,7 @@ function onHeaderClick(event: MouseEvent) {
           @focusout="hideDirTip"
           ><span class="cell-dir-path" :class="CELL_DIR_PATH">{{ dirDisplay }}</span></span
         >
+        <DirIcon :src="dirConfig.iconUrl" />
         <DirBadge :name="dirConfig.name" :color="dirConfig.badgeColor" :workspace="isWorkspace" />
         <span class="cell-cmd" :class="CELL_CMD"
           ><span class="material-symbols-outlined" aria-hidden="true">{{ icon }}</span> {{ label }}</span

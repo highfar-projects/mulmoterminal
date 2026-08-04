@@ -10,6 +10,7 @@ import { dismissWorkCommentFailure, visibleWorkCommentFailure } from "../composa
 import { formatCwd, worktreeLabel } from "./cwdDisplay";
 import { isSameDirPath } from "../../common/dirPathKey";
 import DirBadge from "./DirBadge.vue";
+import DirIcon from "./DirIcon.vue";
 import { isCellContext, isCellUsage, type CellContext, type CellUsage } from "./cellPayload";
 import { asTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { customAgentIdOf, type AgentPick, type CustomAgent } from "../../common/customAgents";
@@ -1071,6 +1072,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
           :home="home"
           :header-color="dirConfig.headerColor"
           :header-text-color="dirConfig.headerTextColor"
+          :icon-url="dirConfig.iconUrl"
           @click="onHeaderClick"
         >
           <span class="cell-actions" :class="CELL_ACTIONS">
@@ -1108,6 +1110,9 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
             <!-- Info (dir badge / git / diff / model / tokens) is dropped on a filmstrip
                thumbnail, leaving only dir + what it's doing + a zoom button. -->
             <template v-if="!filmstrip">
+              <!-- Ahead of the name badge: it is the fastest thing on this row to recognise, and
+                   the two together are how a project reads at thumbnail size. -->
+              <DirIcon :src="dirConfig.iconUrl" />
               <DirBadge :name="dirConfig.name" :color="dirConfig.badgeColor" :workspace="isWorkspace" />
               <!-- Unread Canvas output. Same chip vocabulary as the branch / context / token
                    chips beside it, deliberately: this is one more thing to triage at a glance,

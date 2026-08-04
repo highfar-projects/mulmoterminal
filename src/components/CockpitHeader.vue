@@ -5,6 +5,7 @@
 // wording. Trailing controls — the roster's ⋮ reorder menu, or a thumbnail's expand/close —
 // go in the default slot.
 import { computed } from "vue";
+import DirIcon from "./DirIcon.vue";
 import { formatCwd } from "./cwdDisplay";
 import { CELL_DIR_PATH, DIR_TRUNCATE_FRONT } from "./cellChromeClasses";
 import { headerStyleFor } from "./cellHeaderStyle";
@@ -22,11 +23,13 @@ const props = withDefaults(
     home: string | null;
     headerColor: string | null;
     headerTextColor: string | null;
+    // The directory's `icon` image (#1421), already resolved to something an <img> can load.
+    iconUrl?: string | null;
     workPhase?: WorkPhase | null;
     phase?: PrPhase;
     dirLength?: number;
   }>(),
-  { workPhase: null, phase: "none", dirLength: 44 },
+  { iconUrl: null, workPhase: null, phase: "none", dirLength: 44 },
 );
 
 const STATUS_WORD: Record<AttentionStatus, string> = { working: "running", blocked: "waiting", done: "done", idle: "idle" };
@@ -86,6 +89,9 @@ const barStyle = computed(() => headerStyleFor(props.headerColor, props.headerTe
       >{{ phaseInfo.label }}</span
     >
     <span v-if="badge" class="flex-none rounded-[4px] border border-border px-1 text-[10px] text-[#9ab]">{{ badge.full }}</span>
+    <!-- Directly before the path, which is the other thing on this bar that says WHICH directory
+         this is. The status chips lead, because a roster is scanned for what needs attention. -->
+    <DirIcon :src="iconUrl" />
     <span
       data-testid="cockpit-dir"
       class="min-w-0 flex-auto text-[11px] text-[var(--cell-header-fg,var(--text-dim))]"
