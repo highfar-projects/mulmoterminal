@@ -34,9 +34,9 @@ ping to your phone when a task finishes. One `npx` command, no Electron, no conf
 npx mulmoterminal@latest        # starts on http://localhost:34567 and opens your browser
 ```
 
-Built by **[receptron](https://github.com/receptron)**, with
-**[Satoshi Nakajima](https://x.com/snakajima)** — software architect for **Windows 95** at
-Microsoft, still building from Seattle. [More ↓](#who-builds-this)
+Built by **[receptron](https://github.com/receptron)** — **[Satoshi Nakajima](https://x.com/snakajima)**,
+software architect for **Windows 95** at Microsoft, and **[Isamu Arimoto](https://github.com/isamu)**;
+the same two behind **[GraphAI](https://github.com/receptron/graphai)**. [More ↓](#who-builds-this)
 
 > **Something looks wrong?** Type `/mulmoterminal-bug-report` in any MulmoTerminal session. The
 > bundled skill hears the symptom out, checks your **real** config, schema and version to see
@@ -1816,10 +1816,13 @@ and `fetch` are mocked so the tests run without a server.
 
 ## Who builds this
 
-MulmoTerminal is built by **[receptron](https://github.com/receptron)**, with
-**[Satoshi Nakajima](https://x.com/snakajima)** — software architect for **Windows 95**,
-**Windows 98** and **Internet Explorer 3.0 / 4.0** at Microsoft, later founder of UIEvolution /
-Xevo, and still building from Seattle.
+MulmoTerminal is built by **[receptron](https://github.com/receptron)** —
+**[Satoshi Nakajima](https://x.com/snakajima)** and **[Isamu Arimoto](https://github.com/isamu)**.
+
+Satoshi was the software architect for **Windows 95**, **Windows 98** and **Internet Explorer
+3.0 / 4.0** at Microsoft, later founded UIEvolution / Xevo, and still builds from Seattle. The two
+of them also make **[GraphAI](https://github.com/receptron/graphai)**, a dataflow engine for
+agentic applications, and **[MulmoCast](https://github.com/receptron/mulmocast-cli)**.
 
 It exists because we run several coding agents every day and kept losing track of which one was
 waiting on us. Everything here was built for that, then kept because it worked. MIT licensed.
