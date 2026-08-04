@@ -58,9 +58,9 @@ Empty cells in the grid show a **launcher form**. This is where you choose **wha
 | Part | Role |
 |---|---|
 | **Claude / Codex / Antigravity / Shell** toggle | Choose what runs in this cell — an **agent**, or **Shell**: your OS default shell (`$SHELL`), with nothing to install and nothing to configure |
-| **WORKING DIRECTORY** | Enter the working directory (the play button launches it). Frequently used directories are offered as clickable *cwd preset* **chips** that fill the field (the chip's play button launches right away) |
+| **WORKING DIRECTORY** | Enter the working directory (the play button launches it). Frequently used directories are offered as clickable *cwd preset* **chips** that fill the field (the chip's play button launches right away). A **WORKSPACE** chip always leads that row (→ [which directory to launch in](#launch-dir)) |
 | **Model picker** (when Claude is selected) | Pick the backend / model for this session only (→ [providers](providers.html)) |
-| **Canvas / Workspace data / External accounts** toggles (with an agent selected) | Register a GUI tool group (`render` / `data` / `media` / `external`) as an MCP server **for the directory, not for this session** (→ [which directory to launch in](#launch-dir)) |
+| **Canvas / Workspace data / External accounts** toggles (with an agent selected) | Register a GUI tool group (`render` / `data` / `media` / `external`) as an MCP server **for the directory, not for this session**. **They are absent while the workspace is selected** — everything is available there without registering anything |
 | **OR ISOLATE IN A WORKTREE** | In a git repo, enter a task name and hit **New worktree** to create an isolated worktree and launch there. Existing worktrees are listed below it |
 | **OR RESUME HERE** | Sessions that already exist in this directory — click one to continue it |
 | **OR LAUNCH** | Start a configured **launch command** (`codex`, `htop`, anything) as a persistent terminal |
@@ -101,13 +101,16 @@ It is settled in this order: `--cwd`, then the `CLAUDE_CWD` environment variable
 When you lose track of which one it is, the `Workspace: …` line printed at startup is the answer.
 Collections, Wiki and Accounting read and write there whichever cell you are in (only the Files pane beside an enlarged cell follows that cell's directory).
 
-| The cell's working directory | Claude | Codex / Antigravity |
+| The cell's working directory | Claude / Codex | Antigravity |
 |---|---|---|
-| **The workspace itself** | Carries the **whole** GUI MCP. Your [MCP servers](config.html#settings-modal) (`userMcpServers`) are merged into it too — and in exchange **that directory's own MCP config is not read** | No such rule. It gets **only the tool groups registered for that directory** |
-| **A project directory** | **No whole GUI MCP.** The directory's own MCP config (`.mcp.json`, `claude mcp add -s local`) loads normally, so register a tool group with the MCP toggles when you want GUI tools | Same |
+| **The workspace itself** | **Every GUI tool, with nothing to register.** Your [MCP servers](config.html#settings-modal) (`userMcpServers`) are merged in too | No such rule. It gets **only the tool groups registered for that directory** |
+| **A project directory** | **Only the tool groups registered for that directory** — register one with the MCP toggles when you want GUI tools | Same |
 
-**To keep doing what you did in the single view in 3.x, launch Claude in the workspace.**
-That is the directory the single view ran in, so a Claude cell started there carries the same thing — drawing into the Canvas, working with collections, with no toggle to turn on.
+In either directory, **your own MCP servers** (`.mcp.json`, `claude mcp add`, your claude.ai connectors) load normally. Before 4.4.0 a workspace cell was the one place that could not see them (→ [4.4.0 setup guide](v4.4.0.html)).
+
+**To keep doing what you did in the single view in 3.x, launch in the workspace.**
+That is the directory the single view ran in, so a cell started there carries the same thing — drawing into the Canvas, working with collections, with no toggle to turn on.
+**The agent does not matter** — Claude or Codex, from a cell or from a launcher chip, all reach the same tools (→ [4.3.0 setup guide](v4.3.0.html)).
 
 {: .note }
 > **If you also run MulmoClaude, make the workspace the directory MulmoClaude uses** (`~/mulmoclaude` by default).
@@ -116,11 +119,19 @@ That is the directory the single view ran in, so a Claude cell started there car
 > The preset skills and help docs are seeded only when the default working directory is that workspace.
 > → [Environment variables](config.html#env) (`CLAUDE_CWD` / `MULMOCLAUDE_WORKSPACE_PATH`)
 
-**Codex and Antigravity have no such rule.**
-Even in the workspace, their GUI tools are whatever that directory has registered.
-When you want one of them drawing into the Canvas or touching collections, turn on the MCP toggles you need: **Canvas** (`render` / `media`) is the panel beside an enlarged cell, **Workspace data** (`data`) is collections and the books, and **External accounts** (`external`) is Google, X and the like.
+**The workspace is one chip away.**
+A **WORKSPACE** chip always sits at the head of the launcher's chip row, apart from the recent directories and named for its role rather than its folder, with an icon of its own.
+Its play button launches there; the chip itself only fills WORKING DIRECTORY.
+While the workspace is selected the MCP toggles are gone, replaced by `GUI TOOLS — All of them, automatically`, because there is nothing left to register.
+
+![The launcher's chip row — the workspace leads it](../images/v4.3.0-workspace-chip.png)
+
+**Antigravity has no such rule.**
+Even in the workspace, its GUI tools are whatever that directory has registered (through `.agents/mcp_config.json` → [2.8.0 setup guide](v2.8.0.html)).
+
+**In a project directory, register what you need with the MCP toggles.**
+**Canvas** (`render` / `media`) is the panel beside an enlarged cell, **Workspace data** (`data`) is collections and the books, and **External accounts** (`external`) is Google, X and the like.
 A toggle registers **the directory, not the session**, so it takes effect on the next session started there — it never reaches a session already running.
-Antigravity reads them from `.agents/mcp_config.json` (→ [2.8.0 setup guide](v2.8.0.html)).
 
 ## Reading a cell — "what each agent is doing and where"
 

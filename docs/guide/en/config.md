@@ -90,7 +90,7 @@ setups see sixteen.
 | **Pull request repos** | The repos aggregated by the cross-repo PR/Issue view (`owner/repo`) |
 | **Launch commands** | Commands you can launch besides the agents in a grid cell (`{ label, command }`). A plain shell needs no entry — the launcher's **Shell** toggle opens `$SHELL` unconfigured |
 | **Phone quick commands** | Phrases offered as chips on the **phone's** terminal view. Tapping one fills the input box; it is sent when you press send (`quickCommands`) |
-| **MCP servers** | Your own HTTP MCP servers (`userMcpServers`), merged into the sessions that carry the full GUI MCP — a cell whose working directory is the **workspace**, and any session the server starts on its own (the phone, a scheduled task). A cell in a project directory loads its own MCP config instead (→ [which directory to launch in](basics.html#launch-dir)) |
+| **MCP servers** | Your own HTTP MCP servers (`userMcpServers`), merged into the sessions that have every GUI tool — a cell whose working directory is the **workspace**, and any session the server starts on its own (the phone, a scheduled task). A cell in a project directory does not get this merge (the MCP config **you** wrote — `.mcp.json` and the rest — is read in either directory → [which directory to launch in](basics.html#launch-dir)) |
 | **Cost (estimated)** | Estimated cost readouts for Session / Today / Month |
 | **Keyboard shortcuts** | What is bound to what, read-only. **Everything starts as Not set** — "Set up shortcuts…" starts the `mulmoterminal-keys` skill to bind them in `keymap` (→ [Keyboard shortcuts](#keymap)) |
 | **Help & user guide** | Links into this guide |
@@ -1341,7 +1341,7 @@ there to look at.
 
 | Variable | Default | Role |
 |---|---|---|
-| `CLAUDE_CWD` / `--cwd` | The directory you run `npx mulmoterminal@latest` in (only `~/mulmoclaude` when the server is started directly) | The default working directory (the PTY's cwd), settled in the order `--cwd`, the `CLAUDE_CWD` environment variable, then the directory you ran the launcher in. **Only a Claude cell launched in this same directory carries the whole GUI MCP** (→ [which directory to launch in](basics.html#launch-dir)) |
+| `CLAUDE_CWD` / `--cwd` | The directory you run `npx mulmoterminal@latest` in (only `~/mulmoclaude` when the server is started directly) | The default working directory (the PTY's cwd), settled in the order `--cwd`, the `CLAUDE_CWD` environment variable, then the directory you ran the launcher in. **A session launched in this same directory has every GUI tool** (Antigravity aside → [which directory to launch in](basics.html#launch-dir)) |
 | `PORT` | `34567` | The server port |
 | `MULMOTERMINAL_HOST` | `127.0.0.1` | The interface the server binds to (→ [below](#bind-host)) |
 | `MULMOTERMINAL_ALLOWED_ORIGINS` | *(none)* | Extra browser origins allowed to attach a terminal, comma-separated. Only needed alongside a wider `MULMOTERMINAL_HOST` (→ [below](#bind-host)) |
