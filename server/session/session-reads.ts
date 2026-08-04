@@ -22,13 +22,13 @@ import {
   type LatestTurnContext,
   type TimelineEvent,
 } from "./transcript.js";
-import { createFileCache, type FileStamp } from "./file-cache.js";
+import { createAppendFileCache, createFileCache, type FileStamp } from "./file-cache.js";
 import { classifyWorkPhase, type WorkPhase } from "./workPhase.js";
 import { sessionListTitle } from "./sessionListTitle.js";
 import { activity, aiTitles, codexRolloutIds, isBackgroundSession, isFailedWorker, knownSessions, sessionMemos } from "./registry.js";
 import { projectSessionsDir } from "./project-dir.js";
 import { lastTurnFromClaudeParsed, lastTurnFromCodexRolloutDocs, EMPTY_TURN, type LastTurn } from "./last-turn.js";
-import { forEachJsonlRecord, readTailRecords } from "../infra/jsonl-file.js";
+import { forEachJsonlRecord, forEachJsonlRecordIn, readTailRecords } from "../infra/jsonl-file.js";
 import { createSummaryScan } from "./summary-scan.js";
 import { partitionPending } from "./partitionPending.js";
 import { codexSessionsRoot } from "../agents/codex-session.js";
@@ -215,28 +215,83 @@ export async function sessionLastTurn(cwd: string, id: string, agent: "claude" |
   }
 }
 
-// Scan a session JSONL for a human-friendly title and last activity.
+// The three fields the session list needs OFF DISK. Cached; everything else on a row (the memo, the
+// live ai-title, the activity flags) is read per request from memory, because those change while
+// the file does not — caching the finished row would freeze an edited memo behind it.
+interface TitleFields {
+  aiTitle: string | null;
+  lastPrompt: string | null;
+  firstUserMsg: string | null;
+}
+
+const NO_TITLE_FIELDS: TitleFields = { aiTitle: null, lastPrompt: null, firstUserMsg: null };
+
+// The rule, in one place, so the whole-file read and the resumed one cannot drift apart: the LAST
+// ai-title / last-prompt win, the FIRST user message does.
+function foldTitleField(into: TitleFields, o: Record<string, unknown>): void {
+  if (o.type === "ai-title" && o.aiTitle) into.aiTitle = readString(o.aiTitle);
+  else if (o.type === "last-prompt" && o.lastPrompt) into.lastPrompt = readString(o.lastPrompt);
+  else if (o.type === "user" && into.firstUserMsg === null) {
+    into.firstUserMsg = userPromptText(isRecord(o.message) ? o.message.content : undefined);
+  }
+}
+
+// Windows for the cold read, measured over the 60 largest transcripts on a working machine (5 MB to
+// 508 MB, each read end to end): the first `user` record sat at most 26.6 KB in, and the last
+// ai-title / last-prompt at most 52.8 KB from EOF. Both windows are ~10x that, and a file whose
+// fields fall outside them is not guessed at — it is read whole (see readTitleFields).
+const TITLE_HEAD_BYTES = 256 * 1024;
+const TITLE_TAIL_BYTES = 512 * 1024;
+
+const titleFieldsCache = createAppendFileCache<TitleFields>();
+
+// A transcript is append-only, so the same three fields are folded out of it at most once: an
+// unchanged file is not read at all, and a grown one costs only the bytes that arrived. Without
+// this the session list read every one of its fifty transcripts in full on every request — 4.8 s
+// for a 17 KB answer on a 1.1 GB project, and the launcher waits on it (#1377).
+async function readTitleFields(full: string, stamp: FileStamp): Promise<TitleFields> {
+  const resumed = titleFieldsCache.resume(full, stamp);
+  if (resumed && resumed.from >= stamp.size) return resumed.value;
+  if (!resumed) {
+    const cold = await coldTitleFields(full, stamp.size);
+    titleFieldsCache.set(full, stamp, cold.offset, cold.fields);
+    return cold.fields;
+  }
+  // Resuming from a boundary the previous scan reported, so the record starting there counts.
+  const fields = { ...resumed.value };
+  const offset = await forEachJsonlRecordIn(full, { from: resumed.from, atLineStart: true }, (o) => foldTitleField(fields, o));
+  titleFieldsCache.set(full, stamp, offset, fields);
+  return fields;
+}
+
+// The first read of a file: both ends when it is big enough for that to be worth it, and the whole
+// file when it is not — or when the ends did not answer. A field missing from a window is
+// indistinguishable from a field the file never had, so the windows are a fast path, never the
+// answer: only when all three are found is the fold provably the same as the whole-file one (the
+// tail runs to EOF, so an ai-title found there IS the last one).
+//
+// The offset comes back with the fields, and it is the end of the last COMPLETE line rather than
+// the file's size: a transcript caught mid-append ends in half a record, and resuming past it would
+// start the next scan inside a line — losing the record that half line becomes.
+async function coldTitleFields(full: string, size: number): Promise<{ fields: TitleFields; offset: number }> {
+  if (size > TITLE_HEAD_BYTES + TITLE_TAIL_BYTES) {
+    const head: TitleFields = { ...NO_TITLE_FIELDS };
+    const tail: TitleFields = { ...NO_TITLE_FIELDS };
+    await forEachJsonlRecordIn(full, { to: TITLE_HEAD_BYTES }, (o) => foldTitleField(head, o));
+    const offset = await forEachJsonlRecordIn(full, { from: size - TITLE_TAIL_BYTES }, (o) => foldTitleField(tail, o));
+    if (head.firstUserMsg !== null && tail.aiTitle !== null && tail.lastPrompt !== null) {
+      return { fields: { aiTitle: tail.aiTitle, lastPrompt: tail.lastPrompt, firstUserMsg: head.firstUserMsg }, offset };
+    }
+  }
+  const whole: TitleFields = { ...NO_TITLE_FIELDS };
+  const offset = await forEachJsonlRecordIn(full, {}, (o) => foldTitleField(whole, o));
+  return { fields: whole, offset };
+}
+
 export async function readSessionMeta(dir: string, file: string): Promise<SessionMeta> {
   const full = path.join(dir, file);
-
-  let aiTitle: string | null = null;
-  let lastPrompt: string | null = null;
-  let firstUserMsg: string | null = null;
-
-  // Streamed like every other transcript reader (#998). This one was missed by that issue's own
-  // table, which is a fair warning about how easy the whole-file read is to reach for: three
-  // fields out of a file that reaches 585 MB, where reading it whole throws and the session list
-  // then shows a title of "(no title)".
-  const [, stat] = await Promise.all([
-    forEachJsonlRecord(full, (o) => {
-      if (o.type === "ai-title" && o.aiTitle) aiTitle = readString(o.aiTitle);
-      else if (o.type === "last-prompt" && o.lastPrompt) lastPrompt = readString(o.lastPrompt);
-      else if (o.type === "user" && firstUserMsg === null) {
-        firstUserMsg = userPromptText(isRecord(o.message) ? o.message.content : undefined);
-      }
-    }),
-    fs.stat(full),
-  ]);
+  const stat = await fs.stat(full);
+  const { aiTitle, lastPrompt, firstUserMsg } = await readTitleFields(full, { mtimeMs: stat.mtimeMs, size: stat.size });
 
   const id = path.basename(file, ".jsonl");
   const title = sessionListTitle({ memo: sessionMemos.get(id), liveAiTitle: aiTitles.get(id), diskAiTitle: aiTitle, diskLastPrompt: lastPrompt, firstUserMsg });
