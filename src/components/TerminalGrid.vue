@@ -288,9 +288,6 @@ async function openCanvasFor(uid: number, enlarge = true, stillWanted?: () => bo
   setRightPane("canvas");
 }
 
-// GridView drives this one from OUTSIDE a user gesture (placing a spawned chat whose Canvas is
-// already seeded). The pane is TerminalGrid's own state — GridView owns the cells, not what sits
-// beside them — so this is the seam rather than another prop to watch.
 // Show a file the user picked in the Canvas, without the agent having presented it (#1374). The
 // card is written the way the agent's own results arrive, so it is stored, replayed on reload, and
 // collapsed against the agent's card for the same file — see canvasOpenFile.ts.
@@ -314,6 +311,9 @@ async function openFileInCanvas(path: string): Promise<void> {
   await openCanvasFor(uid, false);
 }
 
+// GridView drives this one from OUTSIDE a user gesture (placing a spawned chat whose Canvas is
+// already seeded). The pane is TerminalGrid's own state — GridView owns the cells, not what sits
+// beside them — so this is the seam rather than another prop to watch.
 defineExpose({ openCanvasFor });
 
 // A pane button: opens its pane, or closes it when it is already the one showing.
