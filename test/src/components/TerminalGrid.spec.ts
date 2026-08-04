@@ -17,8 +17,8 @@ const paneStub = vi.hoisted(() => ({
 vi.mock("../../../src/components/FilesPane.vue", () => ({
   default: {
     name: "FilesPane",
-    props: ["cwd", "requestedPath", "initialState"],
-    emits: ["close", "dirty"],
+    props: ["cwd", "requestedPath", "initialState", "canvasTarget"],
+    emits: ["close", "dirty", "open-in-canvas"],
     setup: (_p: unknown, { expose, slots }: { expose: (e: Record<string, unknown>) => void; slots: { title?: () => VNode[] } }) => {
       expose({ reload: paneStub.reload, flush: paneStub.flush, snapshot: paneStub.snapshot });
       return () => h("div", { class: "stub-files-pane" }, slots.title?.());
@@ -28,9 +28,17 @@ vi.mock("../../../src/components/FilesPane.vue", () => ({
 vi.mock("../../../src/components/TerminalCell.vue", () => ({
   default: {
     name: "TerminalCell",
-    props: ["expanded", "initialSessionId", "initialCwd", "defaultCwd", "presets", "home", "openSessionIds", "cancellable", "reorderable"],
+    props: ["expanded", "initialSessionId", "initialCwd", "defaultCwd", "presets", "home", "openSessionIds", "cancellable", "reorderable", "canvasAvailable"],
     emits: ["toggle-expand", "toggle-files", "session", "cwd", "run", "close", "move", "status"],
     template: '<div class="stub-cell" />',
+  },
+}));
+vi.mock("../../../src/components/GuiPanel.vue", () => ({
+  default: {
+    name: "GuiPanel",
+    props: ["sessionId", "sendTextMessage", "unavailable", "expanded"],
+    emits: ["toggle-expand", "close"],
+    template: '<div class="stub-gui-panel" />',
   },
 }));
 vi.mock("../../../src/components/CommandCell.vue", () => ({
@@ -799,5 +807,81 @@ describe("file pane width restored from storage", () => {
     const w = mountCockpit([cell(1, "s1", "/proj"), cell(2)], 1, []);
     await flushPromises();
     expect(w.findComponent({ name: "FilesPane" }).attributes("style")).toContain("400px");
+  });
+});
+
+// Opening a file the user picked into the Canvas (#1374). The write is a round trip, and the zoom
+// can move while it is in flight — the reply then belongs to a cell that is no longer on screen.
+describe("open-in-canvas", () => {
+  // Same reduced-motion stub the pane tests need: the zoom FLIP asks for it and jsdom omits it.
+  beforeEach(() => {
+    localStorage.clear();
+    if (!window.matchMedia) {
+      window.matchMedia = ((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener() {},
+        removeListener() {},
+        addEventListener() {},
+        removeEventListener() {},
+        dispatchEvent: () => false,
+      })) as typeof window.matchMedia;
+    }
+  });
+
+  // Only the WRITE is held open; the reads the grid makes on expand must settle as usual. The two
+  // are told apart by the trailing `s`, not by a substring test — `/toolResults/<id>` CONTAINS
+  // `/toolResult`, so a `.includes` here holds the read as well and the race under test never runs.
+  const deferredWrite = () => {
+    const held: Array<() => void> = [];
+    const ok = (body: unknown) => ({ ok: true, json: async () => body }) as unknown as Response;
+    globalThis.fetch = vi.fn(
+      (url: RequestInfo | URL) =>
+        new Promise<Response>((resolve) => {
+          const u = String(url);
+          if (u.includes("/api/agent/toolResults/")) return resolve(ok({ toolResults: [] }));
+          if (u.includes("/api/agent/toolResult")) return void held.push(() => resolve(ok({ ok: true })));
+          resolve(ok({ tools: [] }));
+        }),
+    ) as unknown as typeof fetch;
+    return () => held.forEach((r) => r());
+  };
+
+  const gridWithPaneOpen = async () => {
+    const w = mountGrid([cell(1, "s-one", "/work/a"), cell(2, "s-two", "/work/b")], 1);
+    await flushPromises();
+    if (!w.findComponent({ name: "FilesPane" }).exists()) {
+      await w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-files");
+      await flushPromises();
+    }
+    return w;
+  };
+
+  const pickFile = (w: ReturnType<typeof mount>) => w.findComponent({ name: "FilesPane" }).vm.$emit("open-in-canvas", "design.md");
+
+  it("shows the Canvas beside the cell the file was picked in", async () => {
+    const release = deferredWrite();
+    const w = await gridWithPaneOpen();
+    pickFile(w);
+    release();
+    await flushPromises();
+    expect(w.find(".stub-gui-panel").exists()).toBe(true);
+  });
+
+  // The cell moved on while the write was in flight. `canvasHasCard` is one flag for whichever
+  // cell is enlarged, so a late reply would enable the SECOND cell's Canvas button on the strength
+  // of a card written for the first — and pressing it opens a Canvas with nothing of its own in it.
+  it("does not enable the Canvas button on the cell the zoom moved to", async () => {
+    const release = deferredWrite();
+    const w = await gridWithPaneOpen();
+    pickFile(w);
+    await w.setProps({ expandedUid: 2 });
+    await flushPromises();
+    release();
+    await flushPromises();
+    const enlarged = w.findAllComponents({ name: "TerminalCell" }).find((c) => c.props("expanded"));
+    expect(enlarged?.props("initialSessionId")).toBe("s-two");
+    expect(enlarged?.props("canvasAvailable")).toBe(false);
   });
 });

@@ -301,9 +301,10 @@ async function openFileInCanvas(path: string): Promise<void> {
   const card = canvasCardForFile(absoluteUnder(paneCwd.value, path));
   if (!card) return; // the button is only shown for files that have one; a stale click is a no-op
   if (!(await seedCanvasCard(sessionId, card))) return;
-  // Re-asked after the await, like every other late reply here: walking the zoom while the write
-  // was in flight would otherwise enable the button — and reveal the pane — on whichever cell the
-  // user moved to, over a card that is not theirs.
+  // Re-asked after the await, like every other late reply here. openCanvasFor already refuses to
+  // reveal the pane on a cell it was not asked for, but `canvasHasCard` is one flag for whichever
+  // cell is enlarged: walking the zoom while the write was in flight would otherwise leave the
+  // NEW cell's Canvas button enabled on the strength of a card that is not its.
   if (sessionId !== expandedSessionId.value) return;
   // The pane this came from is about to be replaced by the Canvas, so its buffer has to flush —
   // openCanvasFor does that. Already enlarged, hence `false`.
