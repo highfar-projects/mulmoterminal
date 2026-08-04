@@ -9,7 +9,6 @@ import {
   cleanupSessionSettings,
   settingsArgument,
   mcpConfigArgument,
-  mcpConfigFileArgument,
   withSettingsCleanup,
   pruneOrphanSettings,
 } from "../../../server/session/session-settings.js";
@@ -116,28 +115,9 @@ describe("the Windows reason for a file", () => {
     expect(mcpConfigArgument(SESSION, "{}", "darwin")).toBe("{}");
   });
 
-  // A LAUNCHER chip has no argv — the config has to be inserted into a command line as text, so a
-  // few hundred bytes of JSON with nested quotes would pass through a shell. A path has neither
-  // quotes nor metacharacters, so this variant writes the file on every platform.
-  it("always writes the file for the launcher variant, even where inline would do", () => {
-    const arg = mcpConfigFileArgument(SESSION, '{"mcpServers":{}}');
-    expect(arg).toBe(mcpFileFor(SESSION));
-    expect(readFileSync(arg, "utf8")).toBe('{"mcpServers":{}}');
-  });
-
-  // The launch route can now write that file BEFORE spawning, and a spawn that throws never
-  // reaches reap. withSettingsCleanup is what stops the config outliving the attempt (Codex review
-  // on #1358) — the same wrapper the claude spawner has always used, for the same reason.
-  it("drops the launcher's config when the spawn it was written for throws", () => {
-    mcpConfigFileArgument(SESSION, "{}");
-    expect(existsSync(mcpFileFor(SESSION))).toBe(true);
-    expect(() =>
-      withSettingsCleanup(SESSION, () => {
-        throw new Error("spawn failed");
-      }),
-    ).toThrow("spawn failed");
-    expect(existsSync(mcpFileFor(SESSION))).toBe(false);
-  });
+  // A launcher chip used to have a THIRD variant here, writing the file unconditionally because a
+  // command line cannot carry JSON. Chips get no MCP config at all now, so only the two argv
+  // variants above remain.
 
   // reap() calls this once per session; it has to take BOTH files or the mcp one outlives
   // every Windows session.

@@ -33,9 +33,16 @@ function removeLauncher(label: string) {
 
 <template>
   <h3 :class="SECTION_HEADING">Launch commands</h3>
+  <!-- The examples are deliberately NOT an agent. A launcher runs its command verbatim and gets no
+       GUI tools, no transcript, no resume and no "waiting for you" status, so a chip named after an
+       agent is a worse copy of what the Agent Picker already offers — and offering one here is how
+       people came to have both. Anything the Agent Picker cannot run is the real use for this. -->
   <p class="mb-3 mt-1.5 text-[12px] text-dim">
-    Programs a grid cell can launch besides Claude — a plain shell, <code>codex</code>, any interactive command. They run in the cell's directory as a
-    persistent terminal. Example: <code>Shell</code> → <code>$SHELL</code>, <code>Codex</code> → <code>codex</code>.
+    Any interactive command a grid cell can run — a dev server, a REPL, a git UI, a model bridge. It runs in the cell's directory as a persistent terminal,
+    exactly as written. Example: <code>Dev</code> → <code>yarn dev</code>, <code>Git</code> → <code>lazygit</code>.
+  </p>
+  <p class="mb-3 mt-1.5 text-[12px] text-dim">
+    To start Claude, Codex or Antigravity, use the Agent Picker in an empty cell instead — a launcher gives you none of what a session needs.
   </p>
   <ul v-if="launcherList.length" :class="SETTINGS_LIST">
     <SettingsListRow v-for="l in launcherList" :key="l.label" :name="l.label" @remove="removeLauncher(l.label)">
