@@ -204,7 +204,7 @@ async function seedPhase(cwd: string) {
 // The directory chrome each roster row is tinted with — its configured header colour, so
 // a row reads as the same directory as its terminal's header. Keyed by cwd (the config is
 // the directory's, like the phase), fetched through the shared dir-config cache.
-type RowChrome = { headerColor: string | null; headerTextColor: string | null };
+type RowChrome = { headerColor: string | null; headerTextColor: string | null; iconUrl: string | null };
 const chromeByCwd = reactive(new Map<string, RowChrome>());
 // A freshness token per cwd, exactly like latestPhaseSeed: two rapid dir-config edits can
 // leave fetches resolving out of order, and without this a stale one would overwrite the
@@ -215,7 +215,7 @@ async function seedChrome(cwd: string) {
   latestChromeSeed.set(cwd, seed);
   const config = await fetchDirConfig(cwd);
   if (latestChromeSeed.get(cwd) !== seed) return; // a newer seed for this cwd already won
-  chromeByCwd.set(cwd, { headerColor: config.headerColor, headerTextColor: config.headerTextColor });
+  chromeByCwd.set(cwd, { headerColor: config.headerColor, headerTextColor: config.headerTextColor, iconUrl: config.iconUrl });
 }
 const refreshAllChrome = () => {
   const cwds = new Set(state.value.cells.map((c) => c.cwd).filter((c): c is string => c !== null));
@@ -318,7 +318,7 @@ const fallbackLabel = (c: Cell): string | null => c.command?.label ?? c.launcher
 // come out of the meta and two out of the chrome, so a `??` on each both crossed the complexity
 // limit and made every field independently defaultable — which is how a field the roster never
 // wired up reads as a legitimate null rather than failing to typecheck.
-const chromeOf = (cwd: string | null): RowChrome => (cwd ? chromeByCwd.get(cwd) : undefined) ?? { headerColor: null, headerTextColor: null };
+const chromeOf = (cwd: string | null): RowChrome => (cwd ? chromeByCwd.get(cwd) : undefined) ?? { headerColor: null, headerTextColor: null, iconUrl: null };
 const rosterRow = (c: Cell): CockpitRow => {
   const meta = (c.session ? sessionMeta.get(c.session) : undefined) ?? EMPTY_SESSION_META;
   const chrome = chromeOf(c.cwd);
@@ -336,6 +336,7 @@ const rosterRow = (c: Cell): CockpitRow => {
     workPhase: meta.workPhase,
     headerColor: chrome.headerColor,
     headerTextColor: chrome.headerTextColor,
+    iconUrl: chrome.iconUrl,
     parked: c.parked === true,
   };
 };

@@ -10,6 +10,7 @@ import { dismissWorkCommentFailure, visibleWorkCommentFailure } from "../composa
 import { formatCwd, worktreeLabel } from "./cwdDisplay";
 import { isSameDirPath } from "../../common/dirPathKey";
 import DirBadge from "./DirBadge.vue";
+import DirIcon from "./DirIcon.vue";
 import { isCellContext, isCellUsage, type CellContext, type CellUsage } from "./cellPayload";
 import { asTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { customAgentIdOf, type AgentPick, type CustomAgent } from "../../common/customAgents";
@@ -1071,6 +1072,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
           :home="home"
           :header-color="dirConfig.headerColor"
           :header-text-color="dirConfig.headerTextColor"
+          :icon-url="dirConfig.iconUrl"
           @click="onHeaderClick"
         >
           <span class="cell-actions" :class="CELL_ACTIONS">
@@ -1099,6 +1101,11 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
              push the actions past the cell's `overflow: hidden` edge — the buttons must
              stay reachable no matter how much a dir's config crams in here. -->
           <div data-testid="cell-header-main" class="flex min-w-0 flex-auto items-center gap-2 overflow-hidden">
+            <!-- Leading the row, ahead of the status dot: this is the browser-tab position, and a
+                 project icon is read the way a favicon is — you find the tab by its picture before
+                 you read anything. Everything after it says what the cell is DOING; the icon says
+                 which project it is, and that is the first question. -->
+            <DirIcon :src="dirConfig.iconUrl" />
             <span class="cell-dot" :class="[CELL_DOT, statusClass, dotStatusClass, dotMissedClass]" :title="statusLabel" />
             <!-- The path is NOT here any more — it is the lead item on row 2 (see the
                `header-lead` template below). It had `min-w-[16ch]`, a floor of roughly a third of

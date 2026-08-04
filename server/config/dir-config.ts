@@ -17,6 +17,8 @@ import {
   type DirConfigExtras,
 } from "../../common/dirConfigSource.js";
 import { isWithin } from "../infra/path-within.js";
+import { resolveDirIcon, type DirIcon } from "./dir-icon.js";
+import { DIR_ICON_ROUTE } from "../../common/dirIcon.js";
 import { readJsonFile } from "../infra/read-text-file.js";
 import { isRecord } from "../../common/isRecord.js";
 import { isBuiltinThemeId } from "../../common/themeVars.js";
@@ -62,6 +64,9 @@ export interface DirConfig extends DirChrome {
   sound: string | null;
   // Per-kind overrides of `sound` (#873), each either a preset or a file inside cwd.
   sounds: Partial<Record<NotifyKind, DirSound>>;
+  // The image this directory's cells are marked with (#1421) — a file confined to cwd, or a
+  // remote/data URL the browser loads itself. null when unset or unusable.
+  icon: DirIcon | null;
   // Per-project terminal-header action buttons (merged over the global ones by id).
   // null = this dir doesn't configure buttons.
   buttons: HeaderButton[] | null;
@@ -91,6 +96,9 @@ export interface PublicDirConfig extends DirChrome {
   theme: ThemeId | null;
   colors: Record<string, string> | null;
   hasSound: boolean;
+  // Ready for an `<img src>`: this app's own /api/dir-icon route for a file inside the
+  // directory, or the remote URL verbatim. The file PATH stays server-side, like `sound`'s.
+  iconUrl: string | null;
 }
 
 /** The directory whose `.mulmoterminal.json` a tool call just wrote, or null for anything else.
@@ -153,6 +161,7 @@ const EMPTY: DirConfig = {
   colors: null,
   sound: null,
   sounds: {},
+  icon: null,
   buttons: null,
   chips: null,
   skills: null,
@@ -185,6 +194,7 @@ export function loadDirConfig(cwd: string): DirConfig {
       colors: dirColorsField.parse(raw.colors),
       sound: resolveDirSound(base, raw.sound),
       sounds: resolveDirSounds(base, raw.sounds),
+      icon: resolveDirIcon(base, raw.icon),
       buttons: sanitizeButtons(raw.buttons),
       chips: sanitizeChips(raw.chips),
       skills: dirSkillsField.parse(raw.skills),
@@ -215,6 +225,7 @@ export function publicDirConfig(cwd: string): PublicDirConfig {
     colors,
     sound,
     sounds,
+    icon,
   } = loadDirConfig(cwd);
   return {
     name,
@@ -231,7 +242,16 @@ export function publicDirConfig(cwd: string): PublicDirConfig {
     theme,
     colors,
     hasSound: sound !== null || Object.keys(sounds).length > 0,
+    iconUrl: dirIconUrl(cwd, icon),
   };
+}
+
+// A directory's own file is served by us, so the browser gets a route rather than a path; a
+// remote URL is already something the browser can fetch. The cwd is in the query for the same
+// reason every other dir route takes one — the server re-reads the config to find the file.
+function dirIconUrl(cwd: string, icon: DirIcon | null): string | null {
+  if (!icon) return null;
+  return icon.source === "url" ? icon.url : `${DIR_ICON_ROUTE}?cwd=${encodeURIComponent(cwd)}`;
 }
 
 // The settings modal's read-only preview of one directory: what the app resolved, plus which
@@ -284,7 +304,7 @@ function dirConfigFile(cwd: string): string | null {
 export const MISSING_DIR_CONFIG_DETAIL: DirConfigDetail = {
   exists: false,
   file: null,
-  config: { ...EMPTY_DIR_CHROME, theme: null, colors: null, hasSound: false },
+  config: { ...EMPTY_DIR_CHROME, theme: null, colors: null, hasSound: false, iconUrl: null },
   extras: EMPTY_DIR_CONFIG_EXTRAS,
   source: EMPTY_DIR_CONFIG_SOURCE,
 };

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { writeFileSync, readFileSync, existsSync } from "node:fs";
+import { writeFileSync, readFileSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { makeTempDir } from "../../support/tempDir.js";
 import { loadDirConfig } from "../../../server/config/dir-config";
@@ -86,6 +86,22 @@ describe("inheritedWorktreeConfig", () => {
     expect(inherited).not.toHaveProperty("sounds");
     expect(inherited).not.toHaveProperty("addDirs");
     expect(inherited.headerColor).toBe("#2d35a9");
+  });
+
+  // Unlike the sound, an icon IS carried — but as the relative path the user typed, not as the
+  // absolute one the loader resolved. An absolute path would be refused by the very rule that
+  // produced it, so a worktree of a repo whose logo is committed would silently lose its icon.
+  it("carries a file icon as the relative path, so it resolves again in the worktree", () => {
+    const dir = projectDir({ icon: "docs/logo.png" });
+    mkdirSync(path.join(dir, "docs"));
+    writeFileSync(path.join(dir, "docs", "logo.png"), "x", "utf8");
+    const inherited = inheritedWorktreeConfig(loadDirConfig(dir), 1);
+    expect(inherited.icon).toBe("docs/logo.png");
+    expect(inherited.icon).not.toContain(dir);
+  });
+
+  it("carries a remote icon verbatim", () => {
+    expect(inheritedFrom({ icon: "https://example.com/logo.png" }, 1).icon).toBe("https://example.com/logo.png");
   });
 
   it("has nothing to say about a project that configures nothing", () => {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import { useDirColors, useDirPriorities } from "../composables/useDirConfig";
+import { useDirColors, useDirIcons, useDirPriorities } from "../composables/useDirConfig";
+import DirIcon from "./DirIcon.vue";
 import { useResumableSessions, useDirScripts, useDirWorktrees, type ResumableSession, type Worktree } from "../composables/useDirLists";
 import { useMcpToolGroups } from "../composables/useMcpToolGroups";
 import { orderByDirPriority } from "../../common/dirPriorityOrder";
@@ -121,6 +122,7 @@ const chips = computed(() =>
 // stripe means the same thing there as everywhere else.
 const presetPaths = computed(() => chips.value.map((p) => p.path));
 const { colors: presetColors } = useDirColors(presetPaths);
+const { icons: presetIcons } = useDirIcons(presetPaths);
 
 // A preset dir that already has a running session in another cell — the launcher tints its chip
 // so the user can tell it's in use before double-launching there.
@@ -476,7 +478,7 @@ async function removeWorktree(w: Worktree): Promise<void> {
                would put us back where that bug came from. -->
           <span v-if="p.isWorkspace" data-testid="cell-chip-workspace" class="material-symbols-outlined mr-[4px] text-[13px] align-middle" aria-hidden="true"
             >workspaces</span
-          >{{ p.label }}
+          ><DirIcon :src="presetIcons[p.path]" :size="13" class="mr-[4px] inline-block align-middle" />{{ p.label }}
         </button>
         <button
           type="button"

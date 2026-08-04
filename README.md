@@ -686,6 +686,7 @@ malformed file is ignored.
 ```jsonc
 {
   "name": "PROD · payments",            // badge shown on this directory's terminals
+  "icon": "docs/logo.png",              // image marking this directory's cells (path in this dir, URL, or data:)
   "badgeColor": "#cf222e",              // badge color (hex #rrggbb)
   "headerColor": "#190a23",             // cell header background (hex #rrggbb)
   "headerTextColor": "#ffffff",         // cell header text color (hex #rrggbb)
@@ -711,6 +712,7 @@ malformed file is ignored.
 | Field        | Meaning |
 | ------------ | ------- |
 | `name`       | Label shown as a badge in the terminal/cell header. |
+| `icon`       | An **image** marking this directory — shown in the cell header, the cockpit roster, the filmstrip thumbnails and the launcher's directory chips. Either a path **relative to this directory** (an absolute path, or a `../` that escapes it, is rejected), an `http(s)://` URL, or a `data:image/…` URI. PNG / JPEG / **GIF (animated plays)** / WebP / AVIF / SVG / ICO / BMP. Not to be confused with a header **button's** `icon`, which is a Material Symbols name. |
 | `badgeColor` | Badge background color (`#rrggbb`); text auto-contrasts. |
 | `headerColor` | Header **background** color (`#rrggbb`) — the grid cell's header row and the terminal's own header row (grid row 2). While a terminal is working/blocked the status tint still shows; the custom color applies when idle. |
 | `headerTextColor` | Header **text** color (`#rrggbb`) — the dir path, title, and prompt. |
