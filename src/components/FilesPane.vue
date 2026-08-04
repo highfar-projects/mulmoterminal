@@ -12,7 +12,7 @@ import { createEditor, langKindForFilename, type CmEditor } from "./cmEditor";
 import { expandedPaths, restoreOrder } from "./filesTreeState";
 import { isWriteToOpenFile } from "../composables/fileWriteMatch";
 import { usePubSub } from "../composables/usePubSub";
-import { canOpenInCanvas } from "../composables/canvasOpenFile";
+import { canOpenInCanvas, absoluteUnder } from "../composables/canvasOpenFile";
 import { FILE_WRITE_CHANNEL, isFileWriteEvent } from "../../common/fileWriteChannel";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
@@ -64,7 +64,10 @@ const showPreview = ref(false);
 const isMarkdown = computed(() => langKindForFilename(openName.value) === "markdown");
 // Whether the Canvas has a View for the open file — the plugins' own gates decide, not an
 // extension test here (see canvasOpenFile.ts).
-const canvasOpenable = computed(() => canOpenInCanvas(openPath.value));
+// Gated on the path the CARD will carry, not the row's relative one: a cell whose directory has a
+// dot segment (`~/.config/proj`) makes `p.html` pass here and the joined path fail the plugin's
+// own guard, which is a button that does nothing when pressed.
+const canvasOpenable = computed(() => canOpenInCanvas(openPath.value ? absoluteUnder(props.cwd, openPath.value) : null));
 
 const editorHost = ref<HTMLDivElement>();
 let editor: CmEditor | null = null;

@@ -86,3 +86,21 @@ describe("absoluteUnder", () => {
     expect(absoluteUnder(null, "design.md")).toBe("design.md");
   });
 });
+
+// The disagreement the pane's button could have with the card builder: the row's own path passes,
+// and the one the card would carry does not. A cell working under a dot directory is the ordinary
+// way to reach it (`~/.config/…`), and the symptom is a button that does nothing when pressed.
+describe("the button's gate and the card's gate agree on the same path", () => {
+  it("refuses an html file whose containing directory the plugin's guard rejects", () => {
+    expect(canOpenInCanvas("p.html")).toBe(true); // the row alone looks fine
+    const joined = absoluteUnder("/home/me/.config/proj", "p.html");
+    expect(canOpenInCanvas(joined)).toBe(false); // …and the card's path does not
+    expect(canvasCardForFile(joined)).toBeNull();
+  });
+
+  it("still accepts an ordinary directory", () => {
+    const joined = absoluteUnder("/home/me/proj", "p.html");
+    expect(canOpenInCanvas(joined)).toBe(true);
+    expect(canvasCardForFile(joined)?.toolName).toBe("presentHtml");
+  });
+});
