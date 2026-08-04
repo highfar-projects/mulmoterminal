@@ -104,10 +104,10 @@ export function costFromJsonl(raw: string): JsonlCost {
   return scan.total();
 }
 
-/** One record's contribution, folded into a running total. The rule lives here rather than inside
- *  the scan below because a RESUMED read folds into a total it did not start (#1386): both paths
- *  have to add a turn the same way or a resumed cost drifts from a fresh one. */
-export function foldCost(into: JsonlCost, record: Record<string, unknown>): void {
+// One record's contribution, folded into a running total. The rule lives here rather than inside
+// the scan below because a RESUMED read folds into a total it did not start (#1386): both paths
+// have to add a turn the same way or a resumed cost drifts from a fresh one.
+function foldCost(into: JsonlCost, record: Record<string, unknown>): void {
   const turn = assistantUsageTurn(record);
   if (!turn) return;
   const priced = costForUsage(turn.usage, turn.model);
@@ -115,7 +115,8 @@ export function foldCost(into: JsonlCost, record: Record<string, unknown>): void
   else into.unpricedTurns += 1;
 }
 
-export const EMPTY_COST: JsonlCost = { usd: 0, unpricedTurns: 0 };
+// A template to copy, never a target to fold into — foldCost MUTATES what it is given.
+const EMPTY_COST: JsonlCost = { usd: 0, unpricedTurns: 0 };
 
 /** The same accumulation, fed one record at a time — for a caller streaming a transcript too
  *  large to hold as a string (#998). The pricing rule stays in costForUsage either way. */
