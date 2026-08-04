@@ -247,8 +247,12 @@ async function sessionList(req: Request, res: Response) {
   }
 }
 
-// codex's own sessions for a workspace (?cwd=, default CLAUDE_CWD), read from ~/.codex rollouts —
-// the single view's sidebar lists these so past codex conversations are switchable + resumable.
+// codex's own sessions for a workspace (?cwd=, default CLAUDE_CWD), read from ~/.codex rollouts.
+//
+// NOTHING IN THIS REPO CALLS THIS, and the same is true of the agy route below. Both were built for
+// the single view's sidebar, which is gone (#1201 / #1202), so a past codex or agy conversation is
+// currently unreachable from any list — only Claude sessions reach the launcher's resume rows. They
+// are kept deliberately as the base for that list (#1417) rather than deleted and rewritten.
 async function codexSessionList(req: Request, res: Response) {
   try {
     const cwd = workspaceForRoute(req.query.cwd, res);
