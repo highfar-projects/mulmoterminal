@@ -35,8 +35,8 @@ export interface ToolRouteDeps {
   /**
    * Is this session's tool-call history fed by the MCP broker rather than by hooks — i.e. does it
    * hold the GUI tools ALONE? The pane says so, because an empty GUI-only history looks exactly
-   * like an agent that ran nothing. Answered server-side because the client cannot work it out:
-   * a codex launcher chip is a cell with no agent name on it (see mcp/gui-call-history.ts).
+   * like an agent that ran nothing. Answered server-side because the client cannot work it out
+   * from the agent name alone (see mcp/gui-call-history.ts).
    */
   guiOnlyHistory: (sessionId: string) => boolean;
   publish: (channel: string, data: unknown) => void;

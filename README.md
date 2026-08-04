@@ -1106,27 +1106,25 @@ Which route a session takes is decided by `carriesFullGuiMcp()` in
 `server/session/mcp-config.ts` — the single view, a cell-less chat, or anything whose cwd **is**
 the workspace take the first; anything in a project directory takes the second.
 
-**The workspace is agent-agnostic, and so is the way you start a terminal there.** All three
-agents and the launcher chips ask the same predicate, so two terminals in the workspace reach
-the same tools no matter how they were started:
+**The workspace is agent-agnostic.** All three agents ask the same predicate, so two terminals in
+the workspace reach the same tools no matter which agent started them:
 
 | Started as | In the workspace | In a project directory |
 |---|---|---|
 | claude cell (including `?gui=0`) | `mt`, every tool | the directory's registered groups |
 | codex cell | `mt`, every tool | the directory's registered groups |
-| launcher chip running `claude` | `mt`, every tool — flags inserted into the command line | nothing injected; its own `.mcp.json` loads |
-| launcher chip running `codex` | `mt`, every tool — `-c` overrides inserted | the directory's registered groups |
-| launcher chip running anything else | untouched | untouched |
+| any launcher chip | untouched | untouched |
 
-A chip is a command line the user wrote, so the injection is a **rewrite of their text** and is
-deliberately narrow: only a bare `claude` or `codex` is recognised, and anything else — a wrapper
-script, `FOO=1 claude` — is passed through unchanged.
+**A launcher chip is not an agent session — it is a command.** Whatever the command line names,
+it runs exactly as written: nothing is inserted, and no GUI MCP is attached. A chip running
+`claude` therefore reads only its directory's own `.mcp.json`, and a chip running `codex` has no
+Canvas. If you want a chip to reach the GUI tools, put the flags in the command yourself.
 
-A `claude` chip in the workspace is handed the all-tools URL, same as the cell, and like the cell it
-**does not** isolate the session: your own MCP servers and claude.ai connectors load as usual. Where
-a directory also registered per-group URLs in its `.mcp.json`, those groups stand down for that
-session rather than serving a second copy of the same tools — the session already reaches all of
-them under `mt`.
+Earlier releases did rewrite a `claude` or `codex` chip to match the cell beside it. That was
+removed: a chip that silently runs something other than what it says is indistinguishable from
+the Agent Picker, which is the confusion the two controls exist on either side of. Use the Agent
+Picker for an agent session — it is also the only one of the two that gives you a resumable
+transcript, cost and context, and a "waiting for you" status.
 
 **The asymmetry is deliberate.** `mt` is ours to name: nothing on disk holds it, it is
 regenerated on every spawn, so it was shortened to stop paying 17 characters per tool name. The

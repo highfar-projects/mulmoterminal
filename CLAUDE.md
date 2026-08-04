@@ -119,13 +119,20 @@ gets a **generated** `--mcp-config` carrying every tool under `GUI_SERVER_ID`; a
 handed **no `--mcp-config` at all** and reaches the tools through the user's own `.mcp.json` under the
 per-group ids from `toolGroupServerId()`. Both constants live in `common/toolGroups.ts`.
 
-**Ask that predicate from every new spawn path.** It is deliberately agent-agnostic: claude cells,
-codex cells and the launcher chips that run either all consult it, so two terminals in the workspace
-reach the same tools however they were started. It sat in `spawn-claude.ts` while claude was the only
-caller, and the drift that produced — a codex cell and a `claude` chip silently getting less than the
-cell beside them — is exactly what a new path re-creates by not asking. A chip's only lever is the
-command line, so its injection lives in `launcher-gui-mcp.ts` and recognises **only** a bare `claude`
-or `codex`: it is rewriting text the user wrote, and an unrecognised shape must be left alone.
+**Ask that predicate from every new spawn path that starts an AGENT.** It is deliberately
+agent-agnostic: claude cells and codex cells both consult it, so two terminals in the workspace reach
+the same tools however they were started. It sat in `spawn-claude.ts` while claude was the only
+caller, and the drift that produced — a codex cell silently getting less than the cell beside it —
+is exactly what a new path re-creates by not asking.
+
+**A launcher chip is not one of those paths.** A chip runs the user's command line verbatim: no
+flags are inserted, no MCP is attached, whatever program the line names. It did once — a chip whose
+command was `claude` or `codex` was rewritten for parity with the cell (#1040, #1358) — and that was
+removed deliberately, because a chip that silently runs something other than what it says is what
+made the chips and the Agent Picker impossible to tell apart. `launcher-program.ts` still *reads*
+which program a command names, but only for the worktree limit and the session record; it exports no
+rewriter, and a spec pins that. A chip that wants GUI tools asks for them in the flags the user
+writes.
 
 The ids differ in **who owns them**, which is what decides whether a rename is free:
 
