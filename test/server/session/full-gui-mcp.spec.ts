@@ -39,35 +39,46 @@ describe("carriesFullGuiMcp", () => {
   it("does NOT give it to a grid cell in a project directory", () => {
     // The invariant. If this ever flips, every ordinary cell in the grid silently changes what
     // tools it has and where they come from.
-    expect(carriesFullGuiMcp(GRID_CELL, PROJECT)).toBe(false);
+    expect(carriesFullGuiMcp(GRID_CELL, PROJECT, "claude")).toBe(false);
   });
 
   it("gives it to a grid cell running in the workspace", () => {
-    expect(carriesFullGuiMcp(GRID_CELL, WORKSPACE)).toBe(true);
+    expect(carriesFullGuiMcp(GRID_CELL, WORKSPACE, "claude")).toBe(true);
   });
 
   it("gives it to a grid cell that named no directory — that IS the workspace", () => {
-    expect(carriesFullGuiMcp(GRID_CELL, undefined)).toBe(true);
-  });
-
-  // A LAUNCHER chip has no wire flag — it is never the single view — so the cwd is the only thing
-  // that can earn it, which is what the route passes `false` for. Same predicate, so a chip and the
-  // cell beside it agree about which directory is special.
-  it("answers for a launcher chip on the cwd alone", () => {
-    expect(carriesFullGuiMcp(false, WORKSPACE)).toBe(true);
-    expect(carriesFullGuiMcp(false, PROJECT)).toBe(false);
+    expect(carriesFullGuiMcp(GRID_CELL, undefined, "claude")).toBe(true);
   });
 
   it("still gives it to everything that is not a grid cell, whatever the directory", () => {
     // The single view, and every chat spawned without a cell of its own (spawnBackgroundChat,
     // the translation worker, issue work). Unchanged: the wire flag alone decides these.
-    expect(carriesFullGuiMcp(NOT_A_GRID_CELL, PROJECT)).toBe(true);
-    expect(carriesFullGuiMcp(NOT_A_GRID_CELL, WORKSPACE)).toBe(true);
+    expect(carriesFullGuiMcp(NOT_A_GRID_CELL, PROJECT, "claude")).toBe(true);
+    expect(carriesFullGuiMcp(NOT_A_GRID_CELL, WORKSPACE, "claude")).toBe(true);
   });
 
   it("does NOT give it to a cell in a subdirectory of the workspace", () => {
     // Equality, not prefix — `{workspace}/foo` is an ordinary project.
-    expect(carriesFullGuiMcp(GRID_CELL, path.join(WORKSPACE, "foo"))).toBe(false);
+    expect(carriesFullGuiMcp(GRID_CELL, path.join(WORKSPACE, "foo"), "claude")).toBe(false);
+  });
+
+  // #1423. The agent is the third fact, and it used to be encoded only by which spawn file called
+  // this — antigravity simply never did. That left the launcher form unable to ask, so it asked the
+  // directory alone and promised an antigravity session in the workspace every tool.
+  it("does NOT give it to antigravity, in the workspace or anywhere else", () => {
+    expect(carriesFullGuiMcp(GRID_CELL, WORKSPACE, "antigravity")).toBe(false);
+    expect(carriesFullGuiMcp(GRID_CELL, PROJECT, "antigravity")).toBe(false);
+    // Not even as a non-grid-cell: agy has no per-spawn config to receive one on.
+    expect(carriesFullGuiMcp(NOT_A_GRID_CELL, WORKSPACE, "antigravity")).toBe(false);
+  });
+
+  it("gives it to codex on the same terms as claude", () => {
+    expect(carriesFullGuiMcp(GRID_CELL, WORKSPACE, "codex")).toBe(true);
+    expect(carriesFullGuiMcp(GRID_CELL, PROJECT, "codex")).toBe(false);
+  });
+
+  it("does NOT give it to a shell, which is not an agent session", () => {
+    expect(carriesFullGuiMcp(NOT_A_GRID_CELL, WORKSPACE, "shell")).toBe(false);
   });
 });
 

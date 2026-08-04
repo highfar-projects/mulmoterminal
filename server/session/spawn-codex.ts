@@ -87,7 +87,7 @@ export function createCodexSpawner(deps: SpawnDeps) {
     // reuses the id, and a stale claim would stand its group urls down with nothing left to serve
     // them (Codex review on #1399). claimFullGuiMcp owns both directions so neither spawn path can
     // apply half the rule.
-    const allTools = claimFullGuiMcp(sessionId, attachGuiMcp, cwd, ptyWouldReattach(sessionId, true));
+    const allTools = claimFullGuiMcp(sessionId, attachGuiMcp, cwd, ptyWouldReattach(sessionId, true), "codex");
     const guiMcpServers = codexGuiMcpServers({ sessionId, port: PORT, groups: mcpGroups, allTools });
     const args = buildCodexArgs({ resume: resumeRolloutId, model: deps.codexModel, guiMcpServers });
     const { term, tmux, reattached } = ptySpawn(sessionId, deps.codexBin, args, cwd, true, { binEnvVar: codexAdapter.binEnvVar });

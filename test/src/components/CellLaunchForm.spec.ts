@@ -324,10 +324,14 @@ describe("the workspace chip", () => {
   });
 });
 
-// The workspace is handed the WHOLE GUI MCP at spawn whatever agent runs there
-// (carriesFullGuiMcp), so there is no per-directory choice to offer. Four switches there would be
-// worse than redundant: they write a per-folder registration that a claimed session then
+// A claude or codex session in the workspace is handed the WHOLE GUI MCP at spawn
+// (carriesFullGuiMcp), so there is no per-directory choice to offer it. Four switches there would
+// be worse than redundant: they write a per-folder registration that a claimed session then
 // ignores, i.e. controls that visibly do nothing.
+//
+// "Whatever agent runs there" is NOT true and was the bug (#1423): antigravity reaches MCP through
+// a per-directory file, never through a per-spawn config, so in the workspace it must still be
+// asked. The cases below pin both halves.
 describe("the GUI tool groups in the workspace", () => {
   const guiMcpFetch = () => {
     globalThis.fetch = vi.fn(async (url: string) => {
@@ -376,6 +380,47 @@ describe("the GUI tool groups in the workspace", () => {
     expect(w.find('[data-testid="cell-mcp-all"]').exists()).toBe(false);
     expect(w.find('[data-testid="cell-mcp-toggle-render"]').exists()).toBe(true);
     expect(w.find('[data-testid="cell-mcp-toggle-external"]').exists()).toBe(true);
+  });
+
+  // #1423. Both halves of the bug in one assertion: the claim was untrue for antigravity, AND the
+  // same branch hid the switches — which is the only place in src/ that registers a group at all,
+  // so the form promised every tool while removing the way to obtain any.
+  it("asks antigravity in the workspace, rather than telling it that everything is available", async () => {
+    guiMcpFetch();
+    const w = mountForm([], { dir: "/home/me/ws", defaultCwd: "/home/me/ws", agent: "antigravity" });
+    await flushPromises();
+    expect(w.find('[data-testid="cell-mcp-all"]').exists()).toBe(false);
+    expect(w.find('[data-testid="cell-mcp-toggle-render"]').exists()).toBe(true);
+    expect(w.find('[data-testid="cell-mcp-toggle-external"]').exists()).toBe(true);
+  });
+
+  it("still tells codex in the workspace that everything is available", async () => {
+    guiMcpFetch();
+    const w = mountForm([], { dir: "/home/me/ws", defaultCwd: "/home/me/ws", agent: "codex" });
+    await flushPromises();
+    expect(w.find('[data-testid="cell-mcp-all"]').exists()).toBe(true);
+    expect(w.find('[data-testid="cell-mcp-toggle-render"]').exists()).toBe(false);
+  });
+
+  // A custom agent IS the CLI its entry declares, with the user's command wrapped around it — the
+  // appended argv carries the same --mcp-config a plain claude cell gets. Read from `entry.agent`,
+  // never from the command text.
+  it("treats a custom agent as the CLI its entry declares", async () => {
+    guiMcpFetch();
+    const nemotron: CustomAgent = { id: "nemotron", label: "Nemotron", agent: "claude", command: "ollama launch claude --" };
+    const w = mountForm([], { dir: "/home/me/ws", defaultCwd: "/home/me/ws", agent: "custom:nemotron", customAgents: [nemotron] });
+    await flushPromises();
+    expect(w.find('[data-testid="cell-mcp-all"]').exists()).toBe(true);
+  });
+
+  // A cell can outlive the config entry it was launched from. Its CLI is then unknowable, so the
+  // form offers the switches: being wrong in the direction that still leaves a way out.
+  it("offers the switches for a custom agent whose entry is gone", async () => {
+    guiMcpFetch();
+    const w = mountForm([], { dir: "/home/me/ws", defaultCwd: "/home/me/ws", agent: "custom:deleted", customAgents: [] });
+    await flushPromises();
+    expect(w.find('[data-testid="cell-mcp-all"]').exists()).toBe(false);
+    expect(w.find('[data-testid="cell-mcp-toggle-render"]').exists()).toBe(true);
   });
 });
 

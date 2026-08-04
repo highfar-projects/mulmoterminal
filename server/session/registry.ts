@@ -11,7 +11,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { MULMOTERMINAL_HOME, SESSION_ID_RE } from "../config/env.js";
 import type { DirModelChoice } from "./provider-env.js";
-import { asTerminalAgent, type TerminalAgent } from "../../common/sessionAgent.js";
+import { asTerminalAgent, type SessionAgent, type TerminalAgent } from "../../common/sessionAgent.js";
 import { messageOf } from "../errors.js";
 import { buildActivitySnapshot, mergeOwnedActivity, parseActivityState, type PersistedActivity } from "./activity-state.js";
 import { parseSessionIdLog, sessionIdLogLine } from "./session-id-log.js";
@@ -402,8 +402,8 @@ export function hasAllGuiTools(id: string): boolean {
  *   given, which may be no all-tools url — claiming on top of that is exactly the stale-claim
  *   failure, arrived at from the other side.
  */
-export function claimFullGuiMcp(sessionId: string, attachGuiMcp: boolean, cwd: string | undefined, wouldReattach: boolean): boolean {
-  const full = carriesFullGuiMcp(attachGuiMcp, cwd);
+export function claimFullGuiMcp(sessionId: string, attachGuiMcp: boolean, cwd: string | undefined, wouldReattach: boolean, agent: SessionAgent): boolean {
+  const full = carriesFullGuiMcp(attachGuiMcp, cwd, agent);
   if (!full) releaseAllToolsSession(sessionId);
   else if (!wouldReattach) markAllToolsSession(sessionId);
   return full;
