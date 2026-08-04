@@ -5,6 +5,7 @@ import {
   clearResetModes,
   clickReportSequences,
   createWheelTicker,
+  flushWheelResidual,
   isClickGesture,
   recordSwallowedModes,
   wantsMouseReports,
@@ -210,5 +211,54 @@ describe("wheelNotches", () => {
     const ticker = createWheelTicker();
     expect(wheelNotches(ticker, { deltaY: 120, deltaMode: PIXEL }, 0, ROWS, 1)).toBe(1);
     expect(wheelNotches(ticker, { deltaY: -120, deltaMode: PIXEL }, 0, ROWS, 1)).toBe(-1);
+  });
+});
+
+// The hole banking alone leaves: an event worth less than a notch is CONSUMED and reports nothing,
+// so a gesture that never reaches a whole notch does nothing at all. On a trackpad that is a gentle
+// nudge, and because only an agent cell takes this path, the same nudge scrolls a shell cell fine —
+// which reads as "the wheel is broken here" (#1200). The flush is what the gesture's end owes.
+describe("flushWheelResidual", () => {
+  const CELL_HEIGHT_PX = 20;
+  const ROWS = 24;
+  const PIXEL = 0;
+
+  const nudge = (deltas: number[]) => {
+    const ticker = createWheelTicker();
+    const reported = deltas.map((deltaY) => wheelNotches(ticker, { deltaY, deltaMode: PIXEL }, CELL_HEIGHT_PX, ROWS, 1));
+    return { ticker, reported, flushed: flushWheelResidual(ticker) };
+  };
+
+  it("pays a gesture that reported nothing but got most of the way", () => {
+    const { reported, flushed } = nudge([2, 2, 2, 2, 2]); // 0.75 of a notch
+    expect(reported).toEqual([0, 0, 0, 0, 0]);
+    expect(flushed).toBe(1);
+  });
+
+  // A finger resting on the trackpad, or a single stray pixel, is not a scroll.
+  it("pays nothing for less than half a notch", () => {
+    expect(nudge([2]).flushed).toBe(0); // 0.15
+    expect(nudge([2, 2, 2]).flushed).toBe(0); // 0.45
+  });
+
+  it("signs the flush like the gesture", () => {
+    expect(nudge([-2, -2, -2, -2, -2]).flushed).toBe(-1);
+  });
+
+  // Emptied whatever it paid, so the next gesture starts from zero — the bank belongs to ONE
+  // stretch of scrolling, which is the rule the reversal guard and the tracking-stopped reset
+  // both keep.
+  it("empties the bank either way", () => {
+    const paid = nudge([2, 2, 2, 2, 2]);
+    expect(paid.ticker.residual).toBe(0);
+    const unpaid = nudge([2]);
+    expect(unpaid.ticker.residual).toBe(0);
+  });
+
+  // Nothing banked is nothing owed: a gesture that landed on a whole notch must not get a bonus.
+  it("pays nothing when the gesture came out even", () => {
+    const { reported, flushed } = nudge([120]); // exactly 6 notches
+    expect(reported).toEqual([6]);
+    expect(flushed).toBe(0);
   });
 });
