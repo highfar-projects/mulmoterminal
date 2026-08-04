@@ -43,9 +43,13 @@ export interface DirConfigSource {
   // Keys the app doesn't read at all: a misspelling (`badgeColour`), or a setting that belongs
   // in the global config instead of a directory's file.
   unknown: string[];
+  // Keys `.mulmoterminal.local.json` set, and therefore took over from the shared file (#1430).
+  // Without this the panel can say a value is in force but not WHICH of two files decided it —
+  // and "I changed it and nothing happened" is usually the other file winning.
+  local: string[];
 }
 
-export const EMPTY_DIR_CONFIG_SOURCE: DirConfigSource = { applied: [], ignored: [], unknown: [] };
+export const EMPTY_DIR_CONFIG_SOURCE: DirConfigSource = { applied: [], ignored: [], unknown: [], local: [] };
 
 // The settings a directory can make that the per-cell config deliberately doesn't carry — the
 // browser has no use for them while running a terminal, but the preview has to SHOW them or a
@@ -103,7 +107,7 @@ export function keysWithValue(resolved: object): Set<string> {
 // `raw` is the file as parsed; `kept` is which keys survived the loader (see keysWithValue).
 export function describeDirConfig(raw: Record<string, unknown>, kept: ReadonlySet<string>): DirConfigSource {
   const known = new Set<string>(DIR_CONFIG_KEYS);
-  const source: DirConfigSource = { applied: [], ignored: [], unknown: [] };
+  const source: DirConfigSource = { applied: [], ignored: [], unknown: [], local: [] };
   for (const key of Object.keys(raw)) {
     if (!known.has(key)) source.unknown.push(key);
     else if (kept.has(key)) source.applied.push(key);

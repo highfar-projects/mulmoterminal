@@ -55,6 +55,11 @@ import {
 } from "./config-schema.js";
 
 export const DIR_CONFIG_FILE = ".mulmoterminal.json";
+// The same settings for THIS checkout only (#1430). Several clones of one repository share a
+// project config and differ in nothing but their colours and grid rank, so the shared part lives
+// in the file above — which a single-clone user can have on its own, colours included — and this
+// one takes over the handful of keys that make one clone distinguishable from the next.
+export const DIR_LOCAL_CONFIG_FILE = ".mulmoterminal.local.json";
 
 export interface DirConfig extends DirChrome {
   theme: ThemeId | null;
@@ -110,7 +115,11 @@ export interface PublicDirConfig extends DirChrome {
  *  rules, so the config's live reload and the editor's change feed can't drift apart. */
 export function dirConfigWriteTarget(toolName: unknown, toolInput: unknown, sessionCwd: string | null = null): string | null {
   const file = writtenFilePath(toolName, toolInput, sessionCwd);
-  return file && path.basename(file) === DIR_CONFIG_FILE ? path.dirname(file) : null;
+  if (!file) return null;
+  // Either file — a clone's local override is the one a user edits most, and reloading only on the
+  // shared file would leave the very setting they just changed not applying (#1430).
+  const name = path.basename(file);
+  return name === DIR_CONFIG_FILE || name === DIR_LOCAL_CONFIG_FILE ? path.dirname(file) : null;
 }
 
 // A directory's sound for one notification kind: its own audio file, or one of the built-in
@@ -175,13 +184,39 @@ const EMPTY: DirConfig = {
   appendSystemPrompt: null,
 };
 
+/** Both files as ONE object, the local one winning per top-level key.
+ *
+ *  Merged as raw JSON and validated afterwards, rather than loaded twice and combined: every rule
+ *  about what a value may be then stays written once, and a relative `icon` / `sound` / `addDirs`
+ *  resolves against this directory whichever file it came from.
+ *
+ *  Whole keys, not a deep merge. One key is one intent — the seven colours are already separate
+ *  keys, so "this clone is the green one" reads naturally — and a `colors` block a reader has to
+ *  assemble from two files is harder to predict than one they can see entire. */
+export function mergedDirConfigRaw(base: string): { raw: Record<string, unknown>; localKeys: string[] } {
+  const shared = readConfigObject(path.join(base, DIR_CONFIG_FILE));
+  const local = readConfigObject(path.join(base, DIR_LOCAL_CONFIG_FILE));
+  return { raw: { ...shared, ...local }, localKeys: Object.keys(local) };
+}
+
+// A file that is missing, unreadable or not an object contributes nothing — the same tolerance the
+// single file already had, now applied to each of the two independently, so a broken local file
+// leaves the shared config working rather than taking the directory down with it.
+function readConfigObject(file: string): Record<string, unknown> {
+  try {
+    if (!existsSync(file)) return {};
+    const raw: unknown = readJsonFile(file);
+    return isRecord(raw) ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
 export function loadDirConfig(cwd: string): DirConfig {
   try {
     const base = path.resolve(cwd);
-    const file = path.join(base, DIR_CONFIG_FILE);
-    if (!existsSync(file)) return EMPTY;
-    const raw: unknown = readJsonFile(file);
-    if (!isRecord(raw)) return EMPTY;
+    const { raw } = mergedDirConfigRaw(base);
+    if (Object.keys(raw).length === 0) return EMPTY;
     return {
       name: dirNameField.parse(raw.name),
       badgeColor: dirColorField.parse(raw.badgeColor),
@@ -277,8 +312,11 @@ export interface DirConfigDetail {
   // False when the requested directory itself is gone — a preset outliving its project. The
   // preview must not present that as "no config here", which reads as a working directory.
   exists: boolean;
-  // Absolute path of the file, or null when the directory has none.
+  // Absolute path of the shared file, or null when the directory has none.
   file: string | null;
+  // The same for this checkout's own overrides (#1430). Both can be present, and either can be
+  // present alone — a clone may carry only local settings.
+  localFile: string | null;
   config: PublicDirConfig;
   // Everything else the file can set. Separate from `config` because that shape is what every
   // cell fetches on mount, and none of this is of any use to a running terminal.
@@ -316,9 +354,9 @@ function autoIconRef(cwd: string, setting: DirIconSetting): string | null {
 
 // The file, when the directory has one at all. Null also covers an unreadable path — the
 // preview then says "no file", which is what the app itself concluded.
-function dirConfigFile(cwd: string): string | null {
+function dirConfigFile(cwd: string, name: string): string | null {
   try {
-    const file = path.join(path.resolve(cwd), DIR_CONFIG_FILE);
+    const file = path.join(path.resolve(cwd), name);
     return existsSync(file) ? file : null;
   } catch {
     return null;
@@ -330,6 +368,7 @@ function dirConfigFile(cwd: string): string | null {
 export const MISSING_DIR_CONFIG_DETAIL: DirConfigDetail = {
   exists: false,
   file: null,
+  localFile: null,
   config: { ...EMPTY_DIR_CHROME, theme: null, colors: null, hasSound: false, iconUrl: null },
   extras: EMPTY_DIR_CONFIG_EXTRAS,
   source: EMPTY_DIR_CONFIG_SOURCE,
@@ -337,28 +376,22 @@ export const MISSING_DIR_CONFIG_DETAIL: DirConfigDetail = {
 
 export function dirConfigDetail(cwd: string): DirConfigDetail {
   const config = publicDirConfig(cwd);
-  const file = dirConfigFile(cwd);
-  if (!file) return { exists: true, file: null, config, extras: EMPTY_DIR_CONFIG_EXTRAS, source: EMPTY_DIR_CONFIG_SOURCE };
+  const file = dirConfigFile(cwd, DIR_CONFIG_FILE);
+  const localFile = dirConfigFile(cwd, DIR_LOCAL_CONFIG_FILE);
+  if (!file && !localFile) return { exists: true, file: null, localFile: null, config, extras: EMPTY_DIR_CONFIG_EXTRAS, source: EMPTY_DIR_CONFIG_SOURCE };
   const extras = dirConfigExtras(cwd);
-  // Malformed or non-object JSON keeps the FILE in the answer: "there is a file here and none
-  // of it applied" is the single most useful thing this preview can say, and reporting no file
-  // at all would send the reader looking for one that is right there.
-  const raw: unknown = tryReadJson(file);
-  if (!isRecord(raw)) return { exists: true, file, config, extras, source: EMPTY_DIR_CONFIG_SOURCE };
+  // Both files, as the loader sees them. Malformed or non-object JSON keeps the FILE in the
+  // answer: "there is a file here and none of it applied" is the single most useful thing this
+  // preview can say, and reporting no file at all would send the reader looking for one that is
+  // right there — which is now two places to look rather than one.
+  const { raw, localKeys } = mergedDirConfigRaw(path.resolve(cwd));
+  if (Object.keys(raw).length === 0) return { exists: true, file, localFile, config, extras, source: EMPTY_DIR_CONFIG_SOURCE };
   // `icon: "invalid"` is a VALUE to keysWithValue, which would report the key as applied — the one
   // thing it must not say about a setting that did not take effect. Flattened to null here so the
   // key lands in "ignored", where a mistyped path belongs.
   const resolved = loadDirConfig(cwd);
   const kept = keysWithValue({ ...resolved, icon: dirIconRef(resolved.icon) });
-  return { exists: true, file, config, extras, source: describeDirConfig(raw, kept) };
-}
-
-function tryReadJson(file: string): unknown {
-  try {
-    return readJsonFile(file);
-  } catch {
-    return null;
-  }
+  return { exists: true, file, localFile, config, extras, source: { ...describeDirConfig(raw, kept), local: localKeys } };
 }
 
 // The sound this directory wants for one kind: its per-kind entry, else its all-kind
