@@ -3,7 +3,9 @@ import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups";
 import { queueMcpWrite } from "../components/mcpWriteQueue";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
-import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+// The POST shells out to `claude mcp add` / `remove`; the GET only reads config files, so it
+// keeps the ordinary deadline.
+import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 // Which GUI tool groups a directory hands its agents, one switch per group in TOOL_GROUPS
 // (render, data, media, external). NOT MulmoTerminal state: each is an MCP server registered in
@@ -88,11 +90,15 @@ function apply(switches: Switches, group: ToolGroup): Promise<void> {
 
 async function write(switches: Switches, group: ToolGroup, target: string, wanted: boolean): Promise<void> {
   try {
-    const res = await fetchWithTimeout("/api/gui-mcp-groups", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ cwd: target, group, enabled: wanted }),
-    });
+    const res = await fetchWithTimeout(
+      "/api/gui-mcp-groups",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ cwd: target, group, enabled: wanted }),
+      },
+      SLOW_COMMAND_TIMEOUT_MS,
+    );
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await jsonBody(res);
     if (data.ok !== true) throw new Error(typeof data.message === "string" && data.message ? data.message : "claude mcp failed");
@@ -143,11 +149,15 @@ async function syncInto(switches: Switches, worktreePath: string): Promise<void>
   for (const group of changed) {
     await queueMcpWrite(async () => {
       try {
-        await fetchWithTimeout("/api/gui-mcp-groups", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ cwd: worktreePath, group, enabled: wanted(group) }),
-        });
+        await fetchWithTimeout(
+          "/api/gui-mcp-groups",
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ cwd: worktreePath, group, enabled: wanted(group) }),
+          },
+          SLOW_COMMAND_TIMEOUT_MS,
+        );
       } catch {
         // best-effort — a worktree without the registration still launches, just without the tools
       }

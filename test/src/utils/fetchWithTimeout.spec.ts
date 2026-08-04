@@ -84,6 +84,18 @@ describe("fetchWithTimeout", () => {
     await settled;
   });
 
+  // CodeRabbit on #1398: a caller can build the Request up front and put its signal there. Passing
+  // an `init` at all replaces a Request's signal, so reading only `init.signal` dropped it.
+  it("honours a signal carried on a Request rather than in the init", async () => {
+    vi.useFakeTimers();
+    hangingFetch();
+    const caller = new AbortController();
+    const request = new Request("http://localhost/api/thing", { signal: caller.signal });
+    const settled = expect(fetchWithTimeout(request)).rejects.toThrow(/abort/i);
+    caller.abort();
+    await settled;
+  });
+
   it("passes the caller's method and body through untouched", async () => {
     const seen: RequestInit[] = [];
     vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {

@@ -31,7 +31,10 @@ export const SLOW_COMMAND_TIMEOUT_MS = 60_000;
 export async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit, timeout_ms: number = DEFAULT_REQUEST_TIMEOUT_MS): Promise<Response> {
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), timeout_ms);
-  const caller = init?.signal;
+  // A `Request` carries its own signal, and passing `init` at all replaces it — so a caller that
+  // built the request up front, rather than passing an init here, would lose its cancellation
+  // (CodeRabbit, #1398). Read from whichever the caller actually used.
+  const caller = init?.signal ?? (input instanceof Request ? input.signal : null);
   const signal = caller ? AbortSignal.any([caller, abort.signal]) : abort.signal;
   try {
     return await fetch(input, { ...init, signal });

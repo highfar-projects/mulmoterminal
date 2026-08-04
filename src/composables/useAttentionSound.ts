@@ -155,8 +155,18 @@ function loadBuffer(key: string, url: string): Promise<void> {
       if (isDefinitiveMiss(response.status)) buffers.set(key, null);
       return;
     }
+    // The bytes and the decode are separated because only ONE of them is a verdict about the
+    // file. Since #1393 the deadline reaches the body, so `arrayBuffer()` can abort mid-transfer —
+    // and folding that into the catch below would file a slow network under "this sound is wrong"
+    // and silence the kind for good, which is the thing isDefinitiveMiss exists to prevent.
+    let bytes: ArrayBuffer;
     try {
-      buffers.set(key, await ctx.decodeAudioData(await response.arrayBuffer()));
+      bytes = await response.arrayBuffer();
+    } catch {
+      return; // aborted or cut off — unknown, so the next beep tries again
+    }
+    try {
+      buffers.set(key, await ctx.decodeAudioData(bytes));
     } catch {
       // Served, but not audio: the configured file is wrong, not the network. Remember it
       // rather than decoding the same bad bytes on every beep.
