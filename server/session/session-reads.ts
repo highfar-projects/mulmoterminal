@@ -22,7 +22,8 @@ import {
   type LatestTurnContext,
   type TimelineEvent,
 } from "./transcript.js";
-import { createAppendFileCache, createFileCache, type FileStamp } from "./file-cache.js";
+import { createAppendFileCache, createFileCache, type AppendScan, type FileStamp } from "./file-cache.js";
+import { createTranscriptSidecar } from "./transcript-sidecar.js";
 import { classifyWorkPhase, type WorkPhase } from "./workPhase.js";
 import { sessionListTitle } from "./sessionListTitle.js";
 import { activity, aiTitles, codexRolloutIds, isBackgroundSession, isFailedWorker, knownSessions, sessionMemos } from "./registry.js";
@@ -245,23 +246,42 @@ const TITLE_TAIL_BYTES = 512 * 1024;
 
 const titleFieldsCache = createAppendFileCache<TitleFields>();
 
+// The same fold, kept on disk for the transcripts big enough to be worth a file — so a restart and
+// the next mulmoterminal process do not each pay for it again (#1386). Bump the version when
+// foldTitleField changes what it means, or old files answer for a rule that no longer exists.
+const isTitleFields = (value: unknown): value is TitleFields =>
+  isRecord(value) &&
+  (value.aiTitle === null || typeof value.aiTitle === "string") &&
+  (value.lastPrompt === null || typeof value.lastPrompt === "string") &&
+  (value.firstUserMsg === null || typeof value.firstUserMsg === "string");
+
+const titleFieldsSidecar = createTranscriptSidecar<TitleFields>({ kind: "title-fields", version: 1, isValue: isTitleFields });
+
 // A transcript is append-only, so the same three fields are folded out of it at most once: an
 // unchanged file is not read at all, and a grown one costs only the bytes that arrived. Without
 // this the session list read every one of its fifty transcripts in full on every request — 4.8 s
 // for a 17 KB answer on a 1.1 GB project, and the launcher waits on it (#1377).
 async function readTitleFields(full: string, stamp: FileStamp): Promise<TitleFields> {
-  const resumed = titleFieldsCache.resume(full, stamp);
-  if (resumed && resumed.from >= stamp.size) return resumed.value;
-  if (!resumed) {
-    const cold = await coldTitleFields(full, stamp.size);
-    titleFieldsCache.set(full, stamp, cold.offset, cold.fields);
-    return cold.fields;
+  // Memory first, disk second: the sidecar only has to answer the first read of a file in this
+  // process, and after that the in-memory scan is the one being resumed.
+  const resumed = titleFieldsCache.resume(full, stamp) ?? (await titleFieldsSidecar.read(full, stamp));
+  if (resumed && resumed.from >= stamp.size) {
+    titleFieldsCache.set(full, stamp, resumed.from, resumed.value);
+    return resumed.value;
   }
-  // Resuming from a boundary the previous scan reported, so the record starting there counts.
+  const { fields, offset } = resumed
+    ? // Resuming from a boundary the previous scan reported, so the record starting there counts.
+      await resumeTitleFields(full, resumed)
+    : await coldTitleFields(full, stamp.size);
+  titleFieldsCache.set(full, stamp, offset, fields);
+  titleFieldsSidecar.write(full, stamp, offset, fields);
+  return fields;
+}
+
+async function resumeTitleFields(full: string, resumed: AppendScan<TitleFields>): Promise<{ fields: TitleFields; offset: number }> {
   const fields = { ...resumed.value };
   const offset = await forEachJsonlRecordIn(full, { from: resumed.from, atLineStart: true }, (o) => foldTitleField(fields, o));
-  titleFieldsCache.set(full, stamp, offset, fields);
-  return fields;
+  return { fields, offset };
 }
 
 // The first read of a file: both ends when it is big enough for that to be worth it, and the whole
