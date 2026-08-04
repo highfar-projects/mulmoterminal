@@ -23,13 +23,23 @@ import { normalizeOrderPriority } from "../../common/orderPriority.js";
 import { SESSION_AGENTS } from "../../common/sessionAgent.js";
 import { NOTIFY_KINDS } from "../../common/notifyKinds.js";
 import type { QuickCommand } from "../../common/quickCommands.js";
+import { isRecord } from "../../common/isRecord.js";
+import {
+  ENV_NAME_RE,
+  MAX_PORT_BASE,
+  MAX_SLUG_CHARS,
+  MAX_WORKTREE_ENV_VARS,
+  MIN_PORT,
+  type WorktreeEnvSpec,
+  type WorktreeEnvVar,
+} from "../../common/worktreeEnv.js";
 import { CUSTOM_AGENT_KINDS, type CustomAgent } from "../../common/customAgents.js";
 
 // ---- shared constants ---------------------------------------------------------------------
 
 export const VIEW_TARGETS = ["diff", "prs", "wiki", "collections", "accounting"] as const;
 export const RUN_TYPES = ["shell", "input", "open"] as const;
-export const BUILTIN_CHIPS = ["dir", "git", "work", "ctx", "usage", "status", "diff", "tools"] as const;
+export const BUILTIN_CHIPS = ["dir", "git", "work", "ctx", "usage", "status", "diff", "tools", "env"] as const;
 
 export const NAME_MAX_CHARS = 40;
 // Runtime caps (sanitizeButtons / sanitizeChips truncate past these), mirrored by the JSON Schema
@@ -308,6 +318,38 @@ export function resolveAddDirs(input: unknown, base: string, exists: (p: string)
   return unique.length ? unique : null;
 }
 
+// What a directory wants handed out uniquely per working tree (#1367): the port its dev server
+// binds, the database name its migrations touch. The DECLARATION only — which variables and what
+// kind of value each takes. What each tree actually gets is reserved in config/worktree-env.ts.
+//
+// A port names its `base` rather than a range, because the number a project already uses is the
+// one its README, its proxy config and its bookmarks say. The trees spread upward from it.
+const worktreeEnvVarSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("port"), base: z.number().int().min(MIN_PORT).max(MAX_PORT_BASE) }),
+  z.object({ kind: z.literal("slug"), prefix: z.string().max(MAX_SLUG_CHARS).optional() }),
+]);
+export const worktreeEnvSchema = z.record(z.string().regex(ENV_NAME_RE), worktreeEnvVarSchema);
+
+// The lenient loader: one malformed variable is dropped on its own, so a typo in `API_PORT`
+// cannot take a working `PORT` down with it — the same treatment `providers.models` gets, and for
+// the same reason (the other entries are still exactly what the author meant).
+export const dirWorktreeEnvField = z
+  .unknown()
+  .transform((raw): WorktreeEnvSpec | null => {
+    if (!isRecord(raw)) return null;
+    const spec: WorktreeEnvSpec = {};
+    Object.entries(raw)
+      .filter(([name]) => ENV_NAME_RE.test(name))
+      .slice(0, MAX_WORKTREE_ENV_VARS)
+      .forEach(([name, value]) => {
+        const parsed = worktreeEnvVarSchema.safeParse(value);
+        if (parsed.success) spec[name] = parsed.data satisfies WorktreeEnvVar;
+      });
+    return Object.keys(spec).length ? spec : null;
+  })
+  .nullable()
+  .catch(null);
+
 // ---- JSON Schema for the config skill -----------------------------------------------------
 // The WRITABLE per-dir shape (what a user types into `.mulmoterminal.json`), described strictly
 // so the skill can validate its output and drive structured generation. Distinct from the
@@ -410,6 +452,10 @@ const writableDirConfigSchema = z.object({
   // Whether this directory's sessions carry the built-in closing-summary instructions (#1062).
   // Omit to follow `appendSystemPrompt` in the global config, which defaults to on.
   appendSystemPrompt: z.boolean().optional(),
+  // Values every working tree of this project needs its OWN of (#1367) — a dev server's port, a
+  // database name. Each tree (the checkout itself and every managed worktree) is reserved a
+  // distinct value, exported into its terminals. Omit and nothing is set, as before.
+  worktreeEnv: worktreeEnvSchema.optional(),
 });
 
 export function dirConfigJsonSchema(): Record<string, unknown> {

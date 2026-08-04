@@ -7,9 +7,9 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, realpathSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { isStrictlyWithin } from "../infra/path-within.js";
+import { mulmoterminalHome } from "../infra/mulmoterminal-home.js";
 import { splitLines } from "../infra/split-lines.js";
 import { DIR_CONFIG_FILE } from "../config/dir-config.js";
 import { writeInheritedDirConfig } from "../config/worktree-dir-config.js";
@@ -25,7 +25,7 @@ const realpath = realpathSync.native;
 // realpath so it matches the realpaths `git worktree list` reports (e.g. macOS
 // /tmp -> /private/tmp), which the isManagedWorktree filter relies on.
 function worktreesBase(): string {
-  const base = process.env.MULMOTERMINAL_HOME || path.join(os.homedir(), ".mulmoterminal");
+  const base = mulmoterminalHome();
   try {
     return path.join(realpath(base), "worktrees");
   } catch {

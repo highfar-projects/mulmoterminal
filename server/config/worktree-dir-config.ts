@@ -21,7 +21,11 @@ const HUE_STEP_DEGREES = 12;
 // Adopted unchanged: what the project IS rather than which tree this is. `colors` (the xterm
 // palette) is deliberately here and not tinted — rotating the terminal's own palette would move
 // the ANSI colours a program's output names, which is a readability change, not a label.
-const INHERITED_KEYS = ["name", "theme", "colors", "fontSize", "fontFamily", "provider", "model"] as const;
+//
+// `worktreeEnv` is a DECLARATION of what each tree needs its own of (#1367), not a value, so it
+// copies verbatim and the worktree is then reserved its own port and slug. A worktree that did
+// not carry it would be the one tree of the project whose dev server still fought for 3000.
+const INHERITED_KEYS = ["name", "theme", "colors", "fontSize", "fontFamily", "provider", "model", "worktreeEnv"] as const;
 
 // The cell's chrome — everything a glance at the grid distinguishes one cell by. These get the
 // tint, so a worktree is recognisable both AS this project and as not the project's main tree.
