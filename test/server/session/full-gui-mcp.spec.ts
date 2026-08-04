@@ -21,7 +21,7 @@ process.env.CLAUDE_CWD = WORKSPACE;
 
 const { carriesFullGuiMcp } = await import("../../../server/session/mcp-config.js");
 const { buildClaudeArgs } = await import("../../../server/agents/claude-args.js");
-const { launcherCommandWithClaudeGuiMcp } = await import("../../../server/session/launcher-gui-mcp.js");
+const { launcherCommandWithClaudeGuiMcp, launcherCommandWithGuiMcp, launcherTakesGuiMcp } = await import("../../../server/session/launcher-gui-mcp.js");
 
 afterAll(() => {
   if (REAL_CLAUDE_CWD === undefined) delete process.env.CLAUDE_CWD;
@@ -141,5 +141,41 @@ describe("the command line a launcher chip ends up with", () => {
   // this edits text the user wrote, so an unrecognised shape means leave it alone.
   it.each([["codex"], ["zsh"], ["yarn dev"], ["FOO=1 claude"], [""], ["   "]])("leaves %s alone", (command) => {
     expect(rewrite(command)).toBe(command);
+  });
+});
+
+// `launcherTakesGuiMcp` answers a question the two rewriters below answer by ACTING, and anything
+// that records a consequence of the injection has to agree with them — a chip marked as carrying
+// every GUI tool while being handed none misreports itself to /api/tools (Codex on #1399). So the
+// predicate is pinned against what the rewriters actually do, rather than restated.
+describe("which chips are handed the GUI MCP at all", () => {
+  const CLAUDE_GUI = { mcpConfigPath: "/home/u/.mulmoterminal/settings/s-mcp.json", allowedTools: "mcp__mt__presentChart" };
+  const CODEX_GUI = [{ id: "mt", url: "http://127.0.0.1:1/api/mcp/s", autoApprove: true }];
+  // Either rewriter firing means the command line came back changed; both see every command and
+  // each recognises only its own program, so at most one can fire.
+  const rewritten = (command: string) =>
+    launcherCommandWithClaudeGuiMcp(command, CLAUDE_GUI, "darwin") !== command || launcherCommandWithGuiMcp(command, CODEX_GUI, "darwin") !== command;
+
+  it.each([
+    ["claude"],
+    ["codex"],
+    ["claude --model opus"],
+    ["codex resume"],
+    ["zsh"],
+    ["yarn dev"],
+    ["agy"],
+    ["antigravity"],
+    ["lazygit"],
+    ["FOO=1 claude"],
+    [""],
+    ["   "],
+  ])("agrees with the rewriters on %j", (command) => {
+    expect(launcherTakesGuiMcp(command)).toBe(rewritten(command));
+  });
+
+  // The one this exists for. `launcherRunsAgent` says yes here (antigravity IS an agent), and using
+  // that as the gate is what over-marked the session.
+  it("says no to an agent with no rewriter", () => {
+    expect(launcherTakesGuiMcp("antigravity")).toBe(false);
   });
 });

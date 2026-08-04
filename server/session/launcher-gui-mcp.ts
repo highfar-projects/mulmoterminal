@@ -44,6 +44,23 @@ export function launcherAgent(command: string): SessionAgent {
 }
 
 /**
+ * Whether a chip's command line will actually be HANDED the GUI MCP — that is, whether one of the
+ * two rewriters below will fire on it.
+ *
+ * Not `launcherRunsAgent`: that also answers yes for antigravity, which has no rewriter here. The
+ * difference matters to anything that records a consequence of the injection rather than performing
+ * it — a chip running `zsh`, `yarn dev` or `agy` is handed no MCP at all, and marking it as carrying
+ * every GUI tool misreports it to `/api/tools` (Codex review on #1399). The same mistake the config
+ * FILE made before #1358, made again for the record instead of the file.
+ *
+ * A spec pins this against what the rewriters actually do, so the two cannot drift apart.
+ */
+export const launcherTakesGuiMcp = (command: string): boolean => {
+  const program = launcherProgram(command);
+  return program === "claude" || program === "codex";
+};
+
+/**
  * A launcher chip that runs CLAUDE, which reaches the GUI MCP through flags
  * rather than `-c` overrides: `--mcp-config <path> --allowedTools <list>`, the same two a claude
  * cell in the workspace is spawned with.

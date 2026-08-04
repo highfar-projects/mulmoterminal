@@ -32,7 +32,13 @@ import {
 } from "../session/registry.js";
 import { SpawnRefusedError } from "../session/pty-spawn.js";
 import { bufferEarlyFrames, type EarlyFrames } from "../session/early-frames.js";
-import { launcherCommandWithGuiMcp, launcherCommandWithClaudeGuiMcp, launcherProgram, launcherRunsAgent } from "../session/launcher-gui-mcp.js";
+import {
+  launcherCommandWithGuiMcp,
+  launcherCommandWithClaudeGuiMcp,
+  launcherProgram,
+  launcherRunsAgent,
+  launcherTakesGuiMcp,
+} from "../session/launcher-gui-mcp.js";
 import { codexGuiMcpServers, fullGuiAllowedTools } from "../session/mcp-config.js";
 import { mcpConfigFileArgument, withSettingsCleanup } from "../session/session-settings.js";
 import { registeredGuiMcpGroups } from "../infra/gui-mcp-registration.js";
@@ -540,7 +546,11 @@ async function handleLaunchConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
   // exactly as it was, on the groups its directory registered.
   //
   // Nothing at all on a tmux REATTACH: it picks the running program up and ignores `command`.
-  const fullGui = !live && claimFullGuiMcp(sessionId, false, cwd);
+  //
+  // Gated on `launcherTakesGuiMcp` BEFORE the claim is recorded: a chip running `zsh`, `yarn dev`
+  // or `agy` has no rewriter, so it is handed no MCP — and recording it as carrying every GUI tool
+  // would misreport it to /api/tools (Codex review on #1399).
+  const fullGui = !live && launcherTakesGuiMcp(command) && claimFullGuiMcp(sessionId, false, cwd);
   const groups = live ? [] : await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []);
   const codexGui = live ? [] : codexGuiMcpServers({ sessionId, port: PORT, groups, allTools: fullGui });
   // The config file is written ONLY once the command is known to be claude. Writing it up front
