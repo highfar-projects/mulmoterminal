@@ -305,7 +305,11 @@ function setRightPane(pane: RightPane | null, uid: number | null): void {
   persistPane(uid, pane);
   // Every arrival at a pane is a split row. See paneExpanded: the takeover is asked for, never
   // inherited — including by the same pane reopened later.
-  paneExpanded.value = false;
+  //
+  // Only when this is the pane on screen: a button pressed on a tiled cell has not changed what
+  // the user is looking at, and collapsing THAT pane out of full width would be a second cell's
+  // button rearranging the one in front of them.
+  if (paneUid.value === uid) paneExpanded.value = false;
   // Leaving files drops the directory it was on, so coming back re-roots to whichever cell is
   // enlarged THEN rather than resuming a directory the user has since walked away from.
   if (leavingFiles) paneCwd.value = null;

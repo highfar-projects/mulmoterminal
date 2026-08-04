@@ -249,6 +249,21 @@ describe("the takeover is not remembered", () => {
     expect(pane(w).props("expanded")).toBe(false);
   });
 
+  // A button on a TILED cell answers for that cell and changes nothing on screen (#1378). Ending
+  // the takeover of the pane the user is reading would be a second cell's button rearranging the
+  // one in front of them.
+  it("survives a pane asked for on another, tiled cell", async () => {
+    const w = mountGrid();
+    await open(w);
+    await clickExpand(w);
+    expect(pane(w).props("expanded")).toBe(true);
+
+    w.findAllComponents({ name: "TerminalCell" })[1].vm.$emit("toggle-files");
+    await flushPromises();
+    expect(pane(w).props("expanded")).toBe(true);
+    expect(w.find(".zoom-row").classes()).toContain("pane-full");
+  });
+
   // The other way out: collapsing the zoom hides the row without unmounting the pane, so nothing
   // in setRightPane runs. Zooming back in — on this cell or another — must still be a split row.
   //
