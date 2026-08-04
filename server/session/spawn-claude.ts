@@ -9,7 +9,7 @@ import { submitSequenceForAgent } from "../../common/terminalSubmit.js";
 import { buildClaudeArgs } from "../agents/claude-args.js";
 import { claudeAdapter } from "../agents/claude.js";
 import { appendedSystemPrompt } from "../agents/appended-prompt.js";
-import { hookedSessions, knownSessions, launchChoices, ptys, resetSessionToolGroups } from "./registry.js";
+import { claimFullGuiMcp, hookedSessions, knownSessions, launchChoices, ptys, resetSessionToolGroups } from "./registry.js";
 import { ptySpawn, ptyWouldReattach } from "./pty-spawn.js";
 import { ptyExitLine, ptyStartLine } from "./pty-exit-log.js";
 import { attachDraftInjection } from "./draft-injection.js";
@@ -113,8 +113,9 @@ export function createClaudeSpawner(deps: SpawnDeps) {
   function spawnClaudePty(sessionId: string, resume: string | null, ws: WebSocket | null, options: SpawnClaudeOptions = {}): PtyEntry {
     const { initialPrompt, cwd = CLAUDE_CWD, attachGuiMcp = true, draft, launch } = options;
     const fullGuiMcp = carriesFullGuiMcp(attachGuiMcp, cwd);
-    // fullGuiMcp picks the MCP mode (see buildClaudeArgs, and its own doc for who earns it): the
-    // GUI MCP + --strict-mcp-config; a project-directory cell attaches neither, so its own load.
+    // fullGuiMcp picks the MCP mode (see buildClaudeArgs, and its own doc for who earns it): our
+    // broker on one all-tools url; a project-directory cell gets none of ours and loads the GUI
+    // tools its own directory registered. Either way the user's own MCP servers load.
     // Only --resume when the session has an on-disk transcript — claude doesn't write
     // a session's .jsonl until its first prompt, so a started-but-unused session can't
     // be resumed; we restart fresh (reusing the id via --session-id) instead.
@@ -178,12 +179,18 @@ export function createClaudeSpawner(deps: SpawnDeps) {
     // remaining window is irreducible without tmux reporting which branch `-A` took, and what
     // survives it is an over-reported group on a session that lost it — the next genuinely new
     // process clears that, whereas the reverse mistake could not be undone at all.
-    function resetToolGroupsUnlessReattaching(): void {
-      if (!ptyWouldReattach(sessionId, true)) resetSessionToolGroups(sessionId);
+    //
+    // The all-tools claim rides the SAME probe rather than taking its own: asking twice would widen
+    // exactly the window this is placed here to keep narrow. It is passed the answer instead of
+    // asking, and decides for itself what a reattach means for each direction (see claimFullGuiMcp).
+    function recordCapabilitiesForThisSpawn(): void {
+      const reattaching = ptyWouldReattach(sessionId, true);
+      if (!reattaching) resetSessionToolGroups(sessionId);
+      claimFullGuiMcp(sessionId, attachGuiMcp, cwd, reattaching);
     }
 
     function spawnEntry(): PtyEntry {
-      resetToolGroupsUnlessReattaching();
+      recordCapabilitiesForThisSpawn();
       const spawnEnv = { unset: resolved.unset, env: guiMcpEnv(sessionId, PORT), binEnvVar: claudeAdapter.binEnvVar };
       const { term, tmux, reattached } = ptySpawn(sessionId, deps.claudeBin, args, cwd, true, spawnEnv);
       console.log(ptyStartLine({ agent: "claude", pid: term.pid, cwd, tmux, reattached, sessionId, note: canResume ? `resume ${resume}` : null }));

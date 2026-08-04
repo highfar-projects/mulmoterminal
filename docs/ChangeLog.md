@@ -10,6 +10,56 @@ Entries here are folded into the next release's heading when it ships.
 
 ### Fixed
 
+- **Your claude.ai connectors, and your own MCP servers, now work in the workspace cell and the single view** ([#1338](https://github.com/receptron/mulmoterminal/issues/1338), [#1385](https://github.com/receptron/mulmoterminal/issues/1385)).
+  Gmail, Calendar, Drive, Slack, Notion — anything authorised on your claude.ai account — were
+  invisible to exactly the two kinds of session meant to be the most capable, along with
+  `~/.claude.json`, your plugin MCP servers and the directory's own `.mcp.json`. A cell in any other
+  directory had them all. `claude mcp list` said "Connected" the whole time, because that is the CLI
+  running its own health check rather than reporting what a running session can see.
+
+  Two flags were being pushed on one line. `--mcp-config` **adds** our GUI broker; `--strict-mcp-config`
+  makes it the **only** source. So "give this session the GUI panel" also meant "cut it off from
+  everything you configured" — for the single view since the beginning, and for the workspace cell
+  since 4.0.0 gave it the same treatment. The two reports were filed separately, one as a regression
+  and one as by-design; they are one line.
+
+  The isolating flag is gone (deleted, not made an option — a one-valued flag is the same weld
+  waiting to be re-made). What put it there was a worry that merging config layers would silently
+  drop our own broker; measured on CLI 2.1.221, `--mcp-config` alone yields the broker **and** the
+  connectors, while adding the strict flag yields the broker alone. MulmoClaude, which drives the
+  same workspace, reached that conclusion at CLI 2.1.163 and has run without it since.
+
+  A launcher chip running `claude` drops it on the same commit: parity with the cell beside it was
+  why the chip carried the flag, so it is why the chip loses it.
+
+  The rate-limit probe keeps its own `--strict-mcp-config`. That is a hidden session asking one
+  question that needs no tools, where isolation buys 8.0 s to first window instead of 9–15 s.
+
+### Changed
+
+- **A directory's Canvas tool groups stand down for a session that already has every tool.**
+  Fallout from the fix above, handled rather than left: with the isolating flag gone, a directory
+  that registered per-group MCP URLs could hand a workspace session a second copy of tools it
+  already reaches — `mcp__mt__presentChart` and `mcp__mulmoterminal-render__presentChart` for one
+  action. The session is now recorded as carrying the full GUI MCP **at spawn**, and the group URLs
+  serve it nothing. Deciding it at spawn is what makes it independent of which URL the agent's MCP
+  client happens to dial first.
+
+  The obvious alternative — withhold our GUI MCP when the directory registered groups — would have
+  re-broken [#1188](https://github.com/receptron/mulmoterminal/pull/1188): the groups do not cover
+  the tools that belong to no group, `spawnBackgroundChat` among them.
+
+  The record is also **released** when a session is respawned without the all-tools URL, which the
+  log it lives in could not express before — it was append-only on the stated grounds that "nothing
+  removes one". That stopped being true the moment a stale yes could stand a cell's groups down with
+  nothing to serve them: a session id outlives its process, and one opened in the single view can be
+  respawned as a project-directory cell. It now takes the same shape the tool-group log already uses
+  for the same reason — an append log with a release marker, replayed in order, and a bare id still
+  reads as a claim so existing files keep working.
+
+- **Workspace cells and the single view start slower if you have several MCP servers configured**,
+  because they now load them. The same trade MulmoClaude already makes on the same workspace.
+
 - **A finished background task replaced the cell's task line with the harness's XML** ([#1384](https://github.com/receptron/mulmoterminal/issues/1384)).
   A session running a Monitor or a subagent showed `<task-notification> <task-id>…` on row 1 from the
   moment that task reported, and the AI title was then generated from it. "A harness-injected block

@@ -30,10 +30,10 @@ import type { LaunchChoice } from "./wsUrl";
 // `null` => start a fresh session; otherwise resume the given session id.
 // `connectKey` increments on every user action so re-selecting the same
 // session (or starting another fresh one) still forces a reconnect.
-// `devTerminal` runs claude as a plain dev terminal (the grid): NO GUI plugin MCP
-// and NO --strict-mcp-config, so the user's (~/.claude.json) + project's (.mcp.json)
-// MCP servers load normally. Default (false, the single view) keeps main's behavior:
-// the in-process GUI MCP attached and isolated with --strict-mcp-config.
+// `devTerminal` runs claude as a plain dev terminal (the grid): no GUI plugin MCP of
+// ours, so its GUI tools come from whatever the directory registered. Default (false,
+// the single view) attaches the in-process GUI MCP on one all-tools url. The user's
+// (~/.claude.json) + project's (.mcp.json) MCP servers load in both.
 // `command` switches the terminal to a plain shell command (the grid's Run menu):
 // it connects to /ws/run with the script index instead of resuming a Claude
 // session, and never auto-reconnects (the ephemeral process can't be resumed).

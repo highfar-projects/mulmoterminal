@@ -27,7 +27,9 @@ import { normalizeMemo } from "../../common/sessionMemo.js";
 import { forEachJsonlRecord } from "../infra/jsonl-file.js";
 import { devTerminalCwdLine, hydrateCwdsInto } from "./dev-terminal-cwds.js";
 import { parseSessionToolGroups, sessionToolGroupLine, TOOL_GROUP_RESET, type SessionToolGroup } from "./session-tool-groups.js";
+import { allToolsLogLine, parseAllToolsLog } from "./all-tools-log.js";
 import type { ToolGroup } from "../../common/toolGroups.js";
+import { carriesFullGuiMcp } from "./mcp-config.js";
 import type { Activity, KnownSession, PtyEntry } from "./types.js";
 
 // Per-session "working" state, driven by Claude hooks (see /api/hook):
@@ -308,10 +310,13 @@ export function isPhoneListableSession(id: string): boolean {
   return devTerminalSessions.has(id) || (unplacedSessions.has(id) && !placedSessions.has(id));
 }
 
-// Sessions that connected on the ALL-TOOLS MCP url (`/api/mcp/:sessionId`). That url is handed
-// out by --mcp-config and by nothing else, so reaching it is proof the session carries the whole
-// GUI MCP — including the tools that belong to no group and are therefore unreachable through a
-// group url (spawnBackgroundChat).
+// Sessions handed the ALL-TOOLS MCP url (`/api/mcp/:sessionId`). That url comes from --mcp-config
+// and from nothing else, so it means the session carries the whole GUI MCP — including the tools
+// that belong to no group and are therefore unreachable through a group url (spawnBackgroundChat).
+//
+// Written at TWO moments, and the earlier one is what a decision can rely on. Connecting proves it
+// (below), but a group url may be the first to connect, and it has to know the answer already to
+// stand down (#1338) — so `claimFullGuiMcp` records it at spawn, before either client dials.
 //
 // Recorded as its own fact rather than inferred from "has all four groups", which is a different
 // statement: a directory that registered every group url really does have all four groups and
@@ -322,20 +327,74 @@ export function isPhoneListableSession(id: string): boolean {
 // the ListTools that would teach us again.
 const allToolsSessions = new Set<string>();
 const ALL_TOOLS_SESSIONS_FILE = path.join(MULMOTERMINAL_HOME, "all-tools-sessions.json");
-export const allToolsSessionsHydrated = hydrateIdLog(ALL_TOOLS_SESSIONS_FILE, allToolsSessions);
-const appendAllToolsSession = idLogAppender(ALL_TOOLS_SESSIONS_FILE, "all-tools-sessions");
+export const allToolsSessionsHydrated = (async () => {
+  try {
+    for (const id of parseAllToolsLog(await fs.readFile(ALL_TOOLS_SESSIONS_FILE, "utf8"), isValidSessionId)) allToolsSessions.add(id);
+  } catch {
+    // absent on first run / unreadable => nothing remembered
+  }
+})();
+let allToolsPersist: Promise<void> = Promise.resolve();
+function appendAllToolsEntry(id: string, carries: boolean): void {
+  allToolsPersist = allToolsPersist
+    .then(() => fs.mkdir(MULMOTERMINAL_HOME, { recursive: true }))
+    .then(() => fs.appendFile(ALL_TOOLS_SESSIONS_FILE, allToolsLogLine(id, carries)))
+    .catch((e) => console.error(`[all-tools-sessions] failed to persist: ${messageOf(e)}`));
+}
+export const whenAllToolsPersisted = (): Promise<void> => allToolsPersist;
 
 /** Note that a session reached us on the all-tools url. A no-op once known — one server is built
  *  per MCP request, so this is asked on every tool call. */
 export function markAllToolsSession(id: string): void {
   if (!isValidSessionId(id) || allToolsSessions.has(id)) return;
   allToolsSessions.add(id);
-  appendAllToolsSession(id);
+  appendAllToolsEntry(id, true);
+}
+
+/**
+ * The opposite, and the reason this log needed a release marker at all: a session id outlives the
+ * process that earned the claim. A new process given no all-tools url must stop answering yes, or
+ * its group urls stand down (mcp/tool-gate.ts) with nothing left to serve the tools — a cell with
+ * no GUI tools at all, which is worse than the duplicate the standing-down prevents.
+ *
+ * Called only where a genuinely NEW process is starting, never on a tmux reattach: there the
+ * original process is still running with whatever url it was given.
+ */
+export function releaseAllToolsSession(id: string): void {
+  if (!isValidSessionId(id) || !allToolsSessions.has(id)) return;
+  allToolsSessions.delete(id);
+  appendAllToolsEntry(id, false);
 }
 
 /** Does this session carry the whole GUI MCP, rather than the subset its directory registered? */
 export function hasAllGuiTools(id: string): boolean {
   return allToolsSessions.has(id);
+}
+
+/**
+ * Decide whether a spawn carries the full GUI MCP AND bring the record in line, in one call.
+ *
+ * Every spawn path asks `carriesFullGuiMcp` — claude's argv, codex's `-c` overrides, the launcher
+ * chip — and each then hands out the all-tools url, or does not. Keeping the question and the record
+ * apart is how one of them comes to answer differently from what it handed over, which is the drift
+ * CLAUDE.md warns about around this predicate and is what happened twice in review on #1399: a chip
+ * running `zsh` claimed without being handed anything, and codex claimed without ever releasing.
+ * So spawn paths call THIS; the pure predicate stays exported for the specs and for readers.
+ *
+ * The two directions are NOT symmetric, and the asymmetry is the safety:
+ *
+ * - **Release unconditionally.** Releasing one that should have been kept only brings the duplicate
+ *   tool names back — cosmetic, and the next spawn corrects it. Keeping a stale claim leaves a cell
+ *   with its group urls stood down and no all-tools url to serve them: no GUI tools at all.
+ * - **Claim only for a genuinely new process.** A tmux reattach runs whatever the ORIGINAL spawn was
+ *   given, which may be no all-tools url — claiming on top of that is exactly the stale-claim
+ *   failure, arrived at from the other side.
+ */
+export function claimFullGuiMcp(sessionId: string, attachGuiMcp: boolean, cwd: string | undefined, wouldReattach: boolean): boolean {
+  const full = carriesFullGuiMcp(attachGuiMcp, cwd);
+  if (!full) releaseAllToolsSession(sessionId);
+  else if (!wouldReattach) markAllToolsSession(sessionId);
+  return full;
 }
 
 // Sessions the SCHEDULER started — a user's own configured task, as opposed to a collection
