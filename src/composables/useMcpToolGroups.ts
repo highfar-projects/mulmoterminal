@@ -55,8 +55,13 @@ async function load(switches: Switches, target: string | null): Promise<void> {
     // A slower reply for a directory the user has since moved off would show its answer under the
     // new directory's name.
     if (reqId !== switches.req) return;
+    // THROWN, not defaulted to an empty list. The route always answers `{ groups: [...] }`, so a
+    // missing `groups` means the body could not be read — `jsonBody` absorbs a truncated or
+    // aborted one into `{}` and returns NORMALLY, which would walk straight past the catch below
+    // and paint every switch "off". That is the one position the catch exists to refuse.
+    if (!isUnknownArray(data.groups)) throw new Error("GET /api/gui-mcp-groups → body is not { groups }");
     switches.dir.value = target;
-    const registered: unknown[] = isUnknownArray(data.groups) ? data.groups : [];
+    const registered: unknown[] = data.groups;
     switches.enabled.value = byToolGroup(false);
     for (const group of TOOL_GROUPS) switches.enabled.value[group] = registered.includes(group);
     switches.failed.value = byToolGroup(null);
