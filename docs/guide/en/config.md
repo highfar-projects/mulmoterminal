@@ -23,6 +23,7 @@ description: Configuring MulmoTerminal — the settings modal, per-project colou
 | A **worktree** looks like a different project | [Worktrees inherit this file](#worktree-inherit) |
 | **No Canvas** when you enlarge a cell / no GUI tools | [Which directory to launch in](basics.html#launch-dir) |
 | Run on **a model other than Claude** | [Providers](#providers) |
+| Start Claude Code through **your own command** (`ollama launch claude …`) | [Custom agents](#custom-agents) |
 | Add **your own button** to the header | [Customizing the header](#header) |
 | Recolour the whole app **your way** | [Make your own colour scheme](#custom-themes) |
 | Tell an issue **you have started on it** | [issueWorkComments](#issue-work-comments) |
@@ -53,7 +54,7 @@ Settings live in three places: the **settings modal (Settings)**, the **global c
 > | **`/mulmoterminal-theme`** | Your own [colour scheme](#custom-themes), appearing in Settings' picker. (Settings → **Create a theme…**) |
 > | **`/mulmoterminal-header`** | [Header buttons and chips](#header), global or per project |
 > | **`/mulmoterminal-keys`** | [`keymap`](#keymap), [`copyOnSelect`](#copy-on-select), [`terminalSubmit`](#terminal-submit) — the fix for "Shift+Enter submits instead of adding a line". (Settings → **Set up shortcuts…**) |
-> | **`/mulmoterminal-model`** | [`providers`](#providers) and a per-project model |
+> | **`/mulmoterminal-model`** | [`providers`](#providers), a per-project model, and [`customAgents`](#custom-agents) |
 > | **`/mulmoterminal-notify`** | [Which moments beep or push](#sounds), and what each plays. (Settings → **Configure notifications…**) |
 >
 > This is how you reach the settings that have **no UI at all**. Hand-editing works too — this page
@@ -1092,6 +1093,97 @@ Note that `baseUrl` must not end in `/v1`, and `tokenEnv` is the **name** of a v
 → **Full walkthrough, the measured model list, how to add your own models, and troubleshooting:
 [Using another model via OpenRouter](providers.html).**
 
+## Your own way of starting Claude Code (`customAgents`) {#custom-agents}
+
+*A provider is a backend you reach over HTTP. This is the other case: the model is reached by
+**running a command**.*
+
+`ollama launch claude --model nemotron-3-ultra:cloud --` starts Claude Code against a local model.
+You could put that in a launcher chip — but then it is just a command in a terminal: no resumable
+transcript, no cost or context, no "waiting for you", no GUI tools. A **custom agent** runs the same
+command line and hands it **Claude Code's own arguments**, so the cell is a real session.
+
+It appears in the **Agent Picker** — the toggle at the top of an empty cell — beside Claude, Codex,
+Antigravity and Shell.
+
+```json
+{
+  "customAgents": [
+    {
+      "id": "nemotron",
+      "label": "Nemotron",
+      "agent": "claude",
+      "command": "ollama launch claude --model nemotron-3-ultra:cloud --"
+    }
+  ]
+}
+```
+
+| Key | What it is |
+|---|---|
+| `id` | A short name in lowercase — letters, digits, `-` and `_`. It identifies the entry internally, so changing it later makes a **different** agent; rename the label instead. Cannot be `claude`, `codex`, `antigravity` or `shell` |
+| `label` | The button's text. Keep it short — it shares a row with the four built-in options |
+| `agent` | Which agent this launches **as**, i.e. whose arguments get appended. `"claude"` is the only value today, and it is **required** |
+| `command` | The command line to run. Claude Code's arguments are appended to it |
+
+Up to 8 entries. `config.json` only — there is no Settings control, so an edit made while the
+server is running needs a **restart**, then a tab reload.
+
+### Where your command ends and Claude Code's begins
+
+What actually runs is your command with Claude Code's entire argv after it:
+
+```
+ollama launch claude --model nemotron-3-ultra:cloud -- \
+  --session-id <uuid> --settings <hooks> --permission-mode … --mcp-config … --allowedTools …
+```
+
+So your command has to **stop taking arguments** where Claude Code's begin — that is what the
+trailing `--` is doing above: `ollama` consumes `--model nemotron-3-ultra:cloud`, and everything
+after `--` is passed through untouched.
+
+Two things that follow from this:
+
+- **The two `--model`s do not collide.** The one you wrote is before the `--` and belongs to
+  `ollama`; the launch form's MODEL choice arrives after it and belongs to Claude Code.
+- **A command that swallows what follows breaks the session quietly.** Without `--session-id` it
+  cannot be resumed, without `--settings` the cell never shows working / waiting, without
+  `--mcp-config` there are no GUI tools. If a custom agent's cell starts but stays grey, this is
+  why.
+
+Your command runs **as written, not through a shell**: quotes are honoured, but `$HOME`, `~`, pipes
+and `&&` are not expanded. If you want shell syntax, you want a launch command (a chip) instead.
+
+### If the button doesn't appear
+
+The entry was rejected on load, and a rejected entry is simply absent — it looks exactly like never
+having saved the file. In order of likelihood:
+
+1. **No `agent: "claude"`.** It is required: nothing in your command line says which CLI is on the
+   other side of the `--`, so MulmoTerminal will not guess.
+2. **The `id` is not a valid name** — an uppercase letter, a space, or one of the four built-in
+   names.
+3. **The server wasn't restarted**, or the tab wasn't reloaded.
+
+To check what was accepted, compare your file with what the app parsed:
+
+```sh
+curl -s "http://localhost:34567/api/config" | jq .customAgents
+```
+
+An entry in the file and missing from that output is one that was dropped.
+
+### Not the same as a launch command
+
+|  | Custom agent (Agent Picker) | Launch command (chip) |
+|---|---|---|
+| Runs | your command **+ Claude Code's arguments** | your command, exactly as written |
+| The cell is | a real agent session — resume, cost, context, waiting status | a plain terminal |
+| GUI tools | yes, like any Claude cell | only if your own command asks for them |
+| Shell syntax (`$VAR`, pipes) | no | yes |
+
+→ `/mulmoterminal-model` writes this for you, and knows the traps above.
+
 ## Which clone made this PR (`prWorkdirFooter`) {#pr-workdir-footer}
 
 If you keep several checkouts of the same repo side by side — `myrepo`, `myrepo2`, `myrepo3` —
@@ -1310,6 +1402,7 @@ What you write here appears in an empty cell's launcher under **OR RUN A SCRIPT*
 | `repoDirs` | Which local clone work on a repo starts in, when you keep several side by side: `{ "acme/web": "/Users/you/src/web" }`. Only the choice is stored — which clones exist is re-derived from `cwdPresets`, so adding one needs no second edit, and an entry that no longer names a clone of that repo is ignored |
 | `buttons` / `chips` | Header buttons / chips (merged with project settings → [Customizing the header](#header)) |
 | `providers` | Anthropic-compatible backends (→ [Using another model via OpenRouter](providers.html)) |
+| `customAgents` | Your own commands for starting Claude Code, offered in the Agent Picker (→ [Custom agents](#custom-agents)) |
 | `soundFile` | The fallback notification sound for every kind (absolute path to an audio file; also settable from the modal) |
 | `soundKinds` | Which moments beep. Omit to keep `["finished","waiting"]`; the four added in 2.2 are opt-in, `[]` for silence (→ [Notification sounds](#sounds)) |
 | `sounds` | Per-kind sound, e.g. `{ "waiting": "preset:coin" }` — a `preset:<id>` or an absolute path. A kind with no entry uses `soundFile` (→ [Notification sounds](#sounds)) |

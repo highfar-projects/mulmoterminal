@@ -2355,15 +2355,15 @@ describe("TerminalCell launch target — the OS default shell (#1114)", () => {
     }) as unknown as typeof fetch;
   }
 
-  const pick = (w: ReturnType<typeof mount>, agent: string) => w.find(`[data-testid="cell-target-${agent}"]`).trigger("click");
+  const pick = (w: ReturnType<typeof mount>, agent: string) => w.find(`[data-testid="agent-picker-${agent}"]`).trigger("click");
 
   it("offers Claude / Codex / Antigravity / Shell, with Claude picked", async () => {
     const w = mountCell(null);
     await flushPromises();
     const row = w.find('[role="radiogroup"]');
     expect(row.findAll('[role="radio"]').map((b) => b.text())).toEqual(["Claude", "Codex", "Antigravity", "Shell"]);
-    expect(w.find('[data-testid="cell-target-claude"]').attributes("aria-checked")).toBe("true");
-    expect(w.find('[data-testid="cell-target-shell"]').attributes("aria-checked")).toBe("false");
+    expect(w.find('[data-testid="agent-picker-claude"]').attributes("aria-checked")).toBe("true");
+    expect(w.find('[data-testid="agent-picker-shell"]').attributes("aria-checked")).toBe("false");
   });
 
   it("starts the OS default shell in the typed dir — no configured launcher needed", async () => {
@@ -2380,7 +2380,7 @@ describe("TerminalCell launch target — the OS default shell (#1114)", () => {
     expect(w.find('[data-testid="cell-launch"]').exists()).toBe(true);
   });
 
-  // The other launch button in the same form. The selector has to decide here too, or one pick
+  // The other launch button in the same form. The Agent Picker has to decide here too, or one pick
   // opens a shell from the dir field and an agent from the chip beside it.
   it("starts a shell from a directory chip's launch button too", async () => {
     const w = mountCell(null, { presets: [{ label: "proj", path: "/home/me/proj" }] });

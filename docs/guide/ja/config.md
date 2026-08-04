@@ -23,6 +23,7 @@ description: MulmoTerminal の設定方法。設定モーダル、プロジェ�
 | **worktree だけ別プロジェクトに見える** | [worktree はこのファイルを引き継ぐ](#worktree-inherit) |
 | 拡大しても **Canvas が出ない** / GUI ツールが使えない | [どのディレクトリで起動するか](basics.html#launch-dir) |
 | **Claude 以外のモデル**で動かしたい | [プロバイダ](#providers) |
+| **自分のコマンド**で Claude Code を起動したい（`ollama launch claude …`） | [カスタムエージェント](#custom-agents) |
 | ヘッダーに**自分のボタン**を足したい | [ヘッダーのカスタマイズ](#header) |
 | **自分の配色**でアプリ全体を染めたい | [自分の配色を作る](#custom-themes) |
 | issue に**着手を知らせたい** | [issueWorkComments](#issue-work-comments) |
@@ -53,7 +54,7 @@ description: MulmoTerminal の設定方法。設定モーダル、プロジェ�
 > | **`/mulmoterminal-theme`** | 自分の[配色](#custom-themes)を作る。Settings のテーマ選択に並びます（Settings → **Create a theme…**） |
 > | **`/mulmoterminal-header`** | [ヘッダーのボタンとチップ](#header)。global でもプロジェクト単位でも |
 > | **`/mulmoterminal-keys`** | [`keymap`](#keymap)・[`copyOnSelect`](#copy-on-select)・[`terminalSubmit`](#terminal-submit)（「Shift+Enter で改行ではなく送信されてしまう」の対処）（Settings → **Set up shortcuts…**） |
-> | **`/mulmoterminal-model`** | [`providers`](#providers)、プロジェクトごとのモデル |
+> | **`/mulmoterminal-model`** | [`providers`](#providers)、プロジェクトごとのモデル、[`customAgents`](#custom-agents) |
 > | **`/mulmoterminal-notify`** | [どの瞬間に鳴らす・通知するか](#sounds)、それぞれ何を鳴らすか（Settings → **Configure notifications…**） |
 >
 > **UI が一切ない設定**に手が届く唯一の対話的な経路でもあります。手編集でも構いません（このページに全フィールドの
@@ -1060,6 +1061,96 @@ Claude Code は Anthropic 互換のバックエンドなら何にでも接続で
 → **手順・検証済みモデル一覧・モデルの追加方法・トラブルシューティングは
 [OpenRouter で別のモデルを使う](providers.html) にまとめてあります。**
 
+## 自分のコマンドで Claude Code を起動する（`customAgents`） {#custom-agents}
+
+*プロバイダは HTTP で繋ぐバックエンドでした。こちらはもう一方のケース、**コマンドを実行して**
+モデルに繋ぐ場合です。*
+
+`ollama launch claude --model nemotron-3-ultra:cloud --` はローカルのモデルで Claude Code を
+起動するコマンドです。これをランチャチップに登録することもできますが、それでは
+ただの「ターミナルで動くコマンド」で、再開できる履歴もコスト表示もコンテキスト残量も
+「入力待ち」状態も GUI ツールもありません。**カスタムエージェント**は同じコマンドラインを
+実行し、そこに **Claude Code 自身の引数を付け足す**ので、セルは本物のセッションになります。
+
+空きセル上部の **Agent Picker**（Claude / Codex / Antigravity / Shell のトグル）に並びます。
+
+```json
+{
+  "customAgents": [
+    {
+      "id": "nemotron",
+      "label": "Nemotron",
+      "agent": "claude",
+      "command": "ollama launch claude --model nemotron-3-ultra:cloud --"
+    }
+  ]
+}
+```
+
+| キー | 中身 |
+|---|---|
+| `id` | 小文字の短い名前（英数字・`-`・`_`）。内部の識別子なので、後から変えると**別のエージェント**になります。改名したいときは label のほうを変えてください。`claude` / `codex` / `antigravity` / `shell` は使えません |
+| `label` | ボタンの表示名。組み込み 4 つと同じ行に並ぶので短く |
+| `agent` | **何として**起動するか（＝誰の引数を付け足すか）。現状の値は `"claude"` のみで、**必須**です |
+| `command` | 実行するコマンドライン。この後ろに Claude Code の引数が付きます |
+
+最大 8 件。`config.json` のみで Settings に UI はないため、サーバ起動中に編集したら
+**再起動**＋タブのリロードが必要です。
+
+### 自分のコマンドと Claude Code の引数の境目
+
+実際に起動されるのは、あなたのコマンドの後ろに Claude Code の argv がまるごと付いたものです。
+
+```
+ollama launch claude --model nemotron-3-ultra:cloud -- \
+  --session-id <uuid> --settings <hooks> --permission-mode … --mcp-config … --allowedTools …
+```
+
+つまり、あなたのコマンドは **Claude Code の引数が始まる位置で引数の解釈をやめる**必要が
+あります。上の末尾の `--` がその役目で、`ollama` は `--model nemotron-3-ultra:cloud` までを
+自分のものとして受け取り、`--` 以降はそのまま素通しします。
+
+ここから 2 つ言えます。
+
+- **`--model` が 2 つあっても衝突しません。** 書いたほうは `--` の前なので `ollama` のもの、
+  起動フォームの MODEL 選択は `--` の後ろなので Claude Code のものです。
+- **後ろの引数を飲み込んでしまうコマンドは、静かにセッションを壊します。**
+  `--session-id` が届かなければ再開できず、`--settings` が届かなければセルが
+  working / waiting を表示せず、`--mcp-config` が届かなければ GUI ツールが使えません。
+  カスタムエージェントのセルが起動はするのに灰色のままなら、原因はこれです。
+
+コマンドは**シェルを通さず、書かれたまま**実行されます。引用符は解釈しますが、`$HOME`・`~`・
+パイプ・`&&` は展開されません。シェルの記法を使いたいならランチャコマンド（チップ）の出番です。
+
+### ボタンが出てこないとき
+
+読み込み時に弾かれた項目は、単に「無い」状態になります。ファイルを保存し忘れたのと
+見分けがつきません。可能性の高い順に:
+
+1. **`agent: "claude"` が無い。** 必須です。コマンドラインのどこにも「`--` の向こう側が
+   どの CLI か」は書かれていないので、MulmoTerminal は推測しません。
+2. **`id` が名前として無効**（大文字・空白が入っている、組み込みの 4 つと同じ、など）。
+3. **サーバを再起動していない**／タブをリロードしていない。
+
+何が受け付けられたかは、ファイルとアプリが解釈した結果を比べれば分かります。
+
+```sh
+curl -s "http://localhost:34567/api/config" | jq .customAgents
+```
+
+ファイルにあってこの出力に無い項目が、弾かれたものです。
+
+### ランチャコマンドとの違い
+
+|  | カスタムエージェント（Agent Picker） | ランチャコマンド（チップ） |
+|---|---|---|
+| 実行するもの | あなたのコマンド **+ Claude Code の引数** | あなたのコマンドを書かれたまま |
+| セルの中身 | 本物のエージェントセッション（再開・コスト・コンテキスト・入力待ち） | ただのターミナル |
+| GUI ツール | 通常の Claude セルと同じく使える | 自分のコマンドで指定した場合のみ |
+| シェル記法（`$VAR`・パイプ） | 使えない | 使える |
+
+→ `/mulmoterminal-model` が上の落とし穴込みで書いてくれます。
+
 ## この PR はどのクローンの作業か（`prWorkdirFooter`） {#pr-workdir-footer}
 
 同じリポジトリのクローンを `myrepo`, `myrepo2`, `myrepo3` … と並べて使っていると、GitHub 上の
@@ -1269,6 +1360,7 @@ posted by MulmoTerminal
 | `repoDirs` | 同じリポのクローンを複数並べているとき、そのリポの作業をどれで始めるか: `{ "acme/web": "/Users/you/src/web" }`。保存されるのは**選択だけ**で、どのクローンがあるかは `cwdPresets` から毎回導出するのでクローンを増やしても二重管理にならない。そのリポのクローンでなくなったエントリは無視される |
 | `buttons` / `chips` | ヘッダーのボタン/チップ（プロジェクト設定とマージ。→ [ヘッダーのカスタマイズ](#header)） |
 | `providers` | Anthropic 互換の接続先（→ [OpenRouter で別のモデルを使う](providers.html)） |
+| `customAgents` | Claude Code を起動する自分のコマンド。Agent Picker に並びます（→ [カスタムエージェント](#custom-agents)） |
 | `soundFile` | 全種類共通のフォールバック通知音（音声ファイルの絶対パス。設定モーダルからも変更可） |
 | `soundKinds` | どの瞬間に鳴らすか。**書かなければ** `["finished","waiting"]`、2.2 で増えた4種は opt-in、`[]` で無音（→ [通知音](#sounds)） |
 | `sounds` | 種類ごとの音。例 `{ "waiting": "preset:coin" }` — `preset:<id>` か絶対パス。未指定の種類は `soundFile` を使う（→ [通知音](#sounds)） |

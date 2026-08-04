@@ -1,6 +1,7 @@
 import { ref, type Ref } from "vue";
 import { presetLabel, type CwdPreset } from "../components/presets";
 import type { Launcher } from "../components/launchers";
+import { isCustomAgent, type CustomAgent } from "../../common/customAgents";
 import type { UserMcpServer } from "../components/userMcp";
 import type { QuickCommand } from "../../common/quickCommands";
 import { isPushKind, type PushKind } from "../../common/pushKinds";
@@ -85,6 +86,10 @@ const repoDirs = ref<Record<string, string>>({});
 // Cell-launcher commands (shell/codex/…) — SINGLETON so the grid's cell launchers and
 // the settings editor (openable from either view) share one list.
 const launchers = ref<Launcher[]>([]);
+
+// The user's own ways of starting Claude Code, offered in the Agent Picker (#1414) — a SINGLETON
+// like the launchers above, and read-only here: config.json is the only place they can be set.
+const customAgents = ref<CustomAgent[]>([]);
 
 // User-added HTTP MCP servers merged into the single-view session's --mcp-config —
 // SINGLETON like the others.
@@ -398,6 +403,7 @@ export function useAppConfig() {
       pushKinds.value = listOf(c.pushKinds, isPushKind);
       adoptRepoConfig(c);
       launchers.value = listOf(c.launchers, isLauncher);
+      customAgents.value = listOf(c.customAgents, isCustomAgent);
       quickCommands.value = listOf(c.quickCommands, isQuickCommand);
       userMcpServers.value = listOf(c.userMcpServers, isUserMcpServer);
       applyGlobalSettings(c);
@@ -415,6 +421,7 @@ export function useAppConfig() {
     repoDirs,
     saveRepoDir,
     launchers,
+    customAgents,
     quickCommands,
     userMcpServers,
     ...soundSettings,

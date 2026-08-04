@@ -25,6 +25,7 @@ import {
   claimActivityOwnership,
   lastTitledUserTurns,
   launchChoices,
+  customAgentSessions,
   persistActivityState,
   ptys,
   sessionMemos,
@@ -143,6 +144,7 @@ function reap(deps: SessionLifecycleDeps, id: string) {
   // visible via its on-disk record.
   knownSessions.delete(id);
   launchChoices.delete(id); // the picked backend dies with the session that used it
+  customAgentSessions.delete(id); // …and so does the custom agent it was started on
   lastPrompts.delete(id); // don't leak prompt text for torn-down sessions
   lastResponses.delete(id); // ditto, and keep this map from growing across closed sessions
   // The transcript stops being frozen here: the next claude on this id (`--resume`, or a restart

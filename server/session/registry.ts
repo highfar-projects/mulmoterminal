@@ -55,6 +55,12 @@ export const knownSessions = new Map<string, KnownSession>(); // id -> { created
 // back to the directory's default, same as one this server never started.
 export const launchChoices = new Map<string, DirModelChoice>(); // id -> { provider, model }
 
+// Which CUSTOM AGENT each session was started on (#1414) — the Agent Picker's equivalent of
+// `launchChoices` above, and remembered for the same reason: a cell restored after a page reload
+// has forgotten its pick, and resuming as plain claude a conversation that began under a wrapper
+// would move it to another model mid-thread. Process-lifetime only, like the choices.
+export const customAgentSessions = new Map<string, string>(); // id -> custom agent id
+
 // Sessions spawned as hidden background workers (spawnBackgroundChat hidden:true) that are
 // still LIVE. Process-lifetime only, and tied to `activity`'s lifecycle in reap(). Ask
 // `isBackgroundSession()` rather than this set when the question is "does this row belong

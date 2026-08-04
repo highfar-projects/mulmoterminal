@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-config
-description: The way into configuring MulmoTerminal, and the way to find out how it is configured now. Use for a broad or unsure request — "configure MulmoTerminal", "set this up", "customize this", "what can I change?", first-run setup — and route to the skill that owns the area. Also answers "how is this set up right now?", "why isn't my setting working?", "did that take effect?" by reading the live config: the global `~/.mulmoterminal/config.json`, each project's `.mulmoterminal.json`, and what the app ACTUALLY parsed from them — including keys it dropped in validation, which is the difference between a setting you never made and one that silently never applied. When the request already names an area, go straight to that skill instead: mulmoterminal-dirs (colours, grid order, project names, font size), mulmoterminal-theme (your own colour scheme), mulmoterminal-header (buttons and chips), mulmoterminal-keys (shortcuts, copy-on-select, Enter behaviour), mulmoterminal-model (other models and backends), mulmoterminal-notify (sounds and push).
+description: The way into configuring MulmoTerminal, and the way to find out how it is configured now. Use for a broad or unsure request — "configure MulmoTerminal", "set this up", "customize this", "what can I change?", first-run setup — and route to the skill that owns the area. Also answers "how is this set up right now?", "why isn't my setting working?", "did that take effect?" by reading the live config: the global `~/.mulmoterminal/config.json`, each project's `.mulmoterminal.json`, and what the app ACTUALLY parsed from them — including keys it dropped in validation, which is the difference between a setting you never made and one that silently never applied. When the request already names an area, go straight to that skill instead: mulmoterminal-dirs (colours, grid order, project names, font size), mulmoterminal-theme (your own colour scheme), mulmoterminal-header (buttons and chips), mulmoterminal-keys (shortcuts, copy-on-select, Enter behaviour), mulmoterminal-model (other models and backends, and your own command for starting Claude Code), mulmoterminal-notify (sounds and push).
 ---
 
 # Configuring MulmoTerminal — start here
@@ -32,11 +32,19 @@ carry on there. Do not re-explain its contents here; the sibling skill is the so
 | Header buttons or info chips, globally or per project | `mulmoterminal-header` |
 | Keyboard shortcuts, copy-on-select, Enter vs. newline | `mulmoterminal-keys` |
 | Another model or backend (OpenRouter, a gateway, a per-project model) | `mulmoterminal-model` |
+| Their **own command** for starting Claude Code (`ollama launch claude …`, a wrapper script), offered in the Agent Picker | `mulmoterminal-model` |
 | Which moments beep or push, and what they play | `mulmoterminal-notify` |
 | Something is broken and they don't know which setting | **Audit first** (below), then route |
 
 If the request already names an area, skip the question. "Make this project blue" goes straight to
 `mulmoterminal-dirs`.
+
+**"I want to add my own agent" is two different requests**, and the answer differs by which one:
+an entry in the **Agent Picker** that runs Claude Code through the user's command line and receives
+Claude Code's arguments (`customAgents` → `mulmoterminal-model`), or a **launcher chip** that runs a
+command verbatim with nothing added and no session (`launchers` → Settings' *Launch commands*, which
+has a UI and so needs no skill). Ask which before routing: they sit side by side in the launcher and
+behave in opposite ways.
 
 Some requests span two skills, and that is normal — say so and do them in order. "Give my new repo
 the same look as the others, in my own theme" is `mulmoterminal-theme` (define it once) then
@@ -80,6 +88,10 @@ Lead with **what is not in effect**, because that is what the user is asking abo
 phrase it as a general question:
 
 - **Dropped keys** — set in the file, rejected by validation. Name the key, the value, and why.
+  For the global config there is no route that reports this: `/api/config` answers the SANITIZED
+  config, so an entry present in `~/.mulmoterminal/config.json` and absent from that response is
+  precisely one that was dropped. Compare the two whenever a global list (`providers`,
+  `customAgents`, `launchers`, `themes`) is shorter than the user expects.
 - **Unrecognised keys** — typos survive on purpose (`copyOnSlect` is kept, not deleted), which is
   what makes them findable. Say so; a kept key is not a working one.
 - **Set but invisible** — a real setting doing nothing yet. The common ones:
