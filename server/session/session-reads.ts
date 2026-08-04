@@ -20,17 +20,17 @@ import {
   timelineEventsIn,
   type SessionUsage,
   type LatestTurnContext,
+  type PromptTrail,
   type TimelineEvent,
 } from "./transcript.js";
-import { createFileCache, type FileStamp } from "./file-cache.js";
 import { createTranscriptFold, type FoldedAt } from "./transcript-fold.js";
 import { classifyWorkPhase, type WorkPhase } from "./workPhase.js";
 import { sessionListTitle } from "./sessionListTitle.js";
 import { activity, aiTitles, codexRolloutIds, isBackgroundSession, isFailedWorker, knownSessions, sessionMemos } from "./registry.js";
 import { projectSessionsDir } from "./project-dir.js";
 import { lastTurnFromClaudeParsed, lastTurnFromCodexRolloutDocs, EMPTY_TURN, type LastTurn } from "./last-turn.js";
-import { forEachJsonlRecord, forEachJsonlRecordIn, readTailRecords } from "../infra/jsonl-file.js";
-import { createSummaryScan } from "./summary-scan.js";
+import { forEachJsonlRecordIn, readTailRecords } from "../infra/jsonl-file.js";
+import { copySummaryState, emptySummaryState, foldSummary, summaryPartsOf, type SummaryState } from "./summary-scan.js";
 import { partitionPending } from "./partitionPending.js";
 import { codexSessionsRoot } from "../agents/codex-session.js";
 import { codexRolloutPath } from "../agents/codex-sessions.js";
@@ -119,42 +119,59 @@ export const EMPTY_SUMMARY: SessionSummary = {
 
 // Transcripts are append-only and can be hundreds of MB; /api/session/:id is hit on every
 // window focus and by each grid cell as turns finish, so re-reading + re-parsing the whole
-// .jsonl each time blocked the event loop and janked the terminals. Memoize by (mtime,size):
-// an unchanged transcript returns instantly, and a changed one is read + parsed ONCE (the six
-// derived values share one parse pass, vs. one parse per helper before).
-const sessionSummaryCache = createFileCache<SessionSummary>();
+// .jsonl each time blocked the event loop and janked the terminals. A (mtime,size) memo fixed the
+// UNCHANGED case (#948) and left the one that hurts: a transcript being written to is changed on
+// every turn, so an active 508 MB session paid a 10.5 s full read per turn. The fold is resumed
+// instead, and kept beside a big file so a restart and the next process inherit it (#1377/#1386).
+const isSessionUsage = (value: unknown): value is SessionUsage =>
+  isRecord(value) &&
+  typeof value.inputTokens === "number" &&
+  typeof value.outputTokens === "number" &&
+  typeof value.cacheReadTokens === "number" &&
+  typeof value.cacheCreationTokens === "number";
+
+const isPromptTrail = (value: unknown): value is PromptTrail =>
+  isRecord(value) && [value.meaningful, value.latest, value.record].every((v) => v === null || typeof v === "string");
+
+const isSummaryState = (value: unknown): value is SummaryState =>
+  isRecord(value) &&
+  isSessionUsage(value.usage) &&
+  typeof value.userTurns === "number" &&
+  (value.aiTitle === null || typeof value.aiTitle === "string") &&
+  isPromptTrail(value.prompts) &&
+  (value.lastAssistantText === null || typeof value.lastAssistantText === "string") &&
+  isRecord(value.context) &&
+  (value.context.model === null || typeof value.context.model === "string") &&
+  typeof value.context.contextTokens === "number" &&
+  Array.isArray(value.turnTools) &&
+  value.turnTools.every((tool) => typeof tool === "string");
+
+const summaryFold = createTranscriptFold<SummaryState>({
+  kind: "summary",
+  version: 1,
+  isValue: isSummaryState,
+  empty: emptySummaryState,
+  fold: foldSummary,
+  copy: copySummaryState,
+});
 
 export async function readSessionSummary(cwd: string, id: string): Promise<SessionSummary> {
   const file = path.join(projectSessionsDir(cwd), `${id}.jsonl`);
-  let stamp: FileStamp;
   try {
     const st = await fs.stat(file);
-    stamp = { mtimeMs: st.mtimeMs, size: st.size };
+    const parts = summaryPartsOf(await summaryFold.read(file, { mtimeMs: st.mtimeMs, size: st.size }), LAST_RESPONSE_MAX);
+    return {
+      lastPrompt: parts.lastPrompt,
+      aiTitle: parts.aiTitle,
+      lastResponse: parts.lastResponse,
+      userTurns: parts.userTurns,
+      usage: parts.usage,
+      context: parts.context,
+      workPhase: classifyWorkPhase(parts.toolNames),
+    };
   } catch {
-    return EMPTY_SUMMARY; // no transcript on disk yet
+    return EMPTY_SUMMARY; // no transcript on disk yet, or it could not be read
   }
-  const cached = sessionSummaryCache.get(file, stamp);
-  if (cached) return cached;
-  // Streamed, never held: the transcript reaches 585 MB here, which is past what one string can
-  // be — and reading it whole is what emptied the longest sessions (#998).
-  const scan = createSummaryScan();
-  try {
-    await forEachJsonlRecord(file, (record) => scan.add(record));
-  } catch {
-    return EMPTY_SUMMARY;
-  }
-  const parts = scan.finish(LAST_RESPONSE_MAX);
-  const summary: SessionSummary = {
-    lastPrompt: parts.lastPrompt,
-    aiTitle: parts.aiTitle,
-    lastResponse: parts.lastResponse,
-    userTurns: parts.userTurns,
-    usage: parts.usage,
-    context: parts.context,
-    workPhase: classifyWorkPhase(parts.toolNames),
-  };
-  sessionSummaryCache.set(file, stamp, summary);
-  return summary;
 }
 
 // The tool-activity timeline for a session, capped to the most recent events so the
