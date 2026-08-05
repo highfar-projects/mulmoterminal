@@ -416,8 +416,10 @@ today — **Claude Code** (the default), **Codex**, **Antigravity** (`agy`), and
   `~/.mulmoterminal/antigravity-conversations.jsonl`, so a conversation is still resumable after
   the server restarts — the same log Codex keeps, in the same format.
 
-  Its **GUI tools work differently**, because `agy` takes no MCP flag: it reads its servers from
-  `.agents/mcp_config.json` in the working directory. MulmoTerminal writes that file from the
+  Its **GUI tools work differently — in the workspace too**, because `agy` takes no MCP flag: it
+  reads its servers from `.agents/mcp_config.json` in the working directory. So it never gets the
+  workspace's "every tool automatically"; register what it needs with the Canvas switches, wherever
+  it runs (see [MCP server ids](#mcp-server-ids-why-a-workspace-cell-and-a-project-cell-disagree)). MulmoTerminal writes that file from the
   directory's [Canvas switches](#wiki-collections--the-gui-panel) — the same switches Claude's cells read — so
   one switch serves every agent, and rewrites it whenever a switch flips or an agy session starts.
   Servers in it that MulmoTerminal did not write are left alone, the file is removed once no group
@@ -436,9 +438,11 @@ today — **Claude Code** (the default), **Codex**, **Antigravity** (`agy`), and
   via `GROK_HOME`) after the first turn, and re-using a `--session-id` that already exists is a hard
   error, which is why the two flags are never sent together.
 
-  Its **GUI tools work like Antigravity's** and for the same reason: `grok` takes no MCP flag, so
+  Its **GUI tools work like Antigravity's — in the workspace too** and for the same reason: `grok`
+  takes no MCP flag, so it never gets the workspace's "every tool automatically" either, and
   MulmoTerminal registers the bridge in `.grok/config.toml` (grok's project-scope config) from the
-  directory's [Canvas switches](#wiki-collections--the-gui-panel). That file is TOML and yours, so —
+  directory's [Canvas switches](#wiki-collections--the-gui-panel), wherever it runs (see
+  [MCP server ids](#mcp-server-ids-why-a-workspace-cell-and-a-project-cell-disagree)). That file is TOML and yours, so —
   unlike agy's JSON — MulmoTerminal never rewrites it directly: it drives `grok mcp add -s project` /
   `grok mcp remove -s project`, and only for the server ids it wrote itself. Nothing else in the file
   is touched, a directory already in the right state runs no command at all, and the file is added to
@@ -765,7 +769,7 @@ Settings → Directory settings names both files and lists which keys the local 
 | `theme`      | xterm palette for terminals in this directory (one of the built-in theme ids). |
 | `colors`     | Per-key xterm palette overrides applied on top of `theme` (or the app theme when `theme` is unset). Keys are xterm `ITheme` names (`background`, `foreground`, `cursor`, `selectionBackground`, the 16 ANSI colors, …); values are hex (`#rgb` / `#rrggbb` / `#rrggbbaa`). Unknown keys / bad values are dropped. |
 | `fontSize`   | Terminal font size in px for this directory (8–32), overriding the Settings value. A size outside the range is clamped; a non-number is ignored. Changing it re-fits the terminal, so the PTY learns the new width — unlike browser zoom, which leaves the two disagreeing. |
-| `orderPriority` | This directory's rank in the grid's **priority** ordering — the third mode on the toolbar's ordering button, next to auto (attention-first) and manual (the move buttons). Any integer, **lowest first**; negatives are allowed. Directories that set nothing sort last, keeping their existing order, so adding the key to one project doesn't shuffle the rest. The grid reads it in **priority** mode only; the launcher's directory chips sort by it, so a project sits in the same place on both. The one exception is the **workspace** chip, which always leads the launcher's row regardless of any rank — it is not one of the directories being ranked against each other, and it is the one place every GUI tool is reachable (see [MCP server ids](#mcp-server-ids-why-a-workspace-cell-and-a-project-cell-disagree)). |
+| `orderPriority` | This directory's rank in the grid's **priority** ordering — the third mode on the toolbar's ordering button, next to auto (attention-first) and manual (the move buttons). Any integer, **lowest first**; negatives are allowed. Directories that set nothing sort last, keeping their existing order, so adding the key to one project doesn't shuffle the rest. The grid reads it in **priority** mode only; the launcher's directory chips sort by it, so a project sits in the same place on both. The one exception is the **workspace** chip, which always leads the launcher's row regardless of any rank — it is not one of the directories being ranked against each other, and it is the one place a claude or codex session reaches every GUI tool without registering anything (agy and grok get what the directory registered wherever they run — see [MCP server ids](#mcp-server-ids-why-a-workspace-cell-and-a-project-cell-disagree)). |
 | `fontFamily` | CSS font-family stack for this directory's terminals, overriding the global `fontFamily`. Use the names as your OS lists them (`"'Cica', 'MS Gothic', monospace"`). An unusable stack is ignored whole rather than half-applied; `monospace` is appended if you name no generic family. Prefer fonts whose fullwidth glyphs are exactly twice the Latin width, or box-drawing frames tear. |
 | `sound`      | Attention sound for this directory's sessions, a path **relative to the directory** (served at `GET /api/dir-sound`). The fallback for every kind. |
 | `sounds`     | Per-kind override of `sound`: `{ "command-failed": "preset:gong" }`. Each value is a `preset:<id>` or a directory-relative path, under the same confinement. |
@@ -828,7 +832,9 @@ An empty grid cell's launcher sets the **Working directory** by typing, by a pre
 chip, or with the **📁 folder button** (a native OS folder dialog). The preset chips are
 the directories you have launched in; the **workspace** leads them always, labelled
 **WORKSPACE** and marked with an icon, whether or not you have ever launched there — it is
-the one directory where a session reaches every GUI tool, so it is never a click you can
+the one directory where a claude or codex session reaches every GUI tool (agy and grok get
+what the directory registered, there as anywhere — see
+[MCP server ids](#mcp-server-ids-why-a-workspace-cell-and-a-project-cell-disagree)), so it is never a click you can
 lose. It has no remove button for the same reason. It is named for its role rather than its
 folder, because the folder name (`~/mulmoclaude` by default, or wherever `CLAUDE_CWD`
 points) says the least interesting true thing about it; the real path is on its hover.
@@ -836,7 +842,12 @@ points) says the least interesting true thing about it; the real path is on its 
 **The launcher is shorter in the workspace**, because two of its choices do not apply
 there. The per-directory **Canvas switches** are replaced by a line saying every GUI tool
 is already available — a session there is handed the whole GUI MCP at spawn, so a switch
-would register a group URL that then has nothing left to serve. And the **worktree**
+would register a group URL that then has nothing left to serve. **With Antigravity or Grok
+picked they stay**, in the workspace as everywhere else: neither is handed anything at spawn
+and both read their servers from the directory's file, so the switches are their only route
+to a GUI tool and hiding them would leave the session with none (see
+[MCP server ids](#mcp-server-ids-why-a-workspace-cell-and-a-project-cell-disagree)).
+And the **worktree**
 section is hidden: a worktree isolates work on one codebase onto a branch, while the
 workspace is what a session works *from* (the shared wiki, collections and accounting
 live there), which is precisely what a detached branch would cut it off from. Both come
@@ -1163,14 +1174,33 @@ Which route a session takes is decided by `carriesFullGuiMcp()` in
 `server/session/mcp-config.ts` — the single view, a cell-less chat, or anything whose cwd **is**
 the workspace take the first; anything in a project directory takes the second.
 
-**The workspace is agent-agnostic.** All three agents ask the same predicate, so two terminals in
-the workspace reach the same tools no matter which agent started them:
+**The workspace is agent-agnostic for the agents that can RECEIVE a per-spawn config** — claude and
+codex ask the same predicate, so two terminals in the workspace reach the same tools no matter which
+of the two started them. **Antigravity and Grok cannot, and that is the exception you will meet
+first:**
 
 | Started as | In the workspace | In a project directory |
 |---|---|---|
 | claude cell (including `?gui=0`) | `mt`, every tool | the directory's registered groups |
 | codex cell | `mt`, every tool | the directory's registered groups |
+| antigravity cell | **the directory's registered groups** — nothing registered means **no GUI tools at all** | the directory's registered groups |
+| grok cell | **the directory's registered groups** — nothing registered means **no GUI tools at all** | the directory's registered groups |
 | any launcher chip | untouched | untouched |
+
+Neither takes an MCP flag: `agy` reads `.agents/mcp_config.json` and `grok` reads `.grok/config.toml`
+in the working directory, and a file shared by every session in a directory cannot be handed to one
+session and not another — so there is nothing for "this cwd is the workspace" to change. The
+membership is `FULL_GUI_MCP_AGENTS` in `common/guiMcpAgents.ts`, in `common/` precisely so the
+launcher form and the spawn cannot disagree about it
+([#1423](https://github.com/receptron/mulmoterminal/issues/1423)).
+
+The consequence is easy to hit and hard to guess: `presentDocument` works in a project you once
+flipped **Canvas** on for, and is missing in the workspace where everything else is automatic. Fix it
+the same way anywhere — pick **Antigravity** or **Grok**, point WORKING DIRECTORY at that directory,
+flip the **Canvas** switch (it stays visible for both), and start a **new** session; the switch
+registers the directory, never a session already running. Full procedure:
+[Antigravity and Grok register everywhere](https://receptron.github.io/mulmoterminal/guide/en/basics.html#antigravity-gui-tools)
+· [日本語](https://receptron.github.io/mulmoterminal/guide/ja/basics.html#antigravity-gui-tools).
 
 **A launcher chip is not an agent session — it is a command.** Whatever the command line names,
 it runs exactly as written: nothing is inserted, and no GUI MCP is attached. A chip running
