@@ -176,7 +176,7 @@ Pull requests** も並びます。ここは固定なので設定では変わり�
 | `url` | ブラウザで URL（`http` / `https` のみ） |
 | `reveal` | OS のファイルマネージャ（Finder / エクスプローラ / `xdg-open`） |
 | `files` | アプリ内のファイルエクスプローラ |
-| `view` | アプリ内のビュー：`diff` / `prs` / `wiki` / `collections` / `accounting` |
+| `view` | アプリ内のビュー：`prs` / `wiki` / `collections` / `accounting`（`diff` も受け付けますが、**現状は専用の画面が無くファイルビューが開きます**。worktree の差分は[差分バッジ](worktree.html#diff-badge)から） |
 | `terminal` | そのディレクトリで新しい端末セル |
 | `pickFile` | OS のファイル選択ダイアログ。選んだパスを入力欄に挿入します |
 

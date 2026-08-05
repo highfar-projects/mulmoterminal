@@ -175,7 +175,7 @@ Pressing it opens a cell like this and shows the output:
 | `url` | a URL in the browser (`http` / `https` only) |
 | `reveal` | the OS file manager (Finder / Explorer / `xdg-open`) |
 | `files` | the in-app file explorer |
-| `view` | an in-app view: `diff` / `prs` / `wiki` / `collections` / `accounting` |
+| `view` | an in-app view: `prs` / `wiki` / `collections` / `accounting`. (`diff` is accepted but **has no dedicated screen yet and opens the files view** — reach a worktree's diff from [the diff badge](worktree.html#diff-badge) instead) |
 | `terminal` | a new terminal cell in that directory |
 | `pickFile` | the OS file dialog, inserting the chosen path into the prompt |
 
