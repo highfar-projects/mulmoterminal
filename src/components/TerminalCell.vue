@@ -61,6 +61,9 @@ import {
 import { CELL_STATUS, DOT_STATUS, HEADER_STATUS } from "./cellStatusClasses";
 import { handoffTargets, pullLastTurn, type HandoffTarget } from "../composables/useHandoff";
 import { runOneExchange, liveCrossTalkDeps } from "../composables/useCrossTalk";
+import { runRoundTable, liveRoundTableDeps, memberFromTarget, type TableMember } from "../composables/useRoundTable";
+import { roundTableMessage } from "../composables/roundTableRules";
+import RoundTableMenu from "./RoundTableMenu.vue";
 import { outcomeMessage } from "../composables/exchangeRules";
 import { worktreeFailureMessage } from "./cellChromeRules";
 import { isRecord } from "../../common/isRecord";
@@ -638,6 +641,31 @@ async function exchangeWith(target: HandoffTarget) {
   if (message) showAskMsg(message);
 }
 
+// A round table: the same machinery as one exchange, run round N cells until the group says it is
+// done or the budget runs out (#1456). `tableStop` is the only way a running table ends early, so
+// it is what unmounting sets too — a loop typing into terminals must not outlive its cell.
+const tableRunning = ref(false);
+let tableStop = false;
+
+function stopTable() {
+  tableStop = true;
+}
+
+async function startTable(targets: HandoffTarget[], budget: number) {
+  if (!sessionId.value || tableRunning.value) return;
+  askMenuOpen.value = false;
+  tableRunning.value = true;
+  tableStop = false;
+  const self: TableMember = { key: `cell-${props.uid}`, label: `#${props.uid}`, source: { sessionId: sessionId.value, cwd: cwd.value, agent: agent.value } };
+  const { outcome, turnsTaken } = await runRoundTable(
+    [self, ...targets.map(memberFromTarget)],
+    budget,
+    liveRoundTableDeps(() => tableStop),
+  );
+  tableRunning.value = false;
+  showAskMsg(`${roundTableMessage(outcome)} · ${turnsTaken} turn${turnsTaken === 1 ? "" : "s"}`);
+}
+
 function onAskOutside(e: MouseEvent) {
   if (askWrap.value && !(e.target instanceof Node && askWrap.value.contains(e.target))) askMenuOpen.value = false;
 }
@@ -647,6 +675,7 @@ watch(askMenuOpen, (open) => {
 });
 onUnmounted(() => {
   document.removeEventListener("mousedown", onAskOutside);
+  tableStop = true;
   if (askMsgTimer) clearTimeout(askMsgTimer);
   exchangeStop = true; // never leave an exchange typing into terminals after this cell is gone
 });
@@ -1373,6 +1402,14 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                   </button>
                 </div>
                 <p v-if="!askTargets.length" class="m-0 px-2 py-1.5 font-sans text-[12px] text-dim">No other terminal to read</p>
+                <RoundTableMenu
+                  v-if="askTargets.length"
+                  :targets="askTargets"
+                  :self-label="`#${uid}`"
+                  :running="tableRunning"
+                  @start="startTable"
+                  @stop="stopTable"
+                />
               </div>
               <button
                 v-if="exchanging"
