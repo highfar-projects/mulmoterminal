@@ -410,7 +410,7 @@ describe("dirConfigDetail", () => {
     const dir = tmp();
     const detail = dirConfigDetail(dir);
     expect(detail.file).toBeNull();
-    expect(detail.source).toEqual({ applied: [], ignored: [], unknown: [] });
+    expect(detail.source).toEqual({ applied: [], ignored: [], unknown: [], local: [] });
     rmSync(dir, { recursive: true, force: true });
   });
 
@@ -429,7 +429,7 @@ describe("dirConfigDetail", () => {
     const { dir, cleanup } = withConfig("{ not json");
     const detail = dirConfigDetail(dir);
     expect(detail.file).toBe(path.join(dir, ".mulmoterminal.json"));
-    expect(detail.source).toEqual({ applied: [], ignored: [], unknown: [] });
+    expect(detail.source).toEqual({ applied: [], ignored: [], unknown: [], local: [] });
     cleanup();
   });
 
@@ -489,7 +489,7 @@ describe("dirConfigDetail", () => {
   it("reports a directory that is gone as gone, not as one with no config", () => {
     expect(MISSING_DIR_CONFIG_DETAIL.exists).toBe(false);
     expect(MISSING_DIR_CONFIG_DETAIL.file).toBeNull();
-    expect(MISSING_DIR_CONFIG_DETAIL.source).toEqual({ applied: [], ignored: [], unknown: [] });
+    expect(MISSING_DIR_CONFIG_DETAIL.source).toEqual({ applied: [], ignored: [], unknown: [], local: [] });
     expect(Object.values(MISSING_DIR_CONFIG_DETAIL.config).every((v) => v === null || v === false)).toBe(true);
   });
 
