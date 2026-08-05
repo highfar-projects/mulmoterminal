@@ -296,13 +296,19 @@ function applyActivity(d: ActivityPush) {
   // Not while the box is open: the push that lands as another tab saves would otherwise
   // overwrite the sentence being typed here, mid-word.
   if (!memoEditing.value) memo.value = next.memo;
-  // A cell whose model is still unknown asks again on any push. codex and agy file their
-  // transcripts under an id the agent mints AFTER the spawn, so the seed fetch at mount can only
-  // answer "nobody" — and for agy nothing else would ever re-ask, since it has no hooks and no
-  // activity tracker to finish a turn (its spawner publishes precisely to reach this line).
-  // Claude is excluded: its badges come from the summary the route already folds, so a push adds
-  // nothing and this is the busiest route in the app. Self-limiting either way — once a model is
-  // known, this stops.
+}
+
+// A cell whose model is still unknown asks again when a push says something changed. codex and agy
+// file their logs under an id the agent mints AFTER the spawn, so the seed fetch at mount can only
+// answer "nobody" — and for agy nothing else would ever re-ask, since it has no hooks and no
+// activity tracker to finish a turn (its spawner publishes precisely to reach this line). Claude is
+// excluded: its badges come from the summary the route already folds, so a push adds nothing and
+// this is the busiest route in the app. Self-limiting either way — once a model is known, it stops.
+//
+// Called from the PUSH path only, never from a seed: loadInitial applies activity BEFORE badges, so
+// asking there would see `context` still empty and fire a second fetch for the answer already in
+// its hand — on every non-claude cell, every load.
+function refreshBadgesIfModelUnknown() {
   if (agent.value !== "claude" && !context.value?.model) void refreshUsage();
 }
 
@@ -424,7 +430,9 @@ let badgePoll: ReturnType<typeof setInterval> | null = null;
 
 onMounted(() => {
   unsubscribe = subscribe("sessions", (d) => {
-    if (isActivityMsg(d) && d.id === sessionId.value) applyActivity(d);
+    if (!isActivityMsg(d) || d.id !== sessionId.value) return;
+    applyActivity(d);
+    refreshBadgesIfModelUnknown();
   });
   badgePoll = setInterval(() => {
     if (agent.value === "antigravity" && sessionId.value) void refreshUsage();

@@ -1154,9 +1154,11 @@ what it writes down (`?agent=` on the route picks the reader):
 | **Antigravity** | `Gemini 3.6 Flash · ctx 78%` — the model from the first step of the conversation's transcript, the reading from agy's own per-generation accounting (a real 256k window, not a table) | full |
 
 The token badge hides itself when nothing has been counted, and the context badge shows
-the model alone unless it has **both** a token count from the agent and a context window
-— agent-reported (codex) or resolved from the built-in table above (Claude, provider
-models). Either one missing means a name and no percentage. The context badge is absent
+the model alone unless it has **both** a *current-context* token count from the agent and a
+context window — agent-reported (codex, Antigravity) or resolved from the built-in table
+above (Claude, provider models). Either one missing means a name and no percentage. The two
+badges are independent: an Antigravity session whose accounting cannot be read still shows
+its model, and one whose cumulative totals are zero still shows a percentage. The context badge is absent
 entirely until an agent has named a model: codex and Antigravity file their logs under an id
 the agent mints *after* the session starts, so a brand-new cell shows no model badge until it
 has been prompted once — a few seconds, not the rest of the session.

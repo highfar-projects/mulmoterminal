@@ -856,6 +856,9 @@ describe("TerminalCell", () => {
     const w = mountCell(id, { initialAgent: "antigravity" });
     await flushPromises();
     expect(w.find('[data-testid="model-badge"]').exists()).toBe(false); // agy has not created the conversation yet
+    // The seed applies activity BEFORE badges, so a re-ask hung off that path would fire here for
+    // the answer it already has — on every non-claude cell, every load.
+    expect(detailReads).toBe(1);
 
     model = "Gemini 3.6 Flash (High)"; // the capture landed, so the transcript now names it
     captured?.({ id, working: false, waiting: false });

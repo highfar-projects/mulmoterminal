@@ -66,6 +66,14 @@ describe("protoVarintAt", () => {
     expect(protoVarintAt(buf([...key(1, 2), ...varint(9999), 1, 2, 3]), [1, 1])).toBeUndefined(); // length past the end
   });
 
+  it("stops at a fixed-width field whose payload runs past the end", () => {
+    // A fixed64 header with only three bytes behind it. What was read BEFORE it still stands; the
+    // walk does not continue past a field the buffer cannot contain.
+    const short = buf([...varintField(1, 7), ...key(2, 1), 0xaa, 0xbb, 0xcc]);
+    expect(protoVarintAt(short, [1])).toBe(7);
+    expect(protoVarintAt(short, [2])).toBeUndefined();
+  });
+
   it("stops at a wire type that does not exist instead of resynchronising", () => {
     // Field 1 is a real varint; field 2 claims wire type 6, which protobuf does not define. What
     // follows must not be read, however much it looks like a field.

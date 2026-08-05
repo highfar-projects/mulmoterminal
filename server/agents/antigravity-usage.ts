@@ -21,7 +21,6 @@
 // answer rather than contributing a zero. If agy moves these fields the badges go quiet, which is
 // where they were before this existed.
 import path from "node:path";
-import { stat } from "node:fs/promises";
 import { protoVarintsAt } from "./antigravity-proto.js";
 import type { SessionContextInfo } from "../../common/sessionContext.js";
 import type { SessionUsage } from "../session/transcript.js";
@@ -58,7 +57,10 @@ const MAX_TOKENS = 1_000_000_000;
 const CONTEXT_SCAN_ROWS = 32;
 /** Summing the whole table is what makes the usage badge cumulative. A conversation this long is
  *  beyond anything measured (the largest here has 519 rows), so it is a runaway guard: the usage
- *  badge is dropped rather than reported from a partial sum. */
+ *  badge is dropped rather than reported from a partial sum.
+ *
+ *  One MORE than this is read, so that a table of exactly this many rows is recognised as complete
+ *  rather than assumed to be the top of a longer one. */
 const MAX_USAGE_ROWS = 50_000;
 
 export function antigravityDbPath(conversationsRoot: string, conversationId: string): string {
@@ -83,7 +85,11 @@ async function readGenRows(file: string, limit: number): Promise<GenRow[] | null
     const { DatabaseSync } = await import("node:sqlite");
     // Read-only, and through a URI so a database agy has open is opened as a reader rather than as
     // something that could take a write lock on the file the agent is working from.
-    db = new DatabaseSync(`file:${encodeURI(file)}?mode=ro`, { readOnly: true });
+    // A PLAIN path, not a `file:…?mode=ro` URI. node:sqlite does not enable SQLite's URI filenames
+    // on every Node this package supports (`>=22.9`), and where it does not, the URI is taken as a
+    // literal filename — the open fails, and every agy badge silently goes quiet on that runtime.
+    // `readOnly` is the option that makes this a reader, and it is honoured everywhere.
+    db = new DatabaseSync(file, { readOnly: true });
     // A NAMED parameter: `limit ?` binds fine in every other sqlite binding and throws
     // "column index out of range" in node:sqlite, which the specs caught and this comment exists
     // so nobody "simplifies" back to.
@@ -163,11 +169,11 @@ function usageOf(rows: readonly GenRow[]): SessionUsage | null {
  */
 export async function antigravityBadgesFromDb(conversationsRoot: string, conversationId: string): Promise<AntigravityBadges | null> {
   const file = antigravityDbPath(conversationsRoot, conversationId);
-  const rows = await readGenRows(file, MAX_USAGE_ROWS);
+  const rows = await readGenRows(file, MAX_USAGE_ROWS + 1);
   if (!rows?.length) return null;
-  // The cap was hit, so the oldest generations are missing and any total would be short. The
+  // A row beyond the cap means older generations are missing and any total would be short. The
   // context reading is still exact — it comes from the newest row — so only the usage is dropped.
-  const complete = rows.length < MAX_USAGE_ROWS;
+  const complete = rows.length <= MAX_USAGE_ROWS;
   const context = contextOf(rows.slice(0, CONTEXT_SCAN_ROWS));
   const usage = complete ? usageOf(rows) : null;
   if (!context && !usage) return null;
@@ -175,13 +181,4 @@ export async function antigravityBadgesFromDb(conversationsRoot: string, convers
     usage: usage ?? { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 },
     context: context ?? { contextTokens: 0, contextWindow: null },
   };
-}
-
-/** Whether a conversation's database exists at all, for callers that want to skip the read. */
-export async function antigravityDbExists(conversationsRoot: string, conversationId: string): Promise<boolean> {
-  try {
-    return (await stat(antigravityDbPath(conversationsRoot, conversationId))).isFile();
-  } catch {
-    return false;
-  }
 }

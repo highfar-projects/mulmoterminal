@@ -75,6 +75,9 @@ interface Field {
 const FIXED64_BYTES = 8;
 const FIXED32_BYTES = 4;
 
+/** A field whose payload fits inside the buffer, or null when it claims to run past the end. */
+const endWithin = (buf: Buffer, field: Omit<Field, "next">, next: number): Field | null => (next <= buf.length ? { ...field, next } : null);
+
 function readField(buf: Buffer, offset: number): Field | null {
   const key = readKey(buf, offset);
   if (!key) return null;
@@ -90,8 +93,12 @@ function readField(buf: Buffer, offset: number): Field | null {
     if (end > buf.length) return null;
     return { field: key.field, varint: undefined, bytes: buf.subarray(length.next, end), next: end };
   }
-  if (key.wireType === 5) return { ...skipped, next: key.next + FIXED32_BYTES };
-  if (key.wireType === 1) return { ...skipped, next: key.next + FIXED64_BYTES };
+  // Bounds-checked like every other width here. It changes no answer today — a fixed-width field
+  // carries neither a varint nor bytes, so the callback records nothing and the walk ends on the
+  // next loop test either way — but "stop at the first byte you cannot account for" has to hold
+  // for every wire type, or the first reader to report a fixed-width value inherits the hole.
+  if (key.wireType === 5) return endWithin(buf, { ...skipped }, key.next + FIXED32_BYTES);
+  if (key.wireType === 1) return endWithin(buf, { ...skipped }, key.next + FIXED64_BYTES);
   return null;
 }
 
