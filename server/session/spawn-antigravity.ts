@@ -9,7 +9,7 @@ import { antigravityAdapter } from "../agents/antigravity.js";
 import { buildAntigravityArgs } from "../agents/antigravity-args.js";
 import { syncAntigravityMcpConfig } from "../agents/antigravity-mcp.js";
 import { antigravityBrainRoot, snapshotAntigravitySessions, watchForAntigravitySession } from "../agents/antigravity-session.js";
-import { ptySpawn } from "./pty-spawn.js";
+import { ptySpawn, ptyWouldReattach } from "./pty-spawn.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
 import { ptyStartLine } from "./pty-exit-log.js";
 import { claimedAntigravityConversations, ptys, rememberAntigravityConversation } from "./registry.js";
@@ -49,7 +49,18 @@ export function createAntigravitySpawner(deps: SpawnDeps) {
     },
   ): PtyEntry {
     const { mcpGroups, initialPrompt = null } = options;
-    syncAntigravityMcpConfig(cwd, mcpGroups);
+    // Only for a spawn that will really START agy. After a server restart `ptys` is empty but the
+    // tmux session can still be there, so this function is reached for what turns out to be a
+    // REATTACH — and the agy already running in that pane read `.agents/mcp_config.json` once, at
+    // its own start. Rewriting it now cannot affect that process; it can only speak for the OTHER
+    // sessions in the directory, which is the one thing this file must never do.
+    //
+    // The damaging case is not hypothetical: the caller resolves the groups with
+    // `.catch(() => [])`, so a transient failure reading Claude Code's config would arrive here as
+    // "no groups" and CLEAR the entries every live agy in that directory is using. Skipping the
+    // reattach leaves the file exactly as the running sessions expect it (#1443; grok, which has
+    // the same per-directory shape, was fixed in #1441).
+    if (!ptyWouldReattach(sessionId, true)) syncAntigravityMcpConfig(cwd, mcpGroups);
     const root = antigravityBrainRoot();
     const before = snapshotAntigravitySessions(root);
 
