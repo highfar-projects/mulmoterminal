@@ -5,7 +5,7 @@
 `Windows (daily)` on main, [run 31055365939](https://github.com/receptron/mulmoterminal/actions/runs/31055365939)
 (node 24.x), and before it [run 31041081619](https://github.com/receptron/mulmoterminal/actions/runs/31041081619):
 
-```
+```text
 FAIL test/server/git/worktree-pr.spec.ts > push / PR actions >
   createOrOpenPR pushes, then reports no-forge for a remote on no forge it knows
 Error: Test timed out in 30000ms.
