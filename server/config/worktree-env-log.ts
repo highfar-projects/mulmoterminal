@@ -21,10 +21,14 @@ export interface WorktreeEnvReservation {
   value: string;
 }
 
-/** Everything a directory held is given up at once — a worktree is removed as a whole, and
- *  listing its variables would mean the release could go stale against the config. */
+/** A reservation given up. Without `name` it is the whole directory — a worktree is removed as a
+ *  whole, and listing its variables there would mean the release could go stale against the
+ *  config. With `name` it is one variable, which is what a directory that RENAMED or dropped a key
+ *  needs: the value it used to hold has to come back into circulation while the directory itself
+ *  lives on. */
 interface ReleaseEntry {
   dir: string;
+  name?: string;
   release: true;
 }
 
@@ -34,7 +38,8 @@ const key = (dir: string, name: string): string => `${dir} ${name}`;
  *  an appended entry starts its own line, so a truncated write costs one entry and not the next. */
 export const reservationLine = (entry: WorktreeEnvReservation): string => `\n${JSON.stringify(entry)}`;
 
-export const releaseLine = (dir: string): string => `\n${JSON.stringify({ dir, release: true } satisfies ReleaseEntry)}`;
+export const releaseLine = (dir: string, name?: string): string =>
+  `\n${JSON.stringify((name === undefined ? { dir, release: true } : { dir, name, release: true }) satisfies ReleaseEntry)}`;
 
 function parsedLine(line: string): WorktreeEnvReservation | ReleaseEntry | null {
   const trimmed = line.trim();
@@ -48,7 +53,8 @@ function parsedLine(line: string): WorktreeEnvReservation | ReleaseEntry | null 
   }
 }
 
-const isRelease = (raw: unknown): raw is ReleaseEntry => isRecord(raw) && raw.release === true && typeof raw.dir === "string";
+const isRelease = (raw: unknown): raw is ReleaseEntry =>
+  isRecord(raw) && raw.release === true && typeof raw.dir === "string" && (raw.name === undefined || typeof raw.name === "string");
 
 const isReservation = (raw: unknown): raw is WorktreeEnvReservation =>
   isRecord(raw) &&
@@ -67,7 +73,8 @@ export function parseReservations(contents: string): WorktreeEnvReservation[] {
     const entry = parsedLine(line);
     if (!entry) return;
     if (isRelease(entry)) {
-      [...live.values()].filter((held) => held.dir === entry.dir).forEach((held) => live.delete(key(held.dir, held.name)));
+      const released = [...live.values()].filter((held) => held.dir === entry.dir && (entry.name === undefined || held.name === entry.name));
+      released.forEach((held) => live.delete(key(held.dir, held.name)));
       return;
     }
     live.set(key(entry.dir, entry.name), entry);

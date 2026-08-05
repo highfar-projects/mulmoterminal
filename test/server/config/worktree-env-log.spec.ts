@@ -39,6 +39,13 @@ describe("parseReservations", () => {
     expect(parseReservations(lines)).toEqual([]);
   });
 
+  // A rename drops ONE variable while the directory lives on — the whole-directory release is for
+  // a worktree that is gone.
+  it("releases one named variable, leaving the directory's others alone", () => {
+    const other = entry({ name: "DB_NAME", kind: "slug", base: null, value: "app_x" });
+    expect(parseReservations(log(reservationLine(entry()), reservationLine(other), releaseLine("/w/fix-login", "PORT")))).toEqual([other]);
+  });
+
   it("releases only the named directory", () => {
     const other = entry({ dir: "/w/add-search", value: "3020" });
     expect(parseReservations(log(reservationLine(entry()), reservationLine(other), releaseLine("/w/fix-login")))).toEqual([other]);

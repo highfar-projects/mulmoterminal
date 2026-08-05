@@ -157,13 +157,30 @@ function takenValues(reservations: readonly WorktreeEnvReservation[], dir: strin
  *  answered without touching the log at all. */
 const specFor = (dir: string): WorktreeEnvSpec | null => loadDirConfig(dir).worktreeEnv;
 
+/** Give up what this directory holds for variables it no longer declares.
+ *
+ *  Cheap for the overwhelming majority, which declare nothing and have no line in the log: readLog
+ *  answers from an existsSync when the file was never written. Runs on a fresh spawn, not on the
+ *  synchronous read every pty makes — reservedWorktreeEnv still returns early on an absent spec. */
+function releaseUndeclared(dir: string, spec: WorktreeEnvSpec | null): void {
+  const declared = new Set(Object.keys(spec ?? {}));
+  readLog()
+    .filter((entry) => entry.dir === dir && !declared.has(entry.name))
+    .forEach((entry) => appendLog(releaseLine(dir, entry.name)));
+}
+
 /** Reserve every declared variable for `cwd` that does not already hold one, and return the whole
  *  set. Idempotent: a directory whose values are all reserved does no work and no IO beyond
  *  reading its config and the log. */
 export async function ensureWorktreeEnv(cwd: string, portFree: (port: number) => Promise<boolean> = isPortFree): Promise<Record<string, string>> {
   const spec = specFor(cwd);
-  if (!spec) return {};
   const dir = canonicalPath(cwd);
+  // BEFORE the early return, and before allocating: a directory that renamed `PORT` to `APP_PORT`
+  // — or dropped `worktreeEnv` entirely — would otherwise hold its old value for as long as the
+  // directory exists, and takenValues counts it, so the number stays blocked for every other tree.
+  // Whole-directory release only happens when the worktree itself goes (Codex review on #1367).
+  releaseUndeclared(dir, spec);
+  if (!spec) return {};
   const resolved: Record<string, string> = {};
   // Re-read between allocations rather than once: each append is another instance's reservation
   // as much as ours, and two variables of one directory must not be given the same number.

@@ -132,6 +132,36 @@ describe("ensureWorktreeEnv", () => {
     expect(await ensureWorktreeEnv(projectDir("app6", PORT_3000), FREE)).toEqual({ PORT: "3000" });
   });
 
+  // A key that was RENAMED used to hold its value for as long as the directory existed, blocking
+  // that number for every other tree — the release only ever fired when a worktree was removed.
+  // (Codex review on #1367.)
+  it("hands back the value of a variable the project renamed", async () => {
+    const dir = projectDir("app", PORT_3000);
+    expect(await ensureWorktreeEnv(dir, FREE)).toEqual({ PORT: "3000" });
+    writeFileSync(path.join(dir, ".mulmoterminal.json"), JSON.stringify({ worktreeEnv: { APP_PORT: { kind: "port", base: 3000 } } }));
+    expect(await ensureWorktreeEnv(dir, FREE)).toEqual({ APP_PORT: "3000" });
+    // The proof it was really released, not merely hidden: another directory can now take it.
+    expect(await ensureWorktreeEnv(projectDir("other", PORT_3000), FREE)).toEqual({ PORT: "3010" });
+  });
+
+  it("hands back the values of a project that dropped worktreeEnv entirely", async () => {
+    const dir = projectDir("app", PORT_3000);
+    await ensureWorktreeEnv(dir, FREE);
+    writeFileSync(path.join(dir, ".mulmoterminal.json"), JSON.stringify({ name: "app" }));
+    expect(await ensureWorktreeEnv(dir, FREE)).toEqual({});
+    expect(await ensureWorktreeEnv(projectDir("other", PORT_3000), FREE)).toEqual({ PORT: "3000" });
+  });
+
+  // Only the undeclared ones: a directory reconciling one key must not drop the others with it.
+  it("keeps the variables that are still declared", async () => {
+    const both: WorktreeEnvSpec = { PORT: { kind: "port", base: 3000 }, DB_NAME: { kind: "slug", prefix: "myapp_" } };
+    const dir = projectDir("app", both);
+    expect(await ensureWorktreeEnv(dir, FREE)).toEqual({ PORT: "3000", DB_NAME: "myapp_app" });
+    writeFileSync(path.join(dir, ".mulmoterminal.json"), JSON.stringify({ worktreeEnv: { PORT: { kind: "port", base: 3000 } } }));
+    expect(await ensureWorktreeEnv(dir, FREE)).toEqual({ PORT: "3000" });
+    expect(reservedWorktreeEnv(dir)).toEqual({ PORT: "3000" });
+  });
+
   it("leaves the variable unset when the whole span is spoken for", async () => {
     const allBusy = () => Promise.resolve(false);
     expect(await ensureWorktreeEnv(projectDir("app", PORT_3000), allBusy)).toEqual({});
