@@ -11,7 +11,7 @@ import { NOTIFY_KINDS, type NotifyKind } from "../../../common/notifyKinds";
 import { presetRef, SOUND_PRESETS } from "../../../common/notifySounds";
 import type { BundledSkillName } from "../../../common/bundledSkills";
 import type { SoundEmits } from "./soundEmits";
-import { isRecord } from "../../../common/isRecord";
+import { pickPaths } from "../../composables/pickPaths";
 
 const props = defineProps<{ soundFile?: string | null | undefined; soundKinds?: NotifyKind[] | undefined; sounds?: SoundMap | undefined }>();
 const emit = defineEmits<SoundEmits & { (e: "launch-skill", skill: BundledSkillName): void }>();
@@ -79,6 +79,9 @@ function testKindSound(kind: NotifyKind) {
 // Custom attention sound, applied immediately (like the theme) — empty => the
 // built-in chime. The text box mirrors the saved value; Browse / typing apply it.
 const soundPath = ref(props.soundFile ?? "");
+// A host with no file dialog installed: the field still takes a typed path, which nobody discovers
+// from a Browse button that does nothing (#1447).
+const pickError = ref<string | null>(null);
 watch(
   () => props.soundFile,
   (f) => (soundPath.value = f ?? ""),
@@ -92,19 +95,12 @@ function clearSound() {
   emit("update-sound", null);
 }
 async function browseSound() {
-  try {
-    // Deliberately unbounded: this route answers when the USER closes the native file dialog,
-    // so any deadline here is a guess at how long they will take to choose.
-    const res = await fetch("/api/pick-file", { method: "POST", headers: { "content-type": "application/json" } });
-    if (!res.ok) return;
-    const data: unknown = await res.json();
-    const picked = isRecord(data) && Array.isArray(data.paths) && typeof data.paths[0] === "string" ? data.paths[0] : "";
-    if (picked) {
-      soundPath.value = picked;
-      applySound();
-    }
-  } catch {
-    // native dialog unavailable / canceled — leave the field as-is
+  const { paths, error } = await pickPaths();
+  pickError.value = error;
+  const picked = paths[0];
+  if (picked) {
+    soundPath.value = picked;
+    applySound();
   }
 }
 </script>
@@ -169,6 +165,7 @@ async function browseSound() {
     <SettingsButton @click="browseSound">Browse…</SettingsButton>
     <SettingsButton :disabled="!soundPath" title="Use the built-in chime" @click="clearSound">Use chime</SettingsButton>
   </div>
+  <p v-if="pickError" data-testid="sound-pick-error" class="mt-1.5 text-[12px] text-err-text" role="alert">{{ pickError }}</p>
   <p class="mb-3 mt-3 text-[12px] text-dim">
     These are the sounds for every session. The skill also gives one project its own sound, picks which moments push to your phone, and works out which of them
     is the one waking you up.

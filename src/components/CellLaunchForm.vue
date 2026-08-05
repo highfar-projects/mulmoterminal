@@ -20,8 +20,8 @@ import type { LaunchChoice } from "./wsUrl";
 import type { RunCommand } from "./runCommand";
 import LaunchChipList from "./LaunchChipList.vue";
 import ModelPicker from "./ModelPicker.vue";
-import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
+import { pickPaths } from "../composables/pickPaths";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 // What an EMPTY grid cell shows: pick a directory, pick what to run in it, and start — or resume
@@ -236,18 +236,14 @@ function fillDir(path: string): void {
 
 // The folder button: the browser can't open a native folder chooser, so the local server does
 // (POST /api/pick-file { directory: true }). Fill the Working-directory field with the pick.
+// A host with no dialog at all says so under the field — typing the path still works, and that
+// is only discoverable if the button explains itself instead of doing nothing (#1447).
+const pickError = ref<string | null>(null);
 async function pickDir(): Promise<void> {
-  try {
-    // Deliberately unbounded: this route answers when the USER closes the native file dialog,
-    // so any deadline here is a guess at how long they will take to choose.
-    const res = await fetch("/api/pick-file", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ directory: true }) });
-    if (!res.ok) return;
-    const data = await jsonBody(res);
-    const dir = isUnknownArray(data.paths) ? data.paths.find((p): p is string => typeof p === "string") : undefined;
-    if (dir) fillDir(dir);
-  } catch {
-    // best-effort — the native dialog is unavailable or the user canceled
-  }
+  const { paths, error } = await pickPaths({ directory: true });
+  pickError.value = error;
+  const dir = paths[0];
+  if (dir) fillDir(dir);
 }
 
 // The chip's launch button: a one-click quick launch — fill the field and jump straight into a
@@ -571,6 +567,7 @@ async function removeWorktree(w: Worktree): Promise<void> {
       <span v-if="takenWorktreeAt(targetDir)" data-testid="cell-dir-busy" class="font-sans text-[11px] leading-snug text-amber">{{
         takenWorktreeAt(targetDir)
       }}</span>
+      <span v-if="pickError" data-testid="cell-dir-pick-error" role="alert" class="font-sans text-[11px] leading-snug text-amber">{{ pickError }}</span>
     </label>
     <!-- Codex has its own model configuration and doesn't read this one. Keyed on the AGENT
          PICKER, not on the agent the cell will run: that reads "claude" while Shell is picked (a
