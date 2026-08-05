@@ -22,6 +22,7 @@ import { normalizeFontFamily, TERMINAL_FONT_FAMILY_MAX_CHARS, TERMINAL_FONT_FAMI
 import { normalizeOrderPriority } from "../../common/orderPriority.js";
 import { SESSION_AGENTS } from "../../common/sessionAgent.js";
 import { NOTIFY_KINDS } from "../../common/notifyKinds.js";
+import { DIR_ICON_MAX_CHARS } from "../../common/dirIcon.js";
 import type { QuickCommand } from "../../common/quickCommands.js";
 import { isRecord } from "../../common/isRecord.js";
 import {
@@ -409,6 +410,13 @@ const writableHeaderChipSchema = z.union([builtinChipSchema, writableCustomChipS
 
 const writableDirConfigSchema = z.object({
   name: nonEmptyText.max(NAME_MAX_CHARS).optional(),
+  // The IMAGE marking this directory's cells (#1421) — a path relative to this file's own
+  // directory, an http(s) URL, or a data: image. NOT the Material Symbols name a header button
+  // takes under the same key: this one is a picture the project ships, that one is a glyph id.
+  //
+  // `false` means "no icon here" and, unlike omitting the key, stops MulmoTerminal looking for
+  // the favicon the repository already ships (#1428).
+  icon: z.union([nonEmptyText.max(DIR_ICON_MAX_CHARS), z.literal(false)]).optional(),
   badgeColor: z.string().regex(HEX_COLOR_RE).optional(),
   headerColor: z.string().regex(HEX_COLOR_RE).optional(),
   headerTextColor: z.string().regex(HEX_COLOR_RE).optional(),

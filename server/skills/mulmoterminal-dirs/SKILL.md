@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-dirs
-description: Colour-code and order the directories you actually work in, from wherever you are. Writes each project's `<project>/.mulmoterminal.json` — name badge, the seven chrome colours, xterm palette (`theme` / `colors`), terminal font size, `orderPriority` (where it sits in the grid and in the launcher's chips), and `worktreeEnv` (a dev-server port and database name per git worktree, so two `yarn dev` do not fight over 3000). Starts from your recent MulmoTerminal directories rather than just the current one, reads the configs you already have, works out the convention you have been following, and continues it for the ones that are unset or off-pattern — so a newly cloned repo gets the colour and rank it should have had. Use when the user wants to colour-code, theme, rename, reorder, or resize projects in MulmoTerminal — "give this project a colour", "colour-code my repos", "keep my main repos at the top", "the new clone has no colour", "make them consistent", "terminal text is too small", "two worktrees fight over port 3000", "give each worktree its own port / database". For inventing a NEW reusable colour scheme that shows up in Settings, use mulmoterminal-theme instead.
+description: Colour-code and order the directories you actually work in, from wherever you are. Writes each project's `<project>/.mulmoterminal.json` — name badge, project icon image, the seven chrome colours, xterm palette (`theme` / `colors`), terminal font size, `orderPriority` (where it sits in the grid and in the launcher's chips), and `worktreeEnv` (a dev-server port and database name per git worktree, so two `yarn dev` do not fight over 3000). Starts from your recent MulmoTerminal directories rather than just the current one, reads the configs you already have, works out the convention you have been following, and continues it for the ones that are unset or off-pattern — so a newly cloned repo gets the colour and rank it should have had. Use when the user wants to colour-code, theme, rename, reorder, or resize projects in MulmoTerminal — "give this project a colour", "colour-code my repos", "keep my main repos at the top", "the new clone has no colour", "make them consistent", "terminal text is too small", "two worktrees fight over port 3000", "give each worktree its own port / database". For inventing a NEW reusable colour scheme that shows up in Settings, use mulmoterminal-theme instead.
 ---
 
 # Colour and order the directories you work in
@@ -134,12 +134,66 @@ was dropped rather than trusting the file.
 | Key | Meaning |
 |---|---|
 | `name` | Badge label (≤ 40 chars). |
+| `icon` | An image marking this directory (see below). |
 | `badgeColor` | Name-badge colour. |
 | `headerColor` / `headerTextColor` | The cell header's background / text. |
 | `cellColor` | Cell body background. |
 | `cellBorderColor` | Cell border. |
 | `dotColor` | Idle status dot. |
 | `buttonColor` | Header icon buttons. |
+
+### Project icon — `icon`
+
+An IMAGE beside the name badge, in the cell header, the cockpit roster, the filmstrip thumbnails
+and the launcher's directory chips. **Not** a Material Symbols name — that is what a header
+BUTTON's `icon` is, and it is `mulmoterminal-header`'s key, not this one.
+
+- **A path is relative to this directory**, and confined to it: an absolute path, or a `../` that
+  escapes, is dropped. Or an `http(s)://` URL, or a `data:image/…` URI (capped at 64 KB, since it
+  rides in every cell's config fetch — point at a file for anything larger).
+- PNG, JPEG, **GIF (animated ones play)**, WebP, AVIF, SVG, ICO, BMP. Any other extension is dropped.
+
+Do not invent one. **Look for an image the repository already has** — `public/favicon.svg`,
+`public/apple-touch-icon.png`, a web manifest — and offer what you found. A project with no logo
+of its own is better served by the colour scheme; an icon that is not the project's own picture is
+one more thing to recognise, which is the opposite of the point.
+
+Prefer a file over a URL: a remote image is a request per cell to somebody else's host, and it
+disappears when that host does. Prefer a **committed** file over a gitignored one — worktrees
+inherit the key as written, so only a committed image is found in the worktree too.
+
+**Usually you do not need to write this key at all.** MulmoTerminal already picks up a project's
+own favicon when the key is absent — see below — so writing `"icon": "public/favicon.ico"` sets by
+hand what was going to happen anyway. Write it when the repository's icon is somewhere the search
+does not look, or when the project should show a different picture from its favicon.
+
+### The favicon is picked up on its own — `autoDirIcon`
+
+A directory that sets **no** `icon` shows the icon its repository already ships. Searched in this
+order, first hit wins:
+
+1. `public/favicon.svg`, then `favicon.svg`
+2. `public/apple-touch-icon.png`, then `apple-touch-icon.png`
+3. `public/favicon.png`, then `favicon.png`
+4. `public/favicon.ico`, then `favicon.ico`
+5. a web manifest (`public/site.webmanifest`, `public/manifest.json`, or either at the root) — its
+   largest non-`maskable` icon
+
+Ordered by how the image survives being drawn at 14px, not by how common it is. `docs/logo.png`
+and `assets/logo.*` are deliberately NOT searched: a "logo" is as often a wide README banner as an
+icon, and one of those squeezed into 14 square pixels reads as a smudge.
+
+Two ways to turn it off, and they mean different things:
+
+- `"icon": false` in a project's own file — "no icon on THIS project's cells". Worktrees inherit it.
+- `autoDirIcon: false` in `~/.mulmoterminal/config.json` (or the checkbox in Settings → Directory
+  appearance) — off everywhere. This is the one to reach for if the behaviour itself is unwanted;
+  `"icon": false` in every repository is not.
+
+**A key that was written and got it wrong does NOT fall back to the favicon.** `"icon": "logo.png"`
+pointing at a file that isn't there leaves the cell with no icon at all, on purpose: a broken
+setting has to look broken. If a project shows nothing where you expected a picture, check
+`/api/dir-config-detail` (step 1) — the key will be in the `ignored` list.
 
 ### Terminal palette — `theme` and `colors`
 
@@ -246,9 +300,9 @@ default and renders nothing where no `worktreeEnv` is declared, so there is noth
 
 A managed git worktree (`~/.mulmoterminal/worktrees/<repo>-<hash>/<task>`) gets its own
 `.mulmoterminal.json` when MulmoTerminal creates it, derived from the project's: identity keys
-(`name` / `theme` / `colors` / `fontSize` / `fontFamily` / `provider` / `model` / `worktreeEnv`)
-as written, the seven chrome colours rotated **12° further per worktree**, and `orderPriority` at
-the project's rank **+ 1**. `sound` / `sounds` / `addDirs` are not carried.
+(`name` / `icon` / `theme` / `colors` / `fontSize` / `fontFamily` / `provider` / `model` /
+`worktreeEnv`) as written, the seven chrome colours rotated **12° further per worktree**, and
+`orderPriority` at the project's rank **+ 1**. `sound` / `sounds` / `addDirs` are not carried.
 
 Two consequences for this skill:
 

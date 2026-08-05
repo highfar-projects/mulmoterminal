@@ -11,6 +11,7 @@
 import { existsSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { DIR_CONFIG_FILE, loadDirConfig, type DirConfig } from "./dir-config.js";
+import { dirIconRef } from "./dir-icon.js";
 import { rotateHue } from "./hue-rotate.js";
 
 // How far around the hue wheel each successive worktree sits from the one before it. Small
@@ -57,6 +58,15 @@ export function inheritedWorktreeConfig(parent: DirConfig, index: number): Recor
     const value = parent[key];
     if (value !== null) config[key] = rotateHue(value, index * HUE_STEP_DEGREES);
   });
+  // Written back AS THE PARENT WROTE IT, not as the loader resolved it: a file icon resolves to
+  // an absolute path, and this key only accepts relative ones — so the derived config would be
+  // rejected by the same rule that produced it. The relative path resolves again inside the
+  // worktree, where a committed logo is at the same place; one that isn't committed simply
+  // resolves to nothing there, which is the right answer rather than a broken image.
+  const icon = dirIconRef(parent.icon);
+  if (icon !== null) config.icon = icon;
+  // `false` travels too, and has to: a project that turned its icon OFF would otherwise have
+  // worktrees that go looking for its favicon and find one (#1428).
   const rank = worktreeRank(parent.orderPriority);
   if (rank !== null) config.orderPriority = rank;
   return config;

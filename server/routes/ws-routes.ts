@@ -25,7 +25,8 @@ import {
   antigravityConversations,
   antigravityConversationsHydrated,
   customAgentSessionsHydrated,
-  codexRolloutIds,
+  codexRollouts,
+  codexRolloutsHydrated,
   markDevTerminalSession,
   markAttachedSessionPlaced,
   ptys,
@@ -350,7 +351,7 @@ function resolveCodexSession(requested: string | null): { sessionId: string; liv
   const live = hasLivePty && requested ? ptys.get(requested) : undefined;
   const tmuxAlive = !live && !!requested && tmuxHasSession(requested);
   const resumeRolloutId = agentResumeId(requested, {
-    mappedId: requested ? codexRolloutIds.get(requested) : null,
+    mappedId: requested ? codexRollouts.get(requested)?.conversationId : null,
     conversationExists: () => !!requested && codexRolloutExists(codexSessionsRoot(), requested),
     hasLivePty: !!live,
     tmuxAlive,
@@ -587,6 +588,10 @@ async function handleCodexConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUp
   await ensureWorktreeEnv(cwd);
   const attachGuiMcp = url.searchParams.get("gui") !== "0";
 
+  // Before resolving, not after: the mapping this reads lives on disk, and a reconnect that
+  // arrives while the log is still being read would see an empty map and decline to resume a
+  // rollout that is right there — which is the restart case this exists for.
+  await codexRolloutsHydrated;
   const { sessionId, live, resumeRolloutId } = resolveCodexSession(requested);
   const early = await admitAgentSession(ws, "codex", { requested, sessionId, live, cwd, devTerminal: !attachGuiMcp });
   if (!early) return;

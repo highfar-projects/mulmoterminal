@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { antigravityTitleFromTranscriptHead, antigravityTranscriptPath, listAntigravitySessions } from "../../../server/agents/antigravity-sessions.js";
-import type { AntigravityConversation } from "../../../server/session/antigravity-conversations.js";
+import type { AgentConversation } from "../../../server/session/agent-conversations.js";
 
 // Captured verbatim from agy 1.1.9 (`agy -p`), so a format change breaks this rather than
 // quietly renaming every row. The point of the fixture is the wrapping: the prompt is inside
@@ -61,7 +61,7 @@ describe("listAntigravitySessions", () => {
   const ID_B = "5fd4f183-39d4-4842-8e03-114e966e7fa5";
   const ID_C = "7c1f0f6c-2b8e-4a5a-9d3e-0f2a1b3c4d5e";
 
-  const record = (over: Partial<AntigravityConversation> = {}): AntigravityConversation => ({
+  const record = (over: Partial<AgentConversation> = {}): AgentConversation => ({
     sessionId: "11111111-1111-4111-8111-111111111111",
     conversationId: ID_A,
     cwd: CWD,

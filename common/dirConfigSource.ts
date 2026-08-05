@@ -10,6 +10,7 @@
 // together so a field added to the loader can't quietly go missing here.
 export const DIR_CONFIG_KEYS = [
   "name",
+  "icon",
   "badgeColor",
   "headerColor",
   "headerTextColor",
@@ -66,6 +67,10 @@ export interface DirConfigExtras {
   appendSystemPrompt: boolean | null;
   buttonLabels: string[];
   chipLabels: string[];
+  // The repository file an icon was picked up from when the config named none (#1428), relative
+  // to the directory. Null when the icon was configured, or when there is none — so the preview
+  // can distinguish a setting from a discovery, which `iconUrl` cannot.
+  autoIcon: string | null;
   // Which per-tree variables this directory declares (#1367) — the NAMES, not the values. The
   // values belong to a tree rather than to the file, and each cell already shows its own on the
   // `env` header chip; what this panel answers is whether the declaration was read at all.
@@ -80,6 +85,7 @@ export const EMPTY_DIR_CONFIG_EXTRAS: DirConfigExtras = {
   appendSystemPrompt: null,
   buttonLabels: [],
   chipLabels: [],
+  autoIcon: null,
   worktreeEnvNames: [],
 };
 

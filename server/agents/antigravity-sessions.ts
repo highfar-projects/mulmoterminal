@@ -6,10 +6,10 @@
 // of them answers "every conversation in this directory": `cache/last_conversations.json` keeps
 // only the LAST conversation per cwd and is written at exit, `history.jsonl` has no conversation
 // id, and `conversation_summaries.db` has the columns but the CLI never writes a row. So the cwd
-// is read from OUR log (session/antigravity-conversations.ts) and agy's transcript is opened only
+// is read from OUR log (session/agent-conversations.ts) and agy's transcript is opened only
 // for a title and an mtime.
 import path from "node:path";
-import type { AntigravityConversation } from "../session/antigravity-conversations.js";
+import type { AgentConversation } from "../session/agent-conversations.js";
 import { antigravityConversationExists } from "./antigravity-session.js";
 import { cleanTitle, parseJsonRecord, readTranscriptHead } from "./transcript-head.js";
 
@@ -60,8 +60,8 @@ async function readTranscriptSummary(file: string): Promise<{ title: string; mti
 
 // The newest record per conversation. The log only grows, so one conversation can appear under
 // several session keys (a session resumed under a new key) and the same key can appear twice.
-function newestPerConversation(records: Iterable<AntigravityConversation>, cwd: string): AntigravityConversation[] {
-  const byConversation = new Map<string, AntigravityConversation>();
+function newestPerConversation(records: Iterable<AgentConversation>, cwd: string): AgentConversation[] {
+  const byConversation = new Map<string, AgentConversation>();
   for (const record of records) {
     if (record.cwd !== cwd) continue;
     const known = byConversation.get(record.conversationId);
@@ -86,7 +86,7 @@ function newestPerConversation(records: Iterable<AntigravityConversation>, cwd: 
  */
 export async function listAntigravitySessions(
   root: string,
-  records: Iterable<AntigravityConversation>,
+  records: Iterable<AgentConversation>,
   cwd: string,
   limit: number,
 ): Promise<AntigravitySessionSummary[]> {

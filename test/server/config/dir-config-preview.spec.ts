@@ -17,6 +17,7 @@ import { dirConfigRows } from "../../../src/components/dirConfigDetail";
 // key produced it is the failure this is meant to catch.
 const FIXTURES: Record<string, unknown> = {
   name: "proj",
+  icon: "./logo.png", // written to disk below — resolveDirIcon drops a path that isn't there
   badgeColor: "#112233",
   headerColor: "#112233",
   headerTextColor: "#112233",
@@ -48,6 +49,7 @@ function dirSetting(key: string, value: unknown): string {
   const dir = mkdtempSync(path.join(tmpdir(), "mt-preview-"));
   dirs.push(dir);
   writeFileSync(path.join(dir, "alert.mp3"), "x");
+  writeFileSync(path.join(dir, "logo.png"), "x");
   mkdirSync(path.join(dir, "sibling"));
   writeFileSync(path.join(dir, ".mulmoterminal.json"), JSON.stringify({ [key]: value }));
   return dir;

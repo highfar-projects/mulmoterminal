@@ -199,7 +199,7 @@ export function createClaudeSpawner(deps: SpawnDeps) {
   // reattaches.
   function spawnClaudePty(sessionId: string, resume: string | null, ws: WebSocket | null, options: SpawnClaudeOptions = {}): PtyEntry {
     const { initialPrompt, cwd = CLAUDE_CWD, attachGuiMcp = true, draft, launch, customAgentId } = options;
-    const fullGuiMcp = carriesFullGuiMcp(attachGuiMcp, cwd);
+    const fullGuiMcp = carriesFullGuiMcp(attachGuiMcp, cwd, "claude");
     // fullGuiMcp picks the MCP mode (see buildClaudeArgs, and its own doc for who earns it): our
     // broker on one all-tools url; a project-directory cell gets none of ours and loads the GUI
     // tools its own directory registered. Either way the user's own MCP servers load.
@@ -272,7 +272,7 @@ export function createClaudeSpawner(deps: SpawnDeps) {
     function recordCapabilitiesForThisSpawn(): void {
       const reattaching = ptyWouldReattach(sessionId, true);
       if (!reattaching) resetSessionToolGroups(sessionId);
-      claimFullGuiMcp(sessionId, attachGuiMcp, cwd, reattaching);
+      claimFullGuiMcp(sessionId, attachGuiMcp, cwd, reattaching, "claude");
     }
 
     function spawnEntry(): PtyEntry {

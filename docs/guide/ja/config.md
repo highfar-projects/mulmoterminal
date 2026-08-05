@@ -154,6 +154,62 @@ Anthropic のまま別のモデルを指定できます。→ [OpenRouter で別
 
 すべて `#rrggbb`。作業中/要対応の状態色は、これらの背景色より優先されます（アイドル時に反映）。
 
+### プロジェクトのアイコン（`icon`） {#dir-icon}
+
+`icon` は名前バッジの隣に**画像**を出します。プロジェクトのロゴを置いておけば、文字を読む前に
+どのセルか分かります。
+
+```jsonc
+{
+  "icon": "docs/logo.png",                  // このディレクトリ内のファイル
+  // "icon": "https://example.com/logo.svg" // URL でも
+  // "icon": "data:image/png;base64,iVBO…"  // 画像を直接埋め込んでも
+}
+```
+
+出る場所は、**セルのヘッダー**、拡大時の **cockpit ロスター**と**フィルムストリップのサムネイル**、
+そして**ランチャのディレクトリチップ**。起動前も起動後も同じ絵で見分けられます。
+
+- **パスはこのディレクトリからの相対**です。絶対パスや `../` で外に出るものは拒否されます
+  （`sound` と同じ扱い。開いたプロジェクトがマシン上の別の場所を指せないようにするためです）
+- **形式**: PNG / JPEG / **GIF（アニメーションはそのまま動きます）** / WebP / AVIF / SVG / ICO / BMP。
+  これ以外の拡張子は無視されます
+- **画像はリポジトリにコミットしておく**のがおすすめです。clone した直後から、また
+  [worktree](#worktree-inherit) を切った直後からアイコンが付きます（`icon` は書いたままの文字列で
+  引き継がれるので、同じ相対パスが worktree 側でも解決します）
+- 解決できなくなったアイコン（ファイル名変更、URL 先がダウン）は、単に表示されません。実際に何が
+  適用されたかは 設定 → [設定が効かないときは](#dir-settings-preview) で確認できます
+- ヘッダー**ボタン**の `icon` とは別物です。あちらは
+  [Material Symbols](https://fonts.google.com/icons) のアイコン名で、画像ではありません
+
+### favicon は勝手に拾われます {#auto-dir-icon}
+
+たいていの場合 `icon` を書く必要はありません。**未設定**のディレクトリは、そのリポジトリが
+既に持っているアイコンを表示します。
+
+1. `public/favicon.svg` → `favicon.svg`
+2. `public/apple-touch-icon.png` → `apple-touch-icon.png`
+3. `public/favicon.png` → `favicon.png`
+4. `public/favicon.ico` → `favicon.ico`
+5. web manifest（`public/site.webmanifest` / `public/manifest.json` / ルートの同名）の
+   `maskable` でない最大のアイコン
+
+最初に見つかったものが勝ちます。並び順は「よくある順」ではなく「14px で描いたときに崩れない順」です。
+`docs/logo.png` や `assets/logo.*` は**あえて探しません** — 「ロゴ」は README 用の横長バナーであることも
+多く、それを 14px 四方に押し込むとただの染みになるからです。
+
+切り方は2つあり、意味が違います。
+
+- **`"icon": false`**（プロジェクトのファイル）— *そのプロジェクト*のセルにアイコンを出さない。
+  worktree にも引き継がれます
+- **`autoDirIcon: false`**（`~/.mulmoterminal/config.json`）または
+  設定 → *Directory appearance* のチェックボックス — 全体で off。挙動そのものが不要ならこちらです。
+  全リポジトリに `"icon": false` を書いて回るのは違います
+
+**書き間違えたキーは favicon にフォールバックしません。** `"icon": "logo.png"` の指す先が無い場合、
+セルにはアイコンが出ません（意図的です — 壊れた設定は壊れて見えるべきなので）。
+設定 → [設定が効かないときは](#dir-settings-preview) に、落ちたキーとして出ます。
+
 ### このディレクトリの通知音
 
 ```jsonc
@@ -247,8 +303,10 @@ auto（注目度順）と manual（移動ボタンで手動）と並びます。
 
 いまは新しい worktree に、プロジェクトの設定から作った専用のコピーが置かれます。
 
-- **同一性はそのままコピー** — `name` / `theme` / `colors` / `fontSize` / `fontFamily` /
-  `provider` / `model`。同じプロジェクト、同じターミナル、同じモデルです
+- **同一性はそのままコピー** — `name` / `icon` / `theme` / `colors` / `fontSize` / `fontFamily` /
+  `provider` / `model`。同じプロジェクト、同じターミナル、同じモデルです。`icon` は解決後のファイルでは
+  なく**書いたままのパス**で渡るので、リポジトリにコミットされたロゴなら worktree 側でも見つかります
+  （gitignore されている画像なら、worktree には出ないだけです）
 - **セルの色は色相を少しずつ回す** — `badgeColor` / `headerColor` / `headerTextColor` /
   `cellColor` / `cellBorderColor` / `dotColor` / `buttonColor`。1本ごとに 12 度ずつ進むので、
   並べるとグラデーションになります。「このプロジェクトだ」と分かり、かつ「どの worktree か」も分かる状態です。

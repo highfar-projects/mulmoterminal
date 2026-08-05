@@ -11,19 +11,19 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { MULMOTERMINAL_HOME, SESSION_ID_RE } from "../config/env.js";
 import type { DirModelChoice } from "./provider-env.js";
-import { asTerminalAgent, type TerminalAgent } from "../../common/sessionAgent.js";
+import { asTerminalAgent, type SessionAgent, type TerminalAgent } from "../../common/sessionAgent.js";
 import { messageOf } from "../errors.js";
 import { buildActivitySnapshot, mergeOwnedActivity, parseActivityState, type PersistedActivity } from "./activity-state.js";
 import { parseSessionIdLog, sessionIdLogLine } from "./session-id-log.js";
 import { applyCustomAgentSession, customAgentSessionLine, customAgentSessionRecord } from "./custom-agent-log.js";
 import { isCustomAgentId } from "../../common/customAgents.js";
 import {
-  antigravityConversationLine,
-  antigravityConversationRecord,
-  applyAntigravityConversation,
-  hydrateAntigravityConversationInto,
-  type AntigravityConversation,
-} from "./antigravity-conversations.js";
+  agentConversationLine,
+  agentConversationRecord,
+  applyAgentConversation,
+  hydrateAgentConversationInto,
+  type AgentConversation,
+} from "./agent-conversations.js";
 import { applySessionMemo, createMemoWriteGuard, sessionMemoLine, sessionMemoRecord } from "./session-memos.js";
 import { normalizeMemo } from "../../common/sessionMemo.js";
 import { forEachJsonlRecord } from "../infra/jsonl-file.js";
@@ -103,9 +103,6 @@ export const lastTitledUserTurns = new Map<string, number>();
 // keeps failing backs off instead of re-spawning the summarizer on every 4s roster poll.
 export const lastTitleAttemptMs = new Map<string, number>();
 
-// mulmoterminal session key -> the codex rollout id it maps to. codex mints its own id, so we
-// discover it after spawn and keep it here to `codex resume <id>` once the live PTY is gone.
-export const codexRolloutIds = new Map<string, string>();
 // Rollout files already attributed to a session, so a single rollout is never mapped to two keys
 // (which would let both cold-resume the same conversation). Serialized by the single event loop.
 export const claimedCodexRollouts = new Set<string>();
@@ -402,8 +399,8 @@ export function hasAllGuiTools(id: string): boolean {
  *   given, which may be no all-tools url — claiming on top of that is exactly the stale-claim
  *   failure, arrived at from the other side.
  */
-export function claimFullGuiMcp(sessionId: string, attachGuiMcp: boolean, cwd: string | undefined, wouldReattach: boolean): boolean {
-  const full = carriesFullGuiMcp(attachGuiMcp, cwd);
+export function claimFullGuiMcp(sessionId: string, attachGuiMcp: boolean, cwd: string | undefined, wouldReattach: boolean, agent: SessionAgent): boolean {
+  const full = carriesFullGuiMcp(attachGuiMcp, cwd, agent);
   if (!full) releaseAllToolsSession(sessionId);
   else if (!wouldReattach) markAllToolsSession(sessionId);
   return full;
@@ -522,47 +519,65 @@ function rememberSessionCwd(id: string, cwd: string): void {
     .catch((e) => console.error(`[dev-terminal-cwds] failed to persist: ${messageOf(e)}`));
 }
 
-// Which agy conversation each antigravity session runs, so a cold reconnect can resume it with
-// `--conversation <id>`. Persisted because agy mints the id and we discover it after the spawn: a
-// map that dies with the process leaves the conversation on disk with nothing pointing at it.
-export const antigravityConversations = new Map<string, AntigravityConversation>();
-const ANTIGRAVITY_CONVERSATIONS_FILE = path.join(MULMOTERMINAL_HOME, "antigravity-conversations.jsonl");
+// One agent's session -> conversation log. codex and antigravity both mint their own id and both
+// only learn it after the spawn, so each keeps this map on disk: one that dies with the process
+// leaves the conversation there with nothing pointing at it. Separate files, one shape.
+function conversationLog(fileName: string, label: string) {
+  const conversations = new Map<string, AgentConversation>();
+  const file = path.join(MULMOTERMINAL_HOME, fileName);
+  // Sessions this process has already recorded. Hydration reads the file as it was BEFORE our
+  // append could reach it, so without this a session spawned during startup is overwritten by an
+  // older line — and the cwd it answers with would be the directory that session used to run in.
+  const writtenIds = new Set<string>();
 
-// Sessions this process has already recorded. Hydration reads the file as it was BEFORE our append
-// could reach it, so without this a session spawned during startup is overwritten by an older line
-// — and the cwd it answers with would be the directory that session used to run in.
-const antigravityWrittenIds = new Set<string>();
+  const hydrated: Promise<void> = (async () => {
+    try {
+      // Streamed rather than read whole: one line per spawn, and nothing prunes it.
+      await forEachJsonlRecord(file, (parsed) => {
+        const record = agentConversationRecord(parsed, isValidSessionId);
+        if (record) hydrateAgentConversationInto(conversations, writtenIds, record);
+      });
+    } catch {
+      // absent on first run / unreadable => nothing to resume, which is today's behaviour anyway
+    }
+  })();
 
-export const antigravityConversationsHydrated: Promise<void> = (async () => {
-  try {
-    // Streamed rather than read whole: one line per antigravity spawn, and nothing prunes it.
-    await forEachJsonlRecord(ANTIGRAVITY_CONVERSATIONS_FILE, (parsed) => {
-      const record = antigravityConversationRecord(parsed, isValidSessionId);
-      if (record) hydrateAntigravityConversationInto(antigravityConversations, antigravityWrittenIds, record);
-    });
-  } catch {
-    // absent on first run / unreadable => nothing to resume, which is today's behaviour anyway
+  let persist: Promise<void> = Promise.resolve();
+
+  function remember(sessionId: string, conversationId: string, cwd: string): void {
+    if (!isValidSessionId(sessionId) || !isValidSessionId(conversationId) || !cwd) return;
+    const known = conversations.get(sessionId);
+    if (known?.conversationId === conversationId && known.cwd === cwd) return; // already the answer; appending would only grow the log
+    // Carried over rather than re-stamped: a session relaunched somewhere else appends a second
+    // line, and taking the clock there would make `startedAt` mean "last written", which is not
+    // what a reader sorting by it would get. The first line for a session is written at its spawn.
+    const record: AgentConversation = { sessionId, conversationId, cwd, startedAt: known?.startedAt ?? Date.now() };
+    writtenIds.add(sessionId);
+    applyAgentConversation(conversations, record);
+    persist = persist
+      .then(() => fs.mkdir(MULMOTERMINAL_HOME, { recursive: true }))
+      .then(() => fs.appendFile(file, agentConversationLine(record)))
+      .catch((e) => console.error(`[${label}] failed to persist: ${messageOf(e)}`));
   }
-})();
 
-let antigravityPersist: Promise<void> = Promise.resolve();
-
-/** Map a session to the agy conversation it is running, and persist it. */
-export function rememberAntigravityConversation(sessionId: string, conversationId: string, cwd: string): void {
-  if (!isValidSessionId(sessionId) || !isValidSessionId(conversationId) || !cwd) return;
-  const known = antigravityConversations.get(sessionId);
-  if (known?.conversationId === conversationId && known.cwd === cwd) return; // already the answer; appending would only grow the log
-  // Carried over rather than re-stamped: a session relaunched somewhere else appends a second
-  // line, and taking the clock there would make `startedAt` mean "last written", which is not
-  // what a reader sorting by it would get. The first line for a session is written at its spawn.
-  const record: AntigravityConversation = { sessionId, conversationId, cwd, startedAt: known?.startedAt ?? Date.now() };
-  antigravityWrittenIds.add(sessionId);
-  applyAntigravityConversation(antigravityConversations, record);
-  antigravityPersist = antigravityPersist
-    .then(() => fs.mkdir(MULMOTERMINAL_HOME, { recursive: true }))
-    .then(() => fs.appendFile(ANTIGRAVITY_CONVERSATIONS_FILE, antigravityConversationLine(record)))
-    .catch((e) => console.error(`[antigravity-conversations] failed to persist: ${messageOf(e)}`));
+  return { conversations, hydrated, remember };
 }
+
+// Which agy conversation each antigravity session runs, so a cold reconnect can resume it with
+// `agy --conversation <id>`.
+const antigravityLog = conversationLog("antigravity-conversations.jsonl", "antigravity-conversations");
+export const antigravityConversations: ReadonlyMap<string, AgentConversation> = antigravityLog.conversations;
+export const antigravityConversationsHydrated = antigravityLog.hydrated;
+/** Map a session to the agy conversation it is running, and persist it. */
+export const rememberAntigravityConversation = antigravityLog.remember;
+
+// The same, for codex: which rollout each codex session runs, so a cold reconnect can resume it
+// with `codex resume <id>`.
+const codexLog = conversationLog("codex-rollouts.jsonl", "codex-rollouts");
+export const codexRollouts: ReadonlyMap<string, AgentConversation> = codexLog.conversations;
+export const codexRolloutsHydrated = codexLog.hydrated;
+/** Map a session to the codex rollout it is running, and persist it. */
+export const rememberCodexRollout = codexLog.remember;
 
 // The custom-agent mapping's own log (#1414). Same shape as the memos below and kept for the same
 // reason: it must survive reap and a restart, because the transcript it describes does.

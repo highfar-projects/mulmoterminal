@@ -10,7 +10,7 @@ import { codexGuiMcpServers } from "./mcp-config.js";
 import { codexSessionsRoot, snapshotSessions, watchForCodexSession } from "../agents/codex-session.js";
 import { codexRolloutPath } from "../agents/codex-sessions.js";
 import { trackCodexActivity } from "./codex-activity-track.js";
-import { claimedCodexRollouts, claimFullGuiMcp, codexRolloutIds, ptys } from "./registry.js";
+import { claimedCodexRollouts, claimFullGuiMcp, ptys, rememberCodexRollout } from "./registry.js";
 import { ptySpawn, ptyWouldReattach } from "./pty-spawn.js";
 import { ptyStartLine } from "./pty-exit-log.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
@@ -32,12 +32,12 @@ export function createCodexSpawner(deps: SpawnDeps) {
   // codex persists its rollout only after the first user turn, so watch a FRESH session's lifetime
   // (stop once its pty is gone) and capture the minted id so a later cold reconnect can
   // `codex resume <id>`. Attribution is unambiguous-only (see pickFreshSession).
-  function rememberCodexRollout(sessionId: string, entry: PtyEntry, root: string, before: Set<string>, cwd: string): void {
+  function captureCodexRollout(sessionId: string, entry: PtyEntry, root: string, before: Set<string>, cwd: string): void {
     watchForCodexSession(root, before, { cwd, claimed: claimedCodexRollouts, isCancelled: () => !ptys.has(sessionId) })
       .then((meta) => {
         if (!meta) return;
         claimedCodexRollouts.add(meta.file);
-        codexRolloutIds.set(sessionId, meta.id);
+        rememberCodexRollout(sessionId, meta.id, cwd);
         // A rollout only discovered now is one this session just created, so it is read
         // whole: its first turn is in there and hasn't been reported yet.
         trackCodexActivity(sessionId, meta.file, false, activityDepsFor(sessionId, entry, deps));
@@ -87,7 +87,7 @@ export function createCodexSpawner(deps: SpawnDeps) {
     // reuses the id, and a stale claim would stand its group urls down with nothing left to serve
     // them (Codex review on #1399). claimFullGuiMcp owns both directions so neither spawn path can
     // apply half the rule.
-    const allTools = claimFullGuiMcp(sessionId, attachGuiMcp, cwd, ptyWouldReattach(sessionId, true));
+    const allTools = claimFullGuiMcp(sessionId, attachGuiMcp, cwd, ptyWouldReattach(sessionId, true), "codex");
     const guiMcpServers = codexGuiMcpServers({ sessionId, port: PORT, groups: mcpGroups, allTools });
     const args = buildCodexArgs({ resume: resumeRolloutId, model: deps.codexModel, guiMcpServers });
     const { term, tmux, reattached } = ptySpawn(sessionId, deps.codexBin, args, cwd, true, { binEnvVar: codexAdapter.binEnvVar });
@@ -97,13 +97,15 @@ export function createCodexSpawner(deps: SpawnDeps) {
     const entry: PtyEntry = { term, ws, buffer: "", cwd, tmux, active: false, agent: "codex" };
     ptys.set(sessionId, entry);
     if (resumeRolloutId) {
-      codexRolloutIds.set(sessionId, resumeRolloutId);
+      // Recorded on resume too, not just on the spawn that discovered it: a session resumed by the
+      // rollout id itself carries no mapping yet, and one whose cell moved needs the new cwd.
+      rememberCodexRollout(sessionId, resumeRolloutId, cwd);
       const file = codexRolloutPath(root, resumeRolloutId);
       if (file) trackCodexActivity(sessionId, file, true, activityDepsFor(sessionId, entry, deps));
     } else {
       // Discover the id only for a FRESH session. On resume we already know it; running the watcher
       // could overwrite the known id with a mis-attributed concurrent rollout.
-      rememberCodexRollout(sessionId, entry, root, before, cwd);
+      captureCodexRollout(sessionId, entry, root, before, cwd);
     }
     // A seed prompt is typed into codex's input box after it settles (not a CLI arg — see
     // attachCodexAutoRun), so a long collection-action prompt can't overflow tmux's command limit.

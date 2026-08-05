@@ -32,6 +32,7 @@ const EMPTY = {
   colors: null,
   sound: null,
   sounds: {},
+  icon: null,
   buttons: null,
   chips: null,
   skills: null,
@@ -159,6 +160,7 @@ describe("loadDirConfig", () => {
       colors: null,
       sound: path.join(dir, "a.mp3"),
       sounds: {},
+      icon: null,
       buttons: null,
       chips: null,
       skills: ["review", "commit"], // trimmed, deduped, empties dropped
@@ -357,6 +359,7 @@ describe("publicDirConfig / dirSoundFor", () => {
       theme: null,
       colors: null,
       hasSound: true,
+      iconUrl: null,
     });
     expect(dirSoundFor(dir, null)).toEqual({ source: "file", path: path.join(dir, "a.mp3") });
     cleanup();
@@ -479,6 +482,7 @@ describe("dirConfigDetail", () => {
       appendSystemPrompt: null,
       buttonLabels: [],
       chipLabels: [],
+      autoIcon: null,
       worktreeEnvNames: [],
     });
     rmSync(dir, { recursive: true, force: true });

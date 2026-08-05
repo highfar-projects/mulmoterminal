@@ -1,4 +1,5 @@
 import { isRecord } from "../../common/isRecord";
+import { DIR_ICON_ROUTE } from "../../common/dirIcon";
 import { EMPTY_DIR_CONFIG_SOURCE, type DirConfigSource } from "../../common/dirConfigSource";
 import { presetLabel } from "./presets";
 
@@ -75,6 +76,23 @@ function terminalRows(config: Record<string, unknown>): DirConfigRow[] {
   return rows;
 }
 
+// What the icon row SAYS, rather than the URL it resolved to. Three reasons the raw value is
+// wrong here: an inline `data:` image is up to 64 KB of base64 and this panel renders the value
+// verbatim; the route URL repeats the directory path the panel already shows; and neither answers
+// the question the reader came with, which is "did my icon take effect, and where is it from".
+// A remote URL IS the answer for its case, so that one is shown — bounded, since nothing caps it.
+const ICON_URL_MAX_CHARS = 80;
+
+function describeIcon(iconUrl: string, autoIcon: string | null): string {
+  // Named first, because it is the answer to the question that brings someone here: a picture
+  // appeared on a project whose config says nothing about one.
+  if (autoIcon) return `${autoIcon} (found automatically)`;
+  if (iconUrl.startsWith(DIR_ICON_ROUTE)) return "a file in this directory";
+  const inline = /^data:([^;,]+)/.exec(iconUrl);
+  if (inline) return `inline image (${inline[1]})`;
+  return iconUrl.length > ICON_URL_MAX_CHARS ? `${iconUrl.slice(0, ICON_URL_MAX_CHARS)}…` : iconUrl;
+}
+
 const stringList = (value: unknown): string[] => (Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : []);
 
 // The settings a running terminal has no use for, which therefore aren't in the per-cell
@@ -110,8 +128,10 @@ function extraRows(extras: Record<string, unknown>): DirConfigRow[] {
 export function dirConfigRows(config: unknown, extras: unknown = {}): DirConfigRow[] {
   if (!isRecord(config)) return isRecord(extras) ? extraRows(extras) : [];
   const name = asString(config.name);
+  const iconUrl = asString(config.iconUrl);
   return [
     ...(name ? [{ key: "name", label: "Name", value: name, color: null }] : []),
+    ...(iconUrl ? [{ key: "icon", label: "Icon", value: describeIcon(iconUrl, isRecord(extras) ? asString(extras.autoIcon) : null), color: null }] : []),
     ...colorRows(config),
     ...terminalRows(config),
     ...(isRecord(extras) ? extraRows(extras) : []),
