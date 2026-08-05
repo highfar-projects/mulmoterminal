@@ -12,9 +12,11 @@ export interface SessionContextInfo {
   contextTokens: number;
   /**
    * The model's context window, when the AGENT ITSELF reports one. codex writes
-   * `model_context_window` into every `token_count` event, which is better than any table we can
-   * keep: the substring list in modelBadge.ts has already claimed a model whose window it had
-   * wrong (#985), and nothing on this side can notice when a provider changes one.
+   * `model_context_window` into every `token_count` event, grok `contextWindowTokens` into its
+   * `signals.json` and agy the window into its accounting store, which is better than any table we
+   * can keep: the substring list in
+   * modelBadge.ts has already claimed a model whose window it had wrong (#985), and nothing on
+   * this side can notice when a provider changes one.
    *
    * Absent (or null) means nobody told us, NOT "no window" — the client falls back to its table.
    */

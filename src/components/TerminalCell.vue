@@ -419,12 +419,16 @@ watch(
   },
 );
 
-// An agy cell has no turn to end. Claude publishes a Stop hook and codex has an activity tracker,
-// so both re-read their badges the moment a turn settles; nothing calls setWorking for antigravity,
-// so its context reading would be frozen at whatever it was when the cell first asked — `ctx 1%`
-// for the rest of the session, which is worse than no reading at all. This is the substitute, and
-// it is deliberately slow: one indexed sqlite row plus a 64 KB head read, per agy cell, per minute.
-// Delete it the day agy gets an activity tracker.
+// An agy or grok cell has no turn to end. Claude publishes a Stop hook and codex has an activity
+// tracker, so both re-read their badges the moment a turn settles; NOTHING calls setWorking for
+// these two, so a reading taken when the cell first asked is the only one it ever gets — `ctx 1%`
+// for the rest of the session, which is worse than no reading at all. Nor does the push path save
+// them: `refreshBadgesIfModelUnknown` needs an activity push, and an agent that never sets a flag
+// never sends one. This is the substitute, and it is deliberately slow — per cell, per minute:
+// agy pays one indexed sqlite row plus a 64 KB head read, grok two small JSON reads plus a fold
+// resumed at the byte the last poll stopped on. Delete each the day its agent gets an activity
+// tracker.
+const UNTRACKED_BADGE_AGENTS = new Set(["antigravity", "grok"]);
 const UNTRACKED_BADGE_POLL_MS = 60_000;
 let badgePoll: ReturnType<typeof setInterval> | null = null;
 
@@ -435,7 +439,7 @@ onMounted(() => {
     refreshBadgesIfModelUnknown();
   });
   badgePoll = setInterval(() => {
-    if (agent.value === "antigravity" && sessionId.value) void refreshUsage();
+    if (UNTRACKED_BADGE_AGENTS.has(agent.value) && sessionId.value) void refreshUsage();
   }, UNTRACKED_BADGE_POLL_MS);
   // A dropped socket misses the pushes sent while it was down, and this cell's status is
   // derived state that pub/sub only replays room membership for — not the missed events. So

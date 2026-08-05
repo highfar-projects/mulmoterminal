@@ -36,6 +36,13 @@ const grokCwdDir = (root: string, cwd: string): string => path.join(root, encode
 
 export const grokSummaryPath = (root: string, cwd: string, id: string): string => path.join(grokCwdDir(root, cwd), id, "summary.json");
 
+/** The conversation's current context reading, rewritten whole each turn (grok-usage.ts). */
+export const grokSignalsPath = (root: string, cwd: string, id: string): string => path.join(grokCwdDir(root, cwd), id, "signals.json");
+
+/** The conversation's append-only update stream, one `turn_completed` record per turn — the only
+ *  place a per-turn token count is written down (grok-usage.ts). */
+export const grokUpdatesPath = (root: string, cwd: string, id: string): string => path.join(grokCwdDir(root, cwd), id, "updates.jsonl");
+
 /** The first prompt of each conversation the cwd's prompt_history.jsonl still remembers.
  *
  *  FIRST, not last: it is standing in for a title, and a title is what the conversation was
@@ -96,8 +103,9 @@ export function parseGrokSummary(text: string): GrokSummary {
  *
  * `current_model_id` ("grok-4.5") is the only model grok records that a reader can trust: the
  * per-turn `model_id` in `events.jsonl` says the same thing but costs a scan of a file whose
- * phase_changed rows outnumber everything else 100:1. There are no token counts anywhere in a
- * conversation directory, which is why this answers the model alone (agent-badges.ts).
+ * phase_changed rows outnumber everything else 100:1. The token counts are NOT here — they are in
+ * `signals.json` and `updates.jsonl`, read by grok-usage.ts, which is why this answers the model
+ * alone.
  */
 export const grokModelFromSummary = (text: string): string | null => {
   const doc = parseJsonRecord(text);

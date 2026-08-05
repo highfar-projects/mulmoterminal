@@ -1150,12 +1150,12 @@ what it writes down (`?agent=` on the route picks the reader):
 |---|---|---|
 | **Claude** | `Opus · ctx 35%` — window from the table above | full |
 | **Codex** | `gpt-5.5 · ctx 21%` — window from codex's own `model_context_window`, so no table to be out of date | full |
-| **Grok** | `grok-4.5` — the model only; grok records no token counts | hidden |
+| **Grok** | `grok-4.5 · ctx 33%` — window from grok's own `contextWindowTokens`, so no table either | full |
 | **Antigravity** | `Gemini 3.6 Flash · ctx 78%` — the model from the first step of the conversation's transcript, the reading from agy's own per-generation accounting (a real 256k window, not a table) | full |
 
 The token badge hides itself when nothing has been counted, and the context badge shows
 the model alone unless it has **both** a *current-context* token count from the agent and a
-context window — agent-reported (codex, Antigravity) or resolved from the built-in table
+context window — agent-reported (codex, Grok, Antigravity) or resolved from the built-in table
 above (Claude, provider models). Either one missing means a name and no percentage. The two
 badges are independent: an Antigravity session whose accounting cannot be read still shows
 its model, and one whose cumulative totals are zero still shows a percentage. The context badge is absent

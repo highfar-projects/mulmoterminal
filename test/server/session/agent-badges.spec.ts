@@ -7,8 +7,9 @@ import { DatabaseSync } from "node:sqlite";
 import { agentBadges, type BadgeRoots } from "../../../server/session/agent-badges.js";
 
 // The header badges for a session that is not Claude (#1465). Each agent is asked the question the
-// same way and answers as much of it as its own log can: codex both badges, grok and agy the model.
-// What must NOT happen is a number nobody wrote down, or a model another session was running.
+// same way and answers as much of it as its own log can, and all four now answer both badges bar
+// agy's before its first generation. What must NOT happen is a number nobody wrote down, or a model
+// another session was running.
 
 const ROLLOUT_ID = "019fcb3a-a33c-7e72-8364-57e44926dfed";
 const GROK_ID = "150496cf-fb8d-4c35-b19b-e2826a4e7242";
@@ -53,11 +54,18 @@ describe("agentBadges", () => {
     fs.writeFileSync(path.join(dir, `rollout-2026-08-04T05-24-05-${ROLLOUT_ID}.jsonl`), `${lines.join("\n")}\n`);
   };
 
-  const writeGrokSummary = (summary: unknown) => {
+  const grokDir = () => {
     const dir = path.join(home, "grok", "sessions", encodeURIComponent(CWD), GROK_ID);
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, "summary.json"), JSON.stringify(summary));
+    return dir;
   };
+  const writeGrokSummary = (summary: unknown) => fs.writeFileSync(path.join(grokDir(), "summary.json"), JSON.stringify(summary));
+  const writeGrokSignals = (signals: unknown) => fs.writeFileSync(path.join(grokDir(), "signals.json"), JSON.stringify(signals));
+  const writeGrokUpdates = (usages: Record<string, number>[]) =>
+    fs.writeFileSync(
+      path.join(grokDir(), "updates.jsonl"),
+      `${usages.map((usage) => JSON.stringify({ method: "_x.ai/session/update", params: { update: { sessionUpdate: "turn_completed", usage } } })).join("\n")}\n`,
+    );
 
   // agy's accounting store, in the nesting antigravity-usage.ts reads (its own spec covers the
   // shape; this one only has to prove the badge route reaches it).
@@ -122,12 +130,52 @@ describe("agentBadges", () => {
     expect(badges.usage.inputTokens).toBe(0);
   });
 
-  it("names grok's model, and reports no tokens because grok records none", async () => {
+  it("reads a grok session's totals, context and window across its three files", async () => {
     writeGrokSummary({ current_model_id: "grok-4.5", session_summary: "whatever" });
+    writeGrokSignals({ contextTokensUsed: 51_537, contextWindowTokens: 500_000, primaryModelId: "grok-4.5" });
+    writeGrokUpdates([
+      { inputTokens: 109_728, outputTokens: 1436, cachedReadTokens: 65_920 },
+      { inputTokens: 98_548, outputTokens: 1388, cachedReadTokens: 92_160 },
+    ]);
     const badges = await agentBadges(CWD, GROK_ID, "grok", roots);
-    expect(badges.context.model).toBe("grok-4.5");
-    expect(badges.context.contextTokens).toBe(0);
+    expect(badges.context).toEqual({ model: "grok-4.5", contextTokens: 51_537, contextWindow: 500_000 });
+    expect(badges.usage.inputTokens + badges.usage.cacheReadTokens).toBe(109_728 + 98_548); // summed, per turn
+    expect(badges.usage.outputTokens).toBe(1436 + 1388);
+  });
+
+  // `current_model_id` is what the conversation is running now; signals' `primaryModelId` is what
+  // it has mostly run under, which is the WRONG answer for the rest of a session after `/model`.
+  it("prefers the summary's current model to the one signals reports", async () => {
+    writeGrokSummary({ current_model_id: "grok-4.5-fast" });
+    writeGrokSignals({ contextTokensUsed: 10, contextWindowTokens: 500_000, primaryModelId: "grok-4.5" });
+    expect((await agentBadges(CWD, GROK_ID, "grok", roots)).context.model).toBe("grok-4.5-fast");
+  });
+
+  // grok writes the summary a little after it creates the directory, so this is a real state and
+  // not a defensive one.
+  it("falls back to the model signals names when there is no summary yet", async () => {
+    writeGrokSignals({ contextTokensUsed: 10, contextWindowTokens: 500_000, primaryModelId: "grok-4.5" });
+    expect((await agentBadges(CWD, GROK_ID, "grok", roots)).context.model).toBe("grok-4.5");
+  });
+
+  it("answers nothing for a grok session with no conversation directory", async () => {
+    const badges = await agentBadges(CWD, GROK_ID, "grok", roots);
+    expect(badges.context).toEqual({ model: null, contextTokens: 0, contextWindow: null });
     expect(badges.usage).toEqual({ inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 });
+  });
+
+  // The fold is resumed from a byte offset it remembered, so a turn appended after a first read
+  // must be ADDED to what was already counted — not re-counted, and not missed.
+  it("counts a turn appended after an earlier read exactly once", async () => {
+    writeGrokSummary({ current_model_id: "grok-4.5" });
+    writeGrokUpdates([{ inputTokens: 100, outputTokens: 10 }]);
+    expect((await agentBadges(CWD, GROK_ID, "grok", roots)).usage.outputTokens).toBe(10);
+    writeGrokUpdates([
+      { inputTokens: 100, outputTokens: 10 },
+      { inputTokens: 200, outputTokens: 20 },
+    ]);
+    const badges = await agentBadges(CWD, GROK_ID, "grok", roots);
+    expect(badges.usage).toEqual({ inputTokens: 300, outputTokens: 30, cacheReadTokens: 0, cacheCreationTokens: 0 });
   });
 
   // grok partitions by directory, so the cwd is part of the lookup: the same id under another
