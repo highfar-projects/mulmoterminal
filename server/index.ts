@@ -319,6 +319,7 @@ const spawnDeps: SpawnDeps = {
   setWaiting: (id, waiting, event) => setWaiting(id, waiting, event),
   uiPort: String(process.env.CLIENT_PORT || PORT),
   publishSessionCreated: (sessionId) => pubsub?.publish(SESSIONS_CHANNEL, { id: sessionId, working: false, event: "created" }),
+  publishActivity: (sessionId) => publishActivity(sessionId),
 };
 const { spawnClaudePty } = createClaudeSpawner(spawnDeps);
 const { spawnCodexPty } = createCodexSpawner(spawnDeps);
