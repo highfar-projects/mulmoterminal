@@ -64,7 +64,7 @@ export function listRooms(): string[] {
       .filter((entry) => entry.isFile() && entry.name.endsWith(ROOM_EXT))
       .map((entry) => entry.name.slice(0, -ROOM_EXT.length))
       .filter(isRoomId)
-      .sort();
+      .sort((a, b) => a.localeCompare(b));
   } catch {
     return [];
   }

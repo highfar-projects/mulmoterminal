@@ -34,23 +34,41 @@ function portFrom(args) {
   return Number.isFinite(named) && named > 0 ? named : DEFAULT_PORT;
 }
 
+/** The flags this CLI knows, and that each takes a value. Everything else is TEXT.
+ *
+ *  Named explicitly rather than "anything starting with --", because the text being parsed is a
+ *  MESSAGE somebody is posting: `room post standup "use --force carefully"` would otherwise lose
+ *  both `--force` and the word after it, silently (Codex review on #1456). A message is the one
+ *  argument that must survive whatever it happens to contain. */
+const VALUE_FLAGS = new Set(["--port", "--from", "--since"]);
+
 function flag(args, name) {
   const at = args.indexOf(name);
-  return at >= 0 ? args[at + 1] : undefined;
+  return at >= 0 && VALUE_FLAGS.has(name) ? args[at + 1] : undefined;
 }
 
-/** Everything that is not a flag or a flag's value — the room id and the message text. */
+/** Everything that is not one of the known flags or its value — the command, the room id, and the
+ *  message text exactly as it was typed. `--` ends flag parsing, so a message that really does
+ *  start with a known flag can still be posted. */
 function positional(args) {
   const out = [];
   for (let i = 0; i < args.length; i++) {
-    if (args[i]?.startsWith("--")) {
-      i++; // skip its value
+    const arg = args[i];
+    if (arg === "--") {
+      out.push(...args.slice(i + 1));
+      break;
+    }
+    if (VALUE_FLAGS.has(arg)) {
+      i++; // its value
       continue;
     }
-    out.push(args[i]);
+    out.push(arg);
   }
   return out;
 }
+
+export const positionalForTest = positional;
+export const flagForTest = flag;
 
 const speaker = (args) => flag(args, "--from") || process.env.USER || "cli";
 

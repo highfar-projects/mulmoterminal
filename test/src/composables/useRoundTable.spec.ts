@@ -3,6 +3,8 @@ import { runRoundTable, type RoundTableDeps, type TableMember } from "../../../s
 import type { TurnFetch } from "../../../src/composables/useCrossTalk";
 import type { HandoffSource } from "../../../src/composables/useHandoff";
 import { STOP_MARKER } from "../../../src/composables/roundTableRules";
+import { newRoomId } from "../../../src/composables/useRoundTable";
+import { isRoomId } from "../../../common/roomMessage";
 
 const src = (id: string): HandoffSource => ({ sessionId: id, cwd: "/w", agent: "claude" });
 const seat = (n: number): TableMember => ({ key: `cell-${n}`, label: `#${n}`, source: src(String.fromCharCode(64 + n)) });
@@ -165,9 +167,57 @@ describe("runRoundTable", () => {
     expect(h.submitted).toHaveLength(1); // it waited on the first member rather than moving on
   });
 
+  // Room I/O is deliberately non-fatal, which makes an empty read indistinguishable from a failed
+  // one — so ending the table on it would let one dropped request kill a live conversation.
+  // (Codex review on #1456.)
+  it("carries on with the previous turn when the room cannot be read", async () => {
+    const h = harness();
+    let reads = 0;
+    const deps: RoundTableDeps = {
+      ...h.deps,
+      readRoom: async () => {
+        reads += 1;
+        return reads === 2 ? "" : "the conversation so far"; // one transient failure mid-table
+      },
+    };
+    const { outcome, turnsTaken } = await runRoundTable(TABLE, "table-1", 3, deps);
+    expect(outcome).toBe("budget-spent"); // NOT nothing-to-send
+    expect(turnsTaken).toBe(3);
+  });
+
+  it("stops only when there is nothing to hand on at all", async () => {
+    const h = harness();
+    const deps: RoundTableDeps = { ...h.deps, fetchTurn: async () => ({ prompt: null, reply: null, text: "" }), readRoom: async () => "" };
+    expect((await runRoundTable(TABLE, "table-1", 3, deps)).outcome).toBe("nothing-to-send");
+  });
+
   it("reports a failure to reach a terminal instead of throwing", async () => {
     const h = harness({ submitFails: true });
     expect(await runRoundTable(TABLE, "table-1", 4, h.deps)).toEqual({ outcome: "failed", turnsTaken: 0 });
     expect(h.submitted).toHaveLength(0);
+  });
+});
+
+// The timestamp alone is second-granular, so two tables started inside one second would share a
+// room — mixing two independent conversations into one log that every member of both reads back.
+// (Codex review on #1456.)
+describe("newRoomId", () => {
+  it("keeps two tables started in the same second apart", () => {
+    const at = Date.UTC(2026, 7, 6, 4, 12, 33);
+    const a = newRoomId(at, () => 0.1);
+    const b = newRoomId(at, () => 0.9);
+    expect(a).not.toBe(b);
+  });
+
+  it("stays a usable room id — it becomes a filename", () => {
+    expect(isRoomId(newRoomId(Date.UTC(2026, 7, 6, 4, 12, 33)))).toBe(true);
+    expect(isRoomId(newRoomId())).toBe(true);
+  });
+
+  it("is still readable and sortable by when it started", () => {
+    const earlier = newRoomId(Date.UTC(2026, 7, 6, 4, 12, 33), () => 0.5);
+    const later = newRoomId(Date.UTC(2026, 7, 6, 4, 12, 34), () => 0.5);
+    expect(earlier < later).toBe(true);
+    expect(earlier).toContain("2026-08-06");
   });
 });

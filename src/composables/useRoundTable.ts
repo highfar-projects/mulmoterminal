@@ -105,13 +105,19 @@ export async function runRoundTable(members: readonly TableMember[], room: strin
     if (!opening.text) return { outcome: "nothing-to-send", turnsTaken };
     await deps.postToRoom(room, opener.label, opening.reply ?? opening.text);
 
+    // What to hand on when the room cannot be read. Room I/O is deliberately non-fatal — a table
+    // whose log is unwritable is still a conversation — but that means an empty read is
+    // indistinguishable from a failed one, and ending the table on it would let one dropped
+    // request kill a live conversation (Codex review on #1456). So the previous speaker's own
+    // turn is kept as a fallback: the table degrades to what v1 did, rather than stopping.
+    let lastHandoff = opening.text;
     let speaker = 0;
     while (turnsTaken < budget) {
       speaker = nextSpeaker(speaker, members.length);
       // The whole conversation, not just the last thing said. Handing on only the previous reply
       // is what a two-cell exchange does, and with three or more it loses the thread: the reader
       // cannot see what the seat before last argued (#1456).
-      const conversation = await deps.readRoom(room);
+      const conversation = (await deps.readRoom(room)) || lastHandoff;
       if (!conversation) return { outcome: "nothing-to-send", turnsTaken };
       // `nextSpeaker` is a modulo of a list just proved non-empty, so the fallback is unreachable —
       // it is here because an index expression is not narrowed by that proof.
@@ -123,6 +129,7 @@ export async function runRoundTable(members: readonly TableMember[], room: strin
       // back plus our own framing, so storing it would fold the whole conversation into the room
       // again on every turn.
       await deps.postToRoom(room, member.label, said.reply ?? "");
+      if (said.text) lastHandoff = said.text;
       // Against the RAW reply for the same reason — and only once the lap is complete. The first
       // live three-cell run ended on turn 1, before the third cell had said anything at all.
       if (endsTheTable(said.reply, turnsTaken, members.length)) return { outcome: "agreed", turnsTaken };
@@ -143,9 +150,21 @@ export function liveRoundTableDeps(isAborted: () => boolean): RoundTableDeps {
   };
 }
 
-/** A room id for one table. Readable, sortable, and unique enough for a machine that starts a
- *  handful of these a day — the id is a filename, so it stays inside ROOM_ID_RE. */
-export const newRoomId = (now: number = Date.now()): string => `table-${new Date(now).toISOString().slice(0, 19).replace(/[:T]/g, "-").toLowerCase()}`;
+/** A room id for one table: readable and sortable, with a suffix that keeps two tables apart.
+ *
+ *  The timestamp alone is second-granular, and two tables started inside one second would then
+ *  share a room — mixing two independent conversations into one log, which every member of both
+ *  would read back as context (Codex review on #1456). The suffix is the part that has to be
+ *  there; the timestamp is only so a person can tell the rooms apart later.
+ *
+ *  Stays inside ROOM_ID_RE, since the id becomes a filename. */
+export function newRoomId(now: number = Date.now(), rand: () => number = Math.random): string {
+  const stamp = new Date(now).toISOString().slice(0, 19).replace(/[:T]/g, "-").toLowerCase();
+  const suffix = Math.floor(rand() * 36 ** 4)
+    .toString(36)
+    .padStart(4, "0");
+  return `table-${stamp}-${suffix}`;
+}
 /** A handoff target as a seat at the table — the picker lists the same cells the exchange menu
  *  does, so one rule decides what is readable. */
 export const memberFromTarget = (target: HandoffTarget): TableMember => ({ key: target.key, label: target.label, source: target.source });
