@@ -135,12 +135,7 @@ describe("useResumableSessions", () => {
     await load("/x", "codex");
     await load("/x", "antigravity");
     await load("/x", "grok");
-    expect(urls).toEqual([
-      "/api/sessions?cwd=%2Fx",
-      "/api/codex/sessions?cwd=%2Fx",
-      "/api/antigravity/sessions?cwd=%2Fx",
-      "/api/grok/sessions?cwd=%2Fx",
-    ]);
+    expect(urls).toEqual(["/api/sessions?cwd=%2Fx", "/api/codex/sessions?cwd=%2Fx", "/api/antigravity/sessions?cwd=%2Fx", "/api/grok/sessions?cwd=%2Fx"]);
   });
 
   // The agent is read when the URL is built, not when the answer lands: a switch mid-flight must
