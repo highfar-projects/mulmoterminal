@@ -606,89 +606,87 @@ describe("the Agent Picker's custom agents (#1414)", () => {
     // so adding a fifth agent does not read as this feature breaking.
     expect(w.find('[data-testid="agent-picker"]').findAll('[role="radio"]')).toHaveLength(TERMINAL_AGENTS.length + 1);
   });
+});
 
-  // The resume list is per-AGENT, so changing the Agent Picker must refresh it: rows fetched under
-  // Codex must not stand under Claude while the replacement is in flight (#1417). The agent travels
-  // with the id when resuming, so the cell connects the endpoint that wrote that conversation.
-  describe("agent-filtered resume list (#1417)", () => {
-    const claudeSession = { id: "s-claude", title: "claude chat", mtime: 1000 };
-    const codexSession = { id: "s-codex", title: "codex chat", mtime: 2000 };
+// #1417: the list belongs to the AGENT the picker has selected, not to Claude. Before this it read
+// ~/.claude/projects whatever was picked, so choosing Codex offered Claude's conversations and
+// clicking one connected the codex endpoint to a key that only ever named a Claude transcript.
+describe("the resume list follows the Agent Picker", () => {
+  // Keyed by the ROUTE each agent's history is listed at, because that is what the change actually
+  // does — there is no `?agent=` parameter, each agent has its own endpoint (common/agentSessionList).
+  // `/api/sessions` is matched LAST: every other path contains it as a suffix.
+  const ROUTES = ["/api/codex/sessions", "/api/antigravity/sessions", "/api/grok/sessions", "/api/sessions"];
 
-    function mockFetchPerAgent(agentSessions: Record<string, SessionRow[]>) {
-      globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
-        const u = String(url);
-        // The API endpoint includes the agent in the query or path
-        if (u.includes("/api/sessions")) {
-          const params = new URL(u, "http://localhost").searchParams;
-          const agent = params.get("agent") ?? "claude";
-          const sessions = agentSessions[agent] ?? [];
-          return { ok: true, json: async () => ({ cwd: "/repo", sessions }) };
-        }
-        if (u.includes("/api/worktrees")) return { ok: true, json: async () => ({ isGit: true, base: "main", worktrees: [] }) };
-        return { ok: true, json: async () => ({}) };
-      }) as unknown as typeof fetch;
-    }
+  function mockAgentFetch(byRoute: Record<string, SessionRow[]>) {
+    const asked: string[] = [];
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/worktrees")) return { ok: true, json: async () => ({ isGit: true, base: "main", worktrees: [] }) };
+      const route = ROUTES.find((r) => u.startsWith(r));
+      if (route) {
+        asked.push(route);
+        return { ok: true, json: async () => ({ cwd: "/repo", sessions: byRoute[route] ?? [] }) };
+      }
+      return { ok: true, json: async () => ({}) };
+    }) as unknown as typeof fetch;
+    return asked;
+  }
 
-    it("refetches the list when the Agent Picker changes", async () => {
-      mockFetchPerAgent({
-        claude: [claudeSession],
-        codex: [codexSession],
-      });
-      const w = mountForm([], { agent: "claude" });
-      await flushPromises();
-      expect(w.find('[data-testid="cell-resume-item"]').exists()).toBe(true);
-      expect(w.find('[data-testid="ri-title"]').text()).toBe("claude chat");
+  const rowsFor = (title: string): SessionRow[] => [{ id: `id-${title}`, title, mtime: 1 }];
 
-      await w.setProps({ agent: "codex" });
-      await flushPromises();
+  it("lists the picked agent's own conversations, and names them in the heading", async () => {
+    mockAgentFetch({ "/api/codex/sessions": rowsFor("a codex chat"), "/api/sessions": rowsFor("a claude chat") });
+    const w = mountForm([], { agent: "codex" });
+    await flushPromises();
+    expect(w.find('[data-testid="ri-title"]').text()).toBe("a codex chat");
+    expect(w.find('[data-testid="cell-resume-heading"]').text()).toBe("or resume a codex conversation here");
+  });
 
-      // The list has changed to codex's conversations
-      expect(w.find('[data-testid="ri-title"]').text()).toBe("codex chat");
+  it("keeps Claude's heading, which is the default nearly every row wears", async () => {
+    mockAgentFetch({ "/api/sessions": rowsFor("a claude chat") });
+    const w = mountForm();
+    await flushPromises();
+    expect(w.find('[data-testid="cell-resume-heading"]').text()).toBe("or resume here");
+  });
+
+  it("re-reads the list when the picker changes, and resumes as that agent", async () => {
+    const asked = mockAgentFetch({ "/api/grok/sessions": rowsFor("a grok chat"), "/api/sessions": rowsFor("a claude chat") });
+    const w = mountForm();
+    await flushPromises();
+    expect(w.find('[data-testid="ri-title"]').text()).toBe("a claude chat");
+
+    await w.setProps({ agent: "grok" });
+    // The previous agent's rows go at once, rather than standing under the new agent's name for
+    // the length of the fetch (#1372's rule, in a second dimension).
+    expect(w.find('[data-testid="cell-resume-item"]').exists()).toBe(false);
+    await flushPromises();
+    expect(asked).toContain("/api/grok/sessions");
+    expect(w.find('[data-testid="ri-title"]').text()).toBe("a grok chat");
+    await w.find('[data-testid="cell-resume-item"]').trigger("click");
+    expect(w.emitted("resume")?.[0]).toEqual([{ id: "id-a grok chat", cwd: "/repo", agent: "grok" }]);
+  });
+
+  // A custom agent runs Claude Code, so its history IS Claude's — the same rule that gives it the
+  // model picker.
+  it("gives a custom agent Claude's list", async () => {
+    const asked = mockAgentFetch({ "/api/sessions": rowsFor("a claude chat") });
+    const w = mountForm([], {
+      agent: "custom:ollama",
+      customAgents: [{ id: "ollama", label: "Ollama", agent: "claude", command: "ollama launch claude --" }],
     });
+    await flushPromises();
+    expect(asked).toEqual(["/api/sessions"]);
+    expect(w.find('[data-testid="ri-title"]').text()).toBe("a claude chat");
+  });
 
-    it("clears the list before fetching the new agent's conversations", async () => {
-      mockFetchPerAgent({
-        claude: [claudeSession],
-        codex: [codexSession],
-      });
-      const w = mountForm([], { agent: "claude" });
-      await flushPromises();
-      expect(w.findAll('[data-testid="cell-resume-item"]')).toHaveLength(1);
-
-      await w.setProps({ agent: "codex" });
-      // Before the fetch completes, the old list should be gone
-      expect(w.findAll('[data-testid="cell-resume-item"]')).toHaveLength(0);
-      await flushPromises();
-      expect(w.findAll('[data-testid="cell-resume-item"]')).toHaveLength(1);
-    });
-
-    it("emits the correct agent when resuming a codex session", async () => {
-      mockFetchPerAgent({
-        codex: [codexSession],
-      });
-      const w = mountForm([], { agent: "codex" });
-      await flushPromises();
-      await w.find('[data-testid="cell-resume-item"]').trigger("click");
-      expect(w.emitted("resume")?.[0]).toEqual([{ id: "s-codex", cwd: "/repo", agent: "codex" }]);
-    });
-
-    it("hides the resume section when Shell is picked", async () => {
-      mockFetch([], [claudeSession]);
-      const w = mountForm([], { agent: "shell" });
-      await flushPromises();
-      expect(w.find('[data-testid="cell-resume"]').exists()).toBe(false);
-      expect(w.find('[data-testid="cell-resume-heading"]').exists()).toBe(false);
-    });
-
-    it("uses Claude's list for a custom agent", async () => {
-      const nemotron: CustomAgent = { id: "nemotron", label: "Nemotron", agent: "claude", command: "ollama launch claude --" };
-      mockFetchPerAgent({
-        claude: [claudeSession],
-      });
-      const w = mountForm([], { agent: "custom:nemotron", customAgents: [nemotron] });
-      await flushPromises();
-      expect(w.find('[data-testid="cell-resume-item"]').exists()).toBe(true);
-      expect(w.find('[data-testid="ri-title"]').text()).toBe("claude chat");
-    });
+  // A shell resumes nothing, so there is no history to offer and no route to ask.
+  it("asks for nothing, and shows no section, for a shell", async () => {
+    const asked = mockAgentFetch({ "/api/sessions": rowsFor("a claude chat") });
+    const w = mountForm([], { agent: "shell" });
+    await flushPromises();
+    expect(asked).toEqual([]);
+    expect(w.find('[data-testid="cell-resume"]').exists()).toBe(false);
+    // …and the loading row must not be left standing in its place.
+    expect(w.find('[data-testid="cell-dir-loading"]').exists()).toBe(false);
   });
 });
