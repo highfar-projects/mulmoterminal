@@ -444,6 +444,28 @@ export function tmuxAttachedCounts(): Map<string, number> | null {
   return r.status === 0 ? parseTmuxClientSessions(r.stdout) : null;
 }
 
+// `list-sessions -F '<name> <activity>'` → when tmux last saw each session do anything, as an epoch
+// second. Parsed apart from the call so the shapes tmux can hand back — a name outside our prefix,
+// a line missing its number — are pinned without a tmux server.
+export function parseTmuxSessionActivity(stdout: string): Map<string, number> {
+  const activity = new Map<string, number>();
+  for (const line of stdout.split("\n")) {
+    const [name, seconds] = line.trim().split(/\s+/);
+    if (!name?.startsWith(SESSION_PREFIX) || seconds === undefined) continue;
+    const epoch = Number(seconds);
+    if (Number.isFinite(epoch)) activity.set(name.slice(SESSION_PREFIX.length), epoch);
+  }
+  return activity;
+}
+
+// How long each surviving session has been sitting, in one call (#1478). Null — not an empty map —
+// when tmux could not answer, so a caller can tell "nothing is idle" from "nobody could say"; the
+// list shows no age rather than an invented one.
+export function tmuxSessionActivity(): Map<string, number> | null {
+  const r = tmux(["list-sessions", "-F", "#{session_name} #{session_activity}"]);
+  return r.status === 0 ? parseTmuxSessionActivity(r.stdout) : null;
+}
+
 // Ids of sessions that survived (e.g. across a crash), for startup visibility.
 export function tmuxListSessionIds(): string[] {
   const r = tmux(["list-sessions", "-F", "#{session_name}"]);

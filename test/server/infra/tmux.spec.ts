@@ -8,6 +8,7 @@ import {
   parseTmuxEnvironment,
   parseAttachedClientCount,
   parseTmuxClientSessions,
+  parseTmuxSessionActivity,
   parseTmuxTerminalModes,
   parseTmuxWindowSize,
   redrawTargets,
@@ -337,5 +338,28 @@ describe("parseTmuxWindowSize", () => {
     expect(parseTmuxWindowSize("x40")).toBeNull();
     expect(parseTmuxWindowSize("120x40x10")).toBeNull();
     expect(parseTmuxWindowSize("-1x40")).toBeNull();
+  });
+});
+
+// When tmux last saw each session do anything (#1478) — the number that separates "working while I
+// was away" from "abandoned three days ago" in the Settings list.
+describe("parseTmuxSessionActivity", () => {
+  it("reads the epoch second of each of our sessions", () => {
+    expect(parseTmuxSessionActivity("mt-a 1700000000\nmt-b 1700000900\n")).toEqual(
+      new Map([
+        ["a", 1700000000],
+        ["b", 1700000900],
+      ]),
+    );
+  });
+
+  it("ignores sessions outside our prefix — the user's own tmux is not ours to list", () => {
+    expect(parseTmuxSessionActivity("work 1700000000\nmt-a 1700000001\n")).toEqual(new Map([["a", 1700000001]]));
+  });
+
+  // A line tmux gave us without a number, or with something that is not one, must drop out rather
+  // than land as NaN and render as an age nobody can read.
+  it.each(["mt-a", "mt-a notanumber", ""])("drops the unusable line %j", (line) => {
+    expect(parseTmuxSessionActivity(line)).toEqual(new Map());
   });
 });

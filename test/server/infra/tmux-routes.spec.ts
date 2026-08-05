@@ -31,16 +31,20 @@ type MountedHandler = (req: { headers: { origin?: string }; params: { id?: strin
 // needed (mirrors gitRemote.spec's capture pattern). The captured handler is wrapped to
 // carry the method and path Express would have set: the origin guard reads both, since it
 // is the same rule the central gate applies (a safe method is never judged by origin).
-function mountAndCapture(deps: TmuxRouteDeps): { terminate: Handler; cleanup: Handler } {
+function mountAndCapture(deps: TmuxRouteDeps): { terminate: Handler; cleanup: Handler; surviving: Handler } {
   const handlers = new Map<string, Handler>();
   const app = {
     post: (p: string, h: MountedHandler) => handlers.set(p, (req, res) => h({ ...req, method: "POST", path: p }, res)),
+    // The surviving-sessions listing is a GET (#1478); it is judged by the same origin rule, so it
+    // is captured the same way rather than left out of this harness.
+    get: (p: string, h: MountedHandler) => handlers.set(p, (req, res) => h({ ...req, method: "GET", path: p }, res)),
   } as unknown as Express;
   mountTmuxRoutes(app, deps);
   const terminate = handlers.get("/api/session/:id/terminate");
   const cleanup = handlers.get("/api/tmux/cleanup-orphans");
-  if (!terminate || !cleanup) throw new Error("routes were not mounted");
-  return { terminate, cleanup };
+  const surviving = handlers.get("/api/tmux/sessions");
+  if (!terminate || !cleanup || !surviving) throw new Error("routes were not mounted");
+  return { terminate, cleanup, surviving };
 }
 
 const UUID = "01234567-89ab-cdef-0123-456789abcdef";
@@ -55,6 +59,7 @@ function baseDeps(over: Partial<TmuxRouteDeps> = {}): TmuxRouteDeps {
     listTmuxIds: () => [],
     attachedClientCount: () => 0, // nobody else attached, by default
     resumablePredicate: async () => () => false,
+    survivingSessions: async () => [],
     ...over,
   };
 }
@@ -147,6 +152,35 @@ describe("mountTmuxRoutes — POST /api/tmux/cleanup-orphans", () => {
     await cleanup({ headers: {}, params: {} }, res);
     expect(killTmux.mock.calls.map((c) => c[0])).toEqual(["mine-orphan"]);
     expect(res.payload).toEqual({ killed: ["mine-orphan"], killedCount: 1 });
+  });
+});
+
+// The Settings list's own route (#1478). Read-only, and still judged by origin: it names every
+// directory this machine has agents in, which is not something a page from elsewhere may read.
+describe("mountTmuxRoutes — GET /api/tmux/sessions", () => {
+  const ROW = { key: "s-1", cwd: "/repo", agent: "claude" as const, idleSeconds: 60, attached: false, resumable: true };
+
+  it("answers with what the builder produced, untouched", async () => {
+    const { surviving } = mountAndCapture(baseDeps({ survivingSessions: async () => [ROW] }));
+    const res = makeRes();
+    await surviving({ headers: {}, params: {} }, res);
+    expect(res.payload).toEqual({ sessions: [ROW] });
+  });
+
+  // Safe methods are EXEMPT from the origin rule on purpose (same-origin-guard.ts, #1094): a
+  // cross-site `<img>` sends no Origin header and neither does a legitimate local fetch, so
+  // refusing by origin blocks the second without stopping the first. A page from elsewhere still
+  // cannot READ this — that is the browser's job, not ours. Pinned because the opposite reading is
+  // the tempting one, and "hardening" it would break the app's own page.
+  it("is not refused by origin, the way a state-changing route is", async () => {
+    const { surviving, cleanup } = mountAndCapture(baseDeps({ isAllowedOrigin: () => false, survivingSessions: async () => [ROW] }));
+    const read = makeRes();
+    await surviving({ headers: { origin: "https://elsewhere.example" }, params: {} }, read);
+    expect(read.payload).toEqual({ sessions: [ROW] });
+
+    const write = makeRes();
+    await cleanup({ headers: { origin: "https://elsewhere.example" }, params: {} }, write);
+    expect(write.statusCode).toBe(403);
   });
 });
 

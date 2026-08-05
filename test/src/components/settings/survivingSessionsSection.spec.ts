@@ -1,0 +1,102 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { mount, flushPromises } from "@vue/test-utils";
+
+import SurvivingSessionsSection from "../../../../src/components/settings/SurvivingSessionsSection.vue";
+import type { SurvivingSession } from "../../../../common/survivingSessions";
+
+// The one screen that reaches a session left behind by a restart in a directory you no longer open
+// (#1478). What matters is that a row can be ACTED on: the stop button posts that row's own key,
+// and never appears for a session a terminal is holding.
+const row = (over: Partial<SurvivingSession> = {}): SurvivingSession => ({
+  key: "s-1",
+  cwd: "/repo",
+  agent: "claude",
+  idleSeconds: 7200,
+  attached: false,
+  resumable: true,
+  ...over,
+});
+
+const serve = (sessions: unknown) => {
+  globalThis.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ sessions }) })) as unknown as typeof fetch;
+};
+
+const posts = (): string[] => (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) => String(c[0]));
+
+beforeEach(() => {
+  vi.restoreAllMocks();
+  serve([]);
+});
+
+describe("the surviving-sessions section", () => {
+  it("says so when nothing survived, rather than showing an empty box", async () => {
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.text()).toContain("None");
+    expect(w.findAll('[data-testid="surviving-row"]')).toHaveLength(0);
+  });
+
+  it("lists a survivor with its directory, what it is, and how long it has been sitting", async () => {
+    serve([row()]);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    const text = w.get('[data-testid="surviving-row"]').text();
+    expect(text).toContain("/repo");
+    expect(text).toContain("claude");
+    expect(text).toContain("last active 2h ago");
+  });
+
+  // A shell left behind by a restart appears in no other list in the app, so this one has to name
+  // it rather than show a blank where the agent would be — while stopping short of CALLING it a
+  // shell, since an agy/grok session that outlived its pty reaches here the same way.
+  it("names a session no agent claims, and warns that nothing can resume it", async () => {
+    serve([row({ agent: null, resumable: false, cwd: null })]);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    const text = w.get('[data-testid="surviving-row"]').text();
+    expect(text).toContain("shell or unknown");
+    expect(text).toContain("unknown directory");
+    expect(w.find('[data-testid="surviving-only-copy"]').exists()).toBe(true);
+  });
+
+  it("stops the row's own session, then re-reads the list", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    serve([row({ key: "mt-key-9" })]);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    await w.get('[data-testid="surviving-stop"]').trigger("click");
+    await flushPromises();
+    expect(posts()).toContain("/api/session/mt-key-9/terminate");
+    // Twice on /api/tmux/sessions: the mount, and the reload the stop triggers.
+    expect(posts().filter((u) => u.includes("/api/tmux/sessions"))).toHaveLength(2);
+  });
+
+  // Held by a terminal: that window's own close button owns it, and ending it from Settings would
+  // pull a session out from under a tab this screen cannot see (the rule #1474 set).
+  it("offers no stop for a session a terminal is holding", async () => {
+    serve([row({ attached: true })]);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.find('[data-testid="surviving-open"]').exists()).toBe(true);
+    expect(w.find('[data-testid="surviving-stop"]').exists()).toBe(false);
+  });
+
+  // A row missing the key is a stop button with nothing to post to — dropped before it is drawn.
+  it("drops a row the server sent malformed", async () => {
+    serve([{ cwd: "/repo", attached: false }, row()]);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.findAll('[data-testid="surviving-row"]')).toHaveLength(1);
+  });
+
+  it("says the list could not be read instead of claiming there is nothing", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error("offline");
+    }) as unknown as typeof fetch;
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.text()).toContain("Could not read them");
+    expect(w.text()).not.toContain("None —");
+  });
+});

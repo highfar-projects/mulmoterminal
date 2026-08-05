@@ -28,6 +28,7 @@ import McpServersSection from "./settings/McpServersSection.vue";
 import CostSection from "./settings/CostSection.vue";
 import GitHubSection from "./settings/GitHubSection.vue";
 import SessionSection from "./settings/SessionSection.vue";
+import SurvivingSessionsSection from "./settings/SurvivingSessionsSection.vue";
 import HeaderChromeSection from "./settings/HeaderChromeSection.vue";
 import ModelsSection from "./settings/ModelsSection.vue";
 import ShortcutsSection from "./settings/ShortcutsSection.vue";
@@ -135,6 +136,7 @@ useModalKeyboard({ modalEl, onClose: () => emit("close"), trapSelector: MODAL_FO
       <CostSection :cwd="cwd" :session-id="sessionId" />
       <GitHubSection />
       <SessionSection />
+      <SurvivingSessionsSection />
       <ModelsSection @launch-skill="emit('launch-skill', $event)" />
       <HeaderChromeSection @launch-skill="emit('launch-skill', $event)" />
       <ShortcutsSection @launch-skill="emit('launch-skill', $event)" />

@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { requestOriginAllowed } from "../routes/same-origin-guard.js";
+import type { SurvivingSession } from "../../common/survivingSessions.js";
 
 // Deps injected from index.ts so the origin guard, session-id validation, and the
 // orphan-selection boundary are unit-testable without booting the server (mirrors
@@ -19,6 +20,9 @@ export interface TmuxRouteDeps {
   // Build the resumability predicate for a cleanup pass (awaits any hydration, snapshots
   // the live / grid / on-disk sets). A tmux id is reaped only when it returns false.
   resumablePredicate: () => Promise<(id: string) => boolean>;
+  // Every surviving tmux session, annotated for the Settings list (#1478). Injected like the rest,
+  // so the route is testable without tmux, a registry or a clock.
+  survivingSessions: () => Promise<SurvivingSession[]>;
 }
 
 // Whether an orphan tmux session is safe to reap. Not resumable is necessary but not
@@ -42,6 +46,19 @@ export function mountTmuxRoutes(app: Express, deps: TmuxRouteDeps): void {
     deps.reapSession(id); // live entry → kills pty + tmux + cleanup
     if (deps.hasTmux(id)) deps.killTmux(id); // orphan (e.g. post-restart) → kill directly
     return res.json({ ok: true });
+  });
+
+  // Every session that outlived the server, for the Settings list (#1478). A GET, and read-only:
+  // what it shows is what the other two routes act on, which is why it is mounted beside them.
+  //
+  // The guard is asked exactly as its neighbours ask it, and — being a safe method — EXEMPT, the
+  // same way google.ts's GET /status is (#1094): a cross-site `<img>` sends no Origin header and
+  // neither does a legitimate local fetch, so refusing by origin would block the second without
+  // stopping the first. What keeps this list private is that a cross-origin caller cannot READ the
+  // reply; the rule lives in routes/same-origin-guard.ts.
+  app.get("/api/tmux/sessions", async (req, res) => {
+    if (!requestOriginAllowed(req, deps.isAllowedOrigin)) return res.status(403).json({ error: "forbidden origin" });
+    return res.json({ sessions: await deps.survivingSessions() });
   });
 
   // One-shot cleanup of orphaned tmux sessions: reap any that is neither live nor
