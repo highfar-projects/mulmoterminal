@@ -3,7 +3,7 @@ title: 設定 — 色・音・ランチャ・プロジェクト別の設定
 nav_title: 設定
 layout: default
 parent: 日本語
-nav_order: 6
+nav_order: 7
 description: MulmoTerminal の設定方法。設定モーダル、プロジェクトごとの色と名前、Enter の挙動、通知音、フォント、キーボードショートカット、環境変数まで、症状から引ける形で。
 ---
 
@@ -154,6 +154,47 @@ Anthropic のまま別のモデルを指定できます。→ [OpenRouter で別
 
 すべて `#rrggbb`。作業中/要対応の状態色は、これらの背景色より優先されます（アイドル時に反映）。
 
+### 同じリポジトリを何本も clone しているとき（`.mulmoterminal.local.json`） {#local-config}
+
+1つのリポジトリを `acme` / `acme2` / `acme3` と並行して開いているとき、プロジェクトとしては
+同じものなので、**違うべきなのはグリッドで見分けるための色だけ**です。共有ファイルの隣に
+`.mulmoterminal.local.json` を置きます。
+
+```jsonc
+// .mulmoterminal.json — プロジェクトの設定。色も含めて単体で完結しているので、
+// clone を1本しか持たない人はこれだけでよい。コミットして構わない
+{
+  "name": "acme-web",
+  "theme": "nord",
+  "badgeColor": "#1b3479",
+  "headerColor": "#2d4ea9",
+  "headerTextColor": "#ffffff",
+  "orderPriority": 30
+}
+
+// .mulmoterminal.local.json — この clone だけ。.gitignore に入れる
+{
+  "badgeColor": "#27b4a8",
+  "headerColor": "#4ed0c5",
+  "orderPriority": 65
+}
+```
+
+- **local が勝つ（キー単位）。** local に書いていないキーは共有ファイルの値のままです
+- **キーごと丸ごと置き換え。深いマージはしません。** local の `colors` は共有側の `colors` を
+  丸ごと置き換えます。1キー = 1つの意図であり、2つのファイルから組み立てないと分からない
+  パレットより、1か所で読み切れる方が予測しやすいからです
+- **検証は同じように効きます。** local は規則を迂回する手段ではありません。`#rrggbb` でない色は
+  共有ファイルに書いたときと同じように落とされます
+- **相対パスの意味も同じ**（`icon` / `sound` / `addDirs`）。ファイルではなくディレクトリ基準で
+  解決されます
+- **どちらか片方だけでも動きます。** local だけの clone もあり得ますし、片方が壊れていても
+  もう片方は生きたままです
+- **どちらを書き換えてもライブリロードします。** 自分の clone の色を変えれば即座に反映されます
+
+設定 → [設定が効かないときは](#dir-settings-preview) が両方のパスと、local が持っていったキーの
+一覧を出します。「変えたのにセルが違う」ときの答えはたいていこれです
+
 ### プロジェクトのアイコン（`icon`） {#dir-icon}
 
 `icon` は名前バッジの隣に**画像**を出します。プロジェクトのロゴを置いておけば、文字を読む前に
@@ -297,6 +338,9 @@ auto（注目度順）と manual（移動ボタンで手動）と並びます。
 
 ### worktree はこのファイルを引き継ぐ {#worktree-inherit}
 
+> worktree の作り方・制約・片付けは [worktree で作業を隔離する](worktree.html)へ。ここはその
+> **設定ファイルの引き継ぎ規則**です。
+
 `.mulmoterminal.json` は通常 gitignore されているので、プロジェクトから切った
 [worktree](glossary.html#git-worktree) には何も入っていませんでした。色も名前もモデルも順位も無く、
 グリッドの末尾に灰色のセルが1つ増えるだけ — 無関係なプロジェクトに見えていました。
@@ -335,7 +379,12 @@ auto（注目度順）と manual（移動ボタンで手動）と並びます。
 MulmoTerminal の「**拡張**」の柱がここ。稼働中ターミナルのヘッダーを、**小さな DSL** で自分のワークフローに合わせて成形できます。
 どんな開発者でも、よく使う操作をワンクリックにし、見たい情報だけを出せる——それがこの仕組みの狙いです。
 
-**ボタン**（`buttons`）— 稼働中セッションに効く操作ボタン。表示は `icon`（Material Symbol 名）＋ `label`、`order` で並び順を指定できます。
+> **はじめての 1 個は [ヘッダーをカスタマイズする](header.html) へ。** スクリーンショット付きで、
+> ヘッダーの読み方から順に説明しています。ここは**全フィールドのリファレンス**です。
+
+**ボタン**（`buttons`）— 稼働中セッションに効く操作ボタン。**描かれるのは `icon`（Material Symbol 名）だけ**で、
+`label` は**ホバーで出るツールチップ**（と読み上げ名）になります。画面に文字は出ないので、`label` は
+そのボタンが何をするか分かる文にしてください。`icon` も `emoji` も無いときは `bolt` が出ます。`order` で並び順を指定できます。
 未設定なら**組み込みの既定セット**が表示されます: **Insert a file path**・**Open this branch's PR**（git リポかつ PR がある時のみ）。`buttons` をどこかで書くと既定セットは**丸ごと置き換え**られます（マージ**されません**）。つまり自分のリストを書けば——**短い**リストでも——並べ替え・削減・差し替えができます。
 
 *Reveal in the file manager*・*Browse files in the app*・*New terminal here*・*Open on GitHub* も以前は既定ボタンでした。今は**パスメニューの項目**です（ターミナルのヘッダー行にあるディレクトリのパスをクリック）。どれも「このディレクトリに対して何かする」で、それはパス自身が表していることなので、常設アイコン4つ分の場所に見合いませんでした。設定としては何も変わっていません。自分で書けば従来どおりボタンとして動きます——メニューは固定なので、その場合は両方に出ます。
@@ -352,7 +401,7 @@ MulmoTerminal の「**拡張**」の柱がここ。稼働中ターミナルの�
 ```
 
 - `run: "input"` … 稼働中の Claude/Codex に `text` を送信（例 `/compact`）。
-- `run: "open"` … `url`（ブラウザ, http/https のみ）/ `reveal`（OSのファイルマネージャ: Finder/Explorer/xdg-open）/ `files`（アプリ内エクスプローラ）/ `pickFile`（OSのファイル選択でパス挿入）/ `terminal`（そのディレクトリで新しい端末セルを開く）/ `pr`（現在ブランチの PR をブラウザで開く）/ `view`（`diff`/`prs`/`wiki`/`collections`/`accounting`）。
+- `run: "open"` … 1 ボタンに 1 つだけ書きます。複数書いた場合は**次の順で最初の 1 つだけ**が効きます: `pr`（現在ブランチの PR。サーバ側で `url` に解決されるため、`url` を併記しても PR が勝つ）/ `url`（ブラウザ, http/https のみ）/ `reveal`（OSのファイルマネージャ: Finder/Explorer/xdg-open）/ `files`（アプリ内エクスプローラ）/ `view`（`prs`/`wiki`/`collections`/`accounting`。`diff` も受け付けるが専用画面が無く、現状はファイルビューにフォールバックする）/ `terminal`（そのディレクトリで新しい端末セルを開く）/ `pickFile`（OSのファイル選択でパス挿入）。
 - `run: "shell"` … `cmd` をコマンドセルで実行（サーバ側で id 解決 + `${変数}` はシェルエスケープ、コマンドはブラウザに渡らない）。
 - `${変数}` … `dir` `dirName` `branch` `repo` `remoteUrl` `ahead` `behind` `dirty` `agent` `model` `task` `session`。
 - `when` … `isGitRepo` / `agent == …` / `repo == …`（`&&` / `||`、`&&` が優先）。
@@ -363,8 +412,11 @@ MulmoTerminal の「**拡張**」の柱がここ。稼働中ターミナルの�
 { "chips": ["ctx", "git", { "label": "env", "text": "⎇ ${branch}", "when": "isGitRepo" }] }
 ```
 
-- 組み込み `dir` / `git` / `work` / `diff` / `ctx` / `usage` / `status` / `tools` / [`env`](#worktree-env) … 並べた順に表示、書かなければ非表示。
-- カスタム `{ label, text, when }` … 読み取り専用テキスト（`text` は `${変数}` 展開）。
+- **並べ替え・非表示にできるのは `git` / `work` / `diff` / `ctx` / `usage` / [`env`](#worktree-env) の 6 つだけ**です。書いた順に並び、書かなければ出ません。
+- `dir`（プロジェクトバッジ）/ `status`（状態ドット）/ `tools`（2 段目のツール履歴）は**セルの構造**なので、
+  書いても効かず、書かなくても消えません。スキーマは受け付けるためエラーにはならず、黙って無視されます。
+- カスタム `{ label, text, when }` … 読み取り専用テキスト。**出るのは `text`**（`${変数}` 展開あり）で、
+  `label` はボタンと同じく**ツールチップ**です。
 
 #### `work` — そのセルが今どの PR / issue をやっているか {#work-chip}
 

@@ -123,6 +123,29 @@ The chrome colours only show while the cell is **idle** — the working/attentio
 while a session is busy or waiting on the user. Say this, or the user will change a colour, start a
 session, and think nothing happened.
 
+## Several clones of one repository — `.mulmoterminal.local.json`
+
+`<project>/.mulmoterminal.local.json` is read AFTER `.mulmoterminal.json` and **replaces whatever
+top-level keys it names**. Keys it does not name keep the shared value; a `colors` block replaces
+the shared one entirely rather than merging into it.
+
+This is the right shape whenever the population you surveyed contains **several checkouts of one
+repository** (`foo`, `foo2`, `foo3` …) — which step 2 already looks for as a hue band:
+
+- **`.mulmoterminal.json` gets the FULL config**, colours included. Somebody who clones the project
+  once must end up with a working colour from this file alone, so do not reduce it to the shared
+  half and leave the colours only in local files.
+- **`.mulmoterminal.local.json` gets only what makes THIS checkout recognisable** — the seven
+  chrome colours and `orderPriority`. It is per-machine, so **tell the user to gitignore it**.
+
+When you write both, keep the shared file's colour as the family's first hue and let each clone's
+local file step from there, so the repository's own file is not the odd one out.
+
+The settings preview (`/api/dir-config-detail`, step 1) names both paths and returns
+`source.local` — the keys the local file took over. Read it before concluding a directory is
+off-pattern: a colour that disagrees with `.mulmoterminal.json` is usually the local file winning,
+not a config that needs fixing.
+
 ## Schema — `<project>/.mulmoterminal.json`
 
 All keys optional. Colours are lowercase `#rrggbb` unless noted. MulmoTerminal **silently drops**

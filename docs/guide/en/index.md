@@ -71,7 +71,7 @@ and answer with one tap (**yes / no / continue**). → [Mobile notifications](no
 ### Worktree isolation & one-click PRs
 
 **Git worktrees** let several agents work the same repo without colliding — diff panel, commit,
-push, and **Open PR**, all from the cell. → [Scenarios](scenarios.html)
+push, and **Open PR**, all from the cell. → [Isolating work in a git worktree](worktree.html)
 
 ### The GUI panel — a screen beside the terminal
 

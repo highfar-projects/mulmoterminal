@@ -710,6 +710,22 @@ malformed file is ignored.
 }
 ```
 
+**Several clones of one repository?** Drop a `.mulmoterminal.local.json` beside it. It is read
+after `.mulmoterminal.json` and **replaces whatever keys it names**, so the shared file holds what
+the project is — name, theme, a colour — and each checkout's local file holds only what makes it
+recognisable:
+
+```jsonc
+// .mulmoterminal.json — the project. Complete on its own, so one clone needs nothing else.
+{ "name": "acme-web", "theme": "nord", "badgeColor": "#1b3479", "headerColor": "#2d4ea9", "orderPriority": 30 }
+
+// .mulmoterminal.local.json — this checkout only. Gitignore it.
+{ "badgeColor": "#27b4a8", "headerColor": "#4ed0c5", "orderPriority": 65 }
+```
+
+Whole keys, not a deep merge: a `colors` block in the local file replaces the shared one entirely.
+Settings → Directory settings names both files and lists which keys the local one took over.
+
 ![Four projects color-coded in the grid, each in its own palette](https://raw.githubusercontent.com/receptron/mulmoterminal/main/docs/guide/images/grid-colors.png)
 
 *As cells pile up it gets hard to tell which project is which. Give each repo a **name badge** and its own colors in `.mulmoterminal.json` and they're unmistakable — `headerColor`/`badgeColor` tint the frame, while `colors` reaches all the way into the **terminal's own background and text**. (The example above dresses four repos in Mondrian / van Gogh / Picasso / Matisse palettes.)*

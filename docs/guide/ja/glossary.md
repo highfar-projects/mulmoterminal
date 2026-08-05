@@ -3,7 +3,7 @@ title: 用語集 — 並列エージェント・worktree・バイブコーディ
 nav_title: 用語集
 layout: default
 parent: 日本語
-nav_order: 13
+nav_order: 15
 description: バイブコーディング（vibe coding）、並列エージェント、AI コーディングエージェント、git worktree、コックピットなど、MulmoTerminal のドキュメントに出てくる言葉を、実際の画面と結びつけて説明します。
 ---
 
@@ -102,7 +102,7 @@ MulmoClaude を clone したディレクトリのことではありません。
 **複数のエージェントを同じリポジトリで走らせても衝突しない**ので、並列作業の前提になります。
 MulmoTerminal はセルのランチャから worktree を作って、そこでセッションを起動できます。
 
-→ [応用編](scenarios.html)
+→ [worktree で作業を隔離する](worktree.html)
 
 ## セッション永続化（tmux）
 
