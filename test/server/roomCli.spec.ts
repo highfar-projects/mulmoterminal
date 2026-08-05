@@ -5,7 +5,7 @@
 // pinned.
 import { describe, it, expect } from "vitest";
 
-const { positionalForTest, flagForTest } = await import("../../bin/room.js");
+const { positionalForTest, flagForTest, portForTest } = await import("../../bin/room.js");
 
 describe("room CLI arguments", () => {
   it("keeps the whole message, including words that look like flags", () => {
@@ -26,5 +26,19 @@ describe("room CLI arguments", () => {
 
   it("does not treat an unknown flag as taking a value", () => {
     expect(positionalForTest(["post", "r", "--wat", "keep-me"])).toEqual(["post", "r", "--wat", "keep-me"]);
+  });
+
+  // `--` has to mean the same thing to EVERY reader. It kept the message text intact while
+  // `--from` and `--port` were still picked up from inside it, so a message that discussed a flag
+  // silently changed who the post came from (Codex review on #1456).
+  it("keeps a flag after `--` out of the flag readers, not just out of the text", () => {
+    const args = ["post", "standup", "--", "ask", "about", "--from", "ci"];
+    expect(positionalForTest(args)).toEqual(["post", "standup", "ask", "about", "--from", "ci"]);
+    expect(flagForTest(args, "--from")).toBeUndefined();
+  });
+
+  it("keeps a port after `--` from redirecting the request", () => {
+    expect(portForTest(["post", "r", "--", "try", "--port", "9999"])).not.toBe(9999);
+    expect(portForTest(["post", "r", "--port", "34599", "hello"])).toBe(34599);
   });
 });
