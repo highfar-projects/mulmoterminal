@@ -15,13 +15,12 @@
 //                accounting at all (the only `token` fields in one are `first_token` timings and a
 //                WebFetch tool parameter), so the usage badge stays hidden — it hides itself when
 //                the totals are zero.
-//   antigravity  the NAME only, and a constant one. agy's transcript records neither tokens nor a
-//                model id; the single mention of a model is prose inside the user turn ("The user
-//                changed setting `Model Selection` … to Gemini 3.6 Flash (High)"), written only
-//                when the setting CHANGED, and `settings.json` holds the current global pick which
-//                an old conversation was not run under. Reading either would put a specific,
-//                confident, sometimes-wrong model name on the cell. "antigravity" is what we can
-//                stand behind.
+//   antigravity  the model only, from the `<USER_SETTINGS_CHANGE>` block agy writes into step 0 of
+//                the conversation's own transcript (see antigravityModelFromTranscriptHead, which
+//                has the counts behind trusting it). No tokens: agy's transcript records none, so
+//                the usage badge stays hidden as grok's does. A session with no transcript to read
+//                answers `null` — the badge hides, as grok's does before its first turn — and NOT
+//                the cwd's last conversation, which is a different session's model (#1468).
 //
 // A wrong number here is worse than no number: this badge is what a user reads before deciding to
 // /compact, so every field is either what the agent stated or absent.
@@ -34,8 +33,10 @@ import { codexSessionsRoot } from "../agents/codex-session.js";
 import { codexRolloutPath } from "../agents/codex-sessions.js";
 import { grokModelFromSummary, grokSummaryPath } from "../agents/grok-sessions.js";
 import { grokSessionsRoot } from "../agents/grok-session.js";
+import { antigravityBrainRoot } from "../agents/antigravity-session.js";
+import { antigravityModelFromTranscriptHead, antigravityTranscriptPath } from "../agents/antigravity-sessions.js";
 import { readTailRecords } from "../infra/jsonl-file.js";
-import { codexRollouts, codexRolloutsHydrated } from "./registry.js";
+import { antigravityConversations, antigravityConversationsHydrated, codexRollouts, codexRolloutsHydrated } from "./registry.js";
 import type { SessionUsage } from "./transcript.js";
 
 export interface SessionBadges {
@@ -45,9 +46,6 @@ export interface SessionBadges {
 
 const EMPTY_USAGE: SessionUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 };
 
-/** What the badge calls an agy session. A constant, for the reason in the header comment. */
-export const ANTIGRAVITY_MODEL_LABEL = "antigravity";
-
 const modelOnly = (model: string | null): SessionBadges => ({ usage: EMPTY_USAGE, context: { model, contextTokens: 0 } });
 
 /** Where each agent keeps its sessions. Defaulted from the agent's own module and overridden only
@@ -56,6 +54,7 @@ const modelOnly = (model: string | null): SessionBadges => ({ usage: EMPTY_USAGE
 export interface BadgeRoots {
   codexSessions?: string;
   grokSessions?: string;
+  antigravityBrain?: string;
 }
 
 async function codexBadges(sessionKey: string, root: string): Promise<CodexBadges> {
@@ -111,6 +110,28 @@ async function grokBadges(cwd: string, id: string, root: string): Promise<Sessio
   }
 }
 
+// Step 0 and nothing else is needed, so the head the listing reads a title from answers this too —
+// the same 64 KB, never the file. There is deliberately no tail read behind it: the block sits at
+// the front, and a second read that almost never finds anything is paid on every session a cell
+// renders.
+const ANTIGRAVITY_HEAD_BYTES = 64 * 1024;
+
+async function antigravityBadges(sessionKey: string, root: string): Promise<SessionBadges> {
+  // The codex lookup, for the same reason (see codexBadges): the route is given OUR session id and
+  // agy files its transcript under an id of its own. `?? sessionKey` covers a cell resumed straight
+  // onto a conversation id; anything naming no transcript reads as unknown, not as a neighbour's.
+  //
+  // Unknown is the NORMAL state for the first seconds of a fresh cell — agy creates the
+  // conversation on the first prompt and the id is watched for, so a cell that has not been typed
+  // into yet has nothing to read. It is the spawner's capture that says otherwise, by publishing
+  // (spawn-antigravity.ts): without that the answer here never changes, because nothing sets
+  // working for an agy session and the cell's only other badge refresh is on a finished turn.
+  await antigravityConversationsHydrated;
+  const conversationId = antigravityConversations.get(sessionKey)?.conversationId ?? sessionKey;
+  const read = await readTranscriptHead(antigravityTranscriptPath(root, conversationId), ANTIGRAVITY_HEAD_BYTES);
+  return modelOnly(read && antigravityModelFromTranscriptHead(read.head));
+}
+
 /**
  * The badges for a session, from whichever log its agent keeps.
  *
@@ -121,5 +142,5 @@ async function grokBadges(cwd: string, id: string, root: string): Promise<Sessio
 export async function agentBadges(cwd: string, id: string, agent: Exclude<TerminalAgent, "claude">, roots: BadgeRoots = {}): Promise<SessionBadges> {
   if (agent === "codex") return codexBadges(id, roots.codexSessions ?? codexSessionsRoot());
   if (agent === "grok") return grokBadges(cwd, id, roots.grokSessions ?? grokSessionsRoot());
-  return modelOnly(ANTIGRAVITY_MODEL_LABEL);
+  return antigravityBadges(id, roots.antigravityBrain ?? antigravityBrainRoot());
 }

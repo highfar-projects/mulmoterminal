@@ -23,6 +23,12 @@ export function createAntigravitySpawner(deps: SpawnDeps) {
         if (!id) return;
         claimedAntigravityConversations.add(id);
         rememberAntigravityConversation(sessionId, id, cwd);
+        // The cell is holding a header badge answered before this id existed — agy names its model
+        // in the transcript this mapping points at, and until now there was no transcript to point
+        // at. Nothing else will correct it: an agy session has no hooks and no activity tracker, so
+        // it never goes working -> idle, and that transition is the cell's only other badge
+        // refresh. One push, on the one edge where the answer changed.
+        deps.publishActivity(sessionId);
         console.log(`[pty] captured antigravity conversation ${id} for session ${sessionId}`);
       })
       .catch(() => {});

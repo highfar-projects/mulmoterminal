@@ -296,6 +296,14 @@ function applyActivity(d: ActivityPush) {
   // Not while the box is open: the push that lands as another tab saves would otherwise
   // overwrite the sentence being typed here, mid-word.
   if (!memoEditing.value) memo.value = next.memo;
+  // A cell whose model is still unknown asks again on any push. codex and agy file their
+  // transcripts under an id the agent mints AFTER the spawn, so the seed fetch at mount can only
+  // answer "nobody" — and for agy nothing else would ever re-ask, since it has no hooks and no
+  // activity tracker to finish a turn (its spawner publishes precisely to reach this line).
+  // Claude is excluded: its badges come from the summary the route already folds, so a push adds
+  // nothing and this is the busiest route in the app. Self-limiting either way — once a model is
+  // known, this stops.
+  if (agent.value !== "claude" && !context.value?.model) void refreshUsage();
 }
 
 // This session's detail, or nothing to apply. Nothing covers three cases the callers all

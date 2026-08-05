@@ -28,4 +28,8 @@ export interface SpawnDeps {
   uiPort: string;
   /** Surface a brand-new session in the sidebar before it is persisted. */
   publishSessionCreated: (sessionId: string) => void;
+  /** Re-publish a session's row when something a cell reads has changed but its activity has not —
+   *  an agent that mints its conversation id asynchronously answers its model badge only once that
+   *  id is known (spawn-antigravity.ts). */
+  publishActivity: (sessionId: string) => void;
 }

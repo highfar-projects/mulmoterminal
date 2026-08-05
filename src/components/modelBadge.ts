@@ -41,12 +41,25 @@ const PERCENT = 100;
 const AGENT_NAME: Record<TerminalAgent, string> = { claude: "Claude", codex: "Codex", antigravity: "Antigravity", grok: "Grok" };
 export type BadgeAgent = TerminalAgent;
 
+// A trailing qualifier in brackets — agy names a model `Gemini 3.6 Flash (High)`, where `(High)` is
+// the reasoning effort. The badge is `whitespace-nowrap flex-none`, so it does not truncate: it
+// pushes the rest of the header's chips out instead. Dropped here and kept in the tip, which is
+// where this file already puts the full name. Sliced rather than matched: the regex for it
+// backtracks super-linearly, and this runs on every model a cell renders.
+function withoutTrailingQualifier(name: string): string {
+  if (!name.endsWith(")")) return name;
+  const open = name.lastIndexOf("(");
+  if (open <= 0) return name; // no bracket, or a name that is nothing but one
+  return name.slice(0, open).trimEnd() || name;
+}
+
 export function shortModelLabel(model: string): string {
   const preset = presetFor(model);
   if (preset) return preset.label;
   const lower = model.toLowerCase();
   const family = CLAUDE_FAMILIES.find((f) => lower.includes(f.match));
-  return family ? family.label : (model.split("/").pop() ?? model);
+  if (family) return family.label;
+  return withoutTrailingQualifier(model.split("/").pop() ?? model);
 }
 
 function contextWindowTokens(model: string, reported: number | null | undefined): number | null {

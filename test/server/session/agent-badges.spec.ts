@@ -3,14 +3,15 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { agentBadges, ANTIGRAVITY_MODEL_LABEL, type BadgeRoots } from "../../../server/session/agent-badges.js";
+import { agentBadges, type BadgeRoots } from "../../../server/session/agent-badges.js";
 
 // The header badges for a session that is not Claude (#1465). Each agent is asked the question the
-// same way and answers as much of it as its own log can: codex both badges, grok the model, agy a
-// constant. What must NOT happen is a number nobody wrote down.
+// same way and answers as much of it as its own log can: codex both badges, grok and agy the model.
+// What must NOT happen is a number nobody wrote down, or a model another session was running.
 
 const ROLLOUT_ID = "019fcb3a-a33c-7e72-8364-57e44926dfed";
 const GROK_ID = "150496cf-fb8d-4c35-b19b-e2826a4e7242";
+const AGY_ID = "a4dbbf1e-9cba-4879-a84a-d397b47e4f47";
 const CWD = "/Users/x/my proj";
 
 const tokenCountLine = JSON.stringify({
@@ -36,7 +37,11 @@ describe("agentBadges", () => {
 
   beforeEach(() => {
     home = fs.mkdtempSync(path.join(os.tmpdir(), "mt-agent-badges-"));
-    roots = { codexSessions: path.join(home, "codex", "sessions"), grokSessions: path.join(home, "grok", "sessions") };
+    roots = {
+      codexSessions: path.join(home, "codex", "sessions"),
+      grokSessions: path.join(home, "grok", "sessions"),
+      antigravityBrain: path.join(home, "antigravity", "brain"),
+    };
   });
 
   afterEach(() => fs.rmSync(home, { recursive: true, force: true }));
@@ -51,6 +56,13 @@ describe("agentBadges", () => {
     const dir = path.join(home, "grok", "sessions", encodeURIComponent(CWD), GROK_ID);
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, "summary.json"), JSON.stringify(summary));
+  };
+
+  const writeAntigravityTranscript = (id: string, settings: string) => {
+    const file = path.join(home, "antigravity", "brain", id, ".system_generated", "logs", "transcript.jsonl");
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const content = `<USER_REQUEST>\nhi\n</USER_REQUEST>\n<USER_SETTINGS_CHANGE>\n${settings}\n</USER_SETTINGS_CHANGE>`;
+    fs.writeFileSync(file, `${JSON.stringify({ step_index: 0, source: "USER_EXPLICIT", type: "USER_INPUT", status: "DONE", content })}\n`);
   };
 
   it("reads a codex session's totals, context and window out of its rollout", async () => {
@@ -95,11 +107,24 @@ describe("agentBadges", () => {
     expect((await agentBadges("/Users/x/elsewhere", GROK_ID, "grok", roots)).context.model).toBeNull();
   });
 
-  // agy records neither a model nor a token count. The constant is deliberate: the only model name
-  // in its transcript is prose in a settings block that is written only when the setting changed.
-  it("labels an antigravity session with the agent's own name", async () => {
-    const badges = await agentBadges(CWD, "any-id", "antigravity", roots);
-    expect(badges.context).toEqual({ model: ANTIGRAVITY_MODEL_LABEL, contextTokens: 0 });
+  // agy names its model in step 0 of the conversation's transcript and counts no tokens, so the
+  // model badge fills in and the usage badge stays hidden. The id here IS the conversation id: the
+  // session -> conversation mapping is codex's, already covered above, and asking for it in this
+  // spec would append a fake session to the developer's real ~/.mulmoterminal log.
+  it("reads an antigravity session's model from step 0 of its transcript", async () => {
+    writeAntigravityTranscript(AGY_ID, "The user changed setting `Model Selection` from None to Gemini 3.6 Flash (High). No need to comment.");
+    const badges = await agentBadges(CWD, AGY_ID, "antigravity", roots);
+    expect(badges.context).toEqual({ model: "Gemini 3.6 Flash (High)", contextTokens: 0 });
+    expect(badges.usage).toEqual({ inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 });
+  });
+
+  // The session this badge is for has no transcript of its own — a cell that has not been typed
+  // into yet, so agy has not created the conversation. Nobody is the answer, and the badge hides;
+  // the model of whatever else ran in this directory is NOT the answer (#1468).
+  it("names nobody for an antigravity session with no transcript of its own", async () => {
+    writeAntigravityTranscript(AGY_ID, "The user changed setting `Model Selection` from None to Gemini 3.6 Flash (High). No need to comment.");
+    const badges = await agentBadges(CWD, "8dcd4b0f-6d55-4a02-9f2c-1c4f2a7b9e10", "antigravity", roots);
+    expect(badges.context).toEqual({ model: null, contextTokens: 0 });
     expect(badges.usage.inputTokens).toBe(0);
   });
 });
