@@ -171,7 +171,9 @@ const headerButtons = computed(() => (props.command || props.launcher ? [] : res
 // command — it emits the button id + this session's context, and the server re-resolves it (see /ws/run).
 function onHeaderButton(button: HeaderButton): void {
   if (button.run !== "shell") {
-    runHeaderButton(button, slotKey, serverCwd.value);
+    // The banner the drop/paste hints use: a picker or a reveal that could not run says so HERE,
+    // rather than in a console nobody has open (#1447).
+    runHeaderButton(button, slotKey, serverCwd.value, (message) => void showHint(message, "folder_open"));
     return;
   }
   const command: RunCommand = {

@@ -118,7 +118,7 @@ describe("SettingsModal", () => {
     globalThis.fetch = (async () => ({ ok: true, json: async () => ({ paths: ["/picked/sound.ogg"] }) })) as unknown as typeof fetch;
     const w = mountModal({ soundFile: null });
     await clickBtn(w, (t) => t.includes("Browse"));
-    await Promise.resolve();
+    await flushPromises();
     expect((w.find('[aria-label="Custom notification sound file"]').element as HTMLInputElement).value).toBe("/picked/sound.ogg");
     expect(w.emitted("update-sound")?.at(-1)?.[0]).toBe("/picked/sound.ogg");
   });
