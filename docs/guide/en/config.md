@@ -1287,6 +1287,10 @@ goes back into circulation for the other trees.
 On the cell header, as an `env` chip: `:3010`. **Click a port and the dev server opens** in a new
 tab. Hover for the variable name.
 
+On **every** cell in that directory — an agent cell, a Shell, a launch command, a Run command. The
+launcher cell matters most: it is the one running `yarn dev`, so it is the one whose number you
+want to read.
+
 It is one of the default chips, and it renders nothing at all in a project that declares no
 `worktreeEnv` — so there is nothing to switch on, and nothing to see if you do not use this. To
 place it deliberately, name it in [`chips`](#header): `"chips": ["git", "env", "ctx"]`.
