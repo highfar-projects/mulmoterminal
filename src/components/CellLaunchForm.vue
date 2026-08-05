@@ -20,8 +20,9 @@ import type { LaunchChoice } from "./wsUrl";
 import type { RunCommand } from "./runCommand";
 import LaunchChipList from "./LaunchChipList.vue";
 import ModelPicker from "./ModelPicker.vue";
-import { isUnknownArray } from "../../common/isUnknownArray";
+import { LAUNCH_ROW } from "./launchFormClasses";
 import { jsonBody } from "../jsonBody";
+import { pickPaths } from "../composables/pickPaths";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 // What an EMPTY grid cell shows: pick a directory, pick what to run in it, and start — or resume
@@ -273,18 +274,14 @@ function fillDir(path: string): void {
 
 // The folder button: the browser can't open a native folder chooser, so the local server does
 // (POST /api/pick-file { directory: true }). Fill the Working-directory field with the pick.
+// A host with no dialog at all says so under the field — typing the path still works, and that
+// is only discoverable if the button explains itself instead of doing nothing (#1447).
+const pickError = ref<string | null>(null);
 async function pickDir(): Promise<void> {
-  try {
-    // Deliberately unbounded: this route answers when the USER closes the native file dialog,
-    // so any deadline here is a guess at how long they will take to choose.
-    const res = await fetch("/api/pick-file", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ directory: true }) });
-    if (!res.ok) return;
-    const data = await jsonBody(res);
-    const dir = isUnknownArray(data.paths) ? data.paths.find((p): p is string => typeof p === "string") : undefined;
-    if (dir) fillDir(dir);
-  } catch {
-    // best-effort — the native dialog is unavailable or the user canceled
-  }
+  const { paths, error } = await pickPaths({ directory: true });
+  pickError.value = error;
+  const dir = paths[0];
+  if (dir) fillDir(dir);
 }
 
 // The chip's launch button: a one-click quick launch — fill the field and jump straight into a
@@ -483,7 +480,7 @@ async function removeWorktree(w: Worktree): Promise<void> {
     >
       <span class="material-symbols-outlined" aria-hidden="true">close</span>
     </button>
-    <div v-if="chips.length" class="flex max-w-[360px] flex-wrap justify-center gap-1.5">
+    <div v-if="chips.length" class="flex w-full flex-wrap justify-center gap-1.5">
       <span
         v-for="p in chips"
         :key="p.label + p.path"
@@ -549,14 +546,14 @@ async function removeWorktree(w: Worktree): Promise<void> {
         </button>
       </span>
     </div>
-    <!-- The AGENT PICKER. Centred like everything else in this column — the directory field, the
-         model picker and the chips above it all sit on the centre line, so a left-aligned toggle
-         was the one thing off it. Wraps rather than overflowing: four options do not fit one row
-         in a narrow cell, and the one that would fall off the edge is the last, Shell — so the
-         wrapped row is centred too rather than hanging off the left. -->
+    <!-- The AGENT PICKER is the one row that keeps its CONTENT width while the rest of the column
+         spans the cell: it is a segmented control, so stretching it would widen the pill's
+         background and fit nothing more into it. It still wraps rather than overflowing — the
+         options do not fit one row in a narrow cell — and the row that falls to the next line is
+         centred rather than hanging off the left. -->
     <div
       data-testid="agent-picker"
-      class="inline-flex max-w-[360px] flex-wrap justify-center gap-0.5 rounded-[7px] border border-border bg-deep p-0.5"
+      class="inline-flex max-w-full flex-wrap justify-center gap-0.5 rounded-[7px] border border-border bg-deep p-0.5"
       role="radiogroup"
       aria-label="Agent picker — what this terminal runs"
     >
@@ -575,7 +572,7 @@ async function removeWorktree(w: Worktree): Promise<void> {
         {{ option.label }}
       </button>
     </div>
-    <label class="flex w-full max-w-[360px] flex-col items-center gap-1.5">
+    <label class="flex flex-col items-center gap-1.5" :class="LAUNCH_ROW">
       <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">Working directory</span>
       <span class="flex w-full items-stretch gap-1.5">
         <input
@@ -613,6 +610,7 @@ async function removeWorktree(w: Worktree): Promise<void> {
       <span v-if="takenWorktreeAt(targetDir)" data-testid="cell-dir-busy" class="font-sans text-[11px] leading-snug text-amber">{{
         takenWorktreeAt(targetDir)
       }}</span>
+      <span v-if="pickError" data-testid="cell-dir-pick-error" role="alert" class="font-sans text-[11px] leading-snug text-amber">{{ pickError }}</span>
     </label>
     <!-- Codex has its own model configuration and doesn't read this one. Keyed on the AGENT
          PICKER, not on the agent the cell will run: that reads "claude" while Shell is picked (a
@@ -635,7 +633,7 @@ async function removeWorktree(w: Worktree): Promise<void> {
            would register a group URL with nothing left to serve: a control that does nothing.
            Asked of the AGENT as well as the directory — Antigravity in the workspace takes the
            `v-else` and gets the switches, because that is genuinely how it reaches any tool. -->
-      <div v-if="workspaceGivesEveryTool" data-testid="cell-mcp-all" class="flex w-full max-w-[360px] flex-col gap-0.5">
+      <div v-if="workspaceGivesEveryTool" data-testid="cell-mcp-all" class="flex flex-col gap-0.5" :class="LAUNCH_ROW">
         <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">GUI tools</span>
         <span class="font-sans text-[11px] leading-snug text-secondary">
           <span class="material-symbols-outlined mr-[3px] align-middle text-[13px]" aria-hidden="true">workspaces</span>
@@ -647,7 +645,7 @@ async function removeWorktree(w: Worktree): Promise<void> {
            A `template v-else` around the loop rather than `v-else` ON it: v-if and v-for on one
            element is the ambiguity eslint-plugin-vue forbids. -->
       <template v-else>
-        <label v-for="group in TOOL_GROUPS" :key="group" class="flex w-full max-w-[360px] items-center justify-between gap-2" :title="mcpGroupTitle(group)">
+        <label v-for="group in TOOL_GROUPS" :key="group" class="flex items-center justify-between gap-2" :class="LAUNCH_ROW" :title="mcpGroupTitle(group)">
           <!-- The group is named, not just the feature: each switch registers ONE MCP server
            (`mulmoterminal-<group>`), so a heading alone would not say which of the four rows
            writes which server — and two of them share the heading "Canvas".
@@ -679,7 +677,8 @@ async function removeWorktree(w: Worktree): Promise<void> {
     <div
       v-if="dirListsLoading"
       data-testid="cell-dir-loading"
-      class="flex w-full max-w-[360px] items-center justify-center gap-1.5 font-sans text-[11px] text-dim"
+      class="flex items-center justify-center gap-1.5 font-sans text-[11px] text-dim"
+      :class="LAUNCH_ROW"
       role="status"
     >
       <span class="material-symbols-outlined animate-spin text-[14px]" aria-hidden="true">progress_activity</span>
@@ -692,7 +691,8 @@ async function removeWorktree(w: Worktree): Promise<void> {
     <div
       v-if="worktreeList.isGit && launchesAgent && !inWorkspace"
       data-testid="cell-worktrees"
-      class="flex w-full max-w-[360px] flex-col items-stretch gap-1.5"
+      class="flex flex-col items-stretch gap-1.5"
+      :class="LAUNCH_ROW"
     >
       <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">or isolate in a worktree (git repo)</span>
       <!-- Said here rather than left to be inferred from a row that behaves differently each time:
@@ -755,7 +755,7 @@ async function removeWorktree(w: Worktree): Promise<void> {
     <!-- The picked agent's OWN conversations. Shell has none, and reaches here with an empty list
          anyway (loadForDir passes it no directory) — the `listAgent` test says so out loud rather
          than resting on that. -->
-    <div v-if="listAgent && resumable.sessions.length" data-testid="cell-resume" class="flex min-h-0 w-full max-w-[360px] flex-col items-center gap-1.5">
+    <div v-if="listAgent && resumable.sessions.length" data-testid="cell-resume" class="flex min-h-0 flex-col items-center gap-1.5" :class="LAUNCH_ROW">
       <span data-testid="cell-resume-heading" class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">{{ resumeHeading }}</span>
       <div class="flex w-full flex-col gap-1">
         <button

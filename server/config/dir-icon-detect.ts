@@ -17,6 +17,7 @@ import { readJsonFile } from "../infra/read-text-file.js";
 import { isRecord } from "../../common/isRecord.js";
 import { isUnknownArray } from "../../common/isUnknownArray.js";
 import { resolveIconFile, type DirIcon } from "./dir-icon.js";
+import { largestIconArea } from "../../common/iconSizes.js";
 
 // Ordered by how well the image survives being drawn at 14px, not by how common it is: an SVG is
 // exact at any size, an apple-touch icon is ~180px of real artwork, and a .ico is often a 16px
@@ -77,9 +78,14 @@ function iconFromManifest(base: string, manifestRef: string): DirIcon | null {
   // `src` is resolved against the MANIFEST's directory, not the project root: in the layout every
   // one of these repositories uses, the manifest sits in `public/` and its `/pwa-192.png` means
   // `public/pwa-192.png` — the web root is that directory, not the checkout.
-  const manifestDir = path.dirname(manifestRef);
+  //
+  // Joined with path.posix so the `ref` this produces is spelled the way the candidate list above
+  // spells one — a `ref` is a config value (dir-icon.ts) and a config file is read on every
+  // platform, so `public\big.png` would be a path only Windows resolves. path.resolve inside
+  // resolveIconFile takes "/" on Windows, so nothing is lost by keeping it.
+  const manifestDir = path.posix.dirname(manifestRef);
   for (const entry of rankedIcons(parsed.icons)) {
-    const icon = resolveIconFile(base, path.join(manifestDir, entry.src));
+    const icon = resolveIconFile(base, path.posix.join(manifestDir, entry.src));
     if (icon) return icon;
   }
   return null;
@@ -99,25 +105,9 @@ function rankedIcons(entries: readonly unknown[]): ManifestIcon[] {
       // manifest we went looking for must not make the browser fetch somebody's host uninvited.
       if (!src || /^[a-z][a-z0-9+.-]*:/i.test(src) || src.startsWith("//")) return [];
       const purpose = typeof entry.purpose === "string" ? entry.purpose : "";
-      return [{ src, area: largestSize(entry.sizes), maskable: /\bmaskable\b/i.test(purpose) }];
+      return [{ src, area: largestIconArea(entry.sizes), maskable: /\bmaskable\b/i.test(purpose) }];
     })
     .sort((a, b) => Number(a.maskable) - Number(b.maskable) || b.area - a.area);
-}
-
-// `sizes` is a space-separated list of `<w>x<h>`, plus the literal `any` for vectors — which wins,
-// since an SVG in a manifest is exactly the icon we most want.
-const VECTOR_AREA = Number.MAX_SAFE_INTEGER;
-
-function largestSize(sizes: unknown): number {
-  if (typeof sizes !== "string") return 0;
-  return sizes
-    .split(/\s+/)
-    .map((token) => {
-      if (token.toLowerCase() === "any") return VECTOR_AREA;
-      const wh = /^(\d+)x(\d+)$/i.exec(token);
-      return wh ? Number(wh[1]) * Number(wh[2]) : 0;
-    })
-    .reduce((max, area) => Math.max(max, area), 0);
 }
 
 function tryReadJson(file: string): unknown {

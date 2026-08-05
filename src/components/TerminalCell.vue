@@ -480,15 +480,21 @@ function resumeSession({ id, cwd: dir, agent: resumeAgent }: { id: string; cwd: 
 async function openDir() {
   if (!cwd.value) return;
   try {
-    await fetchWithTimeout("/api/open-dir", {
+    const res = await fetchWithTimeout("/api/open-dir", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ path: cwd.value }),
     });
-  } catch {
-    // best-effort — opening a folder is non-critical
+    // A host with no file manager to call (a bare Linux box, WSL without interop) used to look
+    // exactly like a successful reveal — the route said ok and nothing appeared (#1447).
+    if (!res.ok) showAskMsg(openDirFailureText(await jsonBody(res), res.status));
+  } catch (e) {
+    showAskMsg(`Could not open the folder: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
+
+const openDirFailureText = (body: Record<string, unknown>, status: number): string =>
+  typeof body.error === "string" && body.error.length > 0 ? body.error : `Could not open the folder (HTTP ${status}).`;
 
 // The server reports where the PTY actually runs (it may have rejected the
 // requested dir). Adopt it as the truth — display and persist the effective cwd.

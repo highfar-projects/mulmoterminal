@@ -129,9 +129,15 @@ In any directory, tell a Claude session `add OpenRouter to my mulmoterminal conf
 `mulmoterminal-config` skill keeps your existing settings and writes a valid entry — **without your
 key in it**.
 
-**Do not list models here.** Registering a provider with this `id` is enough — the
-[27 measured models](#verified) appear in the picker on their own. You only list models to add ones
-that are **not** in that list (→ [Adding models](#add-models)).
+**Under the id `openrouter`, do not list models here.** Registering a provider with this `id` is
+enough — the [27 measured models](#verified) appear in the picker on their own. You only list models
+to add ones that are **not** in that list (→ [Adding models](#add-models)).
+
+**Under any other `id`, `models` is required.** The measured list is OpenRouter's alone, matched by
+that exact id, so a backend registered as `deepseek`, `moonshot` or an in-house gateway starts with
+none — and **a backend with no models is not offered in the picker**, because a session named on a
+provider without a model refuses to start. List the ids you want to run
+(→ [Adding models](#add-models)).
 
 | Key | Meaning |
 |---|---|
@@ -140,7 +146,7 @@ that are **not** in that list (→ [Adding models](#add-models)).
 | `baseUrl` | **no trailing `/v1`** — see below |
 | `tokenEnv` | the **name** of the environment variable holding the key, never the key |
 | `maxOutputTokens` | optional; defaults to 16000 |
-| `models` | optional; only to add models **not** in the built-in list (→ [Adding models](#add-models)) |
+| `models` | **required unless `id` is `openrouter`** — that is the only id with presets. Under `openrouter`, only to add models **not** in the built-in list (→ [Adding models](#add-models)) |
 
 ### Never end `baseUrl` in `/v1`
 {: .no_toc }
@@ -330,7 +336,9 @@ If you are unsure where to start, try **Kimi K2.7 Code** (fast, coding-oriented)
 | `404 No endpoints available …` | that model is excluded by your [privacy settings](https://openrouter.ai/settings/privacy) |
 | Empty replies, looks hung | `maxOutputTokens` too low — keep it at 16000+ |
 | Talks but never uses tools | the model's own limitation — check the table or `model-trials.ts` |
-| No MODEL select in the launch form | no provider is registered (step 2) or its key is missing; "Use another model…" in the form names what's missing |
+| No MODEL select in the launch form | no provider is registered (step 2), its key is missing, or it has no models to pick; the link beside the MODEL label — "Needs attention" / "Use another model…" — names what's missing |
+| A registered backend is missing from the MODEL list | it has no models: presets come with the id `openrouter` and no other, so [list its `models`](#add-models) |
+| `models` is in the config and the picker still offers none | every id in it was refused — a model id is letters, digits and `. _ : / - ~`, so an object like `{"id": "…"}` or a value with a space is dropped. The server's log names what it dropped |
 | No model in the header | `ctx` is not in your `chips` |
 
 ---

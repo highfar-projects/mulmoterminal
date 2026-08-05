@@ -690,3 +690,40 @@ describe("the resume list follows the Agent Picker", () => {
     expect(w.find('[data-testid="cell-dir-loading"]').exists()).toBe(false);
   });
 });
+
+// #1447: the folder button posted to /api/pick-file and dropped a non-200 on the floor, so on a
+// host with no dialog installed it was a button that did nothing and said nothing. The field still
+// accepts a typed path — which nobody discovers unless the button explains itself.
+describe("the folder button when the host has no file dialog", () => {
+  const pickError = (w: ReturnType<typeof mountForm>) => w.find('[data-testid="cell-dir-pick-error"]');
+
+  const mountWithPicker = async (picker: { ok: boolean; body: unknown }) => {
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/pick-file")) return { ok: picker.ok, status: picker.ok ? 200 : 500, json: async () => picker.body };
+      if (u.includes("/api/worktrees")) return { ok: true, json: async () => ({ isGit: true, base: "main", worktrees: [] }) };
+      return { ok: true, json: async () => ({ cwd: "/repo", sessions: [] }) };
+    }) as unknown as typeof fetch;
+    const w = mountForm();
+    await flushPromises();
+    await w.find('[aria-label="Choose the working directory"]').trigger("click");
+    await flushPromises();
+    return w;
+  };
+
+  it("shows what the server said, under the field", async () => {
+    const w = await mountWithPicker({ ok: false, body: { error: "No file dialog on this host — install zenity" } });
+    expect(pickError(w).text()).toContain("install zenity");
+  });
+
+  it("says nothing when the dialog opened and the user cancelled", async () => {
+    const w = await mountWithPicker({ ok: true, body: { paths: [] } });
+    expect(pickError(w).exists()).toBe(false);
+  });
+
+  it("fills the field, and shows no error, when a folder comes back", async () => {
+    const w = await mountWithPicker({ ok: true, body: { paths: ["/picked/dir"] } });
+    expect(w.emitted("update:dir")?.at(-1)).toEqual(["/picked/dir"]);
+    expect(pickError(w).exists()).toBe(false);
+  });
+});

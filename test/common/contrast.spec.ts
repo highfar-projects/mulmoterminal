@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { contrastRatio, readableTextColor, relativeLuminance } from "../../../src/components/contrast";
+import { contrastRatio, readableTextColor, relativeLuminance } from "../../common/contrast";
 
 const hex = (value: string): [number, number, number] => {
   const n = parseInt(value.slice(1), 16);

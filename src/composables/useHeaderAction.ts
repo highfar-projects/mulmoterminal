@@ -11,26 +11,22 @@ import { submitText, insertText } from "./useTerminalConnections";
 import { openTerminalAt } from "./useNewTerminal";
 import { toInsertText } from "../components/dropPaths";
 import type { HeaderButton, OpenTarget } from "./useHeaderButtons";
-import { isRecord } from "../../common/isRecord";
+import { pickPaths } from "./pickPaths";
+import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 const OPEN_URL_SCHEMES: ReadonlySet<string> = new Set(["http:", "https:"]);
 
+/** Where a failed action explains itself — the cell's own banner, supplied by Terminal.vue. */
+export type ReportProblem = (message: string) => void;
+
 // Open the OS file dialog (server-side, since the browser can't read a real path) and insert the chosen
 // path(s) at the session's cursor. slotKey identifies which terminal receives the text.
-async function pickFileInto(slotKey: string | null): Promise<void> {
+async function pickFileInto(slotKey: string | null, report: ReportProblem): Promise<void> {
   if (!slotKey) return;
-  try {
-    // Deliberately unbounded: this route answers when the USER closes the native file dialog,
-    // so any deadline here is a guess at how long they will take to choose.
-    const res = await fetch("/api/pick-file", { method: "POST", headers: { "content-type": "application/json" } });
-    if (!res.ok) return;
-    const data: unknown = await res.json();
-    const paths = isRecord(data) && Array.isArray(data.paths) ? data.paths.filter((p): p is string => typeof p === "string") : [];
-    insertText(slotKey, toInsertText(paths));
-  } catch {
-    // best-effort — the native dialog is unavailable or the user canceled
-  }
+  const { paths, error } = await pickPaths();
+  if (error) return report(error);
+  insertText(slotKey, toInsertText(paths));
 }
 
 function openUrl(url: string): void {
@@ -41,11 +37,24 @@ function openUrl(url: string): void {
   }
 }
 
-function revealDir(dirPath: string): void {
-  fetchWithTimeout("/api/open-dir", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path: dirPath }) }).catch(
-    () => {},
-  );
+// Reveal a directory in the OS file manager. The route answers only once the opener has actually
+// started, so a host that has none (a bare Linux box with no `xdg-open`) reports it rather than
+// leaving the button looking broken (#1447).
+async function revealDir(dirPath: string, report: ReportProblem): Promise<void> {
+  try {
+    const res = await fetchWithTimeout("/api/open-dir", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ path: dirPath }),
+    });
+    if (!res.ok) report(revealFailureText(await jsonBody(res), res.status));
+  } catch (e) {
+    report(`Could not open the folder: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
+
+const revealFailureText = (body: Record<string, unknown>, status: number): string =>
+  typeof body.error === "string" && body.error.length > 0 ? body.error : `Could not open the folder (HTTP ${status}).`;
 
 function openView(view: string, cwd: string | null): void {
   if (view === "prs") prsGotoIndex();
@@ -55,22 +64,24 @@ function openView(view: string, cwd: string | null): void {
   else filesGotoIndex(cwd); // "files" and (until a dedicated route) "diff"
 }
 
-function dispatchOpen(open: OpenTarget, cwd: string | null, slotKey: string | null): void {
+function dispatchOpen(open: OpenTarget, cwd: string | null, slotKey: string | null, report: ReportProblem): void {
   if (open.url) openUrl(open.url);
-  else if (open.reveal) revealDir(open.reveal);
+  else if (open.reveal) void revealDir(open.reveal, report);
   else if (open.files) filesGotoIndex(open.files);
   else if (open.view) openView(open.view, cwd);
   else if (open.terminal) openTerminalAt(open.terminal, slotKey);
-  else if (open.pickFile) void pickFileInto(slotKey);
+  else if (open.pickFile) void pickFileInto(slotKey, report);
 }
 
-export function runHeaderButton(button: HeaderButton, slotKey: string | null, cwd: string | null): void {
+const logProblem: ReportProblem = (message) => console.warn(`[header] ${message}`);
+
+export function runHeaderButton(button: HeaderButton, slotKey: string | null, cwd: string | null, report: ReportProblem = logProblem): void {
   if (button.run === "input" && button.text && slotKey) {
     submitText(slotKey, button.text);
     return;
   }
   if (button.run === "open" && button.open) {
-    dispatchOpen(button.open, cwd, slotKey);
+    dispatchOpen(button.open, cwd, slotKey, report);
     return;
   }
   // run === "shell" is dispatched by Terminal.vue (emits `run` → command cell); reaching here is a bug.

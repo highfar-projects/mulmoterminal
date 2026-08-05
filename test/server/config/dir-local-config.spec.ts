@@ -82,9 +82,12 @@ describe("the local file layers over the shared one", () => {
 // Writing either file has to recolour the cells. Reloading only on the shared one would leave the
 // file a user edits MOST — their own clone's — not applying until a browser reload.
 describe("live reload", () => {
+  // Resolved, like the sibling cases in dir-config.spec.ts: on Windows "\work\proj" is absolute
+  // but drive-LESS, so the function under test answers "D:\work\proj" and a joined expectation
+  // never matches it.
   it.each([DIR_CONFIG_FILE, DIR_LOCAL_CONFIG_FILE])("fires for a write to %s", (name) => {
-    const file = path.join("/work", "proj", name);
-    expect(dirConfigWriteTarget("Write", { file_path: file })).toBe(path.join("/work", "proj"));
+    const dir = path.resolve("/work/proj");
+    expect(dirConfigWriteTarget("Write", { file_path: path.join(dir, name) })).toBe(dir);
   });
 
   it("does not fire for another file in the same directory", () => {

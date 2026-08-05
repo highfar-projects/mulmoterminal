@@ -227,6 +227,7 @@ Needs **Node ≥ 22.9**, plus these CLIs on your `PATH`:
 | Optional | `codex` | [Codex sessions](#agents-claude--codex) in a cell, alongside Claude | `npm i -g @openai/codex` |
 | Optional | `ffmpeg` | video rendering from the [mulmo-script panel](#wiki-collections--the-gui-panel) (its plugin ships enabled) | `brew install ffmpeg` · `sudo apt install ffmpeg` · `sudo dnf install ffmpeg` |
 | Optional | `ollama` | [`claude-ollama`](https://receptron.github.io/mulmoterminal/guide/en/claude-ollama.html) — Claude Code against a fully local model | [ollama.com/download](https://ollama.com/download) |
+| Linux only | a file dialog | the **Choose a folder / Insert a file path** buttons, which open an OS dialog on the machine the server runs on. macOS and Windows have one built in; **WSL** uses the Windows one over interop and needs nothing installed. A Linux desktop needs one of these — without any, the buttons say so and you type the path instead (#1447) | `sudo apt install zenity` · `sudo dnf install zenity` · `kdialog`, `qarma` and `yad` also work |
 
 The server starts without any of the non-required rows; you just lose that row's feature,
 and the header/panel for it says so. `git` and `gh` are marked required because losing them
@@ -734,6 +735,22 @@ malformed file is ignored.
   }
 }
 ```
+
+**Already have a `repo.json`?** MulmoTerminal reads it. It is an
+[open repository-metadata format](https://receptron.github.io/mulmoterminal/repo-json.html) — one
+small file any tool can read — and a project that ships one gets a coloured, named, icon-bearing
+cell without knowing this app exists:
+
+```json
+{ "name": "diffusion-lab", "icon": "docs/logo.png", "color": "#7c3aed" }
+```
+
+One colour becomes all seven: the header is it exactly, the badge/border/dot/button/body are
+derived from its hue, and the header text is derived for contrast. Anything this app understands
+but the open format doesn't goes under `extensions.mulmoterminal`.
+
+The three files layer, general to specific — **`repo.json` → `.mulmoterminal.json` →
+`.mulmoterminal.local.json`** — replacing whatever keys the one below it set.
 
 **Several clones of one repository?** Drop a `.mulmoterminal.local.json` beside it. It is read
 after `.mulmoterminal.json` and **replaces whatever keys it names**, so the shared file holds what
@@ -1526,7 +1543,7 @@ same-origin-guarded.
 | `POST /api/transcribe`(`/model`…) | Voice-input transcription (Whisper, macOS). |
 | `POST /api/translation` | Runtime UI-string translation. |
 | `GET /api/remote-host/status` · `POST /api/remote-host/{connect,disconnect}` | Companion phone-client link. Each response carries the command channel's `health` (`online` / `reconnecting` / `offline`, plus the last listener error), so the toolbar shows a dropped channel instead of the last state it happened to fetch. |
-| `POST /api/open-dir` · `POST /api/pick-file` | Reveal a dir in Finder/Explorer; OS file-picker → path (`{ directory: true }` opens the folder picker — used by the launcher's Working-directory 📁 button). |
+| `POST /api/open-dir` · `POST /api/pick-file` | Reveal a dir in Finder/Explorer; OS file-picker → path (`{ directory: true }` opens the folder picker — used by the launcher's Working-directory 📁 button). Both run on the SERVER's machine, and both answer **500 with a reason** when it has nothing to open a dialog with, rather than a silent nothing (#1447). The picker tries every dialog the host might have: macOS `osascript`, Windows PowerShell, **WSL** the Windows dialog over interop (`powershell.exe` + `wslpath`), Linux `zenity` → `kdialog` → `qarma` → `yad`. A user cancel is a 200 with `paths: []`. |
 | `POST /api/session/:id/drop` | A dropped file whose path the browser withheld. **Raw bytes**, not JSON, under the file's own content type (base64 in JSON would cap real files near 18 MB, and a dropped `.json` would be parsed as a document); the original name rides percent-encoded in `x-drop-filename` and is used for its **suffix only**. Answers `{ path }` — absolute, inside the private per-session directory the session was granted at launch. 110 MiB cap; 404 for a session this server isn't running. |
 
 The phone itself uses **none** of these routes — it reaches the host over Firestore command
@@ -1842,7 +1859,8 @@ server/
   git/            git, GitHub (gh) and GitLab (glab) + worktrees: git-status.ts, gitRemote.ts,
                   gh.ts, prs.ts, issues.ts, pr-for-branch.ts, worktrees.ts, worktree-*.ts
   files/          files-browse.ts (contained tree read/write), pick-file.ts,
-                  open-dir.ts, scripts.ts (Run-menu script.json loader)
+                  open-dir.ts, wsl.ts (interop detection + wslpath),
+                  scripts.ts (Run-menu script.json loader)
   infra/          process/transport/misc: tmux.ts, tmux-routes.ts,
                   pubsub.ts (socket.io /ws/pubsub), spa-fallback.ts, host-tools.ts,
                   plugins-registry.ts, web-push.ts, install-bundled-skills.ts, accounting-tool.ts
