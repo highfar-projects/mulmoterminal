@@ -29,9 +29,11 @@ grok bumps hours later when it generates a title, and which would sort a dead co
 live one).
 
 All three foreign lists now also carry `attached`, the field that stops a row being opened twice.
-It takes the conversation log read backwards: a conversation started from a grid cell is held under
-a session key MulmoTerminal minted, so asking about the conversation id alone would report it free
-while it is live in another cell — and resuming it would start a second agent process on it.
+For codex and antigravity it takes the conversation log read backwards: a conversation started from
+a grid cell is held under a session key MulmoTerminal minted, so asking about the conversation id
+alone would report it free while it is live in another cell — and resuming it would start a second
+agent process on it. grok needs no log for this, because MulmoTerminal mints its session id: the
+key and the conversation id are the same string, so the row's own id answers the question.
 
 ## mulmoterminal@4.5.1 — 2026-08-05
 
