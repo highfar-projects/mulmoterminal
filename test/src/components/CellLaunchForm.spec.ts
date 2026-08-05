@@ -606,4 +606,89 @@ describe("the Agent Picker's custom agents (#1414)", () => {
     // so adding a fifth agent does not read as this feature breaking.
     expect(w.find('[data-testid="agent-picker"]').findAll('[role="radio"]')).toHaveLength(TERMINAL_AGENTS.length + 1);
   });
+
+  // The resume list is per-AGENT, so changing the Agent Picker must refresh it: rows fetched under
+  // Codex must not stand under Claude while the replacement is in flight (#1417). The agent travels
+  // with the id when resuming, so the cell connects the endpoint that wrote that conversation.
+  describe("agent-filtered resume list (#1417)", () => {
+    const claudeSession = { id: "s-claude", title: "claude chat", mtime: 1000 };
+    const codexSession = { id: "s-codex", title: "codex chat", mtime: 2000 };
+
+    function mockFetchPerAgent(agentSessions: Record<string, SessionRow[]>) {
+      globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
+        const u = String(url);
+        // The API endpoint includes the agent in the query or path
+        if (u.includes("/api/sessions")) {
+          const params = new URL(u, "http://localhost").searchParams;
+          const agent = params.get("agent") ?? "claude";
+          const sessions = agentSessions[agent] ?? [];
+          return { ok: true, json: async () => ({ cwd: "/repo", sessions }) };
+        }
+        if (u.includes("/api/worktrees")) return { ok: true, json: async () => ({ isGit: true, base: "main", worktrees: [] }) };
+        return { ok: true, json: async () => ({}) };
+      }) as unknown as typeof fetch;
+    }
+
+    it("refetches the list when the Agent Picker changes", async () => {
+      mockFetchPerAgent({
+        claude: [claudeSession],
+        codex: [codexSession],
+      });
+      const w = mountForm([], { agent: "claude" });
+      await flushPromises();
+      expect(w.find('[data-testid="cell-resume-item"]').exists()).toBe(true);
+      expect(w.find('[data-testid="ri-title"]').text()).toBe("claude chat");
+
+      await w.setProps({ agent: "codex" });
+      await flushPromises();
+
+      // The list has changed to codex's conversations
+      expect(w.find('[data-testid="ri-title"]').text()).toBe("codex chat");
+    });
+
+    it("clears the list before fetching the new agent's conversations", async () => {
+      mockFetchPerAgent({
+        claude: [claudeSession],
+        codex: [codexSession],
+      });
+      const w = mountForm([], { agent: "claude" });
+      await flushPromises();
+      expect(w.findAll('[data-testid="cell-resume-item"]')).toHaveLength(1);
+
+      await w.setProps({ agent: "codex" });
+      // Before the fetch completes, the old list should be gone
+      expect(w.findAll('[data-testid="cell-resume-item"]')).toHaveLength(0);
+      await flushPromises();
+      expect(w.findAll('[data-testid="cell-resume-item"]')).toHaveLength(1);
+    });
+
+    it("emits the correct agent when resuming a codex session", async () => {
+      mockFetchPerAgent({
+        codex: [codexSession],
+      });
+      const w = mountForm([], { agent: "codex" });
+      await flushPromises();
+      await w.find('[data-testid="cell-resume-item"]').trigger("click");
+      expect(w.emitted("resume")?.[0]).toEqual([{ id: "s-codex", cwd: "/repo", agent: "codex" }]);
+    });
+
+    it("hides the resume section when Shell is picked", async () => {
+      mockFetch([], [claudeSession]);
+      const w = mountForm([], { agent: "shell" });
+      await flushPromises();
+      expect(w.find('[data-testid="cell-resume"]').exists()).toBe(false);
+      expect(w.find('[data-testid="cell-resume-heading"]').exists()).toBe(false);
+    });
+
+    it("uses Claude's list for a custom agent", async () => {
+      const nemotron: CustomAgent = { id: "nemotron", label: "Nemotron", agent: "claude", command: "ollama launch claude --" };
+      mockFetchPerAgent({
+        claude: [claudeSession],
+      });
+      const w = mountForm([], { agent: "custom:nemotron", customAgents: [nemotron] });
+      await flushPromises();
+      expect(w.find('[data-testid="cell-resume-item"]').exists()).toBe(true);
+      expect(w.find('[data-testid="ri-title"]').text()).toBe("claude chat");
+    });
+  });
 });
