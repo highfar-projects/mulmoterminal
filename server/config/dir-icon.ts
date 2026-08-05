@@ -5,34 +5,23 @@
 // project, which only this server can read — confined exactly like `sound` (dir-config.ts) and
 // streamed back through /api/dir-icon. An http(s) or data: URL is loaded by the browser itself,
 // so nothing here touches it beyond deciding that it is one.
-import { existsSync, statSync, realpathSync } from "node:fs";
-import path from "node:path";
-import { isWithin } from "../infra/path-within.js";
+import { resolveFileWithinDir } from "./dir-file.js";
 import { DIR_ICON_MAX_CHARS, dirIconMime, isRemoteDirIconUrl } from "../../common/dirIcon.js";
 
 // `ref` is the path AS WRITTEN, kept beside the resolved one because a worktree inherits this
 // key: a config derived from an absolute path would be rejected by the very rule that produced
 // it (relative only), while the relative path resolves again in the worktree's own tree.
-export type DirIcon = { source: "file"; path: string; ref: string; mime: string } | { source: "url"; url: string };
+export type DirIconFile = { source: "file"; path: string; ref: string; mime: string };
+export type DirIcon = DirIconFile | { source: "url"; url: string };
 
-// Confine a configured icon to a real image file INSIDE cwd — the same rule, and the same order
-// of checks, as resolveDirSound: relative only, no escaping via "../", and a realpath re-check so
-// a symlink inside the directory can't point out of it.
-export function resolveIconFile(cwd: string, ref: string): DirIcon | null {
-  if (path.isAbsolute(ref)) return null;
+// Confine a configured icon to a real image file INSIDE cwd — the shared rule (dir-file.ts), the
+// same one `sound` is held to. The extension check is this key's own: a path that IS inside the
+// directory but names something the browser cannot render is still not an icon.
+export function resolveIconFile(cwd: string, ref: string): DirIconFile | null {
   const mime = dirIconMime(ref);
   if (!mime) return null;
-  const base = path.resolve(cwd);
-  const resolved = path.resolve(base, ref);
-  if (!isWithin(base, resolved)) return null;
-  if (!existsSync(resolved) || !statSync(resolved).isFile()) return null;
-  try {
-    // .native for the 8.3 reason in files/pathContainment.ts — one spelling of a Windows path.
-    if (!isWithin(realpathSync.native(base), realpathSync.native(resolved))) return null;
-  } catch {
-    return null;
-  }
-  return { source: "file", path: resolved, ref, mime };
+  const resolved = resolveFileWithinDir(cwd, ref);
+  return resolved ? { source: "file", path: resolved, ref, mime } : null;
 }
 
 // What the FILE said, before anything is looked for on disk. Four answers, because three
