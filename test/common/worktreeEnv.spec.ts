@@ -12,6 +12,7 @@ import {
   localUrlForPort,
   portForSlot,
   slugCandidate,
+  slugWithSuffix,
   slugifyIdentifier,
   worktreeEnvValue,
 } from "../../common/worktreeEnv";
@@ -81,6 +82,26 @@ describe("slugCandidate", () => {
     expect(long.length).toBeLessThanOrEqual(MAX_SLUG_CHARS);
     expect(long.endsWith("_2")).toBe(true);
     expect(long).not.toBe(slugCandidate("p".repeat(MAX_SLUG_CHARS + 20), "x", 1));
+  });
+});
+
+describe("slugWithSuffix", () => {
+  // The rule slugCandidate is built on, stated on its own because getting it backwards is what
+  // made the 100th colliding directory share the 1st one's name (Codex review on #1367): the STEM
+  // gets cut to make room, so the suffix always survives — even against a prefix already at the
+  // length limit, where truncating the finished string would eat the suffix whole.
+  it("keeps the suffix when the prefix alone already fills the limit", () => {
+    const prefix = "p".repeat(MAX_SLUG_CHARS);
+    const a = slugWithSuffix(prefix, "x", "_a1b2c3d4");
+    const b = slugWithSuffix(prefix, "x", "_e5f6a7b8");
+    expect(a).not.toBe(b);
+    expect(a.endsWith("_a1b2c3d4")).toBe(true);
+    expect(a).toHaveLength(MAX_SLUG_CHARS);
+  });
+
+  it("is what slugCandidate's numbered attempts are made of", () => {
+    expect(slugCandidate("myapp_", "fix-login", 3)).toBe(slugWithSuffix("myapp_", "fix-login", "_3"));
+    expect(slugCandidate("myapp_", "fix-login", 1)).toBe(slugWithSuffix("myapp_", "fix-login", ""));
   });
 });
 

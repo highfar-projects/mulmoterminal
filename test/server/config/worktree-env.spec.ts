@@ -5,7 +5,7 @@ import { realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { ensureWorktreeEnv, releaseWorktreeEnv, reservedWorktreeEnv, worktreeEnvLogFile, worktreeEnvValues } from "../../../server/config/worktree-env";
-import type { WorktreeEnvSpec } from "../../../common/worktreeEnv";
+import { MAX_SLUG_CHARS, MAX_SLUG_SUFFIX, type WorktreeEnvSpec } from "../../../common/worktreeEnv";
 
 // The whole module reads MULMOTERMINAL_HOME lazily, so pointing it at a scratch dir is enough to
 // keep every reservation — and the log — out of the real home.
@@ -161,6 +161,23 @@ describe("ensureWorktreeEnv", () => {
     expect(await ensureWorktreeEnv(dir, FREE)).toEqual({ PORT: "3000" });
     expect(reservedWorktreeEnv(dir)).toEqual({ PORT: "3000" });
   });
+
+  // The boundary the old fallback got wrong: past 99 collisions it appended the directory's hash
+  // INSIDE the identity, and a prefix already at the 63-character limit truncated the hash away —
+  // so every directory past the 99th got the same name, in the branch whose whole job was
+  // uniqueness. The hash is now the suffix, which is what survives truncation. (Codex review.)
+  it("keeps slugs distinct past the numbered suffixes, even with a prefix at the length limit", async () => {
+    const spec: WorktreeEnvSpec = { DB_NAME: { kind: "slug", prefix: "p".repeat(MAX_SLUG_CHARS) } };
+    const values: string[] = [];
+    // Same task name in every tree, so the derived slug collides every single time.
+    for (let i = 0; i < MAX_SLUG_SUFFIX + 5; i++) {
+      const resolved = await ensureWorktreeEnv(worktreeDir(`repo-${i}`, "same-name", spec), FREE);
+      if (resolved.DB_NAME) values.push(resolved.DB_NAME);
+    }
+    expect(values).toHaveLength(MAX_SLUG_SUFFIX + 5);
+    expect(new Set(values).size).toBe(values.length);
+    expect(values.every((v) => v.length <= MAX_SLUG_CHARS)).toBe(true);
+  }, 20_000);
 
   it("leaves the variable unset when the whole span is spoken for", async () => {
     const allBusy = () => Promise.resolve(false);

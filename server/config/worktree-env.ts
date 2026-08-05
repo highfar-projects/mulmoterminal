@@ -37,6 +37,7 @@ import {
   PROJECT_SLOT,
   portForSlot,
   slugCandidate,
+  slugWithSuffix,
   worktreeEnvValue,
   type WorktreeEnvSpec,
   type WorktreeEnvValue,
@@ -45,6 +46,11 @@ import {
 /** Where the reservations live. A function, not a constant, so MULMOTERMINAL_HOME redirects it
  *  the way it redirects the worktree root itself. */
 export const worktreeEnvLogFile = (): string => path.join(mulmoterminalHome(), "worktree-env.jsonl");
+
+/** How much of the directory's hash goes into a last-resort slug. Eight hex characters is what
+ *  the managed worktree root already keys repos by, and it is short enough to leave a readable
+ *  stem in front of it. */
+const DIR_HASH_CHARS = 8;
 
 /** How long the OS gets to answer "is this port free". A probe that hangs must not hold up a
  *  terminal; an unanswered bind is treated as taken, which costs one slot and never a wrong one. */
@@ -127,19 +133,28 @@ async function allocatePort(base: number, firstSlot: number, taken: ReadonlySet<
   return null;
 }
 
-/** The first name derived from this directory that nobody holds. Unlike a port there is no OS to
- *  ask — a database this app never created is not something it can see — so the log is the whole
- *  answer, and `prefix` is what keeps two projects' `main` trees apart.
+/** The first name derived from this directory that nobody holds, or null when even the fallbacks
+ *  are taken. Unlike a port there is no OS to ask — a database this app never created is not
+ *  something it can see — so the log is the whole answer, and `prefix` is what keeps two projects'
+ *  `main` trees apart.
  *
- *  The last resort is keyed off the DIRECTORY rather than a counter: it is reached only when a
- *  name has ninety-nine holders, and at that point what is wanted is a value that is unique by
- *  construction and the same one on every run. */
-function allocateSlug(prefix: string, identity: string, dir: string, taken: ReadonlySet<string>): string {
+ *  Past ninety-nine holders the readable names run out and the directory's own hash goes in. It
+ *  goes in as the SUFFIX, not inside the identity: `slugWithSuffix` cuts the stem to make room, so
+ *  a 63-character prefix can no longer truncate the hash away and hand every directory the same
+ *  name — which is precisely the boundary where the old "unique by construction" claim was false
+ *  (Codex review on #1367). Even that keeps looking rather than trusting the hash, so the return
+ *  is only ever a name nothing else holds. */
+function allocateSlug(prefix: string, identity: string, dir: string, taken: ReadonlySet<string>): string | null {
   for (let attempt = 1; attempt <= MAX_SLUG_SUFFIX; attempt++) {
     const candidate = slugCandidate(prefix, identity, attempt);
     if (!taken.has(candidate)) return candidate;
   }
-  return slugCandidate(prefix, `${identity}_${createHash("sha1").update(dir).digest("hex").slice(0, 8)}`, 1);
+  const hash = createHash("sha1").update(dir).digest("hex").slice(0, DIR_HASH_CHARS);
+  for (let attempt = 1; attempt <= MAX_SLUG_SUFFIX; attempt++) {
+    const candidate = slugWithSuffix(prefix, identity, attempt <= 1 ? `_${hash}` : `_${hash}_${attempt}`);
+    if (!taken.has(candidate)) return candidate;
+  }
+  return null;
 }
 
 /** Values a fresh allocation must not land on: everything held by anyone else, of this kind.
@@ -198,7 +213,7 @@ export async function ensureWorktreeEnv(cwd: string, portFree: (port: number) =>
         ? await allocatePort(declared.base, firstSlotFor(dir), taken, portFree)
         : allocateSlug(declared.prefix ?? "", dirIdentity(dir), dir, taken);
     if (value === null) {
-      console.warn(`[worktree-env] no free port left for ${name} (base ${base}) in ${dir} — leaving it unset`);
+      console.warn(`[worktree-env] no free ${declared.kind} left for ${name} in ${dir} — leaving it unset`);
       continue;
     }
     appendLog(reservationLine({ dir, name, kind: declared.kind, base, value }));

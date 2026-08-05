@@ -86,16 +86,19 @@ export function slugifyIdentifier(input: string): string {
   return /^\d/.test(cleaned) ? `x${cleaned}` : cleaned;
 }
 
-/** The `n`-th candidate name for a slug variable (1-based, so the first has no suffix).
+/** A slug whose SUFFIX is guaranteed to survive: the stem is cut to leave room for it, never the
+ *  other way round.
  *
- *  The suffix is applied AFTER truncation and the whole thing re-truncated, so a long prefix
- *  cannot push `_2` off the end — which would hand two directories the same name, the one
- *  outcome this is here to prevent. */
-export function slugCandidate(prefix: string, identity: string, attempt: number): string {
-  const suffix = attempt <= 1 ? "" : `_${attempt}`;
+ *  Which way round is the whole point. Truncating the finished string would push the suffix off
+ *  the end of a long prefix — and then two directories that differ only in what the suffix says
+ *  come out identical, which is the one outcome a suffix exists to prevent. */
+export function slugWithSuffix(prefix: string, identity: string, suffix: string): string {
   const stem = slugifyIdentifier(`${prefix}${identity}`);
   return `${stem.slice(0, MAX_SLUG_CHARS - suffix.length)}${suffix}`;
 }
+
+/** The `n`-th candidate name for a slug variable (1-based, so the first has no suffix). */
+export const slugCandidate = (prefix: string, identity: string, attempt: number): string => slugWithSuffix(prefix, identity, attempt <= 1 ? "" : `_${attempt}`);
 
 /** A resolved value, ready for the browser. */
 export function worktreeEnvValue(name: string, value: string, kind: WorktreeEnvVar["kind"]): WorktreeEnvValue {
