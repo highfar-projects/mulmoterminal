@@ -167,22 +167,24 @@ Pressing it opens a cell like this and shows the output:
 
 **One key** inside `open` decides what opens.
 
+**The table is also the precedence** if you write more than one — highest first.
+
 | Key | Opens |
 |---|---|
+| `pr` | the current branch's PR in the browser (**the button hides itself when there is no PR**). The server resolves it into `url`, so **it beats an explicit `url` written alongside it** |
 | `url` | a URL in the browser (`http` / `https` only) |
 | `reveal` | the OS file manager (Finder / Explorer / `xdg-open`) |
 | `files` | the in-app file explorer |
-| `pickFile` | the OS file dialog, inserting the chosen path into the prompt |
-| `terminal` | a new terminal cell in that directory |
-| `pr` | the current branch's PR in the browser (**the button hides itself when there is no PR**) |
 | `view` | an in-app view: `diff` / `prs` / `wiki` / `collections` / `accounting` |
+| `terminal` | a new terminal cell in that directory |
+| `pickFile` | the OS file dialog, inserting the chosen path into the prompt |
 
 ```json
 { "id": "handbook", "icon": "menu_book", "label": "Open the team handbook", "run": "open", "open": { "url": "https://example.com/handbook" } }
 ```
 
-> **Write only one per button.** Set several and **only the first** in the order above takes effect;
-> the rest are silently ignored.
+> **Write only one per button.** Set several and **only the first** in that order takes effect; the
+> rest are silently ignored.
 
 ---
 
