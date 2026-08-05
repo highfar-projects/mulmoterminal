@@ -1,9 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { appendFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
-import { realpathSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
+import { makeTempDir } from "../../support/tempDir.js";
 import { ensureWorktreeEnv, releaseWorktreeEnv, reservedWorktreeEnv, worktreeEnvLogFile, worktreeEnvValues } from "../../../server/config/worktree-env";
 import { MAX_SLUG_CHARS, MAX_SLUG_SUFFIX, type WorktreeEnvSpec } from "../../../common/worktreeEnv";
 
@@ -17,10 +16,13 @@ const FREE = (): Promise<boolean> => Promise.resolve(true);
 
 beforeEach(() => {
   savedHome = process.env.MULMOTERMINAL_HOME;
-  // realpath: every path this module records goes through canonicalPath, and on macOS the temp
-  // dir is a symlink — so an un-resolved root would contain none of the worktrees under it.
-  home = realpathSync(mkdtempSync(path.join(tmpdir(), "mt-wtenv-home-")));
-  projects = realpathSync(mkdtempSync(path.join(tmpdir(), "mt-wtenv-proj-")));
+  // makeTempDir, for the realpath it does: every path this module records goes through
+  // canonicalPath, so a directory spelled any other way is a directory it never finds. Node's own
+  // realpathSync is not enough — it leaves Windows' 8.3 component (RUNNER~1) alone where
+  // canonicalPath's `.native` expands it, and a spec writing that spelling into the log then reads
+  // back nothing at all.
+  home = makeTempDir("mt-wtenv-home-");
+  projects = makeTempDir("mt-wtenv-proj-");
   process.env.MULMOTERMINAL_HOME = home;
 });
 
