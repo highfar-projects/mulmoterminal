@@ -20,6 +20,7 @@ import { tmuxHasSession } from "../infra/tmux.js";
 import { launchChoiceFromParams } from "../session/launch-choice.js";
 import { codexSessionsRoot } from "../agents/codex-session.js";
 import { antigravityBrainRoot, antigravityConversationExists } from "../agents/antigravity-session.js";
+import { grokConversationExists, grokSessionsRoot } from "../agents/grok-session.js";
 import { codexRolloutExists } from "../agents/codex-sessions.js";
 import {
   antigravityConversations,
@@ -42,7 +43,15 @@ import { ProviderRefusedError } from "../session/provider-env.js";
 import { sessionExistsOnDisk } from "../session/session-reads.js";
 import { canStartLauncher, isContinuingSession, resolveReattachableId, resolveSession, type SessionResolution } from "../session/session-resolve.js";
 import type { PtyEntry } from "../session/types.js";
-import type { SpawnClaudePty, SpawnCodexPty, SpawnAntigravityPty, SpawnCommandPty, SpawnLauncherPty, ResolveLauncher } from "../session/spawners.js";
+import type {
+  SpawnClaudePty,
+  SpawnCodexPty,
+  SpawnAntigravityPty,
+  SpawnGrokPty,
+  SpawnCommandPty,
+  SpawnLauncherPty,
+  ResolveLauncher,
+} from "../session/spawners.js";
 import { terminalWsKind, type TerminalWsKind } from "./terminal-ws-path.js";
 import { normalizeAgent, parseIndexParam } from "./routeParams.js";
 import { agentResumeId } from "../agents/agent-resume.js";
@@ -64,6 +73,7 @@ export interface WsRouteDeps {
   spawnClaudePty: SpawnClaudePty;
   spawnCodexPty: SpawnCodexPty;
   spawnAntigravityPty: SpawnAntigravityPty;
+  spawnGrokPty: SpawnGrokPty;
   spawnCommandPty: SpawnCommandPty;
   spawnLauncherPty: SpawnLauncherPty;
   resolveLauncher: ResolveLauncher;
@@ -694,6 +704,80 @@ async function handleAntigravityConnection(deps: WsRouteDeps, ws: WebSocket, req
   );
 }
 
+// Which conversation a grok connection resumes, and under which id it runs.
+//
+// Shorter than codex's and antigravity's, and the difference is structural rather than an omission:
+// grok takes `--session-id <UUID>` for a NEW conversation, so the id the browser holds IS grok's
+// own id. There is no mapping to consult and nothing to hydrate — only the on-disk probe.
+//
+// It resumes even when tmux is alive, which is where this parts company with `agentResumeId`, and
+// for the reason resolveSession spells out for claude: if the tmux session dies between the check
+// and the spawn, `tmux new-session -A` re-runs the command — and there `--resume <id>` reattaches
+// the conversation where `--session-id <id>` ABORTS ("Session ID … is already in use", measured).
+// Withholding the resume in that window makes the window fatal.
+function resolveGrokSession(requested: string | null, cwd: string): { sessionId: string; live: PtyEntry | undefined; resumeConversationId: string | null } {
+  const hasLivePty = !!requested && ptys.has(requested);
+  const live = hasLivePty && requested ? ptys.get(requested) : undefined;
+  const tmuxAlive = !live && !!requested && tmuxHasSession(requested);
+  // Only when a conversation by that name EXISTS in this directory. Without the check every key
+  // resumes, which means a stale one is handed to `grok --resume` — and an agent asked for a
+  // conversation it cannot find starts a fresh one, silently, under the old session's id.
+  const resumeConversationId = !hasLivePty && requested && grokConversationExists(grokSessionsRoot(), cwd, requested) ? requested : null;
+  const { sessionId } = resolveReattachableId(requested, { hasLivePty, tmuxAlive, canResume: !!resumeConversationId }, randomUUID);
+  return { sessionId, live, resumeConversationId };
+}
+
+interface GrokStart {
+  sessionId: string;
+  live: PtyEntry | undefined;
+  resumeConversationId: string | null;
+  cwd: string;
+  attachGuiMcp: boolean;
+  mcpGroups: readonly ToolGroup[];
+}
+
+// Reattach or spawn, as ONE function handed to startAndWire — the reattach must not take a shortcut
+// around it. `reattachPty` only swaps the socket and replays the buffer; returning early on it left
+// a reloaded terminal printing output while ignoring every keystroke, and never detaching or
+// reaping when the socket closed.
+function startGrokEntry(deps: WsRouteDeps, ws: WebSocket, start: GrokStart): PtyEntry {
+  const { sessionId, live, resumeConversationId, cwd, attachGuiMcp, mcpGroups } = start;
+  const entry = live ? deps.reattachPty(live, ws, sessionId) : deps.spawnGrokPty(sessionId, ws, resumeConversationId, cwd, { mcpGroups });
+  // Single view (gui) = the attached session IS the actively-viewed pane. A grid dev-terminal cell
+  // (gui=0) is only "viewed" once focused, and says so with a `view` frame.
+  entry.active = attachGuiMcp;
+  return entry;
+}
+
+// grok terminal (?cwd=<dir>, ?session=<id> to reattach/resume). Like antigravity and unlike claude
+// and codex there is no per-session GUI MCP surface to attach or withhold: grok reads its servers
+// from `.grok/config.toml` in the DIRECTORY, so every session there reaches whatever that directory
+// registered — `?gui=0` only keeps a grid dev terminal out of the sidebar.
+async function handleGrokConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUpgradeRequest) {
+  const { url, requested, cwd, unusable, size } = wsConnectionContext(req);
+  if (refuseUnusableWorkspace(ws, "grok", unusable, requested)) return;
+  const attachGuiMcp = url.searchParams.get("gui") !== "0";
+  // No `await …Hydrated` here, and that is not an oversight: the two agents that need one keep a
+  // session -> conversation map on disk, and grok has no such map to wait for.
+  const { sessionId, live, resumeConversationId } = resolveGrokSession(requested, cwd);
+  // The directory's per-tree PORT / DB_NAME (#1367), like every other spawn path — a grok cell in a
+  // worktree gets that tree's own values, not the ones another tree is already serving on.
+  await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });
+  const early = await admitAgentSession(ws, "grok", { requested, sessionId, live, cwd, devTerminal: !attachGuiMcp });
+  if (!early) return;
+
+  // The directory's registered groups, read here because the lookup reads Claude Code's config
+  // files and the spawner is sync. Only for a SPAWN: a reattach keeps the tools its running process
+  // was started with, and rewriting the shared file on a reattach would speak for every other
+  // session in the directory.
+  const mcpGroups = live ? [] : await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []);
+  if (!clientStillConnected(ws, "grok", sessionId, early)) return;
+  const startFailureMessage = startFailureMessageFor("Grok");
+  startAndWire(deps, ws, { id: sessionId, tag: "grok", early, startFailureMessage, size }, () =>
+    startGrokEntry(deps, ws, { sessionId, live, resumeConversationId, cwd, attachGuiMcp, mcpGroups }),
+  );
+}
+
 export function mountTerminalWebSockets(deps: WsRouteDeps) {
   // Terminal WebSocket. Uses noServer + manual upgrade routing so it shares the
   // HTTP server with socket.io (the pub/sub at /ws/pubsub) without the two
@@ -711,12 +795,15 @@ export function mountTerminalWebSockets(deps: WsRouteDeps) {
   const runCodexWss = new WebSocketServer({ noServer: true });
   // First-class Antigravity sessions — persistent + reattachable like /ws/launch, but running agy.
   const runAntigravityWss = new WebSocketServer({ noServer: true });
+  // First-class grok sessions — same again, running grok under an id this server minted.
+  const runGrokWss = new WebSocketServer({ noServer: true });
   const serverFor: Record<TerminalWsKind, WebSocketServer> = {
     claude: wss,
     run: runWss,
     launch: runLaunchWss,
     codex: runCodexWss,
     antigravity: runAntigravityWss,
+    grok: runGrokWss,
   };
   deps.server.on("upgrade", (req, socket, head) => {
     const { pathname } = new URL(req.url ?? "/", "http://localhost");
@@ -742,4 +829,5 @@ export function mountTerminalWebSockets(deps: WsRouteDeps) {
   runLaunchWss.on("connection", (ws, req) => void handleLaunchConnection(deps, ws, req));
   runCodexWss.on("connection", (ws, req) => void handleCodexConnection(deps, ws, req));
   runAntigravityWss.on("connection", (ws, req) => void handleAntigravityConnection(deps, ws, req));
+  runGrokWss.on("connection", (ws, req) => void handleGrokConnection(deps, ws, req));
 }

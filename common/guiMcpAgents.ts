@@ -13,6 +13,12 @@
 // FILE it reads for itself (`syncAntigravityMcpConfig` writes the registered group servers into the
 // directory), so there is no per-spawn `--mcp-config` to hand it a session-scoped URL. Claude takes
 // that URL in its argv and codex in its `-c` overrides; agy has nowhere to receive one.
+//
+// Grok is out for exactly the same reason, and it is written down here rather than left to be
+// rediscovered: `grok` has no `--mcp-config` and no `-c key=value`, only `grok mcp add` writing
+// `~/.grok/config.toml` or `./.grok/config.toml` (server/agents/grok-mcp.ts). So a grok session in
+// the workspace gets the groups its DIRECTORY registered, and the launcher form offers it the four
+// per-group toggles — which is the truthful answer, and the one #1423 failed to give.
 import { type SessionAgent } from "./sessionAgent.js";
 import { isLaunchAgent } from "./launchAgent.js";
 import { customAgentFor, type AgentPick, type CustomAgent } from "./customAgents.js";

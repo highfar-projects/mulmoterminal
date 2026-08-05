@@ -36,6 +36,7 @@ import { codexSessionsRoot } from "../agents/codex-session.js";
 import { codexRolloutPath } from "../agents/codex-sessions.js";
 import type { DiskStat, PendingSession, SessionMeta } from "./types.js";
 import { readString } from "../../common/readString.js";
+import type { TerminalAgent } from "../../common/sessionAgent.js";
 
 // Bytes of an assistant reply kept for the roster; the same cap the push body uses.
 export const LAST_RESPONSE_MAX = 400;
@@ -256,9 +257,14 @@ async function codexLastTurn(sessionKey: string): Promise<LastTurn> {
 // stopped mattering: the same read now costs 256 KB whatever the transcript weighs. There is
 // consequently no size limit here at all, and no "too large" answer for a caller to handle.
 
-export async function sessionLastTurn(cwd: string, id: string, agent: "claude" | "codex" | "antigravity"): Promise<LastTurn> {
+export async function sessionLastTurn(cwd: string, id: string, agent: TerminalAgent): Promise<LastTurn> {
   if (agent === "codex") return codexLastTurn(id);
-  if (agent === "antigravity") return EMPTY_TURN;
+  // Neither log is read yet, and each is a real file rather than a missing feature: agy's brain
+  // directory, and grok's `chat_history.jsonl` under `~/.grok/sessions/<cwd>/<id>/`. EMPTY_TURN is
+  // the honest answer for both until one is parsed — every caller already handles it (a push says
+  // nothing rather than something wrong, a handoff carries no reply), which is why a wrong guess at
+  // the format would be worse than silence.
+  if (agent === "antigravity" || agent === "grok") return EMPTY_TURN;
   try {
     return lastTurnFromClaudeParsed(readTailRecords(path.join(projectSessionsDir(cwd), `${id}.jsonl`)));
   } catch {

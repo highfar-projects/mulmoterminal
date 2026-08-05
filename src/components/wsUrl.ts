@@ -131,6 +131,7 @@ export interface AgentWsUrlInput {
 const AGENT_WS_PATH: Record<Exclude<TerminalAgent, "claude">, string> = {
   codex: "ws/codex",
   antigravity: "ws/antigravity",
+  grok: "ws/grok",
 };
 
 export function buildAgentWsUrl(agent: Exclude<TerminalAgent, "claude">, input: AgentWsUrlInput): string {

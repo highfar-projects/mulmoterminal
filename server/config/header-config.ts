@@ -11,6 +11,7 @@
 // only the built-in buttons show.
 
 import { isRecord } from "../../common/isRecord.js";
+import type { TerminalAgent } from "../../common/sessionAgent.js";
 import type { WorktreeEnvValue } from "../../common/worktreeEnv.js";
 
 import {
@@ -62,7 +63,7 @@ export interface HeaderContext {
   branch: string | null;
   repo: string | null;
   model: string | null;
-  agent: "claude" | "codex" | "antigravity";
+  agent: TerminalAgent;
   session: string | null;
   remoteUrl: string | null;
   dirty: number;

@@ -61,7 +61,7 @@ opens another page (tab).
 
 ## Agent Picker
 
-The **Claude / Codex / Antigravity / Shell** toggle at the top of an empty cell's launcher form:
+The **Claude / Codex / Antigravity / Grok / Shell** toggle at the top of an empty cell's launcher form:
 what that cell will be started as. It is what starts a real **agent session** — resumable
 transcript, cost and context, a "waiting for you" status. Not to be confused with a **launch
 command** (a launcher chip), which runs your own command line verbatim, whatever it names.
@@ -90,7 +90,7 @@ The server's **default working directory** (`CLAUDE_CWD`) — settled in the ord
 It is printed as `Workspace: …` at startup.
 Collections, Wiki and Accounting read and write there, and if you also run MulmoClaude it should be **the same directory for both** (`~/mulmoclaude` by default) — not the directory you cloned MulmoClaude into.
 
-It is treated differently from a project directory: **a Claude or Codex session launched here has every GUI tool**, the way the single view in 3.x did — whichever of the two you pick in the Agent Picker. Antigravity is the exception (it gets what its directory registered), and a Shell or a **launch command** carries no GUI tools at all, `claude` as the command line included: a launch command is run verbatim and is never an agent session.
+It is treated differently from a project directory: **a Claude or Codex session launched here has every GUI tool**, the way the single view in 3.x did — whichever of the two you pick in the Agent Picker. Antigravity and Grok are the exceptions (each gets what its directory registered, in the workspace too → [Antigravity and Grok register everywhere](basics.html#antigravity-gui-tools)), and a Shell or a **launch command** carries no GUI tools at all, `claude` as the command line included: a launch command is run verbatim and is never an agent session.
 
 → [Which directory to launch in](basics.html#launch-dir)
 

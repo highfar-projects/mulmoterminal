@@ -66,6 +66,7 @@ import { FILE_WRITE_CHANNEL, type FileWriteEvent } from "../../common/fileWriteC
 import type { createToolStores } from "../session/tool-store.js";
 import type { createClaudeSpawner } from "../session/spawn-claude.js";
 import type { createCodexSpawner } from "../session/spawn-codex.js";
+import type { createGrokSpawner } from "../session/spawn-grok.js";
 import type { createAntigravitySpawner } from "../session/spawn-antigravity.js";
 import type { createTranslationWorker } from "../session/translation-worker.js";
 import type { createTitleManager } from "../session/session-title.js";
@@ -90,6 +91,7 @@ export interface AppRouteDeps extends SessionActivityDeps {
   spawnClaudePty: ReturnType<typeof createClaudeSpawner>["spawnClaudePty"];
   spawnCodexPty: ReturnType<typeof createCodexSpawner>["spawnCodexPty"];
   spawnAntigravityPty: ReturnType<typeof createAntigravitySpawner>["spawnAntigravityPty"];
+  spawnGrokPty: ReturnType<typeof createGrokSpawner>["spawnGrokPty"];
   translateViaHiddenChat: ReturnType<typeof createTranslationWorker>["translateViaHiddenChat"];
   freshenRosterTitle: ReturnType<typeof createTitleManager>["freshenRosterTitle"];
   reap: (id: string) => void;
@@ -138,6 +140,7 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
     spawnClaudePty: deps.spawnClaudePty,
     spawnCodexPty: deps.spawnCodexPty,
     spawnAntigravityPty: deps.spawnAntigravityPty,
+    spawnGrokPty: deps.spawnGrokPty,
     registerBackgroundSession: deps.registerBackgroundSession,
   });
 

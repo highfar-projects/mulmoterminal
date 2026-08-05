@@ -13,6 +13,8 @@ vi.mock("../../../server/session/pty-spawn.js", () => ({
     },
     tmux: false,
   })),
+  // This spawn really starts agy, so it is the branch that syncs the directory's MCP config (#1443).
+  ptyWouldReattach: vi.fn(() => false),
 }));
 
 describe("createAntigravitySpawner", () => {

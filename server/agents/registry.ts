@@ -2,11 +2,13 @@ import type { AgentAdapter, AgentKind } from "./types.js";
 import { claudeAdapter } from "./claude.js";
 import { codexAdapter } from "./codex.js";
 import { antigravityAdapter } from "./antigravity.js";
+import { grokAdapter } from "./grok.js";
 
 const adapters: Record<AgentKind, AgentAdapter> = {
   claude: claudeAdapter,
   codex: codexAdapter,
   antigravity: antigravityAdapter,
+  grok: grokAdapter,
 };
 
 // Resolve the adapter for a kind; Claude is the default and the fallback.

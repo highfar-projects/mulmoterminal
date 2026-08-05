@@ -1,6 +1,6 @@
 import type { RunCommand } from "./runCommand";
 import { dirPriority } from "../../common/dirPriorityOrder";
-import { asTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
+import { asTerminalAgent, type BadgedAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import type { AttentionStatus } from "./attentionStatus";
@@ -42,8 +42,10 @@ export interface Cell {
   command?: RunCommand | null | undefined;
   // A running launcher (shell/codex/custom). Persistent & reattachable like a session.
   launcher?: CellLauncher | null;
-  // The agent this cell runs. "codex" / "antigravity"; absent = Claude (the default).
-  agent?: "codex" | "antigravity";
+  // The agent this cell runs; absent = Claude (the default), which is why the union excludes it
+  // rather than listing the others — a fifth agent reaches every cell site by adding itself to
+  // TERMINAL_AGENTS, and cannot be half-added by someone updating one of these lists.
+  agent?: BadgedAgent;
   // Set aside by the user: still connected and still holding its history, just sunk out of the
   // way (#992). Stored as the ABSENCE of the key when not parked, for the same reason `agent`
   // is — only an absent key survives the JSON a persisted cell round-trips.

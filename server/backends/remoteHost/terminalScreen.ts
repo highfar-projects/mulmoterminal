@@ -19,7 +19,7 @@ import type { AgentKind } from "../../agents/types.js";
 // panes called `agy-next`, and matching only the default would report their agent as a shell.
 // The basename, because that is what a pane command is; the default stays in the map either way,
 // so overriding the variable never un-recognises sessions started before it was set.
-const AGENT_DEFAULT_COMMAND: Record<AgentKind, string> = { claude: "claude", codex: "codex", antigravity: "agy" };
+const AGENT_DEFAULT_COMMAND: Record<AgentKind, string> = { claude: "claude", codex: "codex", antigravity: "agy", grok: "grok" };
 
 const agentCommands = (): Record<string, SessionAgent> => {
   const map: Record<string, SessionAgent> = {};

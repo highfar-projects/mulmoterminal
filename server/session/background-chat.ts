@@ -35,7 +35,7 @@ export function parseBackgroundChat(body: unknown): { ok: true; request: Backgro
   };
 }
 
-export type SpawnMode = "claude-draft" | "claude-run" | "codex-run" | "antigravity-run";
+export type SpawnMode = "claude-draft" | "claude-run" | "codex-run" | "antigravity-run" | "grok-run";
 
 /** How the seed reaches the agent. Only claude has an editable-draft path — the others have no
  *  stable TUI ready-marker to type against — so their seed always auto-runs, and asking for a
@@ -47,6 +47,7 @@ const RUN_MODE: Record<TerminalAgent, SpawnMode> = {
   claude: "claude-run",
   codex: "codex-run",
   antigravity: "antigravity-run",
+  grok: "grok-run",
 };
 
 export function spawnModeFor(agent: TerminalAgent, draft: boolean): SpawnMode {

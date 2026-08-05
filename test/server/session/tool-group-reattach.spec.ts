@@ -64,6 +64,8 @@ const deps = {
   codexModel: null,
   antigravityBin: "agy",
   antigravityModel: null,
+  grokBin: "grok",
+  grokModel: null,
   permissionMode: "default",
   guiMcpTools: "mcp__mulmoterminal-gui",
   gridMcpTools: "mcp__mulmoterminal-render__presentHtml",
