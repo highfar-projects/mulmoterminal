@@ -4,6 +4,7 @@ import { makeTempDir } from "../../support/tempDir.js";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { writeFileSync, readFileSync, existsSync, symlinkSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { reservedWorktreeEnv } from "../../../server/config/worktree-env.js";
 import path from "node:path";
 import { rmDirRetrying, GIT_TEST_TIMEOUT_MS } from "./wtTestUtil.js";
 import {
@@ -246,6 +247,27 @@ describe("git worktree lifecycle", () => {
       expect(JSON.parse(readFileSync(path.join(wt.path, ".mulmoterminal.json"), "utf8"))).toMatchObject({ headerColor: "#2d4ea9" });
       expect(await isDirty(wt.path)).toBe(false);
       expect(await removeWorktree(repo, wt.path, { deleteBranch: true })).toEqual({ ok: true });
+    },
+    GIT_TEST_TIMEOUT_MS,
+  );
+
+  // Reserved AT CREATION, not on the first terminal socket (#1367): a worktree started from an
+  // issue has its agent spawned directly (routes/issue-work-routes.ts), so a reservation that only
+  // happened in the ws handlers would miss the one flow this feature is most for.
+  it.skipIf(!hasGit)(
+    "reserves the project's per-tree environment for a worktree it creates",
+    async () => {
+      writeFileSync(path.join(repo, ".gitignore"), ".mulmoterminal.json\n");
+      writeFileSync(path.join(repo, ".mulmoterminal.json"), JSON.stringify({ worktreeEnv: { PORT: { kind: "port", base: 3000 } } }));
+      // Committed, or the worktree's checkout has no .gitignore and the config is never adopted
+      // — which would make this pass for the wrong reason on the day the reservation regressed.
+      await git(["add", ".gitignore"], repo);
+      await git(["commit", "-m", "ignore the local config"], repo);
+
+      const wt = await createWorktree(repo, "needs a port");
+      if (!wt) throw new Error("expected a worktree");
+      // The SYNC read — what a spawner sees, with nothing else having run in between.
+      expect(reservedWorktreeEnv(wt.path)).toEqual({ PORT: "3010" });
     },
     GIT_TEST_TIMEOUT_MS,
   );

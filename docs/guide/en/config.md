@@ -20,6 +20,7 @@ description: Configuring MulmoTerminal — the settings modal, per-project colou
 | Move the enlargement **from the keyboard** | [Keyboard shortcuts](#keymap) |
 | Roster rows are **too long or too short** | [Roster rows](#cockpit-lines) |
 | Let a session **see another folder** | [Several folders](#add-dirs) |
+| Two `yarn dev` **fighting over port 3000** | [A port per worktree](#worktree-env) |
 | A **worktree** looks like a different project | [Worktrees inherit this file](#worktree-inherit) |
 | **No Canvas** when you enlarge a cell / no GUI tools | [Which directory to launch in](basics.html#launch-dir) |
 | Run on **a model other than Claude** | [Providers](#providers) |
@@ -375,6 +376,9 @@ repository committed and leaves the worktree's `git status` clean:
 - **`sound`, `sounds` and `addDirs` are NOT carried.** Those name paths inside the project
   directory, which the worktree has no copy of, and `addDirs` would resolve against the worktree
   and quietly grant a different set of folders.
+- **[`worktreeEnv`](#worktree-env) is copied as written**, because it is a declaration rather than
+  a value: the worktree is then reserved its own port and database name from it. A worktree that
+  did not carry it would be the one tree of the project whose dev server still fought for 3000.
 
 Two cases where nothing is written, both deliberate:
 
@@ -429,7 +433,7 @@ With none set, you get a **built-in starter set**: **Insert a file path** · **O
 { "chips": ["ctx", "git", { "label": "env", "text": "⎇ ${branch}", "when": "isGitRepo" }] }
 ```
 
-- **Only `git` / `work` / `diff` / `ctx` / `usage` respond** — shown in the order you list them; omit one to hide it.
+- **Only `git` / `work` / `diff` / `ctx` / `usage` / [`env`](#worktree-env) respond** — shown in the order you list them; omit one to hide it.
 - `dir` (the project badge), `status` (the status dot) and `tools` (the row-2 tool timeline) are **structural to the cell**:
   listing them does nothing and omitting them hides nothing. The schema accepts them, so it is not an error — they are silently ignored.
 - Custom `{ label, text, when }` … read-only text. **`text` is what's displayed** (it expands `${variables}`);
@@ -1208,6 +1212,100 @@ it — you used to need an editor that can open a multi-folder workspace. Claude
 - **Claude only.** codex has no equivalent flag and ignores the key.
 
 Take effect on the next session in that directory.
+
+## A port and a database name per worktree (`worktreeEnv`) {#worktree-env}
+
+A worktree isolates your **files**. It does not isolate a **port**. Start `yarn dev` in one
+worktree and `yarn dev` in another and the second one dies on 3000 — and five worktrees pointed at
+one local database means the one that runs a migration breaks the other four.
+
+Declare what each working tree needs its own of, and MulmoTerminal reserves a distinct value per
+tree and exports it into that tree's terminals:
+
+```json
+{
+  "worktreeEnv": {
+    "PORT": { "kind": "port", "base": 3000 },
+    "API_PORT": { "kind": "port", "base": 4000 },
+    "DB_NAME": { "kind": "slug", "prefix": "myapp_" }
+  }
+}
+```
+
+Where the project's own checkout reserves first — the usual case, since it is the directory you
+opened before cutting anything from it — it takes the `base` it declared and its worktrees the
+numbers above it:
+
+| Directory | `PORT` | `DB_NAME` |
+|---|---|---|
+| `~/src/myapp` (the checkout) | `3000` | `myapp_myapp` |
+| `…/worktrees/myapp-a1b2c3d4/fix-login` | `3010` | `myapp_fix_login` |
+| `…/worktrees/myapp-a1b2c3d4/add-search` | `3020` | `myapp_add_search` |
+
+`base` itself goes to whichever directory reserves first. A **second clone of the same repo**
+declares the same `base`, so it takes the next free slot instead (3010) — which is the point: those
+two checkouts used to fight over 3000 as surely as two worktrees did.
+
+- **`kind: "port"`** — a free TCP port, `base` + a multiple of **10**. The stride is ten and not
+  one because a dev server that finds its port taken commonly moves to the next one (vite does
+  this by default); at a stride of one that fallback would land on the neighbouring worktree's
+  port.
+- **`kind: "slug"`** — a name derived from the worktree's task (or the folder's own name), behind
+  the `prefix` you give. Lowercase, `[a-z0-9_]`, cut to 63 characters — usable as a Postgres
+  database or schema name, a SQLite filename, a container name.
+- MulmoTerminal **does not create the database.** It hands you a name nothing else is using;
+  what your `migrate` script does with it is yours.
+- Variable names are yours: `PORT`, `VITE_PORT`, `NEXT_PUBLIC_PORT`, anything a shell can export.
+  Up to 16 of them.
+
+### The numbers do not move {#worktree-env-stable}
+
+A value is **reserved once and then kept**, in `~/.mulmoterminal/worktree-env.jsonl`. Reopen the
+cell, restart the server, reboot — the same tree gets the same number, for as long as the
+declaration it was made against is unchanged.
+
+That is not a nicety. If the port were re-measured on every launch, the tree's OWN dev server
+would make its port look taken and the number would move — the tree would flee from itself. And a
+cell reattaching to a tmux session does not re-read its environment at all, so a value that moved
+would be one the running program no longer agrees with.
+
+What IS measured, once, is whether the port is free at the moment it is first handed out — so a
+port something else on your machine already holds is skipped rather than handed over.
+
+Two MulmoTerminal servers running side by side can still both pick the same value in the instant
+between reading the reservations and writing one. That collision is detected straight after the
+write rather than prevented with a lock: both servers read the same append-only file, so both agree
+that whoever's line came first keeps it, and the other releases and takes the next value. The
+collision can happen; it does not stick.
+
+The reservation is given up when the worktree is **removed** (Close → delete), and a reservation
+whose directory is simply gone stops holding its value. **Editing the declaration also frees it**:
+change `base` and the next session re-allocates, rename or drop a variable and the value it held
+goes back into circulation for the other trees.
+
+### Where to see what this tree got {#worktree-env-chip}
+
+On the cell header, as an `env` chip: `:3010`. **Click a port and the dev server opens** in a new
+tab. Hover for the variable name.
+
+On **every** cell in that directory — an agent cell, a Shell, a launch command, a Run command. The
+launcher cell matters most: it is the one running `yarn dev`, so it is the one whose number you
+want to read.
+
+It is one of the default chips, and it renders nothing at all in a project that declares no
+`worktreeEnv` — so there is nothing to switch on, and nothing to see if you do not use this. To
+place it deliberately, name it in [`chips`](#header): `"chips": ["git", "env", "ctx"]`.
+
+### Notes
+
+- Values reach **every terminal** in the directory — a Claude cell, a Codex cell, a Shell, a
+  launch command, a Run-menu command. Whatever runs `yarn dev` gets the port.
+- They are set **on top of** the inherited environment, and a variable MulmoTerminal needs for
+  itself wins over a declaration of the same name.
+- Declaring nothing changes nothing: without `worktreeEnv` no value is reserved and no variable
+  is set. A directory that USED to declare one is the single exception — its old reservation is
+  released, which is one line appended, so the value goes back into circulation.
+- Take effect on the **next session** in that directory.
 
 ## Running on another model (providers) {#providers}
 

@@ -23,6 +23,7 @@ import { getAutoDirIcon } from "./config-routes.js";
 import { DIR_ICON_ROUTE } from "../../common/dirIcon.js";
 import { readJsonFile } from "../infra/read-text-file.js";
 import { isRecord } from "../../common/isRecord.js";
+import type { WorktreeEnvSpec } from "../../common/worktreeEnv.js";
 import { isBuiltinThemeId } from "../../common/themeVars.js";
 import { getCustomThemeIds } from "./config-routes.js";
 
@@ -48,6 +49,7 @@ import {
   dirProviderField,
   dirModelField,
   dirAppendSystemPromptField,
+  dirWorktreeEnvField,
   type ThemeId,
   type HeaderButton,
   type HeaderChip,
@@ -93,6 +95,9 @@ export interface DirConfig extends DirChrome {
   // Whether this directory's sessions carry the built-in closing-summary instructions (#1062).
   // null = the key is absent, so the global `appendSystemPrompt` decides.
   appendSystemPrompt: boolean | null;
+  // Which variables every working tree of this project needs its own value of (#1367). The
+  // DECLARATION, not the values — reserving those touches disk and lives in worktree-env.ts.
+  worktreeEnv: WorktreeEnvSpec | null;
 }
 
 // What the browser receives: the raw sound path stays server-side (streamed via
@@ -182,6 +187,7 @@ const EMPTY: DirConfig = {
   model: null,
   addDirs: null,
   appendSystemPrompt: null,
+  worktreeEnv: null,
 };
 
 /** Both files as ONE object, the local one winning per top-level key.
@@ -241,6 +247,7 @@ export function loadDirConfig(cwd: string): DirConfig {
       model: dirModelField.parse(raw.model),
       addDirs: resolveAddDirs(raw.addDirs, base, (p) => statSync(p).isDirectory()),
       appendSystemPrompt: dirAppendSystemPromptField.parse(raw.appendSystemPrompt),
+      worktreeEnv: dirWorktreeEnvField.parse(raw.worktreeEnv),
     };
   } catch {
     return EMPTY;
@@ -329,7 +336,7 @@ export interface DirConfigDetail {
 const chipLabel = (chip: HeaderChip): string => (typeof chip === "string" ? chip : chip.label);
 
 function dirConfigExtras(cwd: string): DirConfigExtras {
-  const { provider, model, skills, addDirs, appendSystemPrompt, buttons, chips, icon } = loadDirConfig(cwd);
+  const { provider, model, skills, addDirs, appendSystemPrompt, buttons, chips, icon, worktreeEnv } = loadDirConfig(cwd);
   return {
     provider,
     model,
@@ -339,6 +346,7 @@ function dirConfigExtras(cwd: string): DirConfigExtras {
     buttonLabels: (buttons ?? []).map((button) => button.label),
     chipLabels: (chips ?? []).map(chipLabel),
     autoIcon: autoIconRef(cwd, icon),
+    worktreeEnvNames: Object.keys(worktreeEnv ?? {}),
   };
 }
 

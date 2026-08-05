@@ -243,7 +243,7 @@ Pull requests** も並びます。ここは固定なので設定では変わり�
 { "chips": ["git", "ctx", { "label": "Which environment this project deploys to", "text": "env staging" }] }
 ```
 
-### 効くのは 5 つだけ {#builtin-chips}
+### 効くのは 6 つだけ {#builtin-chips}
 
 | id | 出るもの | |
 |---|---|---|
@@ -252,6 +252,7 @@ Pull requests** も並びます。ここは固定なので設定では変わり�
 | `diff` | worktree の差分バッジ（`+2 ●5`） | ✅ [worktree のセルで、変更があるときだけ](worktree.html#diff-badge) |
 | `ctx` | モデルとコンテキスト使用率 | ✅ エージェントが報告してから |
 | `usage` | レート制限の消費率 | ✅ 同上 |
+| `env` | このワーキングツリーに配られた値。ポートは `:3010` でクリックでき、それ以外はそのまま表示 | ✅ [プロジェクトが `worktreeEnv` を宣言しているときだけ](config.html#worktree-env) |
 | `dir` / `status` / `tools` | プロジェクトバッジ / 状態ドット / ツール履歴 | ❌ **構造なので、書いても効かず、書かなくても消えません** |
 
 `dir` / `status` / `tools` を書いてもエラーにはならず、黙って無視されます。

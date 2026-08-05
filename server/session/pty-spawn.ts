@@ -10,6 +10,7 @@ import { resolvePtyLaunchForEnv } from "../infra/resolve-bin.js";
 import { binaryProblemMessage, diagnoseBinary, type BinaryDiagnosis } from "../infra/has-binary.js";
 import { cwdProblemMessage, diagnoseSpawnCwd, type CwdDiagnosis } from "../infra/spawn-cwd.js";
 import { withoutUnset } from "./provider-env.js";
+import { reservedWorktreeEnv } from "../config/worktree-env.js";
 import { tmuxAvailable, tmuxHasSession, tmuxNewSessionArgs, tmuxScrubEnvNames } from "../infra/tmux.js";
 
 const PTY_COLS = 120;
@@ -29,10 +30,21 @@ export function ptyEnv(unset: readonly string[] = [], extra: Readonly<Record<str
   return { ...withoutUnset(sanitizePtyEnv(process.env, path.delimiter), unset), ...extra };
 }
 
+/** What a terminal opened in `cwd` is given on top of the inherited environment: the per-tree
+ *  values this directory reserved (#1367), then whatever the spawner itself computed.
+ *
+ *  The caller's own values WIN. A session id or an MCP url is about this session and could not be
+ *  reserved for a directory; a project that declares a variable of the same name is describing
+ *  what its dev server needs, and cannot be allowed to redirect our bridge.
+ *
+ *  Reserved, never allocated — allocation is async and happens before the spawn (see
+ *  config/worktree-env.ts for why a probe at this moment would move a running server's port). */
+const spawnEnvFor = (cwd: string, requested: Readonly<Record<string, string>>): Record<string, string> => ({ ...reservedWorktreeEnv(cwd), ...requested });
+
 // pty.spawn with the binary as a PARAMETER (never a string literal at the call site),
 // so the tmux/shell/claude spawns aren't flagged as spawn-of-a-string-literal.
 export function spawnPty(bin: string, args: string[], cwd: string, unset: readonly string[] = [], extra: Readonly<Record<string, string>> = {}): IPty {
-  const env = ptyEnv(unset, extra);
+  const env = ptyEnv(unset, spawnEnvFor(cwd, extra));
   // On Windows neither the name nor the arguments reach node-pty as they are: its PATH
   // lookup ignores executable extensions (so `claude` misses claude.exe, #794), and a batch
   // shim has to be run through cmd.exe (#798). See infra/resolve-bin.ts.
@@ -148,7 +160,11 @@ export function ptySpawn(
   persistent: boolean,
   options: PtySpawnEnv = {},
 ): { term: IPty; tmux: boolean; reattached: boolean } {
-  const { unset = [], env = {}, binEnvVar } = options;
+  const { unset = [], binEnvVar } = options;
+  // Merged HERE and not only in spawnPty, because the tmux branch below does not hand `env` to
+  // the spawn at all — a pane's environment comes from `new-session -e`, so a variable missing
+  // from that list reaches the program only if the tmux SERVER happens to already carry it.
+  const env = spawnEnvFor(cwd, options.env ?? {});
   // `new-session -A` ATTACHES a surviving session without running `file` at all, so a binary
   // that has gone missing since must not stand between the user and their running agent.
   const reattached = ptyWouldReattach(sessionId, persistent);
