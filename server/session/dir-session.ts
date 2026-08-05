@@ -8,6 +8,7 @@
 import path from "node:path";
 import { canonicalPath } from "../infra/canonical-path.js";
 import { isSessionAttached, type SessionOccupancy } from "../../common/sessionOccupancy.js";
+import { tmuxListSessionIds } from "../infra/tmux.js";
 import { isTerminalAgent, type TerminalAgent } from "../../common/sessionAgent.js";
 import { isProbeSessionId } from "../agents/probe-session.js";
 import { projectSessionsDir } from "./project-dir.js";
@@ -59,6 +60,25 @@ export function sessionAttached(id: string, tmuxCounts: Map<string, number> | nu
     holdsTmuxClient: !!entry?.tmux,
   });
 }
+
+/** Every session key something is actually RUNNING under: a tmux session that survived, or a pty in
+ *  this process (which is all there is when tmux is absent — then nothing outlives a restart).
+ *
+ *  A separate tmux call from `tmuxAttachedCounts`, because the two answer different questions and
+ *  `list-clients` cannot answer this one: it reports only sessions that HAVE a client, so a session
+ *  running with nobody attached — the one that piles up unseen across restarts — is missing from it
+ *  entirely (#1467). One call per list, like the other. */
+export function runningSessionKeys(): Set<string> {
+  return new Set<string>([...tmuxListSessionIds(), ...ptys.keys()]);
+}
+
+/** Which of a row's possible keys is the one actually running, or null.
+ *
+ *  `keys` is the row's own id FIRST, then the session keys its agent's conversation log maps it to
+ *  — a codex/agy conversation started from a grid cell runs under a key MulmoTerminal minted, and
+ *  the id the row is drawn from would kill nothing. Pure, because it is the half that decides what
+ *  a stop button is aimed at. */
+export const runningKeyOf = (keys: readonly string[], running: ReadonlySet<string>): string | null => keys.find((key) => running.has(key)) ?? null;
 
 // A plain shell parked in a worktree is deliberately NOT the worktree's session: it is a terminal
 // someone opened, not an agent editing the tree, and refusing the worktree on the strength of one
