@@ -20,6 +20,7 @@ import type { LaunchChoice } from "./wsUrl";
 import type { RunCommand } from "./runCommand";
 import LaunchChipList from "./LaunchChipList.vue";
 import ModelPicker from "./ModelPicker.vue";
+import { LAUNCH_ROW } from "./launchFormClasses";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
@@ -533,7 +534,7 @@ async function removeWorktree(w: Worktree): Promise<void> {
         {{ option.label }}
       </button>
     </div>
-    <label class="flex w-full flex-col items-center gap-1.5">
+    <label class="flex flex-col items-center gap-1.5" :class="LAUNCH_ROW">
       <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">Working directory</span>
       <span class="flex w-full items-stretch gap-1.5">
         <input
@@ -593,7 +594,7 @@ async function removeWorktree(w: Worktree): Promise<void> {
            would register a group URL with nothing left to serve: a control that does nothing.
            Asked of the AGENT as well as the directory — Antigravity in the workspace takes the
            `v-else` and gets the switches, because that is genuinely how it reaches any tool. -->
-      <div v-if="workspaceGivesEveryTool" data-testid="cell-mcp-all" class="flex w-full flex-col gap-0.5">
+      <div v-if="workspaceGivesEveryTool" data-testid="cell-mcp-all" class="flex flex-col gap-0.5" :class="LAUNCH_ROW">
         <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">GUI tools</span>
         <span class="font-sans text-[11px] leading-snug text-secondary">
           <span class="material-symbols-outlined mr-[3px] align-middle text-[13px]" aria-hidden="true">workspaces</span>
@@ -605,7 +606,7 @@ async function removeWorktree(w: Worktree): Promise<void> {
            A `template v-else` around the loop rather than `v-else` ON it: v-if and v-for on one
            element is the ambiguity eslint-plugin-vue forbids. -->
       <template v-else>
-        <label v-for="group in TOOL_GROUPS" :key="group" class="flex w-full items-center justify-between gap-2" :title="mcpGroupTitle(group)">
+        <label v-for="group in TOOL_GROUPS" :key="group" class="flex items-center justify-between gap-2" :class="LAUNCH_ROW" :title="mcpGroupTitle(group)">
           <!-- The group is named, not just the feature: each switch registers ONE MCP server
            (`mulmoterminal-<group>`), so a heading alone would not say which of the four rows
            writes which server — and two of them share the heading "Canvas".
@@ -637,7 +638,8 @@ async function removeWorktree(w: Worktree): Promise<void> {
     <div
       v-if="dirListsLoading"
       data-testid="cell-dir-loading"
-      class="flex w-full items-center justify-center gap-1.5 font-sans text-[11px] text-dim"
+      class="flex items-center justify-center gap-1.5 font-sans text-[11px] text-dim"
+      :class="LAUNCH_ROW"
       role="status"
     >
       <span class="material-symbols-outlined animate-spin text-[14px]" aria-hidden="true">progress_activity</span>
@@ -647,7 +649,12 @@ async function removeWorktree(w: Worktree): Promise<void> {
          ONE codebase onto a branch; the workspace is the hub a session works FROM — the place the
          agent reads and writes shared state (wiki, collections, accounting), which is exactly what
          a detached branch would cut it off from. Offering it there is offering a mistake. -->
-    <div v-if="worktreeList.isGit && launchesAgent && !inWorkspace" data-testid="cell-worktrees" class="flex w-full flex-col items-stretch gap-1.5">
+    <div
+      v-if="worktreeList.isGit && launchesAgent && !inWorkspace"
+      data-testid="cell-worktrees"
+      class="flex flex-col items-stretch gap-1.5"
+      :class="LAUNCH_ROW"
+    >
       <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">or isolate in a worktree (git repo)</span>
       <!-- Said here rather than left to be inferred from a row that behaves differently each time:
            the one-session rule is why a row resumes instead of launching, and why one of them
@@ -706,7 +713,7 @@ async function removeWorktree(w: Worktree): Promise<void> {
     </div>
     <LaunchChipList heading="or run a script" icon="play_arrow" :chips="scriptChips" @pick="runScript" />
     <LaunchChipList heading="or launch" icon="rocket_launch" :chips="launcherChips" @pick="launchProgram" />
-    <div v-if="resumable.sessions.length" data-testid="cell-resume" class="flex min-h-0 w-full flex-col items-center gap-1.5">
+    <div v-if="resumable.sessions.length" data-testid="cell-resume" class="flex min-h-0 flex-col items-center gap-1.5" :class="LAUNCH_ROW">
       <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">or resume here</span>
       <div class="flex w-full flex-col gap-1">
         <button
