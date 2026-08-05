@@ -323,8 +323,11 @@ function activityPushOf(d: Record<string, unknown>): ActivityPush {
 
 async function fetchSessionDetail(id: string): Promise<Record<string, unknown> | null> {
   try {
-    const q = cwd.value ? `?cwd=${encodeURIComponent(cwd.value)}` : "";
-    const res = await fetchWithTimeout(`/api/session/${id}${q}`);
+    // The agent goes along because the two header badges are read from ITS log, not Claude's
+    // (#1465) — and grok's is partitioned by directory, so the cwd is part of that lookup too.
+    const params = new URLSearchParams({ agent: agent.value });
+    if (cwd.value) params.set("cwd", cwd.value);
+    const res = await fetchWithTimeout(`/api/session/${id}?${params}`);
     if (!res.ok) return null;
     const data = await jsonBody(res);
     return id === sessionId.value ? data : null;
@@ -1167,6 +1170,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                   :agent="agent"
                   :model="context.model"
                   :context-tokens="context.contextTokens"
+                  :context-window="context.contextWindow"
                 />
                 <span
                   v-else-if="chip.builtin === 'usage' && showUsage"

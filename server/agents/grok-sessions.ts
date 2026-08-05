@@ -91,6 +91,19 @@ export function parseGrokSummary(text: string): GrokSummary {
   };
 }
 
+/**
+ * The model a conversation is running, from the same `summary.json`.
+ *
+ * `current_model_id` ("grok-4.5") is the only model grok records that a reader can trust: the
+ * per-turn `model_id` in `events.jsonl` says the same thing but costs a scan of a file whose
+ * phase_changed rows outnumber everything else 100:1. There are no token counts anywhere in a
+ * conversation directory, which is why this answers the model alone (agent-badges.ts).
+ */
+export const grokModelFromSummary = (text: string): string | null => {
+  const doc = parseJsonRecord(text);
+  return doc ? nonEmpty(doc.current_model_id) : null;
+};
+
 async function mtimeOf(target: string): Promise<number | null> {
   try {
     return (await fs.stat(target)).mtimeMs;

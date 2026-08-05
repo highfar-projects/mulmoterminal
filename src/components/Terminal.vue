@@ -150,6 +150,7 @@ const { config: dirConfig } = useDirConfig(dirConfigCwd);
 const { context: sessionContext } = useSessionContext(
   computed(() => props.sessionId),
   serverCwd,
+  computed(() => props.agent ?? "claude"),
 );
 // What GET /api/header resolves for this terminal's directory: the user's configured action buttons
 // (or the built-in defaults), and the per-tree values the directory reserved (#1367).
