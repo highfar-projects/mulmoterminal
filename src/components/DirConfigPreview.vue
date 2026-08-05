@@ -60,10 +60,16 @@ watch(
             <p v-if="!details[path].exists" data-testid="dir-preview-gone" class="m-0 text-[var(--warn-text,#e0a030)]">
               This directory no longer exists — the entry is left over from a project that was moved or deleted.
             </p>
-            <p v-else-if="!details[path].file && !details[path].localFile" class="m-0 text-dim">
+            <p v-else-if="!details[path].file && !details[path].localFile && !details[path].repoFile" class="m-0 text-dim">
               No <code>.mulmoterminal.json</code> here — this directory uses the global settings.
             </p>
             <template v-else>
+              <!-- Listed in the order they are applied, weakest first, so the panel reads the way
+                   the merge runs. `repo.json` is the open file every tool can read; the two below
+                   it are this app's. -->
+              <p v-if="details[path].repoFile" data-testid="dir-preview-repo-file" class="m-0 font-mono text-[11px] text-dim">
+                {{ details[path].repoFile }} <span class="font-sans">(open format — every tool reads this)</span>
+              </p>
               <p v-if="details[path].file" class="m-0 font-mono text-[11px] text-dim">
                 {{ details[path].file }}
               </p>
@@ -103,6 +109,9 @@ watch(
               </table>
               <p v-else class="m-0 text-dim">The file sets nothing this app applies.</p>
 
+              <p v-if="details[path].source.repo.length" data-testid="dir-preview-repo-keys" class="m-0 mt-2 text-dim">
+                Offered by <code>repo.json</code>: <code>{{ details[path].source.repo.join(", ") }}</code>
+              </p>
               <p v-if="details[path].source.local.length" data-testid="dir-preview-local-keys" class="m-0 mt-2 text-dim">
                 Set by <code>.mulmoterminal.local.json</code>: <code>{{ details[path].source.local.join(", ") }}</code>
               </p>

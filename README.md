@@ -706,6 +706,22 @@ malformed file is ignored.
 }
 ```
 
+**Already have a `repo.json`?** MulmoTerminal reads it. It is an
+[open repository-metadata format](https://receptron.github.io/mulmoterminal/repo-json.html) — one
+small file any tool can read — and a project that ships one gets a coloured, named, icon-bearing
+cell without knowing this app exists:
+
+```json
+{ "name": "diffusion-lab", "icon": "docs/logo.png", "color": "#7c3aed" }
+```
+
+One colour becomes all seven: the header is it exactly, the badge/border/dot/button/body are
+derived from its hue, and the header text is derived for contrast. Anything this app understands
+but the open format doesn't goes under `extensions.mulmoterminal`.
+
+The three files layer, general to specific — **`repo.json` → `.mulmoterminal.json` →
+`.mulmoterminal.local.json`** — replacing whatever keys the one below it set.
+
 **Several clones of one repository?** Drop a `.mulmoterminal.local.json` beside it. It is read
 after `.mulmoterminal.json` and **replaces whatever keys it names**, so the shared file holds what
 the project is — name, theme, a colour — and each checkout's local file holds only what makes it

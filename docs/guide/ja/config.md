@@ -153,6 +153,40 @@ Anthropic のまま別のモデルを指定できます。→ [OpenRouter で別
 
 すべて `#rrggbb`。作業中/要対応の状態色は、これらの背景色より優先されます（アイドル時に反映）。
 
+### `repo.json` を持つリポジトリ {#repo-json}
+
+[`repo.json`](../../repo-json.html) は**オープンなリポジトリメタデータの規格**です。リポジトリの
+ルートに置く小さな1ファイルで、どのツールからも読めます。MulmoTerminal もこれを読むので、
+このアプリの存在を知らないプロジェクトでも、名前・色・アイコンの付いたセルになります。
+
+```json
+{
+  "name": "diffusion-lab",
+  "description": "Training and evaluation for latent diffusion models",
+  "icon": "docs/logo.png",
+  "color": "#7c3aed"
+}
+```
+
+- **`name`** → バッジ
+- **`icon`** → セルのアイコン。文字列でも、サイズ付きの配列でも可。使える中で最良のものが選ばれます
+- **`color`** → **7色すべて**。ヘッダーはその色そのもの、バッジ・枠・ステータスドット・ボタン・
+  セル本体はその色相から導出、ヘッダーの文字色はコントラストから導出（宣言しません）。
+  `color.background` はセル本体を直接指定します
+- **`extensions.mulmoterminal`** → オープン規格に無い、このアプリ固有のもの。`theme` /
+  `orderPriority` / `sound` など、このページの他のキー
+
+3つのファイルは一般 → 具体の順に重なります。
+
+```
+repo.json  →  .mulmoterminal.json  →  .mulmoterminal.local.json
+プロジェクト     このアプリの設定        この checkout
+```
+
+下の層が設定したキーを、上の層が置き換えます。`repo.json` だけで完結してもよく、逆に
+`.mulmoterminal.json` の色は `repo.json` の色に勝ちます — ブランド色を一日中見ていたくない
+プロジェクトで、自分の配色を保つのはこの方法です。
+
 ### 同じリポジトリを何本も clone しているとき（`.mulmoterminal.local.json`） {#local-config}
 
 1つのリポジトリを `acme` / `acme2` / `acme3` と並行して開いているとき、プロジェクトとしては

@@ -121,14 +121,16 @@ describe("parseDirConfigDetail", () => {
       exists: true,
       file: "/proj/.mulmoterminal.json",
       localFile: "/proj/.mulmoterminal.local.json",
+      repoFile: "/proj/repo.json",
       config: { name: "proj" },
-      source: { applied: ["name"], ignored: ["cellColor"], unknown: ["badgeColour"], local: ["name"] },
+      source: { applied: ["name"], ignored: ["cellColor"], unknown: ["badgeColour"], local: ["name"], repo: ["name"] },
     });
     expect(view.exists).toBe(true);
     expect(view.file).toBe("/proj/.mulmoterminal.json");
     expect(view.localFile).toBe("/proj/.mulmoterminal.local.json");
+    expect(view.repoFile).toBe("/proj/repo.json");
     expect(view.rows.map((r) => r.key)).toEqual(["name"]);
-    expect(view.source).toEqual({ applied: ["name"], ignored: ["cellColor"], unknown: ["badgeColour"], local: ["name"] });
+    expect(view.source).toEqual({ applied: ["name"], ignored: ["cellColor"], unknown: ["badgeColour"], local: ["name"], repo: ["name"] });
   });
 
   // The wire is a trust boundary like every other parser here: a shape the server would never
@@ -138,15 +140,17 @@ describe("parseDirConfigDetail", () => {
       exists: false,
       file: null,
       localFile: null,
+      repoFile: null,
       rows: [],
-      source: { applied: [], ignored: [], unknown: [], local: [] },
+      source: { applied: [], ignored: [], unknown: [], local: [], repo: [] },
     });
     expect(parseDirConfigDetail({ file: 7, config: "nope", source: { applied: "name" } })).toEqual({
       exists: false,
       file: null,
       localFile: null,
+      repoFile: null,
       rows: [],
-      source: { applied: [], ignored: [], unknown: [], local: [] },
+      source: { applied: [], ignored: [], unknown: [], local: [], repo: [] },
     });
   });
 

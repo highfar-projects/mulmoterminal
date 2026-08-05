@@ -24,6 +24,8 @@ export interface DirConfigDetailView {
   file: string | null;
   // This checkout's own overrides (#1430), when it has any.
   localFile: string | null;
+  // The open `repo.json` (#1442), when the repository ships one.
+  repoFile: string | null;
   rows: DirConfigRow[];
   source: DirConfigSource;
 }
@@ -139,7 +141,7 @@ export function dirConfigRows(config: unknown, extras: unknown = {}): DirConfigR
 }
 
 export function parseDirConfigDetail(data: unknown): DirConfigDetailView {
-  if (!isRecord(data)) return { exists: false, file: null, localFile: null, rows: [], source: EMPTY_DIR_CONFIG_SOURCE };
+  if (!isRecord(data)) return { exists: false, file: null, localFile: null, repoFile: null, rows: [], source: EMPTY_DIR_CONFIG_SOURCE };
   const source = isRecord(data.source) ? data.source : {};
   return {
     // Absent on the wire is read as "gone" rather than "fine": the only responses without it
@@ -147,12 +149,14 @@ export function parseDirConfigDetail(data: unknown): DirConfigDetailView {
     exists: data.exists === true,
     file: asString(data.file),
     localFile: asString(data.localFile),
+    repoFile: asString(data.repoFile),
     rows: dirConfigRows(data.config, data.extras),
     source: {
       applied: stringList(source.applied),
       ignored: stringList(source.ignored),
       unknown: stringList(source.unknown),
       local: stringList(source.local),
+      repo: stringList(source.repo),
     },
   };
 }

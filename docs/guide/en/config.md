@@ -154,6 +154,40 @@ pick a different model on Anthropic itself. → [Using another model via OpenRou
 
 All values are `#rrggbb`. The working / needs-you status colors take priority over these background colors (which show when idle).
 
+### A repository that ships `repo.json` {#repo-json}
+
+[`repo.json`](../../repo-json.html) is an **open repository-metadata format**: one small file, at
+the repository root, that any tool can read. MulmoTerminal reads it, so a project that ships one
+gets a named, coloured, icon-bearing cell without knowing this app exists.
+
+```json
+{
+  "name": "diffusion-lab",
+  "description": "Training and evaluation for latent diffusion models",
+  "icon": "docs/logo.png",
+  "color": "#7c3aed"
+}
+```
+
+- **`name`** → the badge.
+- **`icon`** → the cell icon. A string, or an array with sizes; the best usable entry wins.
+- **`color`** → **all seven** chrome colours. The header is the colour exactly; the badge, border,
+  status dot, buttons and cell body are derived from its hue; the header text is derived for
+  contrast and is never declared. `color.background` sets the cell body directly.
+- **`extensions.mulmoterminal`** → anything this app understands that the open format doesn't —
+  `theme`, `orderPriority`, `sound`, and the rest of the keys on this page.
+
+The three files layer, general to specific:
+
+```
+repo.json  →  .mulmoterminal.json  →  .mulmoterminal.local.json
+the project    this app's settings    this checkout
+```
+
+Each replaces whatever keys the one below it set. A repository can ship `repo.json` alone and never
+create the other two; equally, a `.mulmoterminal.json` colour wins over `repo.json`'s, which is how
+you keep your own palette for a project whose brand colour you would rather not look at all day.
+
 ### Several clones of one repository (`.mulmoterminal.local.json`) {#local-config}
 
 Working on one repository in several checkouts at once — `acme`, `acme2`, `acme3` — they are the
