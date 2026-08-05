@@ -59,7 +59,7 @@ import {
   DIR_TRUNCATE_FRONT,
 } from "./cellChromeClasses";
 import { CELL_STATUS, DOT_STATUS, HEADER_STATUS } from "./cellStatusClasses";
-import { handoffTargets, pullLastTurn, type HandoffTarget } from "../composables/useHandoff";
+import { handoffTargets, pullLastTurn, slotLabel, type HandoffTarget } from "../composables/useHandoff";
 import { runOneExchange, liveCrossTalkDeps } from "../composables/useCrossTalk";
 import { runRoundTable, liveRoundTableDeps, memberFromTarget, type TableMember } from "../composables/useRoundTable";
 import { roundTableMessage } from "../composables/roundTableRules";
@@ -656,7 +656,12 @@ async function startTable(targets: HandoffTarget[], budget: number) {
   askMenuOpen.value = false;
   tableRunning.value = true;
   tableStop = false;
-  const self: TableMember = { key: `cell-${props.uid}`, label: `#${props.uid}`, source: { sessionId: sessionId.value, cwd: cwd.value, agent: agent.value } };
+  // The SAME label shape the other seats get. It was a bare `#0` while everyone else read
+  // `#1 · codex · …/proj`, so the framing told codex "Also at the table: #0" and named something
+  // the reader could not identify (seen in the first live run).
+  const source = { sessionId: sessionId.value, cwd: cwd.value, agent: agent.value };
+  const key = `cell-${props.uid}`;
+  const self: TableMember = { key, label: slotLabel({ key, ...source }, props.home), source };
   const { outcome, turnsTaken } = await runRoundTable(
     [self, ...targets.map(memberFromTarget)],
     budget,
