@@ -2,18 +2,19 @@
 // Used where only the model/context is needed (e.g. header `${model}` substitution). Components that
 // also need live activity/usage (TerminalCell) fetch the same endpoint alongside those concerns.
 import { ref, type Ref } from "vue";
+import type { TerminalAgent } from "../../common/sessionAgent";
+import type { SessionContextInfo } from "../../common/sessionContext";
 import { useAutoRefresh } from "./useAutoRefresh";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
-export interface SessionContext {
-  model: string | null;
-  contextTokens: number;
-}
+export type SessionContext = SessionContextInfo;
 
 const isContext = (c: unknown): c is SessionContext => typeof c === "object" && c !== null && "contextTokens" in c;
 
-export function useSessionContext(sessionId: Ref<string | null>, cwd: Ref<string | null>) {
+// `agent` because the model is read from that agent's own log (#1465); omitted means Claude,
+// which is what the route defaults to.
+export function useSessionContext(sessionId: Ref<string | null>, cwd: Ref<string | null>, agent?: Ref<TerminalAgent>) {
   const context = ref<SessionContext | null>(null);
   let requestSeq = 0;
   let loadedFor: string | null = null; // the session id `context` currently reflects
@@ -31,10 +32,11 @@ export function useSessionContext(sessionId: Ref<string | null>, cwd: Ref<string
       context.value = null;
       loadedFor = null;
     }
-    const query = cwd.value ? `?cwd=${encodeURIComponent(cwd.value)}` : "";
+    const params = new URLSearchParams({ agent: agent?.value ?? "claude" });
+    if (cwd.value) params.set("cwd", cwd.value);
     const seq = ++requestSeq;
     try {
-      const res = await fetchWithTimeout(`/api/session/${id}${query}`);
+      const res = await fetchWithTimeout(`/api/session/${id}?${params}`);
       if (seq !== requestSeq || !res.ok) return;
       const data = await jsonBody(res);
       // Guard against a stale response: the terminal may have switched session mid-flight.

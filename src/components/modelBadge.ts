@@ -49,7 +49,12 @@ export function shortModelLabel(model: string): string {
   return family ? family.label : (model.split("/").pop() ?? model);
 }
 
-function contextWindowTokens(model: string): number | null {
+function contextWindowTokens(model: string, reported: number | null | undefined): number | null {
+  // What the AGENT said, ahead of everything below: codex writes `model_context_window` into its
+  // rollout, and a number the running agent states beats one this file infers from a substring —
+  // which is how a 1M model was read against a 200k window and the badge came out 5x too high
+  // (#985). Absent means nobody told us, so the table still answers for Claude.
+  if (reported && reported > 0) return reported;
   // A preset carries the window its provider publishes, so a session on one shows a real % instead
   // of nothing — the substring list only knows Claude's own families.
   const preset = presetFor(model);
@@ -65,9 +70,12 @@ type ContextReading = { kind: "measured"; windowTokens: number; percent: number 
 // percentage tells us is that CONTEXT_WINDOWS has the wrong window for this model. Reported as
 // unknown rather than clamped — a precise wrong number gets acted on, and a clamp would hide the
 // gap entirely (#985).
-function readContext(model: string, contextTokens: number): ContextReading {
-  const windowTokens = contextWindowTokens(model);
+function readContext(model: string, contextTokens: number, reportedWindow: number | null | undefined): ContextReading {
+  const windowTokens = contextWindowTokens(model, reportedWindow);
   if (windowTokens === null) return { kind: "no-window" };
+  // Nothing measured yet — a grok or antigravity session, which names its model but reports no
+  // tokens. `ctx 0%` would be a reading; there isn't one.
+  if (contextTokens <= 0) return { kind: "no-window" };
   const percent = Math.round((contextTokens / windowTokens) * PERCENT);
   return percent > PERCENT ? { kind: "overflow", windowTokens } : { kind: "measured", windowTokens, percent };
 }
@@ -87,7 +95,8 @@ function badgeTitle(agent: BadgeAgent, model: string, contextTokens: number, rea
 
 export type ModelBadge = { text: string; title: string };
 
-export function modelBadge(agent: BadgeAgent, model: string, contextTokens: number): ModelBadge {
-  const reading = readContext(model, contextTokens);
+// `contextWindow` is the window the agent itself reported, when it reported one (codex does).
+export function modelBadge(agent: BadgeAgent, model: string, contextTokens: number, contextWindow?: number | null): ModelBadge {
+  const reading = readContext(model, contextTokens, contextWindow);
   return { text: badgeText(shortModelLabel(model), reading), title: badgeTitle(agent, model, contextTokens, reading) };
 }

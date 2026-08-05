@@ -57,6 +57,7 @@ import { AGENT_SESSION_LIST_PATHS } from "../../common/agentSessionList.js";
 import { TERMINAL_AGENTS, type TerminalAgent } from "../../common/sessionAgent.js";
 import type { SessionMeta } from "../session/types.js";
 import { parseActivityIds, selectSessionRows } from "../session/session-list.js";
+import { agentBadges } from "../session/agent-badges.js";
 import { sessionDetailView } from "../session/session-detail-view.js";
 import { clearedTranscripts } from "../session/cleared-transcripts.js";
 import { requestBody } from "./requestBody.js";
@@ -90,7 +91,12 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   const cwd = workspaceForRoute(req.query.cwd, res);
   if (cwd === null) return;
   await activityStateHydrated; // a reconnect re-fetch must see the restored working/waiting, not idle
+  // `?agent=` decides where the two header badges are read from — nothing else on this route. It
+  // defaults to Claude, so a client that does not send it (an older build, the single view) gets
+  // exactly what it got before.
+  const agent = normalizeAgent(req.query.agent);
   const { lastPrompt: transcriptPrompt, lastResponse: transcriptResponse, userTurns, usage, context, workPhase } = await readSessionSummary(cwd, id);
+  const badges = agent === "claude" ? { usage, context } : await agentBadges(cwd, id, agent);
   // If we haven't titled it yet, kick off a summary; sessionDetailView falls back meanwhile.
   freshenRosterTitle(id, cwd, userTurns);
   await sessionMemosHydrated; // a cell seeding on boot must not be told its memo is gone
@@ -100,7 +106,7 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
     activity.get(id) ?? {},
     clearedTranscripts.has(id),
   );
-  res.json({ id, cwd, ...view, usage, context, workPhase });
+  res.json({ id, cwd, ...view, usage: badges.usage, context: badges.context, workPhase });
 }
 
 // The user's one-line note on a session (#1084). An empty text ERASES it — the same route, so a

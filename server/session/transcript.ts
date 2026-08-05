@@ -4,6 +4,7 @@
 
 import { isRecord } from "../../common/isRecord.js";
 import { readString } from "../../common/readString.js";
+import type { SessionContextInfo } from "../../common/sessionContext.js";
 
 // Text the HARNESS put in the user channel, rather than something a person typed:
 // slash-command wrappers, bash input, and the notification a finished background task
@@ -307,10 +308,12 @@ export const sessionUsageFromJsonl = (raw: string): SessionUsage => sessionUsage
 // tokens re-sent as context for the next turn. This is NOT the cumulative
 // sessionUsageFromJsonl sum, which counts every turn's re-sent context and so
 // double-counts. `model` is the most recent assistant turn's declared model.
-export interface LatestTurnContext {
-  model: string | null;
-  contextTokens: number;
-}
+//
+// The shape is shared with the UI (common/sessionContext.ts) because it goes on the wire
+// whole; this name is what the Claude readers here have always called it. The Claude
+// transcript reports no context window, so `contextWindow` stays absent on this path — the
+// agents that DO report one fill it in (server/session/agent-badges.ts).
+export type LatestTurnContext = SessionContextInfo;
 
 const contextTokensOf = (u: Record<string, unknown>): number =>
   usageNum(u, "input_tokens") + usageNum(u, "cache_read_input_tokens") + usageNum(u, "cache_creation_input_tokens");

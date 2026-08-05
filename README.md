@@ -1143,6 +1143,20 @@ Each grid cell's header shows two badges for its session, refreshed when a turn 
 - **Token badge** — `⇡<in> ⇣<out>`: cumulative input (fresh + cache-read + cache-creation)
   and output tokens for the session, k/M-formatted, with a full breakdown in the tooltip.
 
+**Both badges are read from the agent's own log**, so what each agent can show differs by
+what it writes down (`?agent=` on the route picks the reader):
+
+| Agent | Context badge | Token badge |
+|---|---|---|
+| **Claude** | `Opus · ctx 35%` — window from the table above | full |
+| **Codex** | `gpt-5.5 · ctx 21%` — window from codex's own `model_context_window`, so no table to be out of date | full |
+| **Grok** | `grok-4.5` — the model only; grok records no token counts | hidden |
+| **Antigravity** | `antigravity` — a constant; agy records neither a model id nor tokens | hidden |
+
+The token badge hides itself when nothing has been counted, and the context badge shows
+the model alone when the tokens or the window are unknown — a percentage is only ever
+shown when both numbers came from the agent.
+
 The **Settings** modal (⚙) shows an **estimated $ cost** — Session / Today / Month — from
 `GET /api/cost`, using a built-in public per-model price table (cache reads billed at
 0.1×, cache writes at 1.25× input). It's an estimate: real billing differs, **flat-plan

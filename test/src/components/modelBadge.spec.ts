@@ -87,3 +87,33 @@ describe("modelBadge — the tooltip", () => {
     expect(modelBadge("claude", "claude-opus-4-20250514", 70_000).title).toBe("Claude · claude-opus-4-20250514 · context 70,000 / 200,000 (35%) tokens");
   });
 });
+
+// #1465: the badge is no longer Claude-only, and the other agents do not all report the same
+// things. codex states its window, grok and antigravity state nothing but a name.
+describe("modelBadge — a window the agent reported", () => {
+  it("prefers the agent's own window to the table", () => {
+    // gpt-5.5 matches nothing in CONTEXT_WINDOWS, so without codex's number there is no percentage
+    // to show at all.
+    expect(modelBadge("codex", "gpt-5.5", 55_447).text).toBe("gpt-5.5");
+    expect(modelBadge("codex", "gpt-5.5", 55_447, 258_400).text).toBe("gpt-5.5 · ctx 21%");
+  });
+
+  it("overrides a Claude family window rather than being overridden by it", () => {
+    // A model whose window the table thinks it knows: whoever is RUNNING is the better authority,
+    // which is the whole reason #985 could happen to a table nobody could correct from outside.
+    expect(modelBadge("claude", "claude-opus-4", 100_000, 1_000_000).text).toBe("Opus · ctx 10%");
+  });
+
+  it("ignores a window that is absent, null or zero", () => {
+    expect(modelBadge("claude", "claude-opus-4", 100_000, null).text).toBe("Opus · ctx 50%");
+    expect(modelBadge("claude", "claude-opus-4", 100_000, 0).text).toBe("Opus · ctx 50%");
+  });
+
+  it("says only the model when nothing has counted any tokens", () => {
+    // grok names its model and records no usage; `ctx 0%` would read as a measurement of an empty
+    // context rather than the absence of one.
+    expect(modelBadge("grok", "grok-4.5", 0).text).toBe("grok-4.5");
+    expect(modelBadge("antigravity", "antigravity", 0).text).toBe("antigravity");
+    expect(modelBadge("claude", "claude-opus-4", 0).text).toBe("Opus");
+  });
+});

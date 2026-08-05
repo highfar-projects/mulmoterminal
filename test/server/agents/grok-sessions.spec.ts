@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { listGrokSessions, parseGrokSummary, grokPromptTitles } from "../../../server/agents/grok-sessions.js";
+import { listGrokSessions, parseGrokSummary, grokPromptTitles, grokModelFromSummary } from "../../../server/agents/grok-sessions.js";
 
 // Captured from grok 0.2.118's own `summary.json`, trimmed to the fields the listing reads. The
 // two timestamps disagree on purpose and that disagreement is the point: `updated_at` (and the
@@ -43,6 +43,18 @@ describe("parseGrokSummary", () => {
     expect(parseGrokSummary(JSON.stringify({ created_at: "2026-08-05T05:00:00Z" })).mtime).toBe(Date.parse("2026-08-05T05:00:00Z"));
     expect(parseGrokSummary(JSON.stringify({ last_active_at: "not a date" })).mtime).toBeNull();
     expect(parseGrokSummary("{oops")).toEqual({ title: null, mtime: null });
+  });
+});
+
+describe("grokModelFromSummary", () => {
+  // What the header's model badge shows for a grok cell (#1465). The real file carries it as
+  // `current_model_id`; a conversation that has not recorded one wears no badge rather than a
+  // guess, which is the same rule the Claude path follows before its first turn.
+  it("reads the current model id, and nothing when there is none", () => {
+    expect(grokModelFromSummary(JSON.stringify({ ...JSON.parse(REAL_SUMMARY), current_model_id: "grok-4.5" }))).toBe("grok-4.5");
+    expect(grokModelFromSummary(REAL_SUMMARY)).toBeNull();
+    expect(grokModelFromSummary(JSON.stringify({ current_model_id: "" }))).toBeNull();
+    expect(grokModelFromSummary("{oops")).toBeNull();
   });
 });
 
