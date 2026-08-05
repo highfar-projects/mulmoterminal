@@ -35,8 +35,14 @@ export interface RoundTableRun {
 /** The same dependency surface the exchange uses — one runner shape, one set of fakes.
  *
  *  Which is why the table has no `liveRoundTableDeps` of its own: it was byte-identical to
- *  `liveCrossTalkDeps` (jscpd caught it), and a second factory for one type is a second place to
- *  change when the sockets move. Callers use `liveCrossTalkDeps`. */
+ *  `liveCrossTalkDeps`, and a second factory building one type is a second place to change when
+ *  the sockets move. Callers use `liveCrossTalkDeps`.
+ *
+ *  Whether the two STAY one is open, so here is the rule for splitting them again: a separate
+ *  type and a separate factory are earned when the table needs something the exchange genuinely
+ *  does not — its own socket, its own clock, a fact only a ring of N cells has. Until then it is
+ *  a copy whose only job is to be a copy, and a copy is the thing that gets fixed on one side.
+ *  So: if the table is never going to become a different feature, do not bring the copy back. */
 export type RoundTableDeps = CrossTalkDeps;
 
 /** Poll a member's log until the turn OUR message produced appears. Same rule as the exchange:
