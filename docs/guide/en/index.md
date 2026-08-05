@@ -16,7 +16,7 @@ running grid. Already set up? `npx mulmoterminal@latest` is the whole thing.
 [Getting started — from zero to running](getting-started.html){: .btn .btn-purple .fs-5 .mb-4 .mb-md-0 .mr-2 }
 [Basics — how to read the screen](basics.html){: .btn .fs-5 .mb-4 .mb-md-0 }
 
-> **[What's new in 4.4.0](v4.4.0.html)** — **every cell keeps its own right pane**, the Files pane can **open a document or a story in the Canvas without an agent**, your **claude.ai connectors work in the workspace** again, and the session list stops re-reading whole transcripts (8.7 s to 1 ms on a 2.1 GB project). The cell header's **path became a menu** and six permanent icons moved into it (as of 2026-08-04)
+> **[What's new in 4.5.0](v4.5.0.html)** — a repository can now **carry its own icon and colour**, in [`repo.json`](../../repo-json.html): an open metadata file any tool can read, so a project states its identity once. One colour becomes the whole cell, and a repo that already ships a **favicon** needs no configuration at all. Each git worktree can also be handed **its own dev-server port and database name**, and **Grok** joins the Agent Picker (as of 2026-08-05)
 >
 > **[What's new in 4.3.1](v4.3.1.html)** — the launcher's workspace chip is labelled **`WORKSPACE`** by its role rather than by its folder name, and the **git chip refreshes when you come back to the tab** instead of up to ten seconds later. Nothing to configure (as of 2026-08-04)
 >

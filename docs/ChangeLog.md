@@ -8,6 +8,110 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.5.0 — 2026-08-05
+
+> **Setup guide:** [Give a repository its own icon and colour — repo.json](https://receptron.github.io/mulmoterminal/guide/en/v4.5.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.5.0.html))
+
+A repository can now **say what it is**, and MulmoTerminal listens. `repo.json` is a small open
+metadata file at a repository's root — name, description, icon, colour — that any tool displaying
+repositories can read, not a file this app invented for itself. A project ships one and its cell
+carries its own mark and palette everywhere it appears.
+
+The gap it fills is measurable. Across 157 git repositories on one machine, **5 had a web app
+manifest and 26 had any icon at all** — every one of them a web project. The other 131, the ML
+repos and CLI tools and libraries you actually open in a terminal, had nowhere to put this.
+Those 131 are what the format is for.
+
+Also in this release: each git worktree can be handed **its own dev-server port and database name**,
+**Grok** joins the Agent Picker as a first-class agent, and the settings that could only be reached
+by hand-editing JSON now have controls.
+
+### Added
+
+- **`repo.json` — an open repository metadata file** ([#1440](https://github.com/receptron/mulmoterminal/pull/1440) spec, [#1445](https://github.com/receptron/mulmoterminal/pull/1445) implementation, closes [#1438](https://github.com/receptron/mulmoterminal/issues/1438) and [#1442](https://github.com/receptron/mulmoterminal/issues/1442)).
+  Four lines give a project a named, coloured, icon-bearing cell:
+
+  ```json
+  { "name": "diffusion-lab", "icon": "docs/logo.png", "color": "#7c3aed" }
+  ```
+
+  **One colour becomes seven.** The header takes it exactly; the badge, border, status dot, buttons
+  and cell body are derived from its hue; the header text is derived for contrast and is never
+  declared, so it stays readable whatever colour a project picks. The derivation is measured, not
+  invented — against eleven hand-tuned palettes it lands at a **median ΔE76 of 1.9, worst case 2.5**,
+  and one derived value came out byte-identical to the hand-picked one. The measurement's finding
+  was that no single rule fits every role: the badge sits *relative* to the brand colour while the
+  surfaces sit at *absolute* lightness, and using either rule alone drifts by ΔE 15–20 at one end of
+  the hue wheel.
+
+  Three layers, general to specific — `repo.json` → `.mulmoterminal.json` →
+  `.mulmoterminal.local.json` — each replacing whatever keys the one below it set. Anything this app
+  understands that the open format doesn't goes under `extensions.mulmoterminal`.
+
+  The [specification](https://receptron.github.io/mulmoterminal/repo-json.html) is written to be
+  implemented by anyone. Its rules are the interesting part: paths resolve against the repository
+  (not a web root, which is what makes every other format web-only), a consumer keeps looking until
+  an icon *resolves* rather than stopping at the first that exists, and text colour is derived
+  rather than declared so two conforming tools reach the same answer.
+
+- **A project's own favicon is picked up with no configuration** ([#1429](https://github.com/receptron/mulmoterminal/pull/1429), closes [#1428](https://github.com/receptron/mulmoterminal/issues/1428)).
+  A directory that names no icon shows the one its repository already ships: `public/favicon.svg`,
+  `apple-touch-icon.png`, `favicon.png`, `favicon.ico`, then a web manifest's largest non-maskable
+  icon. Ordered by how the image survives being drawn at 14px rather than by how common it is, and
+  `docs/logo.png` is deliberately *not* searched — a "logo" is as often a wide README banner as an
+  icon. On by default; Settings → **Directory appearance** turns it off, or `"icon": false` does for
+  one project.
+
+- **An image icon on every cell** ([#1427](https://github.com/receptron/mulmoterminal/pull/1427), closes [#1421](https://github.com/receptron/mulmoterminal/issues/1421)).
+  The mark appears at the **left edge** of the cell header — the browser-tab position — and on the
+  cockpit roster, the filmstrip thumbnails and the launcher's directory chips. PNG, JPEG, **animated
+  GIF** (it plays), WebP, AVIF, SVG, ICO and BMP; a path inside the directory, an `http(s)` URL or a
+  `data:` image. A file is served through a route that types the response from our own extension map
+  and sets `nosniff` + `Content-Security-Policy: sandbox`, so allowing SVG costs nothing.
+
+- **`.mulmoterminal.local.json` — per-checkout overrides** ([#1431](https://github.com/receptron/mulmoterminal/pull/1431), closes [#1430](https://github.com/receptron/mulmoterminal/issues/1430)).
+  Several clones of one repository share a project config and differ only in the colour that tells
+  them apart in the grid. The local file replaces whatever top-level keys it names; the shared file
+  keeps everything else. Both trigger the live reload, and Settings names both files and lists which
+  keys the local one took over — because with more than one file, "which won" is the question.
+
+- **A dev-server port and database name per worktree** ([#1435](https://github.com/receptron/mulmoterminal/pull/1435), closes [#1367](https://github.com/receptron/mulmoterminal/issues/1367)).
+  Declare a variable once and each worktree gets its own value, so two `yarn dev` stop fighting over
+  port 3000.
+
+- **Grok as a fourth first-class agent** ([#1441](https://github.com/receptron/mulmoterminal/pull/1441)), beside Claude, Codex and Antigravity in the Agent Picker.
+
+- **The Agent Picker holds agents you configure** ([#1411](https://github.com/receptron/mulmoterminal/pull/1411)).
+  A `customAgents` entry is your own command line for starting Claude Code — a wrapper, a pinned
+  binary, `ollama launch claude --model … --` — and Claude Code's own arguments are appended to it,
+  so the session still resumes and still reports cost.
+
+- **Settings reaches the keys that needed hand-edited JSON** ([#1412](https://github.com/receptron/mulmoterminal/pull/1412), [#1416](https://github.com/receptron/mulmoterminal/pull/1416), closes [#1401](https://github.com/receptron/mulmoterminal/issues/1401)).
+  An inventory found nine keys no skill documented and twelve with no control anywhere. A test now
+  fails when a new global setting is added without saying where a user can set it.
+
+### Changed
+
+- **This repository ships its own `repo.json` and `favicon.svg`** ([#1448](https://github.com/receptron/mulmoterminal/pull/1448)). The favicon existed only as an inline `data:` SVG in `index.html`; it is now a file the metadata can point at.
+- **`.mulmoterminal.json` is committed rather than gitignored, and worktree inheritance writes `.mulmoterminal.local.json`** ([#1437](https://github.com/receptron/mulmoterminal/pull/1437), closes [#1436](https://github.com/receptron/mulmoterminal/issues/1436)). Committing the shared file used to switch worktree tinting off silently, because the check asked about the file it was *not* writing. A repository set up the old way still works — the shared file remains a fallback.
+- **A launcher chip runs its command line verbatim** ([#1409](https://github.com/receptron/mulmoterminal/pull/1409)). The parser that recognised `claude` or `codex` in a chip's command and rewrote it is gone. A chip that silently ran something other than what it said is what made chips and the Agent Picker impossible to tell apart.
+- **`useSessions` lost the last of the sidebar** ([#1420](https://github.com/receptron/mulmoterminal/pull/1420)) — 231 lines to 70.
+- **Plugin bumps**: `@mulmoclaude/markdown-plugin` 2.1.0 then 2.2.0, `html-plugin` 2.1.0 ([#1434](https://github.com/receptron/mulmoterminal/pull/1434), [#1444](https://github.com/receptron/mulmoterminal/pull/1444)); Antigravity agent updates ([#1446](https://github.com/receptron/mulmoterminal/pull/1446)).
+
+### Fixed
+
+- **A gentle trackpad scroll moved nothing** ([#1414](https://github.com/receptron/mulmoterminal/pull/1414), closes [#1200](https://github.com/receptron/mulmoterminal/issues/1200)). Sub-line deltas were dropped instead of accumulated.
+- **Codex conversations survive a restart** ([#1424](https://github.com/receptron/mulmoterminal/pull/1424), closes [#1418](https://github.com/receptron/mulmoterminal/issues/1418)). The rollout id lived in memory only, so a server restart plus a lost tmux session meant the conversation could not be resumed.
+- **The workspace's "all tools" check counts the agent** ([#1425](https://github.com/receptron/mulmoterminal/pull/1425), closes [#1423](https://github.com/receptron/mulmoterminal/issues/1423)).
+- **Antigravity's shared MCP config is not rewritten on a tmux reattach** ([#1446](https://github.com/receptron/mulmoterminal/pull/1446)).
+
+### Docs
+
+- **The `repo.json` specification** ([#1440](https://github.com/receptron/mulmoterminal/pull/1440)) — published at [receptron.github.io/mulmoterminal/repo-json.html](https://receptron.github.io/mulmoterminal/repo-json.html).
+- **Worktrees and header customization became their own pages** ([#1433](https://github.com/receptron/mulmoterminal/pull/1433)), the latter a screenshot-led beginner's guide.
+- **Antigravity needs Canvas registration in the workspace too** ([#1439](https://github.com/receptron/mulmoterminal/pull/1439)) — plus three places that said the opposite.
+- **The workspace rules brought in line with 4.3.0 and 4.4.0** ([#1408](https://github.com/receptron/mulmoterminal/pull/1408)); the path menu screenshotted ([#1413](https://github.com/receptron/mulmoterminal/pull/1413), [#1415](https://github.com/receptron/mulmoterminal/pull/1415)); `facts.json`'s `$schema` made to resolve ([#1407](https://github.com/receptron/mulmoterminal/pull/1407)).
+
 ## mulmoterminal@4.4.0 — 2026-08-04
 
 > **Setup guide:** [Every cell keeps its own pane, and the Canvas opens a file on its own](https://receptron.github.io/mulmoterminal/guide/en/v4.4.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.4.0.html))
