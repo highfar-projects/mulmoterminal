@@ -78,6 +78,32 @@ describe("runHeaderButton", () => {
     vi.unstubAllGlobals();
   });
 
+  // #1447: a host with no dialog answered 500 and this dropped it, so the button looked broken.
+  // The message goes to the caller's banner, and nothing is typed into the session.
+  it("open pickFile → reports the reason instead of inserting when no dialog opened", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(new Response(JSON.stringify({ error: "No file dialog on this host — install zenity" }), { status: 500 }))),
+    );
+    const report = vi.fn();
+    runHeaderButton(btn({ run: "open", open: { pickFile: true } }), "single", null, report);
+    await vi.waitFor(() => expect(report).toHaveBeenCalledWith(expect.stringContaining("install zenity")));
+    expect(m.insertText).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  // The same silence on the reveal button: the route answered ok before the opener had started.
+  it("open reveal → reports a folder that could not be opened", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(new Response(JSON.stringify({ error: "could not open /proj with xdg-open: ENOENT" }), { status: 500 }))),
+    );
+    const report = vi.fn();
+    runHeaderButton(btn({ run: "open", open: { reveal: "/proj" } }), "single", null, report);
+    await vi.waitFor(() => expect(report).toHaveBeenCalledWith(expect.stringContaining("xdg-open")));
+    vi.unstubAllGlobals();
+  });
+
   it("open pickFile without a slot key is a no-op (no dialog)", () => {
     const f = vi.fn();
     vi.stubGlobal("fetch", f);

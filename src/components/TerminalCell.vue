@@ -301,6 +301,20 @@ function applyActivity(d: ActivityPush) {
   if (!memoEditing.value) memo.value = next.memo;
 }
 
+// A cell whose model is still unknown asks again when a push says something changed. codex and agy
+// file their logs under an id the agent mints AFTER the spawn, so the seed fetch at mount can only
+// answer "nobody" — and for agy nothing else would ever re-ask, since it has no hooks and no
+// activity tracker to finish a turn (its spawner publishes precisely to reach this line). Claude is
+// excluded: its badges come from the summary the route already folds, so a push adds nothing and
+// this is the busiest route in the app. Self-limiting either way — once a model is known, it stops.
+//
+// Called from the PUSH path only, never from a seed: loadInitial applies activity BEFORE badges, so
+// asking there would see `context` still empty and fire a second fetch for the answer already in
+// its hand — on every non-claude cell, every load.
+function refreshBadgesIfModelUnknown() {
+  if (agent.value !== "claude" && !context.value?.model) void refreshUsage();
+}
+
 // This session's detail, or nothing to apply. Nothing covers three cases the callers all
 // treat the same: the read failed (best-effort — pub/sub fills it in on the next event), the
 // server refused, or the cell has since closed or switched session, in which case applying
@@ -326,8 +340,11 @@ function activityPushOf(d: Record<string, unknown>): ActivityPush {
 
 async function fetchSessionDetail(id: string): Promise<Record<string, unknown> | null> {
   try {
-    const q = cwd.value ? `?cwd=${encodeURIComponent(cwd.value)}` : "";
-    const res = await fetchWithTimeout(`/api/session/${id}${q}`);
+    // The agent goes along because the two header badges are read from ITS log, not Claude's
+    // (#1465) — and grok's is partitioned by directory, so the cwd is part of that lookup too.
+    const params = new URLSearchParams({ agent: agent.value });
+    if (cwd.value) params.set("cwd", cwd.value);
+    const res = await fetchWithTimeout(`/api/session/${id}?${params}`);
     if (!res.ok) return null;
     const data = await jsonBody(res);
     return id === sessionId.value ? data : null;
@@ -405,10 +422,28 @@ watch(
   },
 );
 
+// An agy or grok cell has no turn to end. Claude publishes a Stop hook and codex has an activity
+// tracker, so both re-read their badges the moment a turn settles; NOTHING calls setWorking for
+// these two, so a reading taken when the cell first asked is the only one it ever gets — `ctx 1%`
+// for the rest of the session, which is worse than no reading at all. Nor does the push path save
+// them: `refreshBadgesIfModelUnknown` needs an activity push, and an agent that never sets a flag
+// never sends one. This is the substitute, and it is deliberately slow — per cell, per minute:
+// agy pays one indexed sqlite row plus a 64 KB head read, grok two small JSON reads plus a fold
+// resumed at the byte the last poll stopped on. Delete each the day its agent gets an activity
+// tracker.
+const UNTRACKED_BADGE_AGENTS = new Set(["antigravity", "grok"]);
+const UNTRACKED_BADGE_POLL_MS = 60_000;
+let badgePoll: ReturnType<typeof setInterval> | null = null;
+
 onMounted(() => {
   unsubscribe = subscribe("sessions", (d) => {
-    if (isActivityMsg(d) && d.id === sessionId.value) applyActivity(d);
+    if (!isActivityMsg(d) || d.id !== sessionId.value) return;
+    applyActivity(d);
+    refreshBadgesIfModelUnknown();
   });
+  badgePoll = setInterval(() => {
+    if (UNTRACKED_BADGE_AGENTS.has(agent.value) && sessionId.value) void refreshUsage();
+  }, UNTRACKED_BADGE_POLL_MS);
   // A dropped socket misses the pushes sent while it was down, and this cell's status is
   // derived state that pub/sub only replays room membership for — not the missed events. So
   // on reconnect re-seed from the authoritative snapshot (guarded by activityGen), or a turn
@@ -425,6 +460,7 @@ onUnmounted(() => {
   unsubscribe?.();
   unsubscribeCanvas?.();
   offReconnect?.();
+  if (badgePoll) clearInterval(badgePoll);
 });
 
 // Set when the user starts a FRESH session from the launcher, so the next server
@@ -460,9 +496,11 @@ function startPickedAgent(dir: string | null) {
 // Attach to a session the form listed, in the cwd those rows were fetched for (not the
 // possibly-changed input).
 //
-// `resumeAgent` is what the session IS, which a worktree row knows and the Agent Picker may
-// disagree with: connecting a live codex id to /ws because the picker still says Claude runs the
-// wrong endpoint against a real session. Absent (the resume list, all Claude) leaves the pick alone.
+// `resumeAgent` is what the session IS, which the row knows and the Agent Picker may disagree
+// with: connecting a live codex id to /ws because the picker still says Claude runs the wrong
+// endpoint against a real session. Both kinds of row send it — a worktree row, whose session may be
+// any agent, and a resume row, which since #1417 lists the PICKED agent's own conversations rather
+// than always Claude's. Absent (an older caller) leaves the pick alone.
 function resumeSession({ id, cwd: dir, agent: resumeAgent }: { id: string; cwd: string | null; agent?: TerminalAgent }) {
   if (resumeAgent) {
     pickedAgent.value = resumeAgent;
@@ -481,15 +519,21 @@ function resumeSession({ id, cwd: dir, agent: resumeAgent }: { id: string; cwd: 
 async function openDir() {
   if (!cwd.value) return;
   try {
-    await fetchWithTimeout("/api/open-dir", {
+    const res = await fetchWithTimeout("/api/open-dir", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ path: cwd.value }),
     });
-  } catch {
-    // best-effort — opening a folder is non-critical
+    // A host with no file manager to call (a bare Linux box, WSL without interop) used to look
+    // exactly like a successful reveal — the route said ok and nothing appeared (#1447).
+    if (!res.ok) showAskMsg(openDirFailureText(await jsonBody(res), res.status));
+  } catch (e) {
+    showAskMsg(`Could not open the folder: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
+
+const openDirFailureText = (body: Record<string, unknown>, status: number): string =>
+  typeof body.error === "string" && body.error.length > 0 ? body.error : `Could not open the folder (HTTP ${status}).`;
 
 // The server reports where the PTY actually runs (it may have rejected the
 // requested dir). Adopt it as the truth — display and persist the effective cwd.
@@ -1200,6 +1244,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                   :agent="agent"
                   :model="context.model"
                   :context-tokens="context.contextTokens"
+                  :context-window="context.contextWindow"
                 />
                 <span
                   v-else-if="chip.builtin === 'usage' && showUsage"

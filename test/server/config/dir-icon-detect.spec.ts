@@ -19,6 +19,9 @@ const project = (files: Record<string, string>): string => {
   return dir;
 };
 const cleanup = () => dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true }));
+// A `ref` is a config value, so it is spelled with "/" on every platform — never `path.join`,
+// which would assert `public\favicon.png` on Windows and pass there for a value no config file
+// should ever carry.
 const refOf = (dir: string): string | null => {
   const icon = detectDirIcon(dir);
   return icon?.source === "file" ? icon.ref : null;
@@ -69,7 +72,7 @@ describe("detectDirIcon — which file wins", () => {
     writeFileSync(path.join(parent, "outside.png"), "x");
     symlinkSync(path.join(parent, "outside.png"), path.join(dir, "public", "apple-touch-icon.png"));
     writeFileSync(path.join(dir, "public", "favicon.png"), "x");
-    expect(refOf(dir)).toBe(path.join("public", "favicon.png"));
+    expect(refOf(dir)).toBe("public/favicon.png");
     cleanup();
   });
 
@@ -80,7 +83,7 @@ describe("detectDirIcon — which file wins", () => {
       "public/real.png": "x",
     });
     mkdirSync(path.join(dir, "public", "favicon.ico"));
-    expect(refOf(dir)).toBe(path.join("public", "real.png"));
+    expect(refOf(dir)).toBe("public/real.png");
     cleanup();
   });
 
@@ -115,7 +118,7 @@ describe("detectDirIcon — the web manifest", () => {
       "public/big.png": "x",
       "public/mid.png": "x",
     });
-    expect(refOf(dir)).toBe(path.join("public", "big.png"));
+    expect(refOf(dir)).toBe("public/big.png");
     cleanup();
   });
 
@@ -130,9 +133,9 @@ describe("detectDirIcon — the web manifest", () => {
       "public/mask.png": "x",
       "public/plain.png": "x",
     });
-    expect(refOf(both)).toBe(path.join("public", "plain.png"));
+    expect(refOf(both)).toBe("public/plain.png");
     const only = project({ "public/manifest.json": manifest([{ src: "mask.png", sizes: "512x512", purpose: "maskable" }]), "public/mask.png": "x" });
-    expect(refOf(only)).toBe(path.join("public", "mask.png"));
+    expect(refOf(only)).toBe("public/mask.png");
     cleanup();
   });
 
@@ -145,7 +148,7 @@ describe("detectDirIcon — the web manifest", () => {
       "public/raster.png": "x",
       "public/vector.svg": "<svg xmlns='http://www.w3.org/2000/svg'/>",
     });
-    expect(refOf(dir)).toBe(path.join("public", "vector.svg"));
+    expect(refOf(dir)).toBe("public/vector.svg");
     cleanup();
   });
 
@@ -153,7 +156,7 @@ describe("detectDirIcon — the web manifest", () => {
   // directory. Resolving it against the checkout instead would miss every Vite project.
   it("resolves a root-relative src against the manifest's own directory", () => {
     const dir = project({ "public/site.webmanifest": manifest([{ src: "/pwa-192.png", sizes: "192x192" }]), "public/pwa-192.png": "x" });
-    expect(refOf(dir)).toBe(path.join("public", "pwa-192.png"));
+    expect(refOf(dir)).toBe("public/pwa-192.png");
     cleanup();
   });
 
@@ -168,7 +171,7 @@ describe("detectDirIcon — the web manifest", () => {
       ]),
       "public/local.png": "x",
     });
-    expect(refOf(dir)).toBe(path.join("public", "local.png"));
+    expect(refOf(dir)).toBe("public/local.png");
     cleanup();
   });
 
@@ -211,7 +214,7 @@ describe("detectDirIcon — the web manifest", () => {
       ]),
       "public/here.png": "x",
     });
-    expect(refOf(dir)).toBe(path.join("public", "here.png"));
+    expect(refOf(dir)).toBe("public/here.png");
     cleanup();
   });
 });

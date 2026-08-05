@@ -42,6 +42,10 @@ vi.mock("../../../src/components/Terminal.vue", () => ({
   },
 }));
 
+// GET /api/session/:id itself — NOT its sub-routes (/memo, /terminate) and not the other polls a
+// cell runs, which a "everything else" counter would fold in and make a refresh test read high.
+const SESSION_DETAIL_RE = /\/api\/session\/[^/?]+(\?|$)/;
+
 const promptText = (w: ReturnType<typeof mount>) => w.find('[data-testid="cell-prompt"]').text();
 const dotClass = (w: ReturnType<typeof mount>) => w.find(".cell-dot").classes();
 
@@ -84,11 +88,13 @@ function mountCell(
     expanded?: boolean;
     zoomed?: boolean;
     reorderable?: boolean;
+    initialAgent?: "claude" | "codex" | "antigravity" | "grok";
   } = {},
 ) {
   return mount(TerminalCell, {
     props: {
       uid: 1,
+      ...(opts.initialAgent ? { initialAgent: opts.initialAgent } : {}),
       expanded: opts.expanded ?? false,
       zoomed: opts.zoomed ?? false,
       reorderable: opts.reorderable ?? false,
@@ -829,6 +835,110 @@ describe("TerminalCell", () => {
     const badge = w.find('[data-testid="model-badge"]');
     expect(badge.exists()).toBe(true);
     expect(badge.text()).toBe("Opus · ctx 35%"); // 70k / 200k
+  });
+
+  // An agy cell is the case that has no other way back: agy mints its conversation id after the
+  // spawn, so the seed fetch can only answer "no model" — and with no hooks and no activity
+  // tracker it never finishes a turn, which is the cell's only other badge refresh. The server
+  // publishes when it captures the id (spawn-antigravity.ts); this is the other half.
+  it("re-reads the badges on a push while the model is still unknown", async () => {
+    const id = "55555555-5555-5555-5555-555555555555";
+    let model: string | null = null;
+    let detailReads = 0;
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/scripts")) return { ok: true, json: async () => ({ cwd: "/p", scripts: [] }) };
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
+      if (SESSION_DETAIL_RE.test(u)) detailReads++;
+      return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null, context: { model, contextTokens: 0 } }) };
+    }) as unknown as typeof fetch;
+
+    const w = mountCell(id, { initialAgent: "antigravity" });
+    await flushPromises();
+    expect(w.find('[data-testid="model-badge"]').exists()).toBe(false); // agy has not created the conversation yet
+    // The seed applies activity BEFORE badges, so a re-ask hung off that path would fire here for
+    // the answer it already has — on every non-claude cell, every load.
+    expect(detailReads).toBe(1);
+
+    model = "Gemini 3.6 Flash (High)"; // the capture landed, so the transcript now names it
+    captured?.({ id, working: false, waiting: false });
+    await flushPromises();
+    await nextTick();
+    expect(w.find('[data-testid="model-badge"]').text()).toBe("Gemini 3.6 Flash");
+
+    // And it stops: a known model is not asked for again on the next push.
+    const settled = detailReads;
+    captured?.({ id, working: false, waiting: false });
+    await flushPromises();
+    expect(detailReads).toBe(settled);
+  });
+
+  // agy's and grok's context readings move every turn, and neither agent has a turn end to hang a
+  // refresh on — so without this the percentage is frozen at whatever it was when the cell first
+  // asked. Claude and codex both settle a turn, and must not become pollers.
+  it("re-reads an untracked cell's badges on a timer, and no tracked agent's", async () => {
+    vi.useFakeTimers();
+    try {
+      const id = "55555555-5555-5555-5555-555555555555";
+      let detailReads = 0;
+      globalThis.fetch = vi.fn(async (url: string) => {
+        const u = String(url);
+        if (u.includes("/api/scripts")) return { ok: true, json: async () => ({ cwd: "/p", scripts: [] }) };
+        if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
+        if (SESSION_DETAIL_RE.test(u)) detailReads++;
+        return {
+          ok: true,
+          json: async () => ({
+            working: false,
+            waiting: false,
+            lastPrompt: null,
+            context: { model: "Gemini 3.6 Flash", contextTokens: 1000, contextWindow: 256_000 },
+          }),
+        };
+      }) as unknown as typeof fetch;
+
+      for (const untracked of ["antigravity", "grok"] as const) {
+        const w = mountCell(id, { initialAgent: untracked });
+        await vi.advanceTimersByTimeAsync(1);
+        const afterMount = detailReads;
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(detailReads, untracked).toBeGreaterThan(afterMount);
+        w.unmount();
+      }
+
+      for (const tracked of ["claude", "codex"] as const) {
+        const w = mountCell(id, { initialAgent: tracked });
+        await vi.advanceTimersByTimeAsync(1);
+        const settled = detailReads;
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(detailReads, tracked).toBe(settled);
+        w.unmount();
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Claude's badges ride along with the summary the route already folds, and this is the busiest
+  // route in the app — a push must not turn every claude cell into a poller.
+  it("does not re-read the badges on a push for a claude cell", async () => {
+    const id = "55555555-5555-5555-5555-555555555555";
+    let detailReads = 0;
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/scripts")) return { ok: true, json: async () => ({ cwd: "/p", scripts: [] }) };
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
+      if (SESSION_DETAIL_RE.test(u)) detailReads++;
+      return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null, context: { model: null, contextTokens: 0 } }) };
+    }) as unknown as typeof fetch;
+
+    const w = mountCell(id);
+    await flushPromises();
+    const settled = detailReads;
+    captured?.({ id, working: true, waiting: false });
+    await flushPromises();
+    expect(detailReads).toBe(settled);
+    expect(w.find('[data-testid="model-badge"]').exists()).toBe(false);
   });
 
   it("renders configured chips: hides an omitted built-in, keeps a listed one, and shows custom text", async () => {

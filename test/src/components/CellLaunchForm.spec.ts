@@ -216,12 +216,14 @@ describe("a worktree reached without its row", () => {
 describe("a resume row", () => {
   const row = (over: Partial<SessionRow> = {}): SessionRow => ({ id: "s-9", title: "fix the parser", mtime: 1, ...over });
 
+  // The agent travels with the id: since #1417 the row is one of the PICKED agent's own
+  // conversations, and the cell has to connect the endpoint that wrote it.
   it("resumes a session nobody is holding", async () => {
     mockFetch([], [row()]);
     const w = mountForm();
     await flushPromises();
     await w.find('[data-testid="cell-resume-item"]').trigger("click");
-    expect(w.emitted("resume")?.[0]).toEqual([{ id: "s-9", cwd: "/repo" }]);
+    expect(w.emitted("resume")?.[0]).toEqual([{ id: "s-9", cwd: "/repo", agent: "claude" }]);
   });
 
   // The case the grid's own list is blind to: the other viewer is a second browser tab or a second
@@ -603,5 +605,125 @@ describe("the Agent Picker's custom agents (#1414)", () => {
     // TERMINAL_AGENTS + Shell — asserted as a count derived from the list rather than a literal,
     // so adding a fifth agent does not read as this feature breaking.
     expect(w.find('[data-testid="agent-picker"]').findAll('[role="radio"]')).toHaveLength(TERMINAL_AGENTS.length + 1);
+  });
+});
+
+// #1417: the list belongs to the AGENT the picker has selected, not to Claude. Before this it read
+// ~/.claude/projects whatever was picked, so choosing Codex offered Claude's conversations and
+// clicking one connected the codex endpoint to a key that only ever named a Claude transcript.
+describe("the resume list follows the Agent Picker", () => {
+  // Keyed by the ROUTE each agent's history is listed at, because that is what the change actually
+  // does — there is no `?agent=` parameter, each agent has its own endpoint (common/agentSessionList).
+  // `/api/sessions` is matched LAST: every other path contains it as a suffix.
+  const ROUTES = ["/api/codex/sessions", "/api/antigravity/sessions", "/api/grok/sessions", "/api/sessions"];
+
+  function mockAgentFetch(byRoute: Record<string, SessionRow[]>) {
+    const asked: string[] = [];
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/worktrees")) return { ok: true, json: async () => ({ isGit: true, base: "main", worktrees: [] }) };
+      const route = ROUTES.find((r) => u.startsWith(r));
+      if (route) {
+        asked.push(route);
+        return { ok: true, json: async () => ({ cwd: "/repo", sessions: byRoute[route] ?? [] }) };
+      }
+      return { ok: true, json: async () => ({}) };
+    }) as unknown as typeof fetch;
+    return asked;
+  }
+
+  const rowsFor = (title: string): SessionRow[] => [{ id: `id-${title}`, title, mtime: 1 }];
+
+  it("lists the picked agent's own conversations, and names them in the heading", async () => {
+    mockAgentFetch({ "/api/codex/sessions": rowsFor("a codex chat"), "/api/sessions": rowsFor("a claude chat") });
+    const w = mountForm([], { agent: "codex" });
+    await flushPromises();
+    expect(w.find('[data-testid="ri-title"]').text()).toBe("a codex chat");
+    expect(w.find('[data-testid="cell-resume-heading"]').text()).toBe("or resume a codex conversation here");
+  });
+
+  it("keeps Claude's heading, which is the default nearly every row wears", async () => {
+    mockAgentFetch({ "/api/sessions": rowsFor("a claude chat") });
+    const w = mountForm();
+    await flushPromises();
+    expect(w.find('[data-testid="cell-resume-heading"]').text()).toBe("or resume here");
+  });
+
+  it("re-reads the list when the picker changes, and resumes as that agent", async () => {
+    const asked = mockAgentFetch({ "/api/grok/sessions": rowsFor("a grok chat"), "/api/sessions": rowsFor("a claude chat") });
+    const w = mountForm();
+    await flushPromises();
+    expect(w.find('[data-testid="ri-title"]').text()).toBe("a claude chat");
+
+    await w.setProps({ agent: "grok" });
+    // The previous agent's rows go at once, rather than standing under the new agent's name for
+    // the length of the fetch (#1372's rule, in a second dimension).
+    expect(w.find('[data-testid="cell-resume-item"]').exists()).toBe(false);
+    await flushPromises();
+    expect(asked).toContain("/api/grok/sessions");
+    expect(w.find('[data-testid="ri-title"]').text()).toBe("a grok chat");
+    await w.find('[data-testid="cell-resume-item"]').trigger("click");
+    expect(w.emitted("resume")?.[0]).toEqual([{ id: "id-a grok chat", cwd: "/repo", agent: "grok" }]);
+  });
+
+  // A custom agent runs Claude Code, so its history IS Claude's — the same rule that gives it the
+  // model picker.
+  it("gives a custom agent Claude's list", async () => {
+    const asked = mockAgentFetch({ "/api/sessions": rowsFor("a claude chat") });
+    const w = mountForm([], {
+      agent: "custom:ollama",
+      customAgents: [{ id: "ollama", label: "Ollama", agent: "claude", command: "ollama launch claude --" }],
+    });
+    await flushPromises();
+    expect(asked).toEqual(["/api/sessions"]);
+    expect(w.find('[data-testid="ri-title"]').text()).toBe("a claude chat");
+  });
+
+  // A shell resumes nothing, so there is no history to offer and no route to ask.
+  it("asks for nothing, and shows no section, for a shell", async () => {
+    const asked = mockAgentFetch({ "/api/sessions": rowsFor("a claude chat") });
+    const w = mountForm([], { agent: "shell" });
+    await flushPromises();
+    expect(asked).toEqual([]);
+    expect(w.find('[data-testid="cell-resume"]').exists()).toBe(false);
+    // …and the loading row must not be left standing in its place.
+    expect(w.find('[data-testid="cell-dir-loading"]').exists()).toBe(false);
+  });
+});
+
+// #1447: the folder button posted to /api/pick-file and dropped a non-200 on the floor, so on a
+// host with no dialog installed it was a button that did nothing and said nothing. The field still
+// accepts a typed path — which nobody discovers unless the button explains itself.
+describe("the folder button when the host has no file dialog", () => {
+  const pickError = (w: ReturnType<typeof mountForm>) => w.find('[data-testid="cell-dir-pick-error"]');
+
+  const mountWithPicker = async (picker: { ok: boolean; body: unknown }) => {
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/pick-file")) return { ok: picker.ok, status: picker.ok ? 200 : 500, json: async () => picker.body };
+      if (u.includes("/api/worktrees")) return { ok: true, json: async () => ({ isGit: true, base: "main", worktrees: [] }) };
+      return { ok: true, json: async () => ({ cwd: "/repo", sessions: [] }) };
+    }) as unknown as typeof fetch;
+    const w = mountForm();
+    await flushPromises();
+    await w.find('[aria-label="Choose the working directory"]').trigger("click");
+    await flushPromises();
+    return w;
+  };
+
+  it("shows what the server said, under the field", async () => {
+    const w = await mountWithPicker({ ok: false, body: { error: "No file dialog on this host — install zenity" } });
+    expect(pickError(w).text()).toContain("install zenity");
+  });
+
+  it("says nothing when the dialog opened and the user cancelled", async () => {
+    const w = await mountWithPicker({ ok: true, body: { paths: [] } });
+    expect(pickError(w).exists()).toBe(false);
+  });
+
+  it("fills the field, and shows no error, when a folder comes back", async () => {
+    const w = await mountWithPicker({ ok: true, body: { paths: ["/picked/dir"] } });
+    expect(w.emitted("update:dir")?.at(-1)).toEqual(["/picked/dir"]);
+    expect(pickError(w).exists()).toBe(false);
   });
 });

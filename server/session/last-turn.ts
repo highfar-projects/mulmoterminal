@@ -5,7 +5,7 @@
 // simply isn't on disk (#254).
 
 import { conversationTurnsFromParsed, parseJsonl } from "./transcript.js";
-import { isRecord } from "../../common/isRecord.js";
+import { codexEventPayload as eventPayload } from "../agents/codex-events.js";
 
 export interface LastTurn {
   prompt: string | null;
@@ -37,12 +37,8 @@ export const lastTurnFromClaudeJsonl = (raw: string): LastTurn => lastTurnFromCl
 // codex tags only its turn BOUNDARIES with a turn_id (task_started / turn_context /
 // task_complete) — the user_message and agent_message rows in between carry none. So a
 // turn is the positional span between a task_started and its matching task_complete,
-// and the id serves to pair those two rather than to group the contents.
-const eventPayload = (doc: Record<string, unknown>, type: string): Record<string, unknown> | null => {
-  const payload = isRecord(doc.payload) ? doc.payload : null;
-  return doc.type === "event_msg" && payload?.type === type ? payload : null;
-};
-
+// and the id serves to pair those two rather than to group the contents. Each of those
+// rows is reached through `eventPayload` above, which is shared with the badge reader.
 const trimmedString = (value: unknown): string | null => (typeof value === "string" && value.trim() ? value.trim() : null);
 
 // Walk back to the task_started that opened this turn, then forward to the first

@@ -62,7 +62,7 @@ Empty cells in the grid show a **launcher form**. This is where you choose **wha
 | **Model picker** (when Claude is selected) | Pick the backend / model for this session only (→ [providers](providers.html)) |
 | **Canvas / Workspace data / External accounts** toggles (with an agent selected) | Register a GUI tool group (`render` / `data` / `media` / `external`) as an MCP server **for the directory, not for this session**. With **Claude or Codex** picked they are **absent while the workspace is selected** — everything is available there without registering anything. With **Antigravity or Grok** picked they stay, in the workspace too: they are those two agents' only way to get GUI tools anywhere (→ [Antigravity and Grok register everywhere](#antigravity-gui-tools)) |
 | **OR ISOLATE IN A WORKTREE** | In a git repo, enter a task name and hit **New worktree** to create an isolated worktree and launch there. Existing worktrees are listed below it |
-| **OR RESUME HERE** | Sessions that already exist in this directory — click one to continue it |
+| **OR RESUME HERE** | Conversations that already exist in this directory, **for the agent the Agent Picker has selected** — click one to continue it. The heading names the agent when it is not Claude (`or resume a codex conversation here`) |
 | **OR LAUNCH** | Start a configured **launch command** (`codex`, `htop`, anything) as a persistent terminal |
 
 **A worktree holds one session.** It is tied to a branch, so it is never started twice: a row with
@@ -73,6 +73,15 @@ cannot be clicked because that session is open in another terminal.
 **OR RESUME HERE** works the same way: a session marked `● open` is being viewed somewhere and is
 refused, because opening it here would detach whoever has it. "Somewhere" includes another browser
 tab and a second `mulmoterminal` running on this machine.
+
+**The list belongs to the picked agent.** Each agent keeps its history in its own place — Claude in
+`~/.claude/projects`, Codex in `~/.codex/sessions`, Grok in `~/.grok/sessions`, Antigravity in its
+own brain directory — and only that agent can continue what it wrote. So switching the Agent Picker
+replaces the list, and a conversation is always resumed by the agent that started it. Two limits
+worth knowing: **Shell shows no list** (a shell has nothing to resume), and the **Antigravity** list
+can only show conversations *MulmoTerminal* started — agy records nothing that maps a conversation
+to a directory, so the directory comes from MulmoTerminal's own log and a conversation started in
+the Antigravity IDE will not appear here.
 
 **Change the directory and these lists empty at once.** Everything under **WORKING DIRECTORY** —
 **OR RESUME HERE**, the worktree rows, **OR RUN A SCRIPT** — was read for the directory that was in

@@ -50,9 +50,19 @@ hard to diagnose from inside it:
   them where it goes; do not store it anywhere yourself.
 - **Keep `maxOutputTokens` at 16000 or above.** A thinking model given less spends the whole budget
   thinking and returns empty visible text, which reads as a hung session.
-- **Do not write a `models` array** unless the user names a model outside the built-in list.
-  Registering the provider is enough — every preset for that `id` appears in the picker on its own.
-  `models` exists only to ADD ids nobody has measured.
+- **`models` is REQUIRED under any `id` other than `openrouter`.** Every preset in
+  `common/modelPresets.ts` carries `provider: "openrouter"`, and they are matched by that id — so a
+  backend registered as `deepseek`, `moonshot` or a company gateway starts with **no models at
+  all**, and a provider with no models is not offered in the picker (it cannot start a session
+  either: naming a provider without a model is refused at spawn). Ask which model ids the user
+  wants to run and list them.
+- **Under the id `openrouter`, do not write a `models` array** unless the user names a model outside
+  the built-in list — every preset appears in the picker on its own, with its measured pass rate,
+  and `models` there exists only to ADD ids nobody has measured.
+- **A model id is letters, digits and `. _ : / - ~`.** Anything else in `models` — an object like
+  `{"id": "…"}`, a value with a space, a `models` that is not an array — is dropped when the config
+  loads, leaving a backend that lists models in the file and offers none in the picker. The server
+  log names what it dropped; check it after writing.
 - This is a **partial `POST /api/config` merge** — write only `providers`. Send the array **complete**
   (existing entries included): it replaces rather than appends.
 - The server reads the environment **at startup**: after adding a key, it has to be restarted.
@@ -201,6 +211,8 @@ Work down this list; each maps to one of the rules above.
 | Every request 404s | A trailing `/v1` on `baseUrl` |
 | Session starts, replies are empty | `maxOutputTokens` below 16000 on a thinking model |
 | Session refuses to start | A `provider` id that isn't registered, or `tokenEnv` naming a variable that isn't set in the server's shell |
+| The backend is missing from the MODEL dropdown | It has no models to pick — presets exist only under the id `openrouter`, so list `models`. Open "Needs attention" beside the MODEL label for the sentence naming what is missing |
+| `models` is in the config and the picker still offers none | Every id in it was refused by the shape rule above. The server's log names them |
 | Worked yesterday, not today | The key was in a shell that's gone. The server reads the environment at startup |
 | Model answers but never edits files | Not a config problem — check the model's pass rate in `modelPresets.ts` |
 | A custom agent's button never appears | The entry was dropped on load — most often no `agent: "claude"`, an `id` that is not a lowercase slug, or one clashing with a built-in. Audit `/api/config`, then reload the tab |

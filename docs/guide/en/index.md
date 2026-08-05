@@ -16,6 +16,8 @@ running grid. Already set up? `npx mulmoterminal@latest` is the whole thing.
 [Getting started — from zero to running](getting-started.html){: .btn .btn-purple .fs-5 .mb-4 .mb-md-0 .mr-2 }
 [Basics — how to read the screen](basics.html){: .btn .fs-5 .mb-4 .mb-md-0 }
 
+> **[What's new in 4.5.1](v4.5.1.html)** — a backend registered under an id other than `openrouter` **stops appearing as a row you cannot click**: the MODEL list offers only what it can actually run, and the link beside it reads **Needs attention** with the sentence naming what is missing. **Choose a folder…** now works on a Linux desktop and under **WSL2 without zenity**, and says so when the host has no dialog at all. One line to add, and only if you registered such a backend (as of 2026-08-05)
+>
 > **[What's new in 4.5.0](v4.5.0.html)** — a repository can now **carry its own icon and colour**, in [`repo.json`](../../repo-json.html): an open metadata file any tool can read, so a project states its identity once. One colour becomes the whole cell, and a repo that already ships a **favicon** needs no configuration at all. Each git worktree can also be handed **its own dev-server port and database name**, and **Grok** joins the Agent Picker (as of 2026-08-05)
 >
 > **[What's new in 4.3.1](v4.3.1.html)** — the launcher's workspace chip is labelled **`WORKSPACE`** by its role rather than by its folder name, and the **git chip refreshes when you come back to the tab** instead of up to ten seconds later. Nothing to configure (as of 2026-08-04)

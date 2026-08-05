@@ -78,9 +78,14 @@ function iconFromManifest(base: string, manifestRef: string): DirIcon | null {
   // `src` is resolved against the MANIFEST's directory, not the project root: in the layout every
   // one of these repositories uses, the manifest sits in `public/` and its `/pwa-192.png` means
   // `public/pwa-192.png` — the web root is that directory, not the checkout.
-  const manifestDir = path.dirname(manifestRef);
+  //
+  // Joined with path.posix so the `ref` this produces is spelled the way the candidate list above
+  // spells one — a `ref` is a config value (dir-icon.ts) and a config file is read on every
+  // platform, so `public\big.png` would be a path only Windows resolves. path.resolve inside
+  // resolveIconFile takes "/" on Windows, so nothing is lost by keeping it.
+  const manifestDir = path.posix.dirname(manifestRef);
   for (const entry of rankedIcons(parsed.icons)) {
-    const icon = resolveIconFile(base, path.join(manifestDir, entry.src));
+    const icon = resolveIconFile(base, path.posix.join(manifestDir, entry.src));
     if (icon) return icon;
   }
   return null;

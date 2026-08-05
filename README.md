@@ -227,6 +227,7 @@ Needs **Node ≥ 22.9**, plus these CLIs on your `PATH`:
 | Optional | `codex` | [Codex sessions](#agents-claude--codex) in a cell, alongside Claude | `npm i -g @openai/codex` |
 | Optional | `ffmpeg` | video rendering from the [mulmo-script panel](#wiki-collections--the-gui-panel) (its plugin ships enabled) | `brew install ffmpeg` · `sudo apt install ffmpeg` · `sudo dnf install ffmpeg` |
 | Optional | `ollama` | [`claude-ollama`](https://receptron.github.io/mulmoterminal/guide/en/claude-ollama.html) — Claude Code against a fully local model | [ollama.com/download](https://ollama.com/download) |
+| Linux only | a file dialog | the **Choose a folder / Insert a file path** buttons, which open an OS dialog on the machine the server runs on. macOS and Windows have one built in; **WSL** uses the Windows one over interop and needs nothing installed. A Linux desktop needs one of these — without any, the buttons say so and you type the path instead (#1447) | `sudo apt install zenity` · `sudo dnf install zenity` · `kdialog`, `qarma` and `yad` also work |
 
 The server starts without any of the non-required rows; you just lose that row's feature,
 and the header/panel for it says so. `git` and `gh` are marked required because losing them
@@ -1142,6 +1143,33 @@ Each grid cell's header shows two badges for its session, refreshed when a turn 
 - **Token badge** — `⇡<in> ⇣<out>`: cumulative input (fresh + cache-read + cache-creation)
   and output tokens for the session, k/M-formatted, with a full breakdown in the tooltip.
 
+**Both badges are read from the agent's own log**, so what each agent can show differs by
+what it writes down (`?agent=` on the route picks the reader):
+
+| Agent | Context badge | Token badge |
+|---|---|---|
+| **Claude** | `Opus · ctx 35%` — window from the table above | full |
+| **Codex** | `gpt-5.5 · ctx 21%` — window from codex's own `model_context_window`, so no table to be out of date | full |
+| **Grok** | `grok-4.5 · ctx 33%` — window from grok's own `contextWindowTokens`, so no table either | full |
+| **Antigravity** | `Gemini 3.6 Flash · ctx 78%` — the model from the first step of the conversation's transcript, the reading from agy's own per-generation accounting (a real 256k window, not a table) | full |
+
+The token badge hides itself when nothing has been counted, and the context badge shows
+the model alone unless it has **both** a *current-context* token count from the agent and a
+context window — agent-reported (codex, Grok, Antigravity) or resolved from the built-in table
+above (Claude, provider models). Either one missing means a name and no percentage. The two
+badges are independent: an Antigravity session whose accounting cannot be read still shows
+its model, and one whose cumulative totals are zero still shows a percentage. The context badge is absent
+entirely until an agent has named a model: codex and Antigravity file their logs under an id
+the agent mints *after* the session starts, so a brand-new cell shows no model badge until it
+has been prompted once — a few seconds, not the rest of the session.
+
+Antigravity's numbers are the one case read from a store with **no published format**: agy keeps
+its per-generation accounting as protobuf in `~/.gemini/antigravity-cli/conversations/<id>.db`,
+with no schema on disk, so the fields are identified by measurement (see
+`server/agents/antigravity-usage.ts`). Every layer of that reader is built to answer *nothing*
+rather than a number it is unsure of, so if a future agy release moves those fields, an
+Antigravity cell falls back to showing its model alone — it will not show a wrong percentage.
+
 The **Settings** modal (⚙) shows an **estimated $ cost** — Session / Today / Month — from
 `GET /api/cost`, using a built-in public per-model price table (cache reads billed at
 0.1×, cache writes at 1.25× input). It's an estimate: real billing differs, **flat-plan
@@ -1369,7 +1397,7 @@ quietly answering about the **default workspace** (#1151):
 | --- | --- |
 | `/ws`, `/ws/codex`, `/ws/antigravity`, `/ws/grok`, `/ws/launch`, `/ws/run` | The socket is closed with `{ type: "error", message }`, which the terminal shows as a red banner and does not retry. |
 | A session that is still running (`?session=` names a live PTY or a surviving tmux session) | **Attaches anyway**, with a warning in the server log. Moving or renaming a directory must not shut you out of an agent that is still working in it — and the cwd reported back comes from the running PTY, not from the request. |
-| `GET /api/scripts`, `/api/skills`, `/api/dir-config`, `/api/dir-sound`, `/api/git-status`, `/api/pr-phase`, `/api/header`, `/api/sessions`, `/api/codex/sessions`, `/api/antigravity/sessions`, `/api/session/:id`, `/api/transcript/*`, `/api/cost` | `404 { error, cwd }` — a directory that is not there. |
+| `GET /api/scripts`, `/api/skills`, `/api/dir-config`, `/api/dir-sound`, `/api/git-status`, `/api/pr-phase`, `/api/header`, `/api/sessions`, `/api/codex/sessions`, `/api/antigravity/sessions`, `/api/grok/sessions`, `/api/session/:id`, `/api/transcript/*`, `/api/cost` | `404 { error, cwd }` — a directory that is not there. |
 | A `?cwd=` that cannot name a directory at all (relative, or repeated as `?cwd=a&cwd=b`) | `400 { error, cwd }`. |
 
 A request that names **no** directory is unaffected: `CLAUDE_CWD` is then the answer it
@@ -1491,6 +1519,7 @@ same-origin-guarded.
 | `GET /api/session/:id?cwd=` | One session's summary — cumulative `usage` and `context` (model + last-turn context tokens). Backs the cell token & ctx% badges. |
 | `GET /api/codex/sessions?cwd=` | Codex sessions for the project (from `~/.codex` rollouts), newest first. |
 | `GET /api/antigravity/sessions?cwd=` | Antigravity conversations for the project, newest first. agy does record a workspace, but never as a complete conversation-to-workspace map (`cache/last_conversations.json` keeps one conversation per directory and is written at exit; `history.jsonl` carries no conversation id), so the project comes from MulmoTerminal's own `~/.mulmoterminal/antigravity-conversations.jsonl`; agy's transcript supplies the title. |
+| `GET /api/grok/sessions?cwd=` | Grok conversations for the project, newest first. `~/.grok/sessions` is partitioned by working directory (percent-encoded), so this is a directory listing; each conversation's `summary.json` supplies the title and the last-active time, falling back to the directory's `prompt_history.jsonl`. |
 | `GET /api/cost?cwd=&session=` | Estimated $ cost — session / today / month. |
 | `GET /api/transcript/timeline?session=&cwd=` | Per-session activity timeline (tools run). |
 | `GET /api/transcript/last-turn?session=&cwd=&agent=` | A session's last completed exchange (`prompt`, `reply`) plus the `text` to paste into another terminal. `agent=codex` reads the codex rollout instead of the Claude transcript. |
@@ -1541,7 +1570,7 @@ same-origin-guarded.
 | `POST /api/transcribe`(`/model`…) | Voice-input transcription (Whisper, macOS). |
 | `POST /api/translation` | Runtime UI-string translation. |
 | `GET /api/remote-host/status` · `POST /api/remote-host/{connect,disconnect}` | Companion phone-client link. Each response carries the command channel's `health` (`online` / `reconnecting` / `offline`, plus the last listener error), so the toolbar shows a dropped channel instead of the last state it happened to fetch. |
-| `POST /api/open-dir` · `POST /api/pick-file` | Reveal a dir in Finder/Explorer; OS file-picker → path (`{ directory: true }` opens the folder picker — used by the launcher's Working-directory 📁 button). |
+| `POST /api/open-dir` · `POST /api/pick-file` | Reveal a dir in Finder/Explorer; OS file-picker → path (`{ directory: true }` opens the folder picker — used by the launcher's Working-directory 📁 button). Both run on the SERVER's machine, and both answer **500 with a reason** when it has nothing to open a dialog with, rather than a silent nothing (#1447). The picker tries every dialog the host might have: macOS `osascript`, Windows PowerShell, **WSL** the Windows dialog over interop (`powershell.exe` + `wslpath`), Linux `zenity` → `kdialog` → `qarma` → `yad`. A user cancel is a 200 with `paths: []`. |
 | `POST /api/session/:id/drop` | A dropped file whose path the browser withheld. **Raw bytes**, not JSON, under the file's own content type (base64 in JSON would cap real files near 18 MB, and a dropped `.json` would be parsed as a document); the original name rides percent-encoded in `x-drop-filename` and is used for its **suffix only**. Answers `{ path }` — absolute, inside the private per-session directory the session was granted at launch. 110 MiB cap; 404 for a session this server isn't running. |
 
 The phone itself uses **none** of these routes — it reaches the host over Firestore command
@@ -1857,7 +1886,8 @@ server/
   git/            git, GitHub (gh) and GitLab (glab) + worktrees: git-status.ts, gitRemote.ts,
                   gh.ts, prs.ts, issues.ts, pr-for-branch.ts, worktrees.ts, worktree-*.ts
   files/          files-browse.ts (contained tree read/write), pick-file.ts,
-                  open-dir.ts, scripts.ts (Run-menu script.json loader)
+                  open-dir.ts, wsl.ts (interop detection + wslpath),
+                  scripts.ts (Run-menu script.json loader)
   infra/          process/transport/misc: tmux.ts, tmux-routes.ts,
                   pubsub.ts (socket.io /ws/pubsub), spa-fallback.ts, host-tools.ts,
                   plugins-registry.ts, web-push.ts, install-bundled-skills.ts, accounting-tool.ts

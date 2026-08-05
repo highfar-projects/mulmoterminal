@@ -28,6 +28,7 @@ import { DEFAULT_PUSH_KINDS, PUSH_KINDS, type PushKind } from "../../common/push
 import { DEFAULT_SOUND_KINDS, NOTIFY_KINDS, type NotifyKind } from "../../common/notifyKinds.js";
 import { parsePresetRef } from "../../common/notifySounds.js";
 import { isRecord } from "../../common/isRecord.js";
+import { MODEL_ID_ALLOWED } from "../../common/modelIds.js";
 import { sanitizeKeymap, type Keymap } from "../../common/keymap.js";
 import { sanitizeCockpitLines, DEFAULT_COCKPIT_LINES, type CockpitLines } from "../../common/cockpitLines.js";
 import { normalizeFontFamily } from "../../common/terminalFontFamily.js";
@@ -454,6 +455,41 @@ export const emptyConfig = (): AppConfig => ({
   fontFamily: null,
 });
 
+// Said once per process: this config is re-read on paths that run per session spawn, so an entry
+// the user has not fixed yet would repeat its line at every launch and bury everything else.
+const warnedConfigLines = new Set<string>();
+const warnOnce = (message: string): void => {
+  if (warnedConfigLines.has(message)) return;
+  warnedConfigLines.add(message);
+  console.warn(message);
+};
+
+// What a rejected entry is quoted as. A dropped value is whatever the user's JSON held — an
+// object, or a string far past MODEL_ID_MAX_LENGTH, which is one of the reasons it was rejected —
+// so it is quoted to a bound rather than echoed whole into the line.
+const DROPPED_MODEL_QUOTE_MAX = 80;
+const quoteDropped = (model: unknown): string => {
+  const text = JSON.stringify(model) ?? String(model);
+  return text.length > DROPPED_MODEL_QUOTE_MAX ? `${text.slice(0, DROPPED_MODEL_QUOTE_MAX)}…` : text;
+};
+
+// A model id the schema refuses is dropped in silence, and a provider whose whole list was
+// refused looks exactly like one that never listed any: the picker has nothing to offer while the
+// user is reading a config file that lists models (#1432). Compared against what the schema KEPT
+// rather than re-testing the rule here, so the two cannot drift apart.
+function warnDroppedModels(provider: Provider, raw: unknown): void {
+  if (!isRecord(raw) || raw.models === undefined) return;
+  if (!Array.isArray(raw.models)) {
+    warnOnce(`[providers] '${provider.id}': "models" must be an array of model ids — the whole value was ignored, so this backend offers nothing.`);
+    return;
+  }
+  const kept = new Set(provider.models);
+  const dropped = raw.models.filter((model) => typeof model !== "string" || !kept.has(model.trim()));
+  if (dropped.length === 0) return;
+  const shown = dropped.map(quoteDropped).join(", ");
+  warnOnce(`[providers] '${provider.id}': dropped ${dropped.length} unusable model id(s) — ${shown}. A model id is ${MODEL_ID_ALLOWED}.`);
+}
+
 // Drop malformed entries rather than rejecting the whole config: one bad provider must
 // not cost the user their launchers and presets. A bad entry surfaces at spawn time,
 // where resolveProvider names the actual problem.
@@ -461,7 +497,9 @@ export function sanitizeProviders(input: unknown): Provider[] {
   if (!Array.isArray(input)) return [];
   return input.flatMap((entry) => {
     const parsed = providerSchema.safeParse(entry);
-    return parsed.success ? [parsed.data] : [];
+    if (!parsed.success) return [];
+    warnDroppedModels(parsed.data, entry);
+    return [parsed.data];
   });
 }
 

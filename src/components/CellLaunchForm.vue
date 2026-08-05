@@ -13,15 +13,16 @@ import { isSameDirPath } from "../../common/dirPathKey";
 import { TOOL_GROUPS, TOOL_GROUP_HEADINGS, toolGroupServerId, toolsInGroup, type ToolGroup } from "../../common/toolGroups";
 import { customAgentIdOf, type AgentPick, type CustomAgent } from "../../common/customAgents";
 import { pickCarriesFullGuiMcp } from "../../common/guiMcpAgents";
-import type { TerminalAgent } from "../../common/sessionAgent";
+import { agentBadge, isTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { launchChips, type CwdPreset, type LaunchChip } from "./presets";
 import type { Launcher, LaunchPick } from "./launchers";
 import type { LaunchChoice } from "./wsUrl";
 import type { RunCommand } from "./runCommand";
 import LaunchChipList from "./LaunchChipList.vue";
 import ModelPicker from "./ModelPicker.vue";
-import { isUnknownArray } from "../../common/isUnknownArray";
+import { LAUNCH_ROW } from "./launchFormClasses";
 import { jsonBody } from "../jsonBody";
+import { pickPaths } from "../composables/pickPaths";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 // What an EMPTY grid cell shows: pick a directory, pick what to run in it, and start — or resume
@@ -67,9 +68,10 @@ const emit = defineEmits<{
   // the dir field, a preset chip and a worktree alike — so the cell decides once what the picked
   // agent means (a shell replaces the cell; an agent runs in it).
   (e: "start", dir: string | null): void;
-  // Attach to an existing session, in the cwd its row was listed for. `agent` travels only for a
-  // worktree row, whose session may be one the Agent Picker is not currently pointed at —
-  // resuming a codex conversation as Claude would connect the wrong endpoint to a live id.
+  // Attach to an existing session, in the cwd its row was listed for. `agent` says which endpoint
+  // that session speaks — a worktree row reads it off the session it found, a resume row is one of
+  // the picked agent's own conversations (#1417). Resuming a codex conversation as Claude would
+  // connect the wrong endpoint to a live id, so neither row may leave it out.
   (e: "resume", value: { id: string; cwd: string | null; agent?: TerminalAgent }): void;
   (e: "run", value: RunCommand): void;
   (e: "launch", value: LaunchPick): void;
@@ -174,9 +176,33 @@ const {
   syncInto: syncMcpGroupsInto,
 } = useMcpToolGroups();
 
+// WHOSE past conversations the resume list shows: the agent the picker has selected, because each
+// agent keeps its history in its own store and only that store can be resumed by that agent
+// (#1417). A custom agent runs Claude Code, so it takes Claude's — the same reason `launchesClaude`
+// gives the model picker. Shell has none: null, and the section is not rendered at all.
+const listAgent = computed<TerminalAgent | null>(() => {
+  if (launchesClaude.value) return "claude";
+  // NARROWED, not asserted: `AgentPick` also spells Shell and `custom:<id>`, and the one thing this
+  // must never do is name an agent that has no history to list. Anything that is not one of the
+  // four agents lands on null, which is the same answer Shell gets — no route asked, no section.
+  return isTerminalAgent(props.agent) ? props.agent : null;
+});
+
+// How the section says whose conversations these are. Claude's keeps the original wording — it is
+// the default, and naming it would put a label on the list nearly everyone sees — while the others
+// must say it: three of the four lists are new here, and a row that resumes as codex looks exactly
+// like a row that resumes as claude.
+const resumeHeading = computed(() => {
+  const badge = agentBadge(listAgent.value);
+  return badge ? `or resume a ${badge.full} conversation here` : "or resume here";
+});
+
 // Everything this form offers is per-directory, so they are read as one.
-function loadForDir(dir: string | null): void {
-  void loadResumable(dir);
+function loadForDir(dir: string | null, agent: TerminalAgent | null): void {
+  // A null dir is what `load` already takes to mean "nothing to list": for Shell that empties the
+  // list and clears the loading flag, which is what the section's absence has to be built on —
+  // `forget` would leave it loading forever.
+  void loadResumable(agent === null ? null : dir, agent ?? "claude");
   void loadScripts(dir);
   void loadWorktrees(dir);
   void loadMcpGroups(dir);
@@ -191,13 +217,25 @@ function forgetForDir(): void {
   forgetWorktrees();
   forgetMcpGroups();
 }
-onMounted(() => loadForDir(targetDir.value));
+onMounted(() => loadForDir(targetDir.value, listAgent.value));
 
 // A programmatic dir change (fillDir) loads the lists immediately, so the watch below must skip
 // the debounced reload it would otherwise ALSO fire — or every preset click / folder pick would
 // fetch the lists twice.
 let skipDirWatch = false;
 let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+// The AGENT is watched alongside the directory, and for the same reason: the resume rows belong to
+// one agent's history as much as to one directory, so rows fetched under Codex must not stand under
+// Claude while the replacement is in flight (#1372's rule, in a second dimension). A picker click
+// is not typing, so it reloads immediately rather than through the debounce.
+// Only the resume list: scripts, worktrees and the tool-group switches belong to the DIRECTORY and
+// are the same whichever agent is picked, so re-reading them here would be work with no answer to
+// show for it.
+watch(listAgent, (agent) => {
+  forgetResumable();
+  void loadResumable(agent === null ? null : targetDir.value, agent ?? "claude");
+});
 
 watch([() => props.dir, () => props.defaultCwd], () => {
   // Cancel any pending debounced reload FIRST — whether we skip (a fillDir just loaded
@@ -214,7 +252,7 @@ watch([() => props.dir, () => props.defaultCwd], () => {
   // clickable under a directory it has nothing to do with. The reload below puts back the new
   // directory's own.
   forgetForDir();
-  reloadTimer = setTimeout(() => loadForDir(targetDir.value), DIR_RELOAD_DEBOUNCE_MS);
+  reloadTimer = setTimeout(() => loadForDir(targetDir.value, listAgent.value), DIR_RELOAD_DEBOUNCE_MS);
 });
 onUnmounted(() => {
   if (reloadTimer) clearTimeout(reloadTimer);
@@ -231,23 +269,19 @@ function fillDir(path: string): void {
   emit("update:dir", path);
   // The prop only comes back down on the next render, so the lists are asked for the picked path
   // rather than for the field's current (still previous) value.
-  loadForDir(dirFor(path));
+  loadForDir(dirFor(path), listAgent.value);
 }
 
 // The folder button: the browser can't open a native folder chooser, so the local server does
 // (POST /api/pick-file { directory: true }). Fill the Working-directory field with the pick.
+// A host with no dialog at all says so under the field — typing the path still works, and that
+// is only discoverable if the button explains itself instead of doing nothing (#1447).
+const pickError = ref<string | null>(null);
 async function pickDir(): Promise<void> {
-  try {
-    // Deliberately unbounded: this route answers when the USER closes the native file dialog,
-    // so any deadline here is a guess at how long they will take to choose.
-    const res = await fetch("/api/pick-file", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ directory: true }) });
-    if (!res.ok) return;
-    const data = await jsonBody(res);
-    const dir = isUnknownArray(data.paths) ? data.paths.find((p): p is string => typeof p === "string") : undefined;
-    if (dir) fillDir(dir);
-  } catch {
-    // best-effort — the native dialog is unavailable or the user canceled
-  }
+  const { paths, error } = await pickPaths({ directory: true });
+  pickError.value = error;
+  const dir = paths[0];
+  if (dir) fillDir(dir);
 }
 
 // The chip's launch button: a one-click quick launch — fill the field and jump straight into a
@@ -314,9 +348,14 @@ function runScript(index: number): void {
 const sessionBusy = (s: ResumableSession): boolean => s.attached === true || (props.openSessionIds ?? []).includes(s.id);
 
 function resume(s: ResumableSession): void {
-  if (sessionBusy(s)) return;
+  if (sessionBusy(s) || listAgent.value === null) return;
   // Use the cwd those rows were fetched for, not the (possibly-changed) input.
-  emit("resume", { id: s.id, cwd: resumable.value.cwd ?? targetDir.value });
+  //
+  // The AGENT travels too, now that the row can be one of codex's / agy's / grok's own
+  // conversations: the cell must connect the endpoint that WROTE the conversation, and a codex
+  // rollout id resumed as Claude is a live id on the wrong endpoint. It was safe to leave out
+  // while every row here was Claude's; it is not any more.
+  emit("resume", { id: s.id, cwd: resumable.value.cwd ?? targetDir.value, agent: listAgent.value });
 }
 
 const relativeTime = (ms: number): string => relativeTimeFrom(ms, Date.now());
@@ -441,7 +480,7 @@ async function removeWorktree(w: Worktree): Promise<void> {
     >
       <span class="material-symbols-outlined" aria-hidden="true">close</span>
     </button>
-    <div v-if="chips.length" class="flex max-w-[360px] flex-wrap justify-center gap-1.5">
+    <div v-if="chips.length" class="flex w-full flex-wrap justify-center gap-1.5">
       <span
         v-for="p in chips"
         :key="p.label + p.path"
@@ -507,14 +546,14 @@ async function removeWorktree(w: Worktree): Promise<void> {
         </button>
       </span>
     </div>
-    <!-- The AGENT PICKER. Centred like everything else in this column — the directory field, the
-         model picker and the chips above it all sit on the centre line, so a left-aligned toggle
-         was the one thing off it. Wraps rather than overflowing: four options do not fit one row
-         in a narrow cell, and the one that would fall off the edge is the last, Shell — so the
-         wrapped row is centred too rather than hanging off the left. -->
+    <!-- The AGENT PICKER is the one row that keeps its CONTENT width while the rest of the column
+         spans the cell: it is a segmented control, so stretching it would widen the pill's
+         background and fit nothing more into it. It still wraps rather than overflowing — the
+         options do not fit one row in a narrow cell — and the row that falls to the next line is
+         centred rather than hanging off the left. -->
     <div
       data-testid="agent-picker"
-      class="inline-flex max-w-[360px] flex-wrap justify-center gap-0.5 rounded-[7px] border border-border bg-deep p-0.5"
+      class="inline-flex max-w-full flex-wrap justify-center gap-0.5 rounded-[7px] border border-border bg-deep p-0.5"
       role="radiogroup"
       aria-label="Agent picker — what this terminal runs"
     >
@@ -533,7 +572,7 @@ async function removeWorktree(w: Worktree): Promise<void> {
         {{ option.label }}
       </button>
     </div>
-    <label class="flex w-full max-w-[360px] flex-col items-center gap-1.5">
+    <label class="flex flex-col items-center gap-1.5" :class="LAUNCH_ROW">
       <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">Working directory</span>
       <span class="flex w-full items-stretch gap-1.5">
         <input
@@ -571,6 +610,7 @@ async function removeWorktree(w: Worktree): Promise<void> {
       <span v-if="takenWorktreeAt(targetDir)" data-testid="cell-dir-busy" class="font-sans text-[11px] leading-snug text-amber">{{
         takenWorktreeAt(targetDir)
       }}</span>
+      <span v-if="pickError" data-testid="cell-dir-pick-error" role="alert" class="font-sans text-[11px] leading-snug text-amber">{{ pickError }}</span>
     </label>
     <!-- Codex has its own model configuration and doesn't read this one. Keyed on the AGENT
          PICKER, not on the agent the cell will run: that reads "claude" while Shell is picked (a
@@ -593,7 +633,7 @@ async function removeWorktree(w: Worktree): Promise<void> {
            would register a group URL with nothing left to serve: a control that does nothing.
            Asked of the AGENT as well as the directory — Antigravity in the workspace takes the
            `v-else` and gets the switches, because that is genuinely how it reaches any tool. -->
-      <div v-if="workspaceGivesEveryTool" data-testid="cell-mcp-all" class="flex w-full max-w-[360px] flex-col gap-0.5">
+      <div v-if="workspaceGivesEveryTool" data-testid="cell-mcp-all" class="flex flex-col gap-0.5" :class="LAUNCH_ROW">
         <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">GUI tools</span>
         <span class="font-sans text-[11px] leading-snug text-secondary">
           <span class="material-symbols-outlined mr-[3px] align-middle text-[13px]" aria-hidden="true">workspaces</span>
@@ -605,7 +645,7 @@ async function removeWorktree(w: Worktree): Promise<void> {
            A `template v-else` around the loop rather than `v-else` ON it: v-if and v-for on one
            element is the ambiguity eslint-plugin-vue forbids. -->
       <template v-else>
-        <label v-for="group in TOOL_GROUPS" :key="group" class="flex w-full max-w-[360px] items-center justify-between gap-2" :title="mcpGroupTitle(group)">
+        <label v-for="group in TOOL_GROUPS" :key="group" class="flex items-center justify-between gap-2" :class="LAUNCH_ROW" :title="mcpGroupTitle(group)">
           <!-- The group is named, not just the feature: each switch registers ONE MCP server
            (`mulmoterminal-<group>`), so a heading alone would not say which of the four rows
            writes which server — and two of them share the heading "Canvas".
@@ -637,7 +677,8 @@ async function removeWorktree(w: Worktree): Promise<void> {
     <div
       v-if="dirListsLoading"
       data-testid="cell-dir-loading"
-      class="flex w-full max-w-[360px] items-center justify-center gap-1.5 font-sans text-[11px] text-dim"
+      class="flex items-center justify-center gap-1.5 font-sans text-[11px] text-dim"
+      :class="LAUNCH_ROW"
       role="status"
     >
       <span class="material-symbols-outlined animate-spin text-[14px]" aria-hidden="true">progress_activity</span>
@@ -650,7 +691,8 @@ async function removeWorktree(w: Worktree): Promise<void> {
     <div
       v-if="worktreeList.isGit && launchesAgent && !inWorkspace"
       data-testid="cell-worktrees"
-      class="flex w-full max-w-[360px] flex-col items-stretch gap-1.5"
+      class="flex flex-col items-stretch gap-1.5"
+      :class="LAUNCH_ROW"
     >
       <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">or isolate in a worktree (git repo)</span>
       <!-- Said here rather than left to be inferred from a row that behaves differently each time:
@@ -710,8 +752,11 @@ async function removeWorktree(w: Worktree): Promise<void> {
     </div>
     <LaunchChipList heading="or run a script" icon="play_arrow" :chips="scriptChips" @pick="runScript" />
     <LaunchChipList heading="or launch" icon="rocket_launch" :chips="launcherChips" @pick="launchProgram" />
-    <div v-if="resumable.sessions.length" data-testid="cell-resume" class="flex min-h-0 w-full max-w-[360px] flex-col items-center gap-1.5">
-      <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">or resume here</span>
+    <!-- The picked agent's OWN conversations. Shell has none, and reaches here with an empty list
+         anyway (loadForDir passes it no directory) — the `listAgent` test says so out loud rather
+         than resting on that. -->
+    <div v-if="listAgent && resumable.sessions.length" data-testid="cell-resume" class="flex min-h-0 flex-col items-center gap-1.5" :class="LAUNCH_ROW">
+      <span data-testid="cell-resume-heading" class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">{{ resumeHeading }}</span>
       <div class="flex w-full flex-col gap-1">
         <button
           v-for="s in resumable.sessions"
