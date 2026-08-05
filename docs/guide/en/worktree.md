@@ -86,6 +86,11 @@ what refuses, so no client and no way of spelling the path gets around it.
 too when what it runs is an agent. **Shell**, and launchers that run anything else (`yarn dev`,
 `lazygit`), are exempt — the worktree an agent is working in is exactly where you want to run those.
 
+And two of those `yarn dev`s no longer fight over port 3000 — if the project asks for it. Each
+variable a project declares in [`worktreeEnv`](config.html#worktree-env) (a port, a database name,
+or several of either) is given **a value of its own per worktree**, exported into that worktree's
+terminals and shown on the cell header — a port as a clickable `:3010`.
+
 ---
 
 ## Working in the worktree {#work}

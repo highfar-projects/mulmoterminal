@@ -9,7 +9,8 @@
 // Only a MANAGED worktree is limited. An ordinary directory takes as many terminals as the user
 // wants — that is what the grid is for.
 
-import { canonicalPath, isManagedWorktree, repoRoot } from "../git/worktrees.js";
+import { isManagedWorktree, repoRoot } from "../git/worktrees.js";
+import { canonicalPath } from "../infra/canonical-path.js";
 import { tmuxAttachedCounts } from "../infra/tmux.js";
 import { dirSession, type DirSession } from "./dir-session.js";
 

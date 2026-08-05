@@ -32,6 +32,7 @@ export const DIR_CONFIG_KEYS = [
   "model",
   "addDirs",
   "appendSystemPrompt",
+  "worktreeEnv",
 ] as const;
 
 export interface DirConfigSource {
@@ -78,6 +79,10 @@ export interface DirConfigExtras {
   // to the directory. Null when the icon was configured, or when there is none — so the preview
   // can distinguish a setting from a discovery, which `iconUrl` cannot.
   autoIcon: string | null;
+  // Which per-tree variables this directory declares (#1367) — the NAMES, not the values. The
+  // values belong to a tree rather than to the file, and each cell already shows its own on the
+  // `env` header chip; what this panel answers is whether the declaration was read at all.
+  worktreeEnvNames: string[];
 }
 
 export const EMPTY_DIR_CONFIG_EXTRAS: DirConfigExtras = {
@@ -89,6 +94,7 @@ export const EMPTY_DIR_CONFIG_EXTRAS: DirConfigExtras = {
   buttonLabels: [],
   chipLabels: [],
   autoIcon: null,
+  worktreeEnvNames: [],
 };
 
 // "The loader kept nothing for this key" — null/undefined, but also the empty collections the

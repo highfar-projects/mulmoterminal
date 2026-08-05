@@ -23,6 +23,7 @@ import { preferredLaunchDir, shouldSyncLaunchDir } from "./launchDir";
 import CellLaunchForm from "./CellLaunchForm.vue";
 import GitBranchChip from "./GitBranchChip.vue";
 import WorkItemChip from "./WorkItemChip.vue";
+import WorktreeEnvChip from "./WorktreeEnvChip.vue";
 import CellTidyPrompt from "./CellTidyPrompt.vue";
 import WorkCommentNotice from "./WorkCommentNotice.vue";
 import ModelContextBadge from "./ModelContextBadge.vue";
@@ -225,9 +226,11 @@ const context = ref<CellContext | null>(null);
 // below, so with no config the header is exactly as before. When configured, the built-ins listed here
 // (git/diff/ctx/usage) render in that order — others are hidden — and custom chips render as text. `dir`,
 // the project badge, the status dot/activity, and the row-2 tools timeline stay structural.
-const { chips: headerChips } = useHeaderButtons({ cwd, session: sessionId, agent, model: computed(() => context.value?.model ?? null) });
-const ROW1_BUILTIN_CHIPS = new Set(["git", "work", "diff", "ctx", "usage"]);
-const DEFAULT_CELL_CHIP_IDS = ["git", "work", "diff", "ctx", "usage"];
+const { chips: headerChips, env: worktreeEnv } = useHeaderButtons({ cwd, session: sessionId, agent, model: computed(() => context.value?.model ?? null) });
+const ROW1_BUILTIN_CHIPS = new Set(["git", "work", "diff", "ctx", "usage", "env"]);
+// `env` is in the defaults and costs nothing to a project that declares no `worktreeEnv`: the
+// chip renders nothing when there are no values, so this only shows up where it was asked for.
+const DEFAULT_CELL_CHIP_IDS = ["git", "work", "diff", "ctx", "usage", "env"];
 interface CellChipView {
   key: string;
   builtin: string | null;
@@ -1138,6 +1141,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               <template v-for="chip in cellChips" :key="chip.key">
                 <GitBranchChip v-if="chip.builtin === 'git'" :status="gitStatus" :hide-dirty="isWorktreeCell" />
                 <WorkItemChip v-else-if="chip.builtin === 'work'" :item="workItem" />
+                <WorktreeEnvChip v-else-if="chip.builtin === 'env'" :values="worktreeEnv" />
                 <button
                   v-else-if="chip.builtin === 'diff' && showDiffBadge && diff"
                   type="button"
