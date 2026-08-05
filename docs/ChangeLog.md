@@ -8,6 +8,77 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.5.1 — 2026-08-05
+
+> **Setup guide:** [A backend with no models says so](https://receptron.github.io/mulmoterminal/guide/en/v4.5.1.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.5.1.html))
+
+A fix release for two things that looked, from the outside, like the app simply not responding: a
+backend you could see but not select, and a button that did nothing at all.
+
+### Fixed
+
+- **A provider with no models is explained rather than drawn as a row you cannot click** ([#1461](https://github.com/receptron/mulmoterminal/pull/1461), closes [#1432](https://github.com/receptron/mulmoterminal/issues/1432)).
+  A custom backend appeared in the launch form's MODEL dropdown and could not be selected by a click
+  or with the arrow keys. It was never an option: a provider whose `models` is empty rendered as
+  `<optgroup label="DeepSeek"></optgroup>` — a group header with nothing under it, which a browser
+  draws as a shaded row that the mouse and the keyboard both skip.
+
+  Two silent paths lead there, and the report hit at least one. The measured presets are
+  **OpenRouter's alone** — they are matched by the provider's `id`, so a backend registered as
+  `deepseek`, `moonshot` or a company gateway starts with no models and must list its own. And a
+  malformed `models` entry (`[{"id": "…"}]`, a value with a space, a `models` that is not an array)
+  was dropped by the config schema **without a word**, so the file listed models while the UI had
+  none.
+
+  The picker now offers only backends that are reachable **and** have a model to pick; the rest are
+  named. The link beside the MODEL label reads **Needs attention**, and the panel behind it carries
+  the sentence — `provider 'deepseek' has no models to pick — list its model ids under "models" in
+  ~/.mulmoterminal/config.json (only 'openrouter' has built-in presets)`. Settings' **Models and
+  backends** marks such a backend **not in the picker** instead of `ready`, and the server names
+  every model id it dropped, on the terminal it was started from.
+
+  The `mulmoterminal-model` skill and both providers guides said the opposite — *"do not write a
+  `models` array, registering the provider is enough"* — which is true only under the id
+  `openrouter`, and is what produced the broken entry. Corrected in all three.
+
+- **`Choose a folder…` works on Linux and WSL2 without zenity** ([#1463](https://github.com/receptron/mulmoterminal/pull/1463), closes [#1447](https://github.com/receptron/mulmoterminal/issues/1447)).
+  Without `zenity` installed the button did nothing at all — no dialog, no message. Two faults, both
+  fixed: the server spawned `zenity` unconditionally on anything that was not macOS or Windows, and
+  all three call sites in the UI discarded the resulting 500.
+
+  The picker now tries what the host actually has: macOS `osascript`, Windows PowerShell, **WSL2 the
+  Windows dialog over interop** (`powershell.exe`, with the returned path converted by `wslpath` —
+  nothing to install), and a Linux desktop `zenity` → `kdialog` → `qarma` → `yad`. When none exists
+  the UI **says so** rather than appearing broken, and `init` reports on Linux which dialog this host
+  has. `POST /api/open-dir` carried the same swallowed-failure bug and was fixed with it.
+
+- **The launch form's controls have a width again** ([#1460](https://github.com/receptron/mulmoterminal/pull/1460), after [#1455](https://github.com/receptron/mulmoterminal/pull/1455)).
+  Every row of the form was capped at 360px, so a wide cell drew a narrow centred column — 25
+  directory chips wrapped into 20 rows inside 360px while the cell was 1535px wide. #1455 removed the
+  cap, which fixed the chips and stretched everything else: at a 1535px cell a checkbox sat most of a
+  screen from its label. The two are now separate — **chips take the whole cell** (they tile, so
+  width buys rows back), **every other control shares one 560px cap**, and the agent picker keeps its
+  own content width.
+
+- **Four path-dependent tests that failed only on Windows** ([#1462](https://github.com/receptron/mulmoterminal/pull/1462)).
+  `Windows (daily)` had been red on main across both Node 22.x and 24.x while lint, typecheck and
+  build were green. All four expected path shapes Windows does not produce — a `path.join`ed
+  candidate that is a `/`-separated constant, a drive-less absolute path that `path.resolve` completes
+  with the current drive, and a temp dir resolved by the JS `realpathSync` where production uses
+  `.native` (which is what expands an 8.3 short name). Windows does not run on `pull_request`, which
+  is how they reached main green on macOS.
+
+### Documentation
+
+- **The 4.5.0 setup guide covers the whole release** ([#1451](https://github.com/receptron/mulmoterminal/pull/1451)).
+  It had shipped covering `repo.json` only; it now documents `worktreeEnv`, Grok and `customAgents`,
+  and the twelve settings that gained controls — each with a screenshot taken against a running
+  server.
+- **Release pages have their own `nav_order` range** ([#1452](https://github.com/receptron/mulmoterminal/pull/1452), [#1453](https://github.com/receptron/mulmoterminal/pull/1453)).
+  The sidebar read *4.5.0 → glossary → 4.4.0*: the version pages had grown into the numbers the
+  reference pages occupy, and just-the-docs breaks a tie by title. The reference guide now keeps
+  **1–999** and release pages start at **1001**, newest first, so the two ranges cannot meet again.
+
 ## mulmoterminal@4.5.0 — 2026-08-05
 
 > **Setup guide:** [repo.json, a port per worktree, Grok, and settings you can reach](https://receptron.github.io/mulmoterminal/guide/en/v4.5.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.5.0.html))
