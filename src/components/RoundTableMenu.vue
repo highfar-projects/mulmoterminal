@@ -18,7 +18,12 @@ const props = defineProps<{
   targets: readonly HandoffTarget[];
   /** How this cell is named at the table it starts. */
   selfLabel: string;
+  /** A table started from THIS cell is running — the picker offers Stop rather than Start. */
   running: boolean;
+  /** SOME automation is running (this table, or the one-turn exchange beside it). Only one may
+   *  type into terminals at a time, so Start is refused — but the button stays a Start, because
+   *  stopping is the other control's job. */
+  busy: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -42,7 +47,7 @@ function toggle(key: string): void {
 }
 
 const seats = computed(() => picked.value.length + 1);
-const ready = computed(() => !props.running && canRunTable(seats.value));
+const ready = computed(() => !props.busy && canRunTable(seats.value));
 
 function start(): void {
   const chosen = props.targets.filter((target) => isPicked(target.key));
@@ -58,7 +63,7 @@ function start(): void {
       v-for="target in targets"
       :key="target.key"
       class="flex cursor-pointer items-center gap-1.5 rounded-[4px] px-2 py-1 font-sans text-[12px] text-secondary hover:bg-hover hover:text-fg"
-      :class="{ 'cursor-default opacity-40': full && !isPicked(target.key) }"
+      :class="{ 'cursor-default opacity-40': busy || (full && !isPicked(target.key)) }"
     >
       <input
         type="checkbox"
@@ -66,7 +71,7 @@ function start(): void {
         class="m-0 cursor-pointer"
         :value="target.key"
         :checked="isPicked(target.key)"
-        :disabled="running || (full && !isPicked(target.key))"
+        :disabled="busy || (full && !isPicked(target.key))"
         @change="toggle(target.key)"
       />
       {{ target.label }}
@@ -77,7 +82,7 @@ function start(): void {
       <select
         v-model.number="budget"
         data-testid="round-table-budget"
-        :disabled="running"
+        :disabled="busy"
         class="cursor-pointer rounded-[4px] border border-border bg-panel px-1 py-0.5 text-[12px] text-fg"
       >
         <option v-for="option in TURN_BUDGETS" :key="option" :value="option">{{ option }}</option>
@@ -93,7 +98,7 @@ function start(): void {
       data-testid="round-table-start"
       class="mx-1 mb-1 cursor-pointer rounded-[4px] border border-border bg-transparent px-2 py-1 font-sans text-[12px] text-secondary hover:bg-hover hover:text-fg disabled:cursor-default disabled:opacity-40"
       :disabled="!ready"
-      :title="ready ? `Start a table of ${seats}, ${budget} turns` : 'Pick at least one other terminal'"
+      :title="busy ? 'Another automation is running in this cell' : ready ? `Start a table of ${seats}, ${budget} turns` : 'Pick at least one other terminal'"
       @click="start"
     >
       <span class="material-symbols-outlined align-middle" aria-hidden="true">groups</span>

@@ -5,7 +5,7 @@ import { DEFAULT_TURN_BUDGET, MAX_MEMBERS } from "../../../src/composables/round
 import type { HandoffTarget } from "../../../src/composables/useHandoff";
 
 const target = (n: number): HandoffTarget => ({ key: `cell-${n}`, label: `#${n}`, source: { sessionId: `S${n}`, cwd: "/w", agent: "claude" } });
-const render = (targets: HandoffTarget[], running = false) => mount(RoundTableMenu, { props: { targets, selfLabel: "#1", running } });
+const render = (targets: HandoffTarget[], running = false, busy = running) => mount(RoundTableMenu, { props: { targets, selfLabel: "#1", running, busy } });
 
 const seats = (w: ReturnType<typeof render>) => w.findAll('[data-testid="round-table-seat"]');
 
@@ -66,5 +66,26 @@ describe("RoundTableMenu", () => {
   it("does not let seats change while a table is running", () => {
     const w = render([target(2), target(3)], true);
     expect(seats(w).every((box) => box.attributes("disabled") !== undefined)).toBe(true);
+  });
+
+  // Only one automation may type into terminals at a time: both loops submit with pasteAndSubmit
+  // and both correlate on the tail of what they sent, so two running together interleave their
+  // writes and each can take the other's turn as its own answer. The one-turn exchange beside this
+  // picker is the other one. (Codex review on #1456.)
+  it("refuses to start while the cell's OTHER automation is running", () => {
+    const w = render([target(2)], false, true); // an exchange is running, no table
+    expect(w.find('[data-testid="round-table-start"]').exists()).toBe(true); // still a Start…
+    expect(w.find('[data-testid="round-table-start"]').attributes("disabled")).toBeDefined(); // …that refuses
+    expect(seats(w).every((box) => box.attributes("disabled") !== undefined)).toBe(true);
+  });
+
+  // Stopping is the other control's job — this button must not offer to stop something it does
+  // not own, or the user presses it and the exchange carries on.
+  it("keeps offering Start, not Stop, when the busy automation is not this table", () => {
+    expect(
+      render([target(2)], false, true)
+        .find('[data-testid="round-table-stop"]')
+        .exists(),
+    ).toBe(false);
   });
 });

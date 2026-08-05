@@ -615,6 +615,13 @@ async function askCell(target: HandoffTarget) {
   if (error) showAskMsg(error);
 }
 
+// Only ONE automation may type into terminals at a time. Both loops submit with pasteAndSubmit
+// and both decide "is this reply ours" by correlating on the tail of what they sent — so two
+// running together interleave their writes and each can take the other's turn as its own answer.
+// They used to gate only on themselves, which left both orders reachable from this one menu
+// (Codex review on #1456).
+const automating = computed(() => exchanging.value || tableRunning.value);
+
 // One automatic exchange: our turn goes out, their answer comes back, both submitted.
 // `exchangeStop` is the only way a running exchange ends early, so it is also what the
 // cell unmounting sets — a loop typing into terminals must not outlive its cell.
@@ -627,7 +634,7 @@ function stopExchange() {
 
 async function exchangeWith(target: HandoffTarget) {
   askMenuOpen.value = false;
-  if (!sessionId.value || exchanging.value) return;
+  if (!sessionId.value || automating.value) return;
   exchanging.value = true;
   exchangeStop = false;
   const self = { key: `cell-${props.uid}`, source: { sessionId: sessionId.value, cwd: cwd.value, agent: agent.value } };
@@ -652,7 +659,7 @@ function stopTable() {
 }
 
 async function startTable(targets: HandoffTarget[], budget: number) {
-  if (!sessionId.value || tableRunning.value) return;
+  if (!sessionId.value || automating.value) return;
   askMenuOpen.value = false;
   tableRunning.value = true;
   tableStop = false;
@@ -1399,7 +1406,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                     data-testid="cell-exchange-item"
                     :aria-label="`Exchange one turn with ${target.label}`"
                     class="cursor-pointer rounded-[4px] border-none bg-transparent px-1.5 py-1.5 font-sans text-[12px] text-dim hover:bg-hover hover:text-fg disabled:cursor-default disabled:opacity-40"
-                    :disabled="exchanging"
+                    :disabled="automating"
                     title="Send this cell's turn there and bring the answer back, both submitted"
                     @click="exchangeWith(target)"
                   >
@@ -1412,6 +1419,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                   :targets="askTargets"
                   :self-label="`#${uid}`"
                   :running="tableRunning"
+                  :busy="automating"
                   @start="startTable"
                   @stop="stopTable"
                 />
