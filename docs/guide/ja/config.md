@@ -362,11 +362,12 @@ worktree の `git status` を汚しません。
 
 書き込まないケースが2つあります。どちらも意図的です。
 
-- **そのリポジトリで `.mulmoterminal.local.json` が gitignore されていない場合。** worktree の `git status` に
-  未追跡ファイルとして出てしまいます。これは単に汚いだけではありません。MulmoTerminal は未コミットの変更がある
-  worktree の削除を拒否するので、掃除できない worktree になります。リポジトリの `.gitignore` に
-  `.mulmoterminal.local.json` を足せば、次の worktree から色が付きます
-  （**共有**ファイルの方はコミットされていてもいなくても関係ありません）
+- **そのリポジトリでどちらのファイルも gitignore されていない場合。** 書いたファイルが worktree の
+  `git status` に未追跡ファイルとして出てしまいます。これは単に汚いだけではありません。MulmoTerminal は
+  未コミットの変更がある worktree の削除を拒否するので、掃除できない worktree になります。リポジトリの
+  `.gitignore` に `.mulmoterminal.local.json` を足せば、次の worktree から色が付きます。
+  このファイルが無かった頃の設定（`.mulmoterminal.json` を ignore している）もそのまま動きます —
+  そちらはフォールバックとして使われます
 - **worktree に既に local ファイルがある場合**（自分で書いた、または前回の作成で書かれた）。そのファイルが答えなので、
   MulmoTerminal が上書きすることはありません。**共有**設定がコミットされていても止まりません — それは local が
   上に重なる相手だからです

@@ -78,17 +78,18 @@ export function inheritedWorktreeConfig(parent: DirConfig, index: number): Recor
   return config;
 }
 
-/** Write the derived config into `worktreeDir`'s own local override. Returns whether a file was
- *  written.
+/** Write the derived config into `worktreeDir`, as `name` — the local override by default, or the
+ *  shared file for a repository set up before #1436, which gitignores that one instead. Returns
+ *  whether a file was written.
  *
  *  Writes nothing when the parent configures nothing this carries — an empty `{}` on disk is a
  *  file the settings preview would report as present and doing nothing. Never overwrites: a
  *  worktree that already has one either committed it to the repo or was set up by hand, and
  *  either way that file is the answer, not ours. */
-export function writeInheritedDirConfig(parentDir: string, worktreeDir: string, index: number): boolean {
+export function writeInheritedDirConfig(parentDir: string, worktreeDir: string, index: number, name: string = DIR_LOCAL_CONFIG_FILE): boolean {
   const config = inheritedWorktreeConfig(loadDirConfig(parentDir), index);
   if (Object.keys(config).length === 0) return false;
-  const file = path.join(worktreeDir, DIR_LOCAL_CONFIG_FILE);
+  const file = path.join(worktreeDir, name);
   if (existsSync(file)) return false;
   writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`, "utf8");
   return true;

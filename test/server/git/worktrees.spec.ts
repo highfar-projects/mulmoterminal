@@ -202,6 +202,32 @@ describe("git worktree lifecycle", () => {
     GIT_TEST_TIMEOUT_MS,
   );
 
+  // Backward compatibility, and the reason the shared file is still a fallback: the setup this
+  // feature SHIPPED with told people to gitignore `.mulmoterminal.json`, and those repositories
+  // exist. Switching the target outright would have turned their worktrees grey with nothing said.
+  it.skipIf(!hasGit)(
+    "still tints a worktree in a repository set up the old way (only the shared file ignored)",
+    async () => {
+      writeFileSync(path.join(repo, ".gitignore"), ".mulmoterminal.json\n");
+      writeFileSync(path.join(repo, ".mulmoterminal.json"), JSON.stringify({ name: "proj", headerColor: "#2d4ea9", orderPriority: 30 }));
+      await git(["add", ".gitignore"], repo);
+      await git(["commit", "-m", "ignore the shared config, the pre-#1436 way"], repo);
+
+      const wt = await createWorktree(repo, "legacy");
+      if (!wt) throw new Error("expected a worktree");
+      // Written to the SHARED file here, since that is the one this repository ignores.
+      expect(existsSync(path.join(wt.path, ".mulmoterminal.local.json"))).toBe(false);
+      expect(JSON.parse(readFileSync(path.join(wt.path, ".mulmoterminal.json"), "utf8"))).toMatchObject({
+        name: "proj",
+        headerColor: "#2d35a9",
+        orderPriority: 31,
+      });
+      expect(await isDirty(wt.path)).toBe(false);
+      expect(await removeWorktree(repo, wt.path, { deleteBranch: true })).toEqual({ ok: true });
+    },
+    GIT_TEST_TIMEOUT_MS,
+  );
+
   // The regression #1436 exists for: committing the shared config used to switch inheritance off,
   // because the guard asked about that file rather than the one being written.
   it.skipIf(!hasGit)(

@@ -978,9 +978,11 @@ colours **rotated 12 degrees further around the hue wheel per worktree** (so a p
 as a gradient; a grey like `#ffffff` has no hue to move and stays put), and `orderPriority` at the
 project's rank **+ 1**, so the worktree sorts directly after it. `sound` / `sounds` / `addDirs` are
 not carried — they name paths inside the project directory. Written only where git would **ignore
-the local file**: an untracked file in a worktree's `git status` would make it count as dirty, and
-a dirty worktree is one MulmoTerminal refuses to remove. Whether the *shared* config is committed
-makes no difference. A local file the worktree already has is never overwritten.
+what it writes**: an untracked file in a worktree's `git status` would make it count as dirty, and
+a dirty worktree is one MulmoTerminal refuses to remove. The local override is preferred; a repo
+that ignores `.mulmoterminal.json` instead (the setup this feature shipped with) still gets its
+colours there. A committed shared config is never written to. A local file the worktree already
+has is never overwritten.
 
 **One worktree, one session.** A worktree is tied to a branch, so it is never started
 twice: a listed row **resumes** that worktree's session when it has one, and **starts** one

@@ -295,10 +295,10 @@ Two consequences for this skill:
 - **Recolouring a project does not recolour its existing worktrees** — the copy was taken when the
   worktree was created. Say so if the user asks why one cell kept the old colour, and offer to
   delete that worktree's `.mulmoterminal.local.json` so the next launch has nothing stale.
-- **A worktree gets nothing when its repository does not gitignore `.mulmoterminal.local.json`.**
-  That is the check MulmoTerminal makes before writing, since an untracked file would make the
-  worktree count as dirty and therefore unremovable. If a user's worktrees are all grey, that
-  missing `.gitignore` line is the first thing to look at.
+- **A worktree gets nothing when its repository gitignores NEITHER config file.** That is the
+  check MulmoTerminal makes before writing, since an untracked file would make the worktree count
+  as dirty and therefore unremovable. If a user's worktrees are all grey, a missing
+  `.gitignore` line is the first thing to look at — `.mulmoterminal.local.json` is the one to add.
 
 ### Other keys in this file
 

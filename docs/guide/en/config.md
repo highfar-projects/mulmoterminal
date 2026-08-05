@@ -378,11 +378,12 @@ repository committed and leaves the worktree's `git status` clean:
 
 Two cases where nothing is written, both deliberate:
 
-- **`.mulmoterminal.local.json` isn't gitignored in that repository.** The file would show up as an
-  untracked change in the worktree's `git status` — which is not just untidy: MulmoTerminal refuses
-  to remove a worktree that has uncommitted changes, so it could no longer be cleaned up. Add
-  `.mulmoterminal.local.json` to the repo's `.gitignore` and the next worktree gets its colours.
-  (The *shared* file may be committed or ignored — it makes no difference here.)
+- **Neither file is gitignored in that repository.** Whichever one MulmoTerminal wrote would show
+  up as an untracked change in the worktree's `git status` — which is not just untidy: it refuses
+  to remove a worktree that has uncommitted changes, so the tree could no longer be cleaned up.
+  Add `.mulmoterminal.local.json` to the repo's `.gitignore` and the next worktree gets its
+  colours. A repository set up before this file existed, which ignores `.mulmoterminal.json`
+  instead, keeps working — that one is used as a fallback.
 - **The worktree already has a local file of its own** (you wrote it, or a previous run did). That
   file is the answer; MulmoTerminal never overwrites it. A committed *shared* config does not stop
   it — that is the file the local one is meant to layer over.
