@@ -1196,8 +1196,8 @@ worktree B でも `yarn dev` をやると、2つめは 3000 を取れずに落�
 }
 ```
 
-プロジェクト本体の checkout が `base` そのものを取り、worktree はその上の番号を取ります。
-1 つの checkout とその worktree だけを見ると、こうなります。
+プロジェクト本体の checkout が先に予約したとき（普通はそうなります — worktree を切る前に開いて
+いるので）、その checkout が `base` そのものを取り、worktree はその上の番号を取ります。
 
 | ディレクトリ | `PORT` | `DB_NAME` |
 |---|---|---|

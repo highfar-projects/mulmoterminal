@@ -20,9 +20,10 @@ vi.mock("../../../src/composables/useTerminalConnections", async (importOriginal
 }));
 
 const ENV = [{ name: "PORT", value: "3010", url: "http://localhost:3010" }];
+const BUTTONS = [{ id: "deploy", label: "Deploy", run: "shell" as const }];
 vi.mock("../../../src/composables/useHeaderButtons", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../src/composables/useHeaderButtons")>()),
-  useHeaderButtons: () => ({ buttons: ref([]), chips: ref(null), env: ref(ENV), refresh: () => Promise.resolve() }),
+  useHeaderButtons: () => ({ buttons: ref(BUTTONS), chips: ref(null), env: ref(ENV), refresh: () => Promise.resolve() }),
 }));
 
 // jsdom has no ResizeObserver, and the terminal observes its own container for the fit.
@@ -53,7 +54,13 @@ describe("Terminal header — the per-tree env chip", () => {
 
   // Buttons are the half that IS session-scoped: a command/launcher terminal has no session and
   // does not handle `run`, so it must still show none — the fetch is shared, the gate is not.
-  it("still shows no action buttons on those cells", () => {
-    expect(mountTerminal({ launcher: { index: 1 } }).findAll('[data-testid^="header-btn"]')).toHaveLength(0);
+  // Asked by the label the buttons actually render (`aria-label`), so the assertion can fail: the
+  // first version of it named a data-testid this component does not have, and passed on every
+  // input (CodeRabbit review on #1367).
+  it("still shows no action buttons on those cells, though the fetch now happens", () => {
+    expect(mountTerminal({ launcher: { index: 1 } }).findAll('[aria-label="Deploy"]')).toHaveLength(0);
+    expect(mountTerminal({ command: "yarn dev" }).findAll('[aria-label="Deploy"]')).toHaveLength(0);
+    // …and a session terminal, which is what the gate is FOR, still shows them.
+    expect(mountTerminal({ sessionId: "s1" }).findAll('[aria-label="Deploy"]')).toHaveLength(1);
   });
 });

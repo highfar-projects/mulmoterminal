@@ -181,7 +181,7 @@ function releaseUndeclared(dir: string, spec: WorktreeEnvSpec | null): void {
   const declared = new Set(Object.keys(spec ?? {}));
   readLog()
     .filter((entry) => entry.dir === dir && !declared.has(entry.name))
-    .forEach((entry) => appendLog(releaseLine(dir, entry.name)));
+    .forEach((entry) => appendLog(releaseLine({ dir, name: entry.name })));
 }
 
 /** How many times a reservation may be re-attempted after losing a cross-process tie. More than
@@ -226,7 +226,10 @@ async function reserveOne(dir: string, name: string, declared: WorktreeEnvSpec[s
     const entry: WorktreeEnvReservation = { dir, name, kind: declared.kind, base, value };
     appendLog(reservationLine(entry));
     if (!lostTheRace(readLog(), entry)) return value;
-    appendLog(releaseLine(dir, name));
+    // Value-scoped, not just (dir, name): a concurrent call for this same directory may already
+    // have replaced the row with a good reservation of its own, and a release that named only the
+    // variable would wipe a value a terminal is running on (Codex review on #1367).
+    appendLog(releaseLine(entry));
   }
   return null;
 }
@@ -292,5 +295,5 @@ export function worktreeEnvValues(cwd: string): WorktreeEnvValue[] {
  *  that still exists and re-attaches the rest, so a removed worktree spells the same as it did
  *  when its value was reserved. */
 export function releaseWorktreeEnv(cwd: string): void {
-  appendLog(releaseLine(canonicalPath(cwd)));
+  appendLog(releaseLine({ dir: canonicalPath(cwd) }));
 }

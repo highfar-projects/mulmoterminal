@@ -1232,8 +1232,9 @@ tree and exports it into that tree's terminals:
 }
 ```
 
-The project's own checkout takes the `base` it declared and its worktrees the numbers above it —
-so a single checkout and its trees look like this:
+Where the project's own checkout reserves first — the usual case, since it is the directory you
+opened before cutting anything from it — it takes the `base` it declared and its worktrees the
+numbers above it:
 
 | Directory | `PORT` | `DB_NAME` |
 |---|---|---|

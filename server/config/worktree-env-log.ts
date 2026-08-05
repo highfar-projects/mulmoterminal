@@ -21,15 +21,29 @@ export interface WorktreeEnvReservation {
   value: string;
 }
 
-/** A reservation given up. Without `name` it is the whole directory — a worktree is removed as a
- *  whole, and listing its variables there would mean the release could go stale against the
- *  config. With `name` it is one variable, which is what a directory that RENAMED or dropped a key
- *  needs: the value it used to hold has to come back into circulation while the directory itself
- *  lives on. */
+/** A reservation given up, narrowed by however much the releaser actually knows.
+ *
+ *  - `dir` alone — everything that directory held. A worktree is removed as a whole, and naming its
+ *    variables there would let the release go stale against the config.
+ *  - `+ name` — one variable, whatever it holds. What a directory that RENAMED or dropped a key
+ *    needs: the old value comes back into circulation while the directory itself lives on.
+ *  - `+ value` — one variable, and ONLY while it still holds that exact value. This is the one a
+ *    lost race must use: by the time the loser gets to write, the same (dir, name) may already
+ *    hold a NEWER reservation made by a concurrent call, and a release keyed only by name would
+ *    wipe a value a terminal is running on (Codex review on #1367). A release naming a value can
+ *    never take a different one with it. */
 interface ReleaseEntry {
   dir: string;
   name?: string;
+  value?: string;
   release: true;
+}
+
+/** Which reservation a release is aimed at. Absent fields widen it — see ReleaseEntry. */
+export interface ReleaseTarget {
+  dir: string;
+  name?: string;
+  value?: string;
 }
 
 const key = (dir: string, name: string): string => `${dir} ${name}`;
@@ -38,8 +52,7 @@ const key = (dir: string, name: string): string => `${dir} ${name}`;
  *  an appended entry starts its own line, so a truncated write costs one entry and not the next. */
 export const reservationLine = (entry: WorktreeEnvReservation): string => `\n${JSON.stringify(entry)}`;
 
-export const releaseLine = (dir: string, name?: string): string =>
-  `\n${JSON.stringify((name === undefined ? { dir, release: true } : { dir, name, release: true }) satisfies ReleaseEntry)}`;
+export const releaseLine = (target: ReleaseTarget): string => `\n${JSON.stringify({ ...target, release: true } satisfies ReleaseEntry)}`;
 
 function parsedLine(line: string): WorktreeEnvReservation | ReleaseEntry | null {
   const trimmed = line.trim();
@@ -54,7 +67,11 @@ function parsedLine(line: string): WorktreeEnvReservation | ReleaseEntry | null 
 }
 
 const isRelease = (raw: unknown): raw is ReleaseEntry =>
-  isRecord(raw) && raw.release === true && typeof raw.dir === "string" && (raw.name === undefined || typeof raw.name === "string");
+  isRecord(raw) &&
+  raw.release === true &&
+  typeof raw.dir === "string" &&
+  (raw.name === undefined || typeof raw.name === "string") &&
+  (raw.value === undefined || typeof raw.value === "string");
 
 const isReservation = (raw: unknown): raw is WorktreeEnvReservation =>
   isRecord(raw) &&
@@ -73,7 +90,9 @@ export function parseReservations(contents: string): WorktreeEnvReservation[] {
     const entry = parsedLine(line);
     if (!entry) return;
     if (isRelease(entry)) {
-      const released = [...live.values()].filter((held) => held.dir === entry.dir && (entry.name === undefined || held.name === entry.name));
+      const released = [...live.values()].filter(
+        (held) => held.dir === entry.dir && (entry.name === undefined || held.name === entry.name) && (entry.value === undefined || held.value === entry.value),
+      );
       released.forEach((held) => live.delete(key(held.dir, held.name)));
       return;
     }
