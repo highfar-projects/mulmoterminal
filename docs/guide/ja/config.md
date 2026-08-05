@@ -341,11 +341,12 @@ auto（注目度順）と manual（移動ボタンで手動）と並びます。
 > worktree の作り方・制約・片付けは [worktree で作業を隔離する](worktree.html)へ。ここはその
 > **設定ファイルの引き継ぎ規則**です。
 
-`.mulmoterminal.json` は通常 gitignore されているので、プロジェクトから切った
-[worktree](glossary.html#git-worktree) には何も入っていませんでした。色も名前もモデルも順位も無く、
-グリッドの末尾に灰色のセルが1つ増えるだけ — 無関係なプロジェクトに見えていました。
+プロジェクトから切った [worktree](glossary.html#git-worktree) には何も入っていませんでした。色も名前も
+モデルも順位も無く、グリッドの末尾に灰色のセルが1つ増えるだけ — 無関係なプロジェクトに見えていました。
 
-いまは新しい worktree に、プロジェクトの設定から作った専用のコピーが置かれます。
+いまは新しい worktree に、プロジェクトの設定から作った専用のコピーが置かれます。書き込み先は
+**`.mulmoterminal.local.json`**（[前述](#local-config)）で、リポジトリがコミットした共有設定の上に重なり、
+worktree の `git status` を汚しません。
 
 - **同一性はそのままコピー** — `name` / `icon` / `theme` / `colors` / `fontSize` / `fontFamily` /
   `provider` / `model`。同じプロジェクト、同じターミナル、同じモデルです。`icon` は解決後のファイルでは
@@ -365,11 +366,15 @@ auto（注目度順）と manual（移動ボタンで手動）と並びます。
 
 書き込まないケースが2つあります。どちらも意図的です。
 
-- **プロジェクトの config が gitignore されていない場合。** worktree の `git status` に未追跡ファイルとして出てしまいます。
-  これは単に汚いだけではありません。MulmoTerminal は未コミットの変更がある worktree の削除を拒否するので、
-  掃除できない worktree になります。リポジトリの `.gitignore` に `.mulmoterminal.json` を足せば、次の worktree から色が付きます
-- **worktree に既にファイルがある場合**（リポジトリにコミットされている、または自分で書いた）。そのファイルが答えなので、
-  MulmoTerminal が上書きすることはありません
+- **そのリポジトリでどちらのファイルも gitignore されていない場合。** 書いたファイルが worktree の
+  `git status` に未追跡ファイルとして出てしまいます。これは単に汚いだけではありません。MulmoTerminal は
+  未コミットの変更がある worktree の削除を拒否するので、掃除できない worktree になります。リポジトリの
+  `.gitignore` に `.mulmoterminal.local.json` を足せば、次の worktree から色が付きます。
+  このファイルが無かった頃の設定（`.mulmoterminal.json` を ignore している）もそのまま動きます —
+  そちらはフォールバックとして使われます
+- **worktree に既に local ファイルがある場合**（自分で書いた、または前回の作成で書かれた）。そのファイルが答えなので、
+  MulmoTerminal が上書きすることはありません。**共有**設定がコミットされていても止まりません — それは local が
+  上に重なる相手だからです
 
 コピーは作成時に1度だけ取られ、以後は worktree のものです。あとからプロジェクト側の色を変えても、
 既存の worktree は与えられた色のままです。変えたいときは worktree 側のファイルを編集するか削除してください。

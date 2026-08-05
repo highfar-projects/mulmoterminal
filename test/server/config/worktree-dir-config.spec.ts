@@ -7,6 +7,9 @@ import { loadDirConfig } from "../../../server/config/dir-config";
 import { inheritedWorktreeConfig, writeInheritedDirConfig } from "../../../server/config/worktree-dir-config";
 
 const CONFIG_FILE = ".mulmoterminal.json";
+// What the inherited config is WRITTEN to: the local override (#1436), which is gitignored, so a
+// worktree carrying it still reads as clean and can be removed without force.
+const LOCAL_CONFIG_FILE = ".mulmoterminal.local.json";
 
 // Written and read back through loadDirConfig rather than hand-built, so these tests exercise
 // the same validation the server does — a field the loader would drop can't pass here.
@@ -130,15 +133,26 @@ describe("writeInheritedDirConfig", () => {
   it("leaves no file behind when there is nothing to inherit", () => {
     const worktree = makeTempDir("mt-wt-");
     expect(writeInheritedDirConfig(projectDir(null), worktree, 1)).toBe(false);
-    expect(existsSync(path.join(worktree, CONFIG_FILE))).toBe(false);
+    expect(existsSync(path.join(worktree, LOCAL_CONFIG_FILE))).toBe(false);
   });
 
   // A worktree that already has one either committed it or was set up by hand; either way that
   // file is the answer and ours would silently replace it.
-  it("never overwrites a config the worktree already has", () => {
+  it("never overwrites a local config the worktree already has", () => {
     const worktree = makeTempDir("mt-wt-");
-    writeFileSync(path.join(worktree, CONFIG_FILE), '{"name":"mine"}', "utf8");
+    writeFileSync(path.join(worktree, LOCAL_CONFIG_FILE), '{"name":"mine"}', "utf8");
     expect(writeInheritedDirConfig(projectDir(PROJECT), worktree, 1)).toBe(false);
-    expect(readFileSync(path.join(worktree, CONFIG_FILE), "utf8")).toBe('{"name":"mine"}');
+    expect(readFileSync(path.join(worktree, LOCAL_CONFIG_FILE), "utf8")).toBe('{"name":"mine"}');
+  });
+
+  // A worktree of a repository that COMMITS its shared config has that file already, checked out
+  // by git. Refusing to write because of it would leave every such worktree untinted — the shared
+  // file is what the local one is meant to layer over, not a reason to stand down (#1436).
+  it("writes even when the worktree already has a shared config from the checkout", () => {
+    const worktree = makeTempDir("mt-wt-");
+    writeFileSync(path.join(worktree, CONFIG_FILE), '{"name":"committed"}', "utf8");
+    expect(writeInheritedDirConfig(projectDir(PROJECT), worktree, 1)).toBe(true);
+    expect(readFileSync(path.join(worktree, CONFIG_FILE), "utf8")).toBe('{"name":"committed"}');
+    expect(JSON.parse(readFileSync(path.join(worktree, LOCAL_CONFIG_FILE), "utf8"))).toMatchObject({ name: "mulmoterminal" });
   });
 });

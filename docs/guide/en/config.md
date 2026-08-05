@@ -352,11 +352,13 @@ ranked ones, in that launch order.
 > [Isolating work in a git worktree](worktree.html). This section is the **inheritance rule for this
 > config file**.
 
-`.mulmoterminal.json` is normally gitignored, so a [worktree](glossary.html#git-worktree) cut from the project used
-to start with nothing in it: no colours, no name, no model, no rank — one more grey cell at the end
-of the grid, looking like an unrelated project.
+A [worktree](glossary.html#git-worktree) cut from the project used to start with nothing in it: no
+colours, no name, no model, no rank — one more grey cell at the end of the grid, looking like an
+unrelated project.
 
-Now a new worktree is given its own copy, derived from the project's:
+Now a new worktree is given its own copy, derived from the project's, written to
+**`.mulmoterminal.local.json`** ([above](#local-config)) so it layers over any shared config the
+repository committed and leaves the worktree's `git status` clean:
 
 - **The identity is copied as written** — `name`, `icon`, `theme`, `colors`, `fontSize`,
   `fontFamily`, `provider`, `model`. Same project, same terminal, same model. `icon` is carried as
@@ -380,12 +382,15 @@ Now a new worktree is given its own copy, derived from the project's:
 
 Two cases where nothing is written, both deliberate:
 
-- **The project's config isn't gitignored.** The file would show up as an untracked change in the
-  worktree's `git status` — which is not just untidy: MulmoTerminal refuses to remove a worktree
-  that has uncommitted changes, so it could no longer be cleaned up. Add `.mulmoterminal.json` to
-  the repo's `.gitignore` and the next worktree gets its colours.
-- **The worktree already has one** (it is committed to the repo, or you wrote it yourself). That
-  file is the answer; MulmoTerminal never overwrites it.
+- **Neither file is gitignored in that repository.** Whichever one MulmoTerminal wrote would show
+  up as an untracked change in the worktree's `git status` — which is not just untidy: it refuses
+  to remove a worktree that has uncommitted changes, so the tree could no longer be cleaned up.
+  Add `.mulmoterminal.local.json` to the repo's `.gitignore` and the next worktree gets its
+  colours. A repository set up before this file existed, which ignores `.mulmoterminal.json`
+  instead, keeps working — that one is used as a fallback.
+- **The worktree already has a local file of its own** (you wrote it, or a previous run did). That
+  file is the answer; MulmoTerminal never overwrites it. A committed *shared* config does not stop
+  it — that is the file the local one is meant to layer over.
 
 The copy is taken at creation and then belongs to the worktree. Recolour the project afterwards and
 existing worktrees keep the shade they were given — edit or delete their own file to change it.
