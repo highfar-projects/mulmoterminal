@@ -74,6 +74,12 @@ cannot be clicked because that session is open in another terminal.
 refused, because opening it here would detach whoever has it. "Somewhere" includes another browser
 tab and a second `mulmoterminal` running on this machine.
 
+**`● running` means it is still alive with nobody attached** — what a server restart leaves behind,
+since sessions survive it. The row can be resumed as usual, and the **stop** button beside it ends
+that session without touching the conversation: the transcript stays, so the same row can be
+resumed later. What is lost is whatever the agent was doing at that moment, which is why it asks
+first. Rows marked `● open` have no stop button — close those from the terminal that has them.
+
 **The list belongs to the picked agent.** Each agent keeps its history in its own place — Claude in
 `~/.claude/projects`, Codex in `~/.codex/sessions`, Grok in `~/.grok/sessions`, Antigravity in its
 own brain directory — and only that agent can continue what it wrote. So switching the Agent Picker
