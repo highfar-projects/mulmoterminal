@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { isStrictlyWithin } from "../infra/path-within.js";
 import { splitLines } from "../infra/split-lines.js";
-import { DIR_CONFIG_FILE } from "../config/dir-config.js";
+import { DIR_CONFIG_FILE, DIR_LOCAL_CONFIG_FILE } from "../config/dir-config.js";
 import { writeInheritedDirConfig } from "../config/worktree-dir-config.js";
 import { ISSUE_BRANCH_PREFIX, issueFromAnchoredBranch } from "../../common/prPhase.js";
 
@@ -289,17 +289,35 @@ function serializeCreate<T>(task: () => Promise<T>): Promise<T> {
 // each tree is its own shade of the project. The parent is the MAIN checkout, so cutting a
 // worktree from another worktree still measures the gradient from the project itself.
 //
-// Only where git would IGNORE the file. A worktree whose `git status` gains an untracked file is
-// not merely untidy: `isDirty` reads that same status, so removeWorktree would go on refusing to
-// clean up a worktree whose only change we wrote ourselves.
+// Only where git would IGNORE the file we are about to write. A worktree whose `git status` gains
+// an untracked file is not merely untidy: `isDirty` reads that same status, so removeWorktree
+// would go on refusing to clean up a worktree whose only change we wrote ourselves.
+//
+// Preferably the LOCAL override (#1436), which this repository — and any project that adopts the
+// convention — gitignores. Checking the shared file instead used to mean that committing it
+// silently switched this whole feature off.
+//
+// The shared file stays as a FALLBACK, because the setup this feature shipped with told people to
+// gitignore THAT one, and those repositories still exist. Switching the target outright would have
+// turned their worktrees grey with nothing said — the same silent breakage, aimed the other way.
+// A repository that COMMITS the shared file is not caught by the fallback: git reports a tracked
+// file as not-ignored, so it is skipped and only the local override can be written.
 //
 // Best effort throughout — a worktree without its parent's colours is a worktree that works.
+async function inheritableConfigFile(worktreeDir: string): Promise<string | null> {
+  for (const name of [DIR_LOCAL_CONFIG_FILE, DIR_CONFIG_FILE]) {
+    if ((await git(["check-ignore", "--quiet", "--", name], worktreeDir)).ok) return name;
+  }
+  return null;
+}
+
 async function adoptParentDirConfig(repo: string, worktreeDir: string): Promise<void> {
   try {
-    if (!(await git(["check-ignore", "--quiet", "--", DIR_CONFIG_FILE], worktreeDir)).ok) return;
+    const name = await inheritableConfigFile(worktreeDir);
+    if (!name) return;
     // Counted AFTER the add, so it includes the new tree: the first worktree of a repo is index
     // 1 and therefore already one hue step away from the parent, not identical to it.
-    writeInheritedDirConfig(repo, worktreeDir, (await listWorktrees(repo)).length);
+    writeInheritedDirConfig(repo, worktreeDir, (await listWorktrees(repo)).length, name);
   } catch {
     // ignored
   }
