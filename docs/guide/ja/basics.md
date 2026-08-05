@@ -54,7 +54,7 @@ description: グリッドで複数の AI コーディングエージェント（
 
 | 部分 | 役割 |
 |---|---|
-| **Agent Picker**（**Claude / Codex / Antigravity / Shell**） | このセルで動かすものを選ぶ。**エージェント**か、**Shell**（OS 標準シェル `$SHELL`。インストールも設定も不要）。実際のエージェントセッションを起動するのはこのコントロールで、下の **launch commands** はユーザーが書いたコマンドをそのまま実行する |
+| **Agent Picker**（**Claude / Codex / Antigravity / Grok / Shell**） | このセルで動かすものを選ぶ。**エージェント**か、**Shell**（OS 標準シェル `$SHELL`。インストールも設定も不要）。実際のエージェントセッションを起動するのはこのコントロールで、下の **launch commands** はユーザーが書いたコマンドをそのまま実行する |
 | **WORKING DIRECTORY** | 作業ディレクトリを入力（再生ボタンで起動）。よく使うディレクトリは *cwd presets* の**チップ**をクリックして入力（チップの再生ボタンで即起動）。チップ列の先頭には **WORKSPACE** が常にあります（→ [どのディレクトリで起動するか](#launch-dir)） |
 | **モデル選択**（Claude 選択時） | このセッションだけのバックエンド／モデルを選ぶ（→ [プロバイダ](providers.html)） |
 | **Canvas / Workspace data / External accounts** のトグル（エージェント選択時） | GUI ツール群（`render` / `data` / `media` / `external`）の MCP サーバを、**このセッションではなくディレクトリに**登録。**ワークスペースを選んでいる間は出ません**（そこは登録なしで全部使えるため） |
@@ -91,7 +91,7 @@ MCP 登録・worktree がないので、選んでいる間はその 3 つの欄�
 今どこなのか分からなくなったら、起動時に出る `Workspace: …` が答えです。
 Collections・Wiki・Accounting が読み書きするのは、どのセルにいても常にここです（拡大したセルの横に開く Files ペインだけは、そのセルのディレクトリを見ます）。
 
-| セルの作業ディレクトリ | Claude / Codex | Antigravity |
+| セルの作業ディレクトリ | Claude / Codex | Antigravity / Grok |
 |---|---|---|
 | **ワークスペースと同じ** | **GUI ツールを全部持ちます。登録は要りません** | 特例はありません。**そのディレクトリに登録されているツールグループだけ**です |
 | **プロジェクトのディレクトリ** | **そのディレクトリに登録されているツールグループだけ**です。GUI ツールが要るなら MCP トグルで登録します | 同じ |
@@ -120,8 +120,9 @@ Claude でも Codex でも同じです。**Agent Picker** でどちらかを選�
 
 ![ランチャのチップ列 — 先頭がワークスペース](../images/v4.3.1-workspace-chip.png)
 
-**Antigravity にこの特例はありません。**
-ワークスペースで起動しても、GUI ツールはそのディレクトリに登録されているぶんだけです（`.agents/mcp_config.json` 経由。→ [2.8.0 セットアップガイド](v2.8.0.html)）。
+**Antigravity と Grok にこの特例はありません。**
+ワークスペースで起動しても、GUI ツールはそのディレクトリに登録されているぶんだけです（Antigravity は `.agents/mcp_config.json` 経由。→ [2.8.0 セットアップガイド](v2.8.0.html)。Grok は `.grok/config.toml` 経由）。
+どちらの CLI も MCP のフラグを受け取らないので、セッション単位で渡せるツールがそもそもありません。効くのはディレクトリのトグルだけで、ランチャも渡せないツールを約束せずそのトグルを出します。
 
 **プロジェクトのディレクトリで GUI ツールが要るときは、MCP トグルで登録します。**
 どのトグルが何をもたらすかは、**Canvas**（`render` / `media`）が拡大したセルの横のパネル、**Workspace data**（`data`）がコレクションと帳簿、**External accounts**（`external`）が Google や X などの外部アカウントです。
@@ -211,9 +212,9 @@ Claude でも Codex でも同じです。**Agent Picker** でどちらかを選�
 
 Mac のラップトップキーボードには独立した Page Up / Page Down がないため、**`Fn`+`↑`** / **`Fn`+`↓`** を使ってください。
 
-## Claude・Codex・Antigravity を混在 {#claude-and-codex}
+## Claude・Codex・Antigravity・Grok を混在 {#claude-and-codex}
 
-同じグリッドで、セルごとに **Claude**・**Codex**・**Antigravity**（`agy`）を起動できます。端末だけ欲しいときは
+同じグリッドで、セルごとに **Claude**・**Codex**・**Antigravity**（`agy`）・**Grok** を起動できます。端末だけ欲しいときは
 **Shell** も選べます。エージェントはどれも同じ端末体験・永続化・GUI パネル・可視化の仕組みを共有。得意分野で
 使い分けたり、同じタスクを複数に投げて見比べたりできます。
 
@@ -221,6 +222,12 @@ Antigravity は `agy` が `PATH` に載っている必要があります。バ�
 `ANTIGRAVITY_BIN` / `ANTIGRAVITY_MODEL` / `ANTIGRAVITY_HOME` で変えられます。1 点だけ仕組みが違い、GUI パネルの
 登録は**ディレクトリ単位**（`.agents/mcp_config.json`。`git status` には出しません）でセッション単位ではありま
 せん。`agy` がプロジェクト単位で読むファイルがこれ 1 つだけだからです。
+
+Grok は `grok` が `PATH` に載っている必要があります。バイナリ・モデル・セッションの置き場所は
+`GROK_BIN` / `GROK_MODEL` / `GROK_HOME` で変えられます。GUI パネルの登録はやはりディレクトリ単位で
+`.grok/config.toml` に書きますが、書き込みは grok 自身の `grok mcp add -s project` に任せるので、その
+ファイルに書いた他の内容はそのまま残ります。再開の仕組みは他の 2 つより Claude 寄りで、セッション ID を
+MulmoTerminal が先に決めるため、リロードしても探しものなしで同じ会話に戻ります。
 
 ---
 

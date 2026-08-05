@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import CellLaunchForm from "../../../src/components/CellLaunchForm.vue";
 import type { AgentPick, CustomAgent } from "../../../common/customAgents";
+import { TERMINAL_AGENTS } from "../../../common/sessionAgent";
 
 // The launcher's two "there is already a session here" surfaces, mounted directly: a worktree row
 // (one branch, one session) and a resume row. Both used to hand a running agent's terminal to a
@@ -394,6 +395,18 @@ describe("the GUI tool groups in the workspace", () => {
     expect(w.find('[data-testid="cell-mcp-toggle-external"]').exists()).toBe(true);
   });
 
+  // The same question asked of the agent added after that fix. grok reaches MCP through
+  // `.grok/config.toml`, so it is in exactly antigravity's position and must get the switches
+  // rather than the promise — which is what makes #1423 a rule here and not a one-off repair.
+  it("asks grok in the workspace too", async () => {
+    guiMcpFetch();
+    const w = mountForm([], { dir: "/home/me/ws", defaultCwd: "/home/me/ws", agent: "grok" });
+    await flushPromises();
+    expect(w.find('[data-testid="cell-mcp-all"]').exists()).toBe(false);
+    expect(w.find('[data-testid="cell-mcp-toggle-render"]').exists()).toBe(true);
+    expect(w.find('[data-testid="cell-mcp-toggle-external"]').exists()).toBe(true);
+  });
+
   it("still tells codex in the workspace that everything is available", async () => {
     guiMcpFetch();
     const w = mountForm([], { dir: "/home/me/ws", defaultCwd: "/home/me/ws", agent: "codex" });
@@ -561,7 +574,7 @@ describe("the Agent Picker's custom agents (#1414)", () => {
       .find('[data-testid="agent-picker"]')
       .findAll('[role="radio"]')
       .map((b) => b.text());
-    expect(labels).toEqual(["Claude", "Codex", "Antigravity", "Nemotron", "Shell"]);
+    expect(labels).toEqual(["Claude", "Codex", "Antigravity", "Grok", "Nemotron", "Shell"]);
   });
 
   it("reports the pick as `custom:<id>`, which is what the cell sends to /ws", async () => {
@@ -583,10 +596,12 @@ describe("the Agent Picker's custom agents (#1414)", () => {
     expect(w.find('[data-testid="cell-worktrees"]').exists()).toBe(true);
   });
 
-  it("is just the built-in four when the user has configured none", async () => {
+  it("is just the built-in agents when the user has configured none", async () => {
     mockFetch();
     const w = mountForm([]);
     await flushPromises();
-    expect(w.find('[data-testid="agent-picker"]').findAll('[role="radio"]')).toHaveLength(4);
+    // TERMINAL_AGENTS + Shell — asserted as a count derived from the list rather than a literal,
+    // so adding a fifth agent does not read as this feature breaking.
+    expect(w.find('[data-testid="agent-picker"]').findAll('[role="radio"]')).toHaveLength(TERMINAL_AGENTS.length + 1);
   });
 });

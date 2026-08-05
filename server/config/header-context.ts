@@ -9,6 +9,7 @@ import { mergeHeaderConfig, type HeaderConfig, type HeaderContext } from "./head
 import { loadDirConfig } from "./dir-config.js";
 import { worktreeTask } from "./worktree-task.js";
 import { worktreeEnvValues } from "./worktree-env.js";
+import type { TerminalAgent } from "../../common/sessionAgent.js";
 
 async function remoteInfo(cwd: string): Promise<{ remoteUrl: string | null; repo: string | null }> {
   const res = await git(["remote", "get-url", "origin"], cwd);
@@ -19,7 +20,7 @@ async function remoteInfo(cwd: string): Promise<{ remoteUrl: string | null; repo
 
 export interface SessionMeta {
   session: string | null;
-  agent: "claude" | "codex" | "antigravity";
+  agent: TerminalAgent;
   model: string | null;
 }
 

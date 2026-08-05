@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-model
-description: Run MulmoTerminal sessions on something other than Anthropic's default, three ways — register an Anthropic-compatible backend (OpenRouter, Moonshot, a local Ollama bridge, a company gateway) as a `providers` entry in `~/.mulmoterminal/config.json`, which has no Settings UI; pin a `provider` / `model` per project in its `.mulmoterminal.json`; or add a `customAgents` entry, your OWN command line for starting Claude Code (`ollama launch claude --model … --`, a wrapper script, a pinned binary), which then appears in the Agent Picker beside Claude / Codex / Antigravity / Shell and gets Claude Code's own arguments appended. Knows the measured pass rates of the built-in model list, and the misconfigurations that break a session in ways that are hard to diagnose from inside it (a trailing `/v1`, too small an output budget, an API key written to disk, a provider named but never registered, a custom agent that swallows the arguments it is handed). Use when the user wants to use OpenRouter, Kimi, GLM, DeepSeek, Qwen, a local or self-hosted model, a cheaper model, a different Anthropic model for one project, or to launch Claude Code through a command of their own — or when a session refuses to start, returns empty replies, or 404s after they changed models.
+description: Run MulmoTerminal sessions on something other than Anthropic's default, three ways — register an Anthropic-compatible backend (OpenRouter, Moonshot, a local Ollama bridge, a company gateway) as a `providers` entry in `~/.mulmoterminal/config.json`, which has no Settings UI; pin a `provider` / `model` per project in its `.mulmoterminal.json`; or add a `customAgents` entry, your OWN command line for starting Claude Code (`ollama launch claude --model … --`, a wrapper script, a pinned binary), which then appears in the Agent Picker beside Claude / Codex / Antigravity / Grok / Shell and gets Claude Code's own arguments appended. Knows the measured pass rates of the built-in model list, and the misconfigurations that break a session in ways that are hard to diagnose from inside it (a trailing `/v1`, too small an output budget, an API key written to disk, a provider named but never registered, a custom agent that swallows the arguments it is handed). Use when the user wants to use OpenRouter, Kimi, GLM, DeepSeek, Qwen, a local or self-hosted model, a cheaper model, a different Anthropic model for one project, or to launch Claude Code through a command of their own — or when a session refuses to start, returns empty replies, or 404s after they changed models.
 ---
 
 # Run on another model
@@ -60,7 +60,7 @@ hard to diagnose from inside it:
 ## Your own way of starting Claude Code — `customAgents`
 
 For a model that is reached by **running a command** rather than by calling an endpoint. The entry
-becomes a button in the **Agent Picker** — the Claude / Codex / Antigravity / Shell toggle at the
+becomes a button in the **Agent Picker** — the Claude / Codex / Antigravity / Grok / Shell toggle at the
 top of an empty cell — and picking it starts a real session: resumable transcript, cost and
 context, "waiting for you", GUI tools. Global only; no Settings UI.
 
@@ -79,7 +79,7 @@ context, "waiting for you", GUI tools. Global only; no Settings UI.
 
 | Key | Meaning |
 |---|---|
-| `id` | Lowercase slug (`[a-z0-9][a-z0-9_-]*`, ≤ 32 — letters, digits, `-` and `_`). It keys the wire and the session's memory, so **renaming it later is a different agent**; the label is the free one to change. Must not be `claude` / `codex` / `antigravity` / `shell` — those are the built-in buttons. |
+| `id` | Lowercase slug (`[a-z0-9][a-z0-9_-]*`, ≤ 32 — letters, digits, `-` and `_`). It keys the wire and the session's memory, so **renaming it later is a different agent**; the label is the free one to change. Must not be `claude` / `codex` / `antigravity` / `grok` / `shell` — those are the built-in buttons. |
 | `label` | The button's text, ≤ 24 chars. It shares one row with the four built-ins, and that row already wraps in a narrow cell. |
 | `agent` | Which agent this launches AS — whose arguments get appended. **`"claude"` is the only value today**, and it is **required**. |
 | `command` | The command line, ≤ 500 chars. Run as the program, with that agent's own argv appended. |

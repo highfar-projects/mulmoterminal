@@ -57,7 +57,7 @@ Empty cells in the grid show a **launcher form**. This is where you choose **wha
 
 | Part | Role |
 |---|---|
-| **Agent Picker** (**Claude / Codex / Antigravity / Shell**) | Choose what runs in this cell — an **agent**, or **Shell**: your OS default shell (`$SHELL`), with nothing to install and nothing to configure. This is the control that starts a real agent session; the **launch commands** below run your own command line verbatim |
+| **Agent Picker** (**Claude / Codex / Antigravity / Grok / Shell**) | Choose what runs in this cell — an **agent**, or **Shell**: your OS default shell (`$SHELL`), with nothing to install and nothing to configure. This is the control that starts a real agent session; the **launch commands** below run your own command line verbatim |
 | **WORKING DIRECTORY** | Enter the working directory (the play button launches it). Frequently used directories are offered as clickable *cwd preset* **chips** that fill the field (the chip's play button launches right away). A **WORKSPACE** chip always leads that row (→ [which directory to launch in](#launch-dir)) |
 | **Model picker** (when Claude is selected) | Pick the backend / model for this session only (→ [providers](providers.html)) |
 | **Canvas / Workspace data / External accounts** toggles (with an agent selected) | Register a GUI tool group (`render` / `data` / `media` / `external`) as an MCP server **for the directory, not for this session**. **They are absent while the workspace is selected** — everything is available there without registering anything |
@@ -95,9 +95,9 @@ It is settled in this order: `--cwd`, then the `CLAUDE_CWD` environment variable
 When you lose track of which one it is, the `Workspace: …` line printed at startup is the answer.
 Collections, Wiki and Accounting read and write there whichever cell you are in (only the Files pane beside an enlarged cell follows that cell's directory).
 
-| The cell's working directory | Claude / Codex | Antigravity |
+| The cell's working directory | Claude / Codex | Antigravity / Grok |
 |---|---|---|
-| **The workspace itself** | **Every GUI tool, with nothing to register** | No such rule. It gets **only the tool groups registered for that directory** |
+| **The workspace itself** | **Every GUI tool, with nothing to register** | No such rule. They get **only the tool groups registered for that directory** |
 | **A project directory** | **Only the tool groups registered for that directory** — register one with the MCP toggles when you want GUI tools | Same |
 
 **A Claude session reads its own MCP config in either directory** (`.mcp.json`, `claude mcp add`, your claude.ai connectors). Before 4.4.0 a workspace cell was the one place that could not see them (→ [4.4.0 setup guide](v4.4.0.html)).
@@ -122,8 +122,9 @@ While the workspace is selected the MCP toggles are gone, replaced by `GUI TOOLS
 
 ![The launcher's chip row — the workspace leads it](../images/v4.3.1-workspace-chip.png)
 
-**Antigravity has no such rule.**
-Even in the workspace, its GUI tools are whatever that directory has registered (through `.agents/mcp_config.json` → [2.8.0 setup guide](v2.8.0.html)).
+**Antigravity and Grok have no such rule.**
+Even in the workspace, their GUI tools are whatever that directory has registered — Antigravity through `.agents/mcp_config.json` (→ [2.8.0 setup guide](v2.8.0.html)), Grok through `.grok/config.toml`.
+Neither CLI takes an MCP flag, so there is no per-session set of tools to hand them; the directory's toggles are the only lever, and the launcher shows you those toggles rather than promising tools it cannot deliver.
 
 **In a project directory, register what you need with the MCP toggles.**
 **Canvas** (`render` / `media`) is the panel beside an enlarged cell, **Workspace data** (`data`) is collections and the books, and **External accounts** (`external`) is Google, X and the like.
@@ -214,9 +215,9 @@ originally zoomed in from.
 
 On a Mac laptop keyboard there are no dedicated Page Up / Page Down keys; use **`Fn`+`↑`** and **`Fn`+`↓`**.
 
-## Mixing Claude, Codex and Antigravity {#claude-and-codex}
+## Mixing Claude, Codex, Antigravity and Grok {#claude-and-codex}
 
-In the same grid, you can launch **Claude**, **Codex** or **Antigravity** (`agy`) per cell — or **Shell**, when
+In the same grid, you can launch **Claude**, **Codex**, **Antigravity** (`agy`) or **Grok** per cell — or **Shell**, when
 you only want a terminal. The agents share the same terminal experience, persistence, GUI panel, and visibility
 machinery. Use each for its strengths, or throw the same task at several and compare.
 
@@ -224,6 +225,12 @@ Antigravity needs `agy` on your `PATH`. `ANTIGRAVITY_BIN` / `ANTIGRAVITY_MODEL` 
 binary, the model, and where it keeps conversations. One difference worth knowing: its GUI-panel registration is
 written **per directory** (`.agents/mcp_config.json`, kept out of your `git status`), not per session, because
 that is the only project-scoped file `agy` reads.
+
+Grok needs `grok` on your `PATH`. `GROK_BIN` / `GROK_MODEL` / `GROK_HOME` override the binary, the model, and
+where it keeps sessions. It registers the GUI panel per directory too, in `.grok/config.toml` — but through
+grok's own `grok mcp add -s project`, so anything else you have in that file is left exactly as you wrote it.
+Grok resumes like Claude rather than like the other two: MulmoTerminal chooses the session id up front, so a
+reloaded cell continues the same conversation with nothing to look up.
 
 ---
 

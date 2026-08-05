@@ -26,6 +26,7 @@ const OPTIONS: Record<LaunchAgent, Omit<AgentPickerOption, "agent">> = {
   claude: { label: "Claude" },
   codex: { label: "Codex" },
   antigravity: { label: "Antigravity" },
+  grok: { label: "Grok" },
   shell: { label: "Shell", title: "A plain shell ($SHELL) — no agent, nothing to configure" },
 };
 

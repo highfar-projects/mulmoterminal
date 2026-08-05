@@ -386,12 +386,12 @@ SDK; we drive the real interactive CLI and relay its TTY over the WebSocket.
 
 ---
 
-## Agents: Claude, Codex & Antigravity
+## Agents: Claude, Codex, Antigravity & Grok
 
 MulmoTerminal drives **interactive coding-agent CLIs**, not just Claude. An
 `AgentAdapter` seam abstracts the per-agent bits (which binary to spawn, how it resumes)
-so the PTY, grid, persistence, and GUI-panel plumbing stay shared. Three adapters ship
-today — **Claude Code** (the default), **Codex**, and **Antigravity** (`agy`).
+so the PTY, grid, persistence, and GUI-panel plumbing stay shared. Four adapters ship
+today — **Claude Code** (the default), **Codex**, **Antigravity** (`agy`), and **Grok**.
 
 - **Claude** — spawned as `claude` (override with `CLAUDE_BIN`). The server passes
   `--session-id <uuid>`, so it knows the live session's id even before its transcript
@@ -427,9 +427,27 @@ today — **Claude Code** (the default), **Codex**, and **Antigravity** (`agy`).
   per directory and shared by every session running there — and reaches the bridge through the agy
   process's own environment instead.
 
+- **Grok** — spawned as `grok` (override with `GROK_BIN`; `GROK_MODEL` sets `--model`), on its own
+  WebSocket (`/ws/grok`). It resumes the way **Claude** does rather than the way Codex and
+  Antigravity do: `grok --session-id <uuid>` starts a conversation under an id MulmoTerminal minted,
+  so there is no watcher, no attribution guess, and no mapping log — the id the browser holds is
+  grok's own. A reconnect passes `--resume <id>` instead, but only once a conversation by that name
+  exists on disk: grok writes one under `~/.grok/sessions/<url-encoded cwd>/<id>/` (home overridable
+  via `GROK_HOME`) after the first turn, and re-using a `--session-id` that already exists is a hard
+  error, which is why the two flags are never sent together.
+
+  Its **GUI tools work like Antigravity's** and for the same reason: `grok` takes no MCP flag, so
+  MulmoTerminal registers the bridge in `.grok/config.toml` (grok's project-scope config) from the
+  directory's [Canvas switches](#wiki-collections--the-gui-panel). That file is TOML and yours, so —
+  unlike agy's JSON — MulmoTerminal never rewrites it directly: it drives `grok mcp add -s project` /
+  `grok mcp remove -s project`, and only for the server ids it wrote itself. Nothing else in the file
+  is touched, a directory already in the right state runs no command at all, and the file is added to
+  `.git/info/exclude` only when MulmoTerminal created it. As with agy, the **session id is never
+  written into that file** — it reaches the bridge through the grok process's own environment.
+
 **Choosing an agent.** Each grid cell's launch form carries the **Agent Picker** — a
-**Claude / Codex / Antigravity / Shell** toggle — and the Collections browser a **Claude /
-Codex / Antigravity** one (your choice is remembered).
+**Claude / Codex / Antigravity / Grok / Shell** toggle — and the Collections browser a **Claude /
+Codex / Antigravity / Grok** one (your choice is remembered).
 **Shell** is not an agent: it runs your OS default shell (`$SHELL`, or `/bin/sh`) in the
 chosen directory, with nothing to install and nothing to configure. It starts a launcher
 cell, so it has no model, no MCP registration, and no worktree — those rows disappear
@@ -523,6 +541,9 @@ the `claude` / `codex` sessions themselves.
 | `ANTIGRAVITY_BIN` | `agy`     | The Antigravity CLI binary to spawn. |
 | `ANTIGRAVITY_MODEL` | agy default | Model passed to Antigravity as `--model` (unset = agy's own default). |
 | `ANTIGRAVITY_HOME` | `~/.gemini/antigravity-cli` | Antigravity home directory containing session brain storage. |
+| `GROK_BIN` | `grok`    | The Grok CLI binary to spawn. |
+| `GROK_MODEL` | grok default | Model passed to Grok as `--model` (unset = grok's own default). |
+| `GROK_HOME` | `~/.grok` | Grok home directory containing its per-directory session store. |
 | `MULMOTERMINAL_HOME` | `~/.mulmoterminal` | Root for managed **git worktrees**. |
 | `CLAUDE_CONFIG_DIR` | `~` | Claude Code's own config directory. `.claude.json` lives **inside** it, so relocating your Claude Code config moves that file too — MulmoTerminal reads it to tell whether the per-project GUI MCP server is registered (`server/infra/gui-mcp-registration.ts`). Leave it unset and `~/.claude.json` is used. |
 | `MULMOCLAUDE_WORKSPACE_PATH` | `~/mulmoclaude` | Where the managed MulmoClaude workspace lives. MulmoTerminal seeds presets/helps **only** into this directory, so launching in an arbitrary project never writes them there (`server/backends/workspaceSetup.ts`). Set it to the same value MulmoClaude uses. |
@@ -998,7 +1019,7 @@ the same worktree reached by pasting its path into **WORKING DIRECTORY**, or by 
 chip, will not launch either — and the **server** refuses the spawn whichever client asks,
 so a path spelled another way (a trailing slash, a symlink) does not slip past.
 
-What the limit covers is an **agent**: Claude, Codex or Antigravity, including an **OR
+What the limit covers is an **agent**: Claude, Codex, Antigravity or Grok, including an **OR
 LAUNCH** command that runs one of them. A **Shell**, and a launcher that runs anything else
 (`yarn dev`, `lazygit`, `htop`), stays free — a worktree an agent is working in is exactly
 where you want those. A project that declares `worktreeEnv` also gets **its own value per
@@ -1034,7 +1055,7 @@ Typing a task name yourself keeps the local base it has always used, with no fet
 
 ![An empty cell's launch form — choose the agent, working directory, or a worktree](https://raw.githubusercontent.com/receptron/mulmoterminal/main/docs/guide/images/grid-launch-form.png)
 
-*Every empty grid cell shows this launch form: pick an agent in the **Agent Picker** (**Claude / Codex / Antigravity / Shell**), type a **working directory** (frequent ones autocomplete from your presets), or — in a git repo — name a task under **OR ISOLATE IN A WORKTREE** and hit **＋ New worktree** to start the agent on its own isolated branch. **Shell** runs your OS default shell there instead of an agent; **OR LAUNCH** runs one of your configured launch commands.*
+*Every empty grid cell shows this launch form: pick an agent in the **Agent Picker** (**Claude / Codex / Antigravity / Grok / Shell**), type a **working directory** (frequent ones autocomplete from your presets), or — in a git repo — name a task under **OR ISOLATE IN A WORKTREE** and hit **＋ New worktree** to start the agent on its own isolated branch. **Shell** runs your OS default shell there instead of an agent; **OR LAUNCH** runs one of your configured launch commands.*
 
 A worktree cell's header carries a **diff badge** (`+<commits> ●<dirty>`); click it for a
 **Changes vs `<base>`** panel (file list + patch) with actions:
@@ -1300,7 +1321,7 @@ quietly answering about the **default workspace** (#1151):
 
 | Where | What happens |
 | --- | --- |
-| `/ws`, `/ws/codex`, `/ws/antigravity`, `/ws/launch`, `/ws/run` | The socket is closed with `{ type: "error", message }`, which the terminal shows as a red banner and does not retry. |
+| `/ws`, `/ws/codex`, `/ws/antigravity`, `/ws/grok`, `/ws/launch`, `/ws/run` | The socket is closed with `{ type: "error", message }`, which the terminal shows as a red banner and does not retry. |
 | A session that is still running (`?session=` names a live PTY or a surviving tmux session) | **Attaches anyway**, with a warning in the server log. Moving or renaming a directory must not shut you out of an agent that is still working in it — and the cwd reported back comes from the running PTY, not from the request. |
 | `GET /api/scripts`, `/api/skills`, `/api/dir-config`, `/api/dir-sound`, `/api/git-status`, `/api/pr-phase`, `/api/header`, `/api/sessions`, `/api/codex/sessions`, `/api/antigravity/sessions`, `/api/session/:id`, `/api/transcript/*`, `/api/cost` | `404 { error, cwd }` — a directory that is not there. |
 | A `?cwd=` that cannot name a directory at all (relative, or repeated as `?cwd=a&cwd=b`) | `400 { error, cwd }`. |
