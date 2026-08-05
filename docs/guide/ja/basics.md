@@ -72,6 +72,8 @@ description: グリッドで複数の AI コーディングエージェント（
 制限の対象は**エージェント**（Claude / Codex / Antigravity）です。**OR LAUNCH** の起動コマンドでも、
 中身がエージェントなら同じく拒否されます。**Shell** と、それ以外を走らせる launcher（`yarn dev`、
 `lazygit` など）は対象外です — エージェントが作業している worktree こそ、それらを動かしたい場所なので。
+しかも [`worktreeEnv`](config.html#worktree-env) を宣言したプロジェクトでは **worktree ごとに**
+ポートと DB 名が配られるので、2つの `yarn dev` がポート 3000 を取り合うこともありません。
 
 **OR RESUME HERE** も同じで、`● open` のセッションはどこかで表示中なので開けません — ここで開くと
 向こうが切断されるからです。「どこか」にはブラウザの別タブや、このマシンで動いている 2 つ目の

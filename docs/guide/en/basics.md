@@ -74,7 +74,7 @@ server refuses it whichever client asks, so a path spelled another way does not 
 
 The limit is on **agents**: Claude, Codex or Antigravity, including an **OR LAUNCH** command that
 runs one of them. A **Shell**, and a launcher that runs anything else (`yarn dev`, `lazygit`),
-stays free — a worktree an agent is working in is exactly where you want those.
+stays free — a worktree an agent is working in is exactly where you want those. And two of those `yarn dev`s no longer fight over port 3000: a project that declares [`worktreeEnv`](config.html#worktree-env) gets a port and a database name **per worktree**.
 
 **OR RESUME HERE** works the same way: a session marked `● open` is being viewed somewhere and is
 refused, because opening it here would detach whoever has it. "Somewhere" includes another browser

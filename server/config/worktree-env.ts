@@ -26,7 +26,7 @@ import { createHash } from "node:crypto";
 import net from "node:net";
 import path from "node:path";
 import { loadDirConfig } from "./dir-config.js";
-import { worktreeTask } from "./worktree-task.js";
+import { worktreeTask, worktreesRootDir } from "./worktree-task.js";
 import { canonicalPath } from "../git/worktrees.js";
 import { mulmoterminalHome } from "../infra/mulmoterminal-home.js";
 import { heldReservation, parseReservations, releaseLine, reservationLine, type WorktreeEnvReservation } from "./worktree-env-log.js";
@@ -101,14 +101,19 @@ function appendLog(line: string): void {
  *  instead, and the value it held becomes available again. */
 const stillOnDisk = (entry: WorktreeEnvReservation): boolean => existsSync(entry.dir);
 
+/** Which managed worktree a CANONICAL directory is in. The root is canonicalized to match: every
+ *  path here has been through canonicalPath, and a home reached through a symlink (or a macOS
+ *  /tmp that is really /private/tmp) would otherwise contain none of them. */
+const taskOf = (dir: string): string | null => worktreeTask(dir, canonicalPath(worktreesRootDir()));
+
 /** What this directory is called when a value has to be named after it: its worktree task, else
  *  its own folder name. */
-const dirIdentity = (dir: string): string => worktreeTask(dir) ?? path.basename(dir);
+const dirIdentity = (dir: string): string => taskOf(dir) ?? path.basename(dir);
 
 /** The slot a directory starts looking from. The project's own checkout takes `base` itself, so a
  *  project that declared 3000 still sees 3000 where it always did, and its worktrees take the
  *  numbers above it. */
-const firstSlotFor = (dir: string): number => (worktreeTask(dir) === null ? PROJECT_SLOT : FIRST_WORKTREE_SLOT);
+const firstSlotFor = (dir: string): number => (taskOf(dir) === null ? PROJECT_SLOT : FIRST_WORKTREE_SLOT);
 
 /** The first port from `base` upward that nobody holds and the OS will give us, or null when the
  *  whole span is spoken for. */

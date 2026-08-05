@@ -560,7 +560,7 @@ The Settings modal (⚙) persists per-user UI choices to `~/.mulmoterminal/confi
 | `quickCommands` | `{ label, text, agents? }` phrases the **phone** offers as chips on a session's terminal view. Tapping one puts `text` in the input box; it is not sent until you press send. `agents` (`"claude"` / `"codex"` / `"shell"`) scopes a chip to session kinds — omit it to offer the chip everywhere. Empty by default. |
 | `userMcpServers` | `{ id, url }` HTTP MCP servers merged into the `--mcp-config` of the **Claude** sessions that carry the full GUI MCP (codex is handed the GUI server alone, `codexGuiMcpServers`) — a cell whose working directory is the **workspace**, and a session the server starts itself (the phone, a scheduled task) unless it asks for a grid cell's shape, as an issue's seed session does (`issueSpawnOptions`). A cell in a project directory does not get this merge; the MCP config the user wrote is read either way. Takes effect on the next session. |
 | `buttons`    | Header action buttons — see [Header buttons](#header-buttons). Omit to keep the defaults; set to replace them. |
-| `chips`      | Header info chips (`dir` / `git` / `work` / `diff` / `ctx` / `usage` / `status` / `tools`, or custom text). Omit to keep the default set; `[]` hides all built-ins. `work` shows which PR / issue the cell is on (`#977 → #966`) and clears itself when the PR merges — see the [Configuration guide](https://receptron.github.io/mulmoterminal/guide/en/config.html#work-chip). |
+| `chips`      | Header info chips (`dir` / `git` / `work` / `diff` / `ctx` / `usage` / `status` / `tools` / `env`, or custom text). `env` shows what this working tree was reserved by [`worktreeEnv`](#per-directory-config) (`:3010`, clickable) and draws nothing where none is declared. Omit to keep the default set; `[]` hides all built-ins. `work` shows which PR / issue the cell is on (`#977 → #966`) and clears itself when the PR merges — see the [Configuration guide](https://receptron.github.io/mulmoterminal/guide/en/config.html#work-chip). |
 | `pushEnabled` | `true` to send a **Web Push** to your registered devices. Off by default; only sends while the **RemoteHost** channel is connected (see below). The master switch — `pushKinds` picks which moments. |
 | `pushKinds` | Which moments push: `"finished"` (a turn ended, ✅) and/or `"waiting"` (the agent stopped to ask — a permission prompt or a question, ❓, **once per prompt**). Omit to keep both; `[]` for none. A kind added in a later version stays off until you tick it. |
 | `worklogEnabled` | `true` to run the built-in **dev worklog** batch (see below). Off by default (each run spawns an LLM session, so it costs tokens). Editable in Settings → **Sessions and background tasks**. |
@@ -698,7 +698,11 @@ malformed file is ignored.
   "orderPriority": 10,                  // rank in the grid's "priority" order and the launcher chips (lowest first)
   "sound": "./.mulmoterminal/alert.mp3", // attention sound, RELATIVE to this directory
   "sounds": { "command-failed": "preset:gong" }, // per-notification-kind override
-  "appendSystemPrompt": false           // no closing summary here; omit to follow the global setting
+  "appendSystemPrompt": false,          // no closing summary here; omit to follow the global setting
+  "worktreeEnv": {                      // a port / database name of its own per git worktree
+    "PORT": { "kind": "port", "base": 3000 },
+    "DB_NAME": { "kind": "slug", "prefix": "myapp_" }
+  }
 }
 ```
 
@@ -724,6 +728,7 @@ malformed file is ignored.
 | `sound`      | Attention sound for this directory's sessions, a path **relative to the directory** (served at `GET /api/dir-sound`). The fallback for every kind. |
 | `sounds`     | Per-kind override of `sound`: `{ "command-failed": "preset:gong" }`. Each value is a `preset:<id>` or a directory-relative path, under the same confinement. |
 | `appendSystemPrompt` | Whether this directory's Claude sessions are asked to end a reply with a **closing summary** (see [Closing summary](#closing-summary)). Omit to follow the global `appendSystemPrompt`, which is on; `true` / `false` here outranks it. Read per spawn, so a new session in this directory picks up an edit without a restart. |
+| `worktreeEnv` | Values every working tree of this project needs its **own** of — the port its dev server binds, the database its migrations touch. A worktree isolates files, not ports: two trees running `yarn dev` both reach for 3000 and the second one dies. Each variable is `{ "kind": "port", "base": <1024–65215> }` (a free port, `base` + a multiple of 10 — the checkout keeps `base`, its worktrees take the numbers above it) or `{ "kind": "slug", "prefix": "…" }` (a `[a-z0-9_]` name from the tree's task name, ≤ 63 chars, for a database / schema / container). Up to 16, under whatever names the project reads (`PORT`, `VITE_PORT`, …). A value is **reserved once and kept** (`~/.mulmoterminal/worktree-env.jsonl`), so a running dev server's port never moves under it; freeing happens when the worktree is removed. Set on every terminal in the directory — agent cell, Shell, launcher, Run command — and shown on the header's `env` chip, where a port is a link to `http://localhost:<port>`. MulmoTerminal hands out the name; creating the database is the project's own job. |
 | `addDirs`    | Extra directories this project's Claude sessions may read and edit — the terminal-side equivalent of opening several folders in one VS Code workspace, via Claude Code's `--add-dir`. Relative entries resolve against **this file's directory** (`"../shared-lib"`), a path that doesn't exist is dropped, max 16. Claude only: codex has no equivalent flag and ignores the key. |
 
 **Security.** `sound` and every `sounds` entry are directory-relative paths only — absolute
@@ -952,7 +957,8 @@ repo without colliding. Worktrees live under `~/.mulmoterminal/worktrees/` (over
 **A worktree inherits the project's settings.** `.mulmoterminal.json` is normally gitignored,
 so a fresh worktree used to have none — no colours, no name, no model, no grid rank. It is now
 given its own copy derived from the project's: `name` / `theme` / `colors` / `fontSize` /
-`fontFamily` / `provider` / `model` as written, the seven chrome colours **rotated 12 degrees
+`fontFamily` / `provider` / `model` / `worktreeEnv` as written (the last is a declaration, not a
+value — the worktree resolves its own port and database name from it), the seven chrome colours **rotated 12 degrees
 further around the hue wheel per worktree** (so a project's trees read as a gradient; a grey like
 `#ffffff` has no hue to move and stays put), and `orderPriority` at the project's rank **+ 1**, so
 the worktree sorts directly after it. `sound` / `sounds` / `addDirs` are not carried — they name
@@ -971,7 +977,9 @@ so a path spelled another way (a trailing slash, a symlink) does not slip past.
 What the limit covers is an **agent**: Claude, Codex or Antigravity, including an **OR
 LAUNCH** command that runs one of them. A **Shell**, and a launcher that runs anything else
 (`yarn dev`, `lazygit`, `htop`), stays free — a worktree an agent is working in is exactly
-where you want those.
+where you want those. A project that declares `worktreeEnv` also gets **a port and a database
+name per worktree**, so two of those dev servers do not both reach for 3000 (see
+[`worktreeEnv`](https://receptron.github.io/mulmoterminal/guide/en/config.html#worktree-env)).
 
 The same holds for **OR RESUME HERE**: a session someone is holding is listed with `● open`
 and refused, where before it could be confirmed away — which detached whoever had it.
