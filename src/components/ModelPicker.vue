@@ -36,7 +36,7 @@ const selected = computed({
 </script>
 
 <template>
-  <div class="flex w-full max-w-[360px] flex-col items-center gap-1.5">
+  <div class="flex w-full flex-col items-center gap-1.5">
     <span class="flex w-full items-center justify-between">
       <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">Model</span>
       <button
