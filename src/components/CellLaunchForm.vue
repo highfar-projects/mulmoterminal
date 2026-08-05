@@ -194,11 +194,11 @@ const resumeHeading = computed(() => {
 });
 
 // Everything this form offers is per-directory, so they are read as one.
-function loadForDir(dir: string | null): void {
+function loadForDir(dir: string | null, agent: TerminalAgent | null): void {
   // A null dir is what `load` already takes to mean "nothing to list": for Shell that empties the
   // list and clears the loading flag, which is what the section's absence has to be built on —
   // `forget` would leave it loading forever.
-  void loadResumable(listAgent.value === null ? null : dir, listAgent.value ?? "claude");
+  void loadResumable(agent === null ? null : dir, agent ?? "claude");
   void loadScripts(dir);
   void loadWorktrees(dir);
   void loadMcpGroups(dir);
@@ -213,7 +213,7 @@ function forgetForDir(): void {
   forgetWorktrees();
   forgetMcpGroups();
 }
-onMounted(() => loadForDir(targetDir.value));
+onMounted(() => loadForDir(targetDir.value, listAgent.value));
 
 // A programmatic dir change (fillDir) loads the lists immediately, so the watch below must skip
 // the debounced reload it would otherwise ALSO fire — or every preset click / folder pick would
@@ -233,7 +233,7 @@ watch(listAgent, (agent) => {
   void loadResumable(agent === null ? null : targetDir.value, agent ?? "claude");
 });
 
-watch([() => props.dir, () => props.defaultCwd], () => {
+watch([() => props.dir, () => props.defaultCwd, () => props.agent], () => {
   // Cancel any pending debounced reload FIRST — whether we skip (a fillDir just loaded
   // immediately) or reschedule (typing), a stale timer from a prior change (e.g. a type then a
   // preset click) must not fire a duplicate load afterwards.
@@ -248,7 +248,7 @@ watch([() => props.dir, () => props.defaultCwd], () => {
   // clickable under a directory it has nothing to do with. The reload below puts back the new
   // directory's own.
   forgetForDir();
-  reloadTimer = setTimeout(() => loadForDir(targetDir.value), DIR_RELOAD_DEBOUNCE_MS);
+  reloadTimer = setTimeout(() => loadForDir(targetDir.value, listAgent.value), DIR_RELOAD_DEBOUNCE_MS);
 });
 onUnmounted(() => {
   if (reloadTimer) clearTimeout(reloadTimer);
@@ -265,7 +265,7 @@ function fillDir(path: string): void {
   emit("update:dir", path);
   // The prop only comes back down on the next render, so the lists are asked for the picked path
   // rather than for the field's current (still previous) value.
-  loadForDir(dirFor(path));
+  loadForDir(dirFor(path), listAgent.value);
 }
 
 // The folder button: the browser can't open a native folder chooser, so the local server does
