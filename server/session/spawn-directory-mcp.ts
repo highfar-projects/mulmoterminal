@@ -37,6 +37,31 @@ export type SpawnDirectoryMcpPty = (
   options: DirectoryMcpSpawnOptions,
 ) => PtyEntry;
 
+/** Point the directory's shared config at `groups` — but only for a spawn that will really START
+ *  the agent.
+ *
+ *  After a server restart `ptys` is empty while the tmux session can still be there, so a spawner
+ *  is reached for what turns out to be a REATTACH — and the agent already running in that pane
+ *  read the config file once, at its own start. Rewriting it now cannot affect that process; it
+ *  can only speak for the OTHER sessions in the directory, which is the one thing this must never
+ *  do.
+ *
+ *  The damaging case is not hypothetical: the route resolves the groups with `.catch(() => [])`,
+ *  so a transient failure reading Claude Code's config arrives as "no groups" and would clear the
+ *  entries every live session in that directory is using (#1441, #1443).
+ *
+ *  Its own function rather than a step inside the spawn, so a caller that must observe the world
+ *  as the agent will find it can do so BETWEEN the two — which is what antigravity's conversation
+ *  snapshot is. */
+export function syncDirectoryMcpForSpawn(
+  sessionId: string,
+  cwd: string,
+  groups: readonly ToolGroup[],
+  sync: (cwd: string, groups: readonly ToolGroup[]) => void,
+): void {
+  if (!ptyWouldReattach(sessionId, true)) sync(cwd, groups);
+}
+
 interface DirectoryMcpStart {
   sessionId: string;
   ws: WebSocket | null;
@@ -47,26 +72,12 @@ interface DirectoryMcpStart {
   args: string[];
   /** Named in the start line, so the log says which conversation a session picked up. */
   resumeConversationId: string | null;
-  mcpGroups: readonly ToolGroup[];
-  /** Bring the directory's shared config file in line with `mcpGroups`. */
-  syncMcpConfig: (cwd: string, groups: readonly ToolGroup[]) => void;
 }
 
-/** Sync the directory's config, start the pty, register it. `spawnedAtMs` comes back because the
- *  caller wires the relay (and may have its own work to do first). */
+/** Start the pty and register it. `spawnedAtMs` comes back because the caller wires the relay
+ *  (and may have its own work to do first). */
 export function startDirectoryMcpPty(start: DirectoryMcpStart): { entry: PtyEntry; spawnedAtMs: number } {
-  const { sessionId, ws, cwd, agent, bin, binEnvVar, args, resumeConversationId, mcpGroups, syncMcpConfig } = start;
-  // Only for a spawn that will really START the agent. After a server restart `ptys` is empty but
-  // the tmux session can still be there, so this is reached for what turns out to be a REATTACH —
-  // and the agent already running in that pane read the config file once, at its own start.
-  // Rewriting it now cannot affect that process; it can only speak for the OTHER sessions in the
-  // directory, which is the one thing this must never do.
-  //
-  // The damaging case is not hypothetical: the caller resolves the groups with `.catch(() => [])`,
-  // so a transient failure reading Claude Code's config would arrive here as "no groups" and clear
-  // the entries every live session in that directory is using.
-  if (!ptyWouldReattach(sessionId, true)) syncMcpConfig(cwd, mcpGroups);
-
+  const { sessionId, ws, cwd, agent, bin, binEnvVar, args, resumeConversationId } = start;
   // The session id reaches the GUI MCP bridge through this environment and nowhere else — the
   // config file the agent reads is shared by every session in the directory.
   const { term, tmux, reattached } = ptySpawn(sessionId, bin, args, cwd, true, { env: guiMcpEnv(sessionId, PORT), binEnvVar });

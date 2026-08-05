@@ -11,13 +11,15 @@
 import { grokAdapter } from "../agents/grok.js";
 import { buildGrokArgs } from "../agents/grok-args.js";
 import { syncGrokMcpConfig } from "../agents/grok-mcp.js";
-import { startDirectoryMcpPty, type SpawnDirectoryMcpPty } from "./spawn-directory-mcp.js";
+import { startDirectoryMcpPty, syncDirectoryMcpForSpawn, type SpawnDirectoryMcpPty } from "./spawn-directory-mcp.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
 import type { SpawnDeps } from "./spawn-deps.js";
 
 export function createGrokSpawner(deps: SpawnDeps) {
   const spawnGrokPty: SpawnDirectoryMcpPty = (sessionId, ws, resumeConversationId, cwd, options) => {
     const { mcpGroups, initialPrompt = null } = options;
+    syncDirectoryMcpForSpawn(sessionId, cwd, mcpGroups, syncGrokMcpConfig);
+
     const args = buildGrokArgs({ sessionId, resume: resumeConversationId, model: deps.grokModel, skipPermissions: true, initialPrompt });
     const { entry, spawnedAtMs } = startDirectoryMcpPty({
       sessionId,
@@ -28,8 +30,6 @@ export function createGrokSpawner(deps: SpawnDeps) {
       binEnvVar: grokAdapter.binEnvVar,
       args,
       resumeConversationId,
-      mcpGroups,
-      syncMcpConfig: syncGrokMcpConfig,
     });
 
     wireAgentPtyRelay(entry, sessionId, spawnedAtMs, deps);

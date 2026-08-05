@@ -5,7 +5,7 @@ import { antigravityAdapter } from "../agents/antigravity.js";
 import { buildAntigravityArgs } from "../agents/antigravity-args.js";
 import { syncAntigravityMcpConfig } from "../agents/antigravity-mcp.js";
 import { antigravityBrainRoot, snapshotAntigravitySessions, watchForAntigravitySession } from "../agents/antigravity-session.js";
-import { startDirectoryMcpPty, type SpawnDirectoryMcpPty } from "./spawn-directory-mcp.js";
+import { startDirectoryMcpPty, syncDirectoryMcpForSpawn, type SpawnDirectoryMcpPty } from "./spawn-directory-mcp.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
 import { claimedAntigravityConversations, ptys, rememberAntigravityConversation } from "./registry.js";
 import type { SpawnDeps } from "./spawn-deps.js";
@@ -30,16 +30,17 @@ export function createAntigravitySpawner(deps: SpawnDeps) {
 
   const spawnAntigravityPty: SpawnDirectoryMcpPty = (sessionId, ws, resumeConversationId, cwd, options) => {
     const { mcpGroups, initialPrompt = null } = options;
-    // Snapshotted BEFORE the spawn: the capture below tells agy's new conversation from the ones
-    // that were already on disk by the difference.
-    const root = antigravityBrainRoot();
-    const before = snapshotAntigravitySessions(root);
-
-    const args = buildAntigravityArgs({ resume: resumeConversationId, model: deps.antigravityModel, skipPermissions: true, initialPrompt });
     // agy reads its MCP servers from `.agents/mcp_config.json` in the directory rather than from a
     // flag, so that file is brought in line with the groups on the way past: a directory whose
     // switches were flipped before this shipped — or with the `claude mcp` CLI directly — needs no
     // second action to work (#1443).
+    syncDirectoryMcpForSpawn(sessionId, cwd, mcpGroups, syncAntigravityMcpConfig);
+    // Snapshotted between the sync and the spawn: the capture below tells agy's new conversation
+    // from the ones already on disk by the difference, so it must be the world agy is about to find.
+    const root = antigravityBrainRoot();
+    const before = snapshotAntigravitySessions(root);
+
+    const args = buildAntigravityArgs({ resume: resumeConversationId, model: deps.antigravityModel, skipPermissions: true, initialPrompt });
     const { entry, spawnedAtMs } = startDirectoryMcpPty({
       sessionId,
       ws,
@@ -49,8 +50,6 @@ export function createAntigravitySpawner(deps: SpawnDeps) {
       binEnvVar: antigravityAdapter.binEnvVar,
       args,
       resumeConversationId,
-      mcpGroups,
-      syncMcpConfig: syncAntigravityMcpConfig,
     });
 
     if (resumeConversationId) {
