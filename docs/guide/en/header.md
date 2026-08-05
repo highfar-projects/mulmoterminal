@@ -273,7 +273,8 @@ The `env staging` on the right-hand cell of the screenshot above is exactly this
 ## 8. Filtering the Skill menu {#skills}
 
 The header's **⚡ Skill** lists the skills available in that directory (the project's
-`.claude/skills` first, then `~/.claude/skills`). Picking one runs it **in the current session**
+`.claude/skills` first, then `~/.claude/skills`; alphabetical within each group, and a project
+skill shadows a user one of the same slug). Picking one runs it **in the current session**
 (`/<slug>` for Claude, `Use the "<slug>" skill.` for Codex).
 
 ![The Skill menu](../images/header-skill-menu.png)
