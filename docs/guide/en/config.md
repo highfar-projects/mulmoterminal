@@ -3,7 +3,7 @@ title: Configuration — colours, sounds, launchers, per-project settings
 nav_title: Configuration
 layout: default
 parent: English
-nav_order: 6
+nav_order: 7
 description: Configuring MulmoTerminal — the settings modal, per-project colours and names, Enter behaviour, notification sounds, fonts, keyboard shortcuts and environment variables, findable by symptom.
 ---
 
@@ -247,6 +247,10 @@ ranked ones, in that launch order.
 
 ### Worktrees inherit this file {#worktree-inherit}
 
+> Creating worktrees, the rules around them and cleaning them up are in
+> [Isolating work in a git worktree](worktree.html). This section is the **inheritance rule for this
+> config file**.
+
 `.mulmoterminal.json` is normally gitignored, so a [worktree](glossary.html#git-worktree) cut from the project used
 to start with nothing in it: no colours, no name, no model, no rank — one more grey cell at the end
 of the grid, looking like an unrelated project.
@@ -285,7 +289,12 @@ existing worktrees keep the shade they were given — edit or delete their own f
 This is where MulmoTerminal's **Extend** pillar lives. Shape the header of a running terminal to fit your workflow with **a small DSL**.
 Any developer can turn their frequent actions into a single click and surface only the information they want to see — that's what this is for.
 
-**Buttons** (`buttons`) — action buttons that act on a running session. Display is an `icon` (a Material Symbol name) plus a `label`; `order` controls the sort.
+> **For your first one, go to [Customizing the header](header.html)** — it walks through reading the
+> header and adding a button, with screenshots. This section is the **full field reference**.
+
+**Buttons** (`buttons`) — action buttons that act on a running session. **Only the `icon` (a Material Symbol name) is drawn**;
+`label` becomes the **hover tooltip** (and the accessible name). No text appears on screen, so write a `label` that says what the
+button does. With neither `icon` nor `emoji`, you get `bolt`. `order` controls the sort.
 With none set, you get a **built-in starter set**: **Insert a file path** · **Open this branch's PR** (git repos, only when a PR exists). Setting `buttons` at any level **replaces the whole default set** (it is _not_ merged on top) — so listing your own, even a **shorter** list, is how you trim, reorder, or swap them.
 
 *Reveal in the file manager*, *Browse files in the app*, *New terminal here* and *Open on GitHub* used to be defaults too. They are **items in the path menu** now — click the directory path on the terminal's header row. They all answered "do something with this directory", which is what the path itself is; keeping four permanent icons for them cost more room than it was worth in a tiled cell. Nothing changed about them as config: list any of them yourself and it works exactly as before, as a button — you will then have it both places, since the menu is fixed.
@@ -313,8 +322,11 @@ With none set, you get a **built-in starter set**: **Insert a file path** · **O
 { "chips": ["ctx", "git", { "label": "env", "text": "⎇ ${branch}", "when": "isGitRepo" }] }
 ```
 
-- Built-in `dir` / `git` / `work` / `diff` / `ctx` / `usage` / `status` / `tools` … shown in the order you list them; omit one to hide it.
-- Custom `{ label, text, when }` … read-only text (`text` expands `${variables}`).
+- **Only `git` / `work` / `diff` / `ctx` / `usage` respond** — shown in the order you list them; omit one to hide it.
+- `dir` (the project badge), `status` (the status dot) and `tools` (the row-2 tool timeline) are **structural to the cell**:
+  listing them does nothing and omitting them hides nothing. The schema accepts them, so it is not an error — they are silently ignored.
+- Custom `{ label, text, when }` … read-only text. **`text` is what's displayed** (it expands `${variables}`);
+  `label` is the **tooltip**, as on a button.
 
 #### `work` — which PR / issue this cell is on {#work-chip}
 

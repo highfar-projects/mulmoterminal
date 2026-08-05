@@ -65,16 +65,10 @@ Empty cells in the grid show a **launcher form**. This is where you choose **wha
 | **OR RESUME HERE** | Sessions that already exist in this directory — click one to continue it |
 | **OR LAUNCH** | Start a configured **launch command** (`codex`, `htop`, anything) as a persistent terminal |
 
-**A worktree holds one session.** It is tied to a branch, so it is never started twice: a listed
-worktree row says `resume` and continues the session it already has, or nothing and starts its
-first one. A row marked `in use` has its session open in another terminal and cannot be clicked —
-close it there first. The refusal follows the directory rather than the row, so the same worktree
-pasted into **WORKING DIRECTORY** or picked from a recent-dir chip will not launch either — the
-server refuses it whichever client asks, so a path spelled another way does not slip past.
-
-The limit is on **agents**: Claude, Codex or Antigravity, including an **OR LAUNCH** command that
-runs one of them. A **Shell**, and a launcher that runs anything else (`yarn dev`, `lazygit`),
-stays free — a worktree an agent is working in is exactly where you want those.
+**A worktree holds one session.** It is tied to a branch, so it is never started twice: a row with
+nothing on it starts the first session, `resume` continues the one it already has, and `in use`
+cannot be clicked because that session is open in another terminal.
+→ [Isolating work in a git worktree](worktree.html#one-session)
 
 **OR RESUME HERE** works the same way: a session marked `● open` is being viewed somewhere and is
 refused, because opening it here would detach whoever has it. "Somewhere" includes another browser
