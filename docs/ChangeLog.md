@@ -10,7 +10,7 @@ Entries here are folded into the next release's heading when it ships.
 
 ## mulmoterminal@4.5.0 — 2026-08-05
 
-> **Setup guide:** [Give a repository its own icon and colour — repo.json](https://receptron.github.io/mulmoterminal/guide/en/v4.5.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.5.0.html))
+> **Setup guide:** [repo.json, a port per worktree, Grok, and settings you can reach](https://receptron.github.io/mulmoterminal/guide/en/v4.5.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.5.0.html))
 
 A repository can now **say what it is**, and MulmoTerminal listens. `repo.json` is a small open
 metadata file at a repository's root — name, description, icon, colour — that any tool displaying
