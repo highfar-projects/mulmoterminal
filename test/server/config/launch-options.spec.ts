@@ -160,6 +160,18 @@ describe("what config accepts and what the launch path accepts", () => {
       expect(spy.mock.calls.map((call) => String(call[0])).join("\n")).toContain("not-a-list");
     });
 
+    // The value is whatever the user's JSON held, and "longer than a model id may be" is one of
+    // the reasons it was rejected — so the line quotes it to a bound instead of echoing a
+    // megabyte of it. Observed during review; no bot flagged it.
+    it("quotes a rejected value to a bound rather than echoing it whole", () => {
+      const spy = warn();
+      const huge = `x`.repeat(50_000);
+      sanitizeProviders([{ ...provider("huge-value"), models: [`${huge} not an id`] }]);
+      const line = spy.mock.calls.map((call) => String(call[0])).join("\n");
+      expect(line).toContain("huge-value");
+      expect(line.length).toBeLessThan(400);
+    });
+
     it("stays quiet when every listed model was kept", () => {
       const spy = warn();
       sanitizeProviders([{ ...provider("all-kept"), models: ["z-ai/glm-5.2", " moonshotai/kimi-k3 "] }]);

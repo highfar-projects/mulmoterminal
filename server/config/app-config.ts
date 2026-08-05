@@ -464,6 +464,15 @@ const warnOnce = (message: string): void => {
   console.warn(message);
 };
 
+// What a rejected entry is quoted as. A dropped value is whatever the user's JSON held — an
+// object, or a string far past MODEL_ID_MAX_LENGTH, which is one of the reasons it was rejected —
+// so it is quoted to a bound rather than echoed whole into the line.
+const DROPPED_MODEL_QUOTE_MAX = 80;
+const quoteDropped = (model: unknown): string => {
+  const text = JSON.stringify(model) ?? String(model);
+  return text.length > DROPPED_MODEL_QUOTE_MAX ? `${text.slice(0, DROPPED_MODEL_QUOTE_MAX)}…` : text;
+};
+
 // A model id the schema refuses is dropped in silence, and a provider whose whole list was
 // refused looks exactly like one that never listed any: the picker has nothing to offer while the
 // user is reading a config file that lists models (#1432). Compared against what the schema KEPT
@@ -477,7 +486,7 @@ function warnDroppedModels(provider: Provider, raw: unknown): void {
   const kept = new Set(provider.models);
   const dropped = raw.models.filter((model) => typeof model !== "string" || !kept.has(model.trim()));
   if (dropped.length === 0) return;
-  const shown = dropped.map((model) => JSON.stringify(model)).join(", ");
+  const shown = dropped.map(quoteDropped).join(", ");
   warnOnce(`[providers] '${provider.id}': dropped ${dropped.length} unusable model id(s) — ${shown}. A model id is ${MODEL_ID_ALLOWED}.`);
 }
 
