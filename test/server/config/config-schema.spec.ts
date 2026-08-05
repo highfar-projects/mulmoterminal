@@ -263,6 +263,18 @@ describe("dirConfigJsonSchema", () => {
     expect(Object.keys(dirWorktreeEnvField.parse(vars(MAX_WORKTREE_ENV_VARS + 1)) ?? {})).toHaveLength(MAX_WORKTREE_ENV_VARS);
   });
 
+  // The cap has to count what SURVIVES: a malformed entry among the first sixteen used to consume
+  // a slot, so a valid seventeenth declaration was never even looked at and the variable the file
+  // plainly sets came out unset. (CodeRabbit review on #1367.)
+  it("does not let a malformed early entry push a valid later one past the cap", () => {
+    const raw: Record<string, unknown> = { BROKEN: { kind: "port", base: 1 } }; // below MIN_PORT
+    for (let i = 0; i < MAX_WORKTREE_ENV_VARS; i++) raw[`P${i}`] = { kind: "port", base: 3000 };
+    const parsed = dirWorktreeEnvField.parse(raw) ?? {};
+    expect(Object.keys(parsed)).toHaveLength(MAX_WORKTREE_ENV_VARS);
+    expect(parsed[`P${MAX_WORKTREE_ENV_VARS - 1}`]).toEqual({ kind: "port", base: 3000 });
+    expect(parsed.BROKEN).toBeUndefined();
+  });
+
   it("rejects whitespace-only strings the runtime would drop", () => {
     const json = JSON.stringify(dirConfigJsonSchema());
     // every free-text field carries minLength + a non-whitespace pattern

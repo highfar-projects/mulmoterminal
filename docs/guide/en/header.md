@@ -252,7 +252,7 @@ stays.
 | `diff` | the worktree diff badge (`+2 ●5`) | ✅ [worktree cells with changes only](worktree.html#diff-badge) |
 | `ctx` | model and context usage | ✅ once the agent reports it |
 | `usage` | rate-limit consumption | ✅ same |
-| `env` | the port and database name this working tree was reserved (`:3010`, clickable) | ✅ [only where the project declares `worktreeEnv`](config.html#worktree-env) |
+| `env` | the values this working tree was reserved — a port shows as a clickable `:3010`, anything else as its text | ✅ [only where the project declares `worktreeEnv`](config.html#worktree-env) |
 | `dir` / `status` / `tools` | project badge / status dot / tool timeline | ❌ **structural — listing them does nothing, omitting them hides nothing** |
 
 Writing `dir` / `status` / `tools` is not an error; it is silently ignored.

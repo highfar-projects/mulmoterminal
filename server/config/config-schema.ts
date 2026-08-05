@@ -350,13 +350,16 @@ export const dirWorktreeEnvField = z
   .transform((raw): WorktreeEnvSpec | null => {
     if (!isRecord(raw)) return null;
     const spec: WorktreeEnvSpec = {};
-    Object.entries(raw)
-      .filter(([name]) => ENV_NAME_RE.test(name))
-      .slice(0, MAX_WORKTREE_ENV_VARS)
-      .forEach(([name, value]) => {
-        const parsed = worktreeEnvVarSchema.safeParse(value);
-        if (parsed.success) spec[name] = parsed.data satisfies WorktreeEnvVar;
-      });
+    // The cap counts what SURVIVED, not what was written: slicing first would let one malformed
+    // entry among the first sixteen consume a slot and push a perfectly good seventeenth
+    // declaration out, leaving a variable the file plainly sets unset (CodeRabbit review on
+    // #1367). The same reason each entry is dropped on its own rather than failing the block.
+    for (const [name, value] of Object.entries(raw)) {
+      if (Object.keys(spec).length >= MAX_WORKTREE_ENV_VARS) break;
+      if (!ENV_NAME_RE.test(name)) continue;
+      const parsed = worktreeEnvVarSchema.safeParse(value);
+      if (parsed.success) spec[name] = parsed.data satisfies WorktreeEnvVar;
+    }
     return Object.keys(spec).length ? spec : null;
   })
   .nullable()

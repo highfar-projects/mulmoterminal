@@ -199,9 +199,9 @@ in one.
 - **Launch commands** run anything as a persistent terminal — `yarn dev`, `htop`, `lazygit`, a
   `tail -f` you want to keep an eye on.
 - The **one-session-per-worktree** limit is on *agents*. A shell or a `yarn dev` launcher stays
-  free, because a worktree an agent is working in is exactly where you want those — and a project
-  that declares [`worktreeEnv`](config.html#worktree-env) gets a port and a database name **per
-  worktree**, so two of those dev servers do not fight over 3000.
+  free, because a worktree an agent is working in is exactly where you want those — and each
+  variable a project declares in [`worktreeEnv`](config.html#worktree-env) gets a value **per
+  worktree**, so two dev servers given a port of their own do not fight over 3000.
 
 So the grid ends up holding your whole working set, not just the agents — and the agents are the
 cells that get colour, a chime and a phone push, because they're the ones that stop and ask.

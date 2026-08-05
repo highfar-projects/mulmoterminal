@@ -1227,14 +1227,18 @@ tree and exports it into that tree's terminals:
 }
 ```
 
-The project's own checkout keeps the `base` it declared, and its worktrees take the numbers above
-it:
+The project's own checkout takes the `base` it declared and its worktrees the numbers above it —
+so a single checkout and its trees look like this:
 
 | Directory | `PORT` | `DB_NAME` |
 |---|---|---|
 | `~/src/myapp` (the checkout) | `3000` | `myapp_myapp` |
 | `…/worktrees/myapp-a1b2c3d4/fix-login` | `3010` | `myapp_fix_login` |
 | `…/worktrees/myapp-a1b2c3d4/add-search` | `3020` | `myapp_add_search` |
+
+`base` itself goes to whichever directory reserves first. A **second clone of the same repo**
+declares the same `base`, so it takes the next free slot instead (3010) — which is the point: those
+two checkouts used to fight over 3000 as surely as two worktrees did.
 
 - **`kind: "port"`** — a free TCP port, `base` + a multiple of **10**. The stride is ten and not
   one because a dev server that finds its port taken commonly moves to the next one (vite does
@@ -1251,7 +1255,8 @@ it:
 ### The numbers do not move {#worktree-env-stable}
 
 A value is **reserved once and then kept**, in `~/.mulmoterminal/worktree-env.jsonl`. Reopen the
-cell, restart the server, reboot — the same tree gets the same number.
+cell, restart the server, reboot — the same tree gets the same number, for as long as the
+declaration it was made against is unchanged.
 
 That is not a nicety. If the port were re-measured on every launch, the tree's OWN dev server
 would make its port look taken and the number would move — the tree would flee from itself. And a
@@ -1262,7 +1267,9 @@ What IS measured, once, is whether the port is free at the moment it is first ha
 port something else on your machine already holds is skipped rather than handed over.
 
 The reservation is given up when the worktree is **removed** (Close → delete), and a reservation
-whose directory is simply gone stops holding its value.
+whose directory is simply gone stops holding its value. **Editing the declaration also frees it**:
+change `base` and the next session re-allocates, rename or drop a variable and the value it held
+goes back into circulation for the other trees.
 
 ### Where to see what this tree got {#worktree-env-chip}
 
@@ -1279,8 +1286,9 @@ place it deliberately, name it in [`chips`](#header): `"chips": ["git", "env", "
   launch command, a Run-menu command. Whatever runs `yarn dev` gets the port.
 - They are set **on top of** the inherited environment, and a variable MulmoTerminal needs for
   itself wins over a declaration of the same name.
-- Declaring nothing changes nothing. Without `worktreeEnv` no value is reserved, no file is
-  written, and no variable is set.
+- Declaring nothing changes nothing: without `worktreeEnv` no value is reserved and no variable
+  is set. A directory that USED to declare one is the single exception — its old reservation is
+  released, which is one line appended, so the value goes back into circulation.
 - Take effect on the **next session** in that directory.
 
 ## Running on another model (providers) {#providers}
