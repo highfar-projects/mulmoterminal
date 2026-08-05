@@ -44,6 +44,25 @@ describe("useSessionContext", () => {
     unmount();
   });
 
+  // Changing the agent changes which log the server reads, so it has to re-fetch — and clear the
+  // old badge while it does, or a codex cell relaunched as claude keeps wearing `gpt-5.5`.
+  it("re-fetches and drops the old model when the agent changes", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ context: { model: "gpt-5.5", contextTokens: 1 } }))
+      .mockResolvedValueOnce({ ok: false } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+    const agent = ref<TerminalAgent>("codex");
+    const { result, unmount } = withSetup(() => useSessionContext(ref<string | null>("sess-1"), ref<string | null>(null), agent));
+    await flushPromises();
+    expect(result.context.value?.model).toBe("gpt-5.5");
+    agent.value = "claude";
+    await flushPromises();
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/session/sess-1?agent=claude");
+    expect(result.context.value).toBeNull(); // no stale codex model on a claude terminal
+    unmount();
+  });
+
   it("does not fetch and stays null when there is no session id", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

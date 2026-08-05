@@ -28,7 +28,8 @@
 import { promises as fs } from "node:fs";
 import type { TerminalAgent } from "../../common/sessionAgent.js";
 import type { SessionContextInfo } from "../../common/sessionContext.js";
-import { codexBadgesFromRolloutDocs, EMPTY_CODEX_BADGES, type CodexBadges } from "../agents/codex-usage.js";
+import { codexBadgesFromRolloutDocs, codexModelFromDocs, EMPTY_CODEX_BADGES, type CodexBadges } from "../agents/codex-usage.js";
+import { parseJsonRecord, readTranscriptHead } from "../agents/transcript-head.js";
 import { codexSessionsRoot } from "../agents/codex-session.js";
 import { codexRolloutPath } from "../agents/codex-sessions.js";
 import { grokModelFromSummary, grokSummaryPath } from "../agents/grok-sessions.js";
@@ -66,12 +67,40 @@ async function codexBadges(sessionKey: string, root: string): Promise<CodexBadge
   const file = codexRolloutPath(root, rolloutId);
   if (!file) return EMPTY_CODEX_BADGES;
   try {
-    // The tail: every field the reader wants is a running total or a most-recent value, so the end
-    // of the file answers the same as the whole of it — at a bounded cost (#998).
-    return codexBadgesFromRolloutDocs(readTailRecords(file));
+    // The tail: the token fields are running totals and most-recent values, so the end of the file
+    // answers the same as the whole of it — at a bounded cost (#998).
+    const badges = codexBadgesFromRolloutDocs(readTailRecords(file));
+    // The model is the exception, and the reviewers of #1466 caught it: `turn_context` is written
+    // ONCE, at the start of a turn, so a turn that writes more than the tail window leaves its own
+    // model row outside it. Fresh numbers would then arrive with `model: null` and the badge would
+    // hide — on exactly the long sessions the bounded read exists for. The session's first
+    // `turn_context` is a few hundred bytes into the file, so the head answers instead.
+    //
+    // Asked ONLY when the tail named nobody, and only once there is something to label: a rollout
+    // that has not counted a token yet is a session with no badge either way, and this route is
+    // polled per cell.
+    if (badges.context.model !== null || badges.context.contextTokens === 0) return badges;
+    return { ...badges, context: { ...badges.context, model: await rolloutHeadModel(file) } };
   } catch {
     return EMPTY_CODEX_BADGES;
   }
+}
+
+// Enough for the session_meta record and the first turn_context behind it; the same size the
+// rollout listing reads a title from.
+const ROLLOUT_HEAD_BYTES = 64 * 1024;
+
+/** The model the session STARTED on, from the head of its rollout. A fallback, so it is the right
+ *  answer for every session that has not used `/model` and the closest available one when a
+ *  single turn is bigger than the tail window. */
+async function rolloutHeadModel(file: string): Promise<string | null> {
+  const read = await readTranscriptHead(file, ROLLOUT_HEAD_BYTES);
+  if (!read) return null;
+  const docs = read.head
+    .split("\n")
+    .map(parseJsonRecord)
+    .filter((d): d is Record<string, unknown> => d !== null);
+  return codexModelFromDocs(docs);
 }
 
 async function grokBadges(cwd: string, id: string, root: string): Promise<SessionBadges> {

@@ -17,18 +17,23 @@ const isContext = (c: unknown): c is SessionContext => typeof c === "object" && 
 export function useSessionContext(sessionId: Ref<string | null>, cwd: Ref<string | null>, agent?: Ref<TerminalAgent>) {
   const context = ref<SessionContext | null>(null);
   let requestSeq = 0;
-  let loadedFor: string | null = null; // the session id `context` currently reflects
+  // What `context` currently reflects — the session AND the agent it was read from, because the
+  // two decide the answer together: the same id asked about a different agent is read from a
+  // different log entirely.
+  let loadedFor: string | null = null;
 
   async function refresh(): Promise<void> {
     const id = sessionId.value;
+    const key = `${agent?.value ?? "claude"} ${id ?? ""}`;
     if (!id) {
       context.value = null;
       loadedFor = null;
       return;
     }
-    // Switched to a different session: drop the old model now, so a slow/failed fetch can't keep
-    // showing the previous session's model. A same-session refresh keeps the last value (no flicker).
-    if (loadedFor !== id) {
+    // Switched to a different session — or to another agent on the same one: drop the old model
+    // now, so a slow/failed fetch can't keep showing the previous one. A refresh of the same pair
+    // keeps the last value (no flicker).
+    if (loadedFor !== key) {
       context.value = null;
       loadedFor = null;
     }
@@ -42,14 +47,17 @@ export function useSessionContext(sessionId: Ref<string | null>, cwd: Ref<string
       // Guard against a stale response: the terminal may have switched session mid-flight.
       if (seq === requestSeq && id === sessionId.value && isContext(data.context)) {
         context.value = data.context;
-        loadedFor = id;
+        loadedFor = key;
       }
     } catch {
       // best-effort — `${model}` just renders empty until a later fetch succeeds
     }
   }
 
-  useAutoRefresh(refresh, [sessionId, cwd]);
+  // `agent` is a dependency, not just a query param: it names the reader on the server, so a cell
+  // relaunched on another agent would otherwise wear the previous agent's badge until the session
+  // or directory happened to change.
+  useAutoRefresh(refresh, agent ? [sessionId, cwd, agent] : [sessionId, cwd]);
 
   return { context, refresh };
 }

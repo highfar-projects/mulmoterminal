@@ -1154,8 +1154,9 @@ what it writes down (`?agent=` on the route picks the reader):
 | **Antigravity** | `antigravity` — a constant; agy records neither a model id nor tokens | hidden |
 
 The token badge hides itself when nothing has been counted, and the context badge shows
-the model alone when the tokens or the window are unknown — a percentage is only ever
-shown when both numbers came from the agent.
+the model alone unless it has **both** a token count from the agent and a context window
+— agent-reported (codex) or resolved from the built-in table above (Claude, provider
+models). Either one missing means a name and no percentage.
 
 The **Settings** modal (⚙) shows an **estimated $ cost** — Session / Today / Month — from
 `GET /api/cost`, using a built-in public per-model price table (cache reads billed at

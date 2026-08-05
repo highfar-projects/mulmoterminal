@@ -61,6 +61,17 @@ describe("agentBadges", () => {
     expect(badges.usage.outputTokens).toBe(6481);
   });
 
+  // The one field that is not cumulative: `turn_context` is written once, at the start of a turn,
+  // so a turn bigger than the tail window leaves its model row outside it. Without the head
+  // fallback the badge disappears on exactly the long sessions the bounded read is for.
+  it("falls back to the head's model when a huge turn pushed turn_context out of the tail", async () => {
+    const filler = JSON.stringify({ type: "response_item", payload: { junk: "x".repeat(200_000) } });
+    writeRollout([turnContextLine, ...Array.from({ length: 30 }, () => filler), tokenCountLine]);
+    const badges = await agentBadges(CWD, ROLLOUT_ID, "codex", roots);
+    expect(badges.context.model).toBe("gpt-5.5"); // read from the head, not the 4 MB tail
+    expect(badges.context.contextTokens).toBe(55_447); // and the numbers still come from the tail
+  });
+
   // Nothing on disk to read is the ordinary state of a session that has just been launched, and it
   // has to be silence rather than zeroes presented as a reading.
   it("answers nothing for a codex session with no rollout", async () => {
