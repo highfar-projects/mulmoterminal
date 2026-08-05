@@ -52,6 +52,7 @@ import type {
   SpawnLauncherPty,
   ResolveLauncher,
 } from "../session/spawners.js";
+import type { SpawnDirectoryMcpPty } from "../session/spawn-directory-mcp.js";
 import { terminalWsKind, type TerminalWsKind } from "./terminal-ws-path.js";
 import { normalizeAgent, parseIndexParam } from "./routeParams.js";
 import { agentResumeId } from "../agents/agent-resume.js";
@@ -344,6 +345,47 @@ export function beginRunTerminal(deps: WsRouteDeps, ws: WebSocket, resolved: { c
   });
 }
 
+/** What is still RUNNING under a requested id — the two facts every reattachable endpoint starts
+ *  from, gathered in one place because they are asked in a fixed order and one of them costs a
+ *  subprocess: `tmuxHasSession` shells out, so a same-process pty must short-circuit it.
+ *
+ *  `hasLivePty` is `!!live` rather than a separate `ptys.has`, which is what it always meant —
+ *  the map holds no undefined entries — and saying it once removes the chance of the two answers
+ *  parting company. */
+function liveSessionFacts(requested: string | null): { hasLivePty: boolean; live: PtyEntry | undefined; tmuxAlive: boolean } {
+  const live = requested ? ptys.get(requested) : undefined;
+  const tmuxAlive = !live && !!requested && tmuxHasSession(requested);
+  return { hasLivePty: !!live, live, tmuxAlive };
+}
+
+/** The session a self-identifying agent connects as: the id it will run under, the same-process
+ *  pty to reattach if there is one, and the conversation to resume if there is one. */
+interface ResumableSession {
+  sessionId: string;
+  live: PtyEntry | undefined;
+  resumeConversationId: string | null;
+}
+
+/** The session a self-identifying agent (codex, antigravity, grok) connects as.
+ *
+ *  All three mint their OWN conversation id and tell nobody, so the id the browser holds is a key
+ *  this server minted and the conversation behind it has to be looked up. What differs between
+ *  them is only that lookup — a map on disk, a probe, or both — so it arrives as `resumeIdFor`
+ *  and everything around it is decided here.
+ *
+ *  claude is deliberately not one of these: it takes `--session-id`, so its id IS the
+ *  conversation's and resolveClaudeSession answers a different question (resume from disk).
+ */
+function resolveResumableSession(
+  requested: string | null,
+  resumeIdFor: (facts: { hasLivePty: boolean; tmuxAlive: boolean }) => string | null,
+): ResumableSession {
+  const { hasLivePty, live, tmuxAlive } = liveSessionFacts(requested);
+  const resumeConversationId = resumeIdFor({ hasLivePty, tmuxAlive });
+  const { sessionId } = resolveReattachableId(requested, { hasLivePty, tmuxAlive, canResume: !!resumeConversationId }, randomUUID);
+  return { sessionId, live, resumeConversationId };
+}
+
 // Reattach a same-process live PTY, else spawn a launcher (which itself reattaches a
 // surviving tmux session or creates one). `command` is the resolved launcher command,
 // or the fallback for a tmux reattach with no launcher index.
@@ -362,9 +404,7 @@ function resolveLaunchSession(
   index: number,
   shell: boolean,
 ): { sessionId: string; live: PtyEntry | undefined; command: string } | null {
-  const hasLivePty = !!requested && ptys.has(requested);
-  const live = hasLivePty && requested ? ptys.get(requested) : undefined;
-  const tmuxAlive = !live && !!requested && tmuxHasSession(requested);
+  const { hasLivePty, live, tmuxAlive } = liveSessionFacts(requested);
   // A live PTY / surviving tmux session reattaches regardless of the index; only a fresh
   // spawn needs the launcher resolved (the pty already IS the chosen program on reattach).
   const launcher = live || tmuxAlive ? null : deps.resolveLauncher(index);
@@ -379,17 +419,17 @@ function resolveLaunchSession(
 // pty / surviving tmux session (running codex picked up, no resume); else cold-resume a known
 // rollout id; else a fresh session (a new minted key).
 function resolveCodexSession(requested: string | null): { sessionId: string; live: PtyEntry | undefined; resumeRolloutId: string | null } {
-  const hasLivePty = !!requested && ptys.has(requested);
-  const live = hasLivePty && requested ? ptys.get(requested) : undefined;
-  const tmuxAlive = !live && !!requested && tmuxHasSession(requested);
-  const resumeRolloutId = agentResumeId(requested, {
-    mappedId: requested ? codexRollouts.get(requested)?.conversationId : null,
-    conversationExists: () => !!requested && codexRolloutExists(codexSessionsRoot(), requested),
-    hasLivePty: !!live,
-    tmuxAlive,
-  });
-  const { sessionId } = resolveReattachableId(requested, { hasLivePty, tmuxAlive, canResume: !!resumeRolloutId }, randomUUID);
-  return { sessionId, live, resumeRolloutId };
+  const { sessionId, live, resumeConversationId } = resolveResumableSession(requested, ({ hasLivePty, tmuxAlive }) =>
+    agentResumeId(requested, {
+      mappedId: requested ? codexRollouts.get(requested)?.conversationId : null,
+      conversationExists: () => !!requested && codexRolloutExists(codexSessionsRoot(), requested),
+      hasLivePty,
+      tmuxAlive,
+    }),
+  );
+  // "rollout" is codex's own word for the conversation file it resumes from — kept at this
+  // boundary, since everything downstream of here is codex-specific and reads better in it.
+  return { sessionId, live, resumeRolloutId: resumeConversationId };
 }
 
 // Grouped rather than eight positional arguments: what this needs is a session to (re)attach,
@@ -632,75 +672,18 @@ async function handleCodexConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUp
   );
 }
 
-function resolveAntigravitySession(requested: string | null): { sessionId: string; live: PtyEntry | undefined; resumeConversationId: string | null } {
-  const hasLivePty = !!requested && ptys.has(requested);
-  const live = hasLivePty && requested ? ptys.get(requested) : undefined;
-  const tmuxAlive = !live && !!requested && tmuxHasSession(requested);
-  // The same rule codex resumes by, including the part that is easy to drop: the key is only
-  // treated as a conversation id when a conversation by that name EXISTS. Without the check every
-  // key resumes, which means a stale one is handed to `agy --conversation` — agy answers a
-  // conversation it cannot find by starting a fresh one, silently, under the old session's id.
-  const resumeConversationId = agentResumeId(requested, {
-    mappedId: requested ? antigravityConversations.get(requested)?.conversationId : null,
-    conversationExists: () => !!requested && antigravityConversationExists(antigravityBrainRoot(), requested),
-    hasLivePty,
-    tmuxAlive,
-  });
-  const { sessionId } = resolveReattachableId(requested, { hasLivePty, tmuxAlive, canResume: !!resumeConversationId }, randomUUID);
-  return { sessionId, live, resumeConversationId };
-}
-
-interface AntigravityStart {
-  sessionId: string;
-  live: PtyEntry | undefined;
-  resumeConversationId: string | null;
-  cwd: string;
-  attachGuiMcp: boolean;
-  mcpGroups: readonly ToolGroup[];
-}
-
-// Reattach or spawn, as ONE function handed to startAndWire — the reattach must not take a
-// shortcut around it. `reattachPty` only swaps the socket and replays the buffer; returning early
-// on it left a reloaded terminal printing output while ignoring every keystroke, and never
-// detaching or reaping when the socket closed.
-function startAntigravityEntry(deps: WsRouteDeps, ws: WebSocket, start: AntigravityStart): PtyEntry {
-  const { sessionId, live, resumeConversationId, cwd, attachGuiMcp, mcpGroups } = start;
-  const entry = live ? deps.reattachPty(live, ws, sessionId) : deps.spawnAntigravityPty(sessionId, ws, resumeConversationId, cwd, { mcpGroups });
-  // Single view (gui) = the attached session IS the actively-viewed pane. A grid dev-terminal
-  // cell (gui=0) is only "viewed" once focused, and says so with a `view` frame.
-  entry.active = attachGuiMcp;
-  return entry;
-}
-
-// antigravity terminal (?cwd=<dir>, ?session=<id> to reattach/resume). Unlike claude and codex
-// there is no per-session GUI MCP surface to attach or withhold: agy reads its servers from a file
-// in the DIRECTORY, so every session there reaches whatever that directory registered — `?gui=0`
-// only keeps a grid dev terminal out of the sidebar.
-async function handleAntigravityConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUpgradeRequest) {
-  const { url, requested, cwd, unusable, size } = wsConnectionContext(req);
-  if (refuseUnusableWorkspace(ws, "antigravity", unusable, requested)) return;
-  const attachGuiMcp = url.searchParams.get("gui") !== "0";
-  // Before resolving, not after: the mapping this reads lives on disk, and a reconnect that
-  // arrives while the log is still being read would see an empty map and decline to resume a
-  // conversation that is right there — which is the restart case this exists for.
-  await antigravityConversationsHydrated;
-  const { sessionId, live, resumeConversationId } = resolveAntigravitySession(requested);
-  await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });
-  const early = await admitAgentSession(ws, "antigravity", { requested, sessionId, live, cwd, devTerminal: !attachGuiMcp });
-  if (!early) return;
-
-  // The directory's registered groups, read here because the lookup reads Claude Code's config
-  // files and the spawner is sync. Only for a SPAWN: a reattach keeps the tools its running
-  // process was started with, and rewriting the shared file on a reattach would speak for every
-  // other session in the directory.
-  const mcpGroups = live ? [] : await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []);
-  if (!clientStillConnected(ws, "antigravity", sessionId, early)) return;
-  // The reattach goes THROUGH startAndWire like the spawn, not around it: reattachPty only swaps
-  // the socket and replays the buffer, so returning early here left a reloaded terminal printing
-  // output while ignoring every keystroke, and never detaching or reaping on close.
-  const startFailureMessage = startFailureMessageFor("Antigravity");
-  startAndWire(deps, ws, { id: sessionId, tag: "antigravity", early, startFailureMessage, size }, () =>
-    startAntigravityEntry(deps, ws, { sessionId, live, resumeConversationId, cwd, attachGuiMcp, mcpGroups }),
+function resolveAntigravitySession(requested: string | null): ResumableSession {
+  return resolveResumableSession(requested, ({ hasLivePty, tmuxAlive }) =>
+    // The same rule codex resumes by, including the part that is easy to drop: the key is only
+    // treated as a conversation id when a conversation by that name EXISTS. Without the check every
+    // key resumes, which means a stale one is handed to `agy --conversation` — agy answers a
+    // conversation it cannot find by starting a fresh one, silently, under the old session's id.
+    agentResumeId(requested, {
+      mappedId: requested ? antigravityConversations.get(requested)?.conversationId : null,
+      conversationExists: () => !!requested && antigravityConversationExists(antigravityBrainRoot(), requested),
+      hasLivePty,
+      tmuxAlive,
+    }),
   );
 }
 
@@ -715,55 +698,68 @@ async function handleAntigravityConnection(deps: WsRouteDeps, ws: WebSocket, req
 // and the spawn, `tmux new-session -A` re-runs the command — and there `--resume <id>` reattaches
 // the conversation where `--session-id <id>` ABORTS ("Session ID … is already in use", measured).
 // Withholding the resume in that window makes the window fatal.
-function resolveGrokSession(requested: string | null, cwd: string): { sessionId: string; live: PtyEntry | undefined; resumeConversationId: string | null } {
-  const hasLivePty = !!requested && ptys.has(requested);
-  const live = hasLivePty && requested ? ptys.get(requested) : undefined;
-  const tmuxAlive = !live && !!requested && tmuxHasSession(requested);
-  // Only when a conversation by that name EXISTS in this directory. Without the check every key
-  // resumes, which means a stale one is handed to `grok --resume` — and an agent asked for a
-  // conversation it cannot find starts a fresh one, silently, under the old session's id.
-  const resumeConversationId = !hasLivePty && requested && grokConversationExists(grokSessionsRoot(), cwd, requested) ? requested : null;
-  const { sessionId } = resolveReattachableId(requested, { hasLivePty, tmuxAlive, canResume: !!resumeConversationId }, randomUUID);
-  return { sessionId, live, resumeConversationId };
+function resolveGrokSession(requested: string | null, cwd: string): ResumableSession {
+  return resolveResumableSession(requested, ({ hasLivePty }) =>
+    // Only when a conversation by that name EXISTS in this directory. Without the check every key
+    // resumes, which means a stale one is handed to `grok --resume` — and an agent asked for a
+    // conversation it cannot find starts a fresh one, silently, under the old session's id.
+    !hasLivePty && requested && grokConversationExists(grokSessionsRoot(), cwd, requested) ? requested : null,
+  );
 }
 
-interface GrokStart {
-  sessionId: string;
-  live: PtyEntry | undefined;
-  resumeConversationId: string | null;
-  cwd: string;
-  attachGuiMcp: boolean;
-  mcpGroups: readonly ToolGroup[];
+// The two agents that read their MCP servers from a file in the DIRECTORY rather than from a
+// per-session flag: agy from `.agents/mcp_config.json`, grok from `.grok/config.toml`. That one
+// fact decides their whole connection shape and is what claude and codex do NOT share — for them
+// `?gui=0` picks which tools the session gets, while here every session in a directory reaches
+// whatever that directory registered and the flag only keeps a grid cell out of the sidebar.
+//
+// So this describes what differs between the two, and handleDirectoryMcpAgentConnection below
+// owns everything that does not. grok arrived as a copy of antigravity's handler (#1441) and the
+// two had already drifted in wording by the time jscpd named them.
+export interface DirectoryMcpWsAgent {
+  kind: TerminalWsKind;
+  /** How a failed start names this agent to the user. */
+  label: string;
+  /** Awaited BEFORE the session is resolved, for an agent that keeps a session -> conversation map
+   *  on disk: a reconnect arriving mid-read would see an empty map and decline to resume a
+   *  conversation that is right there, which is the server-restart case the map exists for.
+   *
+   *  Required rather than optional, and `null` where there is nothing to wait for (grok mints no
+   *  id of its own, so it keeps no map) — an agent added later has to answer this question rather
+   *  than inherit "no" by leaving a key out. */
+  hydrated: Promise<unknown> | null;
+  resolveSession: (requested: string | null, cwd: string) => ResumableSession;
+  spawn: (deps: WsRouteDeps) => SpawnDirectoryMcpPty;
 }
 
-// Reattach or spawn, as ONE function handed to startAndWire — the reattach must not take a shortcut
-// around it. `reattachPty` only swaps the socket and replays the buffer; returning early on it left
-// a reloaded terminal printing output while ignoring every keystroke, and never detaching or
-// reaping when the socket closed.
-function startGrokEntry(deps: WsRouteDeps, ws: WebSocket, start: GrokStart): PtyEntry {
-  const { sessionId, live, resumeConversationId, cwd, attachGuiMcp, mcpGroups } = start;
-  const entry = live ? deps.reattachPty(live, ws, sessionId) : deps.spawnGrokPty(sessionId, ws, resumeConversationId, cwd, { mcpGroups });
-  // Single view (gui) = the attached session IS the actively-viewed pane. A grid dev-terminal cell
-  // (gui=0) is only "viewed" once focused, and says so with a `view` frame.
-  entry.active = attachGuiMcp;
-  return entry;
-}
+export const ANTIGRAVITY_WS_AGENT: DirectoryMcpWsAgent = {
+  kind: "antigravity",
+  label: "Antigravity",
+  hydrated: antigravityConversationsHydrated,
+  resolveSession: (requested) => resolveAntigravitySession(requested),
+  spawn: (deps) => deps.spawnAntigravityPty,
+};
 
-// grok terminal (?cwd=<dir>, ?session=<id> to reattach/resume). Like antigravity and unlike claude
-// and codex there is no per-session GUI MCP surface to attach or withhold: grok reads its servers
-// from `.grok/config.toml` in the DIRECTORY, so every session there reaches whatever that directory
-// registered — `?gui=0` only keeps a grid dev terminal out of the sidebar.
-async function handleGrokConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUpgradeRequest) {
+export const GROK_WS_AGENT: DirectoryMcpWsAgent = {
+  kind: "grok",
+  label: "Grok",
+  hydrated: null,
+  resolveSession: resolveGrokSession,
+  spawn: (deps) => deps.spawnGrokPty,
+};
+
+// antigravity (?cwd=<dir>, ?session=<id> to reattach/resume) and grok, which connect identically —
+// see DirectoryMcpWsAgent for why those two and not claude or codex.
+export async function handleDirectoryMcpAgentConnection(agent: DirectoryMcpWsAgent, deps: WsRouteDeps, ws: WebSocket, req: WsUpgradeRequest) {
   const { url, requested, cwd, unusable, size } = wsConnectionContext(req);
-  if (refuseUnusableWorkspace(ws, "grok", unusable, requested)) return;
+  if (refuseUnusableWorkspace(ws, agent.kind, unusable, requested)) return;
   const attachGuiMcp = url.searchParams.get("gui") !== "0";
-  // No `await …Hydrated` here, and that is not an oversight: the two agents that need one keep a
-  // session -> conversation map on disk, and grok has no such map to wait for.
-  const { sessionId, live, resumeConversationId } = resolveGrokSession(requested, cwd);
-  // The directory's per-tree PORT / DB_NAME (#1367), like every other spawn path — a grok cell in a
+  if (agent.hydrated) await agent.hydrated;
+  const { sessionId, live, resumeConversationId } = agent.resolveSession(requested, cwd);
+  // The directory's per-tree PORT / DB_NAME (#1367), like every other spawn path — a cell in a
   // worktree gets that tree's own values, not the ones another tree is already serving on.
   await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });
-  const early = await admitAgentSession(ws, "grok", { requested, sessionId, live, cwd, devTerminal: !attachGuiMcp });
+  const early = await admitAgentSession(ws, agent.kind, { requested, sessionId, live, cwd, devTerminal: !attachGuiMcp });
   if (!early) return;
 
   // The directory's registered groups, read here because the lookup reads Claude Code's config
@@ -771,11 +767,18 @@ async function handleGrokConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUpg
   // was started with, and rewriting the shared file on a reattach would speak for every other
   // session in the directory.
   const mcpGroups = live ? [] : await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []);
-  if (!clientStillConnected(ws, "grok", sessionId, early)) return;
-  const startFailureMessage = startFailureMessageFor("Grok");
-  startAndWire(deps, ws, { id: sessionId, tag: "grok", early, startFailureMessage, size }, () =>
-    startGrokEntry(deps, ws, { sessionId, live, resumeConversationId, cwd, attachGuiMcp, mcpGroups }),
-  );
+  if (!clientStillConnected(ws, agent.kind, sessionId, early)) return;
+  const startFailureMessage = startFailureMessageFor(agent.label);
+  // The reattach goes THROUGH startAndWire like the spawn, not around it: reattachPty only swaps
+  // the socket and replays the buffer, so returning early here left a reloaded terminal printing
+  // output while ignoring every keystroke, and never detaching or reaping on close.
+  startAndWire(deps, ws, { id: sessionId, tag: agent.kind, early, startFailureMessage, size }, () => {
+    const entry = live ? deps.reattachPty(live, ws, sessionId) : agent.spawn(deps)(sessionId, ws, resumeConversationId, cwd, { mcpGroups });
+    // Single view (gui) = the attached session IS the actively-viewed pane. A grid dev-terminal
+    // cell (gui=0) is only "viewed" once focused, and says so with a `view` frame.
+    entry.active = attachGuiMcp;
+    return entry;
+  });
 }
 
 export function mountTerminalWebSockets(deps: WsRouteDeps) {
@@ -828,6 +831,6 @@ export function mountTerminalWebSockets(deps: WsRouteDeps) {
   runWss.on("connection", (ws, req) => handleRunConnection(deps, ws, req));
   runLaunchWss.on("connection", (ws, req) => void handleLaunchConnection(deps, ws, req));
   runCodexWss.on("connection", (ws, req) => void handleCodexConnection(deps, ws, req));
-  runAntigravityWss.on("connection", (ws, req) => void handleAntigravityConnection(deps, ws, req));
-  runGrokWss.on("connection", (ws, req) => void handleGrokConnection(deps, ws, req));
+  runAntigravityWss.on("connection", (ws, req) => void handleDirectoryMcpAgentConnection(ANTIGRAVITY_WS_AGENT, deps, ws, req));
+  runGrokWss.on("connection", (ws, req) => void handleDirectoryMcpAgentConnection(GROK_WS_AGENT, deps, ws, req));
 }

@@ -13,13 +13,12 @@
 // It runs in the browser, like the exchange it generalises: close the tab and the table stops. A
 // conversation that continues where nobody is watching is a different feature with a different
 // safety argument.
-import { pasteAndSubmit, listSlots } from "./useTerminalConnections";
 import { waitVerdict } from "./exchangeRules";
-import { fetchLastTurn, type HandoffSource, type HandoffTarget } from "./useHandoff";
+import type { HandoffSource, HandoffTarget } from "./useHandoff";
 import { endsTheTable, nextSpeaker, roundTablePrompt, type RoundTableOutcome } from "./roundTableRules";
 import { formatRoom, roomWindow } from "../../common/roomMessage";
 import { fetchRoom, postRoomMessage } from "./useRooms";
-import type { TurnFetch, CrossTalkDeps } from "./useCrossTalk";
+import { liveCrossTalkDeps, type TurnFetch, type CrossTalkDeps } from "./useCrossTalk";
 import { ANSWER_TIMEOUT_MS, POLL_MS } from "./useCrossTalk";
 
 /** A seat at the table: which slot to type into, and which log to read back. */
@@ -35,9 +34,18 @@ export interface RoundTableRun {
   turnsTaken: number;
 }
 
-/** The exchange's dependency surface plus the room (#1456). The room is a DEPENDENCY rather than
- *  a direct fetch for the same reason the rest of this is: the loop's ordering is what breaks, and
- *  ordering is only testable when nothing in here talks to a server by itself. */
+/** The exchange's dependency surface plus the room (#1456).
+ *
+ *  This type and the factory below were folded into `CrossTalkDeps` / `liveCrossTalkDeps` while
+ *  they were byte-identical, and the note left behind said what would earn the split back: "the
+ *  table needs something the exchange genuinely does not — its own socket, its own clock, a fact
+ *  only a ring of N cells has." The room is that. A two-cell exchange hands one reply straight to
+ *  the other cell and keeps no record; a table posts every turn and reads the whole conversation
+ *  back, which is a socket the exchange has no use for.
+ *
+ *  The room arrives as a DEPENDENCY rather than a direct fetch for the reason the rest of this
+ *  does: the loop's ordering is what breaks, and ordering is only testable when nothing in here
+ *  talks to a server by itself. */
 export interface RoundTableDeps extends CrossTalkDeps {
   /** Append what somebody said. Failure is not fatal — a table whose log is unwritable is still a
    *  conversation, and stopping it would be a worse answer than losing the record. */
@@ -125,16 +133,11 @@ export async function runRoundTable(members: readonly TableMember[], room: strin
   }
 }
 
-/** The real wiring. Identical to the exchange's — the table is the same machine with a longer
- *  loop, so it borrows the same sockets rather than growing a second set. */
+/** The table's own wiring: the exchange's sockets plus the room. `liveCrossTalkDeps` no longer
+ *  covers it — the room is the thing the exchange does not have (see RoundTableDeps). */
 export function liveRoundTableDeps(isAborted: () => boolean): RoundTableDeps {
   return {
-    fetchTurn: (source, shape) => fetchLastTurn(source, shape),
-    submit: pasteAndSubmit,
-    runsSession: (key, sessionId) => listSlots().some((slot) => slot.key === key && slot.sessionId === sessionId),
-    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-    now: () => performance.now(),
-    isAborted,
+    ...liveCrossTalkDeps(isAborted),
     postToRoom: postRoomMessage,
     readRoom: async (room) => formatRoom(roomWindow(await fetchRoom(room))),
   };
@@ -143,7 +146,6 @@ export function liveRoundTableDeps(isAborted: () => boolean): RoundTableDeps {
 /** A room id for one table. Readable, sortable, and unique enough for a machine that starts a
  *  handful of these a day — the id is a filename, so it stays inside ROOM_ID_RE. */
 export const newRoomId = (now: number = Date.now()): string => `table-${new Date(now).toISOString().slice(0, 19).replace(/[:T]/g, "-").toLowerCase()}`;
-
 /** A handoff target as a seat at the table — the picker lists the same cells the exchange menu
  *  does, so one rule decides what is readable. */
 export const memberFromTarget = (target: HandoffTarget): TableMember => ({ key: target.key, label: target.label, source: target.source });
