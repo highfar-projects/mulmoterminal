@@ -9,6 +9,7 @@
 // shorthand costs a single function rather than a branch at every use.
 import { isRecord } from "./isRecord.js";
 import { isUnknownArray } from "./isUnknownArray.js";
+import { largestIconArea } from "./iconSizes.js";
 
 /** One entry of `icon`, after the string shorthand has been expanded. */
 export interface RepoIcon {
@@ -62,30 +63,14 @@ function parseIcons(input: unknown): RepoIcon[] {
   return rankIcons(entries);
 }
 
-// A vector is exact at any size, so `any` outranks every pixel count. An entry that declares no
-// size sorts last rather than being dropped — it is still an icon, just an unranked one.
-const VECTOR_AREA = Number.MAX_SAFE_INTEGER;
-
 /** Best first: vector, then largest declared size, then the order the author wrote. */
 export function rankIcons(icons: RepoIcon[]): RepoIcon[] {
   // Sorted with the index as the tie-break rather than relying on sort stability, so "the first
   // listed wins a tie" is a property of this function rather than of the engine.
   return icons
-    .map((icon, index) => ({ icon, index, area: largestArea(icon.sizes) }))
+    .map((icon, index) => ({ icon, index, area: largestIconArea(icon.sizes) }))
     .sort((a, b) => b.area - a.area || a.index - b.index)
     .map((entry) => entry.icon);
-}
-
-function largestArea(sizes: string | undefined): number {
-  if (!sizes) return 0;
-  return sizes
-    .split(/\s+/)
-    .map((token) => {
-      if (token.toLowerCase() === "any") return VECTOR_AREA;
-      const wh = /^(\d+)x(\d+)$/i.exec(token);
-      return wh ? Number(wh[1]) * Number(wh[2]) : 0;
-    })
-    .reduce((max, area) => Math.max(max, area), 0);
 }
 
 // `"color": "#7c3aed"` means exactly `{ "primary": "#7c3aed" }` — the same shorthand rule as `icon`.

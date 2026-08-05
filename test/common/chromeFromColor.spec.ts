@@ -44,8 +44,8 @@ const HAND_TUNED = [
 // The fixtures name roles as plain strings, so this is the one place that has to reconcile them
 // with the derived object — done with a lookup rather than a cast, so an unknown role is a test
 // failure rather than a silent undefined.
-function derived(primary: string): ChromeColors {
-  const chrome = chromeFromColor(primary);
+function derived(primary: string, background?: string | null): ChromeColors {
+  const chrome = chromeFromColor(primary, background);
   if (!chrome) throw new Error(`no palette derived for ${primary}`);
   return chrome;
 }
@@ -87,8 +87,17 @@ describe("deriving a palette from one colour", () => {
   });
 
   it("takes `background` as the cell surface when the file gives one", () => {
-    expect(chromeFromColor("#7c3aed", "#0b1020")?.cellColor).toBe("#0b1020");
-    expect(chromeFromColor("#7c3aed")?.cellColor).not.toBe("#0b1020");
+    expect(derived("#7c3aed", "#0b1020").cellColor).toBe("#0b1020");
+    expect(derived("#7c3aed").cellColor).not.toBe("#0b1020");
+  });
+
+  // Codex on #1445. An unusable `background` used to win the branch, survive as a non-colour and
+  // be dropped further down — leaving NO surface, neither declared nor derived. A role that did
+  // not parse is a role that was not declared, and the spec says `primary` alone must suffice.
+  it.each(["blue", "rgb(1,2,3)", "#12345", "", "   "])("ignores an unusable background (%s) and still derives one", (background) => {
+    const chrome = derived("#7c3aed", background);
+    expect(chrome.cellColor).toBe(derived("#7c3aed").cellColor);
+    expect(chrome.cellColor).toMatch(/^#[0-9a-f]{6}$/);
   });
 
   it("gives the border and the idle dot the same colour", () => {

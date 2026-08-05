@@ -52,7 +52,11 @@ export function chromeFromColor(primary: string, background?: string | null): Ch
     // also what makes two conforming tools agree.
     headerTextColor: readableTextColor(rgb[0], rgb[1], rgb[2]) === "#000" ? "#1b2430" : "#ffffff",
     // `background` is the surface the brand colour sits on, which is exactly what a cell body is.
-    cellColor: (background && normalizeHex(background)) || at(SURFACE.s, SURFACE.l),
+    // Gated on it PARSING, not on it being present: an unusable value here used to win the branch,
+    // survive as a non-colour, and then be dropped downstream — leaving no surface at all, neither
+    // the declared one nor the derived one (Codex on #1445). The spec says a consumer must be able
+    // to work from `primary` alone, and a role that didn't parse is a role that wasn't declared.
+    cellColor: (background && parseHex(background) && normalizeHex(background)) || at(SURFACE.s, SURFACE.l),
     cellBorderColor: at(EDGE.s, EDGE.l),
     dotColor: at(EDGE.s, EDGE.l),
     buttonColor: at(BUTTON.s, BUTTON.l),
