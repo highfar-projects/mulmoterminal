@@ -70,10 +70,17 @@ watch(
               <!-- Named separately, and second, because that is the order they are applied in.
                    A reader looking for why a value is not what their file says needs to see that
                    there IS a second file before anything else on this panel. -->
+              <!-- "wins over the file above" only when there IS one. A directory may carry the local
+                   file alone, and saying it beats a file that is not there sends the reader looking
+                   for one (Codex on #1431). -->
               <p v-if="details[path].localFile" data-testid="dir-preview-local-file" class="m-0 font-mono text-[11px] text-dim">
-                {{ details[path].localFile }} <span class="font-sans">(this checkout only — wins over the file above)</span>
+                {{ details[path].localFile }}
+                <span class="font-sans">{{ details[path].file ? "(this checkout only — wins over the file above)" : "(this checkout only)" }}</span>
               </p>
-              <p class="m-0 mb-2 mt-2 text-[11px] text-dim">Everything below comes from those files — no global setting or default is mixed in.</p>
+              <p class="m-0 mb-2 mt-2 text-[11px] text-dim">
+                Everything below comes from {{ details[path].file && details[path].localFile ? "those files" : "that file" }} — no global setting or default is
+                mixed in.
+              </p>
 
               <table v-if="details[path].rows.length" class="w-full border-collapse" data-testid="dir-preview-values">
                 <tbody>
