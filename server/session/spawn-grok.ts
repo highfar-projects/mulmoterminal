@@ -15,7 +15,7 @@ import { guiMcpEnv } from "./mcp-config.js";
 import { grokAdapter } from "../agents/grok.js";
 import { buildGrokArgs } from "../agents/grok-args.js";
 import { syncGrokMcpConfig } from "../agents/grok-mcp.js";
-import { ptySpawn } from "./pty-spawn.js";
+import { ptySpawn, ptyWouldReattach } from "./pty-spawn.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
 import { ptyStartLine } from "./pty-exit-log.js";
 import { ptys } from "./registry.js";
@@ -42,7 +42,17 @@ export function createGrokSpawner(deps: SpawnDeps) {
     },
   ): PtyEntry {
     const { mcpGroups, initialPrompt = null } = options;
-    syncGrokMcpConfig(cwd, mcpGroups);
+    // Only for a spawn that will really START grok. After a server restart `ptys` is empty but the
+    // tmux session can still be there, so this function is reached for what turns out to be a
+    // REATTACH — and the grok already running in that pane read `.grok/config.toml` once, at its
+    // own start. Rewriting it now cannot affect that process; it can only speak for the OTHER
+    // sessions in the directory, which is the one thing this file must never do.
+    //
+    // The damaging case is not hypothetical: the caller resolves the groups with
+    // `.catch(() => [])`, so a transient failure reading Claude Code's config would arrive here as
+    // "no groups" and DEREGISTER the servers every live grok in that directory is using. Skipping
+    // the reattach leaves the file exactly as the running sessions expect it (Codex review, #1441).
+    if (!ptyWouldReattach(sessionId, true)) syncGrokMcpConfig(cwd, mcpGroups);
 
     const args = buildGrokArgs({ sessionId, resume: resumeConversationId, model: deps.grokModel, skipPermissions: true, initialPrompt });
     // The session id reaches the GUI MCP bridge through this environment and nowhere else — the
