@@ -123,10 +123,31 @@ The chrome colours only show while the cell is **idle** — the working/attentio
 while a session is busy or waiting on the user. Say this, or the user will change a colour, start a
 session, and think nothing happened.
 
+## An open file the whole ecosystem reads — `repo.json`
+
+`<project>/repo.json` is an open repository-metadata format (`docs/repo-json.md`), not this app's
+own file. MulmoTerminal reads it as the LOWEST layer, under both files below.
+
+```json
+{ "name": "diffusion-lab", "icon": "docs/logo.png", "color": "#7c3aed" }
+```
+
+`color` — one colour — becomes all seven chrome colours. `icon` becomes the cell icon. Anything
+this app understands that the open format doesn't goes under `extensions.mulmoterminal`.
+
+**Prefer it when the colour is the PROJECT's, not the user's.** A project with a real brand colour
+should say so in `repo.json`, where every tool can read it and where the repository can commit it
+for everyone. Reach for `.mulmoterminal.json` when the colour is a personal choice about how this
+user's grid should look — which is most of what this skill does.
+
+When you find a `repo.json` already in place, **read it before proposing colours**: the project has
+stated its own, and overriding it in `.mulmoterminal.json` needs a reason you can give the user.
+
 ## Several clones of one repository — `.mulmoterminal.local.json`
 
 `<project>/.mulmoterminal.local.json` is read AFTER `.mulmoterminal.json` and **replaces whatever
-top-level keys it names**. Keys it does not name keep the shared value; a `colors` block replaces
+top-level keys it names**. The full order, general to specific, is
+`repo.json` → `.mulmoterminal.json` → `.mulmoterminal.local.json`. Keys it does not name keep the shared value; a `colors` block replaces
 the shared one entirely rather than merging into it.
 
 This is the right shape whenever the population you surveyed contains **several checkouts of one
