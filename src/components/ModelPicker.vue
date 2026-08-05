@@ -12,6 +12,7 @@ import { isOfferable, notOfferedReason } from "./launchOffer";
 import { modelOptionLabel, sortedModels } from "./modelOption";
 import { SELECT_CONTROL } from "./selectClasses";
 import ModelSetupHelp from "./ModelSetupHelp.vue";
+import { LAUNCH_ROW } from "./launchFormClasses";
 import type { LaunchChoice } from "./wsUrl";
 
 const props = defineProps<{ modelValue: LaunchChoice | null }>();
@@ -48,7 +49,7 @@ const selected = computed({
 </script>
 
 <template>
-  <div class="flex w-full flex-col items-center gap-1.5">
+  <div class="flex flex-col items-center gap-1.5" :class="LAUNCH_ROW">
     <span class="flex w-full items-center justify-between">
       <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">Model</span>
       <button
