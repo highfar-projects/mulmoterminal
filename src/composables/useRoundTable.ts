@@ -16,7 +16,7 @@
 import { pasteAndSubmit, listSlots } from "./useTerminalConnections";
 import { waitVerdict } from "./exchangeRules";
 import { fetchLastTurn, type HandoffSource, type HandoffTarget } from "./useHandoff";
-import { nextSpeaker, roundTablePrompt, wantsToStop, type RoundTableOutcome } from "./roundTableRules";
+import { endsTheTable, nextSpeaker, roundTablePrompt, type RoundTableOutcome } from "./roundTableRules";
 import type { TurnFetch, CrossTalkDeps } from "./useCrossTalk";
 import { ANSWER_TIMEOUT_MS, POLL_MS } from "./useCrossTalk";
 
@@ -98,8 +98,10 @@ export async function runRoundTable(members: readonly TableMember[], budget: num
       if (typeof said === "string") return { outcome: said, turnsTaken };
       turnsTaken++;
       // Against the RAW reply, not the rendered excerpt: the excerpt carries our own framing, and
-      // the framing is what names the marker (see roundTableRules).
-      if (wantsToStop(said.reply)) return { outcome: "agreed", turnsTaken };
+      // the framing is what names the marker (see roundTableRules). And only once the lap is
+      // complete — the first live three-cell run ended on turn 1, before the third cell had said
+      // anything at all.
+      if (endsTheTable(said.reply, turnsTaken, members.length)) return { outcome: "agreed", turnsTaken };
       if (!said.text) return { outcome: "nothing-to-send", turnsTaken };
       excerpt = said.text;
     }

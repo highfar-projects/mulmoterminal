@@ -10,6 +10,8 @@ import {
   roundTableMessage,
   roundTablePrompt,
   wantsToStop,
+  everyoneHasSpoken,
+  endsTheTable,
 } from "../../../src/composables/roundTableRules";
 import { answersOurSend } from "../../../src/composables/exchangeRules";
 
@@ -31,6 +33,31 @@ describe("wantsToStop", () => {
   it("reads a missing reply as not finished", () => {
     expect(wantsToStop(null)).toBe(false);
     expect(wantsToStop("")).toBe(false);
+  });
+});
+
+// Found by running a real three-cell table: the first speaker answered, reasonably decided the
+// group had said what it needed to, and wrote the marker on turn 1 — so the third cell never spoke
+// at all. A table that ends before it goes round once is not a round table.
+describe("everyoneHasSpoken / endsTheTable", () => {
+  it("counts the opener as having spoken — its turn is the seed", () => {
+    expect(everyoneHasSpoken(1, 2)).toBe(true); // two seats: the other one has now answered
+    expect(everyoneHasSpoken(1, 3)).toBe(false); // three seats: the third has not
+    expect(everyoneHasSpoken(2, 3)).toBe(true);
+  });
+
+  it("ignores the marker until the lap is complete", () => {
+    const done = `Agreed.\n${STOP_MARKER}`;
+    expect(endsTheTable(done, 1, 3)).toBe(false); // the third seat has not spoken
+    expect(endsTheTable(done, 2, 3)).toBe(true);
+  });
+
+  it("still ends a two-cell table on the first reply, where the lap IS one turn", () => {
+    expect(endsTheTable(`${STOP_MARKER}`, 1, 2)).toBe(true);
+  });
+
+  it("never ends on a reply that did not ask to", () => {
+    expect(endsTheTable("still thinking", 5, 3)).toBe(false);
   });
 });
 
@@ -60,8 +87,16 @@ describe("framingLines", () => {
     expect(lines).not.toContain("Also at the table: #1 · claude"); // never lists the speaker as an "other"
   });
 
-  it("names the marker, so a speaker knows how to end the table", () => {
-    expect(framingLines(framing)).toContain(STOP_MARKER);
+  it("names the marker once the lap is complete, so a speaker knows how to end the table", () => {
+    expect(framingLines({ ...framing, turn: 3 })).toContain(STOP_MARKER);
+  });
+
+  // While seats are still to speak, offering the marker is what produced the turn-1 ending in the
+  // first live three-cell run. It is withheld and the reason is stated instead.
+  it("withholds the marker while somebody has yet to speak", () => {
+    const early = framingLines({ ...framing, turn: 1 });
+    expect(early).not.toContain(STOP_MARKER);
+    expect(early).toContain("Everyone speaks once");
   });
 });
 

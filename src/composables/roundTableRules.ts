@@ -20,6 +20,21 @@ export function wantsToStop(reply: string | null): boolean {
   return reply.split("\n").some((line) => line.trim() === STOP_MARKER);
 }
 
+/** Has everyone had their say yet?
+ *
+ *  The opener has: its own last turn is the seed the table starts from. So one lap is complete
+ *  once every OTHER member has spoken, which is `members - 1` turns.
+ *
+ *  This exists because the first live three-cell run ended on turn 1: the first speaker answered,
+ *  reasonably decided the group had said what it needed to, and wrote the marker — so the third
+ *  cell never spoke at all. A table that can end before it goes round once is not a round table.
+ *  The marker is therefore ignored until the lap is done, and the framing says so. */
+export const everyoneHasSpoken = (turnsTaken: number, memberCount: number): boolean => turnsTaken >= memberCount - 1;
+
+/** Whether this reply ends the table: the speaker asked to, AND the lap is complete. */
+export const endsTheTable = (reply: string | null, turnsTaken: number, memberCount: number): boolean =>
+  wantsToStop(reply) && everyoneHasSpoken(turnsTaken, memberCount);
+
 /** Who speaks after the speaker at `index`. A ring, so the last hands back to the first. */
 export const nextSpeaker = (index: number, count: number): number => (count > 0 ? (index + 1) % count : 0);
 
@@ -49,7 +64,9 @@ export function framingLines(framing: RoundTableFraming): string {
   return [
     `[Round table · turn ${framing.turn} of ${framing.budget} · you are ${framing.speaker}]`,
     others.length ? `Also at the table: ${others.join(", ")}. They will read what you write next.` : "You are alone at the table.",
-    `When the group has said what it needs to, write ${STOP_MARKER} on a line of its own and the table ends.`,
+    framing.turn < framing.members.length
+      ? `Everyone speaks once before the table can end, so this round is for your own view — say what you actually think.`
+      : `When the group has said what it needs to, write ${STOP_MARKER} on a line of its own and the table ends.`,
   ].join("\n");
 }
 
