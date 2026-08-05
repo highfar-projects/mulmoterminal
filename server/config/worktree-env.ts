@@ -184,6 +184,53 @@ function releaseUndeclared(dir: string, spec: WorktreeEnvSpec | null): void {
     .forEach((entry) => appendLog(releaseLine(dir, entry.name)));
 }
 
+/** How many times a reservation may be re-attempted after losing a cross-process tie. More than
+ *  one contender for a value is already rare; more than a handful in a row cannot happen without
+ *  something else being wrong. */
+const MAX_RESERVE_ATTEMPTS = 5;
+
+/** Did somebody else get this value first?
+ *
+ *  There is a window between reading the log and appending to it, and a second server sharing
+ *  MULMOTERMINAL_HOME can allocate the same value inside it — no lock, so the collision is
+ *  possible (both bots on #1367 said so, and they were right). What must NOT happen is that it
+ *  STICKS: two directories holding one port in the log is wrong for as long as the log lives,
+ *  where a lost race is only worth one retry.
+ *
+ *  So the loser is decided AFTER the fact instead. The log is append-only and both processes read
+ *  the same bytes, so both compute the same winner — the reservation that appears first — and
+ *  exactly one of them yields. No lock, no stale-lock recovery, and nothing to clean up after a
+ *  crash. */
+function lostTheRace(reservations: readonly WorktreeEnvReservation[], entry: WorktreeEnvReservation): boolean {
+  const holders = reservations.filter((held) => held.kind === entry.kind && held.value === entry.value && stillOnDisk(held));
+  const winner = holders[0];
+  return holders.length > 1 && !(winner?.dir === entry.dir && winner.name === entry.name);
+}
+
+/** Pick a value for one variable, record it, and keep it only if nobody beat us to it. Null when
+ *  nothing is free — the caller leaves the variable unset and says so. */
+async function reserveOne(dir: string, name: string, declared: WorktreeEnvSpec[string], portFree: (port: number) => Promise<boolean>): Promise<string | null> {
+  const base = declared.kind === "port" ? declared.base : null;
+  for (let attempt = 0; attempt < MAX_RESERVE_ATTEMPTS; attempt++) {
+    // Re-read each time round: every append is another instance's reservation as much as ours,
+    // and two variables of one directory must not be given the same number either.
+    const reservations = readLog();
+    const held = heldReservation(reservations, dir, name, base);
+    if (held) return held.value;
+    const taken = takenValues(reservations, dir, name, declared.kind);
+    const value =
+      declared.kind === "port"
+        ? await allocatePort(declared.base, firstSlotFor(dir), taken, portFree)
+        : allocateSlug(declared.prefix ?? "", dirIdentity(dir), dir, taken);
+    if (value === null) return null;
+    const entry: WorktreeEnvReservation = { dir, name, kind: declared.kind, base, value };
+    appendLog(reservationLine(entry));
+    if (!lostTheRace(readLog(), entry)) return value;
+    appendLog(releaseLine(dir, name));
+  }
+  return null;
+}
+
 /** Reserve every declared variable for `cwd` that does not already hold one, and return the whole
  *  set. Idempotent: a directory whose values are all reserved does no work and no IO beyond
  *  reading its config and the log. */
@@ -197,26 +244,12 @@ export async function ensureWorktreeEnv(cwd: string, portFree: (port: number) =>
   releaseUndeclared(dir, spec);
   if (!spec) return {};
   const resolved: Record<string, string> = {};
-  // Re-read between allocations rather than once: each append is another instance's reservation
-  // as much as ours, and two variables of one directory must not be given the same number.
   for (const [name, declared] of Object.entries(spec)) {
-    const base = declared.kind === "port" ? declared.base : null;
-    const reservations = readLog();
-    const held = heldReservation(reservations, dir, name, base);
-    if (held) {
-      resolved[name] = held.value;
-      continue;
-    }
-    const taken = takenValues(reservations, dir, name, declared.kind);
-    const value =
-      declared.kind === "port"
-        ? await allocatePort(declared.base, firstSlotFor(dir), taken, portFree)
-        : allocateSlug(declared.prefix ?? "", dirIdentity(dir), dir, taken);
+    const value = await reserveOne(dir, name, declared, portFree);
     if (value === null) {
       console.warn(`[worktree-env] no free ${declared.kind} left for ${name} in ${dir} — leaving it unset`);
       continue;
     }
-    appendLog(reservationLine({ dir, name, kind: declared.kind, base, value }));
     resolved[name] = value;
   }
   return resolved;

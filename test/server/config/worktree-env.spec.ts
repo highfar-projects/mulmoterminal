@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { appendFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -178,6 +178,28 @@ describe("ensureWorktreeEnv", () => {
     expect(new Set(values).size).toBe(values.length);
     expect(values.every((v) => v.length <= MAX_SLUG_CHARS)).toBe(true);
   }, 20_000);
+
+  // The cross-process race, simulated at exactly the point it happens: the free-port probe runs
+  // BETWEEN reading the log and appending to it, so a competing reservation written from inside it
+  // lands in the same window a second server would. Both bots on #1367 flagged that a lock is
+  // missing; what matters is that the collision does not STICK, and it does not — the loser is
+  // decided after the fact and retries. (Codex/CodeRabbit review.)
+  it("yields and takes the next value when another process reserved the same one first", async () => {
+    const dir = projectDir("app", PORT_3000);
+    const competitor = projectDir("rival", PORT_3000);
+    let raced = false;
+    const raceOnce = (port: number): Promise<boolean> => {
+      if (!raced) {
+        raced = true;
+        appendFileSync(worktreeEnvLogFile(), `\n${JSON.stringify({ dir: competitor, name: "PORT", kind: "port", base: 3000, value: String(port) })}`);
+      }
+      return Promise.resolve(true);
+    };
+    expect(await ensureWorktreeEnv(dir, raceOnce)).toEqual({ PORT: "3010" });
+    // And the log holds ONE holder of 3000 — the winner — not two.
+    expect(reservedWorktreeEnv(competitor)).toEqual({ PORT: "3000" });
+    expect(reservedWorktreeEnv(dir)).toEqual({ PORT: "3010" });
+  });
 
   it("leaves the variable unset when the whole span is spoken for", async () => {
     const allBusy = () => Promise.resolve(false);

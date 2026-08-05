@@ -67,6 +67,14 @@ describe("parseReservations", () => {
     expect(parseReservations('\n{"dir":"/w/x","name":"PORT","kind":"port","base":3000}')).toEqual([]);
   });
 
+  // The cross-process tiebreak reads holders[0] as the winner, so LOG ORDER is load-bearing:
+  // two servers must compute the same winner from the same bytes, or both yield (or neither).
+  it("returns entries in the order the log first records them", () => {
+    const first = entry({ dir: "/w/a" });
+    const second = entry({ dir: "/w/b", value: "3020" });
+    expect(parseReservations(log(reservationLine(first), reservationLine(second))).map((r) => r.dir)).toEqual(["/w/a", "/w/b"]);
+  });
+
   it("reads an empty or blank log as nothing held", () => {
     expect(parseReservations("")).toEqual([]);
     expect(parseReservations("\n\n  \n")).toEqual([]);

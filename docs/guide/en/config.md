@@ -1271,6 +1271,12 @@ would be one the running program no longer agrees with.
 What IS measured, once, is whether the port is free at the moment it is first handed out — so a
 port something else on your machine already holds is skipped rather than handed over.
 
+Two MulmoTerminal servers running side by side can still both pick the same value in the instant
+between reading the reservations and writing one. That collision is detected straight after the
+write rather than prevented with a lock: both servers read the same append-only file, so both agree
+that whoever's line came first keeps it, and the other releases and takes the next value. The
+collision can happen; it does not stick.
+
 The reservation is given up when the worktree is **removed** (Close → delete), and a reservation
 whose directory is simply gone stops holding its value. **Editing the declaration also frees it**:
 change `base` and the next session re-allocates, rename or drop a variable and the value it held
