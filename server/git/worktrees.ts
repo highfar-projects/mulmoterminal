@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { isStrictlyWithin } from "../infra/path-within.js";
 import { splitLines } from "../infra/split-lines.js";
-import { DIR_CONFIG_FILE } from "../config/dir-config.js";
+import { DIR_LOCAL_CONFIG_FILE } from "../config/dir-config.js";
 import { writeInheritedDirConfig } from "../config/worktree-dir-config.js";
 import { ISSUE_BRANCH_PREFIX, issueFromAnchoredBranch } from "../../common/prPhase.js";
 
@@ -289,14 +289,18 @@ function serializeCreate<T>(task: () => Promise<T>): Promise<T> {
 // each tree is its own shade of the project. The parent is the MAIN checkout, so cutting a
 // worktree from another worktree still measures the gradient from the project itself.
 //
-// Only where git would IGNORE the file. A worktree whose `git status` gains an untracked file is
-// not merely untidy: `isDirty` reads that same status, so removeWorktree would go on refusing to
-// clean up a worktree whose only change we wrote ourselves.
+// Only where git would IGNORE the file we are about to write. A worktree whose `git status` gains
+// an untracked file is not merely untidy: `isDirty` reads that same status, so removeWorktree
+// would go on refusing to clean up a worktree whose only change we wrote ourselves.
+//
+// The file is the LOCAL override (#1436), which this repository — and any project that adopts the
+// convention — gitignores. Checking the shared file instead used to mean that committing it
+// silently switched this whole feature off.
 //
 // Best effort throughout — a worktree without its parent's colours is a worktree that works.
 async function adoptParentDirConfig(repo: string, worktreeDir: string): Promise<void> {
   try {
-    if (!(await git(["check-ignore", "--quiet", "--", DIR_CONFIG_FILE], worktreeDir)).ok) return;
+    if (!(await git(["check-ignore", "--quiet", "--", DIR_LOCAL_CONFIG_FILE], worktreeDir)).ok) return;
     // Counted AFTER the add, so it includes the new tree: the first worktree of a repo is index
     // 1 and therefore already one hue step away from the parent, not identical to it.
     writeInheritedDirConfig(repo, worktreeDir, (await listWorktrees(repo)).length);

@@ -1,16 +1,21 @@
 // What a new git worktree inherits from the project it was cut from (#1317).
 //
-// `.mulmoterminal.json` is normally gitignored, so `git worktree add` produces a directory with
-// no config at all: the worktree's cell loses the project's colours, name, model and grid rank
-// and lands last in the priority sort, looking like an unrelated project. This derives the
-// worktree's own config from the parent's and writes it there.
+// `git worktree add` produces a directory whose cell looks like an unrelated project: no colours,
+// no name, no model, and last in the priority sort. This derives the worktree's own config from
+// the parent's and writes it there.
+//
+// Written to `.mulmoterminal.local.json`, not to the shared file (#1436). That file is gitignored,
+// so the worktree's `git status` stays clean — which matters more than tidiness, since `isDirty`
+// reads that same status and `removeWorktree` would refuse to clean up a worktree whose only
+// change we wrote ourselves. It also layers OVER a shared config the repository committed, which
+// is what lets a project ship its own colours and still give each worktree its own shade.
 //
 // The input is a LOADED DirConfig, not the raw file. Every field of that has already been
 // through the loader's zod validation, so what comes out here is valid by construction and
 // needs no second pass — where re-parsing the raw JSON would have to restate the rules.
 import { existsSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { DIR_CONFIG_FILE, loadDirConfig, type DirConfig } from "./dir-config.js";
+import { DIR_LOCAL_CONFIG_FILE, loadDirConfig, type DirConfig } from "./dir-config.js";
 import { dirIconRef } from "./dir-icon.js";
 import { rotateHue } from "./hue-rotate.js";
 
@@ -41,9 +46,14 @@ function worktreeRank(parentRank: number | null): number | null {
   return Number.isSafeInteger(rank) ? rank : null;
 }
 
-/** The `.mulmoterminal.json` contents for the `index`-th worktree of a project (1-based, so the
- *  first worktree is already one step off the parent's hue). Keys the parent doesn't set are
- *  left out rather than written as null, so the file reads like one a person would have typed. */
+/** The local-override contents for the `index`-th worktree of a project (1-based, so the first
+ *  worktree is already one step off the parent's hue). Keys the parent doesn't set are left out
+ *  rather than written as null, so the file reads like one a person would have typed.
+ *
+ *  Still the FULL derived config rather than only the tinted colours: a repository that commits
+ *  its shared file has the identity keys underneath already, and one that gitignores it has
+ *  nothing there at all. Writing everything works in both, and re-stating a value that is already
+ *  the same value costs nothing. */
 export function inheritedWorktreeConfig(parent: DirConfig, index: number): Record<string, unknown> {
   const config: Record<string, unknown> = {};
   INHERITED_KEYS.forEach((key) => {
@@ -68,7 +78,8 @@ export function inheritedWorktreeConfig(parent: DirConfig, index: number): Recor
   return config;
 }
 
-/** Write the derived config into `worktreeDir`. Returns whether a file was written.
+/** Write the derived config into `worktreeDir`'s own local override. Returns whether a file was
+ *  written.
  *
  *  Writes nothing when the parent configures nothing this carries — an empty `{}` on disk is a
  *  file the settings preview would report as present and doing nothing. Never overwrites: a
@@ -77,7 +88,7 @@ export function inheritedWorktreeConfig(parent: DirConfig, index: number): Recor
 export function writeInheritedDirConfig(parentDir: string, worktreeDir: string, index: number): boolean {
   const config = inheritedWorktreeConfig(loadDirConfig(parentDir), index);
   if (Object.keys(config).length === 0) return false;
-  const file = path.join(worktreeDir, DIR_CONFIG_FILE);
+  const file = path.join(worktreeDir, DIR_LOCAL_CONFIG_FILE);
   if (existsSync(file)) return false;
   writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`, "utf8");
   return true;
