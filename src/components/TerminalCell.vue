@@ -59,8 +59,11 @@ import {
   DIR_TRUNCATE_FRONT,
 } from "./cellChromeClasses";
 import { CELL_STATUS, DOT_STATUS, HEADER_STATUS } from "./cellStatusClasses";
-import { handoffTargets, pullLastTurn, type HandoffTarget } from "../composables/useHandoff";
+import { handoffTargets, pullLastTurn, slotLabel, type HandoffTarget } from "../composables/useHandoff";
 import { runOneExchange, liveCrossTalkDeps } from "../composables/useCrossTalk";
+import { runRoundTable, liveRoundTableDeps, memberFromTarget, type TableMember } from "../composables/useRoundTable";
+import { roundTableMessage } from "../composables/roundTableRules";
+import RoundTableMenu from "./RoundTableMenu.vue";
 import { outcomeMessage } from "../composables/exchangeRules";
 import { worktreeFailureMessage } from "./cellChromeRules";
 import { isRecord } from "../../common/isRecord";
@@ -656,6 +659,13 @@ async function askCell(target: HandoffTarget) {
   if (error) showAskMsg(error);
 }
 
+// Only ONE automation may type into terminals at a time. Both loops submit with pasteAndSubmit
+// and both decide "is this reply ours" by correlating on the tail of what they sent — so two
+// running together interleave their writes and each can take the other's turn as its own answer.
+// They used to gate only on themselves, which left both orders reachable from this one menu
+// (Codex review on #1456).
+const automating = computed(() => exchanging.value || tableRunning.value);
+
 // One automatic exchange: our turn goes out, their answer comes back, both submitted.
 // `exchangeStop` is the only way a running exchange ends early, so it is also what the
 // cell unmounting sets — a loop typing into terminals must not outlive its cell.
@@ -668,7 +678,7 @@ function stopExchange() {
 
 async function exchangeWith(target: HandoffTarget) {
   askMenuOpen.value = false;
-  if (!sessionId.value || exchanging.value) return;
+  if (!sessionId.value || automating.value) return;
   exchanging.value = true;
   exchangeStop = false;
   const self = { key: `cell-${props.uid}`, source: { sessionId: sessionId.value, cwd: cwd.value, agent: agent.value } };
@@ -682,6 +692,36 @@ async function exchangeWith(target: HandoffTarget) {
   if (message) showAskMsg(message);
 }
 
+// A round table: the same machinery as one exchange, run round N cells until the group says it is
+// done or the budget runs out (#1456). `tableStop` is the only way a running table ends early, so
+// it is what unmounting sets too — a loop typing into terminals must not outlive its cell.
+const tableRunning = ref(false);
+let tableStop = false;
+
+function stopTable() {
+  tableStop = true;
+}
+
+async function startTable(targets: HandoffTarget[], budget: number) {
+  if (!sessionId.value || automating.value) return;
+  askMenuOpen.value = false;
+  tableRunning.value = true;
+  tableStop = false;
+  // The SAME label shape the other seats get. It was a bare `#0` while everyone else read
+  // `#1 · codex · …/proj`, so the framing told codex "Also at the table: #0" and named something
+  // the reader could not identify (seen in the first live run).
+  const source = { sessionId: sessionId.value, cwd: cwd.value, agent: agent.value };
+  const key = `cell-${props.uid}`;
+  const self: TableMember = { key, label: slotLabel({ key, ...source }, props.home), source };
+  const { outcome, turnsTaken } = await runRoundTable(
+    [self, ...targets.map(memberFromTarget)],
+    budget,
+    liveRoundTableDeps(() => tableStop),
+  );
+  tableRunning.value = false;
+  showAskMsg(`${roundTableMessage(outcome)} · ${turnsTaken} turn${turnsTaken === 1 ? "" : "s"}`);
+}
+
 function onAskOutside(e: MouseEvent) {
   if (askWrap.value && !(e.target instanceof Node && askWrap.value.contains(e.target))) askMenuOpen.value = false;
 }
@@ -691,6 +731,7 @@ watch(askMenuOpen, (open) => {
 });
 onUnmounted(() => {
   document.removeEventListener("mousedown", onAskOutside);
+  tableStop = true;
   if (askMsgTimer) clearTimeout(askMsgTimer);
   exchangeStop = true; // never leave an exchange typing into terminals after this cell is gone
 });
@@ -699,6 +740,12 @@ onUnmounted(() => {
 // remounted (stable key), so the dir/diff state is reset explicitly — otherwise the
 // launch form would still show the closed session's directory.
 function teardown() {
+  // FIRST, and here rather than only in onUnmounted: closing a cell does not unmount this
+  // component — it goes back to the launch form — so an automation started from it would keep
+  // polling and could submit another turn into the OTHER cells after the user closed this one
+  // (Codex review on #1456). Both loops read their flag before every submit.
+  exchangeStop = true;
+  tableStop = true;
   const id = sessionId.value; // capture before the reset below nulls it
   termRef.value?.terminate();
   // Reap on the server over HTTP too — the WS `terminate` only reaches the server while
@@ -1410,7 +1457,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                     data-testid="cell-exchange-item"
                     :aria-label="`Exchange one turn with ${target.label}`"
                     class="cursor-pointer rounded-[4px] border-none bg-transparent px-1.5 py-1.5 font-sans text-[12px] text-dim hover:bg-hover hover:text-fg disabled:cursor-default disabled:opacity-40"
-                    :disabled="exchanging"
+                    :disabled="automating"
                     title="Send this cell's turn there and bring the answer back, both submitted"
                     @click="exchangeWith(target)"
                   >
@@ -1418,6 +1465,15 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                   </button>
                 </div>
                 <p v-if="!askTargets.length" class="m-0 px-2 py-1.5 font-sans text-[12px] text-dim">No other terminal to read</p>
+                <RoundTableMenu
+                  v-if="askTargets.length"
+                  :targets="askTargets"
+                  :self-label="`#${uid}`"
+                  :running="tableRunning"
+                  :busy="automating"
+                  @start="startTable"
+                  @stop="stopTable"
+                />
               </div>
               <button
                 v-if="exchanging"
