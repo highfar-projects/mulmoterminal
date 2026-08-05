@@ -16,7 +16,9 @@
 import { waitVerdict } from "./exchangeRules";
 import type { HandoffSource, HandoffTarget } from "./useHandoff";
 import { endsTheTable, nextSpeaker, roundTablePrompt, type RoundTableOutcome } from "./roundTableRules";
-import type { TurnFetch, CrossTalkDeps } from "./useCrossTalk";
+import { formatRoom, roomWindow } from "../../common/roomMessage";
+import { fetchRoom, postRoomMessage } from "./useRooms";
+import { liveCrossTalkDeps, type TurnFetch, type CrossTalkDeps } from "./useCrossTalk";
 import { ANSWER_TIMEOUT_MS, POLL_MS } from "./useCrossTalk";
 
 /** A seat at the table: which slot to type into, and which log to read back. */
@@ -32,18 +34,25 @@ export interface RoundTableRun {
   turnsTaken: number;
 }
 
-/** The same dependency surface the exchange uses — one runner shape, one set of fakes.
+/** The exchange's dependency surface plus the room (#1456).
  *
- *  Which is why the table has no `liveRoundTableDeps` of its own: it was byte-identical to
- *  `liveCrossTalkDeps`, and a second factory building one type is a second place to change when
- *  the sockets move. Callers use `liveCrossTalkDeps`.
+ *  This type and the factory below were folded into `CrossTalkDeps` / `liveCrossTalkDeps` while
+ *  they were byte-identical, and the note left behind said what would earn the split back: "the
+ *  table needs something the exchange genuinely does not — its own socket, its own clock, a fact
+ *  only a ring of N cells has." The room is that. A two-cell exchange hands one reply straight to
+ *  the other cell and keeps no record; a table posts every turn and reads the whole conversation
+ *  back, which is a socket the exchange has no use for.
  *
- *  Whether the two STAY one is open, so here is the rule for splitting them again: a separate
- *  type and a separate factory are earned when the table needs something the exchange genuinely
- *  does not — its own socket, its own clock, a fact only a ring of N cells has. Until then it is
- *  a copy whose only job is to be a copy, and a copy is the thing that gets fixed on one side.
- *  So: if the table is never going to become a different feature, do not bring the copy back. */
-export type RoundTableDeps = CrossTalkDeps;
+ *  The room arrives as a DEPENDENCY rather than a direct fetch for the reason the rest of this
+ *  does: the loop's ordering is what breaks, and ordering is only testable when nothing in here
+ *  talks to a server by itself. */
+export interface RoundTableDeps extends CrossTalkDeps {
+  /** Append what somebody said. Failure is not fatal — a table whose log is unwritable is still a
+   *  conversation, and stopping it would be a worse answer than losing the record. */
+  postToRoom: (room: string, from: string, text: string) => Promise<void>;
+  /** The conversation so far, already windowed and framed for a reader. */
+  readRoom: (room: string) => Promise<string>;
+}
 
 /** Poll a member's log until the turn OUR message produced appears. Same rule as the exchange:
  *  correlate on what was sent, never on "something changed", or a member that was already mid-turn
@@ -84,35 +93,46 @@ async function takeTurn(
  * Every one of them is a real agent turn on a real account, so the number is a cost control as
  * much as a runaway guard.
  */
-export async function runRoundTable(members: readonly TableMember[], budget: number, deps: RoundTableDeps): Promise<RoundTableRun> {
+export async function runRoundTable(members: readonly TableMember[], room: string, budget: number, deps: RoundTableDeps): Promise<RoundTableRun> {
   const names = members.map((member) => member.label);
   let turnsTaken = 0;
   try {
-    // The seed is the starting cell's own last turn, in the `exchange` shape — the first reader
-    // meets this conversation without context, so it gets both sides. Every hand-off after this
-    // one is a `reply`: the reader's own words became that speaker's prompt, and quoting them back
-    // would hand it a copy of itself once per lap.
+    // The seed is the starting cell's own last turn, in the `exchange` shape — it opens the room
+    // with both sides, since nobody reading it yet has any context at all.
     const opener = members[0];
     if (!opener) return { outcome: "nothing-to-send", turnsTaken };
     const opening = await deps.fetchTurn(opener.source, "exchange");
     if (!opening.text) return { outcome: "nothing-to-send", turnsTaken };
+    await deps.postToRoom(room, opener.label, opening.reply ?? opening.text);
 
-    let excerpt = opening.text;
+    // What to hand on when the room cannot be read. Room I/O is deliberately non-fatal — a table
+    // whose log is unwritable is still a conversation — but that means an empty read is
+    // indistinguishable from a failed one, and ending the table on it would let one dropped
+    // request kill a live conversation (Codex review on #1456). So the previous speaker's own
+    // turn is kept as a fallback: the table degrades to what v1 did, rather than stopping.
+    let lastHandoff = opening.text;
     let speaker = 0;
     while (turnsTaken < budget) {
       speaker = nextSpeaker(speaker, members.length);
+      // The whole conversation, not just the last thing said. Handing on only the previous reply
+      // is what a two-cell exchange does, and with three or more it loses the thread: the reader
+      // cannot see what the seat before last argued (#1456).
+      const conversation = (await deps.readRoom(room)) || lastHandoff;
+      if (!conversation) return { outcome: "nothing-to-send", turnsTaken };
       // `nextSpeaker` is a modulo of a list just proved non-empty, so the fallback is unreachable —
       // it is here because an index expression is not narrowed by that proof.
-      const said = await takeTurn(members[speaker] ?? opener, excerpt, { members: names, turn: turnsTaken + 1, budget }, deps);
+      const member = members[speaker] ?? opener;
+      const said = await takeTurn(member, conversation, { members: names, turn: turnsTaken + 1, budget }, deps);
       if (typeof said === "string") return { outcome: said, turnsTaken };
       turnsTaken++;
-      // Against the RAW reply, not the rendered excerpt: the excerpt carries our own framing, and
-      // the framing is what names the marker (see roundTableRules). And only once the lap is
-      // complete — the first live three-cell run ended on turn 1, before the third cell had said
-      // anything at all.
+      // The RAW reply goes into the room, never the rendered excerpt: the excerpt is the room read
+      // back plus our own framing, so storing it would fold the whole conversation into the room
+      // again on every turn.
+      await deps.postToRoom(room, member.label, said.reply ?? "");
+      if (said.text) lastHandoff = said.text;
+      // Against the RAW reply for the same reason — and only once the lap is complete. The first
+      // live three-cell run ended on turn 1, before the third cell had said anything at all.
       if (endsTheTable(said.reply, turnsTaken, members.length)) return { outcome: "agreed", turnsTaken };
-      if (!said.text) return { outcome: "nothing-to-send", turnsTaken };
-      excerpt = said.text;
     }
     return { outcome: "budget-spent", turnsTaken };
   } catch {
@@ -120,6 +140,31 @@ export async function runRoundTable(members: readonly TableMember[], budget: num
   }
 }
 
+/** The table's own wiring: the exchange's sockets plus the room. `liveCrossTalkDeps` no longer
+ *  covers it — the room is the thing the exchange does not have (see RoundTableDeps). */
+export function liveRoundTableDeps(isAborted: () => boolean): RoundTableDeps {
+  return {
+    ...liveCrossTalkDeps(isAborted),
+    postToRoom: postRoomMessage,
+    readRoom: async (room) => formatRoom(roomWindow(await fetchRoom(room))),
+  };
+}
+
+/** A room id for one table: readable and sortable, with a suffix that keeps two tables apart.
+ *
+ *  The timestamp alone is second-granular, and two tables started inside one second would then
+ *  share a room — mixing two independent conversations into one log, which every member of both
+ *  would read back as context (Codex review on #1456). The suffix is the part that has to be
+ *  there; the timestamp is only so a person can tell the rooms apart later.
+ *
+ *  Stays inside ROOM_ID_RE, since the id becomes a filename. */
+export function newRoomId(now: number = Date.now(), rand: () => number = Math.random): string {
+  const stamp = new Date(now).toISOString().slice(0, 19).replace(/[:T]/g, "-").toLowerCase();
+  const suffix = Math.floor(rand() * 36 ** 4)
+    .toString(36)
+    .padStart(4, "0");
+  return `table-${stamp}-${suffix}`;
+}
 /** A handoff target as a seat at the table — the picker lists the same cells the exchange menu
  *  does, so one rule decides what is readable. */
 export const memberFromTarget = (target: HandoffTarget): TableMember => ({ key: target.key, label: target.label, source: target.source });

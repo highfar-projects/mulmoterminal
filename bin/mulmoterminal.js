@@ -394,6 +394,9 @@ Commands:
                     ~/.mulmoterminal/config.json (idempotent — safe to re-run)
   google login      Link a Google account (browser consent, on this machine) so the
                     Calendar tool and the phone's google.calendar.* commands can run
+  room <cmd>        Take part in a conversation room from a shell:
+                    room read <id> / room post <id> <text…> / room list.
+                    Needs a running server
 
 Options:
   --cwd <dir>       Working directory claude runs in (default: current directory; relative paths allowed)
@@ -416,6 +419,12 @@ async function main() {
 
   if (args[0] === "google") {
     await runGoogle(args.slice(1));
+    return;
+  }
+
+  if (args[0] === "room") {
+    const { runRoom } = await import("./room.js");
+    await runRoom(args.slice(1));
     return;
   }
 

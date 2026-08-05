@@ -36,7 +36,7 @@ vi.mock("../../../src/composables/useRoundTable", async (importOriginal) => {
   const original = await importOriginal<typeof import("../../../src/composables/useRoundTable")>();
   return {
     ...original,
-    runRoundTable: (_members: unknown, _budget: number, deps: { isAborted: () => boolean }) => {
+    runRoundTable: (_members: unknown, _room: string, _budget: number, deps: { isAborted: () => boolean }) => {
       abortSignal = deps.isAborted;
       return new Promise(() => {}); // never settles: the table is "in flight" for the whole test
     },
