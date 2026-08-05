@@ -11,10 +11,11 @@
 //
 //   codex        both badges, and a REAL context window (`model_context_window`) rather than the
 //                UI's substring table. See codex-usage.ts.
-//   grok         the model only. `summary.json` names it; a conversation directory holds no token
-//                accounting at all (the only `token` fields in one are `first_token` timings and a
-//                WebFetch tool parameter), so the usage badge stays hidden — it hides itself when
-//                the totals are zero.
+//   grok         both badges, and a REAL context window (`contextWindowTokens`) as codex has.
+//                `summary.json` names the model; the accounting is in `signals.json` and
+//                `updates.jsonl`. See grok-usage.ts — and note that #1465 shipped saying grok
+//                records no tokens, which was true of the two files it read and false of the
+//                directory.
 //   antigravity  the NAME only, and a constant one. agy's transcript records neither tokens nor a
 //                model id; the single mention of a model is prose inside the user turn ("The user
 //                changed setting `Model Selection` … to Gemini 3.6 Flash (High)"), written only
@@ -32,9 +33,11 @@ import { codexBadgesFromRolloutDocs, codexModelFromDocs, EMPTY_CODEX_BADGES, typ
 import { parseJsonRecord, readTranscriptHead } from "../agents/transcript-head.js";
 import { codexSessionsRoot } from "../agents/codex-session.js";
 import { codexRolloutPath } from "../agents/codex-sessions.js";
-import { grokModelFromSummary, grokSummaryPath } from "../agents/grok-sessions.js";
+import { grokModelFromSummary, grokSignalsPath, grokSummaryPath, grokUpdatesPath } from "../agents/grok-sessions.js";
 import { grokSessionsRoot } from "../agents/grok-session.js";
+import { emptyGrokUsage, foldGrokUsage, grokContextFromSignals, isGrokUsage } from "../agents/grok-usage.js";
 import { readTailRecords } from "../infra/jsonl-file.js";
+import { createTranscriptFold } from "./transcript-fold.js";
 import { codexRollouts, codexRolloutsHydrated } from "./registry.js";
 import type { SessionUsage } from "./transcript.js";
 
@@ -104,10 +107,48 @@ async function rolloutHeadModel(file: string): Promise<string | null> {
 }
 
 async function grokBadges(cwd: string, id: string, root: string): Promise<SessionBadges> {
+  const [model, context, usage] = await Promise.all([
+    readOr(grokSummaryPath(root, cwd, id), null, grokModelFromSummary),
+    readOr(grokSignalsPath(root, cwd, id), EMPTY_GROK_CONTEXT, grokContextFromSignals),
+    grokUsage(grokUpdatesPath(root, cwd, id)),
+  ]);
+  // `current_model_id` first: it is what the conversation is running NOW, where signals' own
+  // `primaryModelId` is what it has mostly run under — the two differ for the rest of a session
+  // after `/model`. Each is asked only because the other can be missing on a conversation grok has
+  // just created.
+  return { usage, context: { ...context, model: model ?? context.model } };
+}
+
+const EMPTY_GROK_CONTEXT: SessionContextInfo = { model: null, contextTokens: 0, contextWindow: null };
+
+/** A file grok may not have written yet is not an error — every reader here wants "nothing to say"
+ *  rather than a rejected promise, and a conversation directory is created before it is filled. */
+async function readOr<T>(file: string, fallback: T, parse: (text: string) => T): Promise<T> {
   try {
-    return modelOnly(grokModelFromSummary(await fs.readFile(grokSummaryPath(root, cwd, id), "utf8")));
+    return parse(await fs.readFile(file, "utf8"));
   } catch {
-    return modelOnly(null); // no conversation directory yet, or none in this cwd
+    return fallback;
+  }
+}
+
+// Summed across every turn, so unlike codex's totals there is no tail that answers the same as the
+// file. The fold is what makes that affordable: this route is polled per cell, and after the first
+// read a poll costs only the bytes the last turn appended (#1377).
+const grokUsageFold = createTranscriptFold<SessionUsage>({
+  kind: "grok-usage",
+  version: 1,
+  isValue: isGrokUsage,
+  empty: emptyGrokUsage,
+  fold: foldGrokUsage,
+  copy: (usage) => ({ ...usage }),
+});
+
+async function grokUsage(file: string): Promise<SessionUsage> {
+  try {
+    const stat = await fs.stat(file);
+    return await grokUsageFold.read(file, { mtimeMs: stat.mtimeMs, size: stat.size });
+  } catch {
+    return emptyGrokUsage();
   }
 }
 
