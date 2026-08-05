@@ -171,9 +171,10 @@ roughly 30% of colours, so it is not an acceptable substitute.
 
 A consumer that needs more colours than three should **derive them from `primary`** rather than ask
 the author for more. This is not a hope: MulmoTerminal paints seven, and deriving all seven from
-`primary` alone reproduces eleven hand-tuned palettes to a **maximum ΔE76 of 2.5, median 1.9** —
-at or below the 2.3 threshold at which a difference becomes noticeable at all. One of the derived
-values came out byte-identical to the hand-picked one.
+`primary` alone reproduces eleven hand-tuned palettes to a **median ΔE76 of 1.9, worst case 2.5**.
+The median sits below 2.3, the threshold at which a difference becomes noticeable at all; the worst
+single role sits just above it. One of the derived values came out byte-identical to the
+hand-picked one.
 
 What the measurement also showed is that a single rule does not fit every role. Snapping every role
 to a fixed saturation/lightness drifts by ΔE 20 at the dark end; making every role a fixed offset
