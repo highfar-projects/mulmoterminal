@@ -282,7 +282,7 @@ UDGothic); anything else tears the box-drawing frames an agent TUI is made of.
 ### Worktrees derive their own config from this one
 
 A managed git worktree (`~/.mulmoterminal/worktrees/<repo>-<hash>/<task>`) gets its own
-`.mulmoterminal.json` when MulmoTerminal creates it, derived from the project's: identity keys
+`.mulmoterminal.local.json` when MulmoTerminal creates it, derived from the project's: identity keys
 (`name` / `icon` / `theme` / `colors` / `fontSize` / `fontFamily` / `provider` / `model`) as written, the
 seven chrome colours rotated **12° further per worktree**, and `orderPriority` at the project's
 rank **+ 1**. `sound` / `sounds` / `addDirs` are not carried.
@@ -294,7 +294,11 @@ Two consequences for this skill:
   and they collide with the +1 the app writes.
 - **Recolouring a project does not recolour its existing worktrees** — the copy was taken when the
   worktree was created. Say so if the user asks why one cell kept the old colour, and offer to
-  delete that worktree's file so the next launch has nothing stale.
+  delete that worktree's `.mulmoterminal.local.json` so the next launch has nothing stale.
+- **A worktree gets nothing when its repository does not gitignore `.mulmoterminal.local.json`.**
+  That is the check MulmoTerminal makes before writing, since an untracked file would make the
+  worktree count as dirty and therefore unremovable. If a user's worktrees are all grey, that
+  missing `.gitignore` line is the first thing to look at.
 
 ### Other keys in this file
 
