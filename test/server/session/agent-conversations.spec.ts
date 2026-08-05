@@ -13,6 +13,7 @@ import {
   agentConversationLine,
   agentConversationRecord,
   applyAgentConversation,
+  conversationSessionKeys,
   hydrateAgentConversationInto,
   type AgentConversation,
 } from "../../../server/session/agent-conversations";
@@ -182,5 +183,32 @@ describe("a hydrated log as agentResumeId's mappedId", () => {
     const conversations = await foldLog(agentConversationLine(record()));
     const facts = { ...coldFacts, hasLivePty: true, mappedId: conversations.get(SESSION_A)?.conversationId };
     expect(agentResumeId(SESSION_A, facts)).toBeNull();
+  });
+});
+
+// The log read BACKWARDS, which is what a LISTING needs (#1417): a row is one of the agent's own
+// conversation ids, and whether it is safe to open is a question about the MulmoTerminal session
+// holding it. Without this a conversation started from a grid cell reads as free while it is live
+// in that cell, and resuming it starts a second agent process on it.
+describe("conversationSessionKeys", () => {
+  it("finds the session key a conversation is running under", () => {
+    const keys = conversationSessionKeys([record()]);
+    expect(keys.get(CONVERSATION_A)).toEqual([SESSION_A]);
+  });
+
+  // The log only grows: a session resumed after a restart arrives under a NEW key and appends a
+  // second line, so both keys name the conversation and either one may be the live one.
+  it("keeps every key that has run the same conversation", () => {
+    const keys = conversationSessionKeys([record(), record({ sessionId: SESSION_B })]);
+    expect(keys.get(CONVERSATION_A)).toEqual([SESSION_A, SESSION_B]);
+  });
+
+  it("does not repeat a key the log records twice", () => {
+    const keys = conversationSessionKeys([record(), record({ cwd: "/work/two" })]);
+    expect(keys.get(CONVERSATION_A)).toEqual([SESSION_A]);
+  });
+
+  it("says nothing about a conversation the log has never seen", () => {
+    expect(conversationSessionKeys([record()]).get(CONVERSATION_B)).toBeUndefined();
   });
 });

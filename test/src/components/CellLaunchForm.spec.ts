@@ -216,12 +216,14 @@ describe("a worktree reached without its row", () => {
 describe("a resume row", () => {
   const row = (over: Partial<SessionRow> = {}): SessionRow => ({ id: "s-9", title: "fix the parser", mtime: 1, ...over });
 
+  // The agent travels with the id: since #1417 the row is one of the PICKED agent's own
+  // conversations, and the cell has to connect the endpoint that wrote it.
   it("resumes a session nobody is holding", async () => {
     mockFetch([], [row()]);
     const w = mountForm();
     await flushPromises();
     await w.find('[data-testid="cell-resume-item"]').trigger("click");
-    expect(w.emitted("resume")?.[0]).toEqual([{ id: "s-9", cwd: "/repo" }]);
+    expect(w.emitted("resume")?.[0]).toEqual([{ id: "s-9", cwd: "/repo", agent: "claude" }]);
   });
 
   // The case the grid's own list is blind to: the other viewer is a second browser tab or a second
