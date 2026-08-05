@@ -44,7 +44,9 @@ import {
 } from "../session/session-reads.js";
 import { formatHandoff, type HandoffShape } from "../session/handoff-text.js";
 import { projectSessionsDir } from "../session/project-dir.js";
-import { sessionAttached } from "../session/dir-session.js";
+import { runningKeyOf, runningSessionKeys, sessionAttached } from "../session/dir-session.js";
+import type { SessionOccupancy } from "../../common/sessionOccupancy.js";
+import type { SessionRunning } from "../../common/sessionRunning.js";
 import { tmuxAttachedCounts } from "../infra/tmux.js";
 import { codexSessionsRoot } from "../agents/codex-session.js";
 import { listCodexSessions } from "../agents/codex-sessions.js";
@@ -253,7 +255,15 @@ async function sessionList(req: Request, res: Response) {
     // browser tab and to a second mulmoterminal process — the two ways a running session got
     // taken over without anything warning first.
     const tmuxCounts = tmuxAttachedCounts();
-    res.json({ cwd, sessions: sessions.map((s) => ({ ...s, attached: sessionAttached(s.id, tmuxCounts) })) });
+    // What is still RUNNING for each row, which `list-clients` above cannot say — it reports only
+    // sessions that have a client, and the ones that accumulate have none (#1467). Claude's key is
+    // its conversation id (we pass it as `--session-id`), so unlike the other three agents there is
+    // no log to consult: the row's own id is the key.
+    const running = runningSessionKeys();
+    res.json({
+      cwd,
+      sessions: sessions.map((s) => ({ ...s, attached: sessionAttached(s.id, tmuxCounts), runningKey: runningKeyOf([s.id], running) })),
+    });
   } catch (err) {
     console.error("[api] /api/sessions failed:", err);
     res.status(500).json({ error: String(err) });
@@ -277,13 +287,18 @@ async function sessionList(req: Request, res: Response) {
  * string and case 1 covers it. It still passes an empty iterable rather than skipping the call, so
  * all three lists answer the question the same way.
  */
-function withAttached<T extends { id: string }>(sessions: T[], records: Iterable<AgentConversation>): (T & { attached: boolean })[] {
+function withAttached<T extends { id: string }>(sessions: T[], records: Iterable<AgentConversation>): (T & SessionOccupancy & SessionRunning)[] {
   const holders = conversationSessionKeys(records);
   const tmuxCounts = tmuxAttachedCounts();
-  return sessions.map((s) => ({
-    ...s,
-    attached: [s.id, ...(holders.get(s.id) ?? [])].some((key) => sessionAttached(key, tmuxCounts)),
-  }));
+  const running = runningSessionKeys();
+  return sessions.map((s) => {
+    const keys = [s.id, ...(holders.get(s.id) ?? [])];
+    return {
+      ...s,
+      attached: keys.some((key) => sessionAttached(key, tmuxCounts)),
+      runningKey: runningKeyOf(keys, running),
+    };
+  });
 }
 
 // codex's own sessions for a workspace (?cwd=, default CLAUDE_CWD), read from ~/.codex rollouts.

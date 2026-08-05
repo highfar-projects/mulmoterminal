@@ -11,7 +11,7 @@ import { TERMINAL_AGENTS } from "../../../common/sessionAgent";
 // (#1207).
 
 type WorktreeRow = { path: string; branch: string | null; task: string; dirty: boolean; session?: unknown };
-type SessionRow = { id: string; title: string; mtime: number; attached?: boolean };
+type SessionRow = { id: string; title: string; mtime: number; attached?: boolean; runningKey?: string | null };
 
 function mockFetch(worktrees: WorktreeRow[] = [], sessions: SessionRow[] = []) {
   globalThis.fetch = vi.fn(async (url: string) => {
@@ -249,6 +249,119 @@ describe("a resume row", () => {
     expect(item.attributes("disabled")).toBeDefined();
     await item.trigger("click");
     expect(w.emitted("resume")).toBeUndefined();
+  });
+});
+
+// A session left running by a restart: alive, nobody attached, and until #1467 invisible — the
+// launcher offered its conversation with nothing to say that a process was still holding it, and
+// no way to end it short of `tmux kill-session` by hand.
+describe("a resume row whose session is still running", () => {
+  const running = (over: Partial<SessionRow> = {}): SessionRow => ({ id: "s-9", title: "fix the parser", mtime: 1, runningKey: "s-9", ...over });
+  const postsTo = (call: unknown[]): string => String(call[0]);
+
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("says it is running, and offers to stop it", async () => {
+    mockFetch([], [running()]);
+    const w = mountForm();
+    await flushPromises();
+    expect(w.find('[data-testid="ri-running"]').exists()).toBe(true);
+    expect(w.find('[data-testid="ri-stop"]').exists()).toBe(true);
+    // Still resumable: stopping is the alternative to picking it up, not a replacement.
+    expect(w.find('[data-testid="cell-resume-item"]').attributes("disabled")).toBeUndefined();
+  });
+
+  it("says nothing when the server reports no running session", async () => {
+    mockFetch([], [running({ runningKey: null })]);
+    const w = mountForm();
+    await flushPromises();
+    expect(w.find('[data-testid="ri-running"]').exists()).toBe(false);
+    expect(w.find('[data-testid="ri-stop"]').exists()).toBe(false);
+  });
+
+  // A row somebody is HOLDING is that terminal's to close: ending it from another cell's launch
+  // form would pull a session out from under a tab the user cannot see from here.
+  it("offers no stop for a session another terminal is holding", async () => {
+    mockFetch([], [running({ attached: true })]);
+    const w = mountForm();
+    await flushPromises();
+    expect(w.find('[data-testid="ri-open"]').exists()).toBe(true);
+    expect(w.find('[data-testid="ri-stop"]').exists()).toBe(false);
+  });
+
+  // An older server sends no `runningKey` at all, and must read as "nothing is running" — an
+  // absent field must not grow a button that posts `undefined` at the terminate route.
+  it("renders exactly as before against a server that never says", async () => {
+    mockFetch([], [{ id: "s-9", title: "fix the parser", mtime: 1 }]);
+    const w = mountForm();
+    await flushPromises();
+    expect(w.find('[data-testid="ri-running"]').exists()).toBe(false);
+    expect(w.find('[data-testid="ri-stop"]').exists()).toBe(false);
+  });
+
+  it("terminates the session and re-reads the list", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    mockFetch([], [running()]);
+    const w = mountForm();
+    await flushPromises();
+    const before = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.length;
+    await w.find('[data-testid="ri-stop"]').trigger("click");
+    await flushPromises();
+    const calls = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.slice(before);
+    expect(calls.map(postsTo)).toContain("/api/session/s-9/terminate");
+    // The reload is what makes the row's state the server's answer rather than a local guess.
+    expect(calls.map(postsTo).some((u) => u.includes("/api/sessions"))).toBe(true);
+  });
+
+  // The KEY, not the row id: a codex/agy conversation started from a grid cell runs under a key
+  // MulmoTerminal minted, and terminating the conversation id would kill nothing while reporting
+  // success.
+  it("terminates the key the server named, not the row's id", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    mockFetch([], [running({ id: "conversation-1", runningKey: "mt-key-2" })]);
+    const w = mountForm();
+    await flushPromises();
+    await w.find('[data-testid="ri-stop"]').trigger("click");
+    await flushPromises();
+    const urls = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) => String(c[0]));
+    expect(urls).toContain("/api/session/mt-key-2/terminate");
+    expect(urls.some((u) => u.includes("/api/session/conversation-1/terminate"))).toBe(false);
+  });
+
+  // The two race, and the order that loses leaves the cell attached to a session the terminate
+  // then kills — a terminal that dies on arrival with nothing saying why (CodeRabbit on #1474).
+  it("refuses to resume the row whose stop is still in flight", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    let release = (): void => {};
+    const held = new Promise((resolve) => {
+      release = () => resolve({ ok: true, json: async () => ({ cwd: "/repo", sessions: [] }) });
+    });
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/terminate")) return held;
+      if (u.includes("/api/worktrees")) return { ok: true, json: async () => ({ isGit: true, base: "main", worktrees: [] }) };
+      return { ok: true, json: async () => ({ cwd: "/repo", sessions: [running()] }) };
+    }) as unknown as typeof fetch;
+    const w = mountForm();
+    await flushPromises();
+    await w.find('[data-testid="ri-stop"]').trigger("click");
+    const item = w.find('[data-testid="cell-resume-item"]');
+    expect(item.attributes("disabled")).toBeDefined();
+    await item.trigger("click");
+    expect(w.emitted("resume")).toBeUndefined();
+    release();
+    await flushPromises();
+  });
+
+  it("does nothing when the confirmation is declined", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    mockFetch([], [running()]);
+    const w = mountForm();
+    await flushPromises();
+    const before = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.length;
+    await w.find('[data-testid="ri-stop"]').trigger("click");
+    await flushPromises();
+    expect((globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls).toHaveLength(before);
   });
 });
 

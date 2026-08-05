@@ -23,6 +23,7 @@ import ModelPicker from "./ModelPicker.vue";
 import { LAUNCH_ROW } from "./launchFormClasses";
 import { jsonBody } from "../jsonBody";
 import { pickPaths } from "../composables/pickPaths";
+import { useSessionStop } from "../composables/useSessionStop";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 // What an EMPTY grid cell shows: pick a directory, pick what to run in it, and start — or resume
@@ -348,7 +349,11 @@ function runScript(index: number): void {
 const sessionBusy = (s: ResumableSession): boolean => s.attached === true || (props.openSessionIds ?? []).includes(s.id);
 
 function resume(s: ResumableSession): void {
-  if (sessionBusy(s) || listAgent.value === null) return;
+  // Not while its own stop is in flight (CodeRabbit on #1474): the two race, and the order that
+  // loses leaves the cell attached to a session the terminate then kills — a terminal that dies on
+  // arrival, with nothing saying why. Guarded here as well as on the button, because the row is
+  // also reachable by keyboard.
+  if (sessionBusy(s) || stopping.value === s.id || listAgent.value === null) return;
   // Use the cwd those rows were fetched for, not the (possibly-changed) input.
   //
   // The AGENT travels too, now that the row can be one of codex's / agy's / grok's own
@@ -357,6 +362,14 @@ function resume(s: ResumableSession): void {
   // while every row here was Claude's; it is not any more.
   emit("resume", { id: s.id, cwd: resumable.value.cwd ?? targetDir.value, agent: listAgent.value });
 }
+
+// A conversation whose session is still RUNNING with nobody attached — what a server restart leaves
+// behind, and what the launcher had no way to show or end (#1467). Only these get the stop button:
+// a row somebody IS holding belongs to that terminal's own close button, and ending it from another
+// cell's launch form is an accident with no undo.
+const stoppable = (s: ResumableSession): boolean => !sessionBusy(s) && typeof s.runningKey === "string";
+
+const { stopping, stopSession } = useSessionStop(() => loadResumable(resumable.value.cwd ?? targetDir.value, listAgent.value ?? "claude"));
 
 const relativeTime = (ms: number): string => relativeTimeFrom(ms, Date.now());
 
@@ -758,42 +771,63 @@ async function removeWorktree(w: Worktree): Promise<void> {
     <div v-if="listAgent && resumable.sessions.length" data-testid="cell-resume" class="flex min-h-0 flex-col items-center gap-1.5" :class="LAUNCH_ROW">
       <span data-testid="cell-resume-heading" class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">{{ resumeHeading }}</span>
       <div class="flex w-full flex-col gap-1">
-        <button
-          v-for="s in resumable.sessions"
-          :key="s.id"
-          data-testid="cell-resume-item"
-          class="flex items-baseline justify-between gap-2 rounded-md border bg-deep px-2.5 py-[5px] text-left font-sans text-[12px]"
-          :class="[
-            { 'is-open': sessionBusy(s) },
-            sessionBusy(s) ? 'border-amber text-dim cursor-not-allowed' : 'border-border text-secondary cursor-pointer hover:border-accent hover:bg-elevated',
-          ]"
-          :disabled="sessionBusy(s)"
-          :title="sessionBusy(s) ? `${s.title} — open in another terminal, close it there to continue it here` : s.title"
-          @click="resume(s)"
-        >
-          <span data-testid="ri-title" class="truncate">{{ s.title }}</span>
-          <!-- A background worker is not the user's own chat, and a FAILED one is the only thing
+        <div v-for="s in resumable.sessions" :key="s.id" class="flex w-full items-center gap-1.5">
+          <button
+            data-testid="cell-resume-item"
+            class="flex flex-auto min-w-0 items-baseline justify-between gap-2 rounded-md border bg-deep px-2.5 py-[5px] text-left font-sans text-[12px]"
+            :class="[
+              { 'is-open': sessionBusy(s) },
+              sessionBusy(s) ? 'border-amber text-dim cursor-not-allowed' : 'border-border text-secondary cursor-pointer hover:border-accent hover:bg-elevated',
+            ]"
+            :disabled="sessionBusy(s) || stopping === s.id"
+            :title="sessionBusy(s) ? `${s.title} — open in another terminal, close it there to continue it here` : s.title"
+            @click="resume(s)"
+          >
+            <span data-testid="ri-title" class="truncate">{{ s.title }}</span>
+            <!-- A background worker is not the user's own chat, and a FAILED one is the only thing
                here nobody was ever told about: it ran invisibly, ended badly, and pulled no
                attention on the way. Naming it in the list is what makes it findable at all. -->
-          <span
-            v-if="s.failed"
-            data-testid="ri-failed"
-            class="flex-none whitespace-nowrap text-[11px] text-err-text"
-            title="This background worker ended without finishing a turn"
-            >● failed</span
+            <span
+              v-if="s.failed"
+              data-testid="ri-failed"
+              class="flex-none whitespace-nowrap text-[11px] text-err-text"
+              title="This background worker ended without finishing a turn"
+              >● failed</span
+            >
+            <span
+              v-else-if="s.hidden"
+              data-testid="ri-background"
+              class="flex-none whitespace-nowrap text-[11px] text-dim"
+              title="Ran in the background — not a chat you opened"
+              >background</span
+            >
+            <span v-if="sessionBusy(s)" data-testid="ri-open" class="flex-none whitespace-nowrap text-[11px] text-amber" title="Open in another terminal"
+              >● open</span
+            >
+            <!-- Running, and nobody is holding it: a session left behind by a restart. Said here
+                 because until now nothing in the app showed it — it stayed alive, unreachable,
+                 until someone ran tmux by hand (#1467). -->
+            <span
+              v-else-if="stoppable(s)"
+              data-testid="ri-running"
+              class="flex-none whitespace-nowrap text-[11px] text-dim"
+              title="Still running with nobody attached — resume it here, or stop it"
+              >● running</span
+            >
+            <span class="flex-none text-[11px] text-dim">{{ relativeTime(s.mtime) }}</span>
+          </button>
+          <button
+            v-if="stoppable(s)"
+            data-testid="ri-stop"
+            class="flex-none cursor-pointer rounded-md border-none bg-transparent px-1.5 py-1 text-[13px] hover:bg-[var(--err-hover-bg)] disabled:cursor-progress"
+            :disabled="stopping === s.id"
+            title="Stop this session (the conversation is kept)"
+            :aria-label="`Stop the session running ${s.title}`"
+            @click="stopSession(s)"
           >
-          <span
-            v-else-if="s.hidden"
-            data-testid="ri-background"
-            class="flex-none whitespace-nowrap text-[11px] text-dim"
-            title="Ran in the background — not a chat you opened"
-            >background</span
-          >
-          <span v-if="sessionBusy(s)" data-testid="ri-open" class="flex-none whitespace-nowrap text-[11px] text-amber" title="Open in another terminal"
-            >● open</span
-          >
-          <span class="flex-none text-[11px] text-dim">{{ relativeTime(s.mtime) }}</span>
-        </button>
+            <span class="material-symbols-outlined" aria-hidden="true">stop_circle</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

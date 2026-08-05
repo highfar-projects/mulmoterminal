@@ -1,6 +1,7 @@
 import { ref, shallowRef } from "vue";
 import type { PartialWorkerStatus } from "../../common/workerStatus";
 import type { PartialSessionOccupancy, SessionOccupancy } from "../../common/sessionOccupancy";
+import type { PartialSessionRunning } from "../../common/sessionRunning";
 import { isTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { agentSessionListUrl } from "../../common/agentSessionList";
 import { isRecord, optionalBoolean } from "../../common/isRecord";
@@ -24,7 +25,7 @@ import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 /** A row the launcher can resume into a cell. `hidden` / `failed` / `attached` come from shared
  *  wire types the server fills — see common/workerStatus.ts and common/sessionOccupancy.ts for
  *  why they are OPTIONAL on this side. */
-export interface ResumableSession extends PartialWorkerStatus, PartialSessionOccupancy {
+export interface ResumableSession extends PartialWorkerStatus, PartialSessionOccupancy, PartialSessionRunning {
   id: string;
   title: string;
   mtime: number;
@@ -87,7 +88,11 @@ const isResumableSession = (row: unknown): row is ResumableSession =>
   // said), but a PRESENT one of the wrong type would be asserted as a boolean and read as truthy.
   optionalBoolean(row.hidden) &&
   optionalBoolean(row.failed) &&
-  optionalBoolean(row.attached);
+  optionalBoolean(row.attached) &&
+  // The key the stop button POSTs to. Checked as strictly as the booleans and for a sharper reason:
+  // a number or an object asserted as a string here would be sent to `/api/session/:id/terminate`
+  // as whatever it stringifies to.
+  (row.runningKey === undefined || row.runningKey === null || typeof row.runningKey === "string");
 
 const isRunnableScript = (row: unknown): row is RunnableScript =>
   isRecord(row) && typeof row.index === "number" && typeof row.label === "string" && typeof row.command === "string";
