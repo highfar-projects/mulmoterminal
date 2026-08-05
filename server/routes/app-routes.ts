@@ -15,6 +15,7 @@ import { mountAllRoutes } from "../infra/plugins-registry.js";
 import { mountConfigRoutes } from "../config/config-routes.js";
 import { mountFilesBrowseRoutes } from "../files/files-browse.js";
 import { mountTmuxRoutes } from "../infra/tmux-routes.js";
+import { survivingSessions } from "../session/surviving-sessions.js";
 import { mountHookRoute } from "../routes/hook-routes.js";
 import { mountPluginRoutes } from "../routes/plugin-routes.js";
 import { mountMcpRoutes } from "../routes/mcp-routes.js";
@@ -377,5 +378,8 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
     listTmuxIds: tmuxListSessionIds,
     attachedClientCount: tmuxAttachedClientCount,
     resumablePredicate: resumableSessionPredicate,
+    // `Date.now()` is read HERE rather than inside the builder, which stays pure and takes the
+    // moment as a number (session/surviving-sessions.ts).
+    survivingSessions: () => survivingSessions(Date.now()),
   });
 }
