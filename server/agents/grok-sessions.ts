@@ -91,6 +91,14 @@ export function parseGrokSummary(text: string): GrokSummary {
   };
 }
 
+async function mtimeOf(target: string): Promise<number | null> {
+  try {
+    return (await fs.stat(target)).mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
 async function readSummary(file: string): Promise<GrokSummary & { statMtime: number | null }> {
   try {
     const [text, stat] = await Promise.all([fs.readFile(file, "utf8"), fs.stat(file)]);
@@ -155,10 +163,15 @@ export async function listGrokSessions(root: string, cwd: string, limit: number)
   const summaries = await Promise.all(
     scanned.map(async (id) => {
       const summary = await readSummary(grokSummaryPath(root, cwd, id));
+      // The DIRECTORY's mtime is the last fallback, not zero: grok creates the directory before it
+      // first writes a summary, so a conversation started seconds ago is exactly the one with no
+      // readable summary — and stamping it 0 sorts it below every old row and straight out of the
+      // `limit` (CodeRabbit / Codex on #1449). Only reached when the summary is unusable.
+      const mtime = summary.mtime ?? summary.statMtime ?? (await mtimeOf(path.join(dir, id)));
       return {
         id,
         title: cleanTitle(summary.title ?? prompts.get(id) ?? null, DEFAULT_TITLE),
-        mtime: summary.mtime ?? summary.statMtime ?? 0,
+        mtime: mtime ?? 0,
       };
     }),
   );

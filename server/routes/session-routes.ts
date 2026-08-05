@@ -53,6 +53,8 @@ import { listAntigravitySessions } from "../agents/antigravity-sessions.js";
 import { grokSessionsRoot } from "../agents/grok-session.js";
 import { listGrokSessions } from "../agents/grok-sessions.js";
 import { conversationSessionKeys, type AgentConversation } from "../session/agent-conversations.js";
+import { AGENT_SESSION_LIST_PATHS } from "../../common/agentSessionList.js";
+import { TERMINAL_AGENTS, type TerminalAgent } from "../../common/sessionAgent.js";
 import type { SessionMeta } from "../session/types.js";
 import { parseActivityIds, selectSessionRows } from "../session/session-list.js";
 import { sessionDetailView } from "../session/session-detail-view.js";
@@ -331,13 +333,21 @@ async function grokSessionList(req: Request, res: Response) {
   }
 }
 
+// Which handler answers each agent's listing. Keyed by the same type as the paths, so the two are
+// added together or not at all.
+const AGENT_SESSION_LISTS: Record<TerminalAgent, (req: Request, res: Response) => Promise<void>> = {
+  claude: sessionList,
+  codex: codexSessionList,
+  antigravity: antigravitySessionList,
+  grok: grokSessionList,
+};
+
 export function mountSessionRoutes(app: Express, deps: SessionRouteDeps): void {
   app.get("/api/session/:id", (req, res) => sessionDetail(req, res, deps.freshenRosterTitle));
   app.post("/api/session/:id/memo", (req, res) => setMemo(req, res, deps.publishActivity));
   app.get("/api/activity", activitySnapshot);
   app.get("/api/transcript/timeline", toolTimeline);
   app.get("/api/transcript/last-turn", lastTurn);
-  app.get("/api/sessions", sessionList);
   // The sessions a loading grid should adopt: spawned VISIBLE by the server and never taken by a
   // cell (a scheduled task's chat, one the phone started, one an agent started from another
   // session). Deliberately its own endpoint answering a server-side marker, rather than the grid
@@ -361,7 +371,11 @@ export function mountSessionRoutes(app: Express, deps: SessionRouteDeps): void {
     });
     res.json({ sessions });
   });
-  app.get("/api/codex/sessions", codexSessionList);
-  app.get("/api/antigravity/sessions", antigravitySessionList);
-  app.get("/api/grok/sessions", grokSessionList);
+  // The four conversation listings are mounted FROM the shared map rather than from literals
+  // beside it (CodeRabbit on #1449). The map is what the launcher builds its URL from, so a fifth
+  // agent that adds an entry there and no route here would 404 for that agent alone — and the
+  // `Record<TerminalAgent, …>` on both sides means neither half can be forgotten.
+  for (const agent of TERMINAL_AGENTS) {
+    app.get(AGENT_SESSION_LIST_PATHS[agent], AGENT_SESSION_LISTS[agent]);
+  }
 }

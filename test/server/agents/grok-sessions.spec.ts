@@ -107,7 +107,20 @@ describe("listGrokSessions", () => {
   // a default name — a listing that silently drops the session the user just started is worse.
   it("keeps a conversation whose summary cannot be read", async () => {
     writeConversation(CWD, ID_A, null);
-    expect(await listGrokSessions(root, CWD, 10)).toEqual([{ id: ID_A, title: "Grok session", mtime: 0 }]);
+    const [row] = await listGrokSessions(root, CWD, 10);
+    expect(row?.id).toBe(ID_A);
+    expect(row?.title).toBe("Grok session");
+  });
+
+  // grok creates the directory before it writes a summary, so the conversation with no readable
+  // summary is typically the one just started. Stamping it 0 would sort it below every old row and
+  // straight out of the limit — the newest conversation missing from the list it is newest in.
+  it("dates a summary-less conversation by its directory, not by zero", async () => {
+    writeConversation(CWD, ID_A, { generated_title: "old but summarised", last_active_at: "2020-01-01T00:00:00Z" });
+    writeConversation(CWD, ID_B, null);
+    const rows = await listGrokSessions(root, CWD, 10);
+    expect(rows.map((r) => r.id)).toEqual([ID_B, ID_A]);
+    expect(rows[0]?.mtime).toBeGreaterThan(Date.parse("2020-01-01T00:00:00Z"));
   });
 
   it("ignores the files that sit beside the conversation directories", async () => {

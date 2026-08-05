@@ -13,7 +13,7 @@ import { isSameDirPath } from "../../common/dirPathKey";
 import { TOOL_GROUPS, TOOL_GROUP_HEADINGS, toolGroupServerId, toolsInGroup, type ToolGroup } from "../../common/toolGroups";
 import { customAgentIdOf, type AgentPick, type CustomAgent } from "../../common/customAgents";
 import { pickCarriesFullGuiMcp } from "../../common/guiMcpAgents";
-import { agentBadge, type TerminalAgent } from "../../common/sessionAgent";
+import { agentBadge, isTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { launchChips, type CwdPreset, type LaunchChip } from "./presets";
 import type { Launcher, LaunchPick } from "./launchers";
 import type { LaunchChoice } from "./wsUrl";
@@ -180,8 +180,11 @@ const {
 // (#1417). A custom agent runs Claude Code, so it takes Claude's — the same reason `launchesClaude`
 // gives the model picker. Shell has none: null, and the section is not rendered at all.
 const listAgent = computed<TerminalAgent | null>(() => {
-  if (!launchesAgent.value) return null;
-  return launchesClaude.value ? "claude" : (props.agent as TerminalAgent);
+  if (launchesClaude.value) return "claude";
+  // NARROWED, not asserted: `AgentPick` also spells Shell and `custom:<id>`, and the one thing this
+  // must never do is name an agent that has no history to list. Anything that is not one of the
+  // four agents lands on null, which is the same answer Shell gets — no route asked, no section.
+  return isTerminalAgent(props.agent) ? props.agent : null;
 });
 
 // How the section says whose conversations these are. Claude's keeps the original wording — it is
