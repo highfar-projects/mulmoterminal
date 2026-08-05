@@ -32,7 +32,7 @@ import {
   markAttachedSessionPlaced,
   ptys,
 } from "../session/registry.js";
-import { SpawnRefusedError } from "../session/pty-spawn.js";
+import { SpawnRefusedError, ptyWouldReattach } from "../session/pty-spawn.js";
 import { bufferEarlyFrames, type EarlyFrames } from "../session/early-frames.js";
 import { registeredGuiMcpGroups } from "../infra/gui-mcp-registration.js";
 import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups.js";
@@ -57,6 +57,7 @@ import { normalizeAgent, parseIndexParam } from "./routeParams.js";
 import { agentResumeId } from "../agents/agent-resume.js";
 import { claimLaunch, worktreeOccupancy } from "../session/worktree-session-limit.js";
 import { worktreeRefusal } from "../../common/worktreeSession.js";
+import { ensureWorktreeEnv } from "../config/worktree-env.js";
 import { isCustomAgentId } from "../../common/customAgents.js";
 
 export interface WsRouteDeps {
@@ -282,12 +283,38 @@ export function attachSocketErrorLogger(ws: Pick<WebSocket, "on">, kind: Termina
   ws.on("error", (err) => console.warn(`[ws] socket error (${kind}): ${messageOf(err)}`));
 }
 
+/** Reserve the directory's per-tree PORT / DB_NAME (#1367), for a connection that is about to
+ *  SPAWN. Awaited here because the spawners are synchronous and only read what is already
+ *  reserved — a path that skips this starts a terminal without the project's values.
+ *
+ *  Skipped on a reattach, and not merely as an optimisation: no process starts, so nothing would
+ *  read the values, and `cwd` on a reattach is the least trustworthy thing in the request — it is
+ *  often absent and then falls back to the default workspace (see effectiveSessionCwd). Reserving
+ *  from it would hand a slot to a directory nobody is launching in. Same "only for a spawn" shape
+ *  the GUI-tool-group lookup below already has, for the same reason. (Codex review on #1367.)
+ *
+ *  BOTH kinds of reattach, which is why this asks ptyWouldReattach rather than testing `live`:
+ *  `live` is only a same-process pty, and a session that survived a server restart is picked up
+ *  from tmux with `live === undefined` — the case a `!live` test reads as a fresh spawn. It is the
+ *  same predicate ptySpawn itself will apply, given the same id, so the two cannot disagree.
+ *
+ *  `session: null` is an ephemeral terminal (/ws/run): no session identity, no tmux, so it always
+ *  spawns.
+ */
+export async function reserveWorktreeEnvForSpawn(cwd: string, session: { id: string; live: PtyEntry | undefined } | null): Promise<void> {
+  if (session && (session.live || ptyWouldReattach(session.id, true))) return;
+  await ensureWorktreeEnv(cwd);
+}
+
 async function startRunTerminal(deps: WsRouteDeps, ws: WebSocket, url: URL): Promise<void> {
   // No session to reattach: /ws/run is ephemeral, so an unusable directory is always a refusal.
   const { cwd, unusable } = workspaceFromUrl(url);
   if (refuseUnusableWorkspace(ws, "run", unusable, null)) return;
   const resolved = await resolveRunTarget(url, cwd);
   if (!resolved) return closeWithError(ws, "Command not found — check your config / script.json.");
+  // Against `resolved.cwd`, not the URL's: a header button's command can resolve a different
+  // directory, and the pty gets that one. /ws/run never reattaches, so it always reserves.
+  await reserveWorktreeEnvForSpawn(resolved.cwd, null);
   beginRunTerminal(deps, ws, resolved, sizeFromUrl(url));
 }
 
@@ -431,6 +458,7 @@ async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
   // Buffered from the announcement on, like every other terminal endpoint: the browser's first
   // frame is the terminal's geometry and it arrives while this handler may still be awaiting the
   // Keychain — /ws was the one route that let it fall on the floor (#1178, see early-frames.ts).
+  await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });
   const early = await admitAgentSession(ws, "claude", { requested, sessionId, live, cwd, devTerminal: !attachGuiMcp });
   if (!early) return;
 
@@ -549,6 +577,7 @@ async function handleLaunchConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
   // The hole this leaves is real and deliberate: a chip whose command is `codex` can start a second
   // agent in a worktree the Agent Picker has already occupied. Nothing on the launcher side can
   // close it without guessing again.
+  await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });
   const early = await admitAgentSession(ws, "launch", { requested, sessionId, live, cwd, devTerminal: true, worktreeLimited: false });
   if (!early) return;
 
@@ -586,6 +615,7 @@ async function handleCodexConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUp
   // rollout that is right there — which is the restart case this exists for.
   await codexRolloutsHydrated;
   const { sessionId, live, resumeRolloutId } = resolveCodexSession(requested);
+  await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });
   const early = await admitAgentSession(ws, "codex", { requested, sessionId, live, cwd, devTerminal: !attachGuiMcp });
   if (!early) return;
 
@@ -655,6 +685,7 @@ async function handleAntigravityConnection(deps: WsRouteDeps, ws: WebSocket, req
   // conversation that is right there — which is the restart case this exists for.
   await antigravityConversationsHydrated;
   const { sessionId, live, resumeConversationId } = resolveAntigravitySession(requested);
+  await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });
   const early = await admitAgentSession(ws, "antigravity", { requested, sessionId, live, cwd, devTerminal: !attachGuiMcp });
   if (!early) return;
 
@@ -729,6 +760,9 @@ async function handleGrokConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUpg
   // No `await …Hydrated` here, and that is not an oversight: the two agents that need one keep a
   // session -> conversation map on disk, and grok has no such map to wait for.
   const { sessionId, live, resumeConversationId } = resolveGrokSession(requested, cwd);
+  // The directory's per-tree PORT / DB_NAME (#1367), like every other spawn path — a grok cell in a
+  // worktree gets that tree's own values, not the ones another tree is already serving on.
+  await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });
   const early = await admitAgentSession(ws, "grok", { requested, sessionId, live, cwd, devTerminal: !attachGuiMcp });
   if (!early) return;
 

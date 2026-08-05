@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import path from "node:path";
-import { worktreeTask } from "../../../server/config/header-context.js";
+import { worktreeTask } from "../../../server/config/worktree-task.js";
 
 describe("worktreeTask", () => {
   const root = path.join("/home", "u", ".mulmoterminal", "worktrees");

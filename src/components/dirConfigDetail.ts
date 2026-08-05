@@ -119,6 +119,8 @@ function extraRows(extras: Record<string, unknown>): DirConfigRow[] {
   if (buttons.length) rows.push({ key: "buttons", label: "Header buttons", value: buttons.join(", "), color: null });
   const chips = stringList(extras.chipLabels);
   if (chips.length) rows.push({ key: "chips", label: "Header chips", value: chips.join(", "), color: null });
+  const worktreeEnv = stringList(extras.worktreeEnvNames);
+  if (worktreeEnv.length) rows.push({ key: "worktreeEnv", label: "Per-worktree env", value: worktreeEnv.join(", "), color: null });
   return rows;
 }
 

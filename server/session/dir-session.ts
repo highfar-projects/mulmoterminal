@@ -6,7 +6,7 @@
 // single answer per directory rather than a list to choose from (#1207).
 
 import path from "node:path";
-import { canonicalPath } from "../git/worktrees.js";
+import { canonicalPath } from "../infra/canonical-path.js";
 import { isSessionAttached, type SessionOccupancy } from "../../common/sessionOccupancy.js";
 import { isTerminalAgent, type TerminalAgent } from "../../common/sessionAgent.js";
 import { isProbeSessionId } from "../agents/probe-session.js";

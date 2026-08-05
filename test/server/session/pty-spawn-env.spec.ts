@@ -9,11 +9,24 @@ const scrub = vi.fn();
 vi.mock("../../../server/infra/tmux.js", () => ({
   tmuxAvailable: () => tmuxOn,
   tmuxHasSession: (id: string) => liveTmuxSessions.has(id),
-  tmuxNewSessionArgs: (id: string, file: string, args: string[]) => ["new-session", id, file, ...args],
+  // The real one turns `env` into `-e KEY=VALUE` pairs, which is the only way a variable
+  // reaches a tmux PANE — so the fake has to carry it or the #1367 assertions below prove nothing.
+  tmuxNewSessionArgs: (id: string, file: string, args: string[], _cwd: string, env: Record<string, string> = {}) => [
+    "new-session",
+    id,
+    ...Object.entries(env).flatMap(([key, value]) => ["-e", `${key}=${value}`]),
+    file,
+    ...args,
+  ],
   tmuxScrubEnvNames: (names: readonly string[]) => scrub(names),
 }));
 
+// What this directory holds per working tree (#1367). Mocked rather than reserved for real:
+// what is under test is that a spawn CARRIES it, not how it was decided.
+vi.mock("../../../server/config/worktree-env.js", () => ({ reservedWorktreeEnv: () => reserved }));
+
 let tmuxOn = false;
+let reserved: Record<string, string> = {};
 const liveTmuxSessions = new Set<string>();
 
 // ptySpawn stats the cwd and refuses a spawn into a directory that is not there, so this cannot
@@ -30,6 +43,7 @@ beforeEach(() => {
   spawn.mockClear();
   scrub.mockClear();
   tmuxOn = false;
+  reserved = {};
   liveTmuxSessions.clear();
   process.env.ANTHROPIC_API_KEY = "sk-ant-leftover";
   process.env.MT_KEEP_ME = "kept";
@@ -112,5 +126,46 @@ describe("ptySpawn — the tmux server's own environment", () => {
     tmuxOn = true;
     ptySpawn("s1", "claude", [], EXISTING_CWD, true);
     expect(scrub).not.toHaveBeenCalled();
+  });
+});
+
+// A worktree isolates files, not ports (#1367). The values are reserved before the spawn; what
+// this pins is that every terminal actually RUNS with them — including the tmux path, where the
+// pane's environment comes from `new-session -e` and not from the process spawned here.
+describe("the per-tree environment a directory reserved", () => {
+  const argsOf = (call: number = 0): string[] => (spawn.mock.calls[call] as unknown as [string, string[]])[1];
+
+  it("reaches a plain spawn", () => {
+    reserved = { PORT: "3010", DB_NAME: "myapp_fix_login" };
+    spawnPty("yarn", ["dev"], EXISTING_CWD);
+    expect(envOf().PORT).toBe("3010");
+    expect(envOf().DB_NAME).toBe("myapp_fix_login");
+  });
+
+  it("reaches a direct ptySpawn", () => {
+    reserved = { PORT: "3010" };
+    ptySpawn("s1", "claude", [], EXISTING_CWD, false);
+    expect(envOf().PORT).toBe("3010");
+  });
+
+  it("is handed to the tmux pane through -e", () => {
+    reserved = { PORT: "3010" };
+    tmuxOn = true;
+    ptySpawn("s1", "claude", [], EXISTING_CWD, true);
+    expect(argsOf()).toContain("PORT=3010");
+  });
+
+  // The spawner's own values are about THIS session and could not have been reserved for a
+  // directory; a project declaring the same name must not be able to redirect our MCP bridge.
+  it("loses to a value the spawner computed for this session", () => {
+    reserved = { MULMOTERMINAL_SESSION: "from-config", PORT: "3010" };
+    ptySpawn("s1", "claude", [], EXISTING_CWD, false, { env: { MULMOTERMINAL_SESSION: "s1" } });
+    expect(envOf().MULMOTERMINAL_SESSION).toBe("s1");
+    expect(envOf().PORT).toBe("3010");
+  });
+
+  it("sets nothing when the directory reserved nothing", () => {
+    spawnPty("claude", [], EXISTING_CWD);
+    expect(envOf()).not.toHaveProperty("PORT");
   });
 });

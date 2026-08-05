@@ -39,6 +39,7 @@ const FIXTURES: Record<string, unknown> = {
   model: "opus",
   addDirs: ["./sibling"], // created below — a path that doesn't exist is dropped by the loader
   appendSystemPrompt: false,
+  worktreeEnv: { PORT: { kind: "port", base: 3000 } },
 };
 
 const dirs: string[] = [];

@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-dirs
-description: Colour-code and order the directories you actually work in, from wherever you are. Writes each project's `<project>/.mulmoterminal.json` — name badge, project icon image, the seven chrome colours, xterm palette (`theme` / `colors`), terminal font size, and `orderPriority` (where it sits in the grid and in the launcher's chips). Starts from your recent MulmoTerminal directories rather than just the current one, reads the configs you already have, works out the convention you have been following, and continues it for the ones that are unset or off-pattern — so a newly cloned repo gets the colour and rank it should have had. Use when the user wants to colour-code, theme, rename, reorder, or resize projects in MulmoTerminal — "give this project a colour", "colour-code my repos", "keep my main repos at the top", "the new clone has no colour", "make them consistent", "terminal text is too small". For inventing a NEW reusable colour scheme that shows up in Settings, use mulmoterminal-theme instead.
+description: Colour-code and order the directories you actually work in, from wherever you are. Writes each project's `<project>/.mulmoterminal.json` — name badge, project icon image, the seven chrome colours, xterm palette (`theme` / `colors`), terminal font size, `orderPriority` (where it sits in the grid and in the launcher's chips), and `worktreeEnv` (a value of its own per git worktree for each declared variable — a dev-server port, a database name — so two `yarn dev` do not fight over 3000). Starts from your recent MulmoTerminal directories rather than just the current one, reads the configs you already have, works out the convention you have been following, and continues it for the ones that are unset or off-pattern — so a newly cloned repo gets the colour and rank it should have had. Use when the user wants to colour-code, theme, rename, reorder, or resize projects in MulmoTerminal — "give this project a colour", "colour-code my repos", "keep my main repos at the top", "the new clone has no colour", "make them consistent", "terminal text is too small", "two worktrees fight over port 3000", "give each worktree its own port / database". For inventing a NEW reusable colour scheme that shows up in Settings, use mulmoterminal-theme instead.
 ---
 
 # Colour and order the directories you work in
@@ -279,13 +279,53 @@ nothing, which reads as the setting being broken. For CJK, prefer a face whose f
 exactly twice the Latin width (Cica, HackGen, Sarasa Mono J, Noto Sans Mono CJK JP, MS Gothic, BIZ
 UDGothic); anything else tears the box-drawing frames an agent TUI is made of.
 
+### A port and a database name per worktree — `worktreeEnv`
+
+A worktree isolates files, not **ports**. Two worktrees running `yarn dev` both reach for 3000 and
+the second one dies; several pointed at one local database means the tree that runs a migration
+breaks the rest. `worktreeEnv` declares what each working tree needs its OWN of, and MulmoTerminal
+reserves a distinct value per tree and exports it into that tree's terminals.
+
+```json
+{
+  "worktreeEnv": {
+    "PORT": { "kind": "port", "base": 3000 },
+    "DB_NAME": { "kind": "slug", "prefix": "myapp_" }
+  }
+}
+```
+
+| Field | Meaning |
+|---|---|
+| key | The variable name — whatever the project reads (`PORT`, `VITE_PORT`, `NEXT_PUBLIC_PORT`). Up to 16. |
+| `kind: "port"` | A free TCP port: `base` + a multiple of 10. `base` is 1024–65215. |
+| `kind: "slug"` | A `[a-z0-9_]` name from the tree's task (or folder) name, behind an optional `prefix`. Cut to 63 chars. |
+
+The project's own checkout keeps `base` itself; its worktrees take `base+10`, `base+20`, … So a
+project declaring 3000 sees 3000 where it always did.
+
+Four things to say when you write this:
+
+- **Ask which variable the project actually reads.** `PORT` is a guess. Look for it in
+  `package.json` scripts, `vite.config.*`, `.env.example`, `docker-compose.yml` — a declaration
+  under the wrong name is a setting that silently does nothing.
+- **MulmoTerminal does not create the database.** It hands out a name nothing else holds; using it
+  is the project's `migrate` script's job. Offer to wire that up only if asked.
+- **Values are reserved once and kept** (`~/.mulmoterminal/worktree-env.jsonl`), so a running dev
+  server's port never moves under it. Editing `base` later re-allocates every tree.
+- **It IS carried into new worktrees**, unlike `sound` / `addDirs` — it is a declaration, not a
+  value, so each tree resolves its own from it.
+
+Each cell shows what it got on the header's `env` chip (`:3010`, clickable). The chip is on by
+default and renders nothing where no `worktreeEnv` is declared, so there is nothing to switch on.
+
 ### Worktrees derive their own config from this one
 
 A managed git worktree (`~/.mulmoterminal/worktrees/<repo>-<hash>/<task>`) gets its own
 `.mulmoterminal.local.json` when MulmoTerminal creates it, derived from the project's: identity keys
-(`name` / `icon` / `theme` / `colors` / `fontSize` / `fontFamily` / `provider` / `model`) as written, the
-seven chrome colours rotated **12° further per worktree**, and `orderPriority` at the project's
-rank **+ 1**. `sound` / `sounds` / `addDirs` are not carried.
+(`name` / `icon` / `theme` / `colors` / `fontSize` / `fontFamily` / `provider` / `model` /
+`worktreeEnv`) as written, the seven chrome colours rotated **12° further per worktree**, and
+`orderPriority` at the project's rank **+ 1**. `sound` / `sounds` / `addDirs` are not carried.
 
 Two consequences for this skill:
 
