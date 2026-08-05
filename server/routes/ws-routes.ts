@@ -273,16 +273,29 @@ export function attachSocketErrorLogger(ws: Pick<WebSocket, "on">, kind: Termina
   ws.on("error", (err) => console.warn(`[ws] socket error (${kind}): ${messageOf(err)}`));
 }
 
+/** Reserve the directory's per-tree PORT / DB_NAME (#1367), for a connection that is about to
+ *  SPAWN. Awaited here because the spawners are synchronous and only read what is already
+ *  reserved — a path that skips this starts a terminal without the project's values.
+ *
+ *  Skipped on a reattach, and not merely as an optimisation: no process starts, so nothing would
+ *  read the values, and `cwd` on a reattach is the least trustworthy thing in the request — it is
+ *  often absent and then falls back to the default workspace (see effectiveSessionCwd). Reserving
+ *  from it would hand a slot to a directory nobody is launching in. Same "only for a spawn" shape
+ *  the GUI-tool-group lookup below already has, for the same reason. (Codex review on #1367.)
+ */
+export async function reserveWorktreeEnvForSpawn(cwd: string, live: PtyEntry | undefined): Promise<void> {
+  if (!live) await ensureWorktreeEnv(cwd);
+}
+
 async function startRunTerminal(deps: WsRouteDeps, ws: WebSocket, url: URL): Promise<void> {
   // No session to reattach: /ws/run is ephemeral, so an unusable directory is always a refusal.
   const { cwd, unusable } = workspaceFromUrl(url);
   if (refuseUnusableWorkspace(ws, "run", unusable, null)) return;
-  // Reserve this directory's per-tree values BEFORE anything spawns (#1367). It has to happen
-  // where a spawn can still be awaited: the spawners are synchronous and only READ what is
-  // reserved, so a path that skips this starts a terminal without the project's PORT / DB_NAME.
-  await ensureWorktreeEnv(cwd);
   const resolved = await resolveRunTarget(url, cwd);
   if (!resolved) return closeWithError(ws, "Command not found — check your config / script.json.");
+  // Against `resolved.cwd`, not the URL's: a header button's command can resolve a different
+  // directory, and the pty gets that one. /ws/run never reattaches, so it always reserves.
+  await reserveWorktreeEnvForSpawn(resolved.cwd, undefined);
   beginRunTerminal(deps, ws, resolved, sizeFromUrl(url));
 }
 
@@ -384,10 +397,6 @@ async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
   // knows the current session's id, even before any file exists.
   const { url, requested, cwd, unusable, size } = wsConnectionContext(req);
   if (refuseUnusableWorkspace(ws, "claude", unusable, requested)) return;
-  // Reserve this directory's per-tree values BEFORE anything spawns (#1367). It has to happen
-  // where a spawn can still be awaited: the spawners are synchronous and only READ what is
-  // reserved, so a path that skips this starts a terminal without the project's PORT / DB_NAME.
-  await ensureWorktreeEnv(cwd);
   // A bad id is never silently reused — closing the socket without a replacement
   // makes the client auto-reconnect with the same bad id forever, so we warn and
   // fall through to mint a fresh session, then tell the browser the new id.
@@ -430,6 +439,7 @@ async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
   // Buffered from the announcement on, like every other terminal endpoint: the browser's first
   // frame is the terminal's geometry and it arrives while this handler may still be awaiting the
   // Keychain — /ws was the one route that let it fall on the floor (#1178, see early-frames.ts).
+  await reserveWorktreeEnvForSpawn(cwd, live);
   const early = await admitAgentSession(ws, "claude", { requested, sessionId, live, cwd, devTerminal: !attachGuiMcp });
   if (!early) return;
 
@@ -533,10 +543,6 @@ function clientStillConnected(ws: WebSocket, tag: string, sessionId: string, ear
 async function handleLaunchConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUpgradeRequest) {
   const { url, requested, cwd, unusable, size } = wsConnectionContext(req);
   if (refuseUnusableWorkspace(ws, "launch", unusable, requested)) return;
-  // Reserve this directory's per-tree values BEFORE anything spawns (#1367). It has to happen
-  // where a spawn can still be awaited: the spawners are synchronous and only READ what is
-  // reserved, so a path that skips this starts a terminal without the project's PORT / DB_NAME.
-  await ensureWorktreeEnv(cwd);
   const index = parseIndexParam(url.searchParams.get("launcher"));
   const shell = url.searchParams.get("shell") === "1";
 
@@ -552,6 +558,7 @@ async function handleLaunchConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
   // The hole this leaves is real and deliberate: a chip whose command is `codex` can start a second
   // agent in a worktree the Agent Picker has already occupied. Nothing on the launcher side can
   // close it without guessing again.
+  await reserveWorktreeEnvForSpawn(cwd, live);
   const early = await admitAgentSession(ws, "launch", { requested, sessionId, live, cwd, devTerminal: true, worktreeLimited: false });
   if (!early) return;
 
@@ -582,10 +589,6 @@ async function handleLaunchConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
 async function handleCodexConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUpgradeRequest) {
   const { url, requested, cwd, unusable, size } = wsConnectionContext(req);
   if (refuseUnusableWorkspace(ws, "codex", unusable, requested)) return;
-  // Reserve this directory's per-tree values BEFORE anything spawns (#1367). It has to happen
-  // where a spawn can still be awaited: the spawners are synchronous and only READ what is
-  // reserved, so a path that skips this starts a terminal without the project's PORT / DB_NAME.
-  await ensureWorktreeEnv(cwd);
   const attachGuiMcp = url.searchParams.get("gui") !== "0";
 
   // Before resolving, not after: the mapping this reads lives on disk, and a reconnect that
@@ -593,6 +596,7 @@ async function handleCodexConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUp
   // rollout that is right there — which is the restart case this exists for.
   await codexRolloutsHydrated;
   const { sessionId, live, resumeRolloutId } = resolveCodexSession(requested);
+  await reserveWorktreeEnvForSpawn(cwd, live);
   const early = await admitAgentSession(ws, "codex", { requested, sessionId, live, cwd, devTerminal: !attachGuiMcp });
   if (!early) return;
 
@@ -656,16 +660,13 @@ function startAntigravityEntry(deps: WsRouteDeps, ws: WebSocket, start: Antigrav
 async function handleAntigravityConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUpgradeRequest) {
   const { url, requested, cwd, unusable, size } = wsConnectionContext(req);
   if (refuseUnusableWorkspace(ws, "antigravity", unusable, requested)) return;
-  // Reserve this directory's per-tree values BEFORE anything spawns (#1367). It has to happen
-  // where a spawn can still be awaited: the spawners are synchronous and only READ what is
-  // reserved, so a path that skips this starts a terminal without the project's PORT / DB_NAME.
-  await ensureWorktreeEnv(cwd);
   const attachGuiMcp = url.searchParams.get("gui") !== "0";
   // Before resolving, not after: the mapping this reads lives on disk, and a reconnect that
   // arrives while the log is still being read would see an empty map and decline to resume a
   // conversation that is right there — which is the restart case this exists for.
   await antigravityConversationsHydrated;
   const { sessionId, live, resumeConversationId } = resolveAntigravitySession(requested);
+  await reserveWorktreeEnvForSpawn(cwd, live);
   const early = await admitAgentSession(ws, "antigravity", { requested, sessionId, live, cwd, devTerminal: !attachGuiMcp });
   if (!early) return;
 
