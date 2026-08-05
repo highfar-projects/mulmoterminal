@@ -10,6 +10,8 @@ import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { isStrictlyWithin } from "../infra/path-within.js";
 import { mulmoterminalHome } from "../infra/mulmoterminal-home.js";
+import { canonicalPath } from "../infra/canonical-path.js";
+import { ensureWorktreeEnv } from "../config/worktree-env.js";
 import { splitLines } from "../infra/split-lines.js";
 import { DIR_CONFIG_FILE } from "../config/dir-config.js";
 import { writeInheritedDirConfig } from "../config/worktree-dir-config.js";
@@ -57,30 +59,6 @@ export function slugify(task: string): string {
 export function worktreesRoot(repoToplevel: string): string {
   const hash = createHash("sha1").update(repoToplevel).digest("hex").slice(0, 8);
   return path.join(worktreesBase(), `${path.basename(repoToplevel)}-${hash}`);
-}
-
-// Canonicalize a path by realpath-resolving its deepest EXISTING ancestor and
-// re-attaching the missing leaf segments. So a symlink anywhere along the path
-// (even when the leaf itself doesn't exist) is resolved before containment checks.
-//
-// Exported because it is also the KEY two concurrent launches must agree on to be recognised as
-// aiming at the same directory (session/worktree-session-limit.ts), and it is sync — which is what
-// lets that check happen before anything awaits.
-export function canonicalPath(p: string): string {
-  const resolved = path.resolve(p);
-  const missing: string[] = [];
-  let cur = resolved;
-  for (;;) {
-    try {
-      const real = realpath(cur);
-      return missing.length ? path.join(real, ...missing) : real;
-    } catch {
-      const parent = path.dirname(cur);
-      if (parent === cur) return resolved; // reached the fs root, nothing resolved
-      missing.unshift(path.basename(cur));
-      cur = parent;
-    }
-  }
 }
 
 // Whether `p` is inside the managed root for `repoToplevel` — the guard that stops
@@ -324,6 +302,11 @@ export async function createWorktree(repoDir: string, task: string, issue?: numb
     const res = await git(["worktree", "add", "-b", branch, dir, start], repo);
     if (!res.ok) return null;
     await adoptParentDirConfig(repo, dir);
+    // AFTER the config is adopted — the declaration this reads is the one just written — and here
+    // rather than only in the ws handlers, because a worktree started FROM AN ISSUE has its agent
+    // spawned directly (routes/issue-work-routes.ts), never through a terminal socket. Reserving
+    // only there would leave the one flow this feature is most for without its port.
+    await ensureWorktreeEnv(dir);
     return { path: dir, branch };
   });
 }

@@ -329,7 +329,18 @@ const worktreeEnvVarSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("port"), base: z.number().int().min(MIN_PORT).max(MAX_PORT_BASE) }),
   z.object({ kind: z.literal("slug"), prefix: z.string().max(MAX_SLUG_CHARS).optional() }),
 ]);
-export const worktreeEnvSchema = z.record(z.string().regex(ENV_NAME_RE), worktreeEnvVarSchema);
+export const worktreeEnvSchema = z
+  .record(z.string().regex(ENV_NAME_RE), worktreeEnvVarSchema)
+  // The cap the LOADER applies (it slices at MAX_WORKTREE_ENV_VARS), mirrored here for the reason
+  // the buttons / chips / skills ones are: a config the shipped JSON Schema calls valid must not
+  // have its tail silently dropped at load time. Both halves are needed — `check` is what refuses
+  // it, `meta` is what reaches the JSON Schema, since z.toJSONSchema cannot see a check.
+  .check((ctx) => {
+    if (Object.keys(ctx.value).length > MAX_WORKTREE_ENV_VARS) {
+      ctx.issues.push({ code: "custom", message: `worktreeEnv holds at most ${MAX_WORKTREE_ENV_VARS} variables`, input: ctx.value });
+    }
+  })
+  .meta({ maxProperties: MAX_WORKTREE_ENV_VARS });
 
 // The lenient loader: one malformed variable is dropped on its own, so a typo in `API_PORT`
 // cannot take a working `PORT` down with it — the same treatment `providers.models` gets, and for

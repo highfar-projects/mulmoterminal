@@ -27,7 +27,7 @@ import net from "node:net";
 import path from "node:path";
 import { loadDirConfig } from "./dir-config.js";
 import { worktreeTask, worktreesRootDir } from "./worktree-task.js";
-import { canonicalPath } from "../git/worktrees.js";
+import { canonicalPath } from "../infra/canonical-path.js";
 import { mulmoterminalHome } from "../infra/mulmoterminal-home.js";
 import { heldReservation, parseReservations, releaseLine, reservationLine, type WorktreeEnvReservation } from "./worktree-env-log.js";
 import {
