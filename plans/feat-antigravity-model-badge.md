@@ -77,11 +77,62 @@ Consequence, and it is deliberate: a cell that has not been prompted yet shows *
 rather than a constant. That is what grok already does before its first turn, and it is what lets
 the client tell "unknown" from "known" — which is the whole mechanism above.
 
+## The numbers, from a store with no published format
+
+Follow-up ask: Claude's cell shows `ctx %` and token counts — can agy's? The transcript really has
+none (its record types carry `step_index`, `content`, `tool_calls`, `exit_code` and nothing else).
+They are in a second store the transcript never mentions:
+`~/.gemini/antigravity-cli/conversations/<conversationId>.db`, a SQLite database whose
+`gen_metadata` table holds one **protobuf blob per generation**. There is no `.proto` on disk.
+
+The fields were identified by watching them across a real 519-generation conversation:
+
+```
+idx=  0  ctx   2,522/256,000  prompt 22,812  out 178  cached       0  thoughts  80
+idx=240  ctx 234,987/256,000  prompt  4,901  out 180  cached 227,183  thoughts  94
+idx=300  ctx 146,536/256,000  prompt  3,660  out  84  cached 137,957  thoughts  68  <- compacted
+```
+
+`1.9.10.1` climbs against `1.9.10.4` = 256,000 and drops on compaction; the per-generation counts
+under `1.4` sum to within a few percent of it. That is a context reading and nothing else.
+
+**Everything about the reader is built to answer "nothing" rather than a number it is unsure of**,
+because the badge is what a user compacts by:
+
+- `antigravity-proto.ts` walks only the requested path, skipping other fields by length (a 740 KB
+  row costs a few dozen byte reads), stops at the first byte it cannot account for rather than
+  resynchronising, and never throws;
+- `antigravity-usage.ts` gates every reading — a window outside 1 KB–100 M, a `used` above its own
+  window, a token count above a billion, a missing leaf — and drops the whole answer rather than
+  contributing a zero;
+- the two badges are independent, so unreadable accounting still leaves the model named.
+
+If a future agy renumbers these fields, an agy cell shows its model alone. That is the pre-#1465
+behaviour, reached quietly.
+
+Two things only the real database revealed, both now pinned by tests:
+
+- **`node:sqlite` throws "column index out of range" on `limit ?`.** A named `$limit` binds.
+- **A varint too large to hold must be SKIPPED, not refused.** agy stores an
+  `18446744073709551615` sentinel in the very message that holds the context reading. The first
+  cut treated "cannot represent" as "cannot continue", stopped there, and reported no context at
+  all — with every synthetic fixture passing. Skipping a field never needs its value.
+
+Freshness needed one more piece: with no turn end, the context reading would be frozen at whatever
+it was when the cell first asked. An agy cell re-reads its badges once a minute (one indexed
+sqlite row plus a 64 KB head read), which is the substitute for the activity tracker it does not
+have and should be deleted the day it gets one.
+
 ## Verified
 
-- `yarn format` / `yarn lint` (0 errors) / `yarn typecheck` / `yarn test` (8614 passed)
-- Against the real logs, not only fixtures: three actual conversations under
-  `~/.gemini/antigravity-cli/brain` answer `Gemini 3.6 Flash (High)`, and an unknown id answers
-  `null`.
+- `yarn format` / `yarn lint` (0 errors) / `yarn typecheck` / `yarn test` (8636 passed)
+- Against the real stores, not only fixtures — which is where both bugs above came from:
+
+  ```
+  a4dbbf1e | Gemini 3.6 Flash (High) | ctx 199141/256000 (78%) | in 4258938 out 266486 cache 75671040
+  9ee2d1bb | Gemini 3.6 Flash (High) | ctx 209450/256000 (82%) | in 1789741 out  93143 cache 15236168
+  2658608b | Gemini 3.6 Flash (High) | ctx  82657/256000 (32%) | in  195827 out  12216 cache  1706889
+  unknown  | null                    | ctx 0/null             | in 0 out 0 cache 0
+  ```
 - The specs write nothing into `~/.mulmoterminal/` — the spawner spec stubs `remember` and the
   watcher, which the previous spec did not (it left a fake session in the real log).

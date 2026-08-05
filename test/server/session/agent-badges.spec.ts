@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { DatabaseSync } from "node:sqlite";
 import { agentBadges, type BadgeRoots } from "../../../server/session/agent-badges.js";
 
 // The header badges for a session that is not Claude (#1465). Each agent is asked the question the
@@ -40,7 +41,7 @@ describe("agentBadges", () => {
     roots = {
       codexSessions: path.join(home, "codex", "sessions"),
       grokSessions: path.join(home, "grok", "sessions"),
-      antigravityBrain: path.join(home, "antigravity", "brain"),
+      antigravityHome: path.join(home, "antigravity"),
     };
   });
 
@@ -56,6 +57,35 @@ describe("agentBadges", () => {
     const dir = path.join(home, "grok", "sessions", encodeURIComponent(CWD), GROK_ID);
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, "summary.json"), JSON.stringify(summary));
+  };
+
+  // agy's accounting store, in the nesting antigravity-usage.ts reads (its own spec covers the
+  // shape; this one only has to prove the badge route reaches it).
+  const writeAntigravityDb = (id: string, gen: { used: number; window: number; prompt: number; output: number; cached?: number }) => {
+    const dir = path.join(home, "antigravity", "conversations");
+    fs.mkdirSync(dir, { recursive: true });
+    const varint = (value: number): number[] => {
+      const out: number[] = [];
+      let rest = value;
+      while (rest > 0x7f) {
+        out.push((rest & 0x7f) | 0x80);
+        rest = Math.floor(rest / 128);
+      }
+      out.push(rest);
+      return out;
+    };
+    const v = (field: number, value: number) => [...varint(field * 8), ...varint(value)];
+    const msg = (field: number, body: number[]) => [...varint(field * 8 + 2), ...varint(body.length), ...body];
+    const blob = Buffer.from(
+      msg(1, [
+        ...msg(4, [...v(2, gen.prompt), ...v(3, gen.output), ...(gen.cached === undefined ? [] : v(5, gen.cached))]),
+        ...msg(9, [...msg(10, [...v(1, gen.used), ...v(4, gen.window)])]),
+      ]),
+    );
+    const db = new DatabaseSync(path.join(dir, `${id}.db`));
+    db.exec("create table gen_metadata (idx integer primary key, data blob, size integer not null default 0)");
+    db.prepare("insert into gen_metadata (idx, data, size) values (0, $data, $size)").run({ data: blob, size: blob.length });
+    db.close();
   };
 
   const writeAntigravityTranscript = (id: string, settings: string) => {
@@ -107,11 +137,21 @@ describe("agentBadges", () => {
     expect((await agentBadges("/Users/x/elsewhere", GROK_ID, "grok", roots)).context.model).toBeNull();
   });
 
-  // agy names its model in step 0 of the conversation's transcript and counts no tokens, so the
-  // model badge fills in and the usage badge stays hidden. The id here IS the conversation id: the
-  // session -> conversation mapping is codex's, already covered above, and asking for it in this
-  // spec would append a fake session to the developer's real ~/.mulmoterminal log.
-  it("reads an antigravity session's model from step 0 of its transcript", async () => {
+  // agy answers from TWO stores: the model is prose in the transcript, the numbers are protobuf in
+  // a database beside it. The id here IS the conversation id — the session -> conversation mapping
+  // is codex's, already covered above, and asking for it in this spec would append a fake session
+  // to the developer's real ~/.mulmoterminal log.
+  it("reads an antigravity session's model from its transcript and its numbers from its database", async () => {
+    writeAntigravityTranscript(AGY_ID, "The user changed setting `Model Selection` from None to Gemini 3.6 Flash (High). No need to comment.");
+    writeAntigravityDb(AGY_ID, { used: 234_987, window: 256_000, prompt: 4901, output: 180, cached: 227_183 });
+    const badges = await agentBadges(CWD, AGY_ID, "antigravity", roots);
+    expect(badges.context).toEqual({ model: "Gemini 3.6 Flash (High)", contextTokens: 234_987, contextWindow: 256_000 });
+    expect(badges.usage).toEqual({ inputTokens: 4901, outputTokens: 180, cacheReadTokens: 227_183, cacheCreationTokens: 0 });
+  });
+
+  // The stores are written at different moments: agy creates the transcript on the first prompt and
+  // the database when the model first answers. Between the two, the model badge must still fill in.
+  it("names the model with no numbers when the database is not there yet", async () => {
     writeAntigravityTranscript(AGY_ID, "The user changed setting `Model Selection` from None to Gemini 3.6 Flash (High). No need to comment.");
     const badges = await agentBadges(CWD, AGY_ID, "antigravity", roots);
     expect(badges.context).toEqual({ model: "Gemini 3.6 Flash (High)", contextTokens: 0 });

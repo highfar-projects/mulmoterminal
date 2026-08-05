@@ -42,6 +42,10 @@ vi.mock("../../../src/components/Terminal.vue", () => ({
   },
 }));
 
+// GET /api/session/:id itself — NOT its sub-routes (/memo, /terminate) and not the other polls a
+// cell runs, which a "everything else" counter would fold in and make a refresh test read high.
+const SESSION_DETAIL_RE = /\/api\/session\/[^/?]+(\?|$)/;
+
 const promptText = (w: ReturnType<typeof mount>) => w.find('[data-testid="cell-prompt"]').text();
 const dotClass = (w: ReturnType<typeof mount>) => w.find(".cell-dot").classes();
 
@@ -845,7 +849,7 @@ describe("TerminalCell", () => {
       const u = String(url);
       if (u.includes("/api/scripts")) return { ok: true, json: async () => ({ cwd: "/p", scripts: [] }) };
       if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
-      detailReads++;
+      if (SESSION_DETAIL_RE.test(u)) detailReads++;
       return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null, context: { model, contextTokens: 0 } }) };
     }) as unknown as typeof fetch;
 
@@ -866,6 +870,47 @@ describe("TerminalCell", () => {
     expect(detailReads).toBe(settled);
   });
 
+  // agy's context reading moves every turn, and agy has no turn end to hang a refresh on — so
+  // without this the percentage is frozen at whatever it was when the cell first asked.
+  it("re-reads an antigravity cell's badges on a timer, and no other agent's", async () => {
+    vi.useFakeTimers();
+    try {
+      const id = "55555555-5555-5555-5555-555555555555";
+      let detailReads = 0;
+      globalThis.fetch = vi.fn(async (url: string) => {
+        const u = String(url);
+        if (u.includes("/api/scripts")) return { ok: true, json: async () => ({ cwd: "/p", scripts: [] }) };
+        if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
+        if (SESSION_DETAIL_RE.test(u)) detailReads++;
+        return {
+          ok: true,
+          json: async () => ({
+            working: false,
+            waiting: false,
+            lastPrompt: null,
+            context: { model: "Gemini 3.6 Flash", contextTokens: 1000, contextWindow: 256_000 },
+          }),
+        };
+      }) as unknown as typeof fetch;
+
+      const agy = mountCell(id, { initialAgent: "antigravity" });
+      await vi.advanceTimersByTimeAsync(1);
+      const afterMount = detailReads;
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(detailReads).toBeGreaterThan(afterMount);
+      agy.unmount();
+
+      const claude = mountCell(id);
+      await vi.advanceTimersByTimeAsync(1);
+      const claudeSettled = detailReads;
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(detailReads).toBe(claudeSettled);
+      claude.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // Claude's badges ride along with the summary the route already folds, and this is the busiest
   // route in the app — a push must not turn every claude cell into a poller.
   it("does not re-read the badges on a push for a claude cell", async () => {
@@ -875,7 +920,7 @@ describe("TerminalCell", () => {
       const u = String(url);
       if (u.includes("/api/scripts")) return { ok: true, json: async () => ({ cwd: "/p", scripts: [] }) };
       if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
-      detailReads++;
+      if (SESSION_DETAIL_RE.test(u)) detailReads++;
       return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null, context: { model: null, contextTokens: 0 } }) };
     }) as unknown as typeof fetch;
 

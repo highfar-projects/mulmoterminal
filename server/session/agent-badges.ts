@@ -15,12 +15,14 @@
 //                accounting at all (the only `token` fields in one are `first_token` timings and a
 //                WebFetch tool parameter), so the usage badge stays hidden — it hides itself when
 //                the totals are zero.
-//   antigravity  the model only, from the `<USER_SETTINGS_CHANGE>` block agy writes into step 0 of
-//                the conversation's own transcript (see antigravityModelFromTranscriptHead, which
-//                has the counts behind trusting it). No tokens: agy's transcript records none, so
-//                the usage badge stays hidden as grok's does. A session with no transcript to read
-//                answers `null` — the badge hides, as grok's does before its first turn — and NOT
-//                the cwd's last conversation, which is a different session's model (#1468).
+//   antigravity  all three, from TWO stores. The model is prose in the `<USER_SETTINGS_CHANGE>`
+//                block agy writes into step 0 of the transcript (antigravityModelFromTranscriptHead
+//                has the counts behind trusting it). The tokens and the window are not in that file
+//                at all — they are protobuf in a SQLite database beside it, read by
+//                antigravity-usage.ts, which answers nothing at all unless every field is where it
+//                was measured to be. A session with no transcript to read answers `null` — the
+//                badge hides, as grok's does before its first turn — and NOT the cwd's last
+//                conversation, which is a different session's model (#1468).
 //
 // A wrong number here is worse than no number: this badge is what a user reads before deciding to
 // /compact, so every field is either what the agent stated or absent.
@@ -33,8 +35,9 @@ import { codexSessionsRoot } from "../agents/codex-session.js";
 import { codexRolloutPath } from "../agents/codex-sessions.js";
 import { grokModelFromSummary, grokSummaryPath } from "../agents/grok-sessions.js";
 import { grokSessionsRoot } from "../agents/grok-session.js";
-import { antigravityBrainRoot } from "../agents/antigravity-session.js";
+import { antigravityBrainRoot, antigravityConversationsRoot, antigravityHome } from "../agents/antigravity-session.js";
 import { antigravityModelFromTranscriptHead, antigravityTranscriptPath } from "../agents/antigravity-sessions.js";
+import { antigravityBadgesFromDb } from "../agents/antigravity-usage.js";
 import { readTailRecords } from "../infra/jsonl-file.js";
 import { antigravityConversations, antigravityConversationsHydrated, codexRollouts, codexRolloutsHydrated } from "./registry.js";
 import type { SessionUsage } from "./transcript.js";
@@ -54,7 +57,10 @@ const modelOnly = (model: string | null): SessionBadges => ({ usage: EMPTY_USAGE
 export interface BadgeRoots {
   codexSessions?: string;
   grokSessions?: string;
-  antigravityBrain?: string;
+  /** agy's HOME, not one of its two stores: the transcript is under `brain/` and the accounting is
+   *  under `conversations/`, and a spec that pointed at one of them would leave the other on the
+   *  developer's real disk. */
+  antigravityHome?: string;
 }
 
 async function codexBadges(sessionKey: string, root: string): Promise<CodexBadges> {
@@ -116,7 +122,7 @@ async function grokBadges(cwd: string, id: string, root: string): Promise<Sessio
 // renders.
 const ANTIGRAVITY_HEAD_BYTES = 64 * 1024;
 
-async function antigravityBadges(sessionKey: string, root: string): Promise<SessionBadges> {
+async function antigravityBadges(sessionKey: string, home: string): Promise<SessionBadges> {
   // The codex lookup, for the same reason (see codexBadges): the route is given OUR session id and
   // agy files its transcript under an id of its own. `?? sessionKey` covers a cell resumed straight
   // onto a conversation id; anything naming no transcript reads as unknown, not as a neighbour's.
@@ -128,8 +134,15 @@ async function antigravityBadges(sessionKey: string, root: string): Promise<Sess
   // working for an agy session and the cell's only other badge refresh is on a finished turn.
   await antigravityConversationsHydrated;
   const conversationId = antigravityConversations.get(sessionKey)?.conversationId ?? sessionKey;
-  const read = await readTranscriptHead(antigravityTranscriptPath(root, conversationId), ANTIGRAVITY_HEAD_BYTES);
-  return modelOnly(read && antigravityModelFromTranscriptHead(read.head));
+  const [read, meters] = await Promise.all([
+    readTranscriptHead(antigravityTranscriptPath(antigravityBrainRoot(home), conversationId), ANTIGRAVITY_HEAD_BYTES),
+    antigravityBadgesFromDb(antigravityConversationsRoot(home), conversationId),
+  ]);
+  const model = (read && antigravityModelFromTranscriptHead(read.head)) ?? null;
+  // The two stores are independent, and so are the two badges: the accounting can be unreadable
+  // while the transcript still names the model (and, before agy's first generation, always is).
+  if (!meters) return modelOnly(model);
+  return { usage: meters.usage, context: { model, ...meters.context } };
 }
 
 /**
@@ -142,5 +155,5 @@ async function antigravityBadges(sessionKey: string, root: string): Promise<Sess
 export async function agentBadges(cwd: string, id: string, agent: Exclude<TerminalAgent, "claude">, roots: BadgeRoots = {}): Promise<SessionBadges> {
   if (agent === "codex") return codexBadges(id, roots.codexSessions ?? codexSessionsRoot());
   if (agent === "grok") return grokBadges(cwd, id, roots.grokSessions ?? grokSessionsRoot());
-  return antigravityBadges(id, roots.antigravityBrain ?? antigravityBrainRoot());
+  return antigravityBadges(id, roots.antigravityHome ?? antigravityHome());
 }

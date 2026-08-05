@@ -18,8 +18,15 @@ export function antigravityHome(): string {
   return process.env.ANTIGRAVITY_HOME || path.join(os.homedir(), ".gemini", "antigravity-cli");
 }
 
-export function antigravityBrainRoot(): string {
-  return path.join(antigravityHome(), "brain");
+export function antigravityBrainRoot(home: string = antigravityHome()): string {
+  return path.join(home, "brain");
+}
+
+// Where agy keeps a conversation's own database — one file per conversation id, beside the brain
+// directory rather than inside it. The transcript and the accounting live in different trees
+// (antigravity-usage.ts), so a reader needs both roots and neither is derivable from the other.
+export function antigravityConversationsRoot(home: string = antigravityHome()): string {
+  return path.join(home, "conversations");
 }
 
 // One directory per conversation, named by its id. Anything else in there is not a conversation.

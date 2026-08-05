@@ -1151,7 +1151,7 @@ what it writes down (`?agent=` on the route picks the reader):
 | **Claude** | `Opus · ctx 35%` — window from the table above | full |
 | **Codex** | `gpt-5.5 · ctx 21%` — window from codex's own `model_context_window`, so no table to be out of date | full |
 | **Grok** | `grok-4.5` — the model only; grok records no token counts | hidden |
-| **Antigravity** | `Gemini 3.6 Flash` — the model agy names in the first step of the conversation's transcript; agy records no token counts | hidden |
+| **Antigravity** | `Gemini 3.6 Flash · ctx 78%` — the model from the first step of the conversation's transcript, the reading from agy's own per-generation accounting (a real 256k window, not a table) | full |
 
 The token badge hides itself when nothing has been counted, and the context badge shows
 the model alone unless it has **both** a token count from the agent and a context window
@@ -1160,6 +1160,13 @@ models). Either one missing means a name and no percentage. The context badge is
 entirely until an agent has named a model: codex and Antigravity file their logs under an id
 the agent mints *after* the session starts, so a brand-new cell shows no model badge until it
 has been prompted once — a few seconds, not the rest of the session.
+
+Antigravity's numbers are the one case read from a store with **no published format**: agy keeps
+its per-generation accounting as protobuf in `~/.gemini/antigravity-cli/conversations/<id>.db`,
+with no schema on disk, so the fields are identified by measurement (see
+`server/agents/antigravity-usage.ts`). Every layer of that reader is built to answer *nothing*
+rather than a number it is unsure of, so if a future agy release moves those fields, an
+Antigravity cell falls back to showing its model alone — it will not show a wrong percentage.
 
 The **Settings** modal (⚙) shows an **estimated $ cost** — Session / Today / Month — from
 `GET /api/cost`, using a built-in public per-model price table (cache reads billed at

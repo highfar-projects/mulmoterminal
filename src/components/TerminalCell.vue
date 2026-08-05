@@ -413,10 +413,22 @@ watch(
   },
 );
 
+// An agy cell has no turn to end. Claude publishes a Stop hook and codex has an activity tracker,
+// so both re-read their badges the moment a turn settles; nothing calls setWorking for antigravity,
+// so its context reading would be frozen at whatever it was when the cell first asked — `ctx 1%`
+// for the rest of the session, which is worse than no reading at all. This is the substitute, and
+// it is deliberately slow: one indexed sqlite row plus a 64 KB head read, per agy cell, per minute.
+// Delete it the day agy gets an activity tracker.
+const UNTRACKED_BADGE_POLL_MS = 60_000;
+let badgePoll: ReturnType<typeof setInterval> | null = null;
+
 onMounted(() => {
   unsubscribe = subscribe("sessions", (d) => {
     if (isActivityMsg(d) && d.id === sessionId.value) applyActivity(d);
   });
+  badgePoll = setInterval(() => {
+    if (agent.value === "antigravity" && sessionId.value) void refreshUsage();
+  }, UNTRACKED_BADGE_POLL_MS);
   // A dropped socket misses the pushes sent while it was down, and this cell's status is
   // derived state that pub/sub only replays room membership for — not the missed events. So
   // on reconnect re-seed from the authoritative snapshot (guarded by activityGen), or a turn
@@ -433,6 +445,7 @@ onUnmounted(() => {
   unsubscribe?.();
   unsubscribeCanvas?.();
   offReconnect?.();
+  if (badgePoll) clearInterval(badgePoll);
 });
 
 // Set when the user starts a FRESH session from the launcher, so the next server
