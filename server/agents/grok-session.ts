@@ -14,6 +14,12 @@ import os from "node:os";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Is this directory name one of grok's conversations? The listing next door (grok-sessions.ts)
+ *  asks it of every entry under a cwd, where `prompt_history.jsonl` and the lock files sit beside
+ *  the conversation directories. Exported rather than duplicated: the probe below and the listing
+ *  must agree about what an id is, or the list offers a row the resume then declines. */
+export const isGrokConversationId = (name: string): boolean => UUID_RE.test(name);
+
 export function grokHome(): string {
   return process.env.GROK_HOME || path.join(os.homedir(), ".grok");
 }

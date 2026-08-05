@@ -2,6 +2,7 @@ import { ref, shallowRef } from "vue";
 import type { PartialWorkerStatus } from "../../common/workerStatus";
 import type { PartialSessionOccupancy, SessionOccupancy } from "../../common/sessionOccupancy";
 import { isTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
+import { agentSessionListUrl } from "../../common/agentSessionList";
 import { isRecord, optionalBoolean } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
@@ -150,13 +151,33 @@ function useDirList<T>(url: (dir: string) => string, parse: (body: ListBody, dir
   return { value, loading, forget, load };
 }
 
-// Existing sessions for a directory, so an empty cell can resume one instead of starting fresh.
-export const useResumableSessions = () =>
-  useDirList<ResumableList>(
-    (dir) => `/api/sessions?cwd=${encodeURIComponent(dir)}`,
+/**
+ * Existing sessions for a directory, so an empty cell can resume one instead of starting fresh.
+ *
+ * Per AGENT as well as per directory (#1417): every agent keeps its history in its own store, so
+ * the picked agent decides which route answers (common/agentSessionList.ts). Before this it was
+ * always Claude's, whatever the Agent Picker said — so picking Codex offered Claude conversations,
+ * and clicking one connected the codex endpoint to a key that only ever named a Claude transcript.
+ *
+ * The agent is read when the URL is built, which happens synchronously inside `load` before its
+ * first await — so a switch mid-flight cannot make one request fetch under another's agent, and
+ * the superseded response is dropped by the request token the same way a stale directory's is.
+ */
+export const useResumableSessions = () => {
+  let agent: TerminalAgent = "claude";
+  const list = useDirList<ResumableList>(
+    (dir) => agentSessionListUrl(agent, dir),
     (body, dir) => ({ sessions: rowsOf(body.sessions, isResumableSession), cwd: dirOf(body.cwd, dir) }),
     () => ({ sessions: [], cwd: null }),
   );
+  return {
+    ...list,
+    load: (dir: string | null, forAgent: TerminalAgent): Promise<void> => {
+      agent = forAgent;
+      return list.load(dir);
+    },
+  };
+};
 
 // The runnable scripts (script.json) for a directory — the launch form's chips and the running
 // terminal's Run menu offer the same list.

@@ -59,7 +59,7 @@ description: グリッドで複数の AI コーディングエージェント（
 | **モデル選択**（Claude 選択時） | このセッションだけのバックエンド／モデルを選ぶ（→ [プロバイダ](providers.html)） |
 | **Canvas / Workspace data / External accounts** のトグル（エージェント選択時） | GUI ツール群（`render` / `data` / `media` / `external`）の MCP サーバを、**このセッションではなくディレクトリに**登録。**Claude / Codex** を選んでいるときは、**ワークスペースを選んでいる間は出ません**（そこは登録なしで全部使えるため）。**Antigravity / Grok** を選んでいるときはワークスペースでも出たままです — この 2 つはどこで動いてもこの登録だけが GUI ツールの入手経路だからです（→ [Antigravity と Grok はどこでも登録が要る](#antigravity-gui-tools)） |
 | **OR ISOLATE IN A WORKTREE** | git リポなら、タスク名を入れて **New worktree**。作業を隔離した worktree を作って起動。既存の worktree はその下に一覧表示 |
-| **OR RESUME HERE** | そのディレクトリに既にあるセッション。クリックすると続きから再開 |
+| **OR RESUME HERE** | そのディレクトリに既にある会話のうち、**Agent Picker で選んでいるエージェントのもの**。クリックすると続きから再開。Claude 以外のときは見出しがエージェント名を含みます（`or resume a codex conversation here`） |
 | **OR LAUNCH** | 設定済みの**起動コマンド**（`codex` / `htop` / 任意）を永続端末として起動 |
 
 **1 つの worktree に 1 セッション。** worktree はブランチに紐づくので、多重起動しません。行に何も
@@ -69,6 +69,14 @@ description: グリッドで複数の AI コーディングエージェント（
 **OR RESUME HERE** も同じで、`● open` のセッションはどこかで表示中なので開けません — ここで開くと
 向こうが切断されるからです。「どこか」にはブラウザの別タブや、このマシンで動いている 2 つ目の
 `mulmoterminal` も含みます。
+
+**一覧は選んでいるエージェントのものです。** 履歴の置き場所はエージェントごとに違い（Claude は
+`~/.claude/projects`、Codex は `~/.codex/sessions`、Grok は `~/.grok/sessions`、Antigravity は自身の
+brain ディレクトリ）、その続きを再開できるのは書いた本人だけです。だから Agent Picker を切り替えると
+一覧も入れ替わり、会話は必ず始めたエージェントで再開されます。注意点が 2 つ。**Shell では一覧が出ません**
+（再開するものがないため）。そして **Antigravity** の一覧は *MulmoTerminal が起動した* 会話しか出せません —
+agy は会話とディレクトリの対応を記録しないので、ディレクトリは MulmoTerminal 自身のログから取っており、
+Antigravity IDE で始めた会話はここには出てきません。
 
 **ディレクトリを変えると、これらの一覧はその場で消えます。****WORKING DIRECTORY** の下にあるもの
 （**OR RESUME HERE**、worktree の行、**OR RUN A SCRIPT**）は、そのとき欄に入っていたディレクトリに

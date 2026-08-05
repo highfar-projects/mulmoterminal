@@ -71,3 +71,28 @@ export function applyAgentConversation(conversations: Map<string, AgentConversat
 export function hydrateAgentConversationInto(conversations: Map<string, AgentConversation>, written: ReadonlySet<string>, record: AgentConversation): void {
   if (!written.has(record.sessionId)) applyAgentConversation(conversations, record);
 }
+
+/**
+ * The log read BACKWARDS: every session key that has run a given conversation.
+ *
+ * The map above answers "what is this session running"; a listing needs the other direction. A row
+ * in the launcher's resume list is one of the AGENT's conversation ids, and whether it is safe to
+ * open is a question about the MulmoTerminal session holding it — which is a key this log is the
+ * only record of. Without it a conversation started from a grid cell reads as free while it is
+ * live in that cell, and resuming it starts a second codex on a conversation already running.
+ *
+ * One conversation, several keys: a session resumed after a restart arrives under a new key and
+ * appends a second line, so both keys name it and either one may be the live one.
+ */
+export function conversationSessionKeys(records: Iterable<AgentConversation>): Map<string, string[]> {
+  const keys = new Map<string, string[]>();
+  for (const record of records) {
+    const known = keys.get(record.conversationId);
+    if (known) {
+      if (!known.includes(record.sessionId)) known.push(record.sessionId);
+    } else {
+      keys.set(record.conversationId, [record.sessionId]);
+    }
+  }
+  return keys;
+}

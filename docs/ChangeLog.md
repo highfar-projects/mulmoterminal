@@ -8,6 +8,33 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+**The launcher's resume list is the picked agent's own history (#1417).** "OR RESUME HERE" read
+`~/.claude/projects` whatever the Agent Picker said, so choosing Codex, Antigravity or Grok still
+offered *Claude's* conversations — and clicking one connected that agent's endpoint to a key that
+only ever named a Claude transcript. Meanwhile every real codex / agy / grok conversation started
+outside a grid cell was unreachable from the UI. The list is now a function of the agent: one route
+per agent (`/api/sessions`, `/api/codex/sessions`, `/api/antigravity/sessions`, and the new
+`/api/grok/sessions`), chosen from a `Record<TerminalAgent, …>` so a fifth agent is a type error
+rather than a picker option that silently lists Claude's history. Switching the picker replaces the
+list, the heading names the agent when it is not Claude, the resume carries the agent so the cell
+connects the endpoint that wrote the conversation, and Shell shows no list at all. A custom agent
+runs Claude Code, so it gets Claude's.
+
+The `/api/codex/sessions` and `/api/antigravity/sessions` routes existed since #1096 / #1218 with
+**no caller** — they were built for the single view's sidebar, which #1201 / #1202 removed. This is
+the call site they were kept for. `/api/grok/sessions` is new and is the cheapest of the four:
+`~/.grok/sessions` is partitioned by working directory, so a per-project listing is one directory
+read, with `summary.json` supplying the title and the last-*active* time (not `updated_at`, which
+grok bumps hours later when it generates a title, and which would sort a dead conversation above a
+live one).
+
+All three foreign lists now also carry `attached`, the field that stops a row being opened twice.
+For codex and antigravity it takes the conversation log read backwards: a conversation started from
+a grid cell is held under a session key MulmoTerminal minted, so asking about the conversation id
+alone would report it free while it is live in another cell — and resuming it would start a second
+agent process on it. grok needs no log for this, because MulmoTerminal mints its session id: the
+key and the conversation id are the same string, so the row's own id answers the question.
+
 ## mulmoterminal@4.5.1 — 2026-08-05
 
 > **Setup guide:** [A backend with no models says so](https://receptron.github.io/mulmoterminal/guide/en/v4.5.1.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.5.1.html))

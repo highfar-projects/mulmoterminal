@@ -13,7 +13,7 @@ import { isSameDirPath } from "../../common/dirPathKey";
 import { TOOL_GROUPS, TOOL_GROUP_HEADINGS, toolGroupServerId, toolsInGroup, type ToolGroup } from "../../common/toolGroups";
 import { customAgentIdOf, type AgentPick, type CustomAgent } from "../../common/customAgents";
 import { pickCarriesFullGuiMcp } from "../../common/guiMcpAgents";
-import type { TerminalAgent } from "../../common/sessionAgent";
+import { agentBadge, isTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { launchChips, type CwdPreset, type LaunchChip } from "./presets";
 import type { Launcher, LaunchPick } from "./launchers";
 import type { LaunchChoice } from "./wsUrl";
@@ -68,9 +68,10 @@ const emit = defineEmits<{
   // the dir field, a preset chip and a worktree alike — so the cell decides once what the picked
   // agent means (a shell replaces the cell; an agent runs in it).
   (e: "start", dir: string | null): void;
-  // Attach to an existing session, in the cwd its row was listed for. `agent` travels only for a
-  // worktree row, whose session may be one the Agent Picker is not currently pointed at —
-  // resuming a codex conversation as Claude would connect the wrong endpoint to a live id.
+  // Attach to an existing session, in the cwd its row was listed for. `agent` says which endpoint
+  // that session speaks — a worktree row reads it off the session it found, a resume row is one of
+  // the picked agent's own conversations (#1417). Resuming a codex conversation as Claude would
+  // connect the wrong endpoint to a live id, so neither row may leave it out.
   (e: "resume", value: { id: string; cwd: string | null; agent?: TerminalAgent }): void;
   (e: "run", value: RunCommand): void;
   (e: "launch", value: LaunchPick): void;
@@ -175,9 +176,33 @@ const {
   syncInto: syncMcpGroupsInto,
 } = useMcpToolGroups();
 
+// WHOSE past conversations the resume list shows: the agent the picker has selected, because each
+// agent keeps its history in its own store and only that store can be resumed by that agent
+// (#1417). A custom agent runs Claude Code, so it takes Claude's — the same reason `launchesClaude`
+// gives the model picker. Shell has none: null, and the section is not rendered at all.
+const listAgent = computed<TerminalAgent | null>(() => {
+  if (launchesClaude.value) return "claude";
+  // NARROWED, not asserted: `AgentPick` also spells Shell and `custom:<id>`, and the one thing this
+  // must never do is name an agent that has no history to list. Anything that is not one of the
+  // four agents lands on null, which is the same answer Shell gets — no route asked, no section.
+  return isTerminalAgent(props.agent) ? props.agent : null;
+});
+
+// How the section says whose conversations these are. Claude's keeps the original wording — it is
+// the default, and naming it would put a label on the list nearly everyone sees — while the others
+// must say it: three of the four lists are new here, and a row that resumes as codex looks exactly
+// like a row that resumes as claude.
+const resumeHeading = computed(() => {
+  const badge = agentBadge(listAgent.value);
+  return badge ? `or resume a ${badge.full} conversation here` : "or resume here";
+});
+
 // Everything this form offers is per-directory, so they are read as one.
-function loadForDir(dir: string | null): void {
-  void loadResumable(dir);
+function loadForDir(dir: string | null, agent: TerminalAgent | null): void {
+  // A null dir is what `load` already takes to mean "nothing to list": for Shell that empties the
+  // list and clears the loading flag, which is what the section's absence has to be built on —
+  // `forget` would leave it loading forever.
+  void loadResumable(agent === null ? null : dir, agent ?? "claude");
   void loadScripts(dir);
   void loadWorktrees(dir);
   void loadMcpGroups(dir);
@@ -192,13 +217,25 @@ function forgetForDir(): void {
   forgetWorktrees();
   forgetMcpGroups();
 }
-onMounted(() => loadForDir(targetDir.value));
+onMounted(() => loadForDir(targetDir.value, listAgent.value));
 
 // A programmatic dir change (fillDir) loads the lists immediately, so the watch below must skip
 // the debounced reload it would otherwise ALSO fire — or every preset click / folder pick would
 // fetch the lists twice.
 let skipDirWatch = false;
 let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+// The AGENT is watched alongside the directory, and for the same reason: the resume rows belong to
+// one agent's history as much as to one directory, so rows fetched under Codex must not stand under
+// Claude while the replacement is in flight (#1372's rule, in a second dimension). A picker click
+// is not typing, so it reloads immediately rather than through the debounce.
+// Only the resume list: scripts, worktrees and the tool-group switches belong to the DIRECTORY and
+// are the same whichever agent is picked, so re-reading them here would be work with no answer to
+// show for it.
+watch(listAgent, (agent) => {
+  forgetResumable();
+  void loadResumable(agent === null ? null : targetDir.value, agent ?? "claude");
+});
 
 watch([() => props.dir, () => props.defaultCwd], () => {
   // Cancel any pending debounced reload FIRST — whether we skip (a fillDir just loaded
@@ -215,7 +252,7 @@ watch([() => props.dir, () => props.defaultCwd], () => {
   // clickable under a directory it has nothing to do with. The reload below puts back the new
   // directory's own.
   forgetForDir();
-  reloadTimer = setTimeout(() => loadForDir(targetDir.value), DIR_RELOAD_DEBOUNCE_MS);
+  reloadTimer = setTimeout(() => loadForDir(targetDir.value, listAgent.value), DIR_RELOAD_DEBOUNCE_MS);
 });
 onUnmounted(() => {
   if (reloadTimer) clearTimeout(reloadTimer);
@@ -232,7 +269,7 @@ function fillDir(path: string): void {
   emit("update:dir", path);
   // The prop only comes back down on the next render, so the lists are asked for the picked path
   // rather than for the field's current (still previous) value.
-  loadForDir(dirFor(path));
+  loadForDir(dirFor(path), listAgent.value);
 }
 
 // The folder button: the browser can't open a native folder chooser, so the local server does
@@ -311,9 +348,14 @@ function runScript(index: number): void {
 const sessionBusy = (s: ResumableSession): boolean => s.attached === true || (props.openSessionIds ?? []).includes(s.id);
 
 function resume(s: ResumableSession): void {
-  if (sessionBusy(s)) return;
+  if (sessionBusy(s) || listAgent.value === null) return;
   // Use the cwd those rows were fetched for, not the (possibly-changed) input.
-  emit("resume", { id: s.id, cwd: resumable.value.cwd ?? targetDir.value });
+  //
+  // The AGENT travels too, now that the row can be one of codex's / agy's / grok's own
+  // conversations: the cell must connect the endpoint that WROTE the conversation, and a codex
+  // rollout id resumed as Claude is a live id on the wrong endpoint. It was safe to leave out
+  // while every row here was Claude's; it is not any more.
+  emit("resume", { id: s.id, cwd: resumable.value.cwd ?? targetDir.value, agent: listAgent.value });
 }
 
 const relativeTime = (ms: number): string => relativeTimeFrom(ms, Date.now());
@@ -710,8 +752,11 @@ async function removeWorktree(w: Worktree): Promise<void> {
     </div>
     <LaunchChipList heading="or run a script" icon="play_arrow" :chips="scriptChips" @pick="runScript" />
     <LaunchChipList heading="or launch" icon="rocket_launch" :chips="launcherChips" @pick="launchProgram" />
-    <div v-if="resumable.sessions.length" data-testid="cell-resume" class="flex min-h-0 flex-col items-center gap-1.5" :class="LAUNCH_ROW">
-      <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">or resume here</span>
+    <!-- The picked agent's OWN conversations. Shell has none, and reaches here with an empty list
+         anyway (loadForDir passes it no directory) — the `listAgent` test says so out loud rather
+         than resting on that. -->
+    <div v-if="listAgent && resumable.sessions.length" data-testid="cell-resume" class="flex min-h-0 flex-col items-center gap-1.5" :class="LAUNCH_ROW">
+      <span data-testid="cell-resume-heading" class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">{{ resumeHeading }}</span>
       <div class="flex w-full flex-col gap-1">
         <button
           v-for="s in resumable.sessions"
