@@ -457,9 +457,11 @@ function startPickedAgent(dir: string | null) {
 // Attach to a session the form listed, in the cwd those rows were fetched for (not the
 // possibly-changed input).
 //
-// `resumeAgent` is what the session IS, which a worktree row knows and the Agent Picker may
-// disagree with: connecting a live codex id to /ws because the picker still says Claude runs the
-// wrong endpoint against a real session. Absent (the resume list, all Claude) leaves the pick alone.
+// `resumeAgent` is what the session IS, which the row knows and the Agent Picker may disagree
+// with: connecting a live codex id to /ws because the picker still says Claude runs the wrong
+// endpoint against a real session. Both kinds of row send it — a worktree row, whose session may be
+// any agent, and a resume row, which since #1417 lists the PICKED agent's own conversations rather
+// than always Claude's. Absent (an older caller) leaves the pick alone.
 function resumeSession({ id, cwd: dir, agent: resumeAgent }: { id: string; cwd: string | null; agent?: TerminalAgent }) {
   if (resumeAgent) {
     pickedAgent.value = resumeAgent;

@@ -16,6 +16,8 @@ import {
   aiTitles,
   antigravityConversations,
   antigravityConversationsHydrated,
+  codexRollouts,
+  codexRolloutsHydrated,
   backgroundSessionsHydrated,
   failedWorkersHydrated,
   unplacedSessionsHydrated,
@@ -48,6 +50,9 @@ import { codexSessionsRoot } from "../agents/codex-session.js";
 import { listCodexSessions } from "../agents/codex-sessions.js";
 import { antigravityBrainRoot } from "../agents/antigravity-session.js";
 import { listAntigravitySessions } from "../agents/antigravity-sessions.js";
+import { grokSessionsRoot } from "../agents/grok-session.js";
+import { listGrokSessions } from "../agents/grok-sessions.js";
+import { conversationSessionKeys, type AgentConversation } from "../session/agent-conversations.js";
 import type { SessionMeta } from "../session/types.js";
 import { parseActivityIds, selectSessionRows } from "../session/session-list.js";
 import { sessionDetailView } from "../session/session-detail-view.js";
@@ -247,19 +252,45 @@ async function sessionList(req: Request, res: Response) {
   }
 }
 
+/**
+ * Who is HOLDING each row of an agent's own conversation list, so the launcher can refuse one that
+ * is open somewhere else — the same field `/api/sessions` puts on a Claude row, answered from one
+ * `list-clients` call for the whole list.
+ *
+ * Two ways a conversation can be held, and the second is why this takes the log:
+ *
+ * 1. Resumed FROM this list, the session key IS the conversation id (ws-routes hands the id
+ *    straight to the spawner), so the id can be asked about directly.
+ * 2. Started from a grid cell, the key is one MulmoTerminal minted and only the conversation log
+ *    connects the two. Ask about the id alone and a conversation live in another cell reads as
+ *    free — and resuming it starts a SECOND agent process on it.
+ *
+ * grok needs no log for this: we mint its session id, so key and conversation id are the same
+ * string and case 1 covers it. It still passes an empty iterable rather than skipping the call, so
+ * all three lists answer the question the same way.
+ */
+function withAttached<T extends { id: string }>(sessions: T[], records: Iterable<AgentConversation>): (T & { attached: boolean })[] {
+  const holders = conversationSessionKeys(records);
+  const tmuxCounts = tmuxAttachedCounts();
+  return sessions.map((s) => ({
+    ...s,
+    attached: [s.id, ...(holders.get(s.id) ?? [])].some((key) => sessionAttached(key, tmuxCounts)),
+  }));
+}
+
 // codex's own sessions for a workspace (?cwd=, default CLAUDE_CWD), read from ~/.codex rollouts.
 //
-// NOTHING IN THIS REPO CALLS THIS, and the same is true of the agy route below. Both were built for
-// the single view's sidebar, which is gone (#1201 / #1202), so a past codex or agy conversation is
-// currently unreachable from any list — only Claude sessions reach the launcher's resume rows. They
-// are kept deliberately as the base for that list (#1417) rather than deleted and rewritten, and
-// README documents both in the HTTP API table: no in-repo caller does not make them private.
+// This and the two below are what the launcher's "or resume here" list reads when the Agent Picker
+// is on something other than Claude (#1417): one list per agent rather than one merged list, so a
+// row is always resumed by the agent that wrote it. Claude's own rows come from /api/sessions
+// above, which reads ~/.claude/projects and nothing else.
 async function codexSessionList(req: Request, res: Response) {
   try {
     const cwd = workspaceForRoute(req.query.cwd, res);
     if (cwd === null) return;
+    await codexRolloutsHydrated;
     const sessions = await listCodexSessions(codexSessionsRoot(), cwd, SESSION_LIST_LIMIT);
-    res.json({ cwd, sessions });
+    res.json({ cwd, sessions: withAttached(sessions, codexRollouts.values()) });
   } catch (err) {
     console.error("[api] /api/codex/sessions failed:", err);
     res.status(500).json({ error: String(err) });
@@ -276,9 +307,26 @@ async function antigravitySessionList(req: Request, res: Response) {
     if (cwd === null) return;
     await antigravityConversationsHydrated;
     const sessions = await listAntigravitySessions(antigravityBrainRoot(), antigravityConversations.values(), cwd, SESSION_LIST_LIMIT);
-    res.json({ cwd, sessions });
+    res.json({ cwd, sessions: withAttached(sessions, antigravityConversations.values()) });
   } catch (err) {
     console.error("[api] /api/antigravity/sessions failed:", err);
+    res.status(500).json({ error: String(err) });
+  }
+}
+
+// grok's own conversations for a workspace (?cwd=, default CLAUDE_CWD). The cheapest of the three:
+// ~/.grok/sessions is partitioned by working directory, so there is no date tree to scan and no
+// log to consult — the cwd IS the directory name (server/agents/grok-sessions.ts).
+async function grokSessionList(req: Request, res: Response) {
+  try {
+    const cwd = workspaceForRoute(req.query.cwd, res);
+    if (cwd === null) return;
+    const sessions = await listGrokSessions(grokSessionsRoot(), cwd, SESSION_LIST_LIMIT);
+    // No conversation log: grok's session key is the id we minted, which is also the directory
+    // name — so `withAttached` finds a holder by the row's own id (see its header).
+    res.json({ cwd, sessions: withAttached(sessions, []) });
+  } catch (err) {
+    console.error("[api] /api/grok/sessions failed:", err);
     res.status(500).json({ error: String(err) });
   }
 }
@@ -315,4 +363,5 @@ export function mountSessionRoutes(app: Express, deps: SessionRouteDeps): void {
   });
   app.get("/api/codex/sessions", codexSessionList);
   app.get("/api/antigravity/sessions", antigravitySessionList);
+  app.get("/api/grok/sessions", grokSessionList);
 }
