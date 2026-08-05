@@ -328,6 +328,31 @@ describe("a resume row whose session is still running", () => {
     expect(urls.some((u) => u.includes("/api/session/conversation-1/terminate"))).toBe(false);
   });
 
+  // The two race, and the order that loses leaves the cell attached to a session the terminate
+  // then kills — a terminal that dies on arrival with nothing saying why (CodeRabbit on #1474).
+  it("refuses to resume the row whose stop is still in flight", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    let release = (): void => {};
+    const held = new Promise((resolve) => {
+      release = () => resolve({ ok: true, json: async () => ({ cwd: "/repo", sessions: [] }) });
+    });
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/terminate")) return held;
+      if (u.includes("/api/worktrees")) return { ok: true, json: async () => ({ isGit: true, base: "main", worktrees: [] }) };
+      return { ok: true, json: async () => ({ cwd: "/repo", sessions: [running()] }) };
+    }) as unknown as typeof fetch;
+    const w = mountForm();
+    await flushPromises();
+    await w.find('[data-testid="ri-stop"]').trigger("click");
+    const item = w.find('[data-testid="cell-resume-item"]');
+    expect(item.attributes("disabled")).toBeDefined();
+    await item.trigger("click");
+    expect(w.emitted("resume")).toBeUndefined();
+    release();
+    await flushPromises();
+  });
+
   it("does nothing when the confirmation is declined", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(false);
     mockFetch([], [running()]);

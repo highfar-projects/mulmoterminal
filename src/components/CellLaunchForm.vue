@@ -349,7 +349,11 @@ function runScript(index: number): void {
 const sessionBusy = (s: ResumableSession): boolean => s.attached === true || (props.openSessionIds ?? []).includes(s.id);
 
 function resume(s: ResumableSession): void {
-  if (sessionBusy(s) || listAgent.value === null) return;
+  // Not while its own stop is in flight (CodeRabbit on #1474): the two race, and the order that
+  // loses leaves the cell attached to a session the terminate then kills — a terminal that dies on
+  // arrival, with nothing saying why. Guarded here as well as on the button, because the row is
+  // also reachable by keyboard.
+  if (sessionBusy(s) || stopping.value === s.id || listAgent.value === null) return;
   // Use the cwd those rows were fetched for, not the (possibly-changed) input.
   //
   // The AGENT travels too, now that the row can be one of codex's / agy's / grok's own
@@ -775,7 +779,7 @@ async function removeWorktree(w: Worktree): Promise<void> {
               { 'is-open': sessionBusy(s) },
               sessionBusy(s) ? 'border-amber text-dim cursor-not-allowed' : 'border-border text-secondary cursor-pointer hover:border-accent hover:bg-elevated',
             ]"
-            :disabled="sessionBusy(s)"
+            :disabled="sessionBusy(s) || stopping === s.id"
             :title="sessionBusy(s) ? `${s.title} — open in another terminal, close it there to continue it here` : s.title"
             @click="resume(s)"
           >

@@ -53,7 +53,7 @@ not reach a project you no longer open — that is the limit of this change, and
 
 | file | change |
 |---|---|
-| `common/sessionOccupancy.ts` | `runningKey` on `SessionOccupancy` (optional on the client, like `attached`) |
+| `common/sessionRunning.ts` (new) | `runningKey`, in its OWN wire type rather than on `SessionOccupancy` next door: that one is the fact a second terminal needs before offering to open a session, and the worktree row depends on its shape — "what is running, and under which key" is the conversation list's own question |
 | `server/routes/session-routes.ts` | one `tmuxListSessionIds()` per list; fill `runningKey` in the claude route and in `withAttached` |
 | `src/composables/useDirLists.ts` | type + row guard |
 | `src/components/CellLaunchForm.vue` | the `running` marker, the stop button, confirm, reload |
