@@ -61,7 +61,7 @@ import {
 import { CELL_STATUS, DOT_STATUS, HEADER_STATUS } from "./cellStatusClasses";
 import { handoffTargets, pullLastTurn, slotLabel, type HandoffTarget } from "../composables/useHandoff";
 import { runOneExchange, liveCrossTalkDeps } from "../composables/useCrossTalk";
-import { runRoundTable, liveRoundTableDeps, memberFromTarget, type TableMember } from "../composables/useRoundTable";
+import { runRoundTable, memberFromTarget, type TableMember } from "../composables/useRoundTable";
 import { roundTableMessage } from "../composables/roundTableRules";
 import RoundTableMenu from "./RoundTableMenu.vue";
 import { outcomeMessage } from "../composables/exchangeRules";
@@ -716,7 +716,7 @@ async function startTable(targets: HandoffTarget[], budget: number) {
   const { outcome, turnsTaken } = await runRoundTable(
     [self, ...targets.map(memberFromTarget)],
     budget,
-    liveRoundTableDeps(() => tableStop),
+    liveCrossTalkDeps(() => tableStop),
   );
   tableRunning.value = false;
   showAskMsg(`${roundTableMessage(outcome)} · ${turnsTaken} turn${turnsTaken === 1 ? "" : "s"}`);

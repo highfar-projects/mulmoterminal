@@ -4,7 +4,7 @@
 // terminal falls back to the global theme/sound. Field validation lives in the zod
 // schemas of config-schema.ts; the path-confinement check for `sound` (the security
 // surface) stays here because it touches the filesystem.
-import { existsSync, statSync, realpathSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { sanitizeButtons, sanitizeChips } from "./header-config.js";
 import { EMPTY_DIR_CHROME, type DirChrome } from "../../common/dirChrome.js";
@@ -16,7 +16,7 @@ import {
   type DirConfigSource,
   type DirConfigExtras,
 } from "../../common/dirConfigSource.js";
-import { isWithin } from "../infra/path-within.js";
+import { resolveFileWithinDir } from "./dir-file.js";
 import { resolveDirIcon, dirIconImage, dirIconNamed, dirIconRef, type DirIcon, type DirIconSetting } from "./dir-icon.js";
 import { detectDirIcon } from "./dir-icon-detect.js";
 import { getAutoDirIcon } from "./config-routes.js";
@@ -152,26 +152,13 @@ function resolveDirSounds(cwd: string, input: unknown): Partial<Record<NotifyKin
   return out;
 }
 
-// Confine the configured sound to a real file INSIDE cwd. Relative paths only;
-// anything absolute or escaping via "../" is rejected so an opened project can't
-// point the player at arbitrary files on disk. The lexical check only constrains the
-// path string, so we ALSO canonicalize with realpath and re-check — otherwise a file
-// inside cwd that is a symlink to a target outside it would slip through.
+// Confine the configured sound to a real file INSIDE cwd, so an opened project can't point the
+// player at arbitrary files on disk — the shared rule, see dir-file.ts for what it checks.
 export function resolveDirSound(cwd: string, input: unknown): string | null {
   if (typeof input !== "string") return null;
   const rel = input.trim();
-  if (!rel || path.isAbsolute(rel)) return null;
-  const base = path.resolve(cwd);
-  const resolved = path.resolve(base, rel);
-  if (!isWithin(base, resolved)) return null;
-  if (!existsSync(resolved) || !statSync(resolved).isFile()) return null;
-  try {
-    // .native for the 8.3 reason in files/pathContainment.ts — one spelling of a Windows path.
-    if (!isWithin(realpathSync.native(base), realpathSync.native(resolved))) return null;
-  } catch {
-    return null;
-  }
-  return resolved;
+  if (!rel) return null;
+  return resolveFileWithinDir(cwd, rel);
 }
 
 const EMPTY: DirConfig = {

@@ -13,9 +13,8 @@
 // It runs in the browser, like the exchange it generalises: close the tab and the table stops. A
 // conversation that continues where nobody is watching is a different feature with a different
 // safety argument.
-import { pasteAndSubmit, listSlots } from "./useTerminalConnections";
 import { waitVerdict } from "./exchangeRules";
-import { fetchLastTurn, type HandoffSource, type HandoffTarget } from "./useHandoff";
+import type { HandoffSource, HandoffTarget } from "./useHandoff";
 import { endsTheTable, nextSpeaker, roundTablePrompt, type RoundTableOutcome } from "./roundTableRules";
 import type { TurnFetch, CrossTalkDeps } from "./useCrossTalk";
 import { ANSWER_TIMEOUT_MS, POLL_MS } from "./useCrossTalk";
@@ -33,7 +32,11 @@ export interface RoundTableRun {
   turnsTaken: number;
 }
 
-/** The same dependency surface the exchange uses — one runner shape, one set of fakes. */
+/** The same dependency surface the exchange uses — one runner shape, one set of fakes.
+ *
+ *  Which is why the table has no `liveRoundTableDeps` of its own: it was byte-identical to
+ *  `liveCrossTalkDeps` (jscpd caught it), and a second factory for one type is a second place to
+ *  change when the sockets move. Callers use `liveCrossTalkDeps`. */
 export type RoundTableDeps = CrossTalkDeps;
 
 /** Poll a member's log until the turn OUR message produced appears. Same rule as the exchange:
@@ -109,19 +112,6 @@ export async function runRoundTable(members: readonly TableMember[], budget: num
   } catch {
     return { outcome: "failed", turnsTaken };
   }
-}
-
-/** The real wiring. Identical to the exchange's — the table is the same machine with a longer
- *  loop, so it borrows the same sockets rather than growing a second set. */
-export function liveRoundTableDeps(isAborted: () => boolean): RoundTableDeps {
-  return {
-    fetchTurn: (source, shape) => fetchLastTurn(source, shape),
-    submit: pasteAndSubmit,
-    runsSession: (key, sessionId) => listSlots().some((slot) => slot.key === key && slot.sessionId === sessionId),
-    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-    now: () => performance.now(),
-    isAborted,
-  };
 }
 
 /** A handoff target as a seat at the table — the picker lists the same cells the exchange menu
