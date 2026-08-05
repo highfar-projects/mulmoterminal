@@ -507,11 +507,11 @@ async function removeWorktree(w: Worktree): Promise<void> {
         </button>
       </span>
     </div>
-    <!-- The AGENT PICKER. Centred like everything else in this column — the directory field, the
-         model picker and the chips above it all sit on the centre line, so a left-aligned toggle
-         was the one thing off it. Wraps rather than overflowing: four options do not fit one row
-         in a narrow cell, and the one that would fall off the edge is the last, Shell — so the
-         wrapped row is centred too rather than hanging off the left. -->
+    <!-- The AGENT PICKER is the one row that keeps its CONTENT width while the rest of the column
+         spans the cell: it is a segmented control, so stretching it would widen the pill's
+         background and fit nothing more into it. It still wraps rather than overflowing — the
+         options do not fit one row in a narrow cell — and the row that falls to the next line is
+         centred rather than hanging off the left. -->
     <div
       data-testid="agent-picker"
       class="inline-flex max-w-full flex-wrap justify-center gap-0.5 rounded-[7px] border border-border bg-deep p-0.5"
