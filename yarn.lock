@@ -1924,18 +1924,18 @@
   dependencies:
     "@mulmoclaude/core" "^2.0.0"
 
-"@mulmoclaude/html-plugin@^2.0.0":
-  version "2.0.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/html-plugin/-/html-plugin-2.0.0.tgz#ec717365deda574e62b16fc8c69e4b20b16bd8bb"
-  integrity sha512-mFav0xEnUqe8LfezB6RT8fYB3P5OibNCDS6lvAIrqMyjxoiMvcubeZz+ruGak4qKmjKImKXdBnPK8erU5gPBpA==
-  dependencies:
-    "@mulmoclaude/common" "^1.1.1"
-    "@mulmoclaude/core" "^2.0.0"
-
-"@mulmoclaude/markdown-plugin@^2.1.0":
+"@mulmoclaude/html-plugin@^2.1.0":
   version "2.1.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/markdown-plugin/-/markdown-plugin-2.1.0.tgz#d8faf0e92df0726fc2df6956486416fd81162fd0"
-  integrity sha512-b0+Pn7kGzao9yGbxGrzz+jh3JU3UCD71zTKMf1ryEZ091/K+LUD90BnxwtbuDpOCm1GYOEMXZdfRpnePngZTCQ==
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/html-plugin/-/html-plugin-2.1.0.tgz#0364ecc2b66f1e5774296380bf47645ffc8b6214"
+  integrity sha512-OvQWzMrZYQSu3CKXm+RO51Xha1INX8PQ5UM1Gofh0y5GH01SulyqZmeh8WUfkE9hC21fnsLzr7+VxFdsNONd0A==
+  dependencies:
+    "@mulmoclaude/common" "^1.1.2"
+    "@mulmoclaude/core" "^2.0.1"
+
+"@mulmoclaude/markdown-plugin@^2.2.0":
+  version "2.2.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/markdown-plugin/-/markdown-plugin-2.2.0.tgz#ed832e5501a46e5a2de782732fc1ec982e51892b"
+  integrity sha512-smBcx5ZjDrSU5eKxMf1ejleNB0Fj9BqgyYmFLhJozkbfEJltmOak0DSUsWAFNpS/qLTDalC4xT2eaIK8thfbKA==
   dependencies:
     "@marp-team/marp-core" "^4.4.0"
     "@mulmoclaude/common" "^1.1.2"
