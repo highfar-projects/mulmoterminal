@@ -56,6 +56,7 @@ import {
 } from "../session/registry.js";
 import { mountShortcutsRoutes } from "../backends/shortcuts.js";
 import { mountDecisionRoutes } from "./decision-routes.js";
+import { mountRoomRoutes } from "./room-routes.js";
 import { mountTranslationRoutes } from "../backends/translation.js";
 import { mountHtmlDispatchRoute, mountHtmlFileRoute, mountHtmlPreviewRoute } from "../backends/html.js";
 import { mountPresentPathRoot } from "../backends/presentPathRoot.js";
@@ -329,6 +330,7 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
   // per-agent worktrees a cell launches into, so several agents work one repo in
   // isolated working trees.
   mountWorktreeRoutes(app, { isAllowedOrigin: deps.isAllowedOrigin });
+  mountRoomRoutes(app, { isAllowedOrigin: deps.isAllowedOrigin });
 
   // POST /api/pick-file opens the OS file dialog and returns the chosen absolute
   // path(s) — how a browser tab inserts a real filesystem path into the terminal

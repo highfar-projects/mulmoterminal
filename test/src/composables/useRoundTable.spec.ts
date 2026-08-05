@@ -31,7 +31,14 @@ function harness(options: HarnessOptions = {}) {
   let sessionsIntact = true;
   let taken = 0;
 
+  const room: { from: string; text: string }[] = [];
   const deps: RoundTableDeps = {
+    postToRoom: async (_room, from, text) => {
+      room.push({ from, text });
+    },
+    // What the real deps do: window the room and frame it. Kept simple here — the framing itself
+    // is `common/roomMessage`'s job and is tested there.
+    readRoom: async () => room.map((m) => `--- ${m.from} ---\n\n${m.text}`).join("\n\n"),
     fetchTurn: async (source) => ({ ...(turns[source.sessionId] ?? { prompt: null, reply: null, text: "" }) }),
     submit: (key, text) => {
       if (options.submitFails) return false;
@@ -51,31 +58,52 @@ function harness(options: HarnessOptions = {}) {
     isAborted: () => aborted,
     runsSession: () => sessionsIntact,
   };
-  return { deps, submitted, abort: () => (aborted = true), switchSession: () => (sessionsIntact = false) };
+  return { deps, submitted, room, abort: () => (aborted = true), switchSession: () => (sessionsIntact = false) };
 }
 
 describe("runRoundTable", () => {
   // The point of the whole feature: a turn goes round three cells without a human between them.
   it("passes the turn round the ring, starting one seat along from the opener", async () => {
     const h = harness();
-    const { outcome, turnsTaken } = await runRoundTable(TABLE, 6, h.deps);
+    const { outcome, turnsTaken } = await runRoundTable(TABLE, "table-1", 6, h.deps);
     expect(outcome).toBe("budget-spent");
     expect(turnsTaken).toBe(6);
     // Never the opener first — its turn is the seed, so it speaks again only after a full lap.
     expect(h.submitted.map((s) => s.key)).toEqual(["cell-2", "cell-3", "cell-1", "cell-2", "cell-3", "cell-1"]);
   });
 
-  it("carries each speaker's answer to the next one, not the original seed", async () => {
+  // THE reason the room exists (#1456). Handing on only the previous reply is what a two-cell
+  // exchange does; with three or more it loses the thread — the third speaker could not see what
+  // the first argued, only what the second said about it.
+  it("hands each speaker the WHOLE conversation, not just the last thing said", async () => {
     const h = harness();
-    await runRoundTable(TABLE, 3, h.deps);
-    expect(h.submitted[0]?.text).toContain("OPENING-FROM-A"); // the seed opens the table…
-    expect(h.submitted[1]?.text).toContain("EXCERPT-B-1"); // …then what B said goes to C
-    expect(h.submitted[2]?.text).toContain("EXCERPT-C-2"); // …and what C said goes back to A
+    await runRoundTable(TABLE, "table-1", 3, h.deps);
+
+    // Turn 1 sees the opener alone — there is nothing else yet.
+    expect(h.submitted[0]?.text).toContain("A's opening position");
+    // Turn 2 sees the opener AND what turn 1 said.
+    expect(h.submitted[1]?.text).toContain("A's opening position");
+    expect(h.submitted[1]?.text).toContain("B says 1");
+    // Turn 3 sees all of it.
+    expect(h.submitted[2]?.text).toContain("A's opening position");
+    expect(h.submitted[2]?.text).toContain("B says 1");
+    expect(h.submitted[2]?.text).toContain("C says 2");
+  });
+
+  it("records every turn in the room, opener first, attributed to its speaker", async () => {
+    const h = harness();
+    await runRoundTable(TABLE, "table-1", 2, h.deps);
+    expect(h.room.map((m) => m.from)).toEqual(["#1", "#2", "#3"]);
+    expect(h.room[0]?.text).toBe("A's opening position");
+    // The RAW reply, never the rendered excerpt — that excerpt is the room read back, so storing
+    // it would fold the whole conversation into the room again on every turn.
+    expect(h.room[1]?.text).toBe("B says 1");
+    expect(h.room[1]?.text).not.toContain("Round table ·");
   });
 
   it("tells each speaker whose turn it is and who else is at the table", async () => {
     const h = harness();
-    await runRoundTable(TABLE, 1, h.deps);
+    await runRoundTable(TABLE, "table-1", 1, h.deps);
     const sent = h.submitted[0]?.text ?? "";
     expect(sent).toContain("you are #2");
     expect(sent).toContain("#1, #3");
@@ -85,14 +113,14 @@ describe("runRoundTable", () => {
   // A table of two is the existing exchange, reached through the same loop.
   it("alternates a two-cell table", async () => {
     const h = harness();
-    const { outcome } = await runRoundTable([seat(1), seat(2)], 4, h.deps);
+    const { outcome } = await runRoundTable([seat(1), seat(2)], "table-1", 4, h.deps);
     expect(outcome).toBe("budget-spent");
     expect(h.submitted.map((s) => s.key)).toEqual(["cell-2", "cell-1", "cell-2", "cell-1"]);
   });
 
   it("ends as soon as a speaker declares the group done", async () => {
     const h = harness({ stopAfter: 2 });
-    const { outcome, turnsTaken } = await runRoundTable(TABLE, 10, h.deps);
+    const { outcome, turnsTaken } = await runRoundTable(TABLE, "table-1", 10, h.deps);
     expect(outcome).toBe("agreed");
     expect(turnsTaken).toBe(2);
     expect(h.submitted).toHaveLength(2); // it does not hand the turn on after the marker
@@ -100,14 +128,14 @@ describe("runRoundTable", () => {
 
   it("stops at the budget even when nobody says they are done", async () => {
     const h = harness();
-    const { outcome, turnsTaken } = await runRoundTable(TABLE, 2, h.deps);
+    const { outcome, turnsTaken } = await runRoundTable(TABLE, "table-1", 2, h.deps);
     expect(outcome).toBe("budget-spent");
     expect(turnsTaken).toBe(2);
   });
 
   it("sends nothing when the opening cell has no completed turn", async () => {
     const h = harness();
-    const { outcome } = await runRoundTable([{ ...seat(9), source: src("Z") }, seat(2)], 4, h.deps);
+    const { outcome } = await runRoundTable([{ ...seat(9), source: src("Z") }, seat(2)], "table-1", 4, h.deps);
     expect(outcome).toBe("nothing-to-send");
     expect(h.submitted).toHaveLength(0);
   });
@@ -115,7 +143,7 @@ describe("runRoundTable", () => {
   it("stops when the user stops it", async () => {
     const h = harness();
     h.abort();
-    const { outcome } = await runRoundTable(TABLE, 4, h.deps);
+    const { outcome } = await runRoundTable(TABLE, "table-1", 4, h.deps);
     expect(outcome).toBe("stopped");
     expect(h.submitted).toHaveLength(0);
   });
@@ -125,21 +153,21 @@ describe("runRoundTable", () => {
   it("stops rather than typing into a cell that switched session", async () => {
     const h = harness();
     h.switchSession();
-    const { outcome } = await runRoundTable(TABLE, 4, h.deps);
+    const { outcome } = await runRoundTable(TABLE, "table-1", 4, h.deps);
     expect(outcome).toBe("session-changed");
     expect(h.submitted).toHaveLength(0);
   });
 
   it("gives up on a member that never answers", async () => {
     const h = harness({ silent: true });
-    const { outcome } = await runRoundTable(TABLE, 4, h.deps);
+    const { outcome } = await runRoundTable(TABLE, "table-1", 4, h.deps);
     expect(outcome).toBe("timed-out");
     expect(h.submitted).toHaveLength(1); // it waited on the first member rather than moving on
   });
 
   it("reports a failure to reach a terminal instead of throwing", async () => {
     const h = harness({ submitFails: true });
-    expect(await runRoundTable(TABLE, 4, h.deps)).toEqual({ outcome: "failed", turnsTaken: 0 });
+    expect(await runRoundTable(TABLE, "table-1", 4, h.deps)).toEqual({ outcome: "failed", turnsTaken: 0 });
     expect(h.submitted).toHaveLength(0);
   });
 });

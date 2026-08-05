@@ -17,6 +17,8 @@ import { pasteAndSubmit, listSlots } from "./useTerminalConnections";
 import { waitVerdict } from "./exchangeRules";
 import { fetchLastTurn, type HandoffSource, type HandoffTarget } from "./useHandoff";
 import { endsTheTable, nextSpeaker, roundTablePrompt, type RoundTableOutcome } from "./roundTableRules";
+import { formatRoom, roomWindow } from "../../common/roomMessage";
+import { fetchRoom, postRoomMessage } from "./useRooms";
 import type { TurnFetch, CrossTalkDeps } from "./useCrossTalk";
 import { ANSWER_TIMEOUT_MS, POLL_MS } from "./useCrossTalk";
 
@@ -33,8 +35,16 @@ export interface RoundTableRun {
   turnsTaken: number;
 }
 
-/** The same dependency surface the exchange uses — one runner shape, one set of fakes. */
-export type RoundTableDeps = CrossTalkDeps;
+/** The exchange's dependency surface plus the room (#1456). The room is a DEPENDENCY rather than
+ *  a direct fetch for the same reason the rest of this is: the loop's ordering is what breaks, and
+ *  ordering is only testable when nothing in here talks to a server by itself. */
+export interface RoundTableDeps extends CrossTalkDeps {
+  /** Append what somebody said. Failure is not fatal — a table whose log is unwritable is still a
+   *  conversation, and stopping it would be a worse answer than losing the record. */
+  postToRoom: (room: string, from: string, text: string) => Promise<void>;
+  /** The conversation so far, already windowed and framed for a reader. */
+  readRoom: (room: string) => Promise<string>;
+}
 
 /** Poll a member's log until the turn OUR message produced appears. Same rule as the exchange:
  *  correlate on what was sent, never on "something changed", or a member that was already mid-turn
@@ -75,35 +85,39 @@ async function takeTurn(
  * Every one of them is a real agent turn on a real account, so the number is a cost control as
  * much as a runaway guard.
  */
-export async function runRoundTable(members: readonly TableMember[], budget: number, deps: RoundTableDeps): Promise<RoundTableRun> {
+export async function runRoundTable(members: readonly TableMember[], room: string, budget: number, deps: RoundTableDeps): Promise<RoundTableRun> {
   const names = members.map((member) => member.label);
   let turnsTaken = 0;
   try {
-    // The seed is the starting cell's own last turn, in the `exchange` shape — the first reader
-    // meets this conversation without context, so it gets both sides. Every hand-off after this
-    // one is a `reply`: the reader's own words became that speaker's prompt, and quoting them back
-    // would hand it a copy of itself once per lap.
+    // The seed is the starting cell's own last turn, in the `exchange` shape — it opens the room
+    // with both sides, since nobody reading it yet has any context at all.
     const opener = members[0];
     if (!opener) return { outcome: "nothing-to-send", turnsTaken };
     const opening = await deps.fetchTurn(opener.source, "exchange");
     if (!opening.text) return { outcome: "nothing-to-send", turnsTaken };
+    await deps.postToRoom(room, opener.label, opening.reply ?? opening.text);
 
-    let excerpt = opening.text;
     let speaker = 0;
     while (turnsTaken < budget) {
       speaker = nextSpeaker(speaker, members.length);
+      // The whole conversation, not just the last thing said. Handing on only the previous reply
+      // is what a two-cell exchange does, and with three or more it loses the thread: the reader
+      // cannot see what the seat before last argued (#1456).
+      const conversation = await deps.readRoom(room);
+      if (!conversation) return { outcome: "nothing-to-send", turnsTaken };
       // `nextSpeaker` is a modulo of a list just proved non-empty, so the fallback is unreachable —
       // it is here because an index expression is not narrowed by that proof.
-      const said = await takeTurn(members[speaker] ?? opener, excerpt, { members: names, turn: turnsTaken + 1, budget }, deps);
+      const member = members[speaker] ?? opener;
+      const said = await takeTurn(member, conversation, { members: names, turn: turnsTaken + 1, budget }, deps);
       if (typeof said === "string") return { outcome: said, turnsTaken };
       turnsTaken++;
-      // Against the RAW reply, not the rendered excerpt: the excerpt carries our own framing, and
-      // the framing is what names the marker (see roundTableRules). And only once the lap is
-      // complete — the first live three-cell run ended on turn 1, before the third cell had said
-      // anything at all.
+      // The RAW reply goes into the room, never the rendered excerpt: the excerpt is the room read
+      // back plus our own framing, so storing it would fold the whole conversation into the room
+      // again on every turn.
+      await deps.postToRoom(room, member.label, said.reply ?? "");
+      // Against the RAW reply for the same reason — and only once the lap is complete. The first
+      // live three-cell run ended on turn 1, before the third cell had said anything at all.
       if (endsTheTable(said.reply, turnsTaken, members.length)) return { outcome: "agreed", turnsTaken };
-      if (!said.text) return { outcome: "nothing-to-send", turnsTaken };
-      excerpt = said.text;
     }
     return { outcome: "budget-spent", turnsTaken };
   } catch {
@@ -121,8 +135,14 @@ export function liveRoundTableDeps(isAborted: () => boolean): RoundTableDeps {
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     now: () => performance.now(),
     isAborted,
+    postToRoom: postRoomMessage,
+    readRoom: async (room) => formatRoom(roomWindow(await fetchRoom(room))),
   };
 }
+
+/** A room id for one table. Readable, sortable, and unique enough for a machine that starts a
+ *  handful of these a day — the id is a filename, so it stays inside ROOM_ID_RE. */
+export const newRoomId = (now: number = Date.now()): string => `table-${new Date(now).toISOString().slice(0, 19).replace(/[:T]/g, "-").toLowerCase()}`;
 
 /** A handoff target as a seat at the table — the picker lists the same cells the exchange menu
  *  does, so one rule decides what is readable. */
