@@ -49,15 +49,11 @@ UTF-8 JSON. Comments are not part of JSON; the samples here use `//` for explana
   "name": "stable-diffusion-webui",
   "description": "Browser interface for Stable Diffusion",
   "icon": "assets/logo.svg",
-  "colors": {
-    "primary": "#7c3aed",
-    "accent": "#22d3ee",
-    "background": "#0b1020"
-  },
+  "color": "#7c3aed",
   "homepage": "https://example.com",
   "authors": ["Ada Lovelace <ada@example.com>"],
 
-  "tools": {
+  "extensions": {
     "mulmoterminal": { "theme": "midnight", "badgeColor": "#5b21b6" }
   }
 }
@@ -73,11 +69,11 @@ is valid.
 | `name` | string | Display name. Not necessarily the directory or package name — this is what a human should see. |
 | `description` | string | One line. What the project is, not how to install it. |
 | `icon` | string \| array | The project's mark. See [Icons](#icons). |
-| `colors` | object | Brand colours by role. See [Colours](#colours). |
+| `color` | string \| object | Brand colour, or colours by role. See [Colours](#colours). |
 | `homepage` | string | URL. |
 | `authors` | array of strings | Free-form; `Name <email>` is conventional but not required. |
 | `keywords` | array of strings | For search and grouping. |
-| `tools` | object | Tool-specific extensions. See [Extensions](#extensions). |
+| `extensions` | object | Tool-specific extensions. See [Extensions](#extensions). |
 
 ## Path resolution
 
@@ -133,17 +129,26 @@ the rule; "until one exists" is the bug.
 ## Colours
 
 ```jsonc
-"colors": {
+"color": "#7c3aed"
+
+"color": {
   "primary": "#7c3aed",     // the brand colour. If you set one thing, set this
   "accent": "#22d3ee",      // secondary, for highlights
   "background": "#0b1020"   // the surface the other two sit on
 }
 ```
 
+**The two forms are equivalent**: `"color": "#7c3aed"` means exactly
+`{ "primary": "#7c3aed" }` — the same shorthand rule `icon` follows.
+
+> **Where a field has an obvious primary value, the scalar form is shorthand for the fullest form.**
+> One rule, stated once, covering both fields. An implementation normalises at the boundary and has
+> a single code path afterwards.
+
 Three roles, because one is too thin to render with and more than three is a design system rather
 than an identity. The Web App Manifest already carries two (`theme_color`, `background_color`);
-Material names three (primary, secondary, surface). All three here are optional, and a consumer
-**must** be able to work from `primary` alone.
+Material names three (primary, secondary, surface). All three are optional, and a consumer **must**
+be able to work from `primary` alone.
 
 **`#rgb` and `#rrggbb` only.** Allowing the whole CSS colour syntax means implementations disagree
 about what a colour is.
@@ -162,23 +167,42 @@ a given tool will paint on. Deriving it also makes every conforming tool reach t
 The common shortcut — YIQ brightness on raw channels — picks the worse of black and white for
 roughly 30% of colours, so it is not an acceptable substitute.
 
+### Deriving what isn't declared
+
+A consumer that needs more colours than three should **derive them from `primary`** rather than ask
+the author for more. This is not a hope: MulmoTerminal paints seven, and deriving all seven from
+`primary` alone reproduces eleven hand-tuned palettes to a **maximum ΔE76 of 2.5, median 1.9** —
+at or below the 2.3 threshold at which a difference becomes noticeable at all. One of the derived
+values came out byte-identical to the hand-picked one.
+
+What the measurement also showed is that a single rule does not fit every role. Snapping every role
+to a fixed saturation/lightness drifts by ΔE 20 at the dark end; making every role a fixed offset
+from `primary` drifts by ΔE 15 at the pale end. The roles differ in kind: a **badge** sits relative
+to the brand colour, while **surfaces** sit at absolute lightness whatever the brand colour is. A
+consumer deriving a palette should expect to do both.
+
 ### Light and dark
 
 v0 defines **one** set of colours, and expects consumers to adapt: derive the foreground as above,
-and adjust surfaces to the theme in force. A `colors.dark` override is a plausible future addition
+and adjust surfaces to the theme in force. A `color.dark` override is a plausible future addition
 and is reserved; it is left out of v0 because most of what it would buy is already covered by
 deriving contrast, and a field that authors fill in inconsistently is worse than no field.
 
 ## Extensions
 
-Tool-specific settings go under `tools`, keyed by tool name:
+Tool-specific settings go under `extensions`, keyed by tool name:
 
 ```jsonc
-"tools": {
+"extensions": {
   "mulmoterminal": { "theme": "midnight", "badgeColor": "#5b21b6" },
   "some-other-tool": { "…": "…" }
 }
 ```
+
+The noun is OpenAPI's — it calls `x-` entries **Specification Extensions** — while the shape is
+devcontainer's: one reserved object with tools namespaced inside. `tools` was the obvious name and
+is the wrong one: in a world of MCP and function calling, "tools" already means something else
+entirely, and a reader would take it for a list of tools the repository *provides*.
 
 The core stays small and every tool gets somewhere to put what only it understands. This is the
 same shape four established formats already use — devcontainer's `customizations.<tool>`,
@@ -190,8 +214,8 @@ Pick a name you demonstrably own — a published package name, a GitHub organisa
 DNS. `pyproject.toml` makes this a hard rule (you may use `[tool.$NAME]` only if you own `$NAME`
 on PyPI); here it is a convention, since there is no registry to check against.
 
-**A consumer must ignore `tools` entries it does not own, and must preserve them when rewriting
-the file.** Dropping another tool's settings on save is the fastest way to make this format
+**A consumer must ignore `extensions` entries it does not own, and must preserve them when
+rewriting the file.** Dropping another tool's settings on save is the fastest way to make this format
 unusable.
 
 ## Precedence
@@ -227,7 +251,7 @@ A machine-learning repository — no web assets, no package registry:
   "name": "diffusion-lab",
   "description": "Training and evaluation for latent diffusion models",
   "icon": "docs/logo.png",
-  "colors": { "primary": "#0f766e" }
+  "color": "#0f766e"
 }
 ```
 
@@ -241,7 +265,7 @@ A monorepo, where no single ecosystem manifest speaks for the whole:
     { "src": "brand/mark.svg", "sizes": "any" },
     { "src": "brand/mark-512.png", "sizes": "512x512", "type": "image/png" }
   ],
-  "colors": { "primary": "#1d4ed8", "accent": "#f59e0b", "background": "#0b1020" }
+  "color": { "primary": "#1d4ed8", "accent": "#f59e0b", "background": "#0b1020" }
 }
 ```
 
@@ -250,14 +274,14 @@ A web project that already has a favicon — `repo.json` adds only what the exis
 ```json
 {
   "name": "acme.com",
-  "colors": { "primary": "#be123c" },
-  "tools": { "mulmoterminal": { "orderPriority": 20 } }
+  "color": "#be123c",
+  "extensions": { "mulmoterminal": { "orderPriority": 20 } }
 }
 ```
 
 ## Open questions
 
-- **`colors.dark`** — worth adding, or does deriving contrast cover it?
-- **Enforcing `tools.<name>` ownership** — is a convention enough without a registry?
-- **Forge rendering** — `name` + `icon` + `colors` is exactly a repository card. Worth proposing
+- **`color.dark`** — worth adding, or does deriving contrast cover it?
+- **Enforcing `extensions.<name>` ownership** — is a convention enough without a registry?
+- **Forge rendering** — `name` + `icon` + `color` is exactly a repository card. Worth proposing
   to GitHub/GitLab once the format has more than one implementation.
