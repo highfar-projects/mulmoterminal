@@ -47,13 +47,14 @@ describe("the surviving-sessions section", () => {
   });
 
   // A shell left behind by a restart appears in no other list in the app, so this one has to name
-  // it rather than show a blank where the agent would be.
+  // it rather than show a blank where the agent would be — while stopping short of CALLING it a
+  // shell, since an agy/grok session that outlived its pty reaches here the same way.
   it("names a session no agent claims, and warns that nothing can resume it", async () => {
     serve([row({ agent: null, resumable: false, cwd: null })]);
     const w = mount(SurvivingSessionsSection);
     await flushPromises();
     const text = w.get('[data-testid="surviving-row"]').text();
-    expect(text).toContain("shell or command");
+    expect(text).toContain("shell or unknown");
     expect(text).toContain("unknown directory");
     expect(w.find('[data-testid="surviving-only-copy"]').exists()).toBe(true);
   });

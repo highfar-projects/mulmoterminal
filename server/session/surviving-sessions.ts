@@ -8,11 +8,8 @@ import { byClearability, type SurvivingSession } from "../../common/survivingSes
 import { isTerminalAgent, type TerminalAgent } from "../../common/sessionAgent.js";
 import { tmuxAttachedCounts, tmuxListSessionIds, tmuxSessionActivity } from "../infra/tmux.js";
 import { ptys, sessionCwd, devTerminalCwdsHydrated } from "./registry.js";
-import { claudeOnDiskSessionIds } from "./session-reads.js";
-import { codexRolloutExists } from "../agents/codex-sessions.js";
-import { codexSessionsRoot } from "../agents/codex-session.js";
 import { sessionAttached } from "./dir-session.js";
-import { resumableSessionPredicate } from "./resumable-sessions.js";
+import { resumableSessionFacts } from "./resumable-sessions.js";
 
 /** The snapshots one listing takes, so the rule below is pure and the tmux calls happen once. */
 export interface SurvivingInput {
@@ -50,13 +47,17 @@ export function buildSurvivingSessions(input: SurvivingInput): SurvivingSession[
 }
 
 /** What is running in this session, as far as anything here can tell. A live pty knows; otherwise
- *  the agent that wrote a conversation under this key does. Null is the honest answer for a Shell
- *  or a launcher command — and saying so is the point, since those are listed nowhere else. */
-function agentOfKey(key: string, claudeOnDisk: ReadonlySet<string>, codexRoot: string): TerminalAgent | null {
+ *  the agent that wrote a conversation under this key does.
+ *
+ *  Null is the answer for a Shell or a launcher command — the rows listed nowhere else, which is
+ *  the point — but ALSO for an agy or grok session that outlived its pty: nothing maps those back
+ *  to a key, the same blind spot `isResumableTmuxSession` has (which is why such a row reads "not
+ *  resumable" too). The UI says "shell or unknown" rather than naming a shell it cannot confirm. */
+function agentOfKey(key: string, claudeOnDisk: ReadonlySet<string>, hasCodexRollout: (id: string) => boolean): TerminalAgent | null {
   const live = ptys.get(key);
   if (live && isTerminalAgent(live.agent)) return live.agent;
   if (claudeOnDisk.has(key)) return "claude";
-  return codexRolloutExists(codexRoot, key) ? "codex" : null;
+  return hasCodexRollout(key) ? "codex" : null;
 }
 
 const SECONDS_PER_MS = 1000;
@@ -66,19 +67,19 @@ export async function survivingSessions(nowMs: number): Promise<SurvivingSession
   // The remembered directories are the only thing a session from a PREVIOUS run can be named by,
   // so a list taken before that file is read would show every survivor without one (#1021).
   await devTerminalCwdsHydrated;
-  const resumable = await resumableSessionPredicate();
+  // One pass for both questions this list asks — is it resumable, and what wrote it. Asking them
+  // separately walks ~/.claude/projects twice per listing for the same answer.
+  const { isResumable, claudeOnDisk, hasCodexRollout } = await resumableSessionFacts();
   const tmuxCounts = tmuxAttachedCounts();
-  const claudeOnDisk = claudeOnDiskSessionIds();
-  const codexRoot = codexSessionsRoot();
   return buildSurvivingSessions({
     tmuxIds: tmuxListSessionIds(),
     activity: tmuxSessionActivity(),
     nowSeconds: Math.floor(nowMs / SECONDS_PER_MS),
     attached: (key) => sessionAttached(key, tmuxCounts),
-    resumable,
+    resumable: isResumable,
     // The live pty wins: it knows where the agent actually runs, and the remembered value can be a
     // directory the session was relaunched away from.
     cwdOf: (key) => ptys.get(key)?.cwd ?? sessionCwd(key),
-    agentOf: (key) => agentOfKey(key, claudeOnDisk, codexRoot),
+    agentOf: (key) => agentOfKey(key, claudeOnDisk, hasCodexRollout),
   });
 }

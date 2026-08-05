@@ -21,9 +21,12 @@ const { stopping, stopSession } = useSessionStop(reload);
 
 onMounted(reload);
 
-// The row's own words for what it is. `null` agent is the honest answer for a shell or a launcher
-// command — and the case nothing else in the app lists, so it is named rather than left blank.
-const describe = (s: SurvivingSession): string => s.agent ?? "shell or command";
+// The row's own words for what it is. `null` covers a shell and a launcher command — the rows
+// listed nowhere else, which is why it is named rather than left blank — but ALSO an agy or grok
+// session that outlived its pty, which nothing can map back to a key. So it says "unknown" too
+// rather than calling something a shell on no evidence; the hover carries the whole answer.
+const describe = (s: SurvivingSession): string => s.agent ?? "shell or unknown";
+const UNKNOWN_AGENT_TITLE = "No agent conversation is recorded under this key — a shell, a launcher command, or an agent this server cannot map back";
 
 // Through the same formatter the cells use, from an absolute moment rather than the elapsed
 // seconds: one vocabulary for "how long ago" across the app, and no second rounding rule.
@@ -50,7 +53,7 @@ const lastActive = (s: SurvivingSession): string => {
       <span class="truncate font-mono text-[12px] text-secondary" :title="s.cwd ?? 'this server has never seen where it runs'">{{
         s.cwd ?? "unknown directory"
       }}</span>
-      <span class="flex-none text-[11px] text-dim">{{ describe(s) }}</span>
+      <span class="flex-none text-[11px] text-dim" :title="s.agent ? '' : UNKNOWN_AGENT_TITLE">{{ describe(s) }}</span>
       <span v-if="lastActive(s)" data-testid="surviving-idle" class="flex-none text-[11px] text-dim">{{ lastActive(s) }}</span>
       <span class="flex-auto" />
       <!-- Resumable is what makes stopping safe to offer at all: the conversation comes back. Said
