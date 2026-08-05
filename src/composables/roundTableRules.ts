@@ -64,9 +64,13 @@ export function framingLines(framing: RoundTableFraming): string {
   return [
     `[Round table · turn ${framing.turn} of ${framing.budget} · you are ${framing.speaker}]`,
     others.length ? `Also at the table: ${others.join(", ")}. They will read what you write next.` : "You are alone at the table.",
-    framing.turn < framing.members.length
-      ? `Everyone speaks once before the table can end, so this round is for your own view — say what you actually think.`
-      : `When the group has said what it needs to, write ${STOP_MARKER} on a line of its own and the table ends.`,
+    // The SAME predicate `endsTheTable` applies, not a restatement of it: the first turn that may
+    // legally end the table has to be the first turn that is told how. Written out separately it
+    // was off by one — a two-seat table could end on turn 1 but was not shown the marker until
+    // turn 2, and a three-seat table not until turn 3 (Codex review on #1456).
+    everyoneHasSpoken(framing.turn, framing.members.length)
+      ? `When the group has said what it needs to, write ${STOP_MARKER} on a line of its own and the table ends.`
+      : `Everyone speaks once before the table can end, so this round is for your own view — say what you actually think.`,
   ].join("\n");
 }
 

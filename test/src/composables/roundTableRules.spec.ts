@@ -98,6 +98,24 @@ describe("framingLines", () => {
     expect(early).not.toContain(STOP_MARKER);
     expect(early).toContain("Everyone speaks once");
   });
+
+  // The two halves must agree turn for turn: whoever MAY end the table has to be told how, or the
+  // instruction arrives a turn after the permission. Written as separate conditions it was off by
+  // one in both directions (Codex review on #1456).
+  it("shows the marker on exactly the first turn that may end the table", () => {
+    const three = ["#1", "#2", "#3"];
+    // Three seats: turn 2 completes the lap, so turn 2 is when the marker appears.
+    expect(endsTheTable(STOP_MARKER, 1, three.length)).toBe(false);
+    expect(framingLines({ speaker: "#2", members: three, turn: 1, budget: 6 })).not.toContain(STOP_MARKER);
+    expect(endsTheTable(STOP_MARKER, 2, three.length)).toBe(true);
+    expect(framingLines({ speaker: "#3", members: three, turn: 2, budget: 6 })).toContain(STOP_MARKER);
+  });
+
+  it("shows it on turn 1 of a two-seat table, which may end there", () => {
+    const two = ["#1", "#2"];
+    expect(endsTheTable(STOP_MARKER, 1, two.length)).toBe(true);
+    expect(framingLines({ speaker: "#2", members: two, turn: 1, budget: 4 })).toContain(STOP_MARKER);
+  });
 });
 
 // THE trap this feature had to avoid, pinned. `answersOurSend` decides "is this reply ours" from
