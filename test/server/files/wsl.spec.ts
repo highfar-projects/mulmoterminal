@@ -73,3 +73,14 @@ describe("isWsl without the environment variables", () => {
     expect(isWsl("linux", { WSL_INTEROP: "/run/WSL/8_interop" }, "6.8.0-45-generic")).toBe(true);
   });
 });
+
+// An empty variable is not an answer. `??` accepted it and never looked at the second one, which
+// also made the server disagree with bin/mulmoterminal.js about the same machine (Codex on #1463).
+describe("isWsl with an empty variable", () => {
+  it("falls through an empty WSL_DISTRO_NAME to WSL_INTEROP", () => {
+    expect(isWsl("linux", { WSL_DISTRO_NAME: "", WSL_INTEROP: "/run/WSL/8_interop" }, "6.8.0-45-generic")).toBe(true);
+  });
+  it("is still false when both are empty on an ordinary kernel", () => {
+    expect(isWsl("linux", { WSL_DISTRO_NAME: "", WSL_INTEROP: "" }, "6.8.0-45-generic")).toBe(false);
+  });
+});

@@ -162,12 +162,24 @@ export function parsePickerOutput(stdout: string): string[] {
   return pickerLines(stdout).filter((line) => path.isAbsolute(line));
 }
 
+export interface PickOutcome {
+  paths: string[];
+  /** Lines the dialog returned that could not be turned into a path this process can open. */
+  untranslated: number;
+}
+
 // The WSL dialog answers in Windows paths, and `C:\proj` is NOT absolute to posix — so the
 // translation has to happen BEFORE the filter above, or every pick reads as a cancel.
-async function pickedPaths(stdout: string, candidate: PickerCandidate): Promise<string[]> {
-  if (!candidate.windowsPaths) return parsePickerOutput(stdout);
-  const converted = await Promise.all(pickerLines(stdout).map((line) => toLinuxPath(line)));
-  return converted.filter((p): p is string => p !== null && path.isAbsolute(p));
+//
+// `untranslated` exists because that failure mode IS the bug in #1447: a `wslpath` that is missing
+// or refuses a UNC path would otherwise turn a real pick into `paths: []`, which the UI cannot
+// tell from a cancel, so the button silently does nothing all over again.
+export async function pickedPaths(stdout: string, candidate: PickerCandidate, convert = toLinuxPath): Promise<PickOutcome> {
+  if (!candidate.windowsPaths) return { paths: parsePickerOutput(stdout), untranslated: 0 };
+  const lines = pickerLines(stdout);
+  const converted = await Promise.all(lines.map((line) => convert(line)));
+  const paths = converted.filter((p): p is string => p !== null && path.isAbsolute(p));
+  return { paths, untranslated: lines.length - paths.length };
 }
 
 function runPicker(candidate: PickerCandidate): Promise<PickerRun> {
@@ -212,8 +224,18 @@ export function mountPickFileRoute(app: Express, { isAllowedOrigin }: PickFileOp
     const attempts: string[] = [];
     for (const candidate of pickFileCandidates(process.platform, directory, { wsl, startFolder })) {
       const run = await runPicker(candidate);
-      if (!pickerRunFailed(run, candidate.cancelStderr)) return res.json({ paths: await pickedPaths(run.stdout, candidate) });
-      attempts.push(attemptNote(candidate, run));
+      if (pickerRunFailed(run, candidate.cancelStderr)) {
+        attempts.push(attemptNote(candidate, run));
+        continue;
+      }
+      const { paths, untranslated } = await pickedPaths(run.stdout, candidate);
+      // Nothing usable out of something the user DID pick: keep going, and say so, rather than
+      // answering with the empty list that means "cancelled".
+      if (paths.length === 0 && untranslated > 0) {
+        attempts.push(`${candidate.cmd}: wslpath could not translate ${untranslated} chosen path(s)`);
+        continue;
+      }
+      return res.json({ paths });
     }
     res.status(500).json({ error: pickerUnavailableMessage(process.platform, wsl, attempts) });
   });

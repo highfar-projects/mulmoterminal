@@ -17,9 +17,12 @@ const WSL_KERNEL = /microsoft/i;
 //
 // A false positive is cheap by construction: every caller falls back to the Linux command when
 // the Windows one cannot be started. A false NEGATIVE is what costs the user the dialog.
+// `||`, never `??`: an EMPTY `WSL_DISTRO_NAME` is not an answer, and `??` would accept it and
+// never look at `WSL_INTEROP`. It is also what bin/mulmoterminal.js does, and the two must not
+// reach different conclusions about the same machine (Codex review on #1463).
 export function isWsl(platform: NodeJS.Platform, env: NodeJS.ProcessEnv, kernelRelease: string = os.release()): boolean {
   if (platform !== "linux") return false;
-  if (env.WSL_DISTRO_NAME ?? env.WSL_INTEROP) return true;
+  if (env.WSL_DISTRO_NAME || env.WSL_INTEROP) return true;
   return WSL_KERNEL.test(kernelRelease);
 }
 

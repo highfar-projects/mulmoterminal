@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   pickFileCandidates,
   parsePickerOutput,
+  pickedPaths,
   pickerRunFailed,
   pickerUnavailableMessage,
   type PickerHost,
@@ -227,5 +228,33 @@ describe("parsePickerOutput", () => {
   // Skipped on Windows, where `path.isAbsolute` reads that path the other way and WSL cannot run.
   it.skipIf(process.platform === "win32")("drops a Windows path, which is why the WSL conversion happens first", () => {
     expect(parsePickerOutput("C:\\proj\\a")).toEqual([]);
+  });
+});
+
+// A WSL pick has to survive the trip back through `wslpath`. If it doesn't, the route must NOT
+// answer with an empty list — that is what a cancel looks like, and the silence it produces is
+// exactly the bug #1447 reported. Observed during review, not flagged by a bot.
+describe("pickedPaths", () => {
+  const wslCandidate = { cmd: "powershell.exe", args: [], windowsPaths: true };
+
+  it("translates the Windows paths a WSL dialog returns", async () => {
+    const convert = (p: string) => Promise.resolve(p.replace("C:\\", "/mnt/c/").replaceAll("\\", "/"));
+    await expect(pickedPaths("C:\\proj\\a\nC:\\proj\\b", wslCandidate, convert)).resolves.toEqual({
+      paths: ["/mnt/c/proj/a", "/mnt/c/proj/b"],
+      untranslated: 0,
+    });
+  });
+
+  it("counts what it could not translate, so the route can tell that from a cancel", async () => {
+    const convert = () => Promise.resolve(null);
+    await expect(pickedPaths("C:\\proj\\a", wslCandidate, convert)).resolves.toEqual({ paths: [], untranslated: 1 });
+  });
+
+  it("reports a real cancel as nothing to translate", async () => {
+    await expect(pickedPaths("", wslCandidate, () => Promise.resolve(null))).resolves.toEqual({ paths: [], untranslated: 0 });
+  });
+
+  it("leaves a Linux dialog's output alone", async () => {
+    await expect(pickedPaths("/a/b\n/c/d", { cmd: "zenity", args: [] })).resolves.toEqual({ paths: ["/a/b", "/c/d"], untranslated: 0 });
   });
 });
