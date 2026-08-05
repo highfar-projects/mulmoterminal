@@ -77,6 +77,7 @@ const deps = {
   setWaiting: vi.fn(),
   uiPort: "3000",
   publishSessionCreated: vi.fn(),
+  publishActivity: vi.fn(),
 };
 
 // `ws` is null throughout: every case here spawns headless, and the socket was only ever passed

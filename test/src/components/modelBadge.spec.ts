@@ -16,6 +16,17 @@ describe("shortModelLabel", () => {
     expect(shortModelLabel("openai/o3-pro")).toBe("o3-pro");
   });
 
+  // agy names a model `Gemini 3.6 Flash (High)`. The badge does not truncate — it pushes the rest
+  // of the header out — and the full name is still in the tip.
+  it("drops a trailing bracketed qualifier", () => {
+    expect(shortModelLabel("Gemini 3.6 Flash (High)")).toBe("Gemini 3.6 Flash");
+    expect(modelBadge("antigravity", "Gemini 3.6 Flash (High)", 0).title).toContain("Gemini 3.6 Flash (High)");
+  });
+
+  it("keeps a name that is nothing but a bracketed part", () => {
+    expect(shortModelLabel("(High)")).toBe("(High)");
+  });
+
   it("prefers a preset's own label when the id is one we launch with", () => {
     expect(shortModelLabel("qwen/qwen3-235b-a22b-2507")).toBe("Qwen3 235B A22B");
   });

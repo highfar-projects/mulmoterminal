@@ -298,6 +298,20 @@ function applyActivity(d: ActivityPush) {
   if (!memoEditing.value) memo.value = next.memo;
 }
 
+// A cell whose model is still unknown asks again when a push says something changed. codex and agy
+// file their logs under an id the agent mints AFTER the spawn, so the seed fetch at mount can only
+// answer "nobody" — and for agy nothing else would ever re-ask, since it has no hooks and no
+// activity tracker to finish a turn (its spawner publishes precisely to reach this line). Claude is
+// excluded: its badges come from the summary the route already folds, so a push adds nothing and
+// this is the busiest route in the app. Self-limiting either way — once a model is known, it stops.
+//
+// Called from the PUSH path only, never from a seed: loadInitial applies activity BEFORE badges, so
+// asking there would see `context` still empty and fire a second fetch for the answer already in
+// its hand — on every non-claude cell, every load.
+function refreshBadgesIfModelUnknown() {
+  if (agent.value !== "claude" && !context.value?.model) void refreshUsage();
+}
+
 // This session's detail, or nothing to apply. Nothing covers three cases the callers all
 // treat the same: the read failed (best-effort — pub/sub fills it in on the next event), the
 // server refused, or the cell has since closed or switched session, in which case applying
@@ -405,10 +419,24 @@ watch(
   },
 );
 
+// An agy cell has no turn to end. Claude publishes a Stop hook and codex has an activity tracker,
+// so both re-read their badges the moment a turn settles; nothing calls setWorking for antigravity,
+// so its context reading would be frozen at whatever it was when the cell first asked — `ctx 1%`
+// for the rest of the session, which is worse than no reading at all. This is the substitute, and
+// it is deliberately slow: one indexed sqlite row plus a 64 KB head read, per agy cell, per minute.
+// Delete it the day agy gets an activity tracker.
+const UNTRACKED_BADGE_POLL_MS = 60_000;
+let badgePoll: ReturnType<typeof setInterval> | null = null;
+
 onMounted(() => {
   unsubscribe = subscribe("sessions", (d) => {
-    if (isActivityMsg(d) && d.id === sessionId.value) applyActivity(d);
+    if (!isActivityMsg(d) || d.id !== sessionId.value) return;
+    applyActivity(d);
+    refreshBadgesIfModelUnknown();
   });
+  badgePoll = setInterval(() => {
+    if (agent.value === "antigravity" && sessionId.value) void refreshUsage();
+  }, UNTRACKED_BADGE_POLL_MS);
   // A dropped socket misses the pushes sent while it was down, and this cell's status is
   // derived state that pub/sub only replays room membership for — not the missed events. So
   // on reconnect re-seed from the authoritative snapshot (guarded by activityGen), or a turn
@@ -425,6 +453,7 @@ onUnmounted(() => {
   unsubscribe?.();
   unsubscribeCanvas?.();
   offReconnect?.();
+  if (badgePoll) clearInterval(badgePoll);
 });
 
 // Set when the user starts a FRESH session from the launcher, so the next server
