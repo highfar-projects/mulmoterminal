@@ -11,6 +11,7 @@ import { setDecisionDigest } from "../../../../src/composables/decisionDigest";
 import { setWorklogEnabled, setWorklogIntervalHours } from "../../../../src/composables/worklog";
 import { setGlobalFontFamily } from "../../../../src/composables/terminalFontFamily";
 import { useAppConfig } from "../../../../src/composables/useAppConfig";
+import { reloadLaunchOptions } from "../../../../src/composables/useLaunchOptions";
 
 // The sections that gave a config.json-only setting a control (#1401). What matters about each is
 // that flipping it POSTs the RIGHT FIELD: every one is a partial update, so a section naming the
@@ -241,5 +242,22 @@ describe("ModelsSection", () => {
     const wrapper = mount(ModelsSection);
     await wrapper.vm.$nextTick();
     expect(wrapper.text()).toContain("None configured");
+  });
+
+  // "ready · 0 models" reads like a working backend, and the launch picker leaves it out — which
+  // is how #1432 was reported as the picker being broken rather than the config being incomplete.
+  it("marks a reachable provider with no models as not being in the picker", async () => {
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ providers: [{ id: "deepseek", label: "DeepSeek", ready: true, tokenEnv: "DEEPSEEK_API_KEY", models: [] }], anyReady: true }),
+    })) as unknown as typeof fetch;
+    await reloadLaunchOptions();
+    const wrapper = mount(ModelsSection);
+    await flushPromises();
+    // The provider's own row, not the section's prose: "ready" must not be what this line says.
+    const row = wrapper.get("li").text();
+    expect(row).toContain("0 models");
+    expect(row).toContain("not in the picker");
+    expect(row).not.toContain("ready");
   });
 });

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useAppConfig } from "../../composables/useAppConfig";
 import { useLaunchOptions } from "../../composables/useLaunchOptions";
+import { isOfferable, notOfferedReason } from "../launchOffer";
 import SkillLaunchButton from "../SkillLaunchButton.vue";
 import { SECTION_HEADING, SETTINGS_LIST } from "./sectionClasses";
 import type { BundledSkillName } from "../../../common/bundledSkills";
@@ -30,8 +31,12 @@ defineEmits<{ (e: "launch-skill", skill: BundledSkillName): void }>();
       <span class="font-mono text-[12px] text-secondary">{{ p.label }}</span>
       <span class="text-[11px] text-dim">{{ p.models.length }} model{{ p.models.length === 1 ? "" : "s" }} · key in {{ p.tokenEnv }}</span>
       <span class="flex-auto" />
-      <span v-if="p.ready" class="text-[11px] text-dim">ready</span>
-      <span v-else class="text-[11px] text-err-text" :title="p.reason">not ready</span>
+      <span v-if="!p.ready" class="text-[11px] text-err-text" :title="p.reason">not ready</span>
+      <!-- Reachable, and still not a choice: a session cannot be started on a provider without a
+           model, so the launch picker leaves it out. Said here because "ready · 0 models" reads
+           like it works (#1432). -->
+      <span v-else-if="!isOfferable(p)" class="text-[11px] text-err-text" :title="notOfferedReason(p) ?? ''">not in the picker</span>
+      <span v-else class="text-[11px] text-dim">ready</span>
     </li>
   </ul>
   <p v-else class="mb-2 text-[12px] text-dim">None configured — sessions run on the built-in default.</p>
