@@ -203,10 +203,14 @@ procedure: open this file, paste this, restart what, how to tell it worked, what
 
 - **Both languages**, and `nav_order` must be a **unique** sequence running **newest release
   first** — ordered by release date, not by version number sorted as text, so 1.11.1 sits above
-  1.11.0. A new release takes the lowest free number and everything below shifts down by one.
-  When renumbering, **enumerate `docs/guide/*/v*.md` rather than typing the list out**: a
-  hand-typed list has silently dropped a page, and the check written from the same list agreed
-  with it, so nothing caught the duplicate until review did.
+  1.11.0. **Release pages live in the 1000s** (`1001` is the newest); the reference guide keeps
+  the small numbers and grows into the space between. A new release takes `1001` and every older
+  page shifts down by one. The two ranges are far apart because they used to collide: the guide
+  had reached `claude-ollama` = 14 and `glossary` = 15 while releases started at 14, and
+  just-the-docs breaks a tie by title, so the sidebar quietly read 4.5.0 / glossary / 4.4.0 with
+  nothing erroring. When renumbering, **enumerate `docs/guide/*/v*.md` rather than typing the list
+  out**: a hand-typed list has silently dropped a page, and the check written from the same list
+  agreed with it, so nothing caught the duplicate until review did.
 - **State the date in the first line and call it a snapshot.** These pages *will* go stale — that
   is accepted, and the date is what makes a stale one readable rather than misleading. Never
   edit an old one to match new behaviour; write the next version's page instead.
