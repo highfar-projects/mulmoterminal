@@ -5,6 +5,7 @@
 // wording. Trailing controls — the roster's ⋮ reorder menu, or a thumbnail's expand/close —
 // go in the default slot.
 import { computed } from "vue";
+import DirIcon from "./DirIcon.vue";
 import { formatCwd } from "./cwdDisplay";
 import { CELL_DIR_PATH, DIR_TRUNCATE_FRONT } from "./cellChromeClasses";
 import { headerStyleFor } from "./cellHeaderStyle";
@@ -22,11 +23,13 @@ const props = withDefaults(
     home: string | null;
     headerColor: string | null;
     headerTextColor: string | null;
+    // The directory's `icon` image (#1421), already resolved to something an <img> can load.
+    iconUrl?: string | null;
     workPhase?: WorkPhase | null;
     phase?: PrPhase;
     dirLength?: number;
   }>(),
-  { workPhase: null, phase: "none", dirLength: 44 },
+  { iconUrl: null, workPhase: null, phase: "none", dirLength: 44 },
 );
 
 const STATUS_WORD: Record<AttentionStatus, string> = { working: "running", blocked: "waiting", done: "done", idle: "idle" };
@@ -71,6 +74,8 @@ const barStyle = computed(() => headerStyleFor(props.headerColor, props.headerTe
     class="flex min-w-0 items-center gap-1.5 bg-[var(--cell-header-bg,transparent)] px-2.5 py-1.5 text-[var(--cell-header-fg,inherit)]"
     :style="barStyle"
   >
+    <!-- Leads the bar, ahead of the status dot — the browser-tab position (see TerminalCell). -->
+    <DirIcon :src="iconUrl" />
     <span data-testid="cockpit-dot" class="h-2 w-2 flex-none rounded-full" :class="DOT_CLASS[status]" aria-hidden="true" />
     <span data-testid="cockpit-badge" class="flex-none rounded-full px-1.5 py-px text-[10px] font-bold" :class="BADGE_CLASS[status]">{{ badgeWord }}</span>
     <span

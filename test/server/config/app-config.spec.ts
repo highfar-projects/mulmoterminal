@@ -392,6 +392,7 @@ describe("loadAppConfig / saveAppConfig", () => {
     issueWorkComments: false,
     prWorkdirFooter: true,
     appendSystemPrompt: true,
+    autoDirIcon: true,
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },
     fontFamily: null,
   };
@@ -427,6 +428,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       issueWorkComments: false, // opt-in, so only `true` proves it persisted rather than defaulted
       prWorkdirFooter: false, // the opt-out: it defaults ON, so only `false` proves it persisted
       appendSystemPrompt: false, // same opt-out shape: defaults ON, so only `false` proves it persisted
+      autoDirIcon: false, // same again (#1428): defaults ON, so only `false` proves it persisted
       cockpitLines: { summary: 6, prompt: 2, response: 3 }, // a raised clamp must survive it too
       fontFamily: "Cica, monospace", // already normalized, so it must come back byte-identical
     };
@@ -490,6 +492,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       issueWorkComments: false,
       prWorkdirFooter: true, // absent from the file — every config predating #872 stays enabled
       appendSystemPrompt: true, // absent from the file — every config predating #1062 stays enabled
+      autoDirIcon: true, // same: a config predating #1428 picks up the repo's own favicon
       fontFamily: null,
     });
     rmSync(dir, { recursive: true, force: true });
@@ -600,6 +603,7 @@ describe("#741 corrupt config is not silently wiped by a partial update", () => 
     issueWorkComments: false,
     prWorkdirFooter: true,
     appendSystemPrompt: true,
+    autoDirIcon: true,
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },
     fontFamily: null,
   };
@@ -667,6 +671,7 @@ describe("mergeConfigUpdate", () => {
     issueWorkComments: false,
     prWorkdirFooter: true,
     appendSystemPrompt: true,
+    autoDirIcon: true,
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },
     fontFamily: null,
     ...over,

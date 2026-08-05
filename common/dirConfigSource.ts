@@ -10,6 +10,7 @@
 // together so a field added to the loader can't quietly go missing here.
 export const DIR_CONFIG_KEYS = [
   "name",
+  "icon",
   "badgeColor",
   "headerColor",
   "headerTextColor",
@@ -65,6 +66,10 @@ export interface DirConfigExtras {
   appendSystemPrompt: boolean | null;
   buttonLabels: string[];
   chipLabels: string[];
+  // The repository file an icon was picked up from when the config named none (#1428), relative
+  // to the directory. Null when the icon was configured, or when there is none — so the preview
+  // can distinguish a setting from a discovery, which `iconUrl` cannot.
+  autoIcon: string | null;
 }
 
 export const EMPTY_DIR_CONFIG_EXTRAS: DirConfigExtras = {
@@ -75,6 +80,7 @@ export const EMPTY_DIR_CONFIG_EXTRAS: DirConfigExtras = {
   appendSystemPrompt: null,
   buttonLabels: [],
   chipLabels: [],
+  autoIcon: null,
 };
 
 // "The loader kept nothing for this key" — null/undefined, but also the empty collections the

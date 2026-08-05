@@ -1,10 +1,12 @@
-// Which agy conversation each antigravity session is running, as it is read from and written back
-// to disk.
+// Which of an agent's OWN conversations each session is running, as it is read from and written
+// back to disk. Shared by codex (a rollout id) and antigravity (a conversation id) for the reason
+// agent-resume.ts already gives about the read side: the problem is the same for both, and so is
+// the answer. Each agent keeps its own file; only the shape is shared.
 //
-// agy mints the conversation id itself and prints it nowhere we can read, so the spawn watcher
-// discovers it after the fact (agents/antigravity-session.ts). Kept only in memory, that mapping
-// dies with the process: after a restart nothing connects a session key to a conversation, and the
-// conversation becomes unreachable even though its directory is still sitting in agy's brain root.
+// Both agents mint that id themselves and print it nowhere we can read, so the spawn watcher
+// discovers it after the fact. Kept only in memory, the mapping dies with the process: after a
+// restart nothing connects a session key to a conversation, and the conversation becomes
+// unreachable even though its rollout / brain directory is still sitting on disk.
 //
 // An APPEND LOG, for the reason the memo log next door spells out: ~/.mulmoterminal is one
 // directory for every server on the machine, and launching twice is the ordinary way to get two
@@ -17,8 +19,12 @@
 //
 // One JSON object per line rather than the id log's bare `<id> <value>`: a cwd can contain spaces,
 // so there is no separator left to split on.
+//
+// `conversationId` names codex's rollout id too. The field is what an older build parses, and
+// antigravity's log has carried it since 2.9.0 — renaming it per agent would buy a word and cost
+// every log already on disk.
 
-export interface AntigravityConversation {
+export interface AgentConversation {
   sessionId: string;
   conversationId: string;
   cwd: string;
@@ -26,18 +32,18 @@ export interface AntigravityConversation {
 }
 
 /** One line of the log. */
-export function antigravityConversationLine(record: AntigravityConversation): string {
+export function agentConversationLine(record: AgentConversation): string {
   return `${JSON.stringify(record)}\n`;
 }
 
 /**
  * The record a parsed line holds, or null for anything unusable.
  *
- * Both ids are validated: they become a filename lookup under agy's brain root and the key a
+ * Both ids are validated: they become a lookup against the agent's own store and the key a
  * reconnect arrives with. `startedAt` is only ever displayed, so a line missing it is still worth
  * keeping — it is the id mapping that makes the conversation reachable again.
  */
-export function antigravityConversationRecord(parsed: Record<string, unknown>, isValidId: (id: string) => boolean): AntigravityConversation | null {
+export function agentConversationRecord(parsed: Record<string, unknown>, isValidId: (id: string) => boolean): AgentConversation | null {
   const { sessionId, conversationId, cwd, startedAt } = parsed;
   if (typeof sessionId !== "string" || !isValidId(sessionId)) return null;
   if (typeof conversationId !== "string" || !isValidId(conversationId)) return null;
@@ -51,7 +57,7 @@ export function antigravityConversationRecord(parsed: Record<string, unknown>, i
  * The log only grows, so a session relaunched somewhere else — or resumed after its conversation
  * was remapped — appends a second line rather than replacing the first.
  */
-export function applyAntigravityConversation(conversations: Map<string, AntigravityConversation>, record: AntigravityConversation): void {
+export function applyAgentConversation(conversations: Map<string, AgentConversation>, record: AgentConversation): void {
   conversations.set(record.sessionId, record);
 }
 
@@ -62,10 +68,6 @@ export function applyAntigravityConversation(conversations: Map<string, Antigrav
  * spawned while it was still reading, the file's line is older by definition. Overwriting would
  * answer with the conversation and directory that session used to have.
  */
-export function hydrateAntigravityConversationInto(
-  conversations: Map<string, AntigravityConversation>,
-  written: ReadonlySet<string>,
-  record: AntigravityConversation,
-): void {
-  if (!written.has(record.sessionId)) applyAntigravityConversation(conversations, record);
+export function hydrateAgentConversationInto(conversations: Map<string, AgentConversation>, written: ReadonlySet<string>, record: AgentConversation): void {
+  if (!written.has(record.sessionId)) applyAgentConversation(conversations, record);
 }

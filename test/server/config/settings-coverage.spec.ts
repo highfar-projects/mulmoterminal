@@ -57,6 +57,7 @@ const REACHABLE_BY: Record<string, Reachable> = {
   issueWorkComments: { ui: true, skill: CONFIG_SKILL },
   prWorkdirFooter: { ui: true, skill: CONFIG_SKILL },
   appendSystemPrompt: { ui: true, skill: CONFIG_SKILL },
+  autoDirIcon: { ui: true, skill: "mulmoterminal-dirs" },
   cockpitLines: { ui: true, skill: CONFIG_SKILL },
   fontFamily: { ui: true, skill: "mulmoterminal-dirs" },
 };

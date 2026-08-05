@@ -404,15 +404,17 @@ today — **Claude Code** (the default), **Codex**, and **Antigravity** (`agy`).
   cockpit roster next to Claude's. Because Codex only mints its rollout id **after** the first
   turn, the server watches `~/.codex/sessions/**/rollout-*.jsonl` (home overridable via
   `CODEX_HOME`) and maps the new rollout to the session — attributed only when it's
-  unambiguous, never by "newest wins". Resume reattaches a live PTY, adopts a surviving
-  tmux session, or cold-resumes the rollout id.
+  unambiguous, never by "newest wins". That mapping is appended to
+  `~/.mulmoterminal/codex-rollouts.jsonl`, so a conversation is still resumable after the server
+  restarts — without it a session whose tmux is also gone came back as a fresh codex. Resume
+  reattaches a live PTY, adopts a surviving tmux session, or cold-resumes the rollout id.
 - **Antigravity** — spawned as `agy` (override with `ANTIGRAVITY_BIN`; `ANTIGRAVITY_MODEL` sets
   `--model`). Antigravity runs on its own WebSocket (`/ws/antigravity`). Like Codex it mints its
   own conversation id, so the server watches `~/.gemini/antigravity-cli/brain/` (home overridable
   via `ANTIGRAVITY_HOME`) for the directory the new conversation creates — attributed only when
   unambiguous — and cold-resumes it with `--conversation <id>`. That mapping is appended to
   `~/.mulmoterminal/antigravity-conversations.jsonl`, so a conversation is still resumable after
-  the server restarts.
+  the server restarts — the same log Codex keeps, in the same format.
 
   Its **GUI tools work differently**, because `agy` takes no MCP flag: it reads its servers from
   `.agents/mcp_config.json` in the working directory. MulmoTerminal writes that file from the
@@ -571,6 +573,7 @@ The Settings modal (⚙) persists per-user UI choices to `~/.mulmoterminal/confi
 | `issueWorkComments` | Let a cell **comment on the issue it is working on**: **one comment**, posted when the work starts and then **edited** as the PR opens and merges (closing the issue if the forge has not already), each milestone stamped in UTC. The comment names the working **directory** it happened in — the folder name only, never the path — so a reader can tell which clone, and two terminals do not start the same issue twice. It says it came from MulmoTerminal. CI is deliberately not reported: it is on the PR already, and it flaps. **Off by default**; it writes to the forge, often on somebody else's issue. Needs the matching CLI logged in — `gh` for GitHub, `glab` for gitlab.com and any host declared in `gitlabHosts`. See the [Configuration guide](https://receptron.github.io/mulmoterminal/guide/en/config.html#issue-work-comments). Editable in Settings → **GitHub and GitLab**. |
 | `prWorkdirFooter` | Ends a PR body with `work in <clone>` — the directory name of the clone the work happened in, so a PR says which of several side-by-side checkouts produced it. Applies to **both** paths that open PRs here: **⧉ Open PR** appends it to the PR it creates, and every Claude session is told to end the bodies it writes with the same line (the name is resolved by the server, so a session inside a managed worktree still names the main checkout). **On by default**; set `false` to opt out, from Settings → **GitHub and GitLab** or the file — read per PR and per session spawn, so no restart is needed, and a second MulmoTerminal beside this one sees the change too. Appending is idempotent: an existing PR never gets a second copy. |
 | `appendSystemPrompt` | Whether a spawned Claude session is asked to end a reply with a **closing summary** — what was asked, what was achieved, what was not (see [Closing summary](#closing-summary)). **On by default**; set `false` to opt out, and a directory's `.mulmoterminal.json` outranks this. Settings → **Sessions and background tasks** has the switch. Read per spawn, so no restart is needed, though a session already running keeps what it was launched with. `true` / `false` only. |
+| `autoDirIcon` | Whether a project that sets no `icon` shows the favicon its repository already ships (`public/favicon.svg`, `apple-touch-icon.png`, a web manifest — first hit wins, ordered by how the image survives at 14px). **On by default**; Settings → **Directory appearance** has the switch. A single project opts out with `"icon": false` in its own `.mulmoterminal.json`, which this does not override. A key that was written and got it wrong shows nothing rather than falling back — a broken setting has to look broken. `true` / `false` only. |
 | `cockpitLines` | `{ summary, prompt, response }` — how many lines each **cockpit-roster** row shows before it clamps (default `2` / `2` / `3`, each clamped to `1`–`20`). Raising them trades how many sessions fit on screen for reading a long one in place. Three steppers in Settings → **Waiting rows**. |
 | `fontFamily` | The **terminal font** every session renders in — a CSS font-family stack, e.g. `"'Cica', 'MS Gothic', monospace"`. Set it in Settings → **Terminal font**, applied at once; editing the file instead needs a **restart** (this config is read once at startup). Unset uses the built-in stack (JetBrains Mono / Fira Code / Menlo / Consolas, then CJK faces for Japanese, Korean and Chinese). Unlike the per-browser font **size**, this is one value for the whole host — it names fonts, and which fonts exist is a property of the machine. A directory can override it. See the [Configuration guide](https://receptron.github.io/mulmoterminal/guide/en/config.html#font-family). |
 
@@ -684,6 +687,7 @@ malformed file is ignored.
 ```jsonc
 {
   "name": "PROD · payments",            // badge shown on this directory's terminals
+  "icon": "docs/logo.png",              // image on this dir's cells (path here, URL, or data:); omit to use the repo's favicon
   "badgeColor": "#cf222e",              // badge color (hex #rrggbb)
   "headerColor": "#190a23",             // cell header background (hex #rrggbb)
   "headerTextColor": "#ffffff",         // cell header text color (hex #rrggbb)
@@ -709,6 +713,7 @@ malformed file is ignored.
 | Field        | Meaning |
 | ------------ | ------- |
 | `name`       | Label shown as a badge in the terminal/cell header. |
+| `icon`       | An **image** marking this directory — shown in the cell header, the cockpit roster, the filmstrip thumbnails and the launcher's directory chips. Either a path **relative to this directory** (an absolute path, or a `../` that escapes it, is rejected), an `http(s)://` URL, or a `data:image/…` URI. PNG / JPEG / **GIF (animated plays)** / WebP / AVIF / SVG / ICO / BMP. Not to be confused with a header **button's** `icon`, which is a Material Symbols name. **Omit it and the repository's own favicon is used** (`public/favicon.svg`, `apple-touch-icon.png`, a web manifest — see `autoDirIcon`); `false` means no icon here and stops that search. |
 | `badgeColor` | Badge background color (`#rrggbb`); text auto-contrasts. |
 | `headerColor` | Header **background** color (`#rrggbb`) — the grid cell's header row and the terminal's own header row (grid row 2). While a terminal is working/blocked the status tint still shows; the custom color applies when idle. |
 | `headerTextColor` | Header **text** color (`#rrggbb`) — the dir path, title, and prompt. |

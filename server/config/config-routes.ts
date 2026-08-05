@@ -121,6 +121,13 @@ export function getIssueWorkComments(): boolean {
   return config.issueWorkComments;
 }
 
+// Whether a project with no `icon` of its own may show the favicon it already ships (#1428).
+// Read live for the same reason as the rest — turning it off recolours the next request, not
+// the next restart.
+export function getAutoDirIcon(): boolean {
+  return config.autoDirIcon;
+}
+
 export function getPushEnabled(): boolean {
   return config.pushEnabled;
 }

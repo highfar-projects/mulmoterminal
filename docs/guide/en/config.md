@@ -154,6 +154,65 @@ pick a different model on Anthropic itself. → [Using another model via OpenRou
 
 All values are `#rrggbb`. The working / needs-you status colors take priority over these background colors (which show when idle).
 
+### Project icon (`icon`) {#dir-icon}
+
+`icon` puts an **image** next to the name badge — the project's own logo, so a cell is recognisable
+before you have read a word of it:
+
+```jsonc
+{
+  "icon": "docs/logo.png",                  // a file in this directory
+  // "icon": "https://example.com/logo.svg" // or a URL
+  // "icon": "data:image/png;base64,iVBO…"  // or an inline image
+}
+```
+
+It appears in the **cell header**, the **cockpit roster** and the **filmstrip thumbnails** while a
+cell is enlarged, and on the **launcher's directory chips** — so the same picture identifies the
+project everywhere it is offered or running.
+
+- **A path is relative to this directory.** An absolute path, or a `../` that escapes the
+  directory, is rejected — the same confinement `sound` has, so an opened project cannot point
+  MulmoTerminal at files elsewhere on your machine.
+- **Formats:** PNG, JPEG, **GIF (an animated one plays)**, WebP, AVIF, SVG, ICO, BMP. A file with
+  any other extension is ignored.
+- **Commit it to the repository.** That is what makes a fresh clone — and a
+  [worktree](#worktree-inherit) cut from it — arrive with the icon already set; the `icon` key is
+  carried over as written, so the same relative path resolves in the worktree's own tree.
+- An icon that stops resolving (a renamed file, a host that is down) simply doesn't appear. Check
+  what the app actually resolved in Settings → [When a setting isn't working](#dir-settings-preview).
+- Not to be confused with a header **button's** `icon`, which is a
+  [Material Symbols](https://fonts.google.com/icons) name rather than a picture.
+
+### The favicon is picked up on its own {#auto-dir-icon}
+
+You usually do not need to write `icon` at all. A directory that sets **none** shows the icon its
+repository already ships:
+
+1. `public/favicon.svg`, then `favicon.svg`
+2. `public/apple-touch-icon.png`, then `apple-touch-icon.png`
+3. `public/favicon.png`, then `favicon.png`
+4. `public/favicon.ico`, then `favicon.ico`
+5. a web manifest (`public/site.webmanifest`, `public/manifest.json`, or either at the root) — its
+   largest non-`maskable` icon
+
+First hit wins, ordered by how the image survives being drawn at 14px rather than by how common it
+is. `docs/logo.png` and `assets/logo.*` are deliberately **not** searched: a "logo" is as often a
+wide README banner as an icon, and one of those at 14 square pixels is a smudge.
+
+Two ways to turn it off, meaning different things:
+
+- **`"icon": false`** in a project's own file — no icon on *this* project's cells. Worktrees
+  inherit it.
+- **`autoDirIcon: false`** in `~/.mulmoterminal/config.json`, or the checkbox in
+  Settings → *Directory appearance* — off everywhere. Reach for this if the behaviour itself is
+  unwanted; writing `"icon": false` into every repository is not the way.
+
+**A key written wrong does not fall back to the favicon.** `"icon": "logo.png"` pointing at a file
+that isn't there leaves the cell with no icon at all, on purpose — a broken setting has to look
+broken. Settings → [When a setting isn't working](#dir-settings-preview) lists the key under the
+ones that were dropped.
+
 ### Sound for this directory
 
 ```jsonc
@@ -257,8 +316,10 @@ of the grid, looking like an unrelated project.
 
 Now a new worktree is given its own copy, derived from the project's:
 
-- **The identity is copied as written** — `name`, `theme`, `colors`, `fontSize`, `fontFamily`,
-  `provider`, `model`. Same project, same terminal, same model.
+- **The identity is copied as written** — `name`, `icon`, `theme`, `colors`, `fontSize`,
+  `fontFamily`, `provider`, `model`. Same project, same terminal, same model. `icon` is carried as
+  the path you typed rather than the file it resolved to, so a logo committed to the repository is
+  found again inside the worktree; one that is gitignored simply doesn't appear there.
 - **The chrome colours are rotated a little around the colour wheel** — `badgeColor`,
   `headerColor`, `headerTextColor`, `cellColor`, `cellBorderColor`, `dotColor`, `buttonColor`. Each
   worktree of a project sits one 12-degree step further round than the one before it, so a row of

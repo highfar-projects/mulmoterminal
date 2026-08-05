@@ -94,6 +94,7 @@ const rosterRow = (uid: number, over: Partial<CockpitRow> = {}): CockpitRow => (
   workPhase: null,
   headerColor: null,
   headerTextColor: null,
+  iconUrl: null,
   parked: false,
   ...over,
 });
