@@ -31,7 +31,7 @@ Here is a cell with nothing configured. The header has two rows.
 | Where | What's there | What config changes |
 |---|---|---|
 | Row 1, left | the status dot and **info chips** like `⎇ main` | [`chips`](#chips) reorders, hides and adds |
-| Row 1, right | expand / sleep / close — **cell actions** | not configurable (app structure) |
+| Row 1, right | expand / set aside / close — **cell actions** | not configurable (app structure) |
 | Row 2, left | `~/acme-api ▾` — the **path menu** (below) | not configurable |
 | Row 2, right | the **Skill** dropdown and a row of **icon buttons** | [`buttons`](#first-button) lands here |
 

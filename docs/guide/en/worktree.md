@@ -55,9 +55,13 @@ Not inside the repository you are working in — under MulmoTerminal's own direc
 
 The folder name is the branch with its **first segment dropped** (`agent/fix-login` → `fix-login`,
 `issue/1026-fix-login` → `1026-fix-login`), so it stays one level deep — otherwise `worktree add`
-would happily dig another folder below the root. Move the root with the `MULMOTERMINAL_HOME`
-environment variable (→ [Configuration → environment variables](config.html#env)). Nothing is
-scattered inside the repo, so a worktree never dirties its `git status`.
+would happily dig another folder below the root.
+
+Setting the `MULMOTERMINAL_HOME` environment variable moves **this worktree root only**
+(→ [Configuration → environment variables](config.html#env)); the other things kept under
+`~/.mulmoterminal` (the rate-limit cache, backups) stay where they are.
+
+Nothing is scattered inside the repo, so a worktree never dirties its `git status`.
 
 ---
 

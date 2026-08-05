@@ -58,7 +58,10 @@ worktree の作成自体は成功します。
 `fix-login`、`issue/1026-fix-login` なら `1026-fix-login`）。1 階層に収めるためで、
 そうしないと `worktree add` がルートの下にもう 1 段フォルダを掘ってしまいます。
 
-ルートは環境変数 `MULMOTERMINAL_HOME` で移せます（→ [設定 → 環境変数](config.html#env)）。
+環境変数 `MULMOTERMINAL_HOME` を設定すると、**この worktree のルートだけ**が動きます
+（→ [設定 → 環境変数](config.html#env)）。`~/.mulmoterminal` に置かれる他のもの（レート制限の
+キャッシュ、バックアップなど）は移動しません。
+
 リポジトリの中に散らからないので、`git status` が worktree で汚れることはありません。
 
 ---
