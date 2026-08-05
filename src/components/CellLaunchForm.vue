@@ -335,19 +335,20 @@ const mcpGroupTitle = (group: ToolGroup): string =>
 // whether there is one — the alternative asserts in the hover what the branch already decided.
 const mcpGroupFailure = (group: ToolGroup): string | undefined => mcpGroupFailed.value[group] ?? undefined;
 
-// The workspace has no per-directory choice to offer: a session started there is handed the WHOLE
-// GUI MCP on one URL, whatever agent runs it (`carriesFullGuiMcp`, server/session/mcp-config.ts).
-// The four switches are not merely redundant there — a group URL serves nothing to a session that
-// already carries every tool (server/mcp/tool-gate.ts), so they would visibly do nothing.
+// Is the launch pointed at the workspace? On its own this decides only the WORKTREE row below —
+// whether the four MCP switches have anything to offer takes the AGENT as well, which is
+// `workspaceGivesEveryTool` right underneath (an agy or grok session in the workspace is handed
+// nothing at spawn, so the switches are its only route to a GUI tool and must stay).
 //
 // Asked of the directory the launch will USE, not of the field: an empty field means the workspace
 // (see dirFor), which is exactly the case a comparison against the raw input would miss.
 const inWorkspace = computed(() => isSameDirPath(targetDir.value, props.defaultCwd));
 
 // The workspace answers "every tool automatically" only for an agent that can RECEIVE a per-spawn
-// config — the directory alone is not enough. Antigravity reads a per-directory file instead, so it
-// gets what that directory registered wherever it runs, and telling it otherwise here both stated
-// something untrue and hid the toggles that were its only way to register anything (#1423).
+// config — the directory alone is not enough. Antigravity and grok read a per-directory file
+// instead, so each gets what that directory registered wherever it runs, and telling them otherwise
+// here both stated something untrue and hid the toggles that were their only way to register
+// anything (#1423).
 //
 // Kept apart from `inWorkspace` rather than folded into it: the worktree row below asks the
 // directory question and only that, and the two would have drifted the moment either changed.

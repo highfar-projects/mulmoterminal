@@ -23,6 +23,7 @@ description: Configuring MulmoTerminal — the settings modal, per-project colou
 | Two `yarn dev` **fighting over port 3000** | [A port per worktree](#worktree-env) |
 | A **worktree** looks like a different project | [Worktrees inherit this file](#worktree-inherit) |
 | **No Canvas** when you enlarge a cell / no GUI tools | [Which directory to launch in](basics.html#launch-dir) |
+| **Antigravity or Grok** has no GUI tools, even in the workspace | [Antigravity and Grok register everywhere](basics.html#antigravity-gui-tools) |
 | Run on **a model other than Claude** | [Providers](#providers) |
 | Start Claude Code through **your own command** (`ollama launch claude …`) | [Custom agents](#custom-agents) |
 | Add **your own button** to the header | [Customizing the header](#header) |
