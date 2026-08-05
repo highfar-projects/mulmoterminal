@@ -2,6 +2,7 @@
 // The model id and token count come from the transcript (server /api/session/:id); the agent kind
 // is known client-side.
 import { presetFor } from "./modelOption";
+import type { TerminalAgent } from "../../common/sessionAgent";
 
 // Substring → short label for Claude's model families, matched case-insensitively. Anything else
 // (a codex model, a future provider) falls back to the id's tail.
@@ -35,8 +36,10 @@ const CONTEXT_WINDOWS: { match: string; tokens: number }[] = [
 ];
 const PERCENT = 100;
 
-const AGENT_NAME = { claude: "Claude", codex: "Codex", antigravity: "Antigravity" } as const;
-export type BadgeAgent = keyof typeof AGENT_NAME;
+// A Record over TERMINAL_AGENTS rather than a free object: this is what the badge CALLS each agent,
+// and an agent missing from it would otherwise badge a session `undefined · <model>`.
+const AGENT_NAME: Record<TerminalAgent, string> = { claude: "Claude", codex: "Codex", antigravity: "Antigravity", grok: "Grok" };
+export type BadgeAgent = TerminalAgent;
 
 export function shortModelLabel(model: string): string {
   const preset = presetFor(model);

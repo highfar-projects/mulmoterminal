@@ -420,6 +420,7 @@ const CELL_FOR_AGENT: Record<LaunchAgent, (cwd: string) => Omit<Cell, "uid">> = 
   claude: (cwd) => ({ session: null, cwd }),
   codex: (cwd) => ({ session: null, cwd, agent: "codex" }),
   antigravity: (cwd) => ({ session: null, cwd, agent: "antigravity" }),
+  grok: (cwd) => ({ session: null, cwd, agent: "grok" }),
 };
 const cellForAgent = (cwd: string, agent: LaunchAgent | undefined): Omit<Cell, "uid"> => (agent ? CELL_FOR_AGENT[agent](cwd) : shellCell(cwd));
 

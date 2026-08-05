@@ -13,23 +13,45 @@ import { isRecord } from "../../common/isRecord.js";
 import { backgroundMarkers, markFailedWorker, markUnplacedSession } from "../session/registry.js";
 import { runWithHiddenMarker } from "../session/hiddenMarker.js";
 import { registerCompletionHook } from "../session/completion-hooks.js";
-import { backgroundChatMessage, parseBackgroundChat, spawnModeFor } from "../session/background-chat.js";
+import { backgroundChatMessage, parseBackgroundChat, spawnModeFor, type SpawnMode } from "../session/background-chat.js";
 import { registeredGuiMcpGroups } from "../infra/gui-mcp-registration.js";
-import { TOOL_GROUPS } from "../../common/toolGroups.js";
+import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups.js";
 import { codexifySkillSeed } from "../agents/codex-skills.js";
 import { manageCollectionHandler } from "../infra/collection-tool.js";
 import { upstreamFailureMessage } from "./plugin-narration.js";
-import type { SpawnClaudePty, SpawnCodexPty, SpawnAntigravityPty } from "../session/spawners.js";
+import type { SpawnClaudePty, SpawnCodexPty, SpawnAntigravityPty, SpawnGrokPty } from "../session/spawners.js";
 
 export interface PluginRouteDeps {
   spawnClaudePty: SpawnClaudePty;
   spawnCodexPty: SpawnCodexPty;
   spawnAntigravityPty: SpawnAntigravityPty;
+  spawnGrokPty: SpawnGrokPty;
   /** Put a hidden spawn on the scheduled-session retention (#541). Nobody watches a
    *  background worker and the chat list keeps it behind a filter, so the hook-driven reap
    *  is the only thing that would ever end it — and a worker blocked on a permission prompt
    *  never fires the hook that starts it. */
   registerBackgroundSession: (id: string) => void;
+}
+
+// Which agent to start, and how the seed reaches it — one switch over SpawnMode, so an agent added
+// to TERMINAL_AGENTS reaches this as a mode with no case rather than as a silent claude spawn.
+//
+// ws is null on every branch: the session runs headless until the user opens it (a reattach replays
+// the buffered output). A claude DRAFT spawns with no initial prompt, so it does not auto-run, and
+// the text is typed into its input box afterwards; the other agents have no editable-draft path (no
+// stable TUI ready-marker), so their seed always auto-runs as a first-turn prompt — codex typed in,
+// agy through `--prompt-interactive`, grok as a positional.
+function spawnSeededSession(
+  deps: PluginRouteDeps,
+  mode: SpawnMode,
+  { sessionId, message, mcpGroups }: { sessionId: string; message: string; mcpGroups: readonly ToolGroup[] },
+): void {
+  const initialPrompt = codexifySkillSeed(message);
+  if (mode === "codex-run") deps.spawnCodexPty(sessionId, null, null, CLAUDE_CWD, true, { initialPrompt });
+  else if (mode === "antigravity-run") deps.spawnAntigravityPty(sessionId, null, null, CLAUDE_CWD, { mcpGroups, initialPrompt });
+  else if (mode === "grok-run") deps.spawnGrokPty(sessionId, null, null, CLAUDE_CWD, { mcpGroups, initialPrompt });
+  else if (mode === "claude-draft") deps.spawnClaudePty(sessionId, null, null, { draft: message });
+  else deps.spawnClaudePty(sessionId, null, null, { initialPrompt: message });
 }
 
 export function mountPluginRoutes(app: Express, deps: PluginRouteDeps): void {
@@ -46,24 +68,14 @@ export function mountPluginRoutes(app: Express, deps: PluginRouteDeps): void {
     if (!parsed.ok) return res.json({ message: parsed.message });
     const { agent, draft, hidden, message } = parsed.request;
     const sessionId = randomUUID();
-    // agy reads its GUI MCP servers from a file in the working directory, shared with every other
-    // session there, so the groups have to be resolved BEFORE the spawn rewrites it — passing none
-    // would clear the entries those sessions are using (#1095 review).
-    const mcpGroups = agent === "antigravity" ? await registeredGuiMcpGroups(CLAUDE_CWD, TOOL_GROUPS).catch(() => []) : [];
-    // ws is null: the session runs headless until the user opens it (reattach replays the buffered
-    // output). A claude draft spawns with NO initial prompt (so it doesn't auto-run) and gets the text
-    // typed into its input box. The other agents have no editable-draft path (no stable TUI
-    // ready-marker), so their seed always auto-runs as a first-turn prompt on the command line —
-    // codex positionally, agy through `--prompt-interactive`.
+    // The agents that read their GUI MCP servers from a FILE in the working directory — agy's
+    // `.agents/mcp_config.json` and grok's `.grok/config.toml` — share that file with every other
+    // session running there, so the groups have to be resolved BEFORE the spawn rewrites it:
+    // passing none would clear the entries those sessions are using (#1095 review).
+    const fileConfigAgent = agent === "antigravity" || agent === "grok";
+    const mcpGroups = fileConfigAgent ? await registeredGuiMcpGroups(CLAUDE_CWD, TOOL_GROUPS).catch(() => []) : [];
     try {
-      runWithHiddenMarker(hidden, sessionId, backgroundMarkers, () => {
-        const mode = spawnModeFor(agent, draft);
-        if (mode === "codex-run") deps.spawnCodexPty(sessionId, null, null, CLAUDE_CWD, true, { initialPrompt: codexifySkillSeed(message) });
-        else if (mode === "antigravity-run")
-          deps.spawnAntigravityPty(sessionId, null, null, CLAUDE_CWD, { mcpGroups, initialPrompt: codexifySkillSeed(message) });
-        else if (mode === "claude-draft") deps.spawnClaudePty(sessionId, null, null, { draft: message });
-        else deps.spawnClaudePty(sessionId, null, null, { initialPrompt: message });
-      });
+      runWithHiddenMarker(hidden, sessionId, backgroundMarkers, () => spawnSeededSession(deps, spawnModeFor(agent, draft), { sessionId, message, mcpGroups }));
       // Visible: somebody should be able to SEE this session. The browser that asked for it
       // places it immediately (useChatLauncher), and this covers every other caller — an agent
       // calling the tool from another session, with no tab open at all. The mark is cleared the

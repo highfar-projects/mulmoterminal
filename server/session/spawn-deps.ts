@@ -7,6 +7,8 @@ export interface SpawnDeps {
   codexModel: string | null;
   antigravityBin: string;
   antigravityModel: string | null;
+  grokBin: string;
+  grokModel: string | null;
   permissionMode: string;
   /** Tool names auto-allowed for every session, already comma-joined. */
   guiMcpTools: string;

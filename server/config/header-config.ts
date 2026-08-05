@@ -11,6 +11,7 @@
 // only the built-in buttons show.
 
 import { isRecord } from "../../common/isRecord.js";
+import type { TerminalAgent } from "../../common/sessionAgent.js";
 
 import {
   RUN_TYPES,
@@ -61,7 +62,7 @@ export interface HeaderContext {
   branch: string | null;
   repo: string | null;
   model: string | null;
-  agent: "claude" | "codex" | "antigravity";
+  agent: TerminalAgent;
   session: string | null;
   remoteUrl: string | null;
   dirty: number;

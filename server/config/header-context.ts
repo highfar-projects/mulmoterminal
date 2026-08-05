@@ -9,6 +9,7 @@ import { repoForRemote } from "../git/forge-support.js";
 import { mergeHeaderConfig, type HeaderConfig, type HeaderContext } from "./header-config.js";
 import { loadDirConfig } from "./dir-config.js";
 import { isStrictlyWithin } from "../infra/path-within.js";
+import type { TerminalAgent } from "../../common/sessionAgent.js";
 
 const WORKTREES_ROOT = path.join(os.homedir(), ".mulmoterminal", "worktrees");
 
@@ -32,7 +33,7 @@ async function remoteInfo(cwd: string): Promise<{ remoteUrl: string | null; repo
 
 export interface SessionMeta {
   session: string | null;
-  agent: "claude" | "codex" | "antigravity";
+  agent: TerminalAgent;
   model: string | null;
 }
 
