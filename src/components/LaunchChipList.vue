@@ -14,7 +14,7 @@ const emit = defineEmits<{ (e: "pick", index: number): void }>();
 </script>
 
 <template>
-  <div v-if="chips.length" class="flex w-full max-w-[360px] flex-col items-center gap-1.5">
+  <div v-if="chips.length" class="flex w-full flex-col items-center gap-1.5">
     <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">{{ heading }}</span>
     <div class="flex w-full flex-wrap justify-center gap-1.5">
       <button
