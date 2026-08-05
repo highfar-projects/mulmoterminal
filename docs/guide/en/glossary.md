@@ -3,7 +3,7 @@ title: Glossary — parallel agents, worktrees, vibe coding
 nav_title: Glossary
 layout: default
 parent: English
-nav_order: 13
+nav_order: 15
 description: Vibe coding, parallel agents, AI coding agents, git worktrees, the cockpit roster — the words this guide uses, tied to what you actually see on screen in MulmoTerminal.
 ---
 
@@ -100,7 +100,7 @@ A git feature that checks out another branch of the same repository into its own
 **several agents can work one repository without colliding**. That is what makes parallel work
 practical. A cell's launcher can create a worktree and start the session inside it.
 
-→ [Scenarios](scenarios.html)
+→ [Isolating work in a git worktree](worktree.html)
 
 ## Session persistence (tmux)
 

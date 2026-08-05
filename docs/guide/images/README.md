@@ -31,6 +31,22 @@ for this reason.
 | `v4.2.0-pane-split.png` | The Canvas pane in SPLIT view beside an enlarged terminal — a wide table with its last four columns cut off at the pane's edge |
 | `v4.2.0-pane-full.png` | The same table after the pane's expand button — full terminal row, every column visible, cockpit roster unmoved |
 | `v4.2.0-done-green.png` | A 3×3 grid holding all three active states at once: five working (blue), two done (green), two waiting (amber) |
+| `header-default.png` | A cell header with nothing configured — the one default button (`pick-file`) beside the fixed cell controls |
+| `header-custom.png` | The same header width with five configured `buttons` and an `env staging` custom chip |
+| `header-before-after.png` | Both of the above side by side — unconfigured cell left, configured right |
+| `header-path-menu.png` | The path menu open: Reveal in the file manager / Browse files in the app / New terminal here |
+| `header-skill-menu.png` | The Skill dropdown listing the bundled `mulmoterminal-*` skills |
+| `header-shell-cell.png` | The command cell a `run: "shell"` button opens, with `yarn test` output and `[finished]` |
+
+The six `header-*.png` were captured for [`../{en,ja}/header.md`](../en/header.md) from a demo
+instance on `HOME=/tmp/mt-demo` (`acme-web` / `acme-api`, header config in
+`acme-web/.mulmoterminal.json`), at `deviceScaleFactor: 1` because terminals are in frame.
+The cells show Claude's folder-trust prompt: the demo `HOME` is not logged in, which is what keeps
+any account out of the shot.
+
+**A config button's tooltip cannot be screenshotted.** `label` renders as the browser's native
+`title`, which no headless capture includes — so `header-custom.png` deliberately shows the icons
+with no text, and the page explains the hover in prose rather than faking a tooltip.
 
 ## Not yet captured (need a live Claude/Codex session)
 

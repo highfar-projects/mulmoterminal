@@ -71,7 +71,7 @@ MulmoTerminal はそのためのコックピットです。ブラウザのター
 ### worktree 隔離 & ワンクリック PR
 
 同じリポに複数エージェントを走らせても衝突しない **git worktree**。差分パネル・コミット・Push・
-**Open PR** までセルの中から。→ [応用編](scenarios.html)
+**Open PR** までセルの中から。→ [worktree で作業を隔離する](worktree.html)
 
 ### GUI パネル — ターミナルの横に「画面」
 
