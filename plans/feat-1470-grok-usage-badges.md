@@ -71,7 +71,23 @@ conversation big enough for a sidecar keeps its total on disk, so a restart does
   updates. Model: `current_model_id` from the summary first (what it is running NOW), signals'
   `primaryModelId` (what it has mostly run under) only as the fallback for a conversation whose
   summary has not been written yet — they differ for the rest of a session after `/model`.
-- No UI change. The badges have been agent-agnostic since #1465; only their inputs were empty.
+- `src/components/TerminalCell.vue` — grok joins agy in the untracked-badge poll, and nothing
+  else: the badges themselves have been agent-agnostic since #1465, so only their inputs were
+  empty. See "Keeping it live".
+
+## Keeping it live
+
+grok has no activity tracker and publishes no hooks, so nothing calls `setWorking` for a grok
+cell — which means the `working -> idle` watch that re-reads every other agent's badges never
+fires, and neither does `refreshBadgesIfModelUnknown` (it needs an activity push). A first read
+taken as the cell announced its id would then be the only one the session ever got: `ctx 0%`, or
+no badge at all, for the rest of it (Codex review).
+
+The substitute already existed for agy, which has the same gap: `UNTRACKED_BADGE_POLL_MS` in
+`TerminalCell.vue`. grok joins it — the set is now `{antigravity, grok}`, one `/api/session` read
+per untracked cell per minute, and for grok that read is two small JSON files plus a fold resumed
+at the byte the last poll stopped on. It goes away for grok the day grok gets a tracker, exactly
+as agy's does.
 
 ## Not done
 

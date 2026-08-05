@@ -873,9 +873,10 @@ describe("TerminalCell", () => {
     expect(detailReads).toBe(settled);
   });
 
-  // agy's context reading moves every turn, and agy has no turn end to hang a refresh on — so
-  // without this the percentage is frozen at whatever it was when the cell first asked.
-  it("re-reads an antigravity cell's badges on a timer, and no other agent's", async () => {
+  // agy's and grok's context readings move every turn, and neither agent has a turn end to hang a
+  // refresh on — so without this the percentage is frozen at whatever it was when the cell first
+  // asked. Claude and codex both settle a turn, and must not become pollers.
+  it("re-reads an untracked cell's badges on a timer, and no tracked agent's", async () => {
     vi.useFakeTimers();
     try {
       const id = "55555555-5555-5555-5555-555555555555";
@@ -896,19 +897,23 @@ describe("TerminalCell", () => {
         };
       }) as unknown as typeof fetch;
 
-      const agy = mountCell(id, { initialAgent: "antigravity" });
-      await vi.advanceTimersByTimeAsync(1);
-      const afterMount = detailReads;
-      await vi.advanceTimersByTimeAsync(60_000);
-      expect(detailReads).toBeGreaterThan(afterMount);
-      agy.unmount();
+      for (const untracked of ["antigravity", "grok"] as const) {
+        const w = mountCell(id, { initialAgent: untracked });
+        await vi.advanceTimersByTimeAsync(1);
+        const afterMount = detailReads;
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(detailReads, untracked).toBeGreaterThan(afterMount);
+        w.unmount();
+      }
 
-      const claude = mountCell(id);
-      await vi.advanceTimersByTimeAsync(1);
-      const claudeSettled = detailReads;
-      await vi.advanceTimersByTimeAsync(60_000);
-      expect(detailReads).toBe(claudeSettled);
-      claude.unmount();
+      for (const tracked of ["claude", "codex"] as const) {
+        const w = mountCell(id, { initialAgent: tracked });
+        await vi.advanceTimersByTimeAsync(1);
+        const settled = detailReads;
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(detailReads, tracked).toBe(settled);
+        w.unmount();
+      }
     } finally {
       vi.useRealTimers();
     }

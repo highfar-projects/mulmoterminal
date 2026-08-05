@@ -17,7 +17,10 @@ one `turn_completed` record per turn in `updates.jsonl` carrying that turn's tok
 now reads `Grok · ctx 33%` with the `⇡ ⇣` token badge beside it, and like codex it never consults
 the client's per-model window table, which has been wrong (#985). The per-turn usage is summed, not
 tailed — it rises and falls per turn, so only the whole file answers — which is affordable because
-the fold from #1377 charges a later poll only for the bytes the last turn appended.
+the fold from #1377 charges a later poll only for the bytes the last turn appended. grok drives no
+activity flags, so — as for Antigravity, which has the same gap — the badges are refreshed on the
+once-a-minute timer rather than at turn end; without it the first reading a cell took would be the
+only one it ever showed.
 
 **The launcher's resume list is the picked agent's own history (#1417).** "OR RESUME HERE" read
 `~/.claude/projects` whatever the Agent Picker said, so choosing Codex, Antigravity or Grok still
