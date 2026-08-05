@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { listRooms, postToRoom, readRoom, roomFile, roomsDir } from "../../../server/rooms/rooms";
@@ -55,6 +55,29 @@ describe("postToRoom / readRoom", () => {
 
   it("reads an unknown room as empty — a conversation that has not started is not a failure", () => {
     expect(readRoom("never-used")).toEqual([]);
+  });
+
+  // "Nothing has been said" and "I could not find out" are different answers, and they were both
+  // being given as an empty conversation — so a caller carried on without history it needed
+  // (CodeRabbit review on #1456).
+  it("throws rather than answering empty when the room cannot be read", () => {
+    postToRoom("locked", "#1", "secret");
+    const file = roomFile("locked");
+    if (!file) throw new Error("expected a file");
+    chmodSync(file, 0o000);
+    try {
+      // Running as root defeats the permission bit; the assertion below is what matters and only
+      // runs where the bit is honoured.
+      let threw = false;
+      try {
+        readRoom("locked");
+      } catch {
+        threw = true;
+      }
+      if (process.getuid?.() !== 0) expect(threw).toBe(true);
+    } finally {
+      chmodSync(file, 0o600);
+    }
   });
 
   // Append-only, because MULMOTERMINAL_HOME is shared and a room has several writers BY DESIGN —

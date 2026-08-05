@@ -31,11 +31,19 @@ export const MAX_MESSAGE_CHARS = 4000;
 export const WINDOW_MESSAGES = 12;
 export const WINDOW_CHARS = 8000;
 
-/** Trim a post to what a room will store. Counted in code points so a limit means the same thing
- *  for Japanese as for English and no surrogate pair is split. */
+const TRUNCATION_MARK = "\n… (truncated)";
+
+/** Trim a post to what a room will store — INCLUDING the mark that says it was trimmed.
+ *
+ *  Counted in code points, so a limit means the same thing for Japanese as for English and no
+ *  surrogate pair is split. The mark's own length is reserved before slicing: the limit is there
+ *  so one post cannot fill a reader's context, and a function that answers more than its own
+ *  limit is wrong in exactly the direction that matters (CodeRabbit review on #1456). */
 export function clipMessage(text: string, maxChars: number = MAX_MESSAGE_CHARS): string {
   const chars = [...text];
-  return chars.length <= maxChars ? text : `${chars.slice(0, maxChars).join("")}\n… (truncated)`;
+  if (chars.length <= maxChars) return text;
+  const room = Math.max(0, maxChars - [...TRUNCATION_MARK].length);
+  return `${chars.slice(0, room).join("")}${TRUNCATION_MARK}`;
 }
 
 /** The last messages of a room, newest-last, within both limits. Takes from the END: a speaker

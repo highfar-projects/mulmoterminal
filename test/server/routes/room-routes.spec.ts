@@ -3,13 +3,13 @@
 // id reaches a FILE PATH, and posting writes into a file every agent in a running table then reads
 // — so a page on another origin must not be able to put words in the conversation (#1456).
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import express from "express";
 import request from "supertest";
 import { mountRoomRoutes } from "../../../server/routes/room-routes";
-import { postToRoom } from "../../../server/rooms/rooms";
+import { postToRoom, roomFile } from "../../../server/rooms/rooms";
 
 const app = express();
 app.use(express.json());
@@ -61,6 +61,21 @@ describe("GET /api/rooms/:room", () => {
     const res = await request(app).get("/api/rooms/quiet");
     expect(res.status).toBe(200);
     expect(res.body.messages).toEqual([]);
+  });
+
+  // A read failure must NOT look like an empty conversation, or the caller carries on without
+  // history it needed (CodeRabbit review on #1456).
+  it("answers 500 rather than 200-with-nothing when the room cannot be read", async () => {
+    postToRoom("locked", "#1", "secret");
+    const file = roomFile("locked");
+    if (!file) throw new Error("expected a file");
+    chmodSync(file, 0o000);
+    try {
+      const res = await request(app).get("/api/rooms/locked");
+      if (process.getuid?.() !== 0) expect(res.status).toBe(500);
+    } finally {
+      chmodSync(file, 0o600);
+    }
   });
 });
 

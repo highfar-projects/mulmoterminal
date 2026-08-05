@@ -37,11 +37,12 @@ describe("clipMessage", () => {
     expect(clipMessage("hello")).toBe("hello");
   });
 
-  // A room is read INTO an agent's context, so one post must not be able to fill it.
-  it("cuts a message that would fill a reader's context", () => {
+  // A room is read INTO an agent's context, so one post must not be able to fill it — and the
+  // result has to respect the limit it declares, mark included (CodeRabbit review on #1456).
+  it("cuts a message to AT MOST the limit, counting the truncation mark", () => {
     const clipped = clipMessage("x".repeat(MAX_MESSAGE_CHARS + 500));
     expect(clipped).toContain("truncated");
-    expect([...clipped].length).toBeLessThan(MAX_MESSAGE_CHARS + 100);
+    expect([...clipped].length).toBeLessThanOrEqual(MAX_MESSAGE_CHARS);
   });
 
   // Code points, not UTF-16 units — a limit must mean the same thing for Japanese as for English.

@@ -25,19 +25,21 @@ export function roomFile(room: string): string | null {
   return isRoomId(room) ? path.join(roomsDir(), `${room}${ROOM_EXT}`) : null;
 }
 
-/** Everything said in a room, oldest first. An unknown room is empty rather than an error: a
- *  reader asking about a conversation that has not started yet is not a failure. */
+/** Everything said in a room, oldest first.
+ *
+ *  A room that does not exist is EMPTY; a room that cannot be read THROWS. Those are different
+ *  answers and were being given the same one: a permission error came back as an empty
+ *  conversation, so a caller could not tell "nothing has been said" from "I could not find out",
+ *  and would carry on without history it needed (CodeRabbit review on #1456).
+ *
+ *  Bounded by how much was posted, which is capped per message and written only by this machine's
+ *  own tools — but a room is a CONVERSATION, and those grow. Read whole for now; if a room ever
+ *  needs to outgrow memory it wants a tail read, not a bigger buffer. */
 export function readRoom(room: string): RoomMessage[] {
   const file = roomFile(room);
   if (!file) return [];
-  try {
-    // Bounded by how much was posted, which is capped per message and written only by this
-    // machine's own tools — but a room is a CONVERSATION, and those grow. Read whole for now;
-    // if a room ever needs to outgrow memory it wants a tail read, not a bigger buffer.
-    return existsSync(file) ? parseRoom(readFileSync(file, "utf8")) : [];
-  } catch {
-    return [];
-  }
+  if (!existsSync(file)) return [];
+  return parseRoom(readFileSync(file, "utf8"));
 }
 
 /** Append one message. Returns what was stored (the text may have been clipped), or null when the
@@ -60,6 +62,8 @@ export function postToRoom(room: string, from: string, text: string, at: number 
  *  room would cost the whole history of every conversation to answer "which ones are there". */
 export function listRooms(): string[] {
   try {
+    // The only swallowed failure here is the directory not existing yet, which is the ordinary
+    // state before anybody has started a conversation.
     return readdirSync(roomsDir(), { withFileTypes: true })
       .filter((entry) => entry.isFile() && entry.name.endsWith(ROOM_EXT))
       .map((entry) => entry.name.slice(0, -ROOM_EXT.length))

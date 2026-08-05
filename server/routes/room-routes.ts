@@ -40,7 +40,16 @@ export function mountRoomRoutes(
   app.get("/api/rooms/:room", (req: Request, res: Response) => {
     const room = req.params.room;
     if (!isRoomId(room)) return res.status(400).json({ error: "invalid room id — lowercase letters, digits and - only" });
-    res.json({ room, messages: messagesSince(readRoom(room), sinceMs(req.query.since)) });
+    try {
+      return res.json({ room, messages: messagesSince(readRoom(room), sinceMs(req.query.since)) });
+    } catch (err) {
+      // 500, never 200-with-nothing: a caller that cannot tell "nobody has spoken" from "I could
+      // not read it" will carry on without history it needed (CodeRabbit review on #1456). What to
+      // DO about it is the caller's call — the round-table runner degrades to the previous turn
+      // rather than ending a live conversation (see useRoundTable).
+      console.warn(`[rooms] could not read ${room}: ${err instanceof Error ? err.message : String(err)}`);
+      return res.status(500).json({ error: "could not read the room" });
+    }
   });
 
   // Post. Same-origin guarded like every other mutation here: this writes to a file every agent
