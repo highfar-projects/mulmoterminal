@@ -150,21 +150,6 @@ export function liveRoundTableDeps(isAborted: () => boolean): RoundTableDeps {
   };
 }
 
-/** A room id for one table: readable and sortable, with a suffix that keeps two tables apart.
- *
- *  The timestamp alone is second-granular, and two tables started inside one second would then
- *  share a room — mixing two independent conversations into one log, which every member of both
- *  would read back as context (Codex review on #1456). The suffix is the part that has to be
- *  there; the timestamp is only so a person can tell the rooms apart later.
- *
- *  Stays inside ROOM_ID_RE, since the id becomes a filename. */
-export function newRoomId(now: number = Date.now(), rand: () => number = Math.random): string {
-  const stamp = new Date(now).toISOString().slice(0, 19).replace(/[:T]/g, "-").toLowerCase();
-  const suffix = Math.floor(rand() * 36 ** 4)
-    .toString(36)
-    .padStart(4, "0");
-  return `table-${stamp}-${suffix}`;
-}
 /** A handoff target as a seat at the table — the picker lists the same cells the exchange menu
  *  does, so one rule decides what is readable. */
 export const memberFromTarget = (target: HandoffTarget): TableMember => ({ key: target.key, label: target.label, source: target.source });

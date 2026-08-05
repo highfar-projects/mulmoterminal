@@ -61,7 +61,7 @@ import {
 import { CELL_STATUS, DOT_STATUS, HEADER_STATUS } from "./cellStatusClasses";
 import { handoffTargets, pullLastTurn, slotLabel, type HandoffTarget } from "../composables/useHandoff";
 import { runOneExchange, liveCrossTalkDeps } from "../composables/useCrossTalk";
-import { runRoundTable, liveRoundTableDeps, memberFromTarget, newRoomId, type TableMember } from "../composables/useRoundTable";
+import { runRoundTable, liveRoundTableDeps, memberFromTarget, type TableMember } from "../composables/useRoundTable";
 import { roundTableMessage } from "../composables/roundTableRules";
 import RoundTableMenu from "./RoundTableMenu.vue";
 import { outcomeMessage } from "../composables/exchangeRules";
@@ -696,16 +696,20 @@ async function exchangeWith(target: HandoffTarget) {
 // done or the budget runs out (#1456). `tableStop` is the only way a running table ends early, so
 // it is what unmounting sets too — a loop typing into terminals must not outlive its cell.
 const tableRunning = ref(false);
+// The room the running table writes to, so the picker can offer to open it while it fills up.
+const tableRoom = ref<string | null>(null);
 let tableStop = false;
 
 function stopTable() {
   tableStop = true;
 }
 
-async function startTable(targets: HandoffTarget[], budget: number) {
+// The menu deliberately stays OPEN: it is where both of the things you want next live — stop, and
+// read the conversation as it fills up. It still closes on the next click outside.
+async function startTable(targets: HandoffTarget[], budget: number, room: string) {
   if (!sessionId.value || automating.value) return;
-  askMenuOpen.value = false;
   tableRunning.value = true;
+  tableRoom.value = room;
   tableStop = false;
   // The SAME label shape the other seats get. It was a bare `#0` while everyone else read
   // `#1 · codex · …/proj`, so the framing told codex "Also at the table: #0" and named something
@@ -715,7 +719,7 @@ async function startTable(targets: HandoffTarget[], budget: number) {
   const self: TableMember = { key, label: slotLabel({ key, ...source }, props.home), source };
   const { outcome, turnsTaken } = await runRoundTable(
     [self, ...targets.map(memberFromTarget)],
-    newRoomId(),
+    room,
     budget,
     liveRoundTableDeps(() => tableStop),
   );
@@ -1471,6 +1475,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                   :targets="askTargets"
                   :self-label="`#${uid}`"
                   :running="tableRunning"
+                  :room="tableRoom"
                   :busy="automating"
                   @start="startTable"
                   @stop="stopTable"

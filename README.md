@@ -1548,6 +1548,24 @@ same-origin-guarded.
 | `GET /api/files/browse/{list,text,version,md}` · `PUT /api/files/browse/{write,backup}` | File tree / read / Markdown-render / write (contained within the project root). `text` answers `{ text, version }`; `write` takes `{ text, baseVersion }` (`null` = expecting to create it) and answers **409** with the version now on disk if the file changed since — so a save can't silently overwrite the agent that edits the same files. `version` answers that token alone, for the editor's periodic check. `backup` banks a buffer the editor is about to discard. |
 | `GET /api/files/raw?path=` | Raw asset bytes (workspace-rooted). |
 
+**Conversation rooms**
+
+A room is one conversation, kept apart from the cells having it (`~/.mulmoterminal/rooms/<id>.jsonl`,
+append-only). A round table writes every turn into one; the point of it being a file behind an API
+is that the things which are **not** agents can join the same conversation — a person in the Rooms
+view, a shell, a CI job posting a result. No agent calls any of this: the runner reads their turns
+and writes for them, which is why the feature needs no MCP tool.
+
+| Endpoint | Purpose |
+| -------- | ------- |
+| `GET /api/rooms` | The rooms that exist, newest activity first. |
+| `GET /api/rooms/:room?since=` | What was said, oldest first. A room that does not exist is empty; a room that cannot be **read** answers **500**, so a caller can tell "nobody has spoken" from "I could not find out" and decide for itself (the round-table runner carries on from the previous turn; the Rooms view says so). |
+| `POST /api/rooms/:room` | `{ from, text }` — append. `from` is a display name, not an identity, and nothing authenticates it. Text over 4000 characters is clipped, since a room is read into an agent's context. |
+| `DELETE /api/rooms/:room` | Forget a conversation. |
+
+From a shell: `mulmoterminal room read <room>` · `room post <room> <text…> [--from <name>]` ·
+`room list`. Everything after `--` is message text, so a post can contain `--force` without losing it.
+
 **GUI panel / plugins / MCP**
 
 | Endpoint | Purpose |

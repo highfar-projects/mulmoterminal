@@ -14,6 +14,7 @@ import CollectionsBrowseOverlay from "./components/CollectionsBrowseOverlay.vue"
 import AccountingOverlay from "./components/AccountingOverlay.vue";
 import WikiBrowseOverlay from "./components/WikiBrowseOverlay.vue";
 import PrsOverlay from "./components/PrsOverlay.vue";
+import RoomsOverlay from "./components/RoomsOverlay.vue";
 import FilesOverlay from "./components/FilesOverlay.vue";
 import HoverTip from "./components/HoverTip.vue";
 import GridView from "./components/GridView.vue";
@@ -85,6 +86,9 @@ useFaviconState(sessions);
   <WikiBrowseOverlay />
   <!-- Full-screen cross-repo PR list; opened by the toolbar's call_merge button. -->
   <PrsOverlay />
+  <!-- The conversation rooms a round table writes to; opened by the toolbar's forum button, or
+       from a cell's round-table menu on the room that table is filling. -->
+  <RoomsOverlay />
   <!-- Full-screen file explorer + editor; opened by the toolbar's Files button, or by a terminal
        header's Files button rooted at that terminal's own directory. -->
   <FilesOverlay />

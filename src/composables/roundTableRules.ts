@@ -5,6 +5,7 @@
 // A round table is one exchange generalised: instead of self → partner → self, the turn goes
 // round a ring of cells until somebody says the group is done, the budget runs out, or the user
 // stops it. Nothing here knows about WebSockets, and nothing here is asynchronous.
+import { isRoomId } from "../../common/roomMessage";
 
 /** What a speaker writes on its own line to end the round table.
  *
@@ -109,3 +110,35 @@ export const MAX_MEMBERS = 5;
 /** Is this a table that can actually be run? Two is the minimum — one cell talking to itself is
  *  the loop with nobody to answer it. */
 export const canRunTable = (memberCount: number): boolean => memberCount >= 2 && memberCount <= MAX_MEMBERS;
+
+/** Which room a table should use, from what the picker's one text box holds.
+ *
+ *  Empty is a NEW room, which is what every table did before there was a box. A name that already
+ *  exists CONTINUES that conversation — the members read it back before they speak, so a table can
+ *  pick up where an earlier one left off. That is why reuse and naming are one control: the answer
+ *  to "which room" is a name, and whether it exists yet is not the user's problem.
+ *
+ *  Null means the name cannot be a room id. The picker refuses rather than falling back to a new
+ *  room: a table that quietly ran somewhere other than where it was told to is a lost conversation
+ *  the user will look for in the wrong place. */
+export function roomForTable(typed: string, mintNew: () => string): string | null {
+  const name = typed.trim().toLowerCase();
+  if (!name) return mintNew();
+  return isRoomId(name) ? name : null;
+}
+
+/** A room id for one table: readable and sortable, with a suffix that keeps two tables apart.
+ *
+ *  The timestamp alone is second-granular, and two tables started inside one second would then
+ *  share a room — mixing two independent conversations into one log, which every member of both
+ *  would read back as context (Codex review on #1456). The suffix is the part that has to be
+ *  there; the timestamp is only so a person can tell the rooms apart later.
+ *
+ *  Stays inside ROOM_ID_RE, since the id becomes a filename. */
+export function newRoomId(now: number = Date.now(), rand: () => number = Math.random): string {
+  const stamp = new Date(now).toISOString().slice(0, 19).replace(/[:T]/g, "-").toLowerCase();
+  const suffix = Math.floor(rand() * 36 ** 4)
+    .toString(36)
+    .padStart(4, "0");
+  return `table-${stamp}-${suffix}`;
+}

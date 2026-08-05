@@ -3,7 +3,7 @@
 // A room is the conversation itself, kept apart from the agents having it. That is what lets a
 // human at the CLI, a CI job, and the round-table runner all take part in the same exchange — and
 // what lets the conversation outlive the browser tab that started it.
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import { mulmoterminalHome } from "../infra/mulmoterminal-home.js";
 import { messageLine, parseRoom } from "./room-log.js";
@@ -58,8 +58,24 @@ export function postToRoom(room: string, from: string, text: string, at: number 
   }
 }
 
-/** The rooms that exist, newest activity first. Reads names only — a listing that parsed every
- *  room would cost the whole history of every conversation to answer "which ones are there". */
+/** When a room was last written to, or 0 if that cannot be told — which sorts it last rather than
+ *  dropping it from the listing. A room you cannot stat is still a room. */
+function lastWrittenAt(room: string): number {
+  try {
+    const file = roomFile(room);
+    return file ? statSync(file).mtimeMs : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** The rooms that exist, newest activity first. Reads names and mtimes only — a listing that
+ *  parsed every room would cost the whole history of every conversation to answer "which ones are
+ *  there".
+ *
+ *  Ordered by mtime rather than by name: a table's id starts with the time it was created, so
+ *  sorting the names put the oldest conversation at the top of the list, and a room somebody named
+ *  themselves sorted wherever its first letter fell. */
 export function listRooms(): string[] {
   try {
     // The only swallowed failure here is the directory not existing yet, which is the ordinary
@@ -68,8 +84,27 @@ export function listRooms(): string[] {
       .filter((entry) => entry.isFile() && entry.name.endsWith(ROOM_EXT))
       .map((entry) => entry.name.slice(0, -ROOM_EXT.length))
       .filter(isRoomId)
-      .sort((a, b) => a.localeCompare(b));
+      .map((room) => ({ room, at: lastWrittenAt(room) }))
+      .sort((a, b) => b.at - a.at || a.room.localeCompare(b.room))
+      .map((entry) => entry.room);
   } catch {
     return [];
+  }
+}
+
+/** Forget a conversation. True when the room is gone afterwards — including when it was never
+ *  there, since the caller asked for it to not exist and it does not.
+ *
+ *  Every table mints a room, so without this the directory only grows; a listing nobody can tidy
+ *  is what makes people stop opening it. */
+export function deleteRoom(room: string): boolean {
+  const file = roomFile(room);
+  if (!file) return false;
+  try {
+    rmSync(file, { force: true });
+    return true;
+  } catch (err) {
+    console.warn(`[rooms] could not delete ${room}: ${err instanceof Error ? err.message : String(err)}`);
+    return false;
   }
 }
