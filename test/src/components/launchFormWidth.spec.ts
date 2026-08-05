@@ -10,7 +10,8 @@ import type { AgentPick } from "../../../common/customAgents";
 // invisible from either side alone: the directory chips tile, so 25 of them inside the old 360px cap
 // wrapped into 20 rows while the cell was 1535px wide, while the controls below gain nothing from
 // the width and lose the checkbox to the far edge of the screen (#1455).
-const CAP = LAUNCH_ROW.split(" ").find((c) => c.startsWith("max-w-")) ?? "";
+const PIXEL_CAP = /^max-w-\[\d+px\]$/;
+const capOf = (classes: string[]): string | undefined => classes.find((c) => PIXEL_CAP.test(c));
 
 describe("the launch form takes the cell's width", () => {
   beforeEach(() => {
@@ -44,12 +45,21 @@ describe("the launch form takes the cell's width", () => {
     return w;
   };
 
-  // The one row let out of the cap, and the reason the cap was worth revisiting at all.
+  // Without this the file stops guarding the moment LAUNCH_ROW drops its cap: every assertion below
+  // is derived from that constant, so all four would keep passing over a form with no cap at all
+  // (Codex on #1460).
+  it("keeps a pixel cap in the row class the controls share", () => {
+    expect(capOf(LAUNCH_ROW.split(" "))).toMatch(PIXEL_CAP);
+  });
+
+  // The one row let out of the cap, and the reason the cap was worth revisiting at all. Asked of the
+  // class list directly rather than against LAUNCH_ROW's value, so the chips are pinned as uncapped
+  // whatever the controls settle on.
   it("lets the directory chips span the whole cell", async () => {
     const w = await mountForm();
     const chipRow = w.get('[data-testid="cell-chip"]').element.parentElement;
     expect([...(chipRow?.classList ?? [])]).toContain("w-full");
-    expect([...(chipRow?.classList ?? [])]).not.toContain(CAP);
+    expect(capOf([...(chipRow?.classList ?? [])])).toBeUndefined();
   });
 
   // Every other row shares one width, so the column stays a column. The agent picker is content-
