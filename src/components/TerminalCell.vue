@@ -740,6 +740,12 @@ onUnmounted(() => {
 // remounted (stable key), so the dir/diff state is reset explicitly — otherwise the
 // launch form would still show the closed session's directory.
 function teardown() {
+  // FIRST, and here rather than only in onUnmounted: closing a cell does not unmount this
+  // component — it goes back to the launch form — so an automation started from it would keep
+  // polling and could submit another turn into the OTHER cells after the user closed this one
+  // (Codex review on #1456). Both loops read their flag before every submit.
+  exchangeStop = true;
+  tableStop = true;
   const id = sessionId.value; // capture before the reset below nulls it
   termRef.value?.terminate();
   // Reap on the server over HTTP too — the WS `terminate` only reaches the server while
