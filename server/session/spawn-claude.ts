@@ -27,6 +27,7 @@ import { appendBoundedOutput } from "./terminal-replay.js";
 import { sessionExistsOnDisk } from "./session-reads.js";
 import type { PtyEntry } from "./types.js";
 import type { SpawnDeps } from "./spawn-deps.js";
+import { handlePtyExit } from "./pty-exit.js";
 import { loadDirConfig } from "../config/dir-config.js";
 import { repoRootSync } from "../git/repo-root-sync.js";
 import { workdirFooter } from "../git/pr-footer.js";
@@ -316,7 +317,9 @@ export function createClaudeSpawner(deps: SpawnDeps) {
       // exits on its own — e.g. a brand-new session that never persisted —
       // doesn't linger in the sidebar.
       deps.setWorking(sessionId, false);
-      deps.reap(sessionId);
+      // Not always a reap: under tmux this pty is the CLIENT, and one killed from outside leaves
+      // the session running (#1496). handlePtyExit asks tmux which of the two just happened.
+      handlePtyExit(sessionId, deps.reap);
     });
 
     return entry;

@@ -6,6 +6,7 @@
 // NOT shared with claude's spawner: that one drives hooks, transcripts and the draft injector off
 // the same stream, and folding those in would make this the thing it exists to avoid. If a second
 // agent ever needs one of them, move it here then.
+import { handlePtyExit } from "./pty-exit.js";
 import { appendBoundedOutput } from "./terminal-replay.js";
 import { ptyExitLine } from "./pty-exit-log.js";
 import { sendExitAndClose, sendFrame } from "./ws-frames.js";
@@ -30,6 +31,7 @@ export function wireAgentPtyRelay(entry: PtyEntry, sessionId: string, spawnedAtM
   entry.term.onExit(({ exitCode, signal }) => {
     console.log(ptyExitLine({ agent: entry.agent ?? "agent", exitCode, signal, lifetimeMs: Date.now() - spawnedAtMs, cwd: entry.cwd, sessionId }));
     sendExitAndClose(entry.ws, exitCode, signal);
-    deps.reap(sessionId);
+    // See spawn-claude's copy: a tmux client killed from outside is not a finished session (#1496).
+    handlePtyExit(sessionId, deps.reap);
   });
 }
