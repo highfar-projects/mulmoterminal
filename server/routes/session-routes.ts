@@ -54,7 +54,7 @@ import { antigravityBrainRoot } from "../agents/antigravity-session.js";
 import { listAntigravitySessions } from "../agents/antigravity-sessions.js";
 import { grokSessionsRoot } from "../agents/grok-session.js";
 import { listGrokSessions } from "../agents/grok-sessions.js";
-import { listMuseSessionsForCwd } from "../agents/muse-session.js";
+import { listMuseSessionsForCwd, museSessionLogPath } from "../agents/muse-session.js";
 import { museConversations, museConversationsHydrated } from "../session/registry.js";
 import { conversationSessionKeys, type AgentConversation } from "../session/agent-conversations.js";
 import { AGENT_SESSION_LIST_PATHS } from "../../common/agentSessionList.js";
@@ -106,14 +106,17 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   // the Claude transcript has no file for this id, so the read above is empty. Muse's own log
   // answers it, and the header self-heals.
   //
-  // Gated on the CONVERSATION LOG rather than on the empty read alone. Empty is also the normal
-  // state of every claude cell before its first turn, and this route is polled per cell — so the
-  // unguarded version paid a sqlite query and a log fold on each of those polls, to answer for a
-  // session muse has never heard of. The map is in memory and knows every session this server
-  // started as muse, including across a restart (it is hydrated from the log).
+  // Gated rather than run on the empty read alone: empty is also the normal state of every claude
+  // cell before its first turn, and the unguarded version folded a session log on each of those
+  // polls to answer for a session muse has never heard of.
+  //
+  // Two gates, cheapest first, because the map alone is not the whole answer (Codex on #1513). The
+  // in-memory map knows every session THIS SERVER started as muse, across a restart too — but a
+  // history row opened before its spawn recorded the mapping, and a session started from a plain
+  // terminal, are muse's own ids and appear in no map of ours. One indexed lookup covers those.
   if (agent === "claude" && badges.context.model === null && badges.usage.inputTokens === 0) {
     await museConversationsHydrated;
-    if (museConversations.has(id)) {
+    if (museConversations.has(id) || (await museSessionLogPath(id).catch(() => null))) {
       const museFallback = await agentBadges(cwd, id, "muse").catch(() => null);
       if (museFallback && museFallback.context.model !== null) badges = museFallback;
     }
