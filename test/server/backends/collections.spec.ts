@@ -110,6 +110,10 @@ beforeAll(async () => {
     fields: {
       id: { type: "string", label: "ID", primary: true, required: true },
       title: { type: "string", label: "Title", required: true },
+      // Required, but only once `visited` is true — the editor hides it and
+      // treats it as never-missing until then, so the write gate must too.
+      visited: { type: "boolean", label: "Visited" },
+      rating: { type: "string", label: "Rating", required: true, when: { field: "visited", in: ["true"] } },
     },
   };
   mkdirSync(path.join(ws, ".claude", "skills", "reqcol"), { recursive: true });
@@ -546,6 +550,27 @@ describe("record CRUD", () => {
     expect(res.status).toBe(400);
     const items = ((await (await request("/api/collections/reqcol/detail")).json()) as { items: Array<{ id: string; title?: string }> }).items;
     expect(items.find((i) => i.id === "r1")).toMatchObject({ title: "Kept" });
+  });
+
+  // A field that is `required` only behind a `when` predicate: the editor hides
+  // it and treats it as never-missing (core's validateOneField), so a gate built
+  // on the visibility-blind validateRecordObject would 400 the editor's own valid
+  // save. Caught in review on #1497.
+  it("does not require a when-hidden field, but does once the predicate holds", async () => {
+    const hidden = await request("/api/collections/reqcol/items", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "r3", title: "Not visited", visited: false }),
+    });
+    expect(hidden.status).toBe(200);
+
+    const shown = await request("/api/collections/reqcol/items", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "r4", title: "Visited", visited: true }),
+    });
+    expect(shown.status).toBe(400);
+    expect(((await shown.json()) as { error: string }).error).toContain("missing required field 'rating'");
   });
 
   it("404s update/delete on a missing collection", async () => {

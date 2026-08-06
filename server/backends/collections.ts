@@ -24,6 +24,7 @@ import {
   enrichItems,
   readCustomViewHtml,
   validateRecordObject,
+  recordFieldProblem,
   generateItemId,
   resolveCreateItemId,
   readSkillTemplate,
@@ -46,7 +47,7 @@ import {
 } from "@mulmoclaude/core/collection/server";
 import type { CollectionMutateAction } from "@mulmoclaude/core/collection";
 // CollectionItem + actionVisible live in the isomorphic core entry.
-import { actionVisible, type ActionWithWhen, type CollectionAction, type CollectionItem } from "@mulmoclaude/core/collection";
+import { actionVisible, fieldVisible, COMPUTED_TYPES, type ActionWithWhen, type CollectionAction, type CollectionItem } from "@mulmoclaude/core/collection";
 // Curated-registry engine (Discover tab): merged catalog fetch + bundle import.
 import { listRegistry, importRegistry } from "@mulmoclaude/core/collection/registry/server";
 import { clampLimit as clampViewLimit, clampOffset as clampViewOffset, normalizeFields, normalizeMutate } from "@mulmoclaude/core/remote-view";
@@ -194,21 +195,54 @@ function resolveWriteTarget(res: Response, collection: ResolvedCollection, body:
   return { write, record };
 }
 
+/** First enforced-tier schema problem on a record about to be written by REST, or
+ *  null. Runs core's own `recordFieldProblem` — the exact per-field check
+ *  `validateRecordObject` runs, so the messages a REST client sees are identical
+ *  to the ones view-data PUT and manageCollection putItems report — over the
+ *  fields a WRITER can actually be held to:
+ *
+ *  - COMPUTED_TYPES are skipped, as core's own compiled validator skips them
+ *    (they are never stored; the host derives them).
+ *  - A `when`-HIDDEN field is skipped, which `validateRecordObject` does not do.
+ *    That difference is deliberate and is why this loop exists rather than a
+ *    plain `validateRecordObject` call: the collection editor treats a hidden
+ *    field as never-missing (core's `validateOneField`: "a `when`-hidden field
+ *    has no input the user can fill"), and its draft cannot populate one. A
+ *    required-behind-`when` field would therefore make the editor's own valid
+ *    save come back 400 (caught in review on #1497).
+ *
+ *  The primaryKey↔id identity check `validateRecordObject` opens with is not
+ *  repeated: both callers build the record with `[primaryKey]: itemId` from a
+ *  string id, so it holds by construction.
+ *
+ *  Core's `validateOneField` is the visibility-aware check, but it reads an
+ *  editor DRAFT rather than a record, so it cannot be reused here. If core grows
+ *  a visibility-aware record validator, this should become a call to it. */
+function firstEnforcedProblem(record: CollectionItem, schema: ResolvedCollection["schema"]): string | null {
+  for (const [key, spec] of Object.entries(schema.fields)) {
+    if (COMPUTED_TYPES.has(spec.type)) continue;
+    if (!fieldVisible(spec, record)) continue;
+    const problem = recordFieldProblem(key, spec, record[key], "enforced");
+    if (problem) return problem;
+  }
+  return null;
+}
+
 /** Gate a record on its schema before it reaches the store, answering 400 with the
  *  problem when it fails. True means the request is already answered — stop.
  *
- *  The same `validateRecordObject` call the other two write paths make: view-data
- *  PUT (writeViewItem, below) and the agent's manageCollection putItems (core's
- *  putOneItem). REST create/update wrote straight through, so a client — a UI bug,
- *  a curl, a future remote writer — could persist a missing required field or an
+ *  The gate the other two write paths already have: view-data PUT (writeViewItem,
+ *  below) and the agent's manageCollection putItems (core's putOneItem) both
+ *  validate. REST create/update wrote straight through, so a client — a UI bug, a
+ *  curl, a future remote writer — could persist a missing required field or an
  *  off-enum value that the detail route then reports back as `issues` with a Repair
  *  button, rather than the write being refused at the door (#1489).
  *
- *  The tier is core's default `"enforced"`: primaryKey↔id identity, required fields
- *  non-empty, enum membership. Deliberately NOT the `"strict"` tier, which exists to
- *  REPORT (a legacy record whose `number` field holds a string stays editable). */
-function rejectedInvalidRecord(res: Response, collection: ResolvedCollection, record: CollectionItem, itemId: string): boolean {
-  const problem = validateRecordObject(record, itemId, collection.schema);
+ *  The tier is core's `"enforced"`: required fields non-empty, enum membership.
+ *  Deliberately NOT the `"strict"` tier, which exists to REPORT (a legacy record
+ *  whose `number` field holds a string stays editable). */
+function rejectedInvalidRecord(res: Response, collection: ResolvedCollection, record: CollectionItem): boolean {
+  const problem = firstEnforcedProblem(record, collection.schema);
   if (!problem) return false;
   res.status(400).json({ error: problem });
   return true;
@@ -404,7 +438,7 @@ const itemCreateHandler: RequestHandler<{ slug: string }> = async (req, res) => 
   const { collection, target } = resolved;
   const itemId = resolveCreateItemId(collection.schema, target.record) ?? generateItemId();
   const recordWithId: CollectionItem = { ...target.record, [collection.schema.primaryKey]: itemId };
-  if (rejectedInvalidRecord(res, collection, recordWithId, itemId)) return;
+  if (rejectedInvalidRecord(res, collection, recordWithId)) return;
   const result = await target.write(itemId, recordWithId, { refuseOverwrite: true });
   if (isCommonStoreFailure(result)) {
     respondForStoreFailure(res, collection.slug, result);
@@ -429,7 +463,7 @@ const itemUpdateHandler: RequestHandler<{ slug: string; itemId: string }> = asyn
     return;
   }
   const recordWithId: CollectionItem = { ...target.record, [primaryKey]: req.params.itemId };
-  if (rejectedInvalidRecord(res, collection, recordWithId, req.params.itemId)) return;
+  if (rejectedInvalidRecord(res, collection, recordWithId)) return;
   const result = await target.write(req.params.itemId, recordWithId);
   if (isCommonStoreFailure(result)) {
     respondForStoreFailure(res, collection.slug, result);
