@@ -76,13 +76,16 @@ describe("spawnMusePty and the machine-wide plugin", () => {
     expect(syncMuseMcpPlugin).toHaveBeenCalledTimes(1);
   });
 
-  // The same rule the two file-writing agents follow, for the same reason: after a restart this is
-  // reached for what turns out to be a tmux reattach, and the muse already running in that pane
-  // read its plugins at its own start. Registering now could only speak for other sessions.
-  it("does not register when tmux will reattach an already-running muse", () => {
+  // NOT the rule the two file-writing agents follow, and the difference is the point. Their file is
+  // shared by every session in the directory, so writing it on a reattach speaks for terminals this
+  // spawn knows nothing about. muse's registration is machine-wide and inert on its own, so there
+  // is nothing to protect — and skipping it here is what made the feature look broken on the day it
+  // landed: sessions outlive the server, so every muse cell was a reattach, none of them registered
+  // anything, and restarting the server changed nothing (2026-08-06).
+  it("registers on a tmux reattach too, so the next start of that session has the tools", () => {
     reattaching = true;
     spawn(["render"]);
-    expect(syncMuseMcpPlugin).not.toHaveBeenCalled();
+    expect(syncMuseMcpPlugin).toHaveBeenCalledTimes(1);
   });
 
   // Deliberately NOT gated on having a group: the registration is inert until a session's own

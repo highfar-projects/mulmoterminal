@@ -1232,6 +1232,13 @@ Muse's plugin support is behind its own experimental flag (`MUSE_EXPERIMENTAL_PL
 MulmoTerminal sets on the sessions it starts. A Muse build without it simply has no GUI tools —
 the registration fails with one warning and the session starts anyway.
 
+**A Muse session picks its plugins up when its own process starts, and MulmoTerminal's sessions
+outlive the server.** So a Muse cell that was already running when you switched a group on — or
+when you first upgraded to a version that has this — keeps no tools until that CELL is started
+again. Restarting the server is not enough: the session is still there in tmux and gets reattached,
+exactly as it was. Close the cell and open a new one (or `Stop` it in Settings → Surviving sessions),
+and it comes back with the tools its directory registered.
+
 Which route a session takes is decided by `carriesFullGuiMcp()` in
 `server/session/mcp-config.ts` — the single view, a cell-less chat, or anything whose cwd **is**
 the workspace take the first; anything in a project directory takes the second.

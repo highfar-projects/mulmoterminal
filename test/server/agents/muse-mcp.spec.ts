@@ -153,6 +153,34 @@ describe("museRegistrationMatches", () => {
   });
 });
 
+// A reattach comes through the sync too (see spawn-muse.ts), and one browser reload reattaches
+// every cell on screen at once — so the check is throttled per process. Safe because the manifest
+// is derived from this server's own bridge path and port, neither of which changes while it runs.
+describe("syncMuseMcpPlugin's throttle", () => {
+  let dir = "";
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), "mt-muse-ttl-"));
+    vi.restoreAllMocks();
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it("keeps retrying after a FAILED check, rather than starting the clock on it", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const previous = process.env.MUSE_BIN;
+    process.env.MUSE_BIN = path.join(dir, "no-such-muse");
+    try {
+      const { syncMuseMcpPlugin } = await import("../../../server/agents/muse-mcp.js");
+      // Both fail, and the second is the assertion that matters: a throttle that started on a
+      // failure would answer ok the second time and leave the user with no tools until a restart.
+      expect(syncMuseMcpPlugin(dir, 1_000).ok).toBe(false);
+      expect(syncMuseMcpPlugin(dir, 1_100).ok).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.MUSE_BIN;
+      else process.env.MUSE_BIN = previous;
+    }
+  });
+});
+
 describe("syncMuseMcpPlugin", () => {
   let dir = "";
   beforeEach(() => {

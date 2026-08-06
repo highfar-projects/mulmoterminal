@@ -110,6 +110,12 @@ function runMusePlugins(args: string[]): { ok: boolean; message: string; json: u
   return { ok: status === 0, message: [stdout, stderr].filter(Boolean).join("\n").trim(), json: parsed(stdout) };
 }
 
+// When this process last confirmed muse's registration. See syncMuseMcpPlugin. `-Infinity` rather
+// than 0, so "never checked" cannot read as "checked at the epoch" — which, for any clock a test
+// hands in, is inside the window.
+let verifiedAtMs = -Infinity;
+const VERIFY_TTL_MS = 60_000;
+
 /** A `--json` answer, or null for anything unusable — a build that prints a sentence instead
  *  ("plugins are not available in this build") lands here, and reads as "nothing registered". */
 function parsed(stdout: string): unknown {
@@ -181,10 +187,20 @@ const sameServers = (a: readonly string[], b: readonly string[]): boolean => a.l
  * config directory are all reasons for a cell to have no GUI tools — none of them a reason for the
  * session not to start.
  */
-export function syncMuseMcpPlugin(dir = musePluginDir()): { ok: boolean; message: string } {
+export function syncMuseMcpPlugin(dir = musePluginDir(), now = Date.now()): { ok: boolean; message: string } {
   try {
+    // Verified recently by THIS process, so nothing can have changed that this would catch: the
+    // manifest is derived from our own bridge path and port, both fixed for the life of the server.
+    // The window exists because a reattach also comes through here (see spawn-muse.ts) and a
+    // reloaded browser tab reattaches every cell at once — without it, one page refresh spawns a
+    // `muse plugins inspect` per muse cell on screen.
+    if (now - verifiedAtMs < VERIFY_TTL_MS) return { ok: true, message: "" };
+
     const manifest = musePluginManifest(bridgeCommand(), PORT);
-    if (museRegistrationMatches(runMusePlugins(["inspect", MUSE_PLUGIN_ID, "--json"]).json, manifest)) return { ok: true, message: "" };
+    if (museRegistrationMatches(runMusePlugins(["inspect", MUSE_PLUGIN_ID, "--json"]).json, manifest)) {
+      verifiedAtMs = now;
+      return { ok: true, message: "" };
+    }
 
     writeMusePlugin(dir, manifest);
     const installed = runMusePlugins(["install", dir, "--scope", "user", "--json"]);
@@ -192,7 +208,12 @@ export function syncMuseMcpPlugin(dir = musePluginDir()): { ok: boolean; message
     const approved = runMusePlugins(["approve", MUSE_PLUGIN_ID, "--json"]);
     if (!approved.ok) return warn(approved.message);
 
-    console.log(`[muse] registered the GUI MCP plugin (${TOOL_GROUPS.length} tool groups)`);
+    verifiedAtMs = now;
+    // Says what it does NOT cover, because that is the surprising half: muse reads its plugins when
+    // the session's process starts, and MulmoTerminal's sessions outlive the server (tmux). So a
+    // muse that was already running when this landed has no GUI tools until it is started again —
+    // restarting the SERVER is not enough, and the cell looks broken rather than out of date.
+    console.log(`[muse] registered the GUI MCP plugin (${TOOL_GROUPS.length} tool groups) — muse sessions already running keep no tools until restarted`);
     return { ok: true, message: "" };
   } catch (err) {
     return warn(String(err));
