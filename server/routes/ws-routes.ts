@@ -33,6 +33,8 @@ import {
   museConversationsHydrated,
   markDevTerminalSession,
   markAttachedSessionPlaced,
+  devTerminalCwdsHydrated,
+  sessionCwd,
   ptys,
 } from "../session/registry.js";
 import { SpawnRefusedError, ptyWouldReattach } from "../session/pty-spawn.js";
@@ -814,10 +816,19 @@ export async function handleDirectoryMcpAgentConnection(agent: DirectoryMcpWsAge
   if (!early) return;
 
   // The directory's registered groups, read here because the lookup reads Claude Code's config
-  // files and the spawner is sync. Only for a SPAWN: a reattach keeps the tools its running process
-  // was started with, and rewriting the shared file on a reattach would speak for every other
+  // files and the spawner is sync. Not for a live REATTACH: that session keeps the tools its
+  // running process was started with, and rewriting the shared file would speak for every other
   // session in the directory.
-  const mcpGroups = live || !agent.readsDirectoryMcpConfig ? [] : await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []);
+  //
+  // Read against the SESSION's own directory rather than the request's, and that distinction is not
+  // cosmetic (Codex on #1514). `live` is absent for a tmux-only reattach as well as for a spawn — a
+  // reconnect after a server restart — and such a reconnect often carries no `?cwd=` at all, which
+  // resolves to the DEFAULT workspace. For agy and grok that only meant a file write suppressed
+  // downstream, but muse records these groups as the session's entitlement, so another directory's
+  // switches would have become this session's. `sessionCwd` is where the session really runs.
+  await devTerminalCwdsHydrated;
+  const groupsCwd = live?.cwd ?? sessionCwd(sessionId) ?? cwd;
+  const mcpGroups = live || !agent.readsDirectoryMcpConfig ? [] : await registeredGuiMcpGroups(groupsCwd, TOOL_GROUPS).catch(() => []);
   if (!clientStillConnected(ws, agent.kind, sessionId, early)) return;
   const startFailureMessage = startFailureMessageFor(agent.label);
   // The reattach goes THROUGH startAndWire like the spawn, not around it: reattachPty only swaps

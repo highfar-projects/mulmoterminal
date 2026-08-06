@@ -23,8 +23,11 @@ const antigravityMapRead = new Promise<void>((resolve) => {
 });
 
 const ptys = new Map<string, unknown>();
+const sessionCwd = vi.fn((_id: string): string | null => null);
 vi.mock("../../../server/session/registry.js", () => ({
   ptys,
+  sessionCwd: (id: string) => sessionCwd(id),
+  devTerminalCwdsHydrated: Promise.resolve(),
   antigravityConversations: new Map(),
   antigravityConversationsHydrated: antigravityMapRead,
   museConversations: new Map(),
@@ -111,6 +114,7 @@ beforeEach(() => {
   ptys.clear();
   vi.clearAllMocks();
   registeredGuiMcpGroups.mockResolvedValue(["render"]);
+  sessionCwd.mockReturnValue(null);
   releaseAntigravityMap();
   dir = mkdtempSync(path.join(tmpdir(), "mt-dirmcp-"));
 });
@@ -201,6 +205,23 @@ describe("/ws/muse", () => {
 
   // The chat-history case: the row the picker offers IS one of muse's own ids, so the connection
   // has to resume it rather than start a fresh session under it.
+  // A reconnect after a server restart has no live pty and often no `?cwd=` either, so the request
+  // resolves to the DEFAULT workspace. muse records these groups as the session's entitlement, so
+  // taking them from the request would make another directory's switches this session's
+  // (Codex on #1514). The session's own directory is what the groups are read against.
+  it("reads the groups against the session's own directory, not the reconnect's", async () => {
+    const session = "11111111-2222-4333-8444-555555555555";
+    const elsewhere = mkdtempSync(path.join(tmpdir(), "mt-elsewhere-"));
+    sessionCwd.mockReturnValueOnce(elsewhere);
+    museSessionExistsForCwd.mockResolvedValueOnce(true);
+    try {
+      await handleDirectoryMcpAgentConnection(MUSE_WS_AGENT, makeDeps(), fakeWs() as unknown as WebSocket, request(`&session=${session}`));
+      expect(registeredGuiMcpGroups).toHaveBeenCalledWith(elsewhere, expect.anything());
+    } finally {
+      rmSync(elsewhere, { recursive: true, force: true });
+    }
+  });
+
   it("resumes a session muse holds for this directory", async () => {
     const session = "11111111-2222-4333-8444-555555555555";
     museSessionExistsForCwd.mockResolvedValueOnce(true);

@@ -47,8 +47,10 @@ vi.mock("../../../server/session/registry.js", () => ({
 vi.mock("../../../server/session/pty-relay.js", () => ({ wireAgentPtyRelay: vi.fn() }));
 
 const rememberEntitledToolGroups = vi.fn();
+let recorded: readonly string[] = [];
 vi.mock("../../../server/session/bridge-session.js", () => ({
   rememberEntitledToolGroups: (id: string, groups: readonly string[]) => rememberEntitledToolGroups(id, groups),
+  entitledToolGroups: () => recorded,
 }));
 vi.mock("../../../server/agents/muse-session.js", () => ({
   snapshotMuseSessions: () => Promise.resolve(new Set<string>()),
@@ -100,9 +102,29 @@ describe("spawnMusePty and the machine-wide plugin", () => {
 describe("spawnMusePty and the session's entitlement", () => {
   beforeEach(() => {
     reattaching = false;
+    recorded = [];
     spawned.length = 0;
     syncMuseMcpPlugin.mockClear();
     rememberEntitledToolGroups.mockClear();
+  });
+
+  // A reattach reaches the spawner too, and the muse in that pane is already running with what it
+  // read at its own start — so re-recording could only move the entitlement of a session that
+  // cannot act on the change, from a reconnect that may not even carry the right directory.
+  it("does not re-record for a session it is only reattaching", () => {
+    reattaching = true;
+    recorded = ["render"];
+    spawn(["media"]);
+    expect(rememberEntitledToolGroups).not.toHaveBeenCalled();
+  });
+
+  // Unless this process knows nothing about it — the server-restart case, where the record is the
+  // only answer the bridge can be given at all.
+  it("records for a reattached session this process has no record of", () => {
+    reattaching = true;
+    recorded = [];
+    spawn(["render"]);
+    expect(rememberEntitledToolGroups).toHaveBeenCalledWith(ID, ["render"]);
   });
 
   it("records exactly the groups the directory registered, against this session", () => {

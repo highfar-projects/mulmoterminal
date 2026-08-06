@@ -14,8 +14,8 @@ import { buildMuseArgs } from "../agents/muse-args.js";
 import { snapshotMuseSessions, watchForMuseSession } from "../agents/muse-session.js";
 import { syncMuseMcpPlugin } from "../agents/muse-mcp.js";
 import { musePluginEnv } from "../agents/muse-mcp.js";
-import { rememberEntitledToolGroups } from "./bridge-session.js";
-import { ptySpawn } from "./pty-spawn.js";
+import { entitledToolGroups, rememberEntitledToolGroups } from "./bridge-session.js";
+import { ptySpawn, ptyWouldReattach } from "./pty-spawn.js";
 import { ptyStartLine } from "./pty-exit-log.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
 import { claimedMuseSessions, ptys, rememberMuseSession } from "./registry.js";
@@ -79,12 +79,19 @@ export function createMuseSpawner(deps: SpawnDeps) {
     // back without the tools it was working with (see muse-args.ts).
     const args = buildMuseArgs({ resume: resumeConversationId, workspace: cwd, model: deps.museModel, initialPrompt });
 
+    // Recorded only when this really STARTS muse. A reattach reaches here too (after a server
+    // restart the pty table is empty while the tmux session is not), and the muse in that pane is
+    // already running with whatever it read at its own start — so re-recording could only move the
+    // entitlement of a session that cannot act on the change (Codex on #1514). The exception is a
+    // session this process has no record of at all, which is exactly that server-restart case: the
+    // groups are then the only answer available for the bridge to be told.
+    //
     // The groups are RECORDED, not exported. A plugin's MCP server inherits nothing from muse
     // (server/session/bridge-session.ts), so the bridge asks this server which session it belongs
     // to and gets this list back with the answer. A session whose directory registered nothing
     // records an empty list and every one of the four servers stands down — the same "no GUI
     // tools" a muse cell had before this was wired.
-    rememberEntitledToolGroups(sessionId, mcpGroups);
+    if (!ptyWouldReattach(sessionId, true) || entitledToolGroups(sessionId).length === 0) rememberEntitledToolGroups(sessionId, mcpGroups);
     // What the MUSE process itself needs: it does inherit our environment, and without this flag it
     // loads no plugins at all — the registration would be inert rather than absent.
     const env = musePluginEnv();
