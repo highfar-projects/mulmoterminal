@@ -211,6 +211,19 @@ OpenRouter's "always the latest" aliases such as `~anthropic/claude-opus-latest`
 differently (whitespace, a leading dash) makes sessions in that directory **refuse to start**, rather
 than quietly running on some other model. The directory's other settings still load.
 
+A model id may also end in **`[1m]`** — Claude Code's own way of asking for the 1M context window,
+on an alias or a full name alike:
+
+```json
+{ "model": "claude-opus-5[1m]" }
+```
+
+The suffix is passed to `claude --model` exactly as you wrote it; Claude Code reads it and strips it
+before the id reaches the backend, so nothing here interprets it. It is the only bracketed suffix
+that exists — `[2m]`, `[200k]` and friends are refused — and it belongs at the very end of the id.
+See [Extended context](https://code.claude.com/docs/en/model-config#extended-context) for which
+models it actually changes anything for. A **provider** `id` may not carry it.
+
 ### What happens on resume
 {: .no_toc }
 
@@ -338,7 +351,7 @@ If you are unsure where to start, try **Kimi K2.7 Code** (fast, coding-oriented)
 | Talks but never uses tools | the model's own limitation — check the table or `model-trials.ts` |
 | No MODEL select in the launch form | no provider is registered (step 2), its key is missing, or it has no models to pick; the link beside the MODEL label — "Needs attention" / "Use another model…" — names what's missing |
 | A registered backend is missing from the MODEL list | it has no models: presets come with the id `openrouter` and no other, so [list its `models`](#add-models) |
-| `models` is in the config and the picker still offers none | every id in it was refused — a model id is letters, digits and `. _ : / - ~`, so an object like `{"id": "…"}` or a value with a space is dropped. The server's log names what it dropped |
+| `models` is in the config and the picker still offers none | every id in it was refused — a model id is letters, digits and `. _ : / - ~` (plus an optional trailing `[1m]`), so an object like `{"id": "…"}` or a value with a space is dropped. The server's log names what it dropped |
 | No model in the header | `ctx` is not in your `chips` |
 
 ---

@@ -59,10 +59,18 @@ hard to diagnose from inside it:
 - **Under the id `openrouter`, do not write a `models` array** unless the user names a model outside
   the built-in list — every preset appears in the picker on its own, with its measured pass rate,
   and `models` there exists only to ADD ids nobody has measured.
-- **A model id is letters, digits and `. _ : / - ~`.** Anything else in `models` — an object like
-  `{"id": "…"}`, a value with a space, a `models` that is not an array — is dropped when the config
-  loads, leaving a backend that lists models in the file and offers none in the picker. The server
-  log names what it dropped; check it after writing.
+- **A model id is letters, digits and `. _ : / - ~`, optionally ending in `[1m]`.** Anything else in
+  `models` — an object like `{"id": "…"}`, a value with a space, a `models` that is not an array — is
+  dropped when the config loads, leaving a backend that lists models in the file and offers none in
+  the picker. The server log names what it dropped; check it after writing.
+- **`[1m]` is Claude Code's extended-context syntax, and the only bracketed suffix there is.** It
+  goes to `claude --model` verbatim — Claude Code strips it before the id reaches the backend, so
+  nothing on this side interprets it. Valid on an alias or a full name (`opus[1m]`, `opusplan[1m]`,
+  `claude-opus-5[1m]`), refused anywhere but the end, and refused in invented forms like `[2m]` or
+  `[200k]`. A **provider** `id` may not carry it. Only suggest it when the user asks for the 1M
+  window: on Opus 5 / Sonnet 5 the Anthropic API already runs 1M, so it changes nothing there —
+  the models it decides for are Opus 4.6 / 4.8 and Sonnet 4.6, and a gateway serving Sonnet 5.
+  <https://code.claude.com/docs/en/model-config#extended-context>
 - This is a **partial `POST /api/config` merge** — write only `providers`. Send the array **complete**
   (existing entries included): it replaces rather than appends.
 - The server reads the environment **at startup**: after adding a key, it has to be restarted.
@@ -192,7 +200,7 @@ difference between a usable session and a broken one, so quote the ratio when yo
 | Key | Meaning |
 |---|---|
 | `provider` | The `id` of a backend registered in `providers`. **Omit to stay on Anthropic.** |
-| `model` | Passed to `claude --model`. With no `provider`, this picks a different **Anthropic** model. |
+| `model` | Passed to `claude --model`. With no `provider`, this picks a different **Anthropic** model. May end in `[1m]` for the 1M context window (see above). |
 
 **A directory naming a `provider` that isn't registered, or whose key is missing, does not fall
 back — its sessions refuse to start.** Check the provider exists in the global config before writing

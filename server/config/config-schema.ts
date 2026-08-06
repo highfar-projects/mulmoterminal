@@ -16,7 +16,7 @@ import { z } from "zod";
 import { THEME_COLOR_KEYS } from "../../common/themeColors.js";
 import { THEME_IDS } from "../../common/themeIds.js";
 import { CUSTOM_THEME_ID_RE, THEME_VAR_KEYS, isBuiltinThemeId } from "../../common/themeVars.js";
-import { isUsableModelId } from "../../common/modelIds.js";
+import { isUsableModelId, isUsableProviderId } from "../../common/modelIds.js";
 import { normalizeFontSize, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN } from "../../common/terminalFontSize.js";
 import { normalizeFontFamily, TERMINAL_FONT_FAMILY_MAX_CHARS, TERMINAL_FONT_FAMILY_SAFE_RE } from "../../common/terminalFontFamily.js";
 import { normalizeOrderPriority } from "../../common/orderPriority.js";
@@ -238,16 +238,16 @@ export const dirColorsField = z
   .nullable()
   .catch(null);
 
-// A provider/model id the launch path will actually accept. Enforced here too, so the
-// picker can never offer an id that the ws query drops on the way to the spawn — a
-// dropped provider whose model survives would start the session on Anthropic instead.
-const modelIdSchema = z.string().trim().refine(isUsableModelId);
+// A provider id the launch path will actually accept. Enforced here too, so the picker can
+// never offer an id that the ws query drops on the way to the spawn — a dropped provider
+// whose model survives would start the session on Anthropic instead.
+const providerIdSchema = z.string().trim().refine(isUsableProviderId);
 
 // An Anthropic-compatible backend a directory can point its sessions at (#579). The key
 // itself is never stored here — `tokenEnv` names the env var the SERVER reads it from,
 // because this config is served over HTTP to the browser and the phone.
 export const providerSchema = z.object({
-  id: modelIdSchema,
+  id: providerIdSchema,
   label: z.string().min(1),
   // No trailing /v1: Claude Code appends /v1/messages itself.
   baseUrl: z.string().min(1),
