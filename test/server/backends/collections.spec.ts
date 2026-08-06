@@ -99,6 +99,28 @@ beforeAll(async () => {
   mkdirSync(path.join(ws, "data", "skills", "singletoncol", "views"), { recursive: true });
   writeFileSync(path.join(ws, "data", "skills", "singletoncol", "views", "sv.html"), "<head></head><body>editable</body>");
 
+  // A collection with a REQUIRED non-primary field, so the REST write gate's
+  // required-field case can be covered. Isolated from testcol because that
+  // collection's view-data tests write partial records on purpose.
+  const REQUIRED_SCHEMA = {
+    title: "Required",
+    icon: "checklist",
+    dataPath: "data/reqcol/items",
+    primaryKey: "id",
+    fields: {
+      id: { type: "string", label: "ID", primary: true, required: true },
+      title: { type: "string", label: "Title", required: true },
+      // Required, but only once `visited` is true — the editor hides it and
+      // treats it as never-missing until then, so the write gate must too.
+      visited: { type: "boolean", label: "Visited" },
+      rating: { type: "string", label: "Rating", required: true, when: { field: "visited", in: ["true"] } },
+    },
+  };
+  mkdirSync(path.join(ws, ".claude", "skills", "reqcol"), { recursive: true });
+  writeFileSync(path.join(ws, ".claude", "skills", "reqcol", "schema.json"), JSON.stringify(REQUIRED_SCHEMA));
+  mkdirSync(path.join(ws, "data", "reqcol", "items"), { recursive: true });
+  writeFileSync(path.join(ws, "data", "reqcol", "items", "r1.json"), JSON.stringify({ id: "r1", title: "Kept" }));
+
   // A collection with a mobile view that declares an image field, so the
   // remote-view items route can inline a real thumbnail (isolated from testcol so
   // its record counts don't perturb the detail/view-data tests above).
@@ -473,6 +495,82 @@ describe("record CRUD", () => {
   it("400s on a non-object create body", async () => {
     const res = await request(ITEMS, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify([1, 2, 3]) });
     expect(res.status).toBe(400);
+  });
+
+  // The write gate REST shares with view-data PUT and manageCollection putItems
+  // (#1489): before this, any client could persist an off-enum value or drop a
+  // required field, and the bad record came back later as a detail `issue` with a
+  // Repair button instead of being refused at the door.
+  it("400s a create with an off-enum value, writing nothing", async () => {
+    const res = await request(ITEMS, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "badenum", name: "Nope", status: "bogus" }),
+    });
+    expect(res.status).toBe(400);
+    // The same problem string view-data's `rejected[].problem` carries.
+    expect(((await res.json()) as { error: string }).error).toContain("not one of");
+    expect((await detailItems()).find((i) => i.id === "badenum")).toBeUndefined();
+  });
+
+  it("400s an update with an off-enum value, leaving the stored record untouched", async () => {
+    const res = await request(itemUrl("item1"), {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "item1", name: "Clobbered", status: "bogus" }),
+    });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toContain("not one of");
+    expect((await detailItems()).find((i) => i.id === "item1")).toMatchObject({ name: "Foo" });
+  });
+
+  it("400s a create missing a required field, and one that supplies it succeeds", async () => {
+    const bad = await request("/api/collections/reqcol/items", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "r2" }),
+    });
+    expect(bad.status).toBe(400);
+    expect(((await bad.json()) as { error: string }).error).toContain("missing required field 'title'");
+
+    const good = await request("/api/collections/reqcol/items", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "r2", title: "Fine" }),
+    });
+    expect(good.status).toBe(200);
+  });
+
+  it("400s an update that empties a required field", async () => {
+    const res = await request("/api/collections/reqcol/items/r1", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "r1", title: "" }),
+    });
+    expect(res.status).toBe(400);
+    const items = ((await (await request("/api/collections/reqcol/detail")).json()) as { items: Array<{ id: string; title?: string }> }).items;
+    expect(items.find((i) => i.id === "r1")).toMatchObject({ title: "Kept" });
+  });
+
+  // A field that is `required` only behind a `when` predicate: the editor hides
+  // it and treats it as never-missing (core's validateOneField), so a gate built
+  // on the visibility-blind validateRecordObject would 400 the editor's own valid
+  // save. Caught in review on #1497.
+  it("does not require a when-hidden field, but does once the predicate holds", async () => {
+    const hidden = await request("/api/collections/reqcol/items", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "r3", title: "Not visited", visited: false }),
+    });
+    expect(hidden.status).toBe(200);
+
+    const shown = await request("/api/collections/reqcol/items", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "r4", title: "Visited", visited: true }),
+    });
+    expect(shown.status).toBe(400);
+    expect(((await shown.json()) as { error: string }).error).toContain("missing required field 'rating'");
   });
 
   it("404s update/delete on a missing collection", async () => {
