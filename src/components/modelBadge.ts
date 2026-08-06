@@ -30,11 +30,11 @@ const CONTEXT_WINDOWS: { match: string; tokens: number }[] = [
   { match: "sonnet-5", tokens: MILLION_TOKENS },
   { match: "fable", tokens: MILLION_TOKENS },
   { match: "mythos", tokens: MILLION_TOKENS },
-  { match: "muse", tokens: K200_TOKENS },
   { match: "opus", tokens: K200_TOKENS },
   { match: "sonnet", tokens: K200_TOKENS },
   { match: "haiku", tokens: K200_TOKENS },
 ];
+// NOTE: Muse (muse-spark-1.2) context window not yet sourced — keep no-window until session-index.db or session.jsonl reports it via SessionContextInfo.contextWindow
 const PERCENT = 100;
 
 // A Record over TERMINAL_AGENTS rather than a free object: this is what the badge CALLS each agent,

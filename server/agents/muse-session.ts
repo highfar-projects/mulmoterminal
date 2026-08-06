@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-unused-vars, sonarjs/cognitive-complexity, max-lines-per-function, complexity, @typescript-eslint/no-non-null-assertion, sonarjs/no-nested-conditional */
+/* eslint-disable max-lines-per-function, complexity, sonarjs/cognitive-complexity, @typescript-eslint/consistent-type-assertions -- museBadgesFromLog parses DB + JSONL, needs casts */
 import os from "node:os";
 import path from "node:path";
 import { promises as fs } from "node:fs";
@@ -165,10 +165,8 @@ export async function museBadgesFromLog(
         if (Number.isFinite(input) && Number.isFinite(cached)) totalInputFresh += Math.max(0, input - Math.min(cached, input));
       }
     }
-    // For usage badge: inputTokens as lastContext fresh portion? Use totalInputFresh for now, but if we sum fresh each turn double counts.
-    // Simpler: use lastContext as contextTokens and totalOutput as usage. For input badge we use lastContext.
-    // We'll return usage with inputTokens = lastContext (so badge shows context), but that double counts if summed. Let's use lastContext for inputTokens and cacheRead as totalCacheRead.
-    // Actually agent-badges expects usage.inputTokens total. We'll set it to totalInputFresh (sum of fresh) which approximates sum.
+    // input_tokens is cumulative context size, output_tokens is per-turn. Report last input as contextTokens
+    // and sum of fresh input (input - cached) + outputs for usage.
     return {
       model: lastModel,
       contextTokens: lastContext,
