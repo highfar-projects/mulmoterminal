@@ -8,6 +8,22 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+- **Custom views catch up to MulmoClaude's host surface** (#1490): a collection's custom view can
+  now read its translations, resolve a stored image, and press a declared mutate action — the three
+  things core's own authoring docs (which MulmoTerminal serves to the agent through
+  `manageCollection`'s `schemaDocs`) already told view authors it could.
+  `GET …/view-i18n` returns the active locale's dict, and the iframe bootstrap gained the
+  `__MC_VIEW.dict` / `__MC_VIEW.t(key, named)` half of the bridge it had been missing entirely — an
+  i18n-declaring view used to render raw keys, with nothing reporting a problem. `GET
+  …/view-data/image` turns an image field's stored path into a downscaled `data:` thumbnail, which
+  is how a desktop view shows a picture at all (the sandboxed iframe cannot put its token on an
+  `<img>`); the authorization rule is the record scan itself, so only a **current** value of an
+  image field resolves and never an arbitrary workspace file. `POST
+  …/view-data/actions/:actionId` lets a write-capable view press a declared **mutate** action
+  instead of hand-rolling the same transition as a raw write — mutate only, so a view token still
+  cannot start LLM work. All three run the shared `@mulmoclaude/core` engines, and the two scoped
+  ones sit behind per-minute budgets with images in a roomier bucket than actions.
+
 ## mulmoterminal@4.6.0 — 2026-08-06
 
 > **Setup guide:** [Cells that talk to each other, and a history that knows whose it is](https://receptron.github.io/mulmoterminal/guide/en/v4.6.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.6.0.html))

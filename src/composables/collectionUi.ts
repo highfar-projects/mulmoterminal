@@ -21,6 +21,7 @@ import type {
   CollectionRemoteViewResult,
   CollectionRemoteViewMutateResult,
   CollectionRemoteViewItemsResult,
+  CollectionViewI18nResult,
 } from "@mulmoclaude/collection-plugin/vue";
 import type {
   CollectionDetailResponse,
@@ -200,10 +201,14 @@ configureCollectionUi({
       `/api/collections/${encodeURIComponent(slug)}/remote-view/${encodeURIComponent(viewId)}/items${remoteViewItemsQuery(request)}`,
     ),
 
-  // MulmoTerminal serves no per-view translations — return the documented
-  // "no i18n" shape ({ locale: "", dict: {} }) so the iframe's __MC_VIEW.t(key)
-  // echoes keys instead of failing.
-  fetchViewI18n: () => Promise.resolve({ ok: true as const, data: { locale: "", dict: {} } }),
+  // The view's translations, already locale-picked server-side (the host is the
+  // picker, the iframe only ever sees the active locale's strings). The route
+  // answers the documented "no i18n" shape ({ locale: "", dict: {} }) when the
+  // view declares none, and the iframe's __MC_VIEW.t(key) then echoes keys.
+  fetchViewI18n: (slug, viewId, locale) =>
+    apiGet<CollectionViewI18nResult>(
+      `/api/collections/${encodeURIComponent(slug)}/view-i18n?id=${encodeURIComponent(viewId)}&locale=${encodeURIComponent(locale)}`,
+    ),
 
   // ── record CRUD: create / update (e.g. checking a to-do item) / delete. ──
   createItem: (slug, record) => apiPost<ItemMutationResponse>(`/api/collections/${encodeURIComponent(slug)}/items`, record),
