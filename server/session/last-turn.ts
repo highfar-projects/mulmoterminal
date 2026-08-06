@@ -14,10 +14,17 @@ export interface LastTurn {
 
 export const EMPTY_TURN: LastTurn = { prompt: null, reply: null };
 
-// Claude's transcript interleaves narration and tool calls as separate assistant
-// records; the LAST prose record of a turn is its conclusion, which is what a reader
-// in another session wants. A turn only counts once it has that reply, so a prompt
-// still being worked on falls back to the previous exchange.
+// Claude's transcript interleaves narration and tool calls as separate assistant records; the
+// prose record that ENDS the turn is its conclusion, which is what a reader in another session
+// wants. A turn only counts once it has that reply, so a prompt still being worked on falls back
+// to the previous exchange.
+//
+// "Ends the turn" is read from the record's own stop reason, not inferred from there being prose.
+// Claude writes a preamble before it runs any tool, so the two are different facts, and taking the
+// first for the second handed another cell "I'll read the actual files before weighing in." as a
+// seat's whole contribution to a round table — the real answer, which disagreed with the others,
+// arrived 40 seconds later and was never passed on (#1487). 78% of the assistant prose records in a
+// sample of real transcripts were mid-turn, so this is the ordinary case, not an edge one.
 export function lastTurnFromClaudeParsed(records: Record<string, unknown>[]): LastTurn {
   let open: LastTurn | null = null;
   let lastComplete: LastTurn | null = null;
@@ -26,6 +33,7 @@ export function lastTurnFromClaudeParsed(records: Record<string, unknown>[]): La
       open = { prompt: turn.text, reply: null };
       continue;
     }
+    if (!turn.endsTurn) continue; // still working — this is narration, not the answer
     open = { prompt: open?.prompt ?? null, reply: turn.text };
     lastComplete = open;
   }
