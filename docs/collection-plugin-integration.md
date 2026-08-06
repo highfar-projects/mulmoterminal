@@ -132,6 +132,12 @@ read-only card over the shared workspace:
   `buildViewSrcdoc`/`listFeeds` → typed failure; `reconcileShortcuts`/`unpin` → no-op;
   `notifiedSeverities` → empty map; `startChat` → no-op (the card uses the `sendTextMessage` prop, not
   this binding hook).
+
+  > **This bullet is the Tier-1 plan, not the current state.** Every binding listed here has since
+  > been wired for real; `notifiedSeverities` was the last of them, in #1491 — it now maps the live
+  > bell's entries (`useNotifications().active` → `src/utils/collectionNotified.ts`) to
+  > `itemId → severity`, which is what accents a Kanban card that has a pending completion bell.
+  > Left as written because the rest of this section records how the increment was scoped.
 - **Asset URLs:** `imageSrc`/`fileAssetUrl` resolve to `GET /api/files/raw?path=<workspace-relative>`
   (server/backends/files.ts), mirroring MulmoClaude's `resolveImageSrc`, so `image`/`file` fields and
   custom-view `<img>` thumbnails render. `fileRoutePath` stays null (no in-app File Explorer).
@@ -237,6 +243,10 @@ favorite), and the full-screen browse overlay (`CollectionsIndexView` / standalo
 via `useCollectionBrowse`). Verified: MulmoClaude's pinned collections appear in MulmoTerminal's
 toolbar from the shared file; the overlay opens and the index renders. Still open: `startChat` is a
 no-op (collection "create"/action buttons that seed a chat are inert), and Tier 1 write routes.
+
+Both of those have since shipped — `startChat` seeds a visible chat (`startCollectionChat`) and the
+Tier 1 write routes are mounted in `server/backends/collections.ts` — which is what the note under the
+stub list above refers to. The sentence before this one is left as the record of where Tier 2 stopped.
 
 Bottom line: **the package is drop-in-ready and needs zero MulmoClaude changes.** The work is entirely
 in MulmoTerminal: server read engine + routes, the frontend ToolPlugin + binding + teleport wrapper,
