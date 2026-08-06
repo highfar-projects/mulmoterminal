@@ -194,6 +194,26 @@ function resolveWriteTarget(res: Response, collection: ResolvedCollection, body:
   return { write, record };
 }
 
+/** Gate a record on its schema before it reaches the store, answering 400 with the
+ *  problem when it fails. True means the request is already answered — stop.
+ *
+ *  The same `validateRecordObject` call the other two write paths make: view-data
+ *  PUT (writeViewItem, below) and the agent's manageCollection putItems (core's
+ *  putOneItem). REST create/update wrote straight through, so a client — a UI bug,
+ *  a curl, a future remote writer — could persist a missing required field or an
+ *  off-enum value that the detail route then reports back as `issues` with a Repair
+ *  button, rather than the write being refused at the door (#1489).
+ *
+ *  The tier is core's default `"enforced"`: primaryKey↔id identity, required fields
+ *  non-empty, enum membership. Deliberately NOT the `"strict"` tier, which exists to
+ *  REPORT (a legacy record whose `number` field holds a string stays editable). */
+function rejectedInvalidRecord(res: Response, collection: ResolvedCollection, record: CollectionItem, itemId: string): boolean {
+  const problem = validateRecordObject(record, itemId, collection.schema);
+  if (!problem) return false;
+  res.status(400).json({ error: problem });
+  return true;
+}
+
 /** The action's skill template, or null after sending a 500. Shared by the per-record
  *  and collection-level action routes. */
 async function readActionTemplateOr500(res: Response, collection: ResolvedCollection, action: { id: string; template: string }): Promise<string | null> {
@@ -384,6 +404,7 @@ const itemCreateHandler: RequestHandler<{ slug: string }> = async (req, res) => 
   const { collection, target } = resolved;
   const itemId = resolveCreateItemId(collection.schema, target.record) ?? generateItemId();
   const recordWithId: CollectionItem = { ...target.record, [collection.schema.primaryKey]: itemId };
+  if (rejectedInvalidRecord(res, collection, recordWithId, itemId)) return;
   const result = await target.write(itemId, recordWithId, { refuseOverwrite: true });
   if (isCommonStoreFailure(result)) {
     respondForStoreFailure(res, collection.slug, result);
@@ -408,6 +429,7 @@ const itemUpdateHandler: RequestHandler<{ slug: string; itemId: string }> = asyn
     return;
   }
   const recordWithId: CollectionItem = { ...target.record, [primaryKey]: req.params.itemId };
+  if (rejectedInvalidRecord(res, collection, recordWithId, req.params.itemId)) return;
   const result = await target.write(req.params.itemId, recordWithId);
   if (isCommonStoreFailure(result)) {
     respondForStoreFailure(res, collection.slug, result);
