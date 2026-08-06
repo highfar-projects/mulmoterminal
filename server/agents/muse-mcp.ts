@@ -105,8 +105,16 @@ export function writeMusePlugin(dir: string, manifest: Record<string, unknown>):
 }
 
 /** One `muse plugins` call, JSON-parsed, with every failure reading as "nothing there". */
+// Every call here runs on the /ws/muse path, which is the event loop — so the bound is what stops
+// a hung `muse plugins` from freezing every other session on the server, not just this spawn. The
+// install copies a package and hashes it; 20s is far beyond the ~0.3s it has been measured at.
+const MUSE_PLUGINS_TIMEOUT_MS = 20_000;
+
 function runMusePlugins(args: string[]): { ok: boolean; message: string; json: unknown } {
-  const { status, stdout, stderr } = spawnCapture(museAdapter.bin(), ["plugins", ...args], { env: { ...process.env, ...musePluginEnv() } });
+  const { status, stdout, stderr } = spawnCapture(museAdapter.bin(), ["plugins", ...args], {
+    env: { ...process.env, ...musePluginEnv() },
+    timeoutMs: MUSE_PLUGINS_TIMEOUT_MS,
+  });
   return { ok: status === 0, message: [stdout, stderr].filter(Boolean).join("\n").trim(), json: parsed(stdout) };
 }
 

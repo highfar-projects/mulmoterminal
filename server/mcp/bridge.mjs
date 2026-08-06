@@ -21,8 +21,9 @@ import { createInterface } from "node:readline";
 //   with a curated environment — measured at 16 variables, all muse's own — so neither the muse
 //   process's environment nor the manifest's own `env` block arrives here. What is ours is the
 //   COMMAND LINE, so the group and the port come in as `--group` and `--port`, and the session is
-//   asked for: /api/mcp/resolve maps this process's own pid back to the session whose pane it is
-//   running under (server/session/bridge-session.ts).
+//   asked for: /api/mcp-resolve maps this process's own pid back to the session whose pane — or
+//   whose pty — it is running under (server/session/bridge-session.ts). NOT `/api/mcp/resolve`:
+//   that path is one segment and `/api/mcp/:sessionId` answers it with a 400.
 const argv = process.argv.slice(2);
 const flag = (name) => (argv.indexOf(name) >= 0 ? argv[argv.indexOf(name) + 1] : undefined);
 const port = flag("--port") || process.env.MULMOTERMINAL_PORT;

@@ -17,10 +17,16 @@
 //   that pane pid to that name, so walking up from the bridge until a pane pid is hit is exact —
 //   it distinguishes two muse cells in ONE directory, which nothing else here can.
 //
-//   THE WORKING DIRECTORY. The bridge inherits the workspace as its cwd. That is the fallback for
-//   a session that is not in tmux (persistence off), and it is only trusted when it names exactly
-//   one live muse session: two cells in one directory would otherwise send one cell's chart to the
-//   other, which is worse than no chart.
+//   THE PTY. With tmux persistence off there is no pane to match, and there the muse process IS a
+//   child of the pty this server spawned — so the pty's own pid appears in the same chain.
+//
+// The working directory is deliberately NOT one of them, and that is a correction: a cwd fallback
+// ("the single live muse session in this directory") shipped first and is unsafe, because the
+// plugin is machine-wide. A muse the USER started in a normal terminal, in a directory that also
+// holds one of our cells, matches no pane and no pty of ours — and would have been handed that
+// cell's session id and groups, letting an unrelated process draw into someone's Canvas and write
+// artifacts under their session (Codex review on #1514). Both facts above are proofs of descent;
+// a shared directory is not.
 import { ptys } from "./registry.js";
 import type { ToolGroup } from "../../common/toolGroups.js";
 
@@ -30,27 +36,27 @@ export interface BridgeSessionFacts {
   panePids: ReadonlyMap<number, string>;
   /** The ancestors of the bridge, nearest first, INCLUDING its own pid. */
   ancestors: readonly number[];
-  /** Live sessions running muse, as id -> cwd. */
-  museSessions: ReadonlyMap<string, string>;
-  /** The bridge's working directory. */
-  cwd: string;
+  /** Live sessions running muse, as id -> the pid of the pty this server spawned for it. */
+  museSessions: ReadonlyMap<string, number>;
 }
 
 /**
- * The session a bridge belongs to, or null when it cannot be known for certain.
+ * The session a bridge belongs to, or null when it cannot be shown to belong to any.
  *
- * Null is a real answer and the important one: it means the bridge serves NO tools rather than
- * some other session's. An ambiguous directory is the case that makes this worth stating —
- * answering "probably that one" would put a chart in the wrong cell, and a missing chart is the
- * failure a user can see and report.
+ * Null is a real answer and the important one: the bridge then serves NO tools, rather than some
+ * other session's. Every path here is a proof of DESCENT — this process runs under that session's
+ * pane, or under its pty — so a muse nobody here started can never claim one. A missing chart is a
+ * failure the user can see and report; a chart drawn in the wrong cell is not.
  */
 export function resolveBridgeSession(facts: BridgeSessionFacts): string | null {
+  const ptyOwners = new Map([...facts.museSessions].map(([id, pid]) => [pid, id]));
   for (const pid of facts.ancestors) {
-    const session = facts.panePids.get(pid);
-    if (session && facts.museSessions.has(session)) return session;
+    const pane = facts.panePids.get(pid);
+    if (pane && facts.museSessions.has(pane)) return pane;
+    const pty = ptyOwners.get(pid);
+    if (pty) return pty;
   }
-  const inCwd = [...facts.museSessions].filter(([, cwd]) => cwd === facts.cwd);
-  return inCwd.length === 1 ? (inCwd[0]?.[0] ?? null) : null;
+  return null;
 }
 
 // ── the groups half ───────────────────────────────────────────────────────────────────────────
@@ -81,13 +87,13 @@ export function forgetEntitledToolGroups(sessionId: string): void {
  *  have no record of is a bridge we cannot vouch for. */
 export const entitledToolGroups = (sessionId: string): readonly ToolGroup[] => groupsBySession.get(sessionId) ?? [];
 
-/** The live muse sessions and where each runs — the world the rule above is applied to.
+/** The live muse sessions and the pty pid behind each — the world the rule above is applied to.
  *
  *  muse-only on purpose: the other hosts are TOLD their session, and a process tree is a weaker
  *  claim than being told. Widening this would let a bridge that lost its environment claim a
  *  claude session by standing near it.  */
-export function liveMuseSessions(): Map<string, string> {
-  const sessions = new Map<string, string>();
-  for (const [id, entry] of ptys) if (entry.agent === "muse") sessions.set(id, entry.cwd);
+export function liveMuseSessions(): Map<string, number> {
+  const sessions = new Map<string, number>();
+  for (const [id, entry] of ptys) if (entry.agent === "muse") sessions.set(id, entry.term.pid);
   return sessions;
 }

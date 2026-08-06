@@ -23,8 +23,11 @@
 // Muse is out for the same reason and reaches its tools a third way. It has no `--mcp-config` and
 // no per-directory config file either: MCP servers are declared by an installed PLUGIN, which
 // `muse plugins install` records per MACHINE (server/agents/muse-mcp.ts). So MulmoTerminal
-// registers one plugin holding all four group servers, and the session's environment narrows them
-// back to what its directory switched on. The launcher form offers muse the same four per-group
+// registers one plugin holding all four group servers, and each SESSION is narrowed back to what
+// its directory switched on — by a lookup, not by the environment: a plugin's MCP server is started
+// with a curated environment that carries nothing of ours, so the bridge resolves which session it
+// belongs to (by its process tree) and is told the groups with the answer. Do not add a bridge
+// environment variable; it is dropped on the way and the failure is silent. The launcher form offers muse the same four per-group
 // toggles as grok and agy, which is the truthful answer for the same reason it is theirs.
 import { type SessionAgent } from "./sessionAgent.js";
 import { isLaunchAgent } from "./launchAgent.js";
