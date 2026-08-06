@@ -17,12 +17,13 @@
 // twice a second and by a badge poll per cell.
 import os from "node:os";
 import path from "node:path";
+import { isRecord } from "../../common/isRecord.js";
 
 /** Where muse keeps everything. `MUSE_HOME` is honoured for the same reason `GROK_HOME` is: a spec
  *  (and a sandboxed run) must be able to point the reads somewhere that is not the developer's own
- *  disk. */
-export const museHome = (): string => process.env.MUSE_HOME || path.join(os.homedir(), ".local", "share", "muse");
-export const museSessionIndexPath = (): string => path.join(museHome(), "session-index.db");
+ *  disk. Read at call time, not captured, so setting it in a test still takes effect. */
+const museHome = (): string => process.env.MUSE_HOME || path.join(os.homedir(), ".local", "share", "muse");
+const museSessionIndexPath = (): string => path.join(museHome(), "session-index.db");
 
 export interface MuseSessionMeta {
   id: string;
@@ -50,7 +51,10 @@ async function queryMuseIndex(sql: string, params: readonly string[] = []): Prom
     const { DatabaseSync } = await import("node:sqlite");
     const db = new DatabaseSync(museSessionIndexPath(), { readOnly: true });
     try {
-      return db.prepare(sql).all(...params) as unknown as Row[];
+      // Filtered rather than asserted: what sqlite hands back is a row shape this file does not
+      // own, and every column is read through a guard below anyway.
+      const rows: unknown[] = db.prepare(sql).all(...params);
+      return rows.filter(isRecord);
     } finally {
       try {
         db.close();

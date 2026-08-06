@@ -732,7 +732,8 @@ async function resolveMuseSession(requested: string | null, cwd: string): Promis
   const mappedId = requested ? (museConversations.get(requested)?.conversationId ?? null) : null;
   // Only asked when the map had no answer — one query, and only on a connection that names a key.
   const isOwnSessionId = !mappedId && requested !== null && (await museSessionExistsForCwd(requested, cwd));
-  return resolveResumableSession(requested, ({ hasLivePty }) => (hasLivePty ? null : (mappedId ?? (isOwnSessionId ? requested : null))));
+  const resumeId = mappedId ?? (isOwnSessionId ? requested : null);
+  return resolveResumableSession(requested, ({ hasLivePty }) => (hasLivePty ? null : resumeId));
 }
 
 // The two agents that read their MCP servers from a file in the DIRECTORY rather than from a

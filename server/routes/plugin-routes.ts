@@ -41,7 +41,7 @@ export interface PluginRouteDeps {
 // the buffered output). A claude DRAFT spawns with no initial prompt, so it does not auto-run, and
 // the text is typed into its input box afterwards; the other agents have no editable-draft path (no
 // stable TUI ready-marker), so their seed always auto-runs as a first-turn prompt — codex typed in,
-// agy through `--prompt-interactive`, grok as a positional.
+// agy through `--prompt-interactive`, grok and muse as a positional.
 function spawnSeededSession(
   deps: PluginRouteDeps,
   mode: SpawnMode,
