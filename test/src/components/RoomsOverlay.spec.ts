@@ -18,9 +18,21 @@ let postOk = true;
 let posted: { room: string; from: string; text: string }[] = [];
 let deleted: string[] = [];
 
+// Two microtask hops, so a watcher run is still suspended when the next room change arrives —
+// which is the race the generation token below is about.
+const suspend = () => Promise.resolve().then(() => undefined);
+let reads = 0;
+
 vi.mock("../../../src/composables/useRooms", () => ({
-  loadRoom: async () => (readOk ? { ok: true, messages } : { ok: false }),
-  listRooms: async () => ["standup", "design-review"],
+  loadRoom: async () => {
+    reads++;
+    await suspend();
+    return readOk ? { ok: true, messages } : { ok: false };
+  },
+  listRooms: async () => {
+    await suspend();
+    return ["standup", "design-review"];
+  },
   sendRoomMessage: async (room: string, from: string, text: string) => {
     if (postOk) posted.push({ room, from, text });
     return postOk;
@@ -40,6 +52,7 @@ beforeEach(() => {
   postOk = true;
   posted = [];
   deleted = [];
+  reads = 0;
 });
 afterEach(() => {
   vi.restoreAllMocks();
@@ -162,6 +175,33 @@ describe("RoomsOverlay", () => {
     it("leaves the view alone when the reader has scrolled back", async () => {
       expect(await arrives(0)).toBe(0);
     });
+  });
+
+  // The watcher awaits before arming the poll, so two room changes in quick succession leave an
+  // older run suspended; it resumes after the newer one armed, overwrites the handle, and the newer
+  // timer becomes unreachable — two intervals polling and one that can never be cleared.
+  it("arms exactly one poll when the room changes while a read is in flight", async () => {
+    vi.useFakeTimers();
+    try {
+      const w = mount(RoomsOverlay);
+      openRoom.value = "design-review";
+      await flushPromises();
+      await flushPromises();
+
+      reads = 0;
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      await flushPromises();
+      expect(reads).toBe(1);
+
+      // And the one that exists is the one unmounting can stop.
+      w.unmount();
+      reads = 0;
+      await vi.advanceTimersByTimeAsync(POLL_MS * 3);
+      await flushPromises();
+      expect(reads).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not delete when the confirmation is declined", async () => {

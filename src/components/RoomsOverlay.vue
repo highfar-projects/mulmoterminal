@@ -84,17 +84,25 @@ function stopPolling(): void {
   pollTimer = null;
 }
 
+// Which run of the watcher below is the current one. The callback AWAITS before arming the poll,
+// so two room changes in quick succession leave an older run suspended: it resumes after the newer
+// one has already armed, overwrites `pollTimer`, and the newer timer is then unreachable — two
+// intervals polling and only one that can ever be cleared (Codex review on #1456).
+let watchRun = 0;
+
 // Poll only while the overlay is open and a room is chosen — a timer left running behind a closed
 // overlay is a request every two seconds for as long as the tab lives.
 watch(
   [isOpen, room],
   async ([open]) => {
+    const run = ++watchRun;
     stopPolling();
     messages.value = [];
     readError.value = null;
     sendError.value = null;
     if (!open) return;
     await Promise.all([refreshRooms(), refresh()]);
+    if (run !== watchRun) return; // a newer run took over while this one was in flight
     if (room.value) pollTimer = setInterval(refresh, POLL_MS);
   },
   { immediate: true },
