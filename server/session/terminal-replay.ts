@@ -102,3 +102,33 @@ export function appendBoundedOutput(buffer: string, data: string, limit: number)
   const cut = combined.slice(cutAt);
   return cut.slice(splitSequenceLength(combined, cutAt, cut));
 }
+
+// How far past `limit` the retained tail is allowed to run before it is cut back.
+//
+// The slack is what makes the append cheap, and its size is a memory trade, not a speed one.
+// Every value tested appends in ~0.0002 ms; what changes is how much unflattened rope the tail
+// carries between cuts, and a rope of small chunks costs several times its character count in
+// cons nodes and per-string headers. Measured per session at a 1 MiB limit, 40-byte pty chunks:
+// 1.00 MB as it was, 2.54 MB at 1.25, 6.45 MB at 2.
+const TAIL_SLACK = 1.25;
+
+// Append pty output for replay WITHOUT paying for the bound on every chunk.
+//
+// appendBoundedOutput slices, which flattens, so calling it per chunk costs O(limit) however
+// few bytes arrived — 0.1 ms against a full 1 MiB buffer, ~11k times a second under a flooding
+// command. That is one core, and it is spent starving the pty read that would have drained the
+// child: six cells running the same command took 8230 ms instead of 2159 ms (#1506).
+//
+// Concatenation is what V8 keeps as a rope, so this is O(chunk); the exact cut happens once per
+// TAIL_SLACK-worth of appended output. Readers therefore get MORE than `limit` and must cut it
+// back themselves — see PtyEntry.buffer.
+export function growOutputTail(buffer: string, data: string, limit: number): string {
+  const grown = buffer + data;
+  return grown.length > limit * TAIL_SLACK ? appendBoundedOutput(grown, "", limit) : grown;
+}
+
+/** The exact bounded tail, for the two places that read a session's buffer out. Named rather
+ *  than inlined so "the buffer overruns its limit" has one answer instead of two. */
+export function boundedTail(buffer: string, limit: number): string {
+  return appendBoundedOutput(buffer, "", limit);
+}

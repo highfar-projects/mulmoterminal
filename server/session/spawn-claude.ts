@@ -22,8 +22,8 @@ import {
 import { ptySpawn, ptyWouldReattach, type PtySpawnEnv } from "./pty-spawn.js";
 import { ptyExitLine, ptyStartLine } from "./pty-exit-log.js";
 import { attachDraftInjection } from "./draft-injection.js";
-import { sendExitAndClose, sendFrame } from "./ws-frames.js";
-import { appendBoundedOutput } from "./terminal-replay.js";
+import { sendExitAndClose } from "./ws-frames.js";
+import { wireBufferedOutput } from "./output-relay.js";
 import { sessionExistsOnDisk } from "./session-reads.js";
 import type { PtyEntry } from "./types.js";
 import type { SpawnDeps } from "./spawn-deps.js";
@@ -302,15 +302,12 @@ export function createClaudeSpawner(deps: SpawnDeps) {
     // newline and the prompt would never run (#1148).
     const scanForDraftReady = attachDraftInjection(entry, initialPrompt, draft, () => submitSequenceForAgent(entry.agent, getTerminalSubmit()));
 
-    // PTY -> browser (buffering a bounded tail for reattach).
-    entry.term.onData((data) => {
-      entry.buffer = appendBoundedOutput(entry.buffer, data, deps.outputBufferLimit);
-      sendFrame(entry.ws, { type: "output", data });
-      scanForDraftReady(data);
-    });
+    // PTY -> browser (buffering a tail for reattach, batching the frames).
+    const output = wireBufferedOutput(entry, deps.outputBufferLimit, scanForDraftReady);
 
     entry.term.onExit(({ exitCode, signal }) => {
       console.log(ptyExitLine({ agent: "claude", exitCode, signal, lifetimeMs: Date.now() - spawnedAtMs, cwd, sessionId }));
+      output.flush(); // a queued batch must not arrive after the exit frame
       sendExitAndClose(entry.ws, exitCode, signal);
       // Clear the dot if it died mid-turn, then tear down everything (deletes
       // ptys/knownSessions/activity and publishes "closed") so a process that

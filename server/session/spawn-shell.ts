@@ -11,7 +11,7 @@ import { ptys } from "./registry.js";
 import { ptySpawn, spawnPty } from "./pty-spawn.js";
 import { ptyExitLine, ptyStartLine } from "./pty-exit-log.js";
 import { sendExitAndClose, sendFrame } from "./ws-frames.js";
-import { appendBoundedOutput } from "./terminal-replay.js";
+import { wireBufferedOutput } from "./output-relay.js";
 import type { PtyEntry } from "./types.js";
 import type { SpawnDeps } from "./spawn-deps.js";
 
@@ -63,12 +63,10 @@ export function createShellSpawners(deps: SpawnDeps) {
     const entry: PtyEntry = { term, ws, buffer: "", cwd, tmux, active: false, agent: "shell" };
     ptys.set(sessionId, entry);
 
-    term.onData((data) => {
-      entry.buffer = appendBoundedOutput(entry.buffer, data, deps.outputBufferLimit);
-      sendFrame(entry.ws, { type: "output", data });
-    });
+    const output = wireBufferedOutput(entry, deps.outputBufferLimit);
     term.onExit(({ exitCode, signal }) => {
       console.log(ptyExitLine({ agent: "launcher", exitCode, signal, lifetimeMs: Date.now() - spawnedAtMs, cwd, sessionId }));
+      output.flush(); // a queued batch must not arrive after the exit frame
       sendExitAndClose(entry.ws, exitCode, signal);
       // A launcher is persistent and tmux-backed like an agent cell, so it has the same two ways to
       // lose its pty — and only one of them means the program is over (#1496).
