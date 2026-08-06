@@ -28,6 +28,8 @@ import {
   customAgentSessionsHydrated,
   codexRollouts,
   codexRolloutsHydrated,
+  museConversations,
+  museConversationsHydrated,
   markDevTerminalSession,
   markAttachedSessionPlaced,
   ptys,
@@ -48,6 +50,7 @@ import type {
   SpawnCodexPty,
   SpawnAntigravityPty,
   SpawnGrokPty,
+  SpawnMusePty,
   SpawnCommandPty,
   SpawnLauncherPty,
   ResolveLauncher,
@@ -75,6 +78,7 @@ export interface WsRouteDeps {
   spawnCodexPty: SpawnCodexPty;
   spawnAntigravityPty: SpawnAntigravityPty;
   spawnGrokPty: SpawnGrokPty;
+  spawnMusePty: SpawnMusePty;
   spawnCommandPty: SpawnCommandPty;
   spawnLauncherPty: SpawnLauncherPty;
   resolveLauncher: ResolveLauncher;
@@ -707,6 +711,35 @@ function resolveGrokSession(requested: string | null, cwd: string): ResumableSes
   );
 }
 
+async function resolveMuseSession(requested: string | null, cwd: string): Promise<ResumableSession> {
+  // Historical sessions: requested is already a muse session_id stored in
+  // session-index.db with workspace_root === cwd. Resume it directly even
+  // without a mulmo mapping (museConversations). This is the chat-history
+  // case — the picker lists DB-backed ids and expects `muse --yolo resume <id>`.
+  if (requested) {
+    const { museSessionExistsForCwd } = await import("../agents/muse-session.js");
+    const existsForCwd = await museSessionExistsForCwd(requested, cwd);
+    if (existsForCwd) {
+      const { live, hasLivePty, tmuxAlive } = liveSessionFacts(requested);
+      if (!hasLivePty) {
+        // Reuse resolveReattachableId shape for consistency with other agents.
+        const { randomUUID } = await import("node:crypto");
+        const { resolveReattachableId: resolveReattachableIdDynamic } = await import("../session/session-resolve.js");
+        const { sessionId } = resolveReattachableIdDynamic(requested, { hasLivePty, tmuxAlive, canResume: true }, randomUUID);
+        return { sessionId, live, resumeConversationId: requested };
+      }
+    }
+  }
+  return resolveResumableSession(requested, ({ hasLivePty, tmuxAlive }) =>
+    agentResumeId(requested, {
+      mappedId: requested ? museConversations.get(requested)?.conversationId : null,
+      conversationExists: () => false, // muse id is mulmo-minted mapping; existence via map only
+      hasLivePty,
+      tmuxAlive,
+    }),
+  );
+}
+
 // The two agents that read their MCP servers from a file in the DIRECTORY rather than from a
 // per-session flag: agy from `.agents/mcp_config.json`, grok from `.grok/config.toml`. That one
 // fact decides their whole connection shape and is what claude and codex do NOT share — for them
@@ -728,7 +761,7 @@ export interface DirectoryMcpWsAgent {
    *  id of its own, so it keeps no map) — an agent added later has to answer this question rather
    *  than inherit "no" by leaving a key out. */
   hydrated: Promise<unknown> | null;
-  resolveSession: (requested: string | null, cwd: string) => ResumableSession;
+  resolveSession: (requested: string | null, cwd: string) => ResumableSession | Promise<ResumableSession>;
   spawn: (deps: WsRouteDeps) => SpawnDirectoryMcpPty;
 }
 
@@ -748,6 +781,14 @@ export const GROK_WS_AGENT: DirectoryMcpWsAgent = {
   spawn: (deps) => deps.spawnGrokPty,
 };
 
+export const MUSE_WS_AGENT: DirectoryMcpWsAgent = {
+  kind: "muse",
+  label: "Muse",
+  hydrated: museConversationsHydrated,
+  resolveSession: (requested, cwd) => resolveMuseSession(requested, cwd),
+  spawn: (deps) => deps.spawnMusePty,
+};
+
 // antigravity (?cwd=<dir>, ?session=<id> to reattach/resume) and grok, which connect identically —
 // see DirectoryMcpWsAgent for why those two and not claude or codex.
 export async function handleDirectoryMcpAgentConnection(agent: DirectoryMcpWsAgent, deps: WsRouteDeps, ws: WebSocket, req: WsUpgradeRequest) {
@@ -755,7 +796,7 @@ export async function handleDirectoryMcpAgentConnection(agent: DirectoryMcpWsAge
   if (refuseUnusableWorkspace(ws, agent.kind, unusable, requested)) return;
   const attachGuiMcp = url.searchParams.get("gui") !== "0";
   if (agent.hydrated) await agent.hydrated;
-  const { sessionId, live, resumeConversationId } = agent.resolveSession(requested, cwd);
+  const { sessionId, live, resumeConversationId } = await agent.resolveSession(requested, cwd);
   // The directory's per-tree PORT / DB_NAME (#1367), like every other spawn path — a cell in a
   // worktree gets that tree's own values, not the ones another tree is already serving on.
   await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });
@@ -800,6 +841,7 @@ export function mountTerminalWebSockets(deps: WsRouteDeps) {
   const runAntigravityWss = new WebSocketServer({ noServer: true });
   // First-class grok sessions — same again, running grok under an id this server minted.
   const runGrokWss = new WebSocketServer({ noServer: true });
+  const runMuseWss = new WebSocketServer({ noServer: true });
   const serverFor: Record<TerminalWsKind, WebSocketServer> = {
     claude: wss,
     run: runWss,
@@ -807,6 +849,7 @@ export function mountTerminalWebSockets(deps: WsRouteDeps) {
     codex: runCodexWss,
     antigravity: runAntigravityWss,
     grok: runGrokWss,
+    muse: runMuseWss,
   };
   deps.server.on("upgrade", (req, socket, head) => {
     const { pathname } = new URL(req.url ?? "/", "http://localhost");
@@ -833,4 +876,5 @@ export function mountTerminalWebSockets(deps: WsRouteDeps) {
   runCodexWss.on("connection", (ws, req) => void handleCodexConnection(deps, ws, req));
   runAntigravityWss.on("connection", (ws, req) => void handleDirectoryMcpAgentConnection(ANTIGRAVITY_WS_AGENT, deps, ws, req));
   runGrokWss.on("connection", (ws, req) => void handleDirectoryMcpAgentConnection(GROK_WS_AGENT, deps, ws, req));
+  runMuseWss.on("connection", (ws, req) => void handleDirectoryMcpAgentConnection(MUSE_WS_AGENT, deps, ws, req));
 }

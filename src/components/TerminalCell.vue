@@ -431,7 +431,7 @@ watch(
 // agy pays one indexed sqlite row plus a 64 KB head read, grok two small JSON reads plus a fold
 // resumed at the byte the last poll stopped on. Delete each the day its agent gets an activity
 // tracker.
-const UNTRACKED_BADGE_AGENTS = new Set(["antigravity", "grok"]);
+const UNTRACKED_BADGE_AGENTS = new Set(["antigravity", "grok", "muse"]);
 const UNTRACKED_BADGE_POLL_MS = 60_000;
 let badgePoll: ReturnType<typeof setInterval> | null = null;
 

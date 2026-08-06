@@ -19,13 +19,14 @@ import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups.js";
 import { codexifySkillSeed } from "../agents/codex-skills.js";
 import { manageCollectionHandler } from "../infra/collection-tool.js";
 import { upstreamFailureMessage } from "./plugin-narration.js";
-import type { SpawnClaudePty, SpawnCodexPty, SpawnAntigravityPty, SpawnGrokPty } from "../session/spawners.js";
+import type { SpawnClaudePty, SpawnCodexPty, SpawnAntigravityPty, SpawnGrokPty, SpawnMusePty } from "../session/spawners.js";
 
 export interface PluginRouteDeps {
   spawnClaudePty: SpawnClaudePty;
   spawnCodexPty: SpawnCodexPty;
   spawnAntigravityPty: SpawnAntigravityPty;
   spawnGrokPty: SpawnGrokPty;
+  spawnMusePty: SpawnMusePty;
   /** Put a hidden spawn on the scheduled-session retention (#541). Nobody watches a
    *  background worker and the chat list keeps it behind a filter, so the hook-driven reap
    *  is the only thing that would ever end it — and a worker blocked on a permission prompt
@@ -50,6 +51,7 @@ function spawnSeededSession(
   if (mode === "codex-run") deps.spawnCodexPty(sessionId, null, null, CLAUDE_CWD, true, { initialPrompt });
   else if (mode === "antigravity-run") deps.spawnAntigravityPty(sessionId, null, null, CLAUDE_CWD, { mcpGroups, initialPrompt });
   else if (mode === "grok-run") deps.spawnGrokPty(sessionId, null, null, CLAUDE_CWD, { mcpGroups, initialPrompt });
+  else if (mode === "muse-run") deps.spawnMusePty(sessionId, null, null, CLAUDE_CWD, { initialPrompt });
   else if (mode === "claude-draft") deps.spawnClaudePty(sessionId, null, null, { draft: message });
   else deps.spawnClaudePty(sessionId, null, null, { initialPrompt: message });
 }

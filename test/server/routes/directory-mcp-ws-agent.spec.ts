@@ -27,6 +27,8 @@ vi.mock("../../../server/session/registry.js", () => ({
   ptys,
   antigravityConversations: new Map(),
   antigravityConversationsHydrated: antigravityMapRead,
+  museConversations: new Map(),
+  museConversationsHydrated: Promise.resolve(),
   codexRollouts: new Map(),
   codexRolloutsHydrated: Promise.resolve(),
   customAgentSessionsHydrated: Promise.resolve(),

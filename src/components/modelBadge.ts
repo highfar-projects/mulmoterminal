@@ -22,6 +22,8 @@ const K200_TOKENS = 200_000;
 // 200k entries. Add new 1M ids here when they ship, ahead of the bare-family fallbacks, or the
 // fallback claims them and the reading comes out 5x too large (#985).
 const CONTEXT_WINDOWS: { match: string; tokens: number }[] = [
+  { match: "muse-spark", tokens: MILLION_TOKENS },
+  { match: "muse", tokens: MILLION_TOKENS },
   { match: "opus-4-6", tokens: MILLION_TOKENS },
   { match: "opus-4-7", tokens: MILLION_TOKENS },
   { match: "opus-4-8", tokens: MILLION_TOKENS },
@@ -38,7 +40,7 @@ const PERCENT = 100;
 
 // A Record over TERMINAL_AGENTS rather than a free object: this is what the badge CALLS each agent,
 // and an agent missing from it would otherwise badge a session `undefined · <model>`.
-const AGENT_NAME: Record<TerminalAgent, string> = { claude: "Claude", codex: "Codex", antigravity: "Antigravity", grok: "Grok" };
+const AGENT_NAME: Record<TerminalAgent, string> = { claude: "Claude", codex: "Codex", antigravity: "Antigravity", grok: "Grok", muse: "Muse" };
 export type BadgeAgent = TerminalAgent;
 
 // A trailing qualifier in brackets — agy names a model `Gemini 3.6 Flash (High)`, where `(High)` is

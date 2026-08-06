@@ -19,6 +19,9 @@
 // `~/.grok/config.toml` or `./.grok/config.toml` (server/agents/grok-mcp.ts). So a grok session in
 // the workspace gets the groups its DIRECTORY registered, and the launcher form offers it the four
 // per-group toggles — which is the truthful answer, and the one #1423 failed to give.
+//
+// Muse is out for the same reason: no --mcp-config, no per-spawn MCP URL — sessions run `muse`
+// directly with no MCP bridge.
 import { type SessionAgent } from "./sessionAgent.js";
 import { isLaunchAgent } from "./launchAgent.js";
 import { customAgentFor, type AgentPick, type CustomAgent } from "./customAgents.js";

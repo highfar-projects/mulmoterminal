@@ -35,6 +35,12 @@ const spokeRotations = Array.from({ length: SPOKES }, (_, i) => (i * 360) / SPOK
       <line x1="14.5" y1="14.5" x2="20" y2="20" />
     </g>
   </svg>
+  <!-- Muse: simple M with spark — three verticals with diagonals -->
+  <svg v-else-if="agent === 'muse'" viewBox="0 0 24 24" class="h-[13px] w-[13px] flex-none" fill="none" aria-hidden="true">
+    <g stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 18V6l6 8 6-8v12" />
+    </g>
+  </svg>
   <!-- Two crossed loops, not three. The knot's own six-fold form was tried first and measured at
        the size it actually renders: three overlapping ellipses fill the middle in and the whole
        thing reads as one dark blob, which distinguishes nothing. Two loops keep an open centre and

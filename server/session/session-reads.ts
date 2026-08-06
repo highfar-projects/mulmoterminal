@@ -260,11 +260,12 @@ async function codexLastTurn(sessionKey: string): Promise<LastTurn> {
 export async function sessionLastTurn(cwd: string, id: string, agent: TerminalAgent): Promise<LastTurn> {
   if (agent === "codex") return codexLastTurn(id);
   // Neither log is read yet, and each is a real file rather than a missing feature: agy's brain
-  // directory, and grok's `chat_history.jsonl` under `~/.grok/sessions/<cwd>/<id>/`. EMPTY_TURN is
-  // the honest answer for both until one is parsed — every caller already handles it (a push says
-  // nothing rather than something wrong, a handoff carries no reply), which is why a wrong guess at
-  // the format would be worse than silence.
-  if (agent === "antigravity" || agent === "grok") return EMPTY_TURN;
+  // directory, grok's `chat_history.jsonl` under `~/.grok/sessions/<cwd>/<id>/`, and muse's
+  // `session.jsonl` under `~/.local/share/muse/sessions/...`. EMPTY_TURN is the honest answer for
+  // all three until one is parsed — every caller already handles it (a push says nothing rather
+  // than something wrong, a handoff carries no reply), which is why a wrong guess at the format
+  // would be worse than silence.
+  if (agent === "antigravity" || agent === "grok" || agent === "muse") return EMPTY_TURN;
   try {
     return lastTurnFromClaudeParsed(readTailRecords(path.join(projectSessionsDir(cwd), `${id}.jsonl`)));
   } catch {
