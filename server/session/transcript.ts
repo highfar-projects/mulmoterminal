@@ -109,7 +109,23 @@ export const aiTitleFromJsonl = (raw: string): string | null => aiTitleFromParse
 export interface ConversationTurn {
   role: "user" | "assistant";
   text: string;
+  /** Assistant only: does this record END the turn, or is the agent still working?
+   *
+   *  Claude writes a preamble ("I'll read the files first") as a complete assistant record BEFORE
+   *  it runs any tool, so "there is prose" and "the turn is over" are different facts — and reading
+   *  the first as the second relayed a preamble to another cell as its answer (#1487). Most callers
+   *  here WANT the in-flight prose (the roster shows what an agent is saying right now); only
+   *  `lastTurnFromClaudeParsed` needs the boundary, so it is carried rather than filtered. */
+  endsTurn?: boolean;
 }
+
+/** `tool_use` is the only stop reason that means "I am not finished" — everything else
+ *  (`end_turn`, `stop_sequence`, `max_tokens`, a refusal) ends the turn one way or another.
+ *
+ *  A record with NO stop reason counts as ending it. That is the pre-#1487 behaviour, and it is the
+ *  safe direction to be wrong in: treating an unrecognised record as still-running would leave a
+ *  turn that never completes, and every exchange waiting on it would time out. */
+const endsTurn = (message: Record<string, unknown>): boolean => message.stop_reason !== "tool_use";
 
 // The joined text of an assistant turn's content: only "text" blocks (tool_use blocks
 // carry no prose a title would use). A plain-string content is returned as-is.
@@ -124,22 +140,23 @@ function assistantText(content: unknown): string | null {
   return joined || null;
 }
 
+// One record as a turn, or null when it carries no prose (a tool-only assistant record, a
+// slash-command wrapper).
+function turnFromRecord(o: Record<string, unknown>): ConversationTurn | null {
+  const message = isRecord(o.message) ? o.message : null;
+  const content = message?.content;
+  if (o.type === "user") {
+    const text = userPromptText(content);
+    return text ? { role: "user", text } : null;
+  }
+  if (o.type !== "assistant") return null;
+  const text = assistantText(content);
+  return text ? { role: "assistant", text, endsTurn: message ? endsTurn(message) : true } : null;
+}
+
 // Ordered user/assistant turns as plain text, skipping slash/local-command wrappers and
 // tool-only assistant turns. Feeds the header-title summarizer.
-export function conversationTurnsFromParsed(records: Record<string, unknown>[]): ConversationTurn[] {
-  const turns: ConversationTurn[] = [];
-  for (const o of records) {
-    const content = isRecord(o.message) ? o.message.content : undefined;
-    if (o.type === "user") {
-      const text = userPromptText(content);
-      if (text) turns.push({ role: "user", text });
-    } else if (o.type === "assistant") {
-      const text = assistantText(content);
-      if (text) turns.push({ role: "assistant", text });
-    }
-  }
-  return turns;
-}
+export const conversationTurnsFromParsed = (records: Record<string, unknown>[]): ConversationTurn[] => records.flatMap((o) => turnFromRecord(o) ?? []);
 export const conversationTurnsFromJsonl = (raw: string): ConversationTurn[] => conversationTurnsFromParsed(parseJsonl(raw));
 
 // How many user turns the transcript holds, so the roster can tell whether a session has
