@@ -113,6 +113,20 @@ describe("createOutputRelay", () => {
     expect(entry.buffer).toBe("background output");
   });
 
+  // The queue only grows while the loop is too busy for the timer to fire, so nothing else
+  // bounds how large one stringify-and-send gets.
+  it("sends without waiting once the queue reaches the batch ceiling", () => {
+    const s = fakeSocket();
+    const relay = createOutputRelay(fakeEntry(s.socket), 4 * 1024 * 1024);
+    relay.push("first"); // idle: goes at once, and starts the batching window
+    const chunk = "y".repeat(64 * 1024);
+    for (let i = 0; i < 4; i++) relay.push(chunk); // 256 KiB, with no timer allowed to fire
+    expect(outputs(s.sent)).toHaveLength(2);
+    expect(outputs(s.sent)[1]).toHaveLength(4 * 64 * 1024);
+    vi.advanceTimersByTime(FLUSH_INTERVAL_MS); // the ceiling flush must leave nothing behind
+    expect(outputs(s.sent)).toHaveLength(2);
+  });
+
   it("bounds the buffer it grows, leaving the reader the exact cut", () => {
     const entry = fakeEntry(fakeSocket().socket);
     const relay = createOutputRelay(entry, 10);

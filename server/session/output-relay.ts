@@ -13,6 +13,11 @@ import type { PtyEntry } from "./types.js";
 // collapses into a handful of frames a second instead of thousands.
 const FLUSH_INTERVAL_MS = 8;
 
+// A batch this big has already amortised the per-frame cost, and the queue only grows while the
+// loop is busy enough that the timer cannot fire — so without a ceiling one burst decides how long
+// a single stringify-and-send blocks. Measured batches run ~30 KB; this is the pathological case.
+const MAX_BATCH_CHARS = 256 * 1024;
+
 export interface OutputRelay {
   /** Keep a chunk for replay, and queue it for the browser. */
   push(data: string): void;
@@ -24,11 +29,13 @@ export interface OutputRelay {
 
 export function createOutputRelay(entry: PtyEntry, limit: number): OutputRelay {
   const pending: string[] = [];
+  let pendingChars = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let lastSentMs = 0;
 
   const discard = () => {
     pending.length = 0;
+    pendingChars = 0;
     if (timer) {
       clearTimeout(timer);
       timer = null;
@@ -47,6 +54,8 @@ export function createOutputRelay(entry: PtyEntry, limit: number): OutputRelay {
   const push = (data: string) => {
     entry.buffer = growOutputTail(entry.buffer, data, limit);
     pending.push(data);
+    pendingChars += data.length;
+    if (pendingChars >= MAX_BATCH_CHARS) return flush();
     if (timer) return;
     // Nothing went out recently, so this is a keystroke echo or a fresh prompt rather than a
     // flood — send it at once. Batching only starts once output is arriving faster than a frame.
