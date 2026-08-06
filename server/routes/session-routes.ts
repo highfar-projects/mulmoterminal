@@ -100,7 +100,19 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   // exactly what it got before.
   const agent = normalizeAgent(req.query.agent);
   const { lastPrompt: transcriptPrompt, lastResponse: transcriptResponse, userTurns, usage, context, workPhase } = await readSessionSummary(cwd, id);
-  const badges = agent === "claude" ? { usage, context } : await agentBadges(cwd, id, agent);
+  let badges = agent === "claude" ? { usage, context } : await agentBadges(cwd, id, agent);
+  // A cell that is actually running Muse but whose persisted `agent` is still "claude"
+  // (created before the Muse feature, or started via shell) would otherwise show no badge:
+  // the Claude transcript has no file for this id. If the Claude read is empty but a Muse
+  // conversation exists for this Mulmo id, fall back to Muse's badges so the header self-heals.
+  if (agent === "claude" && badges.context.model === null && badges.usage.inputTokens === 0) {
+    try {
+      const museFallback = await agentBadges(cwd, id, "muse");
+      if (museFallback.context.model !== null) badges = museFallback;
+    } catch {
+      // keep Claude's empty badges
+    }
+  }
   // If we haven't titled it yet, kick off a summary; sessionDetailView falls back meanwhile.
   freshenRosterTitle(id, cwd, userTurns);
   await sessionMemosHydrated; // a cell seeding on boot must not be told its memo is gone

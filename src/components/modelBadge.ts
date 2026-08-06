@@ -22,6 +22,8 @@ const K200_TOKENS = 200_000;
 // 200k entries. Add new 1M ids here when they ship, ahead of the bare-family fallbacks, or the
 // fallback claims them and the reading comes out 5x too large (#985).
 const CONTEXT_WINDOWS: { match: string; tokens: number }[] = [
+  { match: "muse-spark", tokens: MILLION_TOKENS },
+  { match: "muse", tokens: MILLION_TOKENS },
   { match: "opus-4-6", tokens: MILLION_TOKENS },
   { match: "opus-4-7", tokens: MILLION_TOKENS },
   { match: "opus-4-8", tokens: MILLION_TOKENS },
@@ -34,7 +36,6 @@ const CONTEXT_WINDOWS: { match: string; tokens: number }[] = [
   { match: "sonnet", tokens: K200_TOKENS },
   { match: "haiku", tokens: K200_TOKENS },
 ];
-// NOTE: Muse (muse-spark-1.2) context window not yet sourced — keep no-window until session-index.db or session.jsonl reports it via SessionContextInfo.contextWindow
 const PERCENT = 100;
 
 // A Record over TERMINAL_AGENTS rather than a free object: this is what the badge CALLS each agent,
