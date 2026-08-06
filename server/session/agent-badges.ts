@@ -40,6 +40,8 @@ import { emptyGrokUsage, foldGrokUsage, grokContextFromSignals, isGrokUsage } fr
 import { antigravityBrainRoot, antigravityConversationsRoot, antigravityHome } from "../agents/antigravity-session.js";
 import { antigravityModelFromTranscriptHead, antigravityTranscriptPath } from "../agents/antigravity-sessions.js";
 import { antigravityBadgesFromDb } from "../agents/antigravity-usage.js";
+import { museBadgesFromLog } from "../agents/muse-session.js";
+import { museConversations, museConversationsHydrated } from "./registry.js";
 import { readTailRecords } from "../infra/jsonl-file.js";
 import { createTranscriptFold } from "./transcript-fold.js";
 import { antigravityConversations, antigravityConversationsHydrated, codexRollouts, codexRolloutsHydrated } from "./registry.js";
@@ -163,6 +165,14 @@ async function grokUsage(file: string): Promise<SessionUsage> {
 // renders.
 const ANTIGRAVITY_HEAD_BYTES = 64 * 1024;
 
+async function museBadges(sessionKey: string): Promise<SessionBadges> {
+  await museConversationsHydrated;
+  const conversationId = museConversations.get(sessionKey)?.conversationId ?? sessionKey;
+  const badges = await museBadgesFromLog("", conversationId);
+  if (!badges) return { usage: EMPTY_USAGE, context: { model: null, contextTokens: 0, contextWindow: null } };
+  return { usage: badges.usage, context: { model: badges.model, contextTokens: badges.contextTokens, contextWindow: null } };
+}
+
 async function antigravityBadges(sessionKey: string, home: string): Promise<SessionBadges> {
   // The codex lookup, for the same reason (see codexBadges): the route is given OUR session id and
   // agy files its transcript under an id of its own. `?? sessionKey` covers a cell resumed straight
@@ -196,5 +206,6 @@ async function antigravityBadges(sessionKey: string, home: string): Promise<Sess
 export async function agentBadges(cwd: string, id: string, agent: Exclude<TerminalAgent, "claude">, roots: BadgeRoots = {}): Promise<SessionBadges> {
   if (agent === "codex") return codexBadges(id, roots.codexSessions ?? codexSessionsRoot());
   if (agent === "grok") return grokBadges(cwd, id, roots.grokSessions ?? grokSessionsRoot());
+  if (agent === "muse") return museBadges(id);
   return antigravityBadges(id, roots.antigravityHome ?? antigravityHome());
 }

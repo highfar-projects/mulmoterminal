@@ -18,6 +18,7 @@ export const AGENT_SESSION_LIST_PATHS: Record<TerminalAgent, string> = {
   codex: "/api/codex/sessions",
   antigravity: "/api/antigravity/sessions",
   grok: "/api/grok/sessions",
+  muse: "/api/muse/sessions",
 };
 
 /** The listing URL for one agent's conversations in one directory. */

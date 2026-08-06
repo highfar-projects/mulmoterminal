@@ -38,7 +38,7 @@ const PERCENT = 100;
 
 // A Record over TERMINAL_AGENTS rather than a free object: this is what the badge CALLS each agent,
 // and an agent missing from it would otherwise badge a session `undefined · <model>`.
-const AGENT_NAME: Record<TerminalAgent, string> = { claude: "Claude", codex: "Codex", antigravity: "Antigravity", grok: "Grok" };
+const AGENT_NAME: Record<TerminalAgent, string> = { claude: "Claude", codex: "Codex", antigravity: "Antigravity", grok: "Grok", muse: "Muse" };
 export type BadgeAgent = TerminalAgent;
 
 // A trailing qualifier in brackets — agy names a model `Gemini 3.6 Flash (High)`, where `(High)` is

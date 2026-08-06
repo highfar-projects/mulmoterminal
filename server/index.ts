@@ -84,8 +84,10 @@ import { claudeAdapter } from "./agents/claude.js";
 import { codexAdapter } from "./agents/codex.js";
 import { antigravityAdapter } from "./agents/antigravity.js";
 import { grokAdapter } from "./agents/grok.js";
+import { museAdapter } from "./agents/muse.js";
 import { createAntigravitySpawner } from "./session/spawn-antigravity.js";
 import { createGrokSpawner } from "./session/spawn-grok.js";
+import { createMuseSpawner } from "./session/spawn-muse.js";
 import { renderScreen } from "./session/headlessScreen.js";
 import {
   agentFromPaneCommand,
@@ -150,10 +152,12 @@ const CLAUDE_BIN = claudeAdapter.bin();
 const CODEX_BIN = codexAdapter.bin();
 const ANTIGRAVITY_BIN = antigravityAdapter.bin();
 const GROK_BIN = grokAdapter.bin();
+const MUSE_BIN = museAdapter.bin();
 // Model override for codex sessions (--model); null uses codex's own configured default.
 const CODEX_MODEL = process.env.CODEX_MODEL || null;
 const ANTIGRAVITY_MODEL = process.env.ANTIGRAVITY_MODEL || null;
 const GROK_MODEL = process.env.GROK_MODEL || null;
+const MUSE_MODEL = process.env.MUSE_MODEL || null;
 // Permission mode for backend-spawned Claude sessions. Defaults to "auto" so
 // the backend runs hands-off; override with CLAUDE_PERMISSION_MODE (e.g.
 // "default" / "acceptEdits" / "bypassPermissions" / "plan") when needed.
@@ -310,6 +314,8 @@ const spawnDeps: SpawnDeps = {
   antigravityModel: ANTIGRAVITY_MODEL,
   grokBin: GROK_BIN,
   grokModel: GROK_MODEL,
+  museBin: MUSE_BIN,
+  museModel: MUSE_MODEL,
   permissionMode: CLAUDE_PERMISSION_MODE,
   guiMcpTools: GUI_MCP_TOOLS,
   gridMcpTools: GRID_MCP_TOOLS,
@@ -328,6 +334,7 @@ const { spawnClaudePty } = createClaudeSpawner(spawnDeps);
 const { spawnCodexPty } = createCodexSpawner(spawnDeps);
 const { spawnAntigravityPty } = createAntigravitySpawner(spawnDeps);
 const { spawnGrokPty } = createGrokSpawner(spawnDeps);
+const { spawnMusePty } = createMuseSpawner(spawnDeps);
 const { spawnCommandPty, spawnLauncherPty, resolveLauncher } = createShellSpawners(spawnDeps);
 
 // The hidden translation worker (session/translation-worker.ts). It drives a headless
@@ -870,6 +877,7 @@ mountTerminalWebSockets({
   spawnCodexPty,
   spawnAntigravityPty,
   spawnGrokPty,
+  spawnMusePty,
   spawnCommandPty,
   spawnLauncherPty,
   resolveLauncher,

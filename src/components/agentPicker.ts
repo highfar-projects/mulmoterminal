@@ -27,6 +27,7 @@ const OPTIONS: Record<LaunchAgent, Omit<AgentPickerOption, "agent">> = {
   codex: { label: "Codex" },
   antigravity: { label: "Antigravity" },
   grok: { label: "Grok" },
+  muse: { label: "Muse" },
   shell: { label: "Shell", title: "A plain shell ($SHELL) — no agent, nothing to configure" },
 };
 

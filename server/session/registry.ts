@@ -563,6 +563,14 @@ function conversationLog(fileName: string, label: string) {
   return { conversations, hydrated, remember };
 }
 
+// Which muse session each mulmo session runs, so a cold reconnect can resume it with
+// `muse resume <id>`.
+const museLog = conversationLog("muse-sessions.jsonl", "muse-sessions");
+export const museConversations: ReadonlyMap<string, AgentConversation> = museLog.conversations;
+export const museConversationsHydrated = museLog.hydrated;
+export const rememberMuseSession = museLog.remember;
+export const claimedMuseSessions = new Set<string>();
+
 // Which agy conversation each antigravity session runs, so a cold reconnect can resume it with
 // `agy --conversation <id>`.
 const antigravityLog = conversationLog("antigravity-conversations.jsonl", "antigravity-conversations");

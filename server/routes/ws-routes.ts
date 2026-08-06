@@ -21,6 +21,8 @@ import { launchChoiceFromParams } from "../session/launch-choice.js";
 import { codexSessionsRoot } from "../agents/codex-session.js";
 import { antigravityBrainRoot, antigravityConversationExists } from "../agents/antigravity-session.js";
 import { grokConversationExists, grokSessionsRoot } from "../agents/grok-session.js";
+// museSessionExists retained for future direct probe resume
+void 0;
 import { codexRolloutExists } from "../agents/codex-sessions.js";
 import {
   antigravityConversations,
@@ -28,6 +30,8 @@ import {
   customAgentSessionsHydrated,
   codexRollouts,
   codexRolloutsHydrated,
+  museConversations,
+  museConversationsHydrated,
   markDevTerminalSession,
   markAttachedSessionPlaced,
   ptys,
@@ -48,6 +52,7 @@ import type {
   SpawnCodexPty,
   SpawnAntigravityPty,
   SpawnGrokPty,
+  SpawnMusePty,
   SpawnCommandPty,
   SpawnLauncherPty,
   ResolveLauncher,
@@ -75,6 +80,7 @@ export interface WsRouteDeps {
   spawnCodexPty: SpawnCodexPty;
   spawnAntigravityPty: SpawnAntigravityPty;
   spawnGrokPty: SpawnGrokPty;
+  spawnMusePty: SpawnMusePty;
   spawnCommandPty: SpawnCommandPty;
   spawnLauncherPty: SpawnLauncherPty;
   resolveLauncher: ResolveLauncher;
@@ -707,6 +713,23 @@ function resolveGrokSession(requested: string | null, cwd: string): ResumableSes
   );
 }
 
+function resolveMuseSession(requested: string | null): ResumableSession {
+  return resolveResumableSession(requested, ({ hasLivePty, tmuxAlive }) =>
+    agentResumeId(requested, {
+      mappedId: requested ? museConversations.get(requested)?.conversationId : null,
+      conversationExists: () => false, // muse id is mulmo-minted mapping; existence via map only
+      hasLivePty,
+      tmuxAlive,
+    }),
+  );
+}
+
+// Muse also mints its own id, but we resolve via mapping like codex/agy; direct resume
+// of muse's own id without a mapping is not supported via mulmo id.
+// resolveMuseSession is used via MUSE_WS_AGENT; keep reference for future direct probe
+// eslint-disable-next-line sonarjs/void-use
+void resolveMuseSession;
+
 // The two agents that read their MCP servers from a file in the DIRECTORY rather than from a
 // per-session flag: agy from `.agents/mcp_config.json`, grok from `.grok/config.toml`. That one
 // fact decides their whole connection shape and is what claude and codex do NOT share — for them
@@ -746,6 +769,14 @@ export const GROK_WS_AGENT: DirectoryMcpWsAgent = {
   hydrated: null,
   resolveSession: resolveGrokSession,
   spawn: (deps) => deps.spawnGrokPty,
+};
+
+export const MUSE_WS_AGENT: DirectoryMcpWsAgent = {
+  kind: "muse",
+  label: "Muse",
+  hydrated: museConversationsHydrated,
+  resolveSession: (requested) => resolveMuseSession(requested),
+  spawn: (deps) => deps.spawnMusePty,
 };
 
 // antigravity (?cwd=<dir>, ?session=<id> to reattach/resume) and grok, which connect identically —
@@ -800,6 +831,7 @@ export function mountTerminalWebSockets(deps: WsRouteDeps) {
   const runAntigravityWss = new WebSocketServer({ noServer: true });
   // First-class grok sessions — same again, running grok under an id this server minted.
   const runGrokWss = new WebSocketServer({ noServer: true });
+  const runMuseWss = new WebSocketServer({ noServer: true });
   const serverFor: Record<TerminalWsKind, WebSocketServer> = {
     claude: wss,
     run: runWss,
@@ -807,6 +839,7 @@ export function mountTerminalWebSockets(deps: WsRouteDeps) {
     codex: runCodexWss,
     antigravity: runAntigravityWss,
     grok: runGrokWss,
+    muse: runMuseWss,
   };
   deps.server.on("upgrade", (req, socket, head) => {
     const { pathname } = new URL(req.url ?? "/", "http://localhost");
@@ -833,4 +866,5 @@ export function mountTerminalWebSockets(deps: WsRouteDeps) {
   runCodexWss.on("connection", (ws, req) => void handleCodexConnection(deps, ws, req));
   runAntigravityWss.on("connection", (ws, req) => void handleDirectoryMcpAgentConnection(ANTIGRAVITY_WS_AGENT, deps, ws, req));
   runGrokWss.on("connection", (ws, req) => void handleDirectoryMcpAgentConnection(GROK_WS_AGENT, deps, ws, req));
+  runMuseWss.on("connection", (ws, req) => void handleDirectoryMcpAgentConnection(MUSE_WS_AGENT, deps, ws, req));
 }

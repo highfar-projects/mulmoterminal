@@ -54,6 +54,8 @@ import { antigravityBrainRoot } from "../agents/antigravity-session.js";
 import { listAntigravitySessions } from "../agents/antigravity-sessions.js";
 import { grokSessionsRoot } from "../agents/grok-session.js";
 import { listGrokSessions } from "../agents/grok-sessions.js";
+import { listMuseSessionsForCwd } from "../agents/muse-session.js";
+import { museConversations } from "../session/registry.js";
 import { conversationSessionKeys, type AgentConversation } from "../session/agent-conversations.js";
 import { AGENT_SESSION_LIST_PATHS } from "../../common/agentSessionList.js";
 import { TERMINAL_AGENTS, type TerminalAgent } from "../../common/sessionAgent.js";
@@ -354,6 +356,24 @@ async function grokSessionList(req: Request, res: Response) {
   }
 }
 
+async function museSessionList(req: Request, res: Response) {
+  try {
+    const cwd = workspaceForRoute(req.query.cwd, res);
+    if (cwd === null) return;
+    const metas = await listMuseSessionsForCwd(cwd);
+    const sessions = metas.slice(0, SESSION_LIST_LIMIT).map((m) => ({
+      id: m.id,
+      title: m.title || m.id,
+      mtime: m.updatedAtUs ? m.updatedAtUs / 1000 : 0,
+      model: m.modelId ?? undefined,
+    }));
+    res.json({ cwd, sessions: withAttached(sessions, museConversations.values()) });
+  } catch (err) {
+    console.error("[api] /api/muse/sessions failed:", err);
+    res.status(500).json({ error: String(err) });
+  }
+}
+
 // Which handler answers each agent's listing. Keyed by the same type as the paths, so the two are
 // added together or not at all.
 const AGENT_SESSION_LISTS: Record<TerminalAgent, (req: Request, res: Response) => Promise<void>> = {
@@ -361,6 +381,7 @@ const AGENT_SESSION_LISTS: Record<TerminalAgent, (req: Request, res: Response) =
   codex: codexSessionList,
   antigravity: antigravitySessionList,
   grok: grokSessionList,
+  muse: museSessionList,
 };
 
 export function mountSessionRoutes(app: Express, deps: SessionRouteDeps): void {
