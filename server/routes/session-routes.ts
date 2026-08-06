@@ -361,7 +361,8 @@ async function museSessionList(req: Request, res: Response) {
     const cwd = workspaceForRoute(req.query.cwd, res);
     if (cwd === null) return;
     const metas = await listMuseSessionsForCwd(cwd);
-    const sessions = metas.slice(0, SESSION_LIST_LIMIT).map((m) => ({
+    const sorted = [...metas].sort((a, b) => (b.updatedAtUs ?? 0) - (a.updatedAtUs ?? 0));
+    const sessions = sorted.slice(0, SESSION_LIST_LIMIT).map((m) => ({
       id: m.id,
       title: m.title || m.id,
       mtime: m.updatedAtUs ? m.updatedAtUs / 1000 : 0,

@@ -33,20 +33,13 @@ export function createMuseSpawner(deps: SpawnDeps) {
   ): PtyEntry => {
     const { initialPrompt = null } = options;
 
-    // Snapshot before spawn for fresh sessions
-    let before: Set<string> | null = null;
-    // We need sync snapshot — but spawn is sync in other agents that snapshot synchronously via fs.
-    // For muse, snapshot is async (DB). Instead, capture before as empty and let watcher find any new.
-    // To keep correct semantics, we snapshot synchronously as empty and rely on watcher polling.
-    // Better: start async snapshot then spawn — but we need before value.
-    // We'll do fire-and-forget with current DB state approximated.
+    // Snapshot before spawn for fresh sessions. The snapshot is async (sqlite)
+    // so we start it BEFORE ptySpawn — otherwise the fire-and-forget read can
+    // finish after Muse has already written its row and realBefore already
+    // contains the new id, causing watchForMuseSession to exclude it forever.
+    let beforePromise: Promise<Set<string>> | null = null;
     if (!resumeConversationId) {
-      before = new Set<string>();
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
-      snapshotMuseSessions(cwd).then((realBefore) => {
-        if (!ptys.has(sessionId)) return;
-        captureMuseSession(sessionId, cwd, realBefore);
-      });
+      beforePromise = snapshotMuseSessions(cwd);
     }
 
     const args = buildMuseArgs({
@@ -65,9 +58,12 @@ export function createMuseSpawner(deps: SpawnDeps) {
 
     if (resumeConversationId) {
       rememberMuseSession(sessionId, resumeConversationId, cwd);
-    } else if (before) {
-      // fallback capture if snapshot wasn't ready — will be superseded by async one
-      // only if we didn't already start async watcher
+    } else if (beforePromise) {
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      beforePromise.then((realBefore) => {
+        if (!ptys.has(sessionId)) return;
+        captureMuseSession(sessionId, cwd, realBefore);
+      });
     }
 
     wireAgentPtyRelay(entry, sessionId, spawnedAtMs, deps);

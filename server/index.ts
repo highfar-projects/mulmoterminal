@@ -495,6 +495,7 @@ mountAppRoutes(app, {
   spawnCodexPty,
   spawnAntigravityPty,
   spawnGrokPty,
+  spawnMusePty,
   translateViaHiddenChat,
   freshenRosterTitle,
   forgetTitle,
