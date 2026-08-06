@@ -44,8 +44,10 @@ Everything else matches character-for-character: `items`, `item`,
 `remote-view` (+ `/mutate`, `/items`), `view-token`, `view-data` (+ `/query`,
 `/actions/:actionId`, `/image`), `view-i18n`, `views/:viewId`. So this is three
 named exceptions, not a drifting surface — and they are listed here so the next
-host binding or external script copies one of these two spellings instead of
-inventing a third (CLAUDE.md's parity rule; #907 is the cautionary tale).
+host binding or external script uses **the spelling of the host it talks to**
+(MulmoTerminal's column against this server, MulmoClaude's against that one)
+instead of inventing a third (CLAUDE.md's parity rule; #907 is the cautionary
+tale).
 
 | Concern | MulmoClaude | MulmoTerminal |
 | --- | --- | --- |
@@ -54,19 +56,23 @@ inventing a third (CLAUDE.md's parity rule; #907 is the cautionary tale).
 | Registry | `/api/collections-registry/*` | `/api/collections/registry/*` |
 
 **Why.** All three come from one instinct: keep a literal segment from ever
-being read as a `:slug`. MulmoClaude distinguishes them by HTTP method and by a
-separate top-level `collections-registry` prefix; MulmoTerminal instead put the
-literal *inside* the `/api/collections` namespace, which forces the suffixes —
-`/api/collections/registry/list` only stays unambiguous because it is mounted
-**before** the `:slug` routes (`server/backends/collections.ts`, which says so
-at the mount site), and `list` / `detail` sidestep the question entirely. The
-response *shapes* are MulmoClaude's; only the URLs differ.
+being read as a `:slug`. MulmoClaude leans on path *shape* — list and detail are
+both `GET`, told apart only by whether a segment follows `/api/collections`, and
+the registry sits outside the namespace entirely under its own top-level
+`collections-registry` prefix. MulmoTerminal instead put every literal *inside*
+`/api/collections`, which forces the suffixes: `/api/collections/registry/list`
+only stays unambiguous because it is mounted **before** the `:slug` routes
+(`server/backends/collections.ts` says so at the mount site), and `list` /
+`detail` sidestep the shape question rather than relying on it. The response
+*shapes* are MulmoClaude's; only the URLs differ.
 
 **Consumer of record: `src/composables/collectionUi.ts`.** The plugin's UI
-binding is what actually calls these, and it is self-consistent with the server,
-which is exactly why nothing here ever fails a test. Treat that file plus the
-mount block in `server/backends/collections.ts` as the pair that has to agree —
-and this table as the record of why they don't agree with MulmoClaude.
+binding is what actually calls these, and it is self-consistent with the server —
+`test/server/backends/collections.spec.ts` pins MulmoTerminal's own spelling
+(`GET /api/collections/list`, `/:slug/detail`), as it should. So no test here can
+catch the divergence; only a comparison against MulmoClaude shows it, which is
+what this table is for. Treat that binding plus the mount block in
+`server/backends/collections.ts` as the pair that has to agree.
 
 **Not fixed here, on purpose.** Renaming the runtime paths, or adding aliases at
 MulmoClaude's spellings, are both live options and both out of scope for the

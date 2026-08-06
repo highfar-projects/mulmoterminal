@@ -848,8 +848,10 @@ const viewDataQueryHandler: RequestHandler<{ slug: string }> = async (req, res) 
  *  three PATHS deliberately differ from it: list is `/list` (MulmoClaude: `GET
  *  /api/collections`), detail is `/:slug/detail` (`GET /api/collections/:slug`), and the
  *  registry lives under `/api/collections/registry/*` (`/api/collections-registry/*`).
- *  Reason and the standing decision: docs/mulmoclaude-parity.md. Copy one of those two
- *  spellings in a new caller; do not invent a third.
+ *  Reason and the standing decision: docs/mulmoclaude-parity.md. A new caller against THIS
+ *  server uses the paths mounted below — `/api/collections/list`,
+ *  `/api/collections/:slug/detail`, `/api/collections/registry/*` — never MulmoClaude's
+ *  spelling and never a third one.
  *  One app.METHOD(path, handler) per endpoint — the handlers live above. */
 export function mountCollectionRoutes(app: Express): void {
   // Registered before the ":slug" routes so "registry" is never captured as a slug.
