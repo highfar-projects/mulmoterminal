@@ -8,6 +8,81 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.6.1 — 2026-08-06
+
+> **Setup guide:** [Rooms, and a grid that keeps up with a flood](https://receptron.github.io/mulmoterminal/guide/en/v4.6.1.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.6.1.html))
+
+Two halves. **The conversation between cells now has somewhere to live**, and **a busy cell has
+stopped slowing down the command it is showing.**
+
+Round table (4.6.0) carried one cell's reply into the next cell's input box, and that was all it
+was — the conversation existed while it ran and nothing held it. A **room** is that conversation kept
+apart from the cells having it, so a person, a shell or a CI job can take part in something that
+until now only cells could reach. The limit from 4.6.0 is unchanged and deliberate: no MCP tool, no
+way for an agent to discover a room, no way for one to start a conversation. A human seats the cells.
+
+The performance half is a single wrong complexity. `appendBoundedOutput` kept a session's replay
+tail by slicing, which flattens, so **every chunk cost the size of the whole tail** — a megabyte of
+copying for a few dozen bytes. That was 86% of a core during a flood, and it was CPU not being spent
+reading the pty, so the child process waited for its own output to be collected. Six cells running
+the same heavy command took 8.2 s; they now take 2.2 s, against a floor of 1.9 s for the six shells
+with no app involved at all.
+
+- **Rooms: an append-only log a conversation is kept in** (#1456, #1476): one file per room at
+  `~/.mulmoterminal/rooms/<id>.jsonl`, one JSON object per line, plus the HTTP surface
+  (`GET /api/rooms`, and `GET` / `POST` / `DELETE` on `/api/rooms/:room`) and a
+  `mulmoterminal room list | read | post` CLI that talks to a running server over loopback.
+  Everything after `--` is message text, so a post can carry flags. `--from` is a display label and
+  nothing authenticates it.
+- **Rooms in the browser: see them, enter one, choose another** (#1456, #1483): **Rooms** in the
+  toolbar (the forum icon, beside Pull requests) lists every conversation with its messages and a box
+  to post into yourself — the same door a shell uses, since the agents are typed into by the runner
+  and can call nothing. A cell's forum menu reaches the running table's room with **read the
+  conversation**. The picker's **room** box does naming and reuse together: empty mints
+  `table-2026-08-06-…`, a name that already exists **continues** that conversation, and the seats read
+  the earlier turns back before they speak. Names are lowercase letters, digits and `-`, up to 64
+  characters, refused rather than silently replaced. Two round-table behaviours change with it: a
+  speaker is handed **the whole conversation so far** instead of only the previous reply, and a seat
+  that uses tools before answering contributes its real answer.
+- **Sessions that survived a restart are listed where they can be stopped** (#1478, #1479): a new
+  Settings section shows every terminal still running from an earlier server, **across all
+  directories** — where it runs, what it is, how long it has been idle, and whether ending it loses
+  anything. **Stop** ends that one session; a conversation with a transcript resumes afterwards.
+  Before this the process was still running and no screen admitted it.
+- **Unused sessions are ended at the next start** (#1467, #1486): `sessionIdleReapDays` (default 7,
+  `0` disables, 0–365) bounds how long a terminal may sit with nobody attached and no output. Rows the
+  sweep will take are marked **ends at next start**, so it is visible in the list it acts on. The
+  change is also a decomposition: one predicate had been answering three different questions —
+  "may this be reaped", "is this resumable", "should this be listed" — and separating them is what
+  made the sweep safe to add.
+- **A busy cell no longer starves the pty it is reading** (#1506, #1508): `growOutputTail` appends by
+  concatenation (which V8 keeps as a rope, so O(chunk)) and pays for the exact bound only once per
+  `TAIL_SLACK`-worth of output; the two readers — the reattach replay and the phone's headless screen
+  fallback — cut it back themselves. `TAIL_SLACK` is 1.25 rather than 2 because an unflattened rope
+  costs several times its character count, measured per session at 1.00 MB before, 2.54 MB at 1.25 and
+  6.45 MB at 2. Draining the pty at full speed multiplies the reads it produces, so output is also
+  batched into frames (8 ms, sent at once when idle so a keystroke echo never waits, capped at
+  256 KiB, and not queued at all while no browser is attached): about 8000 frames became about 35 for
+  the same bytes, with the same content in the same order and an identical replay on reattach.
+- **A killed tmux client no longer takes its session with it** (#1496, #1504): losing the client and
+  the program finishing are two different events, and only one of them means the session is over.
+  Under tmux the pty this app holds is a *client*, so a client killed from outside used to be read as
+  an exit and tore down a session that was still working.
+- **Claude's turn boundary is read from `stop_reason`, not inferred** (#1487, #1494): whether a turn
+  has ended now comes from what Claude reports, so a cell's working state agrees with the agent
+  instead of with a guess over its output.
+- **A model id may carry Claude Code's `[1m]` extended-context suffix** (#1503, #1505):
+  `claude-opus-4-5[1m]` in a provider config is accepted instead of rejected as malformed. The
+  provider-id and model-id rules are deliberately asymmetric — only the model id takes the suffix —
+  and a spec pins that asymmetry.
+- **Tool-call history costs less to keep** (#1507, #1509): the per-session history was re-serialised
+  in full and written to disk on **every** tool call, twice (PreToolUse and PostToolUse) — 3.8 ms of
+  blocked event loop for a 3.4 MB list, plus those megabytes on their way to disk. Saves landing in
+  one 50 ms window now share a write: for 100 tool calls (200 saves) that is 3 writes when tools
+  return instantly, 12 at 5 ms, and still only 101 at 200 ms. One session's writes are also
+  serialised, closing a pre-existing hole where two `writeFile` calls truncating the same path
+  concurrently could leave a file that was neither version, and at most one write ever waits behind
+  the running one — chaining per save would have queued writes that all put the same bytes on disk.
 - **Custom views catch up to MulmoClaude's host surface** (#1490): a collection's custom view can
   now read its translations, resolve a stored image, and press a declared mutate action — the three
   things core's own authoring docs (which MulmoTerminal serves to the agent through
@@ -23,6 +98,13 @@ Entries here are folded into the next release's heading when it ships.
   instead of hand-rolling the same transition as a raw write — mutate only, so a view token still
   cannot start LLM work. All three run the shared `@mulmoclaude/core` engines, and the two scoped
   ones sit behind per-minute budgets with images in a roomier bucket than actions.
+- **Remote-host collection and feed records go through the store seam** (#1488, #1495): the phone's
+  path read them directly, so the two hosts could disagree about the same record.
+- **REST item writes are checked against the schema before anything is written** (#1489, #1497):
+  create and update are gated rather than validated after the fact.
+- **Windows CI** (#1481, #1482, #1484, #1485): `worktree-pr.spec` no longer spawns the real `gh` and
+  time out, and two rooms tests that depended on POSIX permission semantics are skipped there. Both
+  were about the tests, not the app.
 
 ## mulmoterminal@4.6.0 — 2026-08-06
 
