@@ -83,6 +83,14 @@ with no app involved at all.
   serialised, closing a pre-existing hole where two `writeFile` calls truncating the same path
   concurrently could leave a file that was neither version, and at most one write ever waits behind
   the running one — chaining per save would have queued writes that all put the same bytes on disk.
+- **A record with a pending completion bell is now visible in the board** (#1491): the collection
+  view's Kanban cards accent (red for urgent, amber for a nudge) when a completion watcher has an
+  open bell for that record. The publishing half already ran — `collectionWatchers` writes into the
+  shared notifier file, and MulmoTerminal's bell has shown those entries for some time — but the
+  binding the plugin asks for the per-record severities returned an empty map, so nothing in the
+  board reflected it. It now reads the live bell, which means a bell **MulmoClaude** published
+  accents the same card here. Read-only: the one-bell-per-record rule stays where it was enforced,
+  on the shared `legacyId` server-side.
 - **Custom views catch up to MulmoClaude's host surface** (#1490): a collection's custom view can
   now read its translations, resolve a stored image, and press a declared mutate action — the three
   things core's own authoring docs (which MulmoTerminal serves to the agent through
