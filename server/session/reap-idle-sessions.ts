@@ -14,11 +14,17 @@ import { reapIdleSeconds, reapSweepEnabled } from "../../common/sessionReap.js";
 import { ptys } from "./registry.js";
 
 export interface ReapSweepResult {
+  /** Ended, and confirmed ended: a kill tmux refused is not in here. */
   reaped: string[];
-  /** Kept because a terminal is holding it, or tmux would not say who. */
+  /** Kept because a terminal is holding it, or a pty of ours is. */
   heldBack: number;
-  /** Kept because it has been active within the threshold, or its age is unknown. */
+  /** Kept because tmux saw output within the threshold. */
   recent: number;
+  /** Kept because tmux would not say — an unreadable attach count, an unknown age, or a kill that
+   *  failed. Its own count because the other two are FACTS, and reporting a session as "in use" or
+   *  "active" on the strength of a question tmux declined to answer is the kind of confident wrong
+   *  answer this log exists to replace (CodeRabbit on #1486). */
+  unclear: number;
 }
 
 export interface ReapSweepInput {
@@ -28,13 +34,14 @@ export interface ReapSweepInput {
   nowSeconds: number;
   idleDays: number;
   liveHere: (id: string) => boolean;
-  kill: (id: string) => void;
+  /** Ends it, and says whether tmux agreed. */
+  kill: (id: string) => boolean;
 }
 
 /** Pure but for `kill`, so what the sweep decides can be pinned without tmux — and so the counts it
  *  reports are the counts it acted on, rather than a second tally that can drift from them. */
 export function reapIdleSessions(input: ReapSweepInput): ReapSweepResult {
-  const result: ReapSweepResult = { reaped: [], heldBack: 0, recent: 0 };
+  const result: ReapSweepResult = { reaped: [], heldBack: 0, recent: 0, unclear: 0 };
   if (!reapSweepEnabled(input.idleDays)) return result;
   const idleThresholdSeconds = reapIdleSeconds(input.idleDays);
   for (const id of input.ids) {
@@ -48,8 +55,13 @@ export function reapIdleSessions(input: ReapSweepInput): ReapSweepResult {
       idleThresholdSeconds,
     };
     if (reapableTmuxSession(facts)) {
-      input.kill(id);
-      result.reaped.push(id);
+      // Recorded only when tmux confirms it. Otherwise the session is still there, and everything
+      // downstream — the log, this route's answer, the settings files boot prunes — would be acting
+      // on a session that never ended.
+      if (input.kill(id)) result.reaped.push(id);
+      else result.unclear += 1;
+    } else if (facts.attachedCount === null || facts.idleSeconds === null) {
+      result.unclear += 1;
     } else if (facts.liveHere || facts.attachedCount !== 0) {
       result.heldBack += 1;
     } else {
@@ -79,10 +91,15 @@ const SECONDS_PER_MS = 1000;
  *  #1467 was filed about. */
 export function reapSweepLines(result: ReapSweepResult, idleDays: number): string[] {
   if (!reapSweepEnabled(idleDays)) return ["[tmux] idle-session sweep off (sessionIdleReapDays: 0)"];
-  const kept = result.heldBack + result.recent;
+  const kept = result.heldBack + result.recent + result.unclear;
   const lines: string[] = [];
   if (result.reaped.length) lines.push(`[tmux] ended ${result.reaped.length} idle session(s) — nobody attached, no output for ${idleDays} day(s)`);
-  if (kept) lines.push(`[tmux] kept ${kept}: ${result.heldBack} in use, ${result.recent} active within ${idleDays} day(s)`);
+  if (kept) {
+    // The third reason is named rather than folded into the other two: "tmux would not say" is not
+    // "in use", and a reader deciding whether the sweep is working needs to see the difference.
+    const unclear = result.unclear ? `, ${result.unclear} tmux would not report on` : "";
+    lines.push(`[tmux] kept ${kept}: ${result.heldBack} in use, ${result.recent} active within ${idleDays} day(s)${unclear}`);
+  }
   return lines;
 }
 

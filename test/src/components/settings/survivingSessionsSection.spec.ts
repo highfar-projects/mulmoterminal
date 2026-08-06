@@ -103,6 +103,19 @@ describe("the surviving-sessions section", () => {
     expect(w.findAll('[data-testid="surviving-doomed"]')).toHaveLength(1);
   });
 
+  // `reapable` is the server's answer against the OLD threshold, so raising it would otherwise leave
+  // rows promising "ends at next start" about a start that will now spare them (CodeRabbit on #1486).
+  it("re-reads the rows after the threshold changes", async () => {
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    const listReads = () =>
+      (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.filter((c) => String(c[0]).includes("/api/tmux/sessions")).length;
+    const before = listReads();
+    await w.get('[aria-label="Increase the idle days before a session is ended"]').trigger("click");
+    await flushPromises();
+    expect(listReads()).toBe(before + 1);
+  });
+
   it("writes the idle threshold to its own config field", async () => {
     const w = mount(SurvivingSessionsSection);
     await flushPromises();

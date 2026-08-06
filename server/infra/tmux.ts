@@ -265,8 +265,12 @@ export function tmuxHasSession(id: string): boolean {
 
 // End a persistent session (explicit close / reap). Killing the pty only detaches our
 // client — the session (and its program) would otherwise keep running.
-export function tmuxKillSession(id: string): void {
-  tmux(["kill-session", "-t", tmuxSessionName(id)]);
+// Whether tmux actually ended it. Callers that just want it gone can ignore the answer; the boot
+// sweep cannot — it reports what it ended, and `server/index.ts` then deletes the settings file of
+// every session it was told about. A kill that failed silently would take a live session's file,
+// which can hold a provider's API token (CodeRabbit on #1486).
+export function tmuxKillSession(id: string): boolean {
+  return tmux(["kill-session", "-t", tmuxSessionName(id)]).status === 0;
 }
 
 // The rendered contents of a session's pane — the visible screen plus `historyLines` of

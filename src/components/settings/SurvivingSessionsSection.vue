@@ -41,7 +41,13 @@ const lastActive = (s: SurvivingSession): string => {
 };
 
 const REAP_STEP_DAYS = 1;
-const nudgeIdleDays = (delta: number) => void saveSessionIdleReapDays(sessionIdleReapDays.value + delta);
+
+// Re-read after saving: `reapable` is the SERVER's answer against the old threshold, so raising it
+// would otherwise leave rows saying "ends at next start" about a start that will now spare them
+// (CodeRabbit on #1486).
+async function nudgeIdleDays(delta: number): Promise<void> {
+  if (await saveSessionIdleReapDays(sessionIdleReapDays.value + delta)) await reload();
+}
 </script>
 
 <template>

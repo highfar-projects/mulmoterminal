@@ -36,7 +36,7 @@ rows claimed to be restorable while only the 15 with a transcript actually are.
 
 **The sweep runs once at boot** (#1467's own ask), through the same rule, and says what it did:
 
-```
+```text
 [tmux] reaped 3 idle session(s) — nobody attached, untouched for over 7 days
 [tmux] kept 18: 6 attached, 12 active within 7 days
 ```

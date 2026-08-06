@@ -17,8 +17,11 @@ describe("sanitizeReapIdleDays", () => {
     expect(reapSweepEnabled(0)).toBe(false);
   });
 
-  it("rounds a fractional day", () => {
-    expect(sanitizeReapIdleDays(2.6)).toBe(3);
+  // NOT rounded: `Math.round(0.4)` is 0, and 0 is the off switch — so rounding would let a
+  // fractional value disable the sweep, which is the silent-disable the fallback exists to stop
+  // (CodeRabbit on #1486).
+  it.each([2.6, 0.4, 6.999])("refuses the fractional %p rather than rounding it", (value) => {
+    expect(sanitizeReapIdleDays(value)).toBe(DEFAULT_REAP_IDLE_DAYS);
   });
 
   // Falling back to the DEFAULT rather than to 0: a corrupt value silently disabling the sweep

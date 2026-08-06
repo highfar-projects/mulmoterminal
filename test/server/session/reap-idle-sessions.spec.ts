@@ -22,7 +22,7 @@ const input = (over: Partial<ReapSweepInput> = {}): ReapSweepInput => ({
   nowSeconds: NOW,
   idleDays: DEFAULT_REAP_IDLE_DAYS,
   liveHere: () => false,
-  kill: vi.fn(),
+  kill: vi.fn((id: string) => Boolean(id)),
   ...over,
 });
 
@@ -87,7 +87,7 @@ describe("isRestorableSession", () => {
 
 describe("the boot sweep", () => {
   it("ends the stale ones and counts what it kept, and why", () => {
-    const kill = vi.fn();
+    const kill = vi.fn((id: string) => Boolean(id));
     const result = reapIdleSessions(
       input({
         ids: ["stale", "held", "fresh", "ours"],
@@ -103,23 +103,40 @@ describe("the boot sweep", () => {
       }),
     );
     expect(kill.mock.calls.map((c) => c[0])).toEqual(["stale"]);
-    expect(result).toEqual({ reaped: ["stale"], heldBack: 2, recent: 1 });
+    expect(result).toEqual({ reaped: ["stale"], heldBack: 2, recent: 1, unclear: 0 });
   });
 
   // `list-clients` reports only sessions that HAVE a client, so absent means zero — but a null map
-  // (tmux itself could not answer) must not read the same way.
-  it("treats an unanswerable attach list as everything being held", () => {
-    const kill = vi.fn();
+  // (tmux itself could not answer) must not read the same way. And it is not "in use" either: the
+  // reason it was kept is that nobody could say (CodeRabbit on #1486).
+  it("keeps a session whose attach count tmux would not give, as its own reason", () => {
+    const kill = vi.fn((id: string) => Boolean(id));
     const result = reapIdleSessions(input({ ids: ["stale"], activity: new Map([["stale", STALE]]), attached: null, kill }));
     expect(kill).not.toHaveBeenCalled();
-    expect(result).toEqual({ reaped: [], heldBack: 1, recent: 0 });
+    expect(result).toEqual({ reaped: [], heldBack: 0, recent: 0, unclear: 1 });
+  });
+
+  it("keeps a session of unknown age without calling it active", () => {
+    const kill = vi.fn((id: string) => Boolean(id));
+    const result = reapIdleSessions(input({ ids: ["ageless"], activity: new Map(), kill }));
+    expect(kill).not.toHaveBeenCalled();
+    expect(result).toEqual({ reaped: [], heldBack: 0, recent: 0, unclear: 1 });
+  });
+
+  // `tmux kill-session` can refuse. Recording it as ended anyway would have boot delete the settings
+  // file of a session that is still running — and that file can hold a provider's API token.
+  it("does not record a kill tmux refused", () => {
+    const kill = vi.fn((id: string) => id !== "stale");
+    const result = reapIdleSessions(input({ ids: ["stale"], activity: new Map([["stale", STALE]]), kill }));
+    expect(kill).toHaveBeenCalledWith("stale");
+    expect(result).toEqual({ reaped: [], heldBack: 0, recent: 0, unclear: 1 });
   });
 
   it("does nothing whatsoever when the threshold is zero", () => {
-    const kill = vi.fn();
+    const kill = vi.fn((id: string) => Boolean(id));
     const result = reapIdleSessions(input({ ids: ["stale"], activity: new Map([["stale", STALE]]), idleDays: 0, kill }));
     expect(kill).not.toHaveBeenCalled();
-    expect(result).toEqual({ reaped: [], heldBack: 0, recent: 0 });
+    expect(result).toEqual({ reaped: [], heldBack: 0, recent: 0, unclear: 0 });
   });
 });
 
@@ -127,21 +144,31 @@ describe("the boot sweep", () => {
 // from "it never ran" — which is the state #1467 was filed about.
 describe("what the sweep says", () => {
   it("reports both what it ended and what it kept", () => {
-    const lines = reapSweepLines({ reaped: ["a", "b"], heldBack: 6, recent: 12 }, 7).join("\n");
+    const lines = reapSweepLines({ reaped: ["a", "b"], heldBack: 6, recent: 12, unclear: 0 }, 7).join("\n");
     expect(lines).toContain("ended 2 idle session(s)");
     expect(lines).toContain("kept 18: 6 in use, 12 active within 7 day(s)");
   });
 
+  // Never as "in use" or "active": those are facts, and this one is a question tmux declined.
+  it("names the ones tmux would not report on separately", () => {
+    const lines = reapSweepLines({ reaped: [], heldBack: 1, recent: 1, unclear: 2 }, 7).join("\n");
+    expect(lines).toContain("kept 4: 1 in use, 1 active within 7 day(s), 2 tmux would not report on");
+  });
+
+  it("leaves that clause out when there is nothing unclear", () => {
+    expect(reapSweepLines({ reaped: [], heldBack: 1, recent: 1, unclear: 0 }, 7).join("\n")).not.toContain("would not report");
+  });
+
   it("still says what it kept when it ended nothing", () => {
-    expect(reapSweepLines({ reaped: [], heldBack: 1, recent: 2 }, 7).join("\n")).toContain("kept 3");
+    expect(reapSweepLines({ reaped: [], heldBack: 1, recent: 2, unclear: 0 }, 7).join("\n")).toContain("kept 3");
   });
 
   it("says it is off rather than silently doing nothing", () => {
-    expect(reapSweepLines({ reaped: [], heldBack: 0, recent: 0 }, 0).join("\n")).toContain("off");
+    expect(reapSweepLines({ reaped: [], heldBack: 0, recent: 0, unclear: 0 }, 0).join("\n")).toContain("off");
   });
 
   it("says nothing at all when there were no sessions to judge", () => {
-    expect(reapSweepLines({ reaped: [], heldBack: 0, recent: 0 }, 7)).toEqual([]);
+    expect(reapSweepLines({ reaped: [], heldBack: 0, recent: 0, unclear: 0 }, 7)).toEqual([]);
   });
 });
 

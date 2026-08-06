@@ -28,10 +28,12 @@ export const reapIdleSeconds = (days: number): number => days * SECONDS_PER_DAY;
  * looks exactly like the bug this fixes, and nobody would find it.
  */
 export function sanitizeReapIdleDays(value: unknown): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) return DEFAULT_REAP_IDLE_DAYS;
-  const whole = Math.round(value);
-  if (whole < MIN_REAP_IDLE_DAYS || whole > MAX_REAP_IDLE_DAYS) return DEFAULT_REAP_IDLE_DAYS;
-  return whole;
+  // Whole days ONLY, and rounding is not the same thing: `Math.round(0.4)` is 0, which is the off
+  // switch — so a fractional value would disable the sweep entirely, the exact silent-disable this
+  // function's fallback exists to prevent (CodeRabbit on #1486).
+  if (typeof value !== "number" || !Number.isInteger(value)) return DEFAULT_REAP_IDLE_DAYS;
+  if (value < MIN_REAP_IDLE_DAYS || value > MAX_REAP_IDLE_DAYS) return DEFAULT_REAP_IDLE_DAYS;
+  return value;
 }
 
 export const reapSweepEnabled = (days: number): boolean => days > REAP_IDLE_DAYS_OFF;

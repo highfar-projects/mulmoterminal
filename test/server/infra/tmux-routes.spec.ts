@@ -56,7 +56,7 @@ function baseDeps(over: Partial<TmuxRouteDeps> = {}): TmuxRouteDeps {
     reapSession: vi.fn(),
     hasTmux: () => false,
     killTmux: vi.fn(),
-    sweep: () => ({ reaped: [], heldBack: 0, recent: 0 }),
+    sweep: () => ({ reaped: [], heldBack: 0, recent: 0, unclear: 0 }),
     survivingSessions: async () => [],
     ...over,
   };
@@ -103,7 +103,7 @@ describe("mountTmuxRoutes — POST /api/session/:id/terminate", () => {
 });
 
 describe("mountTmuxRoutes — POST /api/tmux/cleanup-orphans", () => {
-  const swept = { reaped: ["orphan-1", "orphan-2"], heldBack: 1, recent: 3 };
+  const swept = { reaped: ["orphan-1", "orphan-2"], heldBack: 1, recent: 3, unclear: 0 };
 
   it("rejects a disallowed origin with 403 and sweeps nothing", async () => {
     const sweep = vi.fn(() => swept);
@@ -126,7 +126,7 @@ describe("mountTmuxRoutes — POST /api/tmux/cleanup-orphans", () => {
   });
 
   it("says it ended nothing rather than failing when everything is in use", async () => {
-    const { cleanup } = mountAndCapture(baseDeps({ sweep: () => ({ reaped: [], heldBack: 4, recent: 0 }) }));
+    const { cleanup } = mountAndCapture(baseDeps({ sweep: () => ({ reaped: [], heldBack: 4, recent: 0, unclear: 0 }) }));
     const res = makeRes();
     await cleanup({ headers: {}, params: {} }, res);
     expect(res.payload).toEqual({ killed: [], killedCount: 0 });
