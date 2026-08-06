@@ -6,7 +6,7 @@ the two hosts can't drift. This doc records where that effort stands: which
 subsystems are shared today, which are deliberately **not**, and what picking
 up each remaining item would involve.
 
-Status date: **2026-07-18** (core `0.23.0`, collection-plugin `0.11.1`).
+Status date: **2026-08-05** (core `2.1.0`, collection-plugin `2.0.0`).
 
 ---
 
@@ -100,7 +100,39 @@ remaining item with correctness stakes.
 `server/index.ts`) that applies the shared mirror rule, plus committing to the
 `data/skills/` authoring convention in this app.
 
-### 4. `kind: "agent"` collection actions run visible, not hidden
+### 4. Custom-view host surface — shipped, with two known edges
+
+The endpoints a sandboxed custom view talks to, and the authorization rules
+guarding them, are now the same on both hosts (#1490) — the response *bodies*
+still differ in the one place noted at the end of this section. This is
+deliberately parity-tracked rather than "MT's own API", because core's bundled
+authoring docs — which MulmoTerminal itself serves
+through `manageCollection`'s `schemaDocs` — tell collection authors these exist:
+
+| Endpoint | Where |
+| --- | --- |
+| `GET …/view-i18n` (parent-side; feeds `__MC_VIEW.dict` / `t()`) | `server/backends/customViewRoutes.ts` |
+| `GET …/view-data/image` | same file (+ `isAuthorizedImagePath`) |
+| `POST …/view-data/actions/:actionId` | same file — mutate kind only |
+| `POST …/view-data/query`, `GET`/`PUT …/view-data` | `server/backends/collections.ts` (#167) |
+
+Rules worth keeping when touching these: the image route's authorization *is*
+the record scan (only a **current** value of an `image` field resolves, never an
+arbitrary workspace path), and the action route is **mutate-only** — a view
+token must never be able to start LLM work, so `chat` / `agent` actions stay on
+the parent-side route. Both sit behind per-minute budgets
+(`server/backends/viewRateLimit.ts`), images in a roomier bucket than actions
+because a gallery's first paint is legitimately dozens of fetches.
+
+Two differences remain, both benign but real:
+
+- **`GET …/view-data` ignores `ids` / `fields`.** MulmoClaude routes that read
+  through `manageCollection`'s `getItems`; MulmoTerminal returns every enriched
+  record. A view that passes `?fields=…` (as the core doc's examples do) gets a
+  superset, so it renders correctly — it just transfers more than it asked for.
+- **The registry is list + import only** — no preview or export route.
+
+### 5. `kind: "agent"` collection actions run visible, not hidden
 
 Not part of the PR4/PR5 series, but a real behavioral difference documented
 during the collection-plugin `0.11` upgrade (#383).

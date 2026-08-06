@@ -51,6 +51,10 @@ import { actionVisible, fieldVisible, COMPUTED_TYPES, type ActionWithWhen, type 
 // Curated-registry engine (Discover tab): merged catalog fetch + bundle import.
 import { listRegistry, importRegistry } from "@mulmoclaude/core/collection/registry/server";
 import { clampLimit as clampViewLimit, clampOffset as clampViewOffset, normalizeFields, normalizeMutate } from "@mulmoclaude/core/remote-view";
+// The rest of the custom-view surface (view-i18n, scoped image resolve, scoped
+// mutate action), mounted at the bottom of mountCollectionRoutes with the
+// helpers those routes share with the ones here.
+import { mountCustomViewRoutes, viewActionRateLimit } from "./customViewRoutes.js";
 // Mobile custom-view builder — shared with the remote-host channel handlers so
 // the desktop phone-frame preview renders the EXACT artifact the phone receives.
 import {
@@ -876,5 +880,21 @@ export function mountCollectionRoutes(app: Express): void {
   app.options("/api/collections/:slug/view-data/query", viewDataCors, (_req: Request, res: Response) => {
     res.status(204).end();
   });
-  app.post("/api/collections/:slug/view-data/query", viewDataCors, viewQueryConcurrency, requireViewToken("read"), viewDataQueryHandler);
+  // Not `guarded` like its neighbours, on purpose: the handler catches its own
+  // throw so it can answer a FIXED message. A raw engine error can carry host
+  // paths, and `guarded` would put exactly that in the body for a scoped view.
+  app.post("/api/collections/:slug/view-data/query", viewDataCors, viewActionRateLimit, viewQueryConcurrency, requireViewToken("read"), viewDataQueryHandler);
+
+  // The rest of the custom-view surface (customViewRoutes.ts: the i18n dict, the
+  // scoped image resolve, the scoped mutate action), handed the loader / view
+  // lookup / mutate executor / gate it shares with the routes above.
+  mountCustomViewRoutes(app, {
+    resolveCollection,
+    resolveView,
+    respondForMutateAction,
+    visibilityGate,
+    guarded,
+    cors: viewDataCors,
+    queryConcurrency: viewQueryConcurrency,
+  });
 }

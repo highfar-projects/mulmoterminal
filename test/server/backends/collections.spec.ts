@@ -6,6 +6,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { appRequest } from "../../helpers/appRequest.js";
 import { initCollectionsBackend, mountCollectionRoutes, visibilityGate } from "../../../server/backends/collections.js";
+import { isAuthorizedImagePath } from "../../../server/backends/customViewRoutes.js";
 import { actionVisible } from "@mulmoclaude/core/collection";
 import { listRegistry, importRegistry } from "@mulmoclaude/core/collection/registry/server";
 
@@ -57,7 +58,7 @@ const SCHEMA = {
   },
   views: [
     { id: "v1", file: "views/v1.html", label: "Custom", capabilities: ["read"] },
-    { id: "v2", file: "views/v2.html", label: "Editable", capabilities: ["read", "write"] },
+    { id: "v2", file: "views/v2.html", label: "Editable", capabilities: ["read", "write"], i18n: "views/v2.i18n.json" },
     { id: "phone", file: "views/phone.html", label: "Phone", target: "mobile", editableFields: ["name"] },
   ],
   actions: [{ id: "enrich", label: "Enrich", kind: "chat", role: "general", template: "templates/enrich.md" }],
@@ -80,6 +81,39 @@ beforeAll(async () => {
   writeFileSync(path.join(ws, "data", "skills", "testcol", "views", "v1.html"), "<head></head><body>view</body>");
   writeFileSync(path.join(ws, "data", "skills", "testcol", "views", "v2.html"), "<head></head><body>editable</body>");
   writeFileSync(path.join(ws, "data", "skills", "testcol", "views", "phone.html"), "<head></head><body>phone-view</body>");
+  // v2's translations, in the on-disk `{ <locale>: { <key>: <string> } }` shape.
+  // The host picks ONE locale block per request — the view never sees the rest.
+  writeFileSync(
+    path.join(ws, "data", "skills", "testcol", "views", "v2.i18n.json"),
+    JSON.stringify({ en: { greet: "Hello {name}" }, ja: { greet: "こんにちは {name}" } }),
+  );
+
+  // A collection whose custom view may press a DECLARED mutate action under its
+  // view token: one mutate action gated by `require`, one chat action (which a
+  // view token must never be able to invoke), and a write-capable view.
+  const VIEW_ACTION_SCHEMA = {
+    title: "View Actions",
+    icon: "bolt",
+    dataPath: "data/viewactcol/items",
+    primaryKey: "id",
+    fields: {
+      id: { type: "string", label: "ID", primary: true, required: true },
+      status: { type: "enum", label: "Status", values: ["open", "closed"] },
+    },
+    actions: [
+      { id: "close", label: "Close", kind: "mutate", set: { status: "closed" }, require: { field: "status", in: ["open"] } },
+      { id: "enrich", label: "Enrich", kind: "chat", role: "general", template: "templates/enrich.md" },
+    ],
+    views: [{ id: "board", file: "views/board.html", label: "Board", capabilities: ["read", "write"] }],
+  };
+  mkdirSync(path.join(ws, ".claude", "skills", "viewactcol", "templates"), { recursive: true });
+  writeFileSync(path.join(ws, ".claude", "skills", "viewactcol", "schema.json"), JSON.stringify(VIEW_ACTION_SCHEMA));
+  writeFileSync(path.join(ws, ".claude", "skills", "viewactcol", "templates", "enrich.md"), "ENRICH");
+  mkdirSync(path.join(ws, "data", "viewactcol", "items"), { recursive: true });
+  writeFileSync(path.join(ws, "data", "viewactcol", "items", "a1.json"), JSON.stringify({ id: "a1", status: "open" }));
+  writeFileSync(path.join(ws, "data", "viewactcol", "items", "a2.json"), JSON.stringify({ id: "a2", status: "closed" }));
+  mkdirSync(path.join(ws, "data", "skills", "viewactcol", "views"), { recursive: true });
+  writeFileSync(path.join(ws, "data", "skills", "viewactcol", "views", "board.html"), "<head></head><body>board</body>");
 
   // A singleton collection with a write-capable view, to prove PUT /view-data
   // enforces the singleton invariant (only the fixed id is writable).
@@ -134,12 +168,18 @@ beforeAll(async () => {
       name: { type: "string", label: "Name" },
       photo: { type: "image", label: "Photo" },
     },
-    views: [{ id: "gallery", file: "views/gallery.html", label: "Gallery", target: "mobile", imageFields: ["photo"] }],
+    views: [
+      { id: "gallery", file: "views/gallery.html", label: "Gallery", target: "mobile", imageFields: ["photo"] },
+      // A desktop view: it can't inline images the way the phone page does, so
+      // it resolves each one through GET /view-data/image under its token.
+      { id: "wall", file: "views/wall.html", label: "Wall", capabilities: ["read"] },
+    ],
   };
   mkdirSync(path.join(ws, ".claude", "skills", "photoscol"), { recursive: true });
   writeFileSync(path.join(ws, ".claude", "skills", "photoscol", "schema.json"), JSON.stringify(PHOTOS_SCHEMA));
   mkdirSync(path.join(ws, "data", "skills", "photoscol", "views"), { recursive: true });
   writeFileSync(path.join(ws, "data", "skills", "photoscol", "views", "gallery.html"), "<head></head><body>gallery</body>");
+  writeFileSync(path.join(ws, "data", "skills", "photoscol", "views", "wall.html"), "<head></head><body>wall</body>");
   mkdirSync(path.join(ws, "data", "photoscol", "images"), { recursive: true });
   const pic = await sharp({ create: { width: 40, height: 24, channels: 3, background: { r: 200, g: 30, b: 90 } } })
     .png()
@@ -871,5 +911,162 @@ describe("visibilityGate", () => {
     const gate = visibilityGate({ id: "a", label: "A", kind: "mutate", set: { status: "done" }, require: WHEN });
     expect(actionVisible(gate, { status: "draft" })).toBe(false);
     expect(actionVisible(gate, { status: "ready" })).toBe(true);
+  });
+});
+
+// The three token-scoped / view-facing endpoints MulmoTerminal used to be missing
+// (issue #1490): the i18n dict a view's `t()` reads, the image resolve a desktop
+// view needs (it cannot inline thumbnails the way the phone page does), and the
+// mutate-action invocation that keeps a view from hand-rolling the transition.
+describe("custom-view i18n (GET /:slug/view-i18n)", () => {
+  it("returns the requested locale's block, flattened", async () => {
+    const res = await request("/api/collections/testcol/view-i18n?id=v2&locale=ja");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ locale: "ja", dict: { greet: "こんにちは {name}" } });
+  });
+
+  it("falls back to en for a locale the file has no block for", async () => {
+    const res = await request("/api/collections/testcol/view-i18n?id=v2&locale=fr");
+    expect(await res.json()).toEqual({ locale: "en", dict: { greet: "Hello {name}" } });
+  });
+
+  it("returns the documented empty shape for a view that declares no i18n", async () => {
+    const res = await request("/api/collections/testcol/view-i18n?id=v1&locale=ja");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ locale: "", dict: {} });
+  });
+
+  it("404s an unknown view id", async () => {
+    expect((await request("/api/collections/testcol/view-i18n?id=nope")).status).toBe(404);
+  });
+});
+
+describe("custom-view image resolve (GET /:slug/view-data/image)", () => {
+  const mintWall = async (): Promise<string> => {
+    const mint = await request("/api/collections/photoscol/view-token", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ viewId: "wall" }),
+    });
+    return ((await mint.json()) as { token: string }).token;
+  };
+
+  it("401s without a token", async () => {
+    const res = await request("/api/collections/photoscol/view-data/image?path=data/photoscol/images/pic.png");
+    expect(res.status).toBe(401);
+  });
+
+  it("resolves a current image-field value into a data: thumbnail", async () => {
+    const token = await mintWall();
+    const res = await request("/api/collections/photoscol/view-data/image?path=data%2Fphotoscol%2Fimages%2Fpic.png&maxEdge=32", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { path: string; dataUrl: string };
+    expect(body.path).toBe("data/photoscol/images/pic.png");
+    expect(body.dataUrl.startsWith("data:image/")).toBe(true);
+  });
+
+  it("400s when `path` is missing", async () => {
+    const token = await mintWall();
+    const res = await request("/api/collections/photoscol/view-data/image", { headers: { Authorization: `Bearer ${token}` } });
+    expect(res.status).toBe(400);
+  });
+
+  // The authorization rule: only a CURRENT value of an image field resolves, so
+  // the token can never be used to read an arbitrary workspace file.
+  it("404s a path no record holds in an image field", async () => {
+    const token = await mintWall();
+    const res = await request("/api/collections/photoscol/view-data/image?path=data%2Fphotoscol%2Fitems%2Fp1.json", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as { error: string }).error).toContain("image fields");
+  });
+
+  it("preflights", async () => {
+    const res = await request("/api/collections/photoscol/view-data/image", { method: "OPTIONS" });
+    expect(res.status).toBe(204);
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+  });
+});
+
+describe("isAuthorizedImagePath", () => {
+  const schema = {
+    fields: { id: { type: "string" }, photo: { type: "image" }, note: { type: "string" } },
+  } as unknown as Parameters<typeof isAuthorizedImagePath>[0];
+
+  it("accepts a current image-field value", () => {
+    expect(isAuthorizedImagePath(schema, [{ id: "a", photo: "img/a.png" }], "img/a.png")).toBe(true);
+  });
+
+  it("rejects a value held by a non-image field", () => {
+    expect(isAuthorizedImagePath(schema, [{ id: "a", note: "img/a.png" }], "img/a.png")).toBe(false);
+  });
+
+  it("rejects an empty path and a schema with no image fields", () => {
+    expect(isAuthorizedImagePath(schema, [{ id: "a", photo: "img/a.png" }], "")).toBe(false);
+    const noImages = { fields: { id: { type: "string" } } } as unknown as Parameters<typeof isAuthorizedImagePath>[0];
+    expect(isAuthorizedImagePath(noImages, [{ id: "a", photo: "img/a.png" }], "img/a.png")).toBe(false);
+  });
+});
+
+describe("custom-view mutate actions (POST /:slug/view-data/actions/:actionId)", () => {
+  const mintBoard = async (): Promise<string> => {
+    const mint = await request("/api/collections/viewactcol/view-token", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ viewId: "board" }),
+    });
+    return ((await mint.json()) as { token: string }).token;
+  };
+  const run = async (actionId: string, body: unknown, token: string) =>
+    request(`/api/collections/viewactcol/view-data/actions/${actionId}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+  it("401s without a token", async () => {
+    const res = await request("/api/collections/viewactcol/view-data/actions/close", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ itemId: "a1" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("applies a declared mutate action and returns the written record", async () => {
+    const res = await run("close", { itemId: "a1" }, await mintBoard());
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { written: boolean; item: { id: string; status: string } };
+    expect(body.written).toBe(true);
+    expect(body.item.status).toBe("closed");
+  });
+
+  // A view token must never be able to start LLM work — that is the whole reason
+  // this endpoint is mutate-only rather than a second door onto the action route.
+  it("403s a chat action", async () => {
+    const res = await run("enrich", { itemId: "a2" }, await mintBoard());
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: string }).error).toContain("mutate");
+  });
+
+  it("409s an action whose `require` the record does not satisfy", async () => {
+    const res = await run("close", { itemId: "a2" }, await mintBoard());
+    expect(res.status).toBe(409);
+  });
+
+  it("400s a missing itemId and 404s an unknown item / action", async () => {
+    const token = await mintBoard();
+    expect((await run("close", {}, token)).status).toBe(400);
+    expect((await run("close", { itemId: "ghost" }, token)).status).toBe(404);
+    expect((await run("nope", { itemId: "a1" }, token)).status).toBe(404);
+  });
+
+  it("preflights", async () => {
+    const res = await request("/api/collections/viewactcol/view-data/actions/close", { method: "OPTIONS" });
+    expect(res.status).toBe(204);
+    expect(res.headers.get("access-control-allow-methods")).toContain("POST");
   });
 });
