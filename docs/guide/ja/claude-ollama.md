@@ -2,7 +2,7 @@
 title: claude-ollama でローカルモデルを動かす
 layout: default
 parent: 日本語
-nav_order: 14
+nav_order: 15
 description: claude-ollama で Claude Code をローカルモデル（Ollama）に接続する手順。
 ---
 
