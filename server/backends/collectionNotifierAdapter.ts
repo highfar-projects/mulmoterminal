@@ -8,6 +8,9 @@
 import type { CompletionPriority } from "@mulmoclaude/core/collection-watchers";
 import type { NotifierSeverity } from "@mulmoclaude/core/notifier";
 import { isRecord } from "../../common/isRecord.js";
+// The view marker the UI narrows on when it accents a notified record — shared so
+// the writer here and the reader there cannot drift apart.
+import { COLLECTION_NOTIFY_VIEW } from "../../common/collectionNotifyTarget.js";
 
 // `legacy: true` + a string `legacyId` + a string `kind` is the marker both apps'
 // readEntry recognise; the navigate `action` preserves the bell's icon/routing.
@@ -47,7 +50,7 @@ export function buildPluginData(input: { legacyId: string; slug: string; itemId:
     legacyId,
     kind: "todo",
     priority: priority === "high" ? "high" : "normal",
-    action: { type: "navigate", target: { view: "collections", slug, itemId } },
+    action: { type: "navigate", target: { view: COLLECTION_NOTIFY_VIEW, slug, itemId } },
   };
 }
 

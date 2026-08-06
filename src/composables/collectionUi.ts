@@ -11,8 +11,8 @@
 // Google-calendar push (via @mulmoclaude/core/google — see server/backends/calendarPush.ts),
 // collection/feed/view deletion and the Discover registry tab (listRegistry/importRegistry
 // via @mulmoclaude/core/collection — see server/backends/collections.ts), and state-based
-// navigation (useCollectionBrowse — the toolbar + browse overlay).
-// Still stubbed: the notifier.
+// navigation (useCollectionBrowse — the toolbar + browse overlay), and the live bell's
+// per-record severities (useNotifications → the Kanban accent).
 import { configureCollectionUi } from "@mulmoclaude/collection-plugin/vue";
 import type {
   CollectionApiResult,
@@ -27,7 +27,6 @@ import type {
   CollectionDetailResponse,
   CollectionsListResponse,
   CollectionOntologyResponse,
-  CollectionNotifySeverity,
   ItemMutationResponse,
   FeedsListResponse,
 } from "@mulmoclaude/core/collection";
@@ -38,6 +37,8 @@ import { buildCustomViewSrcdoc } from "../utils/customViewSrcdoc";
 import { fetchJson, errorMessage, readErrorBody } from "../utils/fetchJson";
 import { htmlPreviewUrl, remoteViewItemsQuery } from "./collectionUiRules";
 import { useShortcuts } from "./useShortcuts";
+import { useNotifications } from "./useNotifications";
+import { collectionNotifiedSeverities } from "../utils/collectionNotified";
 import {
   browseGotoIndex,
   browseGotoDetail,
@@ -254,8 +255,14 @@ configureCollectionUi({
   // input box without an Enter (server: spawnBackgroundChat draft:true), so the user
   // reviews / edits / sends. `role` is ignored (MulmoTerminal has no roles).
   startNewChatDraft: (prompt) => void startCollectionChat(prompt, { hidden: false, draft: true }),
-  // No notifier in MulmoTerminal.
-  notifiedSeverities: () => new Map<string, CollectionNotifySeverity>(),
+  // Which of this collection's records currently have a completion bell, and how
+  // urgent — the Kanban view accents those cards. Read live: `active` is a ref, so
+  // reading it inside the call registers the plugin's `computed` as a dependency and
+  // the accents follow a watcher publishing or clearing without any extra plumbing.
+  // `useNotifications()` is a module singleton and its init is idempotent, so calling
+  // it per invocation costs nothing after the first (and keeps the pubsub subscription
+  // out of this module's import).
+  notifiedSeverities: (slug: string) => collectionNotifiedSeverities(useNotifications().active.value, slug),
 
   // ── runtime translation: POST /api/translation (hidden-chat LLM). Enables the
   //    new-collection starter modal's localized cards; omitted ⇒ English fallback. ──
