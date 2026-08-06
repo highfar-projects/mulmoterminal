@@ -134,7 +134,11 @@ function rawFileUrl(value: unknown): string {
 // artifacts/html/*.html with the sandboxed preview CSP so it renders in a new tab;
 // everything else falls back to the raw-file route. See htmlPreviewUrl.
 configureCollectionUi({
-  // ── real (read side) ──
+  // ── real (read side). The two paths below are MulmoClaude's response shapes on
+  //    MulmoTerminal's own URLs — `/list` and `/:slug/detail`, where MulmoClaude has
+  //    `GET /api/collections` and `GET /api/collections/:slug` (registry diverges too,
+  //    see below). This file is the consumer of record for that; the divergence table
+  //    and the reason are in docs/mulmoclaude-parity.md. ──
   fetchCollectionDetail: (slug) => apiGet<CollectionDetailResponse>(`/api/collections/${encodeURIComponent(slug)}/detail`),
   listCollections: () => apiGet<CollectionsListResponse>("/api/collections/list"),
   // Map tab: raw workspace-ontology entries; the plugin builds the graph
@@ -238,7 +242,9 @@ configureCollectionUi({
   deleteView: (slug, viewId) => apiDelete(`/api/collections/${encodeURIComponent(slug)}/views/${encodeURIComponent(viewId)}`),
   listFeeds: () => apiGet<FeedsListResponse>("/api/feeds"),
   // ── Discover/registry tab: the shared @mulmoclaude/core registry engine, wired
-  //    over /api/collections/registry/* (server/backends/collections.ts). ──
+  //    over /api/collections/registry/* (server/backends/collections.ts) — MulmoClaude
+  //    serves the same engine at /api/collections-registry/*, one of the three known
+  //    path divergences (docs/mulmoclaude-parity.md). ──
   listRegistry: () => apiGet<RegistryListResponse>("/api/collections/registry/list"),
   importRegistry: (author, slug, registry) => apiPost<RegistryImportResponse>("/api/collections/registry/import", { author, slug, registry }),
 

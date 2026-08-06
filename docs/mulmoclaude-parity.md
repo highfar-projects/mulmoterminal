@@ -36,6 +36,46 @@ linking once on a machine serves both apps.
 
 ---
 
+## Collection API paths — three deliberate divergences
+
+The collection REST surface is the same on both hosts **except for three paths**.
+Everything else matches character-for-character: `items`, `item`,
+`itemAction`, `collectionAction`, `refresh`, `calendar-push`, `view-file`,
+`remote-view` (+ `/mutate`, `/items`), `view-token`, `view-data` (+ `/query`,
+`/actions/:actionId`, `/image`), `view-i18n`, `views/:viewId`. So this is three
+named exceptions, not a drifting surface — and they are listed here so the next
+host binding or external script copies one of these two spellings instead of
+inventing a third (CLAUDE.md's parity rule; #907 is the cautionary tale).
+
+| Concern | MulmoClaude | MulmoTerminal |
+| --- | --- | --- |
+| List | `GET /api/collections` | `GET /api/collections/list` |
+| Detail | `GET /api/collections/:slug` | `GET /api/collections/:slug/detail` |
+| Registry | `/api/collections-registry/*` | `/api/collections/registry/*` |
+
+**Why.** All three come from one instinct: keep a literal segment from ever
+being read as a `:slug`. MulmoClaude distinguishes them by HTTP method and by a
+separate top-level `collections-registry` prefix; MulmoTerminal instead put the
+literal *inside* the `/api/collections` namespace, which forces the suffixes —
+`/api/collections/registry/list` only stays unambiguous because it is mounted
+**before** the `:slug` routes (`server/backends/collections.ts`, which says so
+at the mount site), and `list` / `detail` sidestep the question entirely. The
+response *shapes* are MulmoClaude's; only the URLs differ.
+
+**Consumer of record: `src/composables/collectionUi.ts`.** The plugin's UI
+binding is what actually calls these, and it is self-consistent with the server,
+which is exactly why nothing here ever fails a test. Treat that file plus the
+mount block in `server/backends/collections.ts` as the pair that has to agree —
+and this table as the record of why they don't agree with MulmoClaude.
+
+**Not fixed here, on purpose.** Renaming the runtime paths, or adding aliases at
+MulmoClaude's spellings, are both live options and both out of scope for the
+documentation (#1492). Nothing outside this app depends on the MulmoTerminal
+spellings today — remote-host commands do not go through these URLs — so the
+cost of aliasing later is low; the cost of a *third* spelling is not.
+
+---
+
 ## Remaining differences
 
 These were the tail of the shared-services plan (originally labeled PR4c, PR4d,

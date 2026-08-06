@@ -1,6 +1,28 @@
 # Integrating `@mulmoclaude/collection-plugin` into MulmoTerminal
 
-Status: **the cross-repo blocker is gone.** The package shipped `0.5.0`/`0.5.1` with exactly the
+> **HISTORICAL — do not read this as the current state (marked 2026-08-06, #1492).**
+>
+> This is the *plan* that brought collections into MulmoTerminal, kept for the reasoning:
+> why the read path needs a server at all, why favorites are a shared on-disk file, how the
+> Shadow-DOM teleport works, and which decisions were taken and rejected along the way.
+>
+> **All three tiers below have shipped.** Everything the tier list, the gap table's `[term]`
+> markers and the stub list describe as future work is now real — the write routes
+> (`items` / `item` / actions / refresh / calendar-push), the registry import, remote views,
+> `manageCollection`, and a `startChat` that seeds a visible chat. If a passage here says
+> something is a stub or a no-op, it is telling you what was true when the increment was scoped.
+>
+> **For the current state, read instead:**
+> - [`mulmoclaude-parity.md`](mulmoclaude-parity.md) — what is shared with MulmoClaude today,
+>   the three deliberate API-path divergences, and the differences that remain (custom-view
+>   response bodies, `kind: "agent"` dispatch).
+> - `server/backends/collections.ts` — the mounted routes, one line each.
+> - `src/composables/collectionUi.ts` — every host-capability binding, real ones and the
+>   handful still deliberately inert.
+>
+> Nothing below is edited to match new behaviour; that is what keeps it readable as a record.
+
+Status at the time of writing: **the cross-repo blocker is gone.** The package shipped `0.5.0`/`0.5.1` with exactly the
 host-contract changes this doc originally said were still needed (ToolPlugin entry, router-optional
 nav, configurable teleport target, server engine). What remains is **MulmoTerminal-side wiring only** —
 **no MulmoClaude changes are required.**
