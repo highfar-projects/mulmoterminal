@@ -43,10 +43,11 @@
 // muse composes the tool name from the plugin id and the capability id — so
 // `mcp__plugin_mulmoterminal_render__presentChart`, where the ids in `toolGroupServerId()` form
 // would repeat our name in every tool name, in every listing, in every session.
-import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { TOOL_GROUPS } from "../../common/toolGroups.js";
+import { isRecord } from "../../common/isRecord.js";
+import { byCodeUnit } from "../../common/byCodeUnit.js";
 import { PORT } from "../config/env.js";
 import { mulmoterminalHome } from "../infra/mulmoterminal-home.js";
 import { spawnCapture } from "../infra/spawnCapture.js";
@@ -86,8 +87,8 @@ export function musePluginManifest(bridge: { command: string; args: string[] }, 
         id: group,
         transport: "stdio",
         // The PORT is baked in because nothing else can carry it: the environment a plugin server
-        // is started with holds none of ours. A server that comes back on a different port writes a
-        // different manifest, which the stamp below reads as a change and re-installs.
+        // is started with holds none of ours. A server that comes back on a different port declares
+        // a different command, which the check below sees and re-installs.
         command: [bridge.command, ...bridge.args, "--group", group, "--port", String(port)],
       })),
     },
@@ -95,44 +96,86 @@ export function musePluginManifest(bridge: { command: string; args: string[] }, 
 }
 
 const manifestPath = (dir: string): string => path.join(dir, ".muse-plugin", "plugin.json");
-/** What we last successfully installed, so an unchanged manifest costs no subprocess. */
-const stampPath = (dir: string): string => path.join(dir, ".installed");
 
-const digest = (text: string): string => createHash("sha256").update(text).digest("hex");
-
-/** Write the bundle, and say whether it differs from the one already installed from here.
- *  Separated from the install so the decision is testable without a muse on PATH. */
-export function writeMusePlugin(dir: string, manifest: Record<string, unknown>): { changed: boolean; stamp: string } {
-  const text = `${JSON.stringify(manifest, null, 2)}\n`;
-  const stamp = digest(text);
+/** Write the bundle where `muse plugins install` will read it. Separated from the install so the
+ *  manifest is testable without a muse on PATH. */
+export function writeMusePlugin(dir: string, manifest: Record<string, unknown>): void {
   mkdirSync(path.dirname(manifestPath(dir)), { recursive: true });
-  writeFileSync(manifestPath(dir), text);
-  return { changed: lastInstalled(dir) !== stamp, stamp };
+  writeFileSync(manifestPath(dir), `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
-/** The stamp of the manifest last installed FROM THIS DIRECTORY, or null when there is none —
- *  a first run, or a home that has been cleared. */
-function lastInstalled(dir: string): string | null {
+/** One `muse plugins` call, JSON-parsed, with every failure reading as "nothing there". */
+function runMusePlugins(args: string[]): { ok: boolean; message: string; json: unknown } {
+  const { status, stdout, stderr } = spawnCapture(museAdapter.bin(), ["plugins", ...args], { env: { ...process.env, ...musePluginEnv() } });
+  return { ok: status === 0, message: [stdout, stderr].filter(Boolean).join("\n").trim(), json: parsed(stdout) };
+}
+
+/** A `--json` answer, or null for anything unusable — a build that prints a sentence instead
+ *  ("plugins are not available in this build") lands here, and reads as "nothing registered". */
+function parsed(stdout: string): unknown {
   try {
-    return readFileSync(stampPath(dir), "utf8").trim();
+    return JSON.parse(stdout);
   } catch {
     return null;
   }
 }
 
-function runMusePlugins(args: string[]): { ok: boolean; message: string } {
-  const { status, stdout, stderr } = spawnCapture(museAdapter.bin(), ["plugins", ...args], { env: { ...process.env, ...musePluginEnv() } });
-  return { ok: status === 0, message: [stdout, stderr].filter(Boolean).join("\n").trim() };
+/**
+ * Is muse's OWN registration already the one this manifest describes?
+ *
+ * Asked of `muse plugins inspect`, not of a note we left ourselves, and that distinction is the
+ * whole point of this function. The first version recorded the digest of the manifest it had last
+ * installed and skipped the install when it matched — which is a record of what WE did, not of what
+ * muse HAS. Anything that removes the plugin on muse's side (`muse plugins remove`, a cleared
+ * cache, a muse reinstall, another tool) then left the two permanently disagreeing: our note said
+ * "installed", muse had nothing, and every muse cell started with no GUI tools and nothing logged.
+ * That is exactly how this shipped broken the first time.
+ *
+ * Three conditions, because a plugin can be present and still not serve:
+ *   - `active`: installed, enabled, and its package still valid.
+ *   - every capability `trusted_enabled`: an unapproved one is listed and never started, which is
+ *     what a CHANGED manifest produces (trust is keyed to the definition hash).
+ *   - the commands match ours: the bridge path or the port may have moved, and a stale command
+ *     points a session at a server that is not there.
+ */
+export function museRegistrationMatches(inspected: unknown, manifest: Record<string, unknown>): boolean {
+  if (!isRecord(inspected) || inspected.active !== true) return false;
+  const capabilities = inspected.runtime_capabilities;
+  if (!Array.isArray(capabilities) || capabilities.length === 0) return false;
+  if (!capabilities.every((entry) => isRecord(entry) && entry.status === "trusted_enabled")) return false;
+  return sameServers(museServersOf(inspected), museServersOf(manifest));
 }
 
+/** `[id, command…]` per declared server, from either shape — muse's inspect output nests the
+ *  capabilities under `plugin`, our manifest has them at the top. */
+function museServersOf(doc: unknown): string[] {
+  const root = isRecord(doc) && isRecord(doc.plugin) ? doc.plugin : doc;
+  if (!isRecord(root) || !isRecord(root.capabilities)) return [];
+  const capabilities: Record<string, unknown> = root.capabilities;
+  // Two spellings for one thing: our manifest writes `mcpServers`, muse's inspect answers
+  // `mcp_servers`. Both are read so the comparison can be made between them at all.
+  const servers = capabilities.mcpServers ?? capabilities.mcp_servers;
+  if (!Array.isArray(servers)) return [];
+  return (
+    servers
+      .filter(isRecord)
+      .map((server) => [String(server.id), ...(Array.isArray(server.command) ? server.command.map(String) : [])].join(" "))
+      // byCodeUnit, not the default sort: this list is compared for EQUALITY between two sources, so
+      // it only has to be the same order on both sides — and a locale-aware sort is not.
+      .toSorted(byCodeUnit)
+  );
+}
+
+const sameServers = (a: readonly string[], b: readonly string[]): boolean => a.length > 0 && a.length === b.length && a.every((entry, i) => entry === b[i]);
+
 /**
- * Make this machine's muse able to reach the GUI tools. Idempotent, and free once done: a manifest
- * identical to the one last installed from here spawns nothing at all.
+ * Make this machine's muse able to reach the GUI tools.
  *
- * Both verbs are needed and in this order — install records the plugin, approve trusts the
+ * Idempotent, and cheap when nothing changed: one `muse plugins inspect` (~100ms) and no writing.
+ * That read is not optional — see museRegistrationMatches for what skipping it cost.
+ *
+ * Both verbs are needed and in this order: install records the plugin, approve trusts the
  * capability definitions by their hash, and an unapproved capability is listed but never started.
- * Re-running approve after a changed manifest is not optional for the same reason: the hash it
- * trusted was the old definition's.
  *
  * Never throws. A muse that is not installed, a build without the plugin flag, and a read-only
  * config directory are all reasons for a cell to have no GUI tools — none of them a reason for the
@@ -140,15 +183,15 @@ function runMusePlugins(args: string[]): { ok: boolean; message: string } {
  */
 export function syncMuseMcpPlugin(dir = musePluginDir()): { ok: boolean; message: string } {
   try {
-    const { changed, stamp } = writeMusePlugin(dir, musePluginManifest(bridgeCommand(), PORT));
-    if (!changed) return { ok: true, message: "" };
+    const manifest = musePluginManifest(bridgeCommand(), PORT);
+    if (museRegistrationMatches(runMusePlugins(["inspect", MUSE_PLUGIN_ID, "--json"]).json, manifest)) return { ok: true, message: "" };
 
+    writeMusePlugin(dir, manifest);
     const installed = runMusePlugins(["install", dir, "--scope", "user", "--json"]);
     if (!installed.ok) return warn(installed.message);
     const approved = runMusePlugins(["approve", MUSE_PLUGIN_ID, "--json"]);
     if (!approved.ok) return warn(approved.message);
 
-    writeFileSync(stampPath(dir), `${stamp}\n`);
     console.log(`[muse] registered the GUI MCP plugin (${TOOL_GROUPS.length} tool groups)`);
     return { ok: true, message: "" };
   } catch (err) {

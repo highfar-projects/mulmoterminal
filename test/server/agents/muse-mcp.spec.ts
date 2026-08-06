@@ -4,11 +4,11 @@
 // have to take on trust. Everything asserted here was measured against muse-bin 0.1.0-R708.1
 // before it was written down (see the module header).
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { TOOL_GROUPS } from "../../../common/toolGroups.js";
-import { MUSE_PLUGIN_ID, musePluginEnv, musePluginManifest, writeMusePlugin } from "../../../server/agents/muse-mcp.js";
+import { MUSE_PLUGIN_ID, museRegistrationMatches, musePluginEnv, musePluginManifest, writeMusePlugin } from "../../../server/agents/muse-mcp.js";
 
 const BRIDGE = { command: "/opt/node/bin/node", args: ["/apps/mulmoterminal/server/mcp/bridge.mjs"] };
 const PORT = 34567;
@@ -81,31 +81,75 @@ describe("writeMusePlugin", () => {
     expect(written).toEqual(manifest());
   });
 
-  it("reports a first write as changed", () => {
-    expect(writeMusePlugin(dir, manifest()).changed).toBe(true);
-  });
-
-  // The whole point of the stamp: a spawn whose manifest matches the one last installed from here
-  // runs no subprocess at all, and a muse spawn is on the path of opening a cell.
-  it("reports no change once the stamp records that manifest", () => {
-    const { stamp } = writeMusePlugin(dir, manifest());
-    writeFileSync(path.join(dir, ".installed"), `${stamp}\n`);
-    expect(writeMusePlugin(dir, manifest()).changed).toBe(false);
-  });
-
-  // A mulmoterminal that moved — an upgrade, a different node — changes the bridge argv, and the
-  // capability muse trusted was hashed from the old one. Re-installing is what re-approves it.
-  it("reports a change when the bridge path moves", () => {
-    const { stamp } = writeMusePlugin(dir, manifest());
-    writeFileSync(path.join(dir, ".installed"), `${stamp}\n`);
-    const moved = { command: "/usr/local/bin/node", args: ["/apps/mulmoterminal-2/server/mcp/bridge.mjs"] };
-    expect(writeMusePlugin(dir, manifest(moved)).changed).toBe(true);
-  });
-
   it("creates the manifest directory when it is not there", () => {
     const nested = path.join(dir, "a", "b");
     expect(() => writeMusePlugin(nested, manifest())).not.toThrow();
     expect(readFileSync(path.join(nested, ".muse-plugin", "plugin.json"), "utf8")).toContain(MUSE_PLUGIN_ID);
+  });
+});
+
+// What decides whether a spawn re-registers. This is asked of MUSE — `muse plugins inspect` — and
+// the reason is a bug that shipped: the first version compared the manifest against a note it had
+// written itself when it last installed, so anything that removed the plugin on muse's side left
+// the two disagreeing forever. Our note said "installed", muse had nothing, and every muse cell
+// came up with no GUI tools and nothing logged anywhere.
+describe("museRegistrationMatches", () => {
+  const inspected = (over: Record<string, unknown> = {}) => ({
+    active: true,
+    runtime_capabilities: TOOL_GROUPS.map((group) => ({ candidate: { capability_id: group }, status: "trusted_enabled" })),
+    plugin: {
+      capabilities: {
+        mcp_servers: TOOL_GROUPS.map((group) => ({ id: group, command: [BRIDGE.command, ...BRIDGE.args, "--group", group, "--port", String(PORT)] })),
+      },
+    },
+    ...over,
+  });
+
+  it("accepts a registration that is already ours", () => {
+    expect(museRegistrationMatches(inspected(), manifest())).toBe(true);
+  });
+
+  // THE case. muse knows nothing about the plugin, so `inspect` fails and answers null.
+  it("re-registers when muse has no such plugin", () => {
+    expect(museRegistrationMatches(null, manifest())).toBe(false);
+    expect(museRegistrationMatches({}, manifest())).toBe(false);
+  });
+
+  it("re-registers a plugin that is installed but not active", () => {
+    expect(museRegistrationMatches(inspected({ active: false }), manifest())).toBe(false);
+  });
+
+  // Trust is keyed to the definition hash, so a changed manifest leaves the capability listed and
+  // never started — which looks exactly like having the tools until one is called.
+  it("re-registers when a capability is not trusted", () => {
+    const untrusted = inspected();
+    untrusted.runtime_capabilities[0] = { candidate: { capability_id: "render" }, status: "untrusted" };
+    expect(museRegistrationMatches(untrusted, manifest())).toBe(false);
+  });
+
+  // The port and the bridge path live in the command, and a stale one points a session at a server
+  // that is not listening — silently, because the bridge reads an unreachable resolve as "no
+  // session" and serves an empty toolset.
+  it("re-registers when the port has moved", () => {
+    expect(museRegistrationMatches(inspected(), manifest(BRIDGE, 40000))).toBe(false);
+  });
+
+  it("re-registers when the bridge path has moved", () => {
+    const moved = { command: "/usr/local/bin/node", args: ["/apps/mulmoterminal-2/server/mcp/bridge.mjs"] };
+    expect(museRegistrationMatches(inspected(), manifest(moved))).toBe(false);
+  });
+
+  // A registration that declares fewer groups than we do is not ours either — it is an older
+  // version of this plugin, from before a group existed.
+  it("re-registers when a group is missing from muse's copy", () => {
+    const partial = inspected();
+    partial.plugin.capabilities.mcp_servers = partial.plugin.capabilities.mcp_servers.slice(1);
+    partial.runtime_capabilities = partial.runtime_capabilities.slice(1);
+    expect(museRegistrationMatches(partial, manifest())).toBe(false);
+  });
+
+  it("re-registers when muse reports no capabilities at all", () => {
+    expect(museRegistrationMatches(inspected({ runtime_capabilities: [] }), manifest())).toBe(false);
   });
 });
 
@@ -133,9 +177,9 @@ describe("syncMuseMcpPlugin", () => {
     }
   });
 
-  // Failing to install must not stamp: the next spawn has to try again, or a transient failure
-  // would silently cost the user their GUI tools until the manifest happened to change.
-  it("does not record a stamp for a failed install", async () => {
+  // A failed install records NOTHING that would make the next spawn skip its retry. There is no
+  // such record left to get wrong now — the check reads muse — and this pins that it stays so.
+  it("leaves nothing behind that would stop the next spawn retrying", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     const previous = process.env.MUSE_BIN;
     process.env.MUSE_BIN = path.join(dir, "no-such-muse");
@@ -143,7 +187,8 @@ describe("syncMuseMcpPlugin", () => {
     try {
       const { syncMuseMcpPlugin } = await import("../../../server/agents/muse-mcp.js");
       syncMuseMcpPlugin(dir);
-      expect(() => readFileSync(path.join(dir, ".installed"), "utf8")).toThrow();
+      expect(syncMuseMcpPlugin(dir).ok).toBe(false);
+      expect(existsSync(path.join(dir, ".installed"))).toBe(false);
     } finally {
       if (previous === undefined) delete process.env.MUSE_BIN;
       else process.env.MUSE_BIN = previous;
