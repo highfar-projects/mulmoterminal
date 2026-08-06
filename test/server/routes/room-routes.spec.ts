@@ -120,6 +120,26 @@ describe("GET /api/rooms", () => {
   it("lists the rooms that exist", async () => {
     postToRoom("alpha", "#1", "a");
     postToRoom("beta", "#1", "b");
-    expect((await request(app).get("/api/rooms")).body.rooms).toEqual(["alpha", "beta"]);
+    expect([...(await request(app).get("/api/rooms")).body.rooms].sort()).toEqual(["alpha", "beta"]);
+  });
+});
+
+describe("DELETE /api/rooms/:room", () => {
+  it("forgets the conversation", async () => {
+    postToRoom("standup", "#1", "morning");
+    expect((await request(app).delete("/api/rooms/standup")).status).toBe(200);
+    expect((await request(app).get("/api/rooms")).body.rooms).toEqual([]);
+  });
+
+  // Guarded like the post, and then some: this one destroys a record rather than adding to one.
+  it("refuses a cross-origin delete", async () => {
+    postToRoom("standup", "#1", "morning");
+    allowOrigin = false;
+    expect((await request(app).delete("/api/rooms/standup")).status).toBe(403);
+    expect((await request(app).get("/api/rooms")).body.rooms).toEqual(["standup"]);
+  });
+
+  it("refuses an id that is not one, rather than resolving a path from it", async () => {
+    expect((await request(app).delete("/api/rooms/..%2Fescape")).status).toBe(400);
   });
 });

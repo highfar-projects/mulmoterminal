@@ -1,9 +1,9 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { listRooms, postToRoom, readRoom, roomFile, roomsDir } from "../../../server/rooms/rooms";
+import { deleteRoom, listRooms, postToRoom, readRoom, roomFile, roomsDir } from "../../../server/rooms/rooms";
 import { messageLine, messagesSince, parseRoom } from "../../../server/rooms/room-log";
 import { MAX_MESSAGE_CHARS } from "../../../common/roomMessage";
 
@@ -124,10 +124,43 @@ describe("listRooms", () => {
     postToRoom("review", "#1", "hi");
     mkdirSync(path.join(roomsDir(), "notes"), { recursive: true });
     writeFileSync(path.join(roomsDir(), "README.md"), "not a room");
-    expect(listRooms()).toEqual(["review", "standup"]);
+    expect([...listRooms()].sort()).toEqual(["review", "standup"]);
   });
 
   it("answers nothing before any room exists", () => {
     expect(listRooms()).toEqual([]);
+  });
+
+  // By activity, not by name. A table's id starts with the time it was created, so sorting the
+  // names put the OLDEST conversation at the top of the list somebody just opened — and a room
+  // named by hand sorted wherever its first letter happened to fall.
+  it("puts the most recently written room first", () => {
+    postToRoom("table-2026-08-01-00-00-00-aaaa", "#1", "old");
+    postToRoom("table-2026-08-06-00-00-00-bbbb", "#1", "new");
+    const old = roomFile("table-2026-08-01-00-00-00-aaaa");
+    const fresh = roomFile("table-2026-08-06-00-00-00-bbbb");
+    if (!old || !fresh) throw new Error("both rooms should have a file");
+    utimesSync(old, new Date(1000), new Date(1000));
+    utimesSync(fresh, new Date(9000), new Date(9000));
+    expect(listRooms()).toEqual(["table-2026-08-06-00-00-00-bbbb", "table-2026-08-01-00-00-00-aaaa"]);
+  });
+});
+
+describe("deleteRoom", () => {
+  it("forgets the conversation", () => {
+    postToRoom("standup", "#1", "hi");
+    expect(deleteRoom("standup")).toBe(true);
+    expect(listRooms()).toEqual([]);
+    expect(readRoom("standup")).toEqual([]);
+  });
+
+  // The caller asked for it to not exist, and it does not. Reporting failure would make a UI
+  // refuse to tidy a listing that is already correct.
+  it("is happy about a room that was never there", () => {
+    expect(deleteRoom("never-existed")).toBe(true);
+  });
+
+  it("refuses an id that is not one, rather than resolving a path from it", () => {
+    expect(deleteRoom("../../etc/passwd")).toBe(false);
   });
 });
