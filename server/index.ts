@@ -130,7 +130,7 @@ import { allowedToolNames, autoAllowedToolNames } from "./infra/plugins-registry
 import { GUI_SERVER_ID } from "../common/toolGroups.js";
 
 import { resumableSessionPredicate } from "./session/resumable-sessions.js";
-import { reapSweepLines, sweepIdleSessions } from "./session/reap-idle-sessions.js";
+import { reapSweepLines, survivingAfterSweep, sweepIdleSessions } from "./session/reap-idle-sessions.js";
 import { installProcessGuards } from "./infra/process-guards.js";
 import { pruneOrphanSettings } from "./session/session-settings.js";
 import { earliestStartedAt, liveInstances, registerInstance } from "../bin/instances.js";
@@ -890,6 +890,7 @@ server.listen(Number(PORT), BIND_HOST, () => {
     console.warn(bindSecurityWarning(BIND_HOST, PORT, browserHostnames));
   }
   const surviving = tmuxAvailable() ? tmuxListSessionIds() : [];
+  const reaped: string[] = [];
   if (tmuxAvailable()) {
     const detail = surviving.length ? ` — ${surviving.length} session(s) survived; reattach on connect` : "";
     console.log(`[tmux] persistence on${detail}`);
@@ -898,7 +899,9 @@ server.listen(Number(PORT), BIND_HOST, () => {
     // largest. `cleanup-orphans` has existed since #367 with no caller — this is that caller, with
     // a rule that is about now instead of about the past (#1467).
     const idleDays = getSessionIdleReapDays();
-    reapSweepLines(sweepIdleSessions(Date.now(), idleDays), idleDays).forEach((line) => console.log(line));
+    const sweep = sweepIdleSessions(Date.now(), idleDays);
+    reaped.push(...sweep.reaped);
+    reapSweepLines(sweep, idleDays).forEach((line) => console.log(line));
   } else {
     console.log("[tmux] not found — terminals are not persistent across a server restart");
   }
@@ -917,7 +920,10 @@ server.listen(Number(PORT), BIND_HOST, () => {
   // that cutoff applies to every sweep here, not just the one the bug was reported against.
   const peers = liveInstances();
   const peerCutoff = earliestStartedAt(peers);
-  const liveSessionIds = new Set(surviving);
+  // Minus what the sweep just ended: those files are orphans as of a moment ago, and one of them
+  // may hold a provider's API token — waiting a whole boot to remove it is the cost of using the
+  // list as it was read (#1467).
+  const liveSessionIds = survivingAfterSweep(surviving, reaped);
   const droppedSettings = pruneOrphanSettings(liveSessionIds, undefined, peerCutoff);
   if (droppedSettings.length) console.log(`[settings] removed ${droppedSettings.length} orphaned session settings file(s)`);
   // Dropped files are the same story: copies in tmp that only their session referred to.

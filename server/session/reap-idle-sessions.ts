@@ -59,6 +59,19 @@ export function reapIdleSessions(input: ReapSweepInput): ReapSweepResult {
   return result;
 }
 
+/**
+ * The sessions still standing after a sweep.
+ *
+ * Its own function because boot reads the tmux list BEFORE sweeping and then decides from it which
+ * settings and drop files are orphaned. A file kept because its session was in that list outlives
+ * the session by a whole boot — and a session settings file can hold a provider's API token, which
+ * is the reason that prune exists at all.
+ */
+export const survivingAfterSweep = (surviving: readonly string[], reaped: readonly string[]): Set<string> => {
+  const ended = new Set(reaped);
+  return new Set(surviving.filter((id) => !ended.has(id)));
+};
+
 const SECONDS_PER_MS = 1000;
 
 /** The lines the sweep prints. Both of them: a sweep that says only what it killed leaves the

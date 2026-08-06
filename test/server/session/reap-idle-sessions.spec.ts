@@ -7,7 +7,7 @@
 // while 15 sat idle for hours with nobody attached. Everything below is about NOW instead.
 import { describe, it, expect, vi } from "vitest";
 
-import { reapIdleSessions, reapSweepLines, type ReapSweepInput } from "../../../server/session/reap-idle-sessions.js";
+import { reapIdleSessions, reapSweepLines, survivingAfterSweep, type ReapSweepInput } from "../../../server/session/reap-idle-sessions.js";
 import { reapableTmuxSession, isRestorableSession } from "../../../server/infra/tmux.js";
 import { DEFAULT_REAP_IDLE_DAYS, reapIdleSeconds } from "../../../common/sessionReap.js";
 
@@ -142,5 +142,19 @@ describe("what the sweep says", () => {
 
   it("says nothing at all when there were no sessions to judge", () => {
     expect(reapSweepLines({ reaped: [], heldBack: 0, recent: 0 }, 7)).toEqual([]);
+  });
+});
+
+// Boot reads the tmux list, sweeps, and THEN decides which settings and drop files are orphaned —
+// from that same list. A file kept because its session was in it outlives the session by a whole
+// boot, and a session settings file can hold a provider's API token (the reason the prune exists).
+// Found reading the boot path during review; no bot flagged it.
+describe("survivingAfterSweep", () => {
+  it("drops what the sweep just ended", () => {
+    expect([...survivingAfterSweep(["kept", "ended", "also-kept"], ["ended"])]).toEqual(["kept", "also-kept"]);
+  });
+
+  it("is the whole list when the sweep ended nothing", () => {
+    expect([...survivingAfterSweep(["a", "b"], [])]).toEqual(["a", "b"]);
   });
 });

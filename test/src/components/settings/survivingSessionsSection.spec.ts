@@ -83,8 +83,13 @@ describe("the surviving-sessions section", () => {
   });
 
   // A row missing the key is a stop button with nothing to post to — dropped before it is drawn.
-  it("drops a row the server sent malformed", async () => {
-    serve([{ cwd: "/repo", attached: false }, row()]);
+  // The same for `reapable`: absent would read as false and quietly drop the "ends at next start"
+  // mark from a row the server is about to end (Codex on #1486).
+  it.each([
+    ["no key", { cwd: "/repo", attached: false }],
+    ["no reapable", { key: "s-2", cwd: "/repo", agent: null, idleSeconds: 1, attached: false, resumable: true }],
+  ])("drops a row the server sent malformed (%s)", async (_name, bad) => {
+    serve([bad, row()]);
     const w = mount(SurvivingSessionsSection);
     await flushPromises();
     expect(w.findAll('[data-testid="surviving-row"]')).toHaveLength(1);
