@@ -4,7 +4,7 @@
 
 3席のラウンドテーブルを実機で回したら、3人目の発言が
 
-```
+```text
 I'll read the actual files before weighing in.
 ```
 
