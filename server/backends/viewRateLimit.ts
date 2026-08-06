@@ -19,9 +19,17 @@ export const ONE_MINUTE_MS = 60_000;
  *  spec can drive the window without waiting on a real clock. */
 export function makeViewActionRateLimiter(max: number, windowMs: number, now: () => number = Date.now) {
   const hits = new Map<string, { count: number; resetAt: number }>();
+  let nextSweepAt = 0;
   return (req: Request<{ slug?: string }>, res: Response, next: NextFunction): void => {
     const nowMs = now();
-    if (hits.size > SWEEP_THRESHOLD) {
+    // Deliberate divergence from MulmoClaude, which gates this on map size alone:
+    // the limiter runs BEFORE `requireViewToken`, so unauthenticated requests
+    // create entries too. Past the threshold with every entry still inside its
+    // window, a size-only gate sweeps on every request and deletes nothing —
+    // O(n) per request while the map keeps growing. Sweeping at most once per
+    // window bounds that; the rate decisions below are unchanged either way.
+    if (hits.size > SWEEP_THRESHOLD && nowMs >= nextSweepAt) {
+      nextSweepAt = nowMs + windowMs;
       for (const [key, entry] of hits) if (entry.resetAt <= nowMs) hits.delete(key);
     }
     const key = `${req.ip ?? ""}\n${req.params.slug ?? ""}`;

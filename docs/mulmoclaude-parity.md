@@ -102,9 +102,11 @@ remaining item with correctness stakes.
 
 ### 4. Custom-view host surface — shipped, with two known edges
 
-The token-scoped surface a sandboxed custom view talks to is now the same on
-both hosts (#1490). This is deliberately parity-tracked rather than "MT's own
-API", because core's bundled authoring docs — which MulmoTerminal itself serves
+The endpoints a sandboxed custom view talks to, and the authorization rules
+guarding them, are now the same on both hosts (#1490) — the response *bodies*
+still differ in the one place noted at the end of this section. This is
+deliberately parity-tracked rather than "MT's own API", because core's bundled
+authoring docs — which MulmoTerminal itself serves
 through `manageCollection`'s `schemaDocs` — tell collection authors these exist:
 
 | Endpoint | Where |

@@ -880,6 +880,9 @@ export function mountCollectionRoutes(app: Express): void {
   app.options("/api/collections/:slug/view-data/query", viewDataCors, (_req: Request, res: Response) => {
     res.status(204).end();
   });
+  // Not `guarded` like its neighbours, on purpose: the handler catches its own
+  // throw so it can answer a FIXED message. A raw engine error can carry host
+  // paths, and `guarded` would put exactly that in the body for a scoped view.
   app.post("/api/collections/:slug/view-data/query", viewDataCors, viewActionRateLimit, viewQueryConcurrency, requireViewToken("read"), viewDataQueryHandler);
 
   // The rest of the custom-view surface (customViewRoutes.ts: the i18n dict, the
