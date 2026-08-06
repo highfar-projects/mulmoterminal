@@ -23,6 +23,7 @@ import { setPrWorkdirFooter } from "./prWorkdirFooter";
 import { setAppendSystemPrompt } from "./appendSystemPrompt";
 import { setDecisionDigest } from "./decisionDigest";
 import { setWorklogEnabled, setWorklogIntervalHours } from "./worklog";
+import { setSessionIdleReapDays } from "./sessionReap";
 import { setHeaderConfigSummary } from "./headerConfigSummary";
 import { postConfigField } from "./postConfigField";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
@@ -303,6 +304,7 @@ function adoptServerSideSettings(c: Record<string, unknown>): void {
   setDecisionDigest(c.decisionDigest);
   setWorklogEnabled(c.worklogEnabled);
   setWorklogIntervalHours(c.worklogIntervalHours);
+  setSessionIdleReapDays(c.sessionIdleReapDays);
 }
 
 // The user's own lists, adopted together — grouped like the sound and repo fields above.

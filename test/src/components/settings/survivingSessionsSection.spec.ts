@@ -14,6 +14,7 @@ const row = (over: Partial<SurvivingSession> = {}): SurvivingSession => ({
   idleSeconds: 7200,
   attached: false,
   resumable: true,
+  reapable: false,
   ...over,
 });
 
@@ -87,6 +88,25 @@ describe("the surviving-sessions section", () => {
     const w = mount(SurvivingSessionsSection);
     await flushPromises();
     expect(w.findAll('[data-testid="surviving-row"]')).toHaveLength(1);
+  });
+
+  // The sweep acts without being asked, so the rows it will take say so before it happens (#1467).
+  it("marks a row the server will end at its next start", async () => {
+    serve([row({ reapable: true }), row({ key: "s-2", reapable: false })]);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.findAll('[data-testid="surviving-doomed"]')).toHaveLength(1);
+  });
+
+  it("writes the idle threshold to its own config field", async () => {
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    await w.get('[aria-label="Increase the idle days before a session is ended"]').trigger("click");
+    await flushPromises();
+    const post = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls
+      .map((c) => c[1] as { body?: string } | undefined)
+      .find((init) => init?.body?.includes("sessionIdleReapDays"));
+    expect(post?.body).toContain("sessionIdleReapDays");
   });
 
   it("says the list could not be read instead of claiming there is nothing", async () => {

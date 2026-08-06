@@ -37,6 +37,7 @@ import { writeFileAtomicSync } from "../files/atomic-write.js";
 import { isRepoEntry } from "../../common/repoEntry.js";
 import { sanitizeGitlabHosts } from "../../common/gitlabHosts.js";
 import { DEFAULT_WORKLOG_INTERVAL_HOURS, sanitizeWorklogIntervalHours } from "../../common/worklogInterval.js";
+import { DEFAULT_REAP_IDLE_DAYS, sanitizeReapIdleDays } from "../../common/sessionReap.js";
 import { GUI_SERVER_ID } from "../../common/toolGroups.js";
 
 export interface AppConfig {
@@ -91,6 +92,9 @@ export interface AppConfig {
   // session on each run, so it costs tokens). `worklogIntervalHours` is the cadence.
   worklogEnabled: boolean;
   worklogIntervalHours: number;
+  // Days a tmux session may sit with nobody attached and no output before the server ends it at
+  // its next start (#1467). 0 turns the sweep off; the conversation is on disk either way.
+  sessionIdleReapDays: number;
   // Anthropic-compatible backends a directory can point its sessions at (#579). Safe to
   // serve: an entry names the env var holding its key (`tokenEnv`), never the key.
   providers: Provider[];
@@ -442,6 +446,7 @@ export const emptyConfig = (): AppConfig => ({
   pushKinds: [...DEFAULT_PUSH_KINDS],
   worklogEnabled: false,
   worklogIntervalHours: DEFAULT_WORKLOG_INTERVAL_HOURS,
+  sessionIdleReapDays: DEFAULT_REAP_IDLE_DAYS,
   providers: [],
   terminalSubmit: DEFAULT_TERMINAL_SUBMIT_MODE,
   keymap: {},
@@ -526,6 +531,7 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     pushKinds: sanitizePushKinds(o.pushKinds),
     worklogEnabled: sanitizeWorklogEnabled(o.worklogEnabled),
     worklogIntervalHours: sanitizeWorklogIntervalHours(o.worklogIntervalHours),
+    sessionIdleReapDays: sanitizeReapIdleDays(o.sessionIdleReapDays),
     providers: sanitizeProviders(o.providers),
     terminalSubmit: sanitizeTerminalSubmit(o.terminalSubmit),
     keymap: sanitizeKeymap(o.keymap),
@@ -633,6 +639,7 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     pushKinds: updated("pushKinds", sanitizePushKinds, base.pushKinds),
     worklogEnabled: updated("worklogEnabled", sanitizeWorklogEnabled, base.worklogEnabled),
     worklogIntervalHours: updated("worklogIntervalHours", sanitizeWorklogIntervalHours, base.worklogIntervalHours),
+    sessionIdleReapDays: updated("sessionIdleReapDays", sanitizeReapIdleDays, base.sessionIdleReapDays),
     providers: updated("providers", sanitizeProviders, base.providers),
     terminalSubmit: updated("terminalSubmit", sanitizeTerminalSubmit, base.terminalSubmit),
     keymap: updated("keymap", sanitizeKeymap, base.keymap),
@@ -671,6 +678,7 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     pushKinds: config.pushKinds,
     worklogEnabled: config.worklogEnabled,
     worklogIntervalHours: config.worklogIntervalHours,
+    sessionIdleReapDays: config.sessionIdleReapDays,
     terminalSubmit: config.terminalSubmit,
     keymap: config.keymap,
     copyOnSelect: config.copyOnSelect,

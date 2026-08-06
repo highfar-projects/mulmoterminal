@@ -56,9 +56,7 @@ function baseDeps(over: Partial<TmuxRouteDeps> = {}): TmuxRouteDeps {
     reapSession: vi.fn(),
     hasTmux: () => false,
     killTmux: vi.fn(),
-    listTmuxIds: () => [],
-    attachedClientCount: () => 0, // nobody else attached, by default
-    resumablePredicate: async () => () => false,
+    sweep: () => ({ reaped: [], heldBack: 0, recent: 0 }),
     survivingSessions: async () => [],
     ...over,
   };
@@ -105,60 +103,40 @@ describe("mountTmuxRoutes — POST /api/session/:id/terminate", () => {
 });
 
 describe("mountTmuxRoutes — POST /api/tmux/cleanup-orphans", () => {
-  it("rejects a disallowed origin with 403 and kills nothing", async () => {
-    const killTmux = vi.fn();
-    const { cleanup } = mountAndCapture(baseDeps({ isAllowedOrigin: () => false, killTmux, listTmuxIds: () => ["a", "b"] }));
+  const swept = { reaped: ["orphan-1", "orphan-2"], heldBack: 1, recent: 3 };
+
+  it("rejects a disallowed origin with 403 and sweeps nothing", async () => {
+    const sweep = vi.fn(() => swept);
+    const { cleanup } = mountAndCapture(baseDeps({ isAllowedOrigin: () => false, sweep }));
     const res = makeRes();
     await cleanup({ headers: { origin: "https://evil.example" }, params: {} }, res);
     expect(res.statusCode).toBe(403);
-    expect(killTmux).not.toHaveBeenCalled();
+    expect(sweep).not.toHaveBeenCalled();
   });
 
-  it("kills only non-resumable tmux ids (the orphan-selection boundary)", async () => {
-    const killTmux = vi.fn();
-    const resumable = new Set(["keep-1", "keep-2"]);
-    const { cleanup } = mountAndCapture(
-      baseDeps({
-        killTmux,
-        listTmuxIds: () => ["keep-1", "orphan-1", "keep-2", "orphan-2"],
-        resumablePredicate: async () => (id) => resumable.has(id),
-      }),
-    );
+  // The route no longer carries the decision. It used to select orphans itself against
+  // `isResumableTmuxSession` — a predicate made of permanent records, which is why it ended almost
+  // nothing (#1467). One rule now, in session/reap-idle-sessions.ts, and it is the same one the
+  // server runs at boot; what is pinned here is that the route reports it faithfully.
+  it("answers with exactly what the sweep ended", async () => {
+    const { cleanup } = mountAndCapture(baseDeps({ sweep: () => swept }));
     const res = makeRes();
     await cleanup({ headers: {}, params: {} }, res);
-    expect(killTmux.mock.calls.map((c) => c[0])).toEqual(["orphan-1", "orphan-2"]);
     expect(res.payload).toEqual({ killed: ["orphan-1", "orphan-2"], killedCount: 2 });
   });
 
-  // Regression (#747): a second mulmoterminal process may have just created a session (no
-  // transcript yet, so not resumable here) and be attached to it. Killing it would yank a
-  // live session out from under that process, so an orphan another process holds is spared.
-  it("spares a non-resumable session that another process is attached to", async () => {
-    const killTmux = vi.fn();
-    const attached = new Map<string, number | null>([
-      ["mine-orphan", 0], // no one attached → really an orphan
-      ["theirs", 1], // another process holds it
-      ["unknown", null], // tmux couldn't say → treat as held
-    ]);
-    const { cleanup } = mountAndCapture(
-      baseDeps({
-        killTmux,
-        listTmuxIds: () => ["mine-orphan", "theirs", "unknown"],
-        attachedClientCount: (id) => (attached.has(id) ? (attached.get(id) ?? null) : 0),
-        resumablePredicate: async () => () => false, // none resumable
-      }),
-    );
+  it("says it ended nothing rather than failing when everything is in use", async () => {
+    const { cleanup } = mountAndCapture(baseDeps({ sweep: () => ({ reaped: [], heldBack: 4, recent: 0 }) }));
     const res = makeRes();
     await cleanup({ headers: {}, params: {} }, res);
-    expect(killTmux.mock.calls.map((c) => c[0])).toEqual(["mine-orphan"]);
-    expect(res.payload).toEqual({ killed: ["mine-orphan"], killedCount: 1 });
+    expect(res.payload).toEqual({ killed: [], killedCount: 0 });
   });
 });
 
 // The Settings list's own route (#1478). Read-only, and still judged by origin: it names every
 // directory this machine has agents in, which is not something a page from elsewhere may read.
 describe("mountTmuxRoutes — GET /api/tmux/sessions", () => {
-  const ROW = { key: "s-1", cwd: "/repo", agent: "claude" as const, idleSeconds: 60, attached: false, resumable: true };
+  const ROW = { key: "s-1", cwd: "/repo", agent: "claude" as const, idleSeconds: 60, attached: false, resumable: true, reapable: false };
 
   it("answers with what the builder produced, untouched", async () => {
     const { surviving } = mountAndCapture(baseDeps({ survivingSessions: async () => [ROW] }));
@@ -181,15 +159,5 @@ describe("mountTmuxRoutes — GET /api/tmux/sessions", () => {
     const write = makeRes();
     await cleanup({ headers: { origin: "https://elsewhere.example" }, params: {} }, write);
     expect(write.statusCode).toBe(403);
-  });
-});
-
-describe("orphanReapable", () => {
-  it("reaps only a non-resumable session with zero attached clients", async () => {
-    const { orphanReapable } = await import("../../../server/infra/tmux-routes.js");
-    expect(orphanReapable(false, 0)).toBe(true);
-    expect(orphanReapable(true, 0)).toBe(false); // resumable → never
-    expect(orphanReapable(false, 1)).toBe(false); // another process holds it
-    expect(orphanReapable(false, null)).toBe(false); // unknown → treat as held
   });
 });

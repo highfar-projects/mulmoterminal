@@ -10,7 +10,7 @@ import { toolSummaries } from "./infra/plugins-registry.js";
 import { initMarkdownBackend } from "./backends/markdown.js";
 import { initArtifactsBackend } from "./backends/artifacts.js";
 import { initOpenPathBackend } from "./backends/openPath.js";
-import { getUserMcpServers, getWorklogConfig, getTerminalSubmit, getQuickCommands, APP_CONFIG_FILE } from "./config/config-routes.js";
+import { getUserMcpServers, getWorklogConfig, getTerminalSubmit, getQuickCommands, getSessionIdleReapDays, APP_CONFIG_FILE } from "./config/config-routes.js";
 import { enforceKeymap } from "./config/keymap-check.js";
 import { readFileSync } from "node:fs";
 import { submitSequenceForAgent } from "../common/terminalSubmit.js";
@@ -130,6 +130,7 @@ import { allowedToolNames, autoAllowedToolNames } from "./infra/plugins-registry
 import { GUI_SERVER_ID } from "../common/toolGroups.js";
 
 import { resumableSessionPredicate } from "./session/resumable-sessions.js";
+import { reapSweepLines, sweepIdleSessions } from "./session/reap-idle-sessions.js";
 import { installProcessGuards } from "./infra/process-guards.js";
 import { pruneOrphanSettings } from "./session/session-settings.js";
 import { earliestStartedAt, liveInstances, registerInstance } from "../bin/instances.js";
@@ -892,6 +893,12 @@ server.listen(Number(PORT), BIND_HOST, () => {
   if (tmuxAvailable()) {
     const detail = surviving.length ? ` — ${surviving.length} session(s) survived; reattach on connect` : "";
     console.log(`[tmux] persistence on${detail}`);
+    // Then end the ones nothing is using. Here rather than on a timer: a restart is when none of
+    // OUR ptys hold anything, so "in use" means somebody else's, and it is the moment the pile is
+    // largest. `cleanup-orphans` has existed since #367 with no caller — this is that caller, with
+    // a rule that is about now instead of about the past (#1467).
+    const idleDays = getSessionIdleReapDays();
+    reapSweepLines(sweepIdleSessions(Date.now(), idleDays), idleDays).forEach((line) => console.log(line));
   } else {
     console.log("[tmux] not found — terminals are not persistent across a server restart");
   }

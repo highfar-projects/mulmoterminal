@@ -227,6 +227,25 @@ for an agent to read before asking something similar.
 - **Off by default**: it writes a file (under `~/.mulmoterminal/decisions/`) that would otherwise
   never exist. `mulmoterminal-decisions` is what READS and curates it; this key is the switch.
 
+### `sessionIdleReapDays` — ending sessions nothing is using
+
+Terminals survive a server restart (that is tmux persistence), so they accumulate. At each start the
+server ends the ones **nothing is using**: nobody attached, no pty of its own, and no output for this
+many days.
+
+```json
+{ "sessionIdleReapDays": 7 }
+```
+
+- **Default 7. `0` turns it off** — the only way to disable it, and the value to reach for when
+  someone parks work in a terminal for weeks.
+- **The conversation is not lost.** A transcript on disk resumes without the tmux session; what ends
+  is the process and its scrollback. Say this before changing the number — it is the fact that makes
+  the sweep safe, and the reason "it has a transcript" is not a reason to keep a session alive.
+- Whole days, 0–365. Anything else falls back to 7.
+- Also a stepper in **Settings → Sessions that survived a restart**, beside the list it acts on; each
+  row there says whether the next start will take it.
+
 ### `worklogEnabled` / `worklogIntervalHours` — the periodic dev-work log
 
 A built-in scheduled task that summarizes recent work across the saved working dirs into weekly

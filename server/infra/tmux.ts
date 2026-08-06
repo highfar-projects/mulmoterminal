@@ -476,9 +476,14 @@ export function tmuxListSessionIds(): string[] {
     .map((n) => n.slice(SESSION_PREFIX.length));
 }
 
-// A tmux `mt-<id>` is resumable — an orphan cleanup must NOT reap it — when it's live
-// (an attached pty), a persisted grid session, or has a Claude/Codex transcript on disk.
-// Pure so the safe-cleanup rule ("never kill a resumable session") is unit-testable.
+// Whether a tmux `mt-<id>` is worth OFFERING: it's live (an attached pty), a persisted grid
+// session, or has a Claude/Codex transcript on disk — the phone's session picker, which must not
+// list a row that opens onto nothing.
+//
+// It is NOT the rule for ending one, though it was used as that for a long time (#1467). Every limb
+// here except `live` is a record of the PAST — a transcript is never deleted, and the grid log is
+// append-only — so read as "may we reap this?", it answers no forever, and nothing was ever
+// cleaned up. The two questions below are the ones a cleanup actually asks.
 export function isResumableTmuxSession(
   id: string,
   live: ReadonlySet<string>,
@@ -487,4 +492,40 @@ export function isResumableTmuxSession(
   codexOnDisk: (id: string) => boolean,
 ): boolean {
   return live.has(id) || grid.has(id) || claudeOnDisk.has(id) || codexOnDisk(id);
+}
+
+// Whether ending this session keeps the conversation: something on disk can bring it back, so what
+// is lost is the work in flight and the scrollback — not the history.
+//
+// Only the on-disk halves, deliberately. A live pty says the session is in USE, and the grid log
+// says it once was a cell; neither restores anything, and counting them is why the Settings list
+// reported 20 of 22 sessions restorable when 15 were (#1479).
+export function isRestorableSession(id: string, claudeOnDisk: ReadonlySet<string>, codexOnDisk: (id: string) => boolean): boolean {
+  return claudeOnDisk.has(id) || codexOnDisk(id);
+}
+
+/** What ending a session without asking depends on. Every field is about NOW; nothing here is a
+ *  record of the past, which is the whole correction (#1467). */
+export interface ReapFacts {
+  /** Terminals holding it, or null when tmux could not say. */
+  attachedCount: number | null;
+  /** A pty for it in THIS process — a cell has it, whatever tmux thinks. */
+  liveHere: boolean;
+  /** Seconds since tmux last saw output, or null when tmux could not say. */
+  idleSeconds: number | null;
+  /** The threshold, in seconds. Zero means the sweep is off and nothing is reapable. */
+  idleThresholdSeconds: number;
+}
+
+/**
+ * May this session be ended on its own?
+ *
+ * Every "unknown" answers NO. An unreadable attach count and an unreadable age are the two ways
+ * tmux can decline to answer, and reaping on either would be killing a session on a guess — the one
+ * outcome worse than the pile-up this exists to clear.
+ */
+export function reapableTmuxSession({ attachedCount, liveHere, idleSeconds, idleThresholdSeconds }: ReapFacts): boolean {
+  if (idleThresholdSeconds <= 0) return false;
+  if (liveHere || attachedCount !== 0) return false;
+  return idleSeconds !== null && idleSeconds >= idleThresholdSeconds;
 }

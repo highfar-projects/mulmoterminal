@@ -97,7 +97,7 @@ description: MulmoTerminal の設定方法。設定モーダル、プロジェ�
 | **Cost (estimated)** | Session / Today / Month の推定コスト表示 |
 | **GitHub and GitLab** | このアプリが**あなたの名前で** forge に書き込むもの。セルが [issue に着手を知らせるか](#issue-work-comments)（`issueWorkComments`、既定 OFF）と、作った PR の末尾に[クローン名を書くか](#pr-workdir-footer)（`prWorkdirFooter`、既定 ON）。その下は `glab` で読む[セルフホスト GitLab のホスト](github.html#自前ホスティングの-gitlab)（`gitlabHosts` — 反映は次回起動時） |
 | **Sessions and background tasks** | 返信を[まとめで終わらせるか](#append-system-prompt)（`appendSystemPrompt`、既定 ON — ディレクトリ側の設定が優先）、[決めたことの記録を残すか](#decision-digest)（`decisionDigest`、既定 OFF）、[定期の開発ログ](#all-keys)とその間隔（`worklogEnabled`、既定 OFF — 実行のたびにトークンを消費します） |
-| **Sessions that survived a restart** | 以前のサーバから動き続けているターミナルを、**全ディレクトリ横断**で一覧。もう開かないプロジェクトのセッションや、素のシェルを見て終了できる唯一の場所です。各行に「どこで動いているか・何なのか（キーに紐づく会話が無ければ `shell or unknown`）・どれだけ放置されているか・終了して失うものがあるか」が出ます。**stop** はそのセッションだけを終了し、transcript のある会話はあとで再開できます。ターミナルが掴んでいる行は代わりに `● open` と出て、そちらで閉じます |
+| **Sessions that survived a restart** | 以前のサーバから動き続けているターミナルを、**全ディレクトリ横断**で一覧。もう開かないプロジェクトのセッションや、素のシェルを見て終了できる唯一の場所です。各行に「どこで動いているか・何なのか（キーに紐づく会話が無ければ `shell or unknown`）・どれだけ放置されているか・終了して失うものがあるか」が出ます。**stop** はそのセッションだけを終了し、transcript のある会話はあとで再開できます。ターミナルが掴んでいる行は代わりに `● open` と出て、そちらで閉じます。この節では `sessionIdleReapDays`（何日放置したらサーバが自動で終了するか）も変更でき、その対象になる行には **ends at next start** と出ます |
 | **Models and backends** | セッションを動かせるバックエンドと、**今それぞれ到達できるか**（読み取り専用）。「Add a backend…」で `mulmoterminal-model` スキルを起動（→ [別のモデルで動かす](providers.html)） |
 | **Header buttons and chips** | グローバル設定で宣言しているボタンとチップの数（読み取り専用）。未設定なら「built-in」。「Set up header buttons…」で `mulmoterminal-header` スキルを起動（→ [ヘッダーのカスタマイズ](#header)） |
 | **Terminal keys** | [選ぶだけでコピー](#copy-on-select)（`copyOnSelect`、既定 OFF）と、あなたの Claude が**送信**として読むバイト（[Enter — 送信と改行](#terminal-submit)、`terminalSubmit`） |
@@ -1647,6 +1647,7 @@ posted by MulmoTerminal
 | `sounds` | 種類ごとの音。例 `{ "waiting": "preset:coin" }` — `preset:<id>` か絶対パス。未指定の種類は `soundFile` を使う（→ [通知音](#sounds)） |
 | `pushEnabled` | Web Push の master スイッチ（既定 `false` → [スマホ通知](notifications.html)） |
 | `pushKinds` | どの瞬間に飛ばすか：`"finished"`（ターン完了）と `"waiting"`（質問して停止）。**書かなければ両方**、`[]` でどれも飛ばさない（→ [どの瞬間に飛ぶか](notifications.html#kinds)） |
+| `sessionIdleReapDays` | **誰も attach しておらず、出力も無い**ターミナルを、何日放置したらサーバが次回起動時に終了するか（既定 7 日、`0` で無効、0〜365）。会話は失われない — transcript があれば tmux セッション無しで再開できる。失うのはプロセスとスクロールバック。Settings → **Sessions that survived a restart** の、対象一覧のすぐ横で変更可 |
 | `worklogEnabled` / `worklogIntervalHours` | 定期 dev-work ログ — 保存済みディレクトリの最近の作業を週次の wiki ページにまとめる（既定 OFF / 6 時間、1〜168 に丸め）。実行のたびに LLM セッションを起こすのでトークンを消費する。Settings → **Sessions and background tasks** で編集可 |
 | `decisionDigest` | このプロジェクトで既に決めたことを Markdown にまとめ、エージェントが聞き直す前に読む。**既定 off**（→ [このプロジェクトで既に決めたこと](#decision-digest)） |
 | `terminalSubmit` | どのバイトを**送信**／**改行**とみなすか — `"cr"`（既定）または `"esc-cr"`（→ [Enter — 送信と改行](#terminal-submit)） |
