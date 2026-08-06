@@ -42,6 +42,10 @@ vi.mock("../../../server/infra/tmux.js", async (importOriginal) => ({
   tmuxHasSession: () => false,
 }));
 
+// muse's index is a sqlite database on the real disk; this spec is about the handler's shape.
+const museSessionExistsForCwd = vi.fn(() => Promise.resolve(false));
+vi.mock("../../../server/agents/muse-session.js", () => ({ museSessionExistsForCwd }));
+
 // The directory's registered tool groups, read off Claude Code's config files on the real path.
 const registeredGuiMcpGroups = vi.fn(() => Promise.resolve(["render"]));
 vi.mock("../../../server/infra/gui-mcp-registration.js", () => ({ registeredGuiMcpGroups }));
@@ -57,7 +61,7 @@ vi.mock("../../../server/session/worktree-session-limit.js", () => ({
   worktreeOccupancy: () => Promise.resolve({ isWorktree: false, session: null }),
 }));
 
-const { handleDirectoryMcpAgentConnection, ANTIGRAVITY_WS_AGENT, GROK_WS_AGENT } = await import("../../../server/routes/ws-routes.js");
+const { handleDirectoryMcpAgentConnection, ANTIGRAVITY_WS_AGENT, GROK_WS_AGENT, MUSE_WS_AGENT } = await import("../../../server/routes/ws-routes.js");
 
 const fakeTerm = () => ({ pid: 1, onData: vi.fn(), onExit: vi.fn(), write: vi.fn(), kill: vi.fn(), resize: vi.fn() });
 
@@ -78,23 +82,28 @@ function fakeWs() {
 // The five arguments a directory-MCP spawner is called with, recorded per agent.
 const spawnAntigravityPty = vi.fn(() => ({ term: fakeTerm(), active: false }));
 const spawnGrokPty = vi.fn(() => ({ term: fakeTerm(), active: false }));
+const spawnMusePty = vi.fn(() => ({ term: fakeTerm(), active: false }));
 const reattachPty = vi.fn(() => ({ term: fakeTerm(), active: false }));
 
 const makeDeps = () =>
   ({
     spawnAntigravityPty,
     spawnGrokPty,
+    spawnMusePty,
     reattachPty,
     handleClientFrame: vi.fn(),
     handleClientClose: vi.fn(),
   }) as never;
 
-const spawnerFor = (kind: string) => (kind === "antigravity" ? spawnAntigravityPty : spawnGrokPty);
+const SPAWNERS: Record<string, typeof spawnGrokPty> = { antigravity: spawnAntigravityPty, grok: spawnGrokPty, muse: spawnMusePty };
+const spawnerFor = (kind: string) => SPAWNERS[kind] as typeof spawnGrokPty;
 
 let dir = "";
 const request = (query = "") => ({ url: `/ws?cwd=${encodeURIComponent(dir)}${query}` });
 
 // Both agents, so a rule asserted once is asserted for the pair. Named so a failure says which.
+// muse shares this handler for the lifecycle only — it has no MCP at all — so it is asserted
+// separately below rather than folded into a list about tool groups.
 const AGENTS = [ANTIGRAVITY_WS_AGENT, GROK_WS_AGENT];
 
 beforeEach(() => {
@@ -178,5 +187,40 @@ describe("waiting for the on-disk conversation map", () => {
   it("grok declares it has nothing to wait for, rather than leaving the question out", () => {
     expect(GROK_WS_AGENT.hydrated).toBeNull();
     expect(ANTIGRAVITY_WS_AGENT.hydrated).not.toBeNull();
+  });
+});
+
+// muse rides this handler for what it shares — the session id, the reattach, the worktree env —
+// and NOT for the MCP: it has none, so reading Claude Code's per-directory registration for it
+// could only produce groups nothing can act on (common/guiMcpAgents.ts, spawn-muse.ts).
+describe("/ws/muse", () => {
+  it("declares that it reads no directory MCP config, where the other two declare that they do", () => {
+    expect(MUSE_WS_AGENT.readsDirectoryMcpConfig).toBe(false);
+    expect(ANTIGRAVITY_WS_AGENT.readsDirectoryMcpConfig).toBe(true);
+    expect(GROK_WS_AGENT.readsDirectoryMcpConfig).toBe(true);
+  });
+
+  it("spawns without looking the directory's tool groups up at all", async () => {
+    const ws = fakeWs();
+    await handleDirectoryMcpAgentConnection(MUSE_WS_AGENT, makeDeps(), ws as unknown as WebSocket, request());
+    expect(registeredGuiMcpGroups).not.toHaveBeenCalled();
+    expect(spawnMusePty).toHaveBeenCalledWith(expect.any(String), expect.anything(), null, dir, { mcpGroups: [] });
+  });
+
+  // The chat-history case: the row the picker offers IS one of muse's own ids, so the connection
+  // has to resume it rather than start a fresh session under it.
+  it("resumes a session muse holds for this directory", async () => {
+    const session = "11111111-2222-4333-8444-555555555555";
+    museSessionExistsForCwd.mockResolvedValueOnce(true);
+    await handleDirectoryMcpAgentConnection(MUSE_WS_AGENT, makeDeps(), fakeWs() as unknown as WebSocket, request(`&session=${session}`));
+    expect(spawnMusePty).toHaveBeenCalledWith(session, expect.anything(), session, dir, { mcpGroups: [] });
+  });
+
+  // A key that names nothing muse knows must not be handed to `muse resume` — and must not keep
+  // the id either, or the client is stranded on a session that will never exist.
+  it("starts fresh under a new id when the key names no session of muse's", async () => {
+    const session = "11111111-2222-4333-8444-555555555555";
+    await handleDirectoryMcpAgentConnection(MUSE_WS_AGENT, makeDeps(), fakeWs() as unknown as WebSocket, request(`&session=${session}`));
+    expect(spawnMusePty).toHaveBeenCalledWith(expect.not.stringMatching(session), expect.anything(), null, dir, { mcpGroups: [] });
   });
 });
