@@ -22,7 +22,8 @@ const K200_TOKENS = 200_000;
 // 200k entries. Add new 1M ids here when they ship, ahead of the bare-family fallbacks, or the
 // fallback claims them and the reading comes out 5x too large (#985).
 const CONTEXT_WINDOWS: { match: string; tokens: number }[] = [
-  { match: "muse-spark", tokens: MILLION_TOKENS },
+  // Every muse model shipped so far is 1M (muse-spark-1.2 measured); the family entry covers the
+  // ids beneath it, so there is no per-id row to keep in step.
   { match: "muse", tokens: MILLION_TOKENS },
   { match: "opus-4-6", tokens: MILLION_TOKENS },
   { match: "opus-4-7", tokens: MILLION_TOKENS },

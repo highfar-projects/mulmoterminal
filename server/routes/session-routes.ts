@@ -101,16 +101,21 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   const agent = normalizeAgent(req.query.agent);
   const { lastPrompt: transcriptPrompt, lastResponse: transcriptResponse, userTurns, usage, context, workPhase } = await readSessionSummary(cwd, id);
   let badges = agent === "claude" ? { usage, context } : await agentBadges(cwd, id, agent);
-  // A cell that is actually running Muse but whose persisted `agent` is still "claude"
-  // (created before the Muse feature, or started via shell) would otherwise show no badge:
-  // the Claude transcript has no file for this id. If the Claude read is empty but a Muse
-  // conversation exists for this Mulmo id, fall back to Muse's badges so the header self-heals.
+  // A cell that is actually running Muse but whose persisted `agent` is still "claude" (created
+  // before the Muse feature, or reconnecting from an older client) would otherwise show no badge:
+  // the Claude transcript has no file for this id, so the read above is empty. Muse's own log
+  // answers it, and the header self-heals.
+  //
+  // Gated on the CONVERSATION LOG rather than on the empty read alone. Empty is also the normal
+  // state of every claude cell before its first turn, and this route is polled per cell — so the
+  // unguarded version paid a sqlite query and a log fold on each of those polls, to answer for a
+  // session muse has never heard of. The map is in memory and knows every session this server
+  // started as muse, including across a restart (it is hydrated from the log).
   if (agent === "claude" && badges.context.model === null && badges.usage.inputTokens === 0) {
-    try {
-      const museFallback = await agentBadges(cwd, id, "muse");
-      if (museFallback.context.model !== null) badges = museFallback;
-    } catch {
-      // keep Claude's empty badges
+    await museConversationsHydrated;
+    if (museConversations.has(id)) {
+      const museFallback = await agentBadges(cwd, id, "muse").catch(() => null);
+      if (museFallback && museFallback.context.model !== null) badges = museFallback;
     }
   }
   // If we haven't titled it yet, kick off a summary; sessionDetailView falls back meanwhile.
