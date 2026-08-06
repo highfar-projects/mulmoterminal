@@ -55,7 +55,7 @@ import { listAntigravitySessions } from "../agents/antigravity-sessions.js";
 import { grokSessionsRoot } from "../agents/grok-session.js";
 import { listGrokSessions } from "../agents/grok-sessions.js";
 import { listMuseSessionsForCwd } from "../agents/muse-session.js";
-import { museConversations } from "../session/registry.js";
+import { museConversations, museConversationsHydrated } from "../session/registry.js";
 import { conversationSessionKeys, type AgentConversation } from "../session/agent-conversations.js";
 import { AGENT_SESSION_LIST_PATHS } from "../../common/agentSessionList.js";
 import { TERMINAL_AGENTS, type TerminalAgent } from "../../common/sessionAgent.js";
@@ -360,6 +360,7 @@ async function museSessionList(req: Request, res: Response) {
   try {
     const cwd = workspaceForRoute(req.query.cwd, res);
     if (cwd === null) return;
+    await museConversationsHydrated;
     const metas = await listMuseSessionsForCwd(cwd);
     const sorted = [...metas].sort((a, b) => (b.updatedAtUs ?? 0) - (a.updatedAtUs ?? 0));
     const sessions = sorted.slice(0, SESSION_LIST_LIMIT).map((m) => ({

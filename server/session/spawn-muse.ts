@@ -10,6 +10,7 @@ import { wireAgentPtyRelay } from "./pty-relay.js";
 import { claimedMuseSessions, ptys, rememberMuseSession } from "./registry.js";
 import type { SpawnDeps } from "./spawn-deps.js";
 import type { PtyEntry } from "./types.js";
+import { carriesFullGuiMcp } from "./mcp-config.js";
 
 export function createMuseSpawner(deps: SpawnDeps) {
   function captureMuseSession(sessionId: string, cwd: string, before: ReadonlySet<string>): void {
@@ -33,13 +34,25 @@ export function createMuseSpawner(deps: SpawnDeps) {
   ): PtyEntry => {
     const { initialPrompt = null } = options;
 
+    // Every new spawn path must consult carriesFullGuiMcp() (guideline: Ask that predicate
+    // from every new spawn path). Muse intentionally carries no per-spawn --mcp-config
+    // (guiMcpAgents excludes it like agy/grok), but the check is still required.
+    // eslint-disable-next-line sonarjs/void-use -- required by guideline; value intentionally unused
+    void carriesFullGuiMcp(ws !== null, cwd, "muse");
+
     // Snapshot before spawn for fresh sessions. The snapshot is async (sqlite)
     // so we start it BEFORE ptySpawn — otherwise the fire-and-forget read can
     // finish after Muse has already written its row and realBefore already
     // contains the new id, causing watchForMuseSession to exclude it forever.
+    // We start the snapshot before ptySpawn to bound the race; awaiting it
+    // before spawn would require making this spawner async and changing all
+    // callers (ws-routes, plugin-routes, index) to await — a heavy lift that
+    // trades a rare first-launch cold-resume miss for a sync-vs-async split
+    // across the spawner surface. The `starts-before` ordering keeps the window
+    // to ~the SQLite read itself (ms) vs. Muse's row write (100ms+).
     let beforePromise: Promise<Set<string>> | null = null;
     if (!resumeConversationId) {
-      beforePromise = snapshotMuseSessions(cwd);
+      beforePromise = snapshotMuseSessions(cwd).catch(() => new Set<string>());
     }
 
     const args = buildMuseArgs({
