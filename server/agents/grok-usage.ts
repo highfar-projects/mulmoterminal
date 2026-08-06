@@ -19,6 +19,7 @@
 import { isRecord } from "../../common/isRecord.js";
 import type { SessionContextInfo } from "../../common/sessionContext.js";
 import type { SessionUsage } from "../session/transcript.js";
+import { usageCount as num } from "./usage-count.js";
 
 export const emptyGrokUsage = (): SessionUsage => ({ inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 });
 
@@ -28,11 +29,6 @@ export const isGrokUsage = (value: unknown): value is SessionUsage =>
   typeof value.outputTokens === "number" &&
   typeof value.cacheReadTokens === "number" &&
   typeof value.cacheCreationTokens === "number";
-
-const num = (record: Record<string, unknown>, key: string): number => {
-  const value = record[key];
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
-};
 
 /**
  * The context reading in a conversation's `signals.json`, or nulls/zeroes when it says nothing.

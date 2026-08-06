@@ -25,9 +25,9 @@ const { stopping, stopSession } = useSessionStop(reload);
 onMounted(reload);
 
 // The row's own words for what it is. `null` covers a shell and a launcher command — the rows
-// listed nowhere else, which is why it is named rather than left blank — but ALSO an agy or grok
-// session that outlived its pty, which nothing can map back to a key. So it says "unknown" too
-// rather than calling something a shell on no evidence; the hover carries the whole answer.
+// listed nowhere else, which is why it is named rather than left blank — but ALSO an agy, grok or
+// muse session that outlived its pty, which nothing can map back to a key. So it says "unknown"
+// too rather than calling something a shell on no evidence; the hover carries the whole answer.
 const describe = (s: SurvivingSession): string => s.agent ?? "shell or unknown";
 const UNKNOWN_AGENT_TITLE = "No agent conversation is recorded under this key — a shell, a launcher command, or an agent this server cannot map back";
 

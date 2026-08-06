@@ -16,6 +16,9 @@
 //                `updates.jsonl`. See grok-usage.ts — and note that #1465 shipped saying grok
 //                records no tokens, which was true of the two files it read and false of the
 //                directory (#1470).
+//   muse         both badges, from ONE store: the `model_completed` events in the session.jsonl
+//                its sqlite index points at. No window — muse states none, so the client's table
+//                answers from the model id. See muse-usage.ts.
 //   antigravity  all three, from TWO stores. The model is prose in the `<USER_SETTINGS_CHANGE>`
 //                block agy writes into step 0 of the transcript (antigravityModelFromTranscriptHead
 //                has the counts behind trusting it). The tokens and the window are not in that file
@@ -40,7 +43,8 @@ import { emptyGrokUsage, foldGrokUsage, grokContextFromSignals, isGrokUsage } fr
 import { antigravityBrainRoot, antigravityConversationsRoot, antigravityHome } from "../agents/antigravity-session.js";
 import { antigravityModelFromTranscriptHead, antigravityTranscriptPath } from "../agents/antigravity-sessions.js";
 import { antigravityBadgesFromDb } from "../agents/antigravity-usage.js";
-import { museBadgesFromLog } from "../agents/muse-session.js";
+import { museSessionLogPath, museSessionModel } from "../agents/muse-session.js";
+import { copyMuseBadgeFold, emptyMuseBadgeFold, foldMuseBadges, isMuseBadgeFold, type MuseBadgeFold } from "../agents/muse-usage.js";
 import { museConversations, museConversationsHydrated } from "./registry.js";
 import { readTailRecords } from "../infra/jsonl-file.js";
 import { createTranscriptFold } from "./transcript-fold.js";
@@ -165,12 +169,42 @@ async function grokUsage(file: string): Promise<SessionUsage> {
 // renders.
 const ANTIGRAVITY_HEAD_BYTES = 64 * 1024;
 
+// Summed across every completed call, as grok's is, and folded for the same reason — except that
+// muse's log is the biggest of the four (33 MB measured after a day) and this route is polled per
+// cell. See muse-usage.ts.
+const museBadgeFold = createTranscriptFold<MuseBadgeFold>({
+  kind: "muse-usage",
+  version: 1,
+  isValue: isMuseBadgeFold,
+  empty: emptyMuseBadgeFold,
+  fold: foldMuseBadges,
+  copy: copyMuseBadgeFold,
+});
+
 async function museBadges(sessionKey: string): Promise<SessionBadges> {
+  // The codex lookup, for the same reason (see codexBadges): the route is given OUR session id and
+  // muse files its log under an id of its own. `?? sessionKey` covers a cell resumed straight onto
+  // one of muse's ids, which is what the history list hands over.
   await museConversationsHydrated;
-  const conversationId = museConversations.get(sessionKey)?.conversationId ?? sessionKey;
-  const badges = await museBadgesFromLog("", conversationId);
-  if (!badges) return { usage: EMPTY_USAGE, context: { model: null, contextTokens: 0, contextWindow: null } };
-  return { usage: badges.usage, context: { model: badges.model, contextTokens: badges.contextTokens, contextWindow: null } };
+  const sessionId = museConversations.get(sessionKey)?.conversationId ?? sessionKey;
+  const file = await museSessionLogPath(sessionId);
+  if (!file) return { usage: EMPTY_USAGE, context: { model: null, contextTokens: 0, contextWindow: null } };
+  const folded = await museFold(file);
+  // Before the first completed call there is nothing in the log to name a model, and a session
+  // that has just been started is exactly when a cell first asks. The index knows it anyway.
+  const model = folded.model ?? (await museSessionModel(sessionId));
+  // No contextWindow: muse states none anywhere a reader can trust, so the client's table answers
+  // it from the model id (muse-spark is 1M — common/modelPresets.ts).
+  return { usage: folded.usage, context: { model, contextTokens: folded.contextTokens, contextWindow: null } };
+}
+
+async function museFold(file: string): Promise<MuseBadgeFold> {
+  try {
+    const stat = await fs.stat(file);
+    return await museBadgeFold.read(file, { mtimeMs: stat.mtimeMs, size: stat.size });
+  } catch {
+    return emptyMuseBadgeFold();
+  }
 }
 
 async function antigravityBadges(sessionKey: string, home: string): Promise<SessionBadges> {

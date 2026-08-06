@@ -10,7 +10,6 @@ import { wireAgentPtyRelay } from "./pty-relay.js";
 import { claimedMuseSessions, ptys, rememberMuseSession } from "./registry.js";
 import type { SpawnDeps } from "./spawn-deps.js";
 import type { PtyEntry } from "./types.js";
-import { carriesFullGuiMcp } from "./mcp-config.js";
 
 export function createMuseSpawner(deps: SpawnDeps) {
   function captureMuseSession(sessionId: string, cwd: string, before: ReadonlySet<string>): void {
@@ -34,12 +33,12 @@ export function createMuseSpawner(deps: SpawnDeps) {
   ): PtyEntry => {
     const { initialPrompt = null } = options;
 
-    // Every new spawn path must consult carriesFullGuiMcp() (guideline: Ask that predicate
-    // from every new spawn path). Muse intentionally carries no per-spawn --mcp-config
-    // (guiMcpAgents excludes it like agy/grok), so the value is intentionally unused — the
-    // consult is for guideline parity, not for branching.
-    // eslint-disable-next-line sonarjs/void-use -- intentionally unused, guideline parity
-    void carriesFullGuiMcp(ws !== null, cwd, "muse");
+    // No GUI MCP is attached, and that is an ANSWER rather than an omission: muse has no
+    // `--mcp-config`, no `-c key=value` and no MCP of its own at all, so there is nothing to hand
+    // it and nothing in the directory for it to read. The answer is declared in
+    // common/guiMcpAgents.ts, which is what `carriesFullGuiMcp` consults and what the launcher
+    // form reads — so it is one fact both sides see, and a spec pins it (test/server/session/
+    // muse-gui-mcp.spec.ts) rather than a call here discarding its own result.
 
     // Snapshot before spawn for fresh sessions. The snapshot is async (sqlite)
     // so we start it BEFORE ptySpawn — otherwise the fire-and-forget read can
@@ -56,12 +55,9 @@ export function createMuseSpawner(deps: SpawnDeps) {
       beforePromise = snapshotMuseSessions(cwd).catch(() => new Set<string>());
     }
 
-    const args = buildMuseArgs({
-      resume: resumeConversationId,
-      workspace: resumeConversationId ? null : cwd,
-      model: deps.museModel,
-      initialPrompt,
-    });
+    // The workspace is passed on BOTH paths — a resumed session that loses `--workspace` comes
+    // back without the tools it was working with (see muse-args.ts).
+    const args = buildMuseArgs({ resume: resumeConversationId, workspace: cwd, model: deps.museModel, initialPrompt });
 
     const { term, tmux, reattached } = ptySpawn(sessionId, deps.museBin, args, cwd, true, { binEnvVar: museAdapter.binEnvVar });
     const spawnedAtMs = Date.now();

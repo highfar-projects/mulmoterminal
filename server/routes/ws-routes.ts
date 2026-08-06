@@ -21,6 +21,7 @@ import { launchChoiceFromParams } from "../session/launch-choice.js";
 import { codexSessionsRoot } from "../agents/codex-session.js";
 import { antigravityBrainRoot, antigravityConversationExists } from "../agents/antigravity-session.js";
 import { grokConversationExists, grokSessionsRoot } from "../agents/grok-session.js";
+import { museSessionExistsForCwd } from "../agents/muse-session.js";
 import { codexRolloutExists } from "../agents/codex-sessions.js";
 import {
   antigravityConversations,
@@ -711,33 +712,28 @@ function resolveGrokSession(requested: string | null, cwd: string): ResumableSes
   );
 }
 
+// Which muse session a connection resumes, and under which id it runs.
+//
+// A requested key means one of two things, and both are real: a cell reconnecting under a key THIS
+// server minted (the mapping says which muse session it started), or a row picked from the history
+// list, which IS one of muse's own ids — `session-index.db` holds them per workspace, which is why
+// the probe takes the cwd. The map is asked first, for the reason agent-resume.ts gives: a key that
+// happens to also name a session must not out-rank the session we recorded for it.
+//
+// It resumes even when tmux is alive, where codex and agy do not, and grok's header has the
+// argument: if the tmux session dies between the check and the spawn, `tmux new-session -A` re-runs
+// the command — and a spawn with no resume id starts a BRAND NEW muse session under the old key,
+// silently losing the conversation. `muse resume` on a session that is already attached costs
+// nothing, because tmux discards the argv it reattaches with.
+//
+// Async where the others are sync: the probe is a sqlite query, and it is awaited BEFORE the
+// resolution rather than inside it so the pure decision stays a pure decision.
 async function resolveMuseSession(requested: string | null, cwd: string): Promise<ResumableSession> {
-  // Historical sessions: requested is already a muse session_id stored in
-  // session-index.db with workspace_root === cwd. Resume it directly even
-  // without a mulmo mapping (museConversations). This is the chat-history
-  // case — the picker lists DB-backed ids and expects `muse --yolo resume <id>`.
-  if (requested) {
-    const { museSessionExistsForCwd } = await import("../agents/muse-session.js");
-    const existsForCwd = await museSessionExistsForCwd(requested, cwd);
-    if (existsForCwd) {
-      const { live, hasLivePty, tmuxAlive } = liveSessionFacts(requested);
-      if (!hasLivePty) {
-        // Reuse resolveReattachableId shape for consistency with other agents.
-        const { randomUUID } = await import("node:crypto");
-        const { resolveReattachableId: resolveReattachableIdDynamic } = await import("../session/session-resolve.js");
-        const { sessionId } = resolveReattachableIdDynamic(requested, { hasLivePty, tmuxAlive, canResume: true }, randomUUID);
-        return { sessionId, live, resumeConversationId: requested };
-      }
-    }
-  }
-  return resolveResumableSession(requested, ({ hasLivePty, tmuxAlive }) =>
-    agentResumeId(requested, {
-      mappedId: requested ? museConversations.get(requested)?.conversationId : null,
-      conversationExists: () => false, // muse id is mulmo-minted mapping; existence via map only
-      hasLivePty,
-      tmuxAlive,
-    }),
-  );
+  const mappedId = requested ? (museConversations.get(requested)?.conversationId ?? null) : null;
+  // Only asked when the map had no answer — one query, and only on a connection that names a key.
+  const isOwnSessionId = !mappedId && requested !== null && (await museSessionExistsForCwd(requested, cwd));
+  const resumeId = mappedId ?? (isOwnSessionId ? requested : null);
+  return resolveResumableSession(requested, ({ hasLivePty }) => (hasLivePty ? null : resumeId));
 }
 
 // The two agents that read their MCP servers from a file in the DIRECTORY rather than from a
@@ -761,6 +757,10 @@ export interface DirectoryMcpWsAgent {
    *  id of its own, so it keeps no map) — an agent added later has to answer this question rather
    *  than inherit "no" by leaving a key out. */
   hydrated: Promise<unknown> | null;
+  /** Whether this agent reads the directory's shared MCP config at all. False for muse, which has
+   *  no MCP of any kind (common/guiMcpAgents.ts) — so the lookup below, which reads Claude Code's
+   *  config files on every spawn, is not paid for an answer nothing can act on. */
+  readsDirectoryMcpConfig: boolean;
   resolveSession: (requested: string | null, cwd: string) => ResumableSession | Promise<ResumableSession>;
   spawn: (deps: WsRouteDeps) => SpawnDirectoryMcpPty;
 }
@@ -769,6 +769,7 @@ export const ANTIGRAVITY_WS_AGENT: DirectoryMcpWsAgent = {
   kind: "antigravity",
   label: "Antigravity",
   hydrated: antigravityConversationsHydrated,
+  readsDirectoryMcpConfig: true,
   resolveSession: (requested) => resolveAntigravitySession(requested),
   spawn: (deps) => deps.spawnAntigravityPty,
 };
@@ -777,6 +778,7 @@ export const GROK_WS_AGENT: DirectoryMcpWsAgent = {
   kind: "grok",
   label: "Grok",
   hydrated: null,
+  readsDirectoryMcpConfig: true,
   resolveSession: resolveGrokSession,
   spawn: (deps) => deps.spawnGrokPty,
 };
@@ -785,12 +787,15 @@ export const MUSE_WS_AGENT: DirectoryMcpWsAgent = {
   kind: "muse",
   label: "Muse",
   hydrated: museConversationsHydrated,
+  readsDirectoryMcpConfig: false,
   resolveSession: (requested, cwd) => resolveMuseSession(requested, cwd),
   spawn: (deps) => deps.spawnMusePty,
 };
 
-// antigravity (?cwd=<dir>, ?session=<id> to reattach/resume) and grok, which connect identically —
-// see DirectoryMcpWsAgent for why those two and not claude or codex.
+// antigravity (?cwd=<dir>, ?session=<id> to reattach/resume), grok and muse, which connect
+// identically — see DirectoryMcpWsAgent for why these and not claude or codex. muse is here for the
+// lifecycle (reattach, worktree env, reap) rather than for the MCP: it has none, which is what
+// `readsDirectoryMcpConfig` says.
 export async function handleDirectoryMcpAgentConnection(agent: DirectoryMcpWsAgent, deps: WsRouteDeps, ws: WebSocket, req: WsUpgradeRequest) {
   const { url, requested, cwd, unusable, size } = wsConnectionContext(req);
   if (refuseUnusableWorkspace(ws, agent.kind, unusable, requested)) return;
@@ -807,7 +812,7 @@ export async function handleDirectoryMcpAgentConnection(agent: DirectoryMcpWsAge
   // files and the spawner is sync. Only for a SPAWN: a reattach keeps the tools its running process
   // was started with, and rewriting the shared file on a reattach would speak for every other
   // session in the directory.
-  const mcpGroups = live ? [] : await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []);
+  const mcpGroups = live || !agent.readsDirectoryMcpConfig ? [] : await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []);
   if (!clientStillConnected(ws, agent.kind, sessionId, early)) return;
   const startFailureMessage = startFailureMessageFor(agent.label);
   // The reattach goes THROUGH startAndWire like the spawn, not around it: reattachPty only swaps

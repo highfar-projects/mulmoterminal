@@ -57,9 +57,10 @@ export function buildSurvivingSessions(input: SurvivingInput): SurvivingSession[
  *  the agent that wrote a conversation under this key does.
  *
  *  Null is the answer for a Shell or a launcher command — the rows listed nowhere else, which is
- *  the point — but ALSO for an agy or grok session that outlived its pty: nothing maps those back
- *  to a key, the same blind spot `isResumableTmuxSession` has (which is why such a row reads "not
- *  resumable" too). The UI says "shell or unknown" rather than naming a shell it cannot confirm. */
+ *  the point — but ALSO for an agy, grok or muse session that outlived its pty: nothing here maps
+ *  those back to a key, the same blind spot `isResumableTmuxSession` has (which is why such a row
+ *  reads "not resumable" too). The UI says "shell or unknown" rather than naming a shell it cannot
+ *  confirm. */
 function agentOfKey(key: string, claudeOnDisk: ReadonlySet<string>, hasCodexRollout: (id: string) => boolean): TerminalAgent | null {
   const live = ptys.get(key);
   if (live && isTerminalAgent(live.agent)) return live.agent;

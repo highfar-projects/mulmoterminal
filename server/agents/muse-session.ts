@@ -1,12 +1,29 @@
-/* eslint-disable max-lines-per-function, complexity, sonarjs/cognitive-complexity, @typescript-eslint/consistent-type-assertions -- museBadgesFromLog parses DB + JSONL, needs casts */
+// Where `muse` keeps its sessions, and the questions the list / resume / badge paths ask of them.
+//
+// muse is codex-shaped: it mints its own session id and tells nobody, so a fresh spawn is watched
+// until a new row appears (spawn-muse.ts) and the mapping is logged so a cold reconnect can resume
+// it. What it does NOT share with codex is where it writes that down — everything a reader wants
+// is a row in ONE sqlite index, `~/.local/share/muse/session-index.db`:
+//
+//   session_id        muse's own id, the argument to `muse resume <id>`
+//   workspace_root    the cwd it was started in — so the launcher's per-directory listing is a
+//                     WHERE clause rather than a scan
+//   model_id, title, updated_at_us   what a row in that listing shows
+//   session_log_path  the session.jsonl the two header badges are folded out of (muse-usage.ts)
+//
+// Every query below is BY THOSE KEYS rather than `SELECT … FROM sessions` filtered in JS: the log
+// this index points at reaches tens of megabytes on a working day, and the index grows with every
+// session on the machine, so "read the whole table to answer one id" is paid by a watcher polling
+// twice a second and by a badge poll per cell.
 import os from "node:os";
 import path from "node:path";
-import { promises as fs } from "node:fs";
 import { isRecord } from "../../common/isRecord.js";
 
-// Where `muse` keeps sessions: ~/.local/share/muse/sessions + session-index.db
-export const museHome = (): string => path.join(os.homedir(), ".local", "share", "muse");
-export const museSessionIndexPath = (): string => path.join(museHome(), "session-index.db");
+/** Where muse keeps everything. `MUSE_HOME` is honoured for the same reason `GROK_HOME` is: a spec
+ *  (and a sandboxed run) must be able to point the reads somewhere that is not the developer's own
+ *  disk. Read at call time, not captured, so setting it in a test still takes effect. */
+const museHome = (): string => process.env.MUSE_HOME || path.join(os.homedir(), ".local", "share", "muse");
+const museSessionIndexPath = (): string => path.join(museHome(), "session-index.db");
 
 export interface MuseSessionMeta {
   id: string;
@@ -16,27 +33,33 @@ export interface MuseSessionMeta {
   updatedAtUs: number | null;
 }
 
-async function readMuseIndexDb(): Promise<MuseSessionMeta[]> {
-  const dbPath = museSessionIndexPath();
+type Row = Record<string, unknown>;
+
+/**
+ * One read-only query against the index, opened and closed around it.
+ *
+ * `node:sqlite` is imported here and nowhere else, and lazily: it is the only sqlite in the server
+ * and a build running on a node without it must not fail to LOAD this module — an agent whose
+ * history cannot be listed is a missing list, not a broken server.
+ *
+ * Every failure answers `[]` for the same reason: before the first muse session there is no
+ * database at all, which is indistinguishable from a schema that moved, and both mean "nothing to
+ * say" to every caller here.
+ */
+async function queryMuseIndex(sql: string, params: readonly string[] = []): Promise<Row[]> {
   try {
     const { DatabaseSync } = await import("node:sqlite");
-    const db = new DatabaseSync(dbPath, { readOnly: true });
+    const db = new DatabaseSync(museSessionIndexPath(), { readOnly: true });
     try {
-      const rows = db.prepare("SELECT session_id, workspace_root, model_id, title, updated_at_us FROM sessions").all() as unknown as Record<string, unknown>[];
-      return rows
-        .filter((r) => typeof r.session_id === "string")
-        .map((r) => ({
-          id: String(r.session_id),
-          workspaceRoot: typeof r.workspace_root === "string" ? String(r.workspace_root) : null,
-          modelId: typeof r.model_id === "string" && String(r.model_id).trim() ? String(r.model_id) : null,
-          title: typeof r.title === "string" ? String(r.title) : String(r.session_id),
-          updatedAtUs: typeof r.updated_at_us === "number" ? Number(r.updated_at_us) : null,
-        }));
+      // Filtered rather than asserted: what sqlite hands back is a row shape this file does not
+      // own, and every column is read through a guard below anyway.
+      const rows: unknown[] = db.prepare(sql).all(...params);
+      return rows.filter(isRecord);
     } finally {
       try {
         db.close();
       } catch {
-        // ignore close failure
+        // A close that fails leaves the caller nothing to do — the read is already answered.
       }
     }
   } catch {
@@ -44,27 +67,67 @@ async function readMuseIndexDb(): Promise<MuseSessionMeta[]> {
   }
 }
 
+/** A non-empty string column, or null. Written once: every field below is a column muse may not
+ *  have filled in yet, and a blank title or model must read as absent rather than as `""`. */
+const text = (row: Row, key: string): string | null => {
+  const value = row[key];
+  return typeof value === "string" && value.trim() ? value : null;
+};
+
+const metaOf = (row: Row): MuseSessionMeta | null => {
+  const id = text(row, "session_id");
+  if (!id) return null;
+  return {
+    id,
+    workspaceRoot: text(row, "workspace_root"),
+    modelId: text(row, "model_id"),
+    title: text(row, "title") ?? id,
+    updatedAtUs: typeof row.updated_at_us === "number" ? row.updated_at_us : null,
+  };
+};
+
+/** muse's sessions for one working directory — the launcher's "or resume here" list. */
 export async function listMuseSessionsForCwd(cwd: string): Promise<MuseSessionMeta[]> {
-  const all = await readMuseIndexDb();
-  return all.filter((s) => s.workspaceRoot === cwd);
+  const rows = await queryMuseIndex("SELECT session_id, workspace_root, model_id, title, updated_at_us FROM sessions WHERE workspace_root = ?", [cwd]);
+  return rows.map(metaOf).filter((meta): meta is MuseSessionMeta => meta !== null);
 }
 
-export async function museSessionExists(id: string): Promise<boolean> {
-  const all = await readMuseIndexDb();
-  return all.some((s) => s.id === id);
-}
-
+/** Does muse hold a session by this id in this directory? The cold-resume probe: a row from the
+ *  history list IS one of muse's own ids, and this is what separates it from a key that only ever
+ *  named a MulmoTerminal session. The cwd is part of the question because `muse resume` is
+ *  workspace-scoped, and resuming another directory's session in this one is not what the row on
+ *  screen offered. */
 export async function museSessionExistsForCwd(id: string, cwd: string): Promise<boolean> {
-  const all = await readMuseIndexDb();
-  return all.some((s) => s.id === id && s.workspaceRoot === cwd);
+  const rows = await queryMuseIndex("SELECT 1 FROM sessions WHERE session_id = ? AND workspace_root = ? LIMIT 1", [id, cwd]);
+  return rows.length > 0;
 }
 
-// Snapshot for watcher: set of session_ids for a workspace
+/** The session.jsonl behind one session, which is where its badges are folded from. */
+export async function museSessionLogPath(id: string): Promise<string | null> {
+  const rows = await queryMuseIndex("SELECT session_log_path FROM sessions WHERE session_id = ? LIMIT 1", [id]);
+  return rows[0] ? text(rows[0], "session_log_path") : null;
+}
+
+/** The model the index records for a session — the badge's fallback for a session whose log has
+ *  not carried a completed turn yet, where there is nothing to fold a model out of. */
+export async function museSessionModel(id: string): Promise<string | null> {
+  const rows = await queryMuseIndex("SELECT model_id FROM sessions WHERE session_id = ? LIMIT 1", [id]);
+  return rows[0] ? text(rows[0], "model_id") : null;
+}
+
+/** The ids a workspace holds right now — the "before" of the spawn watcher. */
 export async function snapshotMuseSessions(cwd: string): Promise<Set<string>> {
-  const sessions = await listMuseSessionsForCwd(cwd);
-  return new Set(sessions.map((s) => s.id));
+  const rows = await queryMuseIndex("SELECT session_id FROM sessions WHERE workspace_root = ?", [cwd]);
+  return new Set(rows.map((row) => text(row, "session_id")).filter((id): id is string => id !== null));
 }
 
+/**
+ * The id muse minted for a session we just started: the first row in this workspace that was not
+ * there before and that no other spawn has claimed.
+ *
+ * `claimed` is what keeps two cells started in the same directory at the same moment from both
+ * taking the first new row — the same set codex's and agy's watchers keep, for the same reason.
+ */
 export async function watchForMuseSession(
   cwd: string,
   before: ReadonlySet<string>,
@@ -77,102 +140,9 @@ export async function watchForMuseSession(
     if (opts.isCancelled()) return null;
     const current = await snapshotMuseSessions(cwd);
     for (const id of current) {
-      if (!before.has(id) && !opts.claimed.has(id)) {
-        // Found a new session for this workspace
-        return id;
-      }
+      if (!before.has(id) && !opts.claimed.has(id)) return id;
     }
-    await new Promise((r) => setTimeout(r, intervalMs));
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
   return null;
-}
-
-export async function museModelFromSessionLog(sessionId: string): Promise<string | null> {
-  const dbPath = museSessionIndexPath();
-  try {
-    const { DatabaseSync } = await import("node:sqlite");
-    const db = new DatabaseSync(dbPath, { readOnly: true });
-    try {
-      const row = db.prepare("SELECT model_id FROM sessions WHERE session_id = ?").get(sessionId) as unknown as Record<string, unknown> | undefined;
-      if (row && typeof row.model_id === "string" && row.model_id.trim()) return String(row.model_id);
-    } finally {
-      try {
-        db.close();
-      } catch {
-        // ignore close failure
-      }
-    }
-  } catch {
-    // ignore db missing
-  }
-  return null;
-}
-
-// eslint-disable-next-line max-lines-per-function, sonarjs/cognitive-complexity, complexity
-// Read token usage + context from session.jsonl
-export async function museBadgesFromLog(
-  _cwd: string,
-  sessionId: string,
-): Promise<{ model: string | null; contextTokens: number; usage: import("../session/transcript.js").SessionUsage } | null> {
-  let logPath: string | null = null;
-  try {
-    const { DatabaseSync } = await import("node:sqlite");
-    const db = new DatabaseSync(museSessionIndexPath(), { readOnly: true });
-    try {
-      const row = db.prepare("SELECT session_log_path FROM sessions WHERE session_id = ?").get(sessionId) as unknown as Record<string, unknown> | undefined;
-      if (row && typeof row.session_log_path === "string") logPath = String(row.session_log_path);
-    } finally {
-      try {
-        db.close();
-      } catch {
-        // ignore close failure
-      }
-    }
-  } catch {
-    // ignore db missing
-  }
-  if (!logPath) return null;
-  try {
-    const text = await fs.readFile(logPath, "utf8");
-    let lastModel: string | null = null;
-    let lastContext = 0;
-    let totalOutput = 0;
-    let totalCacheRead = 0;
-    let totalInputFresh = 0;
-    for (const line of text.split("\n")) {
-      if (!line.trim()) continue;
-      let rec: unknown;
-      try {
-        rec = JSON.parse(line);
-      } catch {
-        continue;
-      }
-      if (!isRecord(rec)) continue;
-      const payload = isRecord(rec.payload) ? (rec.payload as unknown as Record<string, unknown>) : undefined;
-      const event = payload && isRecord(payload.event) ? (payload.event as unknown as Record<string, unknown>) : null;
-      if (!event || event.kind !== "model_completed") continue;
-      const usage = isRecord(event.usage) ? event.usage : null;
-      if (usage && typeof event.model === "string") lastModel = event.model;
-      if (usage) {
-        const input = typeof usage.input_tokens === "number" ? usage.input_tokens : 0;
-        let cached = 0;
-        if (typeof usage.cached_tokens === "number") cached = usage.cached_tokens;
-        else if (typeof usage.cache_read_tokens === "number") cached = usage.cache_read_tokens;
-        const out = typeof usage.output_tokens === "number" ? usage.output_tokens : 0;
-        if (Number.isFinite(input) && input > lastContext) lastContext = input;
-        if (Number.isFinite(out)) totalOutput += out;
-        if (Number.isFinite(cached)) totalCacheRead += Math.min(cached, input);
-        if (Number.isFinite(input) && Number.isFinite(cached)) totalInputFresh += Math.max(0, input - Math.min(cached, input));
-      }
-    }
-    // input_tokens is cumulative context size, output_tokens is per-turn. Report last input as contextTokens
-    // and sum of fresh input (input - cached) + outputs for usage.
-    return {
-      model: lastModel,
-      contextTokens: lastContext,
-      usage: { inputTokens: totalInputFresh, outputTokens: totalOutput, cacheReadTokens: totalCacheRead, cacheCreationTokens: 0 },
-    };
-  } catch {
-    return null;
-  }
 }
