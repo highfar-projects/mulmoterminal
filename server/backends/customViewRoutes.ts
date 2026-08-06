@@ -189,6 +189,14 @@ export function mountCustomViewRoutes(app: Express, deps: CustomViewRouteDeps): 
   app.get("/api/collections/:slug/view-i18n", deps.guarded("view-i18n read", makeI18nHandler(deps)));
 
   app.options("/api/collections/:slug/view-data/image", deps.cors, preflight);
+  // `queryConcurrency` (4 in flight per slug, shared with /query) is deliberate,
+  // and matching MulmoClaude here is not incidental: core's custom-view doc — the
+  // one this app serves to the agent — states the cap, tells authors never to
+  // `Promise.all` over every record, and ships a worker-pool + 429-retry snippet
+  // to obey it. A view that fires N parallel fetches gets 429s on BOTH hosts, by
+  // design; raising the cap here would make a view that only works on
+  // MulmoTerminal look correct. The high per-minute image budget is the other
+  // axis — it exists so a throttled pool of 3 isn't starved over a full gallery.
   app.get(
     "/api/collections/:slug/view-data/image",
     deps.cors,
