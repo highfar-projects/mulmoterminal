@@ -105,12 +105,20 @@ describe("createOutputRelay", () => {
     expect(outputs(second.sent)).toEqual(["during-reattach"]);
   });
 
-  it("survives a session with no socket attached", () => {
+  // A detached session keeps working, and its output keeps arriving. Queueing it would build
+  // batches only to throw them away; the buffer is what a reattach replays.
+  it("buffers but does not queue while no socket is attached", () => {
     const entry = fakeEntry(null);
     const relay = createOutputRelay(entry, LIMIT);
-    relay.push("background output");
-    vi.advanceTimersByTime(FLUSH_INTERVAL_MS);
+    relay.push("background ");
+    relay.push("output");
     expect(entry.buffer).toBe("background output");
+    vi.advanceTimersByTime(FLUSH_INTERVAL_MS);
+    // Nothing was held, so a socket arriving later gets the replay — not a stale batch on top.
+    const s = fakeSocket();
+    entry.ws = s.socket as unknown as PtyEntry["ws"];
+    relay.flush();
+    expect(s.sent).toEqual([]);
   });
 
   // The queue only grows while the loop is too busy for the timer to fire, so nothing else

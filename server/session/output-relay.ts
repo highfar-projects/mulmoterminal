@@ -53,6 +53,10 @@ export function createOutputRelay(entry: PtyEntry, limit: number): OutputRelay {
 
   const push = (data: string) => {
     entry.buffer = growOutputTail(entry.buffer, data, limit);
+    // Nobody to send to — a session whose browser has closed, still working in the background.
+    // Queueing would only build batches to throw away, and the buffer above is already the
+    // record: a reattach replays it (and discards the queue for exactly that reason).
+    if (!entry.ws) return;
     pending.push(data);
     pendingChars += data.length;
     if (pendingChars >= MAX_BATCH_CHARS) return flush();
