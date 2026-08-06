@@ -1,11 +1,18 @@
-import { describe, it, expect } from "vitest";
-import { mount } from "@vue/test-utils";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { mount, flushPromises } from "@vue/test-utils";
 import RoundTableMenu from "../../../src/components/RoundTableMenu.vue";
 import { DEFAULT_TURN_BUDGET, MAX_MEMBERS } from "../../../src/composables/roundTableRules";
+import { isRoomId } from "../../../common/roomMessage";
 import type { HandoffTarget } from "../../../src/composables/useHandoff";
 
+// The picker asks the server which rooms already exist, to offer them for reuse.
+beforeEach(() => {
+  globalThis.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ rooms: ["standup", "design-review"] }) })) as unknown as typeof fetch;
+});
+
 const target = (n: number): HandoffTarget => ({ key: `cell-${n}`, label: `#${n}`, source: { sessionId: `S${n}`, cwd: "/w", agent: "claude" } });
-const render = (targets: HandoffTarget[], running = false, busy = running) => mount(RoundTableMenu, { props: { targets, selfLabel: "#1", running, busy } });
+const render = (targets: HandoffTarget[], running = false, busy = running) =>
+  mount(RoundTableMenu, { props: { targets, selfLabel: "#1", running, busy, room: null } });
 
 const seats = (w: ReturnType<typeof render>) => w.findAll('[data-testid="round-table-seat"]');
 
@@ -85,6 +92,57 @@ describe("RoundTableMenu", () => {
     expect(
       render([target(2)], false, true)
         .find('[data-testid="round-table-stop"]')
+        .exists(),
+    ).toBe(false);
+  });
+
+  // The room box is where "reuse" and "naming" are the same control: whatever you type is the
+  // room, existing or not, and typing nothing keeps the old behaviour of minting a fresh one.
+  describe("which room the table talks in", () => {
+    const startWithRoom = async (typed: string) => {
+      const w = render([target(2)]);
+      await flushPromises();
+      if (typed) await w.find('[data-testid="round-table-room"]').setValue(typed);
+      await w.find('[data-testid="round-table-seat"]').setValue(true);
+      await w.find('[data-testid="round-table-start"]').trigger("click");
+      return { w, room: w.emitted("start")?.[0]?.[2] };
+    };
+
+    it("mints a new room when nothing is typed", async () => {
+      const { room } = await startWithRoom("");
+      expect(typeof room).toBe("string");
+      expect(isRoomId(String(room))).toBe(true);
+    });
+
+    it("uses the name that was typed, so an existing conversation continues", async () => {
+      expect((await startWithRoom("standup")).room).toBe("standup");
+    });
+
+    it("offers the rooms that already exist", async () => {
+      const w = render([target(2)]);
+      await flushPromises();
+      expect(w.findAll("#round-table-rooms option").map((o) => o.attributes("value"))).toEqual(["standup", "design-review"]);
+    });
+
+    // Falling back to a new room here would run the table somewhere the user never named, and they
+    // would look for the conversation under the name they typed.
+    it("refuses a name that cannot be a room id rather than quietly minting one", async () => {
+      const { w, room } = await startWithRoom("Design Review!");
+      expect(room).toBeUndefined();
+      expect(w.emitted("start")).toBeUndefined();
+      expect(w.find('[data-testid="round-table-room-error"]').exists()).toBe(true);
+    });
+  });
+
+  // Until this button existed, the conversation a table produced was reachable only by knowing the
+  // room id and running the CLI.
+  it("offers to open the room, both while the table runs and after it ends", () => {
+    const withRoom = (running: boolean) => mount(RoundTableMenu, { props: { targets: [target(2)], selfLabel: "#1", running, busy: running, room: "standup" } });
+    expect(withRoom(true).find('[data-testid="round-table-watch"]').exists()).toBe(true);
+    expect(withRoom(false).find('[data-testid="round-table-watch"]').exists()).toBe(true);
+    expect(
+      render([target(2)])
+        .find('[data-testid="round-table-watch"]')
         .exists(),
     ).toBe(false);
   });

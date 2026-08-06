@@ -7,7 +7,7 @@
 import type { Express, Request, Response } from "express";
 import { requestBody } from "./requestBody.js";
 import { requestOriginAllowed } from "./same-origin-guard.js";
-import { listRooms, postToRoom, readRoom } from "../rooms/rooms.js";
+import { deleteRoom, listRooms, postToRoom, readRoom } from "../rooms/rooms.js";
 import { messagesSince } from "../rooms/room-log.js";
 import { isRoomId } from "../../common/roomMessage.js";
 
@@ -27,6 +27,15 @@ const speaker = (raw: unknown): string => {
   return name || "someone";
 };
 
+/** The room this request names, or null once the 400 has been sent. Every route goes through it:
+ *  the id becomes a filename, so "is this a room id" is the one check none of them may skip. */
+function requestedRoom(req: Request, res: Response): string | null {
+  const room = req.params.room;
+  if (isRoomId(room)) return room;
+  res.status(400).json({ error: "invalid room id — lowercase letters, digits and - only" });
+  return null;
+}
+
 export function mountRoomRoutes(
   app: Express,
   { isAllowedOrigin }: { isAllowedOrigin: (origin: string | undefined, remote: string | undefined) => boolean },
@@ -38,8 +47,8 @@ export function mountRoomRoutes(
 
   // One room's messages. `?since=<epoch ms>` for a caller that is following along.
   app.get("/api/rooms/:room", (req: Request, res: Response) => {
-    const room = req.params.room;
-    if (!isRoomId(room)) return res.status(400).json({ error: "invalid room id — lowercase letters, digits and - only" });
+    const room = requestedRoom(req, res);
+    if (!room) return;
     try {
       return res.json({ room, messages: messagesSince(readRoom(room), sinceMs(req.query.since)) });
     } catch (err) {
@@ -57,12 +66,22 @@ export function mountRoomRoutes(
   // the conversation.
   app.post("/api/rooms/:room", (req: Request, res: Response) => {
     if (!requestOriginAllowed(req, isAllowedOrigin)) return res.status(403).end();
-    const room = req.params.room;
-    if (!isRoomId(room)) return res.status(400).json({ error: "invalid room id — lowercase letters, digits and - only" });
+    const room = requestedRoom(req, res);
+    if (!room) return;
     const { from, text } = requestBody(req.body);
     if (typeof text !== "string" || !text.trim()) return res.status(400).json({ error: "text is required" });
     const message = postToRoom(room, speaker(from), text);
     if (!message) return res.status(500).json({ error: "could not write to the room" });
-    res.json({ ok: true, message });
+    return res.json({ ok: true, message });
+  });
+
+  // Forget a conversation. Guarded like the post for the same reason, and then some: this one
+  // destroys a record rather than adding to it.
+  app.delete("/api/rooms/:room", (req: Request, res: Response) => {
+    if (!requestOriginAllowed(req, isAllowedOrigin)) return res.status(403).end();
+    const room = requestedRoom(req, res);
+    if (!room) return;
+    if (!deleteRoom(room)) return res.status(500).json({ error: "could not delete the room" });
+    return res.json({ ok: true });
   });
 }

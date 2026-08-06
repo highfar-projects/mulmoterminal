@@ -2,8 +2,7 @@ import { describe, it, expect } from "vitest";
 import { runRoundTable, type RoundTableDeps, type TableMember } from "../../../src/composables/useRoundTable";
 import type { TurnFetch } from "../../../src/composables/useCrossTalk";
 import type { HandoffSource } from "../../../src/composables/useHandoff";
-import { STOP_MARKER } from "../../../src/composables/roundTableRules";
-import { newRoomId } from "../../../src/composables/useRoundTable";
+import { STOP_MARKER, newRoomId } from "../../../src/composables/roundTableRules";
 import { isRoomId } from "../../../common/roomMessage";
 
 const src = (id: string): HandoffSource => ({ sessionId: id, cwd: "/w", agent: "claude" });

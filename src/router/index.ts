@@ -25,6 +25,10 @@ export const routes: RouteRecordRaw[] = [
   { path: "/feeds/:slug", name: "feedDetail", component: Stub },
   { path: "/accounting", name: "accounting", component: Stub },
   { path: "/prs", name: "prs", component: Stub },
+  // The conversation rooms a round table writes to (#1456). The open room is the URL so a
+  // conversation can be linked to and reloaded.
+  { path: "/rooms", name: "rooms", component: Stub },
+  { path: "/rooms/:room", name: "roomView", component: Stub },
   // Full-screen file explorer + editor, rooted at a project dir (?cwd=). Opened from a
   // terminal header's Files button.
   { path: "/files", name: "files", component: Stub },

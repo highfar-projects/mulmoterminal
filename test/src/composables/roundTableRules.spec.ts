@@ -12,8 +12,10 @@ import {
   wantsToStop,
   everyoneHasSpoken,
   endsTheTable,
+  roomForTable,
 } from "../../../src/composables/roundTableRules";
 import { answersOurSend } from "../../../src/composables/exchangeRules";
+import { isRoomId } from "../../../common/roomMessage";
 
 const framing = { speaker: "#1 · claude", members: ["#1 · claude", "#2 · codex", "#3 · claude"], turn: 2, budget: 6 };
 
@@ -169,5 +171,38 @@ describe("roundTableMessage", () => {
     expect(roundTableMessage("agreed")).toBeTruthy();
     expect(roundTableMessage("budget-spent")).toBeTruthy();
     expect(roundTableMessage("timed-out")).toBeTruthy();
+  });
+});
+
+describe("roomForTable", () => {
+  const mint = () => "minted-room";
+
+  // Empty is what the box holds by default, and it has to keep meaning what every table did before
+  // the box existed.
+  it("mints a new room when nothing was typed", () => {
+    expect(roomForTable("", mint)).toBe("minted-room");
+    expect(roomForTable("   ", mint)).toBe("minted-room");
+  });
+
+  // Reuse and naming are the same control: the answer to "which room" is a name, and whether it
+  // exists yet is not the user's problem.
+  it("takes the name as given, so an existing conversation continues", () => {
+    expect(roomForTable("standup", mint)).toBe("standup");
+    expect(roomForTable("  Design-Review  ", mint)).toBe("design-review");
+  });
+
+  // Never a silent fallback: a table that ran somewhere the user did not name is a conversation
+  // they will look for under the name they typed.
+  it("refuses a name that cannot be a room id", () => {
+    expect(roomForTable("design review", mint)).toBeNull();
+    expect(roomForTable("../escape", mint)).toBeNull();
+    expect(roomForTable("-leading", mint)).toBeNull();
+  });
+
+  it("only ever answers something the room API will accept", () => {
+    ["standup", "", "  ", "TABLE-1", "a".repeat(64)].forEach((typed) => {
+      const room = roomForTable(typed, mint);
+      if (room !== null) expect(isRoomId(room)).toBe(true);
+    });
   });
 });
