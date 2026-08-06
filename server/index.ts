@@ -55,6 +55,7 @@ import { createTitleManager } from "./session/session-title.js";
 import { generateTitleFromTurns } from "./config/header-title.js";
 import { mountTerminalWebSockets } from "./routes/ws-routes.js";
 import { createConnectionHandlers } from "./session/pty-connection.js";
+import { boundedTail } from "./session/terminal-replay.js";
 import { createTmuxSizeSync } from "./session/tmux-size-sync.js";
 import type { SpawnDeps } from "./session/spawn-deps.js";
 import {
@@ -251,6 +252,7 @@ const tmuxSizeSync = createTmuxSizeSync({
 // Per-connection plumbing (session/pty-connection.ts). The reap decisions stay here —
 // they read activity state and schedule timers that outlive any one connection.
 const { reattachPty, handleClientFrame, handleClientClose } = createConnectionHandlers({
+  outputBufferLimit: OUTPUT_BUFFER_LIMIT,
   cancelReap: (id) => cancelReap(id),
   reap: (id) => reap(id),
   setWaiting: (id, waiting) => setWaiting(id, waiting),
@@ -725,7 +727,9 @@ const remoteHostCaptureTerminalScreen = (sessionId: string) =>
     captureStyledPane: (id) => tmuxCaptureStyledPane(id, SCREEN_HISTORY_ROWS),
     sourceOf: (id) => {
       const entry = ptys.get(id);
-      return entry ? { buffer: entry.buffer, cols: entry.term.cols, rows: entry.term.rows } : undefined;
+      // Cut to the bound: the buffer runs over it (PtyEntry.buffer), and every extra character
+      // is one more the headless emulator has to parse to answer one screen.
+      return entry ? { buffer: boundedTail(entry.buffer, OUTPUT_BUFFER_LIMIT), cols: entry.term.cols, rows: entry.term.rows } : undefined;
     },
     render: (source) => renderScreen({ ...source, historyLines: SCREEN_HISTORY_ROWS }),
     metaOf: remoteHostSessionScreenMeta,

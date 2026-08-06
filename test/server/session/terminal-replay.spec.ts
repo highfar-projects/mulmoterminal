@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { appendBoundedOutput, stripTerminalQueries, terminalModePrefix } from "../../../server/session/terminal-replay.js";
+import { appendBoundedOutput, boundedTail, growOutputTail, stripTerminalQueries, terminalModePrefix } from "../../../server/session/terminal-replay.js";
 
 const ESC = String.fromCharCode(0x1b);
 const BEL = String.fromCharCode(0x07);
@@ -156,5 +156,109 @@ describe("terminalModePrefix", () => {
   // instead of a text selection (#729). One sequence per mode is what keeps the swallow working.
   it("never combines modes into one parameter list", () => {
     expect(terminalModePrefix([1049, 1003, 1006])).not.toContain(";");
+  });
+});
+
+describe("growOutputTail", () => {
+  it("appends without cutting while inside the slack", () => {
+    expect(growOutputTail("abc", "def", 100)).toBe("abcdef");
+    // 1.25x of 10 is 12.5, so 12 characters still ride along uncut.
+    expect(growOutputTail("a".repeat(11), "b", 10)).toBe("a".repeat(11) + "b");
+  });
+
+  it("cuts back to the limit once the slack is exceeded", () => {
+    const grown = growOutputTail("a".repeat(20), "b".repeat(20), 10);
+    expect(grown).toBe("b".repeat(10));
+  });
+
+  it("leaves the reader something to bound, never something already bounded", () => {
+    let buffer = "";
+    for (let i = 0; i < 500; i++) buffer = growOutputTail(buffer, "0123456789", 100);
+    expect(buffer.length).toBeGreaterThan(100); // the overrun is the point (PtyEntry.buffer)
+    expect(buffer.length).toBeLessThanOrEqual(125);
+    expect(boundedTail(buffer, 100)).toHaveLength(100);
+  });
+});
+
+// The whole fix rests on one claim: deferring the cut does not change what a reattaching
+// browser is sent. Pin it by running both schemes over the same stream and comparing —
+// not by re-deriving what the tail "should" be, which would just restate the new code.
+describe("growOutputTail + boundedTail vs. appendBoundedOutput", () => {
+  // A deterministic pseudo-random stream of the things a real pty emits, re-cut at
+  // arbitrary chunk boundaries so sequences straddle them.
+  function stream(seed: number, maxOscUnits: number) {
+    let state = seed;
+    const rnd = () => {
+      state = (state * 1103515245 + 12345) & 0x7fffffff;
+      return state / 0x7fffffff;
+    };
+    const atoms = [
+      () => "text".repeat(1 + Math.floor(rnd() * 20)),
+      () => "\r\n",
+      () => `${ESC}[${Math.floor(rnd() * 200)}m`,
+      () => `${ESC}[${Math.floor(rnd() * 50)};${Math.floor(rnd() * 50)}H`,
+      () => `${ESC}]0;a title${BEL}`,
+      () => `${ESC}]52;c;${"QUJD".repeat(1 + Math.floor(rnd() * maxOscUnits))}${BEL}`, // OSC 52 clipboard
+      () => `${ESC}]8;;https://example.com/${"p".repeat(Math.floor(rnd() * 300))}${ESC}\\`,
+      () => `${ESC}=`,
+      () => `${ESC}(B`,
+      () => ESC, // an aborted escape
+      () => "日本語テキストの行です\r\n",
+    ];
+    const parts: string[] = [];
+    let length = 0;
+    while (length < 40000) {
+      const atom = atoms[Math.floor(rnd() * atoms.length)]();
+      parts.push(atom);
+      length += atom.length;
+    }
+    const whole = parts.join("");
+    const chunks: string[] = [];
+    for (let at = 0; at < whole.length;) {
+      const size = 1 + Math.floor(rnd() * 200);
+      chunks.push(whole.slice(at, at + size));
+      at += size;
+    }
+    return chunks;
+  }
+
+  const bothWays = (chunks: readonly string[], limit: number) => {
+    let eager = "";
+    let deferred = "";
+    for (const chunk of chunks) {
+      eager = appendBoundedOutput(eager, chunk, limit);
+      deferred = growOutputTail(deferred, chunk, limit);
+    }
+    return { eager, deferred: boundedTail(deferred, limit) };
+  };
+
+  it("replays byte-for-byte the same tail when no single sequence outgrows the limit", () => {
+    for (let seed = 1; seed <= 25; seed++) {
+      // Sequences top out near 3.2k here; every limit is far above that, as 1 MiB is in production.
+      const limit = 16384 + seed * 997;
+      const { eager, deferred } = bothWays(stream(seed, 800), limit);
+      expect(deferred).toBe(eager);
+    }
+  });
+
+  // When a sequence IS longer than the whole buffer, the deferred cut sees more of the
+  // discarded side and recognises an orphan the eager one had already lost track of. It
+  // therefore drops MORE — but only ever from the front, and only bytes belonging to that
+  // unterminated sequence, which would have drawn as literal base64 at the top of the screen.
+  it("drops only orphaned sequence bytes, never visible text, when one outgrows the limit", () => {
+    // Built rather than written literally, so the ESC stays out of the regex source — the same
+    // reason terminal-replay.ts builds its patterns that way.
+    const lineOrSequence = new RegExp(`[\\r\\n${ESC}]`);
+    let diverged = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const limit = 200 + seed * 37;
+      const { eager, deferred } = bothWays(stream(seed, 800), limit);
+      if (deferred === eager) continue;
+      diverged++;
+      expect(eager.endsWith(deferred)).toBe(true); // a suffix: nothing removed from the end
+      const dropped = eager.slice(0, eager.length - deferred.length);
+      expect(dropped).not.toMatch(lineOrSequence); // no line, no new sequence — orphan payload only
+    }
+    expect(diverged).toBeGreaterThan(0); // the case is actually being exercised
   });
 });
