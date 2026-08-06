@@ -27,7 +27,7 @@ export function terminalWsKind(pathname: string): TerminalWsKind | null {
   return BY_PATH.get(pathname) ?? null;
 }
 
-export function wsPathForAgent(agent: TerminalWsKind | "muse"): string {
+export function wsPathForAgent(agent: TerminalWsKind): string {
   for (const [path, kind] of BY_PATH) if (kind === agent) return path;
   return "/ws";
 }

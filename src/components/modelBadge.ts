@@ -30,6 +30,7 @@ const CONTEXT_WINDOWS: { match: string; tokens: number }[] = [
   { match: "sonnet-5", tokens: MILLION_TOKENS },
   { match: "fable", tokens: MILLION_TOKENS },
   { match: "mythos", tokens: MILLION_TOKENS },
+  { match: "muse", tokens: K200_TOKENS },
   { match: "opus", tokens: K200_TOKENS },
   { match: "sonnet", tokens: K200_TOKENS },
   { match: "haiku", tokens: K200_TOKENS },

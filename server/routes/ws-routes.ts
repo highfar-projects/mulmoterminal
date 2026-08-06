@@ -21,8 +21,6 @@ import { launchChoiceFromParams } from "../session/launch-choice.js";
 import { codexSessionsRoot } from "../agents/codex-session.js";
 import { antigravityBrainRoot, antigravityConversationExists } from "../agents/antigravity-session.js";
 import { grokConversationExists, grokSessionsRoot } from "../agents/grok-session.js";
-// museSessionExists retained for future direct probe resume
-void 0;
 import { codexRolloutExists } from "../agents/codex-sessions.js";
 import {
   antigravityConversations,

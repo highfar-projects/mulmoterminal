@@ -7,7 +7,6 @@ import { isRecord } from "../../common/isRecord.js";
 // Where `muse` keeps sessions: ~/.local/share/muse/sessions + session-index.db
 export const museHome = (): string => path.join(os.homedir(), ".local", "share", "muse");
 export const museSessionIndexPath = (): string => path.join(museHome(), "session-index.db");
-export const museSessionsRoot = (): string => path.join(museHome(), "sessions");
 
 export interface MuseSessionMeta {
   id: string;
@@ -58,10 +57,6 @@ export async function museSessionExists(id: string): Promise<boolean> {
 export async function museSessionExistsForCwd(id: string, cwd: string): Promise<boolean> {
   const all = await readMuseIndexDb();
   return all.some((s) => s.id === id && s.workspaceRoot === cwd);
-}
-
-export function museSessionExistsSync(id: string, _workspaceRoot: string | null): Promise<boolean> {
-  return museSessionExists(id).then((exists) => exists);
 }
 
 // Snapshot for watcher: set of session_ids for a workspace

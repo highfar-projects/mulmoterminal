@@ -36,8 +36,9 @@ export function createMuseSpawner(deps: SpawnDeps) {
 
     // Every new spawn path must consult carriesFullGuiMcp() (guideline: Ask that predicate
     // from every new spawn path). Muse intentionally carries no per-spawn --mcp-config
-    // (guiMcpAgents excludes it like agy/grok), but the check is still required.
-    // eslint-disable-next-line sonarjs/void-use -- required by guideline; value intentionally unused
+    // (guiMcpAgents excludes it like agy/grok), so the value is intentionally unused — the
+    // consult is for guideline parity, not for branching.
+    // eslint-disable-next-line sonarjs/void-use -- intentionally unused, guideline parity
     void carriesFullGuiMcp(ws !== null, cwd, "muse");
 
     // Snapshot before spawn for fresh sessions. The snapshot is async (sqlite)
