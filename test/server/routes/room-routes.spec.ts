@@ -65,7 +65,10 @@ describe("GET /api/rooms/:room", () => {
 
   // A read failure must NOT look like an empty conversation, or the caller carries on without
   // history it needed (CodeRabbit review on #1456).
-  it("answers 500 rather than 200-with-nothing when the room cannot be read", async () => {
+  //
+  // Not on Windows: chmod there moves the read-only attribute and nothing else, so `0o000` leaves
+  // the file perfectly readable and the read this test needs to fail simply succeeds (#1484).
+  it.skipIf(process.platform === "win32")("answers 500 rather than 200-with-nothing when the room cannot be read", async () => {
     postToRoom("locked", "#1", "secret");
     const file = roomFile("locked");
     if (!file) throw new Error("expected a file");

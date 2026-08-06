@@ -60,7 +60,10 @@ describe("postToRoom / readRoom", () => {
   // "Nothing has been said" and "I could not find out" are different answers, and they were both
   // being given as an empty conversation — so a caller carried on without history it needed
   // (CodeRabbit review on #1456).
-  it("throws rather than answering empty when the room cannot be read", () => {
+  //
+  // Not on Windows: chmod there moves the read-only attribute and nothing else, so `0o000` leaves
+  // the file perfectly readable and the read this test needs to fail simply succeeds (#1484).
+  it.skipIf(process.platform === "win32")("throws rather than answering empty when the room cannot be read", () => {
     postToRoom("locked", "#1", "secret");
     const file = roomFile("locked");
     if (!file) throw new Error("expected a file");
