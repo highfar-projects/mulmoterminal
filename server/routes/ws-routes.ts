@@ -713,7 +713,25 @@ function resolveGrokSession(requested: string | null, cwd: string): ResumableSes
   );
 }
 
-function resolveMuseSession(requested: string | null): ResumableSession {
+async function resolveMuseSession(requested: string | null, cwd: string): Promise<ResumableSession> {
+  // Historical sessions: requested is already a muse session_id stored in
+  // session-index.db with workspace_root === cwd. Resume it directly even
+  // without a mulmo mapping (museConversations). This is the chat-history
+  // case — the picker lists DB-backed ids and expects `muse --yolo resume <id>`.
+  if (requested) {
+    const { museSessionExistsForCwd } = await import("../agents/muse-session.js");
+    const existsForCwd = await museSessionExistsForCwd(requested, cwd);
+    if (existsForCwd) {
+      const { live, hasLivePty, tmuxAlive } = liveSessionFacts(requested);
+      if (!hasLivePty) {
+        // Reuse resolveReattachableId shape for consistency with other agents.
+        const { randomUUID } = await import("node:crypto");
+        const { resolveReattachableId: resolveReattachableIdDynamic } = await import("../session/session-resolve.js");
+        const { sessionId } = resolveReattachableIdDynamic(requested, { hasLivePty, tmuxAlive, canResume: true }, randomUUID);
+        return { sessionId, live, resumeConversationId: requested };
+      }
+    }
+  }
   return resolveResumableSession(requested, ({ hasLivePty, tmuxAlive }) =>
     agentResumeId(requested, {
       mappedId: requested ? museConversations.get(requested)?.conversationId : null,
@@ -723,12 +741,6 @@ function resolveMuseSession(requested: string | null): ResumableSession {
     }),
   );
 }
-
-// Muse also mints its own id, but we resolve via mapping like codex/agy; direct resume
-// of muse's own id without a mapping is not supported via mulmo id.
-// resolveMuseSession is used via MUSE_WS_AGENT; keep reference for future direct probe
-// eslint-disable-next-line sonarjs/void-use
-void resolveMuseSession;
 
 // The two agents that read their MCP servers from a file in the DIRECTORY rather than from a
 // per-session flag: agy from `.agents/mcp_config.json`, grok from `.grok/config.toml`. That one
@@ -751,7 +763,7 @@ export interface DirectoryMcpWsAgent {
    *  id of its own, so it keeps no map) — an agent added later has to answer this question rather
    *  than inherit "no" by leaving a key out. */
   hydrated: Promise<unknown> | null;
-  resolveSession: (requested: string | null, cwd: string) => ResumableSession;
+  resolveSession: (requested: string | null, cwd: string) => ResumableSession | Promise<ResumableSession>;
   spawn: (deps: WsRouteDeps) => SpawnDirectoryMcpPty;
 }
 
@@ -775,7 +787,7 @@ export const MUSE_WS_AGENT: DirectoryMcpWsAgent = {
   kind: "muse",
   label: "Muse",
   hydrated: museConversationsHydrated,
-  resolveSession: (requested) => resolveMuseSession(requested),
+  resolveSession: (requested, cwd) => resolveMuseSession(requested, cwd),
   spawn: (deps) => deps.spawnMusePty,
 };
 
@@ -786,7 +798,7 @@ export async function handleDirectoryMcpAgentConnection(agent: DirectoryMcpWsAge
   if (refuseUnusableWorkspace(ws, agent.kind, unusable, requested)) return;
   const attachGuiMcp = url.searchParams.get("gui") !== "0";
   if (agent.hydrated) await agent.hydrated;
-  const { sessionId, live, resumeConversationId } = agent.resolveSession(requested, cwd);
+  const { sessionId, live, resumeConversationId } = await agent.resolveSession(requested, cwd);
   // The directory's per-tree PORT / DB_NAME (#1367), like every other spawn path — a cell in a
   // worktree gets that tree's own values, not the ones another tree is already serving on.
   await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });

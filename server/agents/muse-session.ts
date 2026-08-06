@@ -55,6 +55,11 @@ export async function museSessionExists(id: string): Promise<boolean> {
   return all.some((s) => s.id === id);
 }
 
+export async function museSessionExistsForCwd(id: string, cwd: string): Promise<boolean> {
+  const all = await readMuseIndexDb();
+  return all.some((s) => s.id === id && s.workspaceRoot === cwd);
+}
+
 export function museSessionExistsSync(id: string, _workspaceRoot: string | null): Promise<boolean> {
   return museSessionExists(id).then((exists) => exists);
 }
