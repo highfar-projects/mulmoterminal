@@ -31,29 +31,33 @@ const SAVE_COALESCE_MS = 50;
 // Turn "write this session out" into "write it once for this burst, and never twice at once".
 //
 // Two writeFile calls truncating and refilling one path concurrently can leave a file that is
-// neither version, so a write queues behind whatever is already running for that session.
+// neither version, so a write waits out whatever is already running for that session.
+//
+// One session therefore holds at most two writes: the one running, and the one waiting. Every save
+// that arrives before the waiting one STARTS folds into it — including while the earlier write is
+// still going, which is the case that matters on a slow disk. Chaining each save behind the last
+// instead would queue a write per save, and since each writes the list as it stands when it runs,
+// they would all put the same bytes on disk.
 function createCoalescedWriter(write: (sessionId: string) => Promise<void>) {
-  const pending = new Map<string, Promise<void>>(); // scheduled, not started — fold into it
-  const inFlight = new Map<string, Promise<void>>(); // running now — queue behind it
+  const waiting = new Map<string, Promise<void>>(); // not started — fold into it
+  const running = new Map<string, Promise<void>>(); // started — it must finish alone
 
-  const afterInFlight = (sessionId: string): Promise<void> => {
-    const next = (inFlight.get(sessionId) ?? Promise.resolve()).then(() => write(sessionId));
-    inFlight.set(sessionId, next);
-    return next.finally(() => {
-      if (inFlight.get(sessionId) === next) inFlight.delete(sessionId);
-    });
+  const writeAlone = async (sessionId: string): Promise<void> => {
+    await running.get(sessionId);
+    waiting.delete(sessionId); // from here a save needs a write of its own; this one has its list
+    const run = write(sessionId);
+    running.set(sessionId, run);
+    await run;
+    if (running.get(sessionId) === run) running.delete(sessionId);
   };
 
   return (sessionId: string): Promise<void> => {
-    const scheduled = pending.get(sessionId);
+    const scheduled = waiting.get(sessionId);
     if (scheduled) return scheduled; // it has not started, so it will carry this change too
     const written = new Promise<void>((resolve) => {
-      setTimeout(() => {
-        pending.delete(sessionId);
-        void afterInFlight(sessionId).then(resolve);
-      }, SAVE_COALESCE_MS);
+      setTimeout(() => void writeAlone(sessionId).then(resolve), SAVE_COALESCE_MS);
     });
-    pending.set(sessionId, written);
+    waiting.set(sessionId, written);
     return written;
   };
 }

@@ -127,6 +127,39 @@ describe("createSessionStore", () => {
     expect(peak).toBe(1);
   });
 
+  // A write slower than the coalescing window is where a naive queue grows one entry per save —
+  // and since each write serialises the list as it stands when it RUNS, they would all put the
+  // same bytes on disk. Everything arriving before the waiting write starts must fold into it.
+  it("keeps at most one write waiting, however many saves arrive while one is running", async () => {
+    let writes = 0;
+    const store = createSessionStore("things", isThing, root);
+    const list = await store.get(SESSION);
+    const spy = vi.spyOn(fs, "writeFile").mockImplementation(async (...args: Parameters<typeof fs.writeFile>) => {
+      writes++;
+      await new Promise((r) => setTimeout(r, 150)); // slower than the window, so saves pile up behind it
+      return actualWriteFile(...args);
+    });
+    list.push({ n: 0 });
+    const saves = [store.save(SESSION)];
+    await new Promise((r) => setTimeout(r, PAST_THE_SAVE_WINDOW_MS)); // the first write is now running
+    for (let i = 1; i <= 5; i++) {
+      list.push({ n: i });
+      saves.push(store.save(SESSION));
+      await new Promise((r) => setTimeout(r, 15));
+    }
+    await Promise.all(saves);
+    spy.mockRestore();
+    expect(writes).toBe(2); // the one that was running, plus one carrying all five
+    expect(JSON.parse(await fs.readFile(path.join(root, "things", `${SESSION}.json`), "utf8"))).toEqual([
+      { n: 0 },
+      { n: 1 },
+      { n: 2 },
+      { n: 3 },
+      { n: 4 },
+      { n: 5 },
+    ]);
+  });
+
   it("reloads a session's list from disk in a fresh store", async () => {
     await fs.mkdir(path.join(root, "things"), { recursive: true });
     await fs.writeFile(path.join(root, "things", `${SESSION}.json`), JSON.stringify([{ n: 7 }]));
