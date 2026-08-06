@@ -20,8 +20,12 @@
 // the workspace gets the groups its DIRECTORY registered, and the launcher form offers it the four
 // per-group toggles — which is the truthful answer, and the one #1423 failed to give.
 //
-// Muse is out for the same reason: no --mcp-config, no per-spawn MCP URL — sessions run `muse`
-// directly with no MCP bridge.
+// Muse is out for the same reason and reaches its tools a third way. It has no `--mcp-config` and
+// no per-directory config file either: MCP servers are declared by an installed PLUGIN, which
+// `muse plugins install` records per MACHINE (server/agents/muse-mcp.ts). So MulmoTerminal
+// registers one plugin holding all four group servers, and the session's environment narrows them
+// back to what its directory switched on. The launcher form offers muse the same four per-group
+// toggles as grok and agy, which is the truthful answer for the same reason it is theirs.
 import { type SessionAgent } from "./sessionAgent.js";
 import { isLaunchAgent } from "./launchAgent.js";
 import { customAgentFor, type AgentPick, type CustomAgent } from "./customAgents.js";

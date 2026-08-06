@@ -470,6 +470,33 @@ export function tmuxSessionActivity(): Map<string, number> | null {
   return r.status === 0 ? parseTmuxSessionActivity(r.stdout) : null;
 }
 
+/** Parse `#{pane_pid} #{session_name}` rows into pane pid -> our session id. Split out so the
+ *  format, which is the one thing that can silently change under us, is asserted by a spec. */
+export function parseTmuxPanePids(stdout: string): Map<number, string> {
+  const panes = new Map<number, string>();
+  for (const line of stdout.split("\n")) {
+    const [pid, name] = line.trim().split(/\s+/, 2);
+    const numeric = Number(pid);
+    if (!Number.isInteger(numeric) || numeric <= 0 || !name?.startsWith(SESSION_PREFIX)) continue;
+    panes.set(numeric, name.slice(SESSION_PREFIX.length));
+  }
+  return panes;
+}
+
+/**
+ * The root process of every pane, keyed to the session it belongs to.
+ *
+ * This is what lets a process started BY an agent be traced back to the session that agent runs
+ * in, when nothing was handed to it: muse gives a plugin's MCP server a curated environment of 16
+ * variables (measured) — none of them ours — so the only thing that survives is the process tree,
+ * and the pane pid is where that tree meets a session id. See server/session/bridge-session.ts.
+ */
+export function tmuxPanePids(): Map<number, string> {
+  const r = tmux(["list-panes", "-a", "-F", "#{pane_pid} #{session_name}"]);
+  if (r.status !== 0) return new Map<number, string>();
+  return parseTmuxPanePids(r.stdout);
+}
+
 // Ids of sessions that survived (e.g. across a crash), for startup visibility.
 export function tmuxListSessionIds(): string[] {
   const r = tmux(["list-sessions", "-F", "#{session_name}"]);

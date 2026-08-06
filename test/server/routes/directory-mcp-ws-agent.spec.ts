@@ -101,10 +101,11 @@ const spawnerFor = (kind: string) => SPAWNERS[kind] as typeof spawnGrokPty;
 let dir = "";
 const request = (query = "") => ({ url: `/ws?cwd=${encodeURIComponent(dir)}${query}` });
 
-// Both agents, so a rule asserted once is asserted for the pair. Named so a failure says which.
-// muse shares this handler for the lifecycle only — it has no MCP at all — so it is asserted
-// separately below rather than folded into a list about tool groups.
-const AGENTS = [ANTIGRAVITY_WS_AGENT, GROK_WS_AGENT];
+// All three, so a rule asserted once is asserted for every agent on this handler. Named so a
+// failure says which. What muse does with the groups differs (they travel on the session's
+// environment rather than into a file in the directory, because its plugin registration is per
+// machine) — but THAT it is handed the directory's groups is the same rule, and is asserted here.
+const AGENTS = [ANTIGRAVITY_WS_AGENT, GROK_WS_AGENT, MUSE_WS_AGENT];
 
 beforeEach(() => {
   ptys.clear();
@@ -190,21 +191,12 @@ describe("waiting for the on-disk conversation map", () => {
   });
 });
 
-// muse rides this handler for what it shares — the session id, the reattach, the worktree env —
-// and NOT for the MCP: it has none, so reading Claude Code's per-directory registration for it
-// could only produce groups nothing can act on (common/guiMcpAgents.ts, spawn-muse.ts).
+// muse's own half: the resume, and the one thing it does NOT share — where the groups end up.
 describe("/ws/muse", () => {
-  it("declares that it reads no directory MCP config, where the other two declare that they do", () => {
-    expect(MUSE_WS_AGENT.readsDirectoryMcpConfig).toBe(false);
+  it("is handed the directory's groups like the other two, because its plugin is registered for the machine", () => {
+    expect(MUSE_WS_AGENT.readsDirectoryMcpConfig).toBe(true);
     expect(ANTIGRAVITY_WS_AGENT.readsDirectoryMcpConfig).toBe(true);
     expect(GROK_WS_AGENT.readsDirectoryMcpConfig).toBe(true);
-  });
-
-  it("spawns without looking the directory's tool groups up at all", async () => {
-    const ws = fakeWs();
-    await handleDirectoryMcpAgentConnection(MUSE_WS_AGENT, makeDeps(), ws as unknown as WebSocket, request());
-    expect(registeredGuiMcpGroups).not.toHaveBeenCalled();
-    expect(spawnMusePty).toHaveBeenCalledWith(expect.any(String), expect.anything(), null, dir, { mcpGroups: [] });
   });
 
   // The chat-history case: the row the picker offers IS one of muse's own ids, so the connection
@@ -213,7 +205,7 @@ describe("/ws/muse", () => {
     const session = "11111111-2222-4333-8444-555555555555";
     museSessionExistsForCwd.mockResolvedValueOnce(true);
     await handleDirectoryMcpAgentConnection(MUSE_WS_AGENT, makeDeps(), fakeWs() as unknown as WebSocket, request(`&session=${session}`));
-    expect(spawnMusePty).toHaveBeenCalledWith(session, expect.anything(), session, dir, { mcpGroups: [] });
+    expect(spawnMusePty).toHaveBeenCalledWith(session, expect.anything(), session, dir, { mcpGroups: ["render"] });
   });
 
   // A key that names nothing muse knows must not be handed to `muse resume` — and must not keep
@@ -221,6 +213,6 @@ describe("/ws/muse", () => {
   it("starts fresh under a new id when the key names no session of muse's", async () => {
     const session = "11111111-2222-4333-8444-555555555555";
     await handleDirectoryMcpAgentConnection(MUSE_WS_AGENT, makeDeps(), fakeWs() as unknown as WebSocket, request(`&session=${session}`));
-    expect(spawnMusePty).toHaveBeenCalledWith(expect.not.stringMatching(session), expect.anything(), null, dir, { mcpGroups: [] });
+    expect(spawnMusePty).toHaveBeenCalledWith(expect.not.stringMatching(session), expect.anything(), null, dir, { mcpGroups: ["render"] });
   });
 });

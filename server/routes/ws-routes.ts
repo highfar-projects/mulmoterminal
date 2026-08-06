@@ -757,9 +757,14 @@ export interface DirectoryMcpWsAgent {
    *  id of its own, so it keeps no map) — an agent added later has to answer this question rather
    *  than inherit "no" by leaving a key out. */
   hydrated: Promise<unknown> | null;
-  /** Whether this agent reads the directory's shared MCP config at all. False for muse, which has
-   *  no MCP of any kind (common/guiMcpAgents.ts) — so the lookup below, which reads Claude Code's
-   *  config files on every spawn, is not paid for an answer nothing can act on. */
+  /** Whether the directory's registered tool groups are worth looking up for this agent.
+   *
+   *  True for all three now, but it is not a constant: it was false for muse while muse reached no
+   *  MCP at all, and the lookup reads Claude Code's config files on every spawn — a cost nothing
+   *  could act on. What muse does with the answer is still different from the other two (it travels
+   *  on the session's ENVIRONMENT rather than into a file in the directory, because its plugin
+   *  registration is per machine — server/agents/muse-mcp.ts), and that difference lives in its
+   *  spawner rather than here. */
   readsDirectoryMcpConfig: boolean;
   resolveSession: (requested: string | null, cwd: string) => ResumableSession | Promise<ResumableSession>;
   spawn: (deps: WsRouteDeps) => SpawnDirectoryMcpPty;
@@ -787,15 +792,15 @@ export const MUSE_WS_AGENT: DirectoryMcpWsAgent = {
   kind: "muse",
   label: "Muse",
   hydrated: museConversationsHydrated,
-  readsDirectoryMcpConfig: false,
+  readsDirectoryMcpConfig: true,
   resolveSession: (requested, cwd) => resolveMuseSession(requested, cwd),
   spawn: (deps) => deps.spawnMusePty,
 };
 
 // antigravity (?cwd=<dir>, ?session=<id> to reattach/resume), grok and muse, which connect
-// identically — see DirectoryMcpWsAgent for why these and not claude or codex. muse is here for the
-// lifecycle (reattach, worktree env, reap) rather than for the MCP: it has none, which is what
-// `readsDirectoryMcpConfig` says.
+// identically — see DirectoryMcpWsAgent for why these and not claude or codex. All three take their
+// GUI tools from what the DIRECTORY registered rather than from a per-spawn flag; where they differ
+// is only in what the spawner then does with that list.
 export async function handleDirectoryMcpAgentConnection(agent: DirectoryMcpWsAgent, deps: WsRouteDeps, ws: WebSocket, req: WsUpgradeRequest) {
   const { url, requested, cwd, unusable, size } = wsConnectionContext(req);
   if (refuseUnusableWorkspace(ws, agent.kind, unusable, requested)) return;

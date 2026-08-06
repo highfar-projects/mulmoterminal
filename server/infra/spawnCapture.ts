@@ -21,8 +21,11 @@ export interface Captured {
 //
 // stderr is returned SEPARATELY, never folded in: callers here read stdout as data (a keychain
 // secret, a docker label), and a warning printed alongside a successful run would corrupt it.
-export function spawnCapture(bin: string, args: string[]): Captured {
-  const r = spawnSync(bin, args, { encoding: "utf8" });
+export function spawnCapture(bin: string, args: string[], options: { env?: NodeJS.ProcessEnv; cwd?: string } = {}): Captured {
+  // `env` is spread over the CHILD's whole environment by the caller, never merged here: a caller
+  // adding one variable and a caller replacing the environment are different intentions, and
+  // silently merging would make the second impossible to express.
+  const r = spawnSync(bin, args, { encoding: "utf8", ...options });
   return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
 }
 

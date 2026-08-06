@@ -51,7 +51,7 @@ function spawnSeededSession(
   if (mode === "codex-run") deps.spawnCodexPty(sessionId, null, null, CLAUDE_CWD, true, { initialPrompt });
   else if (mode === "antigravity-run") deps.spawnAntigravityPty(sessionId, null, null, CLAUDE_CWD, { mcpGroups, initialPrompt });
   else if (mode === "grok-run") deps.spawnGrokPty(sessionId, null, null, CLAUDE_CWD, { mcpGroups, initialPrompt });
-  else if (mode === "muse-run") deps.spawnMusePty(sessionId, null, null, CLAUDE_CWD, { initialPrompt });
+  else if (mode === "muse-run") deps.spawnMusePty(sessionId, null, null, CLAUDE_CWD, { mcpGroups, initialPrompt });
   else if (mode === "claude-draft") deps.spawnClaudePty(sessionId, null, null, { draft: message });
   else deps.spawnClaudePty(sessionId, null, null, { initialPrompt: message });
 }
