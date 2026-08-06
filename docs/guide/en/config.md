@@ -3,7 +3,7 @@ title: Configuration — colours, sounds, launchers, per-project settings
 nav_title: Configuration
 layout: default
 parent: English
-nav_order: 7
+nav_order: 8
 description: Configuring MulmoTerminal — the settings modal, per-project colours and names, Enter behaviour, notification sounds, fonts, keyboard shortcuts and environment variables, findable by symptom.
 ---
 

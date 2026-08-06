@@ -185,12 +185,13 @@ npx mulmoterminal@latest    # → http://localhost:34567 が開く
 3. [よくある質問（FAQ）](faq.html)（既存セッション・Windows・トークン代・他ツールとの違い）
 4. [応用編 — シナリオ別の使い方](scenarios.html)
 5. [機能一覧](features.html)（4 本柱で整理）
-6. [設定方法](config.html)（設定モーダル・`config.json`・`.mulmoterminal.json`・**DSL 拡張**）
-7. [スマホ通知（Web Push）](notifications.html)（iPhone / Android の設定）
-8. [スマホから使う](phone.html)（閲覧・自分のチップで返信・ターミナル起動）
-9. [GitHub — PR / Issue 横断ビュー](github.html)（登録リポの未マージ PR と Issue を 1 画面で）
-10. [OpenRouter で別のモデルを使う](providers.html)（Kimi / DeepSeek / Gemini などを実測データつきで選ぶ）
-11. [claude-ollama でローカルモデルを動かす](claude-ollama.html)（Ollama で完全ローカル・オフライン）
-12. [用語集](glossary.html)
+6. [セル同士を会話させる](conversation.html)（1往復の受け渡し・円卓・部屋）
+7. [設定方法](config.html)（設定モーダル・`config.json`・`.mulmoterminal.json`・**DSL 拡張**）
+8. [スマホ通知（Web Push）](notifications.html)（iPhone / Android の設定）
+9. [スマホから使う](phone.html)（閲覧・自分のチップで返信・ターミナル起動）
+10. [GitHub — PR / Issue 横断ビュー](github.html)（登録リポの未マージ PR と Issue を 1 画面で）
+11. [OpenRouter で別のモデルを使う](providers.html)（Kimi / DeepSeek / Gemini などを実測データつきで選ぶ）
+12. [claude-ollama でローカルモデルを動かす](claude-ollama.html)（Ollama で完全ローカル・オフライン）
+13. [用語集](glossary.html)
 
 > 英語版は [English guide](../en/) にあります。
