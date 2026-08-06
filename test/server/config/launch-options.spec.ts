@@ -127,13 +127,27 @@ describe("what config accepts and what the launch path accepts", () => {
     expect(sanitizeProviders([provider("open-router.v2")]).map((p) => p.id)).toEqual(["open-router.v2"]);
   });
 
-  it.each(["has space", "-leading-dash", "pipe|char", ""])("refuses the id %j that the launch parser would drop", (id) => {
+  // The last case is #1503's asymmetry: `[1m]` names a context window, which a MODEL has and a
+  // provider key does not, so the two shapes deliberately disagree on exactly that one suffix.
+  it.each(["has space", "-leading-dash", "pipe|char", "", "openrouter[1m]"])("refuses the id %j that the launch parser would drop", (id) => {
     expect(sanitizeProviders([provider(id)])).toEqual([]);
   });
 
   it("drops only the malformed model, not the provider's whole list", () => {
     const [saved] = sanitizeProviders([{ ...provider("openrouter"), models: ["z-ai/glm-5.2", "bad id", 42] }]);
     expect(saved.models).toEqual(["z-ai/glm-5.2"]);
+  });
+
+  // #1503 named three surfaces, and this is the third: `.mulmoterminal.json`'s `model`, the
+  // picker, and a provider's own `models` list all read one shape. A suffix refused HERE is
+  // near-silent — the picker just shows a backend with fewer models than the file lists (#1432)
+  // — so it needs its own assertion rather than trusting the shared predicate.
+  //
+  // `sonnet[1m]` is the realistic entry: behind a gateway that is exactly how the docs say to
+  // select Sonnet 5's 1M window.
+  it("keeps a model carrying the [1m] extended-context suffix", () => {
+    const [saved] = sanitizeProviders([{ ...provider("gateway"), models: ["~anthropic/claude-opus-latest[1m]", "sonnet[1m]"] }]);
+    expect(saved.models).toEqual(["~anthropic/claude-opus-latest[1m]", "sonnet[1m]"]);
   });
 
   // Dropping them silently is half of #1432: the picker then says the backend has no models
