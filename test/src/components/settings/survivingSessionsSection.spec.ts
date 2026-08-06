@@ -14,6 +14,7 @@ const row = (over: Partial<SurvivingSession> = {}): SurvivingSession => ({
   idleSeconds: 7200,
   attached: false,
   resumable: true,
+  reapable: false,
   ...over,
 });
 
@@ -82,11 +83,48 @@ describe("the surviving-sessions section", () => {
   });
 
   // A row missing the key is a stop button with nothing to post to — dropped before it is drawn.
-  it("drops a row the server sent malformed", async () => {
-    serve([{ cwd: "/repo", attached: false }, row()]);
+  // The same for `reapable`: absent would read as false and quietly drop the "ends at next start"
+  // mark from a row the server is about to end (Codex on #1486).
+  it.each([
+    ["no key", { cwd: "/repo", attached: false }],
+    ["no reapable", { key: "s-2", cwd: "/repo", agent: null, idleSeconds: 1, attached: false, resumable: true }],
+  ])("drops a row the server sent malformed (%s)", async (_name, bad) => {
+    serve([bad, row()]);
     const w = mount(SurvivingSessionsSection);
     await flushPromises();
     expect(w.findAll('[data-testid="surviving-row"]')).toHaveLength(1);
+  });
+
+  // The sweep acts without being asked, so the rows it will take say so before it happens (#1467).
+  it("marks a row the server will end at its next start", async () => {
+    serve([row({ reapable: true }), row({ key: "s-2", reapable: false })]);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.findAll('[data-testid="surviving-doomed"]')).toHaveLength(1);
+  });
+
+  // `reapable` is the server's answer against the OLD threshold, so raising it would otherwise leave
+  // rows promising "ends at next start" about a start that will now spare them (CodeRabbit on #1486).
+  it("re-reads the rows after the threshold changes", async () => {
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    const listReads = () =>
+      (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.filter((c) => String(c[0]).includes("/api/tmux/sessions")).length;
+    const before = listReads();
+    await w.get('[aria-label="Increase the idle days before a session is ended"]').trigger("click");
+    await flushPromises();
+    expect(listReads()).toBe(before + 1);
+  });
+
+  it("writes the idle threshold to its own config field", async () => {
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    await w.get('[aria-label="Increase the idle days before a session is ended"]').trigger("click");
+    await flushPromises();
+    const post = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls
+      .map((c) => c[1] as { body?: string } | undefined)
+      .find((init) => init?.body?.includes("sessionIdleReapDays"));
+    expect(post?.body).toContain("sessionIdleReapDays");
   });
 
   it("says the list could not be read instead of claiming there is nothing", async () => {

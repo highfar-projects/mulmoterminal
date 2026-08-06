@@ -2,7 +2,10 @@
 import { onMounted } from "vue";
 import { useSurvivingSessions } from "../../composables/useSurvivingSessions";
 import { useSessionStop } from "../../composables/useSessionStop";
+import { sessionIdleReapDays, saveSessionIdleReapDays } from "../../composables/sessionReap";
+import { MAX_REAP_IDLE_DAYS, MIN_REAP_IDLE_DAYS, REAP_IDLE_DAYS_OFF } from "../../../common/sessionReap";
 import { relativeTime } from "../cellDisplay";
+import SettingsStepper from "./SettingsStepper.vue";
 import { SECTION_HEADING, SETTINGS_LIST } from "./sectionClasses";
 import type { SurvivingSession } from "../../../common/survivingSessions";
 
@@ -13,9 +16,9 @@ import type { SurvivingSession } from "../../../common/survivingSessions";
 // project you no longer open — and a Shell session, which has no conversation to list — appeared
 // nowhere and could only be ended with `tmux kill-session` by hand.
 //
-// Read-only apart from the stop button, and it stops ONE row at a time on purpose: a single click
-// that ends many live agents is automatic cleanup wearing a button, which is a different decision
-// (#1467).
+// One row at a time on purpose: a single click that ends many live agents would be the automatic
+// sweep wearing a button, and the sweep already exists with a rule of its own — which this section
+// also owns the number for, since it is the list that number acts on (#1467).
 const { sessions, loading, failed, reload } = useSurvivingSessions();
 const { stopping, stopSession } = useSessionStop(reload);
 
@@ -36,6 +39,15 @@ const lastActive = (s: SurvivingSession): string => {
   const now = Date.now();
   return `last active ${relativeTime(now - s.idleSeconds * MS_PER_SECOND, now)}`;
 };
+
+const REAP_STEP_DAYS = 1;
+
+// Re-read after saving: `reapable` is the SERVER's answer against the old threshold, so raising it
+// would otherwise leave rows saying "ends at next start" about a start that will now spare them
+// (CodeRabbit on #1486).
+async function nudgeIdleDays(delta: number): Promise<void> {
+  if (await saveSessionIdleReapDays(sessionIdleReapDays.value + delta)) await reload();
+}
 </script>
 
 <template>
@@ -61,6 +73,14 @@ const lastActive = (s: SurvivingSession): string => {
       <span v-if="!s.resumable" data-testid="surviving-only-copy" class="flex-none text-[11px] text-dim" title="Nothing on disk to resume this from">
         not resumable
       </span>
+      <!-- The sweep is the one thing here that acts unasked, so the rows it will take say so. -->
+      <span
+        v-if="s.reapable"
+        data-testid="surviving-doomed"
+        class="flex-none text-[11px] text-dim"
+        :title="`Nothing is using it and it has been silent for ${sessionIdleReapDays} day(s) — the server ends it at its next start`"
+        >ends at next start</span
+      >
       <span v-if="s.attached" data-testid="surviving-open" class="flex-none text-[11px] text-amber" title="A terminal is holding it — close it there"
         >● open</span
       >
@@ -78,4 +98,25 @@ const lastActive = (s: SurvivingSession): string => {
     </li>
   </ul>
   <p v-else class="mb-2 text-[12px] text-dim">None — nothing is running from an earlier server.</p>
+
+  <div class="mb-3 mt-2 flex items-center gap-3">
+    <SettingsStepper
+      :value="sessionIdleReapDays"
+      unit=" days"
+      :min="MIN_REAP_IDLE_DAYS"
+      :max="MAX_REAP_IDLE_DAYS"
+      :step="REAP_STEP_DAYS"
+      label="the idle days before a session is ended"
+      @nudge="nudgeIdleDays"
+    />
+    <span class="text-[12px] text-dim">
+      <template v-if="sessionIdleReapDays === REAP_IDLE_DAYS_OFF">
+        <strong class="text-fg">Never ended automatically.</strong> They stay until you stop one here, or end it from the terminal holding it.
+      </template>
+      <template v-else>
+        A session nothing is using — nobody attached, no output for this long — is <strong class="text-fg">ended when the server next starts</strong>. Its
+        conversation is kept. Set this to 0 to never end one automatically.
+      </template>
+    </span>
+  </div>
 </template>

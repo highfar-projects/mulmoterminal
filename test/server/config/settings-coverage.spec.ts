@@ -50,6 +50,7 @@ const REACHABLE_BY: Record<string, Reachable> = {
   pushKinds: { ui: true, skill: "mulmoterminal-notify" },
   worklogEnabled: { ui: true, skill: CONFIG_SKILL },
   worklogIntervalHours: { ui: true, skill: CONFIG_SKILL },
+  sessionIdleReapDays: { ui: true, skill: CONFIG_SKILL },
   terminalSubmit: { ui: true, skill: "mulmoterminal-keys" },
   keymap: { skill: "mulmoterminal-keys" },
   copyOnSelect: { ui: true, skill: "mulmoterminal-keys" },

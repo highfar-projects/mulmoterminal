@@ -20,6 +20,7 @@ const input = (over: Partial<SurvivingInput> = {}): SurvivingInput => ({
   resumable: () => false,
   cwdOf: () => null,
   agentOf: () => null,
+  reapable: () => false,
   ...over,
 });
 
@@ -38,7 +39,7 @@ describe("buildSurvivingSessions", () => {
         resumable: () => true,
       }),
     );
-    expect(rows).toEqual([{ key: "s-1", cwd: "/repo", agent: "codex", idleSeconds: 2 * HOUR, attached: false, resumable: true }]);
+    expect(rows).toEqual([{ key: "s-1", cwd: "/repo", agent: "codex", idleSeconds: 2 * HOUR, attached: false, resumable: true, reapable: false }]);
   });
 
   // A shell left behind by a restart: no agent wrote a conversation for it, and nothing on disk can
@@ -59,6 +60,13 @@ describe("buildSurvivingSessions", () => {
   it("never reports a negative age", () => {
     const [row] = buildSurvivingSessions(input({ tmuxIds: ["s-1"], activity: new Map([["s-1", NOW + 30]]) }));
     expect(row?.idleSeconds).toBe(0);
+  });
+
+  // The row says whether the server itself will end it, from the sweep's own rule — so the list
+  // shows what is about to happen rather than leaving it to be noticed after a restart (#1467).
+  it("marks the rows the boot sweep will end", () => {
+    const rows = buildSurvivingSessions(input({ tmuxIds: ["doomed", "safe"], reapable: (key) => key === "doomed" }));
+    expect(rows.filter((r) => r.reapable).map((r) => r.key)).toEqual(["doomed"]);
   });
 
   // The list exists to be cleared, so what CAN be cleared comes first, oldest at the top; a row
@@ -93,6 +101,7 @@ describe("byClearability", () => {
     idleSeconds: 0,
     attached: false,
     resumable: false,
+    reapable: false,
     ...over,
   });
 

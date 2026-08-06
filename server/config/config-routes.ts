@@ -149,6 +149,13 @@ export function getWorklogConfig(): { enabled: boolean; intervalHours: number } 
   return { enabled: config.worklogEnabled, intervalHours: config.worklogIntervalHours };
 }
 
+// How long a session may sit unused before the boot sweep ends it (#1467). Read live like the rest,
+// though only the boot sweep asks — a POST that changes it takes effect at the next start, which is
+// also when the sweep runs.
+export function getSessionIdleReapDays(): number {
+  return config.sessionIdleReapDays;
+}
+
 // The Enter-key submit/newline byte mapping — read live so the phone remote-view submit
 // picks up a config edit on the next send without a restart (#772).
 export function getTerminalSubmit(): TerminalSubmitMode {

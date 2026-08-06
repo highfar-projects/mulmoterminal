@@ -16,6 +16,8 @@ import { mountConfigRoutes } from "../config/config-routes.js";
 import { mountFilesBrowseRoutes } from "../files/files-browse.js";
 import { mountTmuxRoutes } from "../infra/tmux-routes.js";
 import { survivingSessions } from "../session/surviving-sessions.js";
+import { getSessionIdleReapDays } from "../config/config-routes.js";
+import { sweepIdleSessions } from "../session/reap-idle-sessions.js";
 import { mountHookRoute } from "../routes/hook-routes.js";
 import { mountPluginRoutes } from "../routes/plugin-routes.js";
 import { mountMcpRoutes } from "../routes/mcp-routes.js";
@@ -72,8 +74,7 @@ import type { createGrokSpawner } from "../session/spawn-grok.js";
 import type { createAntigravitySpawner } from "../session/spawn-antigravity.js";
 import type { createTranslationWorker } from "../session/translation-worker.js";
 import type { createTitleManager } from "../session/session-title.js";
-import { tmuxHasSession, tmuxKillSession, tmuxListSessionIds, tmuxAttachedClientCount } from "../infra/tmux.js";
-import { resumableSessionPredicate } from "../session/resumable-sessions.js";
+import { tmuxHasSession, tmuxKillSession } from "../infra/tmux.js";
 import type { SessionActivityDeps } from "../session/session-activity-deps.js";
 import { mountSpaFallback } from "../infra/spa-fallback.js";
 import { mountRateLimitRoutes, type RateLimitRouteDeps } from "../agents/rate-limit-routes.js";
@@ -377,11 +378,9 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
     reapSession: deps.reap,
     hasTmux: tmuxHasSession,
     killTmux: tmuxKillSession,
-    listTmuxIds: tmuxListSessionIds,
-    attachedClientCount: tmuxAttachedClientCount,
-    resumablePredicate: resumableSessionPredicate,
+    sweep: () => sweepIdleSessions(Date.now(), getSessionIdleReapDays()),
     // `Date.now()` is read HERE rather than inside the builder, which stays pure and takes the
     // moment as a number (session/surviving-sessions.ts).
-    survivingSessions: () => survivingSessions(Date.now()),
+    survivingSessions: () => survivingSessions(Date.now(), getSessionIdleReapDays()),
   });
 }

@@ -26,8 +26,15 @@ export interface SurvivingSession {
   /** A terminal is holding it — this window, another tab, or a second MulmoTerminal. */
   attached: boolean;
   /** Ending it does not lose the conversation: a transcript (or a rollout) can bring it back. False
-   *  means the session IS the only copy — a Shell's scrollback, say. */
+   *  means the session IS the only copy — a Shell's scrollback, say.
+   *
+   *  On-disk evidence ONLY. Being live, or having once been a grid cell, restores nothing — and
+   *  counting those is why this column claimed 20 of 22 sessions were restorable when 15 were. */
   resumable: boolean;
+  /** The server will end it at its next start: nothing is using it and it has been silent past
+   *  `sessionIdleReapDays` (#1467). Said on the row so the sweep is visible in the list it acts on,
+   *  rather than being noticed after the fact. */
+  reapable: boolean;
 }
 
 /**
