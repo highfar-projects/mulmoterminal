@@ -19,6 +19,7 @@
 //   measured here read 397k against a real 266k — a badge saying `/compact` is due when it is not.
 import { isRecord } from "../../common/isRecord.js";
 import type { SessionUsage } from "../session/transcript.js";
+import { usageCount as num } from "./usage-count.js";
 
 /** Everything one fold of a session log answers. One value rather than three folds, because all
  *  three come off the same record and folding the file three times costs three scans. */
@@ -50,11 +51,6 @@ export const isMuseBadgeFold = (value: unknown): value is MuseBadgeFold =>
   typeof value.usage.cacheCreationTokens === "number" &&
   (value.model === null || typeof value.model === "string") &&
   typeof value.contextTokens === "number";
-
-const num = (record: Record<string, unknown>, key: string): number => {
-  const value = record[key];
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
-};
 
 // `{ payload: { kind: "run", event: { kind: "model_completed", usage, model } } }`. Matched on the
 // event's own kind rather than on `payload.kind`: the file carries other run events, and one of
