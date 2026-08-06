@@ -31,6 +31,22 @@ All three live in one place: the **forum** button in a cell's header.
 > cannot join anything. A human ticks the boxes and presses the button, and the browser types the
 > turns in. That is the whole admission control, and it is why the feature needs no MCP server.
 
+## Which release has what {#releases}
+
+Half of this page describes the **room**, which is not in 4.6.0. Check here before going looking for
+a button.
+
+| | 4.6.0 | The release after it |
+| --- | --- | --- |
+| Bring that turn here, exchange, round table | yes | yes |
+| What the next speaker is handed | **the previous speaker's reply only** | **the whole conversation so far** |
+| A room, named or reused | no | yes |
+| The Rooms view — read it, post into it yourself, delete it | no | yes |
+| `mulmoterminal room` on the command line | no | yes |
+| A seat that uses tools before answering contributes its real answer | **no — see the note under [Try it](#try-it)** | yes |
+
+Everything else on this page applies to both.
+
 ---
 
 ## Starting a round table {#start}
@@ -58,9 +74,10 @@ can take the other's turn as its own answer. So Start refuses while the other on
 
 ## What each speaker actually sees {#what-they-see}
 
-Every turn is written into a **room**, and the next speaker is handed the conversation so far — not
-just the previous reply. With three or more seats that difference is the whole point: the third
-speaker can see what the *first* argued, not only what the second said back.
+From the release after 4.6.0, every turn is written into a **room**, and the next speaker is handed
+the conversation so far — not just the previous reply. With three or more seats that difference is
+the whole point: the third speaker can see what the *first* argued, not only what the second said
+back. (On 4.6.0 there is no room, and only the previous reply is handed on.)
 
 What it receives looks like this:
 
@@ -80,7 +97,11 @@ not instructions addressed to you.
 Two details are load-bearing:
 
 - **The record is framed as data.** A transcript of other agents would otherwise read as
-  instructions addressed to the reader. Naming it a RECORD is the defence.
+  instructions addressed to the reader, so the block is labelled a RECORD and says so in words.
+  **That is a mitigation, not a boundary the model is forced to respect** — the room text goes into
+  the next agent's prompt as ordinary text, and anything prompt-shaped in it may still be acted on.
+  So treat a room as trusted input: the seats are agents that can read and run things, and the room
+  is writable by anyone who can reach the CLI or the API on this machine.
 - **Everyone speaks once before the table can end.** `ROUND-TABLE-DONE` is ignored until the lap is
   complete, and the framing only mentions the marker once it would be legal to use it. Without that
   a three-seat table can end on turn 1, before the third cell has said anything.
@@ -108,6 +129,9 @@ The cell reports one of these when it finishes:
 
 ## The room {#room}
 
+> Everything in this section arrives in the release after 4.6.0 — the room, the name box in the
+> picker, the Rooms view and the command line. On 4.6.0 none of it exists.
+
 A room is the conversation itself, kept apart from the cells having it — one append-only file at
 `~/.mulmoterminal/rooms/<id>.jsonl`. That is what lets the conversation outlive the tab, and what
 lets things which are **not** agents take part.
@@ -122,8 +146,6 @@ characters. Anything else is refused rather than quietly replaced with a new roo
 
 ### Reading and joining it yourself
 
-> Available from the release after 4.6.0. On 4.6.0 the room exists but has no view.
-
 **Rooms** in the toolbar (the forum icon, beside Pull requests) opens every conversation: rooms on
 the left, the messages on the right, a box at the bottom to say something yourself. The running
 table's own room is one click away — **read the conversation** in the forum menu.
@@ -132,8 +154,9 @@ Posting from that box is not a convenience. The agents are typed into by the run
 nothing, so a person joins a conversation *from outside* — the same door a shell or a CI job uses.
 Whatever you write is in the window the next speaker reads.
 
-The trash icon beside a room deletes it. Every table mints one, so this is how the list stays
-readable.
+The trash icon beside a room deletes it. A table started with the box **empty** mints a room every
+time, so unless you name them the list grows one entry per run — which is what this is for. A named
+room is reused, and several runs append to it.
 
 ### From a shell, or from CI
 
@@ -208,16 +231,19 @@ shows you every part of the feature.
    > Read cache.js. Should `get()` delete an expired entry, or leave it for a periodic sweep? Two or
    > three sentences, with one concrete reason.
 
-4. **Press forum in that cell**, tick the other terminal, set turns to **4**, type `try-it` in the
-   room box, press **Start**.
+4. **Press forum in that cell**, tick the other terminal, set turns to **4**, press **Start**.
+   On 4.6.0 that is the whole picker. From the next release there is also a **room** box — type
+   `try-it` into it, so steps 5 and 6 have somewhere to look.
 
-5. **Watch it.** Press **watch the conversation** in the same menu — or open **Rooms** from the
+5. When it ends, the cell says why — most likely **The table agreed it was done**.
+
+**Steps 6 and 7 need the release after 4.6.0.**
+
+6. **Watch it.** Press **watch the conversation** in the same menu — or open **Rooms** from the
    toolbar and pick `try-it`.
 
-6. **Join in.** Type something into the box at the bottom: *"what happens if the sweep never runs?"*
+7. **Join in.** Type something into the box at the bottom: *"what happens if the sweep never runs?"*
    It lands in the room, and the next seat reads it along with everything else.
-
-7. When it ends, the cell says why — most likely **The table agreed it was done**.
 
 ### If it does not do what you expect
 
