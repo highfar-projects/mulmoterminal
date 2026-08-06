@@ -4,6 +4,7 @@
 // Split from index.ts (#548 step 3c).
 import type { IPty } from "node-pty";
 import type { WebSocket } from "ws";
+import { handlePtyExit } from "./pty-exit.js";
 import { getLaunchers } from "../config/config-routes.js";
 import { launcherAt, shellInvocation } from "./shell-command.js";
 import { ptys } from "./registry.js";
@@ -69,7 +70,9 @@ export function createShellSpawners(deps: SpawnDeps) {
     term.onExit(({ exitCode, signal }) => {
       console.log(ptyExitLine({ agent: "launcher", exitCode, signal, lifetimeMs: Date.now() - spawnedAtMs, cwd, sessionId }));
       sendExitAndClose(entry.ws, exitCode, signal);
-      deps.reap(sessionId);
+      // A launcher is persistent and tmux-backed like an agent cell, so it has the same two ways to
+      // lose its pty — and only one of them means the program is over (#1496).
+      handlePtyExit(sessionId, deps.reap);
     });
     return entry;
   }
