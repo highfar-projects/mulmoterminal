@@ -244,6 +244,10 @@ via `useCollectionBrowse`). Verified: MulmoClaude's pinned collections appear in
 toolbar from the shared file; the overlay opens and the index renders. Still open: `startChat` is a
 no-op (collection "create"/action buttons that seed a chat are inert), and Tier 1 write routes.
 
+Both of those have since shipped — `startChat` seeds a visible chat (`startCollectionChat`) and the
+Tier 1 write routes are mounted in `server/backends/collections.ts` — which is what the note under the
+stub list above refers to. The sentence before this one is left as the record of where Tier 2 stopped.
+
 Bottom line: **the package is drop-in-ready and needs zero MulmoClaude changes.** The work is entirely
 in MulmoTerminal: server read engine + routes, the frontend ToolPlugin + binding + teleport wrapper,
 then the toolbar/favorites/browse panel for the actual ask.
