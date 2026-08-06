@@ -843,9 +843,15 @@ const viewDataQueryHandler: RequestHandler<{ slug: string }> = async (req, res) 
   }
 };
 
-/** Mount the read-side REST surface. Mirrors MulmoClaude's
- *  GET /api/collections + GET /api/collections/:slug response shapes, which is what
- *  the package's UI binding (fetchCollectionDetail / listCollections) expects.
+/** Mount the collection REST surface. The response SHAPES are MulmoClaude's, which is
+ *  what the package's UI binding (fetchCollectionDetail / listCollections) expects — but
+ *  three PATHS deliberately differ from it: list is `/list` (MulmoClaude: `GET
+ *  /api/collections`), detail is `/:slug/detail` (`GET /api/collections/:slug`), and the
+ *  registry lives under `/api/collections/registry/*` (`/api/collections-registry/*`).
+ *  Reason and the standing decision: docs/mulmoclaude-parity.md. A new caller against THIS
+ *  server uses the paths mounted below — `/api/collections/list`,
+ *  `/api/collections/:slug/detail`, `/api/collections/registry/*` — never MulmoClaude's
+ *  spelling and never a third one.
  *  One app.METHOD(path, handler) per endpoint — the handlers live above. */
 export function mountCollectionRoutes(app: Express): void {
   // Registered before the ":slug" routes so "registry" is never captured as a slug.
