@@ -44,7 +44,7 @@ import {
 } from "../session/session-reads.js";
 import { formatHandoff, type HandoffShape } from "../session/handoff-text.js";
 import { projectSessionsDir } from "../session/project-dir.js";
-import { runningKeyOf, runningSessionKeys, sessionAttached } from "../session/dir-session.js";
+import { runningKeyOf, runningSessionKeys, sessionAttached, survivorSnapshot } from "../session/dir-session.js";
 import type { SessionOccupancy } from "../../common/sessionOccupancy.js";
 import type { SessionRunning } from "../../common/sessionRunning.js";
 import { tmuxAttachedCounts } from "../infra/tmux.js";
@@ -309,10 +309,14 @@ async function sessionList(req: Request, res: Response) {
  * string and case 1 covers it. It still passes an empty iterable rather than skipping the call, so
  * all three lists answer the question the same way.
  */
-function withAttached<T extends { id: string }>(sessions: T[], records: Iterable<AgentConversation>): (T & SessionOccupancy & SessionRunning)[] {
+async function withAttached<T extends { id: string }>(sessions: T[], records: Iterable<AgentConversation>): Promise<(T & SessionOccupancy & SessionRunning)[]> {
+  // The snapshot refreshes the shared conversation logs BEFORE reading the running keys — the same
+  // order dirSession's callers take, for the same reason (survivorSnapshot's header): a session
+  // another MulmoTerminal process started must not read as free in this list either. The records
+  // iterable is live over the registry map, so the refresh's additions are seen below.
+  const running = await survivorSnapshot();
   const holders = conversationSessionKeys(records);
   const tmuxCounts = tmuxAttachedCounts();
-  const running = runningSessionKeys();
   return sessions.map((s) => {
     const keys = [s.id, ...(holders.get(s.id) ?? [])];
     return {
@@ -335,7 +339,7 @@ async function codexSessionList(req: Request, res: Response) {
     if (cwd === null) return;
     await codexRolloutsHydrated;
     const sessions = await listCodexSessions(codexSessionsRoot(), cwd, SESSION_LIST_LIMIT);
-    res.json({ cwd, sessions: withAttached(sessions, codexRollouts.values()) });
+    res.json({ cwd, sessions: await withAttached(sessions, codexRollouts.values()) });
   } catch (err) {
     console.error("[api] /api/codex/sessions failed:", err);
     res.status(500).json({ error: String(err) });
@@ -352,7 +356,7 @@ async function antigravitySessionList(req: Request, res: Response) {
     if (cwd === null) return;
     await antigravityConversationsHydrated;
     const sessions = await listAntigravitySessions(antigravityBrainRoot(), antigravityConversations.values(), cwd, SESSION_LIST_LIMIT);
-    res.json({ cwd, sessions: withAttached(sessions, antigravityConversations.values()) });
+    res.json({ cwd, sessions: await withAttached(sessions, antigravityConversations.values()) });
   } catch (err) {
     console.error("[api] /api/antigravity/sessions failed:", err);
     res.status(500).json({ error: String(err) });
@@ -369,7 +373,7 @@ async function grokSessionList(req: Request, res: Response) {
     const sessions = await listGrokSessions(grokSessionsRoot(), cwd, SESSION_LIST_LIMIT);
     // No conversation log: grok's session key is the id we minted, which is also the directory
     // name — so `withAttached` finds a holder by the row's own id (see its header).
-    res.json({ cwd, sessions: withAttached(sessions, []) });
+    res.json({ cwd, sessions: await withAttached(sessions, []) });
   } catch (err) {
     console.error("[api] /api/grok/sessions failed:", err);
     res.status(500).json({ error: String(err) });
@@ -389,7 +393,7 @@ async function museSessionList(req: Request, res: Response) {
       mtime: m.updatedAtUs ? m.updatedAtUs / 1000 : 0,
       model: m.modelId ?? undefined,
     }));
-    res.json({ cwd, sessions: withAttached(sessions, museConversations.values()) });
+    res.json({ cwd, sessions: await withAttached(sessions, museConversations.values()) });
   } catch (err) {
     console.error("[api] /api/muse/sessions failed:", err);
     res.status(500).json({ error: String(err) });
