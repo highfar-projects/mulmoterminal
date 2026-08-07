@@ -8,6 +8,64 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.7.1 — 2026-08-07
+
+> **Setup guide:** [The version you are running, on screen](https://receptron.github.io/mulmoterminal/guide/en/v4.7.1.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.7.1.html))
+
+**The app can now tell you which build it is**, which until now it could not: the only way to
+answer "what am I running?" was `--version` in another terminal, and the header's Update badge
+appears only when something newer exists — it never named the version you had.
+
+Alongside it, the Agent Picker stops being six words in one weight, and two remaining ways a seed
+prompt could kill a session are closed.
+
+- **The running version, in Settings** (#1524): a **Version** row under the modal's title. An npm
+  install shows the version from the shipped `package.json`; a git checkout shows that plus the
+  short HEAD **commit**, because there the version is only whatever was last released and the
+  commit is what identifies the build. When the registry has something newer, the row repeats the
+  header badge's notice with its command — the badge is behind the modal while it is open. The
+  update check was restructured to make this possible in one pass of the probes: `computeUpdateInfo`
+  now returns the facts (`install` / `version` / `commit` / `latest` / `notice`) and
+  `computeUpdateNotice` takes the notice out of it, so the launcher's console line is unchanged.
+  `readInstallInfo` is the network-free half, which is what runs when the update check is opted
+  out — `MULMOTERMINAL_NO_UPDATE_CHECK` / `NO_UPDATE_NOTIFIER` silence the *notice*, not the
+  version display, and reading it never leaves the machine. `/api/update-status` gained `ready`:
+  the old "notice is null" could not tell *up to date* from *the check has not finished*, which is
+  harmless for a badge that draws nothing either way but would have left the commit permanently
+  absent. The wire shape moved to `common/updateStatus.ts` and `useUpdateStatus` became a single
+  module-level poller, since the badge and the version row are two readers of one answer.
+  Requested by [@chikara813](https://github.com/receptron/mulmoterminal/issues/1520).
+- **A mark per agent in the Agent Picker** (#1521): each built-in agent shows the shape it already
+  wears in the rate-limit gauge — Anthropic's burst, Codex's crossed loops, Antigravity's
+  four-point star, Grok's broken X, Muse's M — so an agent looks the same wherever it is named, and
+  the marks inherit `currentColor` so the selected row's mark brightens with its label. The two
+  options that are not agents get a Material Symbol instead: **Shell** a terminal, and a custom
+  agent a slider — deliberately not Claude's burst, since a row indistinguishable from the Claude
+  row is the problem being fixed. The label moved into its own span, because a Material Symbol is a
+  ligature and its name is real text inside the button.
+- **A seed prompt too long for the command line goes to a file** (#1522): `tmux new-session -A … --
+  <bin> <args>` refuses a command line past a limit shared by everything on it, and over that limit
+  tmux answers `command too long` and **the session dies** — a worse failure than the Windows one,
+  and not Windows-only. Measured on tmux 3.7b: one 16,375-byte argument fails, and two 10,000-byte
+  arguments fail together, which is what makes the budget the whole line rather than one argument.
+  A seed over **4,096 bytes** now goes to a file on every platform. Measured in **bytes**, not
+  characters: tmux counts bytes and Japanese is three per character, so 2,000 Japanese characters
+  (6,000 bytes) goes to a file while the same count of ASCII does not.
+- **A multi-line seed prompt no longer breaks Windows launches** (#1519): `grok`, `antigravity` and
+  `muse` put the seed straight on the command line, and `codexifySkillSeed` always produces
+  multiple lines — so on a `.cmd` install, launching any of the three with a skill failed with
+  `UnsafeArgumentError` every time. The seed is written to a file and the command line carries one
+  line naming it. Narrowed to the case that cannot work otherwise: non-Windows is unchanged, and so
+  is a single-line seed on Windows. Same bug family as 4.7.0's `--append-system-prompt` fix.
+  Reported by [@chikara813](https://github.com/receptron/mulmoterminal/issues/1518).
+- **Two duplicate-code alerts closed** (#1525): the guards in front of a collection's record
+  actions were copied between the parent route (`POST /:slug/items/:itemId/actions/:actionId`) and
+  the view-token route (`POST /:slug/view-data/actions/:actionId`) — action 404, read-only 405,
+  record 404 and the `actionVisible` 409. They are now one module, `collectionActionGuards.ts`,
+  which is what stops the pair drifting into "the action pushed from a view has a different state
+  gate". Behaviour is unchanged: same statuses, same wording, same per-route check order. jscpd
+  reports 0 clones where it reported 2.
+
 ## mulmoterminal@4.7.0 — 2026-08-07
 
 > **Setup guide:** [Muse, and the GUI tools it was not supposed to be able to reach](https://receptron.github.io/mulmoterminal/guide/en/v4.7.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.7.0.html))
