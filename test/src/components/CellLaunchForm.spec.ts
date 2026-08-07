@@ -307,6 +307,18 @@ describe("a resume row whose session is still running", () => {
     expect(w.find('[data-testid="cell-resume-item"]').attributes("disabled")).toBeUndefined();
   });
 
+  // For codex/agy/muse the row's id is the AGENT's conversation id while the running tmux session
+  // is keyed by whatever MulmoTerminal minted at spawn. Resuming by the row's id starts a second
+  // backend on a conversation that already has one (#1533) — picking it up means reattaching the
+  // key it RUNS under.
+  it("resumes under the surviving key, not the row's own id", async () => {
+    mockFetch([], [running({ id: "conv-1", runningKey: "key-1" })]);
+    const w = mountForm();
+    await flushPromises();
+    await w.find('[data-testid="cell-resume-item"]').trigger("click");
+    expect(w.emitted("resume")?.[0]).toEqual([{ id: "key-1", cwd: "/repo", agent: "claude" }]);
+  });
+
   it("says nothing when the server reports no running session", async () => {
     mockFetch([], [running({ runningKey: null })]);
     const w = mountForm();

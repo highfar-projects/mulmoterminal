@@ -11,8 +11,19 @@ import { isSessionAttached, type SessionOccupancy } from "../../common/sessionOc
 import { tmuxListSessionIds } from "../infra/tmux.js";
 import { isTerminalAgent, type TerminalAgent } from "../../common/sessionAgent.js";
 import { isProbeSessionId } from "../agents/probe-session.js";
+import type { AgentConversation } from "./agent-conversations.js";
 import { projectSessionsDir } from "./project-dir.js";
-import { isBackgroundSession, ptys, translationWorkerIds } from "./registry.js";
+import {
+  antigravityConversations,
+  antigravityConversationsHydrated,
+  codexRollouts,
+  codexRolloutsHydrated,
+  isBackgroundSession,
+  museConversations,
+  museConversationsHydrated,
+  ptys,
+  translationWorkerIds,
+} from "./registry.js";
 import { collectOnDiskSessionStats, safeReaddir } from "./session-reads.js";
 
 export interface DirSession extends SessionOccupancy {
@@ -95,17 +106,63 @@ function livePtyCandidates(dir: string, tmuxCounts: Map<string, number> | null, 
   });
 }
 
+/** One agent's conversation log, as the survivor pass below reads it: which agent, and its
+ *  session-key → conversation records. */
+export interface SurvivorLog {
+  agent: TerminalAgent;
+  records: Iterable<readonly [string, AgentConversation]>;
+}
+
+/**
+ * Sessions still RUNNING in tmux that `ptys` no longer knows: the pty died while the session kept
+ * going (#1496 keeps the session and drops the entry), or the server restarted under it. The live
+ * pass above cannot see them, and for codex/agy/muse no transcript pass can either — their
+ * conversations live under the agent's own root keyed by its own id, so the conversation log is
+ * the one record tying the surviving key to a directory.
+ *
+ * Before this pass such a session read as "no session here": the worktree admitted a second agent
+ * beside a running one, and the launcher's row offered its conversation as free — which is how one
+ * conversation ended up with two backends and the view came back on the wrong one (#1533).
+ *
+ * Pure over its inputs so the selection can be pinned; `dirSession` wires the real registry in.
+ */
+export function survivorCandidates(
+  dir: string,
+  logs: readonly SurvivorLog[],
+  facts: {
+    running: ReadonlySet<string>;
+    /** A pty in this process — the live pass already names it, better (its cwd is current). */
+    liveHere: (id: string) => boolean;
+    userSession: (id: string) => boolean;
+    attached: (id: string) => boolean;
+    now: number;
+  },
+): DirSessionCandidate[] {
+  return logs.flatMap(({ agent, records }) =>
+    [...records].flatMap(([id, record]) => {
+      if (!facts.running.has(id) || facts.liveHere(id) || !facts.userSession(id)) return [];
+      // The cwd recorded when the conversation was claimed, canonicalized like the live pass: a
+      // worktree reached through a symlinked spelling is still the same directory (#1208).
+      if (canonicalPath(record.cwd) !== dir) return [];
+      return [{ id, live: true, mtime: facts.now, agent, attached: facts.attached(id) }];
+    }),
+  );
+}
+
 // Claude's transcripts are the only agent conversation discoverable from a DIRECTORY: codex keeps
 // its rollouts under ~/.codex keyed by its own id, so a codex session that outlived its pty is
-// found by the live pass above or not at all. It then reads as "no session here", which starts a
-// fresh one — the same thing that happened before this existed.
-async function transcriptCandidates(dir: string, tmuxCounts: Map<string, number> | null): Promise<DirSessionCandidate[]> {
+// found by the live pass above, the survivor pass, or not at all.
+//
+// `running` upgrades a transcript whose session survives in tmux to a LIVE candidate: rank decides
+// between "the conversation running right now" and "the one written to most recently", and those
+// are different sessions exactly when a restart left one running (#1533).
+async function transcriptCandidates(dir: string, tmuxCounts: Map<string, number> | null, running: ReadonlySet<string>): Promise<DirSessionCandidate[]> {
   const sessionsDir = projectSessionsDir(dir);
   const files = safeReaddir(sessionsDir).filter((f) => f.endsWith(".jsonl"));
   const stats = await collectOnDiskSessionStats(sessionsDir, files);
   return stats
     .filter((s) => isUserSession(s.id))
-    .map((s) => ({ id: s.id, live: false, mtime: s.mtime, agent: "claude" as const, attached: sessionAttached(s.id, tmuxCounts) }));
+    .map((s) => ({ id: s.id, live: running.has(s.id), mtime: s.mtime, agent: "claude" as const, attached: sessionAttached(s.id, tmuxCounts) }));
 }
 
 // BOTH spellings, because neither one alone is right (#1208). Claude names its project directory
@@ -114,18 +171,36 @@ async function transcriptCandidates(dir: string, tmuxCounts: Map<string, number>
 // caller's spelling. But the caller may equally arrive with git's canonical spelling of a worktree
 // reached through a symlink, whose transcripts are under the other name. Looking under one name
 // misses the session and lets a second start; looking under both cannot.
-async function transcriptCandidatesEitherSpelling(dir: string, tmuxCounts: Map<string, number> | null): Promise<DirSessionCandidate[]> {
+async function transcriptCandidatesEitherSpelling(
+  dir: string,
+  tmuxCounts: Map<string, number> | null,
+  running: ReadonlySet<string>,
+): Promise<DirSessionCandidate[]> {
   const spellings = [...new Set([path.resolve(dir), canonicalPath(dir)])];
-  const found = await Promise.all(spellings.map((spelling) => transcriptCandidates(spelling, tmuxCounts)));
+  const found = await Promise.all(spellings.map((spelling) => transcriptCandidates(spelling, tmuxCounts, running)));
   // Deduped by id: one session listed twice would be picked as itself either way, but a duplicate
   // is a fact about the LOOKUP rather than about the directory, and nothing downstream should have
   // to know that.
   return [...new Map(found.flat().map((candidate) => [candidate.id, candidate])).values()];
 }
 
-/** `tmuxCounts` and `now` are passed in so a whole list of directories is answered from one
- *  `list-clients` call and one clock read. */
-export async function dirSession(dir: string, tmuxCounts: Map<string, number> | null, now: number): Promise<DirSession | null> {
-  const live = livePtyCandidates(canonicalPath(dir), tmuxCounts, now);
-  return pickDirSession([...live, ...(await transcriptCandidatesEitherSpelling(dir, tmuxCounts))]);
+/** `tmuxCounts`, `running` and `now` are passed in so a whole list of directories is answered from
+ *  one `list-clients` call, one `list-sessions` call and one clock read — `runningSessionKeys()`
+ *  is the value callers hand over. */
+export async function dirSession(dir: string, tmuxCounts: Map<string, number> | null, now: number, running: ReadonlySet<string>): Promise<DirSession | null> {
+  const canonical = canonicalPath(dir);
+  const live = livePtyCandidates(canonical, tmuxCounts, now);
+  // The logs hydrate once at boot; a listing taken before that would miss every survivor from a
+  // previous run — the very sessions the pass exists for (the same wait survivingSessions takes).
+  await Promise.all([codexRolloutsHydrated, antigravityConversationsHydrated, museConversationsHydrated]);
+  const survivors = survivorCandidates(
+    canonical,
+    [
+      { agent: "codex", records: codexRollouts },
+      { agent: "antigravity", records: antigravityConversations },
+      { agent: "muse", records: museConversations },
+    ],
+    { running, liveHere: (id) => ptys.has(id), userSession: isUserSession, attached: (id) => sessionAttached(id, tmuxCounts), now },
+  );
+  return pickDirSession([...live, ...survivors, ...(await transcriptCandidatesEitherSpelling(dir, tmuxCounts, running))]);
 }
