@@ -15,9 +15,7 @@ import {
   activityStateHydrated,
   aiTitles,
   antigravityConversations,
-  antigravityConversationsHydrated,
   codexRollouts,
-  codexRolloutsHydrated,
   backgroundSessionsHydrated,
   failedWorkersHydrated,
   unplacedSessionsHydrated,
@@ -44,7 +42,7 @@ import {
 } from "../session/session-reads.js";
 import { formatHandoff, type HandoffShape } from "../session/handoff-text.js";
 import { projectSessionsDir } from "../session/project-dir.js";
-import { runningKeyOf, runningSessionKeys, sessionAttached } from "../session/dir-session.js";
+import { runningKeyOf, runningSessionKeys, sessionAttached, survivorSnapshot } from "../session/dir-session.js";
 import type { SessionOccupancy } from "../../common/sessionOccupancy.js";
 import type { SessionRunning } from "../../common/sessionRunning.js";
 import { tmuxAttachedCounts } from "../infra/tmux.js";
@@ -309,10 +307,18 @@ async function sessionList(req: Request, res: Response) {
  * string and case 1 covers it. It still passes an empty iterable rather than skipping the call, so
  * all three lists answer the question the same way.
  */
-function withAttached<T extends { id: string }>(sessions: T[], records: Iterable<AgentConversation>): (T & SessionOccupancy & SessionRunning)[] {
+function withAttached<T extends { id: string }>(
+  sessions: T[],
+  records: Iterable<AgentConversation>,
+  running: ReadonlySet<string>,
+): (T & SessionOccupancy & SessionRunning)[] {
+  // `running` comes from the caller's `survivorSnapshot()`, taken BEFORE the caller built its
+  // list: the snapshot refreshes the shared conversation logs first and reads the running keys
+  // after, so a session another MulmoTerminal process started is in the list, in the holders map
+  // and in `running` alike. Taking it here — after the list was built — left the agy list, whose
+  // ROWS are drawn from the conversation map, missing such a session entirely (#1534 review).
   const holders = conversationSessionKeys(records);
   const tmuxCounts = tmuxAttachedCounts();
-  const running = runningSessionKeys();
   return sessions.map((s) => {
     const keys = [s.id, ...(holders.get(s.id) ?? [])];
     return {
@@ -333,9 +339,9 @@ async function codexSessionList(req: Request, res: Response) {
   try {
     const cwd = workspaceForRoute(req.query.cwd, res);
     if (cwd === null) return;
-    await codexRolloutsHydrated;
+    const running = await survivorSnapshot();
     const sessions = await listCodexSessions(codexSessionsRoot(), cwd, SESSION_LIST_LIMIT);
-    res.json({ cwd, sessions: withAttached(sessions, codexRollouts.values()) });
+    res.json({ cwd, sessions: withAttached(sessions, codexRollouts.values(), running) });
   } catch (err) {
     console.error("[api] /api/codex/sessions failed:", err);
     res.status(500).json({ error: String(err) });
@@ -350,9 +356,12 @@ async function antigravitySessionList(req: Request, res: Response) {
   try {
     const cwd = workspaceForRoute(req.query.cwd, res);
     if (cwd === null) return;
-    await antigravityConversationsHydrated;
+    // BEFORE the list is built, not only before occupancy: the agy rows themselves are drawn from
+    // the conversation map (the cwd comes from OUR log), so a mapping another process appended has
+    // to be folded in first or the row is missing from this response entirely (#1534 review).
+    const running = await survivorSnapshot();
     const sessions = await listAntigravitySessions(antigravityBrainRoot(), antigravityConversations.values(), cwd, SESSION_LIST_LIMIT);
-    res.json({ cwd, sessions: withAttached(sessions, antigravityConversations.values()) });
+    res.json({ cwd, sessions: withAttached(sessions, antigravityConversations.values(), running) });
   } catch (err) {
     console.error("[api] /api/antigravity/sessions failed:", err);
     res.status(500).json({ error: String(err) });
@@ -369,7 +378,7 @@ async function grokSessionList(req: Request, res: Response) {
     const sessions = await listGrokSessions(grokSessionsRoot(), cwd, SESSION_LIST_LIMIT);
     // No conversation log: grok's session key is the id we minted, which is also the directory
     // name — so `withAttached` finds a holder by the row's own id (see its header).
-    res.json({ cwd, sessions: withAttached(sessions, []) });
+    res.json({ cwd, sessions: withAttached(sessions, [], await survivorSnapshot()) });
   } catch (err) {
     console.error("[api] /api/grok/sessions failed:", err);
     res.status(500).json({ error: String(err) });
@@ -380,7 +389,7 @@ async function museSessionList(req: Request, res: Response) {
   try {
     const cwd = workspaceForRoute(req.query.cwd, res);
     if (cwd === null) return;
-    await museConversationsHydrated;
+    const running = await survivorSnapshot();
     const metas = await listMuseSessionsForCwd(cwd);
     const sorted = [...metas].sort((a, b) => (b.updatedAtUs ?? 0) - (a.updatedAtUs ?? 0));
     const sessions = sorted.slice(0, SESSION_LIST_LIMIT).map((m) => ({
@@ -389,7 +398,7 @@ async function museSessionList(req: Request, res: Response) {
       mtime: m.updatedAtUs ? m.updatedAtUs / 1000 : 0,
       model: m.modelId ?? undefined,
     }));
-    res.json({ cwd, sessions: withAttached(sessions, museConversations.values()) });
+    res.json({ cwd, sessions: withAttached(sessions, museConversations.values(), running) });
   } catch (err) {
     console.error("[api] /api/muse/sessions failed:", err);
     res.status(500).json({ error: String(err) });

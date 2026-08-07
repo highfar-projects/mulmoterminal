@@ -61,7 +61,7 @@ const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 export async function watchForAntigravitySession(
   root: string,
   before: ReadonlySet<string>,
-  opts: { pollMs?: number; maxWaitMs?: number; isCancelled?: () => boolean; claimed?: ReadonlySet<string> } = {},
+  opts: { pollMs?: number; maxWaitMs?: number; isCancelled?: () => boolean; claimed?: Set<string> } = {},
 ): Promise<string | null> {
   const pollMs = opts.pollMs ?? WATCH_POLL_MS;
   const deadline = Date.now() + (opts.maxWaitMs ?? WATCH_MAX_WAIT_MS);
@@ -71,5 +71,9 @@ export async function watchForAntigravitySession(
     await delay(pollMs);
     result = pickFreshAntigravitySession(root, before, opts.claimed);
   }
+  // Claimed here, synchronously with the selection, not only in the caller's `.then`: two watchers
+  // awaiting the same poll interval would otherwise both pick the same conversation before either
+  // claim landed (#1533). The caller's own add stays and is idempotent.
+  if (result) opts.claimed?.add(result);
   return result;
 }

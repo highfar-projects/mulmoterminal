@@ -546,6 +546,10 @@ export interface ReapFacts {
   idleSeconds: number | null;
   /** The threshold, in seconds. Zero means the sweep is off and nothing is reapable. */
   idleThresholdSeconds: number;
+  /** The id parses as a session id at all. One that does not (a live `mt-undefined` was found —
+   *  #1533) is unreachable by EVERY route: nothing can attach it, resume it, or terminate it (the
+   *  routes validate the id), so it can only leak. Callers compute this with SESSION_ID_RE. */
+  validId: boolean;
 }
 
 /**
@@ -555,8 +559,12 @@ export interface ReapFacts {
  * tmux can decline to answer, and reaping on either would be killing a session on a guess — the one
  * outcome worse than the pile-up this exists to clear.
  */
-export function reapableTmuxSession({ attachedCount, liveHere, idleSeconds, idleThresholdSeconds }: ReapFacts): boolean {
+export function reapableTmuxSession({ attachedCount, liveHere, idleSeconds, idleThresholdSeconds, validId }: ReapFacts): boolean {
   if (idleThresholdSeconds <= 0) return false;
   if (liveHere || attachedCount !== 0) return false;
+  // Unreachable garbage does not get the idle grace: no amount of recency can make an invalid id
+  // reachable, and this sweep is the only thing that can ever end it (the terminate route refuses
+  // the id). Still only when nobody holds it — someone inspecting the pane by hand keeps it.
+  if (!validId) return true;
   return idleSeconds !== null && idleSeconds >= idleThresholdSeconds;
 }

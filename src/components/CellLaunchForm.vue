@@ -377,7 +377,15 @@ function resume(s: ResumableSession): void {
   // conversations: the cell must connect the endpoint that WROTE the conversation, and a codex
   // rollout id resumed as Claude is a live id on the wrong endpoint. It was safe to leave out
   // while every row here was Claude's; it is not any more.
-  emit("resume", { id: s.id, cwd: resumable.value.cwd ?? targetDir.value, agent: listAgent.value });
+  //
+  // A row that is still RUNNING is picked up under the key it runs under, not the row's own id.
+  // For codex/agy/muse the two differ — the row is the agent's conversation id, the running tmux
+  // session is keyed by whatever MulmoTerminal minted at spawn — and resuming by the row's id
+  // starts a SECOND backend on a conversation that already has one; the two then trade the view on
+  // every cold reconnect (#1533). The surviving key reattaches the process that is already there,
+  // which is what "resume it here" on the badge promises. For Claude and grok the key IS the row's
+  // id, so this changes nothing there.
+  emit("resume", { id: s.runningKey ?? s.id, cwd: resumable.value.cwd ?? targetDir.value, agent: listAgent.value });
 }
 
 // A conversation whose session is still RUNNING with nobody attached — what a server restart leaves

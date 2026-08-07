@@ -730,6 +730,24 @@ function handleMessage(c: Conn, event: MessageEvent) {
 export function attach(key: string, target: ConnTarget, handlers: ConnHandlers, el: HTMLElement, theme?: ITheme, font: TerminalFont = DEFAULT_FONT) {
   const created = !conns.has(key);
   const c = ensure(key, target, font);
+  // A view naming a session the slot is NOT running gets a reconnect, never the reuse. Slot keys
+  // are positional (`cell-<uid>`, renumbered from array position on every grid parse) while this
+  // map outlives components — so a view can inherit a slot another cell filled: after an HMR
+  // reload of GridView, or via the ghost a closed cell used to leave behind. The reuse then showed
+  // a claude cell some earlier shell's terminal, and the onSession replay below wrote that wrong
+  // pairing back into the persisted grid (#1533). A view with no opinion (sessionId null — a fresh
+  // launch, or a parent that never learned the id) keeps the reuse: for a remount of the same cell
+  // that replay is the repair path, and this guard must not break it.
+  // A slot that has not learned an id yet is a mismatch too, not a blank slate (review on #1534):
+  // it was created for a FRESH launch whose socket may still be connecting, and its `session`
+  // frame — the old cell's — would land on whatever view holds the slot now. Only a view with no
+  // opinion of its own (sessionId null) keeps the reuse.
+  const inherited = !created && target.sessionId !== null && c.knownSessionId !== target.sessionId;
+  if (inherited) {
+    const held = c.knownSessionId ?? "a fresh session still starting";
+    console.warn(`[terminal] slot ${key} holds ${held} but the view asked for ${target.sessionId} — reconnecting instead of reusing`);
+    Object.assign(c, { knownSessionId: target.sessionId, knownCwd: null, reconnectAttempts: 0, sawExit: false });
+  }
   c.released = false;
   c.handlers = handlers;
   c.attachedEl = el;
@@ -754,7 +772,7 @@ export function attach(key: string, target: ConnTarget, handlers: ConnHandlers, 
   // is spawned at it, and an unfitted terminal would send xterm's 80x24 default there (#1178). For
   // an already-live slot this is the same sync it always was — the send is a no-op until OPEN.
   fitAndSyncSize(c);
-  if (created) connect(c);
+  if (created || inherited) connect(c);
   c.term.focus();
   // The persisted xterm was just re-parented into a new host. The sync fit() above can no-op (same size)
   // or run before layout, leaving the canvas renderer blank until a scroll. Re-fit + force a repaint next
@@ -919,6 +937,11 @@ const slotCandidate = (c: Conn): SlotCandidate => ({
 export function listSlots(): SlotInfo[] {
   return [...conns.values()].map(slotCandidate).flatMap((candidate) => readableSlot(candidate) ?? []);
 }
+
+/** Whether the slot still exists at all. What a close path asks before cleaning up: a cell whose
+ *  own teardown already ran (TerminalCell's close button) has no slot left, and cleaning up again
+ *  would re-terminate a session id the state still remembers. */
+export const slotLive = (key: string): boolean => conns.has(key);
 
 // Insert text (a path, or space-joined paths) at the cursor via the normal input
 // channel — no trailing CR, so the user reviews and submits.

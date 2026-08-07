@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { pickDirSession, type DirSessionCandidate } from "../../../server/session/dir-session";
+import { grokSurvivorCandidates, pickDirSession, survivorCandidates, type DirSessionCandidate, type SurvivorLog } from "../../../server/session/dir-session";
+import type { AgentConversation } from "../../../server/session/agent-conversations";
 
 const candidate = (over: Partial<DirSessionCandidate> & { id: string }): DirSessionCandidate => ({
   attached: false,
@@ -45,5 +46,94 @@ describe("pickDirSession", () => {
   it("answers the same when a session appears both live and on disk", () => {
     const picked = pickDirSession([candidate({ id: "s1", live: true, mtime: 5, attached: true }), candidate({ id: "s1", mtime: 7, attached: true })]);
     expect(picked).toEqual({ id: "s1", attached: true, agent: "claude" });
+  });
+});
+
+// A codex/agy/muse session whose tmux outlived its pty (#1496) or the whole server. `ptys` cannot
+// see it and no transcript pass can — the conversation log is the one record tying the surviving
+// key to a directory. Reading it as "no session here" is how a worktree admitted a second agent
+// beside a running one, and how a conversation ended up with two backends (#1533).
+describe("survivorCandidates", () => {
+  const record = (over: Partial<AgentConversation> = {}): AgentConversation => ({
+    sessionId: "key-1",
+    conversationId: "conv-1",
+    cwd: "/wt/fix-login",
+    startedAt: 0,
+    ...over,
+  });
+  const logs = (records: AgentConversation[], agent: SurvivorLog["agent"] = "codex"): SurvivorLog[] => [
+    { agent, records: records.map((r) => [r.sessionId, r] as const) },
+  ];
+  const facts = (over: Partial<Parameters<typeof survivorCandidates>[2]> = {}): Parameters<typeof survivorCandidates>[2] => ({
+    running: new Set(["key-1"]),
+    liveHere: () => false,
+    userSession: () => true,
+    attached: () => false,
+    now: 42,
+    ...over,
+  });
+
+  it("names a running survivor as a LIVE candidate of its own agent", () => {
+    const found = survivorCandidates("/wt/fix-login", logs([record()]), facts());
+    expect(found).toEqual([{ id: "key-1", live: true, mtime: 42, agent: "codex", attached: false }]);
+  });
+
+  it("ignores a session that is not running — a dead key is the transcript passes' business", () => {
+    expect(survivorCandidates("/wt/fix-login", logs([record()]), facts({ running: new Set() }))).toEqual([]);
+  });
+
+  // The live pass already names it, better: its pty knows the directory it ACTUALLY runs in,
+  // where the log knows the one it was claimed in.
+  it("leaves a session with a live pty to the live pass", () => {
+    expect(survivorCandidates("/wt/fix-login", logs([record()]), facts({ liveHere: () => true }))).toEqual([]);
+  });
+
+  it("ignores another directory's survivor", () => {
+    expect(survivorCandidates("/wt/other", logs([record()]), facts())).toEqual([]);
+  });
+
+  it("excludes helper sessions, like every other pass", () => {
+    expect(survivorCandidates("/wt/fix-login", logs([record()]), facts({ userSession: () => false }))).toEqual([]);
+  });
+
+  // The point of the pass meeting the point of the rank: the surviving backend must beat a newer
+  // transcript, or the worktree row offers the conversation written to most recently while a
+  // different one is still running (#1533).
+  it("outranks a merely recent transcript once picked with", () => {
+    const survivor = survivorCandidates("/wt/fix-login", logs([record()]), facts())[0];
+    const picked = pickDirSession([candidate({ id: "disk", mtime: 99 }), survivor]);
+    expect(picked?.id).toBe("key-1");
+  });
+});
+
+// grok's survivors, found by probing its cwd-partitioned store rather than a conversation log —
+// grok keeps none: the session key IS its conversation id. Excluded from the log pass, a grok
+// session that outlived its pty read as "no session here" and the worktree admitted a second
+// agent beside it (#1534 review).
+describe("grokSurvivorCandidates", () => {
+  const grokFacts = (over: Partial<Parameters<typeof grokSurvivorCandidates>[0]> = {}): Parameters<typeof grokSurvivorCandidates>[0] => ({
+    running: new Set(["g-1"]),
+    liveHere: () => false,
+    userSession: () => true,
+    attached: () => false,
+    conversationInDir: (id) => id === "g-1",
+    now: 42,
+    ...over,
+  });
+
+  it("names a running survivor whose conversation lives in this directory", () => {
+    expect(grokSurvivorCandidates(grokFacts())).toEqual([{ id: "g-1", live: true, mtime: 42, agent: "grok", attached: false }]);
+  });
+
+  it("ignores a key the store does not tie to this directory", () => {
+    expect(grokSurvivorCandidates(grokFacts({ conversationInDir: () => false }))).toEqual([]);
+  });
+
+  it("leaves a session with a live pty to the live pass", () => {
+    expect(grokSurvivorCandidates(grokFacts({ liveHere: () => true }))).toEqual([]);
+  });
+
+  it("excludes helper sessions, like every other pass", () => {
+    expect(grokSurvivorCandidates(grokFacts({ userSession: () => false }))).toEqual([]);
   });
 });

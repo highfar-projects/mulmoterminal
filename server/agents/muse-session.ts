@@ -122,16 +122,23 @@ export async function snapshotMuseSessions(cwd: string): Promise<Set<string>> {
 }
 
 /**
- * The id muse minted for a session we just started: the first row in this workspace that was not
- * there before and that no other spawn has claimed.
+ * The id muse minted for a session we just started: the row in this workspace that was not there
+ * before and that no other spawn has claimed — attributed ONLY when it is the only such row, the
+ * same refusal codex and agy make (#1533). This watcher used to take the FIRST new row, and with
+ * two spawns in one directory — or a `before` snapshot a busy sqlite answered empty — that guess
+ * mapped a cell to somebody else's conversation, PERSISTED it, and every cold reconnect after
+ * resumed the wrong one. Ambiguity keeps polling rather than failing: the other spawn's claim can
+ * shrink the set to one.
  *
  * `claimed` is what keeps two cells started in the same directory at the same moment from both
- * taking the first new row — the same set codex's and agy's watchers keep, for the same reason.
+ * taking the same row. It is claimed HERE, synchronously with the selection, not in the caller's
+ * `.then` — two watchers awaiting the same poll tick would otherwise both pick the same row before
+ * either claim landed.
  */
 export async function watchForMuseSession(
   cwd: string,
   before: ReadonlySet<string>,
-  opts: { claimed: ReadonlySet<string>; isCancelled: () => boolean },
+  opts: { claimed: Set<string>; isCancelled: () => boolean },
   timeoutMs = 15000,
   intervalMs = 500,
 ): Promise<string | null> {
@@ -139,8 +146,11 @@ export async function watchForMuseSession(
   while (Date.now() < deadline) {
     if (opts.isCancelled()) return null;
     const current = await snapshotMuseSessions(cwd);
-    for (const id of current) {
-      if (!before.has(id) && !opts.claimed.has(id)) return id;
+    const fresh = [...current].filter((id) => !before.has(id) && !opts.claimed.has(id));
+    const sole = fresh.length === 1 ? fresh[0] : undefined;
+    if (sole) {
+      opts.claimed.add(sole);
+      return sole;
     }
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
