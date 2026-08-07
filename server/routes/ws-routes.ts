@@ -66,6 +66,9 @@ import { claimLaunch, worktreeOccupancy } from "../session/worktree-session-limi
 import { worktreeRefusal } from "../../common/worktreeSession.js";
 import { ensureWorktreeEnv } from "../config/worktree-env.js";
 import { isCustomAgentId } from "../../common/customAgents.js";
+import { createKeySerializer } from "../infra/serialize-per-key.js";
+
+const sessionConnects = createKeySerializer();
 
 export interface WsRouteDeps {
   /** The http server these endpoints hang their `upgrade` handler off. */
@@ -539,6 +542,59 @@ function handleRunConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUpgradeReq
 // searched (#1063), or the directory that is gone (#1078). Passing that through rather than
 // wrapping it is what puts the real reason in the terminal instead of `spawn ENOENT`; everything
 // else is an error nobody wrote for a reader, so it gets named.
+/** Whether a PTY entry matches the endpoint trying to reattach it.
+ *
+ *  `ptys` is shared across all agents, so a Claude cell carrying an old shell-entry id
+ *  (unrecognized persisted agent coerced to "shell") would silently reattach the launcher's
+ *  process. This gate rejects that.
+ */
+export function wrongEndpointReason(endpoint: TerminalWsKind, entryAgent: PtyEntry["agent"]): string | null {
+  // The run endpoint is ephemeral and owns no sessions, so it has no reattach case.
+  if (endpoint === "run") return null;
+  // A launcher entry is always "shell", whatever command it runs; the endpoint is "launch".
+  if (endpoint === "launch" && entryAgent === "shell") return null;
+  // Agent endpoints match iff the endpoint and the entry's recorded agent are identical.
+  if (endpoint === entryAgent) return null;
+  return `Session is running ${entryAgent}, not ${endpoint}`;
+}
+
+/** Check if a live PTY entry is still valid after the async admission awaits (git, filesystem, etc).
+ *
+ *  A live entry was captured at resolve time before those awaits. If the reap timer fired
+ *  mid-admission, the entry is a corpse — reattaching it would wire the browser to a dead pty
+ *  while the next connect spawned fresh under the same id. Close plainly so the client reconnects.
+ *
+ *  Also handles the case where a competing connect spawned the id while this one was being
+ *  admitted — serialization handles that (it finds the entry where resolve saw none).
+ */
+export function settledEntry(
+  ws: WebSocket,
+  endpoint: TerminalWsKind,
+  sessionId: string,
+  hadLiveAtResolve: boolean,
+  early: EarlyFrames,
+): { entry: PtyEntry | undefined } | null {
+  const current = ptys.get(sessionId);
+  const reason = current ? wrongEndpointReason(endpoint, current.agent) : null;
+  if (reason) {
+    console.warn(`[ws/${endpoint}] ${sessionId} — ${reason}`);
+    ws.close();
+    early.discard();
+    return null;
+  }
+  // A resolve-time snapshot that has since died: close plainly so the client reconnects.
+  if (hadLiveAtResolve && !current) {
+    console.log(`[ws/${endpoint}] ${sessionId} was reaped mid-admission`);
+    ws.close();
+    early.discard();
+    return null;
+  }
+  // Return what is actually there now, not the resolve-time snapshot — a competing connect
+  // may have spawned it while this one was still being admitted.
+  return { entry: current };
+}
+
+
 export const startFailureMessageFor =
   (what: string) =>
   (err: unknown): string =>
@@ -662,21 +718,25 @@ async function handleCodexConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUp
   // rollout that is right there — which is the restart case this exists for.
   await codexRolloutsHydrated;
   const { sessionId, live, resumeRolloutId } = resolveCodexSession(requested);
-  await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });
-  const early = await admitAgentSession(ws, "codex", { requested, sessionId, live, cwd, devTerminal: !attachGuiMcp });
-  if (!early) return;
+  await sessionConnects(sessionId, async () => {
+    await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });
+    const early = await admitAgentSession(ws, "codex", { requested, sessionId, live, cwd, devTerminal: !attachGuiMcp });
+    if (!early) return;
 
-  // A grid cell's GUI tools are whatever its DIRECTORY registered — the same switches claude's
-  // cells read, in the same file. claude picks them up itself; codex is handed resolved URLs at
-  // spawn, so the answer has to be read here, before the pty exists. Only for a spawn: a reattach
-  // keeps the tools its running process was started with.
-  const mcpGroups = !attachGuiMcp && !live ? await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []) : [];
-  if (!clientStillConnected(ws, "codex", sessionId, early)) return;
+    // A grid cell's GUI tools are whatever its DIRECTORY registered — the same switches claude's
+    // cells read, in the same file. claude picks them up itself; codex is handed resolved URLs at
+    // spawn, so the answer has to be read here, before the pty exists. Only for a spawn: a reattach
+    // keeps the tools its running process was started with.
+    const mcpGroups = !attachGuiMcp && !live ? await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []) : [];
+    if (!clientStillConnected(ws, "codex", sessionId, early)) return;
 
-  const startFailureMessage = startFailureMessageFor("codex");
-  startAndWire(deps, ws, { id: sessionId, tag: "codex", early, startFailureMessage, size }, () =>
-    startCodexEntry(deps, ws, { sessionId, live, resumeRolloutId, cwd, attachGuiMcp, mcpGroups }),
-  );
+    const startFailureMessage = startFailureMessageFor("codex");
+    const settled = settledEntry(ws, "codex", sessionId, !!live, early);
+    if (!settled) return;
+    startAndWire(deps, ws, { id: sessionId, tag: "codex", early, startFailureMessage, size }, () =>
+      startCodexEntry(deps, ws, { sessionId, live: settled.entry, resumeRolloutId, cwd, attachGuiMcp, mcpGroups }),
+    );
+  });
 }
 
 function resolveAntigravitySession(requested: string | null): ResumableSession {
@@ -809,37 +869,41 @@ export async function handleDirectoryMcpAgentConnection(agent: DirectoryMcpWsAge
   const attachGuiMcp = url.searchParams.get("gui") !== "0";
   if (agent.hydrated) await agent.hydrated;
   const { sessionId, live, resumeConversationId } = await agent.resolveSession(requested, cwd);
-  // The directory's per-tree PORT / DB_NAME (#1367), like every other spawn path — a cell in a
-  // worktree gets that tree's own values, not the ones another tree is already serving on.
-  await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });
-  const early = await admitAgentSession(ws, agent.kind, { requested, sessionId, live, cwd, devTerminal: !attachGuiMcp });
-  if (!early) return;
+  await sessionConnects(sessionId, async () => {
+    // The directory's per-tree PORT / DB_NAME (#1367), like every other spawn path — a cell in a
+    // worktree gets that tree's own values, not the ones another tree is already serving on.
+    await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });
+    const early = await admitAgentSession(ws, agent.kind, { requested, sessionId, live, cwd, devTerminal: !attachGuiMcp });
+    if (!early) return;
 
-  // The directory's registered groups, read here because the lookup reads Claude Code's config
-  // files and the spawner is sync. Not for a live REATTACH: that session keeps the tools its
-  // running process was started with, and rewriting the shared file would speak for every other
-  // session in the directory.
-  //
-  // Read against the SESSION's own directory rather than the request's, and that distinction is not
-  // cosmetic (Codex on #1514). `live` is absent for a tmux-only reattach as well as for a spawn — a
-  // reconnect after a server restart — and such a reconnect often carries no `?cwd=` at all, which
-  // resolves to the DEFAULT workspace. For agy and grok that only meant a file write suppressed
-  // downstream, but muse records these groups as the session's entitlement, so another directory's
-  // switches would have become this session's. `sessionCwd` is where the session really runs.
-  await devTerminalCwdsHydrated;
-  const groupsCwd = live?.cwd ?? sessionCwd(sessionId) ?? cwd;
-  const mcpGroups = live || !agent.readsDirectoryMcpConfig ? [] : await registeredGuiMcpGroups(groupsCwd, TOOL_GROUPS).catch(() => []);
-  if (!clientStillConnected(ws, agent.kind, sessionId, early)) return;
-  const startFailureMessage = startFailureMessageFor(agent.label);
-  // The reattach goes THROUGH startAndWire like the spawn, not around it: reattachPty only swaps
-  // the socket and replays the buffer, so returning early here left a reloaded terminal printing
-  // output while ignoring every keystroke, and never detaching or reaping on close.
-  startAndWire(deps, ws, { id: sessionId, tag: agent.kind, early, startFailureMessage, size }, () => {
-    const entry = live ? deps.reattachPty(live, ws, sessionId) : agent.spawn(deps)(sessionId, ws, resumeConversationId, cwd, { mcpGroups });
-    // Single view (gui) = the attached session IS the actively-viewed pane. A grid dev-terminal
-    // cell (gui=0) is only "viewed" once focused, and says so with a `view` frame.
-    entry.active = attachGuiMcp;
-    return entry;
+    // The directory's registered groups, read here because the lookup reads Claude Code's config
+    // files and the spawner is sync. Not for a live REATTACH: that session keeps the tools its
+    // running process was started with, and rewriting the shared file would speak for every other
+    // session in the directory.
+    //
+    // Read against the SESSION's own directory rather than the request's, and that distinction is not
+    // cosmetic (Codex on #1514). `live` is absent for a tmux-only reattach as well as for a spawn — a
+    // reconnect after a server restart — and such a reconnect often carries no `?cwd=` at all, which
+    // resolves to the DEFAULT workspace. For agy and grok that only meant a file write suppressed
+    // downstream, but muse records these groups as the session's entitlement, so another directory's
+    // switches would have become this session's. `sessionCwd` is where the session really runs.
+    await devTerminalCwdsHydrated;
+    const groupsCwd = live?.cwd ?? sessionCwd(sessionId) ?? cwd;
+    const mcpGroups = live || !agent.readsDirectoryMcpConfig ? [] : await registeredGuiMcpGroups(groupsCwd, TOOL_GROUPS).catch(() => []);
+    if (!clientStillConnected(ws, agent.kind, sessionId, early)) return;
+    const startFailureMessage = startFailureMessageFor(agent.label);
+    const settled = settledEntry(ws, agent.kind, sessionId, !!live, early);
+    if (!settled) return;
+    // The reattach goes THROUGH startAndWire like the spawn, not around it: reattachPty only swaps
+    // the socket and replays the buffer, so returning early here left a reloaded terminal printing
+    // output while ignoring every keystroke, and never detaching or reaping on close.
+    startAndWire(deps, ws, { id: sessionId, tag: agent.kind, early, startFailureMessage, size }, () => {
+      const entry = settled.entry ? deps.reattachPty(settled.entry, ws, sessionId) : agent.spawn(deps)(sessionId, ws, resumeConversationId, cwd, { mcpGroups });
+      // Single view (gui) = the attached session IS the actively-viewed pane. A grid dev-terminal
+      // cell (gui=0) is only "viewed" once focused, and says so with a `view` frame.
+      entry.active = attachGuiMcp;
+      return entry;
+    });
   });
 }
 
