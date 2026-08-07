@@ -6,7 +6,7 @@ issue: #1539 / 原因を作った PR: #1534
 
 `main` の **Windows (daily)** が #1534 のマージコミット `752961b5` から赤い（直前の `77e0769a` は緑）。
 
-```
+```text
 FAIL test/server/session/dir-session.spec.ts > survivorCandidates
   > names a running survivor as a LIVE candidate of its own agent
       AssertionError: expected [] to deeply equal [ { id: 'key-1', live: true, … } ]
