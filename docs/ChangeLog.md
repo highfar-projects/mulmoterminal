@@ -8,6 +8,138 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.7.2 — 2026-08-08
+
+> **Setup guide:** [The terminal comes back on the right process](https://receptron.github.io/mulmoterminal/guide/en/v4.7.2.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.7.2.html))
+
+**A reliability release built around one bug**: a terminal view could reattach to the *wrong*
+backend process. Found on a live instance, traced through five pull requests, and each layer of it
+fixed with the evidence the server already keeps rather than a new metadata store.
+
+Alongside it: worktrees stop piling up as working-directory chips, the cockpit roster gets the
+Agent Picker's marks and one border geometry, collection chats can choose their agent again, and
+the Windows CI that #1534 turned red is green.
+
+### The reattach chain (#1533)
+
+- **Resume under the key the conversation is RUNNING under** (#1534): the launcher's resume row
+  emitted the row's own id — the agent's conversation id — even when the server had already said
+  (via `runningKey`, #1467) that the conversation was still running under a different, minted key.
+  "Resume it here" then spawned `codex resume <conv>` in a fresh tmux session while the original
+  kept running the same rollout, and a cold reconnect could come back on either. `dirSession` also
+  gained a **survivor pass**: sessions in `runningSessionKeys()` that `ptys` no longer knows, tied
+  back to their directory through the codex/agy/muse conversation logs — without it a worktree with
+  a live backend read as free, so the one-session-per-worktree refusal (#1207) stopped firing.
+  A Claude transcript whose session survives in tmux is likewise ranked live, so the running
+  conversation outranks a merely newer transcript. `ptySpawn` now refuses a session id
+  `SESSION_ID_RE` rejects at the one choke point every spawner passes — a live `mt-undefined` was
+  found on a machine, a shared bucket unreachable by attach, resume and terminate alike — and the
+  idle sweep reaps such an unreachable session at once rather than waiting out a grace no recency
+  can satisfy. Also in this PR: per-session-id connect serialization, a re-read of the live entry
+  after the admission awaits (the resolve-time snapshot can be a corpse the reap killed
+  mid-admission), an endpoint/agent assertion for a live PTY, watcher guards for the muse and codex
+  spawn attribution, and the client-side slot-inheritance guard that stopped a reloaded GridView
+  handing a Claude cell a closed shell cell's ghost slot.
+- **Codex activity re-armed on a restart reattach** (#1538, from #1536): after a server restart
+  `ptys` is empty while tmux still holds the session — the state every bare `!live` test misreads
+  as a fresh spawn. A tmux attach of a surviving codex took the fresh branch, whose watcher waits
+  for a **new** rollout file to appear; the survivor's file already existed, so nothing tailed it
+  and the cell's working/waiting flags — and its turn-finished notifications — stayed dead until a
+  cold restart. The spawner now tails the hydrated mapping's rollout from the end, with no resume id
+  so no second codex starts beside the surviving one, and falls back to the appear-watcher for a
+  survivor that never reached its first turn. `restoreOpenTurn` re-reports a turn the skipped
+  content leaves open, so a mid-turn survivor is not shown as idle until its turn ends. The codex
+  directory tool-group read now uses the session's own cwd (`sessionCwd`), since a restart reconnect
+  often carries no `?cwd=` and answered for the default workspace. And claude — the one agent
+  endpoint that never asked — got the `clientStillConnected` guard after its admission awaits.
+- **A provably foreign tmux survivor is refused at the endpoint** (#1541, from #1537): the
+  endpoint/agent mismatch check added in #1534 needs a live `PtyEntry` to compare against, so after
+  a restart it had nothing — and `tmux new-session -A` attaches whatever runs in the pane while
+  **ignoring** the argv the endpoint's spawner built, after which the recreated entry records the
+  *endpoint's* agent. Stale or coerced grid state (`asTerminalAgent` reads any unrecognised value as
+  `claude`) could therefore relabel a surviving codex as claude, and every later same-process guard
+  would trust the label. A new guard in `admitAgentSession` — the shared choke point for the claude,
+  launch, codex and directory-MCP endpoints, before the browser is told a session id — decides from
+  what an agent left durably under the session's own key: a claude transcript, codex's rollout
+  mapping, agy's and muse's hydrated conversation maps, a grok conversation named by the key. A
+  single piece of foreign evidence is a loud refusal; **no** evidence attaches as requested, because
+  a shell survivor and an agent session that never reached its first turn both leave none, and
+  refusing the unknowable would lock users out of legitimately surviving sessions.
+
+### Working directories
+
+- **A worktree is no longer remembered as a WORKING DIRECTORY chip** (#1543, fixes #1542): the chips
+  are auto-recorded from wherever a cell launched, and a worktree launches like anywhere else — so
+  every isolated task left one behind, for a directory that is one branch for one task and is
+  deleted with it. Nothing pruned the chip when the directory went, either (the close button is the
+  only remover), so the row filled with paths that no longer exist and pushed the real projects out
+  of reach. Both recording paths are covered — the browser's `recordPreset` and `deriveCwdPresets`,
+  which reseeds the list from Claude's history on `mulmoterminal init` — through one predicate in
+  `common/worktreePath.ts`. It is anchored on the managed **root** (`GET /api/config` now reports it
+  beside `home`, canonicalized, since the browser cannot work it out and `MULMOTERMINAL_HOME` can
+  move it) and requires the minted `<repo>-<8hex>` directory, so a path another tool laid out the
+  same way — or one a person put under the root by hand — is still recorded. An unknown root records
+  the directory: of the two ways to be wrong, an extra chip the user can delete beats a real working
+  directory that quietly never appears. Entries already saved are left exactly where they are.
+- **One file dialog at a time** (#1528, fixes #1527): clicking the folder button repeatedly opened
+  one native OS dialog per click, because a native dialog does not answer until it is dismissed and
+  `/api/pick-file` spawns `osascript` / `powershell` / `zenity` per request with nothing stopping
+  the clicks in between. There is one OS dialog per machine, so the state behind it is now one
+  shared module flag every picker button reads, and the server refuses a second concurrent dialog
+  too.
+
+### Cockpit roster
+
+- **The picker's agent mark on every row, and none on a row that runs no agent** (#1532): the row
+  wore a non-Claude agent's **name** in a bordered pill (`codex`, `agy`, `grok`, `mu`); it now wears
+  the same drawn mark the Agent Picker and the rate-limit gauge use, so one agent looks the same
+  wherever it is named. Marking every row makes the default visible, which is where the trap was:
+  `Cell.agent` is absent for Claude **and** for every cell that is not an agent session at all, so
+  `c.agent ?? "claude"` would have put Anthropic's burst on a `yarn dev` chip. `rosterAgent()` asks
+  the cell's kind first — a launcher or command cell is `shell` whatever command line it names, a
+  session cell keeps its agent, and a cell running nothing is marked with nothing at all.
+- **One border geometry for every row, and a louder cursor** (#1531): the outer ring was 2px for
+  `blocked`, 1px for `done` and absent for the other three states. In a vertical list the eye reads
+  the difference in **width** before the colour, so three thicknesses read as a rendering bug rather
+  than three meanings. Every state now rings at 2px — `transparent` where there is nothing to say —
+  as a box-shadow, so the geometry is identical and costs no layout. The 3px left stripe, carried
+  without a reason since the roster's first prototype, is gone: once the ring surrounds the row it
+  only made one side disagree with the other three. Row spacing went 5px → 9px, since neighbouring
+  rings had closed to within a pixel and the column read as one block.
+
+### Collections
+
+- **Choose the agent for a collection chat, and workspace skills on all of them** (#1544): chats
+  started from Collections were Claude-only twice over. The three-button toggle had been replaced by
+  the pinned favourites, leaving `launchAgent` with **no writer** — frozen at whatever localStorage
+  last held, Claude for anyone who never used the old toggle. A compact "Launch with" dropdown now
+  shares the row with the pins, offering the built-in agents and only those (`spawnBackgroundChat`
+  hosts exactly them: no shell, since a seeded chat needs an agent, and no custom agents, since the
+  route builds no custom argv), derived from `TERMINAL_AGENTS` so a sixth agent reaches the picker
+  with no second list. The other half: the workspace skills those chats lean on were invisible to
+  some agents, and every agent now sees them.
+
+### CI and tooling
+
+- **Windows CI restored** (#1540, fixes #1539): `main`'s Windows daily had been red since #1534's
+  merge. `survivorCandidates` takes an already-canonical directory — `dirSession` hands it
+  `canonicalPath(dir)` and the pass canonicalizes only the record's side — but the new spec passed a
+  raw POSIX literal, so on Windows it compared `/wt/fix-login` against `D:\wt\fix-login` and
+  nothing ever matched. Production code was correct; the spec was not. Worse, four of its six cases
+  assert an empty result, so they had been passing on Windows for the **wrong reason** — the spec
+  was effectively inert there. A case where the record spells the directory another way now pins
+  that the comparison is real. Also adds the `settledEntry` refusal branch (the error frame that
+  stops the client's reconnect loop) that #1534's review left uncovered.
+- **Codex auto-review on the current CLI and model** (#1526, #1529): CLI `0.125.0` → `0.147.0` and
+  the Azure deployment `gpt-5.3-codex` → `gpt-5.6-terra`, the balanced model of the current line;
+  the old deployment stays for rollback. #1529 then folded in the review of that change — separating
+  required secrets from optional overrides, recording that an override deployment name must still be
+  one the CLI does **not** recognise as a model (a recognised name revives the namespaced tools
+  payload and Azure fails every review with `400 empty_string`), and deleting an api-version note
+  that contradicted the block above it.
+- **dev.to cover image** (#1530): moved into this public repository, since the private marketing
+  repo's raw URLs 404 from outside and the article's cover never rendered.
+
 ## mulmoterminal@4.7.1 — 2026-08-07
 
 > **Setup guide:** [The version you are running, on screen](https://receptron.github.io/mulmoterminal/guide/en/v4.7.1.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.7.1.html))
