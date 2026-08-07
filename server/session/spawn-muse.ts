@@ -18,7 +18,7 @@ import { entitledToolGroups, rememberEntitledToolGroups } from "./bridge-session
 import { ptySpawn, ptyWouldReattach } from "./pty-spawn.js";
 import { ptyStartLine } from "./pty-exit-log.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
-import { seedPromptArgument } from "./session-settings.js";
+import { seedPromptArgument, withSettingsCleanup } from "./session-settings.js";
 import { claimedMuseSessions, ptys, rememberMuseSession } from "./registry.js";
 import type { SpawnDeps } from "./spawn-deps.js";
 import type { PtyEntry } from "./types.js";
@@ -101,7 +101,12 @@ export function createMuseSpawner(deps: SpawnDeps) {
     // What the MUSE process itself needs: it does inherit our environment, and without this flag it
     // loads no plugins at all — the registration would be inert rather than absent.
     const env = musePluginEnv();
-    const { term, tmux, reattached } = ptySpawn(sessionId, deps.museBin, args, cwd, true, { env, binEnvVar: museAdapter.binEnvVar });
+    // The seed file may already be on disk (seedFor above), and a spawn that throws never reaches
+    // reap() — where the cleanup normally happens. Same guarantee spawn-claude takes for its
+    // settings file (#579, #1518).
+    const { term, tmux, reattached } = withSettingsCleanup(sessionId, () =>
+      ptySpawn(sessionId, deps.museBin, args, cwd, true, { env, binEnvVar: museAdapter.binEnvVar }),
+    );
     const spawnedAtMs = Date.now();
     const note = resumeConversationId ? `resume ${resumeConversationId}` : null;
     console.log(ptyStartLine({ agent: "muse", pid: term.pid, cwd, tmux, reattached, sessionId, note }));

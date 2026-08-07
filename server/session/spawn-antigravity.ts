@@ -7,7 +7,7 @@ import { syncAntigravityMcpConfig } from "../agents/antigravity-mcp.js";
 import { antigravityBrainRoot, snapshotAntigravitySessions, watchForAntigravitySession } from "../agents/antigravity-session.js";
 import { startDirectoryMcpPty, syncDirectoryMcpForSpawn, type SpawnDirectoryMcpPty } from "./spawn-directory-mcp.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
-import { seedPromptArgument } from "./session-settings.js";
+import { seedPromptArgument, withSettingsCleanup } from "./session-settings.js";
 import { claimedAntigravityConversations, ptys, rememberAntigravityConversation } from "./registry.js";
 import type { SpawnDeps } from "./spawn-deps.js";
 
@@ -52,16 +52,21 @@ export function createAntigravitySpawner(deps: SpawnDeps) {
       skipPermissions: true,
       initialPrompt: seedFor(sessionId, initialPrompt),
     });
-    const { entry, spawnedAtMs } = startDirectoryMcpPty({
-      sessionId,
-      ws,
-      cwd,
-      agent: "antigravity",
-      bin: deps.antigravityBin,
-      binEnvVar: antigravityAdapter.binEnvVar,
-      args,
-      resumeConversationId,
-    });
+    // The seed file may already be on disk (seedFor above), and a spawn that throws never reaches
+    // reap() — where the cleanup normally happens. Same guarantee spawn-claude takes for its
+    // settings file (#579, #1518).
+    const { entry, spawnedAtMs } = withSettingsCleanup(sessionId, () =>
+      startDirectoryMcpPty({
+        sessionId,
+        ws,
+        cwd,
+        agent: "antigravity",
+        bin: deps.antigravityBin,
+        binEnvVar: antigravityAdapter.binEnvVar,
+        args,
+        resumeConversationId,
+      }),
+    );
 
     if (resumeConversationId) {
       // Recorded on resume too, not just on the spawn that discovered it: a session resumed by the

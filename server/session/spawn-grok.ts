@@ -13,7 +13,7 @@ import { buildGrokArgs } from "../agents/grok-args.js";
 import { syncGrokMcpConfig } from "../agents/grok-mcp.js";
 import { startDirectoryMcpPty, syncDirectoryMcpForSpawn, type SpawnDirectoryMcpPty } from "./spawn-directory-mcp.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
-import { seedPromptArgument } from "./session-settings.js";
+import { seedPromptArgument, withSettingsCleanup } from "./session-settings.js";
 import type { SpawnDeps } from "./spawn-deps.js";
 
 // A seed this agent takes as an ARGUMENT cannot carry a newline on Windows, so it may travel in a
@@ -33,16 +33,21 @@ export function createGrokSpawner(deps: SpawnDeps) {
       skipPermissions: true,
       initialPrompt: seedFor(sessionId, initialPrompt),
     });
-    const { entry, spawnedAtMs } = startDirectoryMcpPty({
-      sessionId,
-      ws,
-      cwd,
-      agent: "grok",
-      bin: deps.grokBin,
-      binEnvVar: grokAdapter.binEnvVar,
-      args,
-      resumeConversationId,
-    });
+    // The seed file may already be on disk (seedFor above), and a spawn that throws never reaches
+    // reap() — where the cleanup normally happens. Same guarantee spawn-claude takes for its
+    // settings file (#579, #1518).
+    const { entry, spawnedAtMs } = withSettingsCleanup(sessionId, () =>
+      startDirectoryMcpPty({
+        sessionId,
+        ws,
+        cwd,
+        agent: "grok",
+        bin: deps.grokBin,
+        binEnvVar: grokAdapter.binEnvVar,
+        args,
+        resumeConversationId,
+      }),
+    );
 
     wireAgentPtyRelay(entry, sessionId, spawnedAtMs, deps);
     return entry;
