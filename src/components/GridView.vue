@@ -6,6 +6,7 @@ import AppToolbar from "./AppToolbar.vue";
 import GuideLinks from "./GuideLinks.vue";
 import { startCollectionChat } from "../composables/useChatLauncher";
 import { skillSeed } from "./skillSeed";
+import { rosterAgent } from "./rosterAgent";
 import type { BundledSkillName } from "../../common/bundledSkills";
 import {
   initialState,
@@ -62,7 +63,7 @@ import { reportActiveTerminals } from "../composables/useUnloadGuard";
 import { useAppConfig } from "../composables/useAppConfig";
 import { fetchDirConfig, invalidateDirConfig, useDirPriorities } from "../composables/useDirConfig";
 import { nextSortMode } from "./sortModeButton";
-import { asTerminalAgent, type SessionAgent, type TerminalAgent } from "../../common/sessionAgent";
+import { asTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { router } from "../router";
 import { usePubSub } from "../composables/usePubSub";
 import type { LaunchAgent } from "../../common/launchAgent";
@@ -319,15 +320,6 @@ const fallbackLabel = (c: Cell): string | null => c.command?.label ?? c.launcher
 // limit and made every field independently defaultable — which is how a field the roster never
 // wired up reads as a legitimate null rather than failing to typecheck.
 const chromeOf = (cwd: string | null): RowChrome => (cwd ? chromeByCwd.get(cwd) : undefined) ?? { headerColor: null, headerTextColor: null, iconUrl: null };
-// What a roster row says it is running. `Cell.agent` is absent for Claude AND for every cell that
-// is not an agent session at all (a launcher chip, a run-command cell, a cell nobody has launched
-// in yet), so reading it as "claude" put Anthropic's mark on all of them. Asked of the cell's kind
-// first: a launcher and a command cell both run the user's own command line, which the server
-// records as "shell" whatever it names (see CLAUDE.md — nothing here parses that command).
-const rosterAgent = (c: Cell): SessionAgent | null => {
-  if (c.command || c.launcher) return "shell";
-  return c.session ? (c.agent ?? "claude") : null;
-};
 const rosterRow = (c: Cell): CockpitRow => {
   const meta = (c.session ? sessionMeta.get(c.session) : undefined) ?? EMPTY_SESSION_META;
   const chrome = chromeOf(c.cwd);
