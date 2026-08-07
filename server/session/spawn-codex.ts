@@ -10,7 +10,7 @@ import { codexGuiMcpServers } from "./mcp-config.js";
 import { codexSessionsRoot, snapshotSessions, watchForCodexSession } from "../agents/codex-session.js";
 import { codexRolloutPath } from "../agents/codex-sessions.js";
 import { trackCodexActivity } from "./codex-activity-track.js";
-import { claimedCodexRollouts, claimFullGuiMcp, ptys, rememberCodexRollout } from "./registry.js";
+import { claimedCodexRollouts, claimFullGuiMcp, codexRollouts, ptys, rememberCodexRollout } from "./registry.js";
 import { ptySpawn, ptyWouldReattach } from "./pty-spawn.js";
 import { ptyStartLine } from "./pty-exit-log.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
@@ -40,7 +40,7 @@ export function createCodexSpawner(deps: SpawnDeps) {
         rememberCodexRollout(sessionId, meta.id, cwd);
         // A rollout only discovered now is one this session just created, so it is read
         // whole: its first turn is in there and hasn't been reported yet.
-        trackCodexActivity(sessionId, meta.file, false, activityDepsFor(sessionId, entry, deps));
+        trackCodexActivity(sessionId, meta.file, { startAtEnd: false }, activityDepsFor(sessionId, entry, deps));
       })
       .catch(() => {});
   }
@@ -101,7 +101,26 @@ export function createCodexSpawner(deps: SpawnDeps) {
       // rollout id itself carries no mapping yet, and one whose cell moved needs the new cwd.
       rememberCodexRollout(sessionId, resumeRolloutId, cwd);
       const file = codexRolloutPath(root, resumeRolloutId);
-      if (file) trackCodexActivity(sessionId, file, true, activityDepsFor(sessionId, entry, deps));
+      if (file) trackCodexActivity(sessionId, file, { startAtEnd: true }, activityDepsFor(sessionId, entry, deps));
+    } else if (reattached) {
+      // A tmux attach picked up a codex that was ALREADY running — a server restart, where
+      // `agentResumeId` rightly withholds the resume id so no second codex starts. But the fresh
+      // branch below waits for a rollout file to APPEAR, and this session's existed before the
+      // snapshot — so nothing ever tailed it and the cell's working/waiting flags stayed dead
+      // until a cold restart (#1536). Claude survives the same restart via its HTTP hooks; codex
+      // has only this tail. The mapping outlived the process in the rollout log (the WS route
+      // awaits its hydration before resolving), so tail it from the end, as a resume does —
+      // except that a turn the file leaves OPEN is restored: unlike a resume, the process is
+      // still running, so an open turn is what it is doing right now (#1538 review).
+      const rolloutId = codexRollouts.get(sessionId)?.conversationId;
+      const file = rolloutId ? codexRolloutPath(root, rolloutId) : null;
+      if (file) trackCodexActivity(sessionId, file, { startAtEnd: true, restoreOpenTurn: true }, activityDepsFor(sessionId, entry, deps));
+      // No mapping — the restart came before the survivor's FIRST turn, so no rollout exists
+      // yet. Its first prompt may still be coming, so run the same appear-watcher a fresh
+      // session gets (attribution is unambiguous-only either way): without it that rollout is
+      // never recorded, activity stays dead, and a later cold reconnect starts a NEW
+      // conversation instead of resuming this one (Codex review on #1538).
+      else captureCodexRollout(sessionId, entry, root, before, cwd);
     } else {
       // Discover the id only for a FRESH session. On resume we already know it; running the watcher
       // could overwrite the known id with a mis-attributed concurrent rollout.
