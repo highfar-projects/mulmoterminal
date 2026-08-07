@@ -16,6 +16,7 @@ import { buildMuseArgs } from "../../../server/agents/muse-args.js";
 import { codexifySkillSeed } from "../../../server/agents/codex-skills.js";
 import { seedPromptArgument, cleanupSessionSettings, SEED_ARGV_MAX_BYTES } from "../../../server/session/session-settings.js";
 import { resolvePtyLaunch } from "../../../server/infra/resolve-bin.js";
+import { escapeBatchArgument } from "../../../server/infra/cmd-escape.js";
 import { tmuxNewSessionArgs } from "../../../server/infra/tmux.js";
 
 const SESSION = "seed-argv-spec-session";
@@ -106,6 +107,29 @@ describe("a seed prompt with no room on the command line", () => {
   it("would blow past that limit if the seed rode argv", () => {
     const unguarded = buildMuseArgs({ resume: null, workspace: CWD, model: "muse-spark-1.2", initialPrompt: LONG_SEED });
     expect(Buffer.byteLength(tmuxCommandLine("muse", unguarded), "utf8")).toBeGreaterThan(TMUX_OBSERVED_OK_BYTES);
+  });
+
+  // cmd.exe stops at 8,191 characters, and what it is handed is the ESCAPED line — escapeBatchArgument
+  // doubles every internal quote, so a seed of nothing but quotes arrives at twice its measured size
+  // (codex review on #1522). Asserted on the line resolvePtyLaunch actually builds.
+  const CMD_MAX_CHARS = 8191;
+  const QUOTE_BOMB = '"'.repeat(SEED_ARGV_MAX_BYTES);
+
+  it("leaves the cmd.exe command line inside its limit even when every character doubles", () => {
+    for (const [agent, args] of argvFor("win32", QUOTE_BOMB)) {
+      const launch = asWindowsLaunch(agent, args);
+      // The batch path is the one that goes through cmd; a resolved .exe takes an argv array instead.
+      expect(typeof launch.args, agent).toBe("string");
+      expect((launch.args as unknown as string).length, agent).toBeLessThan(CMD_MAX_CHARS);
+    }
+  });
+
+  it("would blow past cmd's limit if the unescaped size were the measure", () => {
+    // Exactly what a byte-only guard would have let through: at the budget unescaped, over it escaped.
+    expect(Buffer.byteLength(QUOTE_BOMB, "utf8")).toBeLessThanOrEqual(SEED_ARGV_MAX_BYTES);
+    expect(escapeBatchArgument(QUOTE_BOMB).length).toBeGreaterThan(SEED_ARGV_MAX_BYTES);
+    const unguarded = buildMuseArgs({ resume: null, workspace: CWD, model: "muse-spark-1.2", initialPrompt: QUOTE_BOMB });
+    expect((asWindowsLaunch("muse", unguarded).args as unknown as string).length).toBeGreaterThan(CMD_MAX_CHARS);
   });
 
   it("carries no argument bigger than the budget, for every agent that takes one", () => {

@@ -12,6 +12,7 @@
 import { writeFileSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { escapeBatchArgument } from "../infra/cmd-escape.js";
 import { removeQuietly } from "../infra/fs-cleanup.js";
 import { SESSION_ID_RE } from "../config/env.js";
 
@@ -96,9 +97,19 @@ export function appendedPromptArgument(sessionId: string, prompt: string, platfo
 //
 // BYTES, not characters. tmux counts bytes and Japanese is three of them per character, so a
 // 3,000-character seed is 9,000 bytes — a character-count guard would wave it straight through.
+//
+// Windows counts the other way round, and it counts what cmd.exe is HANDED, not what we hold: a
+// `.cmd` shim is run through `cmd /d /s /c "…"`, and escapeBatchArgument doubles every internal
+// quote on the way there. A seed of nothing but quotes therefore arrives at twice the size we
+// measured — 4,096 of them become 8,192 characters, past cmd's 8,191 ceiling, and the session does
+// not start. So the Windows arm measures the ESCAPED argument (codex review on #1522). Its unit is
+// characters because cmd's limit is; the newline test runs first, so nothing that would make
+// escapeBatchArgument throw ever reaches it.
 export const SEED_ARGV_MAX_BYTES = 4096;
-const seedNeedsFile = (prompt: string, platform: NodeJS.Platform): boolean =>
-  (platform === "win32" && /[\0\r\n]/.test(prompt)) || Buffer.byteLength(prompt, "utf8") > SEED_ARGV_MAX_BYTES;
+const seedNeedsFile = (prompt: string, platform: NodeJS.Platform): boolean => {
+  if (platform === "win32") return /[\0\r\n]/.test(prompt) || escapeBatchArgument(prompt).length > SEED_ARGV_MAX_BYTES;
+  return Buffer.byteLength(prompt, "utf8") > SEED_ARGV_MAX_BYTES;
+};
 
 export function seedPromptArgument(sessionId: string, prompt: string, platform: NodeJS.Platform = process.platform): string {
   if (!seedNeedsFile(prompt, platform)) return prompt;
