@@ -14,6 +14,7 @@ import {
   redrawTargets,
   planMsOverride,
   MS_OVERRIDE_ENTRY,
+  parseTmuxPanePids,
 } from "../../../server/infra/tmux";
 
 describe("tmuxSessionName", () => {
@@ -361,5 +362,25 @@ describe("parseTmuxSessionActivity", () => {
   // than land as NaN and render as an age nobody can read.
   it.each(["mt-a", "mt-a notanumber", ""])("drops the unusable line %j", (line) => {
     expect(parseTmuxSessionActivity(line)).toEqual(new Map());
+  });
+});
+
+// The pane pid -> session map, which is how a process started BY an agent is traced back to the
+// session it belongs to when nothing was handed to it (server/session/bridge-session.ts). The
+// FORMAT is the fragile part — it is a tmux format string, and a change to it would silently
+// return an empty map, which reads as "no session owns this bridge" and withholds every GUI tool.
+describe("parseTmuxPanePids", () => {
+  it("keeps only our own sessions, keyed by pane pid", () => {
+    const panes = parseTmuxPanePids(["2220 mt-aaaa-1111", "3300 someone-elses-session", "4400 mt-bbbb-2222"].join("\n"));
+    expect(panes).toEqual(
+      new Map([
+        [2220, "aaaa-1111"],
+        [4400, "bbbb-2222"],
+      ]),
+    );
+  });
+
+  it("ignores a row it cannot read rather than inventing a pid", () => {
+    expect(parseTmuxPanePids(["", "not-a-pid mt-aaaa", "0 mt-bbbb", "-3 mt-cccc", "2220"].join("\n"))).toEqual(new Map());
   });
 });

@@ -398,15 +398,14 @@ const mcpGroupFailure = (group: ToolGroup): string | undefined => mcpGroupFailed
 const inWorkspace = computed(() => isSameDirPath(targetDir.value, props.defaultCwd));
 
 // The workspace answers "every tool automatically" only for an agent that can RECEIVE a per-spawn
-// config — the directory alone is not enough. Antigravity and grok read a per-directory file
-// instead, so each gets what that directory registered wherever it runs, and telling them otherwise
-// here both stated something untrue and hid the toggles that were their only way to register
-// anything (#1423).
+// config — the directory alone is not enough. Antigravity, grok and muse take what the DIRECTORY
+// registered wherever they run (agy and grok from a file in it, muse through a machine-wide plugin
+// narrowed per session), and telling them otherwise here both stated something untrue and hid the
+// toggles that were their only way to register anything (#1423).
 //
 // Kept apart from `inWorkspace` rather than folded into it: the worktree row below asks the
 // directory question and only that, and the two would have drifted the moment either changed.
 const workspaceGivesEveryTool = computed(() => inWorkspace.value && pickCarriesFullGuiMcp(props.agent, props.customAgents ?? []));
-const isMuse = computed(() => props.agent === "muse");
 
 // What "all of them" covers, named so the statement is checkable rather than a claim. Derived from
 // the headings and de-duplicated — render and media both read "Canvas" — so adding a group needs no
@@ -654,12 +653,6 @@ async function removeWorktree(w: Worktree): Promise<void> {
           <span class="material-symbols-outlined mr-[3px] align-middle text-[13px]" aria-hidden="true">workspaces</span>
           All of them, automatically — {{ allToolGroupNames }}. The workspace needs no per-directory registration.
         </span>
-      </div>
-      <div v-else-if="isMuse" data-testid="cell-mcp-muse" class="flex flex-col gap-0.5" :class="LAUNCH_ROW">
-        <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">GUI tools</span>
-        <span class="font-sans text-[11px] leading-snug text-secondary"
-          >Muse has no GUI MCP bridge — sessions run `muse` directly with no per-directory registration.</span
-        >
       </div>
       <!-- The hover names the server id and its tools (mcpGroupTitle); it sits on the ROW so
            the text is reachable from the label as well as the box.

@@ -110,10 +110,11 @@ had no rule until now.
 
 Deliberate divergence is fine — say so in a comment with the reason, and flag it in the PR.
 
-## The GUI MCP has two server ids, and they are not meant to match
+## The GUI MCP has three server-id shapes, and they are not meant to match
 
-The same tool is called `mcp__mt__presentChart` in a workspace cell and
-`mcp__mulmoterminal-render__presentChart` in a project cell. Both are current. The branch is
+The same tool is called `mcp__mt__presentChart` in a workspace cell,
+`mcp__mulmoterminal-render__presentChart` in a project cell, and
+`mcp__plugin_mulmoterminal_render__presentChart` in a muse cell. All three are current. The branch is
 `carriesFullGuiMcp()` in `server/session/mcp-config.ts`: the workspace / single view / cell-less chat
 gets a **generated** `--mcp-config` carrying every tool under `GUI_SERVER_ID`; a project cell is
 handed **no `--mcp-config` at all** and reaches the tools through the user's own `.mcp.json` under the
@@ -150,11 +151,32 @@ So do not re-add a recogniser, however narrow, and do not "restore" the worktree
 that hole is known and accepted (a `codex` chip can occupy a worktree twice). A chip that wants GUI
 tools asks for them in the flags the user writes. Agent behaviour belongs to the Agent Picker.
 
+**Muse is the third shape and the one that breaks the pattern.** It reads neither a flag nor a file
+in the directory: MCP servers are declared by an installed PLUGIN (`server/agents/muse-mcp.ts`), and
+`muse plugins install` records one PER MACHINE — `--scope project` writes nothing into the project.
+So the registration cannot express "this directory gets render", and two things follow that nothing
+else here does:
+
+- a plugin MCP server is started with a **curated environment** — measured at 16 variables, all of
+  muse's own — so `guiMcpEnv` does not reach it and neither does an `env` block in the manifest.
+  The group and the port are argv; the SESSION is asked for, by walking the bridge's process tree
+  back to a tmux pane whose name is the session id (`server/session/bridge-session.ts`).
+- the four servers are registered for every session, and the ones a session is not entitled to
+  serve an EMPTY toolset rather than failing. Erroring would show three broken servers in a cell
+  that switched one group on.
+
+Do not "fix" that by trying to install per directory, and do not add an env var for the bridge —
+both were tried, and both fail silently by serving zero tools.
+
 The ids differ in **who owns them**, which is what decides whether a rename is free:
 
 - `GUI_SERVER_ID` (`mt`) — regenerated on every spawn, written to no file a user keeps. Ours. It is
   short because the client repeats it on **every tool name** (`mcp__<id>__`, or codex's
   `mcp-<id>-` with `-` rewritten to `_`), so the id is paid per tool, per listing, per session.
+- muse's per-group ids (`render`, `data`, …) — **ours, inside a manifest we generate**, and short
+  for `GUI_SERVER_ID`'s reason: muse builds the tool name out of the plugin id AND the capability
+  id, so `mulmoterminal-render` inside a `mulmoterminal` plugin would say our name twice in every
+  tool name. Free to rename, and a rename re-registers itself on the next spawn.
 - `toolGroupServerId()` (`mulmoterminal-render`, …) — **keys in config files users wrote**, read
   back by the launcher's per-group switch, documented in the setup guide. Renaming these breaks
   working setups with no error anywhere; it needs a migration over existing per-folder configs.
