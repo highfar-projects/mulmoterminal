@@ -24,7 +24,7 @@ import AgentMark from "./AgentMark.vue";
 import ModelPicker from "./ModelPicker.vue";
 import { LAUNCH_ROW } from "./launchFormClasses";
 import { jsonBody } from "../jsonBody";
-import { pickPaths } from "../composables/pickPaths";
+import { filePickerOpen, pickPaths } from "../composables/pickPaths";
 import { useSessionStop } from "../composables/useSessionStop";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
@@ -623,7 +623,9 @@ async function removeWorktree(w: Worktree): Promise<void> {
         />
         <button
           type="button"
-          class="flex-none inline-flex items-center justify-center px-2 rounded-md border border-border bg-elevated text-secondary cursor-pointer hover:bg-hover hover:text-fg hover:border-accent"
+          data-testid="cell-dir-pick"
+          class="flex-none inline-flex items-center justify-center px-2 rounded-md border border-border bg-elevated text-secondary cursor-pointer enabled:hover:bg-hover enabled:hover:text-fg enabled:hover:border-accent disabled:cursor-default disabled:opacity-40"
+          :disabled="filePickerOpen"
           title="Choose a folder…"
           aria-label="Choose the working directory"
           @click="pickDir"

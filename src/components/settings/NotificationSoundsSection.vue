@@ -11,7 +11,7 @@ import { NOTIFY_KINDS, type NotifyKind } from "../../../common/notifyKinds";
 import { presetRef, SOUND_PRESETS } from "../../../common/notifySounds";
 import type { BundledSkillName } from "../../../common/bundledSkills";
 import type { SoundEmits } from "./soundEmits";
-import { pickPaths } from "../../composables/pickPaths";
+import { filePickerOpen, pickPaths } from "../../composables/pickPaths";
 
 const props = defineProps<{ soundFile?: string | null | undefined; soundKinds?: NotifyKind[] | undefined; sounds?: SoundMap | undefined }>();
 const emit = defineEmits<SoundEmits & { (e: "launch-skill", skill: BundledSkillName): void }>();
@@ -162,7 +162,7 @@ async function browseSound() {
       spellcheck="false"
       @change="applySound"
     />
-    <SettingsButton @click="browseSound">Browse…</SettingsButton>
+    <SettingsButton :disabled="filePickerOpen" @click="browseSound">Browse…</SettingsButton>
     <SettingsButton :disabled="!soundPath" title="Use the built-in chime" @click="clearSound">Use chime</SettingsButton>
   </div>
   <p v-if="pickError" data-testid="sound-pick-error" class="mt-1.5 text-[12px] text-err-text" role="alert">{{ pickError }}</p>
