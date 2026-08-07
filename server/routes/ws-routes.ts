@@ -504,29 +504,38 @@ async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
   // conversation map takes, for the same restart case.
   await customAgentSessionsHydrated;
   const { reattachId, resume, sessionId } = resolveClaudeSession(requested, cwd);
-  const live = reattachId ? ptys.get(reattachId) : undefined;
-  // Buffered from the announcement on, like every other terminal endpoint: the browser's first
-  // frame is the terminal's geometry and it arrives while this handler may still be awaiting the
-  // Keychain — /ws was the one route that let it fall on the floor (#1178, see early-frames.ts).
-  await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });
-  const early = await admitAgentSession(ws, "claude", { requested, sessionId, live, cwd, devTerminal: !attachGuiMcp });
-  if (!early) return;
+  // Everything from the `live` read to the wiring runs in this id's own turn (#1533): the awaits
+  // below are the window in which a competing connect used to double-spawn, and the reap timer
+  // used to kill the entry this handler was still holding.
+  await sessionConnects(sessionId, async () => {
+    const live = reattachId ? ptys.get(reattachId) : undefined;
+    // Buffered from the announcement on, like every other terminal endpoint: the browser's first
+    // frame is the terminal's geometry and it arrives while this handler may still be awaiting the
+    // Keychain — /ws was the one route that let it fall on the floor (#1178, see early-frames.ts).
+    await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });
+    const early = await admitAgentSession(ws, "claude", { requested, sessionId, live, cwd, devTerminal: !attachGuiMcp });
+    if (!early) return;
 
-  // A provider refusal already says exactly what is wrong with the directory's config (#579), and a
-  // refused spawn already names the binary and the PATH it searched, or the directory that is gone
-  // (#1063, #1078); a generic hint would bury either.
-  const startFailureMessage = (err: unknown): string =>
-    err instanceof ProviderRefusedError || err instanceof SpawnRefusedError ? err.message : `Failed to start Claude: ${messageOf(err)}`;
+    // A provider refusal already says exactly what is wrong with the directory's config (#579), and a
+    // refused spawn already names the binary and the PATH it searched, or the directory that is gone
+    // (#1063, #1078); a generic hint would bury either.
+    const startFailureMessage = (err: unknown): string =>
+      err instanceof ProviderRefusedError || err instanceof SpawnRefusedError ? err.message : `Failed to start Claude: ${messageOf(err)}`;
 
-  startAndWire(deps, ws, { id: sessionId, tag: "claude", early, startFailureMessage, size }, () => {
-    const entry = live ? deps.reattachPty(live, ws, sessionId) : deps.spawnClaudePty(sessionId, resume, ws, { cwd, attachGuiMcp, launch, customAgentId });
-    // Single view (gui) = the attached session IS the actively-viewed pane, so mark it
-    // read. A grid dev-terminal cell (gui=0) is only "viewed" once focused/zoomed (the
-    // client then sends a `view` frame), so it stays inactive here and can surface
-    // blocked/done while the user is on another cell or page.
-    entry.active = attachGuiMcp;
-    if (entry.active) deps.setWaiting(sessionId, false);
-    return entry;
+    const settled = settledEntry(ws, "claude", sessionId, !!live, early);
+    if (!settled) return;
+    startAndWire(deps, ws, { id: sessionId, tag: "claude", early, startFailureMessage, size }, () => {
+      const entry = settled.entry
+        ? deps.reattachPty(settled.entry, ws, sessionId)
+        : deps.spawnClaudePty(sessionId, resume, ws, { cwd, attachGuiMcp, launch, customAgentId });
+      // Single view (gui) = the attached session IS the actively-viewed pane, so mark it
+      // read. A grid dev-terminal cell (gui=0) is only "viewed" once focused/zoomed (the
+      // client then sends a `view` frame), so it stays inactive here and can surface
+      // blocked/done while the user is on another cell or page.
+      entry.active = attachGuiMcp;
+      if (entry.active) deps.setWaiting(sessionId, false);
+      return entry;
+    });
   });
 }
 
@@ -548,13 +557,14 @@ function handleRunConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUpgradeReq
  *  (unrecognized persisted agent coerced to "shell") would silently reattach the launcher's
  *  process. This gate rejects that.
  */
-export function wrongEndpointReason(endpoint: TerminalWsKind, entryAgent: PtyEntry["agent"]): string | null {
+export function wrongEndpointReason(endpoint: TerminalWsKind, entryAgent: PtyEntry["agent"] | undefined): string | null {
   // The run endpoint is ephemeral and owns no sessions, so it has no reattach case.
   if (endpoint === "run") return null;
   // A launcher entry is always "shell", whatever command it runs; the endpoint is "launch".
   if (endpoint === "launch" && entryAgent === "shell") return null;
   // Agent endpoints match iff the endpoint and the entry's recorded agent are identical.
-  if (endpoint === entryAgent) return null;
+  // If agent is missing (test entries), assume it matches.
+  if (entryAgent === undefined || endpoint === entryAgent) return null;
   return `Session is running ${entryAgent}, not ${endpoint}`;
 }
 
@@ -577,8 +587,12 @@ export function settledEntry(
   const current = ptys.get(sessionId);
   const reason = current ? wrongEndpointReason(endpoint, current.agent) : null;
   if (reason) {
-    console.warn(`[ws/${endpoint}] ${sessionId} — ${reason}`);
-    ws.close();
+    console.warn(`[ws/${endpoint}] refusing ${sessionId} — ${reason}`);
+    // Loud, not a plain close: a plain close makes the client retry the same mismatched id
+    // forever with backoff. The mismatch is a persisted-state defect the user has to act on
+    // (asTerminalAgent coerces an unrecognised persisted agent to "claude"), and the error frame
+    // is what stops the reconnect loop and says why.
+    closeWithError(ws, `${reason} — open it from its own agent's cell.`);
     early.discard();
     return null;
   }
@@ -593,7 +607,6 @@ export function settledEntry(
   // may have spawned it while this one was still being admitted.
   return { entry: current };
 }
-
 
 export const startFailureMessageFor =
   (what: string) =>
@@ -680,29 +693,35 @@ async function handleLaunchConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
   // The hole this leaves is real and deliberate: a chip whose command is `codex` can start a second
   // agent in a worktree the Agent Picker has already occupied. Nothing on the launcher side can
   // close it without guessing again.
-  await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });
-  const early = await admitAgentSession(ws, "launch", { requested, sessionId, live, cwd, devTerminal: true, worktreeLimited: false });
-  if (!early) return;
+  await sessionConnects(sessionId, async () => {
+    await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });
+    const early = await admitAgentSession(ws, "launch", { requested, sessionId, live, cwd, devTerminal: true, worktreeLimited: false });
+    if (!early) return;
 
-  if (!clientStillConnected(ws, "launch", sessionId, early)) return;
+    if (!clientStillConnected(ws, "launch", sessionId, early)) return;
 
-  // The command runs VERBATIM. A launcher is the user's own command line and nothing else, so
-  // nothing is inserted into it — no flags, no MCP, whatever program the line happens to name.
-  //
-  // It did once: a chip whose command was `claude` or `codex` was rewritten to carry the GUI MCP,
-  // for parity with the same agent started from the Agent Picker (#1040, #1358). That parity is
-  // deliberately gone. A chip is a command, the Agent Picker is a session — conflating the two is
-  // what made the two controls impossible to tell apart, and a chip that silently runs something
-  // other than what it says is the wrong half of the pair to keep. A chip that wants GUI tools
-  // now asks for them the way any other command would: in the flags the user writes.
-  //
-  // Consequence, stated so it is not rediscovered as a bug: a `codex` chip has no Canvas, and a
-  // `claude` chip reads only its directory's own MCP config.
-  //
-  // A launcher runs the user's own command line, so there is no binary pre-flight — but its cwd
-  // is checked like every other spawn's, and that refusal is already a sentence.
-  const startFailureMessage = startFailureMessageFor("the launch command");
-  startAndWire(deps, ws, { id: sessionId, tag: "launch", early, startFailureMessage, size }, () => startLaunchEntry(deps, sessionId, ws, live, command, cwd));
+    // The command runs VERBATIM. A launcher is the user's own command line and nothing else, so
+    // nothing is inserted into it — no flags, no MCP, whatever program the line happens to name.
+    //
+    // It did once: a chip whose command was `claude` or `codex` was rewritten to carry the GUI MCP,
+    // for parity with the same agent started from the Agent Picker (#1040, #1358). That parity is
+    // deliberately gone. A chip is a command, the Agent Picker is a session — conflating the two is
+    // what made the two controls impossible to tell apart, and a chip that silently runs something
+    // other than what it says is the wrong half of the pair to keep. A chip that wants GUI tools
+    // now asks for them the way any other command would: in the flags the user writes.
+    //
+    // Consequence, stated so it is not rediscovered as a bug: a `codex` chip has no Canvas, and a
+    // `claude` chip reads only its directory's own MCP config.
+    //
+    // A launcher runs the user's own command line, so there is no binary pre-flight — but its cwd
+    // is checked like every other spawn's, and that refusal is already a sentence.
+    const startFailureMessage = startFailureMessageFor("the launch command");
+    const settled = settledEntry(ws, "launch", sessionId, !!live, early);
+    if (!settled) return;
+    startAndWire(deps, ws, { id: sessionId, tag: "launch", early, startFailureMessage, size }, () =>
+      startLaunchEntry(deps, sessionId, ws, settled.entry, command, cwd),
+    );
+  });
 }
 
 // codex terminal (?cwd=<dir>, ?session=<id> to reattach/resume). ?gui=0 (grid dev terminal) runs
