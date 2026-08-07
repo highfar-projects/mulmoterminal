@@ -23,10 +23,10 @@ const antigravityMapRead = new Promise<void>((resolve) => {
 });
 
 const ptys = new Map<string, unknown>();
-const sessionCwd = vi.fn((_id: string): string | null => null);
+const sessionCwd = vi.fn((): string | null => null);
 vi.mock("../../../server/session/registry.js", () => ({
   ptys,
-  sessionCwd: (id: string) => sessionCwd(id),
+  sessionCwd: () => sessionCwd(),
   devTerminalCwdsHydrated: Promise.resolve(),
   antigravityConversations: new Map(),
   antigravityConversationsHydrated: antigravityMapRead,
