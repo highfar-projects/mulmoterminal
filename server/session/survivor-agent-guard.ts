@@ -24,7 +24,7 @@ import { claudeOnDiskSessionIds } from "./session-reads.js";
 import { codexSessionsRoot } from "../agents/codex-session.js";
 import { codexRolloutExists } from "../agents/codex-sessions.js";
 import { antigravityBrainRoot, antigravityConversationExists } from "../agents/antigravity-session.js";
-import { grokConversationExists, grokSessionsRoot } from "../agents/grok-session.js";
+import { grokConversationExistsInAnyCwd, grokSessionsRoot } from "../agents/grok-session.js";
 import { ptyWouldReattach } from "./pty-spawn.js";
 import {
   antigravityConversations,
@@ -71,9 +71,25 @@ async function survivorEvidence(): Promise<SurvivorEvidence> {
     codex: (id) => codexRollouts.has(id) || codexRolloutExists(codexSessionsRoot(), id),
     antigravity: (id) => antigravityConversations.has(id) || antigravityConversationExists(antigravityBrainRoot(), id),
     // grok takes `--session-id`, so the key is grok's own conversation id — no mapping exists.
-    grok: (id) => grokConversationExists(grokSessionsRoot(), id),
+    // Probed across every cwd partition: the request's cwd is untrustworthy on this path.
+    grok: (id) => grokConversationExistsInAnyCwd(grokSessionsRoot(), id),
     muse: (id) => museConversations.has(id),
   };
+}
+
+// One snapshot per reconnect burst, not per socket. After a restart every surviving cell
+// reconnects within moments, `sessionConnects` serializes only EQUAL ids, and the claude
+// evidence is a synchronous walk of every project directory — repeated per cell it blocks
+// the event loop exactly when every terminal is trying to come back (Codex review on
+// #1541). Staleness within the window only fails OPEN: evidence appearing mid-burst reads
+// as silence, which attaches as requested — the same answer no-evidence gives. It never
+// manufactures a refusal, and the tmux recheck below owns the pane-died race.
+const EVIDENCE_SNAPSHOT_MS = 5000;
+let snapshot: { at: number; evidence: Promise<SurvivorEvidence> } | null = null;
+function sharedSurvivorEvidence(): Promise<SurvivorEvidence> {
+  const now = Date.now();
+  if (!snapshot || now - snapshot.at > EVIDENCE_SNAPSHOT_MS) snapshot = { at: now, evidence: survivorEvidence() };
+  return snapshot.evidence;
 }
 
 /** The refusal for a connect that would attach a surviving tmux session, or null to proceed.
@@ -81,5 +97,10 @@ async function survivorEvidence(): Promise<SurvivorEvidence> {
  *  itself so a session that died since resolve is a plain spawn, not a refusal. */
 export async function foreignTmuxSurvivorReason(endpoint: TerminalWsKind, sessionId: string): Promise<string | null> {
   if (endpoint === "run" || !ptyWouldReattach(sessionId, true)) return null;
-  return foreignSurvivorReason(endpoint, survivorAgents(sessionId, await survivorEvidence()));
+  const reason = foreignSurvivorReason(endpoint, survivorAgents(sessionId, await sharedSurvivorEvidence()));
+  // Re-asked AFTER the evidence await: the pane can exit while the disk is read, and then
+  // there is no survivor left to protect — the refusal is terminal to the client, so issuing
+  // it on old transcript data would permanently refuse a request that should fall through to
+  // a fresh spawn (Codex review on #1541). Only a still-live pane is worth refusing over.
+  return reason && ptyWouldReattach(sessionId, true) ? reason : null;
 }

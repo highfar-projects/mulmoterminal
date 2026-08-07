@@ -8,7 +8,7 @@
 // The layout is `~/.grok/sessions/<encoded cwd>/<uuid>/`, partitioned by WORKING DIRECTORY. That
 // partition is why this takes a cwd where the antigravity probe does not: the same id under a
 // different directory is a different lookup, and asking without the cwd cannot be answered.
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
@@ -45,4 +45,21 @@ export const grokSessionDir = (root: string, cwd: string, id: string): string =>
  *  resuming from a key that only ever named a MulmoTerminal session. */
 export function grokConversationExists(root: string, cwd: string, id: string): boolean {
   return UUID_RE.test(id) && existsSync(grokSessionDir(root, cwd, id));
+}
+
+/** The same probe with no cwd to ask under: does ANY directory hold a conversation by this id?
+ *  The survivor-identity guard (#1537) asks this of a tmux session that outlived a restart,
+ *  where the request's cwd is the least trustworthy value on the path — often absent and then
+ *  defaulted — so a per-cwd probe would miss the conversation that is right there. One readdir
+ *  over the cwd partitions, the same walk claudeOnDiskSessionIds does over claude's projects.
+ *  A missing root reads as empty: grok never ran, so nothing is held. */
+export function grokConversationExistsInAnyCwd(root: string, id: string): boolean {
+  if (!UUID_RE.test(id)) return false;
+  let cwds: string[];
+  try {
+    cwds = readdirSync(root);
+  } catch {
+    return false;
+  }
+  return cwds.some((encodedCwd) => existsSync(path.join(root, encodedCwd, id)));
 }

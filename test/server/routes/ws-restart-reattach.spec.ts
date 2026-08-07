@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => ({
   rememberedCwd: null as string | null,
   // The session ids with a claude transcript on disk — the #1537 guard's claude evidence.
   claudeOnDisk: [] as string[],
+  // Whether grok holds a conversation under the requested key, in any cwd partition.
+  grokHas: false,
   // Lets a test simulate the client leaving inside an admission await.
   onEnsureWorktreeEnv: () => {},
 }));
@@ -54,8 +56,14 @@ vi.mock("../../../server/agents/antigravity-session.js", async (importOriginal) 
 }));
 vi.mock("../../../server/agents/grok-session.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../server/agents/grok-session.js")>()),
-  grokConversationExists: () => false,
+  grokConversationExistsInAnyCwd: () => mocks.grokHas,
 }));
+
+// The guard shares one evidence snapshot per reconnect burst (EVIDENCE_SNAPSHOT_MS). Each test
+// here is its own burst, so the clock steps past the window in beforeEach — otherwise one
+// test's snapshot (its claude transcript set, baked at walk time) answers for the next.
+let nowMs = 0;
+vi.spyOn(Date, "now").mockImplementation(() => nowMs);
 
 vi.mock("../../../server/infra/tmux.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../server/infra/tmux.js")>()),
@@ -127,7 +135,9 @@ beforeEach(() => {
   mocks.tmuxHas = false;
   mocks.rememberedCwd = null;
   mocks.claudeOnDisk = [];
+  mocks.grokHas = false;
   mocks.onEnsureWorktreeEnv = () => {};
+  nowMs += 60_000;
   registeredGuiMcpGroups.mockResolvedValue(["render"]);
   dir = mkdtempSync(path.join(tmpdir(), "mt-ws-restart-"));
 });
@@ -196,6 +206,15 @@ describe("tmux survivor identity (#1537)", () => {
     await handleCodexConnection(makeDeps(), ws as unknown as WebSocket, request(`&gui=0&session=${SID}`));
     expect(spawnCodexPty).not.toHaveBeenCalled();
     expect(ws.sent.some((frame) => frame.includes("belongs to claude, not codex"))).toBe(true);
+  });
+
+  it("refuses a claude reconnect to a survivor grok's evidence claims", async () => {
+    mocks.tmuxHas = true;
+    mocks.grokHas = true;
+    const ws = fakeWs();
+    await handleClaudeConnection(makeDeps(), ws as unknown as WebSocket, request(`&session=${SID}`));
+    expect(spawnClaudePty).not.toHaveBeenCalled();
+    expect(ws.sent.some((frame) => frame.includes("belongs to grok, not claude"))).toBe(true);
   });
 
   it("serves a survivor to its own endpoint, evidence agreeing", async () => {
