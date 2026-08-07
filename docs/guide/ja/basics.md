@@ -54,7 +54,7 @@ description: グリッドで複数の AI コーディングエージェント（
 
 | 部分 | 役割 |
 |---|---|
-| **Agent Picker**（**Claude / Codex / Antigravity / Grok / Shell**） | このセルで動かすものを選ぶ。**エージェント**か、**Shell**（OS 標準シェル `$SHELL`。インストールも設定も不要）。実際のエージェントセッションを起動するのはこのコントロールで、下の **launch commands** はユーザーが書いたコマンドをそのまま実行する |
+| **Agent Picker**（**Claude / Codex / Antigravity / Grok / Muse / Shell**） | このセルで動かすものを選ぶ。**エージェント**か、**Shell**（OS 標準シェル `$SHELL`。インストールも設定も不要）。実際のエージェントセッションを起動するのはこのコントロールで、下の **launch commands** はユーザーが書いたコマンドをそのまま実行する。各エージェントに何が必要か・どう再開するか・GUI ツールにどう到達するかは → [どの coding agent を使うか](agents.html) |
 | **WORKING DIRECTORY** | 作業ディレクトリを入力（再生ボタンで起動）。よく使うディレクトリは *cwd presets* の**チップ**をクリックして入力（チップの再生ボタンで即起動）。チップ列の先頭には **WORKSPACE** が常にあります（→ [どのディレクトリで起動するか](#launch-dir)） |
 | **モデル選択**（Claude 選択時） | このセッションだけのバックエンド／モデルを選ぶ（→ [プロバイダ](providers.html)） |
 | **Canvas / Workspace data / External accounts** のトグル（エージェント選択時） | GUI ツール群（`render` / `data` / `media` / `external`）の MCP サーバを、**このセッションではなくディレクトリに**登録。**Claude / Codex** を選んでいるときは、**ワークスペースを選んでいる間は出ません**（そこは登録なしで全部使えるため）。**Antigravity / Grok** を選んでいるときはワークスペースでも出たままです — この 2 つはどこで動いてもこの登録だけが GUI ツールの入手経路だからです（→ [Antigravity と Grok はどこでも登録が要る](#antigravity-gui-tools)） |

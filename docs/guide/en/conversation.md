@@ -3,7 +3,7 @@ title: Making the cells talk to each other — one-turn handoffs and round table
 nav_title: Conversation
 layout: default
 parent: English
-nav_order: 7
+nav_order: 8
 description: How to run a conversation between MulmoTerminal cells — the one-turn exchange, the round table of up to five seats, the room the conversation is kept in, joining it yourself from the Rooms view or a shell, what it costs, and how to try it on a scratch project first.
 ---
 

@@ -8,6 +8,81 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.7.0 — 2026-08-07
+
+> **Setup guide:** [Muse, and the GUI tools it was not supposed to be able to reach](https://receptron.github.io/mulmoterminal/guide/en/v4.7.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.7.0.html))
+
+**Muse is the fifth first-class agent, and its cells reach the GUI tools** — the thing the previous
+release said was impossible. It was impossible only under a wrong premise: Muse does have MCP,
+behind an experimental flag of its own, through a mechanism neither of the other agents uses.
+
+With five agents in the picker, "which one, and what does it cost me" outgrew a table row, so the
+guide gains a page for it. And on Windows, every Claude session can start again.
+
+- **Muse as a first-class agent** (#1512): `muse` joins Claude / Codex / Antigravity / Grok in the
+  Agent Picker with its own `/ws/muse` endpoint, spawner (`muse --yolo --workspace <cwd>`, resume as
+  `muse resume <id>`), session discovery through its SQLite index, and a `mu` badge. The header
+  carries the model and context the same way the other agents do, read from the session log's
+  `model_completed` records: `Muse · ctx%` plus the token arrows. Point the CLI elsewhere with
+  `MUSE_BIN`, override the model with `MUSE_MODEL`.
+- **GUI MCP for Muse cells** (#1514): a Muse cell now gets the tool groups its DIRECTORY switched
+  on. Muse takes neither a `--mcp-config` URL nor a per-directory config file, so this is a third
+  route: MulmoTerminal registers ONE plugin holding all four group servers — `muse plugins install`
+  records per MACHINE, so the registration cannot express "this directory" — and narrows each
+  SESSION back to its directory's switches. Nothing reaches a plugin's MCP server but its command
+  line (its environment is curated to 16 variables, all of Muse's own, and an `env` block in the
+  manifest is dropped silently), so the group and port go in argv and the session is ASKED for:
+  `POST /api/mcp-resolve` walks the bridge's process tree and matches it against `tmux list-panes`,
+  which is exact enough to tell two Muse cells in one directory apart. A group the session is not
+  entitled to serves an EMPTY toolset rather than an error, so a cell with one group on does not
+  show three broken servers. Verified end to end against a real cell: exactly the four `render`
+  tools, and a `presentChart` call writing a real chart into that session's workspace. The bug that
+  hid all of it was a route collision — `POST /api/mcp/resolve` was swallowed by `/api/mcp/:sessionId`
+  and answered `400`, which the bridge reads as "no session", so the feature failed by serving zero
+  tools with nothing logged; the route is now `/api/mcp-resolve` and logs both outcomes.
+  Requires Muse's own `MUSE_EXPERIMENTAL_PLUGINS=1`; without it a Muse cell still starts, with no
+  GUI tools and one warning.
+- **Muse review fixes** (#1513): a resumed session dropped `--workspace`, which is what registers
+  the policy-gated workspace tools — the conversation came back without them. The context badge read
+  a HIGH-WATER mark (`input_tokens` is the context a call ran with, not an increment), so it never
+  came down after a compaction: `ctx 397k` against a live 266k, telling the user to `/compact` when
+  they need not; it now reads the last completed call, which is what the codex and grok badges mean.
+  The badge poll re-read the whole session log every time — 33 MB after a day, once per cell per
+  minute — and now folds through `transcript-fold` as grok's does: 105 ms cold, 2 ms warm, with
+  byte-for-byte the same totals. Every sqlite question was a full-table scan filtered in JS,
+  including the spawn watcher that asks twice a second for 15 s; all are now `WHERE`-keyed. A claude
+  cell paid for muse on every poll through a self-healing fallback that fired whenever a claude read
+  came back empty — the normal state of every claude cell before its first turn. And muse looked up
+  per-directory MCP config it cannot use, now gated by `readsDirectoryMcpConfig`.
+- **A guide page for choosing an agent** (docs): **Which coding agent** covers all five —
+  what each needs installed and its `*_BIN` / `*_MODEL` overrides, where its conversations live and
+  therefore why only it can resume them, the three different routes to the GUI tools (a per-session
+  URL for Claude and Codex, a file in the directory for Antigravity and Grok, a per-machine plugin
+  for Muse) and why that is a property of each CLI rather than a setting, and what the header badges
+  mean. It also covers the two things that widen what "Claude" means — a `providers` entry for any
+  Anthropic-compatible backend, and a `customAgents` entry for your own way of starting Claude Code —
+  and why a launch command is none of these. The Agent Picker row in Basics gains Muse and a link.
+- **Windows: `appendSystemPrompt` no longer stops every Claude session from starting** (#1516,
+  #1517): a Windows command line has no encoding for CR/LF/NUL — CR/LF end the line, NUL ends the
+  string — so `escapeBatchArgument` refuses an argument carrying one rather than mangle it, and the
+  default `--append-system-prompt` is a 44-line preset. A `.cmd`-installed Claude therefore could not
+  be launched at all, on every session, since 2.3.0. There is nothing to escape it INTO: substituting
+  the newlines away would hand the agent a different instruction, which is the exact failure the
+  throw prevents. The repo already had the answer — `--settings` and `--mcp-config` travel as a PATH
+  on Windows because "a path has no quotes and no metacharacters, which removes that layer rather
+  than escaping through it" (#813) — and `--append-system-prompt`, added later in #942, was the one
+  argument outside that rule. It now uses `--append-system-prompt-file` there; off Windows nothing
+  changed. The stated reason for inline (a Docker sandbox that could not read a host path) had gone
+  when that sandbox was removed in #1195. Orphan cleanup learned the new file: its name parser was
+  `.json`-only, so a `.txt` would never have been swept. The Windows argv test now runs through the
+  real cmd-escape rather than checking for quotes — #813 was a quote and #1516 was a newline in a
+  flag added two years later, and a test that checks the characters it knows about only catches the
+  bug it was written for. Reported by @chikara813, who identified the exact release that introduced
+  it.
+- **Collection documentation caught up with the code** (#1492, #1510): the places where
+  MulmoTerminal's `/api/*` paths deliberately differ from MulmoClaude's are written down rather than
+  left to be rediscovered. Documentation and comments only; no runtime change.
+
 ## mulmoterminal@4.6.1 — 2026-08-06
 
 > **Setup guide:** [Rooms, and a grid that keeps up with a flood](https://receptron.github.io/mulmoterminal/guide/en/v4.6.1.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.6.1.html))

@@ -3,7 +3,7 @@ title: ヘッダーをカスタマイズする — ボタンとチップの入�
 nav_title: ヘッダーのカスタマイズ
 layout: default
 parent: 日本語
-nav_order: 9
+nav_order: 10
 description: MulmoTerminal のターミナルヘッダーに自分のボタンを足す方法を、スクリーンショット付きで最初から。run の 3 種類（input / open / shell）、アイコンとツールチップ、when での出し分け、チップ、Skill メニューの絞り込みまで。
 ---
 

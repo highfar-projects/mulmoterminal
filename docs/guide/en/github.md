@@ -3,7 +3,7 @@ title: From a GitHub issue to a running agent in one click
 nav_title: GitHub
 layout: default
 parent: English
-nav_order: 12
+nav_order: 13
 description: See every registered repository's open PRs and issues in one cross-repo view.
 ---
 

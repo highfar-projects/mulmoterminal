@@ -3,7 +3,7 @@ title: セル同士を会話させる — 1往復の受け渡しと円卓
 nav_title: 会話
 layout: default
 parent: 日本語
-nav_order: 7
+nav_order: 8
 description: MulmoTerminal のセル同士で会話を回す方法。1往復の exchange、最大5席の round table、会話が残る「部屋」、Rooms ビューやシェルから人間が参加する方法、かかるコスト、そして捨ててよいプロジェクトでの試し方。
 ---
 

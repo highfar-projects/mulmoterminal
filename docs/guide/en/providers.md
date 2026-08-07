@@ -3,7 +3,7 @@ title: Run Claude Code against another model (OpenRouter, local)
 nav_title: Other models
 layout: default
 parent: English
-nav_order: 13
+nav_order: 14
 description: Point Claude Code at an Anthropic-compatible backend such as OpenRouter and run a session on a model other than Claude.
 ---
 

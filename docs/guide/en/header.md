@@ -3,7 +3,7 @@ title: Customizing the header — a beginner's guide to buttons and chips
 nav_title: Header buttons
 layout: default
 parent: English
-nav_order: 9
+nav_order: 10
 description: How to put your own buttons on a MulmoTerminal terminal header, with screenshots and from the beginning — the three run types (input / open / shell), icons and tooltips, conditional buttons with when, chips, and filtering the Skill menu.
 ---
 

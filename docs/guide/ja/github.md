@@ -3,7 +3,7 @@ title: GitHub の issue から、1クリックでエージェントを起動す�
 nav_title: GitHub
 layout: default
 parent: 日本語
-nav_order: 12
+nav_order: 13
 description: 登録したリポジトリの未マージ PR と Issue を 1 画面で見る、横断ビューの使い方。
 ---
 
