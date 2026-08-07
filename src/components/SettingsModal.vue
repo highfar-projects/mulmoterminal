@@ -10,6 +10,7 @@ import { ref } from "vue";
 import { MODAL_FOCUSABLE } from "../utils/focusTrap";
 import { useModalKeyboard } from "../composables/useModalKeyboard";
 import SettingsButton from "./SettingsButton.vue";
+import AppVersionLine from "./settings/AppVersionLine.vue";
 import ThemeSection from "./settings/ThemeSection.vue";
 import TerminalFontSizeSection from "./settings/TerminalFontSizeSection.vue";
 import TerminalFontFamilySection from "./settings/TerminalFontFamilySection.vue";
@@ -93,8 +94,11 @@ useModalKeyboard({ modalEl, onClose: () => emit("close"), trapSelector: MODAL_FO
       aria-modal="true"
       aria-label="Settings"
     >
-      <div class="flex items-center justify-between">
-        <h2 class="m-0 text-[15px] font-semibold">Settings</h2>
+      <div class="flex items-start justify-between">
+        <div class="min-w-0">
+          <h2 class="m-0 text-[15px] font-semibold">Settings</h2>
+          <AppVersionLine />
+        </div>
         <button
           class="cursor-pointer rounded-md border-0 bg-transparent px-1.5 py-1 text-[14px] text-muted hover:bg-[var(--err-hover-bg)] hover:text-err-text"
           title="Close"

@@ -73,6 +73,11 @@ description: MulmoTerminal の設定方法。設定モーダル、プロジェ�
 
 ツールバーの **Settings**（歯車）から開きます。
 
+タイトルのすぐ下に **Version** の行があり、**いま動いているビルド**が出ます。npm で入れたなら `4.7.0`、
+git チェックアウトならその横に `commit a1b2c3d` のチップが並びます（チェックアウトの場合、バージョン番号は
+最後のリリース時点のものなので、ビルドを特定するのはコミットのほうです）。新しいものがあるときは、ヘッダーの
+バッジと同じ更新通知（実行するコマンド込み）が次の行に続きます。バグ報告に貼るのはこの行です。
+
 ![設定モーダル — Theme（Create a theme… ボタン付き）/ Terminal font size / Terminal scroll speed / Waiting rows（点滅のチェックボックス）/ Directory appearance / Directory settings（acme-web の行を開いた状態）](../images/config-settings-modal.png)
 
 上から順に、最大 21 セクションがあります（**Voice input** は文字起こしできるマシンでのみ出るので、多くの環境では 20）。
