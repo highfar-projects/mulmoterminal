@@ -483,7 +483,7 @@ MulmoTerminal の「**拡張**」の柱がここ。稼働中ターミナルの�
 
 ### Skill メニューの絞り込み（`skills`）
 
-ヘッダーの **Skill**（雷のアイコン） はそのディレクトリで使えるスキル（`<project>/.claude/skills` と `~/.claude/skills`）を一覧します。working dir（プロジェクト）のスキルが先頭、その後にユーザースコープ。選ぶと**今のセッション**でそのスキルを実行します（Claude は `/<slug>`、Codex は `Use the "<slug>" skill.`）。
+ヘッダーの **Skill**（雷のアイコン） はそのディレクトリで使えるスキル（`<project>/.claude/skills` と `~/.claude/skills`）を一覧します。working dir（プロジェクト）のスキルが先頭、その後にユーザースコープ。選ぶと**今のセッション**でそのスキルを実行します（Claude は `/<slug>`、他のエージェントは `Use the "<slug>" skill.`）。
 
 `skills` を書くと**その slug だけを、その並び順で**表示する許可リストになります。**書かなければ全部**表示。
 

@@ -1,0 +1,99 @@
+// @vitest-environment node
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
+import {
+  antigravitySkillsConfigFile,
+  mergeAntigravitySkillsConfig,
+  syncAntigravitySkillsConfig,
+  SKILL_ENTRY_PATHS,
+} from "../../../server/agents/antigravity-skills.js";
+
+describe("mergeAntigravitySkillsConfig", () => {
+  it("adds both skill roots to an empty config", () => {
+    expect(mergeAntigravitySkillsConfig({})).toEqual({ entries: [{ path: ".claude/skills" }, { path: "~/.claude/skills" }] });
+  });
+
+  // No write when there is nothing to add: the sync runs on every agy spawn, and rewriting an
+  // unchanged file would churn its mtime and normalize the user's formatting each time.
+  it("returns null when every root is already present", () => {
+    const existing = { entries: SKILL_ENTRY_PATHS.map((p) => ({ path: p })) };
+    expect(mergeAntigravitySkillsConfig(existing)).toBeNull();
+  });
+
+  it("keeps the user's own entries, appending ours after them", () => {
+    const merged = mergeAntigravitySkillsConfig({ entries: [{ path: "tools/agents/skills", exclude: ["wip-.*"] }] });
+    expect(merged?.entries).toEqual([{ path: "tools/agents/skills", exclude: ["wip-.*"] }, { path: ".claude/skills" }, { path: "~/.claude/skills" }]);
+  });
+
+  it("adds only the root that is missing", () => {
+    const merged = mergeAntigravitySkillsConfig({ entries: [{ path: ".claude/skills" }] });
+    expect(merged?.entries).toEqual([{ path: ".claude/skills" }, { path: "~/.claude/skills" }]);
+  });
+
+  // `inherits` and any field agy grows later ride along untouched — the file is the user's.
+  it("preserves fields it does not know", () => {
+    const merged = mergeAntigravitySkillsConfig({ inherits: [{ path: "/shared/skills.json" }], future: true });
+    expect(merged).toMatchObject({ inherits: [{ path: "/shared/skills.json" }], future: true });
+  });
+
+  // An entry we cannot read as {path: string} is left in place but never matched — a malformed
+  // entry must not swallow the root we were about to add.
+  it("ignores malformed entries when checking presence", () => {
+    const merged = mergeAntigravitySkillsConfig({ entries: ["not-an-object", { path: 5 }] });
+    expect(merged?.entries).toEqual(["not-an-object", { path: 5 }, { path: ".claude/skills" }, { path: "~/.claude/skills" }]);
+  });
+
+  it("refuses a config that is not an object, or whose entries is not an array", () => {
+    expect(mergeAntigravitySkillsConfig([])).toBeNull();
+    expect(mergeAntigravitySkillsConfig("x")).toBeNull();
+    expect(mergeAntigravitySkillsConfig({ entries: { path: ".claude/skills" } })).toBeNull();
+  });
+});
+
+describe("syncAntigravitySkillsConfig", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "ag-skills-"));
+  });
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const read = (): Record<string, unknown> => JSON.parse(fs.readFileSync(antigravitySkillsConfigFile(dir), "utf8"));
+
+  it("writes .agents/skills.json pointing at both skill roots", () => {
+    syncAntigravitySkillsConfig(dir);
+    expect(read()).toEqual({ entries: [{ path: ".claude/skills" }, { path: "~/.claude/skills" }] });
+  });
+
+  it("is idempotent — a second sync leaves the file byte-identical", () => {
+    syncAntigravitySkillsConfig(dir);
+    const first = fs.readFileSync(antigravitySkillsConfigFile(dir), "utf8");
+    syncAntigravitySkillsConfig(dir);
+    expect(fs.readFileSync(antigravitySkillsConfigFile(dir), "utf8")).toBe(first);
+  });
+
+  it("merges into a user's existing file without losing their entries", () => {
+    fs.mkdirSync(path.dirname(antigravitySkillsConfigFile(dir)), { recursive: true });
+    fs.writeFileSync(antigravitySkillsConfigFile(dir), JSON.stringify({ entries: [{ path: "~/personal-skills" }] }));
+    syncAntigravitySkillsConfig(dir);
+    expect(read().entries).toEqual([{ path: "~/personal-skills" }, { path: ".claude/skills" }, { path: "~/.claude/skills" }]);
+  });
+
+  // Not JSON means it is not a file we wrote, and rewriting it would lose whatever it is.
+  it("leaves an unparseable file untouched", () => {
+    fs.mkdirSync(path.dirname(antigravitySkillsConfigFile(dir)), { recursive: true });
+    fs.writeFileSync(antigravitySkillsConfigFile(dir), "not json");
+    syncAntigravitySkillsConfig(dir);
+    expect(fs.readFileSync(antigravitySkillsConfigFile(dir), "utf8")).toBe("not json");
+  });
+
+  // The user's own repo: the file is generated on spawn, so it must not turn up in git status.
+  it("excludes the file through .git/info/exclude, not their .gitignore", () => {
+    fs.mkdirSync(path.join(dir, ".git", "info"), { recursive: true });
+    syncAntigravitySkillsConfig(dir);
+    expect(fs.readFileSync(path.join(dir, ".git", "info", "exclude"), "utf8")).toContain(".agents/skills.json");
+    expect(fs.existsSync(path.join(dir, ".gitignore"))).toBe(false);
+  });
+});

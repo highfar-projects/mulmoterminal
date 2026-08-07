@@ -503,7 +503,7 @@ yourself, add `"work"` to the list** — a configured list is the whole list.
 The header's **Skill** button (the bolt icon) lists the skills available in that directory
 (`<project>/.claude/skills` and `~/.claude/skills`). Working-dir (project) skills come
 first, then user-scope ones. Picking one runs the skill **in the current session**
-(Claude: `/<slug>`; Codex: `Use the "<slug>" skill.`).
+(Claude: `/<slug>`; other agents: `Use the "<slug>" skill.`).
 
 Set `skills` to an allowlist to show **only those slugs, in that order**. **Omit it to
 show everything.**

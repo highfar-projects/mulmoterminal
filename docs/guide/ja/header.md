@@ -276,7 +276,7 @@ Pull requests** も並びます。ここは固定なので設定では変わり�
 ヘッダーの **⚡ Skill** は、そのディレクトリで使えるスキルを一覧します（プロジェクトの
 `.claude/skills` が先、次に `~/.claude/skills`。それぞれの中はアルファベット順で、同じ slug が
 両方にあればプロジェクト側が勝ちます）。選ぶと**今のセッション**でそれを実行します
-（Claude は `/<slug>`、Codex は `Use the "<slug>" skill.`）。
+（Claude は `/<slug>`、他のエージェントは `Use the "<slug>" skill.`）。
 
 ![Skill メニュー](../images/header-skill-menu.png)
 

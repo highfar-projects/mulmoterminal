@@ -17,6 +17,7 @@ import { wireAgentPtyRelay } from "./pty-relay.js";
 import { attachCodexAutoRun } from "./draft-injection.js";
 import type { PtyEntry } from "./types.js";
 import type { SpawnDeps } from "./spawn-deps.js";
+import { refreshCodexSkillsMirror } from "../backends/workspaceSetup.js";
 
 // Bound to ONE pty: `ptys.has(id)` would keep a stale tail alive after a reap-then-
 // respawn under the same id, and both tails would report the same boundaries.
@@ -62,6 +63,11 @@ export function createCodexSpawner(deps: SpawnDeps) {
     } = {},
   ): PtyEntry {
     const { initialPrompt = null, mcpGroups = [] } = options;
+    // codex reads skills from its mirror (~/.codex/skills), not from the workspace's own
+    // `.claude/skills`, and the mirror is otherwise refreshed only at boot — so a skill created
+    // mid-run (a new collection) would stay invisible to codex until a restart. No-op outside
+    // the managed workspace.
+    refreshCodexSkillsMirror(cwd);
     const root = codexSessionsRoot();
     const before = snapshotSessions(root);
     // Two surfaces, the same two claude has:
