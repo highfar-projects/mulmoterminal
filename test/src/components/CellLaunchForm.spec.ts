@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import CellLaunchForm from "../../../src/components/CellLaunchForm.vue";
+import AgentMark from "../../../src/components/AgentMark.vue";
 import type { AgentPick, CustomAgent } from "../../../common/customAgents";
 import { TERMINAL_AGENTS } from "../../../common/sessionAgent";
 
@@ -730,6 +731,10 @@ describe("the Agent Picker's custom agents (#1414)", () => {
     await flushPromises();
     for (const agent of TERMINAL_AGENTS) {
       const button = w.find(`[data-testid="agent-picker-${agent}"]`);
+      // The mark is asked for its OWN agent, not merely for a mark: a row that rendered Claude's
+      // burst under every label would satisfy "an svg is present" while distinguishing nothing,
+      // which is the whole thing this feature exists to do (CodeRabbit on #1521).
+      expect(button.findComponent(AgentMark).props("agent")).toBe(agent);
       expect(button.find("svg").exists()).toBe(true);
       expect(button.find(".material-symbols-outlined").exists()).toBe(false);
     }
