@@ -66,7 +66,10 @@ the client reads fields it has checked rather than off an `any`.
 - `test/bin/update-check.spec.ts` — npm/git info, opted-out shape, dirty tree keeps the commit.
 - `test/server/config/update-status.spec.ts` — cached structure, opt-out uses the local read.
 - `test/src/composables/updateNotice.spec.ts` — `versionLabel` for both installs.
-- `test/src/components/settings/AppVersionLine.spec.ts` — renders the version, hides while unready.
+- `test/src/components/settings/AppVersionLine.spec.ts` — the labelled row, the commit chip, and
+  that the version shows before the probe lands while the commit waits for `ready`. The row is
+  hidden only when no status could be read at all — the version itself is known synchronously and
+  is the same value either way, so blanking it for the length of the probe would buy nothing.
 
 ## Docs
 

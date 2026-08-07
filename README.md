@@ -567,12 +567,12 @@ CLAUDE_CWD=/Users/you/my-project
 
 ### UI settings (`~/.mulmoterminal/config.json`)
 
-The Settings modal (⚙) persists per-user UI choices to `~/.mulmoterminal/config.json`
+The Settings modal (the gear button) persists per-user UI choices to `~/.mulmoterminal/config.json`
 (read/written via `GET`/`POST /api/config`):
 
 ![The Settings modal — theme, notification sound, PR repos, launch commands, and MCP servers](https://raw.githubusercontent.com/receptron/mulmoterminal/main/docs/guide/images/settings.png)
 
-*Open it from the ⚙ button in the toolbar. Under the title, a **Version** row shows what is running: the version from the shipped `package.json`, plus a `commit <sha>` chip on a git checkout — there the version is only whatever was last released, so the commit is what identifies the build. When something newer exists, the row is followed by the header badge's update notice, command included. Pick a **theme**, set the **terminal font size**, **font** and **scroll speed**, set a custom **attention sound**, list the repos the cross-repo **PRs & Issues** view should aggregate, add **launch commands** for grid cells, register your own **MCP servers**, and turn on the switches for what this app writes on your behalf — **issue work comments**, the **PR clone footer**, the **closing summary**, the **decision digest**, the **dev worklog** — no need to hand-edit the config file. Four settings stay with their skill because a form would be the wrong tool for them (`keymap`, `themes`, `providers`, `buttons`/`chips`); Settings shows what each is doing now and launches that skill. Note that **theme, font size and scroll speed are stored per browser** (they're display preferences, so a phone and a desktop keep their own); the rest live in `~/.mulmoterminal/config.json` and are shared by every client.*
+*Open it from the gear button in the toolbar. Under the title, a **Version** row shows what is running: the version from the shipped `package.json`, plus a `commit <sha>` chip on a git checkout — there the version is only whatever was last released, so the commit is what identifies the build. When something newer exists, the row is followed by the header badge's update notice, command included. Pick a **theme**, set the **terminal font size**, **font** and **scroll speed**, set a custom **attention sound**, list the repos the cross-repo **PRs & Issues** view should aggregate, add **launch commands** for grid cells, register your own **MCP servers**, and turn on the switches for what this app writes on your behalf — **issue work comments**, the **PR clone footer**, the **closing summary**, the **decision digest**, the **dev worklog** — no need to hand-edit the config file. Four settings stay with their skill because a form would be the wrong tool for them (`keymap`, `themes`, `providers`, `buttons`/`chips`); Settings shows what each is doing now and launches that skill. Note that **theme, font size and scroll speed are stored per browser** (they're display preferences, so a phone and a desktop keep their own); the rest live in `~/.mulmoterminal/config.json` and are shared by every client.*
 
 | Field        | Meaning |
 | ------------ | ------- |
@@ -879,7 +879,7 @@ alongside the Claude sessions. Scripts are **per-directory**: the cell reads the
 different projects' scripts.
 
 The same launcher also has an **or launch** row for your configured **launch commands**
-— any interactive command — set in Settings (⚙) → **Launch commands** as
+— any interactive command — set in Settings (the gear button) → **Launch commands** as
 `{ label, command }` (e.g. `htop` → `htop`, `Codex` → `codex`). A plain shell needs no
 entry here: the Agent Picker's **Shell** option already opens `$SHELL`. Unlike
 a one-shot script, a launcher runs as a **persistent terminal in the cell's directory**:
@@ -1170,7 +1170,7 @@ with no schema on disk, so the fields are identified by measurement (see
 rather than a number it is unsure of, so if a future agy release moves those fields, an
 Antigravity cell falls back to showing its model alone — it will not show a wrong percentage.
 
-The **Settings** modal (⚙) shows an **estimated $ cost** — Session / Today / Month — from
+The **Settings** modal (the gear button) shows an **estimated $ cost** — Session / Today / Month — from
 `GET /api/cost`, using a built-in public per-model price table (cache reads billed at
 0.1×, cache writes at 1.25× input). It's an estimate: real billing differs, **flat-plan
 (Max) usage isn't reflected**, and turns on unpriced models are flagged and excluded.
@@ -1959,7 +1959,7 @@ src/
     PrsOverlay.vue                           cross-repo PRs & Issues
     Wiki*View.vue, Collections*.vue, AccountingOverlay.vue   workspace views
     TimelineOverlay.vue, ToolsPane.vue, NotificationBell.vue, RemoteHostControl.vue
-    SettingsModal.vue                        ⚙ settings — the dialog shell + section order
+    SettingsModal.vue                        settings — the dialog shell + section order
     settings/                                one file per settings section (theme, sounds,
                                              web push, google, PR repos, launchers, quick
                                              commands, MCP, cost, shortcuts, …), plus the

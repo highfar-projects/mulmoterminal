@@ -69,4 +69,14 @@ describe("AppVersionLine", () => {
   it("renders nothing when the status cannot be read", async () => {
     expect((await mountWith({ error: "nope" })).find('[data-testid="settings-app-version"]').exists()).toBe(false);
   });
+
+  // Deliberate, and CodeRabbit proposed the opposite on #1524: the version is known to the server
+  // synchronously and is the same value either way, so it shows at once instead of blanking the
+  // row for as long as the probe takes. Only `commit` — which needs the install kind the probe
+  // decides — waits for `ready`.
+  it("shows the version before the check has landed, without a commit", async () => {
+    const w = await mountWith(status({ ready: false, install: "git", commit: "a1b2c3d" }));
+    expect(versionText(w)).toBe("4.7.0");
+    expect(commit(w).exists()).toBe(false);
+  });
 });
