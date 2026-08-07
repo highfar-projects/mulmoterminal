@@ -39,15 +39,14 @@ import {
   deleteCollectionRefusalMessage,
   deleteCustomView,
   applyMutateAction,
-  collectionWritable,
   readOnlyRefusal,
   storeFor,
   type LoadedCollection,
   type RecordIssue,
 } from "@mulmoclaude/core/collection/server";
 import type { CollectionMutateAction } from "@mulmoclaude/core/collection";
-// CollectionItem + actionVisible live in the isomorphic core entry.
-import { actionVisible, fieldVisible, COMPUTED_TYPES, type ActionWithWhen, type CollectionAction, type CollectionItem } from "@mulmoclaude/core/collection";
+// CollectionItem + fieldVisible live in the isomorphic core entry.
+import { fieldVisible, COMPUTED_TYPES, type CollectionItem } from "@mulmoclaude/core/collection";
 // Curated-registry engine (Discover tab): merged catalog fetch + bundle import.
 import { listRegistry, importRegistry } from "@mulmoclaude/core/collection/registry/server";
 import { clampLimit as clampViewLimit, clampOffset as clampViewOffset, normalizeFields, normalizeMutate } from "@mulmoclaude/core/remote-view";
@@ -55,6 +54,8 @@ import { clampLimit as clampViewLimit, clampOffset as clampViewOffset, normalize
 // mutate action), mounted at the bottom of mountCollectionRoutes with the
 // helpers those routes share with the ones here.
 import { mountCustomViewRoutes, viewActionRateLimit } from "./customViewRoutes.js";
+// The 404 / 405 / 409 preamble those action routes share with the one here.
+import { refuseReadOnlyCollection, resolveActionableRecord, resolveItemAction } from "./collectionActionGuards.js";
 // Mobile custom-view builder — shared with the remote-host channel handlers so
 // the desktop phone-frame preview renders the EXACT artifact the phone receives.
 import {
@@ -540,47 +541,19 @@ const respondForMutateAction = async (
   res.json({ written: true, itemId, item: outcome.item });
 };
 
-// The action's state gate, rebuilt so core's exact-optional parameter accepts it: the schema
-// parse yields a `when: undefined` / `require: undefined` KEY, which that type rejects.
-//
-// BOTH names are forwarded. They are the same gate under two spellings — `when` on the seeded
-// kinds, `require` on mutate — and this call is the authorization check, so dropping either
-// would make that kind's actions unconditionally runnable by a crafted request.
-export const visibilityGate = (action: CollectionAction): ActionWithWhen => ({
-  ...("when" in action && action.when ? { when: action.when } : {}),
-  ...("require" in action && action.require ? { require: action.require } : {}),
-});
-
 // Per-record action (e.g. Repair / enrich this record).
 const itemActionHandler: RequestHandler<{ slug: string; itemId: string; actionId: string }> = async (req, res) => {
   const collection = await resolveCollection(res, req.params.slug);
   if (!collection) return;
-  const action = collection.schema.actions?.find((entry) => entry.id === req.params.actionId);
-  if (!action) {
-    res.status(404).json({ error: `action '${req.params.actionId}' not found on collection '${collection.slug}'` });
-    return;
-  }
-  const record = await storeFor(collection).read(req.params.itemId);
-  if (!record) {
-    res.status(404).json({ error: `item '${req.params.itemId}' not found` });
-    return;
-  }
-  // The action's `when` predicate is the authorization rule: the client hides
-  // out-of-state buttons, but a stale/crafted request could still target one.
-  if (!actionVisible(visibilityGate(action), record)) {
-    res.status(409).json({ error: `action '${action.id}' is not available for item '${req.params.itemId}' in its current state` });
-    return;
-  }
+  const action = resolveItemAction(res, collection, req.params.actionId);
+  if (!action) return;
+  const record = await resolveActionableRecord(res, collection, action, req.params.itemId);
+  if (!record) return;
   // `kind: "mutate"` needs no template / seed / LLM — the host applies the
   // declarative write itself (`when` was just enforced above, same
   // visibility-is-authorization rule as the seeded kinds).
   if (action.kind === "mutate") {
-    // Schema validation already rejects mutate actions on a dataSource
-    // collection; this is the defensive server-side twin.
-    if (!collectionWritable(collection)) {
-      res.status(405).json({ error: readOnlyRefusal(collection.slug) });
-      return;
-    }
+    if (refuseReadOnlyCollection(res, collection)) return;
     await respondForMutateAction(res, collection, action, req.params.itemId, isRecord(req.body) ? req.body : undefined);
     return;
   }
@@ -770,10 +743,7 @@ const viewDataGetHandler: RequestHandler<{ slug: string }> = async (req, res) =>
 const viewDataPutHandler: RequestHandler<{ slug: string }> = async (req, res) => {
   const collection = await resolveCollection(res, req.params.slug);
   if (!collection) return;
-  if (!collectionWritable(collection)) {
-    res.status(405).json({ error: readOnlyRefusal(collection.slug) });
-    return;
-  }
+  if (refuseReadOnlyCollection(res, collection)) return;
   const body: Record<string, unknown> = isRecord(req.body) ? req.body : {};
   if (!Array.isArray(body.items)) {
     res.status(400).json({ error: "`items` must be an array" });
@@ -893,12 +863,11 @@ export function mountCollectionRoutes(app: Express): void {
 
   // The rest of the custom-view surface (customViewRoutes.ts: the i18n dict, the
   // scoped image resolve, the scoped mutate action), handed the loader / view
-  // lookup / mutate executor / gate it shares with the routes above.
+  // lookup / mutate executor it shares with the routes above.
   mountCustomViewRoutes(app, {
     resolveCollection,
     resolveView,
     respondForMutateAction,
-    visibilityGate,
     guarded,
     cors: viewDataCors,
     queryConcurrency: viewQueryConcurrency,
