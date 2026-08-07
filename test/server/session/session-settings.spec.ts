@@ -80,6 +80,22 @@ describe("withSettingsCleanup", () => {
     expect(withSettingsCleanup(SESSION, () => "entry")).toBe("entry");
     expect(existsSync(fileFor(SESSION))).toBe(true);
   });
+
+  // The prompt file is written while argv is being built, so a spawn that throws afterwards
+  // leaves it behind exactly as the settings file used to (#1516). Every file kind a Windows
+  // spawn writes has to come back out on this path, not just the one it was written for.
+  it("removes every file a Windows spawn wrote when it throws", () => {
+    settingsArgument(SESSION, "{}", false, "win32");
+    mcpConfigArgument(SESSION, "{}", "win32");
+    appendedPromptArgument(SESSION, "first line\nsecond line", "win32");
+    expect([fileFor(SESSION), mcpFileFor(SESSION), promptFileFor(SESSION)].every(existsSync)).toBe(true);
+    expect(() =>
+      withSettingsCleanup(SESSION, () => {
+        throw new Error("spawn failed");
+      }),
+    ).toThrow(/spawn failed/);
+    expect([fileFor(SESSION), mcpFileFor(SESSION), promptFileFor(SESSION)].filter(existsSync)).toEqual([]);
+  });
 });
 
 describe("cleanupSessionSettings", () => {

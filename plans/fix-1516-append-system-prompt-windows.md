@@ -79,16 +79,21 @@ PR の matrix は ubuntu/macOS のみだが、**今回の見逃しはそこで�
 フラグ名は `claude-args.ts` に残す（`--append-system-prompt` と `--append-system-prompt-file` は
 別フラグなので、値だけでなく「どちらか」が伝わる必要がある）。判別可能な値を返す。
 
-### 2. `sessionIdFromFileName` を一般化する
+### 2. `sessionIdFromFileName` に新しい名前を教える
 
 今は `.json` 固定で `-mcp` だけを剥がす。プロンプトファイル（`.txt`）を足すと**孤児掃除の対象から
-漏れる**。拡張子と接尾辞を集合にして、新しい種類を足したら自動的に掃除対象になる形にする。
-`cleanupSessionSettings` にも追加する。
+漏れる**。`cleanupSessionSettings` にも追加する。
+
+一度「拡張子の集合 × 接尾辞の集合」という直積で書いたが、これは Codex レビューの指摘どおり**広すぎた**:
+こちらが一度も書かない `<id>.txt` まで一致してしまい、「自分が書いたものだけ消す」という既存の不変
+条件を弱める。**書く名前そのもの**（`<id>.json` / `<id>-mcp.json` / `<id>-prompt.txt`）を列挙する形に
+直した。
 
 ### 3. `claude-args.ts` — 受け取った形に応じてフラグを置く
 
-pure builder のまま。ファイル書き込みは呼び出し側（`spawn-claude.ts`）が既に
-`settingsArgument` / `mcpConfigArgument` でやっているのと同じ位置で行う。
+pure builder のまま。ファイルを書くのは `session-settings.ts` の `appendedPromptArgument` 自身で、
+`settingsArgument` / `mcpConfigArgument` と同じ。`spawn-claude.ts` はそれを**呼ぶ**だけで、書き込みは
+しない — 既に他の2つを呼んでいるのと同じ位置に並べる、という意味。
 
 ## テスト
 
@@ -97,4 +102,7 @@ pure builder のまま。ファイル書き込みは呼び出し側（`spawn-cla
 - **横断テスト**: Windows の spawn が作る引数の**すべて**がコマンドラインに載せられること。将来
   複数行を運ぶフラグが増えたら、ユーザーではなくテストが落ちる
 - `appendedPromptArgument` の単体テスト（win32 はファイル・パスを返す / それ以外は inline）
-- 孤児掃除がプロンプトファイルも拾うこと
+- プロンプトを改行込みで verbatim に書くこと
+- **消える経路すべて**: reap（`cleanupSessionSettings`）、spawn 失敗（`withSettingsCleanup`）、
+  起動時の孤児掃除（`pruneOrphanSettings`）
+- 書かない名前（`<id>.txt` / `<id>-prompt.json` / `<id>-other.txt`）を掃除しないこと
