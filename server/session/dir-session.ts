@@ -82,6 +82,22 @@ export function runningSessionKeys(): Set<string> {
   return new Set<string>([...tmuxListSessionIds(), ...ptys.keys()]);
 }
 
+/**
+ * The running-key snapshot a survivor match needs, taken in the only safe order: the shared
+ * conversation logs are refreshed FIRST, then the keys are read — so a tmux session another
+ * MulmoTerminal process created during the refresh is in `running` with its mapping already
+ * folded in. The other order left a window the length of the refresh in which such a session had
+ * a mapping but no running key, and its worktree read as free (#1534 review).
+ *
+ * One call per LIST, like `tmuxAttachedCounts`: this is what callers hand `dirSession` and
+ * `runningKeyOf` as `running` — reading `runningSessionKeys()` directly is only for a caller
+ * that consults no conversation log.
+ */
+export async function survivorSnapshot(): Promise<Set<string>> {
+  await refreshAgentConversations();
+  return runningSessionKeys();
+}
+
 /** Which of a row's possible keys is the one actually running, or null.
  *
  *  `keys` is the row's own id FIRST, then the session keys its agent's conversation log maps it to
@@ -206,18 +222,12 @@ export function grokSurvivorCandidates(facts: {
 }
 
 /** `tmuxCounts`, `running` and `now` are passed in so a whole list of directories is answered from
- *  one `list-clients` call, one `list-sessions` call and one clock read — `runningSessionKeys()`
- *  is the value callers hand over. */
+ *  one `list-clients` call, one `list-sessions` call and one clock read — `survivorSnapshot()` is
+ *  the value callers hand over as `running`, because it also refreshes the conversation logs the
+ *  survivor pass below matches against, in the only order that cannot miss a session (see its
+ *  header). */
 export async function dirSession(dir: string, tmuxCounts: Map<string, number> | null, now: number, running: ReadonlySet<string>): Promise<DirSession | null> {
   const canonical = canonicalPath(dir);
-  // Re-read, not merely await-hydration: ~/.mulmoterminal is shared by every MulmoTerminal process
-  // on the machine, and a mapping appended by ANOTHER process after our boot ties a surviving tmux
-  // key to this directory too — hydrated-once maps would read that session's worktree as free
-  // (#1534 review).
-  await refreshAgentConversations();
-  // AFTER the await, like every read below it: a pty spawned during the refresh would otherwise be
-  // missing from a pre-await snapshot while `liveHere` excludes it from the survivor passes too —
-  // gone from both, and the directory reads as free (CodeRabbit on #1534).
   const live = livePtyCandidates(canonical, tmuxCounts, now);
   const liveHere = (id: string): boolean => ptys.has(id);
   const attached = (id: string): boolean => sessionAttached(id, tmuxCounts);
