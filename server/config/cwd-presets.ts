@@ -6,6 +6,7 @@ import { type CwdPreset } from "./config-schema.js";
 import { readJsonFile } from "../infra/read-text-file.js";
 import { writeFileAtomicSync } from "../files/atomic-write.js";
 import { isRecord } from "../../common/isRecord.js";
+import { isManagedWorktreePath } from "../../common/worktreePath.js";
 import { canonicalDir } from "../infra/path-within.js";
 const isPreset = (v: unknown): v is CwdPreset => isRecord(v) && typeof v.label === "string" && typeof v.path === "string";
 
@@ -87,12 +88,14 @@ export function extractCwdFromTranscript(raw: string): string | null {
 }
 
 // Turn discovered session cwds into launch-form presets, newest first: drop dirs that no
-// longer exist (via `exists`, so no bogus preset ever lands), dedupe by path keeping the
-// newest mtime, then cap at `max`. Pure so the derivation rule is unit-testable.
+// longer exist (via `exists`, so no bogus preset ever lands), drop managed worktrees (a task
+// branch is not a place to launch in again — the same rule the browser records by, shared so the
+// two cannot drift), dedupe by path keeping the newest mtime, then cap at `max`. Pure so the
+// derivation rule is unit-testable.
 export function deriveCwdPresets(records: readonly CwdRecord[], exists: (dir: string) => boolean, max = 10): CwdPreset[] {
   const newestByPath = new Map<string, number>();
   for (const { cwd, mtimeMs } of records) {
-    if (!cwd || !exists(cwd)) continue;
+    if (!cwd || isManagedWorktreePath(cwd) || !exists(cwd)) continue;
     const prev = newestByPath.get(cwd);
     if (prev === undefined || mtimeMs > prev) newestByPath.set(cwd, mtimeMs);
   }

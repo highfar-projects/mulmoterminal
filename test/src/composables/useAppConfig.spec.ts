@@ -67,6 +67,36 @@ describe("useAppConfig — auto preset recording", () => {
     expect(presets.value).toEqual([]);
   });
 
+  // A worktree launches like anywhere else, so every isolated task used to leave a chip behind —
+  // for a directory that is one branch for one task and is deleted with it.
+  it("does not record a managed worktree", async () => {
+    const { presets, recordPreset } = useAppConfig();
+    await recordPreset("/home/me/worktrees/myrepo-1a2b3c4d/fix-bug");
+    expect(presets.value).toEqual([]);
+  });
+
+  it("still records the repository the worktree came from", async () => {
+    const { presets, recordPreset } = useAppConfig();
+    await recordPreset("/home/me/myrepo");
+    await recordPreset("/home/me/worktrees/myrepo-1a2b3c4d/fix-bug");
+    expect(presets.value.map((p) => p.path)).toEqual(["/home/me/myrepo"]);
+  });
+
+  // Saved config is the user's, so an entry an earlier version recorded is left where it is
+  // rather than dropped — it just stops being maintained (no bump to the front).
+  it("leaves an already-saved worktree entry alone instead of bumping it", async () => {
+    const { presets, recordPreset } = useAppConfig();
+    const worktree = "/home/me/worktrees/myrepo-1a2b3c4d/fix-bug";
+    presets.value = [
+      { label: "alpha", path: "/home/me/alpha" },
+      { label: "myrepo (fix-bug)", path: worktree },
+    ];
+    const before = vi.mocked(globalThis.fetch).mock.calls.length;
+    await recordPreset(worktree);
+    expect(vi.mocked(globalThis.fetch).mock.calls).toHaveLength(before); // no POST
+    expect(presets.value.map((p) => p.path)).toEqual(["/home/me/alpha", worktree]);
+  });
+
   it("removePreset drops the matching path", async () => {
     const { presets, recordPreset, removePreset } = useAppConfig();
     await recordPreset("/a");

@@ -27,7 +27,9 @@ never have to invent a hex code.
 ### 1. Gather — the directories, and what they already say
 
 Read `~/.mulmoterminal/config.json` and take `cwdPresets` (`[{ label, path }]`, most-recent first —
-the same list the New-terminal launcher offers). That is the population.
+the same list the New-terminal launcher offers). That is the population. Worktrees are not recorded
+into it, so it is the user's real projects rather than every task branch they have ever opened; an
+older entry that still names one is theirs to keep or remove, not this skill's to prune.
 
 Then, for **each** of those paths:
 

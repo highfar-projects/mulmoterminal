@@ -1,5 +1,6 @@
 import { ref, type Ref } from "vue";
 import { presetLabel, type CwdPreset } from "../components/presets";
+import { isManagedWorktreePath } from "../../common/worktreePath";
 import type { Launcher } from "../components/launchers";
 import { isCustomAgent, type CustomAgent } from "../../common/customAgents";
 import type { UserMcpServer } from "../components/userMcp";
@@ -153,8 +154,13 @@ function createPresetMutations(presets: Ref<CwdPreset[]>, savePresets: (next: Cw
   // its basename. Already at the front → no write. No cap: the user prunes the list with the
   // chip's close button. Called with the server-confirmed (effective) cwd so we only remember dirs that
   // actually ran.
+  //
+  // A managed worktree is skipped — see `isManagedWorktreePath`. Skipped rather than filtered on
+  // read, so an entry a previous version recorded stays exactly where the user left it: the chip's
+  // close button is theirs to press, and silently dropping saved config is not this function's
+  // call. It also means a worktree already in the list stops being bumped to the front.
   function recordPreset(path: string | null): Promise<void> {
-    if (!path) return Promise.resolve();
+    if (!path || isManagedWorktreePath(path)) return Promise.resolve();
     return serialize(async () => {
       if (presets.value[0]?.path === path) return; // already most-recent — nothing to reorder
       const existing = presets.value.find((p) => p.path === path);
