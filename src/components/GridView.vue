@@ -369,12 +369,28 @@ const onAgent = (uid: number, agent: TerminalAgent) => (state.value = setCellAge
 const onPark = (uid: number, parked: boolean) => (state.value = setCellParked(state.value, uid, parked));
 // Pass the on-screen order so closing the zoomed cell stays zoomed on its filmstrip
 // neighbour (previous, or next when it was the first) instead of collapsing the grid.
-const onClose = (uid: number) =>
-  (state.value = closeCell(
+//
+// The slot goes down WITH the cell. TerminalCell's own close button tears its session down before
+// emitting close, but every other way here — the terminal-close shortcut, a launcher cell's close —
+// used to drop the cell while its slot kept an open socket: the PTY then read as attached forever
+// (never reaped, refused for resume), and the orphaned slot was the ghost a later `cell-<uid>` key
+// collision handed to a different cell as its terminal (#1533). `slotLive` is what makes the
+// already-torn-down path a no-op rather than a second terminate.
+const onClose = (uid: number) => {
+  const slot = `cell-${uid}`;
+  if (conn.slotLive(slot)) {
+    const session = state.value.cells.find((c) => c.uid === uid)?.session ?? null;
+    conn.terminate(slot);
+    // Over HTTP as well, like TerminalCell.teardown: the WS `terminate` only reaches the server
+    // while the socket it just closed was still open.
+    if (session) void fetchWithTimeout(`/api/session/${encodeURIComponent(session)}/terminate`, { method: "POST" }).catch(() => {});
+  }
+  state.value = closeCell(
     state.value,
     uid,
     displayCells.value.map((c) => c.uid),
-  ));
+  );
+};
 // Pass the on-screen order so releasing the zoom lands on the page holding the cell that was
 // enlarged — including when the user got there by clicking a roster row or filmstrip thumbnail,
 // which changes what is zoomed without touching the page.
