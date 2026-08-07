@@ -1,6 +1,6 @@
 import { ref, type Ref } from "vue";
 import { presetLabel, type CwdPreset } from "../components/presets";
-import { isManagedWorktreePath } from "../../common/worktreePath";
+import { isManagedWorktreePath, worktreeLabel } from "../../common/worktreePath";
 import type { Launcher } from "../components/launchers";
 import { isCustomAgent, type CustomAgent } from "../../common/customAgents";
 import type { UserMcpServer } from "../components/userMcp";
@@ -77,6 +77,26 @@ const home = ref<string | null>(null);
 // A SINGLETON for the same reason as `home`: only `loadConfig` writes it, and a component that
 // calls useAppConfig() without loading would otherwise hold a copy that stays null forever.
 const worktreesRoot = ref<string | null>(null);
+
+// The initial /api/config while it is still in flight, so a launch that lands first can wait for
+// the root rather than decide without it (Codex on #1543). Null when nothing is loading — then
+// there is nothing to wait for. It never rejects and `fetchWithTimeout` bounds it, so a dead
+// server delays one chip instead of stalling the queue.
+let configLoadInFlight: Promise<void> | null = null;
+
+/** Run a config load, publishing it as the in-flight one for the duration — what a preset record
+ *  waits on when it needs the worktree root before it can decide. */
+async function trackConfigLoad(load: () => Promise<void>): Promise<void> {
+  const run = load();
+  configLoadInFlight = run;
+  try {
+    await run;
+  } finally {
+    // Only when a LATER load has not already taken the slot: clearing another's would tell a
+    // waiter that nothing is coming.
+    if (configLoadInFlight === run) configLoadInFlight = null;
+  }
+}
 
 const prRepos = ref<string[]>([]);
 
@@ -166,8 +186,16 @@ function createPresetMutations(presets: Ref<CwdPreset[]>, savePresets: (next: Cw
   // close button is theirs to press, and silently dropping saved config is not this function's
   // call. It also means a worktree already in the list stops being bumped to the front.
   function recordPreset(path: string | null): Promise<void> {
-    if (!path || isManagedWorktreePath(path, worktreesRoot.value)) return Promise.resolve();
+    if (!path) return Promise.resolve();
     return serialize(async () => {
+      // A path without the worktree SHAPE cannot be one of ours whatever the root turns out to be,
+      // so it is written straight away — which is what keeps a launch during the initial GET from
+      // being delayed, and that write is a guarantee of its own (#164). Only a shape-matching path
+      // waits, and only while the config carrying the root is actually in flight: deciding without
+      // it would record a worktree that a moment later we would have known to skip (Codex on
+      // #1543). Inside `serialize`, so the queue stays ordered; `fetchWithTimeout` bounds the wait.
+      if (worktreeLabel(path) !== null && worktreesRoot.value === null) await configLoadInFlight;
+      if (isManagedWorktreePath(path, worktreesRoot.value)) return;
       if (presets.value[0]?.path === path) return; // already most-recent — nothing to reorder
       const existing = presets.value.find((p) => p.path === path);
       const entry = existing ?? { label: presetLabel(path), path };
@@ -416,7 +444,9 @@ export function useAppConfig() {
 
   const { savePresets, recordPreset, removePreset, migrateLegacyRecents, snapshotVersion, adoptServerPresets } = createPresetManager(presets, saving, error);
 
-  async function loadConfig() {
+  const loadConfig = (): Promise<void> => trackConfigLoad(loadConfigOnce);
+
+  async function loadConfigOnce() {
     const version = snapshotVersion();
     try {
       const res = await fetchWithTimeout("/api/config");

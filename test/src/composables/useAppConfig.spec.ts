@@ -174,6 +174,31 @@ describe("useAppConfig — auto preset recording", () => {
     expect(presets.value.map((p) => p.path)).toEqual(["/launched/now"]);
   });
 
+  // The other side of the test above: a launch that lands before the initial GET has no worktree
+  // root to judge by, and deciding without it recorded the very worktree the guard exists to keep
+  // out (Codex on #1543). A path with the worktree SHAPE waits for the root; anything else must
+  // NOT wait, which is what keeps the #164 guarantee above intact.
+  it("does not record a managed worktree launched before the initial config lands", async () => {
+    let releaseGet: () => void = () => {};
+    const getGate = new Promise<void>((r) => {
+      releaseGet = r;
+    });
+    globalThis.fetch = vi.fn(async (_url: string, init?: { body?: string }) => {
+      if (!init?.body) {
+        await getGate;
+        return { ok: true, json: async () => ({ cwd: "/w", home: "/h", worktreesRoot: WORKTREES_ROOT, cwdPresets: [] }) };
+      }
+      const body = JSON.parse(init.body);
+      return { ok: true, json: async () => ({ cwdPresets: body.cwdPresets ?? [] }) };
+    }) as unknown as typeof fetch;
+    const { presets, loadConfig, recordPreset } = useAppConfig();
+    const loading = loadConfig(); // GET in flight (stalled) — the root is not known yet
+    const recording = recordPreset(`${WORKTREES_ROOT}/myrepo-1a2b3c4d/fix-bug`); // deliberately not awaited
+    releaseGet();
+    await Promise.all([loading, recording]);
+    expect(presets.value).toEqual([]);
+  });
+
   it("serializes concurrent records so neither write clobbers the other (#163 review)", async () => {
     // A slow POST means two un-serialized records would both read the empty list and
     // the second would overwrite the first. Serialization keeps both.

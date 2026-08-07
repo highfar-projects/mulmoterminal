@@ -55,9 +55,24 @@ launch form の **WORKING DIRECTORY** のチップ列に managed worktree が溜
 - ブラウザは root を知らない（`MULMOTERMINAL_HOME` で移動できる）ので、`GET /api/config` が
   `home` と並べて `worktreesRoot` を返す。ランタイムの事実であって設定値ではないので、`home` と
   同じ扱い。
-- **root が不明なときは `false`（= 記録する）**。`/api/config` が返る前は比べる相手がいない。
-  間違え方は 2 通りあるが、「余計なチップが 1 つ出る（× で消せる）」ほうが「ディレクトリが黙って
-  出てこない」より軽い。
+- **root が不明なときは `false`（= 記録する）**。間違え方は 2 通りあるが、「余計なチップが 1 つ
+  出る（× で消せる）」ほうが「ディレクトリが黙って出てこない」より軽い。
+
+### 初回 `/api/config` が返る前の launch（#1543 の Codex レビュー 3 回目）
+
+上のフォールバックだけだと、初回 GET が飛んでいる最中の launch は root を知らないまま記録され、
+ガードが素通りする。実際 `loadConfig does not clobber a preset recorded while the initial GET is in
+flight (#164 review)` というテストが「その窓で launch が起きうる」ことを示している。
+
+ただし**無条件に待たせると、その #164 の保証を壊す**（記録が GET の完了待ちになり、上のテストは
+デッドロックする）。なので **形だけの事前判定**を挟む:
+
+- `worktreeLabel(path) === null`（worktree の形ですらない）→ root が何であれ我々のものではないので
+  **待たずに即記録**。#164 の保証はそのまま。
+- 形が一致 かつ root 未知 かつ 初回 GET が飛行中 → その GET を待ってから判定。
+
+待ちは `fetchWithTimeout` で上限が付いており、対象は worktree の形をしたパスだけなので通常の記録は
+遅延しない。`serialize` の内側に置いて書き込み順序は保つ。
 
 包含判定は `common/dirPathKey.ts`（ブラウザ安全、`node:path` 不使用、両セパレータと `.`/`..` を
 畳む）の上に組む。symlink と Windows の大文字小文字は畳めないが、root も cwd も同じサーバ由来なので
