@@ -14,15 +14,21 @@
 // sync would then DEREGISTER the servers every live grok in that directory is using — leaving them
 // with no GUI tools until something else re-registered them. (Codex review, #1441.)
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { cleanupSessionSettings } from "../../../server/session/session-settings.js";
 
 const ID = "11111111-2222-4333-8444-555555555555";
 const CWD = "/home/me/project";
 
 let reattaching = false;
 const syncGrokMcpConfig = vi.fn();
+// The argv each spawn really handed the pty — where the seed wiring is visible end to end.
+const spawnedArgv: string[][] = [];
 
 vi.mock("../../../server/session/pty-spawn.js", () => ({
-  ptySpawn: () => ({ term: fakeTerm(), tmux: true, reattached: reattaching }),
+  ptySpawn: (_id: string, _bin: string, args: string[]) => {
+    spawnedArgv.push(args);
+    return { term: fakeTerm(), tmux: true, reattached: reattaching };
+  },
   ptyWouldReattach: () => reattaching,
 }));
 
@@ -65,5 +71,25 @@ describe("spawnGrokPty and the directory's shared .grok/config.toml", () => {
     reattaching = true;
     spawn([]);
     expect(syncGrokMcpConfig).not.toHaveBeenCalled();
+  });
+});
+
+// The seed wiring, through the REAL spawner rather than through the argument builder: a test that
+// calls seedPromptArgument itself would still pass if this spawner stopped calling it (#1518).
+//
+// Forced to win32 so the branch under test is the one that cannot work — on this machine's own
+// platform a multi-line seed is passed straight through and there is nothing to see.
+describe("the seed a Windows spawn hands the pty", () => {
+  it("is a single-line file reference, never the multi-line seed", () => {
+    const platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+    try {
+      createGrokSpawner(deps).spawnGrokPty(ID, null, null, CWD, { mcpGroups: [] as never, initialPrompt: 'Use the "x" skill.\n\nand do the thing' });
+      const args = spawnedArgv.at(-1) ?? [];
+      expect(args.filter((arg) => /[\0\r\n]/.test(arg))).toEqual([]);
+      expect(args.some((arg) => arg.includes("-seed.txt"))).toBe(true);
+    } finally {
+      platform.mockRestore();
+      cleanupSessionSettings(ID);
+    }
   });
 });
