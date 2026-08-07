@@ -39,14 +39,28 @@ export interface CodexActivityDeps {
 
 export async function watchCodexActivity(deps: CodexActivityDeps): Promise<void> {
   let offset = deps.startAtEnd ? await startingOffset(deps) : 0;
+  let pending = "";
   // Against the SAME offset the tail starts from, so a boundary cannot fall between the
   // restore read and the first poll — it is either in [0, offset) and restored, or after
   // and tailed.
   if (deps.restoreOpenTurn && offset > 0) {
-    const skipped = turnBoundaries((await deps.readSlice(0, offset)).split("\n").filter((l) => l.trim()));
-    if (skipped.at(-1) === "started") deps.onBoundary("started");
+    const skipped = await deps.readSlice(0, offset);
+    // The writer is still ALIVE on this path, so the snapshot can land mid-record. Whatever
+    // follows the last newline is a record still being written: it is carried as the tail's
+    // pending fragment — parsed once its remainder is flushed — never judged as a line here.
+    // Both halves of that matter: a torn task_complete judged here would be ignored AND its
+    // suffix alone is unparseable on the first poll, so the completion would be lost for good
+    // and a restored working flag would stick until some later turn (#1538 review).
+    const lastNewline = skipped.lastIndexOf("\n");
+    pending = skipped.slice(lastNewline + 1);
+    const whole = turnBoundaries(
+      skipped
+        .slice(0, lastNewline + 1)
+        .split("\n")
+        .filter((l) => l.trim()),
+    );
+    if (whole.at(-1) === "started") deps.onBoundary("started");
   }
-  let pending = "";
   while (deps.isAlive()) {
     await deps.sleep(CODEX_ACTIVITY_POLL_MS);
     if (!deps.isAlive()) return;

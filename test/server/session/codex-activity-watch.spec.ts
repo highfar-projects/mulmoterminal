@@ -88,6 +88,18 @@ describe("watchCodexActivity", () => {
     expect(h.boundaries).toEqual([]);
   });
 
+  // The writer is still alive at reattach, so the snapshot can land MID-record. The torn
+  // record must ride the pending fragment into the tail: judged as a line at restore time, a
+  // torn task_complete is ignored there AND unparseable from its suffix alone on the first
+  // poll — the completion is lost for good and the restored working flag sticks (#1538 review).
+  it("assembles a completion record torn by the reattach snapshot, instead of losing it", async () => {
+    const torn = complete("mid");
+    const h = harness(started("mid") + torn.slice(0, 25), true, true);
+    h.appendAt(2, torn.slice(25));
+    await h.run();
+    expect(h.boundaries).toEqual(["started", "completed"]);
+  });
+
   it("joins a record split across two polls", async () => {
     const whole = complete();
     const h = harness("", false);
