@@ -847,7 +847,9 @@ In dev, open the Vite URL; its proxy forwards `/ws`, `/ws/pubsub`, and `/api` to
 
 An empty grid cell's launcher sets the **Working directory** by typing, by a preset
 chip, or with the **📁 folder button** (a native OS folder dialog). The preset chips are
-the directories you have launched in; the **workspace** leads them always, labelled
+the directories you have launched in — **worktrees excluded**, since one is a single task's
+branch that is deleted with the task, not a place to launch in again; the
+**workspace** leads them always, labelled
 **WORKSPACE** and marked with an icon, whether or not you have ever launched there — it is
 the one directory where a claude or codex session reaches every GUI tool (agy and grok get
 what the directory registered, there as anywhere — see

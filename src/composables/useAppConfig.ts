@@ -1,5 +1,6 @@
 import { ref, type Ref } from "vue";
 import { presetLabel, type CwdPreset } from "../components/presets";
+import { isManagedWorktreePath, worktreeLabel } from "../../common/worktreePath";
 import type { Launcher } from "../components/launchers";
 import { isCustomAgent, type CustomAgent } from "../../common/customAgents";
 import type { UserMcpServer } from "../components/userMcp";
@@ -70,6 +71,32 @@ function adoptSoundConfig(c: Record<string, unknown>): void {
 // views does — held its own copy that stayed null forever, and every path it showed came out
 // unshortened. Found by looking at a screenshot of the issue rows' clone menu.
 const home = ref<string | null>(null);
+
+// Where the server keeps the worktrees IT created (`<MULMOTERMINAL_HOME>/worktrees`), so this side
+// can tell one of ours from a directory that merely looks like one — see `isManagedWorktreePath`.
+// A SINGLETON for the same reason as `home`: only `loadConfig` writes it, and a component that
+// calls useAppConfig() without loading would otherwise hold a copy that stays null forever.
+const worktreesRoot = ref<string | null>(null);
+
+// The initial /api/config while it is still in flight, so a launch that lands first can wait for
+// the root rather than decide without it (Codex on #1543). Null when nothing is loading — then
+// there is nothing to wait for. It never rejects and `fetchWithTimeout` bounds it, so a dead
+// server delays one chip instead of stalling the queue.
+let configLoadInFlight: Promise<void> | null = null;
+
+/** Run a config load, publishing it as the in-flight one for the duration — what a preset record
+ *  waits on when it needs the worktree root before it can decide. */
+async function trackConfigLoad(load: () => Promise<void>): Promise<void> {
+  const run = load();
+  configLoadInFlight = run;
+  try {
+    await run;
+  } finally {
+    // Only when a LATER load has not already taken the slot: clearing another's would tell a
+    // waiter that nothing is coming.
+    if (configLoadInFlight === run) configLoadInFlight = null;
+  }
+}
 
 const prRepos = ref<string[]>([]);
 
@@ -153,8 +180,24 @@ function createPresetMutations(presets: Ref<CwdPreset[]>, savePresets: (next: Cw
   // its basename. Already at the front → no write. No cap: the user prunes the list with the
   // chip's close button. Called with the server-confirmed (effective) cwd so we only remember dirs that
   // actually ran.
-  function recordPreset(path: string | null): Promise<void> {
-    if (!path) return Promise.resolve();
+  //
+  // A managed worktree is skipped — see `isManagedWorktreePath`. Skipped rather than filtered on
+  // read, so an entry a previous version recorded stays exactly where the user left it: the chip's
+  // close button is theirs to press, and silently dropping saved config is not this function's
+  // call. It also means a worktree already in the list stops being bumped to the front.
+  async function recordPreset(path: string | null): Promise<void> {
+    if (!path) return;
+    // Decided BEFORE the write lock is taken, never while holding it: `loadConfigOnce` ends with
+    // `migrateLegacyRecents`, which needs that same lock, so waiting for the load from inside it
+    // deadlocks an upgrading user's first load outright — the import and the record both hang
+    // (Codex on #1543).
+    //
+    // A path without the worktree SHAPE cannot be one of ours whatever the root turns out to be, so
+    // it never waits — which is what keeps a launch during the initial GET writing immediately, a
+    // guarantee of its own (#164). Only a shape-matching path waits, and only while the config
+    // carrying the root is actually in flight; `fetchWithTimeout` bounds it.
+    if (worktreeLabel(path) !== null && worktreesRoot.value === null) await configLoadInFlight;
+    if (isManagedWorktreePath(path, worktreesRoot.value)) return;
     return serialize(async () => {
       if (presets.value[0]?.path === path) return; // already most-recent — nothing to reorder
       const existing = presets.value.find((p) => p.path === path);
@@ -404,7 +447,9 @@ export function useAppConfig() {
 
   const { savePresets, recordPreset, removePreset, migrateLegacyRecents, snapshotVersion, adoptServerPresets } = createPresetManager(presets, saving, error);
 
-  async function loadConfig() {
+  const loadConfig = (): Promise<void> => trackConfigLoad(loadConfigOnce);
+
+  async function loadConfigOnce() {
     const version = snapshotVersion();
     try {
       const res = await fetchWithTimeout("/api/config");
@@ -414,6 +459,7 @@ export function useAppConfig() {
       const c = body;
       defaultCwd.value = typeof c.cwd === "string" ? c.cwd : null;
       home.value = typeof c.home === "string" ? c.home : null;
+      worktreesRoot.value = typeof c.worktreesRoot === "string" ? c.worktreesRoot : null;
       adoptServerPresets(c.cwdPresets, version);
       adoptSoundConfig(c);
       pushEnabled.value = c.pushEnabled === true;
