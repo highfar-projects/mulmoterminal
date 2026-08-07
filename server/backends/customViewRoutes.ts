@@ -11,8 +11,7 @@
 import type { Express, Request, RequestHandler, Response } from "express";
 import { clampImageMaxEdge } from "@mulmoclaude/core/remote-view";
 import { readCustomViewI18n, storeFor, type LoadedCollection } from "@mulmoclaude/core/collection/server";
-import type { CollectionMutateAction } from "@mulmoclaude/core/collection";
-import type { CollectionItem } from "@mulmoclaude/core/collection";
+import type { CollectionItem, CollectionMutateAction } from "@mulmoclaude/core/collection";
 // The 404 / 405 / 409 preamble this action route shares with the parent-side one.
 import { refuseReadOnlyCollection, resolveActionableRecord, resolveItemAction } from "./collectionActionGuards.js";
 // The same thumbnail resolver the mobile view's image inlining uses, so a desktop
