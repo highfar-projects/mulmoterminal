@@ -276,7 +276,7 @@ The `env staging` on the right-hand cell of the screenshot above is exactly this
 The header's **⚡ Skill** lists the skills available in that directory (the project's
 `.claude/skills` first, then `~/.claude/skills`; alphabetical within each group, and a project
 skill shadows a user one of the same slug). Picking one runs it **in the current session**
-(`/<slug>` for Claude, `Use the "<slug>" skill.` for Codex).
+(`/<slug>` for Claude, `Use the "<slug>" skill.` for the other agents).
 
 ![The Skill menu](../images/header-skill-menu.png)
 

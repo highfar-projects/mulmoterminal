@@ -4,6 +4,7 @@
 import { antigravityAdapter } from "../agents/antigravity.js";
 import { buildAntigravityArgs } from "../agents/antigravity-args.js";
 import { syncAntigravityMcpConfig } from "../agents/antigravity-mcp.js";
+import { syncAntigravitySkillsConfig } from "../agents/antigravity-skills.js";
 import { antigravityBrainRoot, snapshotAntigravitySessions, watchForAntigravitySession } from "../agents/antigravity-session.js";
 import { startDirectoryMcpPty, syncDirectoryMcpForSpawn, type SpawnDirectoryMcpPty } from "./spawn-directory-mcp.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
@@ -41,6 +42,10 @@ export function createAntigravitySpawner(deps: SpawnDeps) {
     // switches were flipped before this shipped — or with the `claude mcp` CLI directly — needs no
     // second action to work (#1443).
     syncDirectoryMcpForSpawn(sessionId, cwd, mcpGroups, syncAntigravityMcpConfig);
+    // Skills reach agy the same file-in-the-directory way (`.agents/skills.json`) — it cannot
+    // read `.claude/skills` on its own, unlike every other agent hosted here. The entries point
+    // at the live skill roots, so this is registration, not a mirror to keep fresh.
+    syncAntigravitySkillsConfig(cwd);
     // Snapshotted between the sync and the spawn: the capture below tells agy's new conversation
     // from the ones already on disk by the difference, so it must be the world agy is about to find.
     const root = antigravityBrainRoot();

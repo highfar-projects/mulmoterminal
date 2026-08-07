@@ -22,6 +22,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import path from "node:path";
 import { toolGroupServerId, type ToolGroup } from "../../common/toolGroups.js";
 import { isRecord } from "../../common/isRecord.js";
+import { symlinkFreeWriteTarget } from "../infra/symlink-guard.js";
 import { bridgeCommand, OUR_GUI_SERVER_IDS } from "./gui-mcp-bridge.js";
 import { excludeFromGit } from "./git-exclude.js";
 
@@ -79,6 +80,10 @@ const EXCLUDE_ENTRY = `${CUSTOMIZATION_DIR}/mcp_config.json`;
 // project stops carrying a config for a feature it no longer has switched on.
 export function syncAntigravityMcpConfig(cwd: string, groups: readonly ToolGroup[]): void {
   const file = antigravityMcpConfigFile(cwd);
+  // Same guard as the skills config beside it: a checkout can commit `.agents` or the file
+  // itself as a symlink to somewhere of the repo author's choosing, and every fs call below
+  // follows links (symlink-guard.ts).
+  if (!symlinkFreeWriteTarget(file)) return;
   const existing = readMcpServers(file);
   if (existing === null) return;
   const mcpServers = mergeAntigravityMcpServers(existing, groups);

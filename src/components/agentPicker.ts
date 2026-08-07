@@ -31,12 +31,15 @@ const OPTIONS: Record<LaunchAgent, Omit<AgentPickerOption, "agent">> = {
   shell: { label: "Shell", title: "A plain shell ($SHELL) — no agent, nothing to configure" },
 };
 
-const BUILTIN_AGENTS: readonly AgentPickerOption[] = TERMINAL_AGENTS.map((agent) => ({ agent, ...OPTIONS[agent] }));
+// Exported on its own for the collection browser's launch picker, which offers ONLY these:
+// spawnBackgroundChat hosts exactly the built-in agents — no shell (a seeded chat needs an
+// agent to send the seed to) and no custom agents (the route builds no custom argv).
+export const BUILTIN_AGENT_OPTIONS: readonly AgentPickerOption[] = TERMINAL_AGENTS.map((agent) => ({ agent, ...OPTIONS[agent] }));
 const SHELL_OPTION: AgentPickerOption = { agent: "shell", ...OPTIONS.shell };
 
 /** The built-in options alone — the whole picker when the user has configured no custom agent,
  *  which is every install by default. */
-export const AGENT_PICKER_OPTIONS: readonly AgentPickerOption[] = [...BUILTIN_AGENTS, SHELL_OPTION];
+export const AGENT_PICKER_OPTIONS: readonly AgentPickerOption[] = [...BUILTIN_AGENT_OPTIONS, SHELL_OPTION];
 
 /**
  * The picker's options for a user who has configured custom agents.
@@ -57,5 +60,5 @@ export function agentPickerOptions(customAgents: readonly CustomAgent[]): readon
     label: agent.label,
     title: `${agent.command} — your own way of starting Claude Code (Claude Code's own arguments are appended)`,
   }));
-  return [...BUILTIN_AGENTS, ...custom, SHELL_OPTION];
+  return [...BUILTIN_AGENT_OPTIONS, ...custom, SHELL_OPTION];
 }

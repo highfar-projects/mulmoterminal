@@ -98,3 +98,18 @@ export function initWorkspaceSetup(deps: { workspace: string }): void {
     log.info("mirrored skills to codex", { mirrored: result.mirrored.length, skipped: result.skipped.length, removed: result.removed.length });
   });
 }
+
+/** Re-mirror the workspace's skills for a codex session about to start there. The boot-time
+ *  mirror above goes stale the moment a skill is created mid-run — a new collection, say — and
+ *  codex reads the mirror, never the live directory, so without this a restart was the only way
+ *  a codex chat could see a skill made after boot. Gated exactly like boot seeding: only the
+ *  managed workspace's skills belong in the user-global codex root — mirroring an arbitrary
+ *  project's `.claude/skills` there would make its skills fire in every other directory too.
+ *  Quiet on failure for the caller's sake: a mirror that cannot refresh is a session with
+ *  yesterday's skills, not a session that fails to start. */
+export function refreshCodexSkillsMirror(cwd: string): void {
+  if (!isManagedWorkspace(cwd)) return;
+  safeStep("refreshCodexSkillsMirror", () => {
+    syncCodexSkills(path.join(cwd, ".claude", "skills"), codexSkillsRoot());
+  });
+}
