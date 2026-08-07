@@ -19,6 +19,7 @@ const SETTINGS_DIR = path.join(os.homedir(), ".mulmoterminal", "settings");
 
 const settingsFile = (sessionId: string): string => path.join(SETTINGS_DIR, `${sessionId}.json`);
 const mcpConfigFile = (sessionId: string): string => path.join(SETTINGS_DIR, `${sessionId}-mcp.json`);
+const appendedPromptFile = (sessionId: string): string => path.join(SETTINGS_DIR, `${sessionId}-prompt.txt`);
 
 // Windows has a second, unrelated reason to use a file: there, a `.cmd`-installed Claude is
 // launched through cmd.exe (#798), so a JSON argument is parsed by cmd and then by the
@@ -44,6 +45,23 @@ export function mcpConfigArgument(sessionId: string, json: string, platform: Nod
   return mustUseFile(false, platform) ? writePrivate(mcpConfigFile(sessionId), json) : json;
 }
 
+/** Where `--append-system-prompt`'s text travels. Its own type because Claude Code names the two
+ *  forms with DIFFERENT flags, unlike `--settings`, which takes either. */
+export type AppendedPromptArgument = { kind: "inline"; text: string } | { kind: "file"; path: string };
+
+// And the same again for the appended system prompt — with a harder version of the Windows
+// reason. The other two are merely awkward to quote through cmd.exe; this one is impossible: a
+// Windows command line has no encoding for a newline at all (CR/LF end the line), and the text is
+// a MULTI-LINE preset by default, so escapeBatchArgument refused it and every Claude session on a
+// `.cmd` install failed to start (#1516).
+//
+// There is nothing to escape it INTO. Substituting the newlines away would hand the agent a
+// different instruction, which is the exact failure cmd-escape.ts throws to prevent — so the
+// answer is the one already used above: give Claude Code the path and let it read the file.
+export function appendedPromptArgument(sessionId: string, prompt: string, platform: NodeJS.Platform = process.platform): AppendedPromptArgument {
+  return mustUseFile(false, platform) ? { kind: "file", path: writePrivate(appendedPromptFile(sessionId), prompt) } : { kind: "inline", text: prompt };
+}
+
 // Run a spawn, taking the session's settings file with it if the spawn throws. A session
 // that never starts never reaches reap(), where the cleanup normally happens — so without
 // this a failed spawn leaves a token-bearing file behind (#579).
@@ -60,6 +78,7 @@ export function withSettingsCleanup<T>(sessionId: string, spawn: () => T): T {
 export function cleanupSessionSettings(sessionId: string): void {
   removeQuietly(settingsFile(sessionId));
   removeQuietly(mcpConfigFile(sessionId));
+  removeQuietly(appendedPromptFile(sessionId));
 }
 
 /** Drop settings files left behind by a server that never got to reap.
@@ -111,13 +130,24 @@ function isOlderThan(file: string, cutoff: number): boolean {
   }
 }
 
-// `<id>.json` and `<id>-mcp.json` are the two we write, and `<id>` is always a session id —
-// every caller takes one from randomUUID() or a SESSION_ID_RE match. Requiring that shape is
-// what keeps this from deleting a file that merely happens to end in `.json`: the directory
-// is ours, but "ours" is not a good enough reason to remove something we did not write.
+// Every name a session writes here, WHOLE — not a set of extensions crossed with a set of
+// suffixes. `<id>` is always a session id (every caller takes one from randomUUID() or a
+// SESSION_ID_RE match), and requiring the exact shape is what keeps this from deleting a file that
+// merely happens to end in `.json` or `.txt`: the directory is ours, but "ours" is not a good
+// enough reason to remove something we did not write. A cross-product would have swept `<id>.txt`,
+// which nothing here produces.
+//
+// A file kind missing from this list is one nothing ever collects — which is what a `.json`-only
+// rule did to the prompt file (#1516). Add the kind here when you add the writer.
+const FILE_ENDINGS = [".json", "-mcp.json", "-prompt.txt"] as const;
+
 function sessionIdFromFileName(name: string): string | null {
-  if (!name.endsWith(".json")) return null;
-  const stem = name.slice(0, -".json".length);
-  const id = stem.endsWith("-mcp") ? stem.slice(0, -"-mcp".length) : stem;
-  return SESSION_ID_RE.test(id) ? id : null;
+  // First ending whose remainder is a session id wins: `<id>-mcp.json` also ends in `.json`, and
+  // the id check is what rejects that reading before `-mcp.json` gets its turn.
+  for (const ending of FILE_ENDINGS) {
+    if (!name.endsWith(ending)) continue;
+    const id = name.slice(0, -ending.length);
+    if (SESSION_ID_RE.test(id)) return id;
+  }
+  return null;
 }
