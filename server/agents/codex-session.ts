@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { isRecord } from "../../common/isRecord.js";
+import { canonicalPath } from "../infra/canonical-path.js";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const ROLLOUT_RE = /^rollout-.*\.jsonl$/;
@@ -86,14 +87,23 @@ interface RolloutMeta extends CodexSessionMeta {
 // one; a session that can't be attributed just stays unresumable-by-id (cold reconnect starts fresh).
 // `claimed` holds rollouts already mapped to another session, so a single rollout is never
 // attributed to two keys (which would resume one conversation from both).
+//
+// The sole-rollout branch checks the cwd too, when there is one to check: two spawns in DIFFERENT
+// directories share the snapshot-diff window (~/.codex is one tree), and "exactly one new file"
+// used to fire before the cwd was consulted — so the slower spawn claimed the faster spawn's
+// rollout across directories (#1533). Compared canonically: codex records its own spelling of the
+// path, and a worktree reached through a symlink must not read as a different directory (#1208).
+const sameDir = (recorded: string | null | undefined, cwd: string | null): boolean =>
+  cwd === null || (!!recorded && canonicalPath(recorded) === canonicalPath(cwd));
+
 export function pickFreshSession(root: string, before: Set<string>, cwd: string | null, claimed?: Set<string>): RolloutMeta | null {
   const found = listRecentRollouts(root)
     .filter((file) => !before.has(file) && !claimed?.has(file))
     .map((file) => ({ file, meta: readSessionMeta(file) }))
     .filter((x): x is { file: string; meta: CodexSessionMeta } => x.meta !== null);
   const sole = found.length === 1 ? found[0] : undefined;
-  if (sole) return { ...sole.meta, file: sole.file };
-  const matches = cwd ? found.filter((x) => x.meta.cwd === cwd) : [];
+  if (sole && sameDir(sole.meta.cwd, cwd)) return { ...sole.meta, file: sole.file };
+  const matches = cwd ? found.filter((x) => sameDir(x.meta.cwd, cwd)) : [];
   const soleMatch = matches.length === 1 ? matches[0] : undefined;
   if (soleMatch) return { ...soleMatch.meta, file: soleMatch.file };
   return null;
@@ -118,5 +128,9 @@ export async function watchForCodexSession(
     await delay(pollMs);
     result = pickFreshSession(root, before, cwd, opts.claimed);
   }
+  // Claimed here, synchronously with the selection, not only in the caller's `.then`: two watchers
+  // awaiting the same poll interval would otherwise both pick the same rollout before either
+  // claim landed (#1533). The caller's own add stays and is idempotent.
+  if (result) opts.claimed?.add(result.file);
   return result;
 }

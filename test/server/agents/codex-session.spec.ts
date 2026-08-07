@@ -85,10 +85,25 @@ describe("pickFreshSession", () => {
     const before = snapshotSessions(root);
     expect(pickFreshSession(root, before, null)).toBeNull();
   });
-  it("attributes a single fresh rollout (unambiguous)", () => {
+  it("attributes a single fresh rollout whose cwd agrees (unambiguous)", () => {
     const before = snapshotSessions(root);
     writeRollout(root, UUID_A, "/a");
-    expect(pickFreshSession(root, before, "/anything")?.id).toBe(UUID_A);
+    expect(pickFreshSession(root, before, "/a")?.id).toBe(UUID_A);
+  });
+
+  it("attributes a single fresh rollout when the caller has no cwd to check", () => {
+    const before = snapshotSessions(root);
+    writeRollout(root, UUID_A, "/a");
+    expect(pickFreshSession(root, before, null)?.id).toBe(UUID_A);
+  });
+
+  // The #1533 case: two spawns in DIFFERENT directories share ~/.codex, so "exactly one new file"
+  // used to fire before the cwd was consulted — and the slower spawn claimed the faster spawn's
+  // rollout across directories. Sole no longer beats a cwd that disagrees.
+  it("refuses a single fresh rollout recorded for another directory", () => {
+    const before = snapshotSessions(root);
+    writeRollout(root, UUID_A, "/a");
+    expect(pickFreshSession(root, before, "/somewhere-else")).toBeNull();
   });
   it("attributes the unique cwd match when several are fresh", () => {
     const before = snapshotSessions(root);
@@ -146,5 +161,16 @@ describe("watchForCodexSession", () => {
     const before = snapshotSessions(root);
     const found = await watchForCodexSession(root, before, { pollMs: 10, maxWaitMs: 40 });
     expect(found).toBeNull();
+  });
+
+  // Two watchers awaiting the same poll interval both saw a lone rollout unclaimed when the claim
+  // waited for the caller's `.then` (#1533) — so the watcher claims at the moment it selects.
+  it("claims the rollout it selects, synchronously with the selection", async () => {
+    const before = snapshotSessions(root);
+    const file = writeRollout(root, UUID_A, "/work");
+    const claimed = new Set<string>();
+    const found = await watchForCodexSession(root, before, { pollMs: 10, maxWaitMs: 500, cwd: "/work", claimed });
+    expect(found?.id).toBe(UUID_A);
+    expect(claimed.has(file)).toBe(true);
   });
 });

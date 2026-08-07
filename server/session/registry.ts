@@ -563,6 +563,17 @@ function conversationLog(fileName: string, label: string) {
   return { conversations, hydrated, remember };
 }
 
+// Seed a claimed set with every conversation the log already maps, once it is read. The claims are
+// otherwise in-memory only, so a restart forgot them — and muse's spawn watcher, whose `before`
+// snapshot can come back EMPTY from a busy sqlite, could then attribute a conversation that has
+// belonged to another session since before this process started (#1533). A conversation a log
+// already names is never the one a fresh spawn just minted, so claiming it costs nothing.
+function seedClaimsFromLog(log: { conversations: ReadonlyMap<string, AgentConversation>; hydrated: Promise<void> }, claimed: Set<string>): void {
+  void log.hydrated.then(() => {
+    for (const record of log.conversations.values()) claimed.add(record.conversationId);
+  });
+}
+
 // Which muse session each mulmo session runs, so a cold reconnect can resume it with
 // `muse resume <id>`.
 const museLog = conversationLog("muse-sessions.jsonl", "muse-sessions");
@@ -570,6 +581,7 @@ export const museConversations: ReadonlyMap<string, AgentConversation> = museLog
 export const museConversationsHydrated = museLog.hydrated;
 export const rememberMuseSession = museLog.remember;
 export const claimedMuseSessions = new Set<string>();
+seedClaimsFromLog(museLog, claimedMuseSessions);
 
 // Which agy conversation each antigravity session runs, so a cold reconnect can resume it with
 // `agy --conversation <id>`.
@@ -578,6 +590,7 @@ export const antigravityConversations: ReadonlyMap<string, AgentConversation> = 
 export const antigravityConversationsHydrated = antigravityLog.hydrated;
 /** Map a session to the agy conversation it is running, and persist it. */
 export const rememberAntigravityConversation = antigravityLog.remember;
+seedClaimsFromLog(antigravityLog, claimedAntigravityConversations);
 
 // The same, for codex: which rollout each codex session runs, so a cold reconnect can resume it
 // with `codex resume <id>`.
