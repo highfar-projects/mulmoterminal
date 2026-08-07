@@ -89,6 +89,29 @@ describe("syncAntigravitySkillsConfig", () => {
     expect(fs.readFileSync(antigravitySkillsConfigFile(dir), "utf8")).toBe("not json");
   });
 
+  // A checkout can COMMIT skills.json as a symlink to a file elsewhere; the sync's writes
+  // follow links, so without the guard a cloned repo could have a user-owned file silently
+  // rewritten on every agy spawn (#1544 review).
+  it.skipIf(process.platform === "win32")("refuses to write through a symlinked skills.json", () => {
+    const target = path.join(dir, "their-own.json");
+    fs.writeFileSync(target, "{}");
+    fs.mkdirSync(path.dirname(antigravitySkillsConfigFile(dir)), { recursive: true });
+    fs.symlinkSync(target, antigravitySkillsConfigFile(dir));
+    syncAntigravitySkillsConfig(dir);
+    expect(fs.readFileSync(target, "utf8")).toBe("{}");
+  });
+
+  it.skipIf(process.platform === "win32")("refuses to write through a symlinked .agents directory", () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "ag-outside-"));
+    try {
+      fs.symlinkSync(outside, path.join(dir, ".agents"));
+      syncAntigravitySkillsConfig(dir);
+      expect(fs.readdirSync(outside)).toHaveLength(0);
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
   // The user's own repo: the file is generated on spawn, so it must not turn up in git status.
   it("excludes the file through .git/info/exclude, not their .gitignore", () => {
     fs.mkdirSync(path.join(dir, ".git", "info"), { recursive: true });

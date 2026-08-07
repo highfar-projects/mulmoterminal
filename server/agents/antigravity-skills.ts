@@ -19,6 +19,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { isRecord } from "../../common/isRecord.js";
+import { symlinkFreeWriteTarget } from "../infra/symlink-guard.js";
 import { excludeFromGit } from "./git-exclude.js";
 
 /** agy's workspace customization dir — the same one its MCP config lives in. */
@@ -57,6 +58,10 @@ const EXCLUDE_ENTRY = `${CUSTOMIZATION_DIR}/skills.json`;
  *  to start. */
 export function syncAntigravitySkillsConfig(cwd: string): void {
   const file = antigravitySkillsConfigFile(cwd);
+  // A checkout can COMMIT `.agents` or `skills.json` as a symlink to a file elsewhere, and the
+  // reads/writes below all follow links — so a cloned repo could point this sync at a file of
+  // the user's own and have it silently rewritten (symlink-guard.ts).
+  if (!symlinkFreeWriteTarget(file)) return;
   let existing: unknown = {};
   if (existsSync(file)) {
     try {
