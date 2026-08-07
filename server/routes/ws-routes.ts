@@ -683,7 +683,7 @@ async function handleLaunchConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
 
   const resolved = resolveLaunchSession(deps, requested, index, shell);
   if (!resolved) return closeWithError(ws, "Launcher not found — check Settings → Launch commands.");
-  const { sessionId, live, command } = resolved;
+  const { sessionId, live: resolvedLive, command } = resolved;
   // Never worktree-limited. The rule is one AGENT SESSION per worktree, and a launcher is not one:
   // it is a command line this app does not read. It used to read it — a command starting with the
   // word `codex` was held to the limit (#1207, #1208) — but that is a guess about someone else's
@@ -694,6 +694,11 @@ async function handleLaunchConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
   // agent in a worktree the Agent Picker has already occupied. Nothing on the launcher side can
   // close it without guessing again.
   await sessionConnects(sessionId, async () => {
+    // The entry as it stands once THIS turn holds the id (review on #1534): a queued reconnect
+    // resolved before the first connect's spawn had registered, and admitting with that stale
+    // snapshot announced — and persisted — the request/default cwd instead of the live terminal's
+    // own. The corpse fallback keeps the reaped-mid-admission case on settledEntry's close path.
+    const live = ptys.get(sessionId) ?? resolvedLive;
     await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });
     const early = await admitAgentSession(ws, "launch", { requested, sessionId, live, cwd, devTerminal: true, worktreeLimited: false });
     if (!early) return;
@@ -736,8 +741,10 @@ async function handleCodexConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUp
   // arrives while the log is still being read would see an empty map and decline to resume a
   // rollout that is right there — which is the restart case this exists for.
   await codexRolloutsHydrated;
-  const { sessionId, live, resumeRolloutId } = resolveCodexSession(requested);
+  const { sessionId, live: resolvedLive, resumeRolloutId } = resolveCodexSession(requested);
   await sessionConnects(sessionId, async () => {
+    // Same re-read as the launch handler above, for the same review finding.
+    const live = ptys.get(sessionId) ?? resolvedLive;
     await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });
     const early = await admitAgentSession(ws, "codex", { requested, sessionId, live, cwd, devTerminal: !attachGuiMcp });
     if (!early) return;
@@ -887,8 +894,10 @@ export async function handleDirectoryMcpAgentConnection(agent: DirectoryMcpWsAge
   if (refuseUnusableWorkspace(ws, agent.kind, unusable, requested)) return;
   const attachGuiMcp = url.searchParams.get("gui") !== "0";
   if (agent.hydrated) await agent.hydrated;
-  const { sessionId, live, resumeConversationId } = await agent.resolveSession(requested, cwd);
+  const { sessionId, live: resolvedLive, resumeConversationId } = await agent.resolveSession(requested, cwd);
   await sessionConnects(sessionId, async () => {
+    // Same re-read as the launch handler above, for the same review finding.
+    const live = ptys.get(sessionId) ?? resolvedLive;
     // The directory's per-tree PORT / DB_NAME (#1367), like every other spawn path — a cell in a
     // worktree gets that tree's own values, not the ones another tree is already serving on.
     await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });
