@@ -1205,7 +1205,7 @@ it came from — `mcp__<id>__presentChart` in Claude Code, `mcp-<id>-presentChar
 also rewrites `-` in the id to `_`). So the id you register under is repeated on every tool, in
 every listing, for the life of the session.
 
-MulmoTerminal delivers the GUI MCP by **two different routes**, and they do not share an id:
+MulmoTerminal delivers the GUI MCP by **three different routes**, and they do not share an id:
 
 | | Workspace cell / single view | Project-directory grid cell |
 |---|---|---|
@@ -1214,14 +1214,39 @@ MulmoTerminal delivers the GUI MCP by **two different routes**, and they do not 
 | Tools carried | all of them, on one URL | only the groups that directory registered |
 | Tool name looks like | `mcp__mt__presentChart` | `mcp__mulmoterminal-render__presentChart` |
 
+The third is **Muse**, which reads neither a flag nor a file in the directory: its MCP servers are
+declared by an installed **plugin**, and `muse plugins install` records one per MACHINE. So
+MulmoTerminal registers a single `mulmoterminal` plugin holding all four group servers, and each
+session is narrowed back to what its own directory switched on — the bridge asks the server which
+session it belongs to (by its process tree) and is told which groups that session may reach. The
+servers are named by group alone, because Muse composes the tool name out of both ids:
+
+| | Muse cell (anywhere) |
+|---|---|
+| How it arrives | a `mulmoterminal` plugin installed for the machine, re-registered whenever the bridge path or port changes |
+| Server id | **`render`**, `data`, `media`, `external` — inside the `mulmoterminal` plugin |
+| Tools carried | only the groups that directory registered; the rest serve an empty toolset |
+| Tool name looks like | `mcp__plugin_mulmoterminal_render__presentChart` |
+
+Muse's plugin support is behind its own experimental flag (`MUSE_EXPERIMENTAL_PLUGINS`), which
+MulmoTerminal sets on the sessions it starts. A Muse build without it simply has no GUI tools —
+the registration fails with one warning and the session starts anyway.
+
+**A Muse session picks its plugins up when its own process starts, and MulmoTerminal's sessions
+outlive the server.** So a Muse cell that was already running when you switched a group on — or
+when you first upgraded to a version that has this — keeps no tools until that CELL is started
+again. Restarting the server is not enough: the session is still there in tmux and gets reattached,
+exactly as it was. Close the cell and open a new one (or `Stop` it in Settings → Surviving sessions),
+and it comes back with the tools its directory registered.
+
 Which route a session takes is decided by `carriesFullGuiMcp()` in
 `server/session/mcp-config.ts` — the single view, a cell-less chat, or anything whose cwd **is**
 the workspace take the first; anything in a project directory takes the second.
 
 **The workspace is agent-agnostic for the agents that can RECEIVE a per-spawn config** — claude and
 codex ask the same predicate, so two terminals in the workspace reach the same tools no matter which
-of the two started them. **Antigravity and Grok cannot, and that is the exception you will meet
-first:**
+of the two started them. **Antigravity, Grok and Muse cannot, and that is the exception you will
+meet first:**
 
 | Started as | In the workspace | In a project directory |
 |---|---|---|
@@ -1229,11 +1254,13 @@ first:**
 | codex cell | `mt`, every tool | the directory's registered groups |
 | antigravity cell | **the directory's registered groups** — nothing registered means **no GUI tools at all** | the directory's registered groups |
 | grok cell | **the directory's registered groups** — nothing registered means **no GUI tools at all** | the directory's registered groups |
+| muse cell | **the directory's registered groups** — nothing registered means **no GUI tools at all** | the directory's registered groups |
 | any launcher chip | untouched | untouched |
 
-Neither takes an MCP flag: `agy` reads `.agents/mcp_config.json` and `grok` reads `.grok/config.toml`
-in the working directory, and a file shared by every session in a directory cannot be handed to one
-session and not another — so there is nothing for "this cwd is the workspace" to change. The
+None of the three takes an MCP flag: `agy` reads `.agents/mcp_config.json`, `grok` reads
+`.grok/config.toml` in the working directory, and `muse` reads a plugin installed for the whole
+machine — and neither a file shared by every session in a directory nor a machine-wide plugin can be
+handed to one session and not another — so there is nothing for "this cwd is the workspace" to change. The
 membership is `FULL_GUI_MCP_AGENTS` in `common/guiMcpAgents.ts`, in `common/` precisely so the
 launcher form and the spawn cannot disagree about it
 ([#1423](https://github.com/receptron/mulmoterminal/issues/1423)).

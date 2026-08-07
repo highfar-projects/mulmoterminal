@@ -51,7 +51,7 @@ function spawnSeededSession(
   if (mode === "codex-run") deps.spawnCodexPty(sessionId, null, null, CLAUDE_CWD, true, { initialPrompt });
   else if (mode === "antigravity-run") deps.spawnAntigravityPty(sessionId, null, null, CLAUDE_CWD, { mcpGroups, initialPrompt });
   else if (mode === "grok-run") deps.spawnGrokPty(sessionId, null, null, CLAUDE_CWD, { mcpGroups, initialPrompt });
-  else if (mode === "muse-run") deps.spawnMusePty(sessionId, null, null, CLAUDE_CWD, { initialPrompt });
+  else if (mode === "muse-run") deps.spawnMusePty(sessionId, null, null, CLAUDE_CWD, { mcpGroups, initialPrompt });
   else if (mode === "claude-draft") deps.spawnClaudePty(sessionId, null, null, { draft: message });
   else deps.spawnClaudePty(sessionId, null, null, { initialPrompt: message });
 }
@@ -74,8 +74,13 @@ export function mountPluginRoutes(app: Express, deps: PluginRouteDeps): void {
     // `.agents/mcp_config.json` and grok's `.grok/config.toml` — share that file with every other
     // session running there, so the groups have to be resolved BEFORE the spawn rewrites it:
     // passing none would clear the entries those sessions are using (#1095 review).
-    const fileConfigAgent = agent === "antigravity" || agent === "grok";
-    const mcpGroups = fileConfigAgent ? await registeredGuiMcpGroups(CLAUDE_CWD, TOOL_GROUPS).catch(() => []) : [];
+    // Which agents need the workspace's registered groups resolved here: the ones that do not get
+    // a per-spawn `--mcp-config`. agy and grok write them into a config file in the directory; muse
+    // takes them as its session's entitlement (server/session/bridge-session.ts) — and it was left
+    // out of this list when it was wired, so a background muse chat got an empty list and therefore
+    // no GUI tools, in a workspace that had them registered (Codex review on #1514).
+    const needsGroups = agent === "antigravity" || agent === "grok" || agent === "muse";
+    const mcpGroups = needsGroups ? await registeredGuiMcpGroups(CLAUDE_CWD, TOOL_GROUPS).catch(() => []) : [];
     try {
       runWithHiddenMarker(hidden, sessionId, backgroundMarkers, () => spawnSeededSession(deps, spawnModeFor(agent, draft), { sessionId, message, mcpGroups }));
       // Visible: somebody should be able to SEE this session. The browser that asked for it

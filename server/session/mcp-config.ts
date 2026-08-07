@@ -75,6 +75,13 @@ export function guiMcpEnv(sessionId: string, port: string | number): Record<stri
   return { MULMOTERMINAL_PORT: String(port), MULMOTERMINAL_SESSION_ID: sessionId };
 }
 
+// There is deliberately no muse counterpart to `guiMcpEnv`, and the absence is worth a line
+// because writing one is the obvious first move: muse reaches its tools through a PLUGIN, and a
+// plugin's MCP server is started with a curated environment that carries nothing of ours — so a
+// variable set here would be silently dropped between the spawn and the bridge. What muse's spawn
+// sets instead is the flag muse ITSELF reads (musePluginEnv), and the session's entitlement is
+// recorded in memory for the bridge to ask for (server/session/bridge-session.ts).
+
 // The same two surfaces, spelled for CODEX, which takes them as `-c mcp_servers.<id>.url=` at
 // spawn instead of reading a config file. It has no `${VAR}` expansion, so unlike the template
 // above these are resolved here — which is possible precisely because they are built per spawn.

@@ -33,6 +33,8 @@ import {
   museConversationsHydrated,
   markDevTerminalSession,
   markAttachedSessionPlaced,
+  devTerminalCwdsHydrated,
+  sessionCwd,
   ptys,
 } from "../session/registry.js";
 import { SpawnRefusedError, ptyWouldReattach } from "../session/pty-spawn.js";
@@ -757,9 +759,14 @@ export interface DirectoryMcpWsAgent {
    *  id of its own, so it keeps no map) — an agent added later has to answer this question rather
    *  than inherit "no" by leaving a key out. */
   hydrated: Promise<unknown> | null;
-  /** Whether this agent reads the directory's shared MCP config at all. False for muse, which has
-   *  no MCP of any kind (common/guiMcpAgents.ts) — so the lookup below, which reads Claude Code's
-   *  config files on every spawn, is not paid for an answer nothing can act on. */
+  /** Whether the directory's registered tool groups are worth looking up for this agent.
+   *
+   *  True for all three now, but it is not a constant: it was false for muse while muse reached no
+   *  MCP at all, and the lookup reads Claude Code's config files on every spawn — a cost nothing
+   *  could act on. What muse does with the answer is still different from the other two (it travels
+   *  on the session's ENVIRONMENT rather than into a file in the directory, because its plugin
+   *  registration is per machine — server/agents/muse-mcp.ts), and that difference lives in its
+   *  spawner rather than here. */
   readsDirectoryMcpConfig: boolean;
   resolveSession: (requested: string | null, cwd: string) => ResumableSession | Promise<ResumableSession>;
   spawn: (deps: WsRouteDeps) => SpawnDirectoryMcpPty;
@@ -787,15 +794,15 @@ export const MUSE_WS_AGENT: DirectoryMcpWsAgent = {
   kind: "muse",
   label: "Muse",
   hydrated: museConversationsHydrated,
-  readsDirectoryMcpConfig: false,
+  readsDirectoryMcpConfig: true,
   resolveSession: (requested, cwd) => resolveMuseSession(requested, cwd),
   spawn: (deps) => deps.spawnMusePty,
 };
 
 // antigravity (?cwd=<dir>, ?session=<id> to reattach/resume), grok and muse, which connect
-// identically — see DirectoryMcpWsAgent for why these and not claude or codex. muse is here for the
-// lifecycle (reattach, worktree env, reap) rather than for the MCP: it has none, which is what
-// `readsDirectoryMcpConfig` says.
+// identically — see DirectoryMcpWsAgent for why these and not claude or codex. All three take their
+// GUI tools from what the DIRECTORY registered rather than from a per-spawn flag; where they differ
+// is only in what the spawner then does with that list.
 export async function handleDirectoryMcpAgentConnection(agent: DirectoryMcpWsAgent, deps: WsRouteDeps, ws: WebSocket, req: WsUpgradeRequest) {
   const { url, requested, cwd, unusable, size } = wsConnectionContext(req);
   if (refuseUnusableWorkspace(ws, agent.kind, unusable, requested)) return;
@@ -809,10 +816,19 @@ export async function handleDirectoryMcpAgentConnection(agent: DirectoryMcpWsAge
   if (!early) return;
 
   // The directory's registered groups, read here because the lookup reads Claude Code's config
-  // files and the spawner is sync. Only for a SPAWN: a reattach keeps the tools its running process
-  // was started with, and rewriting the shared file on a reattach would speak for every other
+  // files and the spawner is sync. Not for a live REATTACH: that session keeps the tools its
+  // running process was started with, and rewriting the shared file would speak for every other
   // session in the directory.
-  const mcpGroups = live || !agent.readsDirectoryMcpConfig ? [] : await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []);
+  //
+  // Read against the SESSION's own directory rather than the request's, and that distinction is not
+  // cosmetic (Codex on #1514). `live` is absent for a tmux-only reattach as well as for a spawn — a
+  // reconnect after a server restart — and such a reconnect often carries no `?cwd=` at all, which
+  // resolves to the DEFAULT workspace. For agy and grok that only meant a file write suppressed
+  // downstream, but muse records these groups as the session's entitlement, so another directory's
+  // switches would have become this session's. `sessionCwd` is where the session really runs.
+  await devTerminalCwdsHydrated;
+  const groupsCwd = live?.cwd ?? sessionCwd(sessionId) ?? cwd;
+  const mcpGroups = live || !agent.readsDirectoryMcpConfig ? [] : await registeredGuiMcpGroups(groupsCwd, TOOL_GROUPS).catch(() => []);
   if (!clientStillConnected(ws, agent.kind, sessionId, early)) return;
   const startFailureMessage = startFailureMessageFor(agent.label);
   // The reattach goes THROUGH startAndWire like the spawn, not around it: reattachPty only swaps
