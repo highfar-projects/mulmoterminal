@@ -130,21 +130,24 @@ function isOlderThan(file: string, cutoff: number): boolean {
   }
 }
 
-// `<id>.json` and `<id>-mcp.json` are the two we write, and `<id>` is always a session id —
-// every caller takes one from randomUUID() or a SESSION_ID_RE match. Requiring that shape is
-// what keeps this from deleting a file that merely happens to end in `.json`: the directory
-// is ours, but "ours" is not a good enough reason to remove something we did not write.
-// Every file kind a session can leave in this directory, as the pieces its name is built from.
-// The sweep reads the id back out through these, so a kind missing from the lists is a file
-// nothing ever collects — which is what a plain `.json`-only rule did to the prompt file (#1516).
-const FILE_EXTENSIONS = [".json", ".txt"] as const;
-const FILE_SUFFIXES = ["-mcp", "-prompt"] as const;
+// Every name a session writes here, WHOLE — not a set of extensions crossed with a set of
+// suffixes. `<id>` is always a session id (every caller takes one from randomUUID() or a
+// SESSION_ID_RE match), and requiring the exact shape is what keeps this from deleting a file that
+// merely happens to end in `.json` or `.txt`: the directory is ours, but "ours" is not a good
+// enough reason to remove something we did not write. A cross-product would have swept `<id>.txt`,
+// which nothing here produces.
+//
+// A file kind missing from this list is one nothing ever collects — which is what a `.json`-only
+// rule did to the prompt file (#1516). Add the kind here when you add the writer.
+const FILE_ENDINGS = [".json", "-mcp.json", "-prompt.txt"] as const;
 
 function sessionIdFromFileName(name: string): string | null {
-  const extension = FILE_EXTENSIONS.find((candidate) => name.endsWith(candidate));
-  if (!extension) return null;
-  const stem = name.slice(0, -extension.length);
-  const suffix = FILE_SUFFIXES.find((candidate) => stem.endsWith(candidate));
-  const id = suffix ? stem.slice(0, -suffix.length) : stem;
-  return SESSION_ID_RE.test(id) ? id : null;
+  // First ending whose remainder is a session id wins: `<id>-mcp.json` also ends in `.json`, and
+  // the id check is what rejects that reading before `-mcp.json` gets its turn.
+  for (const ending of FILE_ENDINGS) {
+    if (!name.endsWith(ending)) continue;
+    const id = name.slice(0, -ending.length);
+    if (SESSION_ID_RE.test(id)) return id;
+  }
+  return null;
 }

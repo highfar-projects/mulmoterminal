@@ -249,14 +249,18 @@ describe("pruneOrphanSettings", () => {
     expect(existsSync(path.join(dir, `${ALIVE}-prompt.txt`))).toBe(true);
   });
 
-  // The guard that keeps this from clearing out a directory that is ours but not only ours.
-  it("still ignores a name that is not a session file", () => {
-    const dir = tmpDir();
-    write(dir, "notes.txt");
-    write(dir, "README.json");
-    expect(pruneOrphanSettings(new Set(), dir)).toEqual([]);
-    expect(existsSync(path.join(dir, "notes.txt"))).toBe(true);
-  });
+  // The guard that keeps this from clearing out a directory that is ours but not only ours —
+  // including a name that is a session id in a shape we never write. Widening the parser by
+  // crossing extensions with suffixes would have swept `<id>.txt`, which nothing here produces.
+  it.each([["notes.txt"], ["README.json"], [`${DEAD}.txt`], [`${DEAD}-prompt.json`], [`${DEAD}-other.txt`]])(
+    "leaves %s alone — not a name a session writes",
+    (name) => {
+      const dir = tmpDir();
+      write(dir, name);
+      expect(pruneOrphanSettings(new Set(), dir)).toEqual([]);
+      expect(existsSync(path.join(dir, name))).toBe(true);
+    },
+  );
 
   // The field incident (#1061): on Windows there is no tmux, so `liveIds` is empty and every
   // settings file read as a leftover — including the eight belonging to a peer's LIVE sessions.
