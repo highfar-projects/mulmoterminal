@@ -116,6 +116,41 @@ describe("a worktree row", () => {
   });
 });
 
+// #1527: the native dialog is modal to the USER and to nothing else, and the route spawns one per
+// request — so clicking the folder button four times opened four dialogs on top of each other.
+describe("the folder button", () => {
+  /** The worktree/session answers as usual, but pick-file waits until the test closes the dialog. */
+  function mockHeldPicker() {
+    let close: (paths: string[]) => void = () => {};
+    const held = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      close = (paths) => resolve({ ok: true, json: async () => ({ paths }) });
+    });
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/pick-file")) return held;
+      if (u.includes("/api/worktrees")) return { ok: true, json: async () => ({ isGit: true, base: "main", worktrees: [] }) };
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ cwd: "/repo", sessions: [] }) };
+      return { ok: true, json: async () => ({}) };
+    }) as unknown as typeof fetch;
+    return { close };
+  }
+
+  it("refuses a second click while the dialog is open, and takes one again after it closes", async () => {
+    const { close } = mockHeldPicker();
+    const w = mountForm();
+    await flushPromises();
+    const button = w.find('[data-testid="cell-dir-pick"]');
+    expect(button.attributes("disabled")).toBeUndefined();
+    await button.trigger("click");
+    await flushPromises();
+    expect(button.attributes("disabled")).toBeDefined();
+    close(["/picked"]);
+    await flushPromises();
+    expect(button.attributes("disabled")).toBeUndefined();
+    expect(w.emitted("update:dir")?.at(-1)).toEqual(["/picked"]);
+  });
+});
+
 // A worktree is reachable without its row — the field takes any path, and launching in a worktree
 // records it as a recent directory, so its chip appears too. Refusing only the row would leave the
 // one-session rule holding on whichever way in the user did not take.

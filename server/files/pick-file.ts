@@ -204,8 +204,48 @@ function attemptNote(candidate: PickerCandidate, run: PickerRun): string {
 // starts on the Windows side, and reaching a project means typing a `\\wsl.localhost\…` UNC path.
 const wslStartFolder = (wsl: boolean): Promise<string | null> => (wsl ? toWindowsPath(os.homedir()) : Promise.resolve(null));
 
+/** What the route answers: the chosen paths, or why no dialog could be opened. */
+export interface PickAnswer {
+  status: number;
+  body: { paths: string[] } | { error: string };
+}
+
+// Every dialog this host has, tried in turn until one runs.
+async function runPickerDialogs(directory: boolean): Promise<PickAnswer> {
+  // Asked ONCE, here at the edge: everything below takes the answer rather than re-deriving it
+  // from the environment, so there is a single place that decides what this host is.
+  const wsl = isWsl(process.platform, process.env);
+  const startFolder = await wslStartFolder(wsl);
+  const attempts: string[] = [];
+  for (const candidate of pickFileCandidates(process.platform, directory, { wsl, startFolder })) {
+    const run = await runPicker(candidate);
+    if (pickerRunFailed(run, candidate.cancelStderr)) {
+      attempts.push(attemptNote(candidate, run));
+      continue;
+    }
+    const { paths, untranslated } = await pickedPaths(run.stdout, candidate);
+    // Nothing usable out of something the user DID pick: keep going, and say so, rather than
+    // answering with the empty list that means "cancelled".
+    if (paths.length === 0 && untranslated > 0) {
+      attempts.push(`${candidate.cmd}: wslpath could not translate ${untranslated} chosen path(s)`);
+      continue;
+    }
+    return { status: 200, body: { paths } };
+  }
+  return { status: 500, body: { error: pickerUnavailableMessage(process.platform, wsl, attempts) } };
+}
+
+// The dialog belongs to the MACHINE, not to a page. A second browser tab — or the same tab after
+// a reload — knows nothing about the one already on screen, so the client's own guard cannot be
+// the only one: without this, those paths still stack dialogs the user has to close one by one
+// (#1527). 409 rather than an empty list, because the client says WHY nothing opened.
+let dialogOpen = false;
+export const DIALOG_BUSY = "A file dialog is already open — finish or cancel it first.";
+
 interface PickFileOptions {
   isAllowedOrigin: (origin: string | undefined, remoteAddress: string | undefined) => boolean;
+  /** The dialog run, injectable so a spec can pin this route without opening a real dialog. */
+  openDialog?: (directory: boolean) => Promise<PickAnswer>;
 }
 
 // POST /api/pick-file — open the OS file dialog and return the chosen absolute
@@ -213,30 +253,16 @@ interface PickFileOptions {
 // Working-directory field). A user cancel yields empty stdout, so the response is
 // { paths: [] }; a host with no dialog at all is a 500 whose message names the fix, and the
 // UI shows it. Same-origin guarded like the other local-action routes.
-export function mountPickFileRoute(app: Express, { isAllowedOrigin }: PickFileOptions) {
+export function mountPickFileRoute(app: Express, { isAllowedOrigin, openDialog = runPickerDialogs }: PickFileOptions) {
   app.post("/api/pick-file", async (req: Request, res) => {
     if (!requestOriginAllowed(req, isAllowedOrigin)) return res.status(403).json({ error: "forbidden origin" });
-    const directory = isRecord(req.body) && req.body.directory === true;
-    // Asked ONCE, here at the edge: everything below takes the answer rather than re-deriving it
-    // from the environment, so there is a single place that decides what this host is.
-    const wsl = isWsl(process.platform, process.env);
-    const startFolder = await wslStartFolder(wsl);
-    const attempts: string[] = [];
-    for (const candidate of pickFileCandidates(process.platform, directory, { wsl, startFolder })) {
-      const run = await runPicker(candidate);
-      if (pickerRunFailed(run, candidate.cancelStderr)) {
-        attempts.push(attemptNote(candidate, run));
-        continue;
-      }
-      const { paths, untranslated } = await pickedPaths(run.stdout, candidate);
-      // Nothing usable out of something the user DID pick: keep going, and say so, rather than
-      // answering with the empty list that means "cancelled".
-      if (paths.length === 0 && untranslated > 0) {
-        attempts.push(`${candidate.cmd}: wslpath could not translate ${untranslated} chosen path(s)`);
-        continue;
-      }
-      return res.json({ paths });
+    if (dialogOpen) return res.status(409).json({ error: DIALOG_BUSY });
+    dialogOpen = true;
+    try {
+      const { status, body } = await openDialog(isRecord(req.body) && req.body.directory === true);
+      res.status(status).json(body);
+    } finally {
+      dialogOpen = false;
     }
-    res.status(500).json({ error: pickerUnavailableMessage(process.platform, wsl, attempts) });
   });
 }
