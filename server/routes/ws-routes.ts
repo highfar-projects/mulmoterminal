@@ -503,12 +503,16 @@ async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
   // conversation on plain claude — a different model, mid-thread. Same guard the antigravity
   // conversation map takes, for the same restart case.
   await customAgentSessionsHydrated;
-  const { reattachId, resume, sessionId } = resolveClaudeSession(requested, cwd);
+  const { resume, sessionId } = resolveClaudeSession(requested, cwd);
   // Everything from the `live` read to the wiring runs in this id's own turn (#1533): the awaits
   // below are the window in which a competing connect used to double-spawn, and the reap timer
   // used to kill the entry this handler was still holding.
   await sessionConnects(sessionId, async () => {
-    const live = reattachId ? ptys.get(reattachId) : undefined;
+    // By SESSION id, not resolve-time reattachId: a queued reconnect to a transcript-only session
+    // resolved with nothing to reattach, but by its turn the first reconnect's spawn is in `ptys`
+    // under this very id — gating on the stale reattachId admitted with `live` absent and announced
+    // (and recorded) the request/default cwd instead of the running terminal's (review on #1534).
+    const live = ptys.get(sessionId);
     // Buffered from the announcement on, like every other terminal endpoint: the browser's first
     // frame is the terminal's geometry and it arrives while this handler may still be awaiting the
     // Keychain — /ws was the one route that let it fall on the floor (#1178, see early-frames.ts).
