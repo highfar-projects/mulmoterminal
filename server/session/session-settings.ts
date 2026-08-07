@@ -12,6 +12,7 @@
 import { writeFileSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { escapeBatchArgument } from "../infra/cmd-escape.js";
 import { removeQuietly } from "../infra/fs-cleanup.js";
 import { SESSION_ID_RE } from "../config/env.js";
 
@@ -75,9 +76,40 @@ export function appendedPromptArgument(sessionId: string, prompt: string, platfo
 //
 // So the prompt travels in a file and the command line carries a single-line INSTRUCTION to read
 // it. The agent's first act becomes a file read, which is a real behaviour change — so it is made
-// only where the direct form is impossible: on Windows, and only for a prompt that actually
-// carries a newline. Everywhere else, and for a single-line seed anywhere, nothing changes.
-const seedNeedsFile = (prompt: string, platform: NodeJS.Platform): boolean => platform === "win32" && /[\0\r\n]/.test(prompt);
+// only where the direct form is impossible.
+//
+// Impossible has TWO shapes, and they do not share a platform. The newline above is Windows-only.
+// LENGTH is not: a command line runs out of room everywhere, and on the platforms this server
+// actually runs tmux on it runs out FIRST. `ptySpawn` starts a persistent session through
+// `tmux new-session -A … -- <bin> <args>` (pty-spawn.ts, tmux.ts), and tmux answers a command line
+// past its own limit with "command too long" — which kills the session rather than the argument,
+// so it is a worse failure than the Windows one, not a milder one.
+//
+// The limit is on the WHOLE command line, not on any single argument: measured against tmux 3.7b,
+// 16,250 bytes in one argument was accepted and 16,375 refused, and two 10,000-byte arguments were
+// refused together. So the budget is shared with the socket path, the conf path, the session name,
+// `-c <cwd>`, every `-e KEY=VALUE` (muse's plugin env) and the bin's own flags. Windows brings its
+// own, smaller ceiling — cmd.exe stops at 8,191 characters.
+//
+// Gating on the SEED's size alone is still enough, because the seed is the only part of that line
+// with no bound: everything else is a path, a flag or a uuid, and together they run to hundreds of
+// bytes. A seed held to the budget below leaves the total far short of either ceiling.
+//
+// BYTES, not characters. tmux counts bytes and Japanese is three of them per character, so a
+// 3,000-character seed is 9,000 bytes — a character-count guard would wave it straight through.
+//
+// Windows counts the other way round, and it counts what cmd.exe is HANDED, not what we hold: a
+// `.cmd` shim is run through `cmd /d /s /c "…"`, and escapeBatchArgument doubles every internal
+// quote on the way there. A seed of nothing but quotes therefore arrives at twice the size we
+// measured — 4,096 of them become 8,192 characters, past cmd's 8,191 ceiling, and the session does
+// not start. So the Windows arm measures the ESCAPED argument (codex review on #1522). Its unit is
+// characters because cmd's limit is; the newline test runs first, so nothing that would make
+// escapeBatchArgument throw ever reaches it.
+export const SEED_ARGV_MAX_BYTES = 4096;
+const seedNeedsFile = (prompt: string, platform: NodeJS.Platform): boolean => {
+  if (platform === "win32") return /[\0\r\n]/.test(prompt) || escapeBatchArgument(prompt).length > SEED_ARGV_MAX_BYTES;
+  return Buffer.byteLength(prompt, "utf8") > SEED_ARGV_MAX_BYTES;
+};
 
 export function seedPromptArgument(sessionId: string, prompt: string, platform: NodeJS.Platform = process.platform): string {
   if (!seedNeedsFile(prompt, platform)) return prompt;
