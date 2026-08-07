@@ -33,7 +33,7 @@ import { repoRootSync } from "../git/repo-root-sync.js";
 import { workdirFooter } from "../git/pr-footer.js";
 import { getProviders } from "../config/config-routes.js";
 import { requireResolution, resolveProvider, type DirModelChoice } from "./provider-env.js";
-import { settingsArgument, mcpConfigArgument, withSettingsCleanup } from "./session-settings.js";
+import { settingsArgument, mcpConfigArgument, appendedPromptArgument, withSettingsCleanup, type AppendedPromptArgument } from "./session-settings.js";
 import { ensureDropsDir } from "./session-drops.js";
 import { effectiveChoice } from "./launch-choice.js";
 import { customAgentLaunch } from "./custom-agent-command.js";
@@ -77,10 +77,15 @@ function sessionWorkdirFooter(cwd: string): string | null {
   return root ? workdirFooter(root) : null;
 }
 
-// What `--append-system-prompt` carries for this session (#1062). Every source is read per spawn,
-// so switching any section off needs no restart.
-function sessionAppendedPrompt(cwd: string, dirSetting: boolean | null): string | null {
-  return appendedSystemPrompt({ dirSetting, globalSetting: getAppendSystemPrompt(), workdirFooter: sessionWorkdirFooter(cwd) });
+// What `--append-system-prompt` carries for this session (#1062), and where it travels. Every
+// source is read per spawn, so switching any section off needs no restart.
+//
+// The placement happens here, beside the other two arguments a Windows spawn has to send as a
+// path (settingsArgument / mcpConfigArgument): the text is multi-line, and a Windows command line
+// cannot carry a newline at all (#1516).
+function sessionAppendedPrompt(sessionId: string, cwd: string, dirSetting: boolean | null): AppendedPromptArgument | null {
+  const prompt = appendedSystemPrompt({ dirSetting, globalSetting: getAppendSystemPrompt(), workdirFooter: sessionWorkdirFooter(cwd) });
+  return prompt === null ? null : appendedPromptArgument(sessionId, prompt);
 }
 
 // The sidebar row a session gets before it has a transcript. A session spawned to run something
@@ -236,7 +241,7 @@ export function createClaudeSpawner(deps: SpawnDeps) {
       // that path never went through our allowlist before.
       allowedTools: fullGuiMcp ? fullGuiAllowedTools(deps.guiMcpTools, getUserMcpServers()) : deps.gridMcpTools,
       addDirs,
-      appendedPrompt: sessionAppendedPrompt(cwd, dir.appendSystemPrompt),
+      appendedPrompt: sessionAppendedPrompt(sessionId, cwd, dir.appendSystemPrompt),
     });
 
     console.log(`[ws] client connected (${canResume ? "resume" : "new"} ${sessionId})`);

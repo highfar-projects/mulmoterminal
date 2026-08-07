@@ -11,7 +11,9 @@ import {
   mcpConfigArgument,
   withSettingsCleanup,
   pruneOrphanSettings,
+  appendedPromptArgument,
 } from "../../../server/session/session-settings.js";
+import { resolvePtyLaunch } from "../../../server/infra/resolve-bin.js";
 import { hookSettingsJson } from "../../../server/session/hook-settings.js";
 import { buildClaudeArgs } from "../../../server/agents/claude-args.js";
 import { appendedSystemPrompt } from "../../../server/agents/appended-prompt.js";
@@ -19,6 +21,7 @@ import { appendedSystemPrompt } from "../../../server/agents/appended-prompt.js"
 const SESSION = "settings-spec-session";
 const fileFor = (id: string) => path.join(os.homedir(), ".mulmoterminal", "settings", `${id}.json`);
 const mcpFileFor = (id: string) => path.join(os.homedir(), ".mulmoterminal", "settings", `${id}-mcp.json`);
+const promptFileFor = (id: string) => path.join(os.homedir(), ".mulmoterminal", "settings", `${id}-prompt.txt`);
 
 afterEach(() => cleanupSessionSettings(SESSION));
 
@@ -121,27 +124,47 @@ describe("the Windows reason for a file", () => {
 
   // reap() calls this once per session; it has to take BOTH files or the mcp one outlives
   // every Windows session.
-  it("cleans up both files", () => {
+  it("cleans up every file a session wrote", () => {
     settingsArgument(SESSION, json, false, "win32");
     mcpConfigArgument(SESSION, "{}", "win32");
+    appendedPromptArgument(SESSION, "line one\nline two", "win32");
     cleanupSessionSettings(SESSION);
     expect(existsSync(fileFor(SESSION))).toBe(false);
     expect(existsSync(mcpFileFor(SESSION))).toBe(false);
+    expect(existsSync(promptFileFor(SESSION))).toBe(false);
+  });
+
+  // The whole point of the file: the newlines survive it, which is what the command line
+  // could not do.
+  it("writes the prompt verbatim, newlines and all", () => {
+    const written = appendedPromptArgument(SESSION, "line one\nline two\n", "win32");
+    expect(written).toEqual({ kind: "file", path: promptFileFor(SESSION) });
+    if (written.kind !== "file") throw new Error("expected a file");
+    expect(readFileSync(written.path, "utf8")).toBe("line one\nline two\n");
   });
 });
 
-// The property that makes #813 impossible, stated once over the arguments a real spawn
-// builds: with the two JSON payloads travelling as files, NOTHING claude is launched with
-// contains a quote — so no parser downstream, however unforgiving, has anything to lose.
+// What a real Windows spawn produces, asserted against the thing that actually decides —
+// cmd-escape, through the resolver that calls it. Stating it here rather than per flag is the
+// point: #813 was a quote, #1516 was a newline in a flag added two years later, and a test that
+// checks the characters it happens to know about only ever catches the bug it was written for.
 describe("the argv a Windows spawn ends up with", () => {
-  it("contains no quote at all once the JSON payloads are files", () => {
+  // An npm-global install: `claude` on PATH is a .cmd shim, so the launch goes through cmd.exe.
+  const asWindowsLaunch = (args: string[]) =>
+    resolvePtyLaunch("claude", args, "win32", "C:\\npm;C:\\Windows\\System32", "C:\\Windows\\System32\\cmd.exe", (candidate) =>
+      /claude\.cmd$|cmd\.exe$/i.test(candidate),
+    );
+
+  const windowsSpawnArgs = () => {
     const settings = settingsArgument(SESSION, hookSettingsJson({ host: "127.0.0.1", port: 34567, sessionId: SESSION }), false, "win32");
     const mcpConfig = mcpConfigArgument(
       SESSION,
       JSON.stringify({ mcpServers: { "mulmoterminal-gui": { type: "http", url: "http://127.0.0.1:34567/api/mcp/x" } } }),
       "win32",
     );
-    const args = buildClaudeArgs({
+    // Both sections on, exactly as a default spawn resolves them: 40-odd lines of markdown.
+    const prompt = appendedSystemPrompt({ dirSetting: null, globalSetting: true, workdirFooter: "work in mulmoterminal2" });
+    return buildClaudeArgs({
       model: null,
       sessionId: SESSION,
       resume: null,
@@ -151,11 +174,34 @@ describe("the argv a Windows spawn ends up with", () => {
       attachGuiMcp: true,
       mcpConfig,
       allowedTools: "mulmoterminal_readXPost,mulmoterminal_searchX",
-      // Resolved as a real spawn resolves it, both sections on — this argument is prose written
-      // by hand, so it is the one most likely to grow a quote (#942, #973).
-      appendedPrompt: appendedSystemPrompt({ dirSetting: null, globalSetting: true, workdirFooter: "work in mulmoterminal2" }),
+      appendedPrompt: prompt === null ? null : appendedPromptArgument(SESSION, prompt, "win32"),
     });
-    expect(args.filter((a) => a.includes('"'))).toEqual([]);
+  };
+
+  // The regression itself (#1516): every Claude session on a .cmd install failed to start,
+  // because the appended prompt is multi-line and a command line cannot encode a newline.
+  it("can actually be put on a command line", () => {
+    expect(() => asWindowsLaunch(windowsSpawnArgs())).not.toThrow();
+  });
+
+  // Named individually so a failure says WHICH argument, not just that the line was refused.
+  it("carries no argument a command line cannot represent", () => {
+    const unrepresentable = windowsSpawnArgs().filter((arg) => /[\0\r\n]/.test(arg));
+    expect(unrepresentable).toEqual([]);
+  });
+
+  // #813: with every large payload travelling as a path, nothing claude is launched with holds a
+  // quote — so no parser downstream, however unforgiving, has anything to lose.
+  it("contains no quote at all once the payloads are files", () => {
+    expect(windowsSpawnArgs().filter((a) => a.includes('"'))).toEqual([]);
+  });
+
+  // The prompt reaches the session either way; only the flag differs. Off Windows it stays inline,
+  // so nothing about the common path changed.
+  it("sends the prompt by path on Windows and inline everywhere else", () => {
+    expect(windowsSpawnArgs()).toContain("--append-system-prompt-file");
+    const prompt = appendedSystemPrompt({ dirSetting: null, globalSetting: true, workdirFooter: null });
+    expect(appendedPromptArgument(SESSION, prompt ?? "", "darwin")).toEqual({ kind: "inline", text: prompt });
   });
 });
 
@@ -176,13 +222,18 @@ describe("pruneOrphanSettings", () => {
   const DEAD = "11111111-2222-3333-4444-555555555555";
   const ALIVE = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 
-  it("drops both files of a session that did not survive", () => {
+  // EVERY file kind, not just the two that existed when this was written: the sweep reads the
+  // session id back out of the name, so a kind the parser does not know is one nothing ever
+  // collects. The prompt file is `.txt`, which a `.json`-only rule silently skipped (#1516).
+  it("drops every file of a session that did not survive", () => {
     const dir = tmpDir();
     write(dir, `${DEAD}.json`);
     write(dir, `${DEAD}-mcp.json`);
-    expect(pruneOrphanSettings(new Set(), dir).sort()).toEqual([`${DEAD}-mcp.json`, `${DEAD}.json`]);
+    write(dir, `${DEAD}-prompt.txt`);
+    expect(pruneOrphanSettings(new Set(), dir).sort()).toEqual([`${DEAD}-mcp.json`, `${DEAD}-prompt.txt`, `${DEAD}.json`]);
     expect(existsSync(path.join(dir, `${DEAD}.json`))).toBe(false);
     expect(existsSync(path.join(dir, `${DEAD}-mcp.json`))).toBe(false);
+    expect(existsSync(path.join(dir, `${DEAD}-prompt.txt`))).toBe(false);
   });
 
   // The whole point of the liveIds argument: a tmux-backed session is still running with the
@@ -191,9 +242,20 @@ describe("pruneOrphanSettings", () => {
     const dir = tmpDir();
     write(dir, `${ALIVE}.json`);
     write(dir, `${ALIVE}-mcp.json`);
+    write(dir, `${ALIVE}-prompt.txt`);
     expect(pruneOrphanSettings(new Set([ALIVE]), dir)).toEqual([]);
     expect(existsSync(path.join(dir, `${ALIVE}.json`))).toBe(true);
     expect(existsSync(path.join(dir, `${ALIVE}-mcp.json`))).toBe(true);
+    expect(existsSync(path.join(dir, `${ALIVE}-prompt.txt`))).toBe(true);
+  });
+
+  // The guard that keeps this from clearing out a directory that is ours but not only ours.
+  it("still ignores a name that is not a session file", () => {
+    const dir = tmpDir();
+    write(dir, "notes.txt");
+    write(dir, "README.json");
+    expect(pruneOrphanSettings(new Set(), dir)).toEqual([]);
+    expect(existsSync(path.join(dir, "notes.txt"))).toBe(true);
   });
 
   // The field incident (#1061): on Windows there is no tmux, so `liveIds` is empty and every

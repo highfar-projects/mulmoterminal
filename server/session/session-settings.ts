@@ -19,6 +19,7 @@ const SETTINGS_DIR = path.join(os.homedir(), ".mulmoterminal", "settings");
 
 const settingsFile = (sessionId: string): string => path.join(SETTINGS_DIR, `${sessionId}.json`);
 const mcpConfigFile = (sessionId: string): string => path.join(SETTINGS_DIR, `${sessionId}-mcp.json`);
+const appendedPromptFile = (sessionId: string): string => path.join(SETTINGS_DIR, `${sessionId}-prompt.txt`);
 
 // Windows has a second, unrelated reason to use a file: there, a `.cmd`-installed Claude is
 // launched through cmd.exe (#798), so a JSON argument is parsed by cmd and then by the
@@ -44,6 +45,23 @@ export function mcpConfigArgument(sessionId: string, json: string, platform: Nod
   return mustUseFile(false, platform) ? writePrivate(mcpConfigFile(sessionId), json) : json;
 }
 
+/** Where `--append-system-prompt`'s text travels. Its own type because Claude Code names the two
+ *  forms with DIFFERENT flags, unlike `--settings`, which takes either. */
+export type AppendedPromptArgument = { kind: "inline"; text: string } | { kind: "file"; path: string };
+
+// And the same again for the appended system prompt — with a harder version of the Windows
+// reason. The other two are merely awkward to quote through cmd.exe; this one is impossible: a
+// Windows command line has no encoding for a newline at all (CR/LF end the line), and the text is
+// a MULTI-LINE preset by default, so escapeBatchArgument refused it and every Claude session on a
+// `.cmd` install failed to start (#1516).
+//
+// There is nothing to escape it INTO. Substituting the newlines away would hand the agent a
+// different instruction, which is the exact failure cmd-escape.ts throws to prevent — so the
+// answer is the one already used above: give Claude Code the path and let it read the file.
+export function appendedPromptArgument(sessionId: string, prompt: string, platform: NodeJS.Platform = process.platform): AppendedPromptArgument {
+  return mustUseFile(false, platform) ? { kind: "file", path: writePrivate(appendedPromptFile(sessionId), prompt) } : { kind: "inline", text: prompt };
+}
+
 // Run a spawn, taking the session's settings file with it if the spawn throws. A session
 // that never starts never reaches reap(), where the cleanup normally happens — so without
 // this a failed spawn leaves a token-bearing file behind (#579).
@@ -60,6 +78,7 @@ export function withSettingsCleanup<T>(sessionId: string, spawn: () => T): T {
 export function cleanupSessionSettings(sessionId: string): void {
   removeQuietly(settingsFile(sessionId));
   removeQuietly(mcpConfigFile(sessionId));
+  removeQuietly(appendedPromptFile(sessionId));
 }
 
 /** Drop settings files left behind by a server that never got to reap.
@@ -115,9 +134,17 @@ function isOlderThan(file: string, cutoff: number): boolean {
 // every caller takes one from randomUUID() or a SESSION_ID_RE match. Requiring that shape is
 // what keeps this from deleting a file that merely happens to end in `.json`: the directory
 // is ours, but "ours" is not a good enough reason to remove something we did not write.
+// Every file kind a session can leave in this directory, as the pieces its name is built from.
+// The sweep reads the id back out through these, so a kind missing from the lists is a file
+// nothing ever collects — which is what a plain `.json`-only rule did to the prompt file (#1516).
+const FILE_EXTENSIONS = [".json", ".txt"] as const;
+const FILE_SUFFIXES = ["-mcp", "-prompt"] as const;
+
 function sessionIdFromFileName(name: string): string | null {
-  if (!name.endsWith(".json")) return null;
-  const stem = name.slice(0, -".json".length);
-  const id = stem.endsWith("-mcp") ? stem.slice(0, -"-mcp".length) : stem;
+  const extension = FILE_EXTENSIONS.find((candidate) => name.endsWith(candidate));
+  if (!extension) return null;
+  const stem = name.slice(0, -extension.length);
+  const suffix = FILE_SUFFIXES.find((candidate) => stem.endsWith(candidate));
+  const id = suffix ? stem.slice(0, -suffix.length) : stem;
   return SESSION_ID_RE.test(id) ? id : null;
 }
