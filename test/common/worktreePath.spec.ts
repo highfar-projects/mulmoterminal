@@ -59,6 +59,14 @@ describe("isManagedWorktreePath", () => {
     expect(isManagedWorktreePath("/Users/me/.mulmoterminal/worktrees/myrepo-1a2b3c4d", ROOT)).toBe(false);
   });
 
+  // Under the root, but carrying no hash — so not a directory this app minted. Someone put it
+  // there, and it is theirs to launch in (Codex on #1543).
+  it("does not claim a hand-made directory under the root", () => {
+    expect(isManagedWorktreePath("/Users/me/.mulmoterminal/worktrees/myrepo/fix-bug", ROOT)).toBe(false);
+    expect(isManagedWorktreePath("/Users/me/.mulmoterminal/worktrees/myrepo-zzzzzzzz/fix-bug", ROOT)).toBe(false);
+    expect(isManagedWorktreePath("/Users/me/.mulmoterminal/worktrees/notes/2026/plan", ROOT)).toBe(false);
+  });
+
   // The spellings a person types, folded by dirPathKey — a trailing slash, a `..`.
   it("sees through the spellings of the same directory", () => {
     expect(isManagedWorktreePath("/Users/me/.mulmoterminal/worktrees/myrepo-1a2b3c4d/fix-bug/", ROOT)).toBe(true);

@@ -53,7 +53,10 @@ export function isManagedWorktreePath(cwd: string | null | undefined, worktreesR
   const prefix = rootKey.endsWith("/") ? rootKey : `${rootKey}/`;
   const key = dirPathKey(cwd);
   if (!key.startsWith(prefix)) return false;
-  // <repo>-<hash>/<task> at least. The root holds worktrees but is not one, and neither is the
-  // per-repo directory above a task — both are places someone could reasonably be working.
-  return key.slice(prefix.length).split("/").filter(Boolean).length >= 2;
+  const below = key.slice(prefix.length).split("/").filter(Boolean);
+  // `<repo>-<hash>/<task>` at least, and the first segment has to be a name WE mint. The root
+  // holds worktrees but is not one, the per-repo directory above a task is not one either, and a
+  // directory someone put under the root by hand carries no hash — all three are places a person
+  // could reasonably be working, and dropping one loses it from the launcher (Codex on #1543).
+  return below.length >= 2 && MANAGED_DIR.test(below[0] ?? "");
 }

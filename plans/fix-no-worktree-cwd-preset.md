@@ -48,7 +48,9 @@ launch form の **WORKING DIRECTORY** のチップ列に managed worktree が溜
 `isStrictlyWithin(<MULMOTERMINAL_HOME>/worktrees, cwd)` で判定している。同じ権威に合わせる:
 
 - `isManagedWorktreePath(cwd, worktreesRoot)` は **root 配下かどうか**で判定する（形だけでは判定
-  しない）。`<root>/<repo>-<hash>/<task>` 以下、つまり root から 2 階層以上下を要求する。
+  しない）。root から 2 階層以上下、**かつ先頭セグメントが `<repo>-<8hex>`**（= このアプリが
+  生成した名前）であることを要求する。root 直下に人が手で置いた hash なしのディレクトリは
+  我々のものではないので掴まない。
 - サーバは `worktreesRootDir()` をそのまま渡す。
 - ブラウザは root を知らない（`MULMOTERMINAL_HOME` で移動できる）ので、`GET /api/config` が
   `home` と並べて `worktreesRoot` を返す。ランタイムの事実であって設定値ではないので、`home` と
