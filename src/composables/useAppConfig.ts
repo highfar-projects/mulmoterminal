@@ -72,6 +72,12 @@ function adoptSoundConfig(c: Record<string, unknown>): void {
 // unshortened. Found by looking at a screenshot of the issue rows' clone menu.
 const home = ref<string | null>(null);
 
+// Where the server keeps the worktrees IT created (`<MULMOTERMINAL_HOME>/worktrees`), so this side
+// can tell one of ours from a directory that merely looks like one — see `isManagedWorktreePath`.
+// A SINGLETON for the same reason as `home`: only `loadConfig` writes it, and a component that
+// calls useAppConfig() without loading would otherwise hold a copy that stays null forever.
+const worktreesRoot = ref<string | null>(null);
+
 const prRepos = ref<string[]>([]);
 
 // The hosts declared as self-hosted GitLab (#1332). The browser needs it to know that a
@@ -160,7 +166,7 @@ function createPresetMutations(presets: Ref<CwdPreset[]>, savePresets: (next: Cw
   // close button is theirs to press, and silently dropping saved config is not this function's
   // call. It also means a worktree already in the list stops being bumped to the front.
   function recordPreset(path: string | null): Promise<void> {
-    if (!path || isManagedWorktreePath(path)) return Promise.resolve();
+    if (!path || isManagedWorktreePath(path, worktreesRoot.value)) return Promise.resolve();
     return serialize(async () => {
       if (presets.value[0]?.path === path) return; // already most-recent — nothing to reorder
       const existing = presets.value.find((p) => p.path === path);
@@ -420,6 +426,7 @@ export function useAppConfig() {
       const c = body;
       defaultCwd.value = typeof c.cwd === "string" ? c.cwd : null;
       home.value = typeof c.home === "string" ? c.home : null;
+      worktreesRoot.value = typeof c.worktreesRoot === "string" ? c.worktreesRoot : null;
       adoptServerPresets(c.cwdPresets, version);
       adoptSoundConfig(c);
       pushEnabled.value = c.pushEnabled === true;

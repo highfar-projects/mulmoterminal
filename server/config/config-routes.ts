@@ -26,6 +26,7 @@ import type { CustomAgent } from "../../common/customAgents.js";
 import type { PushKind } from "../../common/pushKinds.js";
 import { type TerminalSubmitMode } from "../../common/terminalSubmit.js";
 import { launchOptions } from "./launch-options.js";
+import { worktreesRootDir } from "./worktree-task.js";
 import { badArrayField, badNullableArrayField, badObjectField } from "./config-body.js";
 import { setDeclaredGitlabHosts } from "../git/forge-host.js";
 import { getUpdateStatus } from "./update-status.js";
@@ -190,7 +191,11 @@ export function mountConfigRoutes(app: Express, claudeCwd: string): void {
   const configResponse = () => ({ cwd: claudeCwd, ...toPublicAppConfig(config) });
 
   app.get("/api/config", (_req, res) => {
-    res.json({ ...configResponse(), home: os.homedir() });
+    // `worktreesRoot` rides along with `home`: a runtime fact about THIS server rather than
+    // anything the user configured, and the browser cannot work it out — MULMOTERMINAL_HOME can
+    // move it. Without it the launcher cannot tell a worktree we created from a directory that
+    // merely looks like one, and it must not record ours as a working-directory preset (#1542).
+    res.json({ ...configResponse(), home: os.homedir(), worktreesRoot: worktreesRootDir() });
   });
 
   // The update notice for the header's "update available" badge, from the check the server

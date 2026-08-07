@@ -23,26 +23,58 @@ describe("worktreeLabel", () => {
 // offer as "launch here again" — and nothing prunes its chip when the directory goes. Both the
 // browser's auto-record and `mulmoterminal init`'s seeding ask this, which is why it is here.
 describe("isManagedWorktreePath", () => {
-  it("recognises a managed worktree", () => {
-    expect(isManagedWorktreePath("/home/me/worktrees/myrepo-1a2b3c4d/fix-bug")).toBe(true);
-    expect(isManagedWorktreePath("C:\\Users\\me\\worktrees\\myrepo-1a2b3c4d\\fix-bug")).toBe(true);
+  const ROOT = "/Users/me/.mulmoterminal/worktrees";
+
+  it("recognises a worktree under the managed root", () => {
+    expect(isManagedWorktreePath("/Users/me/.mulmoterminal/worktrees/myrepo-1a2b3c4d/fix-bug", ROOT)).toBe(true);
+    expect(isManagedWorktreePath("/Users/me/.mulmoterminal/worktrees/myrepo-1a2b3c4d/fix-bug/src", ROOT)).toBe(true); // deeper in
+  });
+
+  it("recognises one on Windows separators", () => {
+    const winRoot = "C:\\Users\\me\\.mulmoterminal\\worktrees";
+    expect(isManagedWorktreePath("C:\\Users\\me\\.mulmoterminal\\worktrees\\app-0badf00d\\wip", winRoot)).toBe(true);
   });
 
   it("leaves an ordinary project alone", () => {
-    expect(isManagedWorktreePath("/home/me/my-project")).toBe(false);
-    expect(isManagedWorktreePath("/home/me/mulmoclaude")).toBe(false);
+    expect(isManagedWorktreePath("/Users/me/myrepo", ROOT)).toBe(false);
+    expect(isManagedWorktreePath("/Users/me/mulmoclaude", ROOT)).toBe(false);
   });
 
-  // The hex suffix is what the server mints, and it is the whole reason a lexical test is safe
-  // here: a directory the user happens to keep under a folder called `worktrees` is theirs.
-  it("does not claim a hand-made directory under a folder named worktrees", () => {
-    expect(isManagedWorktreePath("/home/me/worktrees/myrepo/fix-bug")).toBe(false);
-    expect(isManagedWorktreePath("/home/me/worktrees/myrepo-zzzzzzzz/fix-bug")).toBe(false);
+  // The whole reason this is anchored on the ROOT and not on the path's shape: a directory laid out
+  // the same way by a person or another tool is a real working directory, and dropping it would
+  // silently remove it from the launcher (Codex on #1543).
+  it("does not claim a same-shaped path outside the managed root", () => {
+    expect(isManagedWorktreePath("/Users/me/dev/worktrees/myrepo-1a2b3c4d/fix-bug", ROOT)).toBe(false);
+    expect(isManagedWorktreePath("/Users/me/other-tool/worktrees/app-0badf00d/wip", ROOT)).toBe(false);
   });
 
-  // The repo root itself, and the level above a task, are directories someone may well work in.
+  // A sibling whose name merely starts with the root's — the boundary a string prefix would miss.
+  it("does not claim a sibling of the root", () => {
+    expect(isManagedWorktreePath("/Users/me/.mulmoterminal/worktrees-backup/myrepo-1a2b3c4d/fix-bug", ROOT)).toBe(false);
+  });
+
+  // The root holds worktrees but is not one, and the per-repo directory above a task is not either.
   it("does not claim the levels above a task", () => {
-    expect(isManagedWorktreePath("/home/me/worktrees/myrepo-1a2b3c4d")).toBe(false);
-    expect(isManagedWorktreePath("/home/me/worktrees")).toBe(false);
+    expect(isManagedWorktreePath(ROOT, ROOT)).toBe(false);
+    expect(isManagedWorktreePath("/Users/me/.mulmoterminal/worktrees/myrepo-1a2b3c4d", ROOT)).toBe(false);
+  });
+
+  // The spellings a person types, folded by dirPathKey — a trailing slash, a `..`.
+  it("sees through the spellings of the same directory", () => {
+    expect(isManagedWorktreePath("/Users/me/.mulmoterminal/worktrees/myrepo-1a2b3c4d/fix-bug/", ROOT)).toBe(true);
+    expect(isManagedWorktreePath("/Users/me/.mulmoterminal/x/../worktrees/myrepo-1a2b3c4d/fix-bug", ROOT)).toBe(true);
+    expect(isManagedWorktreePath("/Users/me/.mulmoterminal/worktrees/myrepo-1a2b3c4d/fix-bug", `${ROOT}/`)).toBe(true);
+  });
+
+  // Before /api/config resolves there is nothing to compare against. Of the two ways to be wrong,
+  // an extra chip the user can delete beats a directory that quietly never appears.
+  it("answers false — record it — when the root is unknown", () => {
+    expect(isManagedWorktreePath("/Users/me/.mulmoterminal/worktrees/myrepo-1a2b3c4d/fix-bug", null)).toBe(false);
+    expect(isManagedWorktreePath("/Users/me/.mulmoterminal/worktrees/myrepo-1a2b3c4d/fix-bug", "")).toBe(false);
+  });
+
+  it("answers false for an empty cwd", () => {
+    expect(isManagedWorktreePath("", ROOT)).toBe(false);
+    expect(isManagedWorktreePath(null, ROOT)).toBe(false);
   });
 });

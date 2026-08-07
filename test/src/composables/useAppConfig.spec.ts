@@ -4,10 +4,15 @@ import { currentGitlabHosts, useAppConfig } from "../../../src/composables/useAp
 // Echo the posted cwdPresets back as the server would, so presets.value reflects
 // each save. useAppConfig's presets ref is per-call (not a singleton), so every
 // useAppConfig() in these tests starts from an empty list.
+// Where the server keeps the worktrees it created. The GET carries it (the real /api/config does,
+// alongside `home`) because that is the only way this side can tell one of ours from a directory
+// that merely looks like one — see isManagedWorktreePath.
+const WORKTREES_ROOT = "/Users/me/.mulmoterminal/worktrees";
+
 function mockConfigFetch() {
   globalThis.fetch = vi.fn(async (_url: string, init?: { body?: string }) => {
     const body = init?.body ? JSON.parse(init.body) : {};
-    return { ok: true, json: async () => ({ cwdPresets: body.cwdPresets ?? [] }) };
+    return { ok: true, json: async () => ({ cwdPresets: body.cwdPresets ?? [], worktreesRoot: WORKTREES_ROOT }) };
   }) as unknown as typeof fetch;
 }
 
@@ -69,32 +74,45 @@ describe("useAppConfig — auto preset recording", () => {
 
   // A worktree launches like anywhere else, so every isolated task used to leave a chip behind —
   // for a directory that is one branch for one task and is deleted with it.
+  const WORKTREE = `${WORKTREES_ROOT}/myrepo-1a2b3c4d/fix-bug`;
+
   it("does not record a managed worktree", async () => {
-    const { presets, recordPreset } = useAppConfig();
-    await recordPreset("/home/me/worktrees/myrepo-1a2b3c4d/fix-bug");
+    const { presets, recordPreset, loadConfig } = useAppConfig();
+    await loadConfig(); // the root arrives with the config; without it nothing here is a worktree
+    await recordPreset(WORKTREE);
     expect(presets.value).toEqual([]);
   });
 
   it("still records the repository the worktree came from", async () => {
-    const { presets, recordPreset } = useAppConfig();
+    const { presets, recordPreset, loadConfig } = useAppConfig();
+    await loadConfig();
     await recordPreset("/home/me/myrepo");
-    await recordPreset("/home/me/worktrees/myrepo-1a2b3c4d/fix-bug");
+    await recordPreset(WORKTREE);
     expect(presets.value.map((p) => p.path)).toEqual(["/home/me/myrepo"]);
+  });
+
+  // Anchored on the managed root, not on the path's shape: a directory another tool laid out the
+  // same way is a real working directory, and dropping it would silently lose it (Codex on #1543).
+  it("records a same-shaped directory outside the managed root", async () => {
+    const { presets, recordPreset, loadConfig } = useAppConfig();
+    await loadConfig();
+    await recordPreset("/home/me/dev/worktrees/myrepo-1a2b3c4d/fix-bug");
+    expect(presets.value.map((p) => p.path)).toEqual(["/home/me/dev/worktrees/myrepo-1a2b3c4d/fix-bug"]);
   });
 
   // Saved config is the user's, so an entry an earlier version recorded is left where it is
   // rather than dropped — it just stops being maintained (no bump to the front).
   it("leaves an already-saved worktree entry alone instead of bumping it", async () => {
-    const { presets, recordPreset } = useAppConfig();
-    const worktree = "/home/me/worktrees/myrepo-1a2b3c4d/fix-bug";
+    const { presets, recordPreset, loadConfig } = useAppConfig();
+    await loadConfig();
     presets.value = [
       { label: "alpha", path: "/home/me/alpha" },
-      { label: "myrepo (fix-bug)", path: worktree },
+      { label: "myrepo (fix-bug)", path: WORKTREE },
     ];
     const before = vi.mocked(globalThis.fetch).mock.calls.length;
-    await recordPreset(worktree);
+    await recordPreset(WORKTREE);
     expect(vi.mocked(globalThis.fetch).mock.calls).toHaveLength(before); // no POST
-    expect(presets.value.map((p) => p.path)).toEqual(["/home/me/alpha", worktree]);
+    expect(presets.value.map((p) => p.path)).toEqual(["/home/me/alpha", WORKTREE]);
   });
 
   it("removePreset drops the matching path", async () => {
