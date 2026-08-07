@@ -10,7 +10,7 @@ import { codexGuiMcpServers } from "./mcp-config.js";
 import { codexSessionsRoot, snapshotSessions, watchForCodexSession } from "../agents/codex-session.js";
 import { codexRolloutPath } from "../agents/codex-sessions.js";
 import { trackCodexActivity } from "./codex-activity-track.js";
-import { claimedCodexRollouts, claimFullGuiMcp, ptys, rememberCodexRollout } from "./registry.js";
+import { claimedCodexRollouts, claimFullGuiMcp, codexRollouts, ptys, rememberCodexRollout } from "./registry.js";
 import { ptySpawn, ptyWouldReattach } from "./pty-spawn.js";
 import { ptyStartLine } from "./pty-exit-log.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
@@ -101,6 +101,19 @@ export function createCodexSpawner(deps: SpawnDeps) {
       // rollout id itself carries no mapping yet, and one whose cell moved needs the new cwd.
       rememberCodexRollout(sessionId, resumeRolloutId, cwd);
       const file = codexRolloutPath(root, resumeRolloutId);
+      if (file) trackCodexActivity(sessionId, file, true, activityDepsFor(sessionId, entry, deps));
+    } else if (reattached) {
+      // A tmux attach picked up a codex that was ALREADY running — a server restart, where
+      // `agentResumeId` rightly withholds the resume id so no second codex starts. But the fresh
+      // branch below waits for a rollout file to APPEAR, and this session's existed before the
+      // snapshot — so nothing ever tailed it and the cell's working/waiting flags stayed dead
+      // until a cold restart (#1536). Claude survives the same restart via its HTTP hooks; codex
+      // has only this tail. The mapping outlived the process in the rollout log (the WS route
+      // awaits its hydration before resolving), so tail it from the end, exactly as a resume
+      // does. No mapping — a rollout never captured before the restart — means there is nothing
+      // to tail: running the watcher would mis-attribute a concurrent session's rollout.
+      const rolloutId = codexRollouts.get(sessionId)?.conversationId;
+      const file = rolloutId ? codexRolloutPath(root, rolloutId) : null;
       if (file) trackCodexActivity(sessionId, file, true, activityDepsFor(sessionId, entry, deps));
     } else {
       // Discover the id only for a FRESH session. On resume we already know it; running the watcher

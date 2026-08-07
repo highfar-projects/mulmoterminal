@@ -333,8 +333,8 @@ async function startRunTerminal(deps: WsRouteDeps, ws: WebSocket, url: URL): Pro
 // subprocess (buildHeaderContext for a button command), and the viewer can leave during that
 // window — before any close handler is wired. Spawning then leaks a PTY nobody reaps (/ws/run
 // is ephemeral: no reattach, no reap/grace, so its only kill is the close handler below). Bail
-// if the socket has since closed — the same guard handleClaudeConnection applies after its
-// keychain refresh.
+// if the socket has since closed — the same guard the agent handlers apply after their
+// admission awaits (clientStillConnected).
 export function beginRunTerminal(deps: WsRouteDeps, ws: WebSocket, resolved: { command: string; cwd: string }, size: TerminalSize | null = null): void {
   if (ws.readyState !== ws.OPEN) return;
   let term: IPty;
@@ -460,7 +460,7 @@ function startCodexEntry(deps: WsRouteDeps, ws: WebSocket, start: CodexStart): P
   return deps.spawnCodexPty(sessionId, ws, resumeRolloutId, cwd, attachGuiMcp, { mcpGroups }); // interactive: no seed
 }
 
-async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUpgradeRequest) {
+export async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUpgradeRequest) {
   // ?session=<id> resumes an existing conversation; absent => fresh session. For
   // new sessions we generate the id ourselves (--session-id) so the server always
   // knows the current session's id, even before any file exists.
@@ -519,6 +519,11 @@ async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
     await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });
     const early = await admitAgentSession(ws, "claude", { requested, sessionId, live, cwd, devTerminal: !attachGuiMcp });
     if (!early) return;
+
+    // Every other agent endpoint asks this after its admission awaits; claude was the one that
+    // did not (#1536), so a client that left mid-admission still got a pty — spawned after the
+    // socket's close event, so the close handler startAndWire installs never fires for it.
+    if (!clientStillConnected(ws, "claude", sessionId, early)) return;
 
     // A provider refusal already says exactly what is wrong with the directory's config (#579), and a
     // refused spawn already names the binary and the PATH it searched, or the directory that is gone
@@ -736,7 +741,7 @@ async function handleLaunchConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
 // codex terminal (?cwd=<dir>, ?session=<id> to reattach/resume). ?gui=0 (grid dev terminal) runs
 // codex without the GUI MCP and keeps it out of the sidebar; absent (single view) attaches the GUI
 // MCP so codex drives the GUI panel like claude.
-async function handleCodexConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUpgradeRequest) {
+export async function handleCodexConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUpgradeRequest) {
   const { url, requested, cwd, unusable, size } = wsConnectionContext(req);
   if (refuseUnusableWorkspace(ws, "codex", unusable, requested)) return;
   const attachGuiMcp = url.searchParams.get("gui") !== "0";
@@ -756,8 +761,12 @@ async function handleCodexConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUp
     // A grid cell's GUI tools are whatever its DIRECTORY registered — the same switches claude's
     // cells read, in the same file. claude picks them up itself; codex is handed resolved URLs at
     // spawn, so the answer has to be read here, before the pty exists. Only for a spawn: a reattach
-    // keeps the tools its running process was started with.
-    const mcpGroups = !attachGuiMcp && !live ? await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []) : [];
+    // keeps the tools its running process was started with. BOTH kinds of reattach (#1536): a
+    // tmux-only one — a reconnect after a server restart, where `live` is absent — starts no
+    // process either, and it often carries no `?cwd=` at all, so this read would answer for the
+    // DEFAULT workspace; the argv built from it is discarded by `tmux new-session -A` anyway.
+    // Same predicate reserveWorktreeEnvForSpawn asks, for the same reason.
+    const mcpGroups = !attachGuiMcp && !live && !ptyWouldReattach(sessionId, true) ? await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []) : [];
     if (!clientStillConnected(ws, "codex", sessionId, early)) return;
 
     const startFailureMessage = startFailureMessageFor("codex");
