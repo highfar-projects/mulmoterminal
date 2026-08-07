@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { encodeGrokCwd, grokSessionDir, grokConversationExists } from "../../../server/agents/grok-session.js";
+import { encodeGrokCwd, grokSessionDir, grokConversationExists, grokConversationExistsInAnyCwd } from "../../../server/agents/grok-session.js";
 
 const ID = "019fcf22-289b-7773-b19c-462d5c08d061";
 const roots: string[] = [];
@@ -63,5 +63,25 @@ describe("grokConversationExists", () => {
     const root = tempRoot();
     mkdirSync(path.join(root, encodeGrokCwd(cwd), "not-a-uuid"), { recursive: true });
     expect(grokConversationExists(root, cwd, "not-a-uuid")).toBe(false);
+  });
+});
+
+// The survivor-identity guard's probe (#1537): after a restart the request's cwd is often the
+// defaulted workspace, so asking under it would miss the conversation that is right there.
+describe("grokConversationExistsInAnyCwd", () => {
+  const cwd = "/Users/satoshi/project";
+
+  it("finds the conversation whichever cwd partition holds it", () => {
+    const root = tempRoot();
+    mkdirSync(grokSessionDir(root, cwd, ID), { recursive: true });
+    expect(grokConversationExistsInAnyCwd(root, ID)).toBe(true);
+  });
+
+  it("is false for an id grok never minted, for a missing root, and for a non-UUID key", () => {
+    const root = tempRoot();
+    mkdirSync(path.join(root, encodeGrokCwd(cwd)), { recursive: true });
+    expect(grokConversationExistsInAnyCwd(root, ID)).toBe(false);
+    expect(grokConversationExistsInAnyCwd(path.join(root, "nope"), ID)).toBe(false);
+    expect(grokConversationExistsInAnyCwd(root, "not-a-uuid")).toBe(false);
   });
 });

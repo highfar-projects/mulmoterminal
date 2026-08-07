@@ -63,6 +63,7 @@ import { terminalWsKind, type TerminalWsKind } from "./terminal-ws-path.js";
 import { normalizeAgent, parseIndexParam } from "./routeParams.js";
 import { agentResumeId } from "../agents/agent-resume.js";
 import { claimLaunch, worktreeOccupancy } from "../session/worktree-session-limit.js";
+import { foreignTmuxSurvivorReason } from "../session/survivor-agent-guard.js";
 import { worktreeRefusal } from "../../common/worktreeSession.js";
 import { ensureWorktreeEnv } from "../config/worktree-env.js";
 import { isCustomAgentId } from "../../common/customAgents.js";
@@ -235,10 +236,10 @@ async function refuseSecondWorktreeSession(
  * Everything an agent endpoint does between resolving its session and spawning it, in the order
  * the four of them (claude, launch, codex, antigravity) already ran it in.
  *
- * The order is the fragile part: the worktree refusal has to happen BEFORE the browser is told a
- * session id (#1207), and the dev-terminal mark has to be recorded on every attach — new, resumed
- * or reattached — which is what makes this the single choke point for the chat sidebar's exclusion
- * list (see devTerminalSessions).
+ * The order is the fragile part: the survivor-identity refusal and the worktree refusal have to
+ * happen BEFORE the browser is told a session id (#1537, #1207), and the dev-terminal mark has to
+ * be recorded on every attach — new, resumed or reattached — which is what makes this the single
+ * choke point for the chat sidebar's exclusion list (see devTerminalSessions).
  *
  * Returns null when the socket was refused and closed: the caller must return without spawning.
  */
@@ -258,6 +259,20 @@ async function admitAgentSession(
   },
 ): Promise<EarlyFrames | null> {
   const { requested, sessionId, live, cwd, devTerminal, worktreeLimited = true } = session;
+  // A live entry is already agent-checked by settledEntry (wrongEndpointReason); a tmux-only
+  // survivor — a reconnect after a server restart — has no entry to check, and `tmux
+  // new-session -A` would attach whatever runs in the pane under THIS endpoint's identity.
+  // Refused before the browser is told an id, and loudly for settledEntry's reason: the
+  // mismatch is a persisted-state defect the user has to act on, and a plain close would
+  // just retry it forever (#1537).
+  if (!live) {
+    const foreign = await foreignTmuxSurvivorReason(kind, sessionId);
+    if (foreign) {
+      console.warn(`[ws/${kind}] refusing ${sessionId} — ${foreign}`);
+      closeWithError(ws, `${foreign} — open it from its own agent's cell.`);
+      return null;
+    }
+  }
   if (worktreeLimited && (await refuseSecondWorktreeSession(ws, kind, cwd, { requested, sessionId }))) return null;
   if (devTerminal) markDevTerminalSession(sessionId, effectiveSessionCwd(live?.cwd, cwd));
   markAttachedSessionPlaced(sessionId, requested);
