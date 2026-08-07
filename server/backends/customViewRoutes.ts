@@ -10,9 +10,10 @@
 // so there is no cycle between the two modules.
 import type { Express, Request, RequestHandler, Response } from "express";
 import { clampImageMaxEdge } from "@mulmoclaude/core/remote-view";
-import { collectionWritable, readCustomViewI18n, readOnlyRefusal, storeFor, type LoadedCollection } from "@mulmoclaude/core/collection/server";
-import type { CollectionMutateAction } from "@mulmoclaude/core/collection";
-import { actionVisible, type ActionWithWhen, type CollectionAction, type CollectionItem } from "@mulmoclaude/core/collection";
+import { readCustomViewI18n, storeFor, type LoadedCollection } from "@mulmoclaude/core/collection/server";
+import type { CollectionItem, CollectionMutateAction } from "@mulmoclaude/core/collection";
+// The 404 / 405 / 409 preamble this action route shares with the parent-side one.
+import { refuseReadOnlyCollection, resolveActionableRecord, resolveItemAction } from "./collectionActionGuards.js";
 // The same thumbnail resolver the mobile view's image inlining uses, so a desktop
 // view's <img> and the phone's inlined one are the same bytes.
 import { resolveThumbnail } from "./thumbnailStore.js";
@@ -24,8 +25,7 @@ import { isRecord } from "../../common/isRecord.js";
 const log = hostLogger;
 
 /** What these routes need from the collections backend: its 404-answering loader,
- *  its mutate executor, the action gate both spellings of `when` fold into, and
- *  the two middlewares the whole view-data family shares. */
+ *  its mutate executor, and the two middlewares the whole view-data family shares. */
 export interface CustomViewRouteDeps {
   /** Load a collection, answering 404 itself; null means the response was sent. */
   resolveCollection: (res: Response, slug: string) => Promise<LoadedCollection | null>;
@@ -39,8 +39,6 @@ export interface CustomViewRouteDeps {
     itemId: string,
     body: { params?: unknown } | undefined,
   ) => Promise<void>;
-  /** An action's state gate, in the shape `actionVisible` reads. */
-  visibilityGate: (action: CollectionAction) => ActionWithWhen;
   /** Wrap a handler so a throw becomes a logged 500. */
   guarded: <P extends Record<string, string>>(op: string, handler: RequestHandler<P>) => RequestHandler<P>;
   /** `Access-Control-*` for the opaque-origin iframe's preflighted fetch. */
@@ -136,37 +134,20 @@ const makeActionHandler =
   async (req, res) => {
     const collection = await deps.resolveCollection(res, req.params.slug);
     if (!collection) return;
-    const action = collection.schema.actions?.find((entry) => entry.id === req.params.actionId);
-    if (!action) {
-      res.status(404).json({ error: `action '${req.params.actionId}' not found on collection '${collection.slug}'` });
-      return;
-    }
+    const action = resolveItemAction(res, collection, req.params.actionId);
+    if (!action) return;
     if (action.kind !== "mutate") {
       res.status(403).json({ error: `action '${action.id}' has kind "${action.kind}" — view tokens can only invoke "mutate" actions` });
       return;
     }
-    // Schema validation already rejects mutate actions on a dataSource collection;
-    // this is the defensive twin the parent-side action route also carries.
-    if (!collectionWritable(collection)) {
-      res.status(405).json({ error: readOnlyRefusal(collection.slug) });
-      return;
-    }
+    if (refuseReadOnlyCollection(res, collection)) return;
     const body: Record<string, unknown> = isRecord(req.body) ? req.body : {};
     const itemId = typeof body.itemId === "string" ? body.itemId.trim() : "";
     if (!itemId) {
       res.status(400).json({ error: "`itemId` is required (the record's primary-key value)" });
       return;
     }
-    const record = await storeFor(collection).read(itemId);
-    if (!record) {
-      res.status(404).json({ error: `item '${itemId}' not found` });
-      return;
-    }
-    // The same visibility-is-authorization re-check the parent-side route runs.
-    if (!actionVisible(deps.visibilityGate(action), record)) {
-      res.status(409).json({ error: `action '${action.id}' is not available for item '${itemId}' in its current state` });
-      return;
-    }
+    if (!(await resolveActionableRecord(res, collection, action, itemId))) return;
     await deps.respondForMutateAction(res, collection, action, itemId, body);
   };
 
