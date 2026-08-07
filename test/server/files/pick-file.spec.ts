@@ -1,11 +1,16 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
+import express from "express";
+import { appRequest } from "../../helpers/appRequest.js";
 import {
+  DIALOG_BUSY,
+  mountPickFileRoute,
   pickFileCandidates,
   parsePickerOutput,
   pickedPaths,
   pickerRunFailed,
   pickerUnavailableMessage,
+  type PickAnswer,
   type PickerHost,
   type PickerRun,
 } from "../../../server/files/pick-file.js";
@@ -256,5 +261,56 @@ describe("pickedPaths", () => {
 
   it("leaves a Linux dialog's output alone", async () => {
     await expect(pickedPaths("/a/b\n/c/d", { cmd: "zenity", args: [] })).resolves.toEqual({ paths: ["/a/b", "/c/d"], untranslated: 0 });
+  });
+});
+
+// #1527: the client's own guard covers the clicks IT can see. Another tab, or this tab after a
+// reload, is a fresh document that knows nothing about the dialog already on screen — the route
+// is the only place that knows the machine has just one.
+describe("the pick-file route while a dialog is open", () => {
+  /** A dialog run that stays unanswered until the test says the user closed it. */
+  function heldDialog() {
+    let close: (answer: PickAnswer) => void = () => {};
+    const answer = new Promise<PickAnswer>((resolve) => (close = resolve));
+    return { answer, close };
+  }
+
+  function mount(openDialog: (directory: boolean) => Promise<PickAnswer>) {
+    const app = express();
+    app.use(express.json());
+    mountPickFileRoute(app, { isAllowedOrigin: () => true, openDialog });
+    const request = appRequest(app);
+    return () => request("/api/pick-file", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ directory: true }) });
+  }
+
+  it("answers 409 rather than opening a second dialog", async () => {
+    const dialog = heldDialog();
+    const post = mount(() => dialog.answer);
+    const first = post();
+    const second = await post();
+    expect(second.status).toBe(409);
+    expect(await second.json()).toEqual({ error: DIALOG_BUSY });
+    dialog.close({ status: 200, body: { paths: ["/a"] } });
+    expect((await first).status).toBe(200);
+  });
+
+  it("takes a request again once the dialog closed", async () => {
+    const dialog = heldDialog();
+    const post = mount(() => dialog.answer);
+    const first = post();
+    dialog.close({ status: 200, body: { paths: ["/a"] } });
+    await first;
+    const second = await post();
+    expect(second.status).toBe(200);
+    expect(await second.json()).toEqual({ paths: ["/a"] });
+  });
+
+  // A lock a failure leaves latched is worse than the bug: every later pick would 409 forever.
+  it("releases the lock when the dialog run throws", async () => {
+    let fail = true;
+    const post = mount(() => (fail ? Promise.reject(new Error("spawn ENOENT")) : Promise.resolve({ status: 200, body: { paths: ["/a"] } })));
+    await post();
+    fail = false;
+    expect((await post()).status).toBe(200);
   });
 });
