@@ -44,7 +44,7 @@ import { hasCanvasGroup } from "../../common/toolGroups";
 import type { RightPane } from "./gridCell";
 import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
 import { isRecord } from "../../common/isRecord";
-import type { TerminalAgent } from "../../common/sessionAgent";
+import type { SessionAgent, TerminalAgent } from "../../common/sessionAgent";
 import { buildCanvasCard, seedCanvasCard, hasStoredCard, absoluteUnder } from "../composables/canvasOpenFile";
 import { jsonBody } from "../jsonBody";
 import { isUnknownArray } from "../../common/isUnknownArray";
@@ -61,7 +61,10 @@ import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 export interface CockpitRow {
   uid: number;
   cwd: string | null;
-  agent: string;
+  // What the row runs: an agent, "shell" for a launcher or a run-command cell, or null for a cell
+  // that has launched nothing yet. Null rather than a default, so the header can decline to mark
+  // a row it cannot name — see rosterAgent() in GridView.vue.
+  agent: SessionAgent | null;
   status: AttentionStatus;
   memo: string | null; // the user's own one-line note (#1084)
   summary: string | null; // AI title
