@@ -73,6 +73,12 @@ Settings live in three places: the **settings modal (Settings)**, the **global c
 
 Open it from **Settings** (the gear) in the toolbar.
 
+Under the title, a **Version** row says **which build you are running** — `4.7.0` on an npm
+install, and on a git checkout a second `commit a1b2c3d` chip beside it, since there the version
+is only whatever was last released and the commit is what identifies the build. When something
+newer exists, the update notice from the header badge follows on the next line, command included.
+That row is what to quote in a bug report.
+
 ![The Settings modal — Theme with its Create a theme… button, Terminal font size, Terminal scroll speed, Waiting rows with the blink checkbox, Directory appearance, and Directory settings with acme-web expanded](../images/config-settings-modal.png)
 
 Up to twenty-one sections, in this order — **Voice input** is there only on a machine that can transcribe, so most
