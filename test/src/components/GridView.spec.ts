@@ -180,6 +180,32 @@ describe("GridView roster ordering (#720)", () => {
     expect(rows.map((r: { parked: boolean }) => r.parked)).toEqual([false, true]);
     w.unmount();
   });
+
+  // `Cell.agent` is absent for Claude AND for a cell that is no agent session at all, so reading
+  // it as "claude" (which the row did) put Anthropic's mark on every launcher chip and shell
+  // terminal in the roster. The row has to answer "shell" for those and only then fall back.
+  it("says shell for a launcher row and keeps the agent for a session row", async () => {
+    localStorage.setItem(
+      "grid_v2",
+      JSON.stringify({
+        cells: [
+          { uid: 30, session: IDS.idleA, cwd: "/w" },
+          { uid: 31, session: IDS.idleB, cwd: "/w", agent: "codex" },
+          { uid: 32, session: IDS.blocked, cwd: "/w", launcher: { shell: true, label: "shell" } },
+        ],
+        expanded: 30,
+        page: 0,
+        sortMode: "manual",
+      }),
+    );
+    const w = mount(GridView, {
+      global: { stubs: { TerminalGrid: OrderStub, AppToolbar: ToolbarStub, SettingsModal: SettingsStub } },
+    });
+    await flushPromises();
+    const rows = w.findComponent(OrderStub).props("listRows");
+    expect(rows.map((r: { agent: string | null }) => r.agent)).toEqual(["claude", "codex", "shell"]);
+    w.unmount();
+  });
 });
 
 // A toolbar stub that surfaces the view-toggle props and can fire the toggle-view event, plus a

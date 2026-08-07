@@ -6,6 +6,7 @@ import AppToolbar from "./AppToolbar.vue";
 import GuideLinks from "./GuideLinks.vue";
 import { startCollectionChat } from "../composables/useChatLauncher";
 import { skillSeed } from "./skillSeed";
+import { rosterAgent } from "./rosterAgent";
 import type { BundledSkillName } from "../../common/bundledSkills";
 import {
   initialState,
@@ -325,7 +326,7 @@ const rosterRow = (c: Cell): CockpitRow => {
   return {
     uid: c.uid,
     cwd: c.cwd,
-    agent: c.agent ?? "claude",
+    agent: rosterAgent(c),
     status: statusForSort.value[c.uid] ?? "idle",
     memo: meta.memo,
     summary: meta.aiTitle,
