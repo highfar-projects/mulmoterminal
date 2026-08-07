@@ -22,6 +22,9 @@ const input = (over: Partial<ReapSweepInput> = {}): ReapSweepInput => ({
   nowSeconds: NOW,
   idleDays: DEFAULT_REAP_IDLE_DAYS,
   liveHere: () => false,
+  // True by default so the readable ids these tests use ("stale", "held") keep meaning what they
+  // say; the live sweep answers with SESSION_ID_RE, and the unparseable-id test overrides this.
+  validId: () => true,
   kill: vi.fn((id: string) => Boolean(id)),
   ...over,
 });
@@ -32,6 +35,7 @@ describe("reapableTmuxSession", () => {
     liveHere: false,
     idleSeconds: 30 * DAY,
     idleThresholdSeconds: reapIdleSeconds(DEFAULT_REAP_IDLE_DAYS),
+    validId: true,
     ...over,
   });
 
@@ -64,6 +68,23 @@ describe("reapableTmuxSession", () => {
   // Zero is the off switch, and it has to hold even for a session idle for a year.
   it("ends nothing at all when the threshold is zero", () => {
     expect(reapableTmuxSession(facts({ idleThresholdSeconds: 0, idleSeconds: 365 * DAY }))).toBe(false);
+  });
+
+  // A live `mt-undefined` was found (#1533): an id that does not parse is unreachable by EVERY
+  // route — nothing can attach, resume or terminate it — so this sweep is the only thing that can
+  // ever end it, and no amount of recency can make it reachable.
+  it("ends one whose id no route can reach, however recently it was active", () => {
+    expect(reapableTmuxSession(facts({ validId: false, idleSeconds: 0 }))).toBe(true);
+  });
+
+  // Someone can still be LOOKING at it — `tmux attach` by hand is how such a session gets
+  // inspected at all — and killing a pane out from under them is not cleanup.
+  it("spares even an unreachable one while a terminal is attached", () => {
+    expect(reapableTmuxSession(facts({ validId: false, attachedCount: 1 }))).toBe(false);
+  });
+
+  it("the zero threshold switches off even the unreachable-id reap", () => {
+    expect(reapableTmuxSession(facts({ validId: false, idleThresholdSeconds: 0 }))).toBe(false);
   });
 });
 
@@ -137,6 +158,25 @@ describe("the boot sweep", () => {
     const result = reapIdleSessions(input({ ids: ["stale"], activity: new Map([["stale", STALE]]), idleDays: 0, kill }));
     expect(kill).not.toHaveBeenCalled();
     expect(result).toEqual({ reaped: [], heldBack: 0, recent: 0, unclear: 0 });
+  });
+
+  // The `mt-undefined` case (#1533): recently active, nobody attached — and still ended, because
+  // its id parses as nothing any route will serve, so waiting out the idle grace serves no one.
+  it("reaps an unparseable id at once, ignoring the idle grace", () => {
+    const kill = vi.fn((id: string) => Boolean(id));
+    const result = reapIdleSessions(
+      input({
+        ids: ["undefined", "fresh"],
+        activity: new Map([
+          ["undefined", NOW - DAY],
+          ["fresh", NOW - DAY],
+        ]),
+        validId: (id) => id !== "undefined",
+        kill,
+      }),
+    );
+    expect(kill.mock.calls.map((c) => c[0])).toEqual(["undefined"]);
+    expect(result).toEqual({ reaped: ["undefined"], heldBack: 0, recent: 1, unclear: 0 });
   });
 });
 

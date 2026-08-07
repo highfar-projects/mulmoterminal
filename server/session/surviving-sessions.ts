@@ -12,6 +12,7 @@ import { sessionAttached } from "./dir-session.js";
 import { resumableSessionFacts } from "./resumable-sessions.js";
 import { isRestorableSession, reapableTmuxSession } from "../infra/tmux.js";
 import { reapIdleSeconds } from "../../common/sessionReap.js";
+import { SESSION_ID_RE } from "../config/env.js";
 
 /** The snapshots one listing takes, so the rule below is pure and the tmux calls happen once. */
 export interface SurvivingInput {
@@ -94,6 +95,7 @@ export async function survivingSessions(nowMs: number, idleReapDays: number): Pr
         liveHere: ptys.has(key),
         idleSeconds,
         idleThresholdSeconds,
+        validId: SESSION_ID_RE.test(key),
       }),
     // The live pty wins: it knows where the agent actually runs, and the remembered value can be a
     // directory the session was relaunched away from.

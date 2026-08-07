@@ -11,6 +11,7 @@
 // transcript" the wrong reason to keep it alive.
 import { reapableTmuxSession, tmuxAttachedCounts, tmuxKillSession, tmuxListSessionIds, tmuxSessionActivity } from "../infra/tmux.js";
 import { reapIdleSeconds, reapSweepEnabled } from "../../common/sessionReap.js";
+import { SESSION_ID_RE } from "../config/env.js";
 import { ptys } from "./registry.js";
 
 export interface ReapSweepResult {
@@ -34,6 +35,10 @@ export interface ReapSweepInput {
   nowSeconds: number;
   idleDays: number;
   liveHere: (id: string) => boolean;
+  /** Whether the id parses as a session id at all — an unparseable one (`mt-undefined`, #1533) is
+   *  unreachable by every route and reaps at once (see ReapFacts.validId). The live sweep answers
+   *  with SESSION_ID_RE, injected like `liveHere` so the decision stays pure. */
+  validId: (id: string) => boolean;
   /** Ends it, and says whether tmux agreed. */
   kill: (id: string) => boolean;
 }
@@ -53,6 +58,7 @@ export function reapIdleSessions(input: ReapSweepInput): ReapSweepResult {
       liveHere: input.liveHere(id),
       idleSeconds: seen === undefined ? null : input.nowSeconds - seen,
       idleThresholdSeconds,
+      validId: input.validId(id),
     };
     if (reapableTmuxSession(facts)) {
       // Recorded only when tmux confirms it. Otherwise the session is still there, and everything
@@ -114,6 +120,7 @@ export function sweepIdleSessions(nowMs: number, idleDays: number): ReapSweepRes
     // At boot this is empty, and that is not something to rely on: the sweep is written to be safe
     // whenever it runs, so a later caller (a timer, a button) cannot turn it into a session killer.
     liveHere: (id) => ptys.has(id),
+    validId: (id) => SESSION_ID_RE.test(id),
     kill: tmuxKillSession,
   });
 }

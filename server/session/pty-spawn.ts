@@ -10,6 +10,7 @@ import { resolvePtyLaunchForEnv } from "../infra/resolve-bin.js";
 import { binaryProblemMessage, diagnoseBinary, type BinaryDiagnosis } from "../infra/has-binary.js";
 import { cwdProblemMessage, diagnoseSpawnCwd, type CwdDiagnosis } from "../infra/spawn-cwd.js";
 import { withoutUnset } from "./provider-env.js";
+import { SESSION_ID_RE } from "../config/env.js";
 import { reservedWorktreeEnv } from "../config/worktree-env.js";
 import { tmuxAvailable, tmuxHasSession, tmuxNewSessionArgs, tmuxScrubEnvNames } from "../infra/tmux.js";
 
@@ -160,6 +161,13 @@ export function ptySpawn(
   persistent: boolean,
   options: PtySpawnEnv = {},
 ): { term: IPty; tmux: boolean; reattached: boolean } {
+  // The id names everything the session leaves behind — the tmux session (`mt-<id>`), the settings
+  // and seed files — so an unset one poisons a SHARED name: a live `mt-undefined` was found on a
+  // machine (#1533), and every spawn with the same defect would have attached that same pane, each
+  // cell showing whichever conversation got there first. Refused here, at the one choke point every
+  // spawner passes, so the defect is a failed launch with a message instead of a silently shared
+  // terminal. Probe ids pass: they are UUID-shaped by construction (agents/probe-session.ts).
+  if (!SESSION_ID_RE.test(sessionId)) throw new Error(`refusing to spawn a pty for an invalid session id: ${JSON.stringify(sessionId)}`);
   const { unset = [], binEnvVar } = options;
   // Merged HERE and not only in spawnPty, because the tmux branch below does not hand `env` to
   // the spawn at all — a pane's environment comes from `new-session -e`, so a variable missing
