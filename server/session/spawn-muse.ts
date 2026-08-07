@@ -18,10 +18,16 @@ import { entitledToolGroups, rememberEntitledToolGroups } from "./bridge-session
 import { ptySpawn, ptyWouldReattach } from "./pty-spawn.js";
 import { ptyStartLine } from "./pty-exit-log.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
+import { seedPromptArgument } from "./session-settings.js";
 import { claimedMuseSessions, ptys, rememberMuseSession } from "./registry.js";
 import type { SpawnDeps } from "./spawn-deps.js";
 import type { PtyEntry } from "./types.js";
 import type { SpawnDirectoryMcpPty } from "./spawn-directory-mcp.js";
+
+// A seed this agent takes as an ARGUMENT cannot carry a newline on Windows, so it may travel in a
+// file with the command line naming it instead (#1518, session-settings.ts). Null stays null — the
+// builder then places no seed at all.
+const seedFor = (sessionId: string, prompt: string | null): string | null => (prompt === null ? null : seedPromptArgument(sessionId, prompt));
 
 export function createMuseSpawner(deps: SpawnDeps) {
   function captureMuseSession(sessionId: string, cwd: string, before: ReadonlySet<string>): void {
@@ -77,7 +83,7 @@ export function createMuseSpawner(deps: SpawnDeps) {
 
     // The workspace is passed on BOTH paths — a resumed session that loses `--workspace` comes
     // back without the tools it was working with (see muse-args.ts).
-    const args = buildMuseArgs({ resume: resumeConversationId, workspace: cwd, model: deps.museModel, initialPrompt });
+    const args = buildMuseArgs({ resume: resumeConversationId, workspace: cwd, model: deps.museModel, initialPrompt: seedFor(sessionId, initialPrompt) });
 
     // Recorded only when this really STARTS muse. A reattach reaches here too (after a server
     // restart the pty table is empty while the tmux session is not), and the muse in that pane is

@@ -13,14 +13,26 @@ import { buildGrokArgs } from "../agents/grok-args.js";
 import { syncGrokMcpConfig } from "../agents/grok-mcp.js";
 import { startDirectoryMcpPty, syncDirectoryMcpForSpawn, type SpawnDirectoryMcpPty } from "./spawn-directory-mcp.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
+import { seedPromptArgument } from "./session-settings.js";
 import type { SpawnDeps } from "./spawn-deps.js";
+
+// A seed this agent takes as an ARGUMENT cannot carry a newline on Windows, so it may travel in a
+// file with the command line naming it instead (#1518, session-settings.ts). Null stays null — the
+// builder then places no seed at all.
+const seedFor = (sessionId: string, prompt: string | null): string | null => (prompt === null ? null : seedPromptArgument(sessionId, prompt));
 
 export function createGrokSpawner(deps: SpawnDeps) {
   const spawnGrokPty: SpawnDirectoryMcpPty = (sessionId, ws, resumeConversationId, cwd, options) => {
     const { mcpGroups, initialPrompt = null } = options;
     syncDirectoryMcpForSpawn(sessionId, cwd, mcpGroups, syncGrokMcpConfig);
 
-    const args = buildGrokArgs({ sessionId, resume: resumeConversationId, model: deps.grokModel, skipPermissions: true, initialPrompt });
+    const args = buildGrokArgs({
+      sessionId,
+      resume: resumeConversationId,
+      model: deps.grokModel,
+      skipPermissions: true,
+      initialPrompt: seedFor(sessionId, initialPrompt),
+    });
     const { entry, spawnedAtMs } = startDirectoryMcpPty({
       sessionId,
       ws,

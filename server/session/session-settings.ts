@@ -20,6 +20,7 @@ const SETTINGS_DIR = path.join(os.homedir(), ".mulmoterminal", "settings");
 const settingsFile = (sessionId: string): string => path.join(SETTINGS_DIR, `${sessionId}.json`);
 const mcpConfigFile = (sessionId: string): string => path.join(SETTINGS_DIR, `${sessionId}-mcp.json`);
 const appendedPromptFile = (sessionId: string): string => path.join(SETTINGS_DIR, `${sessionId}-prompt.txt`);
+const seedPromptFile = (sessionId: string): string => path.join(SETTINGS_DIR, `${sessionId}-seed.txt`);
 
 // Windows has a second, unrelated reason to use a file: there, a `.cmd`-installed Claude is
 // launched through cmd.exe (#798), so a JSON argument is parsed by cmd and then by the
@@ -62,6 +63,30 @@ export function appendedPromptArgument(sessionId: string, prompt: string, platfo
   return mustUseFile(false, platform) ? { kind: "file", path: writePrivate(appendedPromptFile(sessionId), prompt) } : { kind: "inline", text: prompt };
 }
 
+// A seed prompt an agent takes as an ARGUMENT — grok and muse as a positional, antigravity as
+// `--prompt-interactive`'s value. None of the three can be handed a file, so the same answer as
+// above is not available: what goes on the command line has to be the prompt itself.
+//
+// And it cannot be, when it has a newline in it. A Windows command line has no encoding for one, so
+// escapeBatchArgument refuses the argument and the session never starts — and a skill seed with
+// arguments is ALWAYS multi-line, because codexifySkillSeed puts a blank line after the skill line
+// (#1518). Collapsing the newlines away is the substitution #1516 rejected: it hands the agent a
+// different instruction, silently.
+//
+// So the prompt travels in a file and the command line carries a single-line INSTRUCTION to read
+// it. The agent's first act becomes a file read, which is a real behaviour change — so it is made
+// only where the direct form is impossible: on Windows, and only for a prompt that actually
+// carries a newline. Everywhere else, and for a single-line seed anywhere, nothing changes.
+const seedNeedsFile = (prompt: string, platform: NodeJS.Platform): boolean => platform === "win32" && /[\0\r\n]/.test(prompt);
+
+export function seedPromptArgument(sessionId: string, prompt: string, platform: NodeJS.Platform = process.platform): string {
+  if (!seedNeedsFile(prompt, platform)) return prompt;
+  const file = writePrivate(seedPromptFile(sessionId), prompt);
+  // One line, and it names the file rather than describing it: an agent that reads nothing else
+  // still has the path. "first task" rather than "prompt" because the file IS the turn to run.
+  return `Your first task is written in this file — read it and carry it out: ${file}`;
+}
+
 // Run a spawn, taking the session's settings file with it if the spawn throws. A session
 // that never starts never reaches reap(), where the cleanup normally happens — so without
 // this a failed spawn leaves a token-bearing file behind (#579).
@@ -79,6 +104,7 @@ export function cleanupSessionSettings(sessionId: string): void {
   removeQuietly(settingsFile(sessionId));
   removeQuietly(mcpConfigFile(sessionId));
   removeQuietly(appendedPromptFile(sessionId));
+  removeQuietly(seedPromptFile(sessionId));
 }
 
 /** Drop settings files left behind by a server that never got to reap.
@@ -139,7 +165,7 @@ function isOlderThan(file: string, cutoff: number): boolean {
 //
 // A file kind missing from this list is one nothing ever collects — which is what a `.json`-only
 // rule did to the prompt file (#1516). Add the kind here when you add the writer.
-const FILE_ENDINGS = [".json", "-mcp.json", "-prompt.txt"] as const;
+const FILE_ENDINGS = [".json", "-mcp.json", "-prompt.txt", "-seed.txt"] as const;
 
 function sessionIdFromFileName(name: string): string | null {
   // First ending whose remainder is a session id wins: `<id>-mcp.json` also ends in `.json`, and
