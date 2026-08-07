@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import CellLaunchForm from "../../../src/components/CellLaunchForm.vue";
+import AgentMark from "../../../src/components/AgentMark.vue";
 import type { AgentPick, CustomAgent } from "../../../common/customAgents";
 import { TERMINAL_AGENTS } from "../../../common/sessionAgent";
 
@@ -687,7 +688,7 @@ describe("the Agent Picker's custom agents (#1414)", () => {
     await flushPromises();
     const labels = w
       .find('[data-testid="agent-picker"]')
-      .findAll('[role="radio"]')
+      .findAll('[data-testid="agent-picker-label"]')
       .map((b) => b.text());
     expect(labels).toEqual(["Claude", "Codex", "Antigravity", "Grok", "Muse", "Nemotron", "Shell"]);
   });
@@ -718,6 +719,29 @@ describe("the Agent Picker's custom agents (#1414)", () => {
     // TERMINAL_AGENTS + Shell — asserted as a count derived from the list rather than a literal,
     // so adding a fifth agent does not read as this feature breaking.
     expect(w.find('[data-testid="agent-picker"]').findAll('[role="radio"]')).toHaveLength(TERMINAL_AGENTS.length + 1);
+  });
+
+  // Every option wears a mark, and the built-in agents wear their OWN one (AgentMark.vue's drawn
+  // shapes, the same the rate-limit gauge uses) rather than a Material Symbol — added because a row
+  // of six words in one weight said nothing about which tool each button starts. Derived from
+  // TERMINAL_AGENTS, so a new agent that reaches the picker without a mark fails here.
+  it("marks every built-in agent with its own drawn mark, and Shell with a symbol", async () => {
+    mockFetch();
+    const w = mountForm([], { customAgents: [nemotron] });
+    await flushPromises();
+    for (const agent of TERMINAL_AGENTS) {
+      const button = w.find(`[data-testid="agent-picker-${agent}"]`);
+      // The mark is asked for its OWN agent, not merely for a mark: a row that rendered Claude's
+      // burst under every label would satisfy "an svg is present" while distinguishing nothing,
+      // which is the whole thing this feature exists to do (CodeRabbit on #1521).
+      expect(button.findComponent(AgentMark).props("agent")).toBe(agent);
+      expect(button.find("svg").exists()).toBe(true);
+      expect(button.find(".material-symbols-outlined").exists()).toBe(false);
+    }
+    // The two that are not agents: a plain terminal, and `tune` for the user's own command — not
+    // Claude's burst, which would make a custom entry indistinguishable from the Claude row.
+    expect(w.find('[data-testid="agent-picker-shell"]').find(".material-symbols-outlined").text()).toBe("terminal");
+    expect(w.find('[data-testid="agent-picker-custom:nemotron"]').find(".material-symbols-outlined").text()).toBe("tune");
   });
 });
 

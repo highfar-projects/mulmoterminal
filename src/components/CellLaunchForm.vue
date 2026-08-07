@@ -20,6 +20,7 @@ import type { Launcher, LaunchPick } from "./launchers";
 import type { LaunchChoice } from "./wsUrl";
 import type { RunCommand } from "./runCommand";
 import LaunchChipList from "./LaunchChipList.vue";
+import AgentMark from "./AgentMark.vue";
 import ModelPicker from "./ModelPicker.vue";
 import { LAUNCH_ROW } from "./launchFormClasses";
 import { jsonBody } from "../jsonBody";
@@ -96,6 +97,21 @@ const pickerOptions = computed(() => agentPickerOptions(props.customAgents ?? []
 // picker below, and nothing else — has to say yes for it too. Asked of the PICK rather than of a
 // resolved agent name, which is the same rule the model picker already followed for Shell.
 const launchesClaude = computed(() => props.agent === "claude" || customAgentIdOf(props.agent) !== null);
+
+// The mark each picker option wears. The five built-in agents have one drawn for them
+// (AgentMark.vue) — the same mark the rate-limit gauge uses, so an agent looks the same wherever
+// it is named. The other two options are not agents and get a Material Symbol instead: Shell is a
+// plain terminal, and a CUSTOM agent gets `tune` rather than Claude's burst, because it runs
+// Claude Code through a command of the user's own and must not be mistaken for the Claude row.
+// Narrowed here rather than in the template: the mark is a TerminalAgent and the picker's own type
+// is the wider AgentPick, so resolving it once per option keeps the template free of an assertion.
+const markedOptions = computed(() =>
+  pickerOptions.value.map((option) => ({
+    ...option,
+    mark: isTerminalAgent(option.agent) ? option.agent : null,
+    symbol: option.agent === "shell" ? "terminal" : "tune",
+  })),
+);
 
 // v-model over a prop the cell owns: typing reports the new path up, and the field shows what
 // comes back down.
@@ -572,18 +588,25 @@ async function removeWorktree(w: Worktree): Promise<void> {
       aria-label="Agent picker — what this terminal runs"
     >
       <button
-        v-for="option in pickerOptions"
+        v-for="option in markedOptions"
         :key="option.agent"
         type="button"
         :data-testid="`agent-picker-${option.agent}`"
-        class="cursor-pointer rounded-[5px] border-none px-3.5 py-1 font-sans text-[12px] font-medium"
+        class="inline-flex cursor-pointer items-center gap-1.5 rounded-[5px] border-none px-3 py-1 font-sans text-[12px] font-medium"
         :class="agent === option.agent ? 'bg-elevated text-fg' : 'bg-transparent text-dim hover:text-fg'"
         role="radio"
         :aria-checked="agent === option.agent"
         :title="option.title"
         @click="emit('update:agent', option.agent)"
       >
-        {{ option.label }}
+        <!-- The mark inherits `currentColor`, so the selected option's mark brightens with its
+             label rather than staying a fixed swatch beside dimmed text. -->
+        <AgentMark v-if="option.mark" :agent="option.mark" />
+        <span v-else class="material-symbols-outlined text-[13px]" aria-hidden="true">{{ option.symbol }}</span>
+        <!-- The label in its own element: a Material Symbol is a LIGATURE, so the icon's name is
+             real text inside the button and `.text()` reads "terminal Shell". Asking for the label
+             is what keeps a caller (and a test) able to say what the option is called. -->
+        <span data-testid="agent-picker-label">{{ option.label }}</span>
       </button>
     </div>
     <label class="flex flex-col items-center gap-1.5" :class="LAUNCH_ROW">
