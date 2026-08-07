@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { pickDirSession, survivorCandidates, type DirSessionCandidate, type SurvivorLog } from "../../../server/session/dir-session";
+import { grokSurvivorCandidates, pickDirSession, survivorCandidates, type DirSessionCandidate, type SurvivorLog } from "../../../server/session/dir-session";
 import type { AgentConversation } from "../../../server/session/agent-conversations";
 
 const candidate = (over: Partial<DirSessionCandidate> & { id: string }): DirSessionCandidate => ({
@@ -103,5 +103,37 @@ describe("survivorCandidates", () => {
     const survivor = survivorCandidates("/wt/fix-login", logs([record()]), facts())[0];
     const picked = pickDirSession([candidate({ id: "disk", mtime: 99 }), survivor]);
     expect(picked?.id).toBe("key-1");
+  });
+});
+
+// grok's survivors, found by probing its cwd-partitioned store rather than a conversation log —
+// grok keeps none: the session key IS its conversation id. Excluded from the log pass, a grok
+// session that outlived its pty read as "no session here" and the worktree admitted a second
+// agent beside it (#1534 review).
+describe("grokSurvivorCandidates", () => {
+  const grokFacts = (over: Partial<Parameters<typeof grokSurvivorCandidates>[0]> = {}): Parameters<typeof grokSurvivorCandidates>[0] => ({
+    running: new Set(["g-1"]),
+    liveHere: () => false,
+    userSession: () => true,
+    attached: () => false,
+    conversationInDir: (id) => id === "g-1",
+    now: 42,
+    ...over,
+  });
+
+  it("names a running survivor whose conversation lives in this directory", () => {
+    expect(grokSurvivorCandidates(grokFacts())).toEqual([{ id: "g-1", live: true, mtime: 42, agent: "grok", attached: false }]);
+  });
+
+  it("ignores a key the store does not tie to this directory", () => {
+    expect(grokSurvivorCandidates(grokFacts({ conversationInDir: () => false }))).toEqual([]);
+  });
+
+  it("leaves a session with a live pty to the live pass", () => {
+    expect(grokSurvivorCandidates(grokFacts({ liveHere: () => true }))).toEqual([]);
+  });
+
+  it("excludes helper sessions, like every other pass", () => {
+    expect(grokSurvivorCandidates(grokFacts({ userSession: () => false }))).toEqual([]);
   });
 });

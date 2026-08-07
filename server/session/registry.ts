@@ -544,6 +544,25 @@ function conversationLog(fileName: string, label: string) {
 
   let persist: Promise<void> = Promise.resolve();
 
+  // Re-read the file, folding in lines appended SINCE the last read. ~/.mulmoterminal is shared by
+  // every MulmoTerminal process on the machine, and a hydration done once at boot never sees a
+  // session another process started later — its tmux session is visible to an occupancy check, but
+  // nothing here ties the key to a directory, so the check reads the worktree as free (#1534
+  // review). Whole-file rather than offset-tracked: the logs are a few KB and append-only, and
+  // `hydrateAgentConversationInto` already makes a replay idempotent (newest line wins, own writes
+  // protected by `writtenIds`).
+  async function refresh(): Promise<void> {
+    await hydrated;
+    try {
+      await forEachJsonlRecord(file, (parsed) => {
+        const record = agentConversationRecord(parsed, isValidSessionId);
+        if (record) hydrateAgentConversationInto(conversations, writtenIds, record);
+      });
+    } catch {
+      // absent / unreadable => nothing new to fold in
+    }
+  }
+
   function remember(sessionId: string, conversationId: string, cwd: string): void {
     if (!isValidSessionId(sessionId) || !isValidSessionId(conversationId) || !cwd) return;
     const known = conversations.get(sessionId);
@@ -560,7 +579,7 @@ function conversationLog(fileName: string, label: string) {
       .catch((e) => console.error(`[${label}] failed to persist: ${messageOf(e)}`));
   }
 
-  return { conversations, hydrated, remember };
+  return { conversations, hydrated, remember, refresh };
 }
 
 // Seed a claimed set with every conversation the log already maps, once it is read. The claims are
@@ -599,6 +618,13 @@ export const codexRollouts: ReadonlyMap<string, AgentConversation> = codexLog.co
 export const codexRolloutsHydrated = codexLog.hydrated;
 /** Map a session to the codex rollout it is running, and persist it. */
 export const rememberCodexRollout = codexLog.remember;
+
+/** Fold in conversation-log lines appended by ANOTHER MulmoTerminal process since our last read —
+ *  what an occupancy check calls before matching tmux survivors against the maps, so a session a
+ *  second process started is not read as "no record ties this key to a directory". */
+export const refreshAgentConversations = async (): Promise<void> => {
+  await Promise.all([museLog.refresh(), antigravityLog.refresh(), codexLog.refresh()]);
+};
 
 // The custom-agent mapping's own log (#1414). Same shape as the memos below and kept for the same
 // reason: it must survive reap and a restart, because the transcript it describes does.

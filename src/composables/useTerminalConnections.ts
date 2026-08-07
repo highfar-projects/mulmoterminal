@@ -738,12 +738,15 @@ export function attach(key: string, target: ConnTarget, handlers: ConnHandlers, 
   // pairing back into the persisted grid (#1533). A view with no opinion (sessionId null — a fresh
   // launch, or a parent that never learned the id) keeps the reuse: for a remount of the same cell
   // that replay is the repair path, and this guard must not break it.
-  const inherited = !created && target.sessionId !== null && c.knownSessionId !== null && c.knownSessionId !== target.sessionId;
+  // A slot that has not learned an id yet is a mismatch too, not a blank slate (review on #1534):
+  // it was created for a FRESH launch whose socket may still be connecting, and its `session`
+  // frame — the old cell's — would land on whatever view holds the slot now. Only a view with no
+  // opinion of its own (sessionId null) keeps the reuse.
+  const inherited = !created && target.sessionId !== null && c.knownSessionId !== target.sessionId;
   if (inherited) {
-    console.warn(`[terminal] slot ${key} runs session ${c.knownSessionId} but the view asked for ${target.sessionId} — reconnecting instead of reusing`);
-    c.knownSessionId = target.sessionId;
-    c.knownCwd = null;
-    c.reconnectAttempts = 0;
+    const held = c.knownSessionId ?? "a fresh session still starting";
+    console.warn(`[terminal] slot ${key} holds ${held} but the view asked for ${target.sessionId} — reconnecting instead of reusing`);
+    Object.assign(c, { knownSessionId: target.sessionId, knownCwd: null, reconnectAttempts: 0, sawExit: false });
   }
   c.released = false;
   c.handlers = handlers;

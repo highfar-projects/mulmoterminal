@@ -142,4 +142,15 @@ describe("a slot inherited by a view asking for a different session", () => {
     expect(FakeWebSocket.instances).toHaveLength(1);
     expect(seen).toEqual(["s-1"]);
   });
+
+  // A slot that has not learned an id is not a blank slate (review on #1534): it belongs to a
+  // fresh launch whose socket may still be connecting, and its `session` frame — the OLD cell's —
+  // would land on whatever view holds the slot. A view naming a concrete session reconnects.
+  it("reconnects when the inherited slot has not learned a session yet", () => {
+    conn.attach(KEY, withSession(null), {}, document.createElement("div")); // a fresh launch's slot
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    conn.attach(KEY, withSession("claude-2"), {}, document.createElement("div"));
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(FakeWebSocket.instances.at(-1)?.url).toContain("session=claude-2");
+  });
 });

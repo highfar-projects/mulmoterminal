@@ -13,15 +13,14 @@ import { isTerminalAgent, type TerminalAgent } from "../../common/sessionAgent.j
 import { isProbeSessionId } from "../agents/probe-session.js";
 import type { AgentConversation } from "./agent-conversations.js";
 import { projectSessionsDir } from "./project-dir.js";
+import { grokConversationExists, grokSessionsRoot } from "../agents/grok-session.js";
 import {
   antigravityConversations,
-  antigravityConversationsHydrated,
   codexRollouts,
-  codexRolloutsHydrated,
   isBackgroundSession,
   museConversations,
-  museConversationsHydrated,
   ptys,
+  refreshAgentConversations,
   translationWorkerIds,
 } from "./registry.js";
 import { collectOnDiskSessionStats, safeReaddir } from "./session-reads.js";
@@ -184,15 +183,41 @@ async function transcriptCandidatesEitherSpelling(
   return [...new Map(found.flat().map((candidate) => [candidate.id, candidate])).values()];
 }
 
+/**
+ * grok's survivors, by PROBE rather than log: grok keeps no conversation log to consult — the
+ * session key IS grok's own conversation id, and its store is partitioned by directory — so a
+ * surviving key is tied to a directory by asking the store whether that conversation exists there.
+ * Without this pass a grok session that outlived its pty read as "no session here", and the
+ * worktree admitted a second agent beside it (#1534 review). Pure over `conversationInDir` so the
+ * selection can be pinned.
+ */
+export function grokSurvivorCandidates(facts: {
+  running: ReadonlySet<string>;
+  liveHere: (id: string) => boolean;
+  userSession: (id: string) => boolean;
+  attached: (id: string) => boolean;
+  conversationInDir: (id: string) => boolean;
+  now: number;
+}): DirSessionCandidate[] {
+  return [...facts.running].flatMap((id) => {
+    if (facts.liveHere(id) || !facts.userSession(id) || !facts.conversationInDir(id)) return [];
+    return [{ id, live: true, mtime: facts.now, agent: "grok" as const, attached: facts.attached(id) }];
+  });
+}
+
 /** `tmuxCounts`, `running` and `now` are passed in so a whole list of directories is answered from
  *  one `list-clients` call, one `list-sessions` call and one clock read — `runningSessionKeys()`
  *  is the value callers hand over. */
 export async function dirSession(dir: string, tmuxCounts: Map<string, number> | null, now: number, running: ReadonlySet<string>): Promise<DirSession | null> {
   const canonical = canonicalPath(dir);
   const live = livePtyCandidates(canonical, tmuxCounts, now);
-  // The logs hydrate once at boot; a listing taken before that would miss every survivor from a
-  // previous run — the very sessions the pass exists for (the same wait survivingSessions takes).
-  await Promise.all([codexRolloutsHydrated, antigravityConversationsHydrated, museConversationsHydrated]);
+  // Re-read, not merely await-hydration: ~/.mulmoterminal is shared by every MulmoTerminal process
+  // on the machine, and a mapping appended by ANOTHER process after our boot ties a surviving tmux
+  // key to this directory too — hydrated-once maps would read that session's worktree as free
+  // (#1534 review).
+  await refreshAgentConversations();
+  const liveHere = (id: string): boolean => ptys.has(id);
+  const attached = (id: string): boolean => sessionAttached(id, tmuxCounts);
   const survivors = survivorCandidates(
     canonical,
     [
@@ -200,7 +225,18 @@ export async function dirSession(dir: string, tmuxCounts: Map<string, number> | 
       { agent: "antigravity", records: antigravityConversations },
       { agent: "muse", records: museConversations },
     ],
-    { running, liveHere: (id) => ptys.has(id), userSession: isUserSession, attached: (id) => sessionAttached(id, tmuxCounts), now },
+    { running, liveHere, userSession: isUserSession, attached, now },
   );
-  return pickDirSession([...live, ...survivors, ...(await transcriptCandidatesEitherSpelling(dir, tmuxCounts, running))]);
+  // Both spellings for the probe, like the transcript pass: grok records the cwd spelling the
+  // session was handed, and a worktree reached through a symlink is still the same directory.
+  const spellings = [...new Set([path.resolve(dir), canonical])];
+  const grokSurvivors = grokSurvivorCandidates({
+    running,
+    liveHere,
+    userSession: isUserSession,
+    attached,
+    conversationInDir: (id) => spellings.some((spelling) => grokConversationExists(grokSessionsRoot(), spelling, id)),
+    now,
+  });
+  return pickDirSession([...live, ...survivors, ...grokSurvivors, ...(await transcriptCandidatesEitherSpelling(dir, tmuxCounts, running))]);
 }
