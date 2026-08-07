@@ -17,6 +17,7 @@
 // no tools with nothing logged, and one that carries groups the directory never registered hands a
 // cell tools its neighbours were not given.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { cleanupSessionSettings } from "../../../server/session/session-settings.js";
 
 const ID = "11111111-2222-4333-8444-555555555555";
 const CWD = "/home/me/project";
@@ -24,10 +25,13 @@ const CWD = "/home/me/project";
 let reattaching = false;
 const syncMuseMcpPlugin = vi.fn();
 const spawned: { env: Record<string, string> | undefined }[] = [];
+// The argv each spawn really handed the pty — where the seed wiring is visible end to end.
+const spawnedArgv: string[][] = [];
 
 vi.mock("../../../server/session/pty-spawn.js", () => ({
-  ptySpawn: (_id: string, _bin: string, _args: string[], _cwd: string, _tmux: boolean, options: { env?: Record<string, string> }) => {
+  ptySpawn: (_id: string, _bin: string, args: string[], _cwd: string, _tmux: boolean, options: { env?: Record<string, string> }) => {
     spawned.push({ env: options?.env });
+    spawnedArgv.push(args);
     return { term: fakeTerm(), tmux: true, reattached: reattaching };
   },
   ptyWouldReattach: () => reattaching,
@@ -153,5 +157,25 @@ describe("spawnMusePty and the session's entitlement", () => {
     spawn(["render"]);
     expect(lastEnv().MULMOTERMINAL_SESSION_ID).toBeUndefined();
     expect(lastEnv().MULMOTERMINAL_TOOL_GROUPS).toBeUndefined();
+  });
+});
+
+// The seed wiring, through the REAL spawner rather than through the argument builder: a test that
+// calls seedPromptArgument itself would still pass if this spawner stopped calling it (#1518).
+//
+// Forced to win32 so the branch under test is the one that cannot work — on this machine's own
+// platform a multi-line seed is passed straight through and there is nothing to see.
+describe("the seed a Windows spawn hands the pty", () => {
+  it("is a single-line file reference, never the multi-line seed", () => {
+    const platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+    try {
+      createMuseSpawner(deps).spawnMusePty(ID, null, null, CWD, { mcpGroups: [] as never, initialPrompt: 'Use the "x" skill.\n\nand do the thing' });
+      const args = spawnedArgv.at(-1) ?? [];
+      expect(args.filter((arg) => /[\0\r\n]/.test(arg))).toEqual([]);
+      expect(args.some((arg) => arg.includes("-seed.txt"))).toBe(true);
+    } finally {
+      platform.mockRestore();
+      cleanupSessionSettings(ID);
+    }
   });
 });
