@@ -47,6 +47,13 @@ describe("wrongEndpointReason", () => {
 
 describe("settledEntry", () => {
   const fakeWs = () => ({ close: vi.fn() }) as unknown as WebSocket & { close: ReturnType<typeof vi.fn> };
+  // An OPEN socket, because `closeWithError` sends nothing to one that is not — a refusal tested
+  // against the bare `fakeWs` above would pass while delivering no error frame at all.
+  const fakeOpenWs = () =>
+    ({ close: vi.fn(), send: vi.fn(), OPEN: 1, readyState: 1 }) as unknown as WebSocket & {
+      close: ReturnType<typeof vi.fn>;
+      send: ReturnType<typeof vi.fn>;
+    };
   const fakeEarly = () => ({ discard: vi.fn(), release: vi.fn() }) as unknown as EarlyFrames & { discard: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
@@ -71,6 +78,29 @@ describe("settledEntry", () => {
   it("proceeds to a spawn when there never was an entry", () => {
     const settled = settledEntry(fakeWs(), "claude", SID, false, fakeEarly());
     expect(settled).toEqual({ entry: undefined });
+  });
+
+  // The branch the other four do not reach: an ERROR frame, not a plain close. A plain close has
+  // the client retry the same mismatched id forever with backoff, and the mismatch is persisted
+  // state only the user can act on — so the frame is what ends the loop and says why.
+  it("refuses a mismatched agent with an error frame, not a plain close", () => {
+    ptys.set(SID, entryOf("muse"));
+    const ws = fakeOpenWs();
+    const early = fakeEarly();
+    expect(settledEntry(ws, "claude", SID, true, early)).toBeNull();
+    expect(ws.send).toHaveBeenCalledWith(expect.stringContaining('"type":"error"'));
+    expect(ws.send).toHaveBeenCalledWith(expect.stringContaining("running muse, not claude"));
+    expect(ws.close).toHaveBeenCalledOnce();
+    expect(early.discard).toHaveBeenCalledOnce();
+  });
+
+  // The mismatch is judged on the entry THIS turn finds, so it fires for one a competing connect
+  // spawned under the id while this connect was being admitted — not only for a resolve-time one.
+  it("refuses a mismatched entry that appeared where the resolve saw none", () => {
+    ptys.set(SID, entryOf("codex"));
+    const ws = fakeOpenWs();
+    expect(settledEntry(ws, "launch", SID, false, fakeEarly())).toBeNull();
+    expect(ws.send).toHaveBeenCalledWith(expect.stringContaining("running codex, not launch"));
   });
 
   // The reap fired mid-admission: the snapshot is a corpse. A PLAIN close, not an error frame —

@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { grokSurvivorCandidates, pickDirSession, survivorCandidates, type DirSessionCandidate, type SurvivorLog } from "../../../server/session/dir-session";
+import { canonicalPath } from "../../../server/infra/canonical-path";
 import type { AgentConversation } from "../../../server/session/agent-conversations";
 
 const candidate = (over: Partial<DirSessionCandidate> & { id: string }): DirSessionCandidate => ({
@@ -54,6 +55,14 @@ describe("pickDirSession", () => {
 // key to a directory. Reading it as "no session here" is how a worktree admitted a second agent
 // beside a running one, and how a conversation ended up with two backends (#1533).
 describe("survivorCandidates", () => {
+  // The `dir` argument is CANONICAL by contract — `dirSession` hands it `canonicalPath(dir)` and
+  // this pass canonicalizes only the record's side — so the spec has to canonicalize it too. A raw
+  // POSIX literal compared `/wt/fix-login` against Windows's `D:\wt\fix-login`, which made every
+  // case here return nothing: the two positive cases failed, and the four negative ones passed for
+  // the wrong reason (#1539). The RECORD keeps its raw spelling, which is what the log really
+  // holds.
+  const WORKTREE = canonicalPath("/wt/fix-login");
+  const ELSEWHERE = canonicalPath("/wt/other");
   const record = (over: Partial<AgentConversation> = {}): AgentConversation => ({
     sessionId: "key-1",
     conversationId: "conv-1",
@@ -74,33 +83,41 @@ describe("survivorCandidates", () => {
   });
 
   it("names a running survivor as a LIVE candidate of its own agent", () => {
-    const found = survivorCandidates("/wt/fix-login", logs([record()]), facts());
+    const found = survivorCandidates(WORKTREE, logs([record()]), facts());
     expect(found).toEqual([{ id: "key-1", live: true, mtime: 42, agent: "codex", attached: false }]);
   });
 
   it("ignores a session that is not running — a dead key is the transcript passes' business", () => {
-    expect(survivorCandidates("/wt/fix-login", logs([record()]), facts({ running: new Set() }))).toEqual([]);
+    expect(survivorCandidates(WORKTREE, logs([record()]), facts({ running: new Set() }))).toEqual([]);
   });
 
   // The live pass already names it, better: its pty knows the directory it ACTUALLY runs in,
   // where the log knows the one it was claimed in.
   it("leaves a session with a live pty to the live pass", () => {
-    expect(survivorCandidates("/wt/fix-login", logs([record()]), facts({ liveHere: () => true }))).toEqual([]);
+    expect(survivorCandidates(WORKTREE, logs([record()]), facts({ liveHere: () => true }))).toEqual([]);
   });
 
   it("ignores another directory's survivor", () => {
-    expect(survivorCandidates("/wt/other", logs([record()]), facts())).toEqual([]);
+    expect(survivorCandidates(ELSEWHERE, logs([record()]), facts())).toEqual([]);
+  });
+
+  // The record holds whatever spelling the spawn was handed, so the match has to survive one — and
+  // a spec whose two sides are the same literal cannot tell a real comparison from one that always
+  // answers the same way, which is exactly how the Windows failure hid (#1539).
+  it("matches a record whose cwd spells the directory another way", () => {
+    const found = survivorCandidates(WORKTREE, logs([record({ cwd: "/wt/other/../fix-login" })]), facts());
+    expect(found.map((c) => c.id)).toEqual(["key-1"]);
   });
 
   it("excludes helper sessions, like every other pass", () => {
-    expect(survivorCandidates("/wt/fix-login", logs([record()]), facts({ userSession: () => false }))).toEqual([]);
+    expect(survivorCandidates(WORKTREE, logs([record()]), facts({ userSession: () => false }))).toEqual([]);
   });
 
   // The point of the pass meeting the point of the rank: the surviving backend must beat a newer
   // transcript, or the worktree row offers the conversation written to most recently while a
   // different one is still running (#1533).
   it("outranks a merely recent transcript once picked with", () => {
-    const survivor = survivorCandidates("/wt/fix-login", logs([record()]), facts())[0];
+    const survivor = survivorCandidates(WORKTREE, logs([record()]), facts())[0];
     const picked = pickDirSession([candidate({ id: "disk", mtime: 99 }), survivor]);
     expect(picked?.id).toBe("key-1");
   });
