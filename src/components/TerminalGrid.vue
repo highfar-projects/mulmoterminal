@@ -985,12 +985,22 @@ watch(
 <template>
   <div ref="stage" class="stage" :class="{ zoomed, listmode: listMode, flipping: flippingUids.size > 0 }" :style="flipVars" @focusin="onFocusIn">
     <!-- Cockpit roster: a tall text row per cell (status / dir / memo / summary / prompt / latest
-         reply). Click a row to swap which terminal is enlarged. -->
+         reply). Click a row to swap which terminal is enlarged.
+         The 9px gap is 5px of visible channel plus the 2px ring every row paints on each side
+         (rosterAlertClasses). At the old 5px two neighbours' rings came within a pixel of each
+         other and the column read as one fused block.
+
+         `pr-0` is deliberate, and the right gutter is on the ROWS instead (`mr-1.5`, named by every
+         branch in rosterAlertClasses). The expanded row names none, so it ends flush with this
+         aside's edge and butts against the splitter — the shape that says it IS the terminal beside
+         it. Putting the gutter back here would reinstate the 6px of `bg-deep` that made the row
+         read as a card floating near the edge, and the negative margin that used to cancel it
+         silently mis-aligned the moment this padding changed. -->
     <aside
       v-if="zoomed && listMode"
       ref="roster"
       data-testid="cockpit"
-      class="flex min-w-0 shrink-0 grow-0 flex-col gap-[5px] overflow-y-auto bg-deep p-1.5"
+      class="flex min-w-0 shrink-0 grow-0 flex-col gap-[9px] overflow-y-auto bg-deep py-1.5 pr-0 pl-1.5"
       :style="{ flexBasis: `${rosterWidth}px` }"
     >
       <div
@@ -1000,7 +1010,7 @@ watch(
         role="button"
         :tabindex="0"
         data-testid="cockpit-row"
-        class="flex shrink-0 cursor-pointer flex-col gap-1 overflow-hidden rounded-lg border border-l-[3px] px-2.5 py-2 text-left text-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4a9eff]"
+        class="flex shrink-0 cursor-pointer flex-col gap-1 overflow-hidden rounded-lg border px-2.5 py-2 text-left text-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4a9eff]"
         :class="rosterAlertClass(row.status, { expanded: row.uid === expandedUid, blink: rosterBlink, parked: row.parked })"
         @click="row.uid !== expandedUid && emit('toggle-expand', row.uid)"
         @keydown.enter.self.prevent="row.uid !== expandedUid && emit('toggle-expand', row.uid)"
