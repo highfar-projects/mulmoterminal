@@ -72,7 +72,13 @@ flight (#164 review)` というテストが「その窓で launch が起きう�
 - 形が一致 かつ root 未知 かつ 初回 GET が飛行中 → その GET を待ってから判定。
 
 待ちは `fetchWithTimeout` で上限が付いており、対象は worktree の形をしたパスだけなので通常の記録は
-遅延しない。`serialize` の内側に置いて書き込み順序は保つ。
+遅延しない。
+
+**待つ場所は preset の書き込みロックを取る「前」**（4 回目の Codex レビュー）。`loadConfigOnce()` は
+最後に `migrateLegacyRecents()` を await し、その migration は**同じ serializer** を要求する。ロックを
+保持したまま config を待つと、record → config → migration → record の循環で**デッドロック**する。
+legacy recents を持つアップグレードユーザーだけが踏む経路で、初回ロードが丸ごと固まる。回帰テストは
+修正前のコードで 15 秒タイムアウトすることを確認済み。
 
 包含判定は `common/dirPathKey.ts`（ブラウザ安全、`node:path` 不使用、両セパレータと `.`/`..` を
 畳む）の上に組む。symlink と Windows の大文字小文字は畳めないが、root も cwd も同じサーバ由来なので

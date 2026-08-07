@@ -185,17 +185,20 @@ function createPresetMutations(presets: Ref<CwdPreset[]>, savePresets: (next: Cw
   // read, so an entry a previous version recorded stays exactly where the user left it: the chip's
   // close button is theirs to press, and silently dropping saved config is not this function's
   // call. It also means a worktree already in the list stops being bumped to the front.
-  function recordPreset(path: string | null): Promise<void> {
-    if (!path) return Promise.resolve();
+  async function recordPreset(path: string | null): Promise<void> {
+    if (!path) return;
+    // Decided BEFORE the write lock is taken, never while holding it: `loadConfigOnce` ends with
+    // `migrateLegacyRecents`, which needs that same lock, so waiting for the load from inside it
+    // deadlocks an upgrading user's first load outright — the import and the record both hang
+    // (Codex on #1543).
+    //
+    // A path without the worktree SHAPE cannot be one of ours whatever the root turns out to be, so
+    // it never waits — which is what keeps a launch during the initial GET writing immediately, a
+    // guarantee of its own (#164). Only a shape-matching path waits, and only while the config
+    // carrying the root is actually in flight; `fetchWithTimeout` bounds it.
+    if (worktreeLabel(path) !== null && worktreesRoot.value === null) await configLoadInFlight;
+    if (isManagedWorktreePath(path, worktreesRoot.value)) return;
     return serialize(async () => {
-      // A path without the worktree SHAPE cannot be one of ours whatever the root turns out to be,
-      // so it is written straight away — which is what keeps a launch during the initial GET from
-      // being delayed, and that write is a guarantee of its own (#164). Only a shape-matching path
-      // waits, and only while the config carrying the root is actually in flight: deciding without
-      // it would record a worktree that a moment later we would have known to skip (Codex on
-      // #1543). Inside `serialize`, so the queue stays ordered; `fetchWithTimeout` bounds the wait.
-      if (worktreeLabel(path) !== null && worktreesRoot.value === null) await configLoadInFlight;
-      if (isManagedWorktreePath(path, worktreesRoot.value)) return;
       if (presets.value[0]?.path === path) return; // already most-recent — nothing to reorder
       const existing = presets.value.find((p) => p.path === path);
       const entry = existing ?? { label: presetLabel(path), path };

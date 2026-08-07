@@ -199,6 +199,33 @@ describe("useAppConfig — auto preset recording", () => {
     expect(presets.value).toEqual([]);
   });
 
+  // The wait above must happen BEFORE the preset write lock is taken. `loadConfig` finishes with
+  // `migrateLegacyRecents`, which needs that same lock — so waiting from inside it made the load
+  // and the record wait on each other forever, and only an UPGRADING user (one with legacy recents
+  // to import) ever hit it (Codex on #1543). Without the fix this test hangs to its timeout.
+  it("does not deadlock the initial load of an upgrading user who launches a worktree", async () => {
+    localStorage.setItem("recent_dirs_v1", JSON.stringify(["/legacy/one"]));
+    let releaseGet: () => void = () => {};
+    const getGate = new Promise<void>((r) => {
+      releaseGet = r;
+    });
+    globalThis.fetch = vi.fn(async (_url: string, init?: { body?: string }) => {
+      if (!init?.body) {
+        await getGate;
+        return { ok: true, json: async () => ({ cwd: "/w", worktreesRoot: WORKTREES_ROOT, cwdPresets: [] }) };
+      }
+      const body = JSON.parse(init.body);
+      return { ok: true, json: async () => ({ cwdPresets: body.cwdPresets ?? [] }) };
+    }) as unknown as typeof fetch;
+    const { presets, loadConfig, recordPreset } = useAppConfig();
+    const loading = loadConfig();
+    const recording = recordPreset(`${WORKTREES_ROOT}/myrepo-1a2b3c4d/fix-bug`);
+    releaseGet();
+    await Promise.all([loading, recording]);
+    // The legacy import completed; the worktree was still refused.
+    expect(presets.value.map((p) => p.path)).toEqual(["/legacy/one"]);
+  });
+
   it("serializes concurrent records so neither write clobbers the other (#163 review)", async () => {
     // A slow POST means two un-serialized records would both read the empty list and
     // the second would overwrite the first. Serialization keeps both.
