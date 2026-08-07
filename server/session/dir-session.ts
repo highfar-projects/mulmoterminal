@@ -210,12 +210,15 @@ export function grokSurvivorCandidates(facts: {
  *  is the value callers hand over. */
 export async function dirSession(dir: string, tmuxCounts: Map<string, number> | null, now: number, running: ReadonlySet<string>): Promise<DirSession | null> {
   const canonical = canonicalPath(dir);
-  const live = livePtyCandidates(canonical, tmuxCounts, now);
   // Re-read, not merely await-hydration: ~/.mulmoterminal is shared by every MulmoTerminal process
   // on the machine, and a mapping appended by ANOTHER process after our boot ties a surviving tmux
   // key to this directory too — hydrated-once maps would read that session's worktree as free
   // (#1534 review).
   await refreshAgentConversations();
+  // AFTER the await, like every read below it: a pty spawned during the refresh would otherwise be
+  // missing from a pre-await snapshot while `liveHere` excludes it from the survivor passes too —
+  // gone from both, and the directory reads as free (CodeRabbit on #1534).
+  const live = livePtyCandidates(canonical, tmuxCounts, now);
   const liveHere = (id: string): boolean => ptys.has(id);
   const attached = (id: string): boolean => sessionAttached(id, tmuxCounts);
   const survivors = survivorCandidates(
