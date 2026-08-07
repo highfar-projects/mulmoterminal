@@ -3,8 +3,9 @@
 //
 // After a server restart `ptys` is empty while tmux still holds `mt-<session>` — the state every
 // `!live` test misreads as a fresh spawn. The codex handler read the directory's tool groups on
-// that path (from a request cwd that is often the DEFAULT workspace) and built an MCP argv that
-// `tmux new-session -A` then discarded. And claude was the one agent endpoint that never asked
+// that path from the REQUEST cwd, which a restart reconnect often leaves at the default
+// workspace — another directory's switches, exactly the wrong-cwd read #1514 fixed on the
+// directory-MCP handler. And claude was the one agent endpoint that never asked
 // clientStillConnected after its admission awaits, so a client that left mid-admission still got
 // a pty — spawned after the socket's close event, which no later close handler can reap.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -16,6 +17,8 @@ import type { WebSocket } from "ws";
 const mocks = vi.hoisted(() => ({
   // Whether tmux still holds the requested session — the restart-survivor case.
   tmuxHas: false,
+  // What the dev-terminal cwd log remembers for the session, or null for one it never saw.
+  rememberedCwd: null as string | null,
   // Lets a test simulate the client leaving inside an admission await.
   onEnsureWorktreeEnv: () => {},
 }));
@@ -23,7 +26,7 @@ const mocks = vi.hoisted(() => ({
 const ptys = new Map<string, unknown>();
 vi.mock("../../../server/session/registry.js", () => ({
   ptys,
-  sessionCwd: () => null,
+  sessionCwd: () => mocks.rememberedCwd,
   devTerminalCwdsHydrated: Promise.resolve(),
   antigravityConversations: new Map(),
   antigravityConversationsHydrated: Promise.resolve(),
@@ -103,6 +106,7 @@ beforeEach(() => {
   ptys.clear();
   vi.clearAllMocks();
   mocks.tmuxHas = false;
+  mocks.rememberedCwd = null;
   mocks.onEnsureWorktreeEnv = () => {};
   registeredGuiMcpGroups.mockResolvedValue(["render"]);
   dir = mkdtempSync(path.join(tmpdir(), "mt-ws-restart-"));
@@ -113,18 +117,21 @@ afterEach(() => {
 });
 
 describe("/ws/codex after a server restart (tmux survivor, no live pty)", () => {
-  it("keeps the id, passes no resume id, and looks up no directory groups", async () => {
+  // A restart reconnect often carries no ?cwd= at all, which resolves to the DEFAULT workspace —
+  // so the groups must come from where the session really runs (the remembered cwd, #1514's
+  // shape). Still read rather than skipped: if tmux dies between this handler and the spawn, the
+  // fresh codex that ptySpawn's fallback starts must not come up with no GUI tools at all.
+  it("keeps the id, passes no resume id, and reads the groups from the session's own cwd", async () => {
     mocks.tmuxHas = true;
+    mocks.rememberedCwd = "/where-it-really-runs";
     await handleCodexConnection(makeDeps(), fakeWs() as unknown as WebSocket, request(`&gui=0&session=${SID}`));
-    // The attach ignores whatever argv a group lookup would build, and the request cwd it would
-    // read from is untrustworthy on this path — so the lookup must not happen at all.
-    expect(registeredGuiMcpGroups).not.toHaveBeenCalled();
-    expect(spawnCodexPty).toHaveBeenCalledWith(SID, expect.anything(), null, dir, false, { mcpGroups: [] });
+    expect(registeredGuiMcpGroups).toHaveBeenCalledWith("/where-it-really-runs", expect.anything());
+    expect(spawnCodexPty).toHaveBeenCalledWith(SID, expect.anything(), null, dir, false, { mcpGroups: ["render"] });
   });
 
-  it("still reads the directory's groups for a genuinely fresh grid cell", async () => {
+  it("reads the directory's groups from the request cwd for a genuinely fresh grid cell", async () => {
     await handleCodexConnection(makeDeps(), fakeWs() as unknown as WebSocket, request("&gui=0"));
-    expect(registeredGuiMcpGroups).toHaveBeenCalledTimes(1);
+    expect(registeredGuiMcpGroups).toHaveBeenCalledWith(dir, expect.anything());
     expect(spawnCodexPty).toHaveBeenCalledWith(expect.any(String), expect.anything(), null, dir, false, { mcpGroups: ["render"] });
   });
 });

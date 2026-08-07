@@ -25,11 +25,27 @@ export interface CodexActivityDeps {
    *  first turn isn't missed; a resumed one would otherwise REPLAY every past turn and
    *  leave the cell flagged from history rather than from what is happening now. */
   startAtEnd: boolean;
+  /** Reattach only (with startAtEnd): if the skipped content leaves a turn OPEN — its last
+   *  boundary is a start without an end — report that one boundary before tailing. The
+   *  process behind a reattach is still RUNNING, so an open turn is current fact, not
+   *  history: without this a server restarted mid-turn shows an idle cell until the turn's
+   *  END arrives (#1538 review). A trailing COMPLETED stays unreported — re-flagging a
+   *  days-old finish is the replay startAtEnd exists to prevent. And it must stay false
+   *  for a cold resume, where the process is NEW: a trailing start there means the OLD
+   *  process died mid-turn, and the resumed one is idle. */
+  restoreOpenTurn?: boolean;
   sleep: (ms: number) => Promise<void>;
 }
 
 export async function watchCodexActivity(deps: CodexActivityDeps): Promise<void> {
   let offset = deps.startAtEnd ? await startingOffset(deps) : 0;
+  // Against the SAME offset the tail starts from, so a boundary cannot fall between the
+  // restore read and the first poll — it is either in [0, offset) and restored, or after
+  // and tailed.
+  if (deps.restoreOpenTurn && offset > 0) {
+    const skipped = turnBoundaries((await deps.readSlice(0, offset)).split("\n").filter((l) => l.trim()));
+    if (skipped.at(-1) === "started") deps.onBoundary("started");
+  }
   let pending = "";
   while (deps.isAlive()) {
     await deps.sleep(CODEX_ACTIVITY_POLL_MS);

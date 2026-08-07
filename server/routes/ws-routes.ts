@@ -760,13 +760,20 @@ export async function handleCodexConnection(deps: WsRouteDeps, ws: WebSocket, re
 
     // A grid cell's GUI tools are whatever its DIRECTORY registered — the same switches claude's
     // cells read, in the same file. claude picks them up itself; codex is handed resolved URLs at
-    // spawn, so the answer has to be read here, before the pty exists. Only for a spawn: a reattach
-    // keeps the tools its running process was started with. BOTH kinds of reattach (#1536): a
-    // tmux-only one — a reconnect after a server restart, where `live` is absent — starts no
-    // process either, and it often carries no `?cwd=` at all, so this read would answer for the
-    // DEFAULT workspace; the argv built from it is discarded by `tmux new-session -A` anyway.
-    // Same predicate reserveWorktreeEnvForSpawn asks, for the same reason.
-    const mcpGroups = !attachGuiMcp && !live && !ptyWouldReattach(sessionId, true) ? await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []) : [];
+    // spawn, so the answer has to be read here, before the pty exists. Not for a live reattach,
+    // which keeps the tools its running process was started with.
+    //
+    // Against the SESSION's own directory rather than the request's (#1536) — the same shape the
+    // directory-MCP handler took for #1514: `live` is absent for a tmux-only reattach as well as
+    // for a spawn — a reconnect after a server restart — and such a reconnect often carries no
+    // `?cwd=` at all, which resolves to the DEFAULT workspace. On a real reattach the argv this
+    // builds is discarded by `tmux new-session -A`; it is still read rather than skipped on a
+    // ptyWouldReattach probe, because the tmux session can die between that probe and the spawn's
+    // own — and the fresh codex that fallback starts must not come up with no GUI tools at all
+    // (CodeRabbit on #1538).
+    await devTerminalCwdsHydrated;
+    const groupsCwd = live?.cwd ?? sessionCwd(sessionId) ?? cwd;
+    const mcpGroups = !attachGuiMcp && !live ? await registeredGuiMcpGroups(groupsCwd, TOOL_GROUPS).catch(() => []) : [];
     if (!clientStillConnected(ws, "codex", sessionId, early)) return;
 
     const startFailureMessage = startFailureMessageFor("codex");

@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   // What ptySpawn reports back — the reattached flag IS the case under test.
   reattached: false,
   argv: [] as string[][],
-  tracked: [] as { sessionId: string; file: string; startAtEnd: boolean }[],
+  tracked: [] as { sessionId: string; file: string; mode: unknown }[],
   remembered: [] as { sessionId: string; conversationId: string; cwd: string }[],
   watcherRuns: 0,
   // The hydrated session -> rollout mapping, as the WS route's awaited hydration leaves it.
@@ -51,8 +51,8 @@ vi.mock("../../../server/agents/codex-sessions.js", async (importOriginal) => ({
 }));
 
 vi.mock("../../../server/session/codex-activity-track.js", () => ({
-  trackCodexActivity: vi.fn((sessionId: string, file: string, startAtEnd: boolean) => {
-    mocks.tracked.push({ sessionId, file, startAtEnd });
+  trackCodexActivity: vi.fn((sessionId: string, file: string, mode: unknown) => {
+    mocks.tracked.push({ sessionId, file, mode });
   }),
 }));
 
@@ -96,7 +96,9 @@ describe("createCodexSpawner", () => {
 
   it("tails a resumed rollout from the end, records the mapping, and runs no watcher", () => {
     spawn()(SID, null, ROLLOUT_ID, "/w", false);
-    expect(mocks.tracked).toEqual([{ sessionId: SID, file: `/codex-root/rollout-${ROLLOUT_ID}.jsonl`, startAtEnd: true }]);
+    // No restoreOpenTurn: the resumed process is NEW, so a turn the old rollout left open is
+    // one the OLD process died inside — the resumed session is idle.
+    expect(mocks.tracked).toEqual([{ sessionId: SID, file: `/codex-root/rollout-${ROLLOUT_ID}.jsonl`, mode: { startAtEnd: true } }]);
     expect(mocks.remembered).toEqual([{ sessionId: SID, conversationId: ROLLOUT_ID, cwd: "/w" }]);
     expect(mocks.watcherRuns).toBe(0);
     expect(mocks.argv.at(-1)).toContain(ROLLOUT_ID);
@@ -109,7 +111,9 @@ describe("createCodexSpawner", () => {
     mocks.reattached = true;
     mocks.rollouts.set(SID, { sessionId: SID, conversationId: ROLLOUT_ID, cwd: "/w", startedAt: 1 });
     spawn()(SID, null, null, "/w", false);
-    expect(mocks.tracked).toEqual([{ sessionId: SID, file: `/codex-root/rollout-${ROLLOUT_ID}.jsonl`, startAtEnd: true }]);
+    // restoreOpenTurn: the surviving process may be MID-TURN right now, and tailing from the
+    // end alone would show it idle until that turn's end boundary arrives.
+    expect(mocks.tracked).toEqual([{ sessionId: SID, file: `/codex-root/rollout-${ROLLOUT_ID}.jsonl`, mode: { startAtEnd: true, restoreOpenTurn: true } }]);
     expect(mocks.watcherRuns).toBe(0);
     expect(mocks.argv.at(-1)).not.toContain("resume");
     // The mapping is already on disk with the cwd the session really runs in; a reattach request's
@@ -117,12 +121,14 @@ describe("createCodexSpawner", () => {
     expect(mocks.remembered).toEqual([]);
   });
 
-  // No mapping means the rollout was never captured before the restart. There is nothing to tail,
-  // and the appear-watcher would mis-attribute a concurrent session's rollout to this one.
-  it("arms nothing on a tmux reattach with no known rollout", () => {
+  // No mapping means the restart came before the survivor's FIRST turn — no rollout exists yet,
+  // but its first prompt may still be coming. The appear-watcher must run exactly as it does for
+  // a fresh session, or that rollout is never recorded and a later cold reconnect starts a new
+  // conversation instead of resuming this one (Codex review on #1538).
+  it("falls back to the appear-watcher on a tmux reattach with no known rollout", () => {
     mocks.reattached = true;
     spawn()(SID, null, null, "/w", false);
     expect(mocks.tracked).toEqual([]);
-    expect(mocks.watcherRuns).toBe(0);
+    expect(mocks.watcherRuns).toBe(1);
   });
 });
