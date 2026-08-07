@@ -101,6 +101,15 @@ describe("syncAntigravitySkillsConfig", () => {
     expect(fs.readFileSync(target, "utf8")).toBe("{}");
   });
 
+  // `.agents` existing as a regular FILE makes the child lstat throw ENOTDIR (`throwIfNoEntry`
+  // suppresses only missing entries) — the guard must swallow that and skip, not fail the agy
+  // spawn it runs inside (CodeRabbit on #1544).
+  it("skips quietly when .agents is a regular file", () => {
+    fs.writeFileSync(path.join(dir, ".agents"), "not a directory");
+    expect(() => syncAntigravitySkillsConfig(dir)).not.toThrow();
+    expect(fs.readFileSync(path.join(dir, ".agents"), "utf8")).toBe("not a directory");
+  });
+
   it.skipIf(process.platform === "win32")("refuses to write through a symlinked .agents directory", () => {
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), "ag-outside-"));
     try {
