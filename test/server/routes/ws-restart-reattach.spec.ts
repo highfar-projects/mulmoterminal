@@ -19,11 +19,14 @@ const mocks = vi.hoisted(() => ({
   tmuxHas: false,
   // What the dev-terminal cwd log remembers for the session, or null for one it never saw.
   rememberedCwd: null as string | null,
+  // The session ids with a claude transcript on disk — the #1537 guard's claude evidence.
+  claudeOnDisk: [] as string[],
   // Lets a test simulate the client leaving inside an admission await.
   onEnsureWorktreeEnv: () => {},
 }));
 
 const ptys = new Map<string, unknown>();
+const codexRollouts = new Map<string, unknown>();
 vi.mock("../../../server/session/registry.js", () => ({
   ptys,
   sessionCwd: () => mocks.rememberedCwd,
@@ -32,11 +35,26 @@ vi.mock("../../../server/session/registry.js", () => ({
   antigravityConversationsHydrated: Promise.resolve(),
   museConversations: new Map(),
   museConversationsHydrated: Promise.resolve(),
-  codexRollouts: new Map(),
+  codexRollouts,
   codexRolloutsHydrated: Promise.resolve(),
   customAgentSessionsHydrated: Promise.resolve(),
   markDevTerminalSession: vi.fn(),
   markAttachedSessionPlaced: vi.fn(),
+}));
+
+// The #1537 guard's other evidence probes walk the developer's real home directories; each is
+// pinned so a survivor's identity in these tests comes only from what a test declares.
+vi.mock("../../../server/session/session-reads.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/session/session-reads.js")>()),
+  claudeOnDiskSessionIds: () => new Set(mocks.claudeOnDisk),
+}));
+vi.mock("../../../server/agents/antigravity-session.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/agents/antigravity-session.js")>()),
+  antigravityConversationExists: () => false,
+}));
+vi.mock("../../../server/agents/grok-session.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/agents/grok-session.js")>()),
+  grokConversationExists: () => false,
 }));
 
 vi.mock("../../../server/infra/tmux.js", async (importOriginal) => ({
@@ -104,9 +122,11 @@ const request = (query = "") => ({ url: `/ws?cwd=${encodeURIComponent(dir)}${que
 
 beforeEach(() => {
   ptys.clear();
+  codexRollouts.clear();
   vi.clearAllMocks();
   mocks.tmuxHas = false;
   mocks.rememberedCwd = null;
+  mocks.claudeOnDisk = [];
   mocks.onEnsureWorktreeEnv = () => {};
   registeredGuiMcpGroups.mockResolvedValue(["render"]);
   dir = mkdtempSync(path.join(tmpdir(), "mt-ws-restart-"));
@@ -148,6 +168,49 @@ describe("/ws (claude) admission", () => {
 
   it("spawns for a client that stayed", async () => {
     await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request());
+    expect(spawnClaudePty).toHaveBeenCalledTimes(1);
+  });
+});
+
+// The #1537 guard, through the real handlers: a tmux-only survivor has no PtyEntry for
+// wrongEndpointReason to compare, and `tmux new-session -A` attaches whatever runs in the pane
+// while ignoring the argv — so a stale persisted cell could relabel a codex survivor as claude.
+describe("tmux survivor identity (#1537)", () => {
+  const codexEvidence = () => codexRollouts.set(SID, { sessionId: SID, conversationId: "c1", cwd: "/w", startedAt: 1 });
+
+  it("refuses, loudly, a claude reconnect to a survivor codex's evidence claims", async () => {
+    mocks.tmuxHas = true;
+    codexEvidence();
+    const ws = fakeWs();
+    await handleClaudeConnection(makeDeps(), ws as unknown as WebSocket, request(`&session=${SID}`));
+    expect(spawnClaudePty).not.toHaveBeenCalled();
+    // An error frame, not a plain close: a plain close makes the client retry the same
+    // mismatched id forever, and the defect is persisted state the user has to act on.
+    expect(ws.sent.some((frame) => frame.includes("belongs to codex, not claude"))).toBe(true);
+  });
+
+  it("refuses the reverse — a codex reconnect to a survivor with a claude transcript", async () => {
+    mocks.tmuxHas = true;
+    mocks.claudeOnDisk = [SID];
+    const ws = fakeWs();
+    await handleCodexConnection(makeDeps(), ws as unknown as WebSocket, request(`&gui=0&session=${SID}`));
+    expect(spawnCodexPty).not.toHaveBeenCalled();
+    expect(ws.sent.some((frame) => frame.includes("belongs to claude, not codex"))).toBe(true);
+  });
+
+  it("serves a survivor to its own endpoint, evidence agreeing", async () => {
+    mocks.tmuxHas = true;
+    codexEvidence();
+    await handleCodexConnection(makeDeps(), fakeWs() as unknown as WebSocket, request(`&gui=0&session=${SID}`));
+    expect(spawnCodexPty).toHaveBeenCalledTimes(1);
+  });
+
+  // Refuse-on-proof only: a shell/launcher survivor (or an agent that never reached its first
+  // turn) leaves no evidence, and locking users out of a legitimately surviving session would
+  // be worse than the mislabel this guard prevents.
+  it("attaches an evidence-less survivor as requested", async () => {
+    mocks.tmuxHas = true;
+    await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request(`&session=${SID}`));
     expect(spawnClaudePty).toHaveBeenCalledTimes(1);
   });
 });
