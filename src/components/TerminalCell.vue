@@ -99,6 +99,9 @@ const props = defineProps<
     initialCwd: string | null;
     // The persisted agent for this cell; absent (or "claude") resumes as a normal Claude session.
     initialAgent?: TerminalAgent | null | undefined;
+    // Start `initialAgent` in `initialCwd` on mount rather than opening the launcher form. Set by
+    // the grid for a cell it already knows what to run — the phone's launch request (#831).
+    autoStart?: boolean;
     defaultCwd: string | null;
     presets: CwdPreset[];
     // Configured launch commands (shell/codex/…) offered next to Claude in this launcher.
@@ -494,6 +497,15 @@ function startPickedAgent(dir: string | null) {
   if (pickedAgent.value === "shell") emit("launch", { launcher: shellLauncher(), cwd: dir });
   else launchIn(dir);
 }
+
+// The cell was opened with its agent and directory already decided (the phone's launch request),
+// so start it rather than showing the launcher for someone at the desktop to press Start.
+//
+// On MOUNT, once — never a watcher on the prop. Closing a session returns this same component to
+// the launch form without unmounting it (`teardown`), so a watcher would relaunch under the user.
+onMounted(() => {
+  if (props.autoStart && !launched.value && props.initialCwd) launchIn(props.initialCwd);
+});
 
 // Attach to a session the form listed, in the cwd those rows were fetched for (not the
 // possibly-changed input).
