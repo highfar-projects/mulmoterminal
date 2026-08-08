@@ -53,6 +53,67 @@ export const ja: Messages = {
       help: "ヘルプとユーザーガイド",
     },
 
+    launchers: {
+      intro:
+        "グリッドのセルで動かせる対話コマンドなら何でも — 開発サーバ、REPL、git の UI、モデルのブリッジなど。セルのディレクトリで、書いたとおりのコマンドが永続ターミナルとして動きます。例: {labelExample} → {commandExample}。",
+      notAnAgent:
+        "Claude / Codex / Antigravity を起動したいときは、空のセルの Agent Picker を使ってください。ランチャではセッションに必要なものが何も付きません。",
+      labelField: "ランチャのラベル",
+      labelPlaceholder: "ラベル",
+      commandField: "ランチャのコマンド",
+      commandPlaceholder: "コマンド（例: $SHELL）",
+    },
+
+    quickCommands: {
+      intro:
+        "よく送る言い回しを、スマホのターミナル表示にチップとして並べます。タップすると入力欄に入るだけで、送信ボタンを押すまで送られません。ラベルはチップの見た目なので短くしてください。例: {labelExample} → {textExample}。どれもチェックしなければ全種類に出ます。合うものだけチェックすることもできます — {gitStatus} はシェル用で、Claude 用ではありません。",
+      labelField: "定型文のラベル",
+      labelPlaceholder: "ラベル",
+      textField: "定型文の本文",
+      textPlaceholder: "入力欄に入れる文字列（例: PR作って）",
+      offerTo: "出す相手:",
+      offerToAgent: "{agent} のセッションに出す",
+      offerToNone: "（未チェック = 全種類）",
+    },
+
+    mcp: {
+      intro:
+        "{singleView}の Claude セッションが読み込む HTTP MCP サーバです（組み込みの GUI ツールに加えて）。{idKey} がサーバ名、{urlKey} が streamable-HTTP のエンドポイント。Docker サンドボックスでは {localhost} の URL は自動的に {dockerHost} 経由になります。次の Claude セッションから有効になります。",
+      singleView: "単一ビュー",
+      idField: "MCP サーバの id",
+      idPlaceholder: "id（例: weather）",
+      urlField: "MCP サーバの URL",
+      urlPlaceholder: "https://… または http://localhost:PORT/mcp",
+    },
+
+    headerChrome: {
+      intro:
+        "ターミナルのヘッダーに並ぶ操作ボタンと表示チップです。グローバルには{buttons}・{chips}があります。プロジェクト側は自分の {dirFile} で id 単位に追加・置換できるので、実際に出るのは両者をマージしたものです。",
+      builtInButtons: "組み込みのボタン",
+      noButtons: "ボタンなし（すべて削除済み）",
+      someButtons: "ボタン {count} 個",
+      builtInChips: "組み込みのチップ",
+      noChips: "チップなし（すべて削除済み）",
+      someChips: "チップ {count} 個",
+      setUp: "ヘッダーのボタンを設定する…",
+    },
+
+    models: {
+      intro:
+        "セッションを動かせる Anthropic 互換のバックエンドです（{configFile} の {providersKey} から）。ディレクトリごとに {dirFile} の {providerKey} / {modelKey} で固定できます。API キーは環境変数に置き、設定ファイルには書きません。",
+      modelCount: "モデル {count} 個",
+      keyIn: "キーは {env}",
+      notReady: "使用不可",
+      notInPicker: "ピッカーに出ません",
+      ready: "使用可",
+      noProviders: "未設定 — セッションは組み込みの既定で動きます。",
+      customTitle: "自分のやり方で Claude Code を起動する",
+      customIntro:
+        "— Claude / Codex / Antigravity / Shell と並んで Agent Picker に出ます。ランチャではありません: Claude Code 自身の引数がコマンドの後ろに付くので、他の Claude セッションと同じように再開・コスト表示・GUI ツールが効きます。",
+      noCustomAgents: "未設定。",
+      addBackend: "バックエンドを追加する…",
+    },
+
     common: {
       add: "追加",
       remove: "{name} を削除",

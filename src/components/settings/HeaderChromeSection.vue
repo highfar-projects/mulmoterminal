@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
 import { headerButtonCount, headerChipCount } from "../../composables/headerConfigSummary";
 import SkillLaunchButton from "../SkillLaunchButton.vue";
 import type { BundledSkillName } from "../../../common/bundledSkills";
@@ -12,20 +13,28 @@ import type { BundledSkillName } from "../../../common/bundledSkills";
 // user who removed every button, and saying "0" for both would hide that difference.
 defineEmits<{ (e: "launch-skill", skill: BundledSkillName): void }>();
 
-function describe(count: number | null, noun: string): string {
-  if (count === null) return `built-in ${noun}s`;
-  if (count === 0) return `no ${noun}s (all removed)`;
-  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+const { t } = useI18n();
+
+// Three states, not a count: `null` is "the key is unconfigured, so the built-in header applies",
+// and 0 is "a user removed every one" — saying "0" for both would hide that difference.
+function describe(count: number | null, kind: "Buttons" | "Chips"): string {
+  if (count === null) return t(`settings.headerChrome.builtIn${kind}`);
+  if (count === 0) return t(`settings.headerChrome.no${kind}`);
+  return t(`settings.headerChrome.some${kind}`, { count }, count);
 }
 </script>
 
 <template>
-  <p class="mb-2 mt-1.5 text-[12px] text-dim">
-    The action buttons and the read-out chips along a terminal's header. Globally you have
-    <strong class="text-fg">{{ describe(headerButtonCount, "button") }}</strong> and <strong class="text-fg">{{ describe(headerChipCount, "chip") }}</strong
-    >; a project can add or replace its own by id in its <code>.mulmoterminal.json</code>, so what a given terminal shows is the two merged.
-  </p>
+  <i18n-t keypath="settings.headerChrome.intro" tag="p" class="mb-2 mt-1.5 text-[12px] text-dim">
+    <template #buttons>
+      <strong class="text-fg">{{ describe(headerButtonCount, "Buttons") }}</strong>
+    </template>
+    <template #chips>
+      <strong class="text-fg">{{ describe(headerChipCount, "Chips") }}</strong>
+    </template>
+    <template #dirFile><code>.mulmoterminal.json</code></template>
+  </i18n-t>
   <div class="mb-3">
-    <SkillLaunchButton skill="mulmoterminal-header" icon="widgets" label="Set up header buttons…" @launch="$emit('launch-skill', $event)" />
+    <SkillLaunchButton skill="mulmoterminal-header" icon="widgets" :label="t('settings.headerChrome.setUp')" @launch="$emit('launch-skill', $event)" />
   </div>
 </template>

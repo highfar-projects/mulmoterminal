@@ -56,6 +56,66 @@ export const en = {
       help: "Help & user guide",
     },
 
+    launchers: {
+      intro:
+        "Any interactive command a grid cell can run — a dev server, a REPL, a git UI, a model bridge. It runs in the cell's directory as a persistent terminal, exactly as written. Example: {labelExample} → {commandExample}.",
+      notAnAgent: "To start Claude, Codex or Antigravity, use the Agent Picker in an empty cell instead — a launcher gives you none of what a session needs.",
+      labelField: "Launcher label",
+      labelPlaceholder: "Label",
+      commandField: "Launcher command",
+      commandPlaceholder: "command (e.g. $SHELL)",
+    },
+
+    quickCommands: {
+      intro:
+        "Phrases you send often, offered as chips on the phone's terminal view. Tapping one puts the text in the input box — it isn't sent until you press send. The label is the chip's face, so keep it short. Example: {labelExample} → {textExample}. Leave every kind unchecked to offer a command everywhere, or tick the ones it suits — {gitStatus} belongs to a shell, not to Claude.",
+      labelField: "Quick command label",
+      labelPlaceholder: "Label",
+      textField: "Quick command text",
+      textPlaceholder: "text to insert (e.g. PR作って)",
+      offerTo: "Offer to:",
+      offerToAgent: "Offer to {agent} sessions",
+      offerToNone: "(none ticked = every kind)",
+    },
+
+    mcp: {
+      intro:
+        "HTTP MCP servers the {singleView} Claude session loads (in addition to the built-in GUI tools). {idKey} is the server name; {urlKey} is its streamable-HTTP endpoint. In the Docker sandbox, a {localhost} URL is reached over {dockerHost} automatically. Takes effect on the next Claude session.",
+      singleView: "single-view",
+      idField: "MCP server id",
+      idPlaceholder: "id (e.g. weather)",
+      urlField: "MCP server URL",
+      urlPlaceholder: "https://… or http://localhost:PORT/mcp",
+    },
+
+    headerChrome: {
+      intro:
+        "The action buttons and the read-out chips along a terminal's header. Globally you have {buttons} and {chips}; a project can add or replace its own by id in its {dirFile}, so what a given terminal shows is the two merged.",
+      builtInButtons: "built-in buttons",
+      noButtons: "no buttons (all removed)",
+      someButtons: "{count} button | {count} buttons",
+      builtInChips: "built-in chips",
+      noChips: "no chips (all removed)",
+      someChips: "{count} chip | {count} chips",
+      setUp: "Set up header buttons…",
+    },
+
+    models: {
+      intro:
+        "Anthropic-compatible backends a session can run on, from {providersKey} in {configFile}. A directory can pin one with {providerKey} / {modelKey} in its {dirFile}. A key lives in the environment, never in the config.",
+      modelCount: "{count} model | {count} models",
+      keyIn: "key in {env}",
+      notReady: "not ready",
+      notInPicker: "not in the picker",
+      ready: "ready",
+      noProviders: "None configured — sessions run on the built-in default.",
+      customTitle: "Your own way of starting Claude Code",
+      customIntro:
+        "— offered in the Agent Picker beside Claude / Codex / Antigravity / Shell. Not a launcher: Claude Code's own arguments are appended to the command, so the cell resumes, reports cost and reaches the GUI tools like any other Claude session.",
+      noCustomAgents: "None configured.",
+      addBackend: "Add a backend…",
+    },
+
     common: {
       add: "Add",
       remove: "Remove {name}",
