@@ -548,13 +548,22 @@ describe("SettingsModal reaches the config-only settings", () => {
 // Pressing a skill button used to close Settings, spawn an agent in a new cell and send its first
 // turn, with nothing on screen saying so and nothing to go back to (#1564).
 describe("SettingsModal skill launch confirmation", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    // Restored here rather than at the end of the test that changes it: an assertion that throws
+    // would otherwise leave the next test running as codex and failing for the wrong reason
+    // (CodeRabbit on #1568).
+    launchAgent.value = "claude";
+  });
 
+  // Attached to the document so focus is real: an element outside it can be focused in jsdom but
+  // `document.activeElement` stays on <body>, which is exactly the state being asserted against.
   const pressTheme = async () => {
     stubServer(true);
-    const w = mountModal();
+    const w = mount(SettingsModal, { attachTo: document.body });
     await flushPromises();
     await w.findAllComponents(SkillLaunchButton)[0].find("button").trigger("click");
+    await flushPromises();
     return w;
   };
 
@@ -570,7 +579,6 @@ describe("SettingsModal skill launch confirmation", () => {
     launchAgent.value = "codex";
     const w = await pressTheme();
     expect(w.get('[data-testid="skill-launch-confirm"]').text()).toContain("codex");
-    launchAgent.value = "claude";
   });
 
   it("emits nothing on Cancel, and leaves Settings open", async () => {
@@ -580,6 +588,23 @@ describe("SettingsModal skill launch confirmation", () => {
     expect(w.emitted("close")).toBeUndefined();
     expect(w.find('[data-testid="skill-launch-confirm"]').exists()).toBe(false);
     expect(w.find('[data-testid="settings-pane"]').exists()).toBe(true);
+    w.unmount();
+  });
+
+  // Focus moves INTO the dialog, so dismissing it without putting focus back drops a keyboard user
+  // on <body> — out of the modal they were part way through (Codex and CodeRabbit on #1568).
+  it.each([
+    ["Cancel", async (w: Wrapper) => w.get('[data-testid="skill-launch-cancel"]').trigger("click")],
+    ["Escape", async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))],
+  ])("gives focus to the dialog, and back to the button it came from on %s", async (_how, dismiss) => {
+    const w = await pressTheme();
+    const trigger = w.findAllComponents(SkillLaunchButton)[0].find("button").element;
+    expect(w.get('[data-testid="skill-launch-confirm"]').element.contains(document.activeElement)).toBe(true);
+
+    await dismiss(w);
+    await flushPromises();
+    expect(document.activeElement).toBe(trigger);
+    w.unmount();
   });
 
   // The reason the confirmation lives in the modal rather than in the button: one document-level

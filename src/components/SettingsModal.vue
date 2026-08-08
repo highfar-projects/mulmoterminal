@@ -141,10 +141,23 @@ function onTabPick(e: Event) {
 // close the confirm and this modal on one press. One listener, layered below.
 const pendingSkill = ref<BundledSkillName | null>(null);
 const confirmEl = ref<HTMLElement>();
-
 function askBeforeLaunch(skill: BundledSkillName) {
   pendingSkill.value = skill;
   void nextTick(() => confirmEl.value?.querySelector<HTMLElement>("button")?.focus());
+}
+
+/** Declining: the confirmation goes, and the button that raised it takes focus back — without it,
+ *  focus lands on <body> and a keyboard user is dropped out of the modal they were part way
+ *  through (Codex and CodeRabbit on #1568).
+ *
+ *  Found by the SKILL it launches rather than by remembering `document.activeElement`: a browser
+ *  does not reliably focus a `<button>` when it is clicked (Safari does not), so what was active
+ *  when the press arrived is not dependable. The id is a `BundledSkillName`, so the selector takes
+ *  no user text. */
+function dismissConfirm() {
+  const skill = pendingSkill.value;
+  pendingSkill.value = null;
+  void nextTick(() => modalEl.value?.querySelector<HTMLElement>(`[data-skill="${skill}"]`)?.focus());
 }
 
 // Escape's layered answer: the confirmation is what it dismisses while one is open, and only a
@@ -154,11 +167,12 @@ function closeTopmost() {
     emit("close");
     return;
   }
-  pendingSkill.value = null;
+  dismissConfirm();
 }
 
 function startPendingSkill() {
   const skill = pendingSkill.value;
+  // No focus to restore: the shell closes this modal and puts the session on screen.
   pendingSkill.value = null;
   if (skill) emit("launch-skill", skill);
 }
@@ -364,7 +378,7 @@ useModalKeyboard({
            instance, and both the focus trap and the initial focus need the ELEMENT. The wrapper has
            no box of its own — the dialog inside it is `fixed`. -->
       <div v-if="pendingSkill" ref="confirmEl">
-        <SkillLaunchConfirm :agent="launchAgent" @confirm="startPendingSkill" @cancel="pendingSkill = null" />
+        <SkillLaunchConfirm :agent="launchAgent" @confirm="startPendingSkill" @cancel="dismissConfirm" />
       </div>
 
       <div class="flex items-center gap-2 border-t border-border px-4 py-3">

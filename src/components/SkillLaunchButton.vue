@@ -16,7 +16,7 @@ const { t } = useI18n();
 </script>
 
 <template>
-  <SettingsButton @click="emit('launch', skill)">
+  <SettingsButton :data-skill="skill" @click="emit('launch', skill)">
     <span class="material-symbols-outlined" aria-hidden="true">{{ icon }}</span> {{ label }}
   </SettingsButton>
   <!-- The button was an icon and a label, and pressing it started a live session. The sentence is
