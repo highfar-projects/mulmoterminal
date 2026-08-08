@@ -57,15 +57,36 @@ describe("readIconFile", () => {
     expect(readIconFile(small)?.toString()).toBe("tiny");
   });
 
-  // The size comes from stat, so an oversized file is never built into a string first.
-  it("refuses one over the per-icon cap", () => {
+  // The boundary itself, from both sides — the cap is inclusive, and an icon that lands exactly
+  // on it is a normal icon rather than a rejected one.
+  it("reads a file of exactly the cap, and refuses one byte more", () => {
+    const exact = path.join(dir, "exact.png");
+    writeFileSync(exact, Buffer.alloc(DIR_ICON_MAX_BYTES, 7));
+    expect(readIconFile(exact)?.length).toBe(DIR_ICON_MAX_BYTES);
+
+    const over = path.join(dir, "over.png");
+    writeFileSync(over, Buffer.alloc(DIR_ICON_MAX_BYTES + 1, 7));
+    expect(readIconFile(over)).toBeNull();
+  });
+
+  // The cap has to be a fact about what comes back, not about what `stat` said a moment earlier:
+  // this is a file in someone else's repository, and it can be replaced between the two calls
+  // (Codex on #1558). Reading no further than the cap is what makes the race unreachable — the
+  // buffer is bounded whatever the file turns out to be.
+  it("never returns more than the cap, however big the file is", () => {
     const huge = path.join(dir, "huge.png");
-    writeFileSync(huge, Buffer.alloc(DIR_ICON_MAX_BYTES + 1));
+    writeFileSync(huge, Buffer.alloc(DIR_ICON_MAX_BYTES * 4, 7));
     expect(readIconFile(huge)).toBeNull();
   });
 
   it("answers null for a path that is not there", () => {
     expect(readIconFile(path.join(dir, "missing.png"))).toBeNull();
+  });
+
+  // openSync succeeds on a directory; the read is what fails. Reached only if a config names one
+  // and the confinement check is ever loosened — it must be a missing icon, not a crash.
+  it("answers null for a directory", () => {
+    expect(readIconFile(dir)).toBeNull();
   });
 });
 

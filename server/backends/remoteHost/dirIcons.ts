@@ -5,7 +5,7 @@
 // the reply, which is what everything here is about: turning a resolved DirIcon into one string,
 // and keeping the pile of them small enough that the reply still lands.
 import { createHash } from "node:crypto";
-import { readFileSync, statSync } from "node:fs";
+import { closeSync, openSync, readSync } from "node:fs";
 import type { DirIcon } from "../../config/dir-icon.js";
 import type { TerminalSessionSummary } from "./terminalScreen.js";
 
@@ -36,15 +36,37 @@ export interface DirIconSources {
 
 /** An icon file's bytes, or null when it is unreadable or over DIR_ICON_MAX_BYTES.
  *
- *  The size is taken from `stat`, not from what came back: this is a file in someone else's
- *  repository, and building the string first is how a reader finds out too late. */
+ *  Never reads more than the cap, so the cap is a fact about the returned buffer rather than a
+ *  claim about the file. `stat` then `readFile` would be neither: this is a file in someone
+ *  else's repository, written by tools this process does not control, so between the two calls
+ *  it can become something else entirely — and the whole of THAT is what would get base64'd and
+ *  handed to a Firestore document with a hard 1 MiB ceiling (Codex on #1558). */
 export function readIconFile(iconPath: string): Buffer | null {
+  let fd: number | null = null;
   try {
-    if (statSync(iconPath).size > DIR_ICON_MAX_BYTES) return null;
-    return readFileSync(iconPath);
+    fd = openSync(iconPath, "r");
+    // One byte past the cap: a file that fills this buffer is over it, and that is knowable
+    // without reading the rest of whatever it turned out to be.
+    const buffer = Buffer.alloc(DIR_ICON_MAX_BYTES + 1);
+    const read = fillFromFile(fd, buffer);
+    return read > DIR_ICON_MAX_BYTES ? null : buffer.subarray(0, read);
   } catch {
     return null; // renamed since it was resolved, or no longer readable — the row just has no icon
+  } finally {
+    if (fd !== null) closeSync(fd);
   }
+}
+
+// Read until the buffer is full or the file ends. A loop, because readSync is allowed to answer
+// with less than it was asked for, and a short first read would otherwise truncate the image.
+function fillFromFile(fd: number, buffer: Buffer): number {
+  let read = 0;
+  while (read < buffer.length) {
+    const got = readSync(fd, buffer, read, buffer.length - read, read);
+    if (got === 0) return read;
+    read += got;
+  }
+  return read;
 }
 
 /** The one string that stands for this icon on the wire, or null when the file cannot travel.

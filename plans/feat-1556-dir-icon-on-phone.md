@@ -22,7 +22,7 @@
 | 一覧のワイヤー | `{ sessions, icons }`。行は `iconId?`、実体は `icons` テーブル |
 | `iconId` | src の SHA-256 先頭 16 桁。**内容**ハッシュなので同じ絵は 1 コピー |
 | 画面のワイヤー | `SessionScreenMeta` に `icon?: string`（src そのもの）。1 セッションぶんなのでテーブル不要 |
-| 1 枚の上限 | 48 KiB（読む前に `stat` で判定） |
+| 1 枚の上限 | 48 KiB（**上限+1 バイトまでしか読まない**。`stat`→`readFile` だと、その間にファイルが差し替わったぶんを丸ごと読んでしまう） |
 | 応答全体の予算 | 256 KiB（`icons` の src 合計、文字数） |
 | 超えたら | その行に `iconId` を付けずに送る。スマホは今までどおりのグリフになる |
 | リサイズ | しない（画像ライブラリを増やさない） |
@@ -68,6 +68,7 @@ export interface DirIconSources {
   iconOf: (cwd: string) => DirIcon | null;
   readIcon: (path: string) => Buffer | null; // 上限超え・読めないは null
 }
+export function readIconFile(path: string): Buffer | null; // 上限+1 バイトで打ち切る境界つきの読み取り
 export function dirIconSrc(icon: DirIcon, read: DirIconSources["readIcon"]): string | null;
 export function collectDirIcons(cwds: readonly string[], sources: DirIconSources): {
   iconIdByCwd: Map<string, string>;
