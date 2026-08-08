@@ -6,7 +6,7 @@ import SettingsField from "../SettingsField.vue";
 import { canAddLauncher } from "../settingsValidators";
 import type { Launcher } from "../launchers";
 import SettingsListRow from "./SettingsListRow.vue";
-import { SECTION_HEADING, SETTINGS_LIST } from "./sectionClasses";
+import { SETTINGS_LIST } from "./sectionClasses";
 
 const props = defineProps<{ launchers?: Launcher[] | undefined }>();
 const emit = defineEmits<{ (e: "update-launchers", launchers: Launcher[]): void }>();
@@ -32,7 +32,6 @@ function removeLauncher(label: string) {
 </script>
 
 <template>
-  <h3 :class="SECTION_HEADING">Launch commands</h3>
   <!-- The examples are deliberately NOT an agent. A launcher runs its command verbatim and gets no
        GUI tools, no transcript, no resume and no "waiting for you" status, so a chip named after an
        agent is a worse copy of what the Agent Picker already offers — and offering one here is how

@@ -6,7 +6,6 @@ import SettingsButton from "../SettingsButton.vue";
 import SettingsField from "../SettingsField.vue";
 import SkillLaunchButton from "../SkillLaunchButton.vue";
 import { SELECT_CONTROL } from "../selectClasses";
-import { SECTION_HEADING } from "./sectionClasses";
 import { NOTIFY_KINDS, type NotifyKind } from "../../../common/notifyKinds";
 import { presetRef, SOUND_PRESETS } from "../../../common/notifySounds";
 import type { BundledSkillName } from "../../../common/bundledSkills";
@@ -106,7 +105,6 @@ async function browseSound() {
 </script>
 
 <template>
-  <h3 :class="SECTION_HEADING">Notification sounds</h3>
   <p class="mb-3 mt-1.5 text-[12px] text-dim">
     Which moments beep, and what each one plays. Running many agents at once is what turns notifications into noise — untick the ones you don't need. The
     speaker button in the toolbar silences all of them at once.

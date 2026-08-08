@@ -20,8 +20,9 @@ for this reason.
 | `grid-two-cells.png` | Two parallel terminals |
 | `grid-2x2.png` | Four parallel terminals (2×2) |
 | `grid-zoom.png` | Expanded cell + filmstrip thumbnails |
-| `settings.png` | The Settings modal (theme / sound / PR repos / launch commands / MCP) |
-| `config-settings-modal.png` | The Settings modal: Theme, Terminal font size, Directory appearance, **Directory settings** (a directory expanded), Notification sounds |
+| `settings.png` | The Settings modal before the sidebar (#1563) — one flat scroll. Kept for the dated v2.1.0 / v2.2.0 pages, which describe that screen |
+| `settings-tabs.png` | The Settings modal's sidebar of grouped sections, with **Notification sounds** open |
+| `config-settings-modal.png` | The Settings modal's sidebar, scrolled to show the first eight groups (**Appearance** down to **Sessions**; **Help** is below the fold), with **Theme** open |
 | `config-dir-settings.png` | One expanded Directory-settings row — values in force with colour swatches, the file they came from, and `Not settings this app reads (a typo?)` listing a deliberately misspelt `badgeColour` and `fontSize2` |
 | `config-launcher-chips.png` | An empty cell's launcher showing three settings at once: `cwdPresets` chips (with their directory-colour stripe), `script.json` under OR RUN A SCRIPT, `launchers` under OR LAUNCH |
 | `config-custom-themes.png` | The Settings theme picker with four user-defined schemes (Mondrian / Van Gogh (Arles) / Picasso Blue / Matisse) beside the built-in four, with Van Gogh applied |

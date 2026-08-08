@@ -3,7 +3,7 @@ import { useAppConfig } from "../../composables/useAppConfig";
 import { useLaunchOptions } from "../../composables/useLaunchOptions";
 import { isOfferable, notOfferedReason } from "../launchOffer";
 import SkillLaunchButton from "../SkillLaunchButton.vue";
-import { SECTION_HEADING, SETTINGS_LIST } from "./sectionClasses";
+import { SETTINGS_LIST } from "./sectionClasses";
 import type { BundledSkillName } from "../../../common/bundledSkills";
 
 // Read-only, like the shortcuts list: a provider is a name, a base URL and the env var its key is
@@ -21,7 +21,6 @@ defineEmits<{ (e: "launch-skill", skill: BundledSkillName): void }>();
 </script>
 
 <template>
-  <h3 :class="SECTION_HEADING">Models and backends</h3>
   <p class="mb-2 mt-1.5 text-[12px] text-dim">
     Anthropic-compatible backends a session can run on, from <code>providers</code> in <code>~/.mulmoterminal/config.json</code>. A directory can pin one with
     <code>provider</code> / <code>model</code> in its <code>.mulmoterminal.json</code>. A key lives in the environment, never in the config.

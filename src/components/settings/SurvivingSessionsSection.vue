@@ -6,7 +6,7 @@ import { sessionIdleReapDays, saveSessionIdleReapDays } from "../../composables/
 import { MAX_REAP_IDLE_DAYS, MIN_REAP_IDLE_DAYS, REAP_IDLE_DAYS_OFF } from "../../../common/sessionReap";
 import { relativeTime } from "../cellDisplay";
 import SettingsStepper from "./SettingsStepper.vue";
-import { SECTION_HEADING, SETTINGS_LIST } from "./sectionClasses";
+import { SETTINGS_LIST } from "./sectionClasses";
 import type { SurvivingSession } from "../../../common/survivingSessions";
 
 // Sessions that outlived the server, across every directory (#1478).
@@ -51,7 +51,6 @@ async function nudgeIdleDays(delta: number): Promise<void> {
 </script>
 
 <template>
-  <h3 :class="SECTION_HEADING">Sessions that survived a restart</h3>
   <p class="mb-2 mt-1.5 text-[12px] text-dim">
     Terminals outlive the server, so these are still running from an earlier run. A row is listed
     <strong class="text-fg">whatever directory it belongs to</strong> — including one you no longer open, and a shell, which no other list here shows. Stopping

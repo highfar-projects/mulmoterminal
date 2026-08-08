@@ -9,7 +9,7 @@ import SettingsButton from "../SettingsButton.vue";
 import SettingsField from "../SettingsField.vue";
 import { canAddGitlabHost } from "../settingsValidators";
 import SettingsListRow from "./SettingsListRow.vue";
-import { SECTION_HEADING, SETTINGS_LIST } from "./sectionClasses";
+import { SETTINGS_LIST } from "./sectionClasses";
 
 // What this app writes to a forge on the user's behalf. Grouped because that is the question a
 // reader has — "what does it post as me?" — not because the three keys are related in the config.
@@ -47,8 +47,6 @@ function removeHost(host: string) {
 </script>
 
 <template>
-  <h3 :class="SECTION_HEADING">GitHub and GitLab</h3>
-
   <label class="mt-1.5 flex cursor-pointer items-start gap-2">
     <input
       type="checkbox"

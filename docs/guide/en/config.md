@@ -79,36 +79,47 @@ is only whatever was last released and the commit is what identifies the build. 
 newer exists, the update notice from the header badge follows on the next line, command included.
 That row is what to quote in a bug report.
 
-![The Settings modal — Theme with its Create a theme… button, Terminal font size, Terminal scroll speed, Waiting rows with the blink checkbox, Directory appearance, and Directory settings with acme-web expanded](../images/config-settings-modal.png)
+![The Settings modal — the sidebar scrolled to show Appearance down to Sessions, with Theme open and its Create a theme… button](../images/config-settings-modal.png)
 
-Up to twenty-one sections, in this order — **Voice input** is there only on a machine that can transcribe, so most
-setups see twenty.
+The **sidebar** groups the sections and shows one at a time; below `sm` (a phone) it becomes a picker
+above the section. Twenty-four sections in nine groups — **Voice input** is there only on a machine
+that can transcribe, so most setups see twenty-three.
+
+- **Appearance** — Theme, Terminal font, Terminal font size, Terminal scroll speed, Waiting rows
+- **Projects** — Directory appearance, Directory settings
+- **Header & launch** — Launch commands, Header buttons and chips
+- **Input** — Terminal keys, Keyboard shortcuts, Voice input
+- **Models & servers** — Models and backends, MCP servers
+- **Notifications** — Notification sounds, Web Push notifications, Phone quick commands
+- **Integrations** — GitHub and GitLab, Pull request repos, Google account
+- **Sessions** — Sessions and background tasks, Sessions that survived a restart, Cost (estimated)
+- **Help** — Help & user guide
 
 | Item | Description |
 |---|---|
 | **Theme** | Midnight / Nord / Daylight / Solarized Light, plus [any you defined yourself](#custom-themes). Picks from what exists; "Create a theme…" starts the `mulmoterminal-theme` skill to write a new one |
-| **Terminal font size** | The xterm font size in px (8–32). Applies to every terminal **in this browser** — a phone and a desktop each keep their own. A directory can override it with `fontSize` ([below](#per-dir)) |
 | **Terminal font** | The font-family stack every terminal renders in (`fontFamily`) — **global**, unlike the size, because which fonts exist is a property of the machine. Empty means the built-in stack (→ [Terminal font](#font-family)) |
+| **Terminal font size** | The xterm font size in px (8–32). Applies to every terminal **in this browser** — a phone and a desktop each keep their own. A directory can override it with `fontSize` ([below](#per-dir)) |
 | **Terminal scroll speed** | How far one wheel notch or trackpad swipe moves the terminal (1× is xterm's own). Per browser, like the font size, because it is a property of the pointing device |
 | **Waiting rows** | In the roster beside an enlarged cell, a row whose agent is **waiting on you** carries an amber ring and blinks; one that has merely **finished** is green and still. The checkbox turns off the movement, not the colour — and no row blinks when your system asks for reduced motion. The three steppers below it set how many lines each row shows before clamping (`cockpitLines` → [Roster rows](#cockpit-lines)) |
 | **Directory appearance** | "Configure appearance…" — set a directory's name badge, colors, terminal palette, and grid position interactively, through the `mulmoterminal-dirs` skill |
 | **Directory settings** | What each directory's `.mulmoterminal.json` is **actually doing**. Expand a row for the values in force (colors with a swatch), **which file each came from**, **keys dropped in validation**, and **keys this app never reads**. Read-only — "Explain my settings…" starts the `mulmoterminal-config` skill to say why and fix it (→ [When a setting isn't working](#dir-settings-preview)) |
-| **Notification sounds** | Which moments beep and what each plays — one row per kind, with a preset picker and a play button. "Configure notifications…" starts the `mulmoterminal-notify` skill for a per-project sound and which moments push (→ [Notification sounds](#sounds)) |
-| **Voice input** | The language you **dictate in** (your browser's, per-clip detection, or a fixed one). Shown only on a machine that can transcribe |
-| **Web Push notifications** | The "Notify my devices when a task finishes" toggle (off by default → [Mobile notifications](notifications.html)) |
-| **Google account** | Google sign-in for the Calendar link (not the RemoteHost Connect) |
-| **Pull request repos** | The repos aggregated by the cross-repo PR/Issue view (`owner/repo`) |
 | **Launch commands** | Commands you can launch besides the agents in a grid cell (`{ label, command }`). A plain shell needs no entry — the launcher's **Shell** toggle opens `$SHELL` unconfigured |
-| **Phone quick commands** | Phrases offered as chips on the **phone's** terminal view. Tapping one fills the input box; it is sent when you press send (`quickCommands`) |
-| **MCP servers** | Your own HTTP MCP servers (`userMcpServers`), merged into the **Claude** sessions that have every GUI tool — a cell whose working directory is the **workspace**, and a session the server starts on its own (the phone, a scheduled task) unless it is started in a grid cell's shape, as an issue's seed session is. A cell in a project directory does not get this merge, and neither does Codex (the Claude MCP config **you** wrote — `.mcp.json` and the rest — is read in either directory → [which directory to launch in](basics.html#launch-dir)) |
-| **Cost (estimated)** | Estimated cost readouts for Session / Today / Month |
-| **GitHub and GitLab** | What this app writes to a forge as you: whether a cell [says it has started on an issue](#issue-work-comments) (`issueWorkComments`, off by default) and whether a created PR [ends with the clone name](#pr-workdir-footer) (`prWorkdirFooter`, on). Below them, the [self-hosted GitLab hosts](github.html#a-gitlab-of-your-own-self-hosted) to read with `glab` (`gitlabHosts` — takes effect on the next start) |
-| **Sessions and background tasks** | Whether replies [end with a closing summary](#append-system-prompt) (`appendSystemPrompt`, on — a directory's own setting wins), whether to [keep a digest of decisions](#decision-digest) (`decisionDigest`, off), and the [periodic dev-work log](#all-keys) with its interval in hours (`worklogEnabled`, off — each run costs tokens) |
-| **Sessions that survived a restart** | Every terminal still running from an earlier server, **across all directories** — the one place a session in a project you no longer open, or a plain shell, can be seen and ended. Each row says where it runs, what it is (`shell or unknown` when no agent conversation is recorded under it), how long it has been idle, and whether ending it loses anything. **Stop** ends that session only; a conversation with a transcript can be resumed afterwards. A row a terminal is holding shows `● open` instead, and is closed from there. The section also carries `sessionIdleReapDays` — the number of idle days after which the server ends one on its own — and marks the rows that number will take with **ends at next start** |
-| **Models and backends** | The backends a session can run on and whether each can be **reached right now**, read-only. "Add a backend…" starts the `mulmoterminal-model` skill (→ [Using another model](providers.html)) |
 | **Header buttons and chips** | How many buttons and chips your global config declares, read-only — "built-in" when you have configured none. "Set up header buttons…" starts the `mulmoterminal-header` skill (→ [Customizing the header](#header)) |
 | **Terminal keys** | [Copy on select](#copy-on-select) (`copyOnSelect`, off) and which bytes your Claude reads as **submit** ([Enter — submit vs. newline](#terminal-submit), `terminalSubmit`) |
 | **Keyboard shortcuts** | What is bound to what, read-only. **Everything starts as Not set** — "Set up shortcuts…" starts the `mulmoterminal-keys` skill to bind them in `keymap` (→ [Keyboard shortcuts](#keymap)) |
+| **Voice input** | The language you **dictate in** (your browser's, per-clip detection, or a fixed one). Shown only on a machine that can transcribe |
+| **Models and backends** | The backends a session can run on and whether each can be **reached right now**, read-only. "Add a backend…" starts the `mulmoterminal-model` skill (→ [Using another model](providers.html)) |
+| **MCP servers** | Your own HTTP MCP servers (`userMcpServers`), merged into the **Claude** sessions that have every GUI tool — a cell whose working directory is the **workspace**, and a session the server starts on its own (the phone, a scheduled task) unless it is started in a grid cell's shape, as an issue's seed session is. A cell in a project directory does not get this merge, and neither does Codex (the Claude MCP config **you** wrote — `.mcp.json` and the rest — is read in either directory → [which directory to launch in](basics.html#launch-dir)) |
+| **Notification sounds** | Which moments beep and what each plays — one row per kind, with a preset picker and a play button. "Configure notifications…" starts the `mulmoterminal-notify` skill for a per-project sound and which moments push (→ [Notification sounds](#sounds)) |
+| **Web Push notifications** | The "Notify my devices when a task finishes" toggle (off by default → [Mobile notifications](notifications.html)) |
+| **Phone quick commands** | Phrases offered as chips on the **phone's** terminal view. Tapping one fills the input box; it is sent when you press send (`quickCommands`) |
+| **GitHub and GitLab** | What this app writes to a forge as you: whether a cell [says it has started on an issue](#issue-work-comments) (`issueWorkComments`, off by default) and whether a created PR [ends with the clone name](#pr-workdir-footer) (`prWorkdirFooter`, on). Below them, the [self-hosted GitLab hosts](github.html#a-gitlab-of-your-own-self-hosted) to read with `glab` (`gitlabHosts` — takes effect on the next start) |
+| **Pull request repos** | The repos aggregated by the cross-repo PR/Issue view (`owner/repo`) |
+| **Google account** | Google sign-in for the Calendar link (not the RemoteHost Connect) |
+| **Sessions and background tasks** | Whether replies [end with a closing summary](#append-system-prompt) (`appendSystemPrompt`, on — a directory's own setting wins), whether to [keep a digest of decisions](#decision-digest) (`decisionDigest`, off), and the [periodic dev-work log](#all-keys) with its interval in hours (`worklogEnabled`, off — each run costs tokens) |
+| **Sessions that survived a restart** | Every terminal still running from an earlier server, **across all directories** — the one place a session in a project you no longer open, or a plain shell, can be seen and ended. Each row says where it runs, what it is (`shell or unknown` when no agent conversation is recorded under it), how long it has been idle, and whether ending it loses anything. **Stop** ends that session only; a conversation with a transcript can be resumed afterwards. A row a terminal is holding shows `● open` instead, and is closed from there. The section also carries `sessionIdleReapDays` — the number of idle days after which the server ends one on its own — and marks the rows that number will take with **ends at next start** |
+| **Cost (estimated)** | Estimated cost readouts for Session / Today / Month |
 | **Help & user guide** | Links into this guide |
 
 ## When a setting isn't working — look here first {#dir-settings-preview}

@@ -4,7 +4,6 @@ import { decisionDigest, saveDecisionDigest } from "../../composables/decisionDi
 import { worklogEnabled, saveWorklogEnabled, worklogIntervalHours, saveWorklogIntervalHours } from "../../composables/worklog";
 import { MIN_WORKLOG_INTERVAL_HOURS, MAX_WORKLOG_INTERVAL_HOURS } from "../../../common/worklogInterval";
 import SettingsStepper from "./SettingsStepper.vue";
-import { SECTION_HEADING } from "./sectionClasses";
 
 // What a spawned session carries, and what runs on its own in the background. All three are
 // global config keys the server acts on — this browser only shows and writes them.
@@ -25,8 +24,6 @@ function nudgeInterval(delta: number) {
 </script>
 
 <template>
-  <h3 :class="SECTION_HEADING">Sessions and background tasks</h3>
-
   <label class="mt-1.5 flex cursor-pointer items-start gap-2">
     <input type="checkbox" class="mt-1 cursor-pointer" :checked="appendSystemPrompt" aria-label="End replies with a closing summary" @change="onAppendToggle" />
     <span class="text-[12px]">

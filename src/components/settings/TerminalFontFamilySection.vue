@@ -4,7 +4,6 @@ import { configuredFontFamily, saveGlobalFontFamily } from "../../composables/te
 import { normalizeFontFamily, TERMINAL_FONT_FAMILY_DEFAULT } from "../../../common/terminalFontFamily";
 import SettingsButton from "../SettingsButton.vue";
 import SettingsField from "../SettingsField.vue";
-import { SECTION_HEADING } from "./sectionClasses";
 
 // Global, unlike the font SIZE above it: a family names FONTS, and which fonts exist belongs to
 // the machine the browser runs on, so it is one answer for every client of one host.
@@ -60,7 +59,6 @@ async function apply() {
 </script>
 
 <template>
-  <h3 :class="SECTION_HEADING">Terminal font</h3>
   <p class="mb-2 mt-1.5 text-[12px] text-dim">
     The CSS font-family stack every terminal renders in. Reach for it when CJK text looks wrong — a stack whose first face has no Japanese glyphs falls back per
     character, and the line stops lining up. Leave it empty for the built-in stack. A directory can pin its own with <code>fontFamily</code> in its

@@ -2,7 +2,6 @@
 import { computed, ref } from "vue";
 import { useTheme } from "../../composables/useTheme";
 import SkillLaunchButton from "../SkillLaunchButton.vue";
-import { SECTION_HEADING } from "./sectionClasses";
 import type { BundledSkillName } from "../../../common/bundledSkills";
 
 const emit = defineEmits<{ (e: "launch-skill", skill: BundledSkillName): void }>();
@@ -37,7 +36,6 @@ function onThemeKey(e: KeyboardEvent, index: number) {
 </script>
 
 <template>
-  <h3 :class="SECTION_HEADING">Theme</h3>
   <p v-if="missingThemeId" class="mb-2 mt-1.5 text-[12px] text-[var(--warn-text,#e0a030)]" data-testid="theme-missing">
     The selected theme <code>{{ missingThemeId }}</code> is not defined. Add it to <code>themes</code> in <code>~/.mulmoterminal/config.json</code>, or pick one
     below. Your choice is kept until then.

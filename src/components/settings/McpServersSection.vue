@@ -6,7 +6,7 @@ import SettingsField from "../SettingsField.vue";
 import { canAddMcpServer } from "../settingsValidators";
 import type { UserMcpServer } from "../userMcp";
 import SettingsListRow from "./SettingsListRow.vue";
-import { SECTION_HEADING, SETTINGS_LIST } from "./sectionClasses";
+import { SETTINGS_LIST } from "./sectionClasses";
 
 const props = defineProps<{ userMcpServers?: UserMcpServer[] | undefined }>();
 const emit = defineEmits<{ (e: "update-user-mcp", servers: UserMcpServer[]): void }>();
@@ -32,7 +32,6 @@ function removeMcpServer(id: string) {
 </script>
 
 <template>
-  <h3 :class="SECTION_HEADING">MCP servers</h3>
   <p class="mb-3 mt-1.5 text-[12px] text-dim">
     HTTP MCP servers the <strong>single-view</strong> Claude session loads (in addition to the built-in GUI tools). <code>id</code> is the server name;
     <code>url</code> is its streamable-HTTP endpoint. In the Docker sandbox, a <code>localhost</code> URL is reached over <code>host.docker.internal</code>

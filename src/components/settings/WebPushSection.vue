@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import { SECTION_HEADING } from "./sectionClasses";
 import { PUSH_KINDS, type PushKind } from "../../../common/pushKinds";
 
 const props = defineProps<{ pushEnabled?: boolean | undefined; pushKinds?: PushKind[] | undefined }>();
@@ -36,7 +35,6 @@ function togglePushKind(kind: PushKind) {
 </script>
 
 <template>
-  <h3 :class="SECTION_HEADING">Web Push notifications</h3>
   <p class="mb-3 mt-1.5 text-[12px] text-dim">
     Send a push to your registered devices when a background task finishes. Requires the <strong>RemoteHost</strong> connection — its sign-in provides the
     notification auth, so pushes only send while it's connected.

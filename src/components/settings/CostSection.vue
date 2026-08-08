@@ -2,7 +2,6 @@
 import { onMounted, watch } from "vue";
 import { useCost } from "../../composables/useCost";
 import { formatUsd } from "../formatUsd";
-import { SECTION_HEADING } from "./sectionClasses";
 
 const props = defineProps<{ cwd?: string | null | undefined; sessionId?: string | null | undefined }>();
 
@@ -18,7 +17,6 @@ watch([() => props.cwd, () => props.sessionId], refreshCost);
 </script>
 
 <template>
-  <h3 :class="SECTION_HEADING">Cost (estimated)</h3>
   <p class="mb-3 mt-1.5 text-[12px] text-dim">
     Estimated spend for this project from <strong>public per-model pricing</strong> (input, output, and cache tokens) — actual billing may differ, and flat-plan
     (Max) usage isn't reflected. Today / Month roll up this project's sessions.
