@@ -469,10 +469,12 @@ const reportWorktreeFailure = (repoDir: string | null, message: string): void =>
 // worktree may well appear a moment later. Saying otherwise sends the user to look at their network.
 // Reachable — SLOW_COMMAND_TIMEOUT_MS is 60s, and a checkout large enough to make this bug worth
 // fixing is a checkout that can exceed it.
+const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
 const requestFailureText = (e: unknown): string =>
   e instanceof DOMException && e.name === "AbortError"
     ? "Timed out waiting for git — it may still finish. Re-select this directory to see."
-    : `Could not reach the server: ${e instanceof Error ? e.message : String(e)}`;
+    : `Could not reach the server: ${errorText(e)}`;
 
 // Create a fresh worktree for the typed task and start the selected agent in it.
 //
