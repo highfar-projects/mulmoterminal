@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { useTheme } from "../../composables/useTheme";
 import SkillLaunchButton from "../SkillLaunchButton.vue";
 import type { BundledSkillName } from "../../../common/bundledSkills";
 
 const emit = defineEmits<{ (e: "launch-skill", skill: BundledSkillName): void }>();
+
+const { t } = useI18n();
 
 // Theme is applied immediately on click.
 const { themeId, themes, setTheme, missingThemeId } = useTheme();
@@ -36,15 +39,24 @@ function onThemeKey(e: KeyboardEvent, index: number) {
 </script>
 
 <template>
-  <p v-if="missingThemeId" class="mb-2 mt-1.5 text-[12px] text-[var(--warn-text,#e0a030)]" data-testid="theme-missing">
-    The selected theme <code>{{ missingThemeId }}</code> is not defined. Add it to <code>themes</code> in <code>~/.mulmoterminal/config.json</code>, or pick one
-    below. Your choice is kept until then.
-  </p>
-  <p class="mb-2 mt-1.5 text-[12px] text-dim">
-    Picks from the schemes that exist. Your own go in <code>themes</code> in <code>~/.mulmoterminal/config.json</code> and appear here next to the built-in four
-    — the skill writes one from a palette, a photo or a brand's colours, and checks it for contrast.
-  </p>
-  <div ref="themesEl" class="flex flex-wrap gap-2" role="radiogroup" aria-label="Theme">
+  <i18n-t
+    v-if="missingThemeId"
+    keypath="settings.theme.missing"
+    tag="p"
+    class="mb-2 mt-1.5 text-[12px] text-[var(--warn-text,#e0a030)]"
+    data-testid="theme-missing"
+  >
+    <template #id
+      ><code>{{ missingThemeId }}</code></template
+    >
+    <template #themesKey><code>themes</code></template>
+    <template #configFile><code>~/.mulmoterminal/config.json</code></template>
+  </i18n-t>
+  <i18n-t keypath="settings.theme.intro" tag="p" class="mb-2 mt-1.5 text-[12px] text-dim">
+    <template #themesKey><code>themes</code></template>
+    <template #configFile><code>~/.mulmoterminal/config.json</code></template>
+  </i18n-t>
+  <div ref="themesEl" class="flex flex-wrap gap-2" role="radiogroup" :aria-label="t('settings.theme.group')">
     <button
       v-for="(t, i) in themes"
       :key="t.id"
@@ -66,6 +78,6 @@ function onThemeKey(e: KeyboardEvent, index: number) {
     </button>
   </div>
   <div class="mt-3">
-    <SkillLaunchButton skill="mulmoterminal-theme" icon="format_paint" label="Create a theme…" @launch="emit('launch-skill', $event)" />
+    <SkillLaunchButton skill="mulmoterminal-theme" icon="format_paint" :label="t('settings.theme.create')" @launch="emit('launch-skill', $event)" />
   </div>
 </template>

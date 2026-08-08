@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { configuredFontFamily, saveGlobalFontFamily } from "../../composables/terminalFontFamily";
 import { normalizeFontFamily, TERMINAL_FONT_FAMILY_DEFAULT } from "../../../common/terminalFontFamily";
 import SettingsButton from "../SettingsButton.vue";
 import SettingsField from "../SettingsField.vue";
+
+const { t } = useI18n();
 
 // Global, unlike the font SIZE above it: a family names FONTS, and which fonts exist belongs to
 // the machine the browser runs on, so it is one answer for every client of one host.
@@ -59,29 +62,26 @@ async function apply() {
 </script>
 
 <template>
-  <p class="mb-2 mt-1.5 text-[12px] text-dim">
-    The CSS font-family stack every terminal renders in. Reach for it when CJK text looks wrong — a stack whose first face has no Japanese glyphs falls back per
-    character, and the line stops lining up. Leave it empty for the built-in stack. A directory can pin its own with <code>fontFamily</code> in its
-    <code>.mulmoterminal.json</code>.
-  </p>
+  <i18n-t keypath="settings.font.intro" tag="p" class="mb-2 mt-1.5 text-[12px] text-dim">
+    <template #key><code>fontFamily</code></template>
+    <template #dirFile><code>.mulmoterminal.json</code></template>
+  </i18n-t>
   <div class="flex items-center gap-2">
     <SettingsField
       :model-value="draft"
       class="flex-auto font-mono"
       :placeholder="TERMINAL_FONT_FAMILY_DEFAULT"
-      aria-label="Terminal font family stack"
+      :aria-label="t('settings.font.field')"
       spellcheck="false"
       @update:model-value="onType"
       @keydown.enter="apply"
     />
-    <SettingsButton :disabled="saving || unchanged || !usable" @click="apply">Apply</SettingsButton>
+    <SettingsButton :disabled="saving || unchanged || !usable" @click="apply">{{ t("settings.font.apply") }}</SettingsButton>
   </div>
-  <p v-if="!usable" class="mb-3 mt-1.5 text-[12px] text-err-text">
-    Not a font stack. Separate names with commas — <code>'Cica', 'MS Gothic', monospace</code>. CSS syntax characters and unbalanced quotes are refused, because
-    one bad entry invalidates the whole declaration.
-  </p>
-  <p v-else class="mb-3 mt-1.5 text-[12px] text-dim">
-    Open terminals re-fit as soon as this lands — a different face has a different advance width, so the grid would drift from the canvas otherwise.
-    <code>monospace</code> is appended when you name no generic family, so a stack that matches nothing still falls back to a fixed-width face.
-  </p>
+  <i18n-t v-if="!usable" keypath="settings.font.invalid" tag="p" class="mb-3 mt-1.5 text-[12px] text-err-text">
+    <template #example><code>'Cica', 'MS Gothic', monospace</code></template>
+  </i18n-t>
+  <i18n-t v-else keypath="settings.font.hint" tag="p" class="mb-3 mt-1.5 text-[12px] text-dim">
+    <template #mono><code>monospace</code></template>
+  </i18n-t>
 </template>
