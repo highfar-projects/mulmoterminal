@@ -1,7 +1,8 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { isRecord } from "../../common/isRecord.js";
+import { readFirstJsonlRecord } from "../infra/jsonl-file.js";
 import { canonicalPath } from "../infra/canonical-path.js";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -24,6 +25,15 @@ export function codexSessionsRoot(): string {
 
 // The first line of every rollout is a `session_meta` record carrying the id codex minted for
 // itself (mulmoterminal can't force one) and the cwd it resolved.
+// The meta a parsed record carries, or null when it is not one. Split from the line parser below
+// so the streaming reader — which hands back records, never lines — asks the same question.
+function sessionMetaOf(doc: Record<string, unknown>): CodexSessionMeta | null {
+  if (doc.type !== "session_meta" || !isRecord(doc.payload)) return null;
+  const { id, cwd } = doc.payload;
+  if (typeof id !== "string" || !UUID_RE.test(id)) return null;
+  return { id, cwd: typeof cwd === "string" ? cwd : null };
+}
+
 export function parseSessionMetaLine(line: string): CodexSessionMeta | null {
   let doc: unknown;
   try {
@@ -31,17 +41,16 @@ export function parseSessionMetaLine(line: string): CodexSessionMeta | null {
   } catch {
     return null;
   }
-  if (!isRecord(doc) || doc.type !== "session_meta" || !isRecord(doc.payload)) return null;
-  const { id, cwd } = doc.payload;
-  if (typeof id !== "string" || !UUID_RE.test(id)) return null;
-  return { id, cwd: typeof cwd === "string" ? cwd : null };
+  return isRecord(doc) ? sessionMetaOf(doc) : null;
 }
 
-export function readSessionMeta(rolloutFile: string): CodexSessionMeta | null {
+// The meta is codex's FIRST line, so only that line is read. It used to take the whole rollout to
+// reach it, which the spawn watcher then repeated once a second for up to thirty minutes across
+// every recent rollout — ~37 MB per pass on this machine to look at a few hundred bytes (#1553).
+export async function readSessionMeta(rolloutFile: string): Promise<CodexSessionMeta | null> {
   try {
-    const content = readFileSync(rolloutFile, "utf8");
-    const newline = content.indexOf("\n");
-    return parseSessionMetaLine(newline === -1 ? content : content.slice(0, newline));
+    const first = await readFirstJsonlRecord(rolloutFile);
+    return first === null ? null : sessionMetaOf(first);
   } catch {
     return null;
   }
@@ -96,11 +105,10 @@ interface RolloutMeta extends CodexSessionMeta {
 const sameDir = (recorded: string | null | undefined, cwd: string | null): boolean =>
   cwd === null || (!!recorded && canonicalPath(recorded) === canonicalPath(cwd));
 
-export function pickFreshSession(root: string, before: Set<string>, cwd: string | null, claimed?: Set<string>): RolloutMeta | null {
-  const found = listRecentRollouts(root)
-    .filter((file) => !before.has(file) && !claimed?.has(file))
-    .map((file) => ({ file, meta: readSessionMeta(file) }))
-    .filter((x): x is { file: string; meta: CodexSessionMeta } => x.meta !== null);
+export async function pickFreshSession(root: string, before: Set<string>, cwd: string | null, claimed?: Set<string>): Promise<RolloutMeta | null> {
+  const candidates = listRecentRollouts(root).filter((file) => !before.has(file) && !claimed?.has(file));
+  const read = await Promise.all(candidates.map(async (file) => ({ file, meta: await readSessionMeta(file) })));
+  const found = read.filter((x): x is { file: string; meta: CodexSessionMeta } => x.meta !== null);
   const sole = found.length === 1 ? found[0] : undefined;
   if (sole && sameDir(sole.meta.cwd, cwd)) return { ...sole.meta, file: sole.file };
   const matches = cwd ? found.filter((x) => sameDir(x.meta.cwd, cwd)) : [];
@@ -123,10 +131,10 @@ export async function watchForCodexSession(
   const deadline = Date.now() + (opts.maxWaitMs ?? WATCH_MAX_WAIT_MS);
   const isCancelled = opts.isCancelled ?? (() => false);
   const cwd = opts.cwd ?? null;
-  let result = pickFreshSession(root, before, cwd, opts.claimed);
+  let result = await pickFreshSession(root, before, cwd, opts.claimed);
   while (!result && Date.now() < deadline && !isCancelled()) {
     await delay(pollMs);
-    result = pickFreshSession(root, before, cwd, opts.claimed);
+    result = await pickFreshSession(root, before, cwd, opts.claimed);
   }
   // Claimed here, synchronously with the selection, not only in the caller's `.then`: two watchers
   // awaiting the same poll interval would otherwise both pick the same rollout before either

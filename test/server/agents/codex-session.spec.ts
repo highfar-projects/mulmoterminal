@@ -58,12 +58,12 @@ describe("codex-session fs helpers", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("reads the meta from the first line of a multi-line rollout", () => {
+  it("reads the meta from the first line of a multi-line rollout", async () => {
     const file = writeRollout(root, UUID_A, "/work", ['{"type":"message"}', '{"type":"message"}']);
-    expect(readSessionMeta(file)).toEqual({ id: UUID_A, cwd: "/work" });
+    expect(await readSessionMeta(file)).toEqual({ id: UUID_A, cwd: "/work" });
   });
-  it("returns null reading a missing file", () => {
-    expect(readSessionMeta(path.join(root, "nope.jsonl"))).toBeNull();
+  it("returns null reading a missing file", async () => {
+    expect(await readSessionMeta(path.join(root, "nope.jsonl"))).toBeNull();
   });
   it("lists rollouts under today's day dir", () => {
     writeRollout(root, UUID_A, "/work");
@@ -80,59 +80,59 @@ describe("pickFreshSession", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("returns null when nothing appeared after the snapshot", () => {
+  it("returns null when nothing appeared after the snapshot", async () => {
     writeRollout(root, UUID_A, "/a");
     const before = snapshotSessions(root);
-    expect(pickFreshSession(root, before, null)).toBeNull();
+    expect(await pickFreshSession(root, before, null)).toBeNull();
   });
-  it("attributes a single fresh rollout whose cwd agrees (unambiguous)", () => {
+  it("attributes a single fresh rollout whose cwd agrees (unambiguous)", async () => {
     const before = snapshotSessions(root);
     writeRollout(root, UUID_A, "/a");
-    expect(pickFreshSession(root, before, "/a")?.id).toBe(UUID_A);
+    expect((await pickFreshSession(root, before, "/a"))?.id).toBe(UUID_A);
   });
 
-  it("attributes a single fresh rollout when the caller has no cwd to check", () => {
+  it("attributes a single fresh rollout when the caller has no cwd to check", async () => {
     const before = snapshotSessions(root);
     writeRollout(root, UUID_A, "/a");
-    expect(pickFreshSession(root, before, null)?.id).toBe(UUID_A);
+    expect((await pickFreshSession(root, before, null))?.id).toBe(UUID_A);
   });
 
   // The #1533 case: two spawns in DIFFERENT directories share ~/.codex, so "exactly one new file"
   // used to fire before the cwd was consulted — and the slower spawn claimed the faster spawn's
   // rollout across directories. Sole no longer beats a cwd that disagrees.
-  it("refuses a single fresh rollout recorded for another directory", () => {
+  it("refuses a single fresh rollout recorded for another directory", async () => {
     const before = snapshotSessions(root);
     writeRollout(root, UUID_A, "/a");
-    expect(pickFreshSession(root, before, "/somewhere-else")).toBeNull();
+    expect(await pickFreshSession(root, before, "/somewhere-else")).toBeNull();
   });
-  it("attributes the unique cwd match when several are fresh", () => {
+  it("attributes the unique cwd match when several are fresh", async () => {
     const before = snapshotSessions(root);
     writeRollout(root, UUID_A, "/a");
     writeRollout(root, UUID_B, "/b");
-    expect(pickFreshSession(root, before, "/b")?.id).toBe(UUID_B);
+    expect((await pickFreshSession(root, before, "/b"))?.id).toBe(UUID_B);
   });
-  it("refuses to guess when several fresh rollouts share the cwd", () => {
+  it("refuses to guess when several fresh rollouts share the cwd", async () => {
     const before = snapshotSessions(root);
     writeRollout(root, UUID_A, "/same");
     writeRollout(root, UUID_B, "/same");
-    expect(pickFreshSession(root, before, "/same")).toBeNull();
+    expect(await pickFreshSession(root, before, "/same")).toBeNull();
   });
-  it("refuses to guess when several are fresh and none matches the cwd", () => {
+  it("refuses to guess when several are fresh and none matches the cwd", async () => {
     const before = snapshotSessions(root);
     writeRollout(root, UUID_A, "/a");
     writeRollout(root, UUID_B, "/b");
-    expect(pickFreshSession(root, before, "/other")).toBeNull();
+    expect(await pickFreshSession(root, before, "/other")).toBeNull();
   });
-  it("skips a rollout already claimed by another session", () => {
+  it("skips a rollout already claimed by another session", async () => {
     const before = snapshotSessions(root);
     const a = writeRollout(root, UUID_A, "/same");
     writeRollout(root, UUID_B, "/same");
-    expect(pickFreshSession(root, before, "/same", new Set([a]))?.id).toBe(UUID_B);
+    expect((await pickFreshSession(root, before, "/same", new Set([a])))?.id).toBe(UUID_B);
   });
-  it("returns null when the only fresh rollout is already claimed", () => {
+  it("returns null when the only fresh rollout is already claimed", async () => {
     const before = snapshotSessions(root);
     const a = writeRollout(root, UUID_A, "/a");
-    expect(pickFreshSession(root, before, null, new Set([a]))).toBeNull();
+    expect(await pickFreshSession(root, before, null, new Set([a]))).toBeNull();
   });
 });
 
