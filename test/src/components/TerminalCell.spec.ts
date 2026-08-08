@@ -1779,6 +1779,9 @@ describe("TerminalCell", () => {
     await w.find(".cell-close").trigger("click");
     await flushPromises();
     expect(w.find(".cell-inner").classes()).not.toContain(SUNK_CELL);
+    // Absent, NOT `inert="false"` — Vue treats it as Booleanish, and an element carrying
+    // inert="false" is inert (the trap TerminalGrid's zoom-main hit on #1333).
+    expect(w.find(".cell-inner").attributes("inert")).toBeUndefined();
 
     await w.find('[data-testid="ccx-remove"]').trigger("click");
     await flushPromises();
@@ -1790,6 +1793,10 @@ describe("TerminalCell", () => {
     // a busy indicator inside the layer it is dimming would be dimmed by it.
     expect(w.find(".cell-inner").classes()).toContain(SUNK_CELL);
     expect(w.find(".cell-inner").find('[data-testid="cell-removing"]').exists()).toBe(false);
+    // The veil stops the mouse and nothing else, so the body is made inert too — otherwise Tab
+    // walks into the header buttons and xterm's textarea behind it, and a screen reader reads a
+    // cell that is being deleted (Codex, #1552).
+    expect(w.find(".cell-inner").attributes("inert")).toBeDefined();
     // …and it covers the header, which the confirmation overlay never did.
     expect(busy.classes()).toContain("inset-0");
     expect(w.find('[data-testid="cell-close-confirm"]').exists()).toBe(false);

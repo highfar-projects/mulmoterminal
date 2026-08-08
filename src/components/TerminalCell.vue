@@ -1206,7 +1206,13 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
       <span class="material-symbols-outlined animate-spin text-[30px] text-secondary" aria-hidden="true">progress_activity</span>
       <span class="max-w-full truncate px-3 font-sans text-[12px] text-secondary">Removing {{ headerDir }}…</span>
     </div>
-    <div class="cell-inner" :class="[CELL_INNER, fadedClass]">
+    <!-- `inert` while the removal runs, not just faded: the veil above stops the mouse and nothing
+         else, so Tab still walked into the header buttons and the terminal's own textarea behind
+         it, and a screen reader still read a cell that is being deleted (Codex, #1552).
+         `|| undefined` rather than the boolean — `inert` is Booleanish to Vue, so `false` reaches
+         the DOM as inert="false", which is an inert element (the trap TerminalGrid's zoom-main
+         hit on #1333). -->
+    <div class="cell-inner" :class="[CELL_INNER, fadedClass]" :inert="removingWorktree || undefined">
       <template v-if="launched">
         <!-- Filmstrip thumbnail: the same roster header (CockpitHeader) — the dir colour is applied
            regardless of status (status is the dot + badge), so a thumbnail reads as its directory
