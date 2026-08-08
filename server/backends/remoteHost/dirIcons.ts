@@ -5,7 +5,7 @@
 // the reply, which is what everything here is about: turning a resolved DirIcon into one string,
 // and keeping the pile of them small enough that the reply still lands.
 import { createHash } from "node:crypto";
-import { closeSync, openSync, readSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import type { DirIcon } from "../../config/dir-icon.js";
 import type { TerminalSessionSummary } from "./terminalScreen.js";
 
@@ -34,17 +34,33 @@ export interface DirIconSources {
   readIcon: (path: string) => Buffer | null;
 }
 
-/** An icon file's bytes, or null when it is unreadable or over DIR_ICON_MAX_BYTES.
+// Everything here follows from one fact: the icon was checked as a PATH — inside the directory,
+// a real file, realpath re-checked (resolveFileWithinDir) — and is opened again later, by name.
+// Whatever answers to that name now is what actually gets read, so it is re-checked here rather
+// than assumed (Codex on #1558). Three ways it can differ, and what stops each:
+//
+//   a symlink out of the repository  O_NOFOLLOW — else the confinement is defeated by a rename,
+//                                    and a file elsewhere on the machine is base64'd to the phone
+//   a FIFO                           O_NONBLOCK — else `open` waits for a writer, and since this
+//                                    is synchronous, the whole server waits with it
+//   anything else not a file         the fstat below, which asks the OPEN DESCRIPTOR what it is
+//
+// Neither flag exists on Windows; there `|| 0` drops it and the fstat is the whole check.
+const ICON_OPEN_FLAGS = constants.O_RDONLY | (constants.O_NOFOLLOW || 0) | (constants.O_NONBLOCK || 0);
+
+/** An icon file's bytes, or null when it is unreadable, not a regular file, or over
+ *  DIR_ICON_MAX_BYTES.
  *
  *  Never reads more than the cap, so the cap is a fact about the returned buffer rather than a
  *  claim about the file. `stat` then `readFile` would be neither: this is a file in someone
  *  else's repository, written by tools this process does not control, so between the two calls
  *  it can become something else entirely — and the whole of THAT is what would get base64'd and
- *  handed to a Firestore document with a hard 1 MiB ceiling (Codex on #1558). */
+ *  handed to a Firestore document with a hard 1 MiB ceiling. */
 export function readIconFile(iconPath: string): Buffer | null {
   let fd: number | null = null;
   try {
-    fd = openSync(iconPath, "r");
+    fd = openSync(iconPath, ICON_OPEN_FLAGS);
+    if (!fstatSync(fd).isFile()) return null;
     // One byte past the cap: a file that fills this buffer is over it, and that is knowable
     // without reading the rest of whatever it turned out to be.
     const buffer = Buffer.alloc(DIR_ICON_MAX_BYTES + 1);

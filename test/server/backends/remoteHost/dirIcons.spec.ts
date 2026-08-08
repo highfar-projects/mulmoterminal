@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, vi } from "vitest";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -87,6 +88,25 @@ describe("readIconFile", () => {
   // and the confinement check is ever loosened — it must be a missing icon, not a crash.
   it("answers null for a directory", () => {
     expect(readIconFile(dir)).toBeNull();
+  });
+
+  // The path was confined when the config was READ; this opens it again later. A symlink put
+  // there in between would otherwise read a file outside the repository and send it to the phone
+  // — the exact thing resolveFileWithinDir exists to prevent (Codex on #1558).
+  it.skipIf(process.platform === "win32")("refuses a symlink, wherever it points", () => {
+    const outside = path.join(dir, "secret.txt");
+    writeFileSync(outside, "not yours");
+    const link = path.join(dir, "swapped.png");
+    symlinkSync(outside, link);
+    expect(readIconFile(link)).toBeNull();
+  });
+
+  // A FIFO in place of the file would make `open` wait for a writer that never comes. This
+  // reader is synchronous, so that is not a slow icon — it is the whole server, stopped.
+  it.skipIf(process.platform === "win32")("refuses a FIFO instead of blocking on it", () => {
+    const fifo = path.join(dir, "fifo.png");
+    execFileSync("mkfifo", [fifo]);
+    expect(readIconFile(fifo)).toBeNull();
   });
 });
 
