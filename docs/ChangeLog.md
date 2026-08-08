@@ -8,6 +8,89 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.7.4 — 2026-08-08
+
+> **Setup guide:** [Your projects, recognisable on your phone](https://receptron.github.io/mulmoterminal/guide/en/v4.7.4.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.7.4.html))
+
+**A release about the phone.** The picture that tells your projects apart in the grid now tells
+them apart on your phone too, and an agent you launch from the phone finally starts instead of
+waiting for someone at the desktop.
+
+### A project's icon now reaches the phone ([#1556](https://github.com/receptron/mulmoterminal/issues/1556), [#1558](https://github.com/receptron/mulmoterminal/pull/1558))
+
+The image a directory marks its cells with — `icon` in its `.mulmoterminal.json`, or the favicon
+its repository already ships (4.5.0) — now appears in the mulmoserver PWA's **terminal list** and
+**terminal screen**, so one project reads as one project on both screens. On the list it takes the
+place of the terminal glyph; that glyph's green/grey was the only thing saying whether a session is
+live, so the colour moved to a dot on the icon's corner rather than being dropped. A row whose
+directory has no icon keeps the glyph.
+
+The browser fetches `/api/dir-icon?cwd=…`. The phone has no route to this host at all — it speaks
+over Firestore command documents — so the picture travels **inside the reply** instead:
+`listTerminalSessions` gained an `icons` table that rows point into by `iconId`, and
+`getTerminalScreen` gained an `icon` holding the src directly. A remote `http(s)` or `data:` icon is
+passed through as written; a file inside the project is read and inlined as `data:<mime>;base64,…`.
+
+`iconId` is a **content hash**, so the six clones of one repository — and the nine that share a
+copied `public/favicon.ico` — send those bytes once between them. Two caps keep the reply landing:
+48 KiB per image, 256 KiB for the table. The second is the one that matters, because the reply is a
+Firestore command document that rejects the *whole* document over 1 MiB — an unbounded pile would
+empty the phone's session list rather than dim one row, the same failure as
+[#1042](https://github.com/receptron/mulmoterminal/issues/1042). Icons are packed in the order the
+phone shows the rows, so a budget that runs out costs the bottom of the list. Both numbers come
+from measurement rather than guesswork: across the 22 repositories on the author's machine that
+carry a detectable icon, the largest was 25931 bytes, the median 4286, and all 22 together come to
+148 KB of base64 — nothing reaches either cap.
+
+Two hardenings came out of review, both of which stand on their own. `readIconFile` now **reads no
+more than the cap**, so the cap is a fact about the returned buffer rather than a claim about the
+file: `stat` then `readFile` was neither, since a file in someone else's repository can become
+something else between the two calls. And it opens with `O_NOFOLLOW | O_NONBLOCK` and `fstat`s the
+descriptor, which refuses a FIFO left where the icon was — that would otherwise make `open` wait
+for a writer and stop this synchronous handler, and the server with it.
+
+Needs the companion UI, [receptron/mulmoserver#144](https://github.com/receptron/mulmoserver/pull/144),
+which is already deployed.
+
+### A phone-initiated agent launch now actually starts ([#1535](https://github.com/receptron/mulmoterminal/issues/1535), [#1557](https://github.com/receptron/mulmoterminal/pull/1557))
+
+Launching `claude` or `codex` from the phone opened a cell on the desktop grid and stopped at the
+**empty cell-creation form** — agent pre-picked, directory filled in, waiting for someone at the
+desktop to press Start. `shell` worked; the others did nothing if left alone.
+
+The grid was what was wrong, not either host: a cell with no session, no command and no launcher
+**is** the empty launcher (`isLaunchCell()` says so, and `TerminalCell` renders `CellLaunchForm`
+whenever it mounts without a session id) — and that is exactly what `CELL_FOR_AGENT` built for every
+agent kind. A one-shot, ephemeral `Cell.autoStart`, consumed by `TerminalCell` on mount, is the
+missing way for the grid to say "this cell already knows what it runs; start it". It counts as
+occupied while the session id is still on its way, so `switchPage` does not mistake a trailing cell
+for an abandoned launcher and `+` does not cancel it, and `setSession` strips the key once the id
+lands. Giving the agent cells a `launcher` instead was rejected: that runs the user's command
+verbatim on the launcher PTY with no MCP config, which is exactly the line CLAUDE.md draws between a
+launcher chip and an agent spawn.
+
+### Codex session discovery stops re-reading tens of megabytes a second ([#1554](https://github.com/receptron/mulmoterminal/issues/1554), [#1555](https://github.com/receptron/mulmoterminal/pull/1555))
+
+A JSONL file is one JSON object per line, but `readSessionMeta` stringified the **whole** codex
+rollout to read its first line (`session_meta`). Its caller, `pickFreshSession`, polls once a second
+for up to thirty minutes over every rollout from the last two days — measured on the reporter's
+machine at **149 files and 37 MB re-read every second** to look at a few hundred bytes. It now reads
+the first line only, through the reader module written after
+[#998](https://github.com/receptron/mulmoterminal/issues/998), which had line-streaming, tail and
+range reads but no "first line only" until now.
+
+**Not an OOM fix.** The crash reports under investigation are all `FatalProcessOutOfMemory`, and a
+rollout caps out at 6 MB, so this path alone cannot reach the 4288 MB heap ceiling. The root cause
+is still being chased; this is a real waste found along the way.
+
+### Also
+
+- **Dependency refresh** ([#1559](https://github.com/receptron/mulmoterminal/pull/1559)). No
+  behaviour change.
+- **The 4.7.3 release documentation** ([#1553](https://github.com/receptron/mulmoterminal/pull/1553))
+  — changelog entry, the dated setup guide in both languages and three screenshots — which landed
+  after 4.7.3 was tagged and so falls in this range.
+
 ## mulmoterminal@4.7.3 — 2026-08-08
 
 > **Setup guide:** [Buttons that say they are working](https://receptron.github.io/mulmoterminal/guide/en/v4.7.3.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.7.3.html))
