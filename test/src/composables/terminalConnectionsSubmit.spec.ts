@@ -13,6 +13,7 @@ vi.mock("@xterm/addon-clipboard", async () => (await import("../../helpers/xterm
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
 
 import * as conn from "../../../src/composables/useTerminalConnections";
+import { makeEnterHandler, makeSendHandler } from "../../../src/composables/terminalKeyHandlers";
 import { FakeWebSocket } from "../../helpers/xtermDouble";
 import { newlineSequence, submitSequence } from "../../../common/terminalSubmit";
 import { setTerminalSubmitMode } from "../../../src/composables/terminalSubmitMode";
@@ -40,7 +41,7 @@ describe("makeEnterHandler", () => {
   it("cr mode: sends the newline sequence on Shift+Enter, cancels the default, and preventDefaults", () => {
     const send = vi.fn();
     const preventDefault = vi.fn();
-    const handler = conn.makeEnterHandler(() => "cr", send);
+    const handler = makeEnterHandler(() => "cr", send);
     expect(handler(ev({ shiftKey: true, preventDefault }))).toBe(false); // false => xterm won't also send \r
     expect(send).toHaveBeenCalledWith(newlineSequence("cr"));
     expect(preventDefault).toHaveBeenCalled(); // else the browser fires a keypress and xterm submits a bare \r
@@ -48,7 +49,7 @@ describe("makeEnterHandler", () => {
 
   it("cr mode: passes a plain Enter through (returns true, sends nothing)", () => {
     const send = vi.fn();
-    const handler = conn.makeEnterHandler(() => "cr", send);
+    const handler = makeEnterHandler(() => "cr", send);
     expect(handler(ev({}))).toBe(true);
     expect(send).not.toHaveBeenCalled();
   });
@@ -56,7 +57,7 @@ describe("makeEnterHandler", () => {
   it("esc-cr mode: submits a bare Enter with the ESC+CR sequence and cancels the default", () => {
     const send = vi.fn();
     const preventDefault = vi.fn();
-    const handler = conn.makeEnterHandler(() => "esc-cr", send);
+    const handler = makeEnterHandler(() => "esc-cr", send);
     expect(handler(ev({ preventDefault }))).toBe(false);
     expect(send).toHaveBeenCalledWith(submitSequence("esc-cr"));
     expect(preventDefault).toHaveBeenCalled();
@@ -65,7 +66,7 @@ describe("makeEnterHandler", () => {
   it("reads the mode getter on every keydown, so a live config change is honoured", () => {
     const send = vi.fn();
     let mode: "cr" | "esc-cr" = "cr";
-    const handler = conn.makeEnterHandler(() => mode, send);
+    const handler = makeEnterHandler(() => mode, send);
     expect(handler(ev({}))).toBe(true); // cr: a bare Enter is left to xterm
     mode = "esc-cr";
     expect(handler(ev({}))).toBe(false); // esc-cr: the same key is now intercepted as submit
@@ -263,7 +264,7 @@ describe("makeSendHandler", () => {
   it("sends the bytes, cancels xterm's handling, and preventDefaults", () => {
     const send = vi.fn();
     const preventDefault = vi.fn();
-    const handler = conn.makeSendHandler(() => bound, send);
+    const handler = makeSendHandler(() => bound, send);
     expect(handler(key({ preventDefault }))).toBe(false); // false => xterm does not also translate the key
     expect(send).toHaveBeenCalledWith(CTRL_E);
     // Without this the browser fires a follow-up keypress that arrives as stray input — the same
@@ -274,7 +275,7 @@ describe("makeSendHandler", () => {
   it("passes an unbound key through untouched", () => {
     const send = vi.fn();
     const preventDefault = vi.fn();
-    const handler = conn.makeSendHandler(() => bound, send);
+    const handler = makeSendHandler(() => bound, send);
     expect(handler(key({ key: "ArrowLeft", preventDefault }))).toBe(true);
     expect(send).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
@@ -282,7 +283,7 @@ describe("makeSendHandler", () => {
 
   it("takes no key at all when nothing is bound", () => {
     const send = vi.fn();
-    const handler = conn.makeSendHandler(() => ({}), send);
+    const handler = makeSendHandler(() => ({}), send);
     expect(handler(key({}))).toBe(true);
     expect(send).not.toHaveBeenCalled();
   });
@@ -292,7 +293,7 @@ describe("makeSendHandler", () => {
   it("re-reads the keymap on every keystroke", () => {
     const send = vi.fn();
     let keymap: { send?: { key: string; bytes: string }[] } = {};
-    const handler = conn.makeSendHandler(() => keymap, send);
+    const handler = makeSendHandler(() => keymap, send);
     expect(handler(key({}))).toBe(true);
     keymap = bound;
     expect(handler(key({}))).toBe(false);

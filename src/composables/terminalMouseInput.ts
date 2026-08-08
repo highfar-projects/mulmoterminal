@@ -56,6 +56,13 @@ function cellHeightOf(term: Terminal): number {
   return screen.getBoundingClientRect().height / term.rows;
 }
 
+/** What a caller can ask of the wheel after the fact. Only one thing so far: put the app back
+ *  where it was before the user scrolled — see useScrollToBottomOnSubmit for why that cannot be
+ *  `term.scrollToBottom()`. */
+export interface WheelScrollControl {
+  restoreToBottom: () => void;
+}
+
 /** Wheel -> the SGR wheel reports the app asked for. Without this xterm converts the wheel into
  *  arrow keys for an alt-buffer app, which a TUI binds to input history — so scrolling spun the
  *  prompt history instead of the transcript (#737).
@@ -64,8 +71,14 @@ function cellHeightOf(term: Terminal): number {
  *  event: a macOS trackpad emits a burst per swipe, and one report each scrolled a TUI far
  *  faster than the same gesture scrolls the scrollback (#978). `scrollSpeed` is read per event,
  *  so changing it in Settings applies to terminals that are already open. */
-export function guardMouseWheel(term: Terminal, swallowedMouseModes: ReadonlySet<number>, scrollSpeed: () => number): void {
+export function guardMouseWheel(term: Terminal, swallowedMouseModes: ReadonlySet<number>, scrollSpeed: () => number): WheelScrollControl {
   const ticker = createWheelTicker();
+  // How far ABOVE the bottom our reports have taken the app, in notches. The app owns its scroll
+  // position and never tells us where it is — but every notch it moved came from `report` below,
+  // so counting them is the one honest measure this side has (#1546). Clamped at zero: the app
+  // stops at its own bottom, so reports past it move nothing and must not go negative, or a later
+  // restore would scroll DOWN past where the user actually is.
+  let depthNotches = 0;
   // The gesture-end flush, and where it aims. A flush has no event of its own, so it reports at the
   // last cell the pointer was over — the same cell the gesture has been reporting at all along.
   let pendingFlush: ReturnType<typeof setTimeout> | undefined;
@@ -78,7 +91,11 @@ export function guardMouseWheel(term: Terminal, swallowedMouseModes: ReadonlySet
 
   const report = (notches: number, cell: GridCell): void => {
     const seq = wheelReportSequence(notches, cell.col, cell.row);
-    if (seq) for (let i = 0; i < Math.abs(notches); i++) term.input(seq, false);
+    if (!seq) return;
+    for (let i = 0; i < Math.abs(notches); i++) term.input(seq, false);
+    // Negative notches are wheel-UP (see wheelReportSequence), which takes the app further from
+    // its bottom — so the depth moves against the sign.
+    depthNotches = Math.max(0, depthNotches - notches);
   };
 
   const flush = (): void => {
@@ -118,6 +135,24 @@ export function guardMouseWheel(term: Terminal, swallowedMouseModes: ReadonlySet
     pendingFlush = setTimeout(flush, GESTURE_END_MS);
     return false;
   });
+
+  return {
+    restoreToBottom: (): void => {
+      if (depthNotches <= 0) return;
+      // The app stopped taking reports (it exited, or left the alternate buffer) — there is
+      // nothing left holding a scroll position, and reports now would be typed at whatever
+      // replaced it. Forget the debt instead.
+      if (!reportsMouseToApp(term, swallowedMouseModes)) {
+        depthNotches = 0;
+        return;
+      }
+      // The banked fraction belongs to a gesture that is over, and paying it out after the
+      // restore would scroll back off the bottom by less than a notch.
+      cancelFlush();
+      ticker.residual = 0;
+      report(depthNotches, lastCell); // positive = down; `report` zeroes the depth as it pays it
+    },
+  };
 }
 
 // Which gestures are the app's to hear. Everything rejected here belongs to the browser side of
@@ -159,7 +194,7 @@ export function guardMouseClicks(term: Terminal, swallowedMouseModes: ReadonlySe
   });
 }
 
-export function guardMouseTracking(term: Terminal, swallowedMouseModes: Set<number>): void {
+export function guardMouseTracking(term: Terminal, swallowedMouseModes: Set<number>): WheelScrollControl {
   term.parser.registerCsiHandler({ prefix: "?", final: "h" }, (params) => {
     const swallowed = swallowsMouseTracking(params);
     if (swallowed) recordSwallowedModes(swallowedMouseModes, params);
@@ -169,5 +204,5 @@ export function guardMouseTracking(term: Terminal, swallowedMouseModes: Set<numb
     clearResetModes(swallowedMouseModes, params);
     return false;
   });
-  guardMouseWheel(term, swallowedMouseModes, getTerminalScrollSpeed);
+  return guardMouseWheel(term, swallowedMouseModes, getTerminalScrollSpeed);
 }

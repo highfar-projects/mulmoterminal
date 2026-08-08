@@ -5,7 +5,7 @@
 // alone would pass just as happily with the listeners on the wrong element or the wrong gate.
 import { describe, it, expect, beforeAll, afterEach } from "vitest";
 import { Terminal } from "@xterm/xterm";
-import { GESTURE_END_MS, guardMouseClicks, guardMouseWheel } from "../../../src/composables/terminalMouseInput";
+import { GESTURE_END_MS, guardMouseClicks, guardMouseWheel, type WheelScrollControl } from "../../../src/composables/terminalMouseInput";
 import { recordSwallowedModes } from "../../../src/composables/mouseReports";
 import { swallowsMouseTracking } from "../../../src/composables/mouseTrackingModes";
 
@@ -51,6 +51,7 @@ interface Wired {
   term: Terminal;
   screen: HTMLElement;
   sent: string[];
+  wheel: WheelScrollControl;
 }
 
 // A terminal wired the way ensure() wires one: the #729 parser swallow, then the click guard
@@ -70,13 +71,13 @@ async function openWiredTerminal(options: { tracked?: boolean; scrollSpeed?: num
   const screen = term.element?.querySelector<HTMLElement>(".xterm-screen");
   if (!screen) throw new Error("xterm did not create .xterm-screen — the click guard has nothing to bind to");
   screen.getBoundingClientRect = () => new DOMRect(0, 0, COLS * CELL_WIDTH_PX, ROWS * CELL_HEIGHT_PX);
-  guardMouseWheel(term, swallowedMouseModes, () => options.scrollSpeed ?? 1);
+  const wheelControl = guardMouseWheel(term, swallowedMouseModes, () => options.scrollSpeed ?? 1);
   guardMouseClicks(term, swallowedMouseModes);
   const sent: string[] = [];
   term.onData((data) => sent.push(data));
   await write(term, ALT_BUFFER_ON);
   if (options.tracked !== false) await write(term, CLAUDE_TRACKING_REQUEST);
-  return { term, screen, sent };
+  return { term, screen, sent, wheel: wheelControl };
 }
 
 const mouse = (screen: HTMLElement, type: "mousedown" | "mouseup", clientX: number, clientY: number, button = 0) =>
@@ -335,6 +336,86 @@ describe("guardMouseWheel gesture-end flush", () => {
     for (let i = 0; i < 5; i++) wheel(screen, 2, 115, 250);
     term.dispose();
     await afterGesture();
+    expect(sent).toEqual([]);
+  });
+});
+
+// Returning a scrolled-up agent to the bottom when the user submits (#1546).
+//
+// A shell cell has always done this: no mouse tracking, so the wheel puts tmux into copy-mode and
+// Enter is copy-mode's own cancel. A full-screen agent takes the wheel itself — Claude Code sets
+// tracking 1003 AND the alternate buffer, measured with `tmux list-panes` — so the scroll position
+// belongs to the AGENT and there is no xterm scrollback to return to. What this side can do is
+// unwind the notches it reported, because it is the side that synthesized them.
+describe("restoreToBottom on a real terminal", () => {
+  const wheel = (screen: HTMLElement, deltaY: number) =>
+    screen.dispatchEvent(new WheelEvent("wheel", { deltaY, clientX: 115, clientY: 250, bubbles: true, cancelable: true }));
+  // 120px / 20px per cell = 6 notches at the default speed. Deltas are kept at this WHEEL size
+  // throughout: a small delta is read as a trackpad and gained, so a fraction of it is not a
+  // proportional fraction of the notches (see TRACKPAD_GAIN in mouseReports).
+  const SIX_NOTCHES_PX = 120;
+  const downReports = (sent: string[]) => sent.filter((s) => s.startsWith("\x1b[<65;"));
+  const upReports = (sent: string[]) => sent.filter((s) => s.startsWith("\x1b[<64;"));
+
+  it("sends nothing when the user has not scrolled", async () => {
+    const { sent, wheel: control } = await openWiredTerminal();
+    control.restoreToBottom();
+    expect(sent).toEqual([]);
+  });
+
+  it("unwinds exactly the notches it scrolled the app up by", async () => {
+    const { screen, sent, wheel: control } = await openWiredTerminal();
+    wheel(screen, -SIX_NOTCHES_PX);
+    expect(upReports(sent)).toHaveLength(6);
+    sent.length = 0;
+    control.restoreToBottom();
+    expect(downReports(sent)).toHaveLength(6);
+  });
+
+  it("counts a scroll back down against the debt", async () => {
+    const { screen, sent, wheel: control } = await openWiredTerminal();
+    wheel(screen, -SIX_NOTCHES_PX);
+    wheel(screen, -SIX_NOTCHES_PX); // twelve notches up in total
+    wheel(screen, SIX_NOTCHES_PX); // the user came six of them back themselves
+    sent.length = 0;
+    control.restoreToBottom();
+    expect(downReports(sent)).toHaveLength(6);
+  });
+
+  // The app stops at its own bottom, so reports past it move nothing. Going into credit would make
+  // a later restore scroll DOWN past where the user actually is.
+  it("does not go into credit when scrolled further down than up", async () => {
+    const { screen, sent, wheel: control } = await openWiredTerminal();
+    wheel(screen, -SIX_NOTCHES_PX);
+    wheel(screen, SIX_NOTCHES_PX);
+    wheel(screen, SIX_NOTCHES_PX); // far more down than up
+    sent.length = 0;
+    control.restoreToBottom();
+    expect(sent).toEqual([]);
+  });
+
+  it("is spent once — a second restore sends nothing", async () => {
+    const { screen, sent, wheel: control } = await openWiredTerminal();
+    wheel(screen, -SIX_NOTCHES_PX);
+    control.restoreToBottom();
+    sent.length = 0;
+    control.restoreToBottom();
+    expect(sent).toEqual([]);
+  });
+
+  // The app exited or left the alternate buffer: reports now would be typed at whatever replaced
+  // it, and there is no scroll position left to restore. The debt is forgotten, not paid — and it
+  // stays forgotten if a new app takes the terminal, which never asked to be scrolled.
+  it("forgets the debt when the app has stopped taking the mouse", async () => {
+    const { term, screen, sent, wheel: control } = await openWiredTerminal();
+    wheel(screen, -SIX_NOTCHES_PX);
+    await write(term, ALT_BUFFER_OFF);
+    sent.length = 0;
+    control.restoreToBottom();
+    expect(sent).toEqual([]);
+    await write(term, ALT_BUFFER_ON);
+    await write(term, CLAUDE_TRACKING_REQUEST);
+    control.restoreToBottom();
     expect(sent).toEqual([]);
   });
 });
