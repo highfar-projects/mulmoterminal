@@ -85,6 +85,12 @@ The **sidebar** groups the sections and shows one at a time; below `sm` (a phone
 above the section. Twenty-five sections in nine groups — **Voice input** is there only on a machine
 that can transcribe, so most setups see twenty-four.
 
+A button that hands a section over to a skill — "Create a theme…", "Configure notifications…" —
+**asks first**. It starts an agent session in a new grid cell, so the dialog says what will happen
+and how to stop it (close that cell); **Cancel** leaves you where you were, with Settings still open.
+
+![The confirmation a skill button raises — what starts, how to stop it, Cancel / Start](../images/skill-launch-confirm-en.png)
+
 Settings is available in **English and Japanese**. It follows your browser's language unless you pick
 one in **Language** — the first entry in the sidebar, because it is the one setting someone who
 cannot read the rest of the screen has to find first. Only this modal is translated so far; the rest

@@ -300,6 +300,18 @@ export const en = {
       field: "Add a repository (owner/repo)",
     },
 
+    skillLaunch: {
+      hint: "An agent does this for you — it asks a few questions and edits the config file itself.",
+    },
+
+    skillConfirm: {
+      title: "Let an agent set this up?",
+      what: "One new terminal opens in the grid, and {agent} starts there — it asks you a few questions and edits your config file itself.",
+      howToStop: "To stop, close that terminal with its close button — the session ends there. Settings reopens from the toolbar whenever you want it.",
+      cancel: "Cancel",
+      start: "Start",
+    },
+
     version: {
       label: "Version",
       commit: "commit {sha}",

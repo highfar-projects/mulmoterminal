@@ -14,6 +14,7 @@ import { useI18n } from "vue-i18n";
 import { MODAL_FOCUSABLE } from "../utils/focusTrap";
 import { useModalKeyboard } from "../composables/useModalKeyboard";
 import { fetchVoiceInputStatus } from "../composables/voiceModelStatus";
+import { launchAgent } from "../composables/useChatLauncher";
 import SettingsButton from "./SettingsButton.vue";
 import AppVersionLine from "./settings/AppVersionLine.vue";
 import ThemeSection from "./settings/ThemeSection.vue";
@@ -41,6 +42,7 @@ import TerminalKeysSection from "./settings/TerminalKeysSection.vue";
 import KeyboardShortcutsSection from "./settings/KeyboardShortcutsSection.vue";
 import HelpSection from "./settings/HelpSection.vue";
 import LanguageSection from "./settings/LanguageSection.vue";
+import SkillLaunchConfirm from "./settings/SkillLaunchConfirm.vue";
 import { SECTION_HEADING } from "./settings/sectionClasses";
 import { DEFAULT_SETTINGS_TAB, SETTINGS_GROUPS, isSettingsTabId, type SettingsTabId } from "./settings/settingsTabs";
 import type { Launcher } from "./launchers";
@@ -132,6 +134,35 @@ function onTabPick(e: Event) {
 // Selection follows focus (the pattern's automatic activation, as ThemeSection's radiogroup does):
 // arrowing therefore mounts each pane it lands on, GETs included. That is the cost of the cheaper
 // option, and it is bounded by the sections the user actually arrows past.
+// A skill button starts a live agent session in a new cell and sends its first turn, which used to
+// happen the moment it was pressed — with Settings already closed behind it, so there was nothing
+// to go back to (#1564). The confirmation is owned HERE rather than by the button for the keyboard's
+// sake: `useModalKeyboard` binds Escape on the document, so a dialog with its own binding would
+// close the confirm and this modal on one press. One listener, layered below.
+const pendingSkill = ref<BundledSkillName | null>(null);
+const confirmEl = ref<HTMLElement>();
+
+function askBeforeLaunch(skill: BundledSkillName) {
+  pendingSkill.value = skill;
+  void nextTick(() => confirmEl.value?.querySelector<HTMLElement>("button")?.focus());
+}
+
+// Escape's layered answer: the confirmation is what it dismisses while one is open, and only a
+// second press reaches the modal.
+function closeTopmost() {
+  if (pendingSkill.value === null) {
+    emit("close");
+    return;
+  }
+  pendingSkill.value = null;
+}
+
+function startPendingSkill() {
+  const skill = pendingSkill.value;
+  pendingSkill.value = null;
+  if (skill) emit("launch-skill", skill);
+}
+
 const navEl = ref<HTMLElement>();
 const visibleTabs = computed(() => visibleGroups.value.flatMap((group) => group.tabs));
 
@@ -151,7 +182,16 @@ function onTabKey(e: KeyboardEvent, id: SettingsTabId) {
 // Escape closes; Tab is trapped within the dialog. The first stop is an `input` where there is
 // one — the sections are mostly text fields, and landing on the Close button instead means
 // tabbing past the whole dialog to reach the setting you opened it for.
-useModalKeyboard({ modalEl, onClose: () => emit("close"), trapSelector: MODAL_FOCUSABLE, focusSelector: "input, button" });
+//
+// While the skill confirmation is open it takes both: Escape answers it rather than closing
+// Settings behind it, and Tab is trapped in it rather than in everything it covers.
+const trappedEl = computed(() => confirmEl.value ?? modalEl.value);
+useModalKeyboard({
+  modalEl: trappedEl,
+  onClose: closeTopmost,
+  trapSelector: MODAL_FOCUSABLE,
+  focusSelector: "input, button",
+});
 </script>
 
 <template>
@@ -233,7 +273,7 @@ useModalKeyboard({ modalEl, onClose: () => emit("close"), trapSelector: MODAL_FO
             <LanguageSection />
           </div>
           <div v-if="visitedTabs.has('theme')" v-show="activeTab === 'theme'" data-testid="settings-pane-theme">
-            <ThemeSection @launch-skill="emit('launch-skill', $event)" />
+            <ThemeSection @launch-skill="askBeforeLaunch" />
           </div>
           <div v-if="visitedTabs.has('font')" v-show="activeTab === 'font'" data-testid="settings-pane-font">
             <TerminalFontFamilySection />
@@ -248,28 +288,28 @@ useModalKeyboard({ modalEl, onClose: () => emit("close"), trapSelector: MODAL_FO
             <WaitingRowsSection />
           </div>
           <div v-if="visitedTabs.has('dirAppearance')" v-show="activeTab === 'dirAppearance'" data-testid="settings-pane-dirAppearance">
-            <DirAppearanceSection @launch-skill="emit('launch-skill', $event)" />
+            <DirAppearanceSection @launch-skill="askBeforeLaunch" />
           </div>
           <div v-if="visitedTabs.has('dirSettings')" v-show="activeTab === 'dirSettings'" data-testid="settings-pane-dirSettings">
-            <DirSettingsSection :dir-paths="dirPaths" @launch-skill="emit('launch-skill', $event)" />
+            <DirSettingsSection :dir-paths="dirPaths" @launch-skill="askBeforeLaunch" />
           </div>
           <div v-if="visitedTabs.has('launchers')" v-show="activeTab === 'launchers'" data-testid="settings-pane-launchers">
             <LaunchersSection :launchers="launchers" @update-launchers="emit('update-launchers', $event)" />
           </div>
           <div v-if="visitedTabs.has('headerChrome')" v-show="activeTab === 'headerChrome'" data-testid="settings-pane-headerChrome">
-            <HeaderChromeSection @launch-skill="emit('launch-skill', $event)" />
+            <HeaderChromeSection @launch-skill="askBeforeLaunch" />
           </div>
           <div v-if="visitedTabs.has('terminalKeys')" v-show="activeTab === 'terminalKeys'" data-testid="settings-pane-terminalKeys">
             <TerminalKeysSection />
           </div>
           <div v-if="visitedTabs.has('shortcuts')" v-show="activeTab === 'shortcuts'" data-testid="settings-pane-shortcuts">
-            <KeyboardShortcutsSection @launch-skill="emit('launch-skill', $event)" />
+            <KeyboardShortcutsSection @launch-skill="askBeforeLaunch" />
           </div>
           <div v-if="visitedTabs.has('voice')" v-show="activeTab === 'voice'" data-testid="settings-pane-voice">
             <VoiceInputSection />
           </div>
           <div v-if="visitedTabs.has('models')" v-show="activeTab === 'models'" data-testid="settings-pane-models">
-            <ModelsSection @launch-skill="emit('launch-skill', $event)" />
+            <ModelsSection @launch-skill="askBeforeLaunch" />
           </div>
           <div v-if="visitedTabs.has('mcp')" v-show="activeTab === 'mcp'" data-testid="settings-pane-mcp">
             <McpServersSection :user-mcp-servers="userMcpServers" @update-user-mcp="emit('update-user-mcp', $event)" />
@@ -282,7 +322,7 @@ useModalKeyboard({ modalEl, onClose: () => emit("close"), trapSelector: MODAL_FO
               @update-sound="emit('update-sound', $event)"
               @update-sound-kinds="emit('update-sound-kinds', $event)"
               @update-sounds="emit('update-sounds', $event)"
-              @launch-skill="emit('launch-skill', $event)"
+              @launch-skill="askBeforeLaunch"
             />
           </div>
           <div v-if="visitedTabs.has('push')" v-show="activeTab === 'push'" data-testid="settings-pane-push">
@@ -318,6 +358,13 @@ useModalKeyboard({ modalEl, onClose: () => emit("close"), trapSelector: MODAL_FO
             <HelpSection />
           </div>
         </div>
+      </div>
+
+      <!-- The ref is on a wrapper, not on the component: a template ref on a component yields its
+           instance, and both the focus trap and the initial focus need the ELEMENT. The wrapper has
+           no box of its own — the dialog inside it is `fixed`. -->
+      <div v-if="pendingSkill" ref="confirmEl">
+        <SkillLaunchConfirm :agent="launchAgent" @confirm="startPendingSkill" @cancel="pendingSkill = null" />
       </div>
 
       <div class="flex items-center gap-2 border-t border-border px-4 py-3">
