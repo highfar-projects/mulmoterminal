@@ -129,6 +129,19 @@ describe("pickFreshSession", () => {
     writeRollout(root, UUID_B, "/same");
     expect((await pickFreshSession(root, before, "/same", new Set([a])))?.id).toBe(UUID_B);
   });
+  // Reading the meta is asynchronous now, so selecting and claiming are no longer one tick apart by
+  // construction. Two watchers polling together must still not both take the same rollout — that is
+  // the duplicate attribution #1533 exists to prevent, and it would map one conversation to two
+  // session ids (Codex on #1555).
+  it("gives one rollout to only ONE of two watchers polling at the same time", async () => {
+    const before = snapshotSessions(root);
+    writeRollout(root, UUID_A, "/a");
+    const claimed = new Set<string>();
+    const picks = await Promise.all([pickFreshSession(root, before, "/a", claimed), pickFreshSession(root, before, "/a", claimed)]);
+    expect(picks.filter((p) => p !== null)).toHaveLength(1);
+    expect(claimed.size).toBe(1);
+  });
+
   it("returns null when the only fresh rollout is already claimed", async () => {
     const before = snapshotSessions(root);
     const a = writeRollout(root, UUID_A, "/a");

@@ -108,13 +108,26 @@ const sameDir = (recorded: string | null | undefined, cwd: string | null): boole
 export async function pickFreshSession(root: string, before: Set<string>, cwd: string | null, claimed?: Set<string>): Promise<RolloutMeta | null> {
   const candidates = listRecentRollouts(root).filter((file) => !before.has(file) && !claimed?.has(file));
   const read = await Promise.all(candidates.map(async (file) => ({ file, meta: await readSessionMeta(file) })));
-  const found = read.filter((x): x is { file: string; meta: CodexSessionMeta } => x.meta !== null);
+  // Everything from here to the claim runs in ONE synchronous block, and the `claimed` filter is
+  // re-applied rather than trusted from before the await. Reading the meta used to be synchronous,
+  // so selecting and claiming could not be interleaved; with the read awaited, two watchers polling
+  // the same tick would otherwise both pass the filter above, both pick the same rollout, and both
+  // map it to a different session — the duplicate attribution #1533 exists to prevent (Codex on
+  // #1555).
+  const found = read.filter((x): x is { file: string; meta: CodexSessionMeta } => x.meta !== null && !claimed?.has(x.file));
+  const picked = soleFresh(found, cwd);
+  if (!picked) return null;
+  claimed?.add(picked.file);
+  return { ...picked.meta, file: picked.file };
+}
+
+// Exactly one new rollout, or exactly one whose cwd agrees — the refusal to guess, kept apart from
+// the claiming above so the rule stays readable.
+function soleFresh(found: readonly { file: string; meta: CodexSessionMeta }[], cwd: string | null) {
   const sole = found.length === 1 ? found[0] : undefined;
-  if (sole && sameDir(sole.meta.cwd, cwd)) return { ...sole.meta, file: sole.file };
+  if (sole && sameDir(sole.meta.cwd, cwd)) return sole;
   const matches = cwd ? found.filter((x) => sameDir(x.meta.cwd, cwd)) : [];
-  const soleMatch = matches.length === 1 ? matches[0] : undefined;
-  if (soleMatch) return { ...soleMatch.meta, file: soleMatch.file };
-  return null;
+  return matches.length === 1 ? matches[0] : undefined;
 }
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));

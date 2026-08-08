@@ -24,6 +24,18 @@ JSONL は 1 行 1 JSON なので、必要な行だけ読めばよい。`server/i
 - `readSessionMeta` と `pickFreshSession` が非同期になる。呼び出しは `watchForCodexSession` だけで、
   そこは元から async。
 
+### 非同期化で壊れるもの: 選択と claim の不可分性（#1555 の Codex レビュー）
+
+旧 `pickFreshSession` は同期だったので「`claimed` を見て選ぶ → watcher が claim する」が 1 tick 内で
+不可分だった。await が入ると**スナップショットと claim の間に他の watcher が割り込める**ため、2 つの
+watcher が同じ rollout を掴み、1 つの会話が 2 つの session id に紐づく（#1533 が直した二重帰属）。
+
+`Promise.all` の**後**に `claimed` を再チェックし、選択と claim を同じ同期ブロックに置く。claim する
+のは `pickFreshSession` 自身になる（watcher 側の add は冪等なのでそのまま）。
+
+回帰テストは「同時に走る 2 つの watcher に 1 つしか渡らない」。修正前のコードで実際に 2 つ返ることを
+確認済み。
+
 ## テスト
 
 `test/server/infra/jsonl-file.spec.ts` に 5 ケース。うち 1 つは**「先頭行の後ろがどれだけ大きくても
