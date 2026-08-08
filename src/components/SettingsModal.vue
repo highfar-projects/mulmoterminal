@@ -134,6 +134,22 @@ function onTabPick(e: Event) {
 // Selection follows focus (the pattern's automatic activation, as ThemeSection's radiogroup does):
 // arrowing therefore mounts each pane it lands on, GETs included. That is the cost of the cheaper
 // option, and it is bounded by the sections the user actually arrows past.
+const navEl = ref<HTMLElement>();
+const visibleTabs = computed(() => visibleGroups.value.flatMap((group) => group.tabs));
+
+function onTabKey(e: KeyboardEvent, id: SettingsTabId) {
+  const forward = e.key === "ArrowDown" || e.key === "ArrowRight";
+  const backward = e.key === "ArrowUp" || e.key === "ArrowLeft";
+  if (!forward && !backward) return;
+  e.preventDefault();
+  const tabs = visibleTabs.value;
+  const index = tabs.indexOf(id);
+  const next = tabs[(index + (forward ? 1 : tabs.length - 1)) % tabs.length];
+  if (!next) return;
+  activeTab.value = next;
+  void nextTick(() => navEl.value?.querySelector<HTMLElement>(`[data-testid="settings-tab-${next}"]`)?.focus());
+}
+
 // A skill button starts a live agent session in a new cell and sends its first turn, which used to
 // happen the moment it was pressed — with Settings already closed behind it, so there was nothing
 // to go back to (#1564). The confirmation is owned HERE rather than by the button for the keyboard's
@@ -175,22 +191,6 @@ function startPendingSkill() {
   // No focus to restore: the shell closes this modal and puts the session on screen.
   pendingSkill.value = null;
   if (skill) emit("launch-skill", skill);
-}
-
-const navEl = ref<HTMLElement>();
-const visibleTabs = computed(() => visibleGroups.value.flatMap((group) => group.tabs));
-
-function onTabKey(e: KeyboardEvent, id: SettingsTabId) {
-  const forward = e.key === "ArrowDown" || e.key === "ArrowRight";
-  const backward = e.key === "ArrowUp" || e.key === "ArrowLeft";
-  if (!forward && !backward) return;
-  e.preventDefault();
-  const tabs = visibleTabs.value;
-  const index = tabs.indexOf(id);
-  const next = tabs[(index + (forward ? 1 : tabs.length - 1)) % tabs.length];
-  if (!next) return;
-  activeTab.value = next;
-  void nextTick(() => navEl.value?.querySelector<HTMLElement>(`[data-testid="settings-tab-${next}"]`)?.focus());
 }
 
 // Escape closes; Tab is trapped within the dialog. The first stop is an `input` where there is
