@@ -190,9 +190,10 @@ was dropped rather than trusting the file.
 
 ### Project icon — `icon`
 
-An IMAGE beside the name badge, in the cell header, the cockpit roster, the filmstrip thumbnails
-and the launcher's directory chips. **Not** a Material Symbols name — that is what a header
-BUTTON's `icon` is, and it is `mulmoterminal-header`'s key, not this one.
+An IMAGE beside the name badge, in the cell header, the cockpit roster, the filmstrip thumbnails,
+the launcher's directory chips, and the phone's terminal list and terminal screen. **Not** a
+Material Symbols name — that is what a header BUTTON's `icon` is, and it is
+`mulmoterminal-header`'s key, not this one.
 
 - **A path is relative to this directory**, and confined to it: an absolute path, or a `../` that
   escapes, is dropped. Or an `http(s)://` URL, or a `data:image/…` URI (capped at 64 KB, since it
