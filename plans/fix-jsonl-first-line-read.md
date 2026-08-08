@@ -48,3 +48,12 @@ watcher が同じ rollout を掴み、1 つの会話が 2 つの session id に�
 - **OOM の真因**。クラッシュレポート 4 件はすべて `FatalProcessOutOfMemory` だが、rollout は最大 6MB
   なのでこの経路単体では 4GB に届かない。継続調査。
 - `server/agents/grok-sessions.ts` の `readSummary` も全読み。要約ファイルで小さいので別途。
+
+### キャンセルされた watcher の claim を返す（#1555 の Codex レビュー 2 回目）
+
+claim するのが `pickFreshSession` になったので、**非同期の読み取り中にセッションが死ぬと claim だけが
+残る**。残った claim は「死んだ pty への帰属」か「他のどのセッションも取れない rollout」のどちらかに
+なるため、watcher は取得後にキャンセルを見て**claim を返して null を返す**。
+
+回帰テストは 2 ケース（キャンセル時に何も残さない / 非キャンセル時は両方残す）。修正前のコードで
+結果が返ってしまうことを確認済み。

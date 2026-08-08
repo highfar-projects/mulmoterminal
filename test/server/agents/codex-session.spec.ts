@@ -71,6 +71,37 @@ describe("codex-session fs helpers", () => {
   });
 });
 
+// The read is asynchronous now, so the session a watcher speaks for can die DURING it. A claim that
+// outlives its session is either an attribution to a dead pty or a rollout nothing else can ever
+// take, so the watcher gives it back (Codex on #1555).
+describe("watchForCodexSession cancellation", () => {
+  let root: string;
+  beforeEach(() => {
+    root = mkdtempSync(path.join(tmpdir(), "mt-codex-"));
+  });
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("keeps neither the rollout nor its claim when the session was cancelled", async () => {
+    const before = snapshotSessions(root);
+    const file = writeRollout(root, UUID_A, "/a");
+    const claimed = new Set<string>();
+    const result = await watchForCodexSession(root, before, { cwd: "/a", claimed, isCancelled: () => true, maxWaitMs: 0 });
+    expect(result).toBeNull();
+    expect(claimed.has(file)).toBe(false);
+  });
+
+  it("keeps both when it was not cancelled", async () => {
+    const before = snapshotSessions(root);
+    const file = writeRollout(root, UUID_A, "/a");
+    const claimed = new Set<string>();
+    const result = await watchForCodexSession(root, before, { cwd: "/a", claimed, isCancelled: () => false, maxWaitMs: 0 });
+    expect(result?.file).toBe(file);
+    expect(claimed.has(file)).toBe(true);
+  });
+});
+
 describe("pickFreshSession", () => {
   let root: string;
   beforeEach(() => {

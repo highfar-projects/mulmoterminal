@@ -149,9 +149,14 @@ export async function watchForCodexSession(
     await delay(pollMs);
     result = await pickFreshSession(root, before, cwd, opts.claimed);
   }
-  // Claimed here, synchronously with the selection, not only in the caller's `.then`: two watchers
-  // awaiting the same poll interval would otherwise both pick the same rollout before either
-  // claim landed (#1533). The caller's own add stays and is idempotent.
-  if (result) opts.claimed?.add(result.file);
+  // The claim is made by `pickFreshSession`, synchronously with the selection (#1533, and see the
+  // note there on why the await made that necessary). What is left here is releasing it: the read
+  // is asynchronous now, so the session this watcher speaks for can die DURING it — and a claim
+  // that outlives its session is either an attribution to a dead pty or a rollout no other session
+  // can ever take (Codex on #1555). Released rather than kept, because nothing else will.
+  if (result && isCancelled()) {
+    opts.claimed?.delete(result.file);
+    return null;
+  }
   return result;
 }
