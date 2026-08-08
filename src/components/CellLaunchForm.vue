@@ -24,8 +24,11 @@ import AgentMark from "./AgentMark.vue";
 import ModelPicker from "./ModelPicker.vue";
 import { LAUNCH_ROW } from "./launchFormClasses";
 import { jsonBody } from "../jsonBody";
+import { isRecord } from "../../common/isRecord";
 import { filePickerOpen, pickPaths } from "../composables/pickPaths";
+import { useBusyAction } from "../composables/useBusyAction";
 import { useSessionStop } from "../composables/useSessionStop";
+import { worktreeRequestFailure } from "./cellChromeRules";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 // What an EMPTY grid cell shows: pick a directory, pick what to run in it, and start — or resume
@@ -234,6 +237,9 @@ function forgetForDir(): void {
   forgetScripts();
   forgetWorktrees();
   forgetMcpGroups();
+  // The failure belongs to the repository it was refused in — "no such branch: main" said under a
+  // directory that has one is a sentence about somewhere else.
+  worktreeError.value = null;
 }
 onMounted(() => loadForDir(targetDir.value, listAgent.value));
 
@@ -438,11 +444,53 @@ const allToolGroupNames = computed(() => [...new Set(TOOL_GROUPS.map((group) => 
 
 const worktreeTask = ref("");
 
+// Every worktree control in this section shares one guard, because they all shell out to git in one
+// repository and a second command contends on its index lock. `worktreeBusy` names the control that
+// was actually pressed, so that one spins while the others are merely held (#1549).
+const { busy: worktreeBusy, run: runWorktreeAction } = useBusyAction();
+const CREATE_KEY = "create";
+const openKey = (w: Worktree): string => `open:${w.path}`;
+const removeKey = (w: Worktree): string => `remove:${w.path}`;
+
+// Why the last worktree action failed. Held rather than swallowed: until #1549 a 500 from the
+// create route showed nothing at all, so a missing base branch and a click that never registered
+// looked identical — and the difference was only findable by reading the shipped bundle.
+const worktreeError = ref<string | null>(null);
+
+// Only if the form is STILL pointed at the repository the action was for. The directory field stays
+// editable for the whole round trip, so a failure reported under whatever the user typed meanwhile
+// is a sentence about somewhere else — #1372's rule, applied to the error line rather than the rows.
+// A successful create deliberately does not ask: the worktree was made because it was asked for, and
+// launching in it is the click being honoured, not a stale answer.
+const reportWorktreeFailure = (repoDir: string | null, message: string): void => {
+  if (isSameDirPath(targetDir.value, repoDir)) worktreeError.value = message;
+};
+
+// A timeout is NOT "could not reach the server": the request landed and git is still working, so the
+// worktree may well appear a moment later. Saying otherwise sends the user to look at their network.
+// Reachable — SLOW_COMMAND_TIMEOUT_MS is 60s, and a checkout large enough to make this bug worth
+// fixing is a checkout that can exceed it.
+const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
+const requestFailureText = (e: unknown): string =>
+  e instanceof DOMException && e.name === "AbortError"
+    ? "Timed out waiting for git — it may still finish. Re-select this directory to see."
+    : `Could not reach the server: ${errorText(e)}`;
+
 // Create a fresh worktree for the typed task and start the selected agent in it.
+//
+// Held for the whole round trip: `git worktree add` checks out the tree, which is seconds on a
+// large repository, and the task field is only cleared once the answer lands — so without this the
+// form is byte-identical to the one before the click and a second press makes `agent/<task>-2`.
 async function createWorktreeAndLaunch(): Promise<void> {
   const repoDir = targetDir.value;
   const task = worktreeTask.value.trim();
   if (!repoDir || !task) return;
+  await runWorktreeAction(CREATE_KEY, () => requestWorktree(repoDir, task));
+}
+
+async function requestWorktree(repoDir: string, task: string): Promise<void> {
+  worktreeError.value = null;
   try {
     const res = await fetchWithTimeout(
       "/api/worktrees/create",
@@ -453,27 +501,51 @@ async function createWorktreeAndLaunch(): Promise<void> {
       },
       SLOW_COMMAND_TIMEOUT_MS,
     );
-    if (!res.ok) return;
-    const wt = await jsonBody(res);
-    if (typeof wt.path === "string") {
-      worktreeTask.value = "";
-      await syncMcpGroupsInto(wt.path);
-      emit("start", wt.path);
+    if (!res.ok) {
+      // A refusal's body may not be JSON at all — a 403 from the origin guard is not — and the
+      // STATUS is already an answer, so absorbing it into `{}` here loses nothing.
+      reportWorktreeFailure(repoDir, worktreeRequestFailure(await jsonBody(res), res.status));
+      return;
     }
-  } catch {
-    // best-effort — the launcher stays open so the user can retry
+    // On a 200 the BODY is the answer, so it must not be absorbed. `fetchWithTimeout` deliberately
+    // keeps its deadline armed across the body, so an aborted read would become `{}` and be
+    // reported as a worktree the server never made — for one that exists. Left to throw, it lands
+    // on the timeout message below instead. This is the trap jsonBody's own doc names (#1300).
+    const body: unknown = await res.json();
+    const path = isRecord(body) ? body.path : undefined;
+    // A 200 that still names no worktree is not one to launch in, and reporting it as one would
+    // start the agent in whatever the field happens to say.
+    if (typeof path !== "string") {
+      reportWorktreeFailure(repoDir, "The server answered without a worktree path.");
+      return;
+    }
+    worktreeTask.value = "";
+    await syncMcpGroupsInto(path);
+    emit("start", path);
+  } catch (e) {
+    reportWorktreeFailure(repoDir, requestFailureText(e));
   }
 }
 
 // One branch, one session: the row continues the worktree's session when it has one and nobody is
 // holding it, and starts a fresh one only when it has none. See common/worktreeSession.ts.
+//
+// Guarded like the create above, and for a reason the row does not look like it has: the launcher
+// waits on `syncMcpGroupsInto` first, which is up to four `claude mcp add` calls, and the row stays
+// on screen for all of them.
 const openWorktree = async (w: Worktree): Promise<void> => {
   const action = worktreeAction(w.session);
   if (action === "busy") return;
-  await syncMcpGroupsInto(w.path);
-  if (action === "resume" && w.session) emit("resume", { id: w.session.id, cwd: w.path, agent: w.session.agent });
-  else emit("start", w.path);
+  await runWorktreeAction(openKey(w), async () => {
+    await syncMcpGroupsInto(w.path);
+    if (action === "resume" && w.session) emit("resume", { id: w.session.id, cwd: w.path, agent: w.session.agent });
+    else emit("start", w.path);
+  });
 };
+
+// A row is not clickable while its worktree is open in another terminal, nor while ANY worktree
+// action is in flight.
+const worktreeRowHeld = (w: Worktree): boolean => worktreeAction(w.session) === "busy" || worktreeBusy.value !== null;
 
 // The hover, which is where the three-way rule is actually readable — the row itself can only
 // afford a word.
@@ -487,9 +559,17 @@ const worktreeTitle = (w: Worktree): string => {
 // discarded silently.
 async function removeWorktree(w: Worktree): Promise<void> {
   const repoDir = targetDir.value;
+  // Asked BEFORE the confirmation rather than left to `runWorktreeAction`: a dialog answered "yes"
+  // for work that is then silently dropped is worse than a button that does not respond.
+  if (worktreeBusy.value !== null) return;
   if (w.dirty && !window.confirm(`"${w.task}" has uncommitted changes. Discard and remove it?`)) return;
+  await runWorktreeAction(removeKey(w), () => requestRemove(repoDir, w));
+}
+
+async function requestRemove(repoDir: string | null, w: Worktree): Promise<void> {
+  worktreeError.value = null;
   try {
-    await fetchWithTimeout(
+    const res = await fetchWithTimeout(
       "/api/worktrees/remove",
       {
         method: "POST",
@@ -498,9 +578,10 @@ async function removeWorktree(w: Worktree): Promise<void> {
       },
       SLOW_COMMAND_TIMEOUT_MS,
     );
+    if (!res.ok) reportWorktreeFailure(repoDir, `${w.task}: ${worktreeRequestFailure(await jsonBody(res), res.status)}`);
     void loadWorktrees(targetDir.value);
-  } catch {
-    // best-effort
+  } catch (e) {
+    reportWorktreeFailure(repoDir, requestFailureText(e));
   }
 }
 </script>
@@ -760,40 +841,61 @@ async function removeWorktree(w: Worktree): Promise<void> {
           spellcheck="false"
           @keydown.enter="createWorktreeAndLaunch"
         />
+        <!-- Held while any worktree action runs, and it says which: `git worktree add` checks out
+             the whole tree, so on a large repository the only thing distinguishing "working" from
+             "the click did nothing" is this label (#1549). -->
         <button
           data-testid="wt-start"
-          class="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-elevated px-4 py-[7px] font-sans text-[14px] font-medium text-secondary flex-none whitespace-nowrap hover:bg-hover hover:text-fg"
-          :disabled="!worktreeTask.trim()"
+          class="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-elevated px-4 py-[7px] font-sans text-[14px] font-medium text-secondary flex-none whitespace-nowrap enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-40"
+          :disabled="worktreeBusy !== null || !worktreeTask.trim()"
+          :title="worktreeBusy === CREATE_KEY ? 'Creating the worktree…' : 'Create a worktree for this task and start here'"
           @click="createWorktreeAndLaunch"
         >
-          <span class="material-symbols-outlined" aria-hidden="true">add</span> New worktree
+          <span class="material-symbols-outlined" :class="{ 'animate-spin': worktreeBusy === CREATE_KEY }" aria-hidden="true">{{
+            worktreeBusy === CREATE_KEY ? "progress_activity" : "add"
+          }}</span>
+          {{ worktreeBusy === CREATE_KEY ? "Creating…" : "New worktree" }}
         </button>
       </div>
+      <!-- Until #1549 a refused create showed nothing whatever, so a base branch that is not
+           checked out locally and a click that never registered looked exactly alike. -->
+      <span v-if="worktreeError" data-testid="wt-error" role="alert" class="font-sans text-[11px] leading-snug text-amber">{{ worktreeError }}</span>
       <div v-for="w in worktreeList.worktrees" :key="w.path" class="flex items-center gap-1.5">
         <button
           class="flex-auto min-w-0 text-left rounded-md border bg-elevated font-mono text-[12px] py-[5px] px-2.5 truncate"
-          :class="
-            worktreeAction(w.session) === 'busy'
-              ? 'border-amber text-dim cursor-not-allowed'
-              : 'border-border text-secondary cursor-pointer hover:bg-hover hover:text-fg'
-          "
+          :class="[
+            worktreeAction(w.session) === 'busy' ? 'border-amber text-dim' : 'border-border text-secondary',
+            worktreeRowHeld(w) ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-hover hover:text-fg',
+          ]"
           data-testid="worktree-reuse"
-          :disabled="worktreeAction(w.session) === 'busy'"
+          :disabled="worktreeRowHeld(w)"
           :title="worktreeTitle(w)"
           @click="openWorktree(w)"
         >
           ⎇ {{ w.task }}<span v-if="w.dirty" data-testid="wt-dirty" class="ml-1.5 text-[var(--warn-text,#e0a030)]" title="uncommitted changes">●</span>
           <span v-if="worktreeAction(w.session) === 'busy'" data-testid="wt-busy" class="ml-1.5 font-sans text-[11px] text-amber">in use</span>
           <span v-else-if="worktreeAction(w.session) === 'resume'" data-testid="wt-resume" class="ml-1.5 font-sans text-[11px] text-dim">resume</span>
+          <!-- The row waits on up to four `claude mcp add` calls before the cell launches, and it
+               stays on screen for all of them. -->
+          <span
+            v-if="worktreeBusy === openKey(w)"
+            data-testid="wt-opening"
+            class="material-symbols-outlined ml-1.5 animate-spin align-middle text-[13px]"
+            aria-hidden="true"
+            >progress_activity</span
+          >
         </button>
         <button
           data-testid="wt-del"
-          class="flex-none cursor-pointer rounded-md border-none bg-transparent px-1.5 py-1 text-[13px] hover:bg-[var(--err-hover-bg)]"
-          title="Remove worktree"
+          class="flex-none cursor-pointer rounded-md border-none bg-transparent px-1.5 py-1 text-[13px] enabled:hover:bg-[var(--err-hover-bg)] disabled:cursor-default disabled:opacity-40"
+          :disabled="worktreeBusy !== null"
+          :title="worktreeBusy === removeKey(w) ? 'Removing the worktree…' : 'Remove worktree'"
           aria-label="Remove worktree"
           @click="removeWorktree(w)"
         >
-          <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+          <span class="material-symbols-outlined" :class="{ 'animate-spin': worktreeBusy === removeKey(w) }" aria-hidden="true">{{
+            worktreeBusy === removeKey(w) ? "progress_activity" : "delete"
+          }}</span>
         </button>
       </div>
     </div>
