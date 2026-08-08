@@ -8,6 +8,78 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.7.3 — 2026-08-08
+
+> **Setup guide:** [Buttons that say they are working](https://receptron.github.io/mulmoterminal/guide/en/v4.7.3.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.7.3.html))
+
+**A release about controls that do not say they are working.** A button that shells out to git runs
+for seconds on a large repository while the screen stays byte-identical to the moment before the
+click — so it gets pressed again, and on `+ New worktree` every extra press *succeeded*. Alongside
+it, pressing Enter now takes a scrolled-up terminal back to the latest output.
+
+### `+ New worktree` made one worktree per click ([#1549](https://github.com/receptron/mulmoterminal/issues/1549), [#1550](https://github.com/receptron/mulmoterminal/pull/1550))
+
+`git worktree add` checks out the whole tree — about six seconds on the reporter's ~33,000-file
+monorepo. For all six the launcher looked exactly as it had before the click: no spinner, and the
+button's only `disabled` test was "is the task field empty", with the field cleared *after* the
+response landed. `uniqueBranch` takes the next free suffix, so three presses made
+`agent/<task>`, `-2` and `-3` — three copies of one working tree.
+
+The same line hid failures: `if (!res.ok) return;` plus an empty `catch` meant a 500 showed nothing
+at all. The reporter's actual cause was a base branch that did not exist locally, and reaching that
+diagnosis required reading the shipped bundle.
+
+- **One guard for the whole worktree section** (`useBusyAction`), because they all run git in one
+  repository where a second command contends on the index lock: the create, each worktree row
+  (which waits on up to four `claude mcp add` calls before the cell launches), and each row's
+  delete button. Whichever control was pressed shows `progress_activity` and a `Creating…` /
+  `Removing…` label; the rest are held.
+- **A refusal now says why**, in the server's own words — `{ error }` from the create route,
+  `{ ok:false, reason }` from remove — the treatment the folder button got in #1447. The task name
+  is kept for the retry.
+- **The failure is scoped to the repository it was about.** The directory field stays editable for
+  the whole round trip, so a refusal that lands after the user has typed their way elsewhere is no
+  longer shown under the new directory.
+- **A timeout is reported as a timeout.** `fetchWithTimeout` gives up at 60s while git carries on,
+  so "could not reach the server" sent people to look at their network for a worktree that was
+  about to appear.
+- **An unreadable `200` body is a timeout too, not "the server created nothing."** The deadline
+  stays armed across the body, and `jsonBody` absorbs an unreadable one into `{}` — the trap its
+  own documentation names from #1300.
+- **The running cell's `Discard & remove`** runs through the same guard, and **nothing dismisses the
+  confirmation once the removal starts**: the terminal is ended before the route is even called, so
+  "Keep worktree" was a promise the cell could not make, and Escape took the failure off the screen
+  with it.
+- Disabled styling on `wt-start` / `wt-del`, so a button that cannot be pressed no longer looks
+  like one that can.
+
+### A cell being removed now looks like it ([#1551](https://github.com/receptron/mulmoterminal/issues/1551), [#1552](https://github.com/receptron/mulmoterminal/pull/1552))
+
+The fix above put `Removing…` on a 12px label inside a dialog, while the cell around it — header,
+chips, terminal — went on looking live for the seconds `git worktree remove` takes. The whole cell
+now fades through the same class parked cells use (which rides on `.cell-inner` and therefore covers
+the header), with one spinner over it naming what is going. The spinner is a **sibling** of that
+layer, not a child, so it is not dimmed by what it is dimming. The cell is also made `inert`, so it
+cannot be reached by keyboard or read by a screen reader while it is being deleted — measured in a
+real browser: 13 focusable controls before, 0 during. The confirmation is replaced rather than faded,
+and comes back with its reason if the removal fails.
+
+### Enter returns a scrolled-up terminal to the latest output ([#1546](https://github.com/receptron/mulmoterminal/issues/1546), [#1547](https://github.com/receptron/mulmoterminal/pull/1547))
+
+Scrolling up in a Claude Code cell and pressing Enter left you where you were — unlike an ordinary
+terminal, and unlike a **shell** cell here, which was the asymmetry that diagnosed it. Measured with
+`tmux list-panes`: Claude Code runs mouse tracking 1003 on the alternate buffer, so tmux forwards
+the wheel to the application and the scroll position belongs to Claude Code, with nothing on this
+side to send back down (a plain terminal does not return either — the reporter confirmed it in
+iTerm).
+
+What is possible is **unwinding the scrolling this app itself synthesised** (#737 / #845): the
+notches `report()` sent are counted and the same number is sent back down on submit. Scroll nowhere
+and not a byte is sent. Clamped at zero so it can never scroll past the application's own bottom,
+and forgotten rather than paid back once the application stops taking the mouse, so a later app does
+not receive someone else's scrolling. **On by default**, with a per-browser checkbox in Settings →
+Terminal scroll speed.
+
 ## mulmoterminal@4.7.2 — 2026-08-08
 
 > **Setup guide:** [The terminal comes back on the right process](https://receptron.github.io/mulmoterminal/guide/en/v4.7.2.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.7.2.html))
