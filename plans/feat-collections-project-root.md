@@ -74,6 +74,13 @@ collection, a write in project A refreshes the open view of project B. Add an op
 
 MulmoClaude passes nothing and behaves as today.
 
+**The root on this payload is an absolute path, and it is server-internal.** The engine publishes
+to the HOST, which fans out to subscribers; the value never crosses to the browser. That is a
+different thing from the client-facing project id in §5, which is opaque precisely so host paths
+stay out of the browser and out of logs. When re-keying channels by `(root, slug)` (§4.3), key the
+SERVER-side map on the root and name the client-visible channel by the opaque id — publishing a
+channel named after a filesystem path would leak exactly what §5 refuses to send.
+
 ### U2. A strict mode where there is NO ambient root *(strongly recommended — safety)*
 
 This is the real hazard of the whole change. Today a forgotten `opts.workspaceRoot` silently
@@ -108,7 +115,7 @@ inside `collections.ts`. Put it in `server/` next to the session registry (it ne
 session→cwd map), and export the *type* of a resolved root from `common/` if the client ever
 names one.
 
-```
+```ts
 resolveProjectRoot(req) -> string   // an absolute root; the workspace is simply the default one
 ```
 
@@ -160,7 +167,7 @@ colour, which the grid already renders.
 
 MulmoClaude's `src/config/apiRoutes.ts` is the naming authority and has no project concept:
 
-```
+```text
 /api/collections            /api/collections/:slug            /api/collections/:slug/items
 /api/collections/ontology   /api/collections/:slug/items/:itemId/actions/:actionId   …
 ```
@@ -169,7 +176,7 @@ Inserting a segment (`/api/collections/:project/:slug`) forks all of them from t
 no functional gain. **Carry the project as an out-of-band parameter instead** — a query
 parameter (or header) that is simply absent today:
 
-```
+```http
 GET /api/collections?project=<id>
 GET /api/collections/tasks/items?project=<id>
 ```
@@ -354,7 +361,7 @@ primaryKey, via `node:sqlite`).
 
 **MulmoTerminal does not offer it, but does not block it either.** Nothing in the UI creates one
 and no MulmoTerminal doc mentions it — it arrives with the shared engine: the installed
-`@mulmoclaude/core@2.1.0` ships `sqliteStore`, and `storeFor()` dispatches on the schema's
+`@mulmoclaude/core@3.0.0` ships `sqliteStore`, and `storeFor()` dispatches on the schema's
 storage kind, so a schema declaring sqlite (an agent can write one through `manageCollection`)
 would work today.
 

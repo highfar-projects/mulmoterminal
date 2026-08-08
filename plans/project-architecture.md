@@ -204,8 +204,17 @@ Project ごとに欲しいものは 4 つに見えるが、**コード上は同�
 D2（Project = ディレクトリ）と噛み合う: **cwd がそのまま Project の同一性**。
 
 **4 つ別々に解かず、`resolveProjectRoot(sessionCwd)` を 1 つ決めて 4 つの host アダプタが全部使う。**
-レイアウトも 1 つに揃える（例 `<project>/.mulmoterminal/data/{collections,accounting,wiki,resources}`）。
-**揃えないと Project ごとに 4 通りの置き場所を覚える羽目になる。**
+レイアウトも 1 つに揃える。**ただし「揃える」は「既にあるものを動かす」ではない。**
+
+- **collections は既存のレイアウトのまま動かさない** — `<project>/.claude/skills/<slug>/` と
+  `<project>/data/collections/<slug>/items/`。エンジンが解決するのはこのパスで、
+  self-contained（git clone parity、[collections plan](./feat-collections-project-root.md) §11）が
+  成り立っているのもこの形に対して。しかも CLAUDE.md は MulmoClaude と**同じディスク配置**を
+  要求している。動かせば両方壊れる
+- **統一した置き場所（例 `<project>/.mulmoterminal/data/…`）は、自前のレイアウトをまだ持たない
+  部分系 ＝ resources 以降のためのもの**
+
+**揃えるべきは「どの root か」を決める経路（`resolveProjectRoot`）であって、ディレクトリ名ではない。**
 
 なお collections は**レイアウト関数が既に root 引数化されている**
 （`projectSkillsDir(root)` / `feedsRoot(root)` / `skillsStagingDir(root)`、`importRegistry` は root を明示的に受け取る）。
@@ -230,8 +239,11 @@ CLAUDE.md の参照ホスト規約がそのまま効く。`@mulmoclaude/core` �
 **「root 省略時は従来どおり束縛された root」**の形で足し、向こうを変えずに済ませる。
 
 **波及**: 今の slug はワークスペース内で一意。Project 単位になると Project 内でしか一意でないので、
-`/api/collections/:slug` に Project の修飾が要る。これは**ワイヤ形状の変更**で、
-`/api/*` の命名権は MulmoClaude の `apiRoutes.ts`。**推測でパスを切らず、先に向こうを見る。**
+リクエストがどの Project かを名指す必要がある。**ただしパスは変えない** —
+`/api/collections/:slug` の命名権は MulmoClaude の `apiRoutes.ts` にあり、そこに Project の概念は無い。
+セグメントを挿す（`/api/collections/:project/:slug`）と全ルートが命名権から分岐するので、
+**省略可能な帯域外パラメータ（`?project=<opaque id>`）で運ぶ**。省略時は共有ワークスペースで、
+現在と完全に同じ挙動。詳細は [collections plan](./feat-collections-project-root.md) §5。
 
 ### 5-3b. 共有ワークスペースも 1 つの Project（D7）
 
@@ -277,7 +289,7 @@ collections は上流待ちなので、更地の resources が**一番長いリ�
 
 Project は容器（名詞）。だが人は容器を開きに来るのではなく、**用事を片付けに来る**。
 
-```
+```text
 Project（容器・名詞）
   └ Job（1 件の用事・動詞）
        ├ 依頼（平文）
@@ -303,7 +315,7 @@ Project（容器・名詞）
 
 ### 6-2. Jobs ビューの形
 
-```
+```text
 ┌─ Jobs ─────────────────────────────────────────────┐
 │ Project: 決算2026                     [変更]        │
 │ ┌─ 依頼 ───────────────────────┐ ┌─ 成果物 ──────┐ │
@@ -466,7 +478,8 @@ attach も再開もできる。**自前で走らせ、`claude agents --json` は
 **設計**
 1. ~~ワークスペースを「Project の 1 つ」として扱うか~~ → **D7 で決定（扱う）。**
    残るのは `resolveProjectRoot()` の置き場所のみ
-2. Project 内データのディレクトリ名（`.mulmoterminal/data/` か、もっと見える名前か）
+2. Project 内データのディレクトリ名（`.mulmoterminal/data/` か、もっと見える名前か）。
+   **collections には掛からない** — 既存レイアウトのまま（5-1）。resources 以降の話
 3. 上流 A で通す root の粒度（Project ルートか、任意の root か）
 4. slug 修飾の形 — **MulmoClaude の `apiRoutes.ts` を見てから**
 5. 既存のワークスペース collections の扱い（残す / 移す / 両方見せる）
