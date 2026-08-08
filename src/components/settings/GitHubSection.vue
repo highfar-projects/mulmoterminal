@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { useAppConfig } from "../../composables/useAppConfig";
 import { useSavedListMirror } from "../../composables/useSavedListMirror";
 import { issueWorkComments, saveIssueWorkComments } from "../../composables/issueWorkComments";
@@ -17,6 +18,7 @@ import { SETTINGS_LIST } from "./sectionClasses";
 // Read straight from the composables rather than through the modal's props: useAppConfig's state
 // is a singleton, so a section that owns one setting can own its whole loop (ThemeSection and
 // WaitingRowsSection already do).
+const { t } = useI18n();
 const { gitlabHosts, saveGitlabHosts } = useAppConfig();
 
 function onWorkCommentsToggle(e: Event) {
@@ -52,26 +54,34 @@ function removeHost(host: string) {
       type="checkbox"
       class="mt-1 cursor-pointer"
       :checked="issueWorkComments"
-      aria-label="Comment on the issue a cell is working on"
+      :aria-label="t('settings.github.issueComments')"
       @change="onWorkCommentsToggle"
     />
     <span class="text-[12px]">
-      <strong>Say when work starts on an issue</strong> — one comment, posted as the work starts and edited as the PR opens and merges. It names the working
-      directory (the folder name, never the path), so two terminals do not start the same issue twice. Needs <code>gh</code> (or <code>glab</code>) logged in.
+      <strong>{{ t("settings.github.issueCommentsTitle") }}</strong> —
+      <i18n-t keypath="settings.github.issueCommentsHint" tag="span">
+        <template #gh><code>gh</code></template>
+        <template #glab><code>glab</code></template>
+      </i18n-t>
     </span>
   </label>
 
   <label class="mt-2 flex cursor-pointer items-start gap-2">
-    <input type="checkbox" class="mt-1 cursor-pointer" :checked="prWorkdirFooter" aria-label="End a created PR with the clone name" @change="onFooterToggle" />
+    <input type="checkbox" class="mt-1 cursor-pointer" :checked="prWorkdirFooter" :aria-label="t('settings.github.prFooter')" @change="onFooterToggle" />
     <span class="text-[12px]">
-      <strong>End a created PR with the clone name</strong> — a <code>work in &lt;clone&gt;</code> line at the bottom of the body, so a PR says which of several
-      side-by-side clones produced it.
+      <strong>{{ t("settings.github.prFooter") }}</strong> —
+      <i18n-t keypath="settings.github.prFooterHint" tag="span">
+        <template #line><code>work in &lt;clone&gt;</code></template>
+      </i18n-t>
     </span>
   </label>
 
   <p class="mb-1.5 mt-3 text-[12px] text-dim">
-    <strong class="text-fg">Self-hosted GitLab</strong> — a URL does not say which forge a host runs, so declare it here to have its repos read with
-    <code>glab</code>. Needs <code>glab auth login --hostname &lt;host&gt;</code>. Takes effect on the next server start.
+    <strong class="text-fg">{{ t("settings.github.gitlabTitle") }}</strong> —
+    <i18n-t keypath="settings.github.gitlabHint" tag="span">
+      <template #glab><code>glab</code></template>
+      <template #authCommand><code>glab auth login --hostname &lt;host&gt;</code></template>
+    </i18n-t>
   </p>
   <ul v-if="hosts.length" :class="SETTINGS_LIST">
     <SettingsListRow v-for="h in hosts" :key="h" :name="h" @remove="removeHost(h)">
@@ -83,10 +93,10 @@ function removeHost(host: string) {
       v-model="newHost"
       class="flex-auto font-mono"
       placeholder="gitlab.example.com"
-      aria-label="Add a self-hosted GitLab host"
+      :aria-label="t('settings.github.gitlabField')"
       spellcheck="false"
       @keydown.enter="addHost"
     />
-    <SettingsButton :disabled="!newHostValid" @click="addHost">Add</SettingsButton>
+    <SettingsButton :disabled="!newHostValid" @click="addHost">{{ t("settings.common.add") }}</SettingsButton>
   </div>
 </template>

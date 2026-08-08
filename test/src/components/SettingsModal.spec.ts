@@ -6,6 +6,11 @@ import { SETTINGS_GROUPS, SETTINGS_TABS, DEFAULT_SETTINGS_TAB, type SettingsTabI
 import { VOICE_LANGUAGES } from "../../../src/composables/voiceLanguage";
 import { useTheme } from "../../../src/composables/useTheme";
 import { BUNDLED_SKILL_NAMES } from "../../../common/bundledSkills";
+import { i18n } from "../../../src/i18n";
+import { UI_LOCALES } from "../../../src/composables/uiLanguage";
+
+// The sidebar's words come from the message tree now, keyed by the table's ids.
+const tabLabel = (tab: SettingsTabId): string => i18n.global.t(`settings.tabs.${tab}`);
 
 type Wrapper = ReturnType<typeof mount>;
 
@@ -53,7 +58,7 @@ describe("SettingsModal sidebar", () => {
     stubServer(true);
     const w = mountModal();
     await flushPromises();
-    expect(renderedTabs(w)).toEqual(SETTINGS_TABS.map((tab) => tab.id));
+    expect(renderedTabs(w)).toEqual([...SETTINGS_TABS]);
   });
 
   it("renders a pane for each of them", async () => {
@@ -61,18 +66,31 @@ describe("SettingsModal sidebar", () => {
     const w = mountModal();
     await flushPromises();
     for (const tab of SETTINGS_TABS) {
-      await openTab(w, tab.id);
+      await openTab(w, tab);
       await flushPromises();
       const pane = w.get('[data-testid="settings-pane"]');
       // The heading is always there; anything beyond it is the section that tab is for.
-      expect(pane.element.children.length, `the "${tab.id}" tab rendered no section`).toBeGreaterThan(1);
-      expect(pane.text()).toContain(tab.label);
+      expect(pane.element.children.length, `the "${tab}" tab rendered no section`).toBeGreaterThan(1);
+      expect(pane.text()).toContain(tabLabel(tab));
     }
   });
 
-  it("opens on a tab that exists, and names every group", () => {
-    expect(SETTINGS_TABS.map((tab) => tab.id)).toContain(DEFAULT_SETTINGS_TAB);
-    expect(SETTINGS_GROUPS.every((group) => group.label.length > 0 && group.tabs.length > 0)).toBe(true);
+  it("opens on a tab that exists, and gives every group tabs", () => {
+    expect(SETTINGS_TABS).toContain(DEFAULT_SETTINGS_TAB);
+    expect(SETTINGS_GROUPS.every((group) => group.tabs.length > 0)).toBe(true);
+  });
+
+  // A tab or group whose message was never written renders its own key — visible only to whoever
+  // opens that pane in that language, which is exactly the person who can't read the fallback.
+  // Enumerated from the table rather than from a list typed here (the lesson of #1104).
+  it.each(UI_LOCALES.map((locale) => locale.code))("names every group and tab in %s", (locale) => {
+    const missing: string[] = [];
+    const check = (key: string) => {
+      if (!i18n.global.te(key, locale)) missing.push(key);
+    };
+    SETTINGS_GROUPS.forEach((group) => check(`settings.groups.${group.key}`));
+    SETTINGS_TABS.forEach((tab) => check(`settings.tabs.${tab}`));
+    expect(missing).toEqual([]);
   });
 
   // The narrow-screen picker is a second control over the same state, so it has to offer the same
@@ -83,8 +101,8 @@ describe("SettingsModal sidebar", () => {
     const w = mountModal();
     await flushPromises();
     const picker = w.get('select[aria-label="Settings section"]');
-    expect(picker.findAll("option").map((o) => o.attributes("value"))).toEqual(SETTINGS_TABS.map((tab) => tab.id));
-    expect(picker.findAll("optgroup").map((g) => g.attributes("label"))).toEqual(SETTINGS_GROUPS.map((group) => group.label));
+    expect(picker.findAll("option").map((o) => o.attributes("value"))).toEqual([...SETTINGS_TABS]);
+    expect(picker.findAll("optgroup").map((g) => g.attributes("label"))).toEqual(SETTINGS_GROUPS.map((group) => i18n.global.t(`settings.groups.${group.key}`)));
 
     await picker.setValue("sounds");
     expect(w.get('[data-testid="settings-pane"]').text()).toContain("Notification sounds");
@@ -97,18 +115,22 @@ describe("SettingsModal sidebar", () => {
     const w = mountModal();
     await flushPromises();
     const tabs = () => w.findAll('[role="tab"]');
+    const selectedIndex = () => tabs().findIndex((t) => t.attributes("aria-selected") === "true");
+    const start = selectedIndex();
     expect(tabs().filter((t) => t.attributes("tabindex") === "0")).toHaveLength(1);
-    expect(tabs()[0].attributes("aria-selected")).toBe("true");
+    expect(tabs()[start].attributes("tabindex")).toBe("0");
 
-    await tabs()[0].trigger("keydown", { key: "ArrowDown" });
-    expect(tabs()[1].attributes("aria-selected")).toBe("true");
-    expect(tabs()[1].attributes("tabindex")).toBe("0");
-    expect(tabs()[0].attributes("tabindex")).toBe("-1");
+    await tabs()[start].trigger("keydown", { key: "ArrowDown" });
+    expect(selectedIndex()).toBe(start + 1);
+    expect(tabs()[start + 1].attributes("tabindex")).toBe("0");
+    expect(tabs()[start].attributes("tabindex")).toBe("-1");
 
     // Wraps at the ends rather than dead-ending on the first entry.
-    await tabs()[1].trigger("keydown", { key: "ArrowUp" });
+    await tabs()[start + 1].trigger("keydown", { key: "ArrowUp" });
+    for (let i = start; i > 0; i--) await tabs()[i].trigger("keydown", { key: "ArrowUp" });
+    expect(selectedIndex()).toBe(0);
     await tabs()[0].trigger("keydown", { key: "ArrowUp" });
-    expect(tabs().at(-1)?.attributes("aria-selected")).toBe("true");
+    expect(selectedIndex()).toBe(tabs().length - 1);
   });
 
   // A pane is created on first visit and hidden after that, not destroyed. `v-if` alone threw away
@@ -141,9 +163,12 @@ describe("SettingsModal sidebar", () => {
     expect(w.find('[data-testid="settings-pane-cost"]').exists()).toBe(true);
   });
 
-  it("gives each tab id and label exactly one entry", () => {
-    expect(new Set(SETTINGS_TABS.map((tab) => tab.id)).size).toBe(SETTINGS_TABS.length);
-    expect(new Set(SETTINGS_TABS.map((tab) => tab.label)).size).toBe(SETTINGS_TABS.length);
+  it("gives each tab exactly one entry, and each one its own words in every locale", () => {
+    expect(new Set(SETTINGS_TABS).size).toBe(SETTINGS_TABS.length);
+    UI_LOCALES.forEach(({ code }) => {
+      const labels = SETTINGS_TABS.map((tab) => i18n.global.t(`settings.tabs.${tab}`, {}, { locale: code }));
+      expect(new Set(labels).size, `two tabs read alike in ${code}`).toBe(SETTINGS_TABS.length);
+    });
   });
 });
 
@@ -459,9 +484,9 @@ describe("SettingsModal skill buttons", () => {
     await flushPromises();
     const found: { tab: string; skill: string; label: string }[] = [];
     for (const tab of SETTINGS_TABS) {
-      await openTab(w, tab.id);
+      await openTab(w, tab);
       await flushPromises();
-      w.findAllComponents(SkillLaunchButton).forEach((b) => found.push({ tab: tab.id, skill: b.props("skill"), label: b.props("label") }));
+      w.findAllComponents(SkillLaunchButton).forEach((b) => found.push({ tab, skill: b.props("skill"), label: b.props("label") }));
     }
     return found;
   };

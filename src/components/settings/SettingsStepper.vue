@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { useI18n } from "vue-i18n";
 
 // A −/value/+ nudger for the Settings modal's numeric per-browser settings (terminal font size,
 // terminal scroll speed). Emits the SIGNED step, so the caller's nudge function takes it as-is.
@@ -16,6 +17,8 @@ import { computed } from "vue";
 const props = defineProps<{ value: number; unit: string; min: number; max: number; step: number; label: string; disabled?: boolean }>();
 const emit = defineEmits<{ (e: "nudge", delta: number): void }>();
 
+const { t } = useI18n();
+
 const atMin = computed(() => props.disabled || props.value <= props.min);
 const atMax = computed(() => props.disabled || props.value >= props.max);
 
@@ -25,8 +28,12 @@ const STEPPER_BUTTON =
 
 <template>
   <div class="flex items-center gap-2">
-    <button type="button" :class="STEPPER_BUTTON" :disabled="atMin" :aria-label="`Decrease ${label}`" @click="emit('nudge', -step)">−</button>
+    <button type="button" :class="STEPPER_BUTTON" :disabled="atMin" :aria-label="t('settings.stepper.decrease', { label })" @click="emit('nudge', -step)">
+      −
+    </button>
     <span class="min-w-[56px] text-center text-[13px] text-fg" aria-live="polite">{{ value }}{{ unit }}</span>
-    <button type="button" :class="STEPPER_BUTTON" :disabled="atMax" :aria-label="`Increase ${label}`" @click="emit('nudge', step)">+</button>
+    <button type="button" :class="STEPPER_BUTTON" :disabled="atMax" :aria-label="t('settings.stepper.increase', { label })" @click="emit('nudge', step)">
+      +
+    </button>
   </div>
 </template>
