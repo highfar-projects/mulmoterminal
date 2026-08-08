@@ -3,6 +3,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { nextTick } from "vue";
 import TerminalCell from "../../../src/components/TerminalCell.vue";
 import { CELL_CHIP_BTN, CELL_CHIP_ICON } from "../../../src/components/cellChromeClasses";
+import { SUNK_CELL } from "../../../src/components/cellParked";
 import { TOOL_GROUPS } from "../../../common/toolGroups";
 
 // Capture the "sessions" pub/sub callback and the reconnect handler so tests can push
@@ -1750,20 +1751,55 @@ describe("TerminalCell", () => {
     const remove = () => w.find('[data-testid="ccx-remove"]');
     await remove().trigger("click");
     await flushPromises();
-    expect(remove().attributes("disabled")).toBeDefined();
-    expect(remove().text()).toBe("Removing…");
-    expect(w.find('[data-testid="ccx-cancel"]').attributes("disabled")).toBeDefined();
-    await remove().trigger("click");
+    // The dialog hands over to the whole-cell spinner (#1551), so the second click has no button
+    // left to land on — the handler's own guard is what the count below is really testing.
+    expect(w.find('[data-testid="cell-removing"]').exists()).toBe(true);
+    await w.find(".cell-close").trigger("click");
     await flushPromises();
     expect(removes).toBe(1);
     gate.resolve({ ok: true, status: 200, json: async () => ({ ok: true }) });
     await flushPromises();
     expect(w.find('[data-testid="cell-launch"]').exists()).toBe(true);
+    expect(w.find('[data-testid="cell-removing"]').exists()).toBe(false);
+  });
+
+  // #1551: the button read `Removing…` while the cell around it — header, chips, terminal — went on
+  // looking live for the several seconds `git worktree remove` takes. The whole cell now says so.
+  it("greys the whole cell and spins over it while the worktree is being removed", async () => {
+    const gate = deferred<{ ok: boolean; status: number; json: () => Promise<unknown> }>();
+    globalThis.fetch = vi.fn((url: string) => {
+      const u = String(url);
+      if (u.includes("/api/worktrees/remove")) return gate.promise;
+      if (u.includes("/api/worktrees/diff")) return Promise.resolve({ ok: true, json: async () => cleanWtDiff });
+      if (u.includes("/api/sessions")) return Promise.resolve({ ok: true, json: async () => ({ sessions: [] }) });
+      return Promise.resolve({ ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) });
+    }) as unknown as typeof fetch;
+    const w = mountCell("66666666-6666-6666-6666-666666666666", { initialCwd: WT_CWD });
+    await flushPromises();
+    await w.find(".cell-close").trigger("click");
+    await flushPromises();
+    expect(w.find(".cell-inner").classes()).not.toContain(SUNK_CELL);
+
+    await w.find('[data-testid="ccx-remove"]').trigger("click");
+    await flushPromises();
+    const busy = w.find('[data-testid="cell-removing"]');
+    expect(busy.exists()).toBe(true);
+    expect(busy.text()).toContain("Removing");
+    expect(busy.attributes("role")).toBe("status");
+    // The body fades through the same one class parked cells use, and the spinner sits OUTSIDE it —
+    // a busy indicator inside the layer it is dimming would be dimmed by it.
+    expect(w.find(".cell-inner").classes()).toContain(SUNK_CELL);
+    expect(w.find(".cell-inner").find('[data-testid="cell-removing"]').exists()).toBe(false);
+    // …and it covers the header, which the confirmation overlay never did.
+    expect(busy.classes()).toContain("inset-0");
+    expect(w.find('[data-testid="cell-close-confirm"]').exists()).toBe(false);
   });
 
   // Raised by Codex and CodeRabbit on #1550: the removal terminates the pty BEFORE it calls the
-  // route, so a dialog that can still be dismissed offers to "keep" a worktree that is already
-  // being deleted — and takes the failure off the screen on its way out.
+  // route, so anything that dismisses the confirmation mid-flight takes the failure off the screen
+  // with it. Since #1551 the dialog hands over to the busy overlay, so the buttons are gone — but
+  // `cancelClose` still has to refuse, or Escape would clear `closeConfirm` underneath and the
+  // failure would come back to a confirmation that is no longer rendered.
   it("lets nothing dismiss the confirmation once the removal has started", async () => {
     const gate = deferred<{ ok: boolean; status: number; json: () => Promise<unknown> }>();
     globalThis.fetch = vi.fn((url: string) => {
@@ -1780,17 +1816,18 @@ describe("TerminalCell", () => {
     await w.find('[data-testid="ccx-remove"]').trigger("click");
     await flushPromises();
 
-    expect(w.find('[data-testid="ccx-keep"]').attributes("disabled")).toBeDefined();
-    await w.find('[data-testid="ccx-keep"]').trigger("click");
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     await w.find(".cell-close").trigger("click"); // the header button is not under the overlay
     await flushPromises();
-    expect(w.find('[data-testid="cell-close-confirm"]').exists()).toBe(true);
+    expect(w.find('[data-testid="cell-removing"]').exists()).toBe(true);
     expect(w.find('[data-testid="cell-launch"]').exists()).toBe(false);
 
-    // …and the failure it was hiding stays put, on a confirmation that is dismissible again.
+    // …and the failure lands on a confirmation that is back, un-faded and dismissible again.
     gate.resolve({ ok: false, status: 500, json: async () => ({ ok: false, reason: "failed" }) });
     await flushPromises();
+    expect(w.find('[data-testid="cell-removing"]').exists()).toBe(false);
+    expect(w.find(".cell-inner").classes()).not.toContain(SUNK_CELL);
+    expect(w.find('[data-testid="cell-close-confirm"]').exists()).toBe(true);
     expect(w.find('[data-testid="ccx-warn"]').text()).toContain("Couldn't remove");
     expect(w.find('[data-testid="ccx-close-cell"]').attributes("disabled")).toBeUndefined();
   });

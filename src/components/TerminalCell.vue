@@ -835,11 +835,16 @@ function cancelClose() {
 const { busy: closeBusy, run: runCloseAction } = useBusyAction();
 const REMOVE_KEY = "remove";
 
+// `git worktree remove` runs for seconds on a large repository, and until #1551 the only thing
+// saying so was a 12px label inside the dialog — the cell itself, header and all, went on looking
+// live. This is what fades it and puts the spinner over it.
+const removingWorktree = computed(() => closeBusy.value === REMOVE_KEY);
+
 // The three things this one button is doing at any moment: waiting for an accurate dirty/ahead
 // count, running the removal, or offering it.
 const removeButtonLabel = computed(() => {
   if (closeChecking.value) return "Checking…";
-  if (closeBusy.value === REMOVE_KEY) return "Removing…";
+  if (removingWorktree.value) return "Removing…";
   return hasUnsaved.value ? "Discard & remove" : "Remove worktree";
 });
 
@@ -913,7 +918,10 @@ const headerStatusClass = computed(() => HEADER_STATUS[status.value]);
 // bring it back — that is how you look at a parked session without waking it.
 const parked = computed(() => props.parked === true);
 const sunk = computed(() => isCellSunk(parked.value, status.value));
-const sunkClass = computed(() => (sunk.value ? SUNK_CELL : ""));
+// Both reasons the cell body is faded — set aside, and on its way out (#1551) — resolved to ONE
+// class. Two opacity utilities on one element are settled by Tailwind's output order rather than
+// by intent, which is the rule SUNK_CELL's own comment sets.
+const fadedClass = computed(() => (sunk.value || removingWorktree.value ? SUNK_CELL : ""));
 const togglePark = () => emit("park", !parked.value);
 // Typing into it is the un-parking gesture. Guarded on `parked` so an awake cell does not ask the
 // grid to rewrite its state on every keystroke.
@@ -1185,7 +1193,20 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
          one property covers the whole cell. Opacity alone: the status branches own the borders,
          backgrounds and ink, and two utilities for one property are settled by Tailwind's
          output order rather than by intent. -->
-    <div class="cell-inner" :class="[CELL_INNER, sunkClass]">
+    <!-- A worktree being deleted, over the WHOLE cell — a sibling of `.cell-inner` rather than a
+         child, so it is not dimmed by the layer it is dimming, and so it reaches the header, which
+         the close-confirm overlay inside never did. -->
+    <div
+      v-if="removingWorktree"
+      data-testid="cell-removing"
+      class="absolute inset-0 z-[30] flex flex-col items-center justify-center gap-2 bg-[color-mix(in_srgb,var(--bg-base)_70%,transparent)]"
+      role="status"
+      :aria-label="`Removing worktree ${headerDir}`"
+    >
+      <span class="material-symbols-outlined animate-spin text-[30px] text-secondary" aria-hidden="true">progress_activity</span>
+      <span class="max-w-full truncate px-3 font-sans text-[12px] text-secondary">Removing {{ headerDir }}…</span>
+    </div>
+    <div class="cell-inner" :class="[CELL_INNER, fadedClass]">
       <template v-if="launched">
         <!-- Filmstrip thumbnail: the same roster header (CockpitHeader) — the dir colour is applied
            regardless of status (status is the dot + badge), so a thumbnail reads as its directory
@@ -1604,8 +1625,12 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
             <span v-if="prMsg" data-testid="cell-diff-msg" class="min-w-0 flex-auto truncate font-sans text-[11px] text-dim">{{ prMsg }}</span>
           </div>
         </div>
+        <!-- Replaced, not faded, while the removal runs: every control in here is already disabled
+             by then, and a dialog of dead buttons is noise where the spinner above is an answer. It
+             comes BACK with the failure if the removal fails — which is what the dismissal guards
+             below exist to protect (#1550). -->
         <div
-          v-if="closeConfirm"
+          v-if="closeConfirm && !removingWorktree"
           data-testid="cell-close-confirm"
           class="absolute inset-0 z-[25] flex items-center justify-center bg-[color-mix(in_srgb,var(--bg-base)_82%,transparent)] p-4"
           role="dialog"
