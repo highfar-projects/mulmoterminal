@@ -53,6 +53,51 @@ export const ja: Messages = {
       help: "ヘルプとユーザーガイド",
     },
 
+    push: {
+      intro:
+        "バックグラウンドの処理が終わったとき、登録済みのデバイスにプッシュを送ります。{remoteHost} 接続が必要です — そのサインインが通知の認証を兼ねているため、接続中しか送られません。",
+      remoteHost: "RemoteHost",
+      master: "デバイスに Web Push を送る",
+      masterLabel: "デバイスに通知する",
+      whichMoments: "プッシュする価値のある瞬間:",
+      kindAria: "セッションが {kind} のときにプッシュ",
+      kinds: {
+        finished: "ターンが終わった",
+        waiting: "あなたを待っている",
+      },
+      help: {
+        finished: "エージェントが返信し、その出力がまだ読まれていない",
+        waiting: "権限の確認や質問で止まった。プロンプトごとに 1 回鳴るので、よく聞いてくるタスクはよくプッシュします",
+      },
+    },
+
+    github: {
+      issueComments: "セルが着手した issue にコメントする",
+      issueCommentsTitle: "issue に着手したことを書く",
+      issueCommentsHint:
+        "コメントは 1 つだけで、着手時に投稿し、PR が開いたとき・マージされたときに編集します。作業ディレクトリ名（パスではなくフォルダ名）を書くので、2 つのターミナルが同じ issue に二重着手しません。{gh}（または {glab}）のログインが必要です。",
+      prFooter: "作成した PR の末尾にクローン名を書く",
+      prFooterHint: "本文の最後に {line} の 1 行を足します。横に並んだ複数のクローンのどれで作業したかが PR から分かります。",
+      gitlabTitle: "セルフホストの GitLab",
+      gitlabHint:
+        "URL を見てもそのホストがどの forge かは分からないので、ここで宣言すると {glab} でリポジトリを読みます。{authCommand} が必要です。次のサーバ起動から有効になります。",
+      gitlabField: "セルフホストの GitLab ホストを追加",
+    },
+
+    sessions: {
+      summary: "返信をまとめで終わらせる",
+      summaryHint:
+        "何を頼まれ、何ができて、何ができなかったか、を規則として書かせます。グリッドのための機能です — 後からセルに戻ったとき、これが無いとセッション全体をスクロールしないと分かりません。これ以降に開始したセッションに適用され、ディレクトリ自身の {dirFile} が優先されます。",
+      digest: "決定事項のダイジェストを残す",
+      digestTitle: "このプロジェクトで決めたことのダイジェストを残す",
+      digestHint: "エージェントが「もう決まっていること」を聞き直す前に読める Markdown ファイルです。{dir} の下に書き出します。",
+      worklog: "開発作業ログを定期的に残す",
+      worklogHint:
+        "保存した作業ディレクトリ全体の最近の作業を、週ごとの wiki ページにまとめます。実行のたびに LLM セッションを起動するのでトークンを消費します。",
+      worklogInterval: "実行間隔:",
+      worklogStepper: "開発作業ログの間隔",
+    },
+
     launchers: {
       intro:
         "グリッドのセルで動かせる対話コマンドなら何でも — 開発サーバ、REPL、git の UI、モデルのブリッジなど。セルのディレクトリで、書いたとおりのコマンドが永続ターミナルとして動きます。例: {labelExample} → {commandExample}。",

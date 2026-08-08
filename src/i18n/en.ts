@@ -56,6 +56,50 @@ export const en = {
       help: "Help & user guide",
     },
 
+    push: {
+      intro:
+        "Send a push to your registered devices when a background task finishes. Requires the {remoteHost} connection — its sign-in provides the notification auth, so pushes only send while it's connected.",
+      remoteHost: "RemoteHost",
+      master: "Send a Web Push to my devices",
+      masterLabel: "Notify my devices",
+      whichMoments: "Which moments are worth a push:",
+      kindAria: "Push when a session is {kind}",
+      kinds: {
+        finished: "Turn finished",
+        waiting: "Waiting for you",
+      },
+      help: {
+        finished: "the agent replied and the output is unread",
+        waiting: "it stopped to ask — a permission prompt or a question. Fires once per prompt, so a task that asks a lot pushes a lot",
+      },
+    },
+
+    github: {
+      issueComments: "Comment on the issue a cell is working on",
+      issueCommentsTitle: "Say when work starts on an issue",
+      issueCommentsHint:
+        "one comment, posted as the work starts and edited as the PR opens and merges. It names the working directory (the folder name, never the path), so two terminals do not start the same issue twice. Needs {gh} (or {glab}) logged in.",
+      prFooter: "End a created PR with the clone name",
+      prFooterHint: "a {line} line at the bottom of the body, so a PR says which of several side-by-side clones produced it.",
+      gitlabTitle: "Self-hosted GitLab",
+      gitlabHint:
+        "a URL does not say which forge a host runs, so declare it here to have its repos read with {glab}. Needs {authCommand}. Takes effect on the next server start.",
+      gitlabField: "Add a self-hosted GitLab host",
+    },
+
+    sessions: {
+      summary: "End replies with a closing summary",
+      summaryHint:
+        "what was asked, what was achieved, what was not, under a rule. It exists for the grid: coming back to a cell later, that is otherwise only recoverable by scrolling the whole session. Applies to sessions started from now on; a directory's own {dirFile} wins over this.",
+      digest: "Keep a digest of decisions",
+      digestTitle: "Keep a digest of what this project decided",
+      digestHint: "a Markdown file an agent can read before asking something the project already settled. Writes under {dir}.",
+      worklog: "Keep a periodic dev-work log",
+      worklogHint: "summarizes recent work across your saved working directories into weekly wiki pages. Each run spawns an LLM session, so it costs tokens.",
+      worklogInterval: "How often it runs:",
+      worklogStepper: "dev-work log interval",
+    },
+
     launchers: {
       intro:
         "Any interactive command a grid cell can run — a dev server, a REPL, a git UI, a model bridge. It runs in the cell's directory as a persistent terminal, exactly as written. Example: {labelExample} → {commandExample}.",
