@@ -53,6 +53,101 @@ export const ja: Messages = {
       help: "ヘルプとユーザーガイド",
     },
 
+    terminalKeys: {
+      copyOnSelect: "選択が確定したらすぐコピーする",
+      copyOnSelectTitle: "選ぶだけでコピー",
+      copyOnSelectHint:
+        "マウスの選択が確定した瞬間、キーを押さなくてもクリップボードに入ります。ハイライトしただけのつもりでもクリップボードが書き換わる、唯一の設定です。",
+      enterTitle: "Enter キー",
+      enterHint:
+        "ターミナル内の Claude Code が「送信」として読むバイト列です。お使いの Claude の設定に合わせてください。Claude セッションにだけ適用され、シェルの Enter は変わりません。",
+      enterField: "Claude セッションで送信になるバイト列",
+      modes: {
+        cr: "Enter で送信、Option/Alt+Enter で改行（既定）",
+        "esc-cr": "Option/Alt+Enter で送信、Enter で改行",
+      },
+    },
+
+    shortcuts: {
+      intro:
+        "読み取り専用です。ショートカットは {configFile} の {keymapKey} に割り当てるまで無効です。割り当てたキーはターミナル内のプログラムに届かなくなるため、スキルは書き込む前にエージェントが既に使っているキーと突き合わせます。{guide}も参照してください。",
+      guide: "ガイド",
+      list: "キーボードショートカット",
+      notSet: "未設定",
+      sendRow: "{key} をターミナルに送る",
+      setUp: "ショートカットを設定する…",
+    },
+
+    surviving: {
+      intro:
+        "ターミナルはサーバより長生きするので、ここに出るのは以前の起動から動き続けているものです。{whatever}一覧に出ます — もう開かないディレクトリのものも、ここ以外のどの一覧にも出ないシェルも含みます。行を止めてもそのセッションが終わるだけで、トランスクリプトのある会話は後からそのディレクトリで再開できます。",
+      whatever: "どのディレクトリのものでも",
+      shellOrUnknown: "シェルまたは不明",
+      unknownAgentTitle: "このキーに対応するエージェントの会話が記録されていません — シェル、ランチャのコマンド、あるいはこのサーバが辿れないエージェントです",
+      lastActive: "最終アクティビティ {when}",
+      loading: "生き延びたセッションを読み込み中…",
+      failed: "読み込めませんでした — tmux が動いていない可能性があります。",
+      unknownDir: "ディレクトリ不明",
+      unknownDirTitle: "このサーバはどこで動いているかを一度も見ていません",
+      notResumable: "再開不可",
+      notResumableTitle: "これを再開できるものがディスク上にありません",
+      doomed: "次回起動時に終了",
+      doomedTitle: "誰も使っておらず {days} 日間出力もありません — 次のサーバ起動時に終了されます",
+      open: "● 使用中",
+      openTitle: "ターミナルが掴んでいます — そちらで閉じてください",
+      stopTitle: "このセッションを止める",
+      stopAria: "{dir} のセッションを止める",
+      stopAriaUnknown: "不明なディレクトリ",
+      none: "なし — 以前のサーバから動いているものはありません。",
+      reapStepper: "セッションを終了するまでのアイドル日数",
+      reapUnit: " 日",
+      neverTitle: "自動では終了しません。",
+      neverHint: "ここで止めるか、掴んでいるターミナルから終わらせるまで残ります。",
+      reapHint: "誰も使っておらず、この日数だけ出力の無いセッションは{ended}。会話は残ります。0 にすると自動終了しません。",
+      reapEnded: "次のサーバ起動時に終了されます",
+    },
+
+    sounds: {
+      intro:
+        "どの瞬間に鳴らすか、そしてそれぞれ何を鳴らすか。エージェントを何本も同時に動かすと通知はただの雑音になるので、要らないものはチェックを外してください。ツールバーのスピーカーボタンで一括して黙らせられます。",
+      beepAria: "セッションが {kind} のときに鳴らす",
+      soundFor: "{label} の音",
+      playFor: "{label} の音を再生",
+      default: "既定",
+      defaultTitle: "既定",
+      defaultHint:
+        "は下で指定したファイルを鳴らします。空ならば組み込みのチャイムです。プリセットは一度取得したらこのマシンに保存されるので、オフラインでも鳴ります。",
+      fileField: "通知音のファイル",
+      browse: "参照…",
+      useChime: "チャイムに戻す",
+      useChimeTitle: "組み込みのチャイムを使う",
+      outro:
+        "ここで設定するのは全セッション共通の音です。スキルを使うと、プロジェクトごとの音、スマホにプッシュする瞬間、そのうちどれがあなたを起こすのか、まで決められます。",
+      configure: "通知を設定する…",
+      kinds: {
+        finished: "ターンが終わった",
+        waiting: "あなたを待っている",
+        "command-done": "コマンドが終わった",
+        "command-failed": "コマンドが失敗した",
+        "session-exited": "セッションが終了した",
+        "worker-failed": "バックグラウンドの処理が失敗した",
+        "pr-ci-failed": "PR の CI が落ちた",
+      },
+      help: {
+        finished: "エージェントが返信し、その出力がまだ読まれていない",
+        waiting: "権限の確認や質問で止まった",
+        "command-done": "Run セルのコマンドが正常終了した",
+        "command-failed": "Run セルのコマンドがエラー終了した、または起動しなかった",
+        "session-exited": "セッションのターミナルが終わった（自分でセルを閉じた場合も含む）",
+        "worker-failed": "バックグラウンドの処理が終わらないまま落ちた — 画面にターミナルが無いので、これ以外に知らせるものがありません",
+        "pr-ci-failed": "ディレクトリの PR が赤くなった。ポーリングしているのがロスターなので、ロスターが画面にあるときだけ分かります",
+      },
+    },
+
+    guide: {
+      prompt: "MulmoTerminal の使い方が分からないときはガイドをどうぞ —",
+    },
+
     push: {
       intro:
         "バックグラウンドの処理が終わったとき、登録済みのデバイスにプッシュを送ります。{remoteHost} 接続が必要です — そのサインインが通知の認証を兼ねているため、接続中しか送られません。",
@@ -201,6 +296,21 @@ export const ja: Messages = {
       intro: "横断{view}ビューが open な PR を一覧するリポジトリです。{gh} のログインを使います。形式は {format}。",
       view: "プルリクエスト",
       field: "リポジトリを追加（owner/repo）",
+    },
+
+    version: {
+      label: "バージョン",
+      commit: "コミット {sha}",
+    },
+
+    voice: {
+      intro:
+        "音声入力で話す言語です。マイクが想定していない言語で話すと、想定された言語に{translated}返ってきます — ブラウザの言語のままにせず、実際に話す言語を選んでください。",
+      translated: "翻訳されて",
+      picker: "音声入力の言語",
+      browserLanguage: "ブラウザの言語にあわせる",
+      detect: "話した内容から判定する",
+      always: "常にこの言語",
     },
 
     stepper: {

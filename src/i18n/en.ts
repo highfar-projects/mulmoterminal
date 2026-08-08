@@ -56,6 +56,102 @@ export const en = {
       help: "Help & user guide",
     },
 
+    terminalKeys: {
+      copyOnSelect: "Copy a selection as soon as it settles",
+      copyOnSelectTitle: "Copy on select",
+      copyOnSelectHint:
+        "put a mouse selection on the clipboard the moment it settles, with no key pressed. It is the one setting that writes the clipboard when you only meant to highlight.",
+      enterTitle: "Enter key",
+      enterHint:
+        'which bytes the Claude Code running in the terminal reads as "submit". Match it to how you have Claude configured; it applies to Claude sessions only, so a shell\'s Enter is untouched.',
+      enterField: "Which bytes submit in a Claude session",
+      modes: {
+        cr: "Enter submits, Option/Alt+Enter makes a newline (default)",
+        "esc-cr": "Option/Alt+Enter submits, Enter makes a newline",
+      },
+    },
+
+    shortcuts: {
+      intro:
+        "Read-only. Shortcuts are off until you bind them in {configFile} under {keymapKey} — every key you bind stops reaching the program inside the terminal, so the skill checks a binding against what your agent already uses before writing it. Or see the {guide}.",
+      guide: "guide",
+      list: "Keyboard shortcuts",
+      notSet: "Not set",
+      sendRow: "Send {key} to the terminal",
+      setUp: "Set up shortcuts…",
+    },
+
+    surviving: {
+      intro:
+        "Terminals outlive the server, so these are still running from an earlier run. A row is listed {whatever} — including one you no longer open, and a shell, which no other list here shows. Stopping a row ends that session only: a conversation with a transcript can be resumed afterwards from its own directory.",
+      whatever: "whatever directory it belongs to",
+      shellOrUnknown: "shell or unknown",
+      unknownAgentTitle: "No agent conversation is recorded under this key — a shell, a launcher command, or an agent this server cannot map back",
+      lastActive: "last active {when}",
+      loading: "Reading the surviving sessions…",
+      failed: "Could not read them — tmux may not be running.",
+      unknownDir: "unknown directory",
+      unknownDirTitle: "this server has never seen where it runs",
+      notResumable: "not resumable",
+      notResumableTitle: "Nothing on disk to resume this from",
+      doomed: "ends at next start",
+      doomedTitle: "Nothing is using it and it has been silent for {days} day(s) — the server ends it at its next start",
+      open: "● open",
+      openTitle: "A terminal is holding it — close it there",
+      stopTitle: "Stop this session",
+      stopAria: "Stop the session in {dir}",
+      stopAriaUnknown: "an unknown directory",
+      none: "None — nothing is running from an earlier server.",
+      reapStepper: "the idle days before a session is ended",
+      reapUnit: " days",
+      neverTitle: "Never ended automatically.",
+      neverHint: "They stay until you stop one here, or end it from the terminal holding it.",
+      reapHint:
+        "A session nothing is using — nobody attached, no output for this long — is {ended}. Its conversation is kept. Set this to 0 to never end one automatically.",
+      reapEnded: "ended when the server next starts",
+    },
+
+    sounds: {
+      intro:
+        "Which moments beep, and what each one plays. Running many agents at once is what turns notifications into noise — untick the ones you don't need. The speaker button in the toolbar silences all of them at once.",
+      beepAria: "Beep when a session is {kind}",
+      soundFor: "Sound for {label}",
+      playFor: "Play the {label} sound",
+      default: "Default",
+      defaultTitle: "Default",
+      defaultHint:
+        "plays your own file below, or the built-in chime when that is empty. The presets are fetched once and kept on this machine, so they keep working offline.",
+      fileField: "Custom notification sound file",
+      browse: "Browse…",
+      useChime: "Use chime",
+      useChimeTitle: "Use the built-in chime",
+      outro:
+        "These are the sounds for every session. The skill also gives one project its own sound, picks which moments push to your phone, and works out which of them is the one waking you up.",
+      configure: "Configure notifications…",
+      kinds: {
+        finished: "Turn finished",
+        waiting: "Waiting for you",
+        "command-done": "Command finished",
+        "command-failed": "Command failed",
+        "session-exited": "Session ended",
+        "worker-failed": "Background worker failed",
+        "pr-ci-failed": "PR CI failed",
+      },
+      help: {
+        finished: "the agent replied and the output is unread",
+        waiting: "it stopped to ask — a permission prompt or a question",
+        "command-done": "a Run cell's command exited cleanly",
+        "command-failed": "a Run cell's command exited with an error, or never started",
+        "session-exited": "a session's terminal ended — including when you close the cell yourself",
+        "worker-failed": "a background worker ended without finishing — nothing else reports this, since it has no terminal on screen",
+        "pr-ci-failed": "a directory's PR went red. Only seen while the roster is on screen, since that is what polls it",
+      },
+    },
+
+    guide: {
+      prompt: "Not sure how to use MulmoTerminal? Read the guide —",
+    },
+
     push: {
       intro:
         "Send a push to your registered devices when a background task finishes. Requires the {remoteHost} connection — its sign-in provides the notification auth, so pushes only send while it's connected.",
@@ -202,6 +298,21 @@ export const en = {
       intro: "Repos whose open PRs the cross-repo {view} view lists. Uses your {gh} login. Format: {format}.",
       view: "Pull requests",
       field: "Add a repository (owner/repo)",
+    },
+
+    version: {
+      label: "Version",
+      commit: "commit {sha}",
+    },
+
+    voice: {
+      intro:
+        "The language you dictate in. Speaking a language the mic is not expecting comes back {translated} into the expected one — so pick the one you actually speak rather than leaving it on your browser's.",
+      translated: "translated",
+      picker: "Language for voice input",
+      browserLanguage: "My browser's language",
+      detect: "Detect from what I say",
+      always: "Always this language",
     },
 
     stepper: {
