@@ -1071,6 +1071,55 @@ describe("creating a worktree", () => {
     expect(w.find('[data-testid="wt-error"]').exists()).toBe(false);
   });
 
+  // Raised by Codex on #1550. `fetchWithTimeout` keeps its deadline armed across the BODY, so a
+  // read that aborts after a 200 used to be absorbed into `{}` and reported as "the server answered
+  // without a worktree path" — for a worktree that exists. The absorption is still right on a
+  // refusal, where the STATUS is the answer and the body may not be JSON at all.
+  it("reports an unreadable 200 body as a timeout, not as a worktree that was never made", async () => {
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/worktrees/create")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => {
+            throw new DOMException("The operation was aborted.", "AbortError");
+          },
+        };
+      }
+      if (u.includes("/api/worktrees")) return { ok: true, json: async () => ({ isGit: true, base: "main", worktrees: [] }) };
+      return { ok: true, json: async () => ({ cwd: "/repo", sessions: [] }) };
+    }) as unknown as typeof fetch;
+    const w = mountForm();
+    await flushPromises();
+    await beginCreate(w);
+    const text = w.find('[data-testid="wt-error"]').text();
+    expect(text).toContain("Timed out");
+    expect(text).not.toContain("without a worktree path");
+    expect(w.emitted("start")).toBeUndefined();
+  });
+
+  it("still reads a refusal whose body is not JSON at all (a 403 from the origin guard)", async () => {
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/worktrees/create")) {
+        return {
+          ok: false,
+          status: 403,
+          json: async () => {
+            throw new SyntaxError("Unexpected token '<'");
+          },
+        };
+      }
+      if (u.includes("/api/worktrees")) return { ok: true, json: async () => ({ isGit: true, base: "main", worktrees: [] }) };
+      return { ok: true, json: async () => ({ cwd: "/repo", sessions: [] }) };
+    }) as unknown as typeof fetch;
+    const w = mountForm();
+    await flushPromises();
+    await beginCreate(w);
+    expect(w.find('[data-testid="wt-error"]').text()).toContain("403");
+  });
+
   // `fetchWithTimeout` gives up at 60s, which a checkout large enough to make #1549 worth fixing can
   // exceed — and git carries on regardless. "Could not reach the server" would send the user to look
   // at their network for a worktree that is about to appear.

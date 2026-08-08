@@ -24,6 +24,7 @@ import AgentMark from "./AgentMark.vue";
 import ModelPicker from "./ModelPicker.vue";
 import { LAUNCH_ROW } from "./launchFormClasses";
 import { jsonBody } from "../jsonBody";
+import { isRecord } from "../../common/isRecord";
 import { filePickerOpen, pickPaths } from "../composables/pickPaths";
 import { useBusyAction } from "../composables/useBusyAction";
 import { useSessionStop } from "../composables/useSessionStop";
@@ -500,20 +501,27 @@ async function requestWorktree(repoDir: string, task: string): Promise<void> {
       },
       SLOW_COMMAND_TIMEOUT_MS,
     );
-    const wt = await jsonBody(res);
     if (!res.ok) {
-      reportWorktreeFailure(repoDir, worktreeRequestFailure(wt, res.status));
+      // A refusal's body may not be JSON at all — a 403 from the origin guard is not — and the
+      // STATUS is already an answer, so absorbing it into `{}` here loses nothing.
+      reportWorktreeFailure(repoDir, worktreeRequestFailure(await jsonBody(res), res.status));
       return;
     }
-    // A 200 whose body has no path is not a worktree to launch in, and reporting it as one would
+    // On a 200 the BODY is the answer, so it must not be absorbed. `fetchWithTimeout` deliberately
+    // keeps its deadline armed across the body, so an aborted read would become `{}` and be
+    // reported as a worktree the server never made — for one that exists. Left to throw, it lands
+    // on the timeout message below instead. This is the trap jsonBody's own doc names (#1300).
+    const body: unknown = await res.json();
+    const path = isRecord(body) ? body.path : undefined;
+    // A 200 that still names no worktree is not one to launch in, and reporting it as one would
     // start the agent in whatever the field happens to say.
-    if (typeof wt.path !== "string") {
+    if (typeof path !== "string") {
       reportWorktreeFailure(repoDir, "The server answered without a worktree path.");
       return;
     }
     worktreeTask.value = "";
-    await syncMcpGroupsInto(wt.path);
-    emit("start", wt.path);
+    await syncMcpGroupsInto(path);
+    emit("start", path);
   } catch (e) {
     reportWorktreeFailure(repoDir, requestFailureText(e));
   }
