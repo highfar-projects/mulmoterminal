@@ -5,7 +5,7 @@ import SettingsButton from "../SettingsButton.vue";
 import SettingsField from "../SettingsField.vue";
 import { canAddQuickCommand } from "../settingsValidators";
 import SettingsListRow from "./SettingsListRow.vue";
-import { SECTION_HEADING, SETTINGS_LIST } from "./sectionClasses";
+import { SETTINGS_LIST } from "./sectionClasses";
 import type { QuickCommand } from "../../../common/quickCommands";
 import { SESSION_AGENTS, type SessionAgent } from "../../../common/sessionAgent";
 
@@ -49,7 +49,6 @@ const agentScopeLabel = (command: QuickCommand): string => (command.agents?.leng
 </script>
 
 <template>
-  <h3 :class="SECTION_HEADING">Phone quick commands</h3>
   <p class="mb-3 mt-1.5 text-[12px] text-dim">
     Phrases you send often, offered as chips on the phone's terminal view. Tapping one puts the text in the input box — it isn't sent until you press send. The
     label is the chip's face, so keep it short. Example: <code>PR</code> → <code>PR作って</code>. Leave every kind unchecked to offer a command everywhere, or

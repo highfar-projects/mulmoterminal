@@ -3,7 +3,6 @@ import { useRosterAlert } from "../../composables/useRosterAlert";
 import { cockpitLines, saveCockpitLines } from "../../composables/cockpitLines";
 import { COCKPIT_LINES_MIN, COCKPIT_LINES_MAX, type CockpitLines } from "../../../common/cockpitLines";
 import SettingsStepper from "./SettingsStepper.vue";
-import { SECTION_HEADING } from "./sectionClasses";
 
 // Whether a roster row waiting on the user blinks (#1131) — per browser for the same reason the
 // sizes above are: it is the person watching the screen who finds movement useful or distracting,
@@ -33,7 +32,6 @@ function nudgeLines(key: keyof CockpitLines, delta: number) {
 </script>
 
 <template>
-  <h3 :class="SECTION_HEADING">Waiting rows</h3>
   <p class="mb-2 mt-1.5 text-[12px] text-dim">
     In the list beside an enlarged cell, a row whose agent is <strong>waiting on you</strong> — a permission prompt, a question — carries an amber ring and
     blinks. A row that has simply <strong>finished</strong> is green and holds still. Turning this off keeps both colours and stops the movement; rows never

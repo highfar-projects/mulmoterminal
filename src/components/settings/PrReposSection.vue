@@ -5,7 +5,7 @@ import SettingsButton from "../SettingsButton.vue";
 import SettingsField from "../SettingsField.vue";
 import { canAddRepo } from "../settingsValidators";
 import SettingsListRow from "./SettingsListRow.vue";
-import { SECTION_HEADING, SETTINGS_LIST } from "./sectionClasses";
+import { SETTINGS_LIST } from "./sectionClasses";
 
 const props = defineProps<{ prRepos?: string[] | undefined }>();
 const emit = defineEmits<{ (e: "update-repos", repos: string[]): void }>();
@@ -29,7 +29,6 @@ function removeRepo(repo: string) {
 </script>
 
 <template>
-  <h3 :class="SECTION_HEADING">Pull request repos</h3>
   <p class="mb-3 mt-1.5 text-[12px] text-dim">
     Repos whose open PRs the cross-repo <strong>Pull requests</strong> view lists. Uses your <code>gh</code> login. Format: <code>owner/repo</code>.
   </p>

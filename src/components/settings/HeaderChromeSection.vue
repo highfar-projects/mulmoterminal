@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { headerButtonCount, headerChipCount } from "../../composables/headerConfigSummary";
 import SkillLaunchButton from "../SkillLaunchButton.vue";
-import { SECTION_HEADING } from "./sectionClasses";
 import type { BundledSkillName } from "../../../common/bundledSkills";
 
 // Read-only. A button carries a command, a run mode and a `when` scope, and a chip a template
@@ -21,7 +20,6 @@ function describe(count: number | null, noun: string): string {
 </script>
 
 <template>
-  <h3 :class="SECTION_HEADING">Header buttons and chips</h3>
   <p class="mb-2 mt-1.5 text-[12px] text-dim">
     The action buttons and the read-out chips along a terminal's header. Globally you have
     <strong class="text-fg">{{ describe(headerButtonCount, "button") }}</strong> and <strong class="text-fg">{{ describe(headerChipCount, "chip") }}</strong

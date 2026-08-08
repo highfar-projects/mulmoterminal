@@ -2,7 +2,6 @@
 import { computed, onMounted, onUnmounted } from "vue";
 import { useGoogleLink } from "../../composables/useGoogleLink";
 import SettingsButton from "../SettingsButton.vue";
-import { SECTION_HEADING } from "./sectionClasses";
 
 // The modal is v-if'd, so a fresh load on mount also picks up out-of-band changes
 // (`mulmoterminal google login`, a deleted token file).
@@ -43,7 +42,6 @@ onUnmounted(disposeGoogle);
 </script>
 
 <template>
-  <h3 :class="SECTION_HEADING">Google account</h3>
   <p class="mb-3 mt-1.5 text-[12px] text-dim">
     Link a Google account so the <code>google</code> tool and your phone can read and create <strong>Calendar</strong> events. Sign-in opens in a new tab and
     finishes on <strong>this machine</strong>, so use a browser here — over a remote connection, run <code>npx mulmoterminal@latest google login</code> instead.

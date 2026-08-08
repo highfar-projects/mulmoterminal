@@ -1,14 +1,18 @@
 <script setup lang="ts">
-// The Settings modal's shell: the dialog frame, its keyboard behavior, and the order the
-// sections appear in.
+// The Settings modal's shell: the dialog frame, its keyboard behavior, and the sidebar that decides
+// which section is on screen.
 //
 // Each section owns its own state — its composable, or the one prop/emit pair it edits — so it
 // is one file under ./settings, and what stays here is what belongs to the modal itself. The
 // props/emits below are pure plumbing: they exist because the shells (and the specs) address
 // this component, and each one is handed straight to the section that reads it.
-import { ref } from "vue";
+//
+// One pane at a time is `v-if`, not a hidden pane: coming here for one setting used not to be
+// distinguishable from opening every section at once, which is a GET each.
+import { computed, nextTick, onMounted, ref } from "vue";
 import { MODAL_FOCUSABLE } from "../utils/focusTrap";
 import { useModalKeyboard } from "../composables/useModalKeyboard";
+import { fetchVoiceInputStatus } from "../composables/voiceModelStatus";
 import SettingsButton from "./SettingsButton.vue";
 import AppVersionLine from "./settings/AppVersionLine.vue";
 import ThemeSection from "./settings/ThemeSection.vue";
@@ -32,8 +36,11 @@ import SessionSection from "./settings/SessionSection.vue";
 import SurvivingSessionsSection from "./settings/SurvivingSessionsSection.vue";
 import HeaderChromeSection from "./settings/HeaderChromeSection.vue";
 import ModelsSection from "./settings/ModelsSection.vue";
-import ShortcutsSection from "./settings/ShortcutsSection.vue";
+import TerminalKeysSection from "./settings/TerminalKeysSection.vue";
+import KeyboardShortcutsSection from "./settings/KeyboardShortcutsSection.vue";
 import HelpSection from "./settings/HelpSection.vue";
+import { SECTION_HEADING } from "./settings/sectionClasses";
+import { DEFAULT_SETTINGS_TAB, SETTINGS_GROUPS, isSettingsTabId, settingsTabLabel, type SettingsTabId } from "./settings/settingsTabs";
 import type { Launcher } from "./launchers";
 import type { UserMcpServer } from "./userMcp";
 import type { QuickCommand } from "../../common/quickCommands";
@@ -78,6 +85,56 @@ const emit = defineEmits<
 >();
 
 const modalEl = ref<HTMLElement>();
+const activeTab = ref<SettingsTabId>(DEFAULT_SETTINGS_TAB);
+const SETTINGS_PANE_ID = "settings-pane";
+
+// Voice input is only worth a tab on a machine that can transcribe, and capability lives on the
+// server. One cheap GET when the modal opens; a failed or absent probe leaves the tab out rather
+// than offering a setting for a mic that will never appear. It can only go absent → present, so no
+// tab can vanish from under the user.
+const voiceCapable = ref(false);
+onMounted(async () => {
+  voiceCapable.value = (await fetchVoiceInputStatus())?.capable ?? false;
+});
+
+const visibleGroups = computed(() =>
+  SETTINGS_GROUPS.map((group) => ({ ...group, tabs: group.tabs.filter((tab) => tab.id !== "voice" || voiceCapable.value) })).filter(
+    (group) => group.tabs.length > 0,
+  ),
+);
+
+const activeLabel = computed(() => settingsTabLabel(activeTab.value));
+
+// Below `sm` the sidebar would leave a phone about 190px of pane — narrow enough that the sound
+// rows lose their own labels off the left edge. The groups become <optgroup>s of a native picker
+// there instead, which costs the pane nothing.
+function onTabPick(e: Event) {
+  if (e.target instanceof HTMLSelectElement && isSettingsTabId(e.target.value)) activeTab.value = e.target.value;
+}
+
+// ARIA tablist keyboard contract, for the reason a 24-entry sidebar needs it: without roving
+// tabindex the list is 24 Tab stops standing between the dialog and the setting you opened it for
+// — more keystrokes than the flat scroll this replaced. Only the selected tab is tabbable, and
+// arrows move within the list, so the whole sidebar is one stop.
+//
+// Selection follows focus (the pattern's automatic activation, as ThemeSection's radiogroup does):
+// arrowing therefore mounts each pane it lands on, GETs included. That is the cost of the cheaper
+// option, and it is bounded by the sections the user actually arrows past.
+const navEl = ref<HTMLElement>();
+const visibleTabs = computed(() => visibleGroups.value.flatMap((group) => group.tabs));
+
+function onTabKey(e: KeyboardEvent, id: SettingsTabId) {
+  const forward = e.key === "ArrowDown" || e.key === "ArrowRight";
+  const backward = e.key === "ArrowUp" || e.key === "ArrowLeft";
+  if (!forward && !backward) return;
+  e.preventDefault();
+  const tabs = visibleTabs.value;
+  const index = tabs.findIndex((tab) => tab.id === id);
+  const next = tabs[(index + (forward ? 1 : tabs.length - 1)) % tabs.length];
+  if (!next) return;
+  activeTab.value = next.id;
+  void nextTick(() => navEl.value?.querySelector<HTMLElement>(`[data-testid="settings-tab-${next.id}"]`)?.focus());
+}
 
 // Escape closes; Tab is trapped within the dialog. The first stop is an `input` where there is
 // one — the sections are mostly text fields, and landing on the Close button instead means
@@ -89,12 +146,12 @@ useModalKeyboard({ modalEl, onClose: () => emit("close"), trapSelector: MODAL_FO
   <div class="fixed inset-0 z-[100] flex items-center justify-center bg-[rgba(0,0,0,0.55)]" @click.self="emit('close')">
     <div
       ref="modalEl"
-      class="flex max-h-[85vh] w-[min(560px,92vw)] flex-col overflow-y-auto rounded-[10px] border border-border bg-base p-4 font-sans text-fg"
+      class="flex h-[85vh] w-[min(780px,94vw)] flex-col overflow-hidden rounded-[10px] border border-border bg-base font-sans text-fg"
       role="dialog"
       aria-modal="true"
       aria-label="Settings"
     >
-      <div class="flex items-start justify-between">
+      <div class="flex items-start justify-between border-b border-border px-4 py-3">
         <div class="min-w-0">
           <h2 class="m-0 text-[15px] font-semibold">Settings</h2>
           <AppVersionLine />
@@ -109,44 +166,102 @@ useModalKeyboard({ modalEl, onClose: () => emit("close"), trapSelector: MODAL_FO
         </button>
       </div>
 
-      <ThemeSection @launch-skill="emit('launch-skill', $event)" />
-      <TerminalFontSizeSection />
-      <TerminalFontFamilySection />
-      <TerminalScrollSection />
-      <WaitingRowsSection />
-      <DirAppearanceSection @launch-skill="emit('launch-skill', $event)" />
-      <DirSettingsSection :dir-paths="dirPaths" @launch-skill="emit('launch-skill', $event)" />
-      <NotificationSoundsSection
-        :sound-file="soundFile"
-        :sound-kinds="soundKinds"
-        :sounds="sounds"
-        @update-sound="emit('update-sound', $event)"
-        @update-sound-kinds="emit('update-sound-kinds', $event)"
-        @update-sounds="emit('update-sounds', $event)"
-        @launch-skill="emit('launch-skill', $event)"
-      />
-      <VoiceInputSection />
-      <WebPushSection
-        :push-enabled="pushEnabled"
-        :push-kinds="pushKinds"
-        @update-push-enabled="emit('update-push-enabled', $event)"
-        @update-push-kinds="emit('update-push-kinds', $event)"
-      />
-      <GoogleAccountSection />
-      <PrReposSection :pr-repos="prRepos" @update-repos="emit('update-repos', $event)" />
-      <LaunchersSection :launchers="launchers" @update-launchers="emit('update-launchers', $event)" />
-      <QuickCommandsSection :quick-commands="quickCommands" @update-quick-commands="emit('update-quick-commands', $event)" />
-      <McpServersSection :user-mcp-servers="userMcpServers" @update-user-mcp="emit('update-user-mcp', $event)" />
-      <CostSection :cwd="cwd" :session-id="sessionId" />
-      <GitHubSection />
-      <SessionSection />
-      <SurvivingSessionsSection />
-      <ModelsSection @launch-skill="emit('launch-skill', $event)" />
-      <HeaderChromeSection @launch-skill="emit('launch-skill', $event)" />
-      <ShortcutsSection @launch-skill="emit('launch-skill', $event)" />
-      <HelpSection />
+      <div class="flex min-h-0 flex-1 flex-col sm:flex-row">
+        <select
+          class="m-3 mb-0 shrink-0 cursor-pointer rounded-lg border border-border bg-elevated px-2 py-1.5 text-[12px] text-fg sm:hidden"
+          :value="activeTab"
+          aria-label="Settings section"
+          @change="onTabPick"
+        >
+          <optgroup v-for="group in visibleGroups" :key="group.key" :label="group.label">
+            <option v-for="tab in group.tabs" :key="tab.id" :value="tab.id">{{ tab.label }}</option>
+          </optgroup>
+        </select>
 
-      <div class="mt-4 flex items-center gap-2">
+        <div
+          ref="navEl"
+          class="hidden w-40 shrink-0 overflow-y-auto border-r border-border bg-subtle py-2 sm:block"
+          role="tablist"
+          aria-orientation="vertical"
+          aria-label="Settings sections"
+        >
+          <div v-for="group in visibleGroups" :key="group.key" class="mb-2" role="presentation">
+            <div class="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted" role="presentation">{{ group.label }}</div>
+            <button
+              v-for="tab in group.tabs"
+              :id="`settings-tab-${tab.id}`"
+              :key="tab.id"
+              class="w-full cursor-pointer border-0 border-l-2 bg-transparent px-3 py-1.5 text-left text-[12px]"
+              :class="activeTab === tab.id ? 'border-l-accent bg-elevated font-semibold text-fg' : 'border-l-transparent text-dim hover:bg-elevated'"
+              role="tab"
+              :aria-selected="activeTab === tab.id"
+              :aria-controls="SETTINGS_PANE_ID"
+              :tabindex="activeTab === tab.id ? 0 : -1"
+              :data-testid="`settings-tab-${tab.id}`"
+              @click="activeTab = tab.id"
+              @keydown="onTabKey($event, tab.id)"
+            >
+              {{ tab.label }}
+            </button>
+          </div>
+        </div>
+
+        <div
+          :id="SETTINGS_PANE_ID"
+          class="min-w-0 flex-1 overflow-y-auto px-4 pb-4"
+          role="tabpanel"
+          :aria-labelledby="`settings-tab-${activeTab}`"
+          data-testid="settings-pane"
+        >
+          <h3 :class="SECTION_HEADING">{{ activeLabel }}</h3>
+
+          <ThemeSection v-if="activeTab === 'theme'" @launch-skill="emit('launch-skill', $event)" />
+          <TerminalFontFamilySection v-if="activeTab === 'font'" />
+          <TerminalFontSizeSection v-if="activeTab === 'fontSize'" />
+          <TerminalScrollSection v-if="activeTab === 'scroll'" />
+          <WaitingRowsSection v-if="activeTab === 'waitingRows'" />
+          <DirAppearanceSection v-if="activeTab === 'dirAppearance'" @launch-skill="emit('launch-skill', $event)" />
+          <DirSettingsSection v-if="activeTab === 'dirSettings'" :dir-paths="dirPaths" @launch-skill="emit('launch-skill', $event)" />
+          <LaunchersSection v-if="activeTab === 'launchers'" :launchers="launchers" @update-launchers="emit('update-launchers', $event)" />
+          <HeaderChromeSection v-if="activeTab === 'headerChrome'" @launch-skill="emit('launch-skill', $event)" />
+          <TerminalKeysSection v-if="activeTab === 'terminalKeys'" />
+          <KeyboardShortcutsSection v-if="activeTab === 'shortcuts'" @launch-skill="emit('launch-skill', $event)" />
+          <VoiceInputSection v-if="activeTab === 'voice'" />
+          <ModelsSection v-if="activeTab === 'models'" @launch-skill="emit('launch-skill', $event)" />
+          <McpServersSection v-if="activeTab === 'mcp'" :user-mcp-servers="userMcpServers" @update-user-mcp="emit('update-user-mcp', $event)" />
+          <NotificationSoundsSection
+            v-if="activeTab === 'sounds'"
+            :sound-file="soundFile"
+            :sound-kinds="soundKinds"
+            :sounds="sounds"
+            @update-sound="emit('update-sound', $event)"
+            @update-sound-kinds="emit('update-sound-kinds', $event)"
+            @update-sounds="emit('update-sounds', $event)"
+            @launch-skill="emit('launch-skill', $event)"
+          />
+          <WebPushSection
+            v-if="activeTab === 'push'"
+            :push-enabled="pushEnabled"
+            :push-kinds="pushKinds"
+            @update-push-enabled="emit('update-push-enabled', $event)"
+            @update-push-kinds="emit('update-push-kinds', $event)"
+          />
+          <QuickCommandsSection
+            v-if="activeTab === 'quickCommands'"
+            :quick-commands="quickCommands"
+            @update-quick-commands="emit('update-quick-commands', $event)"
+          />
+          <GitHubSection v-if="activeTab === 'github'" />
+          <PrReposSection v-if="activeTab === 'prRepos'" :pr-repos="prRepos" @update-repos="emit('update-repos', $event)" />
+          <GoogleAccountSection v-if="activeTab === 'google'" />
+          <SessionSection v-if="activeTab === 'sessions'" />
+          <SurvivingSessionsSection v-if="activeTab === 'surviving'" />
+          <CostSection v-if="activeTab === 'cost'" :cwd="cwd" :session-id="sessionId" />
+          <HelpSection v-if="activeTab === 'help'" />
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 border-t border-border px-4 py-3">
         <span class="flex-1" />
         <SettingsButton primary @click="emit('close')">Close</SettingsButton>
       </div>
