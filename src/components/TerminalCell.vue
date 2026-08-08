@@ -3,6 +3,7 @@ import { ref, computed, nextTick, watch, onMounted, onUnmounted, useTemplateRef 
 import TerminalView from "./Terminal.vue";
 import { usePubSub } from "../composables/usePubSub";
 import { useImeAwareEnter } from "../composables/useImeAwareEnter";
+import { useBusyAction } from "../composables/useBusyAction";
 import { useCellChrome } from "../composables/useCellChrome";
 import { useGitStatus } from "../composables/useGitStatus";
 import { useWorkItem } from "../composables/useWorkItem";
@@ -66,7 +67,7 @@ import { runRoundTable, liveRoundTableDeps, memberFromTarget, type TableMember }
 import { roundTableMessage } from "../composables/roundTableRules";
 import RoundTableMenu from "./RoundTableMenu.vue";
 import { outcomeMessage } from "../composables/exchangeRules";
-import { worktreeFailureMessage } from "./cellChromeRules";
+import { worktreeFailureMessage, worktreeRequestFailure } from "./cellChromeRules";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
@@ -819,12 +820,30 @@ function cancelClose() {
   closeError.value = null;
 }
 
+// `git worktree remove` on a large repository takes seconds, and the confirmation stays on screen
+// for all of them — so the button holds itself and says so, rather than terminating the pty and
+// firing a second removal on the next impatient click (#1549's rule, same route).
+const { busy: closeBusy, run: runCloseAction } = useBusyAction();
+const REMOVE_KEY = "remove";
+
+// The three things this one button is doing at any moment: waiting for an accurate dirty/ahead
+// count, running the removal, or offering it.
+const removeButtonLabel = computed(() => {
+  if (closeChecking.value) return "Checking…";
+  if (closeBusy.value === REMOVE_KEY) return "Removing…";
+  return hasUnsaved.value ? "Discard & remove" : "Remove worktree";
+});
+
 async function removeAndClose() {
   const dir = cwd.value;
   if (!dir) {
     teardown();
     return;
   }
+  await runCloseAction(REMOVE_KEY, () => requestRemove(dir));
+}
+
+async function requestRemove(dir: string) {
   closeError.value = null;
   termRef.value?.terminate(); // free the worktree dir first (Windows locks a process's cwd)
   try {
@@ -838,7 +857,7 @@ async function removeAndClose() {
       SLOW_COMMAND_TIMEOUT_MS,
     );
     if (res.ok) return teardown();
-    closeError.value = "Couldn't remove the worktree — it may need manual cleanup.";
+    closeError.value = `Couldn't remove the worktree: ${worktreeRequestFailure(await jsonBody(res), res.status)} — it may need manual cleanup.`;
   } catch {
     closeError.value = "Couldn't reach the server to remove the worktree.";
   }
@@ -1601,15 +1620,16 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                 </button>
                 <button
                   data-testid="ccx-remove"
-                  class="cursor-pointer rounded-md border border-border bg-elevated px-3 py-1.5 font-sans text-[12px] text-secondary hover:border-err-text hover:bg-[var(--err-hover-bg)] hover:text-err-text"
-                  :disabled="closeChecking"
+                  class="cursor-pointer rounded-md border border-border bg-elevated px-3 py-1.5 font-sans text-[12px] text-secondary enabled:hover:border-err-text enabled:hover:bg-[var(--err-hover-bg)] enabled:hover:text-err-text disabled:cursor-default disabled:opacity-40"
+                  :disabled="closeChecking || closeBusy !== null"
                   @click="removeAndClose"
                 >
-                  {{ closeChecking ? "Checking…" : hasUnsaved ? "Discard &amp; remove" : "Remove worktree" }}
+                  {{ removeButtonLabel }}
                 </button>
                 <button
                   data-testid="ccx-cancel"
-                  class="cursor-pointer rounded-md border border-border bg-elevated px-3 py-1.5 font-sans text-[12px] text-secondary hover:bg-hover hover:text-fg"
+                  class="cursor-pointer rounded-md border border-border bg-elevated px-3 py-1.5 font-sans text-[12px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-40"
+                  :disabled="closeBusy !== null"
                   @click="cancelClose"
                 >
                   Cancel
@@ -1621,10 +1641,11 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               <div class="flex flex-wrap gap-1.5">
                 <button
                   data-testid="ccx-remove"
-                  class="cursor-pointer rounded-md border border-border bg-elevated px-3 py-1.5 font-sans text-[12px] text-secondary hover:border-err-text hover:bg-[var(--err-hover-bg)] hover:text-err-text"
+                  class="cursor-pointer rounded-md border border-border bg-elevated px-3 py-1.5 font-sans text-[12px] text-secondary enabled:hover:border-err-text enabled:hover:bg-[var(--err-hover-bg)] enabled:hover:text-err-text disabled:cursor-default disabled:opacity-40"
+                  :disabled="closeBusy !== null"
                   @click="removeAndClose"
                 >
-                  Retry
+                  {{ closeBusy === REMOVE_KEY ? "Removing…" : "Retry" }}
                 </button>
                 <button
                   class="cursor-pointer rounded-md border border-border bg-elevated px-3 py-1.5 font-sans text-[12px] text-secondary hover:bg-hover hover:text-fg"

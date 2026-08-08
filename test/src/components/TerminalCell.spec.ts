@@ -1727,6 +1727,40 @@ describe("TerminalCell", () => {
     expect(w.find('[data-testid="ccx-remove"]').attributes("disabled")).toBeUndefined(); // released
   });
 
+  // #1549's rule, on the same route: `git worktree remove` runs for seconds with the confirmation
+  // still on screen, and the button said nothing — so a second click terminated the pty again and
+  // fired a second removal at a path the first one was already taking apart.
+  it("holds Remove (Removing…) for the whole removal, and posts it once", async () => {
+    const gate = deferred<{ ok: boolean; status: number; json: () => Promise<unknown> }>();
+    let removes = 0;
+    globalThis.fetch = vi.fn((url: string) => {
+      const u = String(url);
+      if (u.includes("/api/worktrees/remove")) {
+        removes += 1;
+        return gate.promise;
+      }
+      if (u.includes("/api/worktrees/diff")) return Promise.resolve({ ok: true, json: async () => cleanWtDiff });
+      if (u.includes("/api/sessions")) return Promise.resolve({ ok: true, json: async () => ({ sessions: [] }) });
+      return Promise.resolve({ ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) });
+    }) as unknown as typeof fetch;
+    const w = mountCell("66666666-6666-6666-6666-666666666666", { initialCwd: WT_CWD });
+    await flushPromises();
+    await w.find(".cell-close").trigger("click");
+    await flushPromises(); // the close() diff refresh releases the button
+    const remove = () => w.find('[data-testid="ccx-remove"]');
+    await remove().trigger("click");
+    await flushPromises();
+    expect(remove().attributes("disabled")).toBeDefined();
+    expect(remove().text()).toBe("Removing…");
+    expect(w.find('[data-testid="ccx-cancel"]').attributes("disabled")).toBeDefined();
+    await remove().trigger("click");
+    await flushPromises();
+    expect(removes).toBe(1);
+    gate.resolve({ ok: true, status: 200, json: async () => ({ ok: true }) });
+    await flushPromises();
+    expect(w.find('[data-testid="cell-launch"]').exists()).toBe(true);
+  });
+
   it("keeps the confirm open with an error when the remove fails (no false success)", async () => {
     globalThis.fetch = vi.fn(async (url: string) => {
       const u = String(url);

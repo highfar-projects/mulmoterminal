@@ -911,3 +911,195 @@ describe("the folder button when the host has no file dialog", () => {
     expect(pickError(w).exists()).toBe(false);
   });
 });
+
+// #1549: `git worktree add` checks out the whole tree — around six seconds on the reporter's
+// 33,000-file monorepo — and the form was byte-identical to the one before the click for all of it.
+// The button's only `disabled` test was "is the task field empty", and the field is cleared once
+// the ANSWER lands, so it stayed live; `uniqueBranch` takes the next free suffix, so every extra
+// press succeeded. Three presses, three worktrees: agent/<task>, -2, -3.
+describe("creating a worktree", () => {
+  /** Everything answers as usual, but the create waits until the test lets it finish. */
+  function mockHeldCreate(answer: { ok: boolean; status?: number; body: unknown }, worktrees: WorktreeRow[] = []) {
+    const bodies: string[] = [];
+    let finish: () => void = () => {};
+    const held = new Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>((resolve) => {
+      finish = () => resolve({ ok: answer.ok, status: answer.status ?? (answer.ok ? 200 : 500), json: async () => answer.body });
+    });
+    globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes("/api/worktrees/create")) {
+        bodies.push(String(init?.body ?? ""));
+        return held;
+      }
+      if (u.includes("/api/worktrees")) return { ok: true, json: async () => ({ isGit: true, base: "main", worktrees }) };
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ cwd: "/repo", sessions: [] }) };
+      return { ok: true, json: async () => ({}) };
+    }) as unknown as typeof fetch;
+    return { finish, bodies };
+  }
+
+  const startButton = (w: ReturnType<typeof mountForm>) => w.find('[data-testid="wt-start"]');
+
+  /** Type a task name and press the button, leaving the create in flight. */
+  async function beginCreate(w: ReturnType<typeof mountForm>, task = "fix login") {
+    await w.find('[data-testid="wt-task"]').setValue(task);
+    await startButton(w).trigger("click");
+    await flushPromises();
+  }
+
+  it("holds the button and says it is working while the worktree is being cut", async () => {
+    const { finish } = mockHeldCreate({ ok: true, body: { path: "/wt/fix-login", branch: "agent/fix-login" } });
+    const w = mountForm();
+    await flushPromises();
+    await w.find('[data-testid="wt-task"]').setValue("fix login");
+    expect(startButton(w).attributes("disabled")).toBeUndefined();
+    await startButton(w).trigger("click");
+    await flushPromises();
+    expect(startButton(w).attributes("disabled")).toBeDefined();
+    expect(startButton(w).text()).toContain("Creating…");
+    finish();
+    await flushPromises();
+    expect(w.emitted("start")?.at(-1)).toEqual(["/wt/fix-login"]);
+    expect(startButton(w).text()).toContain("New worktree");
+  });
+
+  // The Enter key is the OTHER way in and the input is never disabled, so the guard has to live in
+  // the handler rather than only on the button — which is what makes this a fix and not a coat of
+  // paint.
+  it("creates exactly one worktree however many times it is asked", async () => {
+    const { finish, bodies } = mockHeldCreate({ ok: true, body: { path: "/wt/fix-login" } });
+    const w = mountForm();
+    await flushPromises();
+    await beginCreate(w);
+    await w.find('[data-testid="wt-task"]').trigger("keydown.enter");
+    await startButton(w).trigger("click");
+    await flushPromises();
+    expect(bodies).toHaveLength(1);
+    finish();
+    await flushPromises();
+    expect(bodies).toHaveLength(1);
+    expect(w.emitted("start")).toHaveLength(1);
+  });
+
+  // The task name stays put on a failure: it is what the retry needs, and clearing it would make a
+  // refused create look like one that worked.
+  it("shows what the server said instead of nothing at all", async () => {
+    const { finish } = mockHeldCreate({ ok: false, status: 500, body: { error: "fatal: Not a valid object name: 'main'." } });
+    const w = mountForm();
+    await flushPromises();
+    await beginCreate(w);
+    finish();
+    await flushPromises();
+    expect(w.find('[data-testid="wt-error"]').text()).toContain("Not a valid object name");
+    expect(w.emitted("start")).toBeUndefined();
+    expect(startButton(w).attributes("disabled")).toBeUndefined();
+  });
+
+  // A 200 with no path is not a worktree to launch in, and treating it as one would start the agent
+  // in whatever the directory field happens to say.
+  it("refuses to launch on an answer that names no worktree", async () => {
+    const { finish } = mockHeldCreate({ ok: true, body: { branch: "agent/fix-login" } });
+    const w = mountForm();
+    await flushPromises();
+    await beginCreate(w);
+    finish();
+    await flushPromises();
+    expect(w.emitted("start")).toBeUndefined();
+    expect(w.find('[data-testid="wt-error"]').exists()).toBe(true);
+  });
+
+  // One guard for the whole section: these all shell out to git in one repository, where a second
+  // command contends on the index lock.
+  it("holds the existing worktrees' own buttons while a create runs", async () => {
+    const { finish } = mockHeldCreate({ ok: true, body: { path: "/wt/fix-login" } }, [worktree({ session: null })]);
+    const w = mountForm();
+    await flushPromises();
+    expect(w.find('[data-testid="wt-del"]').attributes("disabled")).toBeUndefined();
+    await beginCreate(w);
+    expect(w.find('[data-testid="wt-del"]').attributes("disabled")).toBeDefined();
+    expect(w.find('[data-testid="worktree-reuse"]').attributes("disabled")).toBeDefined();
+    finish();
+    await flushPromises();
+    expect(w.find('[data-testid="wt-del"]').attributes("disabled")).toBeUndefined();
+  });
+
+  it("does not offer the button at all with no task name", async () => {
+    mockFetch();
+    const w = mountForm();
+    await flushPromises();
+    expect(startButton(w).attributes("disabled")).toBeDefined();
+    expect(startButton(w).classes()).toContain("disabled:opacity-40");
+  });
+
+  // The failure belongs to the repository it was refused in, and the section comes BACK for the
+  // next directory — so a message kept in state would reappear under a repo it says nothing true
+  // about. Waited out in real time, like the debounce spec below: what matters is the state after
+  // the new directory's lists land, not that a timer was scheduled.
+  it("drops the failure when the field moves to another repository", async () => {
+    const { finish } = mockHeldCreate({ ok: false, status: 500, body: { error: "fatal: Not a valid object name: 'main'." } });
+    const w = mountForm();
+    await flushPromises();
+    await beginCreate(w);
+    finish();
+    await flushPromises();
+    expect(w.find('[data-testid="wt-error"]').exists()).toBe(true);
+    await w.setProps({ dir: "/elsewhere" });
+    for (let waited_ms = 0; waited_ms < 3000; waited_ms += 25) {
+      if (w.find('[data-testid="cell-worktrees"]').exists()) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      await flushPromises();
+    }
+    expect(w.find('[data-testid="cell-worktrees"]').exists()).toBe(true); // the section is back…
+    expect(w.find('[data-testid="wt-error"]').exists()).toBe(false); // …without the other repo's failure
+  });
+});
+
+// The delete beside each row is the same shape of button on the same slow route, and had the same
+// nothing: no guard, no progress, and `catch {}` over the answer.
+describe("removing a worktree", () => {
+  function mockHeldRemove(answer: { ok: boolean; status?: number; body: unknown }) {
+    let finish: () => void = () => {};
+    let calls = 0;
+    const held = new Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>((resolve) => {
+      finish = () => resolve({ ok: answer.ok, status: answer.status ?? (answer.ok ? 200 : 500), json: async () => answer.body });
+    });
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/worktrees/remove")) {
+        calls += 1;
+        return held;
+      }
+      if (u.includes("/api/worktrees")) return { ok: true, json: async () => ({ isGit: true, base: "main", worktrees: [worktree({ session: null })] }) };
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ cwd: "/repo", sessions: [] }) };
+      return { ok: true, json: async () => ({}) };
+    }) as unknown as typeof fetch;
+    return { finish, calls: () => calls };
+  }
+
+  it("removes once however many times the button is pressed, and shows which row it is on", async () => {
+    const { finish, calls } = mockHeldRemove({ ok: true, body: { ok: true } });
+    const w = mountForm();
+    await flushPromises();
+    const del = () => w.find('[data-testid="wt-del"]');
+    await del().trigger("click");
+    await flushPromises();
+    expect(del().attributes("disabled")).toBeDefined();
+    expect(del().text()).toContain("progress_activity");
+    await del().trigger("click");
+    await flushPromises();
+    expect(calls()).toBe(1);
+    finish();
+    await flushPromises();
+    expect(del().text()).toContain("delete");
+  });
+
+  it("says why a removal was refused", async () => {
+    const { finish } = mockHeldRemove({ ok: false, status: 409, body: { ok: false, reason: "dirty" } });
+    const w = mountForm();
+    await flushPromises();
+    await w.find('[data-testid="wt-del"]').trigger("click");
+    finish();
+    await flushPromises();
+    expect(w.find('[data-testid="wt-error"]').text()).toContain("uncommitted changes");
+  });
+});
