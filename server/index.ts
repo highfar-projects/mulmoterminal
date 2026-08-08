@@ -99,6 +99,8 @@ import {
   type SessionScreenMeta,
   type SessionWorkSummary,
 } from "./backends/remoteHost/terminalScreen.js";
+import { dirIconSrc, readIconFile, withDirIcons, type DirIconSources } from "./backends/remoteHost/dirIcons.js";
+import { dirIconFor } from "./config/dir-config.js";
 import type { SessionAgent } from "../common/sessionAgent.js";
 import { quickCommandsForAgent } from "./backends/remoteHost/quickCommands.js";
 import { decideLaunchTerminal, NO_BROWSER_ERROR } from "./backends/remoteHost/launchTerminal.js";
@@ -648,6 +650,11 @@ const workByCwd = async (cwds: readonly string[]): Promise<Map<string, SessionWo
   return out;
 };
 
+// Where the phone's copy of a directory's picture comes from (#1556). `dirIconFor` is the same
+// resolution the browser's cells use — the configured `icon` and, failing that, the detected
+// favicon — so the two clients never disagree about which image a project has.
+const dirIconSources: DirIconSources = { iconOf: dirIconFor, readIcon: readIconFile };
+
 const remoteHostListTerminalSessions = async () => {
   // A live PTY knows where claude actually runs, so it wins. A session that outlived this process
   // has none — that is what the remembered cwd is for (#1021), and without it the phone shows the
@@ -659,7 +666,7 @@ const remoteHostListTerminalSessions = async () => {
   // case that mark exists for is a server that restarted before any tab opened, where the answer
   // lives only on disk.
   await Promise.all([unplacedSessionsHydrated, placedSessionsHydrated]);
-  return buildSessionList({
+  const sessions = buildSessionList({
     liveIds: [...ptys.keys()],
     tmuxIds: tmuxListSessionIds(),
     isResumable: await resumableSessionPredicate(),
@@ -686,6 +693,8 @@ const remoteHostListTerminalSessions = async () => {
       };
     },
   });
+  // After the sort, so the budget is spent on the rows the phone shows first.
+  return withDirIcons(sessions, dirIconSources);
 };
 
 // Write a chunk to a session's live PTY for the phone's terminal input (#445).
@@ -722,6 +731,12 @@ const remoteHostSessionScreenMeta = (sessionId: string): Promise<SessionScreenMe
     // does not. A per-poll `ls-remote` is the only local fix and costs a network round trip
     // on a screen the phone polls (#832).
     githubUrlOf: resolveGithubUrl,
+    // Inlined rather than the /api/dir-icon URL the browser gets: the phone has no route to
+    // this host at all, so the picture travels in the reply or not at all (#1556).
+    iconOf: (cwd) => {
+      const icon = dirIconFor(cwd);
+      return (icon && dirIconSrc(icon, readIconFile)) || "";
+    },
     memoOf: (id) => sessionMemos.get(id) ?? "", // beside the summary, never instead of it — see SessionScreenMeta (#1110)
     summaryOf: (id) => aiTitles.get(id) ?? "",
     promptOf: (id) => lastPrompts.get(id) ?? "",

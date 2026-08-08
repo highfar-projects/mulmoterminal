@@ -252,8 +252,8 @@ before you have read a word of it:
 ```
 
 It appears in the **cell header**, the **cockpit roster** and the **filmstrip thumbnails** while a
-cell is enlarged, and on the **launcher's directory chips** — so the same picture identifies the
-project everywhere it is offered or running.
+cell is enlarged, on the **launcher's directory chips**, and in the [phone's](phone.md) **terminal list and terminal
+screen** — so the same picture identifies the project everywhere it is offered or running.
 
 - **A path is relative to this directory.** An absolute path, or a `../` that escapes the
   directory, is rejected — the same confinement `sound` has, so an opened project cannot point
