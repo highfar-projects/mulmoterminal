@@ -1052,6 +1052,42 @@ describe("creating a worktree", () => {
     expect(w.find('[data-testid="cell-worktrees"]').exists()).toBe(true); // the section is back…
     expect(w.find('[data-testid="wt-error"]').exists()).toBe(false); // …without the other repo's failure
   });
+
+  // The harder half of the same rule: the field is editable for the whole round trip, so a refusal
+  // can LAND after the move. Clearing on the change is not enough — the answer has to know which
+  // repository it was about. (Observed during review, not flagged by either bot.)
+  it("does not report a refusal that lands after the field has moved on", async () => {
+    const { finish } = mockHeldCreate({ ok: false, status: 500, body: { error: "fatal: Not a valid object name: 'main'." } });
+    const w = mountForm();
+    await flushPromises();
+    await beginCreate(w);
+    await w.setProps({ dir: "/elsewhere" }); // typed while the create is still in flight
+    finish();
+    for (let waited_ms = 0; waited_ms < 3000; waited_ms += 25) {
+      if (w.find('[data-testid="cell-worktrees"]').exists()) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      await flushPromises();
+    }
+    expect(w.find('[data-testid="wt-error"]').exists()).toBe(false);
+  });
+
+  // `fetchWithTimeout` gives up at 60s, which a checkout large enough to make #1549 worth fixing can
+  // exceed — and git carries on regardless. "Could not reach the server" would send the user to look
+  // at their network for a worktree that is about to appear.
+  it("says a timeout is a timeout, not an unreachable server", async () => {
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/worktrees/create")) throw new DOMException("The operation was aborted.", "AbortError");
+      if (u.includes("/api/worktrees")) return { ok: true, json: async () => ({ isGit: true, base: "main", worktrees: [] }) };
+      return { ok: true, json: async () => ({ cwd: "/repo", sessions: [] }) };
+    }) as unknown as typeof fetch;
+    const w = mountForm();
+    await flushPromises();
+    await beginCreate(w);
+    const text = w.find('[data-testid="wt-error"]').text();
+    expect(text).toContain("Timed out");
+    expect(text).not.toContain("Could not reach");
+  });
 });
 
 // The delete beside each row is the same shape of button on the same slow route, and had the same

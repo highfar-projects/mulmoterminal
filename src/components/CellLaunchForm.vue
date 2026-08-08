@@ -456,7 +456,23 @@ const removeKey = (w: Worktree): string => `remove:${w.path}`;
 // looked identical — and the difference was only findable by reading the shipped bundle.
 const worktreeError = ref<string | null>(null);
 
-const unreachable = (e: unknown): string => `Could not reach the server: ${e instanceof Error ? e.message : String(e)}`;
+// Only if the form is STILL pointed at the repository the action was for. The directory field stays
+// editable for the whole round trip, so a failure reported under whatever the user typed meanwhile
+// is a sentence about somewhere else — #1372's rule, applied to the error line rather than the rows.
+// A successful create deliberately does not ask: the worktree was made because it was asked for, and
+// launching in it is the click being honoured, not a stale answer.
+const reportWorktreeFailure = (repoDir: string | null, message: string): void => {
+  if (isSameDirPath(targetDir.value, repoDir)) worktreeError.value = message;
+};
+
+// A timeout is NOT "could not reach the server": the request landed and git is still working, so the
+// worktree may well appear a moment later. Saying otherwise sends the user to look at their network.
+// Reachable — SLOW_COMMAND_TIMEOUT_MS is 60s, and a checkout large enough to make this bug worth
+// fixing is a checkout that can exceed it.
+const requestFailureText = (e: unknown): string =>
+  e instanceof DOMException && e.name === "AbortError"
+    ? "Timed out waiting for git — it may still finish. Re-select this directory to see."
+    : `Could not reach the server: ${e instanceof Error ? e.message : String(e)}`;
 
 // Create a fresh worktree for the typed task and start the selected agent in it.
 //
@@ -484,20 +500,20 @@ async function requestWorktree(repoDir: string, task: string): Promise<void> {
     );
     const wt = await jsonBody(res);
     if (!res.ok) {
-      worktreeError.value = worktreeRequestFailure(wt, res.status);
+      reportWorktreeFailure(repoDir, worktreeRequestFailure(wt, res.status));
       return;
     }
     // A 200 whose body has no path is not a worktree to launch in, and reporting it as one would
     // start the agent in whatever the field happens to say.
     if (typeof wt.path !== "string") {
-      worktreeError.value = "The server answered without a worktree path.";
+      reportWorktreeFailure(repoDir, "The server answered without a worktree path.");
       return;
     }
     worktreeTask.value = "";
     await syncMcpGroupsInto(wt.path);
     emit("start", wt.path);
   } catch (e) {
-    worktreeError.value = unreachable(e);
+    reportWorktreeFailure(repoDir, requestFailureText(e));
   }
 }
 
@@ -552,10 +568,10 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
       },
       SLOW_COMMAND_TIMEOUT_MS,
     );
-    if (!res.ok) worktreeError.value = `${w.task}: ${worktreeRequestFailure(await jsonBody(res), res.status)}`;
+    if (!res.ok) reportWorktreeFailure(repoDir, `${w.task}: ${worktreeRequestFailure(await jsonBody(res), res.status)}`);
     void loadWorktrees(targetDir.value);
   } catch (e) {
-    worktreeError.value = unreachable(e);
+    reportWorktreeFailure(repoDir, requestFailureText(e));
   }
 }
 </script>
