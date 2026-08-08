@@ -1208,6 +1208,7 @@ watch(
           :initial-session-id="cell.session"
           :initial-cwd="cell.cwd"
           :initial-agent="cell.agent"
+          :auto-start="cell.autoStart === true"
           :presets="presets"
           :launchers="launchers"
           :custom-agents="customAgents ?? []"

@@ -429,16 +429,21 @@ let offNewTerminal: (() => void) | null = null;
 // marked with `agent`, and Claude is the plain default. The session id arrives from the server once
 // the cell opens its socket, so they all persist and reconnect like any other cell.
 //
+// `autoStart` is what makes an agent cell RUN. Without it these are indistinguishable from the
+// empty launcher — no session, no command, no launcher — so the phone's request (#831) opened the
+// cell-creation form with the agent pre-picked and waited for someone at the desktop to press
+// Start, which is exactly what #1535 reported. A shell needs none of it: its launcher runs on sight.
+//
 // A Record over LAUNCH_AGENTS rather than an if-chain: the chain ended in `shellCell`, so adding an
 // agent to that list without a case here silently opened a SHELL under its name. Now it does not
 // compile.
 const CELL_FOR_AGENT: Record<LaunchAgent, (cwd: string) => Omit<Cell, "uid">> = {
   shell: (cwd) => shellCell(cwd),
-  claude: (cwd) => ({ session: null, cwd }),
-  codex: (cwd) => ({ session: null, cwd, agent: "codex" }),
-  antigravity: (cwd) => ({ session: null, cwd, agent: "antigravity" }),
-  grok: (cwd) => ({ session: null, cwd, agent: "grok" }),
-  muse: (cwd) => ({ session: null, cwd, agent: "muse" }),
+  claude: (cwd) => ({ session: null, cwd, autoStart: true }),
+  codex: (cwd) => ({ session: null, cwd, agent: "codex", autoStart: true }),
+  antigravity: (cwd) => ({ session: null, cwd, agent: "antigravity", autoStart: true }),
+  grok: (cwd) => ({ session: null, cwd, agent: "grok", autoStart: true }),
+  muse: (cwd) => ({ session: null, cwd, agent: "muse", autoStart: true }),
 };
 const cellForAgent = (cwd: string, agent: LaunchAgent | undefined): Omit<Cell, "uid"> => (agent ? CELL_FOR_AGENT[agent](cwd) : shellCell(cwd));
 

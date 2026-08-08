@@ -50,6 +50,12 @@ export interface Cell {
   // way (#992). Stored as the ABSENCE of the key when not parked, for the same reason `agent`
   // is — only an absent key survives the JSON a persisted cell round-trips.
   parked?: true;
+  // Start `agent` in `cwd` as soon as the cell mounts, instead of opening the launcher form for
+  // someone to press Start. The phone's launch request (#831) is the only thing that sets it: the
+  // grid has to say WHAT the cell runs, because a fresh agent launch is otherwise a local
+  // transition inside TerminalCell and the grid learns of it only when the session id arrives.
+  // One-shot and ephemeral — cleared by setSession, and never persisted.
+  autoStart?: true;
 }
 // How the grid orders its cells. "manual": the user's hand-arranged order (the move buttons);
 // "auto": attention-first, recomputed from each cell's live status; "priority": the rank each
@@ -72,9 +78,11 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export const pageCount = (cellCount: number) => Math.max(1, Math.ceil(cellCount / PAGE_SIZE));
 export const pageSlice = <T>(cells: T[], page: number) => cells.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
 // A cell occupies a slot when it runs a Claude session, a command, OR a launcher; only
-// those count toward the cap. A launch cell is empty: no session, command, or launcher.
-const isOccupied = (c: Cell) => c.session !== null || c.command != null || c.launcher != null;
-const isLaunchCell = (c: Cell | undefined) => !!c && c.session === null && c.command == null && c.launcher == null;
+// those count toward the cap. A cell told to auto-start counts too, in the window before its
+// session id arrives: it is about to run, and `switchPage` discards a trailing LAUNCH cell.
+// A launch cell is the other side of that — the empty launcher, waiting to be told what to run.
+const isOccupied = (c: Cell) => c.session !== null || c.command != null || c.launcher != null || c.autoStart === true;
+const isLaunchCell = (c: Cell | undefined) => !!c && !isOccupied(c);
 export const runningCount = (cells: Cell[]) => cells.filter(isOccupied).length;
 
 const clampPage = (s: GridState): GridState => ({ ...s, page: Math.min(Math.max(0, Math.floor(s.page)), pageCount(s.cells.length) - 1) });
@@ -109,7 +117,10 @@ export function cancelableLaunchUid(state: GridState): number | null {
 }
 
 export function setSession(state: GridState, uid: number, id: string | null): GridState {
-  const cells = state.cells.map((c) => (c.uid === uid ? { ...c, session: id } : c));
+  // Drop the one-shot auto-start flag: the cell has answered. Left set, a cell whose session is
+  // later closed would keep counting as occupied while sitting on the launcher form.
+  const started = ({ autoStart: _consumed, ...rest }: Cell): Cell => ({ ...rest, session: id });
+  const cells = state.cells.map((c) => (c.uid === uid ? started(c) : c));
   const expanded = id === null && state.expanded === uid ? null : state.expanded;
   return { ...state, cells, expanded };
 }

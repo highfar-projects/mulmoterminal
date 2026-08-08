@@ -512,6 +512,37 @@ describe("setSession / setCwd / toggleExpand", () => {
   });
 });
 
+// `autoStart` is a cell the grid already knows what to run — the phone's launch request (#831).
+// Between the request and the server's session id it is the only thing telling the rest of the
+// grid that this cell is not an abandoned launcher, which is what #1535 turned on.
+describe("autoStart (a cell told to run on mount)", () => {
+  const starting = (uid: number): Cell => ({ uid, session: null, cwd: "/w", autoStart: true });
+
+  it("counts toward the cap like any other running cell", () => {
+    expect(runningCount([cell(0, U(0)), starting(1), cell(2)])).toBe(2);
+  });
+
+  // The one that costs the terminal: flipping pages before the session id lands would otherwise
+  // delete the cell the phone just asked for, as an abandoned trailing launcher.
+  it("survives a page switch", () => {
+    expect(switchPage(make([...running(9), starting(9)], { page: 1 }), 0).cells).toHaveLength(10);
+  });
+
+  it("is not the launch cell '+' cancels", () => {
+    expect(cancelableLaunchUid(make([...running(2), starting(2)]))).toBeNull();
+    expect(addCell(make([...running(2), starting(2)])).cells).toHaveLength(4); // appended, not cancelled
+  });
+
+  // One-shot: the cell has answered. Left set, closing that session later would leave an empty
+  // launcher permanently counted as occupied.
+  it("is cleared once the session arrives", () => {
+    const s = setSession(make([starting(0)]), 0, U(5));
+    expect(s.cells[0].session).toBe(U(5));
+    expect(s.cells[0].autoStart).toBeUndefined();
+    expect("autoStart" in s.cells[0]).toBe(false); // absent, not undefined — it round-trips through JSON
+  });
+});
+
 // `agent` is how a reloaded cell knows to reconnect via /ws/codex, and Claude is the ABSENT
 // case — so switching back to it has to REMOVE the key. A persisted grid round-trips through
 // JSON, where `agent: undefined` and no key are indistinguishable on the way out but only the
