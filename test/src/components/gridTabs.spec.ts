@@ -16,6 +16,7 @@ import {
   runCommand,
   runScriptInNewCell,
   insertCellAfter,
+  revealCell,
   shellCell,
   sessionCell,
   launchInCell,
@@ -509,6 +510,28 @@ describe("setSession / setCwd / toggleExpand", () => {
   it("always allows collapsing, even down to one cell", () => {
     const stranded = make([cell(0, U(0)), cell(1)], { expanded: 0 });
     expect(toggleExpand(stranded, 0).expanded).toBeNull();
+  });
+});
+
+// What starts a cell is MOUNTING, and a cell mounts only on the page the grid shows — so for an
+// auto-start cell the page is not cosmetic. insertCellAfter can only page by the manual index.
+describe("revealCell (page at where the cell is actually shown)", () => {
+  const ten = () => make(running(10), { page: 1 });
+
+  it("pages at the cell's position in the DISPLAY order, not its manual one", () => {
+    const manualLast = ten();
+    const reordered = [9, ...Array.from({ length: 9 }, (_, i) => i)]; // uid 9 sorted to the front
+    expect(revealCell(manualLast, 9, reordered).page).toBe(0);
+  });
+
+  it("agrees with the manual page when nothing was re-ordered", () => {
+    const order = Array.from({ length: 10 }, (_, i) => i);
+    expect(revealCell(ten(), 9, order).page).toBe(1);
+  });
+
+  // A uid the order doesn't carry (a full grid refused the insert) must not move the user.
+  it("leaves the page alone for a uid the order does not hold", () => {
+    expect(revealCell(ten(), 99, [0, 1, 2]).page).toBe(1);
   });
 });
 

@@ -21,6 +21,7 @@ import {
   runCommand,
   runScriptInNewCell,
   insertCellAfter,
+  revealCell,
   shellCell,
   sessionCell,
   launchInCell,
@@ -447,10 +448,16 @@ const CELL_FOR_AGENT: Record<LaunchAgent, (cwd: string) => Omit<Cell, "uid">> = 
 };
 const cellForAgent = (cwd: string, agent: LaunchAgent | undefined): Omit<Cell, "uid"> => (agent ? CELL_FOR_AGENT[agent](cwd) : shellCell(cwd));
 
+// `revealCell` after the insert, not instead of its page: what starts a cell is MOUNTING, and a
+// cell mounts only on the page the grid shows. insertCellAfter can only page by the manual index
+// — ordering needs the live status and the directory priorities, which only this component has.
 const openNewTerminal = ({ cwd, afterSlotKey, agent }: NewTerminalRequest) => {
   const match = afterSlotKey?.match(SLOT_UID_RE);
   const afterUid = match ? Number(match[1]) : NO_ORIGIN_UID;
-  state.value = insertCellAfter(state.value, afterUid, cellForAgent(cwd, agent));
+  const uid = state.value.nextUid; // insertCellAfter gives the new cell this one
+  const placed = insertCellAfter(state.value, afterUid, cellForAgent(cwd, agent));
+  const order = orderCells(placed.cells, statusForSort.value, placed.sortMode, priorityByCwd.value).map((c) => c.uid);
+  state.value = revealCell(placed, uid, order);
 };
 const detachNewTerminal = () => {
   offNewTerminal?.();

@@ -11,10 +11,16 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { LAUNCH_AGENTS, type LaunchAgent } from "../../../common/launchAgent";
 import { openTerminalAt } from "../../../src/composables/useNewTerminal";
 import { router } from "../../../src/router";
-import type { Cell } from "../../../src/components/gridTabs";
+import { PAGE_SIZE, type Cell } from "../../../src/components/gridTabs";
 
 vi.mock("../../../src/composables/usePubSub", () => ({
   usePubSub: () => ({ subscribe: () => () => {}, onReconnect: () => () => {} }),
+}));
+// Every pre-existing cell is mid-turn ("working"), which sorts BEHIND a brand-new idle one in
+// auto mode — the condition under which the grid's display order and the manual order disagree.
+const BUSY = vi.hoisted(() => ({ ids: Array.from({ length: 10 }, (_, i) => `${String(i).repeat(8)}-aaaa-aaaa-aaaa-aaaaaaaaaaaa`) }));
+vi.mock("../../../src/composables/useGridActivity", () => ({
+  useGridActivity: () => ({ activity: new Map(BUSY.ids.map((id) => [id, { working: true, waiting: false, event: null }])) }),
 }));
 // The live terminal, reduced to the props that say WHERE it connected and as WHAT.
 vi.mock("../../../src/components/Terminal.vue", () => ({
@@ -146,5 +152,35 @@ describe("the grid's answer to a phone launch request", () => {
     const cell = await openedFor("shell");
     expect(cell?.launcher).toEqual({ shell: true, label: "shell" });
     expect(cell?.autoStart).toBeUndefined();
+  });
+});
+
+// A cell only starts when it MOUNTS, and it only mounts while it is on the page the grid shows.
+// insertCellAfter pages by the cell's index in the MANUAL list — which is the page the user sees
+// only in manual mode. "auto" and "priority" re-order the whole list before paging, so on a grid
+// of more than one page the new cell could be shown on a page the grid had just navigated away
+// from, and nothing would ever start it (Codex on #1557).
+describe("the phone's request on a re-ordered, multi-page grid", () => {
+  const seedBusyGrid = () =>
+    localStorage.setItem(
+      "grid_v2",
+      JSON.stringify({
+        cells: BUSY.ids.map((session, uid) => ({ uid, session, cwd: "/w" })),
+        expanded: null,
+        page: 0,
+        sortMode: "auto",
+      }),
+    );
+
+  it("leaves the grid on the page that actually shows the new cell", async () => {
+    seedBusyGrid();
+    const w = await mountGrid();
+    openTerminalAt(CWD, null, "claude");
+    await flushPromises();
+    // The 10 working cells sort behind it, so the new idle cell is FIRST in display order —
+    // page 0 — while its manual index (10) says page 1.
+    expect(cellsOf(w).map((c) => c.cwd)).toContain(CWD);
+    expect(w.findComponent(GridStub).props("cells").length).toBeLessThanOrEqual(PAGE_SIZE);
+    w.unmount();
   });
 });

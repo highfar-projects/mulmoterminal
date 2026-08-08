@@ -143,6 +143,18 @@ describe("a slot inherited by a view asking for a different session", () => {
     expect(seen).toEqual(["s-1"]);
   });
 
+  // The same cell paging away and back before its id arrives — the window an auto-start cell
+  // (the phone's launch request, #1535) lives in. BOTH sides have no opinion: the slot has not
+  // learned an id and the remounted view is a fresh launch, so this must stay the reuse. A
+  // reconnect here would spawn a SECOND agent and orphan the first, which is what the cell's
+  // relaunch-on-mount was reviewed as doing (CodeRabbit on #1557) — it does not.
+  it("keeps the reuse when neither the slot nor the remounted view knows the session yet", () => {
+    conn.attach(KEY, withSession(null), {}, document.createElement("div"));
+    conn.detach(KEY, null);
+    conn.attach(KEY, withSession(null), {}, document.createElement("div"));
+    expect(FakeWebSocket.instances).toHaveLength(1);
+  });
+
   // A slot that has not learned an id is not a blank slate (review on #1534): it belongs to a
   // fresh launch whose socket may still be connecting, and its `session` frame — the OLD cell's —
   // would land on whatever view holds the slot. A view naming a concrete session reconnects.

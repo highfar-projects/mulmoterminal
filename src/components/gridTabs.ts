@@ -54,7 +54,10 @@ export interface Cell {
   // someone to press Start. The phone's launch request (#831) is the only thing that sets it: the
   // grid has to say WHAT the cell runs, because a fresh agent launch is otherwise a local
   // transition inside TerminalCell and the grid learns of it only when the session id arrives.
-  // One-shot and ephemeral — cleared by setSession, and never persisted.
+  //
+  // One-shot: `setSession` drops it once the cell has answered. It never survives a RELOAD either
+  // — parseGridState rebuilds each cell field by field and does not carry it — though, like every
+  // other in-flight field, it is written to localStorage in the meantime rather than stripped.
   autoStart?: true;
 }
 // How the grid orders its cells. "manual": the user's hand-arranged order (the move buttons);
@@ -165,7 +168,8 @@ export function launchInCell(state: GridState, uid: number, launcher: CellLaunch
 
 // Insert a brand-new cell immediately AFTER the cell that triggered it, so the header
 // "new terminal" button and the Run button open next to the current cell rather than at
-// the end. Falls back to appending when `afterUid` is gone. Jumps to the new cell's page.
+// the end. Falls back to appending when `afterUid` is gone. Jumps to the new cell's page —
+// its MANUAL page, which is what the user sees only in manual mode; see revealCell.
 export function insertCellAfter(state: GridState, afterUid: number, cell: Omit<Cell, "uid">): GridState {
   if (runningCount(state.cells) >= MAX_TERMINALS) return state;
   const idx = state.cells.findIndex((c) => c.uid === afterUid);
@@ -174,6 +178,20 @@ export function insertCellAfter(state: GridState, afterUid: number, cell: Omit<C
   const cells = [...state.cells.slice(0, at), { ...cell, uid }, ...state.cells.slice(at)];
   const expanded = zoomedUid(state) !== null ? uid : state.expanded;
   return { ...state, cells, nextUid: state.nextUid + 1, page: Math.floor(at / PAGE_SIZE), expanded };
+}
+
+// Page the grid at whatever page actually SHOWS `uid`, given the display order.
+//
+// "auto" and "priority" order the whole list before paging (visibleOrdered), so a cell's manual
+// index and the page it appears on are different questions — and insertCellAfter can only answer
+// the first, since ordering needs live status and per-directory priority that a pure transform
+// here is not given. On a grid of more than one page that gap leaves the new cell on a page the
+// grid is not showing, and an unrendered cell never MOUNTS: its launcher, its command, or the
+// agent an `autoStart` cell was opened for is then never started at all (Codex on #1557).
+//
+// `order` is the uid order the grid renders — orderCells over the state this is called with.
+export function revealCell(state: GridState, uid: number, order: readonly number[]): GridState {
+  return { ...state, page: pageHolding(order, uid, state.page) };
 }
 
 // The Run button opened a script in a spare cell next to the cell that triggered it.
