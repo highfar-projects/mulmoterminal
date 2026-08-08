@@ -8,6 +8,86 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.7.5 — 2026-08-09
+
+> **Setup guide:** [Settings you can find, in a language you read](https://receptron.github.io/mulmoterminal/guide/en/v4.7.5.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.7.5.html))
+
+**A release about Settings.** It had grown to twenty-four headings in one scroll, all of them in
+English, with a button that started a live agent session the moment it was pressed. Three reports
+about the same screen, all from the same week.
+
+### Settings is a sidebar of grouped sections, not one flat scroll ([#1563](https://github.com/receptron/mulmoterminal/issues/1563), [#1565](https://github.com/receptron/mulmoterminal/pull/1565))
+
+Twenty-four headings stacked in a single 560px-wide scroll, with no grouping, no search and no table
+of contents. "Notification sounds" was the eighth heading down, and the report that opened #1563 is
+someone who went looking for it and gave up.
+
+It is now a left sidebar of **nine groups** — Appearance, Projects, Header & launch, Input, Models &
+servers, Notifications, Integrations, Sessions, Help — with one section on screen at a time,
+following MulmoClaude's own settings sidebar so a user of both gets the same shape.
+
+Two things were done differently from that reference, because twenty-four entries is not fifteen:
+
+- **The sidebar is a real `role="tablist"` with roving tabindex.** Twenty-four plain buttons would
+  be twenty-four Tab stops standing between the dialog and the setting it was opened for — more
+  keystrokes than the flat scroll being replaced. Only the selected tab is tabbable; arrows move
+  within the list and wrap.
+- **Below `sm` the sidebar becomes an `optgroup`'d picker above the section.** Captured at 390px, a
+  160px sidebar left about 190px of pane and the notification-sound rows lost their own labels off
+  the left edge.
+
+A pane is **created the first time its tab is opened and hidden afterwards, not destroyed**. Opening
+Settings for one setting no longer mounts twenty-three sections and fires their requests, while a
+value typed but not yet applied — the terminal font field keeps one in a local draft precisely so a
+failed save does not lose it — survives a trip to another section and back.
+
+`ShortcutsSection` carried two headings and became `Terminal keys` and `Keyboard shortcuts`: two
+sidebar entries are two chances to find the thing. `Voice input`'s server capability probe moved up
+to the modal, since a section that hid itself inside a tab would leave an empty pane behind a button.
+
+### Settings speaks Japanese ([#1566](https://github.com/receptron/mulmoterminal/issues/1566), [#1567](https://github.com/receptron/mulmoterminal/pull/1567))
+
+MulmoTerminal had **no host i18n at all**. `vue-i18n` was in `package.json` only because the bundled
+`@mulmoclaude/*` plugins run their own; `createI18n` and `useI18n` appeared nowhere in `src/`,
+`server/` or `common/`, and every string in the app was hardcoded English. That is the other half of
+#1563: a Japanese reader searching the screen for 「音」 or 「通知」 found no such word on it.
+
+- `src/i18n/` holds `createI18n({ legacy: false, fallbackLocale: "en" })`, installed in `main.ts`,
+  with `en` and `ja` bundles. **`ja` is typed from `en`**, so a key added to English is a compile
+  error until it is translated rather than a silent fallback discovered a release later.
+- `src/composables/uiLanguage.ts` is `"auto" | "en" | "ja"`, localStorage-backed like the theme.
+  `auto` — the default — resolves through the existing `browserLocale()`, so a `ja-JP` browser comes
+  up Japanese with nothing configured.
+- A **Language** tab leads the sidebar. It is first on purpose: it is the one setting someone who
+  cannot read the rest of the screen has to find first.
+- Every string in the modal is translated, `aria-label`s included, and `settingsTabs.ts` now holds
+  ids only — the words are `settings.tabs.<id>` and `settings.groups.<key>`, derived the way
+  MulmoClaude derives its own.
+
+**Only the Settings modal is translated.** Every other surface is still English and moves later, one
+at a time; the Language pane says so on screen rather than leaving a user to wonder.
+
+### A skill button says what it does, and can be cancelled ([#1564](https://github.com/receptron/mulmoterminal/issues/1564), [#1568](https://github.com/receptron/mulmoterminal/pull/1568))
+
+A skill button was an icon and a label. Pressing "Configure notifications…" closed Settings, spawned
+an agent session in a new grid cell and sent its first turn — nothing on screen said that would
+happen, and nothing said how to undo it. The report is someone who decided they did not need the
+setting after all and could not find the way back.
+
+- **A one-line hint under every skill button**, saying an agent does the writing.
+- **A confirmation on press**, with Cancel / Start. It names the agent the launcher is set to — not
+  a hard-coded `claude`, since the seed is rewritten server-side for codex — says one new terminal
+  will open, and says that closing that terminal ends the session.
+- **Cancel leaves Settings exactly where it was.** Previously `closeSettings()` ran first, which is
+  why there was nothing to go back to; `launch-skill` now fires only on Start.
+- `Escape` answers the confirmation first and reaches the modal only on a second press. The
+  confirmation is owned by the modal rather than by the button for exactly this reason:
+  `useModalKeyboard` binds Escape on the document, so a dialog with its own binding would close both
+  on one press.
+- Declining returns focus to the button that raised it, found by the **skill it launches** rather
+  than by remembering `document.activeElement` — a browser does not reliably focus a `<button>` when
+  it is clicked, and Safari does not.
+
 ## mulmoterminal@4.7.4 — 2026-08-08
 
 > **Setup guide:** [Your projects, recognisable on your phone](https://receptron.github.io/mulmoterminal/guide/en/v4.7.4.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.7.4.html))
