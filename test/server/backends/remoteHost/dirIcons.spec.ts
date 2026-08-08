@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, vi } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -103,9 +103,15 @@ describe("readIconFile", () => {
 
   // A FIFO in place of the file would make `open` wait for a writer that never comes. This
   // reader is synchronous, so that is not a slow icon — it is the whole server, stopped.
-  it.skipIf(process.platform === "win32")("refuses a FIFO instead of blocking on it", () => {
+  //
+  // Node has no mkfifo, so the binary is named by ABSOLUTE path rather than found on PATH —
+  // both because the lint rule refuses a PATH lookup and because a test that shells out should
+  // not depend on the runner's environment. Skipped where it does not exist (Windows).
+  const mkfifo = ["/usr/bin/mkfifo", "/bin/mkfifo"].find((candidate) => existsSync(candidate));
+
+  it.skipIf(!mkfifo)("refuses a FIFO instead of blocking on it", () => {
     const fifo = path.join(dir, "fifo.png");
-    execFileSync("mkfifo", [fifo]);
+    execFileSync(String(mkfifo), [fifo]);
     expect(readIconFile(fifo)).toBeNull();
   });
 });
