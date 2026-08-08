@@ -5,7 +5,7 @@
 // alone would pass just as happily with the listeners on the wrong element or the wrong gate.
 import { describe, it, expect, beforeAll, afterEach } from "vitest";
 import { Terminal } from "@xterm/xterm";
-import { GESTURE_END_MS, guardMouseClicks, guardMouseWheel, type WheelScrollControl } from "../../../src/composables/terminalMouseInput";
+import { GESTURE_END_MS, guardMouseClicks, guardMouseWheel, type FrameScheduler, type WheelScrollControl } from "../../../src/composables/terminalMouseInput";
 import { recordSwallowedModes } from "../../../src/composables/mouseReports";
 import { swallowsMouseTracking } from "../../../src/composables/mouseTrackingModes";
 
@@ -56,7 +56,12 @@ interface Wired {
 
 // A terminal wired the way ensure() wires one: the #729 parser swallow, then the click guard
 // after open(). jsdom lays nothing out, so the screen element is given the grid's real geometry.
-async function openWiredTerminal(options: { tracked?: boolean; scrollSpeed?: number } = {}): Promise<Wired> {
+const syncFrames: FrameScheduler = (fn) => {
+  fn();
+  return () => {};
+};
+
+async function openWiredTerminal(options: { tracked?: boolean; scrollSpeed?: number; schedule?: FrameScheduler } = {}): Promise<Wired> {
   const term = new Terminal({ cols: COLS, rows: ROWS, allowProposedApi: true });
   openTerminals.push(term);
   const swallowedMouseModes = new Set<number>();
@@ -71,7 +76,9 @@ async function openWiredTerminal(options: { tracked?: boolean; scrollSpeed?: num
   const screen = term.element?.querySelector<HTMLElement>(".xterm-screen");
   if (!screen) throw new Error("xterm did not create .xterm-screen — the click guard has nothing to bind to");
   screen.getBoundingClientRect = () => new DOMRect(0, 0, COLS * CELL_WIDTH_PX, ROWS * CELL_HEIGHT_PX);
-  const wheelControl = guardMouseWheel(term, swallowedMouseModes, () => options.scrollSpeed ?? 1);
+  // Paced payout, run synchronously here: a frame scheduler that calls straight through keeps the
+  // notch arithmetic below readable, and the pacing itself has its own case.
+  const wheelControl = guardMouseWheel(term, swallowedMouseModes, () => options.scrollSpeed ?? 1, options.schedule ?? syncFrames);
   guardMouseClicks(term, swallowedMouseModes);
   const sent: string[] = [];
   term.onData((data) => sent.push(data));
@@ -413,6 +420,28 @@ describe("restoreToBottom on a real terminal", () => {
     sent.length = 0;
     control.restoreToBottom();
     expect(sent).toEqual([]);
+  });
+
+  // Why the payout is paced at all. A real gesture reaches the app as small deltas over hundreds of
+  // milliseconds; the whole debt handed over in one tick arrives as a single pty read, and a TUI
+  // collapses that — measured against Claude Code, the transcript moved about one screenful however
+  // far the user had scrolled (#1547). So one frame must carry a gesture-sized batch, not the lot.
+  it("pays the debt a few notches per frame, not in one burst", async () => {
+    const frames: (() => void)[] = [];
+    const manualFrames: FrameScheduler = (fn) => {
+      frames.push(fn);
+      return () => {};
+    };
+    const { screen, sent, wheel: control } = await openWiredTerminal({ schedule: manualFrames });
+    wheel(screen, -SIX_NOTCHES_PX * 4); // 24 notches up
+    sent.length = 0;
+    control.restoreToBottom();
+    const firstBatch = downReports(sent).length;
+    expect(firstBatch).toBeGreaterThan(0);
+    expect(firstBatch).toBeLessThan(24); // paced, not the whole debt at once
+    // Driving the frames it asked for pays the rest, and it stops asking once the debt is clear.
+    while (frames.length > 0) frames.shift()?.();
+    expect(downReports(sent)).toHaveLength(24);
   });
 
   // The debt belongs to the app that was scrolled, and nothing identifies an app. If it survives

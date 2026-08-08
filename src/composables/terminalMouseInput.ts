@@ -63,6 +63,92 @@ export interface WheelScrollControl {
   restoreToBottom: () => void;
 }
 
+// How many notches one frame of the return-to-bottom pays. The debt cannot be handed over in one
+// burst: a real gesture arrives as small deltas spread over hundreds of milliseconds, and a TUI
+// reading its pty gets the whole burst in ONE read and collapses it — measured against Claude
+// Code, ~300 reports sent at once moved the transcript about one screenful, the same distance
+// MAX_NOTCHES_PER_EVENT allows a single event (#1547). Paced, the app sees something shaped like
+// a gesture and moves the whole way.
+const RESTORE_NOTCHES_PER_FRAME = 4;
+
+/** Run `fn` on the next frame, returning the canceller. Injected so a spec can drive the pacing
+ *  instead of waiting for real frames. */
+export type FrameScheduler = (fn: () => void) => () => void;
+
+const onNextFrame: FrameScheduler = (fn) => {
+  const id = requestAnimationFrame(fn);
+  return () => cancelAnimationFrame(id);
+};
+
+/** The scroll debt and the paced repayment of it, as one machine: `owe` records what the wheel
+ *  reported, `payBack` starts handing it back a batch per frame, `stop` abandons a payout in
+ *  flight and `forget` writes the debt off. Its own factory so `guardMouseWheel` stays readable —
+ *  and so the rule about what a debt means lives in one place. */
+function createScrollDebt(pay: (notches: number) => void, canPay: () => boolean, schedule: FrameScheduler) {
+  let notches = 0;
+  let cancel: (() => void) | undefined;
+
+  const stop = (): void => {
+    cancel?.();
+    cancel = undefined;
+  };
+
+  const payBatch = (): void => {
+    cancel = undefined;
+    if (notches <= 0) return;
+    // The app stopped taking reports (it exited, or left the alternate buffer) — there is nothing
+    // left holding a scroll position, and reports now would be typed at whatever replaced it.
+    if (!canPay()) {
+      notches = 0;
+      return;
+    }
+    pay(Math.min(RESTORE_NOTCHES_PER_FRAME, notches));
+    if (notches > 0) cancel = schedule(payBatch);
+  };
+
+  return {
+    /** Negative notches are wheel-UP, which takes the app further from its bottom — so the debt
+     *  moves against the sign. Clamped at zero: the app stops at its own bottom, so reports past
+     *  it move nothing and must not become credit that later scrolls below where the user is. */
+    owe: (reported: number): void => {
+      notches = Math.max(0, notches - reported);
+    },
+    owed: (): number => notches,
+    payBack: payBatch,
+    stop,
+    /** Write the debt off. The app that owed it has stopped owning the screen, and nothing
+     *  identifies an app — paying it into whatever starts NEXT would scroll a program that never
+     *  asked (Codex on #1547). */
+    forget: (): void => {
+      stop();
+      notches = 0;
+    },
+  };
+}
+
+/** The end-of-gesture flush: a timer that pays out the banked fraction once the wheel has actually
+ *  stopped. Its own machine, like the debt above — a gesture worth less than a whole notch would
+ *  otherwise report nothing at all, and only an agent cell takes this path, so the same nudge
+ *  scrolls a shell cell fine and this one reads as broken (#1200). */
+function createGestureFlush(onEnd: () => void) {
+  let pending: ReturnType<typeof setTimeout> | undefined;
+  const cancel = (): void => {
+    if (pending !== undefined) clearTimeout(pending);
+    pending = undefined;
+  };
+  return {
+    cancel,
+    /** Restarted on every event, so it fires only once the gesture has stopped. */
+    restart: (): void => {
+      cancel();
+      pending = setTimeout(() => {
+        pending = undefined;
+        onEnd();
+      }, GESTURE_END_MS);
+    },
+  };
+}
+
 /** Wheel -> the SGR wheel reports the app asked for. Without this xterm converts the wheel into
  *  arrow keys for an alt-buffer app, which a TUI binds to input history — so scrolling spun the
  *  prompt history instead of the transcript (#737).
@@ -71,56 +157,47 @@ export interface WheelScrollControl {
  *  event: a macOS trackpad emits a burst per swipe, and one report each scrolled a TUI far
  *  faster than the same gesture scrolls the scrollback (#978). `scrollSpeed` is read per event,
  *  so changing it in Settings applies to terminals that are already open. */
-export function guardMouseWheel(term: Terminal, swallowedMouseModes: ReadonlySet<number>, scrollSpeed: () => number): WheelScrollControl {
+export function guardMouseWheel(
+  term: Terminal,
+  swallowedMouseModes: ReadonlySet<number>,
+  scrollSpeed: () => number,
+  schedule: FrameScheduler = onNextFrame,
+): WheelScrollControl {
   const ticker = createWheelTicker();
-  // How far ABOVE the bottom our reports have taken the app, in notches. The app owns its scroll
-  // position and never tells us where it is — but every notch it moved came from `report` below,
-  // so counting them is the one honest measure this side has (#1546). Clamped at zero: the app
-  // stops at its own bottom, so reports past it move nothing and must not go negative, or a later
-  // restore would scroll DOWN past where the user actually is.
-  let depthNotches = 0;
-  // The gesture-end flush, and where it aims. A flush has no event of its own, so it reports at the
-  // last cell the pointer was over — the same cell the gesture has been reporting at all along.
-  let pendingFlush: ReturnType<typeof setTimeout> | undefined;
   let lastCell: GridCell = TOP_LEFT_CELL;
-
-  const cancelFlush = (): void => {
-    if (pendingFlush !== undefined) clearTimeout(pendingFlush);
-    pendingFlush = undefined;
-  };
 
   const report = (notches: number, cell: GridCell): void => {
     const seq = wheelReportSequence(notches, cell.col, cell.row);
     if (!seq) return;
     for (let i = 0; i < Math.abs(notches); i++) term.input(seq, false);
-    // Negative notches are wheel-UP (see wheelReportSequence), which takes the app further from
-    // its bottom — so the depth moves against the sign.
-    depthNotches = Math.max(0, depthNotches - notches);
+    debt.owe(notches);
   };
 
-  // The debt belongs to the app that was scrolled, and nothing identifies an app: once it stops
-  // owning the screen the count is meaningless, and paying it into whatever starts NEXT would
-  // scroll a program that never asked (Codex on #1547). Cleared at the transition itself rather
-  // than at the next wheel event or restore, because between one app exiting and the next
-  // starting there may be neither.
-  const forgetDebtWhenUntracked = (): void => {
-    if (!reportsMouseToApp(term, swallowedMouseModes)) depthNotches = 0;
-  };
-  term.buffer.onBufferChange(forgetDebtWhenUntracked);
-
-  const flush = (): void => {
-    pendingFlush = undefined;
-    // Re-asked rather than assumed, which also settles the disposed-terminal case: nothing here
-    // removes a pending timer when the terminal goes away, and a terminal disposed inside the gap
-    // answers `normal` (xterm 6 keeps `buffer` readable after dispose rather than throwing), so a
-    // timer that outlived its terminal drops the fraction instead of writing to a dead one.
+  // Re-asked rather than assumed at flush time, which also settles the disposed-terminal case: a
+  // terminal disposed inside the gap answers `normal` (xterm 6 keeps `buffer` readable after
+  // dispose), so a timer that outlived its terminal drops the fraction instead of writing to a
+  // dead one.
+  const gesture = createGestureFlush(() => {
     if (!reportsMouseToApp(term, swallowedMouseModes)) {
       ticker.residual = 0;
-      depthNotches = 0;
+      debt.forget();
       return;
     }
     report(flushWheelResidual(ticker), lastCell);
-  };
+  });
+
+  // `lastCell` is read at payout time, so a restore aims where the gesture did.
+  const debt = createScrollDebt(
+    (notches) => report(notches, lastCell),
+    () => reportsMouseToApp(term, swallowedMouseModes),
+    schedule,
+  );
+
+  // At the transition itself, not at the next wheel event or restore: between one app exiting and
+  // the next starting there may be neither (Codex on #1547). See `forget` for why it matters.
+  term.buffer.onBufferChange(() => {
+    if (!reportsMouseToApp(term, swallowedMouseModes)) debt.forget();
+  });
 
   term.attachCustomWheelEventHandler((ev) => {
     if (!reportsMouseToApp(term, swallowedMouseModes)) {
@@ -128,12 +205,15 @@ export function guardMouseWheel(term: Terminal, swallowedMouseModes: ReadonlySet
       // over before an app exited (or before the buffer went back to normal) would pay out on the
       // first tiny event the NEXT app sees — a scroll it didn't ask for, from a gesture that was
       // over. Nothing is lost: an unpaid fraction is by definition less than one notch.
-      cancelFlush();
+      gesture.cancel();
       ticker.residual = 0;
-      depthNotches = 0;
+      debt.forget();
       return true;
     }
     if (ev.deltaY === 0) return true;
+    // The user is scrolling again, which outranks a return-to-bottom still paying itself out —
+    // otherwise the two fight and the transcript jitters under the finger.
+    debt.stop();
     const notches = wheelNotches(ticker, ev, cellHeightOf(term), term.rows, scrollSpeed());
     // Consumed even at zero notches: this event's motion is banked, and handing the leftover
     // back to xterm would resurrect the ↑/↓ fallback #737 exists to replace.
@@ -143,26 +223,19 @@ export function guardMouseWheel(term: Terminal, swallowedMouseModes: ReadonlySet
     // Restarted on every event, so it only fires once the gesture has actually stopped. Without it
     // a gesture worth less than one whole notch reports nothing at all, and since only an agent
     // cell takes this path, the same nudge scrolls a shell cell fine (#1200).
-    cancelFlush();
-    pendingFlush = setTimeout(flush, GESTURE_END_MS);
+    gesture.restart();
     return false;
   });
 
   return {
     restoreToBottom: (): void => {
-      if (depthNotches <= 0) return;
-      // The app stopped taking reports (it exited, or left the alternate buffer) — there is
-      // nothing left holding a scroll position, and reports now would be typed at whatever
-      // replaced it. Forget the debt instead.
-      if (!reportsMouseToApp(term, swallowedMouseModes)) {
-        depthNotches = 0;
-        return;
-      }
-      // The banked fraction belongs to a gesture that is over, and paying it out after the
+      if (debt.owed() <= 0) return;
+      // The banked fraction belongs to a gesture that is over, and paying it out during the
       // restore would scroll back off the bottom by less than a notch.
-      cancelFlush();
+      gesture.cancel();
       ticker.residual = 0;
-      report(depthNotches, lastCell); // positive = down; `report` zeroes the depth as it pays it
+      debt.stop(); // a restore landing mid-payout restarts it rather than running two
+      debt.payBack();
     },
   };
 }
