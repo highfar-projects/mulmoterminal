@@ -806,6 +806,9 @@ async function close() {
     teardown();
     return;
   }
+  // The header's own close button is not covered by the overlay. Re-entering while a removal runs
+  // would clear the error the removal is about to write.
+  if (closeBusy.value !== null) return;
   closeError.value = null;
   closeConfirm.value = true;
   // Refresh dirty/ahead before the Remove button is enabled, so a fast click can't
@@ -814,7 +817,13 @@ async function close() {
   await loadDiff();
   closeChecking.value = false;
 }
+
+// Nothing dismisses the confirmation once the removal has started. The pty is terminated before the
+// route is even called, so a dialog that closes here would claim the worktree was kept while it is
+// being deleted — and would take its failure off the screen with it (Codex and CodeRabbit, #1550).
+// Guarded in the shared function rather than on the button, because Escape reaches it too.
 function cancelClose() {
+  if (closeBusy.value !== null) return;
   closeConfirm.value = false;
   closeChecking.value = false;
   closeError.value = null;
@@ -1611,9 +1620,12 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               </p>
               <p v-else class="m-0 font-sans text-[12px] text-dim">Keep the worktree to reuse it later, or remove it.</p>
               <div class="flex flex-wrap gap-1.5">
+                <!-- Held during a removal: by then the pty is gone and the branch is being
+                     deleted, so "keep" is a promise this cannot make. -->
                 <button
                   data-testid="ccx-keep"
-                  class="cursor-pointer rounded-md border border-accent bg-elevated px-3 py-1.5 font-sans text-[12px] text-fg hover:bg-hover hover:text-fg"
+                  class="cursor-pointer rounded-md border border-accent bg-elevated px-3 py-1.5 font-sans text-[12px] text-fg enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-40"
+                  :disabled="closeBusy !== null"
                   @click="teardown"
                 >
                   Keep worktree
@@ -1648,7 +1660,9 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                   {{ closeBusy === REMOVE_KEY ? "Removing…" : "Retry" }}
                 </button>
                 <button
-                  class="cursor-pointer rounded-md border border-border bg-elevated px-3 py-1.5 font-sans text-[12px] text-secondary hover:bg-hover hover:text-fg"
+                  data-testid="ccx-close-cell"
+                  class="cursor-pointer rounded-md border border-border bg-elevated px-3 py-1.5 font-sans text-[12px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-40"
+                  :disabled="closeBusy !== null"
                   @click="teardown"
                 >
                   Close cell
