@@ -413,8 +413,19 @@ describe("restoreToBottom on a real terminal", () => {
     sent.length = 0;
     control.restoreToBottom();
     expect(sent).toEqual([]);
-    await write(term, ALT_BUFFER_ON);
+  });
+
+  // The debt belongs to the app that was scrolled, and nothing identifies an app. If it survives
+  // one exiting, the NEXT full-screen app is scrolled by a gesture made in the previous one — and
+  // between the two there may be no restore and no wheel event to notice the gap, so the clearing
+  // has to happen at the transition itself (Codex on #1547).
+  it("does not replay one app's debt into the next app that takes the mouse", async () => {
+    const { term, screen, sent, wheel: control } = await openWiredTerminal();
+    wheel(screen, -SIX_NOTCHES_PX);
+    await write(term, ALT_BUFFER_OFF); // the app exits — nothing else happens in between
+    await write(term, ALT_BUFFER_ON); // and the next one starts
     await write(term, CLAUDE_TRACKING_REQUEST);
+    sent.length = 0;
     control.restoreToBottom();
     expect(sent).toEqual([]);
   });

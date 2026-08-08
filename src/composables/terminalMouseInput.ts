@@ -98,6 +98,16 @@ export function guardMouseWheel(term: Terminal, swallowedMouseModes: ReadonlySet
     depthNotches = Math.max(0, depthNotches - notches);
   };
 
+  // The debt belongs to the app that was scrolled, and nothing identifies an app: once it stops
+  // owning the screen the count is meaningless, and paying it into whatever starts NEXT would
+  // scroll a program that never asked (Codex on #1547). Cleared at the transition itself rather
+  // than at the next wheel event or restore, because between one app exiting and the next
+  // starting there may be neither.
+  const forgetDebtWhenUntracked = (): void => {
+    if (!reportsMouseToApp(term, swallowedMouseModes)) depthNotches = 0;
+  };
+  term.buffer.onBufferChange(forgetDebtWhenUntracked);
+
   const flush = (): void => {
     pendingFlush = undefined;
     // Re-asked rather than assumed, which also settles the disposed-terminal case: nothing here
@@ -106,6 +116,7 @@ export function guardMouseWheel(term: Terminal, swallowedMouseModes: ReadonlySet
     // timer that outlived its terminal drops the fraction instead of writing to a dead one.
     if (!reportsMouseToApp(term, swallowedMouseModes)) {
       ticker.residual = 0;
+      depthNotches = 0;
       return;
     }
     report(flushWheelResidual(ticker), lastCell);
@@ -119,6 +130,7 @@ export function guardMouseWheel(term: Terminal, swallowedMouseModes: ReadonlySet
       // over. Nothing is lost: an unpaid fraction is by definition less than one notch.
       cancelFlush();
       ticker.residual = 0;
+      depthNotches = 0;
       return true;
     }
     if (ev.deltaY === 0) return true;
