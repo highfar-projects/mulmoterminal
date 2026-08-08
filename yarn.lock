@@ -1869,38 +1869,38 @@
   resolved "https://registry.yarnpkg.com/@mulmochat-plugin/ui-image/-/ui-image-0.4.1.tgz#8fd3b1c4ffe21e6bc22761ff48eac03306e0d345"
   integrity sha512-I3AqTIuQPsSMNxDON9UTxT2KO57HV6uUVotCIFskV0UqBMQrQ3FUu8J+qXRWDdjPyYaHoC8AJsi91TbNrOMwng==
 
-"@mulmoclaude/accounting-plugin@^2.0.0":
-  version "2.0.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/accounting-plugin/-/accounting-plugin-2.0.0.tgz#835a82ca44f326cb0666b8add5d99b190d3d0931"
-  integrity sha512-gLScChItE0nnXM+9WOId3ovdtLUv4SXlhrL9scoG6CGn/n8b1D27/bBNO04aFqme2tda8H1WOm/NF9FiCpnnsQ==
+"@mulmoclaude/accounting-plugin@^2.1.0":
+  version "2.1.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/accounting-plugin/-/accounting-plugin-2.1.0.tgz#836f3d0499fb5f5caff8744aca11bc052d4d207d"
+  integrity sha512-zXUbuNncve4zLaORm/WjuhqoIEApBshvPxvGTdo5/oxPjbhpK6TOIrNrTNDtILWEoVnps4QeFnTdxO7TyhRWxQ==
   dependencies:
-    "@mulmoclaude/common" "^1.1.1"
-    "@mulmoclaude/core" "^2.0.0"
+    "@mulmoclaude/common" "^1.2.0"
+    "@mulmoclaude/core" "^3.0.0"
 
-"@mulmoclaude/chart-plugin@^2.0.0":
-  version "2.0.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/chart-plugin/-/chart-plugin-2.0.0.tgz#f022701ccf2c1532e8bb17c3da7ff2504e8057f2"
-  integrity sha512-7ZnmQPOWOVl5utB2zv4TPhZ6X8ZzkmGAcNAUbwjVwgbglkbOOg925aORsWmwJEOY6a2m8tNO9YdvWs90+hoseA==
+"@mulmoclaude/chart-plugin@^2.1.0":
+  version "2.1.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/chart-plugin/-/chart-plugin-2.1.0.tgz#20b89b75771be741fa9ecbe02759f68e0d846f59"
+  integrity sha512-VQ0Vewx4oYIC663M4BHzXsD7w0f9i9ycYO4SuYlFMQ2aTwwWyXIjGTzSc8BHnwW8Yt+oCXICwmGF6d/bX1YY3A==
   dependencies:
-    "@mulmoclaude/core" "^2.0.0"
+    "@mulmoclaude/core" "^3.0.0"
 
-"@mulmoclaude/collection-plugin@^2.0.0":
-  version "2.0.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/collection-plugin/-/collection-plugin-2.0.0.tgz#40e1f2cdd6a4e718455387cc002735d25f7c752a"
-  integrity sha512-snp/bCfZX1IHiqwQt9l/dd6JeCH4Ycw0YQN9FuuKJhIEk2siZWXgDxwMA1ESsTo43CLBF69ZgHSttgrtypyRiQ==
+"@mulmoclaude/collection-plugin@^3.0.0":
+  version "3.0.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/collection-plugin/-/collection-plugin-3.0.0.tgz#7fdaa55b148b0ead7e578d8b967f1731ccf65c26"
+  integrity sha512-EIs3f8GYic/xAkJ0qQTdyApof+cNTKF/944NVryXMFhhJT6CPcjTE6iZWf6nhs3nPiFIuwiFKKzo4GyPvPuWDA==
   dependencies:
     vuedraggable "^4.1.0"
     zod "^4.4.3"
 
-"@mulmoclaude/common@^1.1.1", "@mulmoclaude/common@^1.1.2", "@mulmoclaude/common@^1.2.0":
+"@mulmoclaude/common@^1.1.2", "@mulmoclaude/common@^1.2.0":
   version "1.2.0"
   resolved "https://registry.yarnpkg.com/@mulmoclaude/common/-/common-1.2.0.tgz#ad2d696a6a06ea47c078e45d8d7f6f41b53d4aeb"
   integrity sha512-Y459jz/3fGY+QPSOtRUpq+JA1v839qlhaKmuz6LohoJp0nneP9Eot+gsn7Yl8RKhEGqxhfmJaCDa28bWK7RhCA==
 
-"@mulmoclaude/core@^2.0.0", "@mulmoclaude/core@^2.0.1", "@mulmoclaude/core@^2.1.0":
-  version "2.1.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/core/-/core-2.1.0.tgz#28cbfc792212db5fcd446ea39715b969635f7a03"
-  integrity sha512-RhKwVdDrUbJRrmOLUi6Vc63/7Te/fnbkneNrOm6gwh5atRGwZSoSIGPYgutl6FB5oClAsl4ACRfkwEg9Ji8gaA==
+"@mulmoclaude/core@^3.0.0":
+  version "3.0.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/core/-/core-3.0.0.tgz#4cdc36c2fd190568cba78c6cf10772c24e9a353b"
+  integrity sha512-CCX9K2xDXoCiMhGep+S2fcom2SI3ioTvddqtwwuYiWfgTT2N7mKleQcqyEi82g5QXXW6WHwRv/3USQXO5MhXrw==
   dependencies:
     "@duckdb/node-api" "^1.5.5-r.2"
     "@mulmoclaude/common" "^1.2.0"
@@ -1917,33 +1917,33 @@
   resolved "https://registry.yarnpkg.com/@mulmoclaude/form-plugin/-/form-plugin-2.0.0.tgz#bdd7f65afa2d121caeac8978d81db5875516113e"
   integrity sha512-5bcCzVFf0om4A/Xv7bsDKcdX9RW1i5OpzQ86m4jY+3UUowmUDwujeO9RkgH/iTdYp6gTR5qdmRIjAVNeqcuKrQ==
 
-"@mulmoclaude/google-plugin@^2.0.0":
-  version "2.0.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/google-plugin/-/google-plugin-2.0.0.tgz#01f3faf2ce7a36d1e2056bb0fb1ae287ef47f54c"
-  integrity sha512-OgAo3Ej/B2Q1Vbvckht63a7RU0m8konIPP/qEcz7GQV07EgSYh2QUOWJjxSEghDgoiN+GdCP9rno8hlfeSfE2Q==
-  dependencies:
-    "@mulmoclaude/core" "^2.0.0"
-
-"@mulmoclaude/html-plugin@^2.1.0":
+"@mulmoclaude/google-plugin@^2.1.0":
   version "2.1.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/html-plugin/-/html-plugin-2.1.0.tgz#0364ecc2b66f1e5774296380bf47645ffc8b6214"
-  integrity sha512-OvQWzMrZYQSu3CKXm+RO51Xha1INX8PQ5UM1Gofh0y5GH01SulyqZmeh8WUfkE9hC21fnsLzr7+VxFdsNONd0A==
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/google-plugin/-/google-plugin-2.1.0.tgz#eebee22f25e4f879b789a7a41aff3cb44dc57ad0"
+  integrity sha512-Cm4xqBSWdFEl/BLBnaSt/+VmdHjFbM8K4SSvrDDk6+cS+UkPhzrOooe/CSa+qXR8hwJ4zM7nm4VGVWbSGeEreg==
   dependencies:
-    "@mulmoclaude/common" "^1.1.2"
-    "@mulmoclaude/core" "^2.0.1"
+    "@mulmoclaude/core" "^3.0.0"
 
-"@mulmoclaude/markdown-plugin@^2.3.0":
-  version "2.3.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/markdown-plugin/-/markdown-plugin-2.3.0.tgz#2e8dd669ba4ee0c27970164b0ee95c2e955b29b6"
-  integrity sha512-aJZJkuUJmP8LpXJjfQ82RX8c7cyVqYW2f5EMMFpOwJ2lU7Ba4eGtB1C+SCK2qEJmEV3QbqzRVdIyK37cAV9huw==
+"@mulmoclaude/html-plugin@^3.0.0":
+  version "3.0.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/html-plugin/-/html-plugin-3.0.0.tgz#ac301471e31ac60459abd70ad0071da0c8494717"
+  integrity sha512-Uhd0h+ioftBHNcqwzHzwMCmQZTObgfix12/m9jMDBaB2PHLdCbtPdpR2eH5vcXpxRUspSCLLXmLyttrdXNrhwg==
+  dependencies:
+    "@mulmoclaude/common" "^1.2.0"
+    "@mulmoclaude/core" "^3.0.0"
+
+"@mulmoclaude/markdown-plugin@^3.0.0":
+  version "3.0.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/markdown-plugin/-/markdown-plugin-3.0.0.tgz#7f7833d231afaa45e230d3006d8b89846e4ee6a9"
+  integrity sha512-PPqqIjz/A0ssA27CBowULyCHr7qLhavmOL3j9f69kwl34+NwmvFBgrpOpWVvR6dTPnePlhh0d/epDlXVvR4PBA==
   dependencies:
     "@marp-team/marp-core" "^4.4.0"
     "@mulmoclaude/common" "^1.2.0"
-    "@mulmoclaude/core" "^2.1.0"
+    "@mulmoclaude/core" "^3.0.0"
     "@mulmoclaude/markdown-utils" "^1.3.5"
     js-yaml "^5.2.3"
     marked "^18.0.7"
-    mermaid "^11.16.0"
+    mermaid "^11.16.1"
 
 "@mulmoclaude/markdown-utils@^1.3.5":
   version "1.3.5"
@@ -1954,13 +1954,13 @@
     js-yaml "^5.2.3"
     marked "^18.0.7"
 
-"@mulmoclaude/mulmoscript-plugin@^2.0.0":
-  version "2.0.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/mulmoscript-plugin/-/mulmoscript-plugin-2.0.0.tgz#223cf946fb2ab436b40b8a6ad660e415bac7b664"
-  integrity sha512-BHMyVEBkW6DKxXSYqvWm+BUdrx8C0eWrKtCz8iB7D1aipRpT1p1VFP6hYMnem2J6dgY0NcELFV7VSZ1gM8hc1Q==
+"@mulmoclaude/mulmoscript-plugin@^2.1.0":
+  version "2.1.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/mulmoscript-plugin/-/mulmoscript-plugin-2.1.0.tgz#b955f50ac8dbdb52c52839ae1766ba56149cde58"
+  integrity sha512-iPPsHdqDJNgSDrrz/PACLVsM08E+XRyuB4s3Xq+TrjRGbfqxkwRtusA7OFXCKIyGkCwhIDOf8CdxeZKpDJayTQ==
   dependencies:
-    "@mulmoclaude/common" "^1.1.1"
-    "@mulmoclaude/core" "^2.0.0"
+    "@mulmoclaude/common" "^1.2.0"
+    "@mulmoclaude/core" "^3.0.0"
 
 "@mulmoclaude/x-plugin@^1.0.3":
   version "1.0.3"
@@ -6081,7 +6081,7 @@ merge-stream@^2.0.0:
   resolved "https://registry.yarnpkg.com/merge-stream/-/merge-stream-2.0.0.tgz#52823629a14dd00c9770fb6ad47dc6310f2c1f60"
   integrity sha512-abv/qOcuPfk3URPfDzmZU1LKmuw8kT+0nIHvKrKgFrwifol/doWcdA4ZqsWQ8ENrFKkd67Mfpo/LovbIUsbt3w==
 
-mermaid@^11.16.0:
+mermaid@^11.16.1:
   version "11.16.1"
   resolved "https://registry.yarnpkg.com/mermaid/-/mermaid-11.16.1.tgz#57ae2342f6c45b967113b04c9258430bdd057ee8"
   integrity sha512-TQsq6u22fAn3rek5VOubrhKPo1g5hwC3FXUN9hiyupTckcYiGuuKGkNQrKYwGJkXUxZdojwRG46gsSCFZMDp4g==
