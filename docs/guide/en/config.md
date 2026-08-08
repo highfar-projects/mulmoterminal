@@ -82,10 +82,15 @@ That row is what to quote in a bug report.
 ![The Settings modal — the sidebar scrolled to show Appearance down to Sessions, with Theme open and its Create a theme… button](../images/config-settings-modal.png)
 
 The **sidebar** groups the sections and shows one at a time; below `sm` (a phone) it becomes a picker
-above the section. Twenty-four sections in nine groups — **Voice input** is there only on a machine
-that can transcribe, so most setups see twenty-three.
+above the section. Twenty-five sections in nine groups — **Voice input** is there only on a machine
+that can transcribe, so most setups see twenty-four.
 
-- **Appearance** — Theme, Terminal font, Terminal font size, Terminal scroll speed, Waiting rows
+Settings is available in **English and Japanese**. It follows your browser's language unless you pick
+one in **Language** — the first entry in the sidebar, because it is the one setting someone who
+cannot read the rest of the screen has to find first. Only this modal is translated so far; the rest
+of the app is still English.
+
+- **Appearance** — Language, Theme, Terminal font, Terminal font size, Terminal scroll speed, Waiting rows
 - **Projects** — Directory appearance, Directory settings
 - **Header & launch** — Launch commands, Header buttons and chips
 - **Input** — Terminal keys, Keyboard shortcuts, Voice input
@@ -95,8 +100,11 @@ that can transcribe, so most setups see twenty-three.
 - **Sessions** — Sessions and background tasks, Sessions that survived a restart, Cost (estimated)
 - **Help** — Help & user guide
 
+![The Settings modal in Japanese — the sidebar's groups and the Notification sounds pane](../images/settings-japanese.png)
+
 | Item | Description |
 |---|---|
+| **Language** | What language Settings itself is written in — your browser's (the default), English, or 日本語. Per browser, like the theme, and stored in `localStorage` rather than in any config file |
 | **Theme** | Midnight / Nord / Daylight / Solarized Light, plus [any you defined yourself](#custom-themes). Picks from what exists; "Create a theme…" starts the `mulmoterminal-theme` skill to write a new one |
 | **Terminal font** | The font-family stack every terminal renders in (`fontFamily`) — **global**, unlike the size, because which fonts exist is a property of the machine. Empty means the built-in stack (→ [Terminal font](#font-family)) |
 | **Terminal font size** | The xterm font size in px (8–32). Applies to every terminal **in this browser** — a phone and a desktop each keep their own. A directory can override it with `fontSize` ([below](#per-dir)) |

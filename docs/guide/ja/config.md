@@ -81,10 +81,14 @@ git チェックアウトならその横に `commit a1b2c3d` のチップが並�
 ![設定モーダル — 左サイドバーの Appearance から Sessions までのグループと、開いている Theme（Create a theme… ボタン付き）](../images/config-settings-modal.png)
 
 **左のサイドバー**がセクションをグループ分けし、一度に 1 つだけ表示します（`sm` 未満、つまりスマホでは
-セクションの上のセレクタになります）。9 グループ・24 セクション（**Voice input** は文字起こしできる
-マシンでのみ出るので、多くの環境では 23）。
+セクションの上のセレクタになります）。9 グループ・25 セクション（**Voice input** は文字起こしできる
+マシンでのみ出るので、多くの環境では 24）。
 
-- **Appearance** — Theme, Terminal font, Terminal font size, Terminal scroll speed, Waiting rows
+設定画面は**英語と日本語**で表示できます。既定ではブラウザの言語に従い、**Language（言語）**で明示的に
+選ぶこともできます。Language をサイドバーの先頭に置いてあるのは、画面の他が読めない人が最初に探すのが
+この設定だからです。いまのところ訳されているのはこのモーダルだけで、他の画面は英語のままです。
+
+- **Appearance** — Language, Theme, Terminal font, Terminal font size, Terminal scroll speed, Waiting rows
 - **Projects** — Directory appearance, Directory settings
 - **Header & launch** — Launch commands, Header buttons and chips
 - **Input** — Terminal keys, Keyboard shortcuts, Voice input
@@ -94,8 +98,11 @@ git チェックアウトならその横に `commit a1b2c3d` のチップが並�
 - **Sessions** — Sessions and background tasks, Sessions that survived a restart, Cost (estimated)
 - **Help** — Help & user guide
 
+![日本語表示の設定モーダル — サイドバーのグループと通知音のペイン](../images/settings-japanese.png)
+
 | 項目 | 内容 |
 |---|---|
+| **Language** | 設定画面自身の表示言語（ブラウザの言語＝既定 / English / 日本語）。配色と同じくブラウザごとで、設定ファイルではなく `localStorage` に保存されます |
 | **Theme** | Midnight / Nord / Daylight / Solarized Light、および[自分で定義した配色](#custom-themes)。選ぶのは既にあるものだけで、新しく作るのは「Create a theme…」（`mulmoterminal-theme` スキルを起動） |
 | **Terminal font** | 全ターミナルの font-family スタック（`fontFamily`）。サイズと違い**グローバル** — どのフォントが入っているかはマシンの性質だからです。空欄なら内蔵スタック（→ [ターミナルのフォント](#font-family)） |
 | **Terminal font size** | ターミナル（xterm）のフォントサイズ（px, 8〜32）。**このブラウザ**の全ターミナルに適用され、スマホと PC でそれぞれ別の値を保持します。ディレクトリ側の `fontSize`（[後述](#per-dir)）が優先されます |
