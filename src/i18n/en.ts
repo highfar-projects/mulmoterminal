@@ -56,6 +56,50 @@ export const en = {
       help: "Help & user guide",
     },
 
+    common: {
+      add: "Add",
+      remove: "Remove {name}",
+    },
+
+    dirAppearance: {
+      intro:
+        "Launch the {skill} skill to style and order your directories — name badge, icon, colors, terminal palette, grid position. It starts from the directories you actually open, reads the settings you already have, and follows the same pattern for the ones that have none.",
+      configure: "Configure appearance…",
+      favicon: "Use a project's own favicon",
+      faviconHint:
+        "a directory that sets no {iconKey} shows the one its repository already ships ({svg}, {png}, a web manifest). A project that wants none sets {iconFalse} in its own {dirFile}, which this does not override.",
+    },
+
+    dirSettings: {
+      intro:
+        "What each directory's {dirFile} is actually doing. Expand one to see the values in force, and any key the app dropped or doesn't recognise — a setting that never took effect looks the same as one you never made until you can see this.",
+      outro: "This lists what is wrong; the skill reads the same thing and says why, then fixes it or points you at whichever skill owns that key.",
+      explain: "Explain my settings…",
+    },
+
+    google: {
+      intro:
+        "Link a Google account so the {tool} tool and your phone can read and create {calendar} events. Sign-in opens in a new tab and finishes on {thisMachine}, so use a browser here — over a remote connection, run {cli} instead. The link is shared with MulmoClaude.",
+      calendar: "Calendar",
+      thisMachine: "this machine",
+      checking: "Checking…",
+      pending: "Waiting for consent in your browser…",
+      linked: "Linked",
+      notLinked: "Not linked",
+      signIn: "Sign in with Google",
+      unlink: "Unlink",
+      confirmUnlink: "Unlink this Google account? MulmoTerminal will lose Calendar access until you sign in again.",
+      secretMissing:
+        "No OAuth client secret found in ~/.secrets. Add a Desktop client's client_secret_*.json there to enable sign-in, or use the GCP-settings-free broker link if available.",
+      secretAmbiguous: "Multiple client_secret_*.json files in ~/.secrets — keep exactly one.",
+    },
+
+    prRepos: {
+      intro: "Repos whose open PRs the cross-repo {view} view lists. Uses your {gh} login. Format: {format}.",
+      view: "Pull requests",
+      field: "Add a repository (owner/repo)",
+    },
+
     stepper: {
       decrease: "Decrease {label}",
       increase: "Increase {label}",

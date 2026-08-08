@@ -53,6 +53,50 @@ export const ja: Messages = {
       help: "ヘルプとユーザーガイド",
     },
 
+    common: {
+      add: "追加",
+      remove: "{name} を削除",
+    },
+
+    dirAppearance: {
+      intro:
+        "{skill} スキルを起動すると、ディレクトリの見た目と並び — 名前バッジ、アイコン、色、ターミナルのパレット、グリッド上の位置 — を設定できます。実際に開いているディレクトリを起点に、既存の設定を読み、まだ何も無いものにも同じ流儀で付けます。",
+      configure: "見た目を設定する…",
+      favicon: "プロジェクト自身の favicon を使う",
+      faviconHint:
+        "{iconKey} を設定していないディレクトリは、そのリポジトリが既に持っている画像（{svg}、{png}、web manifest）を表示します。要らないプロジェクトは自分の {dirFile} に {iconFalse} と書きます。こちらの設定はそれを上書きしません。",
+    },
+
+    dirSettings: {
+      intro:
+        "各ディレクトリの {dirFile} が実際に何をしているか。行を開くと、効いている値と、アプリが捨てたキー・認識しないキーが見えます。効かなかった設定は、これを見るまでは「そもそも書いていない」のと見分けが付きません。",
+      outro: "ここに出るのは「どこがおかしいか」です。スキルは同じものを読んで理由を説明し、直すか、そのキーを持つスキルへ案内します。",
+      explain: "設定を説明してもらう…",
+    },
+
+    google: {
+      intro:
+        "Google アカウントを連携すると、{tool} ツールとスマホから{calendar}の予定を読み書きできます。サインインは新しいタブで開き、{thisMachine}で完了するので、ここのブラウザを使ってください。リモート接続越しなら代わりに {cli} を実行します。この連携は MulmoClaude と共有されます。",
+      calendar: "カレンダー",
+      thisMachine: "このマシン",
+      checking: "確認中…",
+      pending: "ブラウザでの許可を待っています…",
+      linked: "連携済み",
+      notLinked: "未連携",
+      signIn: "Google でサインイン",
+      unlink: "連携を解除",
+      confirmUnlink: "この Google アカウントの連携を解除しますか？ もう一度サインインするまで、MulmoTerminal はカレンダーにアクセスできなくなります。",
+      secretMissing:
+        "~/.secrets に OAuth のクライアントシークレットが見つかりません。デスクトップ クライアントの client_secret_*.json をそこに置くとサインインできます。使えるなら GCP 設定不要のブローカー連携でも構いません。",
+      secretAmbiguous: "~/.secrets に client_secret_*.json が複数あります。1 つだけ残してください。",
+    },
+
+    prRepos: {
+      intro: "横断{view}ビューが open な PR を一覧するリポジトリです。{gh} のログインを使います。形式は {format}。",
+      view: "プルリクエスト",
+      field: "リポジトリを追加（owner/repo）",
+    },
+
     stepper: {
       decrease: "{label}を減らす",
       increase: "{label}を増やす",
