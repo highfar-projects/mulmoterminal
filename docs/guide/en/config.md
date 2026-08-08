@@ -79,7 +79,7 @@ is only whatever was last released and the commit is what identifies the build. 
 newer exists, the update notice from the header badge follows on the next line, command included.
 That row is what to quote in a bug report.
 
-![The Settings modal — the sidebar's groups from Appearance down to Sessions, with Theme open and its Create a theme… button](../images/config-settings-modal.png)
+![The Settings modal — the sidebar scrolled to show Appearance down to Sessions, with Theme open and its Create a theme… button](../images/config-settings-modal.png)
 
 The **sidebar** groups the sections and shows one at a time; below `sm` (a phone) it becomes a picker
 above the section. Twenty-four sections in nine groups — **Voice input** is there only on a machine

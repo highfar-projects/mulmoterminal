@@ -111,6 +111,36 @@ describe("SettingsModal sidebar", () => {
     expect(tabs().at(-1)?.attributes("aria-selected")).toBe("true");
   });
 
+  // A pane is created on first visit and hidden after that, not destroyed. `v-if` alone threw away
+  // whatever a section was holding but had not saved — and the font field keeps a typed stack in a
+  // local draft precisely so a failed POST doesn't lose it (Codex review on #1565). Arrowing past
+  // the tab is enough to hit this.
+  it("keeps a typed but unapplied value when the user visits another tab and comes back", async () => {
+    stubServer(true);
+    const w = mountModal();
+    await flushPromises();
+    await openTab(w, "font");
+    const field = () => w.get('[data-testid="settings-pane-font"]').get("input");
+    await field().setValue("'Cica'");
+
+    await openTab(w, "sounds");
+    expect((w.get('[data-testid="settings-pane-font"]').element as HTMLElement).style.display).toBe("none");
+
+    await openTab(w, "font");
+    expect((field().element as HTMLInputElement).value).toBe("'Cica'");
+  });
+
+  // The other half of the same contract: a tab never opened has not mounted, so opening Settings
+  // for one setting does not fire every other section's GET.
+  it("does not mount a pane until its tab is opened", async () => {
+    stubServer(true);
+    const w = mountModal();
+    await flushPromises();
+    expect(w.find('[data-testid="settings-pane-cost"]').exists()).toBe(false);
+    await openTab(w, "cost");
+    expect(w.find('[data-testid="settings-pane-cost"]').exists()).toBe(true);
+  });
+
   it("gives each tab id and label exactly one entry", () => {
     expect(new Set(SETTINGS_TABS.map((tab) => tab.id)).size).toBe(SETTINGS_TABS.length);
     expect(new Set(SETTINGS_TABS.map((tab) => tab.label)).size).toBe(SETTINGS_TABS.length);

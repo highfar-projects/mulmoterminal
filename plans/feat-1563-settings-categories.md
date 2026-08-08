@@ -57,11 +57,17 @@ entries are two chances to find the thing — so it becomes `TerminalKeysSection
 Enter behaviour) and `KeyboardShortcutsSection.vue` (the read-only keymap table + the
 `mulmoterminal-keys` launch button). No behaviour moves.
 
-### Panes are `v-if`, not `v-show`
+### A pane is created on first visit, then hidden — not destroyed
 
-A tab that is not open does not mount. That is the honest reading of "one tab, one screen", and it
-stops the modal firing 20-odd GETs on open when the user came for one setting. Every section either
-auto-saves or reloads from props/server on mount, so nothing is lost by remounting.
+A tab that has never been opened does not mount, so opening Settings for one setting no longer fires
+20-odd GETs. Once visited it stays mounted and is hidden with `v-show` — **destroying it loses what a
+section is holding but has not saved**, and `TerminalFontFamilySection` keeps a typed stack in a
+local draft precisely so a failed POST does not throw it away. Arrowing past that tab was enough to
+discard it (Codex review on #1565). Closing the modal still resets everything: the shells `v-if` the
+modal itself.
+
+The panes are wrapped in a `<div>` each rather than taking `v-show` directly, because most sections
+are fragment-root components (`v-show` needs one element to set `display` on).
 
 The cost: `VoiceInputSection` hides ITSELF today, behind a server capability probe. A hidden section
 inside a visible tab is an empty pane, so **the probe moves up to the modal** and the Voice input tab
@@ -103,6 +109,8 @@ was every section at once. Each test now opens the tab it is about, through one 
 - the sidebar's group order and the tab-to-group assignment (a table drifts silently otherwise)
 - one Tab stop for the whole sidebar, arrows moving and wrapping within it
 - the narrow-screen picker offering the same sections, grouped, and switching the pane
+- a typed-but-unapplied font stack surviving a trip to another tab, and a never-opened tab not
+  having mounted (the two halves of the visit rule — the first fails against plain `v-if`)
 
 ## Docs
 

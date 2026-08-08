@@ -9,7 +9,7 @@
 //
 // One pane at a time is `v-if`, not a hidden pane: coming here for one setting used not to be
 // distinguishable from opening every section at once, which is a GET each.
-import { computed, nextTick, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import { MODAL_FOCUSABLE } from "../utils/focusTrap";
 import { useModalKeyboard } from "../composables/useModalKeyboard";
 import { fetchVoiceInputStatus } from "../composables/voiceModelStatus";
@@ -96,6 +96,14 @@ const voiceCapable = ref(false);
 onMounted(async () => {
   voiceCapable.value = (await fetchVoiceInputStatus())?.capable ?? false;
 });
+
+// A pane is created the first time its tab is opened, and hidden rather than destroyed after that.
+// `v-if` alone throws away what a section is holding but has not saved — TerminalFontFamilySection
+// keeps a typed stack in a local draft precisely so a failed POST doesn't lose it, and arrowing
+// past the tab discarded it (Codex review on #1565). Closing the modal still resets everything:
+// the shells `v-if` the modal itself, so nothing here outlives it.
+const visitedTabs = reactive(new Set<SettingsTabId>());
+watch(activeTab, (tab) => visitedTabs.add(tab), { immediate: true });
 
 const visibleGroups = computed(() =>
   SETTINGS_GROUPS.map((group) => ({ ...group, tabs: group.tabs.filter((tab) => tab.id !== "voice" || voiceCapable.value) })).filter(
@@ -215,49 +223,91 @@ useModalKeyboard({ modalEl, onClose: () => emit("close"), trapSelector: MODAL_FO
         >
           <h3 :class="SECTION_HEADING">{{ activeLabel }}</h3>
 
-          <ThemeSection v-if="activeTab === 'theme'" @launch-skill="emit('launch-skill', $event)" />
-          <TerminalFontFamilySection v-if="activeTab === 'font'" />
-          <TerminalFontSizeSection v-if="activeTab === 'fontSize'" />
-          <TerminalScrollSection v-if="activeTab === 'scroll'" />
-          <WaitingRowsSection v-if="activeTab === 'waitingRows'" />
-          <DirAppearanceSection v-if="activeTab === 'dirAppearance'" @launch-skill="emit('launch-skill', $event)" />
-          <DirSettingsSection v-if="activeTab === 'dirSettings'" :dir-paths="dirPaths" @launch-skill="emit('launch-skill', $event)" />
-          <LaunchersSection v-if="activeTab === 'launchers'" :launchers="launchers" @update-launchers="emit('update-launchers', $event)" />
-          <HeaderChromeSection v-if="activeTab === 'headerChrome'" @launch-skill="emit('launch-skill', $event)" />
-          <TerminalKeysSection v-if="activeTab === 'terminalKeys'" />
-          <KeyboardShortcutsSection v-if="activeTab === 'shortcuts'" @launch-skill="emit('launch-skill', $event)" />
-          <VoiceInputSection v-if="activeTab === 'voice'" />
-          <ModelsSection v-if="activeTab === 'models'" @launch-skill="emit('launch-skill', $event)" />
-          <McpServersSection v-if="activeTab === 'mcp'" :user-mcp-servers="userMcpServers" @update-user-mcp="emit('update-user-mcp', $event)" />
-          <NotificationSoundsSection
-            v-if="activeTab === 'sounds'"
-            :sound-file="soundFile"
-            :sound-kinds="soundKinds"
-            :sounds="sounds"
-            @update-sound="emit('update-sound', $event)"
-            @update-sound-kinds="emit('update-sound-kinds', $event)"
-            @update-sounds="emit('update-sounds', $event)"
-            @launch-skill="emit('launch-skill', $event)"
-          />
-          <WebPushSection
-            v-if="activeTab === 'push'"
-            :push-enabled="pushEnabled"
-            :push-kinds="pushKinds"
-            @update-push-enabled="emit('update-push-enabled', $event)"
-            @update-push-kinds="emit('update-push-kinds', $event)"
-          />
-          <QuickCommandsSection
-            v-if="activeTab === 'quickCommands'"
-            :quick-commands="quickCommands"
-            @update-quick-commands="emit('update-quick-commands', $event)"
-          />
-          <GitHubSection v-if="activeTab === 'github'" />
-          <PrReposSection v-if="activeTab === 'prRepos'" :pr-repos="prRepos" @update-repos="emit('update-repos', $event)" />
-          <GoogleAccountSection v-if="activeTab === 'google'" />
-          <SessionSection v-if="activeTab === 'sessions'" />
-          <SurvivingSessionsSection v-if="activeTab === 'surviving'" />
-          <CostSection v-if="activeTab === 'cost'" :cwd="cwd" :session-id="sessionId" />
-          <HelpSection v-if="activeTab === 'help'" />
+          <div v-if="visitedTabs.has('theme')" v-show="activeTab === 'theme'" data-testid="settings-pane-theme">
+            <ThemeSection @launch-skill="emit('launch-skill', $event)" />
+          </div>
+          <div v-if="visitedTabs.has('font')" v-show="activeTab === 'font'" data-testid="settings-pane-font">
+            <TerminalFontFamilySection />
+          </div>
+          <div v-if="visitedTabs.has('fontSize')" v-show="activeTab === 'fontSize'" data-testid="settings-pane-fontSize">
+            <TerminalFontSizeSection />
+          </div>
+          <div v-if="visitedTabs.has('scroll')" v-show="activeTab === 'scroll'" data-testid="settings-pane-scroll">
+            <TerminalScrollSection />
+          </div>
+          <div v-if="visitedTabs.has('waitingRows')" v-show="activeTab === 'waitingRows'" data-testid="settings-pane-waitingRows">
+            <WaitingRowsSection />
+          </div>
+          <div v-if="visitedTabs.has('dirAppearance')" v-show="activeTab === 'dirAppearance'" data-testid="settings-pane-dirAppearance">
+            <DirAppearanceSection @launch-skill="emit('launch-skill', $event)" />
+          </div>
+          <div v-if="visitedTabs.has('dirSettings')" v-show="activeTab === 'dirSettings'" data-testid="settings-pane-dirSettings">
+            <DirSettingsSection :dir-paths="dirPaths" @launch-skill="emit('launch-skill', $event)" />
+          </div>
+          <div v-if="visitedTabs.has('launchers')" v-show="activeTab === 'launchers'" data-testid="settings-pane-launchers">
+            <LaunchersSection :launchers="launchers" @update-launchers="emit('update-launchers', $event)" />
+          </div>
+          <div v-if="visitedTabs.has('headerChrome')" v-show="activeTab === 'headerChrome'" data-testid="settings-pane-headerChrome">
+            <HeaderChromeSection @launch-skill="emit('launch-skill', $event)" />
+          </div>
+          <div v-if="visitedTabs.has('terminalKeys')" v-show="activeTab === 'terminalKeys'" data-testid="settings-pane-terminalKeys">
+            <TerminalKeysSection />
+          </div>
+          <div v-if="visitedTabs.has('shortcuts')" v-show="activeTab === 'shortcuts'" data-testid="settings-pane-shortcuts">
+            <KeyboardShortcutsSection @launch-skill="emit('launch-skill', $event)" />
+          </div>
+          <div v-if="visitedTabs.has('voice')" v-show="activeTab === 'voice'" data-testid="settings-pane-voice">
+            <VoiceInputSection />
+          </div>
+          <div v-if="visitedTabs.has('models')" v-show="activeTab === 'models'" data-testid="settings-pane-models">
+            <ModelsSection @launch-skill="emit('launch-skill', $event)" />
+          </div>
+          <div v-if="visitedTabs.has('mcp')" v-show="activeTab === 'mcp'" data-testid="settings-pane-mcp">
+            <McpServersSection :user-mcp-servers="userMcpServers" @update-user-mcp="emit('update-user-mcp', $event)" />
+          </div>
+          <div v-if="visitedTabs.has('sounds')" v-show="activeTab === 'sounds'" data-testid="settings-pane-sounds">
+            <NotificationSoundsSection
+              :sound-file="soundFile"
+              :sound-kinds="soundKinds"
+              :sounds="sounds"
+              @update-sound="emit('update-sound', $event)"
+              @update-sound-kinds="emit('update-sound-kinds', $event)"
+              @update-sounds="emit('update-sounds', $event)"
+              @launch-skill="emit('launch-skill', $event)"
+            />
+          </div>
+          <div v-if="visitedTabs.has('push')" v-show="activeTab === 'push'" data-testid="settings-pane-push">
+            <WebPushSection
+              :push-enabled="pushEnabled"
+              :push-kinds="pushKinds"
+              @update-push-enabled="emit('update-push-enabled', $event)"
+              @update-push-kinds="emit('update-push-kinds', $event)"
+            />
+          </div>
+          <div v-if="visitedTabs.has('quickCommands')" v-show="activeTab === 'quickCommands'" data-testid="settings-pane-quickCommands">
+            <QuickCommandsSection :quick-commands="quickCommands" @update-quick-commands="emit('update-quick-commands', $event)" />
+          </div>
+          <div v-if="visitedTabs.has('github')" v-show="activeTab === 'github'" data-testid="settings-pane-github">
+            <GitHubSection />
+          </div>
+          <div v-if="visitedTabs.has('prRepos')" v-show="activeTab === 'prRepos'" data-testid="settings-pane-prRepos">
+            <PrReposSection :pr-repos="prRepos" @update-repos="emit('update-repos', $event)" />
+          </div>
+          <div v-if="visitedTabs.has('google')" v-show="activeTab === 'google'" data-testid="settings-pane-google">
+            <GoogleAccountSection />
+          </div>
+          <div v-if="visitedTabs.has('sessions')" v-show="activeTab === 'sessions'" data-testid="settings-pane-sessions">
+            <SessionSection />
+          </div>
+          <div v-if="visitedTabs.has('surviving')" v-show="activeTab === 'surviving'" data-testid="settings-pane-surviving">
+            <SurvivingSessionsSection />
+          </div>
+          <div v-if="visitedTabs.has('cost')" v-show="activeTab === 'cost'" data-testid="settings-pane-cost">
+            <CostSection :cwd="cwd" :session-id="sessionId" />
+          </div>
+          <div v-if="visitedTabs.has('help')" v-show="activeTab === 'help'" data-testid="settings-pane-help">
+            <HelpSection />
+          </div>
         </div>
       </div>
 
