@@ -185,6 +185,16 @@ describe("submitText / pasteAndSubmit — delayed submit follows terminalSubmit 
     }
   });
 
+  // pasteAndSubmit gained the return-to-latest the other two submit paths had (Codex on #1547).
+  // What is pinned here is that adding it left the PASTE byte-exact; the restore's own behaviour —
+  // what it owes and how it pays it — is pinned against a real xterm in terminalMouseInput.spec.
+  it("pasteAndSubmit still sends a byte-exact paste with the return-to-latest wired in", () => {
+    const ws = openCell("cell-ps-restore", target("11111111-1111-1111-1111-111111111111"));
+    expect(conn.pasteAndSubmit("cell-ps-restore", "hello")).toBe(true);
+    // The trailing space is the Claude completion-menu guard (#1142), not the restore.
+    expect(ws.sent.map((s) => JSON.parse(s).data)).toContain("\x1b[200~hello \x1b[201~");
+  });
+
   it("pasteAndSubmit: a shell cell's paste is byte-exact too", () => {
     vi.useFakeTimers();
     try {

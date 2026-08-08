@@ -61,6 +61,12 @@ function cellHeightOf(term: Terminal): number {
  *  `term.scrollToBottom()`. */
 export interface WheelScrollControl {
   restoreToBottom: () => void;
+  /** Write off a scroll debt because the app that owed it is gone. The buffer transition is
+   *  watched from inside, but an app can hand over WITHOUT one — `CSI ? 1003 ; 1006 l` drops
+   *  tracking while the alternate buffer stays up, and the next app to ask for the mouse would
+   *  otherwise be scrolled by a gesture made in the previous one (Codex on #1547). The parser
+   *  handler that sees the reset calls this. */
+  forgetScrollDebt: () => void;
 }
 
 // How many notches one frame of the return-to-bottom pays. The debt cannot be handed over in one
@@ -228,6 +234,7 @@ export function guardMouseWheel(
   });
 
   return {
+    forgetScrollDebt: debt.forget,
     restoreToBottom: (): void => {
       if (debt.owed() <= 0) return;
       // The banked fraction belongs to a gesture that is over, and paying it out during the
@@ -279,15 +286,26 @@ export function guardMouseClicks(term: Terminal, swallowedMouseModes: ReadonlySe
   });
 }
 
-export function guardMouseTracking(term: Terminal, swallowedMouseModes: Set<number>): WheelScrollControl {
+// `opts` exists for the spec, which drives the REAL wiring rather than re-registering its own
+// parser handlers — the tracking-reset path below lives here, so a harness that hand-rolled the
+// handlers would not have it (Codex on #1547).
+export function guardMouseTracking(
+  term: Terminal,
+  swallowedMouseModes: Set<number>,
+  opts: { scrollSpeed?: () => number; schedule?: FrameScheduler } = {},
+): WheelScrollControl {
   term.parser.registerCsiHandler({ prefix: "?", final: "h" }, (params) => {
     const swallowed = swallowsMouseTracking(params);
     if (swallowed) recordSwallowedModes(swallowedMouseModes, params);
     return swallowed;
   });
+  const wheel = guardMouseWheel(term, swallowedMouseModes, opts.scrollSpeed ?? getTerminalScrollSpeed, opts.schedule);
   term.parser.registerCsiHandler({ prefix: "?", final: "l" }, (params) => {
     clearResetModes(swallowedMouseModes, params);
+    // The reset may be an app handing the terminal over without touching the buffer, which the
+    // wheel guard's own buffer watch cannot see (Codex on #1547).
+    if (!wantsMouseReports(swallowedMouseModes)) wheel.forgetScrollDebt();
     return false;
   });
-  return guardMouseWheel(term, swallowedMouseModes, getTerminalScrollSpeed);
+  return wheel;
 }

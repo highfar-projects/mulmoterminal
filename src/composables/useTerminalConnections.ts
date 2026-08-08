@@ -883,6 +883,10 @@ export function pasteAndSubmit(key: string, text: string): boolean {
     return false;
   }
   const submit = submitBytesFor(c);
+  // A paste-and-submit is a submit like a typed Enter or a send button, so it returns to the
+  // latest output the same way (#1546) — otherwise this path leaves the answer being written
+  // somewhere the user cannot see (Codex on #1547).
+  if (scrollsToBottomOnSubmit()) c.wheel.restoreToBottom();
   // The guard's space rides INSIDE the paste, where the TUI takes it as text — after the
   // terminator it would be a keystroke, and an open completion menu is what reads those (#1142).
   sock.send(JSON.stringify({ type: "input", data: `${PASTE_START}${submittableFor(c, text)}${PASTE_END}` }));

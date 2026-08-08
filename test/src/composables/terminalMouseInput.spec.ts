@@ -5,9 +5,13 @@
 // alone would pass just as happily with the listeners on the wrong element or the wrong gate.
 import { describe, it, expect, beforeAll, afterEach } from "vitest";
 import { Terminal } from "@xterm/xterm";
-import { GESTURE_END_MS, guardMouseClicks, guardMouseWheel, type FrameScheduler, type WheelScrollControl } from "../../../src/composables/terminalMouseInput";
-import { recordSwallowedModes } from "../../../src/composables/mouseReports";
-import { swallowsMouseTracking } from "../../../src/composables/mouseTrackingModes";
+import {
+  GESTURE_END_MS,
+  guardMouseClicks,
+  guardMouseTracking,
+  type FrameScheduler,
+  type WheelScrollControl,
+} from "../../../src/composables/terminalMouseInput";
 
 // xterm's Terminal.open() reaches for browser APIs jsdom omits; stub the few it needs.
 beforeAll(() => {
@@ -65,10 +69,11 @@ async function openWiredTerminal(options: { tracked?: boolean; scrollSpeed?: num
   const term = new Terminal({ cols: COLS, rows: ROWS, allowProposedApi: true });
   openTerminals.push(term);
   const swallowedMouseModes = new Set<number>();
-  term.parser.registerCsiHandler({ prefix: "?", final: "h" }, (params) => {
-    const swallowed = swallowsMouseTracking(params);
-    if (swallowed) recordSwallowedModes(swallowedMouseModes, params);
-    return swallowed;
+  // The REAL wiring, not a copy of it: guardMouseTracking owns the parser handlers, and the
+  // tracking-RESET path lives in the one this harness used to omit (Codex on #1547).
+  const wheelControl = guardMouseTracking(term, swallowedMouseModes, {
+    scrollSpeed: () => options.scrollSpeed ?? 1,
+    schedule: options.schedule ?? syncFrames,
   });
   const host = document.createElement("div");
   document.body.appendChild(host);
@@ -76,9 +81,6 @@ async function openWiredTerminal(options: { tracked?: boolean; scrollSpeed?: num
   const screen = term.element?.querySelector<HTMLElement>(".xterm-screen");
   if (!screen) throw new Error("xterm did not create .xterm-screen — the click guard has nothing to bind to");
   screen.getBoundingClientRect = () => new DOMRect(0, 0, COLS * CELL_WIDTH_PX, ROWS * CELL_HEIGHT_PX);
-  // Paced payout, run synchronously here: a frame scheduler that calls straight through keeps the
-  // notch arithmetic below readable, and the pacing itself has its own case.
-  const wheelControl = guardMouseWheel(term, swallowedMouseModes, () => options.scrollSpeed ?? 1, options.schedule ?? syncFrames);
   guardMouseClicks(term, swallowedMouseModes);
   const sent: string[] = [];
   term.onData((data) => sent.push(data));
@@ -442,6 +444,19 @@ describe("restoreToBottom on a real terminal", () => {
     // Driving the frames it asked for pays the rest, and it stops asking once the debt is clear.
     while (frames.length > 0) frames.shift()?.();
     expect(downReports(sent)).toHaveLength(24);
+  });
+
+  // The other handover, and the one the buffer watch cannot see: an app drops tracking while the
+  // alternate buffer stays up. The next app to ask for the mouse must not be scrolled by a gesture
+  // made in the previous one (Codex on #1547).
+  it("does not replay the debt after a tracking reset with no buffer switch", async () => {
+    const { term, screen, sent, wheel: control } = await openWiredTerminal();
+    wheel(screen, -SIX_NOTCHES_PX);
+    await write(term, "\x1b[?1002;1006l"); // tracking off, alternate buffer still up
+    await write(term, CLAUDE_TRACKING_REQUEST); // and the next app asks for the mouse
+    sent.length = 0;
+    control.restoreToBottom();
+    expect(sent).toEqual([]);
   });
 
   // The debt belongs to the app that was scrolled, and nothing identifies an app. If it survives
