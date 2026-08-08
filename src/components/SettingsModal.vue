@@ -10,6 +10,7 @@
 // One pane at a time is `v-if`, not a hidden pane: coming here for one setting used not to be
 // distinguishable from opening every section at once, which is a GET each.
 import { computed, nextTick, onMounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { MODAL_FOCUSABLE } from "../utils/focusTrap";
 import { useModalKeyboard } from "../composables/useModalKeyboard";
 import { fetchVoiceInputStatus } from "../composables/voiceModelStatus";
@@ -39,8 +40,9 @@ import ModelsSection from "./settings/ModelsSection.vue";
 import TerminalKeysSection from "./settings/TerminalKeysSection.vue";
 import KeyboardShortcutsSection from "./settings/KeyboardShortcutsSection.vue";
 import HelpSection from "./settings/HelpSection.vue";
+import LanguageSection from "./settings/LanguageSection.vue";
 import { SECTION_HEADING } from "./settings/sectionClasses";
-import { DEFAULT_SETTINGS_TAB, SETTINGS_GROUPS, isSettingsTabId, settingsTabLabel, type SettingsTabId } from "./settings/settingsTabs";
+import { DEFAULT_SETTINGS_TAB, SETTINGS_GROUPS, isSettingsTabId, type SettingsTabId } from "./settings/settingsTabs";
 import type { Launcher } from "./launchers";
 import type { UserMcpServer } from "./userMcp";
 import type { QuickCommand } from "../../common/quickCommands";
@@ -84,6 +86,8 @@ const emit = defineEmits<
   }
 >();
 
+const { t } = useI18n();
+
 const modalEl = ref<HTMLElement>();
 const activeTab = ref<SettingsTabId>(DEFAULT_SETTINGS_TAB);
 const SETTINGS_PANE_ID = "settings-pane";
@@ -98,12 +102,12 @@ onMounted(async () => {
 });
 
 const visibleGroups = computed(() =>
-  SETTINGS_GROUPS.map((group) => ({ ...group, tabs: group.tabs.filter((tab) => tab.id !== "voice" || voiceCapable.value) })).filter(
+  SETTINGS_GROUPS.map((group) => ({ ...group, tabs: group.tabs.filter((tab) => tab !== "voice" || voiceCapable.value) })).filter(
     (group) => group.tabs.length > 0,
   ),
 );
 
-const activeLabel = computed(() => settingsTabLabel(activeTab.value));
+const tabLabel = (id: SettingsTabId): string => t(`settings.tabs.${id}`);
 
 // Below `sm` the sidebar would leave a phone about 190px of pane — narrow enough that the sound
 // rows lose their own labels off the left edge. The groups become <optgroup>s of a native picker
@@ -129,11 +133,11 @@ function onTabKey(e: KeyboardEvent, id: SettingsTabId) {
   if (!forward && !backward) return;
   e.preventDefault();
   const tabs = visibleTabs.value;
-  const index = tabs.findIndex((tab) => tab.id === id);
+  const index = tabs.indexOf(id);
   const next = tabs[(index + (forward ? 1 : tabs.length - 1)) % tabs.length];
   if (!next) return;
-  activeTab.value = next.id;
-  void nextTick(() => navEl.value?.querySelector<HTMLElement>(`[data-testid="settings-tab-${next.id}"]`)?.focus());
+  activeTab.value = next;
+  void nextTick(() => navEl.value?.querySelector<HTMLElement>(`[data-testid="settings-tab-${next}"]`)?.focus());
 }
 
 // Escape closes; Tab is trapped within the dialog. The first stop is an `input` where there is
@@ -149,17 +153,17 @@ useModalKeyboard({ modalEl, onClose: () => emit("close"), trapSelector: MODAL_FO
       class="flex h-[85vh] w-[min(780px,94vw)] flex-col overflow-hidden rounded-[10px] border border-border bg-base font-sans text-fg"
       role="dialog"
       aria-modal="true"
-      aria-label="Settings"
+      :aria-label="t('settings.title')"
     >
       <div class="flex items-start justify-between border-b border-border px-4 py-3">
         <div class="min-w-0">
-          <h2 class="m-0 text-[15px] font-semibold">Settings</h2>
+          <h2 class="m-0 text-[15px] font-semibold">{{ t("settings.title") }}</h2>
           <AppVersionLine />
         </div>
         <button
           class="cursor-pointer rounded-md border-0 bg-transparent px-1.5 py-1 text-[14px] text-muted hover:bg-[var(--err-hover-bg)] hover:text-err-text"
-          title="Close"
-          aria-label="Close settings"
+          :title="t('settings.close')"
+          :aria-label="t('settings.closeAria')"
           @click="emit('close')"
         >
           <span class="material-symbols-outlined" aria-hidden="true">close</span>
@@ -170,11 +174,11 @@ useModalKeyboard({ modalEl, onClose: () => emit("close"), trapSelector: MODAL_FO
         <select
           class="m-3 mb-0 shrink-0 cursor-pointer rounded-lg border border-border bg-elevated px-2 py-1.5 text-[12px] text-fg sm:hidden"
           :value="activeTab"
-          aria-label="Settings section"
+          :aria-label="t('settings.sectionPicker')"
           @change="onTabPick"
         >
-          <optgroup v-for="group in visibleGroups" :key="group.key" :label="group.label">
-            <option v-for="tab in group.tabs" :key="tab.id" :value="tab.id">{{ tab.label }}</option>
+          <optgroup v-for="group in visibleGroups" :key="group.key" :label="t(`settings.groups.${group.key}`)">
+            <option v-for="tab in group.tabs" :key="tab" :value="tab">{{ tabLabel(tab) }}</option>
           </optgroup>
         </select>
 
@@ -183,25 +187,27 @@ useModalKeyboard({ modalEl, onClose: () => emit("close"), trapSelector: MODAL_FO
           class="hidden w-40 shrink-0 overflow-y-auto border-r border-border bg-subtle py-2 sm:block"
           role="tablist"
           aria-orientation="vertical"
-          aria-label="Settings sections"
+          :aria-label="t('settings.sectionsNav')"
         >
           <div v-for="group in visibleGroups" :key="group.key" class="mb-2" role="presentation">
-            <div class="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted" role="presentation">{{ group.label }}</div>
+            <div class="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted" role="presentation">
+              {{ t(`settings.groups.${group.key}`) }}
+            </div>
             <button
               v-for="tab in group.tabs"
-              :id="`settings-tab-${tab.id}`"
-              :key="tab.id"
+              :id="`settings-tab-${tab}`"
+              :key="tab"
               class="w-full cursor-pointer border-0 border-l-2 bg-transparent px-3 py-1.5 text-left text-[12px]"
-              :class="activeTab === tab.id ? 'border-l-accent bg-elevated font-semibold text-fg' : 'border-l-transparent text-dim hover:bg-elevated'"
+              :class="activeTab === tab ? 'border-l-accent bg-elevated font-semibold text-fg' : 'border-l-transparent text-dim hover:bg-elevated'"
               role="tab"
-              :aria-selected="activeTab === tab.id"
+              :aria-selected="activeTab === tab"
               :aria-controls="SETTINGS_PANE_ID"
-              :tabindex="activeTab === tab.id ? 0 : -1"
-              :data-testid="`settings-tab-${tab.id}`"
-              @click="activeTab = tab.id"
-              @keydown="onTabKey($event, tab.id)"
+              :tabindex="activeTab === tab ? 0 : -1"
+              :data-testid="`settings-tab-${tab}`"
+              @click="activeTab = tab"
+              @keydown="onTabKey($event, tab)"
             >
-              {{ tab.label }}
+              {{ tabLabel(tab) }}
             </button>
           </div>
         </div>
@@ -213,8 +219,9 @@ useModalKeyboard({ modalEl, onClose: () => emit("close"), trapSelector: MODAL_FO
           :aria-labelledby="`settings-tab-${activeTab}`"
           data-testid="settings-pane"
         >
-          <h3 :class="SECTION_HEADING">{{ activeLabel }}</h3>
+          <h3 :class="SECTION_HEADING">{{ tabLabel(activeTab) }}</h3>
 
+          <LanguageSection v-if="activeTab === 'language'" />
           <ThemeSection v-if="activeTab === 'theme'" @launch-skill="emit('launch-skill', $event)" />
           <TerminalFontFamilySection v-if="activeTab === 'font'" />
           <TerminalFontSizeSection v-if="activeTab === 'fontSize'" />
@@ -263,7 +270,7 @@ useModalKeyboard({ modalEl, onClose: () => emit("close"), trapSelector: MODAL_FO
 
       <div class="flex items-center gap-2 border-t border-border px-4 py-3">
         <span class="flex-1" />
-        <SettingsButton primary @click="emit('close')">Close</SettingsButton>
+        <SettingsButton primary @click="emit('close')">{{ t("settings.close") }}</SettingsButton>
       </div>
     </div>
   </div>
