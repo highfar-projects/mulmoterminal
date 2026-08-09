@@ -18,6 +18,14 @@ taught the collection engine to resolve a root per request; this release puts th
 scheduled tasks now persist their runs and catch up at startup, which is why a dev worklog someone
 enabled could go for days without producing a page.
 
+> **Do not put a collection in a project folder yet.** The per-folder feature is **not finished** —
+> keep collections in the workspace. Missing: **scheduled refresh for a project's collection** (§3.5
+> below — written and reverted, because an agent-ingest refresh scheduled for a project would have
+> written into the *workspace's* same-named collection), **phone access** to a project's collection
+> (no picker there), **two projects' cards in one panel** (needs an unreleased
+> `@mulmoclaude/collection-plugin` built against core 3.1.0), and **a live browser check of the
+> pane**. Nothing here affects a collection already in the workspace.
+
 ### A Collections pane per cell, scoped to its directory ([#1573](https://github.com/receptron/mulmoterminal/pull/1573))
 
 The pane sits in the cell's right-pane selector beside Canvas / Tools / Files and lists the
