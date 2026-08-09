@@ -48,15 +48,11 @@ import type { CollectionMutateAction } from "@mulmoclaude/core/collection";
 import { fieldVisible, COMPUTED_TYPES, type CollectionItem } from "@mulmoclaude/core/collection";
 // Curated-registry engine (Discover tab): merged catalog fetch + bundle import.
 import { listRegistry, importRegistry } from "@mulmoclaude/core/collection/registry/server";
-import { clampLimit as clampViewLimit, clampOffset as clampViewOffset, normalizeFields, normalizeMutate } from "@mulmoclaude/core/remote-view";
 // The rest of the custom-view surface (view-i18n, scoped image resolve, scoped
 // mutate action), mounted at the bottom of mountCollectionRoutes with the
 // helpers those routes share with the ones here.
 import { mountCustomViewRoutes, viewActionRateLimit } from "./customViewRoutes.js";
-// The 404 / 405 / 409 preamble those action routes share with the one here.
-import { refuseReadOnlyCollection, resolveActionableRecord, resolveItemAction } from "./collectionActionGuards.js";
-// Mobile custom-view builder — shared with the remote-host channel handlers so
-// the desktop phone-frame preview renders the EXACT artifact the phone receives.
+import { clampLimit as clampViewLimit, clampOffset as clampViewOffset, normalizeFields, normalizeMutate } from "@mulmoclaude/core/remote-view";
 import {
   buildRemoteViewFor,
   mutateRemoteViewFor,
@@ -65,13 +61,18 @@ import {
   remoteViewItemsFor,
   remoteViewItemsFailureMessage,
 } from "./remoteView.js";
+import { mutateStatus, mutateWriteApplied } from "./mutateStatus.js";
+// The 404 / 405 / 409 preamble those action routes share with the one here.
+import { refuseReadOnlyCollection, resolveActionableRecord, resolveItemAction } from "./collectionActionGuards.js";
+// Mobile custom-view builder — shared with the remote-host channel handlers so
+// the desktop phone-frame preview renders the EXACT artifact the phone receives.
 import { clampCapabilities, isCapability, mintViewToken, requireViewToken } from "./viewToken.js";
 // The shared manageCollection binding — the query route reuses its queryItems
 // action so a view can never do more than the agent's own data plane.
 import { manageCollectionHandler } from "../infra/collection-tool.js";
 import { hostLogger } from "./hostLogger.js";
-import { initProjectRoots, projectRootsConfigured, resolveProjectRoot, type ProjectScope } from "../infra/project-root.js";
-import { mutateStatus, mutateWriteApplied } from "./mutateStatus.js";
+import { getCwdPresets } from "../config/config-routes.js";
+import { errorStatus, initProjectRoots, projectRootKey, projectRootsConfigured, resolveProjectRoot, type ProjectScope } from "../infra/project-root.js";
 import { isRecord } from "../../common/isRecord.js";
 import { requestBody } from "../routes/requestBody.js";
 
@@ -99,8 +100,11 @@ export const projectSkillsDir = (root: string): string => path.join(root, ".clau
  *  which on a host with one root per project is the difference between an error and another
  *  project's data. The workspace itself is bound through `initProjectRoots`, which is what
  *  every scope still resolves to today. */
-export function initCollectionsBackend(deps: { workspace: string }): void {
-  initProjectRoots({ workspace: deps.workspace });
+export function initCollectionsBackend(deps: { workspace: string; knownProjects?: () => Array<{ label: string; path: string }> }): void {
+  // The saved directories are the projects a request may name. Defaulted here rather than
+  // passed from boot: a THUNK, because launching from a new directory records one and a list
+  // captured at boot would refuse a project the launcher already shows. Specs override it.
+  initProjectRoots({ workspace: deps.workspace, knownProjects: deps.knownProjects ?? getCwdPresets });
   configureCollectionHost({
     workspaceRoot: null,
     log,
@@ -142,7 +146,9 @@ function guarded<P extends Record<string, string>>(op: string, handler: RequestH
       await handler(req, res, next);
     } catch (err) {
       log.warn("collections", `${op} failed`, { ...sanitizeLogValues(req.params), error: errorMessage(err) });
-      res.status(500).json({ error: errorMessage(err) });
+      // A request that named a project this server cannot serve is a CLIENT error; answering
+      // 500 would read as "the server broke" for a typo in a query parameter.
+      res.status(errorStatus(err)).json({ error: errorMessage(err) });
     }
   };
 }
@@ -640,6 +646,53 @@ const viewFileHandler: RequestHandler<{ slug: string }> = async (req, res) => {
   res.type("text/html").send(html);
 };
 
+// Mint a scoped token for a custom view, clamped to what the view declared so a
+// read-only view can never obtain a write token.
+const viewTokenHandler: RequestHandler<{ slug: string }> = async (req, res) => {
+  const { slug } = req.params;
+  const body: Record<string, unknown> = isRecord(req.body) ? req.body : {};
+  const viewId = typeof body.viewId === "string" ? body.viewId.trim() : "";
+  if (!viewId) {
+    res.status(400).json({ error: "`viewId` is required" });
+    return;
+  }
+  const scope = resolveProjectRoot(req);
+  const collection = await resolveCollection(res, slug, scope);
+  if (!collection) return;
+  const view = resolveView(res, collection, viewId);
+  if (!view) return;
+  // The write tier is wired below (PUT /view-data), so grant exactly what the
+  // view declared. `clampCapabilities` defaults the requested set to the declared
+  // set, so a `["read"]` view still can never obtain a `write` token.
+  // Filtered rather than asserted. The schema validator already rejects an unrecognised capability
+  // (a collection declaring one fails to load at all), so this changes nothing today — but it is
+  // the local code proving what it hands to the minter rather than declaring it.
+  const granted = clampCapabilities(Array.isArray(view.capabilities) ? view.capabilities.filter(isCapability) : undefined, undefined);
+  const minted = mintViewToken(slug, granted, scope.workspaceRoot);
+  // The project rides ON the dataUrl, not just in the token. The iframe fetches this URL
+  // verbatim, and a URL without the project resolves to the workspace — against which the
+  // token (minted for the project) is invalid, so the view would render an empty 401 rather
+  // than its records. The two must name the same root or neither works.
+  const project = typeof req.query.project === "string" ? `?project=${encodeURIComponent(req.query.project)}` : "";
+  res.json({
+    token: minted.token,
+    exp: minted.exp,
+    dataUrl: `/api/collections/${encodeURIComponent(slug)}/view-data${project}`,
+    capabilities: granted,
+  });
+};
+
+// CORS for the view-data endpoint: the sandboxed iframe has an opaque origin, so
+// its fetch is cross-origin and preflighted. `*` is safe — auth is the unguessable
+// scoped token in the Authorization header (not a cookie), so no ambient-credential
+// leak; an origin without the token just gets a 401.
+const viewDataCors = (_req: Request, res: Response, next: NextFunction): void => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+  res.setHeader("Access-Control-Allow-Methods", "GET, PUT, POST, OPTIONS");
+  next();
+};
+
 // Serve a mobile (`target: "mobile"`) custom view wrapped into its sandboxed
 // srcdoc — the desktop phone-frame preview's data source. Same builder as the
 // remote-host channel's `getRemoteView`, so the preview renders the exact
@@ -664,9 +717,6 @@ const remoteViewHandler: RequestHandler<{ slug: string }> = async (req, res) => 
 // preview's write channel. Same builder + host-side policy as the channel's
 // `mutateRemoteViewItem`, so a preview mutation runs the exact enforcement the
 // phone will.
-// The predicate the write-mode check needs: `VIEW_WRITE_MODES.includes()` only accepts a value
-// already typed as a mode, which is what forced the assertion it replaces.
-const isViewWriteMode = (value: unknown): value is ViewWriteMode => VIEW_WRITE_MODES.some((mode) => mode === value);
 
 const remoteViewMutateHandler: RequestHandler<{ slug: string; viewId: string }> = async (req, res) => {
   const { slug, viewId } = req.params;
@@ -711,41 +761,9 @@ const remoteViewItemsHandler: RequestHandler<{ slug: string; viewId: string }> =
   res.json({ page: result.page, inlined: result.inlined, omitted: result.omitted });
 };
 
-// Mint a scoped token for a custom view, clamped to what the view declared so a
-// read-only view can never obtain a write token.
-const viewTokenHandler: RequestHandler<{ slug: string }> = async (req, res) => {
-  const { slug } = req.params;
-  const body: Record<string, unknown> = isRecord(req.body) ? req.body : {};
-  const viewId = typeof body.viewId === "string" ? body.viewId.trim() : "";
-  if (!viewId) {
-    res.status(400).json({ error: "`viewId` is required" });
-    return;
-  }
-  const collection = await resolveCollection(res, slug, resolveProjectRoot(req));
-  if (!collection) return;
-  const view = resolveView(res, collection, viewId);
-  if (!view) return;
-  // The write tier is wired below (PUT /view-data), so grant exactly what the
-  // view declared. `clampCapabilities` defaults the requested set to the declared
-  // set, so a `["read"]` view still can never obtain a `write` token.
-  // Filtered rather than asserted. The schema validator already rejects an unrecognised capability
-  // (a collection declaring one fails to load at all), so this changes nothing today — but it is
-  // the local code proving what it hands to the minter rather than declaring it.
-  const granted = clampCapabilities(Array.isArray(view.capabilities) ? view.capabilities.filter(isCapability) : undefined, undefined);
-  const minted = mintViewToken(slug, granted);
-  res.json({ token: minted.token, exp: minted.exp, dataUrl: `/api/collections/${encodeURIComponent(slug)}/view-data`, capabilities: granted });
-};
-
-// CORS for the view-data endpoint: the sandboxed iframe has an opaque origin, so
-// its fetch is cross-origin and preflighted. `*` is safe — auth is the unguessable
-// scoped token in the Authorization header (not a cookie), so no ambient-credential
-// leak; an origin without the token just gets a 401.
-const viewDataCors = (_req: Request, res: Response, next: NextFunction): void => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
-  res.setHeader("Access-Control-Allow-Methods", "GET, PUT, POST, OPTIONS");
-  next();
-};
+// The predicate the write-mode check needs: `VIEW_WRITE_MODES.includes()` only accepts a value
+// already typed as a mode, which is what forced the assertion it replaces.
+const isViewWriteMode = (value: unknown): value is ViewWriteMode => VIEW_WRITE_MODES.some((mode) => mode === value);
 
 // Scoped read: the view's enriched records as `{ items }` — the shape custom views
 // fetch from `window.__MC_VIEW.dataUrl`. Guarded by the view token only.
@@ -797,7 +815,9 @@ const viewDataPutHandler: RequestHandler<{ slug: string }> = async (req, res) =>
 const VIEW_QUERY_MAX_CONCURRENT = 4;
 const inflightViewQueries = new Map<string, number>();
 const viewQueryConcurrency = (req: Request<{ slug?: string }>, res: Response, next: NextFunction): void => {
-  const slug = req.params.slug ?? "";
+  // Keyed by (root, slug): a slug is unique only within a root, so a shared key would let one
+  // project's dashboard spend another project's budget.
+  const slug = `${projectRootKey(req)}\u0000${req.params.slug ?? ""}`;
   const current = inflightViewQueries.get(slug) ?? 0;
   if (current >= VIEW_QUERY_MAX_CONCURRENT) {
     res.status(429).json({ error: "too many concurrent queries for this collection — retry shortly" });

@@ -14,6 +14,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { Request, Response, NextFunction } from "express";
 import { isRecord } from "../../common/isRecord.js";
+import { resolveProjectRoot } from "../infra/project-root.js";
 
 export type ViewCapability = "read" | "write";
 
@@ -32,6 +33,11 @@ const SIGNING_KEY = randomBytes(32).toString("hex");
 
 interface ViewTokenPayload {
   slug: string;
+  /** The project root the token was minted against. A slug is unique only WITHIN a root, so
+   *  without this a token for `tasks` in one project would read `tasks` in another — the
+   *  iframe is sandboxed and opaque-origin, but the token is the only thing standing between
+   *  it and another project's records. */
+  root: string;
   caps: ViewCapability[];
   exp: number;
 }
@@ -54,9 +60,9 @@ export function clampCapabilities(declared: ViewCapability[] | undefined, reques
 }
 
 /** Mint a signed token for `slug` granting `caps`, valid for {@link VIEW_TOKEN_TTL_MS}. */
-export function mintViewToken(slug: string, caps: ViewCapability[], nowMs: number = Date.now()): { token: string; exp: number } {
+export function mintViewToken(slug: string, caps: ViewCapability[], root: string, nowMs: number = Date.now()): { token: string; exp: number } {
   const exp = nowMs + VIEW_TOKEN_TTL_MS;
-  const payload: ViewTokenPayload = { slug, caps, exp };
+  const payload: ViewTokenPayload = { slug, root, caps, exp };
   const payloadB64 = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
   return { token: `${payloadB64}.${signPayload(payloadB64)}`, exp };
 }
@@ -80,12 +86,12 @@ export function verifyViewToken(token: string, nowMs: number = Date.now()): View
     return null;
   }
   if (!isRecord(parsed)) return null;
-  const { slug, exp, caps } = parsed;
-  if (typeof slug !== "string" || typeof exp !== "number") return null;
+  const { slug, root, exp, caps } = parsed;
+  if (typeof slug !== "string" || typeof root !== "string" || typeof exp !== "number") return null;
   // `every` with a type predicate narrows the array itself, so the checked value IS the typed one.
   if (!Array.isArray(caps) || !caps.every(isCapability)) return null;
   if (nowMs >= exp) return null;
-  return { slug, caps, exp };
+  return { slug, root, caps, exp };
 }
 
 /** Express middleware: require a valid scoped token whose slug matches the route
@@ -98,7 +104,18 @@ export function requireViewToken(action: ViewCapability) {
       return;
     }
     const payload = verifyViewToken(header.slice(BEARER_PREFIX.length));
-    if (!payload || payload.slug !== req.params.slug || !payload.caps.includes(action)) {
+    // The root is checked as well as the slug, against the root THIS request resolves. A token
+    // minted for one project must not be spendable on a request naming another — and a request
+    // naming a project the server cannot resolve has no valid token by definition, so the
+    // resolver's refusal is an unauthorized answer here rather than a 500.
+    let requestRoot: string;
+    try {
+      requestRoot = resolveProjectRoot(req).workspaceRoot;
+    } catch {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
+    if (!payload || payload.slug !== req.params.slug || payload.root !== requestRoot || !payload.caps.includes(action)) {
       res.status(401).json({ error: "unauthorized" });
       return;
     }

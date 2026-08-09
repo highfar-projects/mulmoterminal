@@ -16,7 +16,7 @@
 import type { Express, Request, Response } from "express";
 import { pushCalendarForCollection } from "@mulmoclaude/core/google";
 import { loadCollection } from "@mulmoclaude/core/collection/server";
-import { resolveProjectRoot, type ProjectScope } from "../infra/project-root.js";
+import { errorStatus, resolveProjectRoot, type ProjectScope } from "../infra/project-root.js";
 import { toCollectionPushResult } from "./calendarPushResult.js";
 import { hostLogger } from "./hostLogger.js";
 
@@ -80,7 +80,9 @@ export function mountCalendarPushRoutes(app: Express, deps: CalendarPushRouteDep
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       hostLogger.warn("calendar-push", "push threw", { slug, error });
-      res.status(500).json({ error });
+      // A request naming a project this server cannot serve is a client error, not a failure
+      // of the push — `errorStatus` keeps a query-parameter typo out of the 500 bucket.
+      res.status(errorStatus(err)).json({ error });
     }
   });
 }
