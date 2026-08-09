@@ -47,23 +47,27 @@ describe("isManagedWorkspace", () => {
     expect(isManagedWorkspace(makeTempDir())).toBe(false);
   });
 
-  // The workspace arrives from the launcher's --cwd, so its casing is the user's. The question
-  // is whether that spelling names the managed directory, and the answer is the FILESYSTEM's,
-  // not the platform's: macOS is POSIX and case-insensitive by default, so there `MULMOCLAUDE`
-  // is the same directory and seeding into it is correct rather than a spill.
+  // The workspace arrives from the launcher's --cwd, so its casing is the user's. The question is
+  // whether that spelling names the managed directory, and the answer is the FILESYSTEM's, not
+  // the platform's: macOS is POSIX and case-insensitive by default, so there `MULMOCLAUDE` is the
+  // same directory and seeding into it is correct rather than a spill.
   //
-  // Probed rather than assumed, because it varies per volume — a case-sensitive APFS volume on
-  // the same Mac answers the other way.
+  // Measured on the SAME directory it asserts about, and one that EXISTS. An earlier version
+  // probed a temp dir and asserted about `~/MULMOCLAUDE`: two different volumes on a CI runner,
+  // where the home directory also has no managed workspace at all — and a path whose leaf does
+  // not exist keeps the casing it was written with, so the probe and the assertion disagreed.
   it("compares by the filesystem's own casing rule", () => {
-    const probe = makeTempDir();
+    const dir = makeTempDir();
+    process.env[ENV_KEY] = dir;
+    const shouted = path.join(path.dirname(dir), path.basename(dir).toUpperCase());
     const caseInsensitive = ((): boolean => {
       try {
-        return realpathSync.native(probe.toUpperCase()) === realpathSync.native(probe);
+        return realpathSync.native(shouted) === realpathSync.native(dir);
       } catch {
         return false;
       }
     })();
-    expect(isManagedWorkspace(path.join(homedir(), "MULMOCLAUDE"))).toBe(process.platform === "win32" || caseInsensitive);
+    expect(isManagedWorkspace(shouted)).toBe(process.platform === "win32" || caseInsensitive);
   });
 
   it("honors MULMOCLAUDE_WORKSPACE_PATH (resolved compare)", () => {
