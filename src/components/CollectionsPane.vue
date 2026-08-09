@@ -14,6 +14,8 @@ import { collectionShadowCss } from "../collectionShadowCss";
 import { pushCollectionTeleportTarget, popCollectionTeleportTarget } from "../composables/collectionUi";
 import { pushCollectionSurface, popCollectionSurface, type CollectionNavSurface, type CollectionSurface } from "../composables/collectionSurface";
 import { projectIdForCwd } from "../composables/collectionProject";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { asSelfContainmentReport, type SelfContainmentReport, type SelfContainmentSeverity } from "../../common/collectionPortability";
 import type { ShortcutKind } from "../../common/shortcuts";
 
 const props = defineProps<{ cwd: string | null }>();
@@ -81,6 +83,57 @@ watch(
 
 const unknownDirectory = computed(() => !resolving.value && projectId.value === null);
 
+// ── "would this collection survive a clone?" ──
+//
+// The check is surfaced HERE and nowhere else, because here is the only place someone is looking
+// at one collection of one project — which is exactly the pair the question is about. It is a
+// button rather than something computed on open: the answer changes without the collection
+// changing (a `.gitignore` line lands, `git init` runs, the skill moves into the project), so
+// asking on every render would be both wrong and chatty, and asking never is how #1582 shipped a
+// check nothing could reach.
+const report = ref<SelfContainmentReport | null>(null);
+const checking = ref(false);
+const checkFailed = ref(false);
+
+/** The open collection, or undefined on the index — the check is per collection. */
+const openSlug = computed(() => (view.value.mode === "detail" && view.value.kind === "collection" ? view.value.slug : undefined));
+
+// Leaving the collection drops its report: a verdict that outlived the thing it was about would
+// read as this collection's.
+watch(openSlug, () => {
+  report.value = null;
+  checkFailed.value = false;
+});
+
+async function checkPortability(): Promise<void> {
+  const slug = openSlug.value;
+  if (!slug || checking.value) return;
+  checking.value = true;
+  checkFailed.value = false;
+  report.value = null;
+  try {
+    // THIS PANE's project, not the ambient surface's: an overlay opened over this pane is the
+    // active surface, and the question is about the collection on screen here.
+    const scoped = projectId.value === null ? "" : `?project=${encodeURIComponent(projectId.value)}`;
+    const res = await fetchWithTimeout(`/api/collections/${encodeURIComponent(slug)}/self-containment${scoped}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const parsed = asSelfContainmentReport(await res.json());
+    if (!parsed) throw new Error("unrecognised report");
+    // A slower earlier answer must not land on a collection the user has since left.
+    if (openSlug.value === slug) report.value = parsed;
+  } catch {
+    if (openSlug.value === slug) checkFailed.value = true;
+  } finally {
+    checking.value = false;
+  }
+}
+
+const SEVERITY_CLASS: Record<SelfContainmentSeverity, string> = {
+  blocker: "text-err-text",
+  warning: "text-amber",
+  info: "text-dim",
+};
+
 // Register this pane's shadow root as the record-modal teleport target — same getRootNode()
 // trick as CollectionsBrowseOverlay, which is where the comment explaining it lives.
 const probe = ref<HTMLElement>();
@@ -110,14 +163,45 @@ onBeforeUnmount(unregister);
     <div v-else-if="unknownDirectory" class="p-3 font-sans text-[12px] text-dim">
       This directory has no collections yet. Collections live in <code>.claude/skills</code> under the folder the cell is open in.
     </div>
-    <div v-else class="min-h-0 flex-1">
-      <PluginFrame :css="collectionShadowCss" height="100%">
-        <div ref="probe" style="height: 100%">
-          <FeedsView v-if="view.mode === 'index' && view.kind === 'feed'" />
-          <CollectionsIndexView v-else-if="view.mode === 'index'" />
-          <CollectionView v-else />
+    <template v-else>
+      <div class="min-h-0 flex-1">
+        <PluginFrame :css="collectionShadowCss" height="100%">
+          <div ref="probe" style="height: 100%">
+            <FeedsView v-if="view.mode === 'index' && view.kind === 'feed'" />
+            <CollectionsIndexView v-else-if="view.mode === 'index'" />
+            <CollectionView v-else />
+          </div>
+        </PluginFrame>
+      </div>
+      <!-- The portability check, on a strip of its own below the plugin's own surface: it is the
+           HOST's question about the collection (does it survive a clone), not part of the
+           collection's data, and it must not be inside the shadow root the package styles. -->
+      <div v-if="openSlug" class="flex-none border-t border-border px-2.5 py-1.5 font-sans">
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg hover:border-accent disabled:cursor-default disabled:opacity-60"
+            :disabled="checking"
+            :aria-busy="checking"
+            title="Check whether this collection would still work after a git clone on another machine"
+            @click="checkPortability"
+          >
+            {{ checking ? "Checking…" : "Survives a clone?" }}
+          </button>
+          <span v-if="checkFailed" class="text-[11px] text-err-text">Could not run the check.</span>
+          <span v-else-if="report && report.findings.length === 0" class="text-[11px] text-dim">Nothing to fix — it travels.</span>
+          <span v-else-if="report" class="text-[11px]" :class="report.portable ? 'text-amber' : 'text-err-text'">
+            {{ report.portable ? "Travels, with caveats" : "Would not survive a clone" }}
+          </span>
         </div>
-      </PluginFrame>
-    </div>
+        <!-- The MESSAGE, not the code: each one says what breaks on the other machine, which is
+             the part that tells someone what to do about it. -->
+        <ul v-if="report && report.findings.length" class="mt-1.5 flex list-none flex-col gap-1 p-0">
+          <li v-for="finding in report.findings" :key="finding.code" class="text-[11px] leading-[1.4]" :class="SEVERITY_CLASS[finding.severity]">
+            {{ finding.message }}
+          </li>
+        </ul>
+      </div>
+    </template>
   </div>
 </template>

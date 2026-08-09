@@ -21,33 +21,11 @@ import { loadCollection } from "@mulmoclaude/core/collection/server";
 import type { Express, Request, Response } from "express";
 import { errorStatus, resolveProjectRoot, type ProjectScope } from "../infra/project-root.js";
 import { isRecord } from "../../common/isRecord.js";
+// The wire shape is shared: the Collections pane renders this report and colours by severity, so
+// a second copy of the union here is how the two would drift while both keep compiling.
+import type { SelfContainmentFinding, SelfContainmentReport } from "../../common/collectionPortability.js";
 
 const run = promisify(execFile);
-
-/** Why a collection would not survive a clone. Stable strings — a client branches on these, and
- *  the prose is free to be rewritten. */
-export type SelfContainmentCode =
-  /** The skill lives in `~/.claude/skills`, i.e. on this machine and not in the repo. */
-  | "user-scope"
-  /** Records are one SQLite file: git cannot merge it. */
-  | "sqlite-store"
-  /** Records are rows of a CSV read through DuckDB — a runtime the clone must also have. */
-  | "csv-runtime"
-  /** The data directory is git-ignored: the schema travels, the records do not. */
-  | "data-ignored"
-  /** No `primaryKey`, so ids are 4 random bytes and two machines can mint the same one. */
-  | "no-primary-key"
-  /** The project is not a git repo, so there is nothing to clone and most checks do not apply. */
-  | "not-a-repo";
-
-export type SelfContainmentSeverity = "blocker" | "warning" | "info";
-
-export interface SelfContainmentFinding {
-  code: SelfContainmentCode;
-  severity: SelfContainmentSeverity;
-  /** What breaks on the other machine, in the terms the person will see it. */
-  message: string;
-}
 
 /** Everything the verdict depends on, separated from how it is discovered — so the rules can be
  *  exercised without a git repo and a workspace on disk, and so each rule reads as one line. */
@@ -63,13 +41,6 @@ export interface SelfContainmentFacts {
    *  Null when it could not be established — not a repo, or git is not on PATH. Null is NOT
    *  "fine": it is "unknown", and the check says nothing rather than clearing it. */
   dataDirIgnored: boolean | null;
-}
-
-export interface SelfContainmentReport {
-  slug: string;
-  /** True when nothing BLOCKS the clone. Warnings can still be present. */
-  portable: boolean;
-  findings: SelfContainmentFinding[];
 }
 
 /** The rules, in the order someone should act on them. Pure. */
