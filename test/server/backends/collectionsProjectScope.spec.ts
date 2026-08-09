@@ -32,8 +32,13 @@ function makeProject(prefix: string, title: string, recordName: string): string 
   const root = makeTempDir(prefix);
   mkdirSync(path.join(root, ".claude", "skills", "tasks"), { recursive: true });
   writeFileSync(path.join(root, ".claude", "skills", "tasks", "schema.json"), JSON.stringify(schemaFor(title)));
-  mkdirSync(path.join(root, "data", "skills", "tasks", "views"), { recursive: true });
-  writeFileSync(path.join(root, "data", "skills", "tasks", "views", "v1.html"), "<head></head><body>view</body>");
+  // In the SKILL dir, not under `data/skills`. That staging tree is a workspace mechanism — it
+  // exists so the agent can write skill drafts without crossing the `.claude/` permission gate,
+  // and a bridge mirrors the allowlisted files across. A project folder has no such gate: the
+  // files live where git carries them, which is also what makes the collection survive a clone
+  // (plans/feat-collections-project-root.md §6.5, §11).
+  mkdirSync(path.join(root, ".claude", "skills", "tasks", "views"), { recursive: true });
+  writeFileSync(path.join(root, ".claude", "skills", "tasks", "views", "v1.html"), "<head></head><body>view</body>");
   mkdirSync(path.join(root, "data", "tasks", "items"), { recursive: true });
   writeFileSync(path.join(root, "data", "tasks", "items", "one.json"), JSON.stringify({ id: "one", name: recordName }));
   return root;
