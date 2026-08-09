@@ -150,9 +150,8 @@ export function buildUserTaskDefinitions(tasks: readonly unknown[], spawnChat: S
  *  The tick loop starts whenever ANY task exists — so a system task alone (no user tasks) still
  *  drives its schedule. Returns the user-task count.
  *
- *  Boot never waits on the adapter: its catch-up runs every window missed while the server was
- *  off, which for a caught-up feed refresh is real work. The TICK LOOP does wait for it, but
- *  only so far — see startTicking. */
+ *  Nothing waits on the adapter: its catch-up runs every window missed while the server was off,
+ *  which for a caught-up feed refresh is real work — see startTicking for what that costs. */
 export function initUserTaskScheduler(deps: { workspace: string; spawnChat: ScheduledChatSpawn; systemTasks?: SystemTaskDef[] }): number {
   const userDefs = buildUserTaskDefinitions(loadUserTasks(deps.workspace), deps.spawnChat);
   const systemTasks = deps.systemTasks ?? [];
@@ -165,36 +164,25 @@ export function initUserTaskScheduler(deps: { workspace: string; spawnChat: Sche
   return userDefs.length;
 }
 
-// How long the tick loop waits for the adapter before starting without it. One tick: long
-// enough that the normal case (seed + a catch-up run) is always inside it, short enough that a
-// wedged catch-up costs at most one tick rather than every tick.
-const ADAPTER_START_GRACE_MS = 60_000;
-
-/** Start the tick loop once the registry is COMPLETE. The adapter registers its tasks only after
- *  seeding and running the catch-up plan, so starting first leaves ticks that see no system task
- *  at all — and a window passing in that gap then waits for the next boot to be noticed.
+/** Start the tick loop as soon as anything is registered, and let the adapter register its own
+ *  tasks behind it.
  *
- *  Bounded, though: a catch-up run is real work over the network, and waiting on one that never
- *  returns would mean the user's own tasks never tick either. `start()` ignores a second call, so
- *  whichever of the two happens first wins. A failed adapter start also starts the loop — the
- *  user tasks are registered and due regardless. */
+ *  Which window to risk, since both cannot be protected: the adapter registers only after seeding
+ *  and running its catch-up plan, so ticking first means those ticks see no system task — while a
+ *  loop that waits for it fires no USER task meanwhile. Codex flagged each side in turn, and what
+ *  settles it is the asymmetry between the two kinds. A user task is one-shot — "remind me at
+ *  09:00", with no catch-up in either host — so a window it misses is never run at all. A system
+ *  task's WORK survives either way: the worklog's window is [lastRunAt, now] from its own state
+ *  file, and the feed / calendar engines re-derive what is due from their own markers. So the
+ *  loop starts now, and a window landing inside a slow catch-up costs a system task one run
+ *  rather than costing someone a reminder. */
 function startTicking(taskManager: ITaskManager, deps: { workspace: string; systemTasks: SystemTaskDef[]; userTaskCount: number }): void {
   if (deps.systemTasks.length + deps.userTaskCount === 0) return;
-  if (deps.systemTasks.length === 0) {
-    taskManager.start();
-    return;
-  }
-  const graceTimer = setTimeout(() => {
-    log.warn("adapter still starting — ticking without the system tasks for now");
-    taskManager.start();
-  }, ADAPTER_START_GRACE_MS);
-  graceTimer.unref();
-  void startSystemTaskScheduler({ taskManager, workspace: deps.workspace, tasks: deps.systemTasks, log })
-    .catch((err: unknown) => log.error("system task scheduler failed to start", { error: String(err) }))
-    .finally(() => {
-      clearTimeout(graceTimer);
-      taskManager.start();
-    });
+  taskManager.start();
+  if (deps.systemTasks.length === 0) return;
+  void startSystemTaskScheduler({ taskManager, workspace: deps.workspace, tasks: deps.systemTasks, log }).catch((err: unknown) =>
+    log.error("system task scheduler failed to start", { error: String(err) }),
+  );
 }
 
 /** One user task as the API returns it: the persisted entry, tagged with its origin and

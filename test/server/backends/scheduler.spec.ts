@@ -242,42 +242,27 @@ describe("initUserTaskScheduler", () => {
     // System tasks are NOT registered directly any more — registering them there is what left
     // them with no state and no catch-up (#1581).
     expect(registerTaskMock).not.toHaveBeenCalled();
+    expect(startMock).toHaveBeenCalledTimes(1); // started despite zero user tasks
     await vi.waitFor(() => expect(initSchedulerMock).toHaveBeenCalledWith(expect.anything(), [expect.objectContaining({ id: "system:feed-refresh" })]));
-    await vi.waitFor(() => expect(startMock).toHaveBeenCalledTimes(1)); // started despite zero user tasks
   });
 
-  // The adapter registers its tasks only after seeding and catch-up. A tick in that gap would
-  // see no system task at all, and the window it fell in would wait for the next boot.
-  it("does not tick until the system tasks are registered", async () => {
-    let finishInit: () => void = () => {};
-    initSchedulerMock.mockImplementationOnce(() => new Promise<void>((resolve) => (finishInit = resolve)));
+  // The tick loop must not wait for the adapter's seed + catch-up, however long that takes: a
+  // user task's window is one-shot (no catch-up in either host), so a tick it misses is a
+  // reminder that never fires. A system task registered a moment late loses at most one run, and
+  // its work is covered by the next one. Both sides of this were flagged in review, in turn.
+  it("ticks without waiting for the adapter's catch-up to finish", () => {
+    initSchedulerMock.mockImplementationOnce(() => new Promise<void>(() => {})); // never settles
 
-    initUserTaskScheduler({ workspace: makeWorkspace(), spawnChat: spawnOk, systemTasks: [sysTask("system:feed-refresh")] });
+    initUserTaskScheduler({
+      workspace: makeWorkspace([{ id: "a", schedule: { type: "daily", time: "11:00" }, prompt: "go" }]),
+      spawnChat: spawnOk,
+      systemTasks: [sysTask("system:feed-refresh")],
+    });
 
-    await vi.waitFor(() => expect(initSchedulerMock).toHaveBeenCalled());
-    expect(startMock).not.toHaveBeenCalled();
-    finishInit();
-    await vi.waitFor(() => expect(startMock).toHaveBeenCalledTimes(1));
+    expect(startMock).toHaveBeenCalledTimes(1);
   });
 
-  // ...but not forever. A catch-up run is network work; one that never returns must cost a tick,
-  // not every tick, or the user's own tasks never fire either.
-  it("ticks without the system tasks if the adapter is still starting a tick later", async () => {
-    vi.useFakeTimers();
-    try {
-      initSchedulerMock.mockImplementationOnce(() => new Promise<void>(() => {})); // never settles
-      initUserTaskScheduler({ workspace: makeWorkspace(), spawnChat: spawnOk, systemTasks: [sysTask("system:feed-refresh")] });
-
-      vi.advanceTimersByTime(59_000);
-      expect(startMock).not.toHaveBeenCalled();
-      vi.advanceTimersByTime(2_000);
-      expect(startMock).toHaveBeenCalledTimes(1);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  // ...and a broken adapter must not leave the user's own tasks dead in the water either.
+  // And a broken adapter must not leave the user's own tasks dead in the water either.
   it("still ticks when the adapter fails to start", async () => {
     initSchedulerMock.mockRejectedValueOnce(new Error("disk full"));
 
@@ -313,8 +298,8 @@ describe("initUserTaskScheduler", () => {
     });
     expect(count).toBe(1); // one user task
     expect(registerTaskMock.mock.calls.map((call) => (call[0] as TaskDefinition).id)).toEqual(["user.a"]);
+    expect(startMock).toHaveBeenCalledTimes(1);
     await vi.waitFor(() => expect(initSchedulerMock).toHaveBeenCalledTimes(1));
-    await vi.waitFor(() => expect(startMock).toHaveBeenCalledTimes(1));
   });
 
   // The seed is what makes catch-up reachable at all: a task with no state entry is read as
