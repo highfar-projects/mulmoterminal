@@ -17,8 +17,9 @@ vi.mock("../../../src/components/PluginFrame.vue", () => ({
 }));
 
 // The pane resolves its project from the server's list; this cell's cwd IS a known project.
+const PROJECT_OF: Record<string, string> = { "/srv/mag2": "p1", "/srv/other": "p2" };
 vi.mock("../../../src/composables/collectionProject", () => ({
-  projectIdForCwd: async (cwd: string | null) => (cwd === "/srv/mag2" ? "p1" : null),
+  projectIdForCwd: async (cwd: string | null) => (cwd === null ? null : (PROJECT_OF[cwd] ?? null)),
 }));
 
 // Imported at module scope on purpose — an `await import` inside a test bills the whole module
@@ -106,6 +107,41 @@ describe("CollectionsPane portability strip", () => {
     await flushPromises();
     expect(w.text()).toContain("Could not run the check");
     expect(w.text()).not.toContain("survive");
+  });
+
+  // The pair a report describes is (project, collection), and BOTH can change under an in-flight
+  // request. A slug-only guard lets project A's verdict land on project B's identically-named
+  // collection — the same-slug-in-two-roots collision this feature is about, arriving through a
+  // race rather than through a path.
+  it("drops a verdict fetched for the previous project when the same slug is reopened", async () => {
+    // A fetch the test releases by hand, so the pane can be moved while it is out.
+    let release!: (body: unknown) => void;
+    const inFlight = new Promise<unknown>((resolve) => (release = resolve));
+    globalThis.fetch = vi.fn(
+      () => inFlight.then((body) => ({ ok: true, status: 200, json: async () => body })) as unknown as Promise<Response>,
+    ) as unknown as typeof fetch;
+
+    const w = mount(CollectionsPane, { props: { cwd: "/srv/mag2" } });
+    await flushPromises();
+    const navA = activeCollectionNavSurface();
+    navA?.gotoDetail("collection", "notes");
+    await flushPromises();
+    await w.find("button").trigger("click");
+
+    // The cell walks to another project, and the user opens ITS collection of the same name.
+    await w.setProps({ cwd: "/srv/other" });
+    await flushPromises();
+    activeCollectionNavSurface()?.gotoDetail("collection", "notes");
+    await flushPromises();
+
+    // Now project A's answer arrives.
+    release({ slug: "notes", portable: false, findings: [{ code: "data-ignored", severity: "blocker", message: "A's problem, not B's." }] });
+    await flushPromises();
+
+    expect(w.text()).not.toContain("A's problem");
+    expect(w.text()).not.toContain("Would not survive a clone");
+    // And the superseded request must not have left the button spinning.
+    expect(w.find("button").text()).toBe("Survives a clone?");
   });
 
   // A verdict that outlived the collection it was about would read as the new one's.

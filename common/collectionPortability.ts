@@ -47,9 +47,9 @@ export interface SelfContainmentReport {
   findings: SelfContainmentFinding[];
 }
 
-/** The severity IS narrowed, unlike the code: it decides how the row is rendered, so an
- *  unrecognised one has no styling to fall back to. A predicate rather than a list membership
- *  test, so the narrowing is the type system's rather than an assertion's. */
+/** The severity IS narrowed, unlike the code: it decides how the row is rendered AND whether the
+ *  finding is a blocker, so an unrecognised one cannot be shown honestly. A predicate rather than
+ *  a list membership test, so the narrowing is the type system's rather than an assertion's. */
 export function isSelfContainmentSeverity(value: unknown): value is SelfContainmentSeverity {
   return value === "blocker" || value === "warning" || value === "info";
 }
@@ -72,7 +72,13 @@ export function asSelfContainmentReport(body: unknown): SelfContainmentReport | 
   const parsed: SelfContainmentFinding[] = [];
   for (const entry of findings) {
     const finding = asFinding(entry);
-    if (finding) parsed.push(finding);
+    // ONE UNREADABLE FINDING REJECTS THE WHOLE REPORT. Skipping it would be the worse failure:
+    // if the dropped finding was the only blocker, the caller is handed `findings: []` and tells
+    // the user "nothing to fix — it travels" about a collection that does not. A report we cannot
+    // fully read is not a clean bill of health, and "could not run the check" is the honest
+    // answer — visible and actionable, where a false all-clear is neither.
+    if (!finding) return null;
+    parsed.push(finding);
   }
   return { slug, portable, findings: parsed };
 }

@@ -75,6 +75,9 @@ watch(
     projectId.value = resolved;
     resolving.value = false;
     surface.projectId = resolved;
+    // The project half of the report's identity just changed, so anything in flight is about a
+    // pair that is no longer on screen — including a check for a slug that exists in BOTH.
+    invalidateCheck();
     // Reset the view: a slug open in one directory need not exist in the next.
     nav.gotoIndex("collection");
   },
@@ -98,16 +101,31 @@ const checkFailed = ref(false);
 /** The open collection, or undefined on the index — the check is per collection. */
 const openSlug = computed(() => (view.value.mode === "detail" && view.value.kind === "collection" ? view.value.slug : undefined));
 
-// Leaving the collection drops its report: a verdict that outlived the thing it was about would
-// read as this collection's.
-watch(openSlug, () => {
+// A GENERATION token, like the project lookup above it, and for a reason a slug comparison cannot
+// cover: the pair this report describes is (project, collection), and BOTH can change under an
+// in-flight request. Comparing the slug alone lets project A's verdict land on project B's
+// identically-named collection — the same-slug-in-two-roots collision this whole feature is
+// about, arriving through a race instead of through a path.
+let checkGeneration = 0;
+
+/** Abandon any in-flight check and drop what it was about. Also releases `checking`: the user is
+ *  now looking at a different (project, collection) and must be able to ask about THAT one while
+ *  the superseded request is still out. */
+function invalidateCheck(): void {
+  checkGeneration += 1;
   report.value = null;
   checkFailed.value = false;
-});
+  checking.value = false;
+}
+
+// Leaving the collection drops its report: a verdict that outlived the thing it was about would
+// read as this collection's. The project half is invalidated in the cwd watcher above.
+watch(openSlug, invalidateCheck);
 
 async function checkPortability(): Promise<void> {
   const slug = openSlug.value;
   if (!slug || checking.value) return;
+  const mine = ++checkGeneration;
   checking.value = true;
   checkFailed.value = false;
   report.value = null;
@@ -119,12 +137,13 @@ async function checkPortability(): Promise<void> {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const parsed = asSelfContainmentReport(await res.json());
     if (!parsed) throw new Error("unrecognised report");
-    // A slower earlier answer must not land on a collection the user has since left.
-    if (openSlug.value === slug) report.value = parsed;
+    if (mine === checkGeneration) report.value = parsed;
   } catch {
-    if (openSlug.value === slug) checkFailed.value = true;
+    if (mine === checkGeneration) checkFailed.value = true;
   } finally {
-    checking.value = false;
+    // Only the CURRENT check owns the flag — a superseded one clearing it would end the spinner
+    // for a request that is still out.
+    if (mine === checkGeneration) checking.value = false;
   }
 }
 
