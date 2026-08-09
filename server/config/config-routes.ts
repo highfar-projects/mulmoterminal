@@ -7,7 +7,7 @@
 import os from "node:os";
 import path from "node:path";
 import { existsSync, statSync } from "node:fs";
-import type { Express, Response } from "express";
+import type { Express, Request, Response } from "express";
 import {
   loadAppConfig,
   loadAppConfigResult,
@@ -17,6 +17,7 @@ import {
   mergeConfigUpdate,
   toPublicAppConfig,
   unknownKeysOf,
+  withConfigLock,
   type AppConfig,
 } from "./app-config.js";
 import { type HeaderConfig } from "./header-config.js";
@@ -242,7 +243,7 @@ function mountCwdPresetRoutes(app: Express, onCwdPresetsChanged?: CwdPresetsChan
     const path_ = typeof body.path === "string" ? body.path.trim() : "";
     if (!path_) return res.status(400).json({ error: "path is required" });
     const label = typeof body.label === "string" && body.label.trim().length > 0 ? body.label.trim() : path_.split("/").filter(Boolean).at(-1) || path_;
-    return mutatePresets(res, (current) => {
+    return void mutatePresets(res, (current) => {
       // Most-recently-used first, and an existing entry keeps the label the user gave it.
       const existing = current.find((preset) => preset.path === path_);
       return [existing ?? { label, path: path_ }, ...current.filter((preset) => preset.path !== path_)];
@@ -255,13 +256,20 @@ function mountCwdPresetRoutes(app: Express, onCwdPresetsChanged?: CwdPresetsChan
     const body = requestBody(req.body);
     const path_ = typeof body.path === "string" ? body.path : "";
     if (!path_) return res.status(400).json({ error: "path is required" });
-    return mutatePresets(res, (current) => current.filter((preset) => preset.path !== path_));
+    return void mutatePresets(res, (current) => current.filter((preset) => preset.path !== path_));
   });
 
   /** Apply a one-entry change to the saved directories, reading and writing the file the same way
    *  `POST /api/config` does — including refusing a config we could not parse, so a stray comma
    *  never costs the user the rest of their settings. Answers the resulting list. */
-  function mutatePresets(res: Response, mutate: (current: CwdPreset[]) => CwdPreset[]) {
+  async function mutatePresets(res: Response, mutate: (current: CwdPreset[]) => CwdPreset[]) {
+    // The READ and the WRITE are one critical section, held across processes: several
+    // mulmoterminals share this file, and two that each read the old list before either writes
+    // both save a list missing the other's directory. See `withConfigLock`.
+    return withConfigLock(CONFIG_FILE, () => mutatePresetsLocked(res, mutate));
+  }
+
+  function mutatePresetsLocked(res: Response, mutate: (current: CwdPreset[]) => CwdPreset[]) {
     const loaded = loadAppConfigResult(CONFIG_FILE);
     if (loaded.status === "corrupt") {
       const bak = backupCorruptConfig(CONFIG_FILE);
@@ -309,6 +317,12 @@ export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsC
   });
 
   app.post("/api/config", (req, res) => {
+    // Held for the same reason as the one-entry routes below: this re-reads the file as its merge
+    // base, so two processes saving different fields at once can each write the other's away.
+    void withConfigLock(CONFIG_FILE, () => saveWholeConfig(req, res));
+  });
+
+  function saveWholeConfig(req: Request, res: Response) {
     const body = requestBody(req.body);
     // Partial update: keep the field the request omits so saving the sound doesn't
     // wipe the presets (and vice-versa). cwdPresets, when present, must be an array.
@@ -359,7 +373,7 @@ export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsC
     // subscriber's failure is its own, and must not turn a saved config into a 500.
     if (presetsChanged) notifyPresetsChanged(onCwdPresetsChanged);
     res.json(configResponse());
-  });
+  }
 
   mountCwdPresetRoutes(app, onCwdPresetsChanged);
 

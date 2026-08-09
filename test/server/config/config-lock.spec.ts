@@ -1,0 +1,122 @@
+// @vitest-environment node
+//
+// One machine runs several mulmoterminals (several checkouts, side by side) sharing ONE
+// config.json. `writeFileAtomicSync` makes each write all-or-nothing — it says nothing about two
+// processes that both READ the old list, each add their own directory, and each write: the second
+// rename replaces the first's addition, and a saved directory is gone with no error anywhere.
+//
+// A saved directory is not cosmetic here: the list is what decides which projects the server
+// serves collections for. So the read-modify-write is claimed with a lock, and this is what says
+// the lock is real rather than decorative.
+import { describe, it, expect } from "vitest";
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+import { withConfigLock } from "../../../server/config/app-config";
+
+const tmp = () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "mt-config-lock-"));
+  return { dir, file: path.join(dir, "config.json"), cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+};
+
+/** A read-modify-write of a JSON list — the shape every config writer has. */
+const appendUnderLock = (file: string, value: string, onEnter?: () => void) =>
+  withConfigLock(file, () => {
+    const current: string[] = JSON.parse(readFileSync(file, "utf8"));
+    onEnter?.();
+    writeFileSync(file, JSON.stringify([...current, value]));
+    return value;
+  });
+
+describe("withConfigLock", () => {
+  // The race is between PROCESSES, so the other party is played by holding the lock file directly
+  // — two calls inside one process cannot interleave (the critical section is synchronous), which
+  // is why a test that merely starts two of them passes with or without the lock and proves
+  // nothing.
+  it("waits for the holder, then reads what the holder wrote", async () => {
+    const { file, cleanup } = tmp();
+    try {
+      writeFileSync(file, "[]");
+      // "Another mulmoterminal" claims the lock and has not written yet.
+      writeFileSync(`${file}.lock`, "");
+
+      let entered = false;
+      const ours = appendUnderLock(file, "ours", () => {
+        entered = true;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      // Still outside: without the lock it would have read `[]` by now and be about to erase the
+      // other process's entry.
+      expect(entered).toBe(false);
+
+      // The holder finishes its own read-modify-write and releases.
+      writeFileSync(file, JSON.stringify(["theirs"]));
+      rmSync(`${file}.lock`);
+
+      await ours;
+      // Ours read AFTER theirs landed, so both survive — which is the whole point.
+      expect(JSON.parse(readFileSync(file, "utf8"))).toEqual(["theirs", "ours"]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("releases the lock even when the critical section throws", async () => {
+    const { file, cleanup } = tmp();
+    try {
+      writeFileSync(file, "[]");
+      await expect(
+        withConfigLock(file, () => {
+          throw new Error("boom");
+        }),
+      ).rejects.toThrow("boom");
+      expect(existsSync(`${file}.lock`)).toBe(false);
+      // …and the next writer is not shut out by the wreckage.
+      await appendUnderLock(file, "after");
+      expect(JSON.parse(readFileSync(file, "utf8"))).toEqual(["after"]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("leaves no lock file behind on the happy path", async () => {
+    const { file, cleanup } = tmp();
+    try {
+      writeFileSync(file, "[]");
+      await appendUnderLock(file, "a");
+      expect(existsSync(`${file}.lock`)).toBe(false);
+    } finally {
+      cleanup();
+    }
+  });
+
+  // A crash leaves the lock file behind. Waiting it out forever would wedge the config for the
+  // rest of the session, so an old one is broken rather than obeyed.
+  it("breaks a stale lock left by a crashed process", async () => {
+    const { file, cleanup } = tmp();
+    try {
+      writeFileSync(file, "[]");
+      // Mtime in the past: older than LOCK_STALE_MS, i.e. nobody honest is still inside.
+      writeFileSync(`${file}.lock`, "");
+      const { utimesSync } = await import("node:fs");
+      const longAgo = new Date(Date.now() - 60_000);
+      utimesSync(`${file}.lock`, longAgo, longAgo);
+
+      await appendUnderLock(file, "after-crash");
+      expect(JSON.parse(readFileSync(file, "utf8"))).toEqual(["after-crash"]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("returns what the critical section returned", async () => {
+    const { file, cleanup } = tmp();
+    try {
+      writeFileSync(file, "[]");
+      expect(await withConfigLock(file, () => 42)).toBe(42);
+    } finally {
+      cleanup();
+    }
+  });
+});

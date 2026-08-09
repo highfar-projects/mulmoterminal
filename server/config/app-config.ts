@@ -2,7 +2,7 @@
 // presets plus an optional custom attention-sound file. Unified read/write so a
 // partial update (e.g. just the sound) never clobbers the other field. Extracted
 // from config-routes.ts so the sanitize/load/save logic is unit-testable.
-import { existsSync, copyFileSync } from "node:fs";
+import { existsSync, copyFileSync, openSync, closeSync, unlinkSync, statSync } from "node:fs";
 import path from "node:path";
 import { sanitizePresets } from "./cwd-presets.js";
 import { sanitizeButtons, sanitizeChips } from "./header-config.js";
@@ -708,6 +708,78 @@ export function serializableAppConfig(config: AppConfig, unknownKeys: Record<str
   const known = toPublicAppConfig(config);
   const extras = Object.entries(unknownKeys).filter(([key]) => !Object.hasOwn(known, key));
   return Object.fromEntries([...Object.entries(known), ...extras]);
+}
+
+// ── serializing a read-modify-write ACROSS PROCESSES ──────────────────────────────────────────
+//
+// One machine runs several mulmoterminals (several checkouts, side by side) and they share ONE
+// config.json. `writeFileAtomicSync` makes each write all-or-nothing, which stops a truncated
+// file — it does nothing about two processes that both READ the old list, each add their own
+// directory, and each write: the second rename replaces the first process's addition, and a
+// saved directory is gone with no error anywhere.
+//
+// The window is small, and it is exactly the window a user hits by launching a terminal in two
+// windows at once — which is how the whole list was lost once already (a client-side version of
+// the same race). So the critical section is claimed with a lock file rather than hoped over.
+const LOCK_SUFFIX = ".lock";
+// Long enough that no honest read-modify-write is still holding it, short enough that a crash
+// does not wedge the config for a session. Everything inside the lock is synchronous file I/O.
+const LOCK_STALE_MS = 5_000;
+const LOCK_RETRY_MS = 15;
+const LOCK_WAIT_MS = 2_000;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Take the config lock, run `critical`, and release it — whatever `critical` does.
+ *
+ *  If the lock cannot be taken within `LOCK_WAIT_MS` the work runs ANYWAY, because the failure
+ *  modes are not symmetric: proceeding risks the narrow race this exists to close, while
+ *  refusing loses the user's action outright and leaves a wedged lock file permanently fatal.
+ *  A stale lock (older than `LOCK_STALE_MS`, i.e. left by a crash) is broken rather than waited
+ *  out, for the same reason. */
+export async function withConfigLock<T>(file: string, critical: () => T): Promise<T> {
+  const lockPath = `${file}${LOCK_SUFFIX}`;
+  const deadline = Date.now() + LOCK_WAIT_MS;
+  let held = false;
+  while (Date.now() < deadline) {
+    try {
+      // `wx` is the claim: it fails if the file exists, which is what makes this a lock rather
+      // than a note that someone once intended to hold one.
+      closeSync(openSync(lockPath, "wx"));
+      held = true;
+      break;
+    } catch {
+      if (staleLock(lockPath)) {
+        try {
+          unlinkSync(lockPath);
+        } catch {
+          // Someone else broke it first — either way the next attempt can claim it.
+        }
+        continue;
+      }
+      await sleep(LOCK_RETRY_MS);
+    }
+  }
+  try {
+    return critical();
+  } finally {
+    if (held) {
+      try {
+        unlinkSync(lockPath);
+      } catch {
+        // Already gone (a stale-breaker beat us to it). Nothing to undo.
+      }
+    }
+  }
+}
+
+function staleLock(lockPath: string): boolean {
+  try {
+    return Date.now() - statSync(lockPath).mtimeMs > LOCK_STALE_MS;
+  } catch {
+    // Vanished between the failed claim and this check — not stale, just gone.
+    return false;
+  }
 }
 
 // Persist the whole config; returns false on any write failure so the caller can
