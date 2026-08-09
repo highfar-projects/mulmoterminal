@@ -183,6 +183,25 @@ describe("selfContainmentFactsFor against a real repo", () => {
     expect(facts.dataDirIgnored).toBeNull();
   });
 
+  // The records of a `dataSource` collection are NOT in the data directory — they are the rows of
+  // the external file. Asking about the directory answers about a folder they were never in, so a
+  // `*.csv` ignore line reported nothing and left `portable: true` on a clone with no records.
+  it("asks about the external data file for a csv collection, not the data directory", async () => {
+    git("init");
+    writeCollection(SLUG, { dataPath: undefined, dataSource: { type: "csv", path: `data/${SLUG}/rows.csv` } });
+    fs.mkdirSync(path.join(root, "data", SLUG), { recursive: true });
+    fs.writeFileSync(path.join(root, "data", SLUG, "rows.csv"), "id\n1\n");
+    // Ignores the FILE while leaving the conventional data directory perfectly committable.
+    fs.writeFileSync(path.join(root, ".gitignore"), "*.csv\n");
+
+    const facts = await factsFor(SLUG);
+    expect(facts.storageKind).toBe("csv");
+    expect(facts.dataDirIgnored).toBe(true);
+    const findings = selfContainmentFindings(facts);
+    expect(findings.map((f) => f.code)).toContain("data-ignored");
+    expect(isPortable(findings)).toBe(false);
+  });
+
   it("answers null for a slug this project does not have", async () => {
     expect(await selfContainmentFactsFor("nope", { workspaceRoot: root })).toBeNull();
   });

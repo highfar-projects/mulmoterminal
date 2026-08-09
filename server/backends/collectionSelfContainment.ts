@@ -56,7 +56,11 @@ export interface SelfContainmentFacts {
   storageKind: "file" | "csv" | "sqlite";
   hasPrimaryKey: boolean;
   inGitRepo: boolean;
-  /** Null when it could not be established — not a repo, or git is not on PATH. Null is NOT
+  /** Whether git ignores the path the RECORDS actually live at — the external `dataSource` file
+   *  or the `storage` backend file when the schema declares one, else the data directory
+   *  (`recordPathOf`).
+   *
+   *  Null when it could not be established — not a repo, or git is not on PATH. Null is NOT
    *  "fine": it is "unknown", and the check says nothing rather than clearing it. */
   dataDirIgnored: boolean | null;
 }
@@ -167,6 +171,16 @@ async function isGitIgnored(root: string, target: string): Promise<boolean | nul
   }
 }
 
+/** The path whose ignore state decides whether the RECORDS travel — which is not always the data
+ *  directory. A `dataSource` collection's rows live in the external file, and a `storage`
+ *  collection's rows live in its backend file; `dataDir` is then only the conventional per-slug
+ *  directory, and asking about it answers about a folder the records were never in. A `*.csv` or
+ *  `*.db` ignore line would have gone unreported, `portable: true`, with the clone containing no
+ *  records at all — the exact failure this rule exists to catch, aimed one directory to the left. */
+function recordPathOf(collection: { dataDir: string; dataSourceFile?: string; storageFile?: string }): string {
+  return collection.dataSourceFile ?? collection.storageFile ?? collection.dataDir;
+}
+
 /** Gather the facts for one collection. Exported so a caller can run the rules over facts it
  *  already holds. */
 export async function selfContainmentFactsFor(slug: string, scope: ProjectScope): Promise<SelfContainmentFacts | null> {
@@ -180,7 +194,7 @@ export async function selfContainmentFactsFor(slug: string, scope: ProjectScope)
     inGitRepo: git,
     // Only meaningful inside a repo; outside one, `check-ignore` answers about a repo that is
     // not the one this collection would be cloned from.
-    dataDirIgnored: git ? await isGitIgnored(scope.workspaceRoot, path.resolve(collection.dataDir)) : null,
+    dataDirIgnored: git ? await isGitIgnored(scope.workspaceRoot, path.resolve(recordPathOf(collection))) : null,
   };
 }
 

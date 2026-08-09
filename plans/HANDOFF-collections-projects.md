@@ -152,22 +152,36 @@ collections do not exist on the phone. Preparation is specified in
 params defaulting to the host root (so adding the parameter later changes no handler), the scope
 must be an opaque id, and the artifact stays host-built.
 
-### 3.5 Per-root scheduled feed refresh — DONE
+### 3.5 Per-root scheduled feed refresh — BLOCKED UPSTREAM (attempted, reverted)
 
-`buildSystemTasks` now registers ONE `feedRefreshTaskDef` per root — the workspace plus every
-saved project directory, passed in from `server/index.ts` as `feedRoots`. A task id is the
-scheduler's primary key and core builds it from the root, so N roots register N tasks instead of
-overwriting each other down to the last one. Roots are deduped by RESOLVED path: core canonicalises
-the root into the id, so two spellings of one directory would otherwise produce one id and silently
-drop a registration.
+Written, reviewed, and taken back out in #1582. The mechanism is sound and the blocker is one
+missing argument in core.
 
-- **Read at BOOT**, because the scheduler registers once. A directory saved later starts refreshing
-  after the next restart; its feeds still update on demand meanwhile. The alternative is
-  re-architecting the scheduler around a live task list, which the user tasks (also read once, from
-  disk) would need too — a bigger change than this item.
-- **The calendar stays workspace-only, deliberately.** A Google grant is user-scope and its sync
-  marker is workspace state, so a per-project sync would need a per-project answer to "which
-  account" that nothing in this app has.
+**What it was.** `buildSystemTasks` registers one `feedRefreshTaskDef` per root instead of one for
+the workspace. A task id is the scheduler's primary key and core builds it from the root, so N
+roots register N tasks; roots dedupe by RESOLVED path because core canonicalises the root into the
+id, so two spellings would collapse to one id and silently drop a registration. Read at boot, since
+the scheduler registers once.
+
+**Why it cannot ship yet.** A collection with `ingest.kind: "agent"` refreshes by dispatching a
+hidden worker, and the seed prompt core builds carries `dataPath` **straight from the schema** —
+root-relative (`promptPathsFor`). MulmoTerminal's `feedsSpawnWorker` calls `spawnClaudePty` with no
+cwd, so the worker stands in `CLAUDE_CWD`. Schedule a project root and its agent-ingest refresh
+therefore resolves `data/collections/<slug>/items` against the WORKSPACE — writing into the
+workspace's same-named collection. A silent cross-project write, which is the exact failure this
+whole plan exists to remove (invariant 3: the root is the trust boundary).
+
+**The host cannot fix it alone.** `AgentWorkerRunner`'s args are
+`{ message, roleId, hidden, onComplete }` — no root. Only core knows which root the refresh is for.
+
+**The upstream change:** add `workspaceRoot` to the `AgentWorkerRunner` argument object and pass it
+from `refreshViaAgent`. MulmoTerminal then forwards it as the spawn's cwd. Single-workspace hosts
+ignore the new field, so it is additive. Then re-land the revert in #1582 — the commit is intact in
+history (`26ca37ae`) and its spec still describes the behaviour wanted.
+
+Declarative RSS/JSON feeds were never at risk (they fetch and write through the engine under the
+explicit root, with no agent involved) — but there is no way to register only those, because the
+refresh walks a root's collections internally.
 
 ### 3.6 The self-containment check — DONE
 

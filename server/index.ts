@@ -128,8 +128,6 @@ import { stopWhisperSidecar } from "./backends/whisper.js";
 import { startCollectionCompletionWatchers } from "./backends/collectionWatchers.js";
 import { initUserTaskScheduler } from "./backends/scheduler.js";
 import { buildSystemTasks } from "./backends/system-tasks.js";
-// The projects a request may name — and, at boot, the roots whose feeds refresh on schedule.
-import { listProjectRoots } from "./infra/project-root.js";
 import { initMulmoScriptBackend } from "./backends/mulmoscript.js";
 import { createSessionLifecycle, SESSIONS_CHANNEL } from "./session/lifecycle.js";
 import { mountAppRoutes } from "./routes/app-routes.js";
@@ -870,13 +868,6 @@ try {
   // (initFeedsBackend, initGoogleBackend, initCollectionsBackend), so both engines can run.
   const systemTasks = buildSystemTasks({
     workspaceRoot: CLAUDE_CWD,
-    // Every project the server serves gets its feeds refreshed on schedule, not just the
-    // workspace — the same set the collection watchers mount for. Read HERE, at boot, because
-    // the scheduler registers once: a directory saved later starts refreshing after the next
-    // restart. Its feeds still update on demand in the meantime, and the alternative is
-    // re-architecting the scheduler around a live task list, which the user tasks (also read
-    // once, from disk) would need too.
-    feedRoots: listProjectRoots().map((project) => project.cwd),
     worklog: getWorklogConfig(),
     spawnChat: spawnScheduledChat,
   });
