@@ -5,6 +5,7 @@
 // it when — and that file is already well over its line budget.
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { hostname } from "node:os";
 import { openSync, closeSync, unlinkSync, statSync, mkdirSync, writeSync, readFileSync } from "node:fs";
 import { isRecord } from "../../common/isRecord.js";
 
@@ -49,13 +50,13 @@ export class ConfigLockTimeout extends Error {
  *  precisely the bug this exists to close: this writer would read the old config while the holder
  *  is still inside its own read-modify-write, and overwrite it. A rare silent deletion of someone
  *  else's data is worse than a visible "try again". */
-export async function withConfigLock<T>(file: string, critical: () => T): Promise<T> {
+export async function withConfigLock<T>(file: string, critical: () => T | Promise<T>): Promise<T> {
   const lockPath = `${file}${LOCK_SUFFIX}`;
   const deadline = Date.now() + LOCK_WAIT_MS;
   // What identifies THIS claim inside the lock file, so the release can tell "still mine" from
   // "someone reclaimed it". The pid alone is not enough — one process can hold the lock twice in
   // sequence, and the second claim must not be releasable by the first.
-  const token = `${process.pid}:${randomUUID()}`;
+  const token = `${hostname()}:${process.pid}:${randomUUID()}`;
   let held = false;
   while (!held && Date.now() < deadline) {
     held = tryClaim(lockPath, token);
@@ -63,7 +64,11 @@ export async function withConfigLock<T>(file: string, critical: () => T): Promis
   }
   if (!held) throw new ConfigLockTimeout(file);
   try {
-    return critical();
+    // AWAITED inside the lock. Every caller today is synchronous, but a `critical` that returned
+    // a promise would otherwise release the lock the moment it was CREATED — the section would
+    // run outside the protection it asked for, which is worse than not locking at all because it
+    // looks locked.
+    return await critical();
   } finally {
     release(lockPath, token);
   }
@@ -125,10 +130,10 @@ function tryClaim(lockPath: string, token: string): boolean {
       return tryClaim(lockPath, token);
     }
     if (code !== "EEXIST") throw err;
-    // A stale lock is broken here, not waited out; the next attempt claims it. A FAILED unlink
-    // deliberately falls through to the caller's wait rather than retrying at full speed — the
-    // claim would fail the same way and `staleLock` would say the same thing.
-    if (staleLock(lockPath)) {
+    // A lock whose owner is gone is broken here, not waited out; the next attempt claims it. A
+    // FAILED unlink deliberately falls through to the caller's wait rather than retrying at full
+    // speed — the claim would fail the same way and `breakable` would say the same thing.
+    if (breakable(lockPath)) {
       try {
         unlinkSync(lockPath);
         return tryClaim(lockPath, token);
@@ -140,11 +145,63 @@ function tryClaim(lockPath: string, token: string): boolean {
   }
 }
 
-function staleLock(lockPath: string): boolean {
+/** Whether a lock may be taken from whoever wrote it.
+ *
+ *  AGE ALONE IS NOT ENOUGH, and this is the correction that matters: `mtime` says when the lock
+ *  was created, not whether its owner is still inside. Breaking it on age took it from a live
+ *  writer that was merely slow — paused, or blocked in synchronous filesystem I/O — and a second
+ *  writer then entered the read-modify-write the first was still in the middle of. That is the
+ *  overlap this whole file exists to prevent, reintroduced by its own recovery path.
+ *
+ *  So a lock is broken only when it is old AND its owner is GONE. The owner is asked about
+ *  directly: `process.kill(pid, 0)` sends no signal and answers "does this process exist".
+ *
+ *  Three cases the pid cannot answer, each resolved toward the safe side:
+ *
+ *  - **Another host.** `~/.mulmoterminal` can live on a network share, where a pid means nothing
+ *    — it might match an unrelated local process, or miss a live remote one. The token carries
+ *    the hostname, and a lock from elsewhere is left alone: a foreign writer we cannot ask about
+ *    is treated as alive.
+ *  - **A lock we cannot parse** (an older build, a crash mid-claim). Nothing owns it that we can
+ *    find, and refusing forever would wedge the config, so age decides — as it did before.
+ *  - **A live owner that is genuinely stuck.** Its lock is never broken, so writers time out and
+ *    answer "try again" instead of overlapping. Refusing is the right failure: the wedged process
+ *    is a problem the user can see, while a silent lost update is not.
+ */
+function breakable(lockPath: string): boolean {
+  if (!olderThanStale(lockPath)) return false;
+  const owner = readOwner(lockPath);
+  if (!owner) return true; // unreadable or unparseable: age is all there is to go on
+  if (owner.host !== hostname()) return false; // another machine's pid means nothing here
+  return !processAlive(owner.pid);
+}
+
+function olderThanStale(lockPath: string): boolean {
   try {
     return Date.now() - statSync(lockPath).mtimeMs > LOCK_STALE_MS;
   } catch {
     // Vanished between the failed claim and this check — not stale, just gone.
     return false;
+  }
+}
+
+function readOwner(lockPath: string): { host: string; pid: number } | null {
+  try {
+    const [host, pid] = readFileSync(lockPath, "utf8").split(":");
+    const parsed = Number(pid);
+    return host && Number.isInteger(parsed) && parsed > 0 ? { host, pid: parsed } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Does this process still exist? Signal 0 performs the permission and existence checks without
+ *  delivering anything. An EPERM means it exists and belongs to someone else — still alive. */
+function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return hasErrnoCode(err) && err.code === "EPERM";
   }
 }

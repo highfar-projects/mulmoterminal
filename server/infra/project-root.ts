@@ -102,6 +102,20 @@ export function projectId(root: string): string {
   return createHash("sha256").update(root).digest("hex").slice(0, 16);
 }
 
+/** A directory's NAME, never its location.
+ *
+ *  `lastSegment` answers with the path itself when there is nothing to take — `"/"` for a POSIX
+ *  root, `"C:"` for a Windows drive root — and that value travels: the phone's project listing
+ *  promises a label that is never a path. Derived here, once, rather than checked wherever a
+ *  label is used.
+ *
+ *  `path.basename` is not used for the same reason `lastSegment` exists: this process's `path` is
+ *  its own platform's, and a config written on Windows can be read on a mac. */
+function nameOf(root: string): string {
+  const name = lastSegment(root).trim();
+  return name.length > 0 && !name.includes("/") && !name.includes("\\") && !/^[a-z]:$/i.test(name) ? name : "root";
+}
+
 /** Every project a request may name, workspace first. Deduped by root: a user who has launched
  *  from the workspace has it among the saved directories too. */
 export function listProjectRoots(): ProjectSummary[] {
@@ -110,7 +124,7 @@ export function listProjectRoots(): ProjectSummary[] {
   // written on Windows can be read on a mac (a synced config, a restored backup). A POSIX
   // basename hands `C:\Users\me\proj` back WHOLE — which then travels as a "label" to a phone
   // that is promised it will never receive a path.
-  const rows: Array<{ root: string; label: string }> = [{ root: ws, label: lastSegment(ws) }];
+  const rows: Array<{ root: string; label: string }> = [{ root: ws, label: nameOf(ws) }];
   for (const project of knownProjects()) {
     if (!rows.some((row) => row.root === project.path)) rows.push({ root: project.path, label: project.label });
   }

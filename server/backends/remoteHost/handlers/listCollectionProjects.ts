@@ -58,14 +58,27 @@ function disambiguated(projects: ProjectSummary[]): { id: string; label: string 
  *  directory's own name, which is what the label was supposed to be. */
 function pathFreeLabel(project: ProjectSummary): string {
   const label = project.label.trim();
-  return label.length > 0 && !looksLikePath(label) ? label : lastSegment(project.cwd);
+  if (label.length > 0 && !looksLikePath(label)) return label;
+  // The FALLBACK is checked too, because it can fail the same test: a project at a filesystem
+  // root has no directory name to fall back to — `lastSegment("/")` is `"/"` and a Windows drive
+  // root is `"C:"`. Both would walk straight past the check just made, which is the whole reason
+  // this is one function and not a check followed by a trusting `else`.
+  const derived = lastSegment(project.cwd).trim();
+  return derived.length > 0 && !looksLikePath(derived) ? derived : ROOT_LABEL;
 }
+
+/** What a project with no directory name of its own is called. Ambiguous between two roots by
+ *  construction — which `disambiguated` then resolves, exactly as it does for any other pair
+ *  sharing a label. */
+const ROOT_LABEL = "root";
 
 /** A separator, a home-relative `~`, or a drive letter — the three ways a label carries location
  *  rather than a name. Deliberately broad: a false positive costs a nicer label, a false negative
  *  costs the guarantee. */
 function looksLikePath(label: string): boolean {
-  return label.includes("/") || label.includes("\\") || label.startsWith("~") || /^[a-z]:/i.test(label);
+  return (
+    label.includes("\\") || label.startsWith("~") || label.startsWith("/") || /^[a-z]:/i.test(label) || label.split("/").some((part) => /^[a-z]:$/i.test(part))
+  );
 }
 
 /** The shortest tail of `cwd` that no other project shares, or the label plus an id fragment. */
@@ -75,6 +88,10 @@ function distinguish(project: ProjectSummary, projects: ProjectSummary[]): strin
   const tailOf = (cwd: string, depth: number) => pathSegments(cwd).slice(-depth).join("/");
   for (let depth = 2; depth <= MAX_BORROWED_SEGMENTS + 1; depth += 1) {
     const tail = tailOf(project.cwd, depth);
+    // The borrowed segments are RAW path parts, so the tail can be a location in its own right —
+    // a drive letter (`C:`) is a segment like any other. Checked here rather than trusted,
+    // because this is the last thing between the config and the wire.
+    if (looksLikePath(tail)) continue;
     const shared = projects.some((other) => other.id !== project.id && tailOf(other.cwd, depth) === tail);
     if (!shared) return tail;
   }

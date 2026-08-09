@@ -10,6 +10,7 @@
 // the lock is real rather than decorative.
 import { describe, it, expect } from "vitest";
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, utimesSync } from "node:fs";
+import { hostname } from "node:os";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -91,14 +92,55 @@ describe("withConfigLock", () => {
     }
   });
 
+  // THE CORRECTION AGE ALONE COULD NOT MAKE. An old lock whose owner is still RUNNING is not
+  // stale — it belongs to a writer that is merely slow, and taking it lets a second writer into
+  // the read-modify-write the first is still inside. That overlap is what this file exists to
+  // prevent, so recovery must not reintroduce it.
+  it("refuses an old lock whose owner is still alive", async () => {
+    const { file, cleanup } = tmp();
+    try {
+      writeFileSync(file, "[]");
+      // This very process is the owner, and it is definitely running.
+      writeFileSync(`${file}.lock`, `${hostname()}:${process.pid}:still-here`);
+      const longAgo = new Date(Date.now() - 60_000);
+      utimesSync(`${file}.lock`, longAgo, longAgo);
+
+      await expect(withConfigLock(file, () => "should not run")).rejects.toThrow(/try again/);
+      // Untouched: refusing is the right failure here — a wedged process is something the user
+      // can see, a silent lost update is not.
+      expect(readFileSync(`${file}.lock`, "utf8")).toBe(`${hostname()}:${process.pid}:still-here`);
+    } finally {
+      rmSync(`${file}.lock`, { force: true });
+      cleanup();
+    }
+  }, 10_000);
+
+  // A pid from another machine means nothing to `process.kill` — it might match an unrelated
+  // local process or miss a live remote one — so a foreign lock is treated as alive.
+  it("refuses an old lock written by another host", async () => {
+    const { file, cleanup } = tmp();
+    try {
+      writeFileSync(file, "[]");
+      writeFileSync(`${file}.lock`, "some-other-machine:999999:elsewhere");
+      const longAgo = new Date(Date.now() - 60_000);
+      utimesSync(`${file}.lock`, longAgo, longAgo);
+      await expect(withConfigLock(file, () => "should not run")).rejects.toThrow(/try again/);
+    } finally {
+      rmSync(`${file}.lock`, { force: true });
+      cleanup();
+    }
+  }, 10_000);
+
   // A crash leaves the lock file behind. Waiting it out forever would wedge the config for the
   // rest of the session, so an old one is broken rather than obeyed.
   it("breaks a stale lock left by a crashed process", async () => {
     const { file, cleanup } = tmp();
     try {
       writeFileSync(file, "[]");
-      // Mtime in the past: older than LOCK_STALE_MS, i.e. nobody honest is still inside.
-      writeFileSync(`${file}.lock`, "");
+      // Old AND owned by a pid that no longer exists — the two halves together are what makes it
+      // safe to take. A pid this high is not in use; if it somehow were, the test would refuse
+      // rather than pass wrongly.
+      writeFileSync(`${file}.lock`, `${hostname()}:4194303:crashed`);
       const longAgo = new Date(Date.now() - 60_000);
       utimesSync(`${file}.lock`, longAgo, longAgo);
 
@@ -190,10 +232,35 @@ describe("withConfigLock", () => {
       await withConfigLock(file, () => {
         seen = readFileSync(`${file}.lock`, "utf8");
       });
-      // pid + a unique part: one process can hold the lock twice in sequence, and the second
-      // claim must not be releasable by the first.
-      expect(seen.startsWith(`${process.pid}:`)).toBe(true);
-      expect(seen.length).toBeGreaterThan(String(process.pid).length + 1);
+      // host + pid + a unique part. The host is what makes the liveness check honest on a network
+      // share (another machine's pid means nothing here); the unique part is because one process
+      // can hold the lock twice in sequence, and the second claim must not be releasable by the
+      // first.
+      const [host, pid, unique] = seen.split(":");
+      expect(host).toBe(hostname());
+      expect(Number(pid)).toBe(process.pid);
+      expect(unique?.length).toBeGreaterThan(0);
+    } finally {
+      cleanup();
+    }
+  });
+
+  // A critical section that returns a promise must be awaited INSIDE the lock. Releasing when the
+  // promise is merely created would run the section outside the protection it asked for — worse
+  // than not locking, because it looks locked.
+  it("holds the lock until an async critical section finishes", async () => {
+    const { file, cleanup } = tmp();
+    try {
+      writeFileSync(file, "[]");
+      let lockedDuring: string | null = null;
+      const result = await withConfigLock(file, async () => {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        lockedDuring = existsSync(`${file}.lock`) ? "held" : "released";
+        return "done";
+      });
+      expect(lockedDuring).toBe("held");
+      expect(result).toBe("done");
+      expect(existsSync(`${file}.lock`)).toBe(false);
     } finally {
       cleanup();
     }

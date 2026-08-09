@@ -122,6 +122,23 @@ describe("listCollectionProjects", () => {
       }
     });
 
+    // A project at a filesystem ROOT has no directory name to fall back to: `lastSegment("/")` is
+    // `"/"` and a Windows drive root is `"C:"`. Both would walk past the check just made.
+    it("does not fall back to a path for a project at the filesystem root", async () => {
+      initProjectRoots({
+        workspace: "/",
+        knownProjects: () => [{ label: "C:\\", path: "C:\\" }],
+      });
+      const labels = (await listing()).map((project) => project.label);
+      for (const label of labels) {
+        expect(label).not.toContain("/");
+        expect(label).not.toContain("\\");
+        expect(label).not.toContain(":");
+      }
+      // Two nameless roots collide, and the normal disambiguation resolves them.
+      expect(new Set(labels).size).toBe(2);
+    });
+
     // A Windows path split on "/" alone is ONE segment, so the "tail" would be the whole absolute
     // path — the no-path guarantee off on Windows, with nothing in the code that states it
     // changing at all.
