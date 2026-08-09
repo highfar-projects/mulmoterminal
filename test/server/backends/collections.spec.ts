@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import express from "express";
 import sharp from "sharp";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -65,6 +65,9 @@ const SCHEMA = {
 };
 
 let request: ReturnType<typeof appRequest>;
+// Saved and restored: the assignment below mutates the WORKER's environment, which outlives this
+// suite even though vitest isolates the module registry.
+let savedWorkspaceEnv: string | undefined;
 
 beforeAll(async () => {
   const ws = makeTempDir("mt-col-");
@@ -194,6 +197,7 @@ beforeAll(async () => {
   // the staging layout the skill-bridge produces — and staging is workspace-only since core
   // 3.1.0. So the temp dir has to actually BE the managed workspace, or `skillsStagingDir`
   // returns null for it and the staged views are invisible.
+  savedWorkspaceEnv = process.env.MULMOCLAUDE_WORKSPACE_PATH;
   process.env.MULMOCLAUDE_WORKSPACE_PATH = ws;
   initCollectionsBackend({ workspace: ws });
 
@@ -201,6 +205,11 @@ beforeAll(async () => {
   app.use(express.json());
   mountCollectionRoutes(app);
   request = appRequest(app);
+});
+
+afterAll(() => {
+  if (savedWorkspaceEnv === undefined) delete process.env.MULMOCLAUDE_WORKSPACE_PATH;
+  else process.env.MULMOCLAUDE_WORKSPACE_PATH = savedWorkspaceEnv;
 });
 
 describe("GET /api/collections/list", () => {

@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, existsSync, readdirSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import path from "node:path";
+import { realpathSync } from "node:fs";
 import { isManagedWorkspace, initWorkspaceSetup, refreshCodexSkillsMirror } from "../../../server/backends/workspaceSetup.js";
 
 // Save/restore MULMOCLAUDE_WORKSPACE_PATH so a test can mark a temp dir as the
@@ -46,11 +47,23 @@ describe("isManagedWorkspace", () => {
     expect(isManagedWorkspace(makeTempDir())).toBe(false);
   });
 
-  // The workspace arrives from the launcher's --cwd, so its casing is the user's. On
-  // Windows that still names the managed directory; on POSIX it names a different one, and
-  // seeding must stay out of it.
-  it("compares by the platform's own casing rule", () => {
-    expect(isManagedWorkspace(path.join(homedir(), "MULMOCLAUDE"))).toBe(process.platform === "win32");
+  // The workspace arrives from the launcher's --cwd, so its casing is the user's. The question
+  // is whether that spelling names the managed directory, and the answer is the FILESYSTEM's,
+  // not the platform's: macOS is POSIX and case-insensitive by default, so there `MULMOCLAUDE`
+  // is the same directory and seeding into it is correct rather than a spill.
+  //
+  // Probed rather than assumed, because it varies per volume — a case-sensitive APFS volume on
+  // the same Mac answers the other way.
+  it("compares by the filesystem's own casing rule", () => {
+    const probe = makeTempDir();
+    const caseInsensitive = ((): boolean => {
+      try {
+        return realpathSync.native(probe.toUpperCase()) === realpathSync.native(probe);
+      } catch {
+        return false;
+      }
+    })();
+    expect(isManagedWorkspace(path.join(homedir(), "MULMOCLAUDE"))).toBe(process.platform === "win32" || caseInsensitive);
   });
 
   it("honors MULMOCLAUDE_WORKSPACE_PATH (resolved compare)", () => {

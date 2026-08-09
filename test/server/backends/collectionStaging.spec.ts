@@ -9,12 +9,13 @@
 // it to author there — an agent that obeys writes a draft nothing mirrors and nothing discovers,
 // producing a collection that does not exist with no error anywhere.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, symlinkSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { readCustomViewHtml, loadCollection } from "@mulmoclaude/core/collection/server";
 
 import { initCollectionsBackend } from "../../../server/backends/collections.js";
 import { manageCollectionHandlerFor } from "../../../server/infra/collection-tool.js";
+import { isManagedWorkspace } from "../../../server/backends/workspaceSetup.js";
 import { makeTempDir } from "../../support/tempDir";
 
 const SCHEMA = {
@@ -60,6 +61,17 @@ describe("skill staging is workspace-only", () => {
   // The regression that matters. The engine reads staging FIRST for a project-scope collection,
   // so before `null` a stray file there won — silently, and in a repo where the committed skill
   // is the one git carries.
+  // A managed workspace is often reached by a symlink (`~/mulmoclaude` pointing elsewhere), and
+  // the launcher may name it by either spelling. A lexical comparison read the physical path as
+  // "not the workspace", which since core 3.1.0 means no staging dir and the project authoring
+  // guide — the workspace quietly losing its staged views and being told to write elsewhere.
+  it("recognises the managed workspace through a symlink", async () => {
+    const link = path.join(makeTempDir("mt-staging-link-"), "workspace-link");
+    symlinkSync(workspace, link, "dir");
+    expect(isManagedWorkspace(link)).toBe(true);
+    expect(isManagedWorkspace(realpathSync(link))).toBe(true);
+  });
+
   it("does not let a stray data/skills view shadow the committed one", async () => {
     mkdirSync(path.join(project, "data", "skills", "tasks", "views"), { recursive: true });
     writeFileSync(path.join(project, "data", "skills", "tasks", "views", "v1.html"), "<body>STRAY</body>");
