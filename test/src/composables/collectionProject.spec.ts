@@ -113,7 +113,7 @@ describe("collection nav surface", () => {
   // full-screen browser, so the surface that mounted last is not always the one being looked at —
   // and the overlay's own requests would then be sent to a background session's project.
   it("keeps a full-screen surface in charge when a pane mounts behind it", () => {
-    const overlay: CollectionSurface = { projectId: null, layer: "screen", nav: surfaceFor(null, "overlay").nav };
+    const overlay: CollectionSurface = { ...surfaceFor(null, "overlay"), layer: "screen" };
     const canvas: CollectionSurface = { projectId: "proj-behind" };
     pushCollectionSurface(overlay);
     pushCollectionSurface(canvas);
