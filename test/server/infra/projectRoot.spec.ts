@@ -38,9 +38,18 @@ describe("project roots", () => {
     expect(() => resolveProjectRoot(anyRequest)).toThrow(/not configured/);
   });
 
-  it("refuses a project parameter rather than silently serving the workspace", () => {
+  // Presence, not shape. Express turns `?project=a&project=b` into an array and
+  // `?project[x]=y` into an object, so a `typeof === "string"` guard would read both as
+  // "absent" and serve the workspace — the silent substitution this refuses. An empty
+  // `?project=` counts too: the client meant to name one.
+  it.each([
+    ["a plain id", "some-project"],
+    ["repeated parameters", ["a", "b"]],
+    ["a bracketed object", { x: "y" }],
+    ["an empty value", ""],
+  ])("refuses %s rather than silently serving the workspace", (_label, project) => {
     initProjectRoots({ workspace: ws });
-    expect(() => resolveProjectRoot(requestWith({ project: "some-project" }))).toThrow(/not enabled/);
+    expect(() => resolveProjectRoot(requestWith({ project }))).toThrow(/not enabled/);
   });
 
   it("resolves every request to the bound workspace", () => {

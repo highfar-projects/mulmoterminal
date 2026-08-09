@@ -96,7 +96,13 @@ export const createBuildRemoteView =
  *  resolve against the scope the REQUEST named — binding at construction is what keeps the
  *  root next to the call instead of threading it through every dep signature. */
 export const buildRemoteViewFor = (scope: ProjectScope) =>
-  createBuildRemoteView({ readCustomViewHtml: (collection, file) => readCustomViewHtml(collection, file, scope), readCustomViewI18n });
+  createBuildRemoteView({
+    readCustomViewHtml: (collection, file) => readCustomViewHtml(collection, file, scope),
+    // Bound too, and not by symmetry: a view that declares `i18n` reads it through this dep,
+    // and an unbound one falls back to the ambient root — which under explicit-root mode is a
+    // throw, so a TRANSLATED mobile view would fail to build while an untranslated one worked.
+    readCustomViewI18n: (collection, file, locale) => readCustomViewI18n(collection, file, locale, scope),
+  });
 
 /** The message a failure kind nobody wrote a branch for gets.
  *

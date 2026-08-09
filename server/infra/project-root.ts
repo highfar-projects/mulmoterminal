@@ -19,6 +19,7 @@
 // an arbitrary-directory reader, which is why the extension point below takes an opaque id
 // resolved through directories we already know rather than a path.
 import type { Request } from "express";
+import { describeValue } from "../../common/readString.js";
 
 /** A root, in the shape the collection engine's options already take, so it can be passed
  *  straight through as `opts` rather than unpacked at every call site. */
@@ -65,11 +66,15 @@ export function workspaceScope(): ProjectScope {
  *  silent-wrong-root failure explicit-root mode exists to remove, just moved onto the wire.
  *  A build that cannot honour the request should say so. */
 export function resolveProjectRoot(req: Request): ProjectScope {
-  const requested = typeof req.query.project === "string" ? req.query.project.trim() : "";
-  if (requested !== "") {
-    // The value is caller-controlled and lands in a log line via `guarded`; strip CR/LF so a
-    // crafted id cannot forge one.
-    throw new Error(`project scoping is not enabled on this server (received project '${requested.replace(/[\r\n]/g, " ")}')`);
+  // PRESENCE is the test, not the value's shape. `?project=a&project=b` arrives as an array
+  // and `?project[x]=y` as an object, so a `typeof === "string"` check would let both through
+  // as "absent" and quietly serve the workspace — the exact silent substitution this refuses.
+  // An empty `?project=` is refused for the same reason: the client meant to name one.
+  if (Object.hasOwn(req.query, "project")) {
+    // Caller-controlled, and it lands in a log line via `guarded`; `describeValue` renders a
+    // non-string shape without interpolating it, and CR/LF is stripped so no id can forge one.
+    const described = describeValue(req.query.project).replace(/[\r\n]/g, " ");
+    throw new Error(`project scoping is not enabled on this server (received project: ${described})`);
   }
   return { workspaceRoot: requireWorkspace() };
 }
