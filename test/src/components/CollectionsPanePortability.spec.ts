@@ -100,6 +100,35 @@ describe("CollectionsPane portability strip", () => {
     expect(w.findAll("li")).toHaveLength(0);
   });
 
+  // `portable` is the verdict; the findings are its reasons. A build that cannot read the reason
+  // must still not contradict the verdict — "nothing to fix" is the one thing that may never be
+  // said about a report that says the collection does not travel.
+  it("never says 'nothing to fix' about a report whose verdict is not portable", async () => {
+    mockFetch({ slug: "newsletters", portable: false, findings: [] });
+    const { wrapper: w } = await mountOnCollection();
+    await w.find("button").trigger("click");
+    await flushPromises();
+    expect(w.text()).toContain("Would not survive a clone");
+    expect(w.text()).not.toContain("Nothing to fix");
+  });
+
+  // Focus stays on the button across the whole check, so a verdict that merely APPEARS is one a
+  // screen-reader user is never told. The region has to exist before the result lands, or the
+  // insertion is not announced at all.
+  it("announces the result through a live region that is present before it arrives", async () => {
+    const { wrapper: w } = await mountOnCollection();
+    const region = w.find('[role="status"]');
+    expect(region.exists()).toBe(true);
+    expect(region.attributes("aria-live")).toBe("polite");
+    expect(region.text()).toBe("");
+
+    await w.find("button").trigger("click");
+    await flushPromises();
+    // The findings are inside it too: the list IS the answer, not a decoration on it.
+    expect(w.find('[role="status"]').text()).toContain("Would not survive a clone");
+    expect(w.find('[role="status"]').text()).toContain("excluded by .gitignore");
+  });
+
   it("says the check failed rather than showing a verdict it does not have", async () => {
     mockFetch({}, false);
     const { wrapper: w } = await mountOnCollection();

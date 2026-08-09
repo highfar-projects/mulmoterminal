@@ -207,19 +207,28 @@ onBeforeUnmount(unregister);
           >
             {{ checking ? "Checking…" : "Survives a clone?" }}
           </button>
-          <span v-if="checkFailed" class="text-[11px] text-err-text">Could not run the check.</span>
-          <span v-else-if="report && report.findings.length === 0" class="text-[11px] text-dim">Nothing to fix — it travels.</span>
-          <span v-else-if="report" class="text-[11px]" :class="report.portable ? 'text-amber' : 'text-err-text'">
-            {{ report.portable ? "Travels, with caveats" : "Would not survive a clone" }}
-          </span>
         </div>
-        <!-- The MESSAGE, not the code: each one says what breaks on the other machine, which is
-             the part that tells someone what to do about it. -->
-        <ul v-if="report && report.findings.length" class="mt-1.5 flex list-none flex-col gap-1 p-0">
-          <li v-for="finding in report.findings" :key="finding.code" class="text-[11px] leading-[1.4]" :class="SEVERITY_CLASS[finding.severity]">
-            {{ finding.message }}
-          </li>
-        </ul>
+        <!-- A LIVE REGION, and always present rather than rendered with the result: focus stays on
+             the button across the whole check, so a verdict that merely appears is a verdict a
+             screen-reader user is never told. `polite` because it answers something they asked
+             for and interrupts nothing. It wraps the findings too — the list IS the answer, not a
+             decoration on it. -->
+        <div role="status" aria-live="polite" class="mt-1">
+          <span v-if="checkFailed" class="text-[11px] text-err-text">Could not run the check.</span>
+          <!-- `portable` decides FIRST. A report can be non-portable with no findings this build
+               can read (a newer server disqualifying on something it does not describe here), and
+               "nothing to fix" is the one thing that must never be said about it. -->
+          <span v-else-if="report && !report.portable" class="text-[11px] text-err-text">Would not survive a clone</span>
+          <span v-else-if="report && report.findings.length === 0" class="text-[11px] text-dim">Nothing to fix — it travels.</span>
+          <span v-else-if="report" class="text-[11px] text-amber">Travels, with caveats</span>
+          <!-- The MESSAGE, not the code: each one says what breaks on the other machine, which is
+               the part that tells someone what to do about it. -->
+          <ul v-if="report && report.findings.length" class="mt-1.5 flex list-none flex-col gap-1 p-0">
+            <li v-for="finding in report.findings" :key="finding.code" class="text-[11px] leading-[1.4]" :class="SEVERITY_CLASS[finding.severity]">
+              {{ finding.message }}
+            </li>
+          </ul>
+        </div>
       </div>
     </template>
   </div>
