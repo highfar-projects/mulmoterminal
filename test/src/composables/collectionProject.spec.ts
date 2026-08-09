@@ -95,6 +95,20 @@ describe("collection nav surface", () => {
     popCollectionSurface(pane);
   });
 
+  // The canvas scopes its cards' fetches without owning navigation: a link inside a card still
+  // belongs to the full-screen browser. So a scope-only surface must not silence the nav of the
+  // surface beneath it.
+  it("lets a scope-only surface set the project without taking navigation", () => {
+    const overlay = surfaceFor(null, "overlay");
+    const canvas: CollectionSurface = { projectId: "proj-canvas" };
+    pushCollectionSurface(overlay);
+    pushCollectionSurface(canvas);
+    expect(activeCollectionProjectId()).toBe("proj-canvas");
+    expect(activeCollectionNavSurface()?.routeSlug()).toBe("overlay");
+    popCollectionSurface(canvas);
+    popCollectionSurface(overlay);
+  });
+
   it("ignores a pop for a surface that is not registered", () => {
     const pane = surfaceNamed("pane");
     pushCollectionSurface(pane);

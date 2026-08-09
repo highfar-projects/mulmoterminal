@@ -40,7 +40,11 @@ export interface CollectionNavSurface {
  *  panes existed. */
 export interface CollectionSurface {
   projectId: string | null;
-  nav: CollectionNavSurface;
+  /** How this surface navigates — OPTIONAL, because scoping and navigating are not always the
+   *  same claim. The canvas shows one session's cards and must scope their fetches to that
+   *  session's project, but a link inside a card still belongs to the full-screen browser: a
+   *  canvas that took navigation would swallow it. */
+  nav?: CollectionNavSurface;
 }
 
 // A PLAIN array, deliberately not a `ref`. Nothing renders from this stack — it is read
@@ -68,5 +72,11 @@ export function activeCollectionProjectId(): string | null {
  *  Null is the DEFAULT, not a failure: with no pane mounted the binding keeps behaving exactly as
  *  it did, which is what keeps this change invisible to the overlay. */
 export function activeCollectionNavSurface(): CollectionNavSurface | null {
-  return stack.at(-1)?.nav ?? null;
+  // The topmost surface that HAS a nav, not the topmost surface: a scope-only surface above it
+  // (the canvas) must not silence the one below that can actually navigate.
+  for (let i = stack.length - 1; i >= 0; i -= 1) {
+    const nav = stack[i]?.nav;
+    if (nav) return nav;
+  }
+  return null;
 }

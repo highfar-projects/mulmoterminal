@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from "vue";
+import { ref, computed, watch, nextTick, onBeforeUnmount } from "vue";
 import { useSessionFeed } from "../composables/useSessionFeed";
 import { onToolGroupsAnnounced } from "../composables/useToolGroupsAnnounce";
 import { getPlugin } from "../plugins-registry";
@@ -12,6 +12,8 @@ import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { pushCollectionSurface, popCollectionSurface, type CollectionSurface } from "../composables/collectionSurface";
+import { projectIdForCwd } from "../composables/collectionProject";
 
 // The GUI panel renders the toolResults produced by GUI-protocol plugins. It
 // mirrors the terminal's active session: live results arrive on that session's
@@ -30,6 +32,10 @@ interface ToolResult {
 
 const props = defineProps<{
   sessionId: string | null;
+  /** The directory the session this panel mirrors is running in. A `presentCollection` card
+   *  SELF-FETCHES by slug, so without it the fetch went to the workspace and a collection living
+   *  in the session's own folder came back "not found". */
+  cwd?: string | null;
   sendTextMessage: (text: string) => boolean;
   // Whether the panel currently covers the terminal area. Owned by the grid (it is the grid's
   // layout that changes), shown here because the button that flips it lives in this toolbar.
@@ -254,6 +260,31 @@ async function loadAvailableTools(sessionId: string | null) {
   }
 }
 watch(() => props.sessionId, loadAvailableTools, { immediate: true });
+
+// The canvas is a SURFACE: it shows one session's cards, and a `presentCollection` card
+// self-fetches its collection by slug through the global binding. Without a scope that fetch went
+// to the workspace, so a collection living in the session's own folder came back "not found" —
+// the card rendered its own failure while the tool call had succeeded.
+//
+// Scope only, no `nav`: a link inside a card still belongs to the full-screen browser, and a
+// canvas that took navigation would swallow it.
+//
+// A GENERATION token for the same reason the pane has one — the lookup is async, so a session
+// change or an unmount mid-flight must not let an older answer land.
+const canvasSurface: CollectionSurface = { projectId: null };
+pushCollectionSurface(canvasSurface);
+onBeforeUnmount(() => popCollectionSurface(canvasSurface));
+
+let scopeGeneration = 0;
+watch(
+  () => props.cwd,
+  async (cwd) => {
+    const mine = ++scopeGeneration;
+    const resolved = await projectIdForCwd(cwd ?? null);
+    if (mine === scopeGeneration) canvasSurface.projectId = resolved;
+  },
+  { immediate: true },
+);
 
 // The answer above is normally asked BEFORE it can be true: the browser is handed a session id
 // while claude is still being spawned, so its MCP client has not connected to the group URLs yet
