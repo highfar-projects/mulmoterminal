@@ -152,19 +152,85 @@ collections do not exist on the phone. Preparation is specified in
 params defaulting to the host root (so adding the parameter later changes no handler), the scope
 must be an opaque id, and the artifact stays host-built.
 
-### 3.5 Per-root scheduled feed refresh (§7c F)
+### 3.5 Per-root scheduled feed refresh — BLOCKED UPSTREAM (attempted, reverted)
 
-`server/backends/system-tasks.ts` registers `feedRefreshTaskDef({ workspaceRoot })` once. A
-project's feeds therefore never refresh on their schedule. Core's task def is root-parameterised
-with a per-root id, so registering one per watched project is the shape — and "which roots" is
-now answered by §3.1: `listProjectRoots()`, reconciled by the same kind of pass.
+Written, reviewed, and taken back out in #1582. The mechanism is sound and the blocker is one
+missing argument in core.
 
-### 3.6 The self-containment check (phase 7)
+**What it was.** `buildSystemTasks` registers one `feedRefreshTaskDef` per root instead of one for
+the workspace. A task id is the scheduler's primary key and core builds it from the root, so N
+roots register N tasks; roots dedupe by RESOLVED path because core canonicalises the root into the
+id, so two spellings would collapse to one id and silently drop a registration. Read at boot, since
+the scheduler registers once.
 
-`feat-collections-project-root.md` §11.4: one function answering "would this collection survive a
-clone?" — user-scope dependencies, a sqlite store in a git repo (unmergeable), a data dir excluded
-by `.gitignore`, a missing `primaryKey`. Cheap, no upstream dependency, and it is the difference
-between the guarantee holding and appearing to hold until someone else pulls.
+**Why it cannot ship yet.** A collection with `ingest.kind: "agent"` refreshes by dispatching a
+hidden worker, and the seed prompt core builds carries `dataPath` **straight from the schema** —
+root-relative (`promptPathsFor`). MulmoTerminal's `feedsSpawnWorker` calls `spawnClaudePty` with no
+cwd, so the worker stands in `CLAUDE_CWD`. Schedule a project root and its agent-ingest refresh
+therefore resolves `data/collections/<slug>/items` against the WORKSPACE — writing into the
+workspace's same-named collection. A silent cross-project write, which is the exact failure this
+whole plan exists to remove (invariant 3: the root is the trust boundary).
+
+**The host cannot fix it alone.** `AgentWorkerRunner`'s args are
+`{ message, roleId, hidden, onComplete }` — no root. Only core knows which root the refresh is for.
+
+**The upstream change:** add `workspaceRoot` to the `AgentWorkerRunner` argument object and pass it
+from `refreshViaAgent`. MulmoTerminal then forwards it as the spawn's cwd. Single-workspace hosts
+ignore the new field, so it is additive. Then re-land the revert in #1582 — the commit is intact in
+history (`26ca37ae`) and its spec still describes the behaviour wanted.
+
+Declarative RSS/JSON feeds were never at risk (they fetch and write through the engine under the
+explicit root, with no agent involved) — but there is no way to register only those, because the
+refresh walks a root's collections internally.
+
+### 3.6 The self-containment check — DONE
+
+`server/backends/collectionSelfContainment.ts` answers "would this collection survive a clone?",
+served at `GET /api/collections/:slug/self-containment` (project-scoped like every other read; the
+module mounts its own route because `collections.ts` is at its line budget).
+
+Five rules, each named for what breaks on the OTHER machine:
+
+| code | severity | what goes wrong there |
+|---|---|---|
+| `user-scope` | blocker | the skill is in `~/.claude/skills`; the clone gets whatever that machine has |
+| `data-ignored` | blocker | schema committed, records not — reads as an empty collection |
+| `sqlite-store` | blocker | one binary file; git cannot merge it |
+| `csv-runtime` | warning | the file travels, the DuckDB runtime must be there too |
+| `no-primary-key` | warning | 4-byte random ids, so two machines can mint the same one |
+| `not-a-repo` | info | nothing to clone yet; the git-dependent checks did not run |
+
+Two decisions worth keeping:
+
+- **It asks git, it does not parse `.gitignore`.** The rule that matters may come from a parent
+  directory, `.git/info/exclude`, or the user's global ignore file. `--no-index` is passed so the
+  answer is about the RULE rather than current tracking — a data dir that is already tracked reads
+  as "not ignored" without it, which is true of the files already committed and misleading about
+  every record written from now on.
+- **Unknown is not clean.** `dataDirIgnored` is `boolean | null`, and `null` (no repo, no git)
+  reports nothing rather than clearing the collection.
+
+Not done: nothing SURFACES it yet — no button, no agent tool, no creation-time hook. The route is
+the seam a UI would use, and the rules are a pure function anything can call.
+
+### 3.8 The Collections button only where the tools are (added 2026-08-09)
+
+Not from this plan — asked for after the button was first pressed. A directory that never
+registered the `data` MCP group has no `manageCollection`, so the pane is a door onto a room the
+agent beside it cannot enter. The button is now HIDDEN there rather than disabled: a disabled
+Canvas button explains a pane that would open empty and can be fixed by switching the group on,
+while a directory with no collection tools is simply not a place where collections are a thing.
+
+Answered from the SAME `/api/tools` reply as the canvas question (`hasCollectionsGroup`, beside
+`hasCanvasGroup`), so the two buttons can never disagree about what a session has.
+
+Two consequences to keep in mind:
+
+- **A cell with no session gets no button** — no MCP client, no groups. That is the honest answer,
+  but it also hides the pane on a launcher or command cell whose DIRECTORY does have collections.
+- **The pane has no close control of its own**, so the button is its only way out. It therefore
+  stays visible while the pane is open regardless of the groups (`collectionsOpenable`) — remove
+  that clause and the pane is stranded for the life of the cell.
 
 ### 3.7 A live browser check — still owed, and it already cost one dead button
 

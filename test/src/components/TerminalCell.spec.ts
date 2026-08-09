@@ -87,6 +87,7 @@ function mountCell(
     openSessionIds?: string[];
     openCwds?: string[];
     expanded?: boolean;
+    collectionsAvailable?: boolean;
     zoomed?: boolean;
     reorderable?: boolean;
     initialAgent?: "claude" | "codex" | "antigravity" | "grok";
@@ -97,6 +98,7 @@ function mountCell(
       uid: 1,
       ...(opts.initialAgent ? { initialAgent: opts.initialAgent } : {}),
       expanded: opts.expanded ?? false,
+      collectionsAvailable: opts.collectionsAvailable ?? false,
       zoomed: opts.zoomed ?? false,
       reorderable: opts.reorderable ?? false,
       initialSessionId,
@@ -1967,10 +1969,21 @@ describe("TerminalCell", () => {
   // `chromeEvents` had no `toggle-collections` key, so the emit was dropped inside the cell and
   // nothing reached the grid. See cellChromeForwarding.spec for why the list is derived now.
   it("forwards the collections toggle out of an enlarged cell, so the grid can open the pane", async () => {
-    const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj", expanded: true });
+    const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj", expanded: true, collectionsAvailable: true });
     await flushPromises();
     await w.find(`[aria-label="Show this folder's collections"]`).trigger("click");
     expect(w.emitted("toggle-collections")).toHaveLength(1);
+  });
+
+  // A directory that never registered the `data` MCP group has no collection tools, so the pane
+  // would be a door onto a room the agent beside it cannot enter. Hidden, not disabled — there is
+  // nothing for a disabled button to explain.
+  it("offers no collections button where the directory has no collection tools", async () => {
+    const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj", expanded: true });
+    await flushPromises();
+    expect(w.find(`[aria-label="Show this folder's collections"]`).exists()).toBe(false);
+    // The neighbouring buttons are untouched — this hides ONE control, not the header.
+    expect(w.find('[aria-label="Show tools"]').exists()).toBe(true);
   });
 
   it("shows the restore label + icon when the cell is expanded", async () => {

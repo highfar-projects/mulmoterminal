@@ -22,6 +22,10 @@ const props = defineProps<{
   // the `render` MCP group registered with Claude Code. False disables the button rather than
   // removing it: the pane would open empty, and that is worth SAYING rather than hiding.
   canvasAvailable?: boolean;
+  // Whether this cell's directory has the collection tools — the `data` MCP group, which is what
+  // manageCollection is served under. False REMOVES the button, where canvasAvailable only
+  // disables its own: a pane the agent cannot act on is not worth a control to explain.
+  collectionsAvailable?: boolean;
   // Whether this cell is set aside (#992). Present ONLY on a cell that can be parked — a session
   // terminal. Left undefined, the button is not rendered at all, which is how the command and
   // launcher cells opt out without declaring anything: an ephemeral run and an empty launch slot
@@ -108,9 +112,15 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
   >
     <span class="material-symbols-outlined" aria-hidden="true">build</span>
   </button>
-  <!-- Scoped to THIS cell's directory — a Project is a directory, so the cell is the picker. -->
+  <!-- Scoped to THIS cell's directory — a Project is a directory, so the cell is the picker.
+       Only where the directory HAS the collection tools — OR where the pane is already open,
+       because this button is also its only close: the Collections pane renders no control of its
+       own, so hiding this one mid-session strands the pane for the life of the cell. That clause
+       lives HERE, next to the `v-if` it guards, rather than in the grid's prop: the rule belongs
+       to whoever renders the button, and `rightPane` here is THIS cell's pane, which is the more
+       precise question. -->
   <button
-    v-if="expanded"
+    v-if="expanded && (collectionsAvailable || rightPane === 'collections')"
     class="cell-btn"
     :class="collectionsClass"
     :aria-pressed="rightPane === 'collections'"

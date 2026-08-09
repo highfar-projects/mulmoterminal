@@ -31,6 +31,20 @@ export const isToolGroup = (value: unknown): value is ToolGroup => TOOL_GROUPS.s
 // front of the spend (same reasoning as presentDocument below).
 export const CANVAS_TOOL_GROUPS: readonly ToolGroup[] = ["render", "media"];
 
+// The groups the COLLECTIONS pane is made of. `data` is the group manageCollection and
+// presentCollection belong to, and the pane is a window onto exactly that store — a directory
+// that never registered the group has no collection tools, so the pane is a door onto a room the
+// agent beside it cannot enter.
+//
+// Named here rather than written as `"data"` at the call site for the same reason
+// CANVAS_TOOL_GROUPS is: a rename must not leave a literal pointing at a group that is gone.
+export const COLLECTIONS_TOOL_GROUPS: readonly ToolGroup[] = ["data"];
+
+/** Does this session/directory have the collection tools? Same shape as `hasCanvasGroup`, and
+ *  validated the same way — an unknown group name from a newer server must not count. */
+export const hasCollectionsGroup = (groups: unknown): boolean =>
+  Array.isArray(groups) && groups.some((group) => isToolGroup(group) && COLLECTIONS_TOOL_GROUPS.includes(group));
+
 // Does a session/directory reach the Canvas at all? Asked of the group list the server reports,
 // whose members arrive as plain strings — validated rather than cast, since an unknown name from
 // a newer server must not count as a canvas group.

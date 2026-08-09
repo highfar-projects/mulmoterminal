@@ -41,7 +41,7 @@ import { paneCanShowClick } from "./paneClickTarget";
 import { onToolGroupsAnnounced } from "../composables/useToolGroupsAnnounce";
 import { usePubSub } from "../composables/usePubSub";
 import { isDrawnResult } from "../utils/drawnResult";
-import { hasCanvasGroup } from "../../common/toolGroups";
+import { hasCanvasGroup, hasCollectionsGroup } from "../../common/toolGroups";
 import type { RightPane } from "./gridCell";
 import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
 import { isRecord } from "../../common/isRecord";
@@ -488,12 +488,20 @@ const canvasChecked = ref(false);
 const canvasHasCard = ref(false);
 /** Whether the Canvas button can be pressed: the tools say so, or there is already a card. */
 const canvasOpenable = computed(() => canvasAvailable.value || canvasHasCard.value);
+// Whether this cell's directory registered the `data` MCP group, i.e. whether the agent beside
+// the pane can manage collections at all. Answered from the SAME reply as the canvas question —
+// one request, two groups — so the two buttons can never disagree about what a session has.
+const collectionsAvailable = ref(false);
+
 watch(
   [expandedSessionId, () => props.expandedUid],
   async ([sessionId]) => {
     canvasAvailable.value = false;
     canvasChecked.value = false;
     canvasHasCard.value = false;
+    // A cell with no session has no MCP client and therefore no groups: no Collections button,
+    // which is the honest answer rather than one that opens a pane the agent cannot act on.
+    collectionsAvailable.value = false;
     if (!sessionId) return;
     // Asked beside the tools question rather than folded into it: `/api/tools` answers what the
     // session CAN draw, this answers what it already HAS. A failure here leaves the flag false —
@@ -516,11 +524,15 @@ watch(
       // presentCollection, which belongs to `data` and draws nothing without the collection
       // store behind it.
       canvasAvailable.value = hasCanvasGroup(body.groups);
+      collectionsAvailable.value = hasCollectionsGroup(body.groups);
       canvasChecked.value = true;
     } catch {
       // Unreachable server: no button rather than one that opens an empty panel. Left unchecked
       // so the panel does not blame the session for what is our own failure to ask.
-      if (sessionId === expandedSessionId.value) canvasAvailable.value = false;
+      if (sessionId === expandedSessionId.value) {
+        canvasAvailable.value = false;
+        collectionsAvailable.value = false;
+      }
     }
   },
   { immediate: true },
@@ -536,6 +548,7 @@ onToolGroupsAnnounced((announcement) => {
   // "my MCP client is up" one is a cue to ask again, not an empty answer.
   if (!announcement.groups) return;
   canvasAvailable.value = hasCanvasGroup(announcement.groups);
+  collectionsAvailable.value = hasCollectionsGroup(announcement.groups);
   canvasChecked.value = true;
 });
 
@@ -555,6 +568,10 @@ const gridCellProps = (cell: Cell) => ({
   filesOpen: paneOf(cell.uid) === "files",
   rightPane: paneOf(cell.uid),
   canvasAvailable: canvasOpenable.value,
+  // The raw answer. The "an open pane must keep its only close" clause is CellChromeButtons'
+  // own, where the button is rendered and where `rightPane` names that cell's pane rather than
+  // the one the grid happens to be showing.
+  collectionsAvailable: collectionsAvailable.value,
   zoomed: zoomed.value,
   home: props.home,
   // Grid-wide, so it is bound here rather than per cell type: every cell compares its own cwd

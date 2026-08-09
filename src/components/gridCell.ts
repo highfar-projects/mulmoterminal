@@ -31,6 +31,12 @@ export interface GridCellProps {
   // DISABLED: the pane would open empty, and a button that explains why beats one that isn't
   // there to ask about.
   canvasAvailable?: boolean;
+  // Whether the ENLARGED cell's directory registered the `data` MCP group — the one
+  // manageCollection belongs to. False HIDES the Collections button rather than disabling it:
+  // a directory with no collection tools is not a place where collections are a thing, so there
+  // is nothing for a disabled button to explain. See TerminalGrid's `collectionsOpenable` for
+  // the one case that keeps it visible anyway (the pane is open and this is its only close).
+  collectionsAvailable?: boolean;
   home: string | null;
   // The server's workspace directory. Grid state, not the cell's: a cell compares its OWN cwd
   // against it to know whether it is the workspace, and then says so in its header badge — the
