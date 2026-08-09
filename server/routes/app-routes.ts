@@ -214,8 +214,9 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // bell. The engine is configured below once pubsub + the workspace exist.
   mountNotificationRoutes(app);
 
-  // Scheduler REST surface (read-only list of user cron tasks) — backs a future tasks
-  // UI. The tasks themselves are loaded + started below, once the spawn infra exists.
+  // Scheduler REST surface (read-only): every registered task with its execution state, and the
+  // run log. Backs a future tasks UI, and answers "did the worklog ever actually run?" today.
+  // The tasks themselves are loaded + started below, once the spawn infra exists.
   mountSchedulerRoutes(app, { workspace: CLAUDE_CWD });
 
   // Raw file serving (GET /api/files/raw?path=[&cwd=]) — backs collection image/file
