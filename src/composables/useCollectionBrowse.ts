@@ -47,26 +47,50 @@ function pathFor(kind: ShortcutKind, slug?: string): string {
   return slug ? `${base}/${encodeURIComponent(slug)}` : base;
 }
 
+/** The project the open page is showing, or null for the workspace.
+ *
+ *  IT LIVES IN THE URL, unlike the open record: a project is not a modal, it is which
+ *  collections the page is listing, and a link that arrives without it lands on a different
+ *  collection of the same name. That is exactly what a completion bell from a project sends —
+ *  the deep link it carries is the only way this overlay is ever asked for a non-workspace
+ *  project (server/backends/collectionNotifierAdapter.ts). An OPAQUE ID, never a path. */
+export function browseRouteProjectId(): string | null {
+  const project = router.currentRoute.value.query.project;
+  return typeof project === "string" && project.length > 0 ? project : null;
+}
+
+/** The query a push should carry: the project asked for, else the one already open — so a ref
+ *  hop or an index click made INSIDE a project stays in it instead of silently falling back to
+ *  the workspace halfway through a browse. */
+function queryFor(projectId?: string | null): Record<string, string> {
+  const project = projectId === undefined ? browseRouteProjectId() : projectId;
+  return project ? { project } : {};
+}
+
 /** Open the index for a kind (collections / feeds). */
-export function browseGotoIndex(kind: ShortcutKind): void {
+export function browseGotoIndex(kind: ShortcutKind, projectId?: string | null): void {
   clearRecord();
-  void router.push({ path: pathFor(kind), state: overlayOriginState() });
+  void router.push({ path: pathFor(kind), query: queryFor(projectId), state: overlayOriginState() });
 }
 
 /** Open one collection / feed's detail page. */
-export function browseGotoDetail(kind: ShortcutKind, slug: string): void {
+export function browseGotoDetail(kind: ShortcutKind, slug: string, projectId?: string | null): void {
   clearRecord();
-  void router.push({ path: pathFor(kind, slug), state: overlayOriginState() });
+  void router.push({ path: pathFor(kind, slug), query: queryFor(projectId), state: overlayOriginState() });
 }
 
-/** A ref/embed hop into another collection, optionally deep-linking a record. */
-export function browseNavigateToRecord(targetSlug: string, recordId?: string): void {
+/** A ref/embed hop into another collection, optionally deep-linking a record.
+ *
+ *  `projectId` is passed by the ONE caller that knows a project other than the open one: a
+ *  completion bell, whose record may live in a project this page is not showing. A ref hop
+ *  passes nothing and stays where it is — a reference is resolved within its own root. */
+export function browseNavigateToRecord(targetSlug: string, recordId?: string, projectId?: string | null): void {
   // Ref hops are collection→collection. The sync path watcher clears the record
   // during the push, so (re)apply the record AFTER navigation settles on the target
   // path. Always assign — a hop to the CURRENT page (no path change → no watcher
   // fire) with no recordId must still close any stale modal, not reuse it.
   const targetPath = pathFor("collection", targetSlug);
-  void router.push({ path: targetPath, state: overlayOriginState() }).then(() => {
+  void router.push({ path: targetPath, query: queryFor(projectId), state: overlayOriginState() }).then(() => {
     state.recordPath = recordId ? targetPath : null;
     state.selectedId = recordId ?? null;
   });

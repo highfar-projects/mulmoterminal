@@ -59,3 +59,31 @@ describe("collectionNotifiedSeverities", () => {
     expect(collectionNotifiedSeverities([published], "tasks").get("t1")).toBe("urgent");
   });
 });
+
+// A bell is app-wide and now carries records from every watched root. The project on its
+// target is what keeps a project's bell off the workspace's identically-named card — and with
+// a `primaryKey` schema the ids are drawn from the data, so the same record in two projects has
+// the SAME id and an unscoped reader accents the wrong card reliably, not rarely.
+describe("collectionNotifiedSeverities scopes by project", () => {
+  const inProject = (project: string | undefined, itemId: string): NotifiedEntryLike => ({
+    severity: "urgent",
+    pluginData: buildPluginData({ legacyId: `todo:tasks/${itemId}`, slug: "tasks", itemId, priority: "high", project }),
+  });
+
+  it("accents only the project's own records", () => {
+    const entries = [inProject("p1", "shared"), inProject("p2", "other")];
+    expect([...collectionNotifiedSeverities(entries, "tasks", "p1")]).toEqual([["shared", "urgent"]]);
+    expect([...collectionNotifiedSeverities(entries, "tasks", "p2")]).toEqual([["other", "urgent"]]);
+  });
+
+  it("treats an absent project on the target as the workspace, matched by null or omission", () => {
+    const workspaceBell = [inProject(undefined, "t1")];
+    expect(collectionNotifiedSeverities(workspaceBell, "tasks", null).get("t1")).toBe("urgent");
+    expect(collectionNotifiedSeverities(workspaceBell, "tasks").get("t1")).toBe("urgent");
+    expect(collectionNotifiedSeverities(workspaceBell, "tasks", "p1").size).toBe(0);
+  });
+
+  it("keeps a project's bell off the workspace view of the same slug and id", () => {
+    expect(collectionNotifiedSeverities([inProject("p1", "t1")], "tasks", null).size).toBe(0);
+  });
+});

@@ -28,15 +28,24 @@ export interface NotifiedEntryLike {
   severity?: string | undefined;
 }
 
-/** itemId → worst active severity, for records of `slug`. Entries without a concrete
- *  `itemId` are skipped (a collection-level bell can't point at one card), and when a
- *  record has several bells the highest severity wins so the accent matches the most
- *  urgent one. */
-export function collectionNotifiedSeverities(entries: readonly NotifiedEntryLike[], slug: string): Map<string, NotifiedSeverity> {
+/** itemId → worst active severity, for records of `slug` IN `projectId`. Entries without a
+ *  concrete `itemId` are skipped (a collection-level bell can't point at one card), and when a
+ *  record has several bells the highest severity wins so the accent matches the most urgent one.
+ *
+ *  `projectId` is the project the view being accented is showing — `null`/omitted for the
+ *  workspace, which is also what a bell with no project on its target means. It is matched
+ *  rather than ignored because a slug is unique within a root only: two projects' `tasks` are
+ *  different collections, and with a `primaryKey` schema their record ids are not even unlikely
+ *  to coincide — they are drawn from the data (an ISBN, an email address), so a shared record
+ *  in two projects has the SAME id, and ignoring the project accents the wrong card reliably
+ *  rather than rarely. */
+export function collectionNotifiedSeverities(entries: readonly NotifiedEntryLike[], slug: string, projectId?: string | null): Map<string, NotifiedSeverity> {
   const out = new Map<string, NotifiedSeverity>();
+  const project = projectId ?? null;
   for (const entry of entries) {
     const target = collectionNotifyTargetOf(entry.pluginData);
     if (!target || target.slug !== slug || !target.itemId) continue;
+    if ((target.project ?? null) !== project) continue;
     const severity = asSeverity(entry.severity);
     const existing = out.get(target.itemId);
     if (!existing || SEVERITY_RANK[severity] > SEVERITY_RANK[existing]) out.set(target.itemId, severity);

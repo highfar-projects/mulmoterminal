@@ -290,7 +290,9 @@ configureCollectionUi({
   // `useNotifications()` is a module singleton and its init is idempotent, so calling
   // it per invocation costs nothing after the first (and keeps the pubsub subscription
   // out of this module's import).
-  notifiedSeverities: (slug: string) => collectionNotifiedSeverities(useNotifications().active.value, slug),
+  // Scoped to the SURFACE's project: the bell is app-wide and carries records from every
+  // watched root, so a pane showing one project must not accent from another's.
+  notifiedSeverities: (slug: string) => collectionNotifiedSeverities(useNotifications().active.value, slug, activeCollectionProjectId()),
 
   // ── runtime translation: POST /api/translation (hidden-chat LLM). Enables the
   //    new-collection starter modal's localized cards; omitted ⇒ English fallback. ──

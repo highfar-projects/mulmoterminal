@@ -5,7 +5,7 @@
 // inside a PluginFrame shadow root with the collection styles, exactly like the chat
 // card. Opened by the toolbar launcher / index cards / ref hops via the binding's nav
 // capabilities (collectionUi.ts).
-import { onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { CollectionsIndexView, CollectionView, FeedsView } from "@mulmoclaude/collection-plugin/vue";
 import PluginFrame from "./PluginFrame.vue";
 import { collectionShadowCss } from "../collectionShadowCss";
@@ -16,6 +16,7 @@ import { pushCollectionSurface, popCollectionSurface, type CollectionSurface } f
 import {
   browseGotoIndex,
   browseNavigateToRecord,
+  browseRouteProjectId,
   browseRouteSlug,
   browseRouteSelectedId,
   browseIsFeedRoute,
@@ -73,11 +74,18 @@ onBeforeUnmount(unregister);
 // pane's project. Registering restores the invariant the stack is for — the innermost VISIBLE
 // surface owns scope and navigation.
 //
-// `projectId: null` is the workspace, which is what this overlay has always shown. Its nav
-// delegates to `useCollectionBrowse`, i.e. the router, which is what the binding fell through to
-// before surfaces existed.
+// The project comes from the ROUTE, and null — the workspace — is what every way of opening this
+// overlay still produces. Only one thing puts a project in that URL: a completion bell whose
+// record lives in one (server/backends/collectionNotifierAdapter.ts). A GETTER because the stack
+// is read imperatively at the moment a request is built, so the surface must answer for the page
+// on screen NOW rather than for the one it was pushed on.
+//
+// Its nav delegates to `useCollectionBrowse`, i.e. the router, which is what the binding fell
+// through to before surfaces existed.
 const overlaySurface: CollectionSurface = {
-  projectId: null,
+  get projectId() {
+    return browseRouteProjectId();
+  },
   // Full-screen: it covers the pane slot, so it outranks a canvas or Collections pane however
   // recently that mounted — a tool result can auto-reveal a canvas BEHIND this overlay.
   layer: "screen",
@@ -100,6 +108,9 @@ watch(
   { immediate: true },
 );
 onBeforeUnmount(() => popCollectionSurface(overlaySurface));
+
+// Remount key for the plugin views — see the template.
+const projectKey = computed(() => browseRouteProjectId() ?? "workspace");
 
 useEscapeToClose(isOpen, close);
 </script>
@@ -151,9 +162,13 @@ useEscapeToClose(isOpen, close);
                the collection list under the Feeds button — the plugin ships FeedsView for exactly
                this and nothing here was using it. Detail is shared: CollectionView asks the binding
                (`isFeedRoute`) which kind it is showing. -->
-          <FeedsView v-if="view.mode === 'index' && view.kind === 'feed'" />
-          <CollectionsIndexView v-else-if="view.mode === 'index'" />
-          <CollectionView v-else-if="view.mode === 'detail'" />
+          <!-- KEYED BY PROJECT. The views fetch on mount and follow the route's SLUG; switching
+               project changes only the query, so without this a bell for another project's
+               `tasks` while the workspace's `tasks` is open would re-scope the requests and
+               render none of them. -->
+          <FeedsView v-if="view.mode === 'index' && view.kind === 'feed'" :key="projectKey" />
+          <CollectionsIndexView v-else-if="view.mode === 'index'" :key="projectKey" />
+          <CollectionView v-else-if="view.mode === 'detail'" :key="projectKey" />
         </div>
       </PluginFrame>
     </div>

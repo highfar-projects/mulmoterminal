@@ -11,6 +11,7 @@ import {
   browseRouteSlug,
   browseRouteSelectedId,
   browseIsFeedRoute,
+  browseRouteProjectId,
   browseClose,
 } from "../../../src/composables/useCollectionBrowse";
 
@@ -156,5 +157,51 @@ describe("useCollectionBrowse over the router", () => {
     await flushPromises();
     expect(browseRouteSelectedId()).toBeUndefined();
     expect(useCollectionBrowse().view.value).toMatchObject({ slug: "foo", selectedId: null });
+  });
+});
+
+// The project lives in the URL because it decides WHICH collections the page is listing —
+// unlike the open record, which is a modal and deliberately not addressable. A completion bell
+// from a project is the only thing that puts one there today.
+describe("the project a browse page is scoped to", () => {
+  it("is null on every ordinary open", async () => {
+    browseGotoIndex("collection");
+    await flushPromises();
+    expect(browseRouteProjectId()).toBeNull();
+  });
+
+  it("rides in the query when a bell names one, and comes back out", async () => {
+    browseNavigateToRecord("tasks", "t1", "p1");
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/collections/tasks");
+    expect(router.currentRoute.value.query.project).toBe("p1");
+    expect(browseRouteProjectId()).toBe("p1");
+    expect(browseRouteSelectedId()).toBe("t1");
+  });
+
+  it("is CARRIED by a nav made inside a project — a ref hop must not fall back to the workspace", async () => {
+    browseNavigateToRecord("tasks", "t1", "p1");
+    await flushPromises();
+    browseNavigateToRecord("people");
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/collections/people");
+    expect(browseRouteProjectId()).toBe("p1");
+
+    browseGotoDetail("collection", "notes");
+    await flushPromises();
+    expect(browseRouteProjectId()).toBe("p1");
+
+    browseGotoIndex("collection");
+    await flushPromises();
+    expect(browseRouteProjectId()).toBe("p1");
+  });
+
+  it("is DROPPED when a workspace bell names null explicitly, rather than inheriting the open one", async () => {
+    browseNavigateToRecord("tasks", "t1", "p1");
+    await flushPromises();
+    browseNavigateToRecord("tasks", "t2", null);
+    await flushPromises();
+    expect(browseRouteProjectId()).toBeNull();
+    expect(browseRouteSelectedId()).toBe("t2");
   });
 });
