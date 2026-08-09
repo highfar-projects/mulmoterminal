@@ -331,6 +331,12 @@ project selector ships, or "my project's collection never rings" becomes the fir
 - **Branch on `err.code`, not message text.** Both codes are exported. Our call site
   (`startCollectionCompletionWatchers`, fire-and-forget with `.catch`) otherwise lands both on
   one log line and we cannot tell "forgot the root" from "another project is running".
+- **SUPERSEDED BY core 3.1.0 (shipped):** `startCollectionWatchers` mounts one generation PER
+  ROOT concurrently, `WATCHER_ROOT_CONFLICT` is no longer thrown, and bell ids carry the root, so
+  two projects owning one slug hold two distinct bells. MulmoTerminal wires it in
+  `server/backends/collectionWatchers.ts` — see `HANDOFF-collections-projects.md` §3.1. The
+  paragraph below is the 3.0.0 contract, kept for the reasoning behind the identity change:
+
 - **Still one root at a time.** Concurrency was deliberately deferred: bell identity is
   `completionLegacyId(slug, itemId)` and `buildNavigateTarget(slug, itemId)`, a HOST-FACING
   contract carried through the notifier file we SHARE with MulmoClaude. Two roots owning one slug
@@ -360,11 +366,12 @@ spawns in `CLAUDE_CWD`, while the seed prompt's `<collection_paths>` are built f
 root. The agent is handed a project's paths and dropped in the workspace — the two disagree in a
 way that reads as a broken template rather than a wrong cwd.
 
-**C. Notification deep links.** `buildNavigateTarget(slug, itemId)` yields
+**C. Notification deep links.** ~~`buildNavigateTarget(slug, itemId)` yields
 `/collections/<slug>` with no project, so a bell from a project collection opens the workspace's
-collection of that slug. Worse, the bell's identity is `completionLegacyId(slug, itemId)` in a
-notifier file SHARED with MulmoClaude — so this one is the cross-app identity change §7b names,
-not a local fix.
+collection of that slug.~~ **DONE.** core 3.1.0 made the identity change this paragraph called
+for — `completionLegacyId` encodes the root, and the adapter receives it — and MulmoTerminal now
+turns that root into an opaque project id on the link, the target and the card accent. See
+`HANDOFF-collections-projects.md` §3.2, including the one parity asymmetry it leaves.
 
 **D. Canvas cards.** `presentCollection` / `seedCollectionCanvas` render through the global
 binding, which reads the ambient `activeProjectId` — set only while a Collections pane is open. A

@@ -35,8 +35,8 @@ uses. Confirmed present in the installed package:
   `stagedSkillAuthoring` — **both wired**
 - **`startCollectionWatchers` mounts one generation PER ROOT, concurrently**, each stamping its
   root on payloads and driving bells whose ids carry it; `stopCollectionWatchers({ workspaceRoot })`
-  stops exactly one — **not wired**
-- `buildNavigateTarget(slug, itemId, root?)` — the adapter receives the root — **not used**
+  stops exactly one — **wired** (§3.1)
+- `buildNavigateTarget(slug, itemId, root?)` — the adapter receives the root — **used** (§3.2)
 - `withCardScope` for per-card project — **blocked, see §3.3**
 - `feedRefreshTaskDef({ workspaceRoot })` with a per-root task id — MT registers one, for the
   workspace only
@@ -79,34 +79,61 @@ PRs and they were nearly all one of the following.
 
 ## 3. What is left
 
-Ordered by how much it hurts today.
+Ordered by how much it hurts today. §3.1 and §3.2 are now done — kept here, marked, because what
+was decided about them (which roots get a watcher, and why the adapter must not import server
+infra) is what the next reader needs.
 
-### 3.1 Per-root watchers — the one with live consequences
+### 3.1 Per-root watchers — DONE
 
-`server/backends/collectionWatchers.ts` starts ONE generation, for the workspace. The collection
-created in mag2 declares `completionField` / `completionDoneValues`, so it is asking for a feature
-that cannot fire:
+`server/backends/collectionWatchers.ts` now mounts **one generation per known project** — the
+workspace and every saved `cwdPresets` directory — instead of one for the workspace. So a
+project's collections get their completion bells and their live refresh on a direct file write,
+which is the canonical authoring path.
 
-- **no completion bells** for a project's collections;
-- **no live refresh** when an agent writes records directly — and that is the CANONICAL authoring
-  path (the watcher's own header says so: a direct file write has no other producer, so open views
-  would never refresh).
+- **"Open" means "a project this server serves"**, not "a project on screen". A completion bell is
+  the notification that the user is NOT looking, so scoping the watchers to the open Collections
+  pane would mean a bell can only ring while its collection is already visible. The inotify cost is
+  bounded by discovery: a root with no collections mounts no watcher.
+- The watched set is reconciled by a **60s poll** (`syncCollectionWatcherRoots`, exported so a
+  caller that knows the list just changed can pull the pass forward). A poll because
+  `listProjectRoots` reads a live thunk over `cwdPresets` and nothing emits when it changes.
+- A root that fails to start does not stop the roots after it, is warned about **once**, and is
+  retried on the next pass. Errors carry their `code` (`COLLECTION_ROOT_REQUIRED` distinguishes a
+  wiring bug in this file from one directory's problem).
+- `WATCHER_ROOT_CONFLICT` is no longer thrown by core 3.1.0 — a second root mounts a second
+  generation. `feat-collections-project-root.md` §7b describes the 3.0.0 contract and is now
+  historical on that point.
 
-Core already supports it (see §1). The MT work is to start a generation for each project the user
-has open and stop it when they close it — `stopCollectionWatchers({ workspaceRoot })` releases one.
-The contract, including the error codes to branch on (`WATCHER_ROOT_CONFLICT`,
-`COLLECTION_ROOT_REQUIRED`) and why the failure is silent if you get it wrong, is
-`feat-collections-project-root.md` §7b.
+Not done: nothing calls `syncCollectionWatcherRoots` when a directory is recorded, so a project
+launched for the first time waits up to a minute for its watcher. Config writes go through several
+paths (`POST /api/config`, `cli-init`) and the poll covers them all.
 
-Decide what "open" means — the Collections pane's project is the obvious trigger; watching every
-known project would spend inotify handles on directories nobody is looking at.
+### 3.2 Notification deep links — DONE
 
-### 3.2 Notification deep links (§7c C, MT half)
+A bell now carries its project, as the **opaque id**, both in the URL
+(`/collections/<slug>?selected=<itemId>&project=<id>`) and on `action.target.project`.
 
-`server/backends/collectionNotifierAdapter.ts` builds `/collections/<slug>` with no project, so a
-bell from a project collection opens the workspace's collection of that slug. Core now passes the
-root as the third argument to `buildNavigateTarget`. The client route must accept a project too.
-The id is opaque — do not put a path in a URL.
+- `buildNavigateTarget` / `buildPluginData` take the project, and
+  **`collectionWatchers.ts` resolves root → id** (`projectIdForRoot`, new in `project-root.ts`).
+  The adapter stays free of server infra deliberately: `test/src/utils/collectionNotified.spec.ts`
+  imports it, so pulling `node:crypto` in through it puts Node's globals into a DOM-typed project
+  and `window.setTimeout` stops returning a number — a real, confusing typecheck failure.
+- **Cross-app parity holds where it is observable**: the id is omitted for the workspace, so the
+  only link MulmoClaude can produce or receive is byte-for-byte what it was.
+- The client half: `browseRouteProjectId()` reads it from the route query, the browse pushes
+  **carry** the open project (a ref hop inside a project stays in it) while a bell passes its own
+  explicitly (`null` for a workspace bell, so it does not inherit an open project), and
+  `CollectionsBrowseOverlay`'s surface takes its `projectId` from the route via a getter. The
+  plugin views are **keyed** by project so a same-path project switch refetches.
+- `collectionNotifiedSeverities` now matches the project too. That is not theoretical: with a
+  `primaryKey` schema the record id is drawn from the data, so the same record in two projects has
+  the SAME id and an unscoped reader accents the wrong card reliably rather than rarely.
+
+Still open (upstream): MT publishes ROOTED bell ids while MulmoClaude publishes root-less ones for
+the same workspace. Core's sweep handles it asymmetrically — MT's rooted sweep clears a root-less
+entry (`drop-legacy`) and republishes, while MulmoClaude's root-less sweep `skip`s a rooted one, so
+alternating between the apps can leave a stale bell MulmoClaude will not clear. Pre-existing since
+#1571, by upstream design, and worth confirming with MulmoClaude before anyone "fixes" it here.
 
 ### 3.3 Per-card project scope (§7c D remainder) — blocked
 
@@ -129,7 +156,8 @@ must be an opaque id, and the artifact stays host-built.
 
 `server/backends/system-tasks.ts` registers `feedRefreshTaskDef({ workspaceRoot })` once. A
 project's feeds therefore never refresh on their schedule. Core's task def is root-parameterised
-with a per-root id, so registering one per watched project is the shape.
+with a per-root id, so registering one per watched project is the shape — and "which roots" is
+now answered by §3.1: `listProjectRoots()`, reconciled by the same kind of pass.
 
 ### 3.6 The self-containment check (phase 7)
 
@@ -138,12 +166,27 @@ clone?" — user-scope dependencies, a sqlite store in a git repo (unmergeable),
 by `.gitignore`, a missing `primaryKey`. Cheap, no upstream dependency, and it is the difference
 between the guarantee holding and appearing to hold until someone else pulls.
 
-### 3.7 Never done: a live browser check
+### 3.7 A live browser check — still owed, and it already cost one dead button
 
 The Collections pane shipped without one. The pane's height, the plugin views inside the shadow
 root, and the nav containment are exactly what a test suite does not see. Note that this instance
 serves compiled `dist/` with no HMR — a UI change needs `yarn build` and a server restart before it
 is visible.
+
+**What the first hand-press found (2026-08-09):** the "Show this folder's collections" button had
+never worked. `CellChromeButtons` emitted `toggle-collections`, but `cellChromeBinding`'s
+`chromeEvents` object — which every cell binds with a single `v-on` — had no key for it, and
+`GridCellEmits` did not declare it. So the emit was dropped inside the cell and `TerminalGrid`'s
+handler waited for something nothing ever sent. Fixed by adding the event to both, plus
+`cellShellEvents`.
+
+Two things made it survive: an unlistened Vue emit is legal, so `typecheck` was clean; and the
+existing "forwards every chrome event" test listed the events BY HAND from the same wrong set of
+four. The replacement (`test/src/components/cellChromeForwarding.spec.ts`) derives the expectation
+from `CellChromeButtons`' own runtime `emits`, so the next button is covered the day it is added.
+
+The general lesson for the rest of this list: server-side correctness here has been verified by
+curl and by specs at every step, and none of that says the feature is reachable.
 
 ---
 
