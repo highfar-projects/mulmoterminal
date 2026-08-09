@@ -1130,7 +1130,7 @@ absent from the answer — which is how a caller learns work cannot start on it.
 Each grid cell's header shows two badges for its session, refreshed when a turn finishes
 (from `GET /api/session/:id`):
 
-![A live Claude cell — the header shows the model·context and token badges this section describes](https://raw.githubusercontent.com/receptron/mulmoterminal/main/docs/guide/images/grid-cell-live.png)
+![A live Claude cell's header, close up — the model·context and token badges this section describes](https://raw.githubusercontent.com/receptron/mulmoterminal/main/docs/guide/images/grid-cell-live.png)
 
 *Both badges, live on a real Claude session: **`Sonnet · ctx 9%`** (model family + how full its context window is) and **`⇡1.8M ⇣6.9k`** (cumulative input / output tokens for the session). They sit in the header's first row alongside the **status dot** and the **git chip** (`⎇ main ●2`), with what the agent is doing to the right; the working directory, the icon buttons and the **timeline** (🕘) of tool calls are on the second row.*
 

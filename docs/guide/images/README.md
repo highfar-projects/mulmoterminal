@@ -25,7 +25,7 @@ Referenced from the README and the living guide, so these go stale when the UI m
 |---|---|
 | `hero.gif` | The grid, live: sessions changing colour by state in real time. The README's first image |
 | `grid-2x2-live.png` | Four live Claude sessions side by side, each in its own colour-coded project |
-| `grid-cell-live.png` | One live cell, for the cost & tokens section — the header's `Sonnet · ctx 8%` and `⇡1.3M ⇣5.9k` badges. Cropped out of a two-cell capture at bounds measured from the DOM, and **kept at retina rather than downscaled** — the whole point is reading two small badges. The token badge needs the `usage` chip AND turns the capturing server actually ran (a resumed fixture reads zero) |
+| `grid-cell-live.png` | A live cell's header close-up, for the cost & tokens section — the `Sonnet · ctx 9%` and `⇡1.8M ⇣6.9k` badges, with both header rows and a few terminal lines for context. Cropped out of a two-cell capture at bounds measured from the DOM, and **kept at retina rather than downscaled** — the whole point is reading two small badges. The token badge needs the `usage` chip AND turns the capturing server actually ran (a resumed fixture reads zero) |
 | `cockpit-roster.png` | The cockpit roster — every session as one text row, beside the enlarged terminal |
 | `zoom-canvas.png` | One agent zoomed, with the GUI panel (Canvas) beside it |
 | `single-view.png` | The single view (chat + GUI panel). Removed in 4.0.0 — kept for the pages that describe 3.x |
