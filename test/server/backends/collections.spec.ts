@@ -189,6 +189,12 @@ beforeAll(async () => {
 
   // Point the collection host at the fixture. vitest isolates modules
   // per test file, so this configure is fresh for this worker.
+  //
+  // The fixture models the MANAGED workspace — its views live under `data/skills/<slug>/views`,
+  // the staging layout the skill-bridge produces — and staging is workspace-only since core
+  // 3.1.0. So the temp dir has to actually BE the managed workspace, or `skillsStagingDir`
+  // returns null for it and the staged views are invisible.
+  process.env.MULMOCLAUDE_WORKSPACE_PATH = ws;
   initCollectionsBackend({ workspace: ws });
 
   const app = express();

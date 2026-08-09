@@ -72,6 +72,7 @@ import { clampCapabilities, isCapability, mintViewToken, requireViewToken } from
 import { manageCollectionHandlerFor } from "../infra/collection-tool.js";
 import { hostLogger } from "./hostLogger.js";
 import { getCwdPresets } from "../config/config-routes.js";
+import { isManagedWorkspace } from "./workspaceSetup.js";
 import {
   errorStatus,
   initProjectRoots,
@@ -123,8 +124,18 @@ export function initCollectionsBackend(deps: { workspace: string; knownProjects?
       projectSkillsDir,
       // <root>/feeds — feed registry root.
       feedsRoot: (root) => path.join(root, "feeds"),
-      // <root>/data/skills — project-skills staging.
-      skillsStagingDir: (root) => path.join(root, "data", "skills"),
+      // <root>/data/skills — project-skills staging, and ONLY for the managed workspace.
+      //
+      // Staging exists to route around the `.claude/` permission gate: the agent writes drafts
+      // to a plain data dir and a bridge mirrors the allowlisted files into `.claude/skills`.
+      // A project folder has no such gate and MulmoTerminal runs no bridge, so a staging tree
+      // there is not merely unused — the engine reads it FIRST for a project-scope collection,
+      // so a stray file would shadow the committed skill, and it is a second copy of the
+      // definition in a repo that is supposed to be self-contained.
+      //
+      // `null` is what core 3.1.0 added for exactly this: the engine then skips the staging
+      // base rather than being handed a path that must never match.
+      skillsStagingDir: (root) => (isManagedWorkspace(root) ? path.join(root, "data", "skills") : null),
       // Workspace-relative archive dir (removed collections move here).
       archiveDir: "archive",
       // <root>/config/collections-registries.json — extra Discover registries
