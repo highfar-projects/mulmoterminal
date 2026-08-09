@@ -22,6 +22,7 @@ import { useRosterAlert } from "../composables/useRosterAlert";
 import { formatCwd } from "./cwdDisplay";
 import FilesPane, { type FilesPaneState } from "./FilesPane.vue";
 import GuiPanel from "./GuiPanel.vue";
+import CollectionsPane from "./CollectionsPane.vue";
 import ToolsPane from "./ToolsPane.vue";
 import {
   clampPaneWidth,
@@ -192,7 +193,7 @@ const remember = (key: string, value: string): void => {
 //   files  — the file tree/editor (the original occupant).
 //   canvas — what the agent DREW: the GUI plugin views for this cell's session.
 //   tools  — which GUI tools this session actually has, read-only.
-const isRightPane = (value: unknown): value is RightPane => value === "files" || value === "canvas" || value === "tools";
+const isRightPane = (value: unknown): value is RightPane => value === "files" || value === "canvas" || value === "tools" || value === "collections";
 
 // Which cell the pane is on — the identity everything else hangs off. The UID rather than the
 // directory: two terminals in the same repository is the ordinary case here, and keying on the
@@ -263,7 +264,8 @@ function restoreSessionPane(uid: number): void {
 // where you asked for it, and the thing it hid is the thing you were working in. So it lasts as
 // long as the pane does — closing it, or switching to another one, is the end of the takeover.
 const paneExpanded = ref(false);
-const paneFull = computed(() => paneExpanded.value && (rightPane.value === "canvas" || rightPane.value === "tools"));
+// Collections joins canvas/tools in the full-width mode: it is a browser, not a sidebar strip.
+const paneFull = computed(() => paneExpanded.value && rightPane.value !== null && rightPane.value !== "files");
 function togglePaneExpanded(): void {
   paneExpanded.value = !paneExpanded.value;
 }
@@ -569,6 +571,7 @@ const gridCellEvents = (cell: Cell) => ({
   "toggle-canvas": () => toggleRightPane("canvas", cell.uid),
   "open-canvas": () => openCanvasFor(cell.uid),
   "toggle-tools": () => toggleRightPane("tools", cell.uid),
+  "toggle-collections": () => toggleRightPane("collections", cell.uid),
   close: () => emit("close", cell.uid),
   move: (dir: -1 | 1) => emit("move", cell.uid, dir),
   status: (value: AttentionStatus) => emit("status", cell.uid, value),
@@ -1165,6 +1168,14 @@ watch(
           class="border-l border-border"
           @toggle-expand="togglePaneExpanded"
           @close="setRightPane(null, paneUid)"
+        />
+        <!-- Scoped by the CELL's directory, not by a picker: a Project is a directory, and the
+             cell already names one. -->
+        <CollectionsPane
+          v-else-if="rightPane === 'collections'"
+          :cwd="expandedCwd"
+          :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
+          class="border-l border-border"
         />
       </template>
     </div>
