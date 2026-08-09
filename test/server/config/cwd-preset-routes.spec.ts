@@ -1,0 +1,137 @@
+// @vitest-environment node
+//
+// Recording a working directory is a ONE-ENTRY mutation applied to the file, not a replace-all.
+//
+// This is a data-loss fix, so what these pin is mostly what must NOT happen: `cwdPresets` is
+// global (every mulmoterminal on the machine shares the file) and it decides which projects the
+// server serves collections for. A client that sent the whole list sent its own view of it, and
+// on 2026-08-09 a terminal launched during the initial GET reduced five saved directories to one.
+// The routes below exist so the caller never holds the list at all.
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import express from "express";
+import request from "supertest";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+const dirs: string[] = [];
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
+
+async function mountAgainstTempHome(initial: Record<string, unknown>) {
+  const dir = mkdtempSync(path.join(tmpdir(), "mt-preset-routes-"));
+  dirs.push(dir);
+  vi.stubEnv("HOME", dir);
+  vi.stubEnv("USERPROFILE", dir);
+  vi.resetModules();
+  const { mountConfigRoutes, APP_CONFIG_FILE } = await import("../../../server/config/config-routes.js");
+  // Guard before anything writes: a stub that did not take would target the real config.
+  expect(APP_CONFIG_FILE.startsWith(dir), "config path must be inside the temp HOME").toBe(true);
+  mkdirSync(path.dirname(APP_CONFIG_FILE), { recursive: true });
+  writeFileSync(APP_CONFIG_FILE, JSON.stringify(initial, null, 2));
+
+  const onChanged = vi.fn();
+  const app = express();
+  app.use(express.json());
+  mountConfigRoutes(app, dir, onChanged);
+  const onDisk = () => JSON.parse(readFileSync(APP_CONFIG_FILE, "utf8"));
+  return { app, onChanged, onDisk };
+}
+
+const TWO = [
+  { label: "mag2", path: "/srv/mag2" },
+  { label: "site", path: "/srv/site" },
+];
+
+describe("POST /api/config/cwd-presets/record", () => {
+  it("adds one entry and KEEPS every other, whatever the caller knows", async () => {
+    const { app, onDisk } = await mountAgainstTempHome({ cwdPresets: TWO });
+    const res = await request(app).post("/api/config/cwd-presets/record").send({ path: "/srv/new", label: "new" });
+    expect(res.status).toBe(200);
+    // The caller sent ONE path. It could not have deleted the others if it tried.
+    expect(res.body.cwdPresets.map((preset: { path: string }) => preset.path)).toEqual(["/srv/new", "/srv/mag2", "/srv/site"]);
+    expect(onDisk().cwdPresets).toHaveLength(3);
+  });
+
+  it("bumps an existing directory to the front, keeping the label the user gave it", async () => {
+    const { app } = await mountAgainstTempHome({
+      cwdPresets: [
+        { label: "two", path: "/b" },
+        { label: "Custom", path: "/a" },
+      ],
+    });
+    const res = await request(app).post("/api/config/cwd-presets/record").send({ path: "/a", label: "a" });
+    expect(res.body.cwdPresets).toEqual([
+      { label: "Custom", path: "/a" },
+      { label: "two", path: "/b" },
+    ]);
+  });
+
+  it("falls back to the basename when no label is sent", async () => {
+    const { app } = await mountAgainstTempHome({});
+    const res = await request(app).post("/api/config/cwd-presets/record").send({ path: "/home/me/alpha" });
+    expect(res.body.cwdPresets).toEqual([{ label: "alpha", path: "/home/me/alpha" }]);
+  });
+
+  it("keeps every OTHER setting in the file", async () => {
+    const { app, onDisk } = await mountAgainstTempHome({ cwdPresets: TWO, pushEnabled: true, futureFeature: "on" });
+    await request(app).post("/api/config/cwd-presets/record").send({ path: "/srv/new" });
+    const saved = onDisk();
+    expect(saved.pushEnabled).toBe(true);
+    // Including a key THIS build does not know — another version's setting must not vanish (#966).
+    expect(saved.futureFeature).toBe("on");
+  });
+
+  it("refuses a request with no path", async () => {
+    const { app, onDisk } = await mountAgainstTempHome({ cwdPresets: TWO });
+    expect((await request(app).post("/api/config/cwd-presets/record").send({})).status).toBe(400);
+    expect((await request(app).post("/api/config/cwd-presets/record").send({ path: "   " })).status).toBe(400);
+    expect(onDisk().cwdPresets).toHaveLength(2);
+  });
+
+  // A single stray comma must not cost the user the rest of their settings — the same refusal
+  // POST /api/config makes.
+  it("refuses to write over a config it could not parse", async () => {
+    const { app } = await mountAgainstTempHome({});
+    const { APP_CONFIG_FILE } = await import("../../../server/config/config-routes.js");
+    writeFileSync(APP_CONFIG_FILE, "{ not json");
+    const res = await request(app).post("/api/config/cwd-presets/record").send({ path: "/srv/new" });
+    expect(res.status).toBe(409);
+  });
+
+  it("tells the caller the project list moved, so the collection watchers can follow", async () => {
+    const { app, onChanged } = await mountAgainstTempHome({ cwdPresets: TWO });
+    await request(app).post("/api/config/cwd-presets/record").send({ path: "/srv/new" });
+    expect(onChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays quiet when the directory was already at the front", async () => {
+    const { app, onChanged } = await mountAgainstTempHome({ cwdPresets: TWO });
+    await request(app).post("/api/config/cwd-presets/record").send({ path: "/srv/mag2" });
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/config/cwd-presets/remove", () => {
+  it("drops one entry and keeps the rest", async () => {
+    const { app, onDisk } = await mountAgainstTempHome({ cwdPresets: TWO });
+    const res = await request(app).post("/api/config/cwd-presets/remove").send({ path: "/srv/mag2" });
+    expect(res.body.cwdPresets).toEqual([{ label: "site", path: "/srv/site" }]);
+    expect(onDisk().cwdPresets).toHaveLength(1);
+  });
+
+  it("is a no-op for a path that is not saved, and says nothing changed", async () => {
+    const { app, onChanged } = await mountAgainstTempHome({ cwdPresets: TWO });
+    const res = await request(app).post("/api/config/cwd-presets/remove").send({ path: "/srv/never" });
+    expect(res.body.cwdPresets).toHaveLength(2);
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  it("refuses a request with no path", async () => {
+    const { app } = await mountAgainstTempHome({ cwdPresets: TWO });
+    expect((await request(app).post("/api/config/cwd-presets/remove").send({})).status).toBe(400);
+  });
+});

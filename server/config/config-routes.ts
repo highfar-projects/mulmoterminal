@@ -7,7 +7,7 @@
 import os from "node:os";
 import path from "node:path";
 import { existsSync, statSync } from "node:fs";
-import type { Express } from "express";
+import type { Express, Response } from "express";
 import {
   loadAppConfig,
   loadAppConfigResult,
@@ -199,6 +199,70 @@ export function getAppendSystemPrompt(): boolean {
  *  are the caller's concern, not the config route's. */
 export type CwdPresetsChanged = () => void;
 
+/** The saved-directory routes, at module scope so `mountConfigRoutes` stays inside its line
+ *  budget — and because they are their own subsystem: one-entry mutations of a global list. */
+function mountCwdPresetRoutes(app: Express, onCwdPresetsChanged?: CwdPresetsChanged): void {
+  // ── recording ONE saved directory, server-side ─────────────────────────────────────────────
+  //
+  // WHY THIS EXISTS AT ALL, and why the client must not do it with `POST /api/config`:
+  //
+  // `cwdPresets` is a REPLACE-ALL field, and it is global — every mulmoterminal on this machine
+  // shares the file, and the list decides which projects the server serves collections for
+  // (server/infra/project-root.ts). A client that sends the whole list sends ITS OWN VIEW of it,
+  // and any way that view is short, the difference is deleted from disk: the initial GET has not
+  // landed yet, the GET failed, another instance added a directory this tab never saw.
+  //
+  // On 2026-08-09 that cost a user four of five saved directories — a terminal launched while the
+  // first GET was in flight persisted `[the one just launched]`, and the collections of the other
+  // four stopped being served. Nothing said anything; the config was simply smaller.
+  //
+  // So "remember this directory" is expressed as what it IS: a one-entry mutation, applied to the
+  // list ON DISK, read and written here. A caller cannot clobber a list it never has to hold, and
+  // two instances recording different directories at once no longer race each other.
+  //
+  // The client keeps `POST /api/config` for a genuine replace-all (reordering in a settings UI),
+  // where sending the whole list is the user's actual intent.
+  app.post("/api/config/cwd-presets/record", (req, res) => {
+    const body = requestBody(req.body);
+    const path_ = typeof body.path === "string" ? body.path.trim() : "";
+    if (!path_) return res.status(400).json({ error: "path is required" });
+    const label = typeof body.label === "string" && body.label.trim().length > 0 ? body.label.trim() : path_.split("/").filter(Boolean).at(-1) || path_;
+    return mutatePresets(res, (current) => {
+      // Most-recently-used first, and an existing entry keeps the label the user gave it.
+      const existing = current.find((preset) => preset.path === path_);
+      return [existing ?? { label, path: path_ }, ...current.filter((preset) => preset.path !== path_)];
+    });
+  });
+
+  // The chip's close button. Same reasoning: a stale client filtering its own copy would drop
+  // whatever it had not seen.
+  app.post("/api/config/cwd-presets/remove", (req, res) => {
+    const body = requestBody(req.body);
+    const path_ = typeof body.path === "string" ? body.path : "";
+    if (!path_) return res.status(400).json({ error: "path is required" });
+    return mutatePresets(res, (current) => current.filter((preset) => preset.path !== path_));
+  });
+
+  /** Apply a one-entry change to the saved directories, reading and writing the file the same way
+   *  `POST /api/config` does — including refusing a config we could not parse, so a stray comma
+   *  never costs the user the rest of their settings. Answers the resulting list. */
+  function mutatePresets(res: Response, mutate: (current: CwdPreset[]) => CwdPreset[]) {
+    const loaded = loadAppConfigResult(CONFIG_FILE);
+    if (loaded.status === "corrupt") {
+      const bak = backupCorruptConfig(CONFIG_FILE);
+      const backupNote = bak ? ` (backed up to ${path.basename(bak)})` : "";
+      return res.status(409).json({ error: `config.json is unreadable and was NOT overwritten${backupNote}. Fix or remove it, then retry.` });
+    }
+    const base = loaded.status === "ok" ? loaded.config : emptyConfig();
+    const next = mergeConfigUpdate(base, { cwdPresets: mutate(base.cwdPresets) });
+    if (!saveAppConfig(CONFIG_FILE, next, unknownKeysOf(loaded))) return res.status(500).json({ error: "failed to persist config" });
+    const changed = !samePresets(base.cwdPresets, next.cwdPresets);
+    config = next;
+    if (changed) onCwdPresetsChanged?.();
+    return res.json({ cwdPresets: next.cwdPresets });
+  }
+}
+
 export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsChanged?: CwdPresetsChanged): void {
   // The live config as the API exposes it, so a client (e.g. a settings UI) can read back
   // everything it can write — buttons/chips included — and round-trip it.
@@ -273,6 +337,8 @@ export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsC
     if (presetsChanged) onCwdPresetsChanged?.();
     res.json(configResponse());
   });
+
+  mountCwdPresetRoutes(app, onCwdPresetsChanged);
 
   // What the launch form may offer (#584): the configured backends, whether each can be
   // reached right now, and the models it can run. Never the tokens themselves — only the
