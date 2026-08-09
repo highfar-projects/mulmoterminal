@@ -98,8 +98,8 @@ describe("project roots", () => {
       ],
     });
     expect(listProjectRoots()).toEqual([
-      { id: projectId(ws), label: path.basename(ws) },
-      { id: projectId(other), label: "other" },
+      { id: projectId(ws), label: path.basename(ws), cwd: ws },
+      { id: projectId(other), label: "other", cwd: other },
     ]);
   });
 

@@ -52,24 +52,27 @@ async function toFeedSummary(feed: Awaited<ReturnType<typeof listFeeds>>[number]
 export function mountFeedsRoutes(app: Express): void {
   // The feeds index (data-source collections in the workspace's feeds/ registry),
   // each enriched with its last-fetch state. Backs collectionUi.listFeeds.
-  app.get("/api/feeds", async (_req: Request, res: Response) => {
+  app.get("/api/feeds", async (req: Request, res: Response) => {
     try {
-      const feeds = await listFeeds(workspaceRoot);
+      // Feeds live under `<root>/feeds`, so they follow the named project like collections do —
+      // a collections surface showing one project's cards beside another's feeds would be a
+      // list nobody could reason about.
+      const feeds = await listFeeds(resolveProjectRoot(req).workspaceRoot);
       res.json({ feeds: await Promise.all(feeds.map(toFeedSummary)) });
     } catch (err) {
       log.warn("feeds", "list failed", { error: errorMessage(err) });
-      res.status(500).json({ error: errorMessage(err) });
+      res.status(errorStatus(err)).json({ error: errorMessage(err) });
     }
   });
 
   // Remove a feed's registry entry (its records under dataPath are kept).
   app.delete("/api/feeds/:slug", async (req: Request<{ slug: string }>, res: Response) => {
     try {
-      const removed = await removeFeed(workspaceRoot, req.params.slug);
+      const removed = await removeFeed(resolveProjectRoot(req).workspaceRoot, req.params.slug);
       res.json({ removed });
     } catch (err) {
       log.warn("feeds", "delete failed", { slug: req.params.slug, error: errorMessage(err) });
-      res.status(500).json({ error: errorMessage(err) });
+      res.status(errorStatus(err)).json({ error: errorMessage(err) });
     }
   });
 

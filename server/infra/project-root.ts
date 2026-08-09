@@ -8,10 +8,10 @@
 // into an arbitrary-directory reader. Ids resolve against directories the app already knows —
 // the shared workspace and the saved `cwdPresets` — and anything else is refused.
 //
-// The id is also what keeps host paths out of the browser, out of URLs and out of logs. It is
-// DERIVED from the path rather than stored, so it survives restarts and needs no registry: the
-// list of projects is already `cwdPresets`, which follows from a Project simply BEING a
-// directory (plans/project-architecture.md D2).
+// The id is DERIVED from the path rather than stored, so it survives restarts and needs no
+// registry: the list of projects is already `cwdPresets`, which follows from a Project simply
+// BEING a directory (plans/project-architecture.md D2). It also keeps the path out of what
+// travels back IN — URLs, view tokens, logs — which is where a path is a liability.
 //
 // The other half of the contract lives in the engine binding: the collection host runs in
 // explicit-root mode (`workspaceRoot: null`), so nothing can fall back to an ambient root when
@@ -28,11 +28,17 @@ export interface ProjectScope {
   workspaceRoot: string;
 }
 
-/** A project as the client sees it: an opaque id and something to show in a picker. The path
- *  is deliberately absent — see the header. */
+/** A project as the client sees it.
+ *
+ *  `cwd` is included because the client has to MATCH a project to a cell it is already showing,
+ *  and a cell is identified by its cwd. That is not a hole in the id: the invariant is that the
+ *  SERVER resolves an id against its own list and never takes a root from the client — a path on
+ *  the way out does not weaken it, and the browser already has every cell's cwd. What the id
+ *  buys is that the path is not what travels back in, in URLs, tokens or logs. */
 export interface ProjectSummary {
   id: string;
   label: string;
+  cwd: string;
 }
 
 /** A request that named a project this server cannot serve. Carries the status the route
@@ -103,7 +109,7 @@ export function listProjectRoots(): ProjectSummary[] {
   for (const project of knownProjects()) {
     if (!rows.some((row) => row.root === project.path)) rows.push({ root: project.path, label: project.label });
   }
-  return rows.map((row) => ({ id: projectId(row.root), label: row.label }));
+  return rows.map((row) => ({ id: projectId(row.root), label: row.label, cwd: row.root }));
 }
 
 /** The root an opaque id names, or null when it names none. Exported because the view-token
