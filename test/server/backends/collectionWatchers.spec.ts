@@ -111,14 +111,61 @@ describe("syncCollectionWatcherRoots", () => {
 
   it("serialises overlapping passes rather than dropping the later one", async () => {
     await startCollectionCompletionWatchers();
+    // The first pass is held INSIDE its start, so it has provably already read the project list
+    // before the second pass is queued. Without the gate both passes read the list after it was
+    // widened, and an implementation that simply DROPPED the second pass would pass this test.
+    let release!: () => void;
+    let entered!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const inFlight = new Promise<void>((resolve) => (entered = resolve));
+    vi.mocked(startCollectionWatchers).mockImplementationOnce(async () => {
+      entered();
+      await gate;
+    });
+
     projects = [{ label: "mag2", path: "/srv/mag2" }];
     const first = syncCollectionWatcherRoots();
+    await inFlight;
+
     projects = [
       { label: "mag2", path: "/srv/mag2" },
       { label: "site", path: "/srv/site" },
     ];
     const second = syncCollectionWatcherRoots();
+    release();
     await Promise.all([first, second]);
     expect(watchedCollectionRootsForTesting().sort()).toEqual(["/srv/mag2", "/srv/site", WORKSPACE]);
+  });
+
+  // The package deletes its generation on the LAST line of its stop, so a throw can leave one
+  // alive. Forgetting the root here would forget the only handle a later pass could retry with,
+  // and the project would keep watching files and publishing bells forever.
+  it("keeps a root tracked when its stop fails, and retries the stop next pass", async () => {
+    projects = [{ label: "mag2", path: "/srv/mag2" }];
+    await startCollectionCompletionWatchers();
+
+    vi.mocked(stopCollectionWatchers).mockRejectedValueOnce(new Error("EBUSY"));
+    projects = [];
+    await syncCollectionWatcherRoots();
+    expect(watchedCollectionRootsForTesting().sort()).toEqual(["/srv/mag2", WORKSPACE]);
+
+    await syncCollectionWatcherRoots();
+    expect(vi.mocked(stopCollectionWatchers)).toHaveBeenCalledTimes(2);
+    expect(watchedCollectionRootsForTesting()).toEqual([WORKSPACE]);
+  });
+
+  it("does not re-mount a root whose stop failed — it is still watching", async () => {
+    projects = [{ label: "mag2", path: "/srv/mag2" }];
+    await startCollectionCompletionWatchers();
+    const startsAfterBoot = vi.mocked(startCollectionWatchers).mock.calls.length;
+
+    vi.mocked(stopCollectionWatchers).mockRejectedValue(new Error("EBUSY"));
+    projects = [];
+    await syncCollectionWatcherRoots();
+    // Back on the list before the stop ever succeeded: the generation never went away, so
+    // starting it again would be mounting a second one over a live tree.
+    projects = [{ label: "mag2", path: "/srv/mag2" }];
+    await syncCollectionWatcherRoots();
+    expect(vi.mocked(startCollectionWatchers).mock.calls.length).toBe(startsAfterBoot);
   });
 });
