@@ -112,11 +112,13 @@ until there's a concrete need.
 **What MulmoClaude has:** routes and a panel to create / edit / delete
 scheduled tasks.
 
-**What MulmoTerminal has:** the engine only. Tasks in
-`config/scheduler/tasks.json` load at boot and fire correctly, but the sole
-route is a read-only `GET /api/scheduler/tasks` — creating or changing a task
-means editing the JSON by hand (or asking the agent to edit it, which works
-fine and is the current de-facto CRUD).
+**What MulmoTerminal has:** the engine, plus the same persistence adapter since
+issue #1581 — system tasks catch up at startup for windows missed while the server
+was off, every run is recorded, and the read-only routes (`GET /api/scheduler/tasks`
+with each task's state, `GET /api/scheduler/logs`) mirror MulmoClaude's shapes.
+What is missing is the write half: creating or changing a task means editing
+`config/scheduler/tasks.json` by hand (or asking the agent to edit it, which
+works fine and is the current de-facto CRUD), and there is no tasks view.
 
 **Picking it up means:** write routes over the same validated
 `buildUserTaskDefinitions` path, plus a small tasks view. Pure convenience on
