@@ -106,6 +106,46 @@ async function startRoot(root: string): Promise<void> {
   }
 }
 
+/** Warn ONCE that a root would not release, so a stop that keeps failing does not fill the log
+ *  at one line a minute. */
+function warnStopFailure(root: string, err: unknown): void {
+  if (failedStops.has(root)) return;
+  failedStops.add(root);
+  log.warn("collection watchers failed to stop for a root — retrying next pass", {
+    root,
+    error: err instanceof Error ? err.message : String(err),
+  });
+}
+
+/** Release one root's generation, forgetting it only once the package confirms it is gone.
+ *
+ *  STAYS TRACKED ON FAILURE. The package deletes the generation on the LAST line of its stop, so
+ *  a throw can leave one alive — and forgetting the root here would forget the only handle the
+ *  next pass has to try again with, leaving a project the server no longer serves watching its
+ *  files and publishing bells for the rest of the process's life. A repeat stop is idempotent
+ *  (an already-released root is a no-op), so retrying costs nothing. */
+async function releaseRoot(root: string): Promise<void> {
+  try {
+    // Scoped stop: it releases exactly this root's generation and leaves every other project
+    // running. A bare `stopCollectionWatchers()` stops them ALL.
+    await stopCollectionWatchers({ workspaceRoot: root });
+  } catch (err) {
+    warnStopFailure(root, err);
+    return;
+  }
+  watchedRoots.delete(root);
+  failedRoots.delete(root);
+  failedStops.delete(root);
+}
+
+/** Drop the retry bookkeeping a pass has made moot: a root that left the list has no start left
+ *  to retry, and one that came BACK while its stop was failing is wanted again — so its pending
+ *  warning is spent and it must warn afresh if it ever fails to stop later. */
+function forgetSpentRetries(desired: Set<string>): void {
+  for (const root of failedRoots) if (!desired.has(root)) failedRoots.delete(root);
+  for (const root of failedStops) if (desired.has(root)) failedStops.delete(root);
+}
+
 /** Reconcile the mounted generations against the current project list: mount one per root the
  *  server now serves, and release the ones it no longer does.
  *
@@ -115,40 +155,9 @@ async function startRoot(root: string): Promise<void> {
  *  `WATCHER_ROOT_CONFLICT` is no longer thrown (the export remains for hosts that catch it). */
 async function runRootSync(): Promise<void> {
   const desired = new Set(desiredRoots());
-  for (const root of [...watchedRoots]) {
-    if (desired.has(root)) continue;
-    try {
-      // Scoped stop: it releases exactly this root's generation and leaves every other
-      // project running. A bare `stopCollectionWatchers()` stops them ALL.
-      await stopCollectionWatchers({ workspaceRoot: root });
-    } catch (err) {
-      // STAY TRACKED. The package deletes the generation on its LAST line, so a throw can
-      // leave one alive — and forgetting the root here would be forgetting the only handle
-      // the next pass has to try again with, leaving a project the server no longer serves
-      // watching its files and publishing bells for the rest of the process's life. A repeat
-      // stop is idempotent (an already-released root is a no-op), so retrying costs nothing.
-      if (!failedStops.has(root)) {
-        failedStops.add(root);
-        log.warn("collection watchers failed to stop for a root — retrying next pass", {
-          root,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-      continue;
-    }
-    watchedRoots.delete(root);
-    failedRoots.delete(root);
-    failedStops.delete(root);
-  }
-  for (const root of desired) {
-    if (watchedRoots.has(root)) continue;
-    await startRoot(root);
-  }
-  // A root that dropped off the list has nothing left to retry.
-  for (const root of [...failedRoots]) if (!desired.has(root)) failedRoots.delete(root);
-  // A root that came BACK onto the list while its stop was failing is wanted again, so the
-  // pending-stop warning is spent — it must warn afresh if it ever fails to stop later.
-  for (const root of [...failedStops]) if (desired.has(root)) failedStops.delete(root);
+  for (const root of [...watchedRoots]) if (!desired.has(root)) await releaseRoot(root);
+  for (const root of desired) if (!watchedRoots.has(root)) await startRoot(root);
+  forgetSpentRetries(desired);
 }
 
 /** Reconcile the watched roots now. Exported so a caller that KNOWS the project list just

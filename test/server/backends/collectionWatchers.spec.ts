@@ -166,7 +166,7 @@ describe("syncCollectionWatcherRoots", () => {
     // starting it again would be mounting a second one over a live tree.
     projects = [{ label: "mag2", path: "/srv/mag2" }];
     await syncCollectionWatcherRoots();
-    expect(vi.mocked(startCollectionWatchers).mock.calls.length).toBe(startsAfterBoot);
+    expect(vi.mocked(startCollectionWatchers).mock.calls).toHaveLength(startsAfterBoot);
     // The teardown stops everything through the same mock, so leave it able to succeed.
     vi.mocked(stopCollectionWatchers).mockResolvedValue(undefined);
   });
