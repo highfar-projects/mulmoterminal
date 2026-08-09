@@ -344,9 +344,9 @@ project selector ships, or "my project's collection never rings" becomes the fir
 | 1 | U1 payload root + U2 strict mode + U3 cleanup, published | MulmoClaude / core | yes (no behaviour change there) |
 | 2 | `resolveProjectRoot()` + known-projects validation | MulmoTerminal | **DONE** (the known-projects list is phase 5; a `project` parameter is refused, not ignored) |
 | 3 | Thread root through all routes; turn strict mode on | MulmoTerminal | **DONE** — still workspace-only, but now explicit |
-| 4 | Re-key tokens / caches / channels by `(root, slug)` | MulmoTerminal | yes |
-| 5 | `?project=` parameter + client project selector | MulmoTerminal | **yes — this is the feature landing** |
-| 6 | Merge-semantics decisions from §6 made real | MulmoTerminal | with 5 |
+| 4 | Re-key tokens / caches / channels by `(root, slug)` | MulmoTerminal | **DONE** — tokens carry the root, the thumbnail cache and the query cap key on it; MT wires no collection change publisher, so there was no channel to re-key |
+| 5 | `?project=` parameter + client project selector | MulmoTerminal | **server DONE** (`?project=<opaque id>`, `GET /api/collection-projects`); the client selector is still to build |
+| 6 | Merge-semantics decisions from §6 made real | MulmoTerminal | **DONE by construction** — user scope still merges (engine default), feeds follow the root (`feedsRoot(root)`), and the workspace is simply not the root when a project is named |
 | 7 | Self-containment check (§11.4) | MulmoTerminal | yes — useful even before 5 |
 | 8 | Watcher per root, or accept workspace-only bells (§7b) | MT + possibly upstream | decide before 5 ships |
 | 9 | No skill staging outside the managed workspace (§6.5, needs U5) | upstream + MT | with 5 |

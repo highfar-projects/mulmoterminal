@@ -42,6 +42,7 @@ import { mountWikiRoutes } from "../backends/wiki.js";
 import { mountAccountingRoutes } from "../backends/accounting.js";
 import { mountFeedsRoutes } from "../backends/feeds.js";
 import { mountCalendarPushRoutes } from "../backends/calendarPush.js";
+import { listProjectRoots } from "../infra/project-root.js";
 import { mountRemoteHostRoutes } from "../backends/remoteHost/index.js";
 import { mountNotificationRoutes } from "../backends/notifier.js";
 import { mountWhisperRoutes } from "../backends/whisper.js";
@@ -194,6 +195,17 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // API_ROUTES.collections.calendarPush). Backs the collection-view Push button; reads the
   // workspace from the collection host configured below.
   mountCalendarPushRoutes(app);
+
+  // The projects a request may name, for a picker: ids and labels only — the paths they stand
+  // for stay server-side (server/infra/project-root.ts).
+  //
+  // Deliberately OUTSIDE `/api/collections/*`. MulmoClaude's `src/config/apiRoutes.ts` is the
+  // naming authority in that namespace and has no project concept at all — it is a
+  // single-workspace app — so there is nothing to match and nothing to drift from. Mounting it
+  // there would also shadow `/api/collections/:slug` for a collection named `projects`.
+  app.get("/api/collection-projects", (_req, res) => {
+    res.json({ projects: listProjectRoots() });
+  });
 
   // Notification REST surface (list active / history, dismiss one) — backs the toolbar
   // bell. The engine is configured below once pubsub + the workspace exist.

@@ -2,22 +2,23 @@
 // share (collections now; accounting, wiki and resources later, see
 // plans/project-architecture.md D4).
 //
-// WHY THIS EXISTS BEFORE IT DOES ANYTHING INTERESTING. Every root today resolves to the
-// shared workspace, so this file changes no behaviour. What it buys is that the ~30 engine
-// call sites now name a root explicitly instead of falling through to the engine's ambient
-// default, which lets `configureCollectionHost` run in EXPLICIT-ROOT mode
-// (`workspaceRoot: null`): a call that forgets its root throws `COLLECTION_ROOT_REQUIRED`
-// instead of silently resolving against whichever workspace happened to be bound. On a host
-// with one root that difference is invisible; on a host with one root PER PROJECT it is the
-// difference between an error and quietly reading another project's data.
+// A request names its project with an OPAQUE ID, never a path. That is not tidiness: the
+// engine's `resolveDataDir` guarantees containment only WITHIN the root it is handed, so the
+// root itself is the trust boundary. A client-supplied path would turn every collection route
+// into an arbitrary-directory reader. Ids resolve against directories the app already knows —
+// the shared workspace and the saved `cwdPresets` — and anything else is refused.
 //
-// Serving a second root is deliberately NOT wired here yet. When it is, the resolution order
-// is: an explicit project parameter on the request (validated against the known-projects
-// list) → the session's cwd → the workspace. The validation is not optional and not a detail:
-// `resolveDataDir` only guarantees containment WITHIN the root it is handed, so the root
-// itself is the trust boundary. A client-supplied path would turn every collection route into
-// an arbitrary-directory reader, which is why the extension point below takes an opaque id
-// resolved through directories we already know rather than a path.
+// The id is also what keeps host paths out of the browser, out of URLs and out of logs. It is
+// DERIVED from the path rather than stored, so it survives restarts and needs no registry: the
+// list of projects is already `cwdPresets`, which follows from a Project simply BEING a
+// directory (plans/project-architecture.md D2).
+//
+// The other half of the contract lives in the engine binding: the collection host runs in
+// explicit-root mode (`workspaceRoot: null`), so nothing can fall back to an ambient root when
+// a call site forgets to pass one — it throws instead. Serving several roots is only safe
+// because that fallback is gone.
+import { createHash } from "node:crypto";
+import path from "node:path";
 import type { Request } from "express";
 import { describeValue } from "../../common/readString.js";
 
@@ -27,11 +28,42 @@ export interface ProjectScope {
   workspaceRoot: string;
 }
 
-let workspace: string | null = null;
+/** A project as the client sees it: an opaque id and something to show in a picker. The path
+ *  is deliberately absent — see the header. */
+export interface ProjectSummary {
+  id: string;
+  label: string;
+}
 
-/** Bind the shared workspace. Call once at boot, before any route resolves a scope. */
-export function initProjectRoots(deps: { workspace: string }): void {
+/** A request that named a project this server cannot serve. Carries the status the route
+ *  should answer with, so an unknown id reads as the client error it is rather than as a 500
+ *  that looks like the server broke. */
+export class ProjectRootError extends Error {
+  readonly status = 400;
+}
+
+/** The status a caught error should answer with — `ProjectRootError`'s own, 500 otherwise. */
+export function errorStatus(err: unknown): number {
+  return err instanceof ProjectRootError ? err.status : 500;
+}
+
+interface KnownProject {
+  label: string;
+  path: string;
+}
+
+let workspace: string | null = null;
+let knownProjects: () => KnownProject[] = () => [];
+
+/** Bind the shared workspace and the source of saved directories. Call once at boot, before
+ *  any route resolves a scope.
+ *
+ *  `knownProjects` is a THUNK because the saved directories change while the server runs —
+ *  launching from a new directory records one — and a list captured at boot would refuse a
+ *  project the user can see in their own launcher. */
+export function initProjectRoots(deps: { workspace: string; knownProjects?: () => KnownProject[] }): void {
   workspace = deps.workspace;
+  knownProjects = deps.knownProjects ?? (() => []);
 }
 
 /** Whether the binding is in place. Routes that answered 503 for "backend not initialized"
@@ -43,6 +75,7 @@ export function projectRootsConfigured(): boolean {
 /** Test-only: drop the binding so a spec can assert the unconfigured failure. */
 export function resetProjectRootsForTesting(): void {
   workspace = null;
+  knownProjects = () => [];
 }
 
 function requireWorkspace(): string {
@@ -52,29 +85,86 @@ function requireWorkspace(): string {
   return workspace;
 }
 
-/** The shared workspace, for callers that have no request: boot paths, the agent tool
- *  dispatch, the completion watchers. Separate from `resolveProjectRoot` so those callers
- *  read as what they are — "the workspace" — rather than as a request that lost its `req`. */
-export function workspaceScope(): ProjectScope {
-  return { workspaceRoot: requireWorkspace() };
+/** The opaque id for a root. A truncated digest: stable across restarts (nothing is stored),
+ *  short enough to sit in a URL, and not reversible into the path it names.
+ *
+ *  16 hex characters is 64 bits. A collision would need billions of directories, and even then
+ *  it could only confuse two of the user's OWN projects — never reach one outside the list,
+ *  since an id that matches nothing resolves to nothing. */
+export function projectId(root: string): string {
+  return createHash("sha256").update(root).digest("hex").slice(0, 16);
 }
 
-/** The root this request operates against — the workspace, today.
- *
- *  A `project` parameter is REFUSED rather than ignored. Ignoring it would mean a client that
- *  asks for one project and is served another, with nothing anywhere saying so — the same
- *  silent-wrong-root failure explicit-root mode exists to remove, just moved onto the wire.
- *  A build that cannot honour the request should say so. */
-export function resolveProjectRoot(req: Request): ProjectScope {
-  // PRESENCE is the test, not the value's shape. `?project=a&project=b` arrives as an array
-  // and `?project[x]=y` as an object, so a `typeof === "string"` check would let both through
-  // as "absent" and quietly serve the workspace — the exact silent substitution this refuses.
-  // An empty `?project=` is refused for the same reason: the client meant to name one.
-  if (Object.hasOwn(req.query, "project")) {
-    // Caller-controlled, and it lands in a log line via `guarded`; `describeValue` renders a
-    // non-string shape without interpolating it, and CR/LF is stripped so no id can forge one.
-    const described = describeValue(req.query.project).replace(/[\r\n]/g, " ");
-    throw new Error(`project scoping is not enabled on this server (received project: ${described})`);
+/** Every project a request may name, workspace first. Deduped by root: a user who has launched
+ *  from the workspace has it among the saved directories too. */
+export function listProjectRoots(): ProjectSummary[] {
+  const ws = requireWorkspace();
+  const rows: Array<{ root: string; label: string }> = [{ root: ws, label: path.basename(ws) || ws }];
+  for (const project of knownProjects()) {
+    if (!rows.some((row) => row.root === project.path)) rows.push({ root: project.path, label: project.label });
   }
+  return rows.map((row) => ({ id: projectId(row.root), label: row.label }));
+}
+
+/** The root an opaque id names, or null when it names none. Exported because the view-token
+ *  middleware resolves the id carried IN a token, which never passes through a query string. */
+export function rootForProjectId(id: string): string | null {
+  if (projectId(requireWorkspace()) === id) return requireWorkspace();
+  for (const project of knownProjects()) {
+    if (projectId(project.path) === id) return project.path;
+  }
+  return null;
+}
+
+/** The root this request operates against: the project it named, or the workspace when it
+ *  named none.
+ *
+ *  PRESENCE is the test, not the value's shape. `?project=a&project=b` arrives as an array and
+ *  `?project[x]=y` as an object, so a `typeof === "string"` guard would read both as "absent"
+ *  and serve the workspace — one project asked for, another served, with nothing anywhere
+ *  saying so. That is the silent-wrong-root failure explicit-root mode removed from the engine,
+ *  and it must not come back through the wire. */
+export function resolveProjectRoot(req: Request): ProjectScope {
+  const attached = attachedScopes.get(req);
+  if (attached) return attached;
+  if (!Object.hasOwn(req.query, "project")) return { workspaceRoot: requireWorkspace() };
+  const requested = req.query.project;
+  if (typeof requested === "string") {
+    const root = rootForProjectId(requested);
+    if (root !== null) return { workspaceRoot: root };
+  }
+  // Caller-controlled, and it lands in a log line; `describeValue` renders a non-string shape
+  // without interpolating it, and CR/LF is stripped so no id can forge one.
+  throw new ProjectRootError(`unknown project: ${describeValue(requested).replace(/[\r\n]/g, " ")}`);
+}
+
+// Scopes resolved by AUTHORIZATION rather than by the query string. A custom view's iframe
+// fetches URLs the bundled API contract builds by concatenation (`dataUrl + "/query"`), so a
+// project cannot ride in the query there without corrupting those suffixes — the token carries
+// it instead, and the middleware that verifies the token records the root it authorized. A
+// WeakMap because the key is the request object and the entry should die with it.
+const attachedScopes = new WeakMap<Request, ProjectScope>();
+
+/** Record the root a request was AUTHORIZED for, so every handler behind that middleware
+ *  resolves the same one through the usual accessor. */
+export function attachProjectScope(req: Request, scope: ProjectScope): void {
+  attachedScopes.set(req, scope);
+}
+
+/** The request's root as a cache-key fragment, or "" when it names a project this server
+ *  cannot resolve. Deliberately does NOT throw: a caller building a key is not the place an
+ *  unknown project should be reported — the route it guards answers that. */
+export function projectRootKey(req: Request): string {
+  try {
+    return resolveProjectRoot(req).workspaceRoot;
+  } catch {
+    return "";
+  }
+}
+
+/** The shared workspace, for callers that have no request: boot paths, the agent tool
+ *  dispatch, the completion watchers. Separate from `resolveProjectRoot` so those callers read
+ *  as what they are — "the workspace" — rather than as a request that lost its `req`. */
+export function workspaceScope(): ProjectScope {
   return { workspaceRoot: requireWorkspace() };
 }

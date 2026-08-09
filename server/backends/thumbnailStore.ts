@@ -45,16 +45,21 @@ interface CacheEntry {
 const MAX_CACHE_ENTRIES = 256;
 const cache = new Map<string, CacheEntry>();
 
-function cacheGet(relPath: string, mtimeMs: number, maxEdge: number): string | null {
-  const entry = cache.get(relPath);
+// The cache key carries the ROOT, not just the workspace-relative path. Two projects both
+// holding `data/pic.png` are the normal case, and the cached value is the image BYTES — so a
+// path-only key would serve one project's picture inside another's view.
+const cacheKey = (root: string, relPath: string): string => `${root}\u0000${relPath}`;
+
+function cacheGet(key: string, mtimeMs: number, maxEdge: number): string | null {
+  const entry = cache.get(key);
   if (!entry || entry.mtimeMs !== mtimeMs || entry.maxEdge !== maxEdge) return null;
-  cache.delete(relPath);
-  cache.set(relPath, entry);
+  cache.delete(key);
+  cache.set(key, entry);
   return entry.dataUrl;
 }
 
-function cacheSet(relPath: string, entry: CacheEntry): void {
-  cache.set(relPath, entry);
+function cacheSet(key: string, entry: CacheEntry): void {
+  cache.set(key, entry);
   if (cache.size > MAX_CACHE_ENTRIES) {
     const oldest = cache.keys().next().value;
     if (oldest !== undefined) cache.delete(oldest);
@@ -91,12 +96,13 @@ export function createThumbnailResolver(resize: ResizeToJpeg = sharpResize, root
     if (!real) return null;
     const info = await stat(real).catch(() => null);
     if (!info?.isFile()) return null;
-    const cached = cacheGet(relPath, info.mtimeMs, maxEdge);
+    const key = cacheKey(root, relPath);
+    const cached = cacheGet(key, info.mtimeMs, maxEdge);
     if (cached) return cached;
     try {
       const out = await resize(await readFile(real), maxEdge);
       const dataUrl = `data:image/jpeg;base64,${out.toString("base64")}`;
-      cacheSet(relPath, { mtimeMs: info.mtimeMs, maxEdge, dataUrl });
+      cacheSet(key, { mtimeMs: info.mtimeMs, maxEdge, dataUrl });
       return dataUrl;
     } catch (err) {
       console.warn("[thumbnail] resolve failed", relPath, String(err));

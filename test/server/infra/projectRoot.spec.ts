@@ -10,8 +10,13 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { getWorkspaceRoot } from "@mulmoclaude/core/collection/server";
 
 import { initCollectionsBackend } from "../../../server/backends/collections.js";
+import path from "node:path";
+
 import {
+  errorStatus,
   initProjectRoots,
+  listProjectRoots,
+  projectId,
   projectRootsConfigured,
   resolveProjectRoot,
   resetProjectRootsForTesting,
@@ -40,16 +45,62 @@ describe("project roots", () => {
 
   // Presence, not shape. Express turns `?project=a&project=b` into an array and
   // `?project[x]=y` into an object, so a `typeof === "string"` guard would read both as
-  // "absent" and serve the workspace — the silent substitution this refuses. An empty
+  // "absent" and serve the workspace — one project asked for, another served. An empty
   // `?project=` counts too: the client meant to name one.
   it.each([
-    ["a plain id", "some-project"],
+    ["an unknown id", "0123456789abcdef"],
     ["repeated parameters", ["a", "b"]],
     ["a bracketed object", { x: "y" }],
     ["an empty value", ""],
   ])("refuses %s rather than silently serving the workspace", (_label, project) => {
     initProjectRoots({ workspace: ws });
-    expect(() => resolveProjectRoot(requestWith({ project }))).toThrow(/not enabled/);
+    expect(() => resolveProjectRoot(requestWith({ project }))).toThrow(/unknown project/);
+  });
+
+  it("answers an unknown project as a client error, not a server failure", () => {
+    initProjectRoots({ workspace: ws });
+    try {
+      resolveProjectRoot(requestWith({ project: "nope" }));
+      expect.unreachable("should have thrown");
+    } catch (err) {
+      expect(errorStatus(err)).toBe(400);
+    }
+  });
+
+  // The id is derived, not stored: a restart must not invalidate a URL a view is holding.
+  it("resolves a known project by its opaque id", () => {
+    const other = makeTempDir("mt-other-project-");
+    initProjectRoots({ workspace: ws, knownProjects: () => [{ label: "other", path: other }] });
+    expect(resolveProjectRoot(requestWith({ project: projectId(other) }))).toEqual({ workspaceRoot: other });
+    expect(resolveProjectRoot(requestWith({ project: projectId(ws) }))).toEqual({ workspaceRoot: ws });
+  });
+
+  // The list is read through a thunk on every call: launching from a new directory records a
+  // preset, and a list captured at boot would refuse a project the launcher already shows.
+  it("sees a project added after boot", () => {
+    const added = makeTempDir("mt-added-project-");
+    let projects: Array<{ label: string; path: string }> = [];
+    initProjectRoots({ workspace: ws, knownProjects: () => projects });
+    expect(() => resolveProjectRoot(requestWith({ project: projectId(added) }))).toThrow(/unknown project/);
+    projects = [{ label: "added", path: added }];
+    expect(resolveProjectRoot(requestWith({ project: projectId(added) }))).toEqual({ workspaceRoot: added });
+  });
+
+  it("lists the workspace first, then the saved directories, without repeating one", () => {
+    const other = makeTempDir("mt-listed-project-");
+    initProjectRoots({
+      workspace: ws,
+      // The workspace appears among the saved directories too, as it does for anyone who has
+      // launched from it — it must be listed once.
+      knownProjects: () => [
+        { label: "workspace", path: ws },
+        { label: "other", path: other },
+      ],
+    });
+    expect(listProjectRoots()).toEqual([
+      { id: projectId(ws), label: path.basename(ws) },
+      { id: projectId(other), label: "other" },
+    ]);
   });
 
   it("resolves every request to the bound workspace", () => {

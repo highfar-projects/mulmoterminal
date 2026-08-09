@@ -187,8 +187,11 @@ export function mountCustomViewRoutes(app: Express, deps: CustomViewRouteDeps): 
     "/api/collections/:slug/view-data/image",
     deps.cors,
     imageRateLimit,
-    deps.queryConcurrency,
+    // Token first, cap second — the token is what names the project, and a cap keyed on the
+    // root before it is attached buckets every project into the workspace's. Same order as
+    // /view-data/query, for the same reason.
     requireViewToken("read"),
+    deps.queryConcurrency,
     deps.guarded("view-data image", makeImageHandler(deps)),
   );
 
