@@ -144,13 +144,31 @@ the field. **This needs a collection-plugin release built against core 3.1.0.** 
 surface-level scoping covers the real case (one panel, one session's work); what is missing is two
 cards from two projects in the same panel.
 
-### 3.4 The phone (§7c E)
+### 3.4 The phone (§7c E) — PREPARATION DONE
 
-`server/backends/remoteHost/handlers/*` are bound to `workspaceScope()`, so a project's
-collections do not exist on the phone. Preparation is specified in
-`../mulmoclaude/plans/feat-collection-multi-root-2.md` §8: handlers should resolve a scope from
-params defaulting to the host root (so adding the parameter later changes no handler), the scope
-must be an opaque id, and the artifact stays host-built.
+The command handlers no longer hard-code the workspace. `server/backends/remoteHost/commandScope.ts`
+resolves a scope from the command's params, defaulting to the host's root, and every collection /
+feed / skill handler calls it — so the day a phone gains a project picker, the picker is the only
+new thing (`../mulmoclaude/plans/feat-collection-multi-root-2.md` §8, item 3).
+
+**No behaviour changed**: nothing sends `project` yet, so every command resolves the same root it
+did before.
+
+- The param name and reader are core's (`COMMAND_SCOPE_PARAM`, `readCommandScope`) — the wire name
+  was already reserved upstream, so nothing here invents one.
+- **An opaque id, never a path.** A path in a command would publish the user's home directory over
+  the wire and make every handler an arbitrary-directory reader; the id resolves against the
+  server's own list, and a spec pins that a real path is REFUSED.
+- **A named-but-unknown project THROWS**, which is a deliberate divergence from the wording on
+  core's `readCommandScope` ("fall back to the default"). Falling back would serve the workspace's
+  records to a phone that asked for a project's — the silent wrong-root answer the HTTP side
+  answers 400 for. An ABSENT scope still defaults, which is what that rule is really about.
+- `getCollection` and `getFeed` build their deps once, so the scope is threaded through the deps
+  per call rather than captured at construction — the one shape a later `project` param could not
+  have changed.
+
+Still missing (deliberately, per §8): the phone-side picker, and a command that lets it LEARN the
+`{ id, label }` list.
 
 ### 3.5 Per-root scheduled feed refresh — BLOCKED UPSTREAM (attempted, reverted)
 
@@ -210,8 +228,49 @@ Two decisions worth keeping:
 - **Unknown is not clean.** `dataDirIgnored` is `boolean | null`, and `null` (no repo, no git)
   reports nothing rather than clearing the collection.
 
-Not done: nothing SURFACES it yet — no button, no agent tool, no creation-time hook. The route is
-the seam a UI would use, and the rules are a pure function anything can call.
+**Surfaced in the Collections pane** (a strip below the plugin's views, outside its shadow root):
+a "Survives a clone?" button while a collection is open, then the findings, coloured by severity.
+A BUTTON rather than something computed on open, because the answer changes without the collection
+changing — a `.gitignore` line lands, `git init` runs, the skill moves into the project.
+
+The wire shape lives in `common/collectionPortability.ts`, since both sides decide from it. The
+finding's `code` is a plain `string` there on purpose: a newer server may report one this build has
+never heard of, and narrowing would drop a real finding behind a version skew. `severity` IS
+narrowed — it decides how the row renders. A spec pins that the server only ever produces a
+documented code.
+
+Still missing: an agent-facing form (a tool or a skill step), and a creation-time hook. §11.4 asked
+for "collection-creation time and as a command"; this is the command half.
+
+### 3.7 A live browser check — DONE for the overlay, still owed for the pane
+
+**How it is run** (repeatable, and it touches neither the live config nor a real project): start a
+server from this checkout with `HOME` pointed at a scratch dir holding its own
+`.mulmoterminal/config.json`, `CLAUDE_CWD` at an empty scratch workspace, and `PORT` on a free
+port. Drive Chromium with the Playwright already installed in a sibling checkout
+(`../mulmoclaude/node_modules/playwright`) — this repo gains no dependency. The scratch project is
+a real git repo with one collection whose `data/` is gitignored, so the portability rules have
+something true to say.
+
+**What it proved (2026-08-09), none of which a unit test can see:**
+
+- The per-root watchers mount for real: the boot log says
+  `collection completion watchers started { roots: 2 }` and a watcher for the scratch project's own
+  collection. §3.1 had never been observed in a live process.
+- `/collections` shows "No collections installed" for the empty workspace, while
+  `/collections?project=<id>` shows the PROJECT's collection, and
+  `/collections/<slug>?project=<id>` shows its records. That is the project query, the surface
+  scoping and the plugin's fetch, working together inside the shadow root.
+- Zero console errors and zero page errors across all three routes.
+
+**What it did NOT reach.** The Collections PANE — and therefore the portability strip and the
+button-visibility rule — needs a cell whose session reports the `data` MCP group, i.e. a real agent
+session. Nothing in this harness can conjure one, and spawning a paid agent was not something to do
+unasked. The pane's own behaviour is covered by component specs; what remains unobserved is its
+height, the plugin views inside ITS shadow root, and the strip's layout beneath them.
+
+The original lesson stands: server-side correctness was verified by curl and by specs at every
+step, and none of that said the feature was reachable.
 
 ### 3.8 The Collections button only where the tools are (added 2026-08-09)
 
@@ -229,30 +288,10 @@ Two consequences to keep in mind:
 - **A cell with no session gets no button** — no MCP client, no groups. That is the honest answer,
   but it also hides the pane on a launcher or command cell whose DIRECTORY does have collections.
 - **The pane has no close control of its own**, so the button is its only way out. It therefore
-  stays visible while the pane is open regardless of the groups (`collectionsOpenable`) — remove
-  that clause and the pane is stranded for the life of the cell.
-
-### 3.7 A live browser check — still owed, and it already cost one dead button
-
-The Collections pane shipped without one. The pane's height, the plugin views inside the shadow
-root, and the nav containment are exactly what a test suite does not see. Note that this instance
-serves compiled `dist/` with no HMR — a UI change needs `yarn build` and a server restart before it
-is visible.
-
-**What the first hand-press found (2026-08-09):** the "Show this folder's collections" button had
-never worked. `CellChromeButtons` emitted `toggle-collections`, but `cellChromeBinding`'s
-`chromeEvents` object — which every cell binds with a single `v-on` — had no key for it, and
-`GridCellEmits` did not declare it. So the emit was dropped inside the cell and `TerminalGrid`'s
-handler waited for something nothing ever sent. Fixed by adding the event to both, plus
-`cellShellEvents`.
-
-Two things made it survive: an unlistened Vue emit is legal, so `typecheck` was clean; and the
-existing "forwards every chrome event" test listed the events BY HAND from the same wrong set of
-four. The replacement (`test/src/components/cellChromeForwarding.spec.ts`) derives the expectation
-from `CellChromeButtons`' own runtime `emits`, so the next button is covered the day it is added.
-
-The general lesson for the rest of this list: server-side correctness here has been verified by
-curl and by specs at every step, and none of that says the feature is reachable.
+  stays visible while the pane is open regardless of the groups. That clause lives in
+  `CellChromeButtons` beside the `v-if` it guards (moved there on review), where `rightPane` is
+  THAT cell's pane rather than the one the grid happens to be showing — remove it and an open pane
+  is stranded for the life of the cell.
 
 ---
 
