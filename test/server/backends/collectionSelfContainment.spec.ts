@@ -9,13 +9,9 @@ import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import {
-  isPortable,
-  selfContainmentFactsFor,
-  selfContainmentFindings,
-  type SelfContainmentCode,
-  type SelfContainmentFacts,
-} from "../../../server/backends/collectionSelfContainment.js";
+import { isPortable, selfContainmentFactsFor, selfContainmentFindings, type SelfContainmentFacts } from "../../../server/backends/collectionSelfContainment.js";
+// The wire types are shared with the pane that renders the report.
+import type { SelfContainmentCode } from "../../../common/collectionPortability.js";
 import { initCollectionsBackend } from "../../../server/backends/collections.js";
 import { makeTempDir } from "../../support/tempDir";
 
@@ -28,8 +24,12 @@ const PORTABLE: SelfContainmentFacts = {
   dataDirIgnored: false,
 };
 
-const codes = (facts: Partial<SelfContainmentFacts>): SelfContainmentCode[] =>
-  selfContainmentFindings({ ...PORTABLE, ...facts }).map((finding) => finding.code);
+const codes = (facts: Partial<SelfContainmentFacts>): string[] => selfContainmentFindings({ ...PORTABLE, ...facts }).map((finding) => finding.code);
+
+// The wire type widens `code` to a plain string so a newer server's finding is not dropped by an
+// older client. That widening must not become licence for THIS server to invent one: every code
+// it can produce is pinned to the documented union here.
+const KNOWN_CODES: readonly SelfContainmentCode[] = ["user-scope", "sqlite-store", "csv-runtime", "data-ignored", "no-primary-key", "not-a-repo"];
 
 const verdict = (facts: Partial<SelfContainmentFacts>): boolean => isPortable(selfContainmentFindings({ ...PORTABLE, ...facts }));
 
@@ -94,6 +94,15 @@ describe("selfContainmentFindings", () => {
       "sqlite-store",
       "no-primary-key",
     ]);
+  });
+
+  it("only ever produces a documented code", () => {
+    const everyFinding = [
+      ...selfContainmentFindings({ source: "user", storageKind: "sqlite", hasPrimaryKey: false, inGitRepo: true, dataDirIgnored: true }),
+      ...selfContainmentFindings({ source: "project", storageKind: "csv", hasPrimaryKey: true, inGitRepo: false, dataDirIgnored: null }),
+    ];
+    expect(everyFinding.length).toBeGreaterThan(4);
+    for (const finding of everyFinding) expect(KNOWN_CODES).toContain(finding.code);
   });
 
   it("names what breaks on the other machine, not just the rule", () => {

@@ -12,7 +12,8 @@
 // stubbed; the default export wires the real engine functions. Mirrors
 // MulmoClaude's server/remoteHost/handlers/getCollection.ts.
 import { loadCollection, storeFor, toDetail, type LoadedCollection } from "@mulmoclaude/core/collection/server";
-import { workspaceScope } from "../../../infra/project-root.js";
+import { scopeFromCommand } from "../commandScope.js";
+import type { ProjectScope } from "../../../infra/project-root.js";
 import type { CollectionItem } from "@mulmoclaude/core/collection";
 import type { CommandHandlers, JsonObject } from "@mulmoclaude/core/remote-host";
 import { clampLimit, clampOffset, deriveItems, pageResult } from "../collectionPage.js";
@@ -21,7 +22,7 @@ import { readString } from "../../../../common/readString.js";
 export interface GetCollectionDeps {
   loadCollection: typeof loadCollection;
   /** Store-aware records loader (file records or a dataSource CSV's rows). */
-  listRecords: (collection: LoadedCollection) => Promise<CollectionItem[]>;
+  listRecords: (collection: LoadedCollection, scope: ProjectScope) => Promise<CollectionItem[]>;
   toDetail: typeof toDetail;
 }
 
@@ -31,14 +32,18 @@ export const createGetCollection =
     const slug = readString(params.slug);
     const offset = clampOffset(params.offset);
     const limit = clampLimit(params.limit);
-    const collection = await deps.loadCollection(slug);
+    // Resolved PER CALL and threaded into both engine calls, rather than baked into the deps at
+    // construction: the deps are built once, so a scope captured there is the one thing a later
+    // `project` param could not change (../commandScope.ts).
+    const scope = scopeFromCommand(params);
+    const collection = await deps.loadCollection(slug, scope);
     if (!collection) throw new Error(`collection '${slug}' not found`);
-    const all = deriveItems(collection.schema, await deps.listRecords(collection));
+    const all = deriveItems(collection.schema, await deps.listRecords(collection, scope));
     return pageResult(deps.toDetail(collection), all, offset, limit);
   };
 
 export const getCollection = createGetCollection({
-  loadCollection: (slug) => loadCollection(slug, workspaceScope()),
-  listRecords: (collection) => storeFor(collection, workspaceScope()).list(),
+  loadCollection,
+  listRecords: (collection, scope) => storeFor(collection, scope).list(),
   toDetail,
 });

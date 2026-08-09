@@ -7,7 +7,7 @@ import { loadCollection } from "@mulmoclaude/core/collection/server";
 import { normalizeMutate } from "@mulmoclaude/core/remote-view";
 import { toJsonObject, type CommandHandlers, type JsonObject } from "@mulmoclaude/core/remote-host";
 import { mutateRemoteViewFor, mutateRemoteViewFailureMessage } from "../../remoteView.js";
-import { workspaceScope } from "../../../infra/project-root.js";
+import { scopeFromCommand } from "../commandScope.js";
 import { mutateWriteApplied } from "../../mutateStatus.js";
 import { jsonPayload } from "../jsonPayload.js";
 import { readString } from "../../../../common/readString.js";
@@ -17,7 +17,8 @@ export const mutateRemoteViewItem: CommandHandlers["mutateRemoteViewItem"] = asy
   const viewId = readString(params.viewId);
   const request = normalizeMutate({ op: params.op, id: params.id, patch: params.patch });
   if (!request) throw new Error("invalid mutate request — expected { op: 'update'|'delete', id, patch? }");
-  const scope = workspaceScope();
+  // The project this command names, or the host's workspace when it names none (../commandScope.ts).
+  const scope = scopeFromCommand(params);
   const collection = await loadCollection(slug, scope);
   if (!collection) throw new Error(`collection '${slug}' not found`);
   const result = await mutateRemoteViewFor(scope)(collection, viewId, request);
