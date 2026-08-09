@@ -250,7 +250,7 @@ describe("initUserTaskScheduler", () => {
   // user task's window is one-shot (no catch-up in either host), so a tick it misses is a
   // reminder that never fires. A system task registered a moment late loses at most one run, and
   // its work is covered by the next one. Both sides of this were flagged in review, in turn.
-  it("ticks without waiting for the adapter's catch-up to finish", () => {
+  it("ticks without waiting for the adapter's catch-up to finish", async () => {
     initSchedulerMock.mockImplementationOnce(() => new Promise<void>(() => {})); // never settles
 
     initUserTaskScheduler({
@@ -259,7 +259,11 @@ describe("initUserTaskScheduler", () => {
       systemTasks: [sysTask("system:feed-refresh")],
     });
 
-    expect(startMock).toHaveBeenCalledTimes(1);
+    expect(startMock).toHaveBeenCalledTimes(1); // already ticking, with the adapter still going
+    // Then let the adapter reach `initScheduler` before this test ends. Not decoration: the seed
+    // ahead of it is real file I/O, and a call still in flight lands in a LATER test's counts —
+    // which is how this file went green here and red on the slower CI runner.
+    await vi.waitFor(() => expect(initSchedulerMock).toHaveBeenCalledTimes(1));
   });
 
   // And a broken adapter must not leave the user's own tasks dead in the water either.
@@ -272,7 +276,9 @@ describe("initUserTaskScheduler", () => {
       systemTasks: [sysTask("system:feed-refresh")],
     });
 
-    await vi.waitFor(() => expect(startMock).toHaveBeenCalledTimes(1));
+    expect(startMock).toHaveBeenCalledTimes(1);
+    // Same reason as above: don't leave the rejected adapter start in flight into the next test.
+    await vi.waitFor(() => expect(initSchedulerMock).toHaveBeenCalledTimes(1));
   });
 
   it("does not start the tick loop when there are no tasks at all", () => {
