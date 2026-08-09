@@ -8,6 +8,102 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.7.6 — 2026-08-09
+
+> **Setup guide:** [Groundwork for collections outside the workspace](https://receptron.github.io/mulmoterminal/guide/en/v4.7.6.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.7.6.html))
+
+**An infrastructure release.** No screen changes, no setting is added or removed. The work is in the
+collection engine's root handling: it assumed one shared workspace and now resolves a root per
+request, which is the groundwork for a collection living in any project directory rather than only
+in the workspace. The client half — the UI that would let you pick a project — is not built, so
+nothing in the browser sends a project yet.
+
+### Collections can be served from any known project ([#1572](https://github.com/receptron/mulmoterminal/pull/1572))
+
+A request may name a project with `?project=<opaque id>`, and the collection routes serve **that**
+root instead of the shared workspace. Absent the parameter, everything behaves exactly as before.
+
+The id is the security boundary. It is **opaque** and resolved against directories the app already
+knows — the workspace plus the saved `cwdPresets` — because the engine's `resolveDataDir` guarantees
+containment only *within the root it is handed*, so the root itself must not be attacker-controlled;
+a path parameter would have turned every collection route into an arbitrary-directory reader.
+Deriving the id from the path (a truncated digest) also keeps host paths out of the browser, out of
+URLs and out of logs, and needs no registry, since the list of projects is already `cwdPresets`.
+`GET /api/collection-projects` lists what a request may name — deliberately **outside**
+`/api/collections/*`, both because MulmoClaude's `apiRoutes.ts` is the naming authority there and
+has no project concept to match, and because it would shadow `/api/collections/:slug` for a
+collection someone named `projects`.
+
+A slug is unique only *within* a root, so everything keyed on one alone was re-keyed by
+`(root, slug)`:
+
+- **View tokens** carry the root and are checked against the root the request resolves, so a `tasks`
+  token minted in one project is unusable against another project's `tasks`. The minted `dataUrl`
+  carries the project too — the iframe fetches it verbatim, and a URL without it would resolve to
+  the workspace, against which the token is invalid, rendering an empty 401 instead of the records.
+- **The thumbnail cache** keys on the root. Two projects both holding `data/pic.png` is the normal
+  case, and the cached value is the image **bytes** — a path-only key served one project's picture
+  inside another's view.
+- **The view-query concurrency cap** keys on the root, so one project's dashboard cannot spend
+  another's budget.
+
+An unknown project answers **400**, not 500 — a typo in a query parameter is the client's error —
+and **401** inside the view-token middleware, where a request whose root cannot be resolved has no
+valid token by definition. `test/server/backends/collectionsProjectScope.spec.ts` is the assertion
+the previous architecture could not express: two roots, each owning a `tasks` collection, read and
+written through the same routes without bleeding into each other.
+
+### A root is resolved per request, and the engine is left none ([#1571](https://github.com/receptron/mulmoterminal/pull/1571))
+
+Behaviour unchanged — every request still resolves to the shared workspace — but
+`configureCollectionHost` now binds `workspaceRoot: null`, so `getWorkspaceRoot()` **throws** instead
+of guessing, and every engine call names its root through the new `server/infra/project-root.ts`:
+one choke point, so serving a second root changes one function rather than the ~30 call sites this
+touched.
+
+The ceremony for a no-op is the point. With one root, a forgotten `opts.workspaceRoot` resolves
+correctly by accident; with one root per project it is not a crash but a read or write of another
+project's data, with tests green, types green and nothing logged. Turning the fallback into a throw
+is the only way to know the threading is complete — and it immediately caught two missed call sites:
+the custom-view i18n read, and the thumbnail resolver's containment check, which is a security
+boundary and must check against the root the request resolved rather than whatever happened to be
+bound.
+
+Shapes worth knowing: injected-dep modules are bound per scope (`buildRemoteViewFor(scope)` and
+friends) so no dep interface changed; `manageCollection`'s binding takes the root as a **getter**,
+since the tool is built at module scope before boot binds anything; the completion watchers are
+started with an explicit root, because without one they would throw `COLLECTION_ROOT_REQUIRED` on
+first discovery into a fire-and-forget `.catch` and leave every collection bell silently dead; and
+`resolveProjectRoot` **refuses** a `?project=` parameter rather than ignoring it, since ignoring it
+would serve one project while the client asked for another.
+`test/server/infra/projectRoot.spec.ts` pins the throw — binding a string root again would restore
+the silent fallback and every other test would still pass.
+
+### `@mulmoclaude/core` 3.0.0, then 3.0.1 ([#1570](https://github.com/receptron/mulmoterminal/pull/1570), [#1576](https://github.com/receptron/mulmoterminal/pull/1576))
+
+Core 3.0.0 is the release that makes the collection engine safely multi-root (a host may bind
+`workspaceRoot: null` and pass an explicit root per call). No MulmoTerminal source changes were
+needed for the bump itself; 3.0.1 is a follow-up patch.
+
+The bundled plugins moved with it because a caret does not float across a major: left alone, six of
+them would have pulled a **nested `core@2.x`** beside the top-level 3.0.0 — and since `html-plugin`,
+`markdown-plugin` and `accounting-plugin` import `@mulmoclaude/core/plugin-vue`, the bundle would
+have carried **two copies of a Vue-side runtime**, which is how a plugin registers into one copy
+while the host reads the other. Verified as exactly one copy of core in `node_modules`. Two breaking
+changes were absorbed with no source change: `isContainedInWorkspace` was removed from
+`@mulmoclaude/core/collection/server` (zero callers here), and `CollectionHost.workspaceRoot` widened
+to `string | null` (we pass a string).
+
+Also landed with that PR are the design notes the work runs on: `plans/project-architecture.md` — a
+Project is an existing directory rather than a new abstraction, and collections / accounting / wiki /
+resources are **one** problem, a boot-time root binding that wants to be a per-request root resolver
+— and `plans/feat-collections-project-root.md`, the consumer-side plan.
+
+### Documentation ([#1569](https://github.com/receptron/mulmoterminal/pull/1569))
+
+The 4.7.5 changelog entry and the dated `docs/guide/{en,ja}/v4.7.5.md` setup guides, merged after
+that release's tag.
+
 ## mulmoterminal@4.7.5 — 2026-08-09
 
 > **Setup guide:** [Settings you can find, in a language you read](https://receptron.github.io/mulmoterminal/guide/en/v4.7.5.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.7.5.html))
