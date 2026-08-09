@@ -78,6 +78,9 @@ onBeforeUnmount(unregister);
 // before surfaces existed.
 const overlaySurface: CollectionSurface = {
   projectId: null,
+  // Full-screen: it covers the pane slot, so it outranks a canvas or Collections pane however
+  // recently that mounted — a tool result can auto-reveal a canvas BEHIND this overlay.
+  layer: "screen",
   nav: {
     routeSlug: browseRouteSlug,
     routeSelectedId: browseRouteSelectedId,
