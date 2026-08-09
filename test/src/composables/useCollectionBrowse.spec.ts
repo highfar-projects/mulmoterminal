@@ -196,6 +196,44 @@ describe("the project a browse page is scoped to", () => {
     expect(browseRouteProjectId()).toBe("p1");
   });
 
+  // The record modal is keyed by the PAGE, and two projects' /collections/tasks are one path.
+  // Browser Back and a hand-typed URL are the navigations this module does not route itself, so
+  // they are the ones that reach a project change with the path unmoved — and with a primaryKey
+  // schema the surviving id often EXISTS in the project landed on, so the modal shows a
+  // different record of the same name instead of failing visibly.
+  it("drops the open record when only the project changes (Back / a hand-typed URL)", async () => {
+    browseNavigateToRecord("tasks", "t1", "p1");
+    await flushPromises();
+    expect(browseRouteSelectedId()).toBe("t1");
+
+    // Same path, project gone — what Back onto the workspace page looks like to the router.
+    await router.push({ path: "/collections/tasks" });
+    await flushPromises();
+    expect(browseRouteProjectId()).toBeNull();
+    expect(browseRouteSelectedId()).toBeUndefined();
+  });
+
+  it("drops it in the other direction too — workspace record, then a project URL", async () => {
+    browseNavigateToRecord("tasks", "t1");
+    await flushPromises();
+    expect(browseRouteSelectedId()).toBe("t1");
+
+    await router.push({ path: "/collections/tasks", query: { project: "p1" } });
+    await flushPromises();
+    expect(browseRouteSelectedId()).toBeUndefined();
+  });
+
+  it("does not revive a record when the same project page is returned to", async () => {
+    browseNavigateToRecord("tasks", "t1", "p1");
+    await flushPromises();
+    await router.push({ path: "/collections/people", query: { project: "p1" } });
+    await flushPromises();
+    await router.push({ path: "/collections/tasks", query: { project: "p1" } });
+    await flushPromises();
+    // Records are not history: coming back to the exact same page must not restore the modal.
+    expect(browseRouteSelectedId()).toBeUndefined();
+  });
+
   it("is DROPPED when a workspace bell names null explicitly, rather than inheriting the open one", async () => {
     browseNavigateToRecord("tasks", "t1", "p1");
     await flushPromises();
