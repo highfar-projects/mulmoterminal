@@ -908,7 +908,12 @@ export function mountCollectionRoutes(app: Express): void {
   // Not `guarded` like its neighbours, on purpose: the handler catches its own
   // throw so it can answer a FIXED message. A raw engine error can carry host
   // paths, and `guarded` would put exactly that in the body for a scoped view.
-  app.post("/api/collections/:slug/view-data/query", viewDataCors, viewActionRateLimit, viewQueryConcurrency, requireViewToken("read"), viewDataQueryHandler);
+  // `requireViewToken` runs BEFORE the concurrency cap, and the order is load-bearing: the
+  // token is what names the project (the iframe's URLs carry none), so a cap keyed on the root
+  // must run after the token has attached it — otherwise every project's views contend for the
+  // workspace's bucket. It is also the cheaper order: an unauthorized request no longer spends
+  // a slot before being refused.
+  app.post("/api/collections/:slug/view-data/query", viewDataCors, viewActionRateLimit, requireViewToken("read"), viewQueryConcurrency, viewDataQueryHandler);
 
   // The rest of the custom-view surface (customViewRoutes.ts: the i18n dict, the
   // scoped image resolve, the scoped mutate action), handed the loader / view
