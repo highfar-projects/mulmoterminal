@@ -9,7 +9,7 @@
 // serves collections for. So the read-modify-write is claimed with a lock, and this is what says
 // the lock is real rather than decorative.
 import { describe, it, expect } from "vitest";
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -99,12 +99,60 @@ describe("withConfigLock", () => {
       writeFileSync(file, "[]");
       // Mtime in the past: older than LOCK_STALE_MS, i.e. nobody honest is still inside.
       writeFileSync(`${file}.lock`, "");
-      const { utimesSync } = await import("node:fs");
       const longAgo = new Date(Date.now() - 60_000);
       utimesSync(`${file}.lock`, longAgo, longAgo);
 
       await appendUnderLock(file, "after-crash");
       expect(JSON.parse(readFileSync(file, "utf8"))).toEqual(["after-crash"]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  // THE ESCAPE HATCH THAT WAS WRONG. An earlier version ran the critical section anyway when the
+  // lock could not be taken, reasoning that losing the user's action beats a narrow race. Both
+  // halves were false: the action is not lost (the caller retries — a launched directory is
+  // recorded again on the next launch), and "a narrow race" is exactly this bug — the writer
+  // would read the old config while the holder is mid-write and overwrite it. A visible "try
+  // again" beats a rare silent deletion of someone else's data.
+  it("REFUSES rather than running without the lock", async () => {
+    const { file, cleanup } = tmp();
+    try {
+      writeFileSync(file, "[]");
+      writeFileSync(`${file}.lock`, ""); // a live holder, kept fresh below
+      let entered = false;
+      const keepFresh = setInterval(() => {
+        try {
+          const now = new Date();
+          utimesSync(`${file}.lock`, now, now);
+        } catch {
+          // gone — the test is finishing
+        }
+      }, 200);
+      try {
+        await expect(withConfigLock(file, () => (entered = true))).rejects.toThrow(/try again/);
+      } finally {
+        clearInterval(keepFresh);
+      }
+      expect(entered).toBe(false);
+      // And nothing was written: the file is exactly as the holder left it.
+      expect(JSON.parse(readFileSync(file, "utf8"))).toEqual([]);
+    } finally {
+      cleanup();
+    }
+  }, 10_000);
+
+  // ~/.mulmoterminal does not exist on a first-ever write, and a failed claim there is not
+  // contention. Treating it as such made a fresh install wait out the timeout and then refuse to
+  // save anything at all.
+  it("creates the config directory rather than reading a missing one as contention", async () => {
+    const { dir, cleanup } = tmp();
+    try {
+      const nested = path.join(dir, "never-created", "config.json");
+      const started = Date.now();
+      await withConfigLock(nested, () => writeFileSync(nested, '["made it"]'));
+      expect(JSON.parse(readFileSync(nested, "utf8"))).toEqual(["made it"]);
+      expect(Date.now() - started).toBeLessThan(1_000); // i.e. it did not wait anything out
     } finally {
       cleanup();
     }

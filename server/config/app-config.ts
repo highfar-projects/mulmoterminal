@@ -2,7 +2,7 @@
 // presets plus an optional custom attention-sound file. Unified read/write so a
 // partial update (e.g. just the sound) never clobbers the other field. Extracted
 // from config-routes.ts so the sanitize/load/save logic is unit-testable.
-import { existsSync, copyFileSync, openSync, closeSync, unlinkSync, statSync } from "node:fs";
+import { existsSync, copyFileSync, openSync, closeSync, unlinkSync, statSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { sanitizePresets } from "./cwd-presets.js";
 import { sanitizeButtons, sanitizeChips } from "./header-config.js";
@@ -722,54 +722,92 @@ export function serializableAppConfig(config: AppConfig, unknownKeys: Record<str
 // windows at once — which is how the whole list was lost once already (a client-side version of
 // the same race). So the critical section is claimed with a lock file rather than hoped over.
 const LOCK_SUFFIX = ".lock";
-// Long enough that no honest read-modify-write is still holding it, short enough that a crash
-// does not wedge the config for a session. Everything inside the lock is synchronous file I/O.
-const LOCK_STALE_MS = 5_000;
+// A critical section here is synchronous file I/O — microseconds. So a lock still held after
+// SECONDS is not a slow writer, it is a crashed one, and it is broken rather than obeyed: a crash
+// must not wedge the config for the rest of the session.
+const LOCK_STALE_MS = 2_000;
+// Deliberately LONGER than the stale window, so a lock left by a crash is always broken inside
+// the wait instead of timing out. A timeout therefore means real contention, never wreckage.
+const LOCK_WAIT_MS = 3_000;
 const LOCK_RETRY_MS = 15;
-const LOCK_WAIT_MS = 2_000;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const hasErrnoCode = (err: unknown): err is { code: string } => isRecord(err) && typeof err.code === "string";
+
+/** Thrown when the lock could not be taken. Its own class so a route can answer "retry" rather
+ *  than reporting a generic failure for something that will very likely work in a moment. */
+export class ConfigLockTimeout extends Error {
+  constructor(file: string) {
+    super(`config is being written by another process (${path.basename(file)}) — try again`);
+    this.name = "ConfigLockTimeout";
+  }
+}
+
 /** Take the config lock, run `critical`, and release it — whatever `critical` does.
  *
- *  If the lock cannot be taken within `LOCK_WAIT_MS` the work runs ANYWAY, because the failure
- *  modes are not symmetric: proceeding risks the narrow race this exists to close, while
- *  refusing loses the user's action outright and leaves a wedged lock file permanently fatal.
- *  A stale lock (older than `LOCK_STALE_MS`, i.e. left by a crash) is broken rather than waited
- *  out, for the same reason. */
+ *  IT NEVER RUNS `critical` WITHOUT THE LOCK. An earlier version proceeded on timeout, on the
+ *  reasoning that losing the user's action is worse than a narrow race; that was wrong twice
+ *  over. The action is not lost — the caller gets a retryable error, and the one caller that
+ *  matters (recording a launched directory) retries on the next launch. And "a narrow race" is
+ *  precisely the bug this exists to close: this writer would read the old config while the holder
+ *  is still inside its own read-modify-write, and overwrite it. A rare silent deletion of someone
+ *  else's data is worse than a visible "try again". */
 export async function withConfigLock<T>(file: string, critical: () => T): Promise<T> {
   const lockPath = `${file}${LOCK_SUFFIX}`;
   const deadline = Date.now() + LOCK_WAIT_MS;
   let held = false;
-  while (Date.now() < deadline) {
-    try {
-      // `wx` is the claim: it fails if the file exists, which is what makes this a lock rather
-      // than a note that someone once intended to hold one.
-      closeSync(openSync(lockPath, "wx"));
-      held = true;
-      break;
-    } catch {
-      if (staleLock(lockPath)) {
-        try {
-          unlinkSync(lockPath);
-        } catch {
-          // Someone else broke it first — either way the next attempt can claim it.
-        }
-        continue;
-      }
-      await sleep(LOCK_RETRY_MS);
-    }
+  while (!held && Date.now() < deadline) {
+    held = tryClaim(lockPath);
+    if (!held) await sleep(LOCK_RETRY_MS);
   }
+  if (!held) throw new ConfigLockTimeout(file);
   try {
     return critical();
   } finally {
-    if (held) {
+    try {
+      unlinkSync(lockPath);
+    } catch {
+      // Already gone (a stale-breaker beat us to it). Nothing to undo.
+    }
+  }
+}
+
+/** One attempt at the claim. True when this call now holds the lock.
+ *
+ *  Every failure is classified rather than lumped into "someone else has it":
+ *
+ *  - **EEXIST** is the only real contention. If the holder is older than `LOCK_STALE_MS` it
+ *    crashed, so the lock is broken; otherwise the caller waits.
+ *  - **ENOENT** is a first-ever write — `~/.mulmoterminal` does not exist yet. Reading that as
+ *    contention made a fresh install wait out the whole timeout and then refuse to save anything.
+ *  - **anything else** (a read-only directory, a permissions problem) will not become true by
+ *    waiting, so it is raised immediately instead of costing the caller the full timeout first. */
+function tryClaim(lockPath: string): boolean {
+  try {
+    // `wx` is the claim: it fails if the file exists, which is what makes this a lock rather than
+    // a note that someone once intended to hold one.
+    closeSync(openSync(lockPath, "wx"));
+    return true;
+  } catch (err) {
+    const code = hasErrnoCode(err) ? err.code : "";
+    if (code === "ENOENT") {
+      mkdirSync(path.dirname(lockPath), { recursive: true });
+      return tryClaim(lockPath);
+    }
+    if (code !== "EEXIST") throw err;
+    // A stale lock is broken here, not waited out; the next attempt claims it. A FAILED unlink
+    // deliberately falls through to the caller's wait rather than retrying at full speed — the
+    // claim would fail the same way and `staleLock` would say the same thing.
+    if (staleLock(lockPath)) {
       try {
         unlinkSync(lockPath);
+        return tryClaim(lockPath);
       } catch {
-        // Already gone (a stale-breaker beat us to it). Nothing to undo.
+        // Someone else broke it first, or we may not remove it at all.
       }
     }
+    return false;
   }
 }
 

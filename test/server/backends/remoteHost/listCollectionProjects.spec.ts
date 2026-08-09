@@ -82,6 +82,23 @@ describe("listCollectionProjects", () => {
       }
     });
 
+    // A Windows path split on "/" alone is ONE segment, so the "tail" would be the whole absolute
+    // path — the no-path guarantee off on Windows, with nothing in the code that states it
+    // changing at all.
+    it("never returns a Windows path as a label", async () => {
+      initProjectRoots({
+        workspace: "C:\\Users\\me\\dup",
+        knownProjects: () => [{ label: "dup", path: "C:\\work\\dup" }],
+      });
+      const labels = (await listing()).map((project) => project.label);
+      expect(new Set(labels).size).toBe(2);
+      for (const label of labels) {
+        expect(label).not.toContain("\\");
+        expect(label).not.toContain("C:");
+        expect(label).not.toContain("Users");
+      }
+    });
+
     // Two directories whose tails match all the way up: the id breaks the tie rather than the
     // listing walking to the home directory.
     it("falls back to an id fragment rather than sending the whole path", async () => {

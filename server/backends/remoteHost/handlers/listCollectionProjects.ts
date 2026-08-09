@@ -15,6 +15,7 @@
 // parameter and hoping.
 import { toJsonObject, type CommandHandlers } from "@mulmoclaude/core/remote-host";
 import { listProjectRoots, type ProjectSummary } from "../../../infra/project-root.js";
+import { pathSegments } from "../../../../common/pathSegments.js";
 
 export const listCollectionProjects: CommandHandlers["listCollectionProjects"] = async () => toJsonObject({ projects: disambiguated(listProjectRoots()) });
 
@@ -47,7 +48,9 @@ function disambiguated(projects: ProjectSummary[]): { id: string; label: string 
 
 /** The shortest tail of `cwd` that no other project shares, or the label plus an id fragment. */
 function distinguish(project: ProjectSummary, projects: ProjectSummary[]): string {
-  const tailOf = (cwd: string, depth: number) => cwd.split("/").filter(Boolean).slice(-depth).join("/");
+  // BOTH separators: splitting on "/" alone leaves `C:\\Users\\me\\project` as ONE segment, so the
+  // "tail" would be the whole absolute path — the no-path rule silently off on Windows.
+  const tailOf = (cwd: string, depth: number) => pathSegments(cwd).slice(-depth).join("/");
   for (let depth = 2; depth <= MAX_BORROWED_SEGMENTS + 1; depth += 1) {
     const tail = tailOf(project.cwd, depth);
     const shared = projects.some((other) => other.id !== project.id && tailOf(other.cwd, depth) === tail);

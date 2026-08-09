@@ -18,6 +18,7 @@ import {
   toPublicAppConfig,
   unknownKeysOf,
   withConfigLock,
+  ConfigLockTimeout,
   type AppConfig,
 } from "./app-config.js";
 import { type HeaderConfig } from "./header-config.js";
@@ -36,6 +37,7 @@ import { readSoundPreset } from "./sound-presets.js";
 import { isNotifyKind } from "../../common/notifyKinds.js";
 import { parsePresetRef, soundPresetById } from "../../common/notifySounds.js";
 import { requestBody } from "../routes/requestBody.js";
+import { lastSegment } from "../../common/pathSegments.js";
 
 export const APP_CONFIG_FILE = path.join(os.homedir(), ".mulmoterminal", "config.json");
 const CONFIG_FILE = APP_CONFIG_FILE;
@@ -200,6 +202,29 @@ export function getAppendSystemPrompt(): boolean {
  *  are the caller's concern, not the config route's. */
 export type CwdPresetsChanged = () => void | Promise<void>;
 
+/** Answer a write that never happened.
+ *
+ *  A LOCK TIMEOUT IS NOT A FAILURE OF THE SAVE — it is "someone else is mid-write", so it says
+ *  retry (503) rather than reporting the user's settings as broken. Not taken means not
+ *  attempted: writing anyway is the cross-process race the lock exists to close, and the one
+ *  caller that matters records its directory again on the next launch.
+ *
+ *  Anything else escaping the critical section IS a failure, and must not be dressed as a
+ *  transient one — a 503 there would send the client into a retry loop over something that will
+ *  never succeed. It also must not go unanswered: an unobserved rejection leaves the request
+ *  hanging until the client's own timeout.
+ *
+ *  `headersSent` because the critical section may have answered already before throwing. */
+function answerLockFailure(res: Response, err: unknown): void {
+  if (res.headersSent) return;
+  if (err instanceof ConfigLockTimeout) {
+    res.status(503).json({ error: "config is being written by another process — try again" });
+    return;
+  }
+  console.error("[config] write failed", err);
+  res.status(500).json({ error: "failed to persist config" });
+}
+
 /** Tell the subscriber, and let nothing it does reach the response.
  *
  *  The config is ALREADY PERSISTED by the time this runs, so a subscriber that throws — or hands
@@ -242,7 +267,9 @@ function mountCwdPresetRoutes(app: Express, onCwdPresetsChanged?: CwdPresetsChan
     const body = requestBody(req.body);
     const path_ = typeof body.path === "string" ? body.path.trim() : "";
     if (!path_) return res.status(400).json({ error: "path is required" });
-    const label = typeof body.label === "string" && body.label.trim().length > 0 ? body.label.trim() : path_.split("/").filter(Boolean).at(-1) || path_;
+    // `lastSegment` rather than a "/" split: a Windows path would otherwise become its own label,
+    // i.e. the whole absolute path shown as the directory's name.
+    const label = typeof body.label === "string" && body.label.trim().length > 0 ? body.label.trim() : lastSegment(path_);
     return void mutatePresets(res, (current) => {
       // Most-recently-used first, and an existing entry keeps the label the user gave it.
       const existing = current.find((preset) => preset.path === path_);
@@ -266,7 +293,11 @@ function mountCwdPresetRoutes(app: Express, onCwdPresetsChanged?: CwdPresetsChan
     // The READ and the WRITE are one critical section, held across processes: several
     // mulmoterminals share this file, and two that each read the old list before either writes
     // both save a list missing the other's directory. See `withConfigLock`.
-    return withConfigLock(CONFIG_FILE, () => mutatePresetsLocked(res, mutate));
+    try {
+      await withConfigLock(CONFIG_FILE, () => mutatePresetsLocked(res, mutate));
+    } catch (err) {
+      answerLockFailure(res, err);
+    }
   }
 
   function mutatePresetsLocked(res: Response, mutate: (current: CwdPreset[]) => CwdPreset[]) {
@@ -319,7 +350,9 @@ export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsC
   app.post("/api/config", (req, res) => {
     // Held for the same reason as the one-entry routes below: this re-reads the file as its merge
     // base, so two processes saving different fields at once can each write the other's away.
-    void withConfigLock(CONFIG_FILE, () => saveWholeConfig(req, res));
+    void withConfigLock(CONFIG_FILE, () => saveWholeConfig(req, res)).catch((err: unknown) => {
+      answerLockFailure(res, err);
+    });
   });
 
   function saveWholeConfig(req: Request, res: Response) {
