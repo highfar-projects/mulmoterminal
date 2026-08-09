@@ -395,9 +395,9 @@ root and nowhere else, and every item above is a place that assumption was left 
 | 6 | Merge-semantics decisions from §6 made real | MulmoTerminal | **DONE by construction** — user scope still merges (engine default), feeds follow the root (`feedsRoot(root)`), and the workspace is simply not the root when a project is named |
 | 7 | Self-containment check (§11.4) | MulmoTerminal | yes — useful even before 5 |
 | 8 | Watcher per root, or accept workspace-only bells (§7b) | MT + possibly upstream | decide before 5 ships |
-| 9 | No skill staging outside the managed workspace (§6.5, needs U5) | upstream + MT | with 5 |
+| 9 | No skill staging outside the managed workspace (§6.5, needs U5) | upstream + MT | **DONE** — core 3.1.0 + MT #1578: staging is workspace-only and `schemaDocs` serves a root-appropriate authoring guide |
 | **A** | Session-scope the agent's `manageCollection` dispatch (§7c A) | MT | **DONE** — reads `cwdForSession`, the same lookup presentDocument's relative paths use |
-| B | Spawn a collection action's chat in the collection's root (§7c B) | MT | with A |
+| B | Spawn a collection action's chat in the collection's root (§7c B) | MT | **DONE** in #1573's review round |
 | C | Notification deep links carry the project (§7c C) | MT + cross-app | with 8 |
 | D | Canvas cards carry the root they were made for (§7c D) | MT | after A |
 | E | The phone follows the session's project (§7c E) | MT | decide |
