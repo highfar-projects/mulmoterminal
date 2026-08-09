@@ -53,7 +53,7 @@ import { startCollectionChat } from "./useChatLauncher";
 import { browserLocale } from "../utils/browserLocale";
 import { isRecord } from "../../common/isRecord";
 import { withActiveProject } from "./collectionProject";
-import { activeCollectionNavSurface } from "./collectionSurface";
+import { activeCollectionNavSurface, activeCollectionProjectId } from "./collectionSurface";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 // ── Modal teleport target (Shadow DOM) ──
@@ -164,7 +164,16 @@ configureCollectionUi({
   //    else resolves to /api/files/raw?path=<workspace-relative>. fileRoutePath
   //    (in-app File Explorer nav) stays null — MulmoTerminal has no file explorer. ──
   imageSrc: (imageData) => (typeof imageData === "string" && imageData.startsWith("data:") ? imageData : rawFileUrl(imageData)),
-  fileAssetUrl: (value) => (typeof value === "string" && value.length > 0 ? (htmlPreviewUrl(value) ?? rawFileUrl(value)) : null),
+  // The HTML preview route (`/artifacts/html/…`) is fixed to the workspace and takes no project,
+  // so it is offered ONLY when the surface is the workspace. For a project it would either 404 or —
+  // worse — render the workspace's file of the same path under that project's name; the raw-file
+  // route is project-scoped, so a project's HTML asset goes there instead. It loses the preview
+  // CSP treatment, which is the deliberate trade until that route learns about projects.
+  fileAssetUrl: (value) => {
+    if (typeof value !== "string" || value.length === 0) return null;
+    const preview = activeCollectionProjectId() === null ? htmlPreviewUrl(value) : null;
+    return preview ?? rawFileUrl(value);
+  },
   fileRoutePath: () => null,
 
   // ── navigation: no router — map onto useCollectionBrowse's view-state, which

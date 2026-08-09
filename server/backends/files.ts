@@ -42,9 +42,12 @@ import { rootForProjectId } from "../infra/project-root.js";
 type ServingBase = { kind: "ok"; dir: string } | { kind: "refused"; status: number; error: string };
 
 function servingBase(req: Request, root: string, sessionCwds: Iterable<string>): ServingBase {
-  const projectId = typeof req.query.project === "string" ? req.query.project : null;
-  if (projectId !== null) {
-    const projectRoot = rootForProjectId(projectId);
+  // PRESENCE is the test, not the shape — the same rule `resolveProjectRoot` applies. Express
+  // turns `?project=a&project=b` into an array and `?project[x]=y` into an object, and treating
+  // those as "absent" would serve a workspace file to a request that explicitly named a project.
+  if (Object.hasOwn(req.query, "project")) {
+    const projectId = req.query.project;
+    const projectRoot = typeof projectId === "string" ? rootForProjectId(projectId) : null;
     return projectRoot === null ? { kind: "refused", status: 400, error: "unknown project" } : { kind: "ok", dir: projectRoot };
   }
   const cwd = typeof req.query.cwd === "string" ? req.query.cwd : null;

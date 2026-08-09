@@ -52,6 +52,17 @@ function spawnSeededSession(
   mode: SpawnMode,
   { sessionId, message, mcpGroups, cwd }: { sessionId: string; message: string; mcpGroups: readonly ToolGroup[]; cwd: string },
 ): void {
+  // GUI MCP: every branch below keeps the full toolset regardless of the directory, and that is a
+  // decision rather than an oversight. `carriesFullGuiMcp()` is consulted inside each spawner —
+  // claude's `attachGuiMcp` defaults true and codex is passed `true` here — so a seeded chat gets
+  // the generated `--mcp-config` even when it runs in a project directory, where a plain CELL
+  // would instead read the user's own `.mcp.json`.
+  //
+  // Why that asymmetry is right: this chat exists because a GUI action asked for it, and the seed
+  // it carries names collection paths and expects the collection tools. A cell the user opened in
+  // that directory has made no such request. The agents that read their groups from a file in the
+  // directory get them from `groupsForSpawn(agent, cwd)` instead, which is the per-directory
+  // mechanism that DOES have to follow the cwd.
   const initialPrompt = codexifySkillSeed(message);
   if (mode === "codex-run") deps.spawnCodexPty(sessionId, null, null, cwd, true, { initialPrompt });
   else if (mode === "antigravity-run") deps.spawnAntigravityPty(sessionId, null, null, cwd, { mcpGroups, initialPrompt });
