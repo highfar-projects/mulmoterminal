@@ -69,10 +69,18 @@ import { refuseReadOnlyCollection, resolveActionableRecord, resolveItemAction } 
 import { clampCapabilities, isCapability, mintViewToken, requireViewToken } from "./viewToken.js";
 // The shared manageCollection binding — the query route reuses its queryItems
 // action so a view can never do more than the agent's own data plane.
-import { manageCollectionHandler } from "../infra/collection-tool.js";
+import { manageCollectionHandlerFor } from "../infra/collection-tool.js";
 import { hostLogger } from "./hostLogger.js";
 import { getCwdPresets } from "../config/config-routes.js";
-import { errorStatus, initProjectRoots, projectRootKey, projectRootsConfigured, resolveProjectRoot, type ProjectScope } from "../infra/project-root.js";
+import {
+  errorStatus,
+  initProjectRoots,
+  projectId,
+  projectRootKey,
+  projectRootsConfigured,
+  resolveProjectRoot,
+  type ProjectScope,
+} from "../infra/project-root.js";
 import { isRecord } from "../../common/isRecord.js";
 import { requestBody } from "../routes/requestBody.js";
 
@@ -668,18 +676,11 @@ const viewTokenHandler: RequestHandler<{ slug: string }> = async (req, res) => {
   // (a collection declaring one fails to load at all), so this changes nothing today — but it is
   // the local code proving what it hands to the minter rather than declaring it.
   const granted = clampCapabilities(Array.isArray(view.capabilities) ? view.capabilities.filter(isCapability) : undefined, undefined);
-  const minted = mintViewToken(slug, granted, scope.workspaceRoot);
-  // The project rides ON the dataUrl, not just in the token. The iframe fetches this URL
-  // verbatim, and a URL without the project resolves to the workspace — against which the
-  // token (minted for the project) is invalid, so the view would render an empty 401 rather
-  // than its records. The two must name the same root or neither works.
-  const project = typeof req.query.project === "string" ? `?project=${encodeURIComponent(req.query.project)}` : "";
-  res.json({
-    token: minted.token,
-    exp: minted.exp,
-    dataUrl: `/api/collections/${encodeURIComponent(slug)}/view-data${project}`,
-    capabilities: granted,
-  });
+  // The token carries the project; the URL stays clean. The bundled custom-view contract
+  // builds its other endpoints by CONCATENATION (`dataUrl + "/query"`, `+ "/image?…"`), so a
+  // trailing `?project=` here would land inside those suffixes and 401 every one of them.
+  const minted = mintViewToken(slug, granted, projectId(scope.workspaceRoot));
+  res.json({ token: minted.token, exp: minted.exp, dataUrl: `/api/collections/${encodeURIComponent(slug)}/view-data`, capabilities: granted });
 };
 
 // CORS for the view-data endpoint: the sandboxed iframe has an opaque origin, so
@@ -845,7 +846,11 @@ const viewQueryConcurrency = (req: Request<{ slug?: string }>, res: Response, ne
 const viewDataQueryHandler: RequestHandler<{ slug: string }> = async (req, res) => {
   try {
     const body: Record<string, unknown> = isRecord(req.body) ? req.body : {};
-    const raw = await manageCollectionHandler({ action: "queryItems", slug: req.params.slug, query: body.query });
+    // Bound to the root THIS request resolved. `requireViewToken` has already checked the
+    // token against that same root, so running the query against any other one would hand a
+    // project-scoped view another project's rows for a shared slug.
+    const query = manageCollectionHandlerFor(resolveProjectRoot(req).workspaceRoot);
+    const raw = await query({ action: "queryItems", slug: req.params.slug, query: body.query });
     try {
       res.json(JSON.parse(raw));
     } catch {

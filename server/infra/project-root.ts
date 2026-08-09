@@ -106,7 +106,9 @@ export function listProjectRoots(): ProjectSummary[] {
   return rows.map((row) => ({ id: projectId(row.root), label: row.label }));
 }
 
-function rootForId(id: string): string | null {
+/** The root an opaque id names, or null when it names none. Exported because the view-token
+ *  middleware resolves the id carried IN a token, which never passes through a query string. */
+export function rootForProjectId(id: string): string | null {
   if (projectId(requireWorkspace()) === id) return requireWorkspace();
   for (const project of knownProjects()) {
     if (projectId(project.path) === id) return project.path;
@@ -123,15 +125,30 @@ function rootForId(id: string): string | null {
  *  saying so. That is the silent-wrong-root failure explicit-root mode removed from the engine,
  *  and it must not come back through the wire. */
 export function resolveProjectRoot(req: Request): ProjectScope {
+  const attached = attachedScopes.get(req);
+  if (attached) return attached;
   if (!Object.hasOwn(req.query, "project")) return { workspaceRoot: requireWorkspace() };
   const requested = req.query.project;
   if (typeof requested === "string") {
-    const root = rootForId(requested);
+    const root = rootForProjectId(requested);
     if (root !== null) return { workspaceRoot: root };
   }
   // Caller-controlled, and it lands in a log line; `describeValue` renders a non-string shape
   // without interpolating it, and CR/LF is stripped so no id can forge one.
   throw new ProjectRootError(`unknown project: ${describeValue(requested).replace(/[\r\n]/g, " ")}`);
+}
+
+// Scopes resolved by AUTHORIZATION rather than by the query string. A custom view's iframe
+// fetches URLs the bundled API contract builds by concatenation (`dataUrl + "/query"`), so a
+// project cannot ride in the query there without corrupting those suffixes — the token carries
+// it instead, and the middleware that verifies the token records the root it authorized. A
+// WeakMap because the key is the request object and the entry should die with it.
+const attachedScopes = new WeakMap<Request, ProjectScope>();
+
+/** Record the root a request was AUTHORIZED for, so every handler behind that middleware
+ *  resolves the same one through the usual accessor. */
+export function attachProjectScope(req: Request, scope: ProjectScope): void {
+  attachedScopes.set(req, scope);
 }
 
 /** The request's root as a cache-key fragment, or "" when it names a project this server

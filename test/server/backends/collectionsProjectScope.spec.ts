@@ -23,6 +23,7 @@ const schemaFor = (title: string) => ({
     id: { type: "string", label: "ID", primary: true, required: true },
     name: { type: "string", label: "Name" },
   },
+  views: [{ id: "v1", file: "views/v1.html", label: "Custom", capabilities: ["read"] }],
 });
 
 /** A root holding one `tasks` collection with one record — the same slug in both, which is
@@ -31,6 +32,8 @@ function makeProject(prefix: string, title: string, recordName: string): string 
   const root = makeTempDir(prefix);
   mkdirSync(path.join(root, ".claude", "skills", "tasks"), { recursive: true });
   writeFileSync(path.join(root, ".claude", "skills", "tasks", "schema.json"), JSON.stringify(schemaFor(title)));
+  mkdirSync(path.join(root, "data", "skills", "tasks", "views"), { recursive: true });
+  writeFileSync(path.join(root, "data", "skills", "tasks", "views", "v1.html"), "<head></head><body>view</body>");
   mkdirSync(path.join(root, "data", "tasks", "items"), { recursive: true });
   writeFileSync(path.join(root, "data", "tasks", "items", "one.json"), JSON.stringify({ id: "one", name: recordName }));
   return root;
@@ -90,6 +93,45 @@ describe("collections served from a named project", () => {
     const res = await request("/api/collections/tasks/detail?project=0123456789abcdef");
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toContain("unknown project");
+  });
+
+  // The token names the project; the URL handed to the iframe must stay CLEAN. The bundled
+  // custom-view contract builds its other endpoints by concatenation (`dataUrl + "/query"`), so
+  // a trailing `?project=` would land inside the suffix and 401 every one of them.
+  it("mints a view token for the named project whose dataUrl carries no query", async () => {
+    const res = await request(`/api/collections/tasks/view-token?project=${projectId(other)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ viewId: "v1" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { token: string; dataUrl: string };
+    expect(body.dataUrl).toBe("/api/collections/tasks/view-data");
+
+    // A token is signed, not encrypted: the payload is plain base64url JSON that the iframe can
+    // read. It must name the project by id — an absolute root here would publish the user's
+    // home directory to the LLM-authored page the token is handed to.
+    const payload = JSON.parse(Buffer.from(body.token.split(".")[0], "base64url").toString("utf8")) as Record<string, unknown>;
+    expect(payload.project).toBe(projectId(other));
+    expect(JSON.stringify(payload)).not.toContain(other);
+  });
+
+  // The token alone must scope the read — the iframe sends no project in the URL.
+  it("serves view-data for the token's project without a project in the URL", async () => {
+    const minted = (await (
+      await request(`/api/collections/tasks/view-token?project=${projectId(other)}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ viewId: "v1" }),
+      })
+    ).json()) as { token: string; dataUrl: string };
+
+    const res = await request(minted.dataUrl, { headers: { authorization: `Bearer ${minted.token}` } });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { items: Array<{ name: string }> };
+    const names = body.items.map((item) => item.name);
+    expect(names).toContain("from-other");
+    expect(names).not.toContain("from-workspace");
   });
 
   it("scopes the collection LIST to the named project too, not only the detail route", async () => {

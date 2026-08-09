@@ -31,8 +31,31 @@ const tool = makeManageCollectionTool({
 
 /** The bound handler the dispatch route calls. Returns the tool's narration
  *  string (JSON for the read/write actions) — no GUI `data`, matching
- *  MulmoClaude where manageCollection results narrate to claude only. */
+ *  MulmoClaude where manageCollection results narrate to claude only.
+ *
+ *  This one is the AGENT's data plane and operates on the workspace, which is what the
+ *  getter above says. A REQUEST must not use it — see `manageCollectionHandlerFor`. */
 export const manageCollectionHandler = tool.handler;
+
+// One tool instance per root. `makeManageCollectionTool` takes its root in the FACTORY deps,
+// not per call, so a request-scoped operation needs its own instance; they are cached because
+// a custom view's dashboard can issue these in a loop. Bounded by the number of projects the
+// user has, which is the same list `resolveProjectRoot` resolves against.
+const byRoot = new Map<string, typeof tool.handler>();
+
+/** The handler bound to ONE project root — what a request-scoped route must use.
+ *
+ *  The workspace-bound handler above would execute against the workspace no matter which
+ *  project the request named and its token was checked for, so a view in one project could
+ *  receive another's rows for a shared slug. The token check and the query have to agree on
+ *  the root, and this is how the query learns it. */
+export function manageCollectionHandlerFor(workspaceRoot: string): typeof tool.handler {
+  const cached = byRoot.get(workspaceRoot);
+  if (cached) return cached;
+  const handler = makeManageCollectionTool({ bundledHelpsDir: helpsAssetDir, workspaceRoot }).handler;
+  byRoot.set(workspaceRoot, handler);
+  return handler;
+}
 
 /** gui-chat-protocol shape of the core tool's MCP definition — the same
  *  inputSchema→parameters / prompt-folding adaptation loadServerToolPackage
