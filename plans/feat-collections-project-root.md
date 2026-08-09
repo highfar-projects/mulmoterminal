@@ -399,7 +399,7 @@ root and nowhere else, and every item above is a place that assumption was left 
 | **A** | Session-scope the agent's `manageCollection` dispatch (§7c A) | MT | **DONE** — reads `cwdForSession`, the same lookup presentDocument's relative paths use |
 | B | Spawn a collection action's chat in the collection's root (§7c B) | MT | **DONE** in #1573's review round |
 | C | Notification deep links carry the project (§7c C) | MT + cross-app | with 8 |
-| D | Canvas cards carry the root they were made for (§7c D) | MT | after A |
+| D | Canvas cards carry the root they were made for (§7c D) | MT | **PARTLY DONE** (#1579): the canvas is a surface and scopes its cards to its session's project, with layer-based precedence so a browser covering it still wins. Per-CARD scope (`withCardScope`, core 3.1.0) waits on a `collection-plugin` release — the plugin still fetches by slug alone |
 | E | The phone follows the session's project (§7c E) | MT | decide |
 | F | Per-root scheduled feed refresh (§7c F) | MT | decide |
 
