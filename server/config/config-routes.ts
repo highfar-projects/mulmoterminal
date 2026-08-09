@@ -17,8 +17,6 @@ import {
   mergeConfigUpdate,
   toPublicAppConfig,
   unknownKeysOf,
-  withConfigLock,
-  ConfigLockTimeout,
   type AppConfig,
 } from "./app-config.js";
 import { type HeaderConfig } from "./header-config.js";
@@ -37,6 +35,7 @@ import { readSoundPreset } from "./sound-presets.js";
 import { isNotifyKind } from "../../common/notifyKinds.js";
 import { parsePresetRef, soundPresetById } from "../../common/notifySounds.js";
 import { requestBody } from "../routes/requestBody.js";
+import { withConfigLock, ConfigLockTimeout } from "./config-lock.js";
 import { lastSegment } from "../../common/pathSegments.js";
 
 export const APP_CONFIG_FILE = path.join(os.homedir(), ".mulmoterminal", "config.json");

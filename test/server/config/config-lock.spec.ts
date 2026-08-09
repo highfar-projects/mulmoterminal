@@ -13,7 +13,7 @@ import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, utimesSyn
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { withConfigLock } from "../../../server/config/app-config";
+import { withConfigLock } from "../../../server/config/config-lock";
 
 const tmp = () => {
   const dir = mkdtempSync(path.join(tmpdir(), "mt-config-lock-"));
@@ -153,6 +153,47 @@ describe("withConfigLock", () => {
       await withConfigLock(nested, () => writeFileSync(nested, '["made it"]'));
       expect(JSON.parse(readFileSync(nested, "utf8"))).toEqual(["made it"]);
       expect(Date.now() - started).toBeLessThan(1_000); // i.e. it did not wait anything out
+    } finally {
+      cleanup();
+    }
+  });
+
+  // Stale-breaking is what stops a crash from wedging the config, and its cost is that a lock can
+  // be taken from a LIVE holder whose critical section ran long. What must not follow is a
+  // cascade: the original owner reaching `finally` and freeing the NEW holder's lock, so a third
+  // writer walks in while the second is inside. The claim carries a token and the release checks
+  // it, so the loser of a theft removes nothing.
+  it("does not release a lock that was reclaimed while it was held", async () => {
+    const { file, cleanup } = tmp();
+    try {
+      writeFileSync(file, "[]");
+      let released: string | null = null;
+      await withConfigLock(file, () => {
+        // Somebody breaks our (apparently stale) lock and claims it.
+        rmSync(`${file}.lock`);
+        writeFileSync(`${file}.lock`, "the-new-owner");
+      });
+      released = existsSync(`${file}.lock`) ? readFileSync(`${file}.lock`, "utf8") : null;
+      // The new owner's lock is still there — we did not free somebody else's claim.
+      expect(released).toBe("the-new-owner");
+    } finally {
+      rmSync(`${file}.lock`, { force: true });
+      cleanup();
+    }
+  });
+
+  it("writes an owner token, not an empty file", async () => {
+    const { file, cleanup } = tmp();
+    try {
+      writeFileSync(file, "[]");
+      let seen = "";
+      await withConfigLock(file, () => {
+        seen = readFileSync(`${file}.lock`, "utf8");
+      });
+      // pid + a unique part: one process can hold the lock twice in sequence, and the second
+      // claim must not be releasable by the first.
+      expect(seen.startsWith(`${process.pid}:`)).toBe(true);
+      expect(seen.length).toBeGreaterThan(String(process.pid).length + 1);
     } finally {
       cleanup();
     }

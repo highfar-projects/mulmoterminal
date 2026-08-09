@@ -15,7 +15,7 @@
 // parameter and hoping.
 import { toJsonObject, type CommandHandlers } from "@mulmoclaude/core/remote-host";
 import { listProjectRoots, type ProjectSummary } from "../../../infra/project-root.js";
-import { pathSegments } from "../../../../common/pathSegments.js";
+import { lastSegment, pathSegments } from "../../../../common/pathSegments.js";
 
 export const listCollectionProjects: CommandHandlers["listCollectionProjects"] = async () => toJsonObject({ projects: disambiguated(listProjectRoots()) });
 
@@ -38,12 +38,34 @@ const MAX_BORROWED_SEGMENTS = 2;
  *  still collide after `MAX_BORROWED_SEGMENTS`, the id's first characters break the tie — ugly,
  *  but ugly and distinct beats pretty and ambiguous. */
 function disambiguated(projects: ProjectSummary[]): { id: string; label: string }[] {
+  const named = projects.map((project) => ({ ...project, label: pathFreeLabel(project) }));
   const counts = new Map<string, number>();
-  for (const project of projects) counts.set(project.label, (counts.get(project.label) ?? 0) + 1);
-  return projects.map((project) => ({
+  for (const project of named) counts.set(project.label, (counts.get(project.label) ?? 0) + 1);
+  return named.map((project) => ({
     id: project.id,
-    label: (counts.get(project.label) ?? 0) > 1 ? distinguish(project, projects) : project.label,
+    label: (counts.get(project.label) ?? 0) > 1 ? distinguish(project, named) : project.label,
   }));
+}
+
+/** A label with no path in it — ENFORCED here rather than assumed of what is stored.
+ *
+ *  `cwdPresets` labels are arbitrary strings: hand-edited, or written by an older version, or set
+ *  to the directory itself. One that IS a path (`/Users/alice/work/private`) is perfectly unique,
+ *  so nothing else on this path would look at it twice — and it would go out verbatim to a phone
+ *  the protocol promises never receives one, publishing the user's home directory over the wire.
+ *
+ *  The no-path rule is this listing's to keep. A label that looks like a path is replaced by the
+ *  directory's own name, which is what the label was supposed to be. */
+function pathFreeLabel(project: ProjectSummary): string {
+  const label = project.label.trim();
+  return label.length > 0 && !looksLikePath(label) ? label : lastSegment(project.cwd);
+}
+
+/** A separator, a home-relative `~`, or a drive letter — the three ways a label carries location
+ *  rather than a name. Deliberately broad: a false positive costs a nicer label, a false negative
+ *  costs the guarantee. */
+function looksLikePath(label: string): boolean {
+  return label.includes("/") || label.includes("\\") || label.startsWith("~") || /^[a-z]:/i.test(label);
 }
 
 /** The shortest tail of `cwd` that no other project shares, or the label plus an id fragment. */

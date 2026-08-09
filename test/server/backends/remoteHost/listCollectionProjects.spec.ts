@@ -82,6 +82,46 @@ describe("listCollectionProjects", () => {
       }
     });
 
+    // Saved labels are ARBITRARY STRINGS — hand-edited, written by an older version, or set to the
+    // directory itself. One that IS a path is perfectly unique, so nothing else here would look
+    // at it twice, and it would go out verbatim to a client the protocol promises never receives
+    // one. The rule is this listing's to keep, not something to assume of the config.
+    it("replaces a saved label that is itself a path", async () => {
+      initProjectRoots({
+        workspace: "/srv/ws",
+        knownProjects: () => [
+          { label: "/Users/alice/work/private", path: "/Users/alice/work/private" },
+          { label: "~/secrets/vault", path: "/Users/alice/secrets/vault" },
+          { label: "C:\\Users\\alice\\win", path: "/Users/alice/win" },
+        ],
+      });
+      const labels = (await listing()).map((project) => project.label);
+      expect(labels).toEqual(["ws", "private", "vault", "win"]);
+    });
+
+    it("keeps a hand-written label that is a NAME rather than a location", async () => {
+      initProjectRoots({
+        workspace: "/srv/ws",
+        knownProjects: () => [{ label: "Client work (2026)", path: "/srv/clients" }],
+      });
+      expect((await listing()).map((project) => project.label)).toEqual(["ws", "Client work (2026)"]);
+    });
+
+    it("never lets a path through, whatever the config says", async () => {
+      initProjectRoots({
+        workspace: "/Users/alice/ws",
+        knownProjects: () => [
+          { label: "/Users/alice/a", path: "/Users/alice/a" },
+          { label: "  ", path: "/Users/alice/b" },
+        ],
+      });
+      for (const project of await listing()) {
+        expect(project.label).not.toContain("/");
+        expect(project.label).not.toContain("\\");
+        expect(project.label.trim()).not.toBe("");
+      }
+    });
+
     // A Windows path split on "/" alone is ONE segment, so the "tail" would be the whole absolute
     // path — the no-path guarantee off on Windows, with nothing in the code that states it
     // changing at all.
