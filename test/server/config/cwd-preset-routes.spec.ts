@@ -26,12 +26,17 @@ async function mountAgainstTempHome(initial: Record<string, unknown>) {
   dirs.push(dir);
   vi.stubEnv("HOME", dir);
   vi.stubEnv("USERPROFILE", dir);
+  // WRITTEN BEFORE THE IMPORT, because that is the order production has: the module reads the
+  // file once at load and serves that list until something writes. A fixture that writes it
+  // afterwards leaves the module's view empty while the disk is full — a state the server is
+  // never in, and one that makes the "did the list THIS process serves move?" comparison look
+  // wrong when it is right.
+  mkdirSync(path.join(dir, ".mulmoterminal"), { recursive: true });
+  writeFileSync(path.join(dir, ".mulmoterminal", "config.json"), JSON.stringify(initial, null, 2));
   vi.resetModules();
   const { mountConfigRoutes, APP_CONFIG_FILE } = await import("../../../server/config/config-routes.js");
-  // Guard before anything writes: a stub that did not take would target the real config.
+  // Guard: a stub that did not take would have targeted the real config.
   expect(APP_CONFIG_FILE.startsWith(dir), "config path must be inside the temp HOME").toBe(true);
-  mkdirSync(path.dirname(APP_CONFIG_FILE), { recursive: true });
-  writeFileSync(APP_CONFIG_FILE, JSON.stringify(initial, null, 2));
 
   const onChanged = vi.fn();
   const app = express();

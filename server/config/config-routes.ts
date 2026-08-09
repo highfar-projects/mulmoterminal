@@ -197,7 +197,22 @@ export function getAppendSystemPrompt(): boolean {
 /** Called after a config write that CHANGED the saved directories. Injected rather than imported,
  *  so this module stays config-shaped and does not reach into a backend: the collection watchers
  *  are the caller's concern, not the config route's. */
-export type CwdPresetsChanged = () => void;
+export type CwdPresetsChanged = () => void | Promise<void>;
+
+/** Tell the subscriber, and let nothing it does reach the response.
+ *
+ *  The config is ALREADY PERSISTED by the time this runs, so a subscriber that throws — or hands
+ *  back a promise that rejects — must not turn a save that succeeded into a 500 the client will
+ *  retry. Fire-and-forget is the contract this makes true rather than merely states. */
+function notifyPresetsChanged(onCwdPresetsChanged?: CwdPresetsChanged): void {
+  try {
+    void Promise.resolve(onCwdPresetsChanged?.()).catch((err: unknown) => {
+      console.warn("[config] cwdPresets subscriber failed", err);
+    });
+  } catch (err) {
+    console.warn("[config] cwdPresets subscriber threw", err);
+  }
+}
 
 /** The saved-directory routes, at module scope so `mountConfigRoutes` stays inside its line
  *  budget — and because they are their own subsystem: one-entry mutations of a global list. */
@@ -256,9 +271,14 @@ function mountCwdPresetRoutes(app: Express, onCwdPresetsChanged?: CwdPresetsChan
     const base = loaded.status === "ok" ? loaded.config : emptyConfig();
     const next = mergeConfigUpdate(base, { cwdPresets: mutate(base.cwdPresets) });
     if (!saveAppConfig(CONFIG_FILE, next, unknownKeysOf(loaded))) return res.status(500).json({ error: "failed to persist config" });
-    const changed = !samePresets(base.cwdPresets, next.cwdPresets);
+    // Compared against what THIS PROCESS was serving, not against what was on disk. The two
+    // differ exactly when another mulmoterminal wrote the file since we booted: the disk-vs-next
+    // comparison then sees no change, while `config = next` silently ADOPTS that instance's
+    // directories — and the collection watchers, which read the in-memory list
+    // (`getCwdPresets` → `listProjectRoots`), would never hear about the projects they now serve.
+    const changed = !samePresets(config.cwdPresets, next.cwdPresets);
     config = next;
-    if (changed) onCwdPresetsChanged?.();
+    if (changed) notifyPresetsChanged(onCwdPresetsChanged);
     return res.json({ cwdPresets: next.cwdPresets });
   }
 }
@@ -328,13 +348,16 @@ export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsC
     // mulmoterminal sharing the file may have written since we booted, and that is the same
     // reason the merge base above is re-read. A stale comparison would both miss a change and
     // invent one.
-    const presetsChanged = !samePresets(base.cwdPresets, next.cwdPresets);
+    // See mutatePresets: the question is whether the list THIS process serves has moved, not
+    // whether the file did. A change another instance made and we are only now absorbing is a
+    // change from here.
+    const presetsChanged = !samePresets(config.cwdPresets, next.cwdPresets);
     config = next;
     // AFTER the commit, and only when the list actually moved: the saved directories are the
     // projects the collection watchers mount for, and without this a directory added mid-session
     // waits out the poll before its collections can ring. Fire-and-forget by contract — a
     // subscriber's failure is its own, and must not turn a saved config into a 500.
-    if (presetsChanged) onCwdPresetsChanged?.();
+    if (presetsChanged) notifyPresetsChanged(onCwdPresetsChanged);
     res.json(configResponse());
   });
 

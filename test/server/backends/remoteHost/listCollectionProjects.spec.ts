@@ -51,6 +51,68 @@ describe("listCollectionProjects", () => {
     expect(projects.map((project) => project.id)).toEqual([projectId(WORKSPACE), projectId(PROJECT)]);
   });
 
+  // `cwdPresets` dedupes by PATH and an auto-derived label is just the basename, so a repo and
+  // its clone are both "mulmoclaude" — this is the author's own config. The browser tells them
+  // apart by the `cwd` it also receives; the phone deliberately gets none, so two identical rows
+  // would be a coin toss.
+  describe("labels a person can tell apart", () => {
+    const listing = async () => ((await listCollectionProjects({})) as unknown as Listing).projects;
+
+    it("borrows the least it needs from the parent directories", async () => {
+      initProjectRoots({
+        workspace: "/Users/me/mulmoclaude",
+        knownProjects: () => [{ label: "mulmoclaude", path: "/Users/me/git/ai/mulmoclaude" }],
+      });
+      expect((await listing()).map((project) => project.label)).toEqual(["me/mulmoclaude", "ai/mulmoclaude"]);
+    });
+
+    it("leaves a label that is already unique completely alone", async () => {
+      initProjectRoots({ workspace: "/srv/ws", knownProjects: () => [{ label: "mag2", path: "/srv/mag2" }] });
+      expect((await listing()).map((project) => project.label)).toEqual(["ws", "mag2"]);
+    });
+
+    it("still carries no absolute path, however deep it had to borrow", async () => {
+      initProjectRoots({
+        workspace: "/Users/me/a/b/c/dup",
+        knownProjects: () => [{ label: "dup", path: "/Users/me/x/b/c/dup" }],
+      });
+      for (const project of await listing()) {
+        expect(project.label.startsWith("/")).toBe(false);
+        expect(project.label).not.toContain("/Users/me");
+      }
+    });
+
+    // Two directories whose tails match all the way up: the id breaks the tie rather than the
+    // listing walking to the home directory.
+    it("falls back to an id fragment rather than sending the whole path", async () => {
+      initProjectRoots({
+        workspace: "/one/a/b/dup",
+        knownProjects: () => [{ label: "dup", path: "/two/a/b/dup" }],
+      });
+      const labels = (await listing()).map((project) => project.label);
+      expect(new Set(labels).size).toBe(2);
+      for (const label of labels) expect(label.split("/").length).toBeLessThanOrEqual(3);
+    });
+  });
+
+  // The handler being correct is half of it; the phone can only call a command the TABLE carries.
+  // That registration is one line in a 20-entry object, which is exactly the kind of line a merge
+  // drops without anything failing.
+  it("is registered in the command table the runner serves", async () => {
+    const { createRemoteHostHandlers } = await import("../../../../server/backends/remoteHost/handlers/index.js");
+    const handlers = createRemoteHostHandlers({
+      workspace: WORKSPACE,
+      spawnChat: () => ({ chatId: "x" }),
+      ingest: async () => ({ attachments: [], cleanup: async () => {} }) as never,
+      listTerminalSessions: async () => ({}) as never,
+      captureTerminalScreen: async () => ({}) as never,
+      writeToSession: () => false,
+    } as never);
+    expect(typeof handlers.listCollectionProjects).toBe("function");
+    const answered = (await handlers.listCollectionProjects({})) as unknown as Listing;
+    expect(answered.projects.map((project) => project.label)).toEqual(["ws", "mag2"]);
+  });
+
   it("is just the workspace when nothing else is saved", async () => {
     initProjectRoots({ workspace: WORKSPACE });
     const { projects } = (await listCollectionProjects({})) as unknown as Listing;
