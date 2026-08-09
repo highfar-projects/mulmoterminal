@@ -113,10 +113,14 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
     <span class="material-symbols-outlined" aria-hidden="true">build</span>
   </button>
   <!-- Scoped to THIS cell's directory — a Project is a directory, so the cell is the picker.
-       Only where the directory HAS the collection tools: the grid keeps it visible while the pane
-       is open regardless, since this button is also the pane's only close. -->
+       Only where the directory HAS the collection tools — OR where the pane is already open,
+       because this button is also its only close: the Collections pane renders no control of its
+       own, so hiding this one mid-session strands the pane for the life of the cell. That clause
+       lives HERE, next to the `v-if` it guards, rather than in the grid's prop: the rule belongs
+       to whoever renders the button, and `rightPane` here is THIS cell's pane, which is the more
+       precise question. -->
   <button
-    v-if="expanded && collectionsAvailable"
+    v-if="expanded && (collectionsAvailable || rightPane === 'collections')"
     class="cell-btn"
     :class="collectionsClass"
     :aria-pressed="rightPane === 'collections'"

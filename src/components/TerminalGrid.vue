@@ -492,17 +492,7 @@ const canvasOpenable = computed(() => canvasAvailable.value || canvasHasCard.val
 // the pane can manage collections at all. Answered from the SAME reply as the canvas question —
 // one request, two groups — so the two buttons can never disagree about what a session has.
 const collectionsAvailable = ref(false);
-/** Whether to offer the Collections button at all.
- *
- *  HIDDEN rather than disabled, unlike Canvas: a disabled Canvas button explains a pane that
- *  would open empty and can be fixed by switching the group on, whereas a directory with no
- *  collection tools is simply not a place where collections are a thing — there is nothing for
- *  the button to say.
- *
- *  The `rightPane` clause is the escape hatch, and it is load-bearing: the pane has no close
- *  control of its own, so this button is the only way to shut it. Hiding it while the pane is
- *  open would strand the pane there for the life of the cell. */
-const collectionsOpenable = computed(() => collectionsAvailable.value || rightPane.value === "collections");
+
 watch(
   [expandedSessionId, () => props.expandedUid],
   async ([sessionId]) => {
@@ -578,7 +568,10 @@ const gridCellProps = (cell: Cell) => ({
   filesOpen: paneOf(cell.uid) === "files",
   rightPane: paneOf(cell.uid),
   canvasAvailable: canvasOpenable.value,
-  collectionsAvailable: collectionsOpenable.value,
+  // The raw answer. The "an open pane must keep its only close" clause is CellChromeButtons'
+  // own, where the button is rendered and where `rightPane` names that cell's pane rather than
+  // the one the grid happens to be showing.
+  collectionsAvailable: collectionsAvailable.value,
   zoomed: zoomed.value,
   home: props.home,
   // Grid-wide, so it is bound here rather than per cell type: every cell compares its own cwd

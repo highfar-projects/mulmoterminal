@@ -183,6 +183,44 @@ describe("selfContainmentFactsFor against a real repo", () => {
     expect(facts.dataDirIgnored).toBeNull();
   });
 
+  // The rule that bites in practice is not "ignore the folder" — it is a pattern that excludes the
+  // FILES while leaving the folder perfectly committable. check-ignore answers about the paths it
+  // is given and nothing below them, so asking only about the directory read as clean while every
+  // record in it was ignored.
+  it("sees a rule that ignores the record files inside an unignored data directory", async () => {
+    git("init");
+    writeCollection(SLUG);
+    const items = path.join(root, "data", "collections", SLUG, "items");
+    fs.mkdirSync(items, { recursive: true });
+    fs.writeFileSync(path.join(items, "one.json"), JSON.stringify({ id: "one" }));
+    fs.writeFileSync(path.join(root, ".gitignore"), "data/**/*.json\n");
+
+    const facts = await factsFor(SLUG);
+    expect(facts.dataDirIgnored).toBe(true);
+    expect(isPortable(selfContainmentFindings(facts))).toBe(false);
+  });
+
+  // An EMPTY collection is exactly when this matters: nothing is committed yet, so there is no
+  // missing file to notice. A probe path stands in for the record that will be written.
+  it("sees the same rule before any record exists", async () => {
+    git("init");
+    writeCollection(SLUG);
+    fs.writeFileSync(path.join(root, ".gitignore"), "*.json\n");
+
+    expect((await factsFor(SLUG)).dataDirIgnored).toBe(true);
+  });
+
+  // The probe must not invent a problem: an unignored empty collection stays portable.
+  it("does not report an empty collection whose records nothing excludes", async () => {
+    git("init");
+    writeCollection(SLUG);
+    fs.writeFileSync(path.join(root, ".gitignore"), "node_modules/\n");
+
+    const facts = await factsFor(SLUG);
+    expect(facts.dataDirIgnored).toBe(false);
+    expect(selfContainmentFindings(facts)).toEqual([]);
+  });
+
   // The records of a `dataSource` collection are NOT in the data directory — they are the rows of
   // the external file. Asking about the directory answers about a folder they were never in, so a
   // `*.csv` ignore line reported nothing and left `portable: true` on a clone with no records.
