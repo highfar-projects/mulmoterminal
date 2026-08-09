@@ -76,7 +76,9 @@ describe("CommandCell", () => {
   // silently does nothing, and canvas/tools had no cell-level coverage at all — so all five are
   // asserted, not just the two that already were.
   it("forwards every chrome event, including the canvas, tools and collections toggles", async () => {
-    const w = mount(CommandCell, { props: { expanded: true, filesOpen: false, canvasAvailable: true, command: COMMAND, home: "/work" } });
+    const w = mount(CommandCell, {
+      props: { expanded: true, filesOpen: false, canvasAvailable: true, collectionsAvailable: true, command: COMMAND, home: "/work" },
+    });
     await w.find('[aria-label="Show files"]').trigger("click");
     await w.find('[aria-label="Show canvas"]').trigger("click");
     await w.find('[aria-label="Show tools"]').trigger("click");

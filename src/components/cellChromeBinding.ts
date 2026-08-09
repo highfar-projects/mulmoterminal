@@ -8,6 +8,7 @@ export interface CellChromeSource {
   filesOpen?: boolean | undefined;
   rightPane?: RightPane | null | undefined;
   canvasAvailable?: boolean | undefined;
+  collectionsAvailable?: boolean | undefined;
 }
 
 // The two booleans are resolved rather than passed through as `boolean | undefined`: under
@@ -19,6 +20,7 @@ export interface CellChromeProps {
   filesOpen: boolean;
   rightPane: RightPane | null;
   canvasAvailable: boolean;
+  collectionsAvailable: boolean;
 }
 
 // EVERY event CellChromeButtons can raise, minus the ones a cell binds itself (`toggle-park`,
@@ -49,6 +51,9 @@ export function cellChromeBinding(
       filesOpen: source.filesOpen ?? false,
       rightPane: source.rightPane ?? null,
       canvasAvailable: source.canvasAvailable ?? false,
+      // Absent means NOT available, so a cell type that forgets to forward it hides the button
+      // rather than offering one onto a store its agent cannot reach.
+      collectionsAvailable: source.collectionsAvailable ?? false,
     })),
     chromeEvents: {
       "toggle-expand": () => emit("toggle-expand"),

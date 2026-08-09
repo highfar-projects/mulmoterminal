@@ -61,6 +61,7 @@ function relaunch() {
     :files-open="filesOpen"
     :right-pane="rightPane"
     :canvas-available="canvasAvailable"
+    :collections-available="collectionsAvailable"
     :home="home"
     :cwd="cwd"
     :default-cwd="defaultCwd"
