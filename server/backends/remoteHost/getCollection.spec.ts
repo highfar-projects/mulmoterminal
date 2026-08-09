@@ -8,9 +8,22 @@
 // The store-seam test is the one this file exists for (#1488): records must come
 // from `listRecords` (storeFor(...).list() in production), never from a dataDir
 // read, or a CSV/SQLite-backed collection pages as empty on the phone.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
 import { createGetCollection, type GetCollectionDeps } from "./handlers/getCollection.js";
+import { initProjectRoots, resetProjectRootsForTesting } from "../../infra/project-root.js";
+
+// The handler RESOLVES its scope per call now (commandScope.ts) instead of capturing the
+// workspace in its deps, so the roots binding has to exist — the same binding boot installs. A
+// handler that reaches it unconfigured should fail loudly rather than invent a root, which is why
+// this is set up here rather than defaulted away inside the resolver.
+beforeEach(() => {
+  initProjectRoots({ workspace: "/srv/ws" });
+});
+
+afterEach(() => {
+  resetProjectRootsForTesting();
+});
 
 const records = (count: number) => Array.from({ length: count }, (_unused, index) => ({ id: `r${index}` }));
 

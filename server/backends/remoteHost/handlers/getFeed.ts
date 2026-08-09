@@ -16,12 +16,15 @@ import { listFeeds } from "@mulmoclaude/core/feeds/server";
 import type { CommandHandlers, JsonObject } from "@mulmoclaude/core/remote-host";
 import { clampLimit, clampOffset, deriveItems, pageResult } from "../collectionPage.js";
 import { readString } from "../../../../common/readString.js";
+import { scopeFromCommand } from "../commandScope.js";
+import type { ProjectScope } from "../../../infra/project-root.js";
 
 export interface GetFeedDeps {
   listFeeds: typeof listFeeds;
   /** Store-aware records loader (file records or a dataSource CSV's rows). */
-  listRecords: (collection: LoadedCollection) => Promise<CollectionItem[]>;
+  listRecords: (collection: LoadedCollection, scope: ProjectScope) => Promise<CollectionItem[]>;
   toDetail: typeof toDetail;
+  /** The host's own root — the DEFAULT a command that names no project resolves to. */
   workspaceRoot: string;
 }
 
@@ -31,11 +34,13 @@ export const createGetFeed =
     const slug = readString(params.slug);
     const offset = clampOffset(params.offset);
     const limit = clampLimit(params.limit);
-    const feed = (await deps.listFeeds(deps.workspaceRoot)).find((entry) => entry.slug === slug);
+    // Resolved per call, defaulting to the injected root (../commandScope.ts).
+    const scope = scopeFromCommand(params, deps.workspaceRoot);
+    const feed = (await deps.listFeeds(scope.workspaceRoot)).find((entry) => entry.slug === slug);
     if (!feed) throw new Error(`feed '${slug}' not found`);
-    const all = deriveItems(feed.schema, await deps.listRecords(feed));
+    const all = deriveItems(feed.schema, await deps.listRecords(feed, scope));
     return pageResult(deps.toDetail(feed), all, offset, limit);
   };
 
 export const getFeedFor = (workspaceRoot: string): CommandHandlers["getFeed"] =>
-  createGetFeed({ listFeeds, listRecords: (collection) => storeFor(collection, { workspaceRoot }).list(), toDetail, workspaceRoot });
+  createGetFeed({ listFeeds, listRecords: (collection, scope) => storeFor(collection, scope).list(), toDetail, workspaceRoot });
