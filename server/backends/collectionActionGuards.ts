@@ -10,6 +10,7 @@
 import type { Response } from "express";
 import { collectionWritable, readOnlyRefusal, storeFor, type LoadedCollection } from "@mulmoclaude/core/collection/server";
 import { actionVisible, type ActionWithWhen, type CollectionAction, type CollectionItem } from "@mulmoclaude/core/collection";
+import type { ProjectScope } from "../infra/project-root.js";
 
 // The action's state gate, rebuilt so core's exact-optional parameter accepts it: the schema
 // parse yields a `when: undefined` / `require: undefined` KEY, which that type rejects.
@@ -53,8 +54,9 @@ export const resolveActionableRecord = async (
   collection: LoadedCollection,
   action: CollectionAction,
   itemId: string,
+  scope: ProjectScope,
 ): Promise<CollectionItem | null> => {
-  const record = await storeFor(collection).read(itemId);
+  const record = await storeFor(collection, scope).read(itemId);
   if (!record) {
     res.status(404).json({ error: `item '${itemId}' not found` });
     return null;

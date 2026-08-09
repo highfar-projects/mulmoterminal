@@ -38,4 +38,4 @@ export const createGetFeed =
   };
 
 export const getFeedFor = (workspaceRoot: string): CommandHandlers["getFeed"] =>
-  createGetFeed({ listFeeds, listRecords: (collection) => storeFor(collection).list(), toDetail, workspaceRoot });
+  createGetFeed({ listFeeds, listRecords: (collection) => storeFor(collection, { workspaceRoot }).list(), toDetail, workspaceRoot });

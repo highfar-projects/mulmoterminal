@@ -13,6 +13,7 @@ import { readFile, stat } from "node:fs/promises";
 import { realpathSync } from "node:fs";
 
 import { getWorkspaceRoot } from "@mulmoclaude/core/collection/server";
+import type { ProjectScope } from "../infra/project-root.js";
 
 import { containedPath, realContainedWithin } from "../files/pathContainment.js";
 
@@ -69,14 +70,14 @@ export function clearThumbnailCache(): void {
  *  `null` when the path escapes the workspace, is missing, or can't be decoded —
  *  the caller then leaves the field as its original path (a placeholder in the
  *  view). `maxEdge` should already be clamped by the caller (`clampImageMaxEdge`). */
-export function createThumbnailResolver(resize: ResizeToJpeg = sharpResize) {
+export function createThumbnailResolver(resize: ResizeToJpeg = sharpResize, rootOf: () => string = getWorkspaceRoot) {
   return async function resolveThumbnail(relPath: string, maxEdge: number): Promise<string | null> {
     if (typeof relPath !== "string" || relPath.length === 0) return null;
     let root: string;
     try {
       // .native, for the Windows 8.3 reason in files/pathContainment.ts. fs/promises has no
       // native variant, so this is the sync call.
-      root = realpathSync.native(getWorkspaceRoot());
+      root = realpathSync.native(rootOf());
     } catch {
       return null;
     }
@@ -104,4 +105,8 @@ export function createThumbnailResolver(resize: ResizeToJpeg = sharpResize) {
   };
 }
 
-export const resolveThumbnail = createThumbnailResolver();
+/** A resolver bound to one project root. There is deliberately no ambient
+ *  `resolveThumbnail`: the containment check below IS the security boundary, so the root it
+ *  checks against must be the root the request resolved, never whatever the engine happens to
+ *  have bound. Under explicit-root mode an ambient one would throw anyway. */
+export const thumbnailResolverFor = (scope: ProjectScope) => createThumbnailResolver(sharpResize, () => scope.workspaceRoot);

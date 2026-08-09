@@ -12,6 +12,7 @@
 // stubbed; the default export wires the real engine functions. Mirrors
 // MulmoClaude's server/remoteHost/handlers/getCollection.ts.
 import { loadCollection, storeFor, toDetail, type LoadedCollection } from "@mulmoclaude/core/collection/server";
+import { workspaceScope } from "../../../infra/project-root.js";
 import type { CollectionItem } from "@mulmoclaude/core/collection";
 import type { CommandHandlers, JsonObject } from "@mulmoclaude/core/remote-host";
 import { clampLimit, clampOffset, deriveItems, pageResult } from "../collectionPage.js";
@@ -36,4 +37,8 @@ export const createGetCollection =
     return pageResult(deps.toDetail(collection), all, offset, limit);
   };
 
-export const getCollection = createGetCollection({ loadCollection, listRecords: (collection) => storeFor(collection).list(), toDetail });
+export const getCollection = createGetCollection({
+  loadCollection: (slug) => loadCollection(slug, workspaceScope()),
+  listRecords: (collection) => storeFor(collection, workspaceScope()).list(),
+  toDetail,
+});
