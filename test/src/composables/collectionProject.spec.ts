@@ -95,6 +95,36 @@ describe("collection nav surface", () => {
     popCollectionSurface(pane);
   });
 
+  // The canvas scopes its cards' fetches without owning navigation: a link inside a card still
+  // belongs to the full-screen browser. So a scope-only surface must not silence the nav of the
+  // surface beneath it.
+  it("lets a scope-only surface set the project without taking navigation", () => {
+    const overlay = surfaceFor(null, "overlay");
+    const canvas: CollectionSurface = { projectId: "proj-canvas" };
+    pushCollectionSurface(overlay);
+    pushCollectionSurface(canvas);
+    expect(activeCollectionProjectId()).toBe("proj-canvas");
+    expect(activeCollectionNavSurface()?.routeSlug()).toBe("overlay");
+    popCollectionSurface(canvas);
+    popCollectionSurface(overlay);
+  });
+
+  // Precedence is by LAYER, not by push order. A tool result can auto-reveal a canvas BEHIND the
+  // full-screen browser, so the surface that mounted last is not always the one being looked at —
+  // and the overlay's own requests would then be sent to a background session's project.
+  it("keeps a full-screen surface in charge when a pane mounts behind it", () => {
+    const overlay: CollectionSurface = { ...surfaceFor(null, "overlay"), layer: "screen" };
+    const canvas: CollectionSurface = { projectId: "proj-behind" };
+    pushCollectionSurface(overlay);
+    pushCollectionSurface(canvas);
+    expect(activeCollectionProjectId()).toBeNull();
+    expect(activeCollectionNavSurface()?.routeSlug()).toBe("overlay");
+    // …and the pane takes over again once the screen above it goes away.
+    popCollectionSurface(overlay);
+    expect(activeCollectionProjectId()).toBe("proj-behind");
+    popCollectionSurface(canvas);
+  });
+
   it("ignores a pop for a surface that is not registered", () => {
     const pane = surfaceNamed("pane");
     pushCollectionSurface(pane);

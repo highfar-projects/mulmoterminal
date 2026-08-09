@@ -25,6 +25,9 @@ export interface CollectionProject {
 }
 
 let cache: Promise<CollectionProject[]> | null = null;
+// The resolved list, kept beside the promise so a caller that cannot await still gets an answer
+// once one exists (`cachedProjectIdForCwd`).
+let settled: CollectionProject[] | null = null;
 
 function asProjects(body: unknown): CollectionProject[] {
   if (!isRecord(body) || !isUnknownArray(body.projects)) return [];
@@ -42,7 +45,8 @@ export async function listCollectionProjects(): Promise<CollectionProject[]> {
   cache ??= (async () => {
     const res = await fetchWithTimeout("/api/collection-projects");
     if (!res.ok) throw new Error(`collection-projects: HTTP ${res.status}`);
-    return asProjects(await res.json());
+    settled = asProjects(await res.json());
+    return settled;
   })().catch((err: unknown) => {
     cache = null;
     throw err;
@@ -53,6 +57,19 @@ export async function listCollectionProjects(): Promise<CollectionProject[]> {
 /** Drop the cached list — after launching from a directory that was not in it. */
 export function forgetCollectionProjects(): void {
   cache = null;
+  settled = null;
+}
+
+/** The project id for a cwd from the ALREADY-FETCHED list, or `undefined` when the list has not
+ *  arrived yet — which is a different answer from `null` ("known, and not a project").
+ *
+ *  Exists so a surface can scope itself SYNCHRONOUSLY once the list is warm. The async lookup is
+ *  a race against the cards it is supposed to scope: they mount and self-fetch immediately, so a
+ *  scope that arrives a tick later arrives after the request it was for. */
+export function cachedProjectIdForCwd(cwd: string | null | undefined): string | null | undefined {
+  if (!cwd) return null;
+  if (!settled) return undefined;
+  return settled.find((project) => project.cwd === cwd)?.id ?? null;
 }
 
 /** The project id for a cell's cwd, or null when that directory is not one the server knows.

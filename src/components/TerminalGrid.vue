@@ -1151,6 +1151,7 @@ watch(
         <GuiPanel
           v-else-if="rightPane === 'canvas'"
           :session-id="expandedSessionId"
+          :cwd="expandedCwd"
           :send-text-message="sendToExpandedCell"
           :unavailable="canvasUnavailable"
           :expanded="paneFull"

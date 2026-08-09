@@ -38,9 +38,24 @@ export interface CollectionNavSurface {
 /** A surface: where navigation goes, and which project its requests name. `projectId: null` is
  *  the shared workspace — what the full-screen overlay shows, and what everything showed before
  *  panes existed. */
+/** How a surface sits on the screen. `"screen"` covers everything below it (the full-screen
+ *  collection browser); `"pane"` is the right-hand slot beside the terminal (the Collections pane
+ *  and the canvas, which share it).
+ *
+ *  Precedence is by LAYER first, push order second — not push order alone. A canvas can mount
+ *  while the full-screen browser is already open (a tool result auto-reveals one behind it), and
+ *  the surface that mounted last is then not the surface being looked at. */
+export type CollectionSurfaceLayer = "pane" | "screen";
+
 export interface CollectionSurface {
   projectId: string | null;
-  nav: CollectionNavSurface;
+  /** Defaults to `"pane"` — the slot beside the terminal. */
+  layer?: CollectionSurfaceLayer;
+  /** How this surface navigates — OPTIONAL, because scoping and navigating are not always the
+   *  same claim. The canvas shows one session's cards and must scope their fetches to that
+   *  session's project, but a link inside a card still belongs to the full-screen browser: a
+   *  canvas that took navigation would swallow it. */
+  nav?: CollectionNavSurface;
 }
 
 // A PLAIN array, deliberately not a `ref`. Nothing renders from this stack — it is read
@@ -58,15 +73,31 @@ export function popCollectionSurface(surface: CollectionSurface): void {
   if (i >= 0) stack.splice(i, 1);
 }
 
+/** The surfaces that can be the visible one: those on the topmost occupied LAYER. A full-screen
+ *  surface covers every pane, so once one is registered nothing in a pane can be what the user is
+ *  looking at, however recently it mounted. */
+function visibleSurfaces(): CollectionSurface[] {
+  const screen = stack.filter((surface) => surface.layer === "screen");
+  return screen.length > 0 ? screen : stack;
+}
+
 /** The project the visible surface is scoped to — null for the workspace, which is also the
  *  answer when no surface is registered at all. */
 export function activeCollectionProjectId(): string | null {
-  return stack.at(-1)?.projectId ?? null;
+  return visibleSurfaces().at(-1)?.projectId ?? null;
 }
 
 /** The surface currently driving navigation, or null when only the router-backed overlay is up.
  *  Null is the DEFAULT, not a failure: with no pane mounted the binding keeps behaving exactly as
  *  it did, which is what keeps this change invisible to the overlay. */
 export function activeCollectionNavSurface(): CollectionNavSurface | null {
-  return stack.at(-1)?.nav ?? null;
+  // The topmost VISIBLE surface that has a nav, not the topmost surface: a scope-only surface
+  // above it (the canvas) must not silence the one below that can actually navigate, and a pane
+  // must not answer for a full-screen browser covering it.
+  const visible = visibleSurfaces();
+  for (let i = visible.length - 1; i >= 0; i -= 1) {
+    const nav = visible[i]?.nav;
+    if (nav) return nav;
+  }
+  return null;
 }
