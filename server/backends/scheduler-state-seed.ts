@@ -51,13 +51,18 @@ function nextWindowIso(schedule: TaskSchedule, now: Date): string | null {
   return next === null ? null : new Date(next).toISOString();
 }
 
-/** Give every task the map has never seen a starting point. Returns the ids seeded — pure
- *  apart from the map it fills, so the boot behaviour is testable without a filesystem. */
+/** Give every task without a starting point one. Returns the ids seeded — pure apart from the
+ *  map it fills, so the boot behaviour is testable without a filesystem.
+ *
+ *  Keyed on `lastRunAt`, not on the entry existing: an entry that somehow has none is stuck in
+ *  the same never-caught-up loop, and the rest of its fields (run counts, last error) are still
+ *  worth keeping. */
 export function seedStates(states: StateMap, tasks: readonly SeedTask[], now: Date): string[] {
   const seeded: string[] = [];
   for (const task of tasks) {
-    if (states.has(task.id)) continue;
-    states.set(task.id, { ...emptyState(task.id), lastRunAt: now.toISOString(), nextScheduledAt: nextWindowIso(task.schedule, now) });
+    const current = states.get(task.id);
+    if (current && current.lastRunAt !== null) continue;
+    states.set(task.id, { ...(current ?? emptyState(task.id)), lastRunAt: now.toISOString(), nextScheduledAt: nextWindowIso(task.schedule, now) });
     seeded.push(task.id);
   }
   return seeded;

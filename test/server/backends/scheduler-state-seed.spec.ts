@@ -71,6 +71,31 @@ describe("seedStates", () => {
     expect(seedStates(states, [WORKLOG], BOOT)).toEqual([]);
     expect(states.get(WORKLOG.id)?.lastRunAt).toBe(ranAt);
   });
+
+  // An entry with no lastRunAt is in the same never-caught-up loop as no entry at all, so it
+  // gets a starting point — without discarding what the entry already knows.
+  it("gives an entry that has no starting point one, keeping its history", () => {
+    const states: StateMap = new Map([
+      [
+        WORKLOG.id,
+        {
+          taskId: WORKLOG.id,
+          lastRunAt: null,
+          lastRunResult: null,
+          lastRunDurationMs: null,
+          lastErrorMessage: "boom",
+          consecutiveFailures: 2,
+          totalRuns: 5,
+          nextScheduledAt: null,
+        },
+      ],
+    ]);
+
+    expect(seedStates(states, [WORKLOG], BOOT)).toEqual([WORKLOG.id]);
+    expect(states.get(WORKLOG.id)?.lastRunAt).toBe(BOOT.toISOString());
+    expect(states.get(WORKLOG.id)?.totalRuns).toBe(5);
+    expect(states.get(WORKLOG.id)?.consecutiveFailures).toBe(2);
+  });
 });
 
 describe("what the seed buys: a window missed with the server down is caught up", () => {
