@@ -52,6 +52,8 @@ import PinToggle from "../components/PinToggle.vue";
 import { startCollectionChat } from "./useChatLauncher";
 import { browserLocale } from "../utils/browserLocale";
 import { isRecord } from "../../common/isRecord";
+import { withActiveProject } from "./collectionProject";
+import { activeCollectionNavSurface, activeCollectionProjectId } from "./collectionSurface";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 // ── Modal teleport target (Shadow DOM) ──
@@ -79,10 +81,10 @@ const asDeclared = <T>(raw: unknown): T => raw as T;
 
 // Read helper: normalise fetch into the package's CollectionApiResult (the view
 // treats `ok:false` with `status` 404 as not-found, any other failure as a skip).
-const apiGet = <T>(url: string): Promise<CollectionApiResult<T>> => fetchJson<T>(url, asDeclared);
+const apiGet = <T>(url: string): Promise<CollectionApiResult<T>> => fetchJson<T>(withActiveProject(url), asDeclared);
 
 const apiSend = <T>(method: "POST" | "PUT", url: string, body: unknown): Promise<CollectionApiResult<T>> =>
-  fetchJson<T>(url, asDeclared, { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  fetchJson<T>(withActiveProject(url), asDeclared, { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 const apiPost = <T>(url: string, body: unknown) => apiSend<T>("POST", url, body);
 const apiPut = <T>(url: string, body: unknown) => apiSend<T>("PUT", url, body);
 
@@ -91,7 +93,7 @@ const apiPut = <T>(url: string, body: unknown) => apiSend<T>("PUT", url, body);
 // like "preset collections can't be deleted") instead of a bare status code.
 async function apiDelete(url: string): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    const res = await fetchWithTimeout(url, { method: "DELETE" });
+    const res = await fetchWithTimeout(withActiveProject(url), { method: "DELETE" });
     if (res.ok) return { ok: true };
     return { ok: false, error: errorMessage(await readErrorBody(res), res.status) };
   } catch (err) {
@@ -125,9 +127,13 @@ async function postTranslation(req: TranslateRequest): Promise<TranslateResponse
 
 const itemUrl = (slug: string, itemId: string) => `/api/collections/${encodeURIComponent(slug)}/items/${encodeURIComponent(itemId)}`;
 
-/** Browser URL for a workspace-relative file path, via the raw-file route. */
+/** Browser URL for a ROOT-relative file path, via the raw-file route.
+ *
+ *  Carries the project like every other collection request: an `image` / `file` field is relative
+ *  to the collection's own root, so without it a project's records resolve against the workspace —
+ *  a missing image at best, another project's file at worst. */
 function rawFileUrl(value: unknown): string {
-  return `/api/files/raw?path=${encodeURIComponent(String(value))}`;
+  return withActiveProject(`/api/files/raw?path=${encodeURIComponent(String(value))}`);
 }
 
 // The preview route (server/backends/html.ts → mountHtmlPreviewRoute) serves
@@ -158,18 +164,34 @@ configureCollectionUi({
   //    else resolves to /api/files/raw?path=<workspace-relative>. fileRoutePath
   //    (in-app File Explorer nav) stays null — MulmoTerminal has no file explorer. ──
   imageSrc: (imageData) => (typeof imageData === "string" && imageData.startsWith("data:") ? imageData : rawFileUrl(imageData)),
-  fileAssetUrl: (value) => (typeof value === "string" && value.length > 0 ? (htmlPreviewUrl(value) ?? rawFileUrl(value)) : null),
+  // The HTML preview route (`/artifacts/html/…`) is fixed to the workspace and takes no project,
+  // so it is offered ONLY when the surface is the workspace. For a project it would either 404 or —
+  // worse — render the workspace's file of the same path under that project's name; the raw-file
+  // route is project-scoped, so a project's HTML asset goes there instead. It loses the preview
+  // CSP treatment, which is the deliberate trade until that route learns about projects.
+  fileAssetUrl: (value) => {
+    if (typeof value !== "string" || value.length === 0) return null;
+    const preview = activeCollectionProjectId() === null ? htmlPreviewUrl(value) : null;
+    return preview ?? rawFileUrl(value);
+  },
   fileRoutePath: () => null,
 
   // ── navigation: no router — map onto useCollectionBrowse's view-state, which
-  //    drives the full-screen browse overlay + the toolbar launcher. ──
-  routeSlug: () => browseRouteSlug(),
-  routeSelectedId: () => browseRouteSelectedId(),
-  isFeedRoute: () => browseIsFeedRoute(),
-  setSelectedId: (itemId) => browseSetSelectedId(itemId),
-  gotoIndex: (kind) => browseGotoIndex(kind),
-  gotoDetail: (kind, slug) => browseGotoDetail(kind, slug),
-  navigateToRecord: (targetSlug, recordId) => browseNavigateToRecord(targetSlug, recordId),
+  //    drives the full-screen browse overlay + the toolbar launcher.
+  //
+  //    …unless a surface has registered itself (collectionNavSurface.ts). A collections PANE
+  //    beside a cell navigates INSIDE itself: routing it through the overlay's view-state would
+  //    move the whole app on a click in a side pane, and two cells on different projects would
+  //    share one "open collection". With no pane mounted the stack is empty and every line below
+  //    is the browse call it always was. ──
+  routeSlug: () => activeCollectionNavSurface()?.routeSlug() ?? browseRouteSlug(),
+  routeSelectedId: () => activeCollectionNavSurface()?.routeSelectedId() ?? browseRouteSelectedId(),
+  isFeedRoute: () => activeCollectionNavSurface()?.isFeedRoute() ?? browseIsFeedRoute(),
+  setSelectedId: (itemId) => (activeCollectionNavSurface() ?? { setSelectedId: browseSetSelectedId }).setSelectedId(itemId),
+  gotoIndex: (kind) => (activeCollectionNavSurface() ?? { gotoIndex: browseGotoIndex }).gotoIndex(kind),
+  gotoDetail: (kind, slug) => (activeCollectionNavSurface() ?? { gotoDetail: browseGotoDetail }).gotoDetail(kind, slug),
+  navigateToRecord: (targetSlug, recordId) =>
+    (activeCollectionNavSurface() ?? { navigateToRecord: browseNavigateToRecord }).navigateToRecord(targetSlug, recordId),
 
   // ── custom views (read-only): sandboxed-iframe HTML views over the shared
   //    workspace. Mint a scoped token, fetch the view HTML, and wrap it in a
@@ -177,7 +199,7 @@ configureCollectionUi({
   mintViewToken: (slug, viewId) => apiPost<CollectionViewToken>(`/api/collections/${encodeURIComponent(slug)}/view-token`, { viewId }),
   fetchViewHtml: async (slug, viewId) => {
     try {
-      const res = await fetchWithTimeout(`/api/collections/${encodeURIComponent(slug)}/view-file?id=${encodeURIComponent(viewId)}`);
+      const res = await fetchWithTimeout(withActiveProject(`/api/collections/${encodeURIComponent(slug)}/view-file?id=${encodeURIComponent(viewId)}`));
       return res.ok ? { ok: true as const, html: await res.text() } : { ok: false as const, status: res.status };
     } catch {
       return { ok: false as const, status: 0 };

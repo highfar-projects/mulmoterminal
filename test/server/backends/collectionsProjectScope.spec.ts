@@ -12,6 +12,7 @@ import path from "node:path";
 import { appRequest } from "../../helpers/appRequest.js";
 import { initCollectionsBackend, mountCollectionRoutes } from "../../../server/backends/collections.js";
 import { projectId } from "../../../server/infra/project-root.js";
+import { manageCollectionHandlerFor } from "../../../server/infra/collection-tool.js";
 import { makeTempDir } from "../../support/tempDir";
 
 const schemaFor = (title: string) => ({
@@ -32,8 +33,13 @@ function makeProject(prefix: string, title: string, recordName: string): string 
   const root = makeTempDir(prefix);
   mkdirSync(path.join(root, ".claude", "skills", "tasks"), { recursive: true });
   writeFileSync(path.join(root, ".claude", "skills", "tasks", "schema.json"), JSON.stringify(schemaFor(title)));
-  mkdirSync(path.join(root, "data", "skills", "tasks", "views"), { recursive: true });
-  writeFileSync(path.join(root, "data", "skills", "tasks", "views", "v1.html"), "<head></head><body>view</body>");
+  // In the SKILL dir, not under `data/skills`. That staging tree is a workspace mechanism — it
+  // exists so the agent can write skill drafts without crossing the `.claude/` permission gate,
+  // and a bridge mirrors the allowlisted files across. A project folder has no such gate: the
+  // files live where git carries them, which is also what makes the collection survive a clone
+  // (plans/feat-collections-project-root.md §6.5, §11).
+  mkdirSync(path.join(root, ".claude", "skills", "tasks", "views"), { recursive: true });
+  writeFileSync(path.join(root, ".claude", "skills", "tasks", "views", "v1.html"), "<head></head><body>view</body>");
   mkdirSync(path.join(root, "data", "tasks", "items"), { recursive: true });
   writeFileSync(path.join(root, "data", "tasks", "items", "one.json"), JSON.stringify({ id: "one", name: recordName }));
   return root;
@@ -132,6 +138,20 @@ describe("collections served from a named project", () => {
     const names = body.items.map((item) => item.name);
     expect(names).toContain("from-other");
     expect(names).not.toContain("from-workspace");
+  });
+
+  // The agent's own data plane. `manageCollection` used to be bound to the workspace, so an
+  // agent asked to create a collection "here" created it somewhere else — and, unlike the routes
+  // above, nothing in the request said which project it meant. It reads the session's cwd now.
+  it("runs the agent's manageCollection against the session's directory", async () => {
+    const inOther = await manageCollectionHandlerFor(other)({ action: "getSchema", slug: "tasks" });
+    expect(inOther).toContain("Other Tasks");
+    expect(inOther).not.toContain("Workspace Tasks");
+
+    // …and the workspace-bound one still answers for the workspace, so the two roots are told
+    // apart by the handler rather than by whichever was configured last.
+    const inWorkspace = await manageCollectionHandlerFor(workspace)({ action: "getSchema", slug: "tasks" });
+    expect(inWorkspace).toContain("Workspace Tasks");
   });
 
   it("scopes the collection LIST to the named project too, not only the detail route", async () => {

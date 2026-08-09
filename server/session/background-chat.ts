@@ -14,6 +14,14 @@ export interface BackgroundChatRequest {
   /** Keep the session out of the sidebar. */
   hidden: boolean;
   message: string;
+  /** The project the chat belongs to, as the opaque id the collection surface uses, or null for
+   *  the shared workspace.
+   *
+   *  A collection action seeds its prompt with THAT collection's `<collection_paths>`, so a chat
+   *  spawned in the workspace for a project's collection is handed paths for a directory it is
+   *  not standing in — which reads as a broken template rather than as a wrong cwd. The id is
+   *  resolved against the server's own list of known directories; it is never a path. */
+  project: string | null;
 }
 
 /** The request, or the message to answer with when it cannot be served. */
@@ -31,6 +39,7 @@ export function parseBackgroundChat(body: unknown): { ok: true; request: Backgro
       draft: record.draft === true,
       hidden: record.hidden === true,
       message,
+      project: typeof record.project === "string" && record.project.length > 0 ? record.project : null,
     },
   };
 }

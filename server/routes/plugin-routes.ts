@@ -14,10 +14,15 @@ import { backgroundMarkers, markFailedWorker, markUnplacedSession } from "../ses
 import { runWithHiddenMarker } from "../session/hiddenMarker.js";
 import { registerCompletionHook } from "../session/completion-hooks.js";
 import { backgroundChatMessage, parseBackgroundChat, spawnModeFor, type SpawnMode } from "../session/background-chat.js";
+import type { TerminalAgent } from "../../common/sessionAgent.js";
 import { registeredGuiMcpGroups } from "../infra/gui-mcp-registration.js";
 import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups.js";
 import { codexifySkillSeed } from "../agents/codex-skills.js";
-import { manageCollectionHandler } from "../infra/collection-tool.js";
+import { SESSION_HEADER } from "../backends/presentPathRoot.js";
+import { SESSION_ID_RE } from "../config/env.js";
+import { cwdForSession } from "../session/session-cwd.js";
+import { projectScopeForCwd, rootForProjectId } from "../infra/project-root.js";
+import { manageCollectionHandlerFor } from "../infra/collection-tool.js";
 import { upstreamFailureMessage } from "./plugin-narration.js";
 import type { SpawnClaudePty, SpawnCodexPty, SpawnAntigravityPty, SpawnGrokPty, SpawnMusePty } from "../session/spawners.js";
 
@@ -45,15 +50,55 @@ export interface PluginRouteDeps {
 function spawnSeededSession(
   deps: PluginRouteDeps,
   mode: SpawnMode,
-  { sessionId, message, mcpGroups }: { sessionId: string; message: string; mcpGroups: readonly ToolGroup[] },
+  { sessionId, message, mcpGroups, cwd }: { sessionId: string; message: string; mcpGroups: readonly ToolGroup[]; cwd: string },
 ): void {
+  // GUI MCP: every branch below keeps the full toolset regardless of the directory, and that is a
+  // decision rather than an oversight. `carriesFullGuiMcp()` is consulted inside each spawner —
+  // claude's `attachGuiMcp` defaults true and codex is passed `true` here — so a seeded chat gets
+  // the generated `--mcp-config` even when it runs in a project directory, where a plain CELL
+  // would instead read the user's own `.mcp.json`.
+  //
+  // Why that asymmetry is right: this chat exists because a GUI action asked for it, and the seed
+  // it carries names collection paths and expects the collection tools. A cell the user opened in
+  // that directory has made no such request. The agents that read their groups from a file in the
+  // directory get them from `groupsForSpawn(agent, cwd)` instead, which is the per-directory
+  // mechanism that DOES have to follow the cwd.
   const initialPrompt = codexifySkillSeed(message);
-  if (mode === "codex-run") deps.spawnCodexPty(sessionId, null, null, CLAUDE_CWD, true, { initialPrompt });
-  else if (mode === "antigravity-run") deps.spawnAntigravityPty(sessionId, null, null, CLAUDE_CWD, { mcpGroups, initialPrompt });
-  else if (mode === "grok-run") deps.spawnGrokPty(sessionId, null, null, CLAUDE_CWD, { mcpGroups, initialPrompt });
-  else if (mode === "muse-run") deps.spawnMusePty(sessionId, null, null, CLAUDE_CWD, { mcpGroups, initialPrompt });
-  else if (mode === "claude-draft") deps.spawnClaudePty(sessionId, null, null, { draft: message });
-  else deps.spawnClaudePty(sessionId, null, null, { initialPrompt: message });
+  if (mode === "codex-run") deps.spawnCodexPty(sessionId, null, null, cwd, true, { initialPrompt });
+  else if (mode === "antigravity-run") deps.spawnAntigravityPty(sessionId, null, null, cwd, { mcpGroups, initialPrompt });
+  else if (mode === "grok-run") deps.spawnGrokPty(sessionId, null, null, cwd, { mcpGroups, initialPrompt });
+  else if (mode === "muse-run") deps.spawnMusePty(sessionId, null, null, cwd, { mcpGroups, initialPrompt });
+  else if (mode === "claude-draft") deps.spawnClaudePty(sessionId, null, null, { draft: message, cwd });
+  else deps.spawnClaudePty(sessionId, null, null, { initialPrompt: message, cwd });
+}
+
+/** Where a seeded chat runs: the project it was started from, or the workspace when it named
+ *  none. `null` means the request named a project this server does not know — refused rather than
+ *  quietly spawned in the workspace, which is the substitution the rest of this surface refuses.
+ *
+ *  The id is resolved against the server's OWN list of directories; it is never a path. */
+function spawnCwdFor(project: string | null): string | null {
+  return project === null ? CLAUDE_CWD : rootForProjectId(project);
+}
+
+/** The GUI MCP groups a seeded spawn must be handed, resolved from the directory it will run in.
+ *
+ *  The agents that read their GUI MCP servers from a FILE in the working directory — agy's
+ *  `.agents/mcp_config.json` and grok's `.grok/config.toml` — share that file with every other
+ *  session running there, so the groups have to be resolved BEFORE the spawn rewrites it: passing
+ *  none would clear the entries those sessions are using (#1095 review).
+ *
+ *  Which agents need them resolved here: the ones that do not get a per-spawn `--mcp-config`. agy
+ *  and grok write them into a config file in the directory; muse takes them as its session's
+ *  entitlement (server/session/bridge-session.ts) — and it was left out of this list when it was
+ *  wired, so a background muse chat got an empty list and therefore no GUI tools, in a workspace
+ *  that had them registered (Codex review on #1514).
+ *
+ *  Read from the SPAWN's directory, not the workspace: those config files live in the directory
+ *  the session runs in, so a chat spawned in a project must be told what that project registered. */
+async function groupsForSpawn(agent: TerminalAgent, cwd: string): Promise<readonly ToolGroup[]> {
+  const needsGroups = agent === "antigravity" || agent === "grok" || agent === "muse";
+  return needsGroups ? await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []) : [];
 }
 
 export function mountPluginRoutes(app: Express, deps: PluginRouteDeps): void {
@@ -68,21 +113,15 @@ export function mountPluginRoutes(app: Express, deps: PluginRouteDeps): void {
   app.post("/api/plugin/spawnBackgroundChat", async (req, res) => {
     const parsed = parseBackgroundChat(req.body);
     if (!parsed.ok) return res.json({ message: parsed.message });
-    const { agent, draft, hidden, message } = parsed.request;
+    const { agent, draft, hidden, message, project } = parsed.request;
+    const cwd = spawnCwdFor(project);
+    if (cwd === null) return res.json({ message: `spawnBackgroundChat: unknown project '${project?.replace(/[\r\n]/g, " ") ?? ""}'.` });
     const sessionId = randomUUID();
-    // The agents that read their GUI MCP servers from a FILE in the working directory — agy's
-    // `.agents/mcp_config.json` and grok's `.grok/config.toml` — share that file with every other
-    // session running there, so the groups have to be resolved BEFORE the spawn rewrites it:
-    // passing none would clear the entries those sessions are using (#1095 review).
-    // Which agents need the workspace's registered groups resolved here: the ones that do not get
-    // a per-spawn `--mcp-config`. agy and grok write them into a config file in the directory; muse
-    // takes them as its session's entitlement (server/session/bridge-session.ts) — and it was left
-    // out of this list when it was wired, so a background muse chat got an empty list and therefore
-    // no GUI tools, in a workspace that had them registered (Codex review on #1514).
-    const needsGroups = agent === "antigravity" || agent === "grok" || agent === "muse";
-    const mcpGroups = needsGroups ? await registeredGuiMcpGroups(CLAUDE_CWD, TOOL_GROUPS).catch(() => []) : [];
+    const mcpGroups = await groupsForSpawn(agent, cwd);
     try {
-      runWithHiddenMarker(hidden, sessionId, backgroundMarkers, () => spawnSeededSession(deps, spawnModeFor(agent, draft), { sessionId, message, mcpGroups }));
+      runWithHiddenMarker(hidden, sessionId, backgroundMarkers, () =>
+        spawnSeededSession(deps, spawnModeFor(agent, draft), { sessionId, message, mcpGroups, cwd }),
+      );
       // Visible: somebody should be able to SEE this session. The browser that asked for it
       // places it immediately (useChatLauncher), and this covers every other caller — an agent
       // calling the tool from another session, with no tab open at all. The mark is cleared the
@@ -164,7 +203,18 @@ export function mountPluginRoutes(app: Express, deps: PluginRouteDeps): void {
   // MulmoClaude.
   app.post("/api/plugin/manageCollection", async (req, res) => {
     try {
-      const message = await manageCollectionHandler(isRecord(req.body) ? req.body : {});
+      // Scoped to the SESSION's directory, not the workspace. An agent asked to make a
+      // collection "here" means the folder its cell is open in, and the workspace-bound handler
+      // silently made it somewhere else — the read/write surface was scoped per request while
+      // this, the agent's own data plane, still resolved one fixed root.
+      //
+      // The session id rides in a header from the MCP broker, and `cwdForSession` is the same
+      // lookup presentDocument's relative paths already resolve through, so the tool and the
+      // documents it produces agree on where "here" is.
+      const header = req.get(SESSION_HEADER);
+      const sessionId = header && SESSION_ID_RE.test(header) ? header : null;
+      const handler = manageCollectionHandlerFor(projectScopeForCwd(cwdForSession(sessionId)).workspaceRoot);
+      const message = await handler(isRecord(req.body) ? req.body : {});
       return res.json({ message });
     } catch (err) {
       console.error(`[manageCollection] dispatch failed: ${messageOf(err)}`);
