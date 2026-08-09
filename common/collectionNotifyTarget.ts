@@ -19,6 +19,12 @@ export interface CollectionNotifyTarget {
   slug: string;
   /** Absent on a collection-level bell — those can't accent a specific record. */
   itemId?: string | undefined;
+  /** The record's project, as the opaque id the API takes. ABSENT MEANS THE WORKSPACE — both
+   *  because that is what a workspace bell has always written and because it is the only thing
+   *  MulmoClaude, which has one root, can write. A slug is unique within a root and nowhere
+   *  else, so a reader that ignores this accents the same-named record of whichever project is
+   *  on screen. */
+  project?: string | undefined;
 }
 
 /** Narrow a notification's opaque `pluginData` to its collection navigate target,
@@ -31,7 +37,11 @@ export function collectionNotifyTargetOf(pluginData: unknown): CollectionNotifyT
   if (!isRecord(action)) return null;
   const { target } = action;
   if (!isRecord(target)) return null;
-  const { view, slug, itemId } = target;
+  const { view, slug, itemId, project } = target;
   if (view !== COLLECTION_NOTIFY_VIEW || typeof slug !== "string" || slug.length === 0) return null;
-  return { slug, itemId: typeof itemId === "string" && itemId.length > 0 ? itemId : undefined };
+  return {
+    slug,
+    itemId: typeof itemId === "string" && itemId.length > 0 ? itemId : undefined,
+    project: typeof project === "string" && project.length > 0 ? project : undefined,
+  };
 }

@@ -1961,6 +1961,18 @@ describe("TerminalCell", () => {
     expect(w.find(".cell-actions .cell-close").exists()).toBe(true);
   });
 
+  // The whole chain, on the cell the user actually presses it on: button -> CellChromeButtons'
+  // emit -> the cell's chromeEvents object -> the cell's own emit -> the grid, which opens the
+  // pane. It was broken at the third step from #1573 until the button was first tried by hand:
+  // `chromeEvents` had no `toggle-collections` key, so the emit was dropped inside the cell and
+  // nothing reached the grid. See cellChromeForwarding.spec for why the list is derived now.
+  it("forwards the collections toggle out of an enlarged cell, so the grid can open the pane", async () => {
+    const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj", expanded: true });
+    await flushPromises();
+    await w.find(`[aria-label="Show this folder's collections"]`).trigger("click");
+    expect(w.emitted("toggle-collections")).toHaveLength(1);
+  });
+
   it("shows the restore label + icon when the cell is expanded", async () => {
     const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj", expanded: true });
     await flushPromises();

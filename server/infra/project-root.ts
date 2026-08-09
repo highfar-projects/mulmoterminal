@@ -112,6 +112,29 @@ export function listProjectRoots(): ProjectSummary[] {
   return rows.map((row) => ({ id: projectId(row.root), label: row.label, cwd: row.root }));
 }
 
+/** The opaque id for a ROOT the server serves, or null when it serves none — which is also
+ *  the answer for the WORKSPACE, deliberately: the workspace is what a request naming no
+ *  project gets, so a link into it carries no id and stays byte-identical to the one this app
+ *  built before projects existed (and to MulmoClaude's, which has only that root).
+ *
+ *  The inverse of `rootForProjectId`, and matched against the SAME list it resolves against —
+ *  by RESOLVED path, not by string equality. Hashing the caller's root directly would mint an
+ *  id that resolves to nothing: `cwdPresets` holds the path as the user saved it while the
+ *  collection engine hands back a `path.resolve`d form, so a trailing slash or a `.` segment
+ *  would be a different digest of the same directory.
+ *
+ *  Exported for the completion-bell adapter, whose deep link has to name a project the client
+ *  can then ask for. */
+export function projectIdForRoot(root: string): string | null {
+  if (workspace === null) return null;
+  const target = path.resolve(root);
+  if (path.resolve(workspace) === target) return null;
+  for (const project of knownProjects()) {
+    if (path.resolve(project.path) === target) return projectId(project.path);
+  }
+  return null;
+}
+
 /** The root an opaque id names, or null when it names none. Exported because the view-token
  *  middleware resolves the id carried IN a token, which never passes through a query string. */
 export function rootForProjectId(id: string): string | null {

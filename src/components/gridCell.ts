@@ -45,7 +45,7 @@ export interface GridCellEmits {
   // `open-canvas` is the unread-canvas chip on an UN-expanded cell: enlarge me AND open the
   // pane, in one gesture. Distinct from `toggle-canvas`, which toggles the pane on the cell
   // that is already enlarged.
-  (e: "toggle-expand" | "close" | "toggle-files" | "toggle-canvas" | "toggle-tools" | "open-canvas"): void;
+  (e: "toggle-expand" | "close" | "toggle-files" | "toggle-canvas" | "toggle-tools" | "toggle-collections" | "open-canvas"): void;
   // Swap this cell left (-1) or right (+1) in manual sort mode.
   (e: "move", dir: -1 | 1): void;
   // Report activity up so the grid can attention-sort in auto mode.
