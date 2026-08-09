@@ -11,9 +11,13 @@ const WORKLOG_OFF = { enabled: false, intervalHours: 6 };
 const build = (worklog = WORKLOG_OFF) => buildSystemTasks({ workspaceRoot: "/ws", worklog, spawnChat: () => {} });
 
 describe("buildSystemTasks", () => {
-  it("registers both shared engines", () => {
+  // The feed-refresh id carries its ROOT since core 3.1.0 — the task def is per root, so two
+  // roots would otherwise register one id and the second would replace the first. MulmoTerminal
+  // registers one (the workspace) today, and does not persist system-task state, so there is no
+  // stale row from the old id to clean up.
+  it("registers both shared engines, the feed refresh keyed by its root", () => {
     const ids = build().map((task) => task.id);
-    expect(ids).toContain("system:feed-refresh");
+    expect(ids).toContain("system:feed-refresh:/ws");
     expect(ids).toContain("system:google-calendar-sync");
   });
 

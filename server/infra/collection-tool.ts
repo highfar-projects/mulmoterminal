@@ -21,6 +21,7 @@ import type { ToolDefinition } from "gui-chat-protocol";
 import { makeManageCollectionTool } from "@mulmoclaude/core/collection/server";
 import { helpsAssetDir } from "@mulmoclaude/core/workspace-setup";
 import { workspaceScope } from "./project-root.js";
+import { isManagedWorkspace } from "../backends/workspaceSetup.js";
 
 const tool = makeManageCollectionTool({
   bundledHelpsDir: helpsAssetDir,
@@ -52,7 +53,20 @@ const byRoot = new Map<string, typeof tool.handler>();
 export function manageCollectionHandlerFor(workspaceRoot: string): typeof tool.handler {
   const cached = byRoot.get(workspaceRoot);
   if (cached) return cached;
-  const handler = makeManageCollectionTool({ bundledHelpsDir: helpsAssetDir, workspaceRoot }).handler;
+  const handler = makeManageCollectionTool({
+    bundledHelpsDir: helpsAssetDir,
+    workspaceRoot,
+    // Which authoring guide `schemaDocs` serves. Staged authoring (`data/skills/<slug>/`, mirrored
+    // by a bridge) is a WORKSPACE mechanism; told that in a project folder, the agent writes a
+    // draft nothing mirrors and nothing discovers — it does as instructed and produces a
+    // collection that does not exist, with no error anywhere.
+    //
+    // The engine also derives the variant from `skillsStagingDir` returning null, so this agrees
+    // with the host binding rather than overriding it. Passed anyway: two levers that must agree
+    // are worth stating at both ends, and this one says WHY the root has no staging rather than
+    // leaving it to be inferred from a path that came back empty.
+    stagedSkillAuthoring: isManagedWorkspace(workspaceRoot),
+  }).handler;
   byRoot.set(workspaceRoot, handler);
   return handler;
 }
