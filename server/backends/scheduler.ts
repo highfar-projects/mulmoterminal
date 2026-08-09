@@ -164,19 +164,36 @@ export function initUserTaskScheduler(deps: { workspace: string; spawnChat: Sche
   return userDefs.length;
 }
 
+// How long the tick loop waits for the adapter before starting without it. One tick: long
+// enough that the normal case (seed + a catch-up run) is always inside it, short enough that a
+// wedged catch-up costs at most one tick rather than every tick.
+const ADAPTER_START_GRACE_MS = 60_000;
+
 /** Start the tick loop once the registry is COMPLETE. The adapter registers its tasks only after
  *  seeding and running the catch-up plan, so starting first leaves ticks that see no system task
  *  at all — and a window passing in that gap then waits for the next boot to be noticed.
- *  A failed adapter start still starts the loop: the user tasks are registered and due. */
+ *
+ *  Bounded, though: a catch-up run is real work over the network, and waiting on one that never
+ *  returns would mean the user's own tasks never tick either. `start()` ignores a second call, so
+ *  whichever of the two happens first wins. A failed adapter start also starts the loop — the
+ *  user tasks are registered and due regardless. */
 function startTicking(taskManager: ITaskManager, deps: { workspace: string; systemTasks: SystemTaskDef[]; userTaskCount: number }): void {
   if (deps.systemTasks.length + deps.userTaskCount === 0) return;
   if (deps.systemTasks.length === 0) {
     taskManager.start();
     return;
   }
+  const graceTimer = setTimeout(() => {
+    log.warn("adapter still starting — ticking without the system tasks for now");
+    taskManager.start();
+  }, ADAPTER_START_GRACE_MS);
+  graceTimer.unref();
   void startSystemTaskScheduler({ taskManager, workspace: deps.workspace, tasks: deps.systemTasks, log })
     .catch((err: unknown) => log.error("system task scheduler failed to start", { error: String(err) }))
-    .finally(() => taskManager.start());
+    .finally(() => {
+      clearTimeout(graceTimer);
+      taskManager.start();
+    });
 }
 
 /** One user task as the API returns it: the persisted entry, tagged with its origin and

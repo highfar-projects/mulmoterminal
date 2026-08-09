@@ -260,7 +260,24 @@ describe("initUserTaskScheduler", () => {
     await vi.waitFor(() => expect(startMock).toHaveBeenCalledTimes(1));
   });
 
-  // ...but a broken adapter must not leave the user's own tasks dead in the water.
+  // ...but not forever. A catch-up run is network work; one that never returns must cost a tick,
+  // not every tick, or the user's own tasks never fire either.
+  it("ticks without the system tasks if the adapter is still starting a tick later", async () => {
+    vi.useFakeTimers();
+    try {
+      initSchedulerMock.mockImplementationOnce(() => new Promise<void>(() => {})); // never settles
+      initUserTaskScheduler({ workspace: makeWorkspace(), spawnChat: spawnOk, systemTasks: [sysTask("system:feed-refresh")] });
+
+      vi.advanceTimersByTime(59_000);
+      expect(startMock).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(2_000);
+      expect(startMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // ...and a broken adapter must not leave the user's own tasks dead in the water either.
   it("still ticks when the adapter fails to start", async () => {
     initSchedulerMock.mockRejectedValueOnce(new Error("disk full"));
 
