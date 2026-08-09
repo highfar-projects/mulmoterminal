@@ -41,16 +41,40 @@ grouped in `handlers/terminalSession.ts`.
 | `startChat` | `message`, `attachments?` | `{ started: true, chatId }` |
 | `listIssues` | — | `{ repos: RepoIssueRows[] }` |
 | `startIssueWork` | `repo`, `issue`, `run?` | `{ started: true, sessionId, branch, issue, outcome, ran }` |
-| `listFeeds` | — | `{ feeds }` |
-| `getFeed` | `slug`, `offset?`, `limit?` | the feed page |
-| `listCollections` | — | `{ collections }` (feed-backed ones excluded) |
-| `getCollection` | `slug`, `offset?`, `limit?` | one page of the collection's items |
+| `listFeeds` | `project?` | `{ feeds }` |
+| `getFeed` | `slug`, `project?`, `offset?`, `limit?` | the feed page |
+| `listCollectionProjects` | — | `{ projects: { id, label }[] }` — workspace first |
+| `listCollections` | `project?` | `{ collections }` (feed-backed ones excluded) |
+| `getCollection` | `slug`, `project?`, `offset?`, `limit?` | one page of the collection's items |
 | `listShortcuts` | — | `{ shortcuts }` |
-| `listSkills` | — | `{ skills }` (collection slugs excluded) |
+| `listSkills` | `project?` | `{ skills }` (collection slugs excluded) |
 | `listAccountingBooks` | — | `{ books: { id, name }[] }` |
-| `getRemoteView` | `slug`, `viewId`, `locale?` | `{ view, srcdoc, bytes }` |
-| `getRemoteViewItems` | `slug`, `viewId`, `offset?`, `limit?`, `fields?` | `{ page, inlined, omitted }` |
-| `mutateRemoteViewItem` | `slug`, `viewId`, `op`, `id`, `patch?` | `{ op, item }` / `{ op, id }` |
+| `getRemoteView` | `slug`, `viewId`, `project?`, `locale?` | `{ view, srcdoc, bytes }` |
+| `getRemoteViewItems` | `slug`, `viewId`, `project?`, `offset?`, `limit?`, `fields?` | `{ page, inlined, omitted }` |
+| `mutateRemoteViewItem` | `slug`, `viewId`, `project?`, `op`, `id`, `patch?` | `{ op, item }` / `{ op, id }` |
+
+### Which project a command means (`project`)
+
+A collection lives in a **directory**, and the host serves several: its own workspace plus every
+directory the user has saved. Every command above that reads collections, feeds or skills accepts
+an optional **`project`**, and `listCollectionProjects` is how the phone learns the ids to put in
+it.
+
+Three rules, and they are the contract rather than this host's preference:
+
+1. **The value is an OPAQUE ID, never a path.** The phone is a genuinely remote client — an
+   absolute root in a command or an artifact publishes the user's home directory over the wire.
+   Ids come from `listCollectionProjects` and are resolved host-side against the list the host
+   owns; a path is refused even when it names a real project.
+2. **Omitting it means the host's own workspace**, which is what every command meant before this
+   parameter existed. A phone that never sends it behaves exactly as it always did.
+3. **An id the host cannot resolve is an ERROR, not a fallback.** Serving the workspace's records
+   to a request that named a project would be the same slug, the same shape and different records,
+   with nothing saying so. Re-fetch the list and retry rather than treating the answer as the
+   project's.
+
+The ids are derived from the directory, not stored, so they survive a host restart — but they are
+not a name: a project the user removes stops resolving, which is the error in (3).
 
 The three `*RemoteView*` commands serve a collection's **mobile custom views**. The host wraps
 each view into its sandboxed `srcdoc` (CSP + postMessage bootstrap) and the phone renders that
