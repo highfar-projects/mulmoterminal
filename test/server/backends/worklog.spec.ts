@@ -1,12 +1,12 @@
 // @vitest-environment node
 import { describe, it, expect, vi } from "vitest";
-import { SCHEDULE_TYPES } from "@receptron/task-scheduler";
+import { MISSED_RUN_POLICIES, SCHEDULE_TYPES } from "@receptron/task-scheduler";
 import { worklogSystemTask, WORKLOG_PROMPT } from "../../../server/backends/worklog.js";
 
 const HOUR_MS = 3_600_000;
 
 describe("worklogSystemTask", () => {
-  const noop = () => {};
+  const noop = () => "11111111-1111-1111-1111-111111111111";
 
   it("returns null when disabled (no system task registered)", () => {
     expect(worklogSystemTask({ enabled: false, intervalHours: 6, spawnChat: noop })).toBeNull();
@@ -24,10 +24,19 @@ describe("worklogSystemTask", () => {
     expect(task?.schedule).toEqual({ type: SCHEDULE_TYPES.interval, intervalMs: 24 * HOUR_MS });
   });
 
+  // #1581: without these two fields the persistence adapter cannot take the task, so a window
+  // missed while the server was off was skipped forever. `run-once` and not `run-all` because
+  // the batch's own window is [lastRunAt, now] — one run already covers every missed window.
+  it("carries what the catch-up adapter needs: a name and run-once on a missed window", () => {
+    const task = worklogSystemTask({ enabled: true, intervalHours: 6, spawnChat: noop });
+    expect(task?.name).toBe("Dev worklog");
+    expect(task?.missedRunPolicy).toBe(MISSED_RUN_POLICIES.runOnce);
+  });
+
   it("run() spawns a chat seeded with the worklog prompt", async () => {
-    const spawnChat = vi.fn();
+    const spawnChat = vi.fn(noop);
     const task = worklogSystemTask({ enabled: true, intervalHours: 6, spawnChat });
-    await task?.run({ taskId: "system.worklog", now: new Date(0) });
+    await task?.run();
     expect(spawnChat).toHaveBeenCalledWith(WORKLOG_PROMPT);
   });
 });

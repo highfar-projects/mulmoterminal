@@ -852,16 +852,18 @@ setInterval(refreshDecisionDigests, DECISION_DIGEST_INTERVAL_MS).unref();
 
 // A user's scheduled task runs as a BACKGROUND WORKER — see scheduled-chat.ts for why, and for
 // what follows from it (no grid cell, but a failed one still says so).
-function spawnScheduledChat(message: string): void {
+//
+// A failed spawn is left to throw: whichever scheduler dispatched it records the failure and
+// logs it. Swallowing it here is how a task that never once started looked exactly like a task
+// that had not come due yet.
+function spawnScheduledChat(message: string, onComplete?: (outcome: { didError: boolean }, sessionId: string) => void | Promise<void>): string {
   const sessionId = randomUUID();
-  try {
-    spawnScheduledWorker(sessionId, {
-      spawn: (id) => spawnClaudePty(id, null, null, { initialPrompt: message }),
-      retain: (id) => scheduledSessions.register(id),
-    });
-  } catch (err) {
-    console.error(`[scheduler] failed to spawn chat for a scheduled task: ${messageOf(err)}`);
-  }
+  spawnScheduledWorker(sessionId, {
+    spawn: (id) => spawnClaudePty(id, null, null, { initialPrompt: message }),
+    retain: (id) => scheduledSessions.register(id),
+    onComplete,
+  });
+  return sessionId;
 }
 try {
   // Which tasks and why: system-tasks.ts. Both hosts are already configured above

@@ -1,12 +1,13 @@
 import { feedRefreshTaskDef } from "@mulmoclaude/core/feeds/server";
 import { googleCalendarSyncTaskDef } from "@mulmoclaude/core/google";
-import type { TaskDefinition } from "@mulmoclaude/core/scheduler";
+import type { SystemTaskDef } from "@mulmoclaude/core/scheduler";
 import { worklogSystemTask } from "./worklog.js";
+import type { ScheduledChatSpawn } from "./scheduled-run.js";
 
 export interface SystemTaskDeps {
   workspaceRoot: string;
   worklog: { enabled: boolean; intervalHours: number };
-  spawnChat: (message: string) => void;
+  spawnChat: ScheduledChatSpawn;
 }
 
 // The system tasks a standalone MulmoTerminal registers — the ones that must keep running with no
@@ -24,10 +25,15 @@ export interface SystemTaskDeps {
 //
 // Extracted from index.ts so the list is a value a spec can read. It went months missing the
 // calendar task with nothing to notice (#1191).
-export function buildSystemTasks(deps: SystemTaskDeps): TaskDefinition[] {
+//
+// `SystemTaskDef`, not `TaskDefinition`: the extra `name` + `missedRunPolicy` are what the
+// persistence adapter needs to catch a task up after the server was off. Both core factories
+// already returned them — this host used to throw them away, so nothing was ever caught up
+// and a missed window was skipped forever (#1581).
+export function buildSystemTasks(deps: SystemTaskDeps): SystemTaskDef[] {
   return [
     feedRefreshTaskDef({ workspaceRoot: deps.workspaceRoot }),
     googleCalendarSyncTaskDef({ workspaceRoot: deps.workspaceRoot }),
     worklogSystemTask({ ...deps.worklog, spawnChat: deps.spawnChat }),
-  ].filter((task): task is TaskDefinition => task !== null);
+  ].filter((task): task is SystemTaskDef => task !== null);
 }
