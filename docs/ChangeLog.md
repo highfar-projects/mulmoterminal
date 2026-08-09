@@ -8,6 +8,113 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.8.0 — 2026-08-10
+
+> **Setup guide:** [Collections in the cell, and tasks that catch up](https://receptron.github.io/mulmoterminal/guide/en/v4.8.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.8.0.html))
+
+**The visible half of the collection-project work, plus a scheduler that stops losing runs.** 4.7.6
+taught the collection engine to resolve a root per request; this release puts that on screen as a
+**Collections pane per cell**, scoped to the directory that cell is open in. Separately, built-in
+scheduled tasks now persist their runs and catch up at startup, which is why a dev worklog someone
+enabled could go for days without producing a page.
+
+### A Collections pane per cell, scoped to its directory ([#1573](https://github.com/receptron/mulmoterminal/pull/1573))
+
+The pane sits in the cell's right-pane selector beside Canvas / Tools / Files and lists the
+collections of that cell's folder. **No project picker is needed** — a Project *is* a directory
+(`plans/project-architecture.md` D2) and a cell already names one.
+
+Navigation is contained in the pane. The collection plugin's views navigate through one global
+binding, which until now meant "the full-screen overlay", i.e. the app's route: left alone, a click
+in a side pane would have moved the whole app, and two cells on different projects would have shared
+one "open collection". `collectionNavSurface.ts` is a stack of surfaces mirroring the teleport-target
+stack beside it and for the same reason — surfaces nest, so the innermost wins and unregistering
+restores the previous.
+
+### Per-root watchers and project-aware completion bells ([#1580](https://github.com/receptron/mulmoterminal/pull/1580))
+
+The completion watcher mounted ONE generation, for the workspace, so a collection in a project folder
+got **no completion bells and no live refresh** when an agent wrote a record directly — the canonical
+authoring path. core 3.1.0 supports a generation per root concurrently; this wires one per root the
+server serves: the workspace plus every saved `cwdPresets` directory. **"Open" means "served by this
+server", not "on screen"** — a saved directory is watched whether or not a cell shows it.
+
+Also fixes the pane button showing on a cell whose directory has no collection tools.
+
+### "Would this collection survive a clone?" ([#1582](https://github.com/receptron/mulmoterminal/pull/1582))
+
+`GET /api/collections/:slug/self-containment`, project-scoped like every other read. Five rules, each
+named for what breaks on the **other** machine: `user-scope` (the skill is in `~/.claude/skills`, so
+the clone gets whatever that machine has) and `data-ignored` (schema committed, records gitignored —
+reads as an empty collection) and `sqlite-store` (one binary file git cannot merge) are blockers;
+`csv-runtime` (the file travels, the DuckDB runtime must be there too) and `no-primary-key` (4-byte
+random ids, so two machines can mint the same one) are warnings; `not-a-repo` is informational.
+
+§3.5 of the handoff plan was attempted in the same branch and reverted.
+
+### Staging is workspace-only, and the agent is told so ([#1578](https://github.com/receptron/mulmoterminal/pull/1578))
+
+Takes `@mulmoclaude/core@3.1.0`. `skillsStagingDir` returns the staging path for the managed
+workspace and **`null`** for every other root. Staging exists to route around the `.claude/`
+permission gate: the agent writes drafts to a plain data dir and a bridge mirrors the allowlisted
+files across. A project folder has **neither gate nor bridge**, and the engine reads staging *first*
+for a project-scope collection — so a stray `data/skills/<slug>/` shadowed the committed skill in a
+repo whose whole point is to be self-contained. `manageCollection`'s `schemaDocs`, which the agent
+reads before authoring, now says which directory to write in for which scope instead of an
+unconditional "author under `data/skills/<slug>/`".
+
+### A `presentCollection` card fetches its own session's project ([#1579](https://github.com/receptron/mulmoterminal/pull/1579))
+
+Reported from a real session: an agent in a project folder created a collection there successfully —
+`putSchema` wrote it, `queryItems` read 168 records — and `presentCollection` then rendered
+**"Collection not found"**. The tool call succeeded and the card failed, which is the worst shape for
+this to take. The card self-fetches by slug through the global binding, which scopes to the active
+surface; with no Collections pane open there was no surface, so the fetch went to the workspace. The
+canvas is a surface too and now says so: it shows one session's cards, that session has a directory,
+and that directory is the project its cards belong to. It registers with a project and **no `nav`**,
+a new shape the surface stack allows.
+
+### Scheduled tasks catch up after the server was off ([#1583](https://github.com/receptron/mulmoterminal/pull/1583), fixes [#1581](https://github.com/receptron/mulmoterminal/issues/1581))
+
+System tasks (dev worklog, feed refresh, calendar sync) were registered directly on the task-manager,
+which fires an interval schedule only on UTC-midnight-aligned boundaries. A 6-hour task could
+therefore run only during the one tick minute at 00/06/12/18 UTC, and a server that was off, asleep
+or restarting through that minute skipped the run **forever** — nothing recorded that a window had
+passed, and nothing in the UI or API could say so.
+
+They now go through `@mulmoclaude/core/scheduler`'s persistence adapter, the same path MulmoClaude
+uses: `config/scheduler/state.json`, startup catch-up per each task's `missedRunPolicy`, and an
+execution log under `data/scheduler/logs/`. The worklog uses `run-once`, because its own window is
+`[lastRunAt, now]` — one catch-up run already covers everything missed, and `run-all` would spawn
+several batches summarising the same period.
+
+**A task the state file has never seen is seeded at boot**, which is not something MulmoClaude does:
+`computeCatchUpPlan` reads a missing entry as "just registered" and enumerates nothing, and because
+nothing is then written the next boot reads it the same way — the reported bug surviving its own fix.
+The seed writes `lastRunAt` with `totalRuns: 0`, so nothing claims a run happened, and it lands
+before `initScheduler` because the adapter holds the state map in memory and rewrites the whole file
+on each save.
+
+User tasks still fire forward only (as in MulmoClaude), but every run is now recorded with the
+turn's **real** outcome rather than "the spawn returned" — MulmoTerminal has the same completion-hook
+seam MulmoClaude uses, so a scheduled chat that dies on its first turn is filed as a failure.
+`spawnScheduledWorker` gained an `onComplete` hook for it; the hook map holds one hook per session,
+so the recorder shares the existing failed-worker hook rather than replacing it. Two read-only routes
+report all of it, shaped like MulmoClaude's `schedulerTasks.ts`: `GET /api/scheduler/tasks` (system
+and user tasks, each with `origin` and execution state) and `GET /api/scheduler/logs`
+(`since` / `taskId` / `limit`, capped at 500).
+
+The tick loop deliberately starts **before** the adapter has registered its tasks. Both orderings
+lose something and they are not symmetric: a user task is one-shot — "remind me at 09:00", with no
+catch-up in either host — so a tick it misses is a reminder that never happens, while a system task's
+work survives a missed run (the worklog's window is `[lastRunAt, now]`, feeds dedup on
+`lastFetchedAt`, calendar on `lastSyncedAt`).
+
+### Documentation
+
+- **Two guide screenshots retaken, and every image indexed** ([#1410](https://github.com/receptron/mulmoterminal/pull/1410)). `cockpit-roster.png` showed a maintainer's real instance — project names in the roster, real PR numbers in the enlarged pane — and `grid-cell-live.png` caught Claude Code's startup banner with an account email. Both retaken on 4.7.5 with the same framing (the live-cell shot narrowed to a header close-up, since its job is to make the two cost badges readable), and `docs/guide/images/README.md` now indexes all 74 images.
+- **4.7.6 release notes and setup guide** ([#1577](https://github.com/receptron/mulmoterminal/pull/1577)).
+
 ## mulmoterminal@4.7.6 — 2026-08-09
 
 > **Setup guide:** [Groundwork for collections outside the workspace](https://receptron.github.io/mulmoterminal/guide/en/v4.7.6.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.7.6.html))
