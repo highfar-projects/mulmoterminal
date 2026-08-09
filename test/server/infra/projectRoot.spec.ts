@@ -17,6 +17,7 @@ import {
   initProjectRoots,
   listProjectRoots,
   projectId,
+  projectIdForRoot,
   projectRootsConfigured,
   resolveProjectRoot,
   resetProjectRootsForTesting,
@@ -35,6 +36,33 @@ describe("project roots", () => {
   beforeEach(() => {
     resetProjectRootsForTesting();
     ws = makeTempDir("mt-project-root-");
+  });
+
+  it("resolves a root back to the id the client can ask for", () => {
+    const proj = path.join(ws, "mag2");
+    initProjectRoots({ workspace: ws, knownProjects: () => [{ label: "mag2", path: proj }] });
+    const id = projectIdForRoot(proj);
+    expect(id).toBe(projectId(proj));
+    // The whole point of building it this way: the id resolves back through the route's own path.
+    expect(resolveProjectRoot(requestWith({ project: id })).workspaceRoot).toBe(proj);
+  });
+
+  it("answers null for the workspace — the root a request naming no project already gets", () => {
+    initProjectRoots({ workspace: ws });
+    expect(projectIdForRoot(ws)).toBeNull();
+  });
+
+  it("matches a root by RESOLVED path, so a differently spelled one still gets its id", () => {
+    const proj = path.join(ws, "mag2");
+    initProjectRoots({ workspace: ws, knownProjects: () => [{ label: "mag2", path: proj }] });
+    expect(projectIdForRoot(path.join(proj, "."))).toBe(projectId(proj));
+    expect(projectIdForRoot(`${proj}/`)).toBe(projectId(proj));
+  });
+
+  it("answers null for a directory the server does not serve, and before it is configured", () => {
+    expect(projectIdForRoot(ws)).toBeNull();
+    initProjectRoots({ workspace: ws });
+    expect(projectIdForRoot(path.join(ws, "elsewhere"))).toBeNull();
   });
 
   it("is unconfigured until a workspace is bound", () => {
