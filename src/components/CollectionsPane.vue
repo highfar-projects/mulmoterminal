@@ -147,6 +147,17 @@ async function checkPortability(): Promise<void> {
   }
 }
 
+/** Whether to TELL the user it travels — the report's verdict, corrected by a blocker this build
+ *  can read.
+ *
+ *  `portable` and the findings can contradict each other, and the two directions want opposite
+ *  treatment. A non-portable report with no readable reason is trusted: a newer server may
+ *  disqualify on something this build cannot describe, and refusing to say so would replace a
+ *  wrong answer with none. A portable report carrying a BLOCKER is not trusted: the contradiction
+ *  is visible from here, and of the two readings the safe one is the blocker — a false "it
+ *  travels" is discovered by someone else, on another machine, days later. */
+const travels = computed(() => report.value !== null && report.value.portable && !report.value.findings.some((finding) => finding.severity === "blocker"));
+
 const SEVERITY_CLASS: Record<SelfContainmentSeverity, string> = {
   blocker: "text-err-text",
   warning: "text-amber",
@@ -215,10 +226,10 @@ onBeforeUnmount(unregister);
              decoration on it. -->
         <div role="status" aria-live="polite" class="mt-1">
           <span v-if="checkFailed" class="text-[11px] text-err-text">Could not run the check.</span>
-          <!-- `portable` decides FIRST. A report can be non-portable with no findings this build
-               can read (a newer server disqualifying on something it does not describe here), and
-               "nothing to fix" is the one thing that must never be said about it. -->
-          <span v-else-if="report && !report.portable" class="text-[11px] text-err-text">Would not survive a clone</span>
+          <!-- The VERDICT decides first (see `travels`): a report can be non-portable with no
+               finding this build can read, and "nothing to fix" is the one thing that must never
+               be said about it — nor may "it travels" be said over a blocker we CAN read. -->
+          <span v-else-if="report && !travels" class="text-[11px] text-err-text">Would not survive a clone</span>
           <span v-else-if="report && report.findings.length === 0" class="text-[11px] text-dim">Nothing to fix — it travels.</span>
           <span v-else-if="report" class="text-[11px] text-amber">Travels, with caveats</span>
           <!-- The MESSAGE, not the code: each one says what breaks on the other machine, which is

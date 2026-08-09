@@ -112,6 +112,37 @@ describe("CollectionsPane portability strip", () => {
     expect(w.text()).not.toContain("Nothing to fix");
   });
 
+  // The mirror case, and the one where the client can SEE the contradiction: of the two readings
+  // the safe one is the blocker, because a false "it travels" is discovered by someone else, on
+  // another machine, days later.
+  it("does not call it portable over a blocker it can read", async () => {
+    mockFetch({
+      slug: "newsletters",
+      portable: true,
+      findings: [{ code: "sqlite-store", severity: "blocker", message: "Records are one SQLite file; git cannot merge it." }],
+    });
+    const { wrapper: w } = await mountOnCollection();
+    await w.find("button").trigger("click");
+    await flushPromises();
+    expect(w.text()).toContain("Would not survive a clone");
+    expect(w.text()).not.toContain("Travels, with caveats");
+    // The reason is still shown — the correction is to the headline, not to the report.
+    expect(w.text()).toContain("git cannot merge it");
+  });
+
+  it("still says 'with caveats' when the findings are only warnings", async () => {
+    mockFetch({
+      slug: "newsletters",
+      portable: true,
+      findings: [{ code: "no-primary-key", severity: "warning", message: "No primaryKey is declared." }],
+    });
+    const { wrapper: w } = await mountOnCollection();
+    await w.find("button").trigger("click");
+    await flushPromises();
+    expect(w.text()).toContain("Travels, with caveats");
+    expect(w.text()).not.toContain("Would not survive");
+  });
+
   // Focus stays on the button across the whole check, so a verdict that merely APPEARS is one a
   // screen-reader user is never told. The region has to exist before the result lands, or the
   // insertion is not announced at all.
