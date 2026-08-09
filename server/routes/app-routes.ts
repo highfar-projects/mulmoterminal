@@ -39,6 +39,7 @@ import { mountCostRoute } from "../session/cost.js";
 import { mountCollectionRoutes } from "../backends/collections.js";
 // "Would this collection survive a clone?" — mounts itself beside the collection routes.
 import { mountSelfContainmentRoutes } from "../backends/collectionSelfContainment.js";
+import { syncCollectionWatcherRoots } from "../backends/collectionWatchers.js";
 import { mountGoogleRoutes } from "../backends/google.js";
 import { mountWikiRoutes } from "../backends/wiki.js";
 import { mountAccountingRoutes } from "../backends/accounting.js";
@@ -327,7 +328,13 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
   // GET/POST /api/config (workspace dir + directory presets) — in its own module.
   // GRID-ONLY (dev_tool): backs the grid launcher's default dir + the settings
   // modal's directory presets. The single view never calls it.
-  mountConfigRoutes(app, CLAUDE_CWD);
+  // A directory saved here is a project the collection watchers should mount for, and the sync
+  // is otherwise a 60s poll — long enough that a new project's first collection looks broken.
+  mountConfigRoutes(app, CLAUDE_CWD, () => {
+    void syncCollectionWatcherRoots().catch((err: unknown) => {
+      console.warn("[collection-watchers] sync after a config write failed", err);
+    });
+  });
 
   // Project-scoped file browsing + editing for the full-screen Files view
   // (GET /api/files/browse/{list,text,md}, PUT .../write — all ?cwd=&path=). Each

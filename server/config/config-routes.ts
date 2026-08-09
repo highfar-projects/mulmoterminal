@@ -62,6 +62,14 @@ setDeclaredGitlabHosts(getGitlabHosts);
 // The saved directories and the recorded clone-per-repo choices, for the repo -> dir reverse
 // lookup (#1172). Read live for the same reason as the repos above: choosing a clone writes the
 // config, and the next lookup has to see it without a restart.
+/** Whether the saved-directory list is the same one. By PATH: a relabelled preset is the same
+ *  directory to everything downstream of this (the collection watchers, the project ids), and
+ *  waking them for a rename would be work with no question behind it. */
+function samePresets(before: readonly CwdPreset[], after: readonly CwdPreset[]): boolean {
+  if (before.length !== after.length) return false;
+  return before.every((preset, index) => preset.path === after[index]?.path);
+}
+
 export function getCwdPresets(): CwdPreset[] {
   return config.cwdPresets;
 }
@@ -186,7 +194,12 @@ export function getAppendSystemPrompt(): boolean {
   return loadAppConfig(CONFIG_FILE).appendSystemPrompt;
 }
 
-export function mountConfigRoutes(app: Express, claudeCwd: string): void {
+/** Called after a config write that CHANGED the saved directories. Injected rather than imported,
+ *  so this module stays config-shaped and does not reach into a backend: the collection watchers
+ *  are the caller's concern, not the config route's. */
+export type CwdPresetsChanged = () => void;
+
+export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsChanged?: CwdPresetsChanged): void {
   // The live config as the API exposes it, so a client (e.g. a settings UI) can read back
   // everything it can write — buttons/chips included — and round-trip it.
   const configResponse = () => ({ cwd: claudeCwd, ...toPublicAppConfig(config) });
@@ -247,7 +260,17 @@ export function mountConfigRoutes(app: Express, claudeCwd: string): void {
     // Carry the keys this build doesn't know straight back to disk. Another version's setting
     // must not disappear because this one saved over it (#966).
     if (!saveAppConfig(CONFIG_FILE, next, unknownKeysOf(loaded))) return res.status(500).json({ error: "failed to persist config" });
+    // Compared against the config just read from DISK, not this instance's cached copy: another
+    // mulmoterminal sharing the file may have written since we booted, and that is the same
+    // reason the merge base above is re-read. A stale comparison would both miss a change and
+    // invent one.
+    const presetsChanged = !samePresets(base.cwdPresets, next.cwdPresets);
     config = next;
+    // AFTER the commit, and only when the list actually moved: the saved directories are the
+    // projects the collection watchers mount for, and without this a directory added mid-session
+    // waits out the poll before its collections can ring. Fire-and-forget by contract — a
+    // subscriber's failure is its own, and must not turn a saved config into a 500.
+    if (presetsChanged) onCwdPresetsChanged?.();
     res.json(configResponse());
   });
 
