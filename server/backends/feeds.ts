@@ -26,12 +26,13 @@ const log: FeedsLogger = {
   debug: (prefix, msg, data) => console.debug(`[${prefix}] ${msg}`, data ?? ""),
 };
 
-let workspaceRoot = "";
-
 /** Wire the feeds engine to the shared workspace. Call once at boot, after pubsub +
- *  the collection backend. `spawnWorker` is supplied by server/index.ts. */
+ *  the collection backend. `spawnWorker` is supplied by server/index.ts.
+ *
+ *  No module-level root is kept any more: every route on the collection surface resolves its own
+ *  (`resolveProjectRoot`), and a second copy of "the root" is what let one route answer for a
+ *  project while the helper beside it answered for the workspace. */
 export function initFeedsBackend(deps: { workspace: string; spawnWorker: AgentWorkerRunner }): void {
-  workspaceRoot = deps.workspace;
   configureFeedsHost({ workspaceRoot: deps.workspace, log, writeFileAtomic, spawnWorker: deps.spawnWorker });
 }
 
@@ -40,8 +41,12 @@ function errorMessage(err: unknown): string {
 }
 
 // One feeds-index row: the registered feed's schema + its last-fetch state.
-async function toFeedSummary(feed: Awaited<ReturnType<typeof listFeeds>>[number]): Promise<FeedSummary> {
-  const state = await readFeedState(workspaceRoot, feed);
+//
+// The ROOT is passed in. Reading the module-level workspace here made a project's feeds report
+// the workspace feed's `lastFetchedAt` — or none at all — while the row beside it came from the
+// project: one list, two roots, and no way to tell which number belonged to which.
+async function toFeedSummary(root: string, feed: Awaited<ReturnType<typeof listFeeds>>[number]): Promise<FeedSummary> {
+  const state = await readFeedState(root, feed);
   return feedSummary(feed, state.lastFetchedAt);
 }
 
@@ -57,8 +62,9 @@ export function mountFeedsRoutes(app: Express): void {
       // Feeds live under `<root>/feeds`, so they follow the named project like collections do —
       // a collections surface showing one project's cards beside another's feeds would be a
       // list nobody could reason about.
-      const feeds = await listFeeds(resolveProjectRoot(req).workspaceRoot);
-      res.json({ feeds: await Promise.all(feeds.map(toFeedSummary)) });
+      const root = resolveProjectRoot(req).workspaceRoot;
+      const feeds = await listFeeds(root);
+      res.json({ feeds: await Promise.all(feeds.map((feed) => toFeedSummary(root, feed))) });
     } catch (err) {
       log.warn("feeds", "list failed", { error: errorMessage(err) });
       res.status(errorStatus(err)).json({ error: errorMessage(err) });

@@ -2,22 +2,40 @@
 //
 // The client half of the project scope. Two rules are encoded here rather than in a comment
 // alone, because both are invisible until they break in a way that looks like something else.
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 
-import { activeProjectId, withActiveProject } from "../../../src/composables/collectionProject";
+import { withActiveProject } from "../../../src/composables/collectionProject";
 import {
   activeCollectionNavSurface,
-  popCollectionNavSurface,
-  pushCollectionNavSurface,
-  type CollectionNavSurface,
-} from "../../../src/composables/collectionNavSurface";
+  activeCollectionProjectId,
+  popCollectionSurface,
+  pushCollectionSurface,
+  type CollectionSurface,
+} from "../../../src/composables/collectionSurface";
+
+/** A surface with only the parts these tests read. */
+const surfaceFor = (projectId: string | null, slug = "surface"): CollectionSurface => ({
+  projectId,
+  nav: {
+    routeSlug: () => slug,
+    routeSelectedId: () => undefined,
+    isFeedRoute: () => false,
+    setSelectedId: () => {},
+    gotoIndex: () => {},
+    gotoDetail: () => {},
+    navigateToRecord: () => {},
+  },
+});
 
 describe("withActiveProject", () => {
-  beforeEach(() => {
-    activeProjectId.value = null;
-  });
+  let scoped: CollectionSurface | null = null;
+  const scopeTo = (projectId: string) => {
+    scoped = surfaceFor(projectId);
+    pushCollectionSurface(scoped);
+  };
   afterEach(() => {
-    activeProjectId.value = null;
+    if (scoped) popCollectionSurface(scoped);
+    scoped = null;
   });
 
   it("leaves urls alone when no project is active", () => {
@@ -25,7 +43,7 @@ describe("withActiveProject", () => {
   });
 
   it("appends the project, and joins an existing query with &", () => {
-    activeProjectId.value = "abc123";
+    scopeTo("abc123");
     expect(withActiveProject("/api/collections/list")).toBe("/api/collections/list?project=abc123");
     expect(withActiveProject("/api/collections/tasks/view-file?id=v1")).toBe("/api/collections/tasks/view-file?id=v1&project=abc123");
   });
@@ -35,22 +53,14 @@ describe("withActiveProject", () => {
   // suffixes the view contract builds by concatenation (`dataUrl + "/query"`), which is how the
   // server-side version of this mistake 401'd every one of them.
   it("never touches the view-data endpoints", () => {
-    activeProjectId.value = "abc123";
+    scopeTo("abc123");
     expect(withActiveProject("/api/collections/tasks/view-data")).toBe("/api/collections/tasks/view-data");
     expect(withActiveProject("/api/collections/tasks/view-data/query")).toBe("/api/collections/tasks/view-data/query");
   });
 });
 
 describe("collection nav surface", () => {
-  const surfaceNamed = (slug: string): CollectionNavSurface => ({
-    routeSlug: () => slug,
-    routeSelectedId: () => undefined,
-    isFeedRoute: () => false,
-    setSelectedId: () => {},
-    gotoIndex: () => {},
-    gotoDetail: () => {},
-    navigateToRecord: () => {},
-  });
+  const surfaceNamed = (slug: string): CollectionSurface => surfaceFor(null, slug);
 
   it("has no surface by default, so the binding keeps driving the router-backed overlay", () => {
     expect(activeCollectionNavSurface()).toBeNull();
@@ -61,20 +71,35 @@ describe("collection nav surface", () => {
   it("hands navigation to the innermost surface and restores the previous one", () => {
     const pane = surfaceNamed("pane");
     const overlay = surfaceNamed("overlay");
-    pushCollectionNavSurface(pane);
-    pushCollectionNavSurface(overlay);
+    pushCollectionSurface(pane);
+    pushCollectionSurface(overlay);
     expect(activeCollectionNavSurface()?.routeSlug()).toBe("overlay");
-    popCollectionNavSurface(overlay);
+    popCollectionSurface(overlay);
     expect(activeCollectionNavSurface()?.routeSlug()).toBe("pane");
-    popCollectionNavSurface(pane);
+    popCollectionSurface(pane);
     expect(activeCollectionNavSurface()).toBeNull();
+  });
+
+  // Scope travels WITH navigation: registering only the nav is what let a mounted pane keep the
+  // project for the full-screen overlay opened over it.
+  it("takes the project from the innermost surface too", () => {
+    const pane = surfaceFor("project-a", "pane");
+    const overlay = surfaceFor(null, "overlay");
+    pushCollectionSurface(pane);
+    expect(activeCollectionProjectId()).toBe("project-a");
+    pushCollectionSurface(overlay);
+    expect(activeCollectionProjectId()).toBeNull();
+    expect(withActiveProject("/api/collections/list")).toBe("/api/collections/list");
+    popCollectionSurface(overlay);
+    expect(activeCollectionProjectId()).toBe("project-a");
+    popCollectionSurface(pane);
   });
 
   it("ignores a pop for a surface that is not registered", () => {
     const pane = surfaceNamed("pane");
-    pushCollectionNavSurface(pane);
-    popCollectionNavSurface(surfaceNamed("never-pushed"));
+    pushCollectionSurface(pane);
+    popCollectionSurface(surfaceNamed("never-pushed"));
     expect(activeCollectionNavSurface()?.routeSlug()).toBe("pane");
-    popCollectionNavSurface(pane);
+    popCollectionSurface(pane);
   });
 });

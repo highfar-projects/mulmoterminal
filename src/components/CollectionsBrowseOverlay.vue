@@ -12,6 +12,15 @@ import { collectionShadowCss } from "../collectionShadowCss";
 import { useCollectionBrowse, browseGotoDetail } from "../composables/useCollectionBrowse";
 import { useEscapeToClose } from "../composables/useEscapeToClose";
 import { pushCollectionTeleportTarget, popCollectionTeleportTarget } from "../composables/collectionUi";
+import { pushCollectionSurface, popCollectionSurface, type CollectionSurface } from "../composables/collectionSurface";
+import {
+  browseGotoIndex,
+  browseNavigateToRecord,
+  browseRouteSlug,
+  browseRouteSelectedId,
+  browseIsFeedRoute,
+  browseSetSelectedId,
+} from "../composables/useCollectionBrowse";
 import { useShortcuts } from "../composables/useShortcuts";
 import type { Shortcut } from "../../common/shortcuts";
 import { launchAgent } from "../composables/useChatLauncher";
@@ -56,6 +65,38 @@ watch(probe, (el) => {
   }
 });
 onBeforeUnmount(unregister);
+
+// The overlay registers itself as a SURFACE while it is open, and that is not symmetry for its
+// own sake: a Collections pane may still be mounted behind it (panes are per cell and do not
+// unmount when an overlay covers them). Without this the pane stayed the top surface, so clicks
+// in the visible overlay navigated the hidden pane and the overlay's own requests carried the
+// pane's project. Registering restores the invariant the stack is for — the innermost VISIBLE
+// surface owns scope and navigation.
+//
+// `projectId: null` is the workspace, which is what this overlay has always shown. Its nav
+// delegates to `useCollectionBrowse`, i.e. the router, which is what the binding fell through to
+// before surfaces existed.
+const overlaySurface: CollectionSurface = {
+  projectId: null,
+  nav: {
+    routeSlug: browseRouteSlug,
+    routeSelectedId: browseRouteSelectedId,
+    isFeedRoute: browseIsFeedRoute,
+    setSelectedId: browseSetSelectedId,
+    gotoIndex: browseGotoIndex,
+    gotoDetail: browseGotoDetail,
+    navigateToRecord: browseNavigateToRecord,
+  },
+};
+watch(
+  isOpen,
+  (open) => {
+    if (open) pushCollectionSurface(overlaySurface);
+    else popCollectionSurface(overlaySurface);
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => popCollectionSurface(overlaySurface));
 
 useEscapeToClose(isOpen, close);
 </script>

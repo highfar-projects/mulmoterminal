@@ -19,6 +19,7 @@
 // prompt is auto-sent as claude's first turn (startChat / actions).
 
 import { ref, watch } from "vue";
+import { activeCollectionProjectId } from "./collectionSurface";
 import { asTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { placeSpawnedChat } from "./useSpawnedChat";
 import { seedCollectionCanvas } from "./seedCollectionCanvas";
@@ -61,7 +62,10 @@ export async function startCollectionChat(prompt: string, opts: { hidden?: boole
       {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ message, draft, agent }),
+        // The chat runs where the collection it was started from lives. Without this a starter
+        // or action pressed in a project's Collections pane seeds a prompt full of that project's
+        // paths and then opens a terminal standing in the workspace.
+        body: JSON.stringify({ message, draft, agent, project: activeCollectionProjectId() }),
       },
       SLOW_COMMAND_TIMEOUT_MS,
     );

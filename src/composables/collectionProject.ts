@@ -10,10 +10,10 @@
 // listing returns the cwd so the client can MATCH a project to the cell it is already showing —
 // the browser has those paths regardless.
 //
-// One project is active at a time because one right pane is open at a time. The collection
-// plugin's binding is a module singleton (collectionUi.ts), so a per-cell project would need a
-// per-cell binding; the pane instead sets this while it is mounted and clears it after.
-import { ref } from "vue";
+// WHICH project is active belongs to the SURFACE being looked at, not to this module — see
+// collectionSurface.ts. A global "active project" made a mounted pane own the scope for every
+// consumer, including the full-screen overlay opened over it.
+import { activeCollectionProjectId } from "./collectionSurface";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
@@ -23,9 +23,6 @@ export interface CollectionProject {
   label: string;
   cwd: string;
 }
-
-/** The project every collection API call is scoped to, or null for the shared workspace. */
-export const activeProjectId = ref<string | null>(null);
 
 let cache: Promise<CollectionProject[]> | null = null;
 
@@ -39,15 +36,17 @@ function asProjects(body: unknown): CollectionProject[] {
 /** Every directory a collection request may name. Cached: the list changes only when the user
  *  launches from a new directory, and the pane asks for it on every open. */
 export async function listCollectionProjects(): Promise<CollectionProject[]> {
+  // A FAILURE IS NOT CACHED. Caching the caught `[]` would make one timeout permanent: every
+  // directory would read as unknown until a full reload, which looks exactly like "this folder
+  // has no collections" — the state the pane deliberately shows for a real miss.
   cache ??= (async () => {
-    try {
-      const res = await fetchWithTimeout("/api/collection-projects");
-      if (!res.ok) return [];
-      return asProjects(await res.json());
-    } catch {
-      return [];
-    }
-  })();
+    const res = await fetchWithTimeout("/api/collection-projects");
+    if (!res.ok) throw new Error(`collection-projects: HTTP ${res.status}`);
+    return asProjects(await res.json());
+  })().catch((err: unknown) => {
+    cache = null;
+    throw err;
+  });
   return cache;
 }
 
@@ -61,8 +60,20 @@ export function forgetCollectionProjects(): void {
  *  says so rather than quietly showing the workspace's collections under its name. */
 export async function projectIdForCwd(cwd: string | null): Promise<string | null> {
   if (!cwd) return null;
-  const projects = await listCollectionProjects();
-  return projects.find((project) => project.cwd === cwd)?.id ?? null;
+  const found = async (): Promise<string | null> => {
+    try {
+      return (await listCollectionProjects()).find((project) => project.cwd === cwd)?.id ?? null;
+    } catch {
+      return null;
+    }
+  };
+  const hit = await found();
+  if (hit) return hit;
+  // A MISS RE-ASKS, once. The server records a directory when a terminal launches from it, so a
+  // list fetched earlier in the session can be genuinely out of date — and the failure mode of
+  // trusting it is a folder that stays "unknown" forever with nothing to retry it.
+  forgetCollectionProjects();
+  return found();
 }
 
 /** Append the active project to a collection API url.
@@ -74,7 +85,7 @@ export async function projectIdForCwd(cwd: string | null): Promise<string | null
  *  url minted with its token, and that token is what names their project. A parameter here would
  *  land inside the suffixes the view contract builds by concatenation (`dataUrl + "/query"`). */
 export function withActiveProject(url: string): string {
-  const id = activeProjectId.value;
+  const id = activeCollectionProjectId();
   if (!id || url.includes("/view-data")) return url;
   return `${url}${url.includes("?") ? "&" : "?"}project=${encodeURIComponent(id)}`;
 }

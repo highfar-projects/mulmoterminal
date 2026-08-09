@@ -544,7 +544,7 @@ describe("GridView skill launch (#1111)", () => {
 
   it("seeds the skill's slash command and shows the session in a cell of its own", async () => {
     const { w, spawns } = await mountWithSpawn();
-    expect(spawns).toEqual([{ message: "/mulmoterminal-theme", draft: false, agent: "claude" }]);
+    expect(spawns).toEqual([{ message: "/mulmoterminal-theme", draft: false, agent: "claude", project: null }]);
     const spawned = spawnedCells(w);
     expect(spawned).toHaveLength(1);
     // Seeded with the directory the server spawns these in, so the cell's header isn't blank while
@@ -567,7 +567,7 @@ describe("GridView skill launch (#1111)", () => {
     launchAgent.value = agent;
     try {
       const { w, spawns } = await mountWithSpawn();
-      expect(spawns).toEqual([{ message: "/mulmoterminal-theme", draft: false, agent }]);
+      expect(spawns).toEqual([{ message: "/mulmoterminal-theme", draft: false, agent, project: null }]);
       expect(spawnedCells(w)[0].agent).toBe(agent);
       w.unmount();
     } finally {

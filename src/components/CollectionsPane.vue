@@ -12,8 +12,8 @@ import { CollectionsIndexView, CollectionView, FeedsView } from "@mulmoclaude/co
 import PluginFrame from "./PluginFrame.vue";
 import { collectionShadowCss } from "../collectionShadowCss";
 import { pushCollectionTeleportTarget, popCollectionTeleportTarget } from "../composables/collectionUi";
-import { pushCollectionNavSurface, popCollectionNavSurface, type CollectionNavSurface } from "../composables/collectionNavSurface";
-import { activeProjectId, projectIdForCwd } from "../composables/collectionProject";
+import { pushCollectionSurface, popCollectionSurface, type CollectionNavSurface, type CollectionSurface } from "../composables/collectionSurface";
+import { projectIdForCwd } from "../composables/collectionProject";
 import type { ShortcutKind } from "../../common/shortcuts";
 
 const props = defineProps<{ cwd: string | null }>();
@@ -23,7 +23,7 @@ type PaneView = { mode: "index"; kind: ShortcutKind } | { mode: "detail"; kind: 
 const view = ref<PaneView>({ mode: "index", kind: "collection" });
 const selectedId = ref<string | null>(null);
 
-const surface: CollectionNavSurface = {
+const nav: CollectionNavSurface = {
   routeSlug: () => (view.value.mode === "detail" ? view.value.slug : undefined),
   routeSelectedId: () => selectedId.value ?? undefined,
   isFeedRoute: () => view.value.kind === "feed",
@@ -52,28 +52,34 @@ const surface: CollectionNavSurface = {
 const resolving = ref(true);
 const projectId = ref<string | null>(null);
 
+// THE surface this pane is, registered for as long as it is mounted. Scope and navigation travel
+// together (collectionSurface.ts): registering only the nav is what let a mounted pane keep the
+// project for the full-screen overlay opened over it.
+const surface: CollectionSurface = { projectId: null, nav };
+pushCollectionSurface(surface);
+onBeforeUnmount(() => popCollectionSurface(surface));
+
+// A GENERATION token, not just an await. The lookup is async, so a cwd change or an unmount while
+// one is in flight would otherwise let the older completion write its answer over the newer one —
+// or over the cleanup — leaving the pane scoped to a directory it is no longer showing.
+let generation = 0;
 watch(
   () => props.cwd,
   async (cwd) => {
+    const mine = ++generation;
     resolving.value = true;
-    projectId.value = await projectIdForCwd(cwd);
+    const resolved = await projectIdForCwd(cwd);
+    if (mine !== generation) return;
+    projectId.value = resolved;
     resolving.value = false;
-    // Re-scope, and reset the view: a slug open in one directory need not exist in the next.
-    activeProjectId.value = projectId.value;
-    surface.gotoIndex("collection");
+    surface.projectId = resolved;
+    // Reset the view: a slug open in one directory need not exist in the next.
+    nav.gotoIndex("collection");
   },
   { immediate: true },
 );
 
 const unknownDirectory = computed(() => !resolving.value && projectId.value === null);
-
-// The pane owns the global project scope while it is mounted, because one right pane is open at
-// a time and the plugin binding is a module singleton (collectionProject.ts says why).
-pushCollectionNavSurface(surface);
-onBeforeUnmount(() => {
-  popCollectionNavSurface(surface);
-  activeProjectId.value = null;
-});
 
 // Register this pane's shadow root as the record-modal teleport target — same getRootNode()
 // trick as CollectionsBrowseOverlay, which is where the comment explaining it lives.

@@ -53,7 +53,7 @@ import { startCollectionChat } from "./useChatLauncher";
 import { browserLocale } from "../utils/browserLocale";
 import { isRecord } from "../../common/isRecord";
 import { withActiveProject } from "./collectionProject";
-import { activeCollectionNavSurface } from "./collectionNavSurface";
+import { activeCollectionNavSurface } from "./collectionSurface";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 // ── Modal teleport target (Shadow DOM) ──
@@ -127,9 +127,13 @@ async function postTranslation(req: TranslateRequest): Promise<TranslateResponse
 
 const itemUrl = (slug: string, itemId: string) => `/api/collections/${encodeURIComponent(slug)}/items/${encodeURIComponent(itemId)}`;
 
-/** Browser URL for a workspace-relative file path, via the raw-file route. */
+/** Browser URL for a ROOT-relative file path, via the raw-file route.
+ *
+ *  Carries the project like every other collection request: an `image` / `file` field is relative
+ *  to the collection's own root, so without it a project's records resolve against the workspace —
+ *  a missing image at best, another project's file at worst. */
 function rawFileUrl(value: unknown): string {
-  return `/api/files/raw?path=${encodeURIComponent(String(value))}`;
+  return withActiveProject(`/api/files/raw?path=${encodeURIComponent(String(value))}`);
 }
 
 // The preview route (server/backends/html.ts → mountHtmlPreviewRoute) serves
