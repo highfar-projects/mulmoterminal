@@ -59,6 +59,10 @@ const watchedRoots = new Set<string>();
 // Roots whose last start FAILED, so the retry every sync pass does not repeat the warning
 // once a minute forever (a project on an unmounted volume would otherwise fill the log).
 const failedRoots = new Set<string>();
+// Roots whose scoped STOP failed, for the same warn-once reason. Separate from `failedRoots`
+// because the two are opposite states: one is not watching and wants to be, the other is still
+// watching and must not be.
+const failedStops = new Set<string>();
 let syncTimer: NodeJS.Timeout | null = null;
 // Sync passes are SERIALISED rather than single-flighted: a pass triggered while one is
 // running must still run, because it may be the one that sees a newly recorded project.
@@ -118,10 +122,23 @@ async function runRootSync(): Promise<void> {
       // project running. A bare `stopCollectionWatchers()` stops them ALL.
       await stopCollectionWatchers({ workspaceRoot: root });
     } catch (err) {
-      log.warn("collection watchers failed to stop for a root", { root, error: err instanceof Error ? err.message : String(err) });
+      // STAY TRACKED. The package deletes the generation on its LAST line, so a throw can
+      // leave one alive — and forgetting the root here would be forgetting the only handle
+      // the next pass has to try again with, leaving a project the server no longer serves
+      // watching its files and publishing bells for the rest of the process's life. A repeat
+      // stop is idempotent (an already-released root is a no-op), so retrying costs nothing.
+      if (!failedStops.has(root)) {
+        failedStops.add(root);
+        log.warn("collection watchers failed to stop for a root — retrying next pass", {
+          root,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+      continue;
     }
     watchedRoots.delete(root);
     failedRoots.delete(root);
+    failedStops.delete(root);
   }
   for (const root of desired) {
     if (watchedRoots.has(root)) continue;
@@ -129,6 +146,9 @@ async function runRootSync(): Promise<void> {
   }
   // A root that dropped off the list has nothing left to retry.
   for (const root of [...failedRoots]) if (!desired.has(root)) failedRoots.delete(root);
+  // A root that came BACK onto the list while its stop was failing is wanted again, so the
+  // pending-stop warning is spent — it must warn afresh if it ever fails to stop later.
+  for (const root of [...failedStops]) if (desired.has(root)) failedStops.delete(root);
 }
 
 /** Reconcile the watched roots now. Exported so a caller that KNOWS the project list just
@@ -170,6 +190,7 @@ export async function stopCollectionCompletionWatchers(): Promise<void> {
   await stopCollectionWatchers();
   watchedRoots.clear();
   failedRoots.clear();
+  failedStops.clear();
 }
 
 /** Test-only: which roots currently have a generation mounted. */

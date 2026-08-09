@@ -14,32 +14,50 @@ import { overlayOriginState, overlayReturnPath } from "./overlayOrigin";
 type BrowseView = { mode: "closed" } | { mode: "index"; kind: ShortcutKind } | { mode: "detail"; kind: ShortcutKind; slug: string; selectedId: string | null };
 
 // The only retained state: which record's modal is open, KEYED by the exact detail
-// PATH it belongs to (so /collections/foo and /feeds/foo never share a record, even
+// PAGE it belongs to (so /collections/foo and /feeds/foo never share a record, even
 // with overlapping slugs). Records are intentionally not addressable — opening one
 // never touches the URL.
-const state = reactive<{ recordPath: string | null; selectedId: string | null }>({ recordPath: null, selectedId: null });
+const state = reactive<{ pageKey: string | null; selectedId: string | null }>({ pageKey: null, selectedId: null });
+
+/** What "the same page" means for a record: the path AND the project.
+ *
+ *  THE PROJECT IS PART OF THE KEY, not decoration. Two projects' `/collections/tasks` are the
+ *  same path, so keying on the path alone lets a record modal survive a project change made by
+ *  browser Back/Forward or a hand-typed URL — the one navigation this module does not route
+ *  itself. With a `primaryKey` schema the ids are drawn from the data, so the surviving id
+ *  frequently EXISTS in the project navigated to, and the modal then shows a different record
+ *  of the same name rather than failing visibly.
+ *
+ *  A newline separates the two because a path cannot contain one, so no path-and-project pair
+ *  can spell another. */
+function pageKeyFor(path: string, projectId: string | null): string {
+  return `${path}\n${projectId ?? ""}`;
+}
+
+function currentPageKey(): string {
+  return pageKeyFor(router.currentRoute.value.path, browseRouteProjectId());
+}
 
 function clearRecord(): void {
-  state.recordPath = null;
+  state.pageKey = null;
   state.selectedId = null;
 }
 
 // Leaving a detail page — by ANY means: a toolbar push, browser Back/Forward, or a
 // hand-typed URL — drops the open record, honoring the "records are not history"
 // contract (a later return to the same URL must not revive a stale modal). A single
-// SYNC watcher on the path is the one place this happens, so individual nav callers
+// SYNC watcher on the page key is the one place this happens, so individual nav callers
 // (showChat / showGrid / showAccounting / …) don't each have to remember to clear.
 // flush:"sync" fires the clear during navigation, strictly before router.push's
 // promise resolves — so browseNavigateToRecord's post-push .then re-set always wins.
-watch(
-  () => router.currentRoute.value.path,
-  () => clearRecord(),
-  { flush: "sync" },
-);
+//
+// It watches the KEY rather than the path so a project switch that keeps the path counts as
+// leaving the page, which it is.
+watch(currentPageKey, () => clearRecord(), { flush: "sync" });
 
-// The open record for the page currently on screen (null once the path no longer matches).
+// The open record for the page currently on screen (null once the page no longer matches).
 function recordOnCurrentPage(): string | null {
-  return state.recordPath !== null && state.recordPath === router.currentRoute.value.path ? state.selectedId : null;
+  return state.pageKey !== null && state.pageKey === currentPageKey() ? state.selectedId : null;
 }
 
 function pathFor(kind: ShortcutKind, slug?: string): string {
@@ -91,7 +109,7 @@ export function browseNavigateToRecord(targetSlug: string, recordId?: string, pr
   // fire) with no recordId must still close any stale modal, not reuse it.
   const targetPath = pathFor("collection", targetSlug);
   void router.push({ path: targetPath, query: queryFor(projectId), state: overlayOriginState() }).then(() => {
-    state.recordPath = recordId ? targetPath : null;
+    state.pageKey = recordId ? currentPageKey() : null;
     state.selectedId = recordId ?? null;
   });
 }
@@ -115,7 +133,7 @@ export function browseIsFeedRoute(): boolean {
 
 /** Set/clear the open record (the modal deep-link) on the current page, no history. */
 export function browseSetSelectedId(itemId: string | null): void {
-  state.recordPath = itemId ? router.currentRoute.value.path : null;
+  state.pageKey = itemId ? currentPageKey() : null;
   state.selectedId = itemId;
 }
 
