@@ -693,8 +693,9 @@ work. It reads and reconciles progress against `vision.md` / `milestones.md` (cr
 empty ones if absent) so a long-running goal isn't forgotten.
 
 A run due while the server was **off** is not lost: built-in scheduled tasks record their
-runs in `config/scheduler/state.json` and **catch up at startup** — one run covering
-everything since the last, so several missed windows don't become several batches. Whether
+runs in `config/scheduler/state.json` and **catch up at startup**, each by its own missed-run
+policy. The worklog's is `run-once` — a single run covering everything since the last, so
+several missed windows don't become several batches summarising the same period. Whether
 they ran, and when they run next, is in `GET /api/scheduler/tasks`; the history is in
 `GET /api/scheduler/logs` (`?taskId=&since=&limit=`, newest first) and on disk under
 `data/scheduler/logs/`.

@@ -3,10 +3,19 @@ import { describe, it, expect, vi } from "vitest";
 import { MISSED_RUN_POLICIES, SCHEDULE_TYPES } from "@receptron/task-scheduler";
 import { worklogSystemTask, WORKLOG_PROMPT } from "../../../server/backends/worklog.js";
 
+// Only the run recorder is needed here; the rest of the package is untouched by this file.
+const { recordExternalRunMock } = vi.hoisted(() => ({ recordExternalRunMock: vi.fn(async () => {}) }));
+vi.mock("@mulmoclaude/core/scheduler", () => ({
+  recordExternalRun: recordExternalRunMock,
+  TASK_TRIGGERS: { scheduled: "scheduled", catchUp: "catch-up", manual: "manual" },
+}));
+
 const HOUR_MS = 3_600_000;
 
+const SESSION_ID = "11111111-1111-1111-1111-111111111111";
+
 describe("worklogSystemTask", () => {
-  const noop = () => "11111111-1111-1111-1111-111111111111";
+  const noop = () => SESSION_ID;
 
   it("returns null when disabled (no system task registered)", () => {
     expect(worklogSystemTask({ enabled: false, intervalHours: 6, spawnChat: noop })).toBeNull();
@@ -37,7 +46,40 @@ describe("worklogSystemTask", () => {
     const spawnChat = vi.fn(noop);
     const task = worklogSystemTask({ enabled: true, intervalHours: 6, spawnChat });
     await task?.run();
-    expect(spawnChat).toHaveBeenCalledWith(WORKLOG_PROMPT);
+    expect(spawnChat).toHaveBeenCalledWith(WORKLOG_PROMPT, expect.any(Function));
+  });
+
+  // run() resolves at the spawn — awaiting the batch would stall the tick loop for its whole
+  // length — so the adapter files that as a successful run. A turn that then dies is filed here,
+  // rather than leaving the scheduler reading "success" for a batch that never wrote a page.
+  describe("a worker that fails after it was spawned", () => {
+    const runAndReport = async (didError: boolean) => {
+      recordExternalRunMock.mockClear();
+      let report: ((outcome: { didError: boolean }, sessionId: string) => void | Promise<void>) | undefined;
+      const spawnChat = (_message: string, onComplete?: (outcome: { didError: boolean }, sessionId: string) => void | Promise<void>) => {
+        report = onComplete;
+        return SESSION_ID;
+      };
+      await worklogSystemTask({ enabled: true, intervalHours: 6, spawnChat })?.run();
+      await report?.({ didError }, SESSION_ID);
+    };
+
+    it("is recorded against the task, with the session that failed", async () => {
+      await runAndReport(true);
+      expect(recordExternalRunMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "system.worklog",
+          name: "Dev worklog",
+          chatSessionId: SESSION_ID,
+          errorMessage: expect.stringContaining("did not complete"),
+        }),
+      );
+    });
+
+    it("records nothing extra when the turn finished — the adapter already filed it", async () => {
+      await runAndReport(false);
+      expect(recordExternalRunMock).not.toHaveBeenCalled();
+    });
   });
 });
 

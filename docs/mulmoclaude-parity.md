@@ -113,8 +113,8 @@ until there's a concrete need.
 scheduled tasks.
 
 **What MulmoTerminal has:** the engine, plus the same persistence adapter since
-#1581 — system tasks catch up at startup for windows missed while the server was
-off, every run is recorded, and the read-only routes (`GET /api/scheduler/tasks`
+issue #1581 — system tasks catch up at startup for windows missed while the server
+was off, every run is recorded, and the read-only routes (`GET /api/scheduler/tasks`
 with each task's state, `GET /api/scheduler/logs`) mirror MulmoClaude's shapes.
 What is missing is the write half: creating or changing a task means editing
 `config/scheduler/tasks.json` by hand (or asking the agent to edit it, which

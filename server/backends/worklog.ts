@@ -7,7 +7,7 @@
 // user only has to flip the flag. See plans/feat-worklog-vision.md (#351).
 import { MISSED_RUN_POLICIES, SCHEDULE_TYPES } from "@receptron/task-scheduler";
 import type { SystemTaskDef } from "@mulmoclaude/core/scheduler";
-import type { ScheduledChatSpawn } from "./scheduled-run.js";
+import { spawnSystemChat, type ScheduledChatSpawn } from "./scheduled-run.js";
 
 const HOUR_MS = 3_600_000;
 
@@ -69,14 +69,17 @@ export const WORKLOG_PROMPT = `あなたは開発作業ログのバッチです�
 export function worklogSystemTask(deps: { enabled: boolean; intervalHours: number; spawnChat: ScheduledChatSpawn }): SystemTaskDef | null {
   if (!deps.enabled) return null;
   const intervalMs = Math.max(1, Math.round(deps.intervalHours)) * HOUR_MS;
-  return {
+  const task = {
     id: "system.worklog",
     name: "Dev worklog",
     description: "Periodic cross-clone dev worklog → weekly wiki pages",
     schedule: { type: SCHEDULE_TYPES.interval, intervalMs },
     missedRunPolicy: MISSED_RUN_POLICIES.runOnce,
-    run: async () => {
-      deps.spawnChat(WORKLOG_PROMPT);
-    },
+  } as const;
+  return {
+    ...task,
+    // Returns at the spawn and files a failure later — see spawnSystemChat for why awaiting the
+    // batch here would stop the whole tick loop for its duration.
+    run: async () => spawnSystemChat(task, WORKLOG_PROMPT, deps.spawnChat),
   };
 }

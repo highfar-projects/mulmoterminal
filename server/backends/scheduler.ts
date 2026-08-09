@@ -19,7 +19,7 @@ import path from "node:path";
 import type { Express, Request, Response } from "express";
 import { SCHEDULE_TYPES, TASK_ORIGINS, TASK_TRIGGERS, type TaskLogEntry } from "@receptron/task-scheduler";
 import { createTaskManager, getSchedulerLogs, getSchedulerTasks, getSchedulerTaskState } from "@mulmoclaude/core/scheduler";
-import type { SystemTaskDef, TaskDefinition, TaskSchedule } from "@mulmoclaude/core/scheduler";
+import type { ITaskManager, SystemTaskDef, TaskDefinition, TaskSchedule } from "@mulmoclaude/core/scheduler";
 import { readTextFile } from "../infra/read-text-file.js";
 import { isRecord } from "../../common/isRecord.js";
 import { configureSchedulerAdapter, startSystemTaskScheduler } from "./scheduler-adapter.js";
@@ -159,14 +159,24 @@ export function initUserTaskScheduler(deps: { workspace: string; spawnChat: Sche
   // Before anything can record a run — including a user task, which reaches the same state file.
   configureSchedulerAdapter(deps.workspace, log);
   for (const definition of userDefs) taskManager.registerTask(definition);
-  if (systemTasks.length + userDefs.length > 0) {
-    taskManager.start();
-    void startSystemTaskScheduler({ taskManager, workspace: deps.workspace, tasks: systemTasks, log }).catch((err: unknown) =>
-      log.error("system task scheduler failed to start", { error: String(err) }),
-    );
-  }
+  startTicking(taskManager, { workspace: deps.workspace, systemTasks, userTaskCount: userDefs.length });
   log.info("scheduler started", { userTasks: userDefs.length, systemTasks: systemTasks.length });
   return userDefs.length;
+}
+
+/** Start the tick loop once the registry is COMPLETE. The adapter registers its tasks only after
+ *  seeding and running the catch-up plan, so starting first leaves ticks that see no system task
+ *  at all — and a window passing in that gap then waits for the next boot to be noticed.
+ *  A failed adapter start still starts the loop: the user tasks are registered and due. */
+function startTicking(taskManager: ITaskManager, deps: { workspace: string; systemTasks: SystemTaskDef[]; userTaskCount: number }): void {
+  if (deps.systemTasks.length + deps.userTaskCount === 0) return;
+  if (deps.systemTasks.length === 0) {
+    taskManager.start();
+    return;
+  }
+  void startSystemTaskScheduler({ taskManager, workspace: deps.workspace, tasks: deps.systemTasks, log })
+    .catch((err: unknown) => log.error("system task scheduler failed to start", { error: String(err) }))
+    .finally(() => taskManager.start());
 }
 
 /** One user task as the API returns it: the persisted entry, tagged with its origin and

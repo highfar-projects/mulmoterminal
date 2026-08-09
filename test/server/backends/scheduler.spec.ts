@@ -239,11 +239,38 @@ describe("initUserTaskScheduler", () => {
       systemTasks: [sysTask("system:feed-refresh")],
     });
     expect(count).toBe(0); // zero USER tasks
-    expect(startMock).toHaveBeenCalledTimes(1); // started despite zero user tasks
     // System tasks are NOT registered directly any more — registering them there is what left
     // them with no state and no catch-up (#1581).
     expect(registerTaskMock).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(initSchedulerMock).toHaveBeenCalledWith(expect.anything(), [expect.objectContaining({ id: "system:feed-refresh" })]));
+    await vi.waitFor(() => expect(startMock).toHaveBeenCalledTimes(1)); // started despite zero user tasks
+  });
+
+  // The adapter registers its tasks only after seeding and catch-up. A tick in that gap would
+  // see no system task at all, and the window it fell in would wait for the next boot.
+  it("does not tick until the system tasks are registered", async () => {
+    let finishInit: () => void = () => {};
+    initSchedulerMock.mockImplementationOnce(() => new Promise<void>((resolve) => (finishInit = resolve)));
+
+    initUserTaskScheduler({ workspace: makeWorkspace(), spawnChat: spawnOk, systemTasks: [sysTask("system:feed-refresh")] });
+
+    await vi.waitFor(() => expect(initSchedulerMock).toHaveBeenCalled());
+    expect(startMock).not.toHaveBeenCalled();
+    finishInit();
+    await vi.waitFor(() => expect(startMock).toHaveBeenCalledTimes(1));
+  });
+
+  // ...but a broken adapter must not leave the user's own tasks dead in the water.
+  it("still ticks when the adapter fails to start", async () => {
+    initSchedulerMock.mockRejectedValueOnce(new Error("disk full"));
+
+    initUserTaskScheduler({
+      workspace: makeWorkspace([{ id: "a", schedule: { type: "daily", time: "11:00" }, prompt: "go" }]),
+      spawnChat: spawnOk,
+      systemTasks: [sysTask("system:feed-refresh")],
+    });
+
+    await vi.waitFor(() => expect(startMock).toHaveBeenCalledTimes(1));
   });
 
   it("does not start the tick loop when there are no tasks at all", () => {
@@ -269,8 +296,8 @@ describe("initUserTaskScheduler", () => {
     });
     expect(count).toBe(1); // one user task
     expect(registerTaskMock.mock.calls.map((call) => (call[0] as TaskDefinition).id)).toEqual(["user.a"]);
-    expect(startMock).toHaveBeenCalledTimes(1);
     await vi.waitFor(() => expect(initSchedulerMock).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(startMock).toHaveBeenCalledTimes(1));
   });
 
   // The seed is what makes catch-up reachable at all: a task with no state entry is read as
