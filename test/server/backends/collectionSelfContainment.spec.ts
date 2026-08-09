@@ -200,6 +200,35 @@ describe("selfContainmentFactsFor against a real repo", () => {
     expect(isPortable(selfContainmentFindings(facts))).toBe(false);
   });
 
+  // Sampling the first few records would clear a record that is ignored by name and merely sorts
+  // late — "some records travel" is not the guarantee being checked. Asked of git over ALL of
+  // them (`ls-files --others --ignored`), so the count does not matter.
+  it("sees one record ignored by name among many that are not, whatever its position", async () => {
+    git("init");
+    writeCollection(SLUG);
+    const items = path.join(root, "data", "collections", SLUG, "items");
+    fs.mkdirSync(items, { recursive: true });
+    for (let i = 0; i < 12; i += 1) fs.writeFileSync(path.join(items, `r${i}.json`), JSON.stringify({ id: `r${i}` }));
+    fs.writeFileSync(path.join(items, "zz-archived.json"), JSON.stringify({ id: "archived" }));
+    // Names ONE record. The directory is committable, eleven records are fine, one is not.
+    fs.writeFileSync(path.join(root, ".gitignore"), `data/collections/${SLUG}/items/zz-archived.json\n`);
+
+    const facts = await factsFor(SLUG);
+    expect(facts.dataDirIgnored).toBe(true);
+    expect(isPortable(selfContainmentFindings(facts))).toBe(false);
+  });
+
+  it("does not report a directory full of records that nothing excludes", async () => {
+    git("init");
+    writeCollection(SLUG);
+    const items = path.join(root, "data", "collections", SLUG, "items");
+    fs.mkdirSync(items, { recursive: true });
+    for (let i = 0; i < 12; i += 1) fs.writeFileSync(path.join(items, `r${i}.json`), JSON.stringify({ id: `r${i}` }));
+    fs.writeFileSync(path.join(root, ".gitignore"), "node_modules/\n");
+
+    expect((await factsFor(SLUG)).dataDirIgnored).toBe(false);
+  });
+
   // An EMPTY collection is exactly when this matters: nothing is committed yet, so there is no
   // missing file to notice. A probe path stands in for the record that will be written.
   it("sees the same rule before any record exists", async () => {

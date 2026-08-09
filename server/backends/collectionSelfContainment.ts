@@ -14,7 +14,6 @@
 // collection, not as "not committed". A user-scope skill silently resolves to whatever that
 // machine happens to have. Nothing warns, because from here everything works.
 import path from "node:path";
-import fs from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { storageKindFor } from "@mulmoclaude/core/collection";
@@ -180,53 +179,61 @@ async function anyGitIgnored(root: string, targets: readonly string[]): Promise<
   }
 }
 
-/** How many existing records to ask about. A handful, because the answer is a yes/no about the
- *  collection and one ignored record already decides it — and because these become argv. */
-const SAMPLED_RECORDS = 5;
-
 /** A name that stands in for a record when the collection has none on disk yet. Any `.json` under
  *  the data dir would do; a fixed one keeps the question reproducible. */
 const RECORD_PROBE = "__portability_probe__.json";
 
-/** Every path whose ignore state decides whether the RECORDS travel.
+/** The paths to ask about DIRECTLY: the container the records live in or under, plus one probe
+ *  path standing in for a record that does not exist yet.
  *
- *  NOT just the data directory, for two separate reasons:
+ *  A `dataSource` collection's rows live in the external file and a `storage` collection's in its
+ *  backend file — `dataDir` is then only the conventional per-slug directory, and asking about it
+ *  answers about a folder the records were never in. A `*.csv` or `*.db` line would go
+ *  unreported.
  *
- *  1. A `dataSource` collection's rows live in the external file and a `storage` collection's in
- *     its backend file — `dataDir` is then only the conventional per-slug directory, and asking
- *     about it answers about a folder the records were never in. A `*.csv` or `*.db` line would
- *     go unreported.
- *  2. For the default file store the records are FILES inside that directory, and a rule can
- *     exclude them while leaving the directory itself perfectly unignored — `items/*`, `*.json`,
- *     `data/**\/*.json`. `git check-ignore` answers about the paths it is given and nothing
- *     below them, so the directory alone reads as clean while every record in it is ignored.
- *
- *  So the file store contributes real record files (up to `SAMPLED_RECORDS`), falling back to a
- *  probe path when the collection is empty — an empty collection is exactly when this matters,
- *  since there is nothing committed yet to notice missing. What a probe cannot catch is a rule
- *  keyed to particular ids (`draft-*.json`); that is a real limit, and reporting the common
- *  patterns beats reporting only the directory. */
-async function recordPathsOf(collection: { dataDir: string; dataSourceFile?: string; storageFile?: string }): Promise<string[]> {
+ *  For the default file store the probe is what catches a pattern rule (`*.json`, `items/*`)
+ *  BEFORE any record exists — which is exactly when it matters, since nothing is committed yet
+ *  and there is no missing file to notice. Existing records are covered separately and
+ *  exhaustively by `hasIgnoredContent`. */
+function directIgnoreTargets(collection: { dataDir: string; dataSourceFile?: string; storageFile?: string }): string[] {
   if (collection.dataSourceFile) return [path.resolve(collection.dataSourceFile)];
   if (collection.storageFile) return [path.resolve(collection.storageFile)];
   const dataDir = path.resolve(collection.dataDir);
-  return [dataDir, ...(await sampleRecordFiles(dataDir))];
+  return [dataDir, path.join(dataDir, RECORD_PROBE)];
 }
 
-/** Up to `SAMPLED_RECORDS` real record files, else the single probe path. A directory that
- *  cannot be read (it does not exist yet — the data folder is created on first write) is the
- *  empty case, not an error. */
-async function sampleRecordFiles(dataDir: string): Promise<string[]> {
-  const names = await readRecordNames(dataDir);
-  return (names.length > 0 ? names : [RECORD_PROBE]).map((name) => path.join(dataDir, name));
-}
-
-async function readRecordNames(dataDir: string): Promise<string[]> {
+/** Whether git ignores ANYTHING that exists under `dataDir` — asked of git over ALL of them
+ *  rather than a sample, because "some records travel" is not the guarantee being checked.
+ *
+ *  `ls-files --others --ignored` rather than a per-file `check-ignore`: one call, no argv limit,
+ *  and no cap to leak past. A collection with thousands of records is ordinary, and sampling the
+ *  first few would clear a specifically-ignored record simply for sorting late.
+ *
+ *  It reports UNTRACKED files only, and that is the right half: a record already committed
+ *  travels whatever a rule says about it. What this catches is everything that would not. */
+async function hasIgnoredContent(root: string, dataDir: string): Promise<boolean | null> {
   try {
-    return (await fs.readdir(dataDir)).filter((name) => name.endsWith(".json")).slice(0, SAMPLED_RECORDS);
-  } catch {
-    return [];
+    const { stdout } = await run("git", ["ls-files", "--others", "--ignored", "--exclude-standard", "--", dataDir], {
+      cwd: root,
+      timeout: 5_000,
+      maxBuffer: 1_000_000,
+    });
+    return stdout.trim().length > 0;
+  } catch (err) {
+    // Output that overflowed the buffer IS the answer — a great many ignored files — not a
+    // failure to ask. Anything else stays unknown.
+    if (isRecord(err) && typeof err.stdout === "string" && err.stdout.trim().length > 0) return true;
+    return null;
   }
+}
+
+/** Combine partial answers: an ignored path anywhere decides it, an unknown leaves it unknown,
+ *  and only "nothing ignored, nothing unknown" clears the collection. Written out because the
+ *  three-valued `||` is exactly the thing a later edit collapses into a two-valued one. */
+function anyIgnored(...answers: readonly (boolean | null)[]): boolean | null {
+  if (answers.includes(true)) return true;
+  if (answers.includes(null)) return null;
+  return false;
 }
 
 /** Gather the facts for one collection. Exported so a caller can run the rules over facts it
@@ -242,7 +249,7 @@ export async function selfContainmentFactsFor(slug: string, scope: ProjectScope)
     inGitRepo: git,
     // Only meaningful inside a repo; outside one, `check-ignore` answers about a repo that is
     // not the one this collection would be cloned from.
-    dataDirIgnored: git ? await anyGitIgnored(scope.workspaceRoot, await recordPathsOf(collection)) : null,
+    dataDirIgnored: git ? await ignoreVerdict(scope.workspaceRoot, collection) : null,
   };
 }
 
@@ -279,6 +286,16 @@ export function mountSelfContainmentRoutes(app: Express): void {
       }
     })();
   });
+}
+
+/** Would anything the records need be left behind: the container, a pattern that would catch a
+ *  record not yet written, or any record already on disk. */
+async function ignoreVerdict(root: string, collection: { dataDir: string; dataSourceFile?: string; storageFile?: string }): Promise<boolean | null> {
+  const direct = await anyGitIgnored(root, directIgnoreTargets(collection));
+  // The content sweep only applies to the file store — the other two keep their records in the
+  // single file already asked about above.
+  if (collection.dataSourceFile || collection.storageFile) return direct;
+  return anyIgnored(direct, await hasIgnoredContent(root, path.resolve(collection.dataDir)));
 }
 
 /** The full check for one collection, or null when the slug names none. */
