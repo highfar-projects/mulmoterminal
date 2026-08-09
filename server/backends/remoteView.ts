@@ -118,7 +118,11 @@ function unhandledFailure(result: never, slug: string): string {
 export function remoteViewFailureMessage(result: Exclude<RemoteViewBuildResult, { kind: "ok" }>, slug: string): string {
   if (result.kind === "view-not-found") return `custom view '${result.viewId}' not found on collection '${slug}'`;
   if (result.kind === "not-mobile") return `custom view '${result.viewId}' is not a mobile view — declare target: "mobile" in its views[] entry`;
-  if (result.kind === "file-missing") return `view file '${result.file}' not found — author it at data/skills/${slug}/${result.file}`;
+  // Names `.claude/skills`, not the workspace's `data/skills` staging tree. A view now belongs to
+  // whichever FOLDER the collection is in, and outside the managed workspace there is no staging
+  // mirror to write into — telling the author to use one would send them to a path nothing reads
+  // back (and, in a git-tracked project, one that must not exist at all).
+  if (result.kind === "file-missing") return `view file '${result.file}' not found — author it at .claude/skills/${slug}/${result.file}`;
   if (result.kind === "too-large")
     return `mobile view srcdoc is ${result.bytes} bytes — over the ${REMOTE_VIEW_MAX_BYTES}-byte command-channel budget; slim the HTML`;
   return unhandledFailure(result, slug);
