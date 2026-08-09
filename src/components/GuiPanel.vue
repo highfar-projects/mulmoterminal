@@ -13,7 +13,7 @@ import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { pushCollectionSurface, popCollectionSurface, type CollectionSurface } from "../composables/collectionSurface";
-import { projectIdForCwd } from "../composables/collectionProject";
+import { cachedProjectIdForCwd, projectIdForCwd } from "../composables/collectionProject";
 
 // The GUI panel renders the toolResults produced by GUI-protocol plugins. It
 // mirrors the terminal's active session: live results arrive on that session's
@@ -161,7 +161,11 @@ const cards = computed(() => collapseByIdentity(results.value, cardIdentity));
 // and that is exactly what today's behaviour already loses, since today every edit draws a whole
 // new card. Correct-and-unchanged beats stale-but-smooth. Caught by Codex on PR #1223; pinned by
 // "remounts the view … so it refetches" in GuiPanelCollapse.spec.ts.
-const cardKey = (result: ToolResult) => result.uuid;
+// The PROJECT SCOPE is part of the key, not decoration: a `presentCollection` card self-fetches
+// by slug, so a card mounted before the scope resolved fetched against the workspace. Keying on
+// the scope remounts it when the scope lands — the same refetch-by-remount this file already
+// relies on above, applied to the one input a card cannot see change.
+const cardKey = (result: ToolResult) => `${scopeId.value ?? ""}\u0000${result.uuid}`;
 
 // Each card paired with the plugin that draws it, resolved ONCE here rather than in the template.
 // A template cannot carry `v-if="getPlugin(...)"` narrowing across to the sibling attributes, so
@@ -275,13 +279,26 @@ const canvasSurface: CollectionSurface = { projectId: null };
 pushCollectionSurface(canvasSurface);
 onBeforeUnmount(() => popCollectionSurface(canvasSurface));
 
+// Mirrored into a ref because the CARD KEY reads it: a card self-fetches on mount, so a scope
+// that resolves a tick later resolves after the request it was for. Keying on it remounts the
+// cards when it lands, which is how this file already makes a card refetch (see `cardKey`).
+const scopeId = ref<string | null>(null);
+function applyScope(resolved: string | null): void {
+  canvasSurface.projectId = resolved;
+  scopeId.value = resolved;
+}
+
 let scopeGeneration = 0;
 watch(
   () => props.cwd,
   async (cwd) => {
     const mine = ++scopeGeneration;
+    // Synchronously when the project list is already warm, which it is for every canvas after the
+    // first: then there is no window at all, rather than a window the cards usually win.
+    const cached = cachedProjectIdForCwd(cwd ?? null);
+    if (cached !== undefined) applyScope(cached);
     const resolved = await projectIdForCwd(cwd ?? null);
-    if (mine === scopeGeneration) canvasSurface.projectId = resolved;
+    if (mine === scopeGeneration) applyScope(resolved);
   },
   { immediate: true },
 );
