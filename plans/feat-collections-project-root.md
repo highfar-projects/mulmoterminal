@@ -337,6 +337,52 @@ project selector ships, or "my project's collection never rings" becomes the fir
   collide there, not just in a watcher map — so per-project bells are a cross-app identity change,
   not a re-key. Budget for that separately if phase 5 wants bells per project.
 
+## 7c. The gap this design missed: a reference is still a bare slug
+
+Found by trying to USE the feature rather than by reading the plan, which is the wrong way round
+— it belonged here before any of it was built.
+
+**A collection's identity became `(root, slug)`. Every reference that crosses a boundary still
+carries `slug` alone.** Phases 3-5 scoped the read/write SURFACE — routes, tokens, caches — and
+stopped there. Anything that names a collection from OUTSIDE that surface still resolves the
+workspace, silently and by construction.
+
+The boundaries, worst first:
+
+**A. The agent's tool dispatch.** `POST /api/plugin/manageCollection` calls the
+workspace-bound handler, so "create a collection in this folder" from a project cell creates it
+in the workspace. This is the one that makes the feature unusable as intended, and it is the
+cheapest to fix: the dispatch already carries the session id in a header (`broker.ts`), so
+session → cwd → root is the resolver the accounting comment predicted.
+
+**B. A collection action spawns its chat in the wrong directory.** `spawnBackgroundChat` always
+spawns in `CLAUDE_CWD`, while the seed prompt's `<collection_paths>` are built from the request's
+root. The agent is handed a project's paths and dropped in the workspace — the two disagree in a
+way that reads as a broken template rather than a wrong cwd.
+
+**C. Notification deep links.** `buildNavigateTarget(slug, itemId)` yields
+`/collections/<slug>` with no project, so a bell from a project collection opens the workspace's
+collection of that slug. Worse, the bell's identity is `completionLegacyId(slug, itemId)` in a
+notifier file SHARED with MulmoClaude — so this one is the cross-app identity change §7b names,
+not a local fix.
+
+**D. Canvas cards.** `presentCollection` / `seedCollectionCanvas` render through the global
+binding, which reads the ambient `activeProjectId` — set only while a Collections pane is open. A
+card produced in a project cell reads whichever project is active when it renders, which may be
+none. A card should carry the root it was made for.
+
+**E. The phone.** The remote-host channel handlers are bound to `workspaceScope()`, so a project's
+collections do not exist on the phone at all. Deliberate for now — but undocumented until here.
+
+**F. Scheduled feed refresh.** The system task runs against the workspace, so a project's feeds
+never refresh on their schedule; only a manual `/refresh?project=` does.
+
+**G. Watchers** — one root per process (§7b).
+
+**What to take from it.** The rule the design should have stated: *if a name crosses a process,
+a session, a file or an app boundary, it needs the root beside it.* A slug is unique within a
+root and nowhere else, and every item above is a place that assumption was left standing.
+
 ## 8. Phases
 
 | # | Work | Where | Ships on its own? |
@@ -350,6 +396,12 @@ project selector ships, or "my project's collection never rings" becomes the fir
 | 7 | Self-containment check (§11.4) | MulmoTerminal | yes — useful even before 5 |
 | 8 | Watcher per root, or accept workspace-only bells (§7b) | MT + possibly upstream | decide before 5 ships |
 | 9 | No skill staging outside the managed workspace (§6.5, needs U5) | upstream + MT | with 5 |
+| **A** | **Session-scope the agent's `manageCollection` dispatch (§7c A)** | MT | **next — the feature is unusable as intended without it** |
+| B | Spawn a collection action's chat in the collection's root (§7c B) | MT | with A |
+| C | Notification deep links carry the project (§7c C) | MT + cross-app | with 8 |
+| D | Canvas cards carry the root they were made for (§7c D) | MT | after A |
+| E | The phone follows the session's project (§7c E) | MT | decide |
+| F | Per-root scheduled feed refresh (§7c F) | MT | decide |
 
 Phase 3 is worth shipping alone: it changes no behaviour but removes every implicit root, which
 is what makes phase 5 safe.
