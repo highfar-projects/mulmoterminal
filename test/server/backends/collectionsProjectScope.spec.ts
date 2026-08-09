@@ -11,6 +11,8 @@ import path from "node:path";
 
 import { appRequest } from "../../helpers/appRequest.js";
 import { initCollectionsBackend, mountCollectionRoutes } from "../../../server/backends/collections.js";
+// Mounted separately in app-routes.ts, so a spec that exercises it mounts it separately too.
+import { mountSelfContainmentRoutes } from "../../../server/backends/collectionSelfContainment.js";
 import { projectId } from "../../../server/infra/project-root.js";
 import { manageCollectionHandlerFor } from "../../../server/infra/collection-tool.js";
 import { makeTempDir } from "../../support/tempDir";
@@ -58,6 +60,7 @@ describe("collections served from a named project", () => {
     const app = express();
     app.use(express.json());
     mountCollectionRoutes(app);
+    mountSelfContainmentRoutes(app);
     request = appRequest(app);
   });
 
@@ -76,6 +79,23 @@ describe("collections served from a named project", () => {
     const body = (await res.json()) as { collection: { title: string }; items: Array<{ name: string }> };
     expect(body.collection.title).toBe("Other Tasks");
     expect(body.items.map((item) => item.name)).toEqual(["from-other"]);
+  });
+
+  // The portability report is scoped like every other read: it answers about the PROJECT's
+  // collection, not the workspace's collection of the same name.
+  it("reports self-containment for the named project's collection", async () => {
+    const res = await request(`/api/collections/tasks/self-containment?project=${projectId(other)}`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { slug: string; portable: boolean; findings: Array<{ code: string }> };
+    expect(body.slug).toBe("tasks");
+    // These fixture roots are tmpdirs, not repos — so the report says exactly that, and the
+    // checks that depend on git are reported as not run rather than as passed.
+    expect(body.findings.map((finding) => finding.code)).toEqual(["not-a-repo"]);
+    expect(body.portable).toBe(true);
+  });
+
+  it("404s the report for a slug the project does not have", async () => {
+    expect((await request("/api/collections/nope/self-containment")).status).toBe(404);
   });
 
   it("writes into the named project, leaving the workspace untouched", async () => {

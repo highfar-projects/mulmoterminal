@@ -37,6 +37,8 @@ import { mountPickFileRoute } from "../files/pick-file.js";
 import { mountCommandSummaryRoute } from "../session/command-summary.js";
 import { mountCostRoute } from "../session/cost.js";
 import { mountCollectionRoutes } from "../backends/collections.js";
+// "Would this collection survive a clone?" — mounts itself beside the collection routes.
+import { mountSelfContainmentRoutes } from "../backends/collectionSelfContainment.js";
 import { mountGoogleRoutes } from "../backends/google.js";
 import { mountWikiRoutes } from "../backends/wiki.js";
 import { mountAccountingRoutes } from "../backends/accounting.js";
@@ -172,6 +174,7 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // card and (later) the collections toolbar. The engine itself is configured below
   // once CLAUDE_CWD is the confirmed workspace.
   mountCollectionRoutes(app);
+  mountSelfContainmentRoutes(app);
 
   // Read-only wiki routes (GET /api/wiki[?slug=] + /graph + /lint) over the shared
   // workspace, thin consumers of @mulmoclaude/core/wiki/server. Claude authors the wiki
