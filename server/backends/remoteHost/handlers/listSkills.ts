@@ -10,7 +10,7 @@ import { discoverSkillNames } from "../skills.js";
 export const createListSkills =
   (workspace: string): CommandHandlers["listSkills"] =>
   async () => {
-    const [names, collections] = await Promise.all([discoverSkillNames({ workspaceRoot: workspace }), discoverCollections()]);
+    const [names, collections] = await Promise.all([discoverSkillNames({ workspaceRoot: workspace }), discoverCollections({ workspaceRoot: workspace })]);
     const collectionSlugs = new Set(collections.filter((collection) => collection.source !== "feed").map((collection) => collection.slug));
     return toJsonObject({ skills: names.filter((name) => !collectionSlugs.has(name)) });
   };

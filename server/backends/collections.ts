@@ -31,7 +31,6 @@ import {
   buildActionSeedPrompt,
   buildCollectionActionSeedPrompt,
   promptPathsFor,
-  getWorkspaceRoot,
   toSummary,
   toDetail,
   validateCollectionRecords,
@@ -59,11 +58,11 @@ import { refuseReadOnlyCollection, resolveActionableRecord, resolveItemAction } 
 // Mobile custom-view builder — shared with the remote-host channel handlers so
 // the desktop phone-frame preview renders the EXACT artifact the phone receives.
 import {
-  buildRemoteView,
-  mutateRemoteView,
+  buildRemoteViewFor,
+  mutateRemoteViewFor,
   remoteViewFailureMessage,
   mutateRemoteViewFailureMessage,
-  remoteViewItems,
+  remoteViewItemsFor,
   remoteViewItemsFailureMessage,
 } from "./remoteView.js";
 import { clampCapabilities, isCapability, mintViewToken, requireViewToken } from "./viewToken.js";
@@ -71,6 +70,7 @@ import { clampCapabilities, isCapability, mintViewToken, requireViewToken } from
 // action so a view can never do more than the agent's own data plane.
 import { manageCollectionHandler } from "../infra/collection-tool.js";
 import { hostLogger } from "./hostLogger.js";
+import { initProjectRoots, projectRootsConfigured, resolveProjectRoot, type ProjectScope } from "../infra/project-root.js";
 import { mutateStatus, mutateWriteApplied } from "./mutateStatus.js";
 import { isRecord } from "../../common/isRecord.js";
 import { requestBody } from "../routes/requestBody.js";
@@ -89,16 +89,20 @@ export const userSkillsDir = (): string => path.join(os.homedir(), ".claude", "s
 /** `<root>/.claude/skills` — project scope. */
 export const projectSkillsDir = (root: string): string => path.join(root, ".claude", "skills");
 
-// The shared workspace root, captured at init so the registry import route can pass
-// it to the engine (importRegistry takes it explicitly; the read side reads the host).
-let workspaceRoot: string | null = null;
-
 /** Wire the collection engine to the shared workspace. Call once at boot, before
- *  any collection route is hit. The path layout mirrors MulmoClaude verbatim. */
+ *  any collection route is hit. The path layout mirrors MulmoClaude verbatim.
+ *
+ *  EXPLICIT-ROOT MODE: the host binds `workspaceRoot: null`, declaring that every call
+ *  names its own root (`resolveProjectRoot`). Under that binding the engine's
+ *  `getWorkspaceRoot()` THROWS rather than falling back, so a call site that forgets its
+ *  root fails loudly here instead of silently reading whichever root happened to be bound —
+ *  which on a host with one root per project is the difference between an error and another
+ *  project's data. The workspace itself is bound through `initProjectRoots`, which is what
+ *  every scope still resolves to today. */
 export function initCollectionsBackend(deps: { workspace: string }): void {
-  workspaceRoot = deps.workspace;
+  initProjectRoots({ workspace: deps.workspace });
   configureCollectionHost({
-    workspaceRoot: deps.workspace,
+    workspaceRoot: null,
     log,
     paths: {
       // ~/.claude/skills — user scope (read-only).
@@ -154,8 +158,8 @@ type ResolvedCollection = NonNullable<Awaited<ReturnType<typeof loadCollection>>
 
 /** Load a collection, answering 404 when the slug is unknown. A null return means
  *  the response is already sent — the caller must return immediately. */
-async function resolveCollection(res: Response, slug: string): Promise<ResolvedCollection | null> {
-  const collection = await loadCollection(slug);
+async function resolveCollection(res: Response, slug: string, scope: ProjectScope): Promise<ResolvedCollection | null> {
+  const collection = await loadCollection(slug, scope);
   if (!collection) res.status(404).json({ error: `collection '${slug}' not found` });
   return collection;
 }
@@ -186,8 +190,13 @@ type CollectionWriteFn = NonNullable<ReturnType<typeof storeFor>["write"]>;
 /** The collection's write function plus a validated body record, or null after
  *  sending the 405 (read-only) / 400 (bad body) response. Shared by the create and
  *  update routes, which each then call `write` their own way. */
-function resolveWriteTarget(res: Response, collection: ResolvedCollection, body: unknown): { write: CollectionWriteFn; record: CollectionItem } | null {
-  const write = storeFor(collection).write;
+function resolveWriteTarget(
+  res: Response,
+  collection: ResolvedCollection,
+  body: unknown,
+  scope: ProjectScope,
+): { write: CollectionWriteFn; record: CollectionItem } | null {
+  const write = storeFor(collection, scope).write;
   if (!write) {
     res.status(405).json({ error: readOnlyRefusal(collection.slug) });
     return null;
@@ -281,7 +290,7 @@ const VIEW_WRITE_MODES: readonly ViewWriteMode[] = ["merge", "upsert", "create"]
 // row comes back in `rejected` with an actionable `problem` instead of persisting.
 type ViewItemWriteResult = { writtenId: string } | { rejected: { id: string; problem: string } };
 
-async function writeViewItem(collection: ResolvedCollection, raw: unknown, mode: ViewWriteMode): Promise<ViewItemWriteResult> {
+async function writeViewItem(collection: ResolvedCollection, raw: unknown, mode: ViewWriteMode, scope: ProjectScope): Promise<ViewItemWriteResult> {
   const record = extractRecord(raw);
   if (!record) return { rejected: { id: "", problem: "item must be a JSON object" } };
   const { singleton, primaryKey } = collection.schema;
@@ -293,7 +302,7 @@ async function writeViewItem(collection: ResolvedCollection, raw: unknown, mode:
   }
   // Reads and writes go through the collection's STORE (file, sqlite, …);
   // presence of `write` IS the writability check (core 0.25 storage seam).
-  const store = storeFor(collection);
+  const store = storeFor(collection, scope);
   const { write } = store;
   if (!write) return { rejected: { id: itemId, problem: readOnlyRefusal(collection.slug) } };
   let toWrite: CollectionItem;
@@ -332,16 +341,17 @@ function csvParam(value: unknown): string[] | undefined {
 
 // Discover tab: the merged curated-registry catalog (every configured registry's
 // index.json, fetched + cached server-side).
-const registryListHandler: RequestHandler = async (_req, res) => {
-  res.json(await listRegistry());
+const registryListHandler: RequestHandler = async (req, res) => {
+  res.json(await listRegistry(resolveProjectRoot(req)));
 };
 
 // Discover tab: install a registry collection into the shared workspace.
 const registryImportHandler: RequestHandler = async (req, res) => {
-  if (!workspaceRoot) {
+  if (!projectRootsConfigured()) {
     res.status(503).json({ error: "collections backend not initialized" });
     return;
   }
+  const { workspaceRoot } = resolveProjectRoot(req);
   const body = requestBody(req.body);
   const author = typeof body.author === "string" ? body.author : "";
   const slug = typeof body.slug === "string" ? body.slug : "";
@@ -361,9 +371,10 @@ const registryImportHandler: RequestHandler = async (req, res) => {
 // Delete one custom view: drop it from the schema + unlink its HTML. Refuses
 // user-scope / preset collections (read-only), like collection delete.
 const viewDeleteHandler: RequestHandler<{ slug: string; viewId: string }> = async (req, res) => {
-  const collection = await resolveCollection(res, req.params.slug);
+  const scope = resolveProjectRoot(req);
+  const collection = await resolveCollection(res, req.params.slug, scope);
   if (!collection) return;
-  const result = await deleteCustomView(collection, req.params.viewId);
+  const result = await deleteCustomView(collection, req.params.viewId, scope);
   if (result.kind !== "ok") {
     res.status(result.kind === "not-found" ? 404 : 403).json({ error: `view delete refused (${result.kind})` });
     return;
@@ -375,9 +386,10 @@ const viewDeleteHandler: RequestHandler<{ slug: string; viewId: string }> = asyn
 // copy. Only project-scope, non-preset collections are deletable; a refusal
 // (preset / user-scope / unsafe path) comes back as 403 with the reason.
 const collectionDeleteHandler: RequestHandler<{ slug: string }> = async (req, res) => {
-  const collection = await resolveCollection(res, req.params.slug);
+  const scope = resolveProjectRoot(req);
+  const collection = await resolveCollection(res, req.params.slug, scope);
   if (!collection) return;
-  const result = await deleteCollection(collection);
+  const result = await deleteCollection(collection, scope);
   if (result.kind !== "ok") {
     res.status(403).json({ error: deleteCollectionRefusalMessage(result) });
     return;
@@ -386,8 +398,8 @@ const collectionDeleteHandler: RequestHandler<{ slug: string }> = async (req, re
 };
 
 // List skill-backed collections for the index + toolbar.
-const listHandler: RequestHandler = async (_req, res) => {
-  const collections = await discoverCollections();
+const listHandler: RequestHandler = async (req, res) => {
+  const collections = await discoverCollections(resolveProjectRoot(req));
   res.json({ collections: collections.map(toSummary) });
 };
 
@@ -395,22 +407,23 @@ const listHandler: RequestHandler = async (_req, res) => {
 // never stored); the /collections Map tab builds its graph from these with the
 // shared `buildOntologyGraph` client-side. Port of MulmoClaude's
 // GET /api/collections/ontology (mulmoclaude PR #2218).
-const ontologyHandler: RequestHandler = async (_req, res) => {
-  res.json({ entries: await buildWorkspaceOntology() });
+const ontologyHandler: RequestHandler = async (req, res) => {
+  res.json({ entries: await buildWorkspaceOntology(resolveProjectRoot(req)) });
 };
 
 // A collection's live schema + records by slug. Backs both the card's own load
 // (CollectionView reads `status` for 404 → not-found) and ref/embed resolution.
 const detailHandler: RequestHandler<{ slug: string }> = async (req, res) => {
-  const collection = await resolveCollection(res, req.params.slug);
+  const scope = resolveProjectRoot(req);
+  const collection = await resolveCollection(res, req.params.slug, scope);
   if (!collection) return;
-  const items = await storeFor(collection).list();
+  const items = await storeFor(collection, scope).list();
   // Best-effort validation: a malformed record is silently skipped at read
   // time, so surface the problems here too and let the view offer a Repair
   // button. Never let validation failure turn a successful detail into a 500.
   let issues: RecordIssue[] = [];
   try {
-    issues = await validateCollectionRecords(collection);
+    issues = await validateCollectionRecords(collection, scope);
   } catch (err) {
     log.warn("collections", "detail validation skipped", { slug: collection.slug, error: errorMessage(err) });
   }
@@ -426,10 +439,11 @@ async function resolveWriteRequest(
   res: Response,
   slug: string,
   body: unknown,
+  scope: ProjectScope,
 ): Promise<{ collection: ResolvedCollection; target: { write: CollectionWriteFn; record: CollectionItem } } | null> {
-  const collection = await resolveCollection(res, slug);
+  const collection = await resolveCollection(res, slug, scope);
   if (!collection) return null;
-  const target = resolveWriteTarget(res, collection, body);
+  const target = resolveWriteTarget(res, collection, body, scope);
   if (!target) return null;
   return { collection, target };
 }
@@ -438,7 +452,7 @@ async function resolveWriteRequest(
 // Create a record. The id is the schema's primaryKey value from the body, or a
 // generated one; a singleton collection pins every create to its fixed id.
 const itemCreateHandler: RequestHandler<{ slug: string }> = async (req, res) => {
-  const resolved = await resolveWriteRequest(res, req.params.slug, req.body);
+  const resolved = await resolveWriteRequest(res, req.params.slug, req.body, resolveProjectRoot(req));
   if (!resolved) return;
   const { collection, target } = resolved;
   const itemId = resolveCreateItemId(collection.schema, target.record) ?? generateItemId();
@@ -459,7 +473,7 @@ const itemCreateHandler: RequestHandler<{ slug: string }> = async (req, res) => 
 // Update a record. The primaryKey is pinned to the URL itemId (the body can't
 // smuggle a different id). Singletons only accept their one fixed id.
 const itemUpdateHandler: RequestHandler<{ slug: string; itemId: string }> = async (req, res) => {
-  const resolved = await resolveWriteRequest(res, req.params.slug, req.body);
+  const resolved = await resolveWriteRequest(res, req.params.slug, req.body, resolveProjectRoot(req));
   if (!resolved) return;
   const { collection, target } = resolved;
   const { singleton, primaryKey } = collection.schema;
@@ -483,9 +497,10 @@ const itemUpdateHandler: RequestHandler<{ slug: string; itemId: string }> = asyn
 
 // Delete a record.
 const itemDeleteHandler: RequestHandler<{ slug: string; itemId: string }> = async (req, res) => {
-  const collection = await resolveCollection(res, req.params.slug);
+  const scope = resolveProjectRoot(req);
+  const collection = await resolveCollection(res, req.params.slug, scope);
   if (!collection) return;
-  const deleteStore = storeFor(collection).delete;
+  const deleteStore = storeFor(collection, scope).delete;
   if (!deleteStore) {
     res.status(405).json({ error: readOnlyRefusal(collection.slug) });
     return;
@@ -517,10 +532,11 @@ const respondForMutateAction = async (
   action: CollectionMutateAction,
   itemId: string,
   body: { params?: unknown } | undefined,
+  scope: ProjectScope,
 ): Promise<void> => {
   const raw = body?.params;
   const params = isRecord(raw) ? raw : {};
-  const outcome = await applyMutateAction(collection, action, itemId, params);
+  const outcome = await applyMutateAction(collection, action, itemId, params, scope);
   if (!outcome.ok) {
     // `itemId` is caller-controlled (a route param) — strip CR/LF so a crafted
     // id can't forge log lines.
@@ -543,31 +559,33 @@ const respondForMutateAction = async (
 
 // Per-record action (e.g. Repair / enrich this record).
 const itemActionHandler: RequestHandler<{ slug: string; itemId: string; actionId: string }> = async (req, res) => {
-  const collection = await resolveCollection(res, req.params.slug);
+  const scope = resolveProjectRoot(req);
+  const collection = await resolveCollection(res, req.params.slug, scope);
   if (!collection) return;
   const action = resolveItemAction(res, collection, req.params.actionId);
   if (!action) return;
-  const record = await resolveActionableRecord(res, collection, action, req.params.itemId);
+  const record = await resolveActionableRecord(res, collection, action, req.params.itemId, scope);
   if (!record) return;
   // `kind: "mutate"` needs no template / seed / LLM — the host applies the
   // declarative write itself (`when` was just enforced above, same
   // visibility-is-authorization rule as the seeded kinds).
   if (action.kind === "mutate") {
     if (refuseReadOnlyCollection(res, collection)) return;
-    await respondForMutateAction(res, collection, action, req.params.itemId, isRecord(req.body) ? req.body : undefined);
+    await respondForMutateAction(res, collection, action, req.params.itemId, isRecord(req.body) ? req.body : undefined, scope);
     return;
   }
   const template = await readActionTemplateOr500(res, collection, action);
   if (template === null) return;
   // Pass the collection paths so the seed prompt carries the <collection_paths>
   // block — the skill template needs skillDir/dataPath to find its files.
-  const paths = promptPathsFor(collection, getWorkspaceRoot());
+  const paths = promptPathsFor(collection, scope.workspaceRoot);
   res.json({ prompt: buildActionSeedPrompt(record, template, paths), role: action.role });
 };
 
 // Collection-level action (operates over all records).
 const collectionActionHandler: RequestHandler<{ slug: string; actionId: string }> = async (req, res) => {
-  const collection = await resolveCollection(res, req.params.slug);
+  const scope = resolveProjectRoot(req);
+  const collection = await resolveCollection(res, req.params.slug, scope);
   if (!collection) return;
   const action = collection.schema.collectionActions?.find((entry) => entry.id === req.params.actionId);
   if (!action) {
@@ -583,8 +601,8 @@ const collectionActionHandler: RequestHandler<{ slug: string; actionId: string }
   try {
     const template = await readActionTemplateOr500(res, collection, action);
     if (template === null) return;
-    const allItems = await storeFor(collection).list();
-    const paths = promptPathsFor(collection, getWorkspaceRoot());
+    const allItems = await storeFor(collection, scope).list();
+    const paths = promptPathsFor(collection, scope.workspaceRoot);
     res.json({ prompt: buildCollectionActionSeedPrompt(allItems, collection.schema, template, paths), role: action.role });
   } catch (err) {
     log.warn("collections", "collection action seed failed", { slug: collection.slug, actionId: req.params.actionId, error: errorMessage(err) });
@@ -601,11 +619,12 @@ const collectionActionHandler: RequestHandler<{ slug: string; actionId: string }
 // path-safe reader. The frontend renders it sandboxed (token injected).
 const viewFileHandler: RequestHandler<{ slug: string }> = async (req, res) => {
   const viewId = typeof req.query.id === "string" ? req.query.id : "";
-  const collection = await resolveCollection(res, req.params.slug);
+  const scope = resolveProjectRoot(req);
+  const collection = await resolveCollection(res, req.params.slug, scope);
   if (!collection) return;
   const view = resolveView(res, collection, viewId);
   if (!view) return;
-  const html = await readCustomViewHtml(collection, view.file);
+  const html = await readCustomViewHtml(collection, view.file, scope);
   if (html === null) {
     res.status(404).json({ error: `view file '${view.file}' not found` });
     return;
@@ -629,9 +648,10 @@ const remoteViewHandler: RequestHandler<{ slug: string }> = async (req, res) => 
   const { slug } = req.params;
   const viewId = typeof req.query.id === "string" ? req.query.id : "";
   const locale = typeof req.query.locale === "string" ? req.query.locale : "";
-  const collection = await resolveCollection(res, slug);
+  const scope = resolveProjectRoot(req);
+  const collection = await resolveCollection(res, slug, scope);
   if (!collection) return;
-  const result = await buildRemoteView(collection, viewId, locale);
+  const result = await buildRemoteViewFor(scope)(collection, viewId, locale);
   if (result.kind !== "ok") {
     const notFound = result.kind === "view-not-found" || result.kind === "file-missing";
     res.status(notFound ? 404 : 400).json({ error: remoteViewFailureMessage(result, slug) });
@@ -655,9 +675,10 @@ const remoteViewMutateHandler: RequestHandler<{ slug: string; viewId: string }> 
     res.status(400).json({ error: "invalid mutate request — expected { op: 'update'|'delete', id, patch? }" });
     return;
   }
-  const collection = await resolveCollection(res, slug);
+  const scope = resolveProjectRoot(req);
+  const collection = await resolveCollection(res, slug, scope);
   if (!collection) return;
-  const result = await mutateRemoteView(collection, viewId, request);
+  const result = await mutateRemoteViewFor(scope)(collection, viewId, request);
   if (mutateWriteApplied(result)) {
     // The write applied; only its response blew the byte budget. Report success (not a 4xx
     // that reads as a failed edit and strands stale data) and tell the client to re-fetch.
@@ -679,9 +700,10 @@ const remoteViewItemsHandler: RequestHandler<{ slug: string; viewId: string }> =
   const { slug, viewId } = req.params;
   const fields = normalizeFields(csvParam(req.query.fields));
   const request = { offset: clampViewOffset(req.query.offset), limit: clampViewLimit(req.query.limit), ...(fields ? { fields } : {}) };
-  const collection = await resolveCollection(res, slug);
+  const scope = resolveProjectRoot(req);
+  const collection = await resolveCollection(res, slug, scope);
   if (!collection) return;
-  const result = await remoteViewItems(collection, viewId, request);
+  const result = await remoteViewItemsFor(scope)(collection, viewId, request);
   if (result.kind !== "ok") {
     res.status(result.kind === "view-not-found" ? 404 : 400).json({ error: remoteViewItemsFailureMessage(result, slug) });
     return;
@@ -699,7 +721,7 @@ const viewTokenHandler: RequestHandler<{ slug: string }> = async (req, res) => {
     res.status(400).json({ error: "`viewId` is required" });
     return;
   }
-  const collection = await resolveCollection(res, slug);
+  const collection = await resolveCollection(res, slug, resolveProjectRoot(req));
   if (!collection) return;
   const view = resolveView(res, collection, viewId);
   if (!view) return;
@@ -728,9 +750,10 @@ const viewDataCors = (_req: Request, res: Response, next: NextFunction): void =>
 // Scoped read: the view's enriched records as `{ items }` — the shape custom views
 // fetch from `window.__MC_VIEW.dataUrl`. Guarded by the view token only.
 const viewDataGetHandler: RequestHandler<{ slug: string }> = async (req, res) => {
-  const collection = await resolveCollection(res, req.params.slug);
+  const scope = resolveProjectRoot(req);
+  const collection = await resolveCollection(res, req.params.slug, scope);
   if (!collection) return;
-  const items = await enrichItems(collection, await storeFor(collection).list());
+  const items = await enrichItems(collection, await storeFor(collection, scope).list(), scope);
   res.json({ items });
 };
 
@@ -741,7 +764,8 @@ const viewDataGetHandler: RequestHandler<{ slug: string }> = async (req, res) =>
 // response envelope is `{ written, rejected }` — `written` is the id of each stored
 // record, `rejected` a `{ id, problem }` per row that failed — the shape views read.
 const viewDataPutHandler: RequestHandler<{ slug: string }> = async (req, res) => {
-  const collection = await resolveCollection(res, req.params.slug);
+  const scope = resolveProjectRoot(req);
+  const collection = await resolveCollection(res, req.params.slug, scope);
   if (!collection) return;
   if (refuseReadOnlyCollection(res, collection)) return;
   const body: Record<string, unknown> = isRecord(req.body) ? req.body : {};
@@ -760,7 +784,7 @@ const viewDataPutHandler: RequestHandler<{ slug: string }> = async (req, res) =>
   const written: string[] = [];
   const rejected: Array<{ id: string; problem: string }> = [];
   for (const raw of body.items) {
-    const outcome = await writeViewItem(collection, raw, mode);
+    const outcome = await writeViewItem(collection, raw, mode, scope);
     if ("writtenId" in outcome) written.push(outcome.writtenId);
     else rejected.push(outcome.rejected);
   }

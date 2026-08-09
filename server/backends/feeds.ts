@@ -73,7 +73,7 @@ export function mountFeedsRoutes(app: Express): void {
   });
 
   app.post("/api/collections/:slug/refresh", async (req: Request<{ slug: string }>, res: Response) => {
-    const collection = await loadCollection(req.params.slug);
+    const collection = await loadCollection(req.params.slug, { workspaceRoot });
     if (!collection) {
       res.status(404).json({ error: `collection '${req.params.slug}' not found` });
       return;

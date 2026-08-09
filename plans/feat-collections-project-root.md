@@ -100,6 +100,14 @@ we are not re-binding, we are passing arguments.
 Zero callers, and it is precisely the helper a future contributor would reach for — at which
 point containment is silently checked against the wrong root. Delete it, or make it take a root.
 
+### U5. `skillsStagingDir` must be able to say "there is no staging here" *(required — see §6.5)*
+
+`CollectionHost.paths.skillsStagingDir: (root) => string` cannot express "this root has no
+staging tree", and the engine reads staging **first** for `source === "project"` collections
+(`skillAssets.ts:55`). Widen it to `(root) => string | null` and skip the staging base when null.
+
+MulmoClaude returns a string for its one workspace and is unaffected.
+
 ### Not upstream
 
 - **Route shapes** — the collection HTTP routes are host-owned (MulmoTerminal mounts its own in
@@ -205,6 +213,52 @@ With a project root, the questions are:
 
 None of these need upstream changes; they are the options the host passes.
 
+### 6.5. Skill staging is a WORKSPACE mechanism and must not follow into project roots
+
+The workspace does not let the agent write `.claude/skills/` directly. It writes drafts to
+`data/skills/<slug>/`, and `@mulmoclaude/core/skill-bridge` mirrors a **fixed allowlist** —
+`SKILL.md`, `schema.json`, `templates/<path>` — into `.claude/skills/<slug>/`. Everything else
+(README, assets, arbitrary nesting) stays staging-side. The bridge exists because of the
+`.claude/` permission gate, not because staging is a nicer layout.
+
+**A regular project folder has no such gate: the agent writes `<project>/.claude/skills/<slug>/`
+directly, and there must be no staging tree there.**
+
+This is not just a preference — the engine actively prefers staging:
+
+```ts
+// skillAssets.ts:55 — a `source: "project"` collection reads staging FIRST
+const bases = collection.source === "project"
+  ? [path.join(skillsStagingDir(workspaceRoot), safeSlug), collection.skillDir]
+  : [collection.skillDir];
+```
+
+A project root's collections are exactly `source: "project"`. So a stray
+`<project>/data/skills/<slug>/` — copied from a workspace, or written by an agent that learned the
+workspace convention — **silently shadows the committed skill**: two `schema.json` in one repo, and
+the one that is not the committed one wins. It also breaks §11 (the clone would carry a second copy
+of the definition, and which one is live depends on a directory nobody meant to commit).
+
+**What to do**
+
+- Upstream **U5**: let `skillsStagingDir` return `null`; the engine then uses `[collection.skillDir]`
+  alone.
+- In MulmoTerminal, return the staging path **only for the managed workspace**. The predicate
+  already exists — `isManagedWorkspace()` in `server/backends/workspaceSetup.ts`, which is what
+  gates workspace-only seeding today.
+- Do **not** wire a skill-bridge for project roots. There is nothing to bridge.
+
+**How this qualifies D7 (§6.4).** The workspace stays "just another project" *for root resolution* —
+`resolveProjectRoot` still returns a plain root with no discriminator. What differs is not identity
+but **whether the root sits behind the `.claude/` permission gate**, and that belongs to the
+skill-WRITE path, not to the resolver. Keep the distinction there and it stays one branch in one
+place instead of a `kind` field spreading through every caller.
+
+**Note on MulmoTerminal today**: MT declares `skillsStagingDir` for the engine but wires **no
+bridge** — there is no PostToolUse mirror here (that was the deferred PR5). So MT reads a staging
+tree it never writes; the declaration exists so a workspace MulmoClaude staged into is read the same
+way by both hosts. Whether MT needs the bridge for the workspace at all is §10.
+
 ### 6.4. The shared workspace is one project among many *(decided)*
 
 For collections there is **no workspace special case**: `~/mulmoclaude` is a directory with
@@ -238,6 +292,7 @@ separate change, deliberately not bundled here.
 | **Live-update pings crossing projects** | U1 |
 | Drift from MulmoClaude's API | paths unchanged; project rides as an optional param (§5) |
 | A project directory with no `.claude/skills` | empty list, not an error — same as an empty workspace |
+| **A stray `data/skills/<slug>/` in a project shadowing the committed skill** | U5 + return staging only for the managed workspace (§6.5) |
 
 ## 7b. The collection watcher is single-root, and it fails quietly
 
@@ -287,13 +342,14 @@ project selector ships, or "my project's collection never rings" becomes the fir
 | # | Work | Where | Ships on its own? |
 |---|---|---|---|
 | 1 | U1 payload root + U2 strict mode + U3 cleanup, published | MulmoClaude / core | yes (no behaviour change there) |
-| 2 | `resolveProjectRoot()` + known-projects validation | MulmoTerminal | no |
-| 3 | Thread root through all routes; turn strict mode on | MulmoTerminal | yes — still workspace-only, but now explicit |
+| 2 | `resolveProjectRoot()` + known-projects validation | MulmoTerminal | **DONE** (the known-projects list is phase 5; a `project` parameter is refused, not ignored) |
+| 3 | Thread root through all routes; turn strict mode on | MulmoTerminal | **DONE** — still workspace-only, but now explicit |
 | 4 | Re-key tokens / caches / channels by `(root, slug)` | MulmoTerminal | yes |
 | 5 | `?project=` parameter + client project selector | MulmoTerminal | **yes — this is the feature landing** |
 | 6 | Merge-semantics decisions from §6 made real | MulmoTerminal | with 5 |
 | 7 | Self-containment check (§11.4) | MulmoTerminal | yes — useful even before 5 |
 | 8 | Watcher per root, or accept workspace-only bells (§7b) | MT + possibly upstream | decide before 5 ships |
+| 9 | No skill staging outside the managed workspace (§6.5, needs U5) | upstream + MT | with 5 |
 
 Phase 3 is worth shipping alone: it changes no behaviour but removes every implicit root, which
 is what makes phase 5 safe.
@@ -318,6 +374,9 @@ is what makes phase 5 safe.
    repo? Refusal is safer for clone parity and worse for the "global collection everywhere" case.
 6. Should `generateItemId()` be widened upstream (32 bits → 128), or is `primaryKey` guidance
    enough?
+7. Does MulmoTerminal need the skill-bridge for the managed workspace at all (§6.5)? It declares
+   the staging path but mirrors nothing, so an agent authoring a collection skill in the workspace
+   from MT writes a draft that never becomes active here.
 
 ## 11. Self-contained projects — clone parity
 

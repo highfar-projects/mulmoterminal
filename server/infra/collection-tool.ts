@@ -6,9 +6,11 @@
 // there is no passthrough router — the route calls the handler directly.
 //
 // MulmoTerminal's deps binding:
-//   - workspaceRoot: omitted — the engine falls back to the collection host
-//     configured at boot (initCollectionsBackend → configureCollectionHost),
-//     the same root every collection REST route uses.
+//   - workspaceRoot: a GETTER over the bound workspace, not a captured string. The tool
+//     is built at module scope — before boot binds anything — so a value read here would
+//     be `undefined`, and under the engine's explicit-root binding that is a throw rather
+//     than a fallback. The getter defers the read to the call, which is when a root exists.
+//     (This is the agent's data plane, which has no request: it operates on the workspace.)
 //   - bundledHelpsDir: workspace-setup's helpsAssetDir, so `schemaDocs`
 //     serves the bundled collection-authoring reference even when the
 //     workspace has no config/helps copy (only managed workspaces are seeded).
@@ -18,8 +20,14 @@
 import type { ToolDefinition } from "gui-chat-protocol";
 import { makeManageCollectionTool } from "@mulmoclaude/core/collection/server";
 import { helpsAssetDir } from "@mulmoclaude/core/workspace-setup";
+import { workspaceScope } from "./project-root.js";
 
-const tool = makeManageCollectionTool({ bundledHelpsDir: helpsAssetDir });
+const tool = makeManageCollectionTool({
+  bundledHelpsDir: helpsAssetDir,
+  get workspaceRoot(): string {
+    return workspaceScope().workspaceRoot;
+  },
+});
 
 /** The bound handler the dispatch route calls. Returns the tool's narration
  *  string (JSON for the read/write actions) — no GUI `data`, matching

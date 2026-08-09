@@ -16,9 +16,10 @@ import type { CollectionItem, CollectionMutateAction } from "@mulmoclaude/core/c
 import { refuseReadOnlyCollection, resolveActionableRecord, resolveItemAction } from "./collectionActionGuards.js";
 // The same thumbnail resolver the mobile view's image inlining uses, so a desktop
 // view's <img> and the phone's inlined one are the same bytes.
-import { resolveThumbnail } from "./thumbnailStore.js";
+import { thumbnailResolverFor } from "./thumbnailStore.js";
 import { makeViewActionRateLimiter, ONE_MINUTE_MS, VIEW_ACTION_RATE_LIMIT_PER_MINUTE, VIEW_IMAGE_RATE_LIMIT_PER_MINUTE } from "./viewRateLimit.js";
 import { requireViewToken } from "./viewToken.js";
+import { resolveProjectRoot, type ProjectScope } from "../infra/project-root.js";
 import { hostLogger } from "./hostLogger.js";
 import { isRecord } from "../../common/isRecord.js";
 
@@ -28,7 +29,7 @@ const log = hostLogger;
  *  its mutate executor, and the two middlewares the whole view-data family shares. */
 export interface CustomViewRouteDeps {
   /** Load a collection, answering 404 itself; null means the response was sent. */
-  resolveCollection: (res: Response, slug: string) => Promise<LoadedCollection | null>;
+  resolveCollection: (res: Response, slug: string, scope: ProjectScope) => Promise<LoadedCollection | null>;
   /** Locate a declared custom view, answering 404 itself; null means sent. */
   resolveView: (res: Response, collection: LoadedCollection, viewId: string) => { i18n?: string | undefined } | null;
   /** Apply a mutate action and answer with the written record (or its refusal). */
@@ -38,6 +39,7 @@ export interface CustomViewRouteDeps {
     action: CollectionMutateAction,
     itemId: string,
     body: { params?: unknown } | undefined,
+    scope: ProjectScope,
   ) => Promise<void>;
   /** Wrap a handler so a throw becomes a logged 500. */
   guarded: <P extends Record<string, string>>(op: string, handler: RequestHandler<P>) => RequestHandler<P>;
@@ -77,7 +79,8 @@ const makeI18nHandler =
   async (req, res) => {
     const viewId = typeof req.query.id === "string" ? req.query.id : "";
     const locale = typeof req.query.locale === "string" ? req.query.locale : "";
-    const collection = await deps.resolveCollection(res, req.params.slug);
+    const i18nScope = resolveProjectRoot(req);
+    const collection = await deps.resolveCollection(res, req.params.slug, i18nScope);
     if (!collection) return;
     const view = deps.resolveView(res, collection, viewId);
     if (!view) return;
@@ -86,7 +89,7 @@ const makeI18nHandler =
       res.json({ locale: "", dict: {} });
       return;
     }
-    res.json(await readCustomViewI18n(collection, view.i18n, locale));
+    res.json(await readCustomViewI18n(collection, view.i18n, locale, i18nScope));
   };
 
 // Scoped image read: resolve one record-referenced image path into a downscaled
@@ -97,7 +100,8 @@ const makeI18nHandler =
 const makeImageHandler =
   (deps: CustomViewRouteDeps): RequestHandler<{ slug: string }> =>
   async (req, res) => {
-    const collection = await deps.resolveCollection(res, req.params.slug);
+    const scope = resolveProjectRoot(req);
+    const collection = await deps.resolveCollection(res, req.params.slug, scope);
     if (!collection) return;
     const relPath = typeof req.query.path === "string" ? req.query.path : "";
     if (relPath.length === 0) {
@@ -105,12 +109,12 @@ const makeImageHandler =
       return;
     }
     try {
-      const items = await storeFor(collection).list();
+      const items = await storeFor(collection, scope).list();
       if (!isAuthorizedImagePath(collection.schema, items, relPath)) {
         res.status(404).json({ error: "path is not a current value of this collection's image fields" });
         return;
       }
-      const dataUrl = await resolveThumbnail(relPath, clampImageMaxEdge(req.query.maxEdge));
+      const dataUrl = await thumbnailResolverFor(scope)(relPath, clampImageMaxEdge(req.query.maxEdge));
       if (dataUrl === null) {
         res.status(404).json({ error: "image could not be resolved" });
         return;
@@ -132,7 +136,8 @@ const makeImageHandler =
 const makeActionHandler =
   (deps: CustomViewRouteDeps): RequestHandler<{ slug: string; actionId: string }> =>
   async (req, res) => {
-    const collection = await deps.resolveCollection(res, req.params.slug);
+    const mutateScope = resolveProjectRoot(req);
+    const collection = await deps.resolveCollection(res, req.params.slug, mutateScope);
     if (!collection) return;
     const action = resolveItemAction(res, collection, req.params.actionId);
     if (!action) return;
@@ -147,8 +152,8 @@ const makeActionHandler =
       res.status(400).json({ error: "`itemId` is required (the record's primary-key value)" });
       return;
     }
-    if (!(await resolveActionableRecord(res, collection, action, itemId))) return;
-    await deps.respondForMutateAction(res, collection, action, itemId, body);
+    if (!(await resolveActionableRecord(res, collection, action, itemId, mutateScope))) return;
+    await deps.respondForMutateAction(res, collection, action, itemId, body, mutateScope);
   };
 
 // Per-minute budgets, keyed by IP + slug. Two buckets on purpose: a gallery's
