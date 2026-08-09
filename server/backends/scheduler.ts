@@ -150,8 +150,9 @@ export function buildUserTaskDefinitions(tasks: readonly unknown[], spawnChat: S
  *  The tick loop starts whenever ANY task exists — so a system task alone (no user tasks) still
  *  drives its schedule. Returns the user-task count.
  *
- *  The adapter's catch-up is deliberately NOT awaited: it runs every window missed while the
- *  server was off, which for a caught-up feed refresh is real work, and boot must not wait. */
+ *  Boot never waits on the adapter: its catch-up runs every window missed while the server was
+ *  off, which for a caught-up feed refresh is real work. The TICK LOOP does wait for it, but
+ *  only so far — see startTicking. */
 export function initUserTaskScheduler(deps: { workspace: string; spawnChat: ScheduledChatSpawn; systemTasks?: SystemTaskDef[] }): number {
   const userDefs = buildUserTaskDefinitions(loadUserTasks(deps.workspace), deps.spawnChat);
   const systemTasks = deps.systemTasks ?? [];
