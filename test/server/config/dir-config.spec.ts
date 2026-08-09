@@ -32,6 +32,7 @@ const EMPTY = {
   colors: null,
   sound: null,
   sounds: {},
+  icon: null,
   buttons: null,
   chips: null,
   skills: null,
@@ -39,6 +40,7 @@ const EMPTY = {
   model: null,
   addDirs: null,
   appendSystemPrompt: null,
+  worktreeEnv: null,
 };
 
 function withConfig(body: unknown): { dir: string; cleanup: () => void } {
@@ -137,6 +139,9 @@ describe("loadDirConfig", () => {
       sound: "./a.mp3",
       skills: ["  review  ", "commit", "review", ""],
       appendSystemPrompt: false,
+      // One good variable and two the loader must drop ON THEIR OWN: a name no shell could
+      // export, and a privileged port. Dropping the whole block would take PORT with them.
+      worktreeEnv: { PORT: { kind: "port", base: 3000 }, "not a name": { kind: "port", base: 4000 }, LOW: { kind: "port", base: 80 } },
     });
     writeFileSync(path.join(dir, "a.mp3"), "x");
     expect(loadDirConfig(dir)).toEqual({
@@ -155,6 +160,7 @@ describe("loadDirConfig", () => {
       colors: null,
       sound: path.join(dir, "a.mp3"),
       sounds: {},
+      icon: null,
       buttons: null,
       chips: null,
       skills: ["review", "commit"], // trimmed, deduped, empties dropped
@@ -162,6 +168,7 @@ describe("loadDirConfig", () => {
       model: null,
       addDirs: null,
       appendSystemPrompt: false,
+      worktreeEnv: { PORT: { kind: "port", base: 3000 } },
     });
     cleanup();
   });
@@ -352,6 +359,7 @@ describe("publicDirConfig / dirSoundFor", () => {
       theme: null,
       colors: null,
       hasSound: true,
+      iconUrl: null,
     });
     expect(dirSoundFor(dir, null)).toEqual({ source: "file", path: path.join(dir, "a.mp3") });
     cleanup();
@@ -407,7 +415,7 @@ describe("dirConfigDetail", () => {
     const dir = tmp();
     const detail = dirConfigDetail(dir);
     expect(detail.file).toBeNull();
-    expect(detail.source).toEqual({ applied: [], ignored: [], unknown: [] });
+    expect(detail.source).toEqual({ applied: [], ignored: [], unknown: [], local: [], repo: [] });
     rmSync(dir, { recursive: true, force: true });
   });
 
@@ -426,7 +434,7 @@ describe("dirConfigDetail", () => {
     const { dir, cleanup } = withConfig("{ not json");
     const detail = dirConfigDetail(dir);
     expect(detail.file).toBe(path.join(dir, ".mulmoterminal.json"));
-    expect(detail.source).toEqual({ applied: [], ignored: [], unknown: [] });
+    expect(detail.source).toEqual({ applied: [], ignored: [], unknown: [], local: [], repo: [] });
     cleanup();
   });
 
@@ -466,7 +474,17 @@ describe("dirConfigDetail", () => {
     const dir = tmp();
     const { config, extras } = dirConfigDetail(dir);
     expect(Object.values(config).every((value) => value === null || value === false)).toBe(true);
-    expect(extras).toEqual({ provider: null, model: null, skills: null, addDirs: null, appendSystemPrompt: null, buttonLabels: [], chipLabels: [] });
+    expect(extras).toEqual({
+      provider: null,
+      model: null,
+      skills: null,
+      addDirs: null,
+      appendSystemPrompt: null,
+      buttonLabels: [],
+      chipLabels: [],
+      autoIcon: null,
+      worktreeEnvNames: [],
+    });
     rmSync(dir, { recursive: true, force: true });
   });
 
@@ -477,7 +495,7 @@ describe("dirConfigDetail", () => {
   it("reports a directory that is gone as gone, not as one with no config", () => {
     expect(MISSING_DIR_CONFIG_DETAIL.exists).toBe(false);
     expect(MISSING_DIR_CONFIG_DETAIL.file).toBeNull();
-    expect(MISSING_DIR_CONFIG_DETAIL.source).toEqual({ applied: [], ignored: [], unknown: [] });
+    expect(MISSING_DIR_CONFIG_DETAIL.source).toEqual({ applied: [], ignored: [], unknown: [], local: [], repo: [] });
     expect(Object.values(MISSING_DIR_CONFIG_DETAIL.config).every((v) => v === null || v === false)).toBe(true);
   });
 

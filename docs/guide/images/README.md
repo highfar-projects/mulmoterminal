@@ -37,7 +37,11 @@ Referenced from the README and the living guide, so these go stale when the UI m
 | `grid-zoom.png` | Expanded cell + filmstrip thumbnails |
 | `files-pane.png` | The file pane open beside an enlarged terminal |
 | `editor-syntax-highlight.png` | The Files view with a `.vue` file open — tree on the left, the editor colouring imports, types and strings |
-| `settings.png` | The Settings modal (theme / sound / PR repos / launch commands / MCP) |
+| `settings.png` | The Settings modal before the sidebar (#1563) — one flat scroll. Kept for the dated v2.1.0 / v2.2.0 pages, which describe that screen |
+| `settings-tabs.png` | The Settings modal's sidebar of grouped sections, with **Notification sounds** open |
+| `settings-japanese.png` | The same modal in Japanese, on a `ja-JP` browser with nothing configured |
+| `skill-launch-confirm-en.png` | The confirmation a skill button raises before starting an agent session (English) |
+| `skill-launch-confirm-ja.png` | The same confirmation in Japanese |
 | `worktree-close-keep.png` | Closing a worktree cell with nothing unsaved — Keep worktree / Remove worktree / Cancel |
 | `worktree-close-discard.png` | The same dialog when the worktree has unpushed commits + uncommitted changes — the button becomes `Discard & remove` |
 | `push-lock-screen.jpg` | Push notifications on a phone's lock screen — finished tasks and "Claude is waiting for your input" |
@@ -47,7 +51,7 @@ Referenced from the README and the living guide, so these go stale when the UI m
 
 | File | Shows |
 |---|---|
-| `config-settings-modal.png` | The Settings modal: Theme, Terminal font size, Directory appearance, **Directory settings** (a directory expanded), Notification sounds |
+| `config-settings-modal.png` | The Settings modal's sidebar, scrolled to show the first eight groups (**Appearance** down to **Sessions**; **Help** is below the fold), with **Theme** open |
 | `config-dir-settings.png` | One expanded Directory-settings row — values in force with colour swatches, the file they came from, and `Not settings this app reads (a typo?)` listing a deliberately misspelt `badgeColour` and `fontSize2` |
 | `config-launcher-chips.png` | An empty cell's launcher showing three settings at once: `cwdPresets` chips (with their directory-colour stripe), `script.json` under OR RUN A SCRIPT, `launchers` under OR LAUNCH |
 | `config-custom-themes.png` | The Settings theme picker with four user-defined schemes (Mondrian / Van Gogh (Arles) / Picasso Blue / Matisse) beside the built-in four, with Van Gogh applied |
@@ -84,6 +88,43 @@ dated on purpose; write the next version's page instead.
 | `v4.3.0-gui-tools-workspace.png` | The launcher's GUI TOOLS section with the workspace selected — all of them, automatically, no per-directory registration |
 | `v4.3.0-workspace-chip.png` | The launcher chip row: the workspace first with its own icon and no remove button, then two ordinary directory chips that have one |
 | `v4.3.1-workspace-chip.png` | The same row after the workspace chip became capitalised `WORKSPACE` |
+| `v4.4.0-path-menu.png` | The cell header path with its open menu: Reveal in the file manager / Browse files in the app / New terminal here, then Repository / Issues / Pull requests |
+| `v4.5.0-agent-picker.png` | The Agent Picker: Claude, Codex, Antigravity, Grok, Shell |
+| `v4.5.0-repo-json-cells.png` | Two cells, each carrying its repository's own icon |
+| `v4.5.0-repo-json-chips.png` | The launcher's chips, each carrying its repository's icon |
+| `v4.5.0-settings.png` | Settings sections for PR footers, GitLab, background tasks, backends and header buttons |
+| `v4.5.0-worktree-env.png` | A worktree's cell header showing the port and database it was given |
+| `v4.5.1-model-help.png` | The Running-a-session-on-another-model panel with a NEEDS ATTENTION block (a provider with no models listed) |
+| `v4.5.1-model-needs-attention.png` | The launch form's MODEL row with the "Needs attention" link beside the model select |
+| `v4.6.0-resume-running.png` | The OR RESUME HERE list — the top row marked running, 30m ago, with a stop button |
+| `v4.6.0-round-table.png` | The forum menu with a ROUND TABLE section: two seats ticked, turns set to 6, "Start · #0 first" |
+| `v4.7.1-agent-picker.png` | The Agent Picker with Muse added: Claude, Codex, Antigravity, Grok, Muse, Shell |
+| `v4.7.1-settings-version-git.png` | The Settings header showing VERSION 4.7.1 with a "commit 6d1171ec" chip |
+| `v4.7.1-settings-version.png` | The Settings header's VERSION with an "Update available: 4.7.1 to 4.8.0" notice |
+| `v4.7.3-cell-removing.png` | A cell being removed — dimmed behind a spinner reading "Removing acme-web (fix-login)…" |
+| `v4.7.3-scroll-setting.png` | The "Return to the latest output when you send" checkbox under Terminal scroll speed |
+| `v4.7.3-worktree-creating.png` | The New worktree button mid-create: disabled with a "Creating…" spinner |
+
+## Header guide (`{en,ja}/header.md`)
+
+| File | Shows |
+|---|---|
+| `header-default.png` | A cell header with nothing configured — the one default button (`pick-file`) beside the fixed cell controls |
+| `header-custom.png` | The same header width with five configured `buttons` and an `env staging` custom chip |
+| `header-before-after.png` | Both of the above side by side — unconfigured cell left, configured right |
+| `header-path-menu.png` | The path menu open: Reveal in the file manager / Browse files in the app / New terminal here |
+| `header-skill-menu.png` | The Skill dropdown listing the bundled `mulmoterminal-*` skills |
+| `header-shell-cell.png` | The command cell a `run: "shell"` button opens, with `yarn test` output and `[finished]` |
+
+The six `header-*.png` were captured for [`../{en,ja}/header.md`](../en/header.md) from a demo
+instance on `HOME=/tmp/mt-demo` (`acme-web` / `acme-api`, header config in
+`acme-web/.mulmoterminal.json`), at `deviceScaleFactor: 1` because terminals are in frame.
+The cells show Claude's folder-trust prompt: the demo `HOME` is not logged in, which is what keeps
+any account out of the shot.
+
+**A config button's tooltip cannot be screenshotted.** `label` renders as the browser's native
+`title`, which no headless capture includes — so `header-custom.png` deliberately shows the icons
+with no text, and the page explains the hover in prose rather than faking a tooltip.
 
 ## Not yet captured (need a live Claude/Codex session)
 

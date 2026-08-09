@@ -1,6 +1,8 @@
 import { ref, type Ref } from "vue";
 import { presetLabel, type CwdPreset } from "../components/presets";
+import { isManagedWorktreePath, worktreeLabel } from "../../common/worktreePath";
 import type { Launcher } from "../components/launchers";
+import { isCustomAgent, type CustomAgent } from "../../common/customAgents";
 import type { UserMcpServer } from "../components/userMcp";
 import type { QuickCommand } from "../../common/quickCommands";
 import { isPushKind, type PushKind } from "../../common/pushKinds";
@@ -18,6 +20,13 @@ import { setActiveKeymap } from "./activeKeymap";
 import { setCockpitLines } from "./cockpitLines";
 import { setCopyOnSelect } from "./copyOnSelect";
 import { setIssueWorkComments } from "./issueWorkComments";
+import { setPrWorkdirFooter } from "./prWorkdirFooter";
+import { setAppendSystemPrompt } from "./appendSystemPrompt";
+import { setDecisionDigest } from "./decisionDigest";
+import { setWorklogEnabled, setWorklogIntervalHours } from "./worklog";
+import { setSessionIdleReapDays } from "./sessionReap";
+import { setHeaderConfigSummary } from "./headerConfigSummary";
+import { postConfigField } from "./postConfigField";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 // The custom attention-sound file is a SINGLETON ref shared across every
@@ -63,11 +72,37 @@ function adoptSoundConfig(c: Record<string, unknown>): void {
 // unshortened. Found by looking at a screenshot of the issue rows' clone menu.
 const home = ref<string | null>(null);
 
+// Where the server keeps the worktrees IT created (`<MULMOTERMINAL_HOME>/worktrees`), so this side
+// can tell one of ours from a directory that merely looks like one — see `isManagedWorktreePath`.
+// A SINGLETON for the same reason as `home`: only `loadConfig` writes it, and a component that
+// calls useAppConfig() without loading would otherwise hold a copy that stays null forever.
+const worktreesRoot = ref<string | null>(null);
+
+// The initial /api/config while it is still in flight, so a launch that lands first can wait for
+// the root rather than decide without it (Codex on #1543). Null when nothing is loading — then
+// there is nothing to wait for. It never rejects and `fetchWithTimeout` bounds it, so a dead
+// server delays one chip instead of stalling the queue.
+let configLoadInFlight: Promise<void> | null = null;
+
+/** Run a config load, publishing it as the in-flight one for the duration — what a preset record
+ *  waits on when it needs the worktree root before it can decide. */
+async function trackConfigLoad(load: () => Promise<void>): Promise<void> {
+  const run = load();
+  configLoadInFlight = run;
+  try {
+    await run;
+  } finally {
+    // Only when a LATER load has not already taken the slot: clearing another's would tell a
+    // waiter that nothing is coming.
+    if (configLoadInFlight === run) configLoadInFlight = null;
+  }
+}
+
 const prRepos = ref<string[]>([]);
 
-// The hosts declared as self-hosted GitLab (#1332). Read-only here — config.json is the only place
-// it can be set — but the browser needs it to know that a `gitlab.hogefuga.com/...` row can start
-// work, which is a decision this side makes on its own (common/issueStartPlan.ts).
+// The hosts declared as self-hosted GitLab (#1332). The browser needs it to know that a
+// `gitlab.hogefuga.com/...` row can start work, which is a decision this side makes on its own
+// (common/issueStartPlan.ts), and Settings now edits it too.
 const gitlabHosts = ref<string[]>([]);
 
 /** The declared hosts, for a reader outside the composable — same shape as `currentSoundConfig`
@@ -85,6 +120,10 @@ const repoDirs = ref<Record<string, string>>({});
 // Cell-launcher commands (shell/codex/…) — SINGLETON so the grid's cell launchers and
 // the settings editor (openable from either view) share one list.
 const launchers = ref<Launcher[]>([]);
+
+// The user's own ways of starting Claude Code, offered in the Agent Picker (#1414) — a SINGLETON
+// like the launchers above, and read-only here: config.json is the only place they can be set.
+const customAgents = ref<CustomAgent[]>([]);
 
 // User-added HTTP MCP servers merged into the single-view session's --mcp-config —
 // SINGLETON like the others.
@@ -106,26 +145,6 @@ function readLegacyRecents(): string[] {
     return Array.isArray(parsed) ? parsed.filter((d): d is string => typeof d === "string" && d.length > 0) : [];
   } catch {
     return [];
-  }
-}
-
-// POST a single config field as a partial update; the server keeps the other fields, so
-// this never clobbers them. Returns the server's echoed value for that field (or
-// `{ ok: false }` on failure) so each caller can update just its own singleton ref.
-async function postConfigField(field: string, value: unknown): Promise<{ ok: true; value: unknown } | { ok: false }> {
-  try {
-    const res = await fetchWithTimeout("/api/config", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ [field]: value }),
-    });
-    if (!res.ok) return { ok: false };
-    const body: unknown = await res.json();
-    // `unknown`, not a caller-named `T`: this is the server's echo, and the type argument used to
-    // let each caller DECLARE the shape it wanted. Several already narrowed it anyway; now all do.
-    return { ok: true, value: isRecord(body) ? body[field] : undefined };
-  } catch {
-    return { ok: false };
   }
 }
 
@@ -161,8 +180,24 @@ function createPresetMutations(presets: Ref<CwdPreset[]>, savePresets: (next: Cw
   // its basename. Already at the front → no write. No cap: the user prunes the list with the
   // chip's close button. Called with the server-confirmed (effective) cwd so we only remember dirs that
   // actually ran.
-  function recordPreset(path: string | null): Promise<void> {
-    if (!path) return Promise.resolve();
+  //
+  // A managed worktree is skipped — see `isManagedWorktreePath`. Skipped rather than filtered on
+  // read, so an entry a previous version recorded stays exactly where the user left it: the chip's
+  // close button is theirs to press, and silently dropping saved config is not this function's
+  // call. It also means a worktree already in the list stops being bumped to the front.
+  async function recordPreset(path: string | null): Promise<void> {
+    if (!path) return;
+    // Decided BEFORE the write lock is taken, never while holding it: `loadConfigOnce` ends with
+    // `migrateLegacyRecents`, which needs that same lock, so waiting for the load from inside it
+    // deadlocks an upgrading user's first load outright — the import and the record both hang
+    // (Codex on #1543).
+    //
+    // A path without the worktree SHAPE cannot be one of ours whatever the root turns out to be, so
+    // it never waits — which is what keeps a launch during the initial GET writing immediately, a
+    // guarantee of its own (#164). Only a shape-matching path waits, and only while the config
+    // carrying the root is actually in flight; `fetchWithTimeout` bounds it.
+    if (worktreeLabel(path) !== null && worktreesRoot.value === null) await configLoadInFlight;
+    if (isManagedWorktreePath(path, worktreesRoot.value)) return;
     return serialize(async () => {
       if (presets.value[0]?.path === path) return; // already most-recent — nothing to reorder
       const existing = presets.value.find((p) => p.path === path);
@@ -266,13 +301,21 @@ async function savePrRepos(next: string[]): Promise<boolean> {
   if (r.ok) prRepos.value = stringsOf(r.value);
   return r.ok;
 }
+// Persist the self-hosted GitLab hosts. The server drops anything that is not a bare hostname, so
+// the echo is what lands here rather than what was sent — a rejected entry has to disappear from
+// the list, not sit there looking saved.
+async function saveGitlabHosts(next: string[]): Promise<boolean> {
+  const r = await postConfigField("gitlabHosts", next);
+  if (r.ok) gitlabHosts.value = stringsOf(r.value);
+  return r.ok;
+}
 
 // The settings that are PUSHED into other modules rather than held as refs here. Grouped for the
 // same reason as adoptSoundConfig: loadConfig should read as what the config decides, not as the
 // plumbing for each decision.
 function applyGlobalSettings(c: Record<string, unknown>): void {
-  // The Enter-key submit/newline byte mapping — read once so every terminal's key
-  // handler honours it (config.json-only; unset falls back to the standard binding).
+  // The Enter-key submit/newline byte mapping, so every terminal's key handler honours it.
+  // Unset falls back to the standard binding.
   setTerminalSubmitMode(isTerminalSubmitMode(c.terminalSubmit) ? c.terminalSubmit : DEFAULT_TERMINAL_SUBMIT_MODE);
   // Keyboard shortcuts are opt-in: no `keymap` in config.json leaves this empty and
   // every shortcut stays off.
@@ -284,14 +327,38 @@ function applyGlobalSettings(c: Record<string, unknown>): void {
   setIssueWorkComments(c.issueWorkComments);
   // How far the cockpit roster clamps each line. Absent `cockpitLines` keeps 2/2/3.
   setCockpitLines(c.cockpitLines);
-  // The terminal font stack (config.json-only, no Settings UI). Terminals already open
-  // re-fit when this lands — a different face means different cell metrics.
+  // The terminal font stack. Terminals already open re-fit when this lands — a different face
+  // means different cell metrics.
   setGlobalFontFamily(c.fontFamily);
   // The user's own colour schemes (#996). Re-applied after loading, because the selected id
   // may name one of these: until the config arrives it resolves to nothing, and the app is
   // painted with the default.
   setCustomThemes(c.themes);
   refreshTheme();
+}
+
+// The settings this browser only DISPLAYS — the server is what acts on each of them. They still
+// have to be adopted, because Settings shows and writes them; before there were controls, nothing
+// on this side had a reason to know their values.
+function adoptServerSideSettings(c: Record<string, unknown>): void {
+  setHeaderConfigSummary(c);
+  setPrWorkdirFooter(c.prWorkdirFooter);
+  setAppendSystemPrompt(c.appendSystemPrompt);
+  setDecisionDigest(c.decisionDigest);
+  setWorklogEnabled(c.worklogEnabled);
+  setWorklogIntervalHours(c.worklogIntervalHours);
+  setSessionIdleReapDays(c.sessionIdleReapDays);
+}
+
+// The user's own lists, adopted together — grouped like the sound and repo fields above.
+//
+// Each is filtered by the SAME guard its own save path uses. They used to differ: a save
+// validated, the load on every page open did not.
+function adoptListConfig(c: Record<string, unknown>): void {
+  launchers.value = listOf(c.launchers, isLauncher);
+  customAgents.value = listOf(c.customAgents, isCustomAgent);
+  quickCommands.value = listOf(c.quickCommands, isQuickCommand);
+  userMcpServers.value = listOf(c.userMcpServers, isUserMcpServer);
 }
 
 // The repo fields, adopted together — like adoptSoundConfig, so loadConfig keeps reading as a list
@@ -380,7 +447,9 @@ export function useAppConfig() {
 
   const { savePresets, recordPreset, removePreset, migrateLegacyRecents, snapshotVersion, adoptServerPresets } = createPresetManager(presets, saving, error);
 
-  async function loadConfig() {
+  const loadConfig = (): Promise<void> => trackConfigLoad(loadConfigOnce);
+
+  async function loadConfigOnce() {
     const version = snapshotVersion();
     try {
       const res = await fetchWithTimeout("/api/config");
@@ -390,17 +459,15 @@ export function useAppConfig() {
       const c = body;
       defaultCwd.value = typeof c.cwd === "string" ? c.cwd : null;
       home.value = typeof c.home === "string" ? c.home : null;
+      worktreesRoot.value = typeof c.worktreesRoot === "string" ? c.worktreesRoot : null;
       adoptServerPresets(c.cwdPresets, version);
       adoptSoundConfig(c);
       pushEnabled.value = c.pushEnabled === true;
-      // Each list is filtered by the SAME guard its own save path uses (postConfigField below).
-      // They used to differ: a save validated, the load on every page open did not.
       pushKinds.value = listOf(c.pushKinds, isPushKind);
       adoptRepoConfig(c);
-      launchers.value = listOf(c.launchers, isLauncher);
-      quickCommands.value = listOf(c.quickCommands, isQuickCommand);
-      userMcpServers.value = listOf(c.userMcpServers, isUserMcpServer);
+      adoptListConfig(c);
       applyGlobalSettings(c);
+      adoptServerSideSettings(c);
       await migrateLegacyRecents();
     } catch {
       // the app still works; presets are just unavailable
@@ -412,9 +479,12 @@ export function useAppConfig() {
     home,
     presets,
     prRepos,
+    gitlabHosts,
+    saveGitlabHosts,
     repoDirs,
     saveRepoDir,
     launchers,
+    customAgents,
     quickCommands,
     userMcpServers,
     ...soundSettings,

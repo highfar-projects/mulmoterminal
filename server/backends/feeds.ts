@@ -17,6 +17,7 @@ import { loadCollection } from "@mulmoclaude/core/collection/server";
 import type { FeedSummary } from "@mulmoclaude/core/collection";
 import { writeFileAtomic } from "../files/atomic-write.js";
 import { feedSummary } from "./feed-summary.js";
+import { errorStatus, resolveProjectRoot } from "../infra/project-root.js";
 
 const log: FeedsLogger = {
   error: (prefix, msg, data) => console.error(`[${prefix}] ${msg}`, data ?? ""),
@@ -72,8 +73,18 @@ export function mountFeedsRoutes(app: Express): void {
     }
   });
 
+  // Sits on the collection surface, so it honours `?project=` like the rest of it. Reading the
+  // module-level workspace here instead would refresh — and WRITE — the workspace collection
+  // that happens to share the slug, or 404 while the named project holds the feed.
   app.post("/api/collections/:slug/refresh", async (req: Request<{ slug: string }>, res: Response) => {
-    const collection = await loadCollection(req.params.slug);
+    let scope;
+    try {
+      scope = resolveProjectRoot(req);
+    } catch (err) {
+      res.status(errorStatus(err)).json({ error: errorMessage(err) });
+      return;
+    }
+    const collection = await loadCollection(req.params.slug, scope);
     if (!collection) {
       res.status(404).json({ error: `collection '${req.params.slug}' not found` });
       return;
@@ -83,7 +94,7 @@ export function mountFeedsRoutes(app: Express): void {
       return;
     }
     try {
-      const result = await refreshOne(workspaceRoot, collection, { hidden: false });
+      const result = await refreshOne(scope.workspaceRoot, collection, { hidden: false });
       res.json({ refreshed: true, written: result.written, errors: result.errors, dispatched: result.dispatched, chatId: result.chatId });
     } catch (err) {
       log.warn("feeds", "refresh failed", { slug: collection.slug, error: errorMessage(err) });

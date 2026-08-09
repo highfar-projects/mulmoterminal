@@ -14,7 +14,7 @@
 import type { CommandHandlers } from "@mulmoclaude/core/remote-host";
 import { googleCalendarColors, googleCalendarCreateEvent, googleCalendarListCalendars, googleCalendarListEvents } from "../googleCalendar.js";
 import { getCollection } from "./getCollection.js";
-import { createGetFeed } from "./getFeed.js";
+import { getFeedFor } from "./getFeed.js";
 import { getRemoteView } from "./getRemoteView.js";
 import { createIssueWorkHandlers } from "./issueWork.js";
 import { getRemoteViewItems } from "./getRemoteViewItems.js";
@@ -52,7 +52,7 @@ export function createRemoteHostHandlers(deps: RemoteHostHandlerDeps): CommandHa
     "google.calendar.colors": googleCalendarColors,
 
     listFeeds: createListFeeds(workspace),
-    getFeed: createGetFeed(workspace),
+    getFeed: getFeedFor(workspace),
     listShortcuts: createListShortcuts(workspace),
     listSkills: createListSkills(workspace),
     listAccountingBooks: createListAccountingBooks(workspace),

@@ -3,7 +3,7 @@ title: GitHub の issue から、1クリックでエージェントを起動す�
 nav_title: GitHub
 layout: default
 parent: 日本語
-nav_order: 9
+nav_order: 13
 description: 登録したリポジトリの未マージ PR と Issue を 1 画面で見る、横断ビューの使い方。
 ---
 
@@ -128,7 +128,7 @@ PR 本文に `Fixes #<番号>` を入れ、ヘッダーの work item チップ�
 **同じ issue をもう一度押したときは、2本目の worktree は作りません。** 1 つの issue に対して
 worktree は 1 つです。既にあるものが開き、そこにセッションが残っていればそれが開きます。
 そのセッションを**他のターミナルで開いたまま**なら、何も起こさずにその旨が出ます
-（worktree は 1 セッションまで、というルールと同じです）。
+（[worktree は 1 セッションまで](worktree.html#one-session)、というルールと同じです）。
 
 > issue の本文は、その issue を書いた**他人**のテキストであることがほとんどです。だから送信せず
 > 入力欄に置いたままにしています。Enter を押すのはあなたです。**再開したセッション**には

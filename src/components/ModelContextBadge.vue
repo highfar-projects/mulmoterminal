@@ -10,9 +10,13 @@ const props = defineProps<{
   agent: BadgeAgent;
   model: string | null;
   contextTokens: number;
+  /** The window the agent stated, when it stated one — codex does, Claude does not. `undefined`
+   *  is admitted rather than made optional: it arrives off the wire object, where the field is
+   *  simply absent for every other agent. */
+  contextWindow: number | null | undefined;
 }>();
 
-const badge = computed(() => (props.model ? modelBadge(props.agent, props.model, props.contextTokens) : null));
+const badge = computed(() => (props.model ? modelBadge(props.agent, props.model, props.contextTokens, props.contextWindow) : null));
 
 // The badge shortens the model to `Opus`; the tip is where the full name and the token counts live.
 const { described, show: showTip, hide: hideTip } = useHoverTipAnchor(() => badgeTip(badge.value?.title ?? ""));

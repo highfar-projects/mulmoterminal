@@ -3,6 +3,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { nextTick } from "vue";
 import TerminalCell from "../../../src/components/TerminalCell.vue";
 import { CELL_CHIP_BTN, CELL_CHIP_ICON } from "../../../src/components/cellChromeClasses";
+import { SUNK_CELL } from "../../../src/components/cellParked";
 import { TOOL_GROUPS } from "../../../common/toolGroups";
 
 // Capture the "sessions" pub/sub callback and the reconnect handler so tests can push
@@ -41,6 +42,10 @@ vi.mock("../../../src/components/Terminal.vue", () => ({
     },
   },
 }));
+
+// GET /api/session/:id itself — NOT its sub-routes (/memo, /terminate) and not the other polls a
+// cell runs, which a "everything else" counter would fold in and make a refresh test read high.
+const SESSION_DETAIL_RE = /\/api\/session\/[^/?]+(\?|$)/;
 
 const promptText = (w: ReturnType<typeof mount>) => w.find('[data-testid="cell-prompt"]').text();
 const dotClass = (w: ReturnType<typeof mount>) => w.find(".cell-dot").classes();
@@ -84,11 +89,13 @@ function mountCell(
     expanded?: boolean;
     zoomed?: boolean;
     reorderable?: boolean;
+    initialAgent?: "claude" | "codex" | "antigravity" | "grok";
   } = {},
 ) {
   return mount(TerminalCell, {
     props: {
       uid: 1,
+      ...(opts.initialAgent ? { initialAgent: opts.initialAgent } : {}),
       expanded: opts.expanded ?? false,
       zoomed: opts.zoomed ?? false,
       reorderable: opts.reorderable ?? false,
@@ -829,6 +836,110 @@ describe("TerminalCell", () => {
     const badge = w.find('[data-testid="model-badge"]');
     expect(badge.exists()).toBe(true);
     expect(badge.text()).toBe("Opus · ctx 35%"); // 70k / 200k
+  });
+
+  // An agy cell is the case that has no other way back: agy mints its conversation id after the
+  // spawn, so the seed fetch can only answer "no model" — and with no hooks and no activity
+  // tracker it never finishes a turn, which is the cell's only other badge refresh. The server
+  // publishes when it captures the id (spawn-antigravity.ts); this is the other half.
+  it("re-reads the badges on a push while the model is still unknown", async () => {
+    const id = "55555555-5555-5555-5555-555555555555";
+    let model: string | null = null;
+    let detailReads = 0;
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/scripts")) return { ok: true, json: async () => ({ cwd: "/p", scripts: [] }) };
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
+      if (SESSION_DETAIL_RE.test(u)) detailReads++;
+      return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null, context: { model, contextTokens: 0 } }) };
+    }) as unknown as typeof fetch;
+
+    const w = mountCell(id, { initialAgent: "antigravity" });
+    await flushPromises();
+    expect(w.find('[data-testid="model-badge"]').exists()).toBe(false); // agy has not created the conversation yet
+    // The seed applies activity BEFORE badges, so a re-ask hung off that path would fire here for
+    // the answer it already has — on every non-claude cell, every load.
+    expect(detailReads).toBe(1);
+
+    model = "Gemini 3.6 Flash (High)"; // the capture landed, so the transcript now names it
+    captured?.({ id, working: false, waiting: false });
+    await flushPromises();
+    await nextTick();
+    expect(w.find('[data-testid="model-badge"]').text()).toBe("Gemini 3.6 Flash");
+
+    // And it stops: a known model is not asked for again on the next push.
+    const settled = detailReads;
+    captured?.({ id, working: false, waiting: false });
+    await flushPromises();
+    expect(detailReads).toBe(settled);
+  });
+
+  // agy's and grok's context readings move every turn, and neither agent has a turn end to hang a
+  // refresh on — so without this the percentage is frozen at whatever it was when the cell first
+  // asked. Claude and codex both settle a turn, and must not become pollers.
+  it("re-reads an untracked cell's badges on a timer, and no tracked agent's", async () => {
+    vi.useFakeTimers();
+    try {
+      const id = "55555555-5555-5555-5555-555555555555";
+      let detailReads = 0;
+      globalThis.fetch = vi.fn(async (url: string) => {
+        const u = String(url);
+        if (u.includes("/api/scripts")) return { ok: true, json: async () => ({ cwd: "/p", scripts: [] }) };
+        if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
+        if (SESSION_DETAIL_RE.test(u)) detailReads++;
+        return {
+          ok: true,
+          json: async () => ({
+            working: false,
+            waiting: false,
+            lastPrompt: null,
+            context: { model: "Gemini 3.6 Flash", contextTokens: 1000, contextWindow: 256_000 },
+          }),
+        };
+      }) as unknown as typeof fetch;
+
+      for (const untracked of ["antigravity", "grok"] as const) {
+        const w = mountCell(id, { initialAgent: untracked });
+        await vi.advanceTimersByTimeAsync(1);
+        const afterMount = detailReads;
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(detailReads, untracked).toBeGreaterThan(afterMount);
+        w.unmount();
+      }
+
+      for (const tracked of ["claude", "codex"] as const) {
+        const w = mountCell(id, { initialAgent: tracked });
+        await vi.advanceTimersByTimeAsync(1);
+        const settled = detailReads;
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(detailReads, tracked).toBe(settled);
+        w.unmount();
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Claude's badges ride along with the summary the route already folds, and this is the busiest
+  // route in the app — a push must not turn every claude cell into a poller.
+  it("does not re-read the badges on a push for a claude cell", async () => {
+    const id = "55555555-5555-5555-5555-555555555555";
+    let detailReads = 0;
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/scripts")) return { ok: true, json: async () => ({ cwd: "/p", scripts: [] }) };
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
+      if (SESSION_DETAIL_RE.test(u)) detailReads++;
+      return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null, context: { model: null, contextTokens: 0 } }) };
+    }) as unknown as typeof fetch;
+
+    const w = mountCell(id);
+    await flushPromises();
+    const settled = detailReads;
+    captured?.({ id, working: true, waiting: false });
+    await flushPromises();
+    expect(detailReads).toBe(settled);
+    expect(w.find('[data-testid="model-badge"]').exists()).toBe(false);
   });
 
   it("renders configured chips: hides an omitted built-in, keeps a listed one, and shows custom text", async () => {
@@ -1617,6 +1728,117 @@ describe("TerminalCell", () => {
     expect(w.find('[data-testid="ccx-remove"]').attributes("disabled")).toBeUndefined(); // released
   });
 
+  // #1549's rule, on the same route: `git worktree remove` runs for seconds with the confirmation
+  // still on screen, and the button said nothing — so a second click terminated the pty again and
+  // fired a second removal at a path the first one was already taking apart.
+  it("holds Remove (Removing…) for the whole removal, and posts it once", async () => {
+    const gate = deferred<{ ok: boolean; status: number; json: () => Promise<unknown> }>();
+    let removes = 0;
+    globalThis.fetch = vi.fn((url: string) => {
+      const u = String(url);
+      if (u.includes("/api/worktrees/remove")) {
+        removes += 1;
+        return gate.promise;
+      }
+      if (u.includes("/api/worktrees/diff")) return Promise.resolve({ ok: true, json: async () => cleanWtDiff });
+      if (u.includes("/api/sessions")) return Promise.resolve({ ok: true, json: async () => ({ sessions: [] }) });
+      return Promise.resolve({ ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) });
+    }) as unknown as typeof fetch;
+    const w = mountCell("66666666-6666-6666-6666-666666666666", { initialCwd: WT_CWD });
+    await flushPromises();
+    await w.find(".cell-close").trigger("click");
+    await flushPromises(); // the close() diff refresh releases the button
+    const remove = () => w.find('[data-testid="ccx-remove"]');
+    await remove().trigger("click");
+    await flushPromises();
+    // The dialog hands over to the whole-cell spinner (#1551), so the second click has no button
+    // left to land on — the handler's own guard is what the count below is really testing.
+    expect(w.find('[data-testid="cell-removing"]').exists()).toBe(true);
+    await w.find(".cell-close").trigger("click");
+    await flushPromises();
+    expect(removes).toBe(1);
+    gate.resolve({ ok: true, status: 200, json: async () => ({ ok: true }) });
+    await flushPromises();
+    expect(w.find('[data-testid="cell-launch"]').exists()).toBe(true);
+    expect(w.find('[data-testid="cell-removing"]').exists()).toBe(false);
+  });
+
+  // #1551: the button read `Removing…` while the cell around it — header, chips, terminal — went on
+  // looking live for the several seconds `git worktree remove` takes. The whole cell now says so.
+  it("greys the whole cell and spins over it while the worktree is being removed", async () => {
+    const gate = deferred<{ ok: boolean; status: number; json: () => Promise<unknown> }>();
+    globalThis.fetch = vi.fn((url: string) => {
+      const u = String(url);
+      if (u.includes("/api/worktrees/remove")) return gate.promise;
+      if (u.includes("/api/worktrees/diff")) return Promise.resolve({ ok: true, json: async () => cleanWtDiff });
+      if (u.includes("/api/sessions")) return Promise.resolve({ ok: true, json: async () => ({ sessions: [] }) });
+      return Promise.resolve({ ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) });
+    }) as unknown as typeof fetch;
+    const w = mountCell("66666666-6666-6666-6666-666666666666", { initialCwd: WT_CWD });
+    await flushPromises();
+    await w.find(".cell-close").trigger("click");
+    await flushPromises();
+    expect(w.find(".cell-inner").classes()).not.toContain(SUNK_CELL);
+    // Absent, NOT `inert="false"` — Vue treats it as Booleanish, and an element carrying
+    // inert="false" is inert (the trap TerminalGrid's zoom-main hit on #1333).
+    expect(w.find(".cell-inner").attributes("inert")).toBeUndefined();
+
+    await w.find('[data-testid="ccx-remove"]').trigger("click");
+    await flushPromises();
+    const busy = w.find('[data-testid="cell-removing"]');
+    expect(busy.exists()).toBe(true);
+    expect(busy.text()).toContain("Removing");
+    expect(busy.attributes("role")).toBe("status");
+    // The body fades through the same one class parked cells use, and the spinner sits OUTSIDE it —
+    // a busy indicator inside the layer it is dimming would be dimmed by it.
+    expect(w.find(".cell-inner").classes()).toContain(SUNK_CELL);
+    expect(w.find(".cell-inner").find('[data-testid="cell-removing"]').exists()).toBe(false);
+    // The veil stops the mouse and nothing else, so the body is made inert too — otherwise Tab
+    // walks into the header buttons and xterm's textarea behind it, and a screen reader reads a
+    // cell that is being deleted (Codex, #1552).
+    expect(w.find(".cell-inner").attributes("inert")).toBeDefined();
+    // …and it covers the header, which the confirmation overlay never did.
+    expect(busy.classes()).toContain("inset-0");
+    expect(w.find('[data-testid="cell-close-confirm"]').exists()).toBe(false);
+  });
+
+  // Raised by Codex and CodeRabbit on #1550: the removal terminates the pty BEFORE it calls the
+  // route, so anything that dismisses the confirmation mid-flight takes the failure off the screen
+  // with it. Since #1551 the dialog hands over to the busy overlay, so the buttons are gone — but
+  // `cancelClose` still has to refuse, or Escape would clear `closeConfirm` underneath and the
+  // failure would come back to a confirmation that is no longer rendered.
+  it("lets nothing dismiss the confirmation once the removal has started", async () => {
+    const gate = deferred<{ ok: boolean; status: number; json: () => Promise<unknown> }>();
+    globalThis.fetch = vi.fn((url: string) => {
+      const u = String(url);
+      if (u.includes("/api/worktrees/remove")) return gate.promise;
+      if (u.includes("/api/worktrees/diff")) return Promise.resolve({ ok: true, json: async () => cleanWtDiff });
+      if (u.includes("/api/sessions")) return Promise.resolve({ ok: true, json: async () => ({ sessions: [] }) });
+      return Promise.resolve({ ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) });
+    }) as unknown as typeof fetch;
+    const w = mountCell("66666666-6666-6666-6666-666666666666", { initialCwd: WT_CWD });
+    await flushPromises();
+    await w.find(".cell-close").trigger("click");
+    await flushPromises();
+    await w.find('[data-testid="ccx-remove"]').trigger("click");
+    await flushPromises();
+
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    await w.find(".cell-close").trigger("click"); // the header button is not under the overlay
+    await flushPromises();
+    expect(w.find('[data-testid="cell-removing"]').exists()).toBe(true);
+    expect(w.find('[data-testid="cell-launch"]').exists()).toBe(false);
+
+    // …and the failure lands on a confirmation that is back, un-faded and dismissible again.
+    gate.resolve({ ok: false, status: 500, json: async () => ({ ok: false, reason: "failed" }) });
+    await flushPromises();
+    expect(w.find('[data-testid="cell-removing"]').exists()).toBe(false);
+    expect(w.find(".cell-inner").classes()).not.toContain(SUNK_CELL);
+    expect(w.find('[data-testid="cell-close-confirm"]').exists()).toBe(true);
+    expect(w.find('[data-testid="ccx-warn"]').text()).toContain("Couldn't remove");
+    expect(w.find('[data-testid="ccx-close-cell"]').attributes("disabled")).toBeUndefined();
+  });
+
   it("keeps the confirm open with an error when the remove fails (no false success)", async () => {
     globalThis.fetch = vi.fn(async (url: string) => {
       const u = String(url);
@@ -2355,15 +2577,15 @@ describe("TerminalCell launch target — the OS default shell (#1114)", () => {
     }) as unknown as typeof fetch;
   }
 
-  const pick = (w: ReturnType<typeof mount>, agent: string) => w.find(`[data-testid="cell-target-${agent}"]`).trigger("click");
+  const pick = (w: ReturnType<typeof mount>, agent: string) => w.find(`[data-testid="agent-picker-${agent}"]`).trigger("click");
 
-  it("offers Claude / Codex / Antigravity / Shell, with Claude picked", async () => {
+  it("offers every built-in agent then Shell, with Claude picked", async () => {
     const w = mountCell(null);
     await flushPromises();
     const row = w.find('[role="radiogroup"]');
-    expect(row.findAll('[role="radio"]').map((b) => b.text())).toEqual(["Claude", "Codex", "Antigravity", "Shell"]);
-    expect(w.find('[data-testid="cell-target-claude"]').attributes("aria-checked")).toBe("true");
-    expect(w.find('[data-testid="cell-target-shell"]').attributes("aria-checked")).toBe("false");
+    expect(row.findAll('[data-testid="agent-picker-label"]').map((b) => b.text())).toEqual(["Claude", "Codex", "Antigravity", "Grok", "Muse", "Shell"]);
+    expect(w.find('[data-testid="agent-picker-claude"]').attributes("aria-checked")).toBe("true");
+    expect(w.find('[data-testid="agent-picker-shell"]').attributes("aria-checked")).toBe("false");
   });
 
   it("starts the OS default shell in the typed dir — no configured launcher needed", async () => {
@@ -2380,7 +2602,7 @@ describe("TerminalCell launch target — the OS default shell (#1114)", () => {
     expect(w.find('[data-testid="cell-launch"]').exists()).toBe(true);
   });
 
-  // The other launch button in the same form. The selector has to decide here too, or one pick
+  // The other launch button in the same form. The Agent Picker has to decide here too, or one pick
   // opens a shell from the dir field and an agent from the chip beside it.
   it("starts a shell from a directory chip's launch button too", async () => {
     const w = mountCell(null, { presets: [{ label: "proj", path: "/home/me/proj" }] });

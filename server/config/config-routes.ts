@@ -22,9 +22,12 @@ import {
 import { type HeaderConfig } from "./header-config.js";
 import { type CwdPreset, type Launcher, type Provider, type UserMcpServer } from "./config-schema.js";
 import type { QuickCommand } from "../../common/quickCommands.js";
+import type { CustomAgent } from "../../common/customAgents.js";
 import type { PushKind } from "../../common/pushKinds.js";
 import { type TerminalSubmitMode } from "../../common/terminalSubmit.js";
 import { launchOptions } from "./launch-options.js";
+import { worktreesRootDir } from "./worktree-task.js";
+import { canonicalPath } from "../infra/canonical-path.js";
 import { badArrayField, badNullableArrayField, badObjectField } from "./config-body.js";
 import { setDeclaredGitlabHosts } from "../git/forge-host.js";
 import { getUpdateStatus } from "./update-status.js";
@@ -73,6 +76,13 @@ export function getLaunchers(): Launcher[] {
   return config.launchers;
 }
 
+// The user's own ways of starting Claude Code, offered in the Agent Picker — read live for the
+// same reason as the launchers above: /ws resolves `?customAgent=<id>` against the current list,
+// so adding one needs no restart. The LIST is the allowlist; the browser sends only an id.
+export function getCustomAgents(): CustomAgent[] {
+  return config.customAgents;
+}
+
 // The phrases the phone offers as chips — read live so a Settings edit reaches the next
 // screen the phone pulls without a restart (#830).
 export function getQuickCommands(): QuickCommand[] {
@@ -113,6 +123,13 @@ export function getIssueWorkComments(): boolean {
   return config.issueWorkComments;
 }
 
+// Whether a project with no `icon` of its own may show the favicon it already ships (#1428).
+// Read live for the same reason as the rest — turning it off recolours the next request, not
+// the next restart.
+export function getAutoDirIcon(): boolean {
+  return config.autoDirIcon;
+}
+
 export function getPushEnabled(): boolean {
   return config.pushEnabled;
 }
@@ -134,6 +151,13 @@ export function getWorklogConfig(): { enabled: boolean; intervalHours: number } 
   return { enabled: config.worklogEnabled, intervalHours: config.worklogIntervalHours };
 }
 
+// How long a session may sit unused before the boot sweep ends it (#1467). Read live like the rest,
+// though only the boot sweep asks — a POST that changes it takes effect at the next start, which is
+// also when the sweep runs.
+export function getSessionIdleReapDays(): number {
+  return config.sessionIdleReapDays;
+}
+
 // The Enter-key submit/newline byte mapping — read live so the phone remote-view submit
 // picks up a config edit on the next send without a restart (#772).
 export function getTerminalSubmit(): TerminalSubmitMode {
@@ -142,20 +166,22 @@ export function getTerminalSubmit(): TerminalSubmitMode {
 
 // Whether a PR this app creates says which clone it came from (#872).
 //
-// Read from DISK, unlike every other accessor here, because this setting has no Settings
-// control: the only way to set it is to hand-edit config.json, and the in-memory copy is
-// refreshed only by POST /api/config. Served from memory it would need a server restart to
-// take effect — i.e. a user sets `false`, presses the button, still gets the line, and
-// concludes the switch is broken. One JSON read per PR creation, next to a push and three
-// gh calls, costs nothing. A missing or corrupt file yields the default (on), which is the
-// safe direction for a switch whose off state is invisible.
+// Read from DISK, unlike every other accessor here. The in-memory copy is refreshed only by a
+// POST to THIS server, and these two settings are read by the instance the user is not looking
+// at: several mulmoterminals share one config.json, and this is the app whose whole point is
+// running side-by-side clones. Served from memory, a user who turns the line off in one window
+// still gets it from the next window's PR — and both settings fail silently, so what they see is
+// a switch that does nothing rather than an error. One JSON read per PR creation, next to a push
+// and three gh calls, costs nothing. A missing or corrupt file yields the default (on), which is
+// the safe direction for a switch whose off state is invisible.
 export function getPrWorkdirFooter(): boolean {
   return loadAppConfig(CONFIG_FILE).prWorkdirFooter;
 }
 
 // Whether a spawned session carries the built-in closing-summary instructions (#1062). Read from
-// disk per spawn for the same reason as the footer above: it has no Settings control, so served
-// from memory a hand-edit would need a server restart to take effect.
+// disk per spawn for the same reason as the footer above, and one more: a session outlives the
+// write, so the cost of reading stale here is a cell that keeps the old answer until it is
+// reopened.
 export function getAppendSystemPrompt(): boolean {
   return loadAppConfig(CONFIG_FILE).appendSystemPrompt;
 }
@@ -166,7 +192,16 @@ export function mountConfigRoutes(app: Express, claudeCwd: string): void {
   const configResponse = () => ({ cwd: claudeCwd, ...toPublicAppConfig(config) });
 
   app.get("/api/config", (_req, res) => {
-    res.json({ ...configResponse(), home: os.homedir() });
+    // `worktreesRoot` rides along with `home`: a runtime fact about THIS server rather than
+    // anything the user configured, and the browser cannot work it out — MULMOTERMINAL_HOME can
+    // move it. Without it the launcher cannot tell a worktree we created from a directory that
+    // merely looks like one, and it must not record ours as a working-directory preset (#1542).
+    //
+    // CANONICAL, like the one `worktree-env.ts` compares against: the browser can only match this
+    // lexically, and the cwd it matches it to came from `git worktree list` — i.e. realpathed. A
+    // MULMOTERMINAL_HOME behind a symlink would otherwise never match, and the feature would
+    // silently do nothing.
+    res.json({ ...configResponse(), home: os.homedir(), worktreesRoot: canonicalPath(worktreesRootDir()) });
   });
 
   // The update notice for the header's "update available" badge, from the check the server

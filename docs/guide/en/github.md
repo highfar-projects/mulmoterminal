@@ -3,7 +3,7 @@ title: From a GitHub issue to a running agent in one click
 nav_title: GitHub
 layout: default
 parent: English
-nav_order: 9
+nav_order: 13
 description: See every registered repository's open PRs and issues in one cross-repo view.
 ---
 
@@ -133,7 +133,7 @@ to enable it.
 **Pressing it again for the same issue does not make a second worktree.** One issue has one
 worktree: the existing one opens, along with the session left in it if there is one. If that
 session is still open in another terminal, nothing happens and the button says so — the same
-one-session-per-worktree rule as everywhere else.
+[one-session-per-worktree rule](worktree.html#one-session) as everywhere else.
 
 > The issue body is text written by whoever opened the issue, which is often not you. That is why it
 > is left in the input box rather than sent: the Enter is yours. A **resumed** session gets nothing

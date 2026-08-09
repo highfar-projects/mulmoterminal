@@ -33,6 +33,8 @@ mountPluginRoutes(app, {
   spawnClaudePty: (() => ({})) as never,
   spawnCodexPty: (() => ({})) as never,
   spawnAntigravityPty: (() => ({})) as never,
+  spawnGrokPty: (() => ({})) as never,
+  spawnMusePty: (() => ({})) as never,
   registerBackgroundSession: () => {},
 });
 

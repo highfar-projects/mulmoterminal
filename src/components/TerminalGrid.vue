@@ -15,6 +15,7 @@ import type { RunCommand } from "./runCommand";
 import type { PrPhase, WorkPhase } from "./rosterPhase";
 import type { CwdPreset } from "./presets";
 import type { Launcher, LaunchPick } from "./launchers";
+import type { CustomAgent } from "../../common/customAgents";
 import { shouldFlipZoom } from "./cellChromeRules";
 import { rosterAlertClass } from "./rosterAlertClasses";
 import { useRosterAlert } from "../composables/useRosterAlert";
@@ -43,7 +44,7 @@ import { hasCanvasGroup } from "../../common/toolGroups";
 import type { RightPane } from "./gridCell";
 import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
 import { isRecord } from "../../common/isRecord";
-import type { TerminalAgent } from "../../common/sessionAgent";
+import type { SessionAgent, TerminalAgent } from "../../common/sessionAgent";
 import { buildCanvasCard, seedCanvasCard, hasStoredCard, absoluteUnder } from "../composables/canvasOpenFile";
 import { jsonBody } from "../jsonBody";
 import { isUnknownArray } from "../../common/isUnknownArray";
@@ -60,7 +61,10 @@ import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 export interface CockpitRow {
   uid: number;
   cwd: string | null;
-  agent: string;
+  // What the row runs: an agent, "shell" for a launcher or a run-command cell, or null for a cell
+  // that has launched nothing yet. Null rather than a default, so the header can decline to mark
+  // a row it cannot name — see rosterAgent() in GridView.vue.
+  agent: SessionAgent | null;
   status: AttentionStatus;
   memo: string | null; // the user's own one-line note (#1084)
   summary: string | null; // AI title
@@ -71,6 +75,7 @@ export interface CockpitRow {
   workPhase: WorkPhase | null; // planning vs editing while working; null when unknown / not working
   headerColor: string | null; // the directory's configured header background, tinting the row
   headerTextColor: string | null; // and its text colour, so the row stays legible on that tint
+  iconUrl: string | null; // the directory's `icon` image (#1421), or null when it sets none
   parked: boolean; // set aside by the user (#992) — the row sinks, unless it is blocked
 }
 const props = defineProps<{
@@ -82,6 +87,10 @@ const props = defineProps<{
   defaultCwd: string | null;
   presets: CwdPreset[];
   launchers: Launcher[];
+  // The user's own ways of starting Claude Code, for the Agent Picker in an empty cell (#1414).
+  // Optional, unlike `launchers`: an install with none configured is the normal case, and the
+  // picker's built-in options are the whole list then.
+  customAgents?: CustomAgent[];
   home: string | null;
   // Manual sort mode: each cell shows move buttons to reorder.
   reorderable?: boolean;
@@ -979,12 +988,22 @@ watch(
 <template>
   <div ref="stage" class="stage" :class="{ zoomed, listmode: listMode, flipping: flippingUids.size > 0 }" :style="flipVars" @focusin="onFocusIn">
     <!-- Cockpit roster: a tall text row per cell (status / dir / memo / summary / prompt / latest
-         reply). Click a row to swap which terminal is enlarged. -->
+         reply). Click a row to swap which terminal is enlarged.
+         The 9px gap is 5px of visible channel plus the 2px ring every row paints on each side
+         (rosterAlertClasses). At the old 5px two neighbours' rings came within a pixel of each
+         other and the column read as one fused block.
+
+         `pr-0` is deliberate, and the right gutter is on the ROWS instead (`mr-1.5`, named by every
+         branch in rosterAlertClasses). The expanded row names none, so it ends flush with this
+         aside's edge and butts against the splitter — the shape that says it IS the terminal beside
+         it. Putting the gutter back here would reinstate the 6px of `bg-deep` that made the row
+         read as a card floating near the edge, and the negative margin that used to cancel it
+         silently mis-aligned the moment this padding changed. -->
     <aside
       v-if="zoomed && listMode"
       ref="roster"
       data-testid="cockpit"
-      class="flex min-w-0 shrink-0 grow-0 flex-col gap-[5px] overflow-y-auto bg-deep p-1.5"
+      class="flex min-w-0 shrink-0 grow-0 flex-col gap-[9px] overflow-y-auto bg-deep py-1.5 pr-0 pl-1.5"
       :style="{ flexBasis: `${rosterWidth}px` }"
     >
       <div
@@ -994,7 +1013,7 @@ watch(
         role="button"
         :tabindex="0"
         data-testid="cockpit-row"
-        class="flex shrink-0 cursor-pointer flex-col gap-1 overflow-hidden rounded-lg border border-l-[3px] px-2.5 py-2 text-left text-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4a9eff]"
+        class="flex shrink-0 cursor-pointer flex-col gap-1 overflow-hidden rounded-lg border px-2.5 py-2 text-left text-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4a9eff]"
         :class="rosterAlertClass(row.status, { expanded: row.uid === expandedUid, blink: rosterBlink, parked: row.parked })"
         @click="row.uid !== expandedUid && emit('toggle-expand', row.uid)"
         @keydown.enter.self.prevent="row.uid !== expandedUid && emit('toggle-expand', row.uid)"
@@ -1011,6 +1030,7 @@ watch(
           :home="home"
           :header-color="row.headerColor"
           :header-text-color="row.headerTextColor"
+          :icon-url="row.iconUrl"
           :work-phase="row.workPhase"
           :phase="row.phase"
         >
@@ -1188,8 +1208,10 @@ watch(
           :initial-session-id="cell.session"
           :initial-cwd="cell.cwd"
           :initial-agent="cell.agent"
+          :auto-start="cell.autoStart === true"
           :presets="presets"
           :launchers="launchers"
+          :custom-agents="customAgents ?? []"
           :open-session-ids="openSessionIds"
           :open-cwds="openCwds"
           :cancellable="cell.uid === cancelUid"

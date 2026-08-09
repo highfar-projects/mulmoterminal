@@ -27,8 +27,9 @@ import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTim
 
 export type Agent = TerminalAgent;
 
-// Which agent a collection action / chat spawns. Bound to the Claude/Codex/Antigravity toggle in the collection
-// browser (CollectionsBrowseOverlay); persisted in localStorage so the choice survives reloads.
+// Which agent a collection action / chat spawns. Bound to the "Launch with" dropdown in the
+// collection browser (CollectionsBrowseOverlay); persisted in localStorage so the choice
+// survives reloads.
 const LAUNCH_AGENT_KEY = "mt-launch-agent";
 const saved = localStorage.getItem(LAUNCH_AGENT_KEY);
 export const launchAgent = ref<Agent>(asTerminalAgent(saved));

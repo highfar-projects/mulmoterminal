@@ -11,8 +11,8 @@
 // Google-calendar push (via @mulmoclaude/core/google — see server/backends/calendarPush.ts),
 // collection/feed/view deletion and the Discover registry tab (listRegistry/importRegistry
 // via @mulmoclaude/core/collection — see server/backends/collections.ts), and state-based
-// navigation (useCollectionBrowse — the toolbar + browse overlay).
-// Still stubbed: the notifier.
+// navigation (useCollectionBrowse — the toolbar + browse overlay), and the live bell's
+// per-record severities (useNotifications → the Kanban accent).
 import { configureCollectionUi } from "@mulmoclaude/collection-plugin/vue";
 import type {
   CollectionApiResult,
@@ -21,12 +21,12 @@ import type {
   CollectionRemoteViewResult,
   CollectionRemoteViewMutateResult,
   CollectionRemoteViewItemsResult,
+  CollectionViewI18nResult,
 } from "@mulmoclaude/collection-plugin/vue";
 import type {
   CollectionDetailResponse,
   CollectionsListResponse,
   CollectionOntologyResponse,
-  CollectionNotifySeverity,
   ItemMutationResponse,
   FeedsListResponse,
 } from "@mulmoclaude/core/collection";
@@ -37,6 +37,8 @@ import { buildCustomViewSrcdoc } from "../utils/customViewSrcdoc";
 import { fetchJson, errorMessage, readErrorBody } from "../utils/fetchJson";
 import { htmlPreviewUrl, remoteViewItemsQuery } from "./collectionUiRules";
 import { useShortcuts } from "./useShortcuts";
+import { useNotifications } from "./useNotifications";
+import { collectionNotifiedSeverities } from "../utils/collectionNotified";
 import {
   browseGotoIndex,
   browseGotoDetail,
@@ -132,7 +134,11 @@ function rawFileUrl(value: unknown): string {
 // artifacts/html/*.html with the sandboxed preview CSP so it renders in a new tab;
 // everything else falls back to the raw-file route. See htmlPreviewUrl.
 configureCollectionUi({
-  // ── real (read side) ──
+  // ── real (read side). The two paths below are MulmoClaude's response shapes on
+  //    MulmoTerminal's own URLs — `/list` and `/:slug/detail`, where MulmoClaude has
+  //    `GET /api/collections` and `GET /api/collections/:slug` (registry diverges too,
+  //    see below). This file is the consumer of record for that; the divergence table
+  //    and the reason are in docs/mulmoclaude-parity.md. ──
   fetchCollectionDetail: (slug) => apiGet<CollectionDetailResponse>(`/api/collections/${encodeURIComponent(slug)}/detail`),
   listCollections: () => apiGet<CollectionsListResponse>("/api/collections/list"),
   // Map tab: raw workspace-ontology entries; the plugin builds the graph
@@ -200,10 +206,14 @@ configureCollectionUi({
       `/api/collections/${encodeURIComponent(slug)}/remote-view/${encodeURIComponent(viewId)}/items${remoteViewItemsQuery(request)}`,
     ),
 
-  // MulmoTerminal serves no per-view translations — return the documented
-  // "no i18n" shape ({ locale: "", dict: {} }) so the iframe's __MC_VIEW.t(key)
-  // echoes keys instead of failing.
-  fetchViewI18n: () => Promise.resolve({ ok: true as const, data: { locale: "", dict: {} } }),
+  // The view's translations, already locale-picked server-side (the host is the
+  // picker, the iframe only ever sees the active locale's strings). The route
+  // answers the documented "no i18n" shape ({ locale: "", dict: {} }) when the
+  // view declares none, and the iframe's __MC_VIEW.t(key) then echoes keys.
+  fetchViewI18n: (slug, viewId, locale) =>
+    apiGet<CollectionViewI18nResult>(
+      `/api/collections/${encodeURIComponent(slug)}/view-i18n?id=${encodeURIComponent(viewId)}&locale=${encodeURIComponent(locale)}`,
+    ),
 
   // ── record CRUD: create / update (e.g. checking a to-do item) / delete. ──
   createItem: (slug, record) => apiPost<ItemMutationResponse>(`/api/collections/${encodeURIComponent(slug)}/items`, record),
@@ -232,7 +242,9 @@ configureCollectionUi({
   deleteView: (slug, viewId) => apiDelete(`/api/collections/${encodeURIComponent(slug)}/views/${encodeURIComponent(viewId)}`),
   listFeeds: () => apiGet<FeedsListResponse>("/api/feeds"),
   // ── Discover/registry tab: the shared @mulmoclaude/core registry engine, wired
-  //    over /api/collections/registry/* (server/backends/collections.ts). ──
+  //    over /api/collections/registry/* (server/backends/collections.ts) — MulmoClaude
+  //    serves the same engine at /api/collections-registry/*, one of the three known
+  //    path divergences (docs/mulmoclaude-parity.md). ──
   listRegistry: () => apiGet<RegistryListResponse>("/api/collections/registry/list"),
   importRegistry: (author, slug, registry) => apiPost<RegistryImportResponse>("/api/collections/registry/import", { author, slug, registry }),
 
@@ -249,8 +261,14 @@ configureCollectionUi({
   // input box without an Enter (server: spawnBackgroundChat draft:true), so the user
   // reviews / edits / sends. `role` is ignored (MulmoTerminal has no roles).
   startNewChatDraft: (prompt) => void startCollectionChat(prompt, { hidden: false, draft: true }),
-  // No notifier in MulmoTerminal.
-  notifiedSeverities: () => new Map<string, CollectionNotifySeverity>(),
+  // Which of this collection's records currently have a completion bell, and how
+  // urgent — the Kanban view accents those cards. Read live: `active` is a ref, so
+  // reading it inside the call registers the plugin's `computed` as a dependency and
+  // the accents follow a watcher publishing or clearing without any extra plumbing.
+  // `useNotifications()` is a module singleton and its init is idempotent, so calling
+  // it per invocation costs nothing after the first (and keeps the pubsub subscription
+  // out of this module's import).
+  notifiedSeverities: (slug: string) => collectionNotifiedSeverities(useNotifications().active.value, slug),
 
   // ── runtime translation: POST /api/translation (hidden-chat LLM). Enables the
   //    new-collection starter modal's localized cards; omitted ⇒ English fallback. ──

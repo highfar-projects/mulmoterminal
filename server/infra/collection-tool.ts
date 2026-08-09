@@ -6,9 +6,11 @@
 // there is no passthrough router — the route calls the handler directly.
 //
 // MulmoTerminal's deps binding:
-//   - workspaceRoot: omitted — the engine falls back to the collection host
-//     configured at boot (initCollectionsBackend → configureCollectionHost),
-//     the same root every collection REST route uses.
+//   - workspaceRoot: a GETTER over the bound workspace, not a captured string. The tool
+//     is built at module scope — before boot binds anything — so a value read here would
+//     be `undefined`, and under the engine's explicit-root binding that is a throw rather
+//     than a fallback. The getter defers the read to the call, which is when a root exists.
+//     (This is the agent's data plane, which has no request: it operates on the workspace.)
 //   - bundledHelpsDir: workspace-setup's helpsAssetDir, so `schemaDocs`
 //     serves the bundled collection-authoring reference even when the
 //     workspace has no config/helps copy (only managed workspaces are seeded).
@@ -18,13 +20,42 @@
 import type { ToolDefinition } from "gui-chat-protocol";
 import { makeManageCollectionTool } from "@mulmoclaude/core/collection/server";
 import { helpsAssetDir } from "@mulmoclaude/core/workspace-setup";
+import { workspaceScope } from "./project-root.js";
 
-const tool = makeManageCollectionTool({ bundledHelpsDir: helpsAssetDir });
+const tool = makeManageCollectionTool({
+  bundledHelpsDir: helpsAssetDir,
+  get workspaceRoot(): string {
+    return workspaceScope().workspaceRoot;
+  },
+});
 
 /** The bound handler the dispatch route calls. Returns the tool's narration
  *  string (JSON for the read/write actions) — no GUI `data`, matching
- *  MulmoClaude where manageCollection results narrate to claude only. */
+ *  MulmoClaude where manageCollection results narrate to claude only.
+ *
+ *  This one is the AGENT's data plane and operates on the workspace, which is what the
+ *  getter above says. A REQUEST must not use it — see `manageCollectionHandlerFor`. */
 export const manageCollectionHandler = tool.handler;
+
+// One tool instance per root. `makeManageCollectionTool` takes its root in the FACTORY deps,
+// not per call, so a request-scoped operation needs its own instance; they are cached because
+// a custom view's dashboard can issue these in a loop. Bounded by the number of projects the
+// user has, which is the same list `resolveProjectRoot` resolves against.
+const byRoot = new Map<string, typeof tool.handler>();
+
+/** The handler bound to ONE project root — what a request-scoped route must use.
+ *
+ *  The workspace-bound handler above would execute against the workspace no matter which
+ *  project the request named and its token was checked for, so a view in one project could
+ *  receive another's rows for a shared slug. The token check and the query have to agree on
+ *  the root, and this is how the query learns it. */
+export function manageCollectionHandlerFor(workspaceRoot: string): typeof tool.handler {
+  const cached = byRoot.get(workspaceRoot);
+  if (cached) return cached;
+  const handler = makeManageCollectionTool({ bundledHelpsDir: helpsAssetDir, workspaceRoot }).handler;
+  byRoot.set(workspaceRoot, handler);
+  return handler;
+}
 
 /** gui-chat-protocol shape of the core tool's MCP definition — the same
  *  inputSchema→parameters / prompt-folding adaptation loadServerToolPackage

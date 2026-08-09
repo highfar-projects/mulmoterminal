@@ -10,7 +10,7 @@ import { toolSummaries } from "./infra/plugins-registry.js";
 import { initMarkdownBackend } from "./backends/markdown.js";
 import { initArtifactsBackend } from "./backends/artifacts.js";
 import { initOpenPathBackend } from "./backends/openPath.js";
-import { getUserMcpServers, getWorklogConfig, getTerminalSubmit, getQuickCommands, APP_CONFIG_FILE } from "./config/config-routes.js";
+import { getUserMcpServers, getWorklogConfig, getTerminalSubmit, getQuickCommands, getSessionIdleReapDays, APP_CONFIG_FILE } from "./config/config-routes.js";
 import { enforceKeymap } from "./config/keymap-check.js";
 import { readFileSync } from "node:fs";
 import { submitSequenceForAgent } from "../common/terminalSubmit.js";
@@ -55,6 +55,7 @@ import { createTitleManager } from "./session/session-title.js";
 import { generateTitleFromTurns } from "./config/header-title.js";
 import { mountTerminalWebSockets } from "./routes/ws-routes.js";
 import { createConnectionHandlers } from "./session/pty-connection.js";
+import { boundedTail } from "./session/terminal-replay.js";
 import { createTmuxSizeSync } from "./session/tmux-size-sync.js";
 import type { SpawnDeps } from "./session/spawn-deps.js";
 import {
@@ -82,7 +83,11 @@ import { createScheduledSessionRegistry, scheduledSessionInUse, scheduledSession
 import { claudeAdapter } from "./agents/claude.js";
 import { codexAdapter } from "./agents/codex.js";
 import { antigravityAdapter } from "./agents/antigravity.js";
+import { grokAdapter } from "./agents/grok.js";
+import { museAdapter } from "./agents/muse.js";
 import { createAntigravitySpawner } from "./session/spawn-antigravity.js";
+import { createGrokSpawner } from "./session/spawn-grok.js";
+import { createMuseSpawner } from "./session/spawn-muse.js";
 import { renderScreen } from "./session/headlessScreen.js";
 import {
   agentFromPaneCommand,
@@ -94,6 +99,8 @@ import {
   type SessionScreenMeta,
   type SessionWorkSummary,
 } from "./backends/remoteHost/terminalScreen.js";
+import { dirIconSrc, readIconFile, withDirIcons, type DirIconSources } from "./backends/remoteHost/dirIcons.js";
+import { dirIconFor } from "./config/dir-config.js";
 import type { SessionAgent } from "../common/sessionAgent.js";
 import { quickCommandsForAgent } from "./backends/remoteHost/quickCommands.js";
 import { decideLaunchTerminal, NO_BROWSER_ERROR } from "./backends/remoteHost/launchTerminal.js";
@@ -128,6 +135,7 @@ import { allowedToolNames, autoAllowedToolNames } from "./infra/plugins-registry
 import { GUI_SERVER_ID } from "../common/toolGroups.js";
 
 import { resumableSessionPredicate } from "./session/resumable-sessions.js";
+import { reapSweepLines, survivingAfterSweep, sweepIdleSessions } from "./session/reap-idle-sessions.js";
 import { installProcessGuards } from "./infra/process-guards.js";
 import { pruneOrphanSettings } from "./session/session-settings.js";
 import { earliestStartedAt, liveInstances, registerInstance } from "../bin/instances.js";
@@ -145,9 +153,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLAUDE_BIN = claudeAdapter.bin();
 const CODEX_BIN = codexAdapter.bin();
 const ANTIGRAVITY_BIN = antigravityAdapter.bin();
+const GROK_BIN = grokAdapter.bin();
+const MUSE_BIN = museAdapter.bin();
 // Model override for codex sessions (--model); null uses codex's own configured default.
 const CODEX_MODEL = process.env.CODEX_MODEL || null;
 const ANTIGRAVITY_MODEL = process.env.ANTIGRAVITY_MODEL || null;
+const GROK_MODEL = process.env.GROK_MODEL || null;
+const MUSE_MODEL = process.env.MUSE_MODEL || null;
 // Permission mode for backend-spawned Claude sessions. Defaults to "auto" so
 // the backend runs hands-off; override with CLAUDE_PERMISSION_MODE (e.g.
 // "default" / "acceptEdits" / "bypassPermissions" / "plan") when needed.
@@ -246,6 +258,7 @@ const tmuxSizeSync = createTmuxSizeSync({
 // Per-connection plumbing (session/pty-connection.ts). The reap decisions stay here —
 // they read activity state and schedule timers that outlive any one connection.
 const { reattachPty, handleClientFrame, handleClientClose } = createConnectionHandlers({
+  outputBufferLimit: OUTPUT_BUFFER_LIMIT,
   cancelReap: (id) => cancelReap(id),
   reap: (id) => reap(id),
   setWaiting: (id, waiting) => setWaiting(id, waiting),
@@ -301,6 +314,10 @@ const spawnDeps: SpawnDeps = {
   codexModel: CODEX_MODEL,
   antigravityBin: ANTIGRAVITY_BIN,
   antigravityModel: ANTIGRAVITY_MODEL,
+  grokBin: GROK_BIN,
+  grokModel: GROK_MODEL,
+  museBin: MUSE_BIN,
+  museModel: MUSE_MODEL,
   permissionMode: CLAUDE_PERMISSION_MODE,
   guiMcpTools: GUI_MCP_TOOLS,
   gridMcpTools: GRID_MCP_TOOLS,
@@ -313,10 +330,13 @@ const spawnDeps: SpawnDeps = {
   setWaiting: (id, waiting, event) => setWaiting(id, waiting, event),
   uiPort: String(process.env.CLIENT_PORT || PORT),
   publishSessionCreated: (sessionId) => pubsub?.publish(SESSIONS_CHANNEL, { id: sessionId, working: false, event: "created" }),
+  publishActivity: (sessionId) => publishActivity(sessionId),
 };
 const { spawnClaudePty } = createClaudeSpawner(spawnDeps);
 const { spawnCodexPty } = createCodexSpawner(spawnDeps);
 const { spawnAntigravityPty } = createAntigravitySpawner(spawnDeps);
+const { spawnGrokPty } = createGrokSpawner(spawnDeps);
+const { spawnMusePty } = createMuseSpawner(spawnDeps);
 const { spawnCommandPty, spawnLauncherPty, resolveLauncher } = createShellSpawners(spawnDeps);
 
 // The hidden translation worker (session/translation-worker.ts). It drives a headless
@@ -476,6 +496,8 @@ mountAppRoutes(app, {
   spawnClaudePty,
   spawnCodexPty,
   spawnAntigravityPty,
+  spawnGrokPty,
+  spawnMusePty,
   translateViaHiddenChat,
   freshenRosterTitle,
   forgetTitle,
@@ -628,6 +650,11 @@ const workByCwd = async (cwds: readonly string[]): Promise<Map<string, SessionWo
   return out;
 };
 
+// Where the phone's copy of a directory's picture comes from (#1556). `dirIconFor` is the same
+// resolution the browser's cells use — the configured `icon` and, failing that, the detected
+// favicon — so the two clients never disagree about which image a project has.
+const dirIconSources: DirIconSources = { iconOf: dirIconFor, readIcon: readIconFile };
+
 const remoteHostListTerminalSessions = async () => {
   // A live PTY knows where claude actually runs, so it wins. A session that outlived this process
   // has none — that is what the remembered cwd is for (#1021), and without it the phone shows the
@@ -639,7 +666,7 @@ const remoteHostListTerminalSessions = async () => {
   // case that mark exists for is a server that restarted before any tab opened, where the answer
   // lives only on disk.
   await Promise.all([unplacedSessionsHydrated, placedSessionsHydrated]);
-  return buildSessionList({
+  const sessions = buildSessionList({
     liveIds: [...ptys.keys()],
     tmuxIds: tmuxListSessionIds(),
     isResumable: await resumableSessionPredicate(),
@@ -666,6 +693,8 @@ const remoteHostListTerminalSessions = async () => {
       };
     },
   });
+  // After the sort, so the budget is spent on the rows the phone shows first.
+  return withDirIcons(sessions, dirIconSources);
 };
 
 // Write a chunk to a session's live PTY for the phone's terminal input (#445).
@@ -702,6 +731,12 @@ const remoteHostSessionScreenMeta = (sessionId: string): Promise<SessionScreenMe
     // does not. A per-poll `ls-remote` is the only local fix and costs a network round trip
     // on a screen the phone polls (#832).
     githubUrlOf: resolveGithubUrl,
+    // Inlined rather than the /api/dir-icon URL the browser gets: the phone has no route to
+    // this host at all, so the picture travels in the reply or not at all (#1556).
+    iconOf: (cwd) => {
+      const icon = dirIconFor(cwd);
+      return (icon && dirIconSrc(icon, readIconFile)) || "";
+    },
     memoOf: (id) => sessionMemos.get(id) ?? "", // beside the summary, never instead of it — see SessionScreenMeta (#1110)
     summaryOf: (id) => aiTitles.get(id) ?? "",
     promptOf: (id) => lastPrompts.get(id) ?? "",
@@ -715,7 +750,9 @@ const remoteHostCaptureTerminalScreen = (sessionId: string) =>
     captureStyledPane: (id) => tmuxCaptureStyledPane(id, SCREEN_HISTORY_ROWS),
     sourceOf: (id) => {
       const entry = ptys.get(id);
-      return entry ? { buffer: entry.buffer, cols: entry.term.cols, rows: entry.term.rows } : undefined;
+      // Cut to the bound: the buffer runs over it (PtyEntry.buffer), and every extra character
+      // is one more the headless emulator has to parse to answer one screen.
+      return entry ? { buffer: boundedTail(entry.buffer, OUTPUT_BUFFER_LIMIT), cols: entry.term.cols, rows: entry.term.rows } : undefined;
     },
     render: (source) => renderScreen({ ...source, historyLines: SCREEN_HISTORY_ROWS }),
     metaOf: remoteHostSessionScreenMeta,
@@ -855,6 +892,8 @@ mountTerminalWebSockets({
   spawnClaudePty,
   spawnCodexPty,
   spawnAntigravityPty,
+  spawnGrokPty,
+  spawnMusePty,
   spawnCommandPty,
   spawnLauncherPty,
   resolveLauncher,
@@ -879,9 +918,18 @@ server.listen(Number(PORT), BIND_HOST, () => {
     console.warn(bindSecurityWarning(BIND_HOST, PORT, browserHostnames));
   }
   const surviving = tmuxAvailable() ? tmuxListSessionIds() : [];
+  const reaped: string[] = [];
   if (tmuxAvailable()) {
     const detail = surviving.length ? ` — ${surviving.length} session(s) survived; reattach on connect` : "";
     console.log(`[tmux] persistence on${detail}`);
+    // Then end the ones nothing is using. Here rather than on a timer: a restart is when none of
+    // OUR ptys hold anything, so "in use" means somebody else's, and it is the moment the pile is
+    // largest. `cleanup-orphans` has existed since #367 with no caller — this is that caller, with
+    // a rule that is about now instead of about the past (#1467).
+    const idleDays = getSessionIdleReapDays();
+    const sweep = sweepIdleSessions(Date.now(), idleDays);
+    reaped.push(...sweep.reaped);
+    reapSweepLines(sweep, idleDays).forEach((line) => console.log(line));
   } else {
     console.log("[tmux] not found — terminals are not persistent across a server restart");
   }
@@ -900,7 +948,10 @@ server.listen(Number(PORT), BIND_HOST, () => {
   // that cutoff applies to every sweep here, not just the one the bug was reported against.
   const peers = liveInstances();
   const peerCutoff = earliestStartedAt(peers);
-  const liveSessionIds = new Set(surviving);
+  // Minus what the sweep just ended: those files are orphans as of a moment ago, and one of them
+  // may hold a provider's API token — waiting a whole boot to remove it is the cost of using the
+  // list as it was read (#1467).
+  const liveSessionIds = survivingAfterSweep(surviving, reaped);
   const droppedSettings = pruneOrphanSettings(liveSessionIds, undefined, peerCutoff);
   if (droppedSettings.length) console.log(`[settings] removed ${droppedSettings.length} orphaned session settings file(s)`);
   // Dropped files are the same story: copies in tmp that only their session referred to.

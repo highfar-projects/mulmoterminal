@@ -4,10 +4,15 @@ import { currentGitlabHosts, useAppConfig } from "../../../src/composables/useAp
 // Echo the posted cwdPresets back as the server would, so presets.value reflects
 // each save. useAppConfig's presets ref is per-call (not a singleton), so every
 // useAppConfig() in these tests starts from an empty list.
+// Where the server keeps the worktrees it created. The GET carries it (the real /api/config does,
+// alongside `home`) because that is the only way this side can tell one of ours from a directory
+// that merely looks like one — see isManagedWorktreePath.
+const WORKTREES_ROOT = "/Users/me/.mulmoterminal/worktrees";
+
 function mockConfigFetch() {
   globalThis.fetch = vi.fn(async (_url: string, init?: { body?: string }) => {
     const body = init?.body ? JSON.parse(init.body) : {};
-    return { ok: true, json: async () => ({ cwdPresets: body.cwdPresets ?? [] }) };
+    return { ok: true, json: async () => ({ cwdPresets: body.cwdPresets ?? [], worktreesRoot: WORKTREES_ROOT }) };
   }) as unknown as typeof fetch;
 }
 
@@ -67,6 +72,49 @@ describe("useAppConfig — auto preset recording", () => {
     expect(presets.value).toEqual([]);
   });
 
+  // A worktree launches like anywhere else, so every isolated task used to leave a chip behind —
+  // for a directory that is one branch for one task and is deleted with it.
+  const WORKTREE = `${WORKTREES_ROOT}/myrepo-1a2b3c4d/fix-bug`;
+
+  it("does not record a managed worktree", async () => {
+    const { presets, recordPreset, loadConfig } = useAppConfig();
+    await loadConfig(); // the root arrives with the config; without it nothing here is a worktree
+    await recordPreset(WORKTREE);
+    expect(presets.value).toEqual([]);
+  });
+
+  it("still records the repository the worktree came from", async () => {
+    const { presets, recordPreset, loadConfig } = useAppConfig();
+    await loadConfig();
+    await recordPreset("/home/me/myrepo");
+    await recordPreset(WORKTREE);
+    expect(presets.value.map((p) => p.path)).toEqual(["/home/me/myrepo"]);
+  });
+
+  // Anchored on the managed root, not on the path's shape: a directory another tool laid out the
+  // same way is a real working directory, and dropping it would silently lose it (Codex on #1543).
+  it("records a same-shaped directory outside the managed root", async () => {
+    const { presets, recordPreset, loadConfig } = useAppConfig();
+    await loadConfig();
+    await recordPreset("/home/me/dev/worktrees/myrepo-1a2b3c4d/fix-bug");
+    expect(presets.value.map((p) => p.path)).toEqual(["/home/me/dev/worktrees/myrepo-1a2b3c4d/fix-bug"]);
+  });
+
+  // Saved config is the user's, so an entry an earlier version recorded is left where it is
+  // rather than dropped — it just stops being maintained (no bump to the front).
+  it("leaves an already-saved worktree entry alone instead of bumping it", async () => {
+    const { presets, recordPreset, loadConfig } = useAppConfig();
+    await loadConfig();
+    presets.value = [
+      { label: "alpha", path: "/home/me/alpha" },
+      { label: "myrepo (fix-bug)", path: WORKTREE },
+    ];
+    const before = vi.mocked(globalThis.fetch).mock.calls.length;
+    await recordPreset(WORKTREE);
+    expect(vi.mocked(globalThis.fetch).mock.calls).toHaveLength(before); // no POST
+    expect(presets.value.map((p) => p.path)).toEqual(["/home/me/alpha", WORKTREE]);
+  });
+
   it("removePreset drops the matching path", async () => {
     const { presets, recordPreset, removePreset } = useAppConfig();
     await recordPreset("/a");
@@ -124,6 +172,58 @@ describe("useAppConfig — auto preset recording", () => {
     releaseGet(); // the stale (empty) GET snapshot now lands
     await loading;
     expect(presets.value.map((p) => p.path)).toEqual(["/launched/now"]);
+  });
+
+  // The other side of the test above: a launch that lands before the initial GET has no worktree
+  // root to judge by, and deciding without it recorded the very worktree the guard exists to keep
+  // out (Codex on #1543). A path with the worktree SHAPE waits for the root; anything else must
+  // NOT wait, which is what keeps the #164 guarantee above intact.
+  it("does not record a managed worktree launched before the initial config lands", async () => {
+    let releaseGet: () => void = () => {};
+    const getGate = new Promise<void>((r) => {
+      releaseGet = r;
+    });
+    globalThis.fetch = vi.fn(async (_url: string, init?: { body?: string }) => {
+      if (!init?.body) {
+        await getGate;
+        return { ok: true, json: async () => ({ cwd: "/w", home: "/h", worktreesRoot: WORKTREES_ROOT, cwdPresets: [] }) };
+      }
+      const body = JSON.parse(init.body);
+      return { ok: true, json: async () => ({ cwdPresets: body.cwdPresets ?? [] }) };
+    }) as unknown as typeof fetch;
+    const { presets, loadConfig, recordPreset } = useAppConfig();
+    const loading = loadConfig(); // GET in flight (stalled) — the root is not known yet
+    const recording = recordPreset(`${WORKTREES_ROOT}/myrepo-1a2b3c4d/fix-bug`); // deliberately not awaited
+    releaseGet();
+    await Promise.all([loading, recording]);
+    expect(presets.value).toEqual([]);
+  });
+
+  // The wait above must happen BEFORE the preset write lock is taken. `loadConfig` finishes with
+  // `migrateLegacyRecents`, which needs that same lock — so waiting from inside it made the load
+  // and the record wait on each other forever, and only an UPGRADING user (one with legacy recents
+  // to import) ever hit it (Codex on #1543). Without the fix this test hangs to its timeout.
+  it("does not deadlock the initial load of an upgrading user who launches a worktree", async () => {
+    localStorage.setItem("recent_dirs_v1", JSON.stringify(["/legacy/one"]));
+    let releaseGet: () => void = () => {};
+    const getGate = new Promise<void>((r) => {
+      releaseGet = r;
+    });
+    globalThis.fetch = vi.fn(async (_url: string, init?: { body?: string }) => {
+      if (!init?.body) {
+        await getGate;
+        return { ok: true, json: async () => ({ cwd: "/w", worktreesRoot: WORKTREES_ROOT, cwdPresets: [] }) };
+      }
+      const body = JSON.parse(init.body);
+      return { ok: true, json: async () => ({ cwdPresets: body.cwdPresets ?? [] }) };
+    }) as unknown as typeof fetch;
+    const { presets, loadConfig, recordPreset } = useAppConfig();
+    const loading = loadConfig();
+    const recording = recordPreset(`${WORKTREES_ROOT}/myrepo-1a2b3c4d/fix-bug`);
+    releaseGet();
+    await Promise.all([loading, recording]);
+    // The legacy import completed; the worktree was still refused.
+    expect(presets.value.map((p) => p.path)).toEqual(["/legacy/one"]);
   });
 
   it("serializes concurrent records so neither write clobbers the other (#163 review)", async () => {

@@ -1,4 +1,4 @@
-import { readableTextColor } from "./contrast";
+import { readableTextColor } from "../../common/contrast";
 import { isHexColor } from "./hexColor";
 
 // Inline style for a directory's name badge: the configured color as the

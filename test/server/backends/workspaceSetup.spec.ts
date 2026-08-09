@@ -1,14 +1,18 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, existsSync, readdirSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, readdirSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import path from "node:path";
-import { isManagedWorkspace, initWorkspaceSetup } from "../../../server/backends/workspaceSetup.js";
+import { isManagedWorkspace, initWorkspaceSetup, refreshCodexSkillsMirror } from "../../../server/backends/workspaceSetup.js";
 
 // Save/restore MULMOCLAUDE_WORKSPACE_PATH so a test can mark a temp dir as the
-// managed workspace without leaking into sibling tests.
+// managed workspace without leaking into sibling tests. CODEX_HOME likewise, so the
+// mirror-refresh tests never touch the real ~/.codex.
 const ENV_KEY = "MULMOCLAUDE_WORKSPACE_PATH";
+const CODEX_ENV_KEY = "CODEX_HOME";
 let savedEnv: string | undefined;
+let savedCodexEnv: string | undefined;
+let codexHome: string;
 const tempDirs: string[] = [];
 
 function makeTempDir(): string {
@@ -19,12 +23,17 @@ function makeTempDir(): string {
 
 beforeEach(() => {
   savedEnv = process.env[ENV_KEY];
+  savedCodexEnv = process.env[CODEX_ENV_KEY];
   Reflect.deleteProperty(process.env, ENV_KEY);
+  codexHome = makeTempDir();
+  process.env[CODEX_ENV_KEY] = codexHome;
 });
 
 afterEach(() => {
   if (savedEnv === undefined) Reflect.deleteProperty(process.env, ENV_KEY);
   else process.env[ENV_KEY] = savedEnv;
+  if (savedCodexEnv === undefined) Reflect.deleteProperty(process.env, CODEX_ENV_KEY);
+  else process.env[CODEX_ENV_KEY] = savedCodexEnv;
   for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
@@ -79,5 +88,36 @@ describe("initWorkspaceSetup", () => {
     expect(existsSync(path.join(workspace, "data"))).toBe(false);
     expect(existsSync(path.join(workspace, ".claude"))).toBe(false);
     expect(readdirSync(workspace)).toHaveLength(0);
+  });
+});
+
+describe("refreshCodexSkillsMirror", () => {
+  const addSkill = (workspace: string, name: string): void => {
+    const dir = path.join(workspace, ".claude", "skills", name);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, "SKILL.md"), `---\nname: ${name}\n---\n`);
+  };
+
+  // The point of the refresh: a skill created AFTER boot reaches codex on the next spawn,
+  // not the next server restart.
+  it("mirrors a skill created after boot into the codex root", () => {
+    const workspace = makeTempDir();
+    process.env[ENV_KEY] = workspace;
+    addSkill(workspace, "made-later");
+
+    refreshCodexSkillsMirror(workspace);
+
+    expect(existsSync(path.join(codexHome, "skills", "made-later", "SKILL.md"))).toBe(true);
+  });
+
+  // An arbitrary project's skills must not land in the user-global codex root, where they
+  // would fire in every other directory's sessions too.
+  it("does nothing outside the managed workspace", () => {
+    const workspace = makeTempDir();
+    addSkill(workspace, "project-local");
+
+    refreshCodexSkillsMirror(workspace);
+
+    expect(existsSync(path.join(codexHome, "skills"))).toBe(false);
   });
 });

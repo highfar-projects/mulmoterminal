@@ -14,6 +14,7 @@
 import { configureCollectionWatchers, startCollectionWatchers } from "@mulmoclaude/core/collection-watchers";
 import type { CollectionNotificationAdapter } from "@mulmoclaude/core/collection-watchers";
 import { buildNavigateTarget, buildPluginData, priorityToSeverity, readEntry } from "./collectionNotifierAdapter.js";
+import { workspaceScope } from "../infra/project-root.js";
 
 const log = {
   info: (message: string, data?: Record<string, unknown>) => console.log(`[collection-watchers] ${message}`, data ?? ""),
@@ -35,6 +36,14 @@ const adapter: CollectionNotificationAdapter = {
  *  watcher failure must not abort startup, so the caller attaches `.catch`. */
 export async function startCollectionCompletionWatchers(): Promise<void> {
   configureCollectionWatchers({ adapter, log });
-  await startCollectionWatchers();
+  // The root is passed EXPLICITLY. The engine host runs in explicit-root mode, so a watcher
+  // started without one would throw `COLLECTION_ROOT_REQUIRED` on its first discovery — and
+  // because the caller is fire-and-forget with a `.catch`, that failure would not stop the
+  // server, it would just log once and leave every collection bell silently dead.
+  //
+  // One root per process is the watcher's own contract (a second start for a DIFFERENT root
+  // throws `WATCHER_ROOT_CONFLICT`); serving a project's collections means
+  // `await stopCollectionWatchers()` first. See plans/feat-collections-project-root.md §7b.
+  await startCollectionWatchers({ discoveryOpts: workspaceScope() });
   log.info("collection completion watchers started");
 }

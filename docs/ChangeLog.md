@@ -8,6 +8,946 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.7.5 — 2026-08-09
+
+> **Setup guide:** [Settings you can find, in a language you read](https://receptron.github.io/mulmoterminal/guide/en/v4.7.5.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.7.5.html))
+
+**A release about Settings.** It had grown to twenty-four headings in one scroll, all of them in
+English, with a button that started a live agent session the moment it was pressed. Three reports
+about the same screen, all from the same week.
+
+### Settings is a sidebar of grouped sections, not one flat scroll ([#1563](https://github.com/receptron/mulmoterminal/issues/1563), [#1565](https://github.com/receptron/mulmoterminal/pull/1565))
+
+Twenty-four headings stacked in a single 560px-wide scroll, with no grouping, no search and no table
+of contents. "Notification sounds" was the eighth heading down, and the report that opened #1563 is
+someone who went looking for it and gave up.
+
+It is now a left sidebar of **nine groups** — Appearance, Projects, Header & launch, Input, Models &
+servers, Notifications, Integrations, Sessions, Help — with one section on screen at a time,
+following MulmoClaude's own settings sidebar so a user of both gets the same shape.
+
+Two things were done differently from that reference, because twenty-four entries is not fifteen:
+
+- **The sidebar is a real `role="tablist"` with roving tabindex.** Twenty-four plain buttons would
+  be twenty-four Tab stops standing between the dialog and the setting it was opened for — more
+  keystrokes than the flat scroll being replaced. Only the selected tab is tabbable; arrows move
+  within the list and wrap.
+- **Below `sm` the sidebar becomes an `optgroup`'d picker above the section.** Captured at 390px, a
+  160px sidebar left about 190px of pane and the notification-sound rows lost their own labels off
+  the left edge.
+
+A pane is **created the first time its tab is opened and hidden afterwards, not destroyed**. Opening
+Settings for one setting no longer mounts twenty-three sections and fires their requests, while a
+value typed but not yet applied — the terminal font field keeps one in a local draft precisely so a
+failed save does not lose it — survives a trip to another section and back.
+
+`ShortcutsSection` carried two headings and became `Terminal keys` and `Keyboard shortcuts`: two
+sidebar entries are two chances to find the thing. `Voice input`'s server capability probe moved up
+to the modal, since a section that hid itself inside a tab would leave an empty pane behind a button.
+
+### Settings speaks Japanese ([#1566](https://github.com/receptron/mulmoterminal/issues/1566), [#1567](https://github.com/receptron/mulmoterminal/pull/1567))
+
+MulmoTerminal had **no host i18n at all**. `vue-i18n` was in `package.json` only because the bundled
+`@mulmoclaude/*` plugins run their own; `createI18n` and `useI18n` appeared nowhere in `src/`,
+`server/` or `common/`, and every string in the app was hardcoded English. That is the other half of
+#1563: a Japanese reader searching the screen for 「音」 or 「通知」 found no such word on it.
+
+- `src/i18n/` holds `createI18n({ legacy: false, fallbackLocale: "en" })`, installed in `main.ts`,
+  with `en` and `ja` bundles. **`ja` is typed from `en`**, so a key added to English is a compile
+  error until it is translated rather than a silent fallback discovered a release later.
+- `src/composables/uiLanguage.ts` is `"auto" | "en" | "ja"`, localStorage-backed like the theme.
+  `auto` — the default — resolves through the existing `browserLocale()`, so a `ja-JP` browser comes
+  up Japanese with nothing configured.
+- A **Language** tab leads the sidebar. It is first on purpose: it is the one setting someone who
+  cannot read the rest of the screen has to find first.
+- Every string in the modal is translated, `aria-label`s included, and `settingsTabs.ts` now holds
+  ids only — the words are `settings.tabs.<id>` and `settings.groups.<key>`, derived the way
+  MulmoClaude derives its own.
+
+**Only the Settings modal is translated.** Every other surface is still English and moves later, one
+at a time; the Language pane says so on screen rather than leaving a user to wonder.
+
+### A skill button says what it does, and can be cancelled ([#1564](https://github.com/receptron/mulmoterminal/issues/1564), [#1568](https://github.com/receptron/mulmoterminal/pull/1568))
+
+A skill button was an icon and a label. Pressing "Configure notifications…" closed Settings, spawned
+an agent session in a new grid cell and sent its first turn — nothing on screen said that would
+happen, and nothing said how to undo it. The report is someone who decided they did not need the
+setting after all and could not find the way back.
+
+- **A one-line hint under every skill button**, saying an agent does the writing.
+- **A confirmation on press**, with Cancel / Start. It names the agent the launcher is set to — not
+  a hard-coded `claude`, since the seed is rewritten server-side for codex — says one new terminal
+  will open, and says that closing that terminal ends the session.
+- **Cancel leaves Settings exactly where it was.** Previously `closeSettings()` ran first, which is
+  why there was nothing to go back to; `launch-skill` now fires only on Start.
+- `Escape` answers the confirmation first and reaches the modal only on a second press. The
+  confirmation is owned by the modal rather than by the button for exactly this reason:
+  `useModalKeyboard` binds Escape on the document, so a dialog with its own binding would close both
+  on one press.
+- Declining returns focus to the button that raised it, found by the **skill it launches** rather
+  than by remembering `document.activeElement` — a browser does not reliably focus a `<button>` when
+  it is clicked, and Safari does not.
+
+## mulmoterminal@4.7.4 — 2026-08-08
+
+> **Setup guide:** [Your projects, recognisable on your phone](https://receptron.github.io/mulmoterminal/guide/en/v4.7.4.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.7.4.html))
+
+**A release about the phone.** The picture that tells your projects apart in the grid now tells
+them apart on your phone too, and an agent you launch from the phone finally starts instead of
+waiting for someone at the desktop.
+
+### A project's icon now reaches the phone ([#1556](https://github.com/receptron/mulmoterminal/issues/1556), [#1558](https://github.com/receptron/mulmoterminal/pull/1558))
+
+The image a directory marks its cells with — `icon` in its `.mulmoterminal.json`, or the favicon
+its repository already ships (4.5.0) — now appears in the mulmoserver PWA's **terminal list** and
+**terminal screen**, so one project reads as one project on both screens. On the list it takes the
+place of the terminal glyph; that glyph's green/grey was the only thing saying whether a session is
+live, so the colour moved to a dot on the icon's corner rather than being dropped. A row whose
+directory has no icon keeps the glyph.
+
+The browser fetches `/api/dir-icon?cwd=…`. The phone has no route to this host at all — it speaks
+over Firestore command documents — so the picture travels **inside the reply** instead:
+`listTerminalSessions` gained an `icons` table that rows point into by `iconId`, and
+`getTerminalScreen` gained an `icon` holding the src directly. A remote `http(s)` or `data:` icon is
+passed through as written; a file inside the project is read and inlined as `data:<mime>;base64,…`.
+
+`iconId` is a **content hash**, so the six clones of one repository — and the nine that share a
+copied `public/favicon.ico` — send those bytes once between them. Two caps keep the reply landing:
+48 KiB per image, 256 KiB for the table. The second is the one that matters, because the reply is a
+Firestore command document that rejects the *whole* document over 1 MiB — an unbounded pile would
+empty the phone's session list rather than dim one row, the same failure as
+[#1042](https://github.com/receptron/mulmoterminal/issues/1042). Icons are packed in the order the
+phone shows the rows, so a budget that runs out costs the bottom of the list. Both numbers come
+from measurement rather than guesswork: across the 22 repositories on the author's machine that
+carry a detectable icon, the largest was 25931 bytes, the median 4286, and all 22 together come to
+148 KB of base64 — nothing reaches either cap.
+
+Two hardenings came out of review, both of which stand on their own. `readIconFile` now **reads no
+more than the cap**, so the cap is a fact about the returned buffer rather than a claim about the
+file: `stat` then `readFile` was neither, since a file in someone else's repository can become
+something else between the two calls. And it opens with `O_NOFOLLOW | O_NONBLOCK` and `fstat`s the
+descriptor, which refuses a FIFO left where the icon was — that would otherwise make `open` wait
+for a writer and stop this synchronous handler, and the server with it.
+
+Needs the companion UI, [receptron/mulmoserver#144](https://github.com/receptron/mulmoserver/pull/144),
+which is already deployed.
+
+### A phone-initiated agent launch now actually starts ([#1535](https://github.com/receptron/mulmoterminal/issues/1535), [#1557](https://github.com/receptron/mulmoterminal/pull/1557))
+
+Launching `claude` or `codex` from the phone opened a cell on the desktop grid and stopped at the
+**empty cell-creation form** — agent pre-picked, directory filled in, waiting for someone at the
+desktop to press Start. `shell` worked; the others did nothing if left alone.
+
+The grid was what was wrong, not either host: a cell with no session, no command and no launcher
+**is** the empty launcher (`isLaunchCell()` says so, and `TerminalCell` renders `CellLaunchForm`
+whenever it mounts without a session id) — and that is exactly what `CELL_FOR_AGENT` built for every
+agent kind. A one-shot, ephemeral `Cell.autoStart`, consumed by `TerminalCell` on mount, is the
+missing way for the grid to say "this cell already knows what it runs; start it". It counts as
+occupied while the session id is still on its way, so `switchPage` does not mistake a trailing cell
+for an abandoned launcher and `+` does not cancel it, and `setSession` strips the key once the id
+lands. Giving the agent cells a `launcher` instead was rejected: that runs the user's command
+verbatim on the launcher PTY with no MCP config, which is exactly the line CLAUDE.md draws between a
+launcher chip and an agent spawn.
+
+### Codex session discovery stops re-reading tens of megabytes a second ([#1554](https://github.com/receptron/mulmoterminal/issues/1554), [#1555](https://github.com/receptron/mulmoterminal/pull/1555))
+
+A JSONL file is one JSON object per line, but `readSessionMeta` stringified the **whole** codex
+rollout to read its first line (`session_meta`). Its caller, `pickFreshSession`, polls once a second
+for up to thirty minutes over every rollout from the last two days — measured on the reporter's
+machine at **149 files and 37 MB re-read every second** to look at a few hundred bytes. It now reads
+the first line only, through the reader module written after
+[#998](https://github.com/receptron/mulmoterminal/issues/998), which had line-streaming, tail and
+range reads but no "first line only" until now.
+
+**Not an OOM fix.** The crash reports under investigation are all `FatalProcessOutOfMemory`, and a
+rollout caps out at 6 MB, so this path alone cannot reach the 4288 MB heap ceiling. The root cause
+is still being chased; this is a real waste found along the way.
+
+### Also
+
+- **Dependency refresh** ([#1559](https://github.com/receptron/mulmoterminal/pull/1559)). No
+  behaviour change.
+- **The 4.7.3 release documentation** ([#1553](https://github.com/receptron/mulmoterminal/pull/1553))
+  — changelog entry, the dated setup guide in both languages and three screenshots — which landed
+  after 4.7.3 was tagged and so falls in this range.
+
+## mulmoterminal@4.7.3 — 2026-08-08
+
+> **Setup guide:** [Buttons that say they are working](https://receptron.github.io/mulmoterminal/guide/en/v4.7.3.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.7.3.html))
+
+**A release about controls that do not say they are working.** A button that shells out to git runs
+for seconds on a large repository while the screen stays byte-identical to the moment before the
+click — so it gets pressed again, and on `+ New worktree` every extra press *succeeded*. Alongside
+it, pressing Enter now takes a scrolled-up terminal back to the latest output.
+
+### `+ New worktree` made one worktree per click ([#1549](https://github.com/receptron/mulmoterminal/issues/1549), [#1550](https://github.com/receptron/mulmoterminal/pull/1550))
+
+`git worktree add` checks out the whole tree — about six seconds on the reporter's ~33,000-file
+monorepo. For all six the launcher looked exactly as it had before the click: no spinner, and the
+button's only `disabled` test was "is the task field empty", with the field cleared *after* the
+response landed. `uniqueBranch` takes the next free suffix, so three presses made
+`agent/<task>`, `-2` and `-3` — three copies of one working tree.
+
+The same line hid failures: `if (!res.ok) return;` plus an empty `catch` meant a 500 showed nothing
+at all. The reporter's actual cause was a base branch that did not exist locally, and reaching that
+diagnosis required reading the shipped bundle.
+
+- **One guard for the whole worktree section** (`useBusyAction`), because they all run git in one
+  repository where a second command contends on the index lock: the create, each worktree row
+  (which waits on up to four `claude mcp add` calls before the cell launches), and each row's
+  delete button. Whichever control was pressed shows `progress_activity` and a `Creating…` /
+  `Removing…` label; the rest are held.
+- **A refusal now says why**, in the server's own words — `{ error }` from the create route,
+  `{ ok:false, reason }` from remove — the treatment the folder button got in #1447. The task name
+  is kept for the retry.
+- **The failure is scoped to the repository it was about.** The directory field stays editable for
+  the whole round trip, so a refusal that lands after the user has typed their way elsewhere is no
+  longer shown under the new directory.
+- **A timeout is reported as a timeout.** `fetchWithTimeout` gives up at 60s while git carries on,
+  so "could not reach the server" sent people to look at their network for a worktree that was
+  about to appear.
+- **An unreadable `200` body is a timeout too, not "the server created nothing."** The deadline
+  stays armed across the body, and `jsonBody` absorbs an unreadable one into `{}` — the trap its
+  own documentation names from #1300.
+- **The running cell's `Discard & remove`** runs through the same guard, and **nothing dismisses the
+  confirmation once the removal starts**: the terminal is ended before the route is even called, so
+  "Keep worktree" was a promise the cell could not make, and Escape took the failure off the screen
+  with it.
+- Disabled styling on `wt-start` / `wt-del`, so a button that cannot be pressed no longer looks
+  like one that can.
+
+### A cell being removed now looks like it ([#1551](https://github.com/receptron/mulmoterminal/issues/1551), [#1552](https://github.com/receptron/mulmoterminal/pull/1552))
+
+The fix above put `Removing…` on a 12px label inside a dialog, while the cell around it — header,
+chips, terminal — went on looking live for the seconds `git worktree remove` takes. The whole cell
+now fades through the same class parked cells use (which rides on `.cell-inner` and therefore covers
+the header), with one spinner over it naming what is going. The spinner is a **sibling** of that
+layer, not a child, so it is not dimmed by what it is dimming. The cell is also made `inert`, so it
+cannot be reached by keyboard or read by a screen reader while it is being deleted — measured in a
+real browser: 13 focusable controls before, 0 during. The confirmation is replaced rather than faded,
+and comes back with its reason if the removal fails.
+
+### Enter returns a scrolled-up terminal to the latest output ([#1546](https://github.com/receptron/mulmoterminal/issues/1546), [#1547](https://github.com/receptron/mulmoterminal/pull/1547))
+
+Scrolling up in a Claude Code cell and pressing Enter left you where you were — unlike an ordinary
+terminal, and unlike a **shell** cell here, which was the asymmetry that diagnosed it. Measured with
+`tmux list-panes`: Claude Code runs mouse tracking 1003 on the alternate buffer, so tmux forwards
+the wheel to the application and the scroll position belongs to Claude Code, with nothing on this
+side to send back down (a plain terminal does not return either — the reporter confirmed it in
+iTerm).
+
+What is possible is **unwinding the scrolling this app itself synthesised** (#737 / #845): the
+notches `report()` sent are counted and the same number is sent back down on submit. Scroll nowhere
+and not a byte is sent. Clamped at zero so it can never scroll past the application's own bottom,
+and forgotten rather than paid back once the application stops taking the mouse, so a later app does
+not receive someone else's scrolling. **On by default**, with a per-browser checkbox in Settings →
+Terminal scroll speed.
+
+## mulmoterminal@4.7.2 — 2026-08-08
+
+> **Setup guide:** [The terminal comes back on the right process](https://receptron.github.io/mulmoterminal/guide/en/v4.7.2.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.7.2.html))
+
+**A reliability release built around one bug**: a terminal view could reattach to the *wrong*
+backend process. Found on a live instance, traced through five pull requests, and each layer of it
+fixed with the evidence the server already keeps rather than a new metadata store.
+
+Alongside it: worktrees stop piling up as working-directory chips, the cockpit roster gets the
+Agent Picker's marks and one border geometry, collection chats can choose their agent again, and
+the Windows CI that #1534 turned red is green.
+
+### The reattach chain (#1533)
+
+- **Resume under the key the conversation is RUNNING under** (#1534): the launcher's resume row
+  emitted the row's own id — the agent's conversation id — even when the server had already said
+  (via `runningKey`, #1467) that the conversation was still running under a different, minted key.
+  "Resume it here" then spawned `codex resume <conv>` in a fresh tmux session while the original
+  kept running the same rollout, and a cold reconnect could come back on either. `dirSession` also
+  gained a **survivor pass**: sessions in `runningSessionKeys()` that `ptys` no longer knows, tied
+  back to their directory through the codex/agy/muse conversation logs — without it a worktree with
+  a live backend read as free, so the one-session-per-worktree refusal (#1207) stopped firing.
+  A Claude transcript whose session survives in tmux is likewise ranked live, so the running
+  conversation outranks a merely newer transcript. `ptySpawn` now refuses a session id
+  `SESSION_ID_RE` rejects at the one choke point every spawner passes — a live `mt-undefined` was
+  found on a machine, a shared bucket unreachable by attach, resume and terminate alike — and the
+  idle sweep reaps such an unreachable session at once rather than waiting out a grace no recency
+  can satisfy. Also in this PR: per-session-id connect serialization, a re-read of the live entry
+  after the admission awaits (the resolve-time snapshot can be a corpse the reap killed
+  mid-admission), an endpoint/agent assertion for a live PTY, watcher guards for the muse and codex
+  spawn attribution, and the client-side slot-inheritance guard that stopped a reloaded GridView
+  handing a Claude cell a closed shell cell's ghost slot.
+- **Codex activity re-armed on a restart reattach** (#1538, from #1536): after a server restart
+  `ptys` is empty while tmux still holds the session — the state every bare `!live` test misreads
+  as a fresh spawn. A tmux attach of a surviving codex took the fresh branch, whose watcher waits
+  for a **new** rollout file to appear; the survivor's file already existed, so nothing tailed it
+  and the cell's working/waiting flags — and its turn-finished notifications — stayed dead until a
+  cold restart. The spawner now tails the hydrated mapping's rollout from the end, with no resume id
+  so no second codex starts beside the surviving one, and falls back to the appear-watcher for a
+  survivor that never reached its first turn. `restoreOpenTurn` re-reports a turn the skipped
+  content leaves open, so a mid-turn survivor is not shown as idle until its turn ends. The codex
+  directory tool-group read now uses the session's own cwd (`sessionCwd`), since a restart reconnect
+  often carries no `?cwd=` and answered for the default workspace. And claude — the one agent
+  endpoint that never asked — got the `clientStillConnected` guard after its admission awaits.
+- **A provably foreign tmux survivor is refused at the endpoint** (#1541, from #1537): the
+  endpoint/agent mismatch check added in #1534 needs a live `PtyEntry` to compare against, so after
+  a restart it had nothing — and `tmux new-session -A` attaches whatever runs in the pane while
+  **ignoring** the argv the endpoint's spawner built, after which the recreated entry records the
+  *endpoint's* agent. Stale or coerced grid state (`asTerminalAgent` reads any unrecognised value as
+  `claude`) could therefore relabel a surviving codex as claude, and every later same-process guard
+  would trust the label. A new guard in `admitAgentSession` — the shared choke point for the claude,
+  launch, codex and directory-MCP endpoints, before the browser is told a session id — decides from
+  what an agent left durably under the session's own key: a claude transcript, codex's rollout
+  mapping, agy's and muse's hydrated conversation maps, a grok conversation named by the key. A
+  single piece of foreign evidence is a loud refusal; **no** evidence attaches as requested, because
+  a shell survivor and an agent session that never reached its first turn both leave none, and
+  refusing the unknowable would lock users out of legitimately surviving sessions.
+
+### Working directories
+
+- **A worktree is no longer remembered as a WORKING DIRECTORY chip** (#1543, fixes #1542): the chips
+  are auto-recorded from wherever a cell launched, and a worktree launches like anywhere else — so
+  every isolated task left one behind, for a directory that is one branch for one task and is
+  deleted with it. Nothing pruned the chip when the directory went, either (the close button is the
+  only remover), so the row filled with paths that no longer exist and pushed the real projects out
+  of reach. Both recording paths are covered — the browser's `recordPreset` and `deriveCwdPresets`,
+  which reseeds the list from Claude's history on `mulmoterminal init` — through one predicate in
+  `common/worktreePath.ts`. It is anchored on the managed **root** (`GET /api/config` now reports it
+  beside `home`, canonicalized, since the browser cannot work it out and `MULMOTERMINAL_HOME` can
+  move it) and requires the minted `<repo>-<8hex>` directory, so a path another tool laid out the
+  same way — or one a person put under the root by hand — is still recorded. An unknown root records
+  the directory: of the two ways to be wrong, an extra chip the user can delete beats a real working
+  directory that quietly never appears. Entries already saved are left exactly where they are.
+- **One file dialog at a time** (#1528, fixes #1527): clicking the folder button repeatedly opened
+  one native OS dialog per click, because a native dialog does not answer until it is dismissed and
+  `/api/pick-file` spawns `osascript` / `powershell` / `zenity` per request with nothing stopping
+  the clicks in between. There is one OS dialog per machine, so the state behind it is now one
+  shared module flag every picker button reads, and the server refuses a second concurrent dialog
+  too.
+
+### Cockpit roster
+
+- **The picker's agent mark on every row, and none on a row that runs no agent** (#1532): the row
+  wore a non-Claude agent's **name** in a bordered pill (`codex`, `agy`, `grok`, `mu`); it now wears
+  the same drawn mark the Agent Picker and the rate-limit gauge use, so one agent looks the same
+  wherever it is named. Marking every row makes the default visible, which is where the trap was:
+  `Cell.agent` is absent for Claude **and** for every cell that is not an agent session at all, so
+  `c.agent ?? "claude"` would have put Anthropic's burst on a `yarn dev` chip. `rosterAgent()` asks
+  the cell's kind first — a launcher or command cell is `shell` whatever command line it names, a
+  session cell keeps its agent, and a cell running nothing is marked with nothing at all.
+- **One border geometry for every row, and a louder cursor** (#1531): the outer ring was 2px for
+  `blocked`, 1px for `done` and absent for the other three states. In a vertical list the eye reads
+  the difference in **width** before the colour, so three thicknesses read as a rendering bug rather
+  than three meanings. Every state now rings at 2px — `transparent` where there is nothing to say —
+  as a box-shadow, so the geometry is identical and costs no layout. The 3px left stripe, carried
+  without a reason since the roster's first prototype, is gone: once the ring surrounds the row it
+  only made one side disagree with the other three. Row spacing went 5px → 9px, since neighbouring
+  rings had closed to within a pixel and the column read as one block.
+
+### Collections
+
+- **Choose the agent for a collection chat, and workspace skills on all of them** (#1544): chats
+  started from Collections were Claude-only twice over. The three-button toggle had been replaced by
+  the pinned favourites, leaving `launchAgent` with **no writer** — frozen at whatever localStorage
+  last held, Claude for anyone who never used the old toggle. A compact "Launch with" dropdown now
+  shares the row with the pins, offering the built-in agents and only those (`spawnBackgroundChat`
+  hosts exactly them: no shell, since a seeded chat needs an agent, and no custom agents, since the
+  route builds no custom argv), derived from `TERMINAL_AGENTS` so a sixth agent reaches the picker
+  with no second list. The other half: the workspace skills those chats lean on were invisible to
+  some agents, and every agent now sees them.
+
+### CI and tooling
+
+- **Windows CI restored** (#1540, fixes #1539): `main`'s Windows daily had been red since #1534's
+  merge. `survivorCandidates` takes an already-canonical directory — `dirSession` hands it
+  `canonicalPath(dir)` and the pass canonicalizes only the record's side — but the new spec passed a
+  raw POSIX literal, so on Windows it compared `/wt/fix-login` against `D:\wt\fix-login` and
+  nothing ever matched. Production code was correct; the spec was not. Worse, four of its six cases
+  assert an empty result, so they had been passing on Windows for the **wrong reason** — the spec
+  was effectively inert there. A case where the record spells the directory another way now pins
+  that the comparison is real. Also adds the `settledEntry` refusal branch (the error frame that
+  stops the client's reconnect loop) that #1534's review left uncovered.
+- **Codex auto-review on the current CLI and model** (#1526, #1529): CLI `0.125.0` → `0.147.0` and
+  the Azure deployment `gpt-5.3-codex` → `gpt-5.6-terra`, the balanced model of the current line;
+  the old deployment stays for rollback. #1529 then folded in the review of that change — separating
+  required secrets from optional overrides, recording that an override deployment name must still be
+  one the CLI does **not** recognise as a model (a recognised name revives the namespaced tools
+  payload and Azure fails every review with `400 empty_string`), and deleting an api-version note
+  that contradicted the block above it.
+- **dev.to cover image** (#1530): moved into this public repository, since the private marketing
+  repo's raw URLs 404 from outside and the article's cover never rendered.
+
+## mulmoterminal@4.7.1 — 2026-08-07
+
+> **Setup guide:** [The version you are running, on screen](https://receptron.github.io/mulmoterminal/guide/en/v4.7.1.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.7.1.html))
+
+**The app can now tell you which build it is**, which until now it could not: the only way to
+answer "what am I running?" was `--version` in another terminal, and the header's Update badge
+appears only when something newer exists — it never named the version you had.
+
+Alongside it, the Agent Picker stops being six words in one weight, and two remaining ways a seed
+prompt could kill a session are closed.
+
+- **The running version, in Settings** (#1524): a **Version** row under the modal's title. An npm
+  install shows the version from the shipped `package.json`; a git checkout shows that plus the
+  short HEAD **commit**, because there the version is only whatever was last released and the
+  commit is what identifies the build. When the registry has something newer, the row repeats the
+  header badge's notice with its command — the badge is behind the modal while it is open. The
+  update check was restructured to make this possible in one pass of the probes: `computeUpdateInfo`
+  now returns the facts (`install` / `version` / `commit` / `latest` / `notice`) and
+  `computeUpdateNotice` takes the notice out of it, so the launcher's console line is unchanged.
+  `readInstallInfo` is the network-free half, which is what runs when the update check is opted
+  out — `MULMOTERMINAL_NO_UPDATE_CHECK` / `NO_UPDATE_NOTIFIER` silence the *notice*, not the
+  version display, and reading it never leaves the machine. `/api/update-status` gained `ready`:
+  the old "notice is null" could not tell *up to date* from *the check has not finished*, which is
+  harmless for a badge that draws nothing either way but would have left the commit permanently
+  absent. The wire shape moved to `common/updateStatus.ts` and `useUpdateStatus` became a single
+  module-level poller, since the badge and the version row are two readers of one answer.
+  Requested by [@chikara813](https://github.com/receptron/mulmoterminal/issues/1520).
+- **A mark per agent in the Agent Picker** (#1521): each built-in agent shows the shape it already
+  wears in the rate-limit gauge — Anthropic's burst, Codex's crossed loops, Antigravity's
+  four-point star, Grok's broken X, Muse's M — so an agent looks the same wherever it is named, and
+  the marks inherit `currentColor` so the selected row's mark brightens with its label. The two
+  options that are not agents get a Material Symbol instead: **Shell** a terminal, and a custom
+  agent a slider — deliberately not Claude's burst, since a row indistinguishable from the Claude
+  row is the problem being fixed. The label moved into its own span, because a Material Symbol is a
+  ligature and its name is real text inside the button.
+- **A seed prompt too long for the command line goes to a file** (#1522): `tmux new-session -A … --
+  <bin> <args>` refuses a command line past a limit shared by everything on it, and over that limit
+  tmux answers `command too long` and **the session dies** — a worse failure than the Windows one,
+  and not Windows-only. Measured on tmux 3.7b: one 16,375-byte argument fails, and two 10,000-byte
+  arguments fail together, which is what makes the budget the whole line rather than one argument.
+  A seed over **4,096 bytes** now goes to a file on every platform. Measured in **bytes**, not
+  characters: tmux counts bytes and Japanese is three per character, so 2,000 Japanese characters
+  (6,000 bytes) goes to a file while the same count of ASCII does not.
+- **A multi-line seed prompt no longer breaks Windows launches** (#1519): `grok`, `antigravity` and
+  `muse` put the seed straight on the command line, and `codexifySkillSeed` always produces
+  multiple lines — so on a `.cmd` install, launching any of the three with a skill failed with
+  `UnsafeArgumentError` every time. The seed is written to a file and the command line carries one
+  line naming it. Narrowed to the case that cannot work otherwise: non-Windows is unchanged, and so
+  is a single-line seed on Windows. Same bug family as 4.7.0's `--append-system-prompt` fix.
+  Reported by [@chikara813](https://github.com/receptron/mulmoterminal/issues/1518).
+- **Two duplicate-code alerts closed** (#1525): the guards in front of a collection's record
+  actions were copied between the parent route (`POST /:slug/items/:itemId/actions/:actionId`) and
+  the view-token route (`POST /:slug/view-data/actions/:actionId`) — action 404, read-only 405,
+  record 404 and the `actionVisible` 409. They are now one module, `collectionActionGuards.ts`,
+  which is what stops the pair drifting into "the action pushed from a view has a different state
+  gate". Behaviour is unchanged: same statuses, same wording, same per-route check order. jscpd
+  reports 0 clones where it reported 2.
+
+## mulmoterminal@4.7.0 — 2026-08-07
+
+> **Setup guide:** [Muse, and the GUI tools it was not supposed to be able to reach](https://receptron.github.io/mulmoterminal/guide/en/v4.7.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.7.0.html))
+
+**Muse is the fifth first-class agent, and its cells reach the GUI tools** — the thing the previous
+release said was impossible. It was impossible only under a wrong premise: Muse does have MCP,
+behind an experimental flag of its own, through a mechanism neither of the other agents uses.
+
+With five agents in the picker, "which one, and what does it cost me" outgrew a table row, so the
+guide gains a page for it. And on Windows, every Claude session can start again.
+
+- **Muse as a first-class agent** (#1512): `muse` joins Claude / Codex / Antigravity / Grok in the
+  Agent Picker with its own `/ws/muse` endpoint, spawner (`muse --yolo --workspace <cwd>`, resume as
+  `muse resume <id>`), session discovery through its SQLite index, and a `mu` badge. The header
+  carries the model and context the same way the other agents do, read from the session log's
+  `model_completed` records: `Muse · ctx%` plus the token arrows. Point the CLI elsewhere with
+  `MUSE_BIN`, override the model with `MUSE_MODEL`.
+- **GUI MCP for Muse cells** (#1514): a Muse cell now gets the tool groups its DIRECTORY switched
+  on. Muse takes neither a `--mcp-config` URL nor a per-directory config file, so this is a third
+  route: MulmoTerminal registers ONE plugin holding all four group servers — `muse plugins install`
+  records per MACHINE, so the registration cannot express "this directory" — and narrows each
+  SESSION back to its directory's switches. Nothing reaches a plugin's MCP server but its command
+  line (its environment is curated to 16 variables, all of Muse's own, and an `env` block in the
+  manifest is dropped silently), so the group and port go in argv and the session is ASKED for:
+  `POST /api/mcp-resolve` walks the bridge's process tree and matches it against `tmux list-panes`,
+  which is exact enough to tell two Muse cells in one directory apart. A group the session is not
+  entitled to serves an EMPTY toolset rather than an error, so a cell with one group on does not
+  show three broken servers. Verified end to end against a real cell: exactly the four `render`
+  tools, and a `presentChart` call writing a real chart into that session's workspace. The bug that
+  hid all of it was a route collision — `POST /api/mcp/resolve` was swallowed by `/api/mcp/:sessionId`
+  and answered `400`, which the bridge reads as "no session", so the feature failed by serving zero
+  tools with nothing logged; the route is now `/api/mcp-resolve` and logs both outcomes.
+  Requires Muse's own `MUSE_EXPERIMENTAL_PLUGINS=1`; without it a Muse cell still starts, with no
+  GUI tools and one warning.
+- **Muse review fixes** (#1513): a resumed session dropped `--workspace`, which is what registers
+  the policy-gated workspace tools — the conversation came back without them. The context badge read
+  a HIGH-WATER mark (`input_tokens` is the context a call ran with, not an increment), so it never
+  came down after a compaction: `ctx 397k` against a live 266k, telling the user to `/compact` when
+  they need not; it now reads the last completed call, which is what the codex and grok badges mean.
+  The badge poll re-read the whole session log every time — 33 MB after a day, once per cell per
+  minute — and now folds through `transcript-fold` as grok's does: 105 ms cold, 2 ms warm, with
+  byte-for-byte the same totals. Every sqlite question was a full-table scan filtered in JS,
+  including the spawn watcher that asks twice a second for 15 s; all are now `WHERE`-keyed. A claude
+  cell paid for muse on every poll through a self-healing fallback that fired whenever a claude read
+  came back empty — the normal state of every claude cell before its first turn. And muse looked up
+  per-directory MCP config it cannot use, now gated by `readsDirectoryMcpConfig`.
+- **A guide page for choosing an agent** (docs): **Which coding agent** covers all five —
+  what each needs installed and its `*_BIN` / `*_MODEL` overrides, where its conversations live and
+  therefore why only it can resume them, the three different routes to the GUI tools (a per-session
+  URL for Claude and Codex, a file in the directory for Antigravity and Grok, a per-machine plugin
+  for Muse) and why that is a property of each CLI rather than a setting, and what the header badges
+  mean. It also covers the two things that widen what "Claude" means — a `providers` entry for any
+  Anthropic-compatible backend, and a `customAgents` entry for your own way of starting Claude Code —
+  and why a launch command is none of these. The Agent Picker row in Basics gains Muse and a link.
+- **Windows: `appendSystemPrompt` no longer stops every Claude session from starting** (#1516,
+  #1517): a Windows command line has no encoding for CR/LF/NUL — CR/LF end the line, NUL ends the
+  string — so `escapeBatchArgument` refuses an argument carrying one rather than mangle it, and the
+  default `--append-system-prompt` is a 44-line preset. A `.cmd`-installed Claude therefore could not
+  be launched at all, on every session, since 2.3.0. There is nothing to escape it INTO: substituting
+  the newlines away would hand the agent a different instruction, which is the exact failure the
+  throw prevents. The repo already had the answer — `--settings` and `--mcp-config` travel as a PATH
+  on Windows because "a path has no quotes and no metacharacters, which removes that layer rather
+  than escaping through it" (#813) — and `--append-system-prompt`, added later in #942, was the one
+  argument outside that rule. It now uses `--append-system-prompt-file` there; off Windows nothing
+  changed. The stated reason for inline (a Docker sandbox that could not read a host path) had gone
+  when that sandbox was removed in #1195. Orphan cleanup learned the new file: its name parser was
+  `.json`-only, so a `.txt` would never have been swept. The Windows argv test now runs through the
+  real cmd-escape rather than checking for quotes — #813 was a quote and #1516 was a newline in a
+  flag added two years later, and a test that checks the characters it knows about only catches the
+  bug it was written for. Reported by @chikara813, who identified the exact release that introduced
+  it.
+- **Collection documentation caught up with the code** (#1492, #1510): the places where
+  MulmoTerminal's `/api/*` paths deliberately differ from MulmoClaude's are written down rather than
+  left to be rediscovered. Documentation and comments only; no runtime change.
+
+## mulmoterminal@4.6.1 — 2026-08-06
+
+> **Setup guide:** [Rooms, and a grid that keeps up with a flood](https://receptron.github.io/mulmoterminal/guide/en/v4.6.1.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.6.1.html))
+
+Two halves. **The conversation between cells now has somewhere to live**, and **a busy cell has
+stopped slowing down the command it is showing.**
+
+Round table (4.6.0) carried one cell's reply into the next cell's input box, and that was all it
+was — the conversation existed while it ran and nothing held it. A **room** is that conversation kept
+apart from the cells having it, so a person, a shell or a CI job can take part in something that
+until now only cells could reach. The limit from 4.6.0 is unchanged and deliberate: no MCP tool, no
+way for an agent to discover a room, no way for one to start a conversation. A human seats the cells.
+
+The performance half is a single wrong complexity. `appendBoundedOutput` kept a session's replay
+tail by slicing, which flattens, so **every chunk cost the size of the whole tail** — a megabyte of
+copying for a few dozen bytes. That was 86% of a core during a flood, and it was CPU not being spent
+reading the pty, so the child process waited for its own output to be collected. Six cells running
+the same heavy command took 8.2 s; they now take 2.2 s, against a floor of 1.9 s for the six shells
+with no app involved at all.
+
+- **Rooms: an append-only log a conversation is kept in** (#1456, #1476): one file per room at
+  `~/.mulmoterminal/rooms/<id>.jsonl`, one JSON object per line, plus the HTTP surface
+  (`GET /api/rooms`, and `GET` / `POST` / `DELETE` on `/api/rooms/:room`) and a
+  `mulmoterminal room list | read | post` CLI that talks to a running server over loopback.
+  Everything after `--` is message text, so a post can carry flags. `--from` is a display label and
+  nothing authenticates it.
+- **Rooms in the browser: see them, enter one, choose another** (#1456, #1483): **Rooms** in the
+  toolbar (the forum icon, beside Pull requests) lists every conversation with its messages and a box
+  to post into yourself — the same door a shell uses, since the agents are typed into by the runner
+  and can call nothing. A cell's forum menu reaches the running table's room with **read the
+  conversation**. The picker's **room** box does naming and reuse together: empty mints
+  `table-2026-08-06-…`, a name that already exists **continues** that conversation, and the seats read
+  the earlier turns back before they speak. Names are lowercase letters, digits and `-`, up to 64
+  characters, refused rather than silently replaced. Two round-table behaviours change with it: a
+  speaker is handed **the whole conversation so far** instead of only the previous reply, and a seat
+  that uses tools before answering contributes its real answer.
+- **Sessions that survived a restart are listed where they can be stopped** (#1478, #1479): a new
+  Settings section shows every terminal still running from an earlier server, **across all
+  directories** — where it runs, what it is, how long it has been idle, and whether ending it loses
+  anything. **Stop** ends that one session; a conversation with a transcript resumes afterwards.
+  Before this the process was still running and no screen admitted it.
+- **Unused sessions are ended at the next start** (#1467, #1486): `sessionIdleReapDays` (default 7,
+  `0` disables, 0–365) bounds how long a terminal may sit with nobody attached and no output. Rows the
+  sweep will take are marked **ends at next start**, so it is visible in the list it acts on. The
+  change is also a decomposition: one predicate had been answering three different questions —
+  "may this be reaped", "is this resumable", "should this be listed" — and separating them is what
+  made the sweep safe to add.
+- **A busy cell no longer starves the pty it is reading** (#1506, #1508): `growOutputTail` appends by
+  concatenation (which V8 keeps as a rope, so O(chunk)) and pays for the exact bound only once per
+  `TAIL_SLACK`-worth of output; the two readers — the reattach replay and the phone's headless screen
+  fallback — cut it back themselves. `TAIL_SLACK` is 1.25 rather than 2 because an unflattened rope
+  costs several times its character count, measured per session at 1.00 MB before, 2.54 MB at 1.25 and
+  6.45 MB at 2. Draining the pty at full speed multiplies the reads it produces, so output is also
+  batched into frames (8 ms, sent at once when idle so a keystroke echo never waits, capped at
+  256 KiB, and not queued at all while no browser is attached): about 8000 frames became about 35 for
+  the same bytes, with the same content in the same order and an identical replay on reattach.
+- **A killed tmux client no longer takes its session with it** (#1496, #1504): losing the client and
+  the program finishing are two different events, and only one of them means the session is over.
+  Under tmux the pty this app holds is a *client*, so a client killed from outside used to be read as
+  an exit and tore down a session that was still working.
+- **Claude's turn boundary is read from `stop_reason`, not inferred** (#1487, #1494): whether a turn
+  has ended now comes from what Claude reports, so a cell's working state agrees with the agent
+  instead of with a guess over its output.
+- **A model id may carry Claude Code's `[1m]` extended-context suffix** (#1503, #1505):
+  `claude-opus-4-5[1m]` in a provider config is accepted instead of rejected as malformed. The
+  provider-id and model-id rules are deliberately asymmetric — only the model id takes the suffix —
+  and a spec pins that asymmetry.
+- **Tool-call history costs less to keep** (#1507, #1509): the per-session history was re-serialised
+  in full and written to disk on **every** tool call, twice (PreToolUse and PostToolUse) — 3.8 ms of
+  blocked event loop for a 3.4 MB list, plus those megabytes on their way to disk. Saves landing in
+  one 50 ms window now share a write: for 100 tool calls (200 saves) that is 3 writes when tools
+  return instantly, 12 at 5 ms, and still only 101 at 200 ms. One session's writes are also
+  serialised, closing a pre-existing hole where two `writeFile` calls truncating the same path
+  concurrently could leave a file that was neither version, and at most one write ever waits behind
+  the running one — chaining per save would have queued writes that all put the same bytes on disk.
+- **A record with a pending completion bell is now visible in the board** (#1491): the collection
+  view's Kanban cards accent (red for urgent, amber for a nudge) when a completion watcher has an
+  open bell for that record. The publishing half already ran — `collectionWatchers` writes into the
+  shared notifier file, and MulmoTerminal's bell has shown those entries for some time — but the
+  binding the plugin asks for the per-record severities returned an empty map, so nothing in the
+  board reflected it. It now reads the live bell, which means a bell **MulmoClaude** published
+  accents the same card here. Read-only: the one-bell-per-record rule stays where it was enforced,
+  on the shared `legacyId` server-side.
+- **Custom views catch up to MulmoClaude's host surface** (#1490): a collection's custom view can
+  now read its translations, resolve a stored image, and press a declared mutate action — the three
+  things core's own authoring docs (which MulmoTerminal serves to the agent through
+  `manageCollection`'s `schemaDocs`) already told view authors it could.
+  `GET …/view-i18n` returns the active locale's dict, and the iframe bootstrap gained the
+  `__MC_VIEW.dict` / `__MC_VIEW.t(key, named)` half of the bridge it had been missing entirely — an
+  i18n-declaring view used to render raw keys, with nothing reporting a problem. `GET
+  …/view-data/image` turns an image field's stored path into a downscaled `data:` thumbnail, which
+  is how a desktop view shows a picture at all (the sandboxed iframe cannot put its token on an
+  `<img>`); the authorization rule is the record scan itself, so only a **current** value of an
+  image field resolves and never an arbitrary workspace file. `POST
+  …/view-data/actions/:actionId` lets a write-capable view press a declared **mutate** action
+  instead of hand-rolling the same transition as a raw write — mutate only, so a view token still
+  cannot start LLM work. All three run the shared `@mulmoclaude/core` engines, and the two scoped
+  ones sit behind per-minute budgets with images in a roomier bucket than actions.
+- **Remote-host collection and feed records go through the store seam** (#1488, #1495): the phone's
+  path read them directly, so the two hosts could disagree about the same record.
+- **REST item writes are checked against the schema before anything is written** (#1489, #1497):
+  create and update are gated rather than validated after the fact.
+- **Windows CI** (#1481, #1482, #1484, #1485): `worktree-pr.spec` no longer spawns the real `gh` and
+  time out, and two rooms tests that depended on POSIX permission semantics are skipped there. Both
+  were about the tests, not the app.
+
+## mulmoterminal@4.6.0 — 2026-08-06
+
+> **Setup guide:** [Cells that talk to each other, and a history that knows whose it is](https://receptron.github.io/mulmoterminal/guide/en/v4.6.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.6.0.html))
+
+Two cells can now hold a conversation **without you pressing anything between the turns**. Round
+table generalises Cross-terminal talk — one human-pressed round trip since #550 — into a ring of up
+to five seats running for a set number of turns, and it does so without giving the agents a single
+new capability: no MCP tool, no room, no way for an agent to start a conversation or to discover
+that another cell exists. A human picks the seats; the browser's runner reads one cell's answer and
+types it into the next.
+
+The rest of the release is about **the other three agents catching up with Claude**. The launcher's
+resume list was Claude's transcript directory whatever the Agent Picker said, so a Codex, Grok or
+Antigravity conversation started outside a grid cell was unreachable from any screen. And the two
+header badges — the model with its context percentage, and what the conversation has spent — only
+ever appeared on a Claude cell. Both now answer for the agent you actually picked.
+
+### Added
+
+- **Round table — the cells talk to each other, for a set number of turns** ([#1458](https://github.com/receptron/mulmoterminal/pull/1458), refs [#1456](https://github.com/receptron/mulmoterminal/issues/1456) and [#1454](https://github.com/receptron/mulmoterminal/issues/1454)).
+  Open a cell's handoff menu, tick the cells that should take a seat, choose a turn budget, press
+  start. From then on each agent's answer is carried to the next seat as the next prompt, around the
+  ring, until something stops it.
+
+  **No new agent capability, and zero MCP tools.** The runner already does both of the things it
+  would otherwise have handed the agents — it *reads* another cell's last turn (`fetchLastTurn`) and
+  it *types into* a cell and submits (`pasteAndSubmit`) — so the runner does it on their behalf and
+  each agent just talks in its own terminal as always. Two of the three worries raised on #1456
+  therefore disappear rather than being mitigated: an agent cannot start a conversation because it
+  has no tool for it, and cannot find a partner because it cannot see other cells at all.
+
+  The seat picker is **the only admission control**: at most five seats, and a turn budget of 4, 6,
+  10 or 20 (default 6). One turn is one real agent turn, so that number is a runaway guard and a
+  wallet setting at the same time. The ring stops on **agreement** (a reply containing the line
+  `ROUND-TABLE-DONE`, matched whole-line so that *discussing* the marker does not end the
+  conversation), on the budget, on a seat not answering in time, on you pressing stop, on the cell's
+  session being swapped, and on a failed send. Closing the cell stops it too.
+
+  One trap is worth recording, because getting it backwards silently corrupts the ring: the framing
+  text ("your turn", "write the marker if you agree") is always a **prefix**. Replies are correlated
+  to sends by the *last* 160 characters of what was sent — the opening is identical every round — so
+  appending the framing would make every round's tail identical, match the *previous* round's
+  prompt, and read a reply that has not arrived yet as the answer. A spec pins the failure.
+
+  This is v1, and the runner lives in the browser: closing the tab ends the ring. No room store, no
+  HTTP API, no MCP tools, no human or shell seats, no persisted minutes — [#1456](https://github.com/receptron/mulmoterminal/issues/1456) stays open for those.
+
+- **The launcher's resume list is the picked agent's own history** ([#1449](https://github.com/receptron/mulmoterminal/pull/1449), closes [#1417](https://github.com/receptron/mulmoterminal/issues/1417)).
+  "OR RESUME HERE" read `~/.claude/projects` whatever the Agent Picker said, so choosing Codex,
+  Antigravity or Grok still offered *Claude's* conversations — and clicking one connected that
+  agent's endpoint to a key that only ever named a Claude transcript. Meanwhile every real codex /
+  agy / grok conversation started outside a grid cell was unreachable from the UI.
+
+  The list is now a function of the agent: one route per agent (`/api/sessions`,
+  `/api/codex/sessions`, `/api/antigravity/sessions`, and the new `/api/grok/sessions`), chosen from
+  a `Record<TerminalAgent, …>` so a fifth agent is a type error rather than a picker option that
+  silently lists Claude's history. Switching the picker replaces the list, the heading names the
+  agent when it is not Claude, the resume carries the agent so the cell connects the endpoint that
+  wrote the conversation, and Shell shows no list at all. A custom agent runs Claude Code, so it
+  gets Claude's.
+
+  The `/api/codex/sessions` and `/api/antigravity/sessions` routes existed since #1096 / #1218 with
+  **no caller** — they were built for the single view's sidebar, which #1201 / #1202 removed. This
+  is the call site they were kept for. `/api/grok/sessions` is new and is the cheapest of the four:
+  `~/.grok/sessions` is partitioned by working directory, so a per-project listing is one directory
+  read, with `summary.json` supplying the title and the last-*active* time (not `updated_at`, which
+  grok bumps hours later when it generates a title, and which would sort a dead conversation above a
+  live one).
+
+  All three foreign lists now also carry `attached`, the field that stops a row being opened twice.
+  For codex and antigravity it takes the conversation log read backwards: a conversation started
+  from a grid cell is held under a session key MulmoTerminal minted, so asking about the
+  conversation id alone would report it free while it is live in another cell — and resuming it
+  would start a second agent process on it. grok needs no log for this, because MulmoTerminal mints
+  its session id: the key and the conversation id are the same string, so the row's own id answers
+  the question.
+
+- **Every agent's cell says which model it is running and how full its context is** ([#1466](https://github.com/receptron/mulmoterminal/pull/1466), closes [#1465](https://github.com/receptron/mulmoterminal/issues/1465)).
+  The two badges on the first line of a cell header — `Opus · ctx 35%` and `⇡427k ⇣1.8k` — appeared
+  on Claude cells alone. This was never a UI decision: `modelBadge.ts` has always been
+  agent-agnostic, and the badges hide themselves when there is nothing to show. The cause was that
+  `readSessionSummary`, behind `GET /api/session/:id`, read only Claude Code's transcript format, so
+  the other three agents got `{ model: null }` and zeroes.
+
+  The route now picks a reader from `?agent=`. **Claude's path is untouched** — no parameter means
+  claude, and those two fields still come out of the summary fold the route already ran. Each agent
+  answers only from what its own log actually records: Codex reports `gpt-5.5 · ctx 33%` from
+  `token_count` events, with the window taken from codex's own `model_context_window` rather than
+  the client's per-model table, which has been wrong (#985). When no tokens have been counted at
+  all, the model name is shown without `ctx 0%` — the absence of a reading is not a measurement of
+  an empty context.
+
+- **An Antigravity cell reads its real model, context and token usage** ([#1469](https://github.com/receptron/mulmoterminal/pull/1469)).
+  #1466 gave agy the fixed label `antigravity`, on the reading that its logs record neither a model
+  id nor tokens. Measured against the data, that was wrong on all three counts. agy writes the model
+  it is on at the start of **every** conversation (50 of 50 transcripts, always at step 0), which
+  makes it a fact about *that conversation* — unlike `settings.json`, which is global and current.
+  So the badge reads `Gemini 3.6 Flash` from the transcript's head, `ctx 78%` against agy's measured
+  256,000-token window, and `⇡ ⇣` beside it.
+
+  There is no schema for any of it, so every layer is built to show **nothing rather than something
+  wrong**: the parser walks only the requested path and stops without resynchronising at bytes it
+  does not understand, and the accounting layer discards the *whole* answer when a window is outside
+  1 KB–100 M, when `used` exceeds the window, when a count passes a billion, or when a leaf is
+  missing — a partial sum is not a small number, it is a wrong one. The two badges are independent,
+  so an unreadable accounting still leaves the model name. If agy renumbers its fields, the cell
+  falls back to the model name alone; it will not print a wrong percentage.
+
+- **A Grok cell shows how full its context is, and what it has spent** ([#1471](https://github.com/receptron/mulmoterminal/pull/1471), closes [#1470](https://github.com/receptron/mulmoterminal/issues/1470)).
+  #1466 left grok with the model alone, on the finding that its conversation directory holds no
+  token accounting. That was true of the two files it read (`summary.json`, `events.jsonl`) and
+  false of the directory. grok writes `signals.json` — rewritten whole each turn, carrying the
+  current context, the model's real window (500,000 for grok-4.5) and the model — plus one
+  `turn_completed` record per turn in `updates.jsonl` with that turn's tokens. So a Grok cell now
+  reads `Grok · ctx 33%` with the `⇡ ⇣` badge beside it, and like codex it never consults the
+  client's window table.
+
+  The per-turn usage is summed rather than tailed — it rises and falls per turn, so only the whole
+  file answers — which stays affordable because the fold from #1377 charges a later poll only for
+  the bytes the last turn appended. Neither grok nor antigravity drives activity flags, so their
+  badges refresh on the once-a-minute timer instead of at turn end; without it, the first reading a
+  cell took would be the only one it ever showed.
+
+- **A conversation left running with nobody attached says so, and can be stopped from the launcher** ([#1474](https://github.com/receptron/mulmoterminal/pull/1474), part of [#1467](https://github.com/receptron/mulmoterminal/issues/1467)).
+  The `or resume here` rows already answered "is anyone holding this" via `tmux list-clients` —
+  which reports **only** sessions that have a client, so the sessions that actually accumulate,
+  running with nobody attached after a server restart, were structurally invisible to it. One
+  `tmux list-sessions` per list was what was missing. Such rows are now marked, and only they get a
+  **stop** button: a row marked `● open` belongs to the terminal holding it, and ending it from
+  another cell's launch form would pull a session out from under a tab you cannot see from here.
+
+  It asks before stopping, because the in-flight turn is lost. The conversation is not — the
+  transcript stays and the row can be resumed afterwards. What is stopped is the *session key*
+  MulmoTerminal minted, not the row's conversation id; for codex and agy those differ, and killing
+  the wrong one would report success having killed nothing.
+
+  **[#1467](https://github.com/receptron/mulmoterminal/issues/1467) stays open.** It asks for
+  automatic cleanup, and this is the manual half. The list is per directory and per agent, so it
+  does not reach a project you no longer open — which is where the reporter's sessions are. Measured
+  on one machine with 21 surviving sessions: 12 attached, **5 unattached with claude still running**
+  and idle 10–11 hours, 4 unattached with no transcript, and 0 where claude had exited. So what
+  accumulates is live agent processes nobody is attached to, and the issue's own proposal
+  (`cleanup-orphans` at boot) would reap 4 of those 21 — none of them the 5.
+
+### Changed
+
+- **Four `jscpd/duplicate-code` alerts closed by extracting shared helpers** ([#1473](https://github.com/receptron/mulmoterminal/pull/1473), refs [#1472](https://github.com/receptron/mulmoterminal/issues/1472); follow-up comment in [#1475](https://github.com/receptron/mulmoterminal/pull/1475)).
+  Behaviour is unchanged. All four alerts had the same cause — something added later copied the
+  same-shaped code next to it, `icon` from `sound` and grok from antigravity — and the real bug is
+  the drift where only the copy gets fixed, which is exactly how #1441 happened. So the copies were
+  merged into shared helpers (`resolveFileWithinDir`, `liveSessionFacts` / `resolveResumableSession`,
+  `handleDirectoryMcpAgentConnection`, `startDirectoryMcpPty`) rather than deleted, making it
+  impossible to fix one side alone.
+
+- **`@mulmoclaude/core` 2.1.0 and `@mulmoclaude/markdown-plugin` 2.3.0** ([#1477](https://github.com/receptron/mulmoterminal/pull/1477)).
+  Dependency bump only, no source changes. It also removed a second copy of `core`: the other
+  plugins declare `^2.0.0` / `^2.0.1` and yarn 1 does not dedupe those onto a newer resolution, so
+  2.0.1 was being installed beside 2.1.0.
+
+## mulmoterminal@4.5.1 — 2026-08-05
+
+> **Setup guide:** [A backend with no models says so](https://receptron.github.io/mulmoterminal/guide/en/v4.5.1.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.5.1.html))
+
+A fix release for two things that looked, from the outside, like the app simply not responding: a
+backend you could see but not select, and a button that did nothing at all.
+
+### Fixed
+
+- **A provider with no models is explained rather than drawn as a row you cannot click** ([#1461](https://github.com/receptron/mulmoterminal/pull/1461), closes [#1432](https://github.com/receptron/mulmoterminal/issues/1432)).
+  A custom backend appeared in the launch form's MODEL dropdown and could not be selected by a click
+  or with the arrow keys. It was never an option: a provider whose `models` is empty rendered as
+  `<optgroup label="DeepSeek"></optgroup>` — a group header with nothing under it, which a browser
+  draws as a shaded row that the mouse and the keyboard both skip.
+
+  Two silent paths lead there, and the report hit at least one. The measured presets are
+  **OpenRouter's alone** — they are matched by the provider's `id`, so a backend registered as
+  `deepseek`, `moonshot` or a company gateway starts with no models and must list its own. And a
+  malformed `models` entry (`[{"id": "…"}]`, a value with a space, a `models` that is not an array)
+  was dropped by the config schema **without a word**, so the file listed models while the UI had
+  none.
+
+  The picker now offers only backends that are reachable **and** have a model to pick; the rest are
+  named. The link beside the MODEL label reads **Needs attention**, and the panel behind it carries
+  the sentence — `provider 'deepseek' has no models to pick — list its model ids under "models" in
+  ~/.mulmoterminal/config.json (only 'openrouter' has built-in presets)`. Settings' **Models and
+  backends** marks such a backend **not in the picker** instead of `ready`, and the server names
+  every model id it dropped, on the terminal it was started from.
+
+  The `mulmoterminal-model` skill and both providers guides said the opposite — *"do not write a
+  `models` array, registering the provider is enough"* — which is true only under the id
+  `openrouter`, and is what produced the broken entry. Corrected in all three.
+
+- **`Choose a folder…` works on Linux and WSL2 without zenity** ([#1463](https://github.com/receptron/mulmoterminal/pull/1463), closes [#1447](https://github.com/receptron/mulmoterminal/issues/1447)).
+  Without `zenity` installed the button did nothing at all — no dialog, no message. Two faults, both
+  fixed: the server spawned `zenity` unconditionally on anything that was not macOS or Windows, and
+  all three call sites in the UI discarded the resulting 500.
+
+  The picker now tries what the host actually has: macOS `osascript`, Windows PowerShell, **WSL2 the
+  Windows dialog over interop** (`powershell.exe`, with the returned path converted by `wslpath` —
+  nothing to install), and a Linux desktop `zenity` → `kdialog` → `qarma` → `yad`. When none exists
+  the UI **says so** rather than appearing broken, and `init` reports on Linux which dialog this host
+  has. `POST /api/open-dir` carried the same swallowed-failure bug and was fixed with it.
+
+- **The launch form's controls have a width again** ([#1460](https://github.com/receptron/mulmoterminal/pull/1460), after [#1455](https://github.com/receptron/mulmoterminal/pull/1455)).
+  Every row of the form was capped at 360px, so a wide cell drew a narrow centred column — 25
+  directory chips wrapped into 20 rows inside 360px while the cell was 1535px wide. #1455 removed the
+  cap, which fixed the chips and stretched everything else: at a 1535px cell a checkbox sat most of a
+  screen from its label. The two are now separate — **chips take the whole cell** (they tile, so
+  width buys rows back), **every other control shares one 560px cap**, and the agent picker keeps its
+  own content width.
+
+- **Four path-dependent tests that failed only on Windows** ([#1462](https://github.com/receptron/mulmoterminal/pull/1462)).
+  `Windows (daily)` had been red on main across both Node 22.x and 24.x while lint, typecheck and
+  build were green. All four expected path shapes Windows does not produce — a `path.join`ed
+  candidate that is a `/`-separated constant, a drive-less absolute path that `path.resolve` completes
+  with the current drive, and a temp dir resolved by the JS `realpathSync` where production uses
+  `.native` (which is what expands an 8.3 short name). Windows does not run on `pull_request`, which
+  is how they reached main green on macOS.
+
+### Documentation
+
+- **The 4.5.0 setup guide covers the whole release** ([#1451](https://github.com/receptron/mulmoterminal/pull/1451)).
+  It had shipped covering `repo.json` only; it now documents `worktreeEnv`, Grok and `customAgents`,
+  and the twelve settings that gained controls — each with a screenshot taken against a running
+  server.
+- **Release pages have their own `nav_order` range** ([#1452](https://github.com/receptron/mulmoterminal/pull/1452), [#1453](https://github.com/receptron/mulmoterminal/pull/1453)).
+  The sidebar read *4.5.0 → glossary → 4.4.0*: the version pages had grown into the numbers the
+  reference pages occupy, and just-the-docs breaks a tie by title. The reference guide now keeps
+  **1–999** and release pages start at **1001**, newest first, so the two ranges cannot meet again.
+
+## mulmoterminal@4.5.0 — 2026-08-05
+
+> **Setup guide:** [repo.json, a port per worktree, Grok, and settings you can reach](https://receptron.github.io/mulmoterminal/guide/en/v4.5.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.5.0.html))
+
+A repository can now **say what it is**, and MulmoTerminal listens. `repo.json` is a small open
+metadata file at a repository's root — name, description, icon, colour — that any tool displaying
+repositories can read, not a file this app invented for itself. A project ships one and its cell
+carries its own mark and palette everywhere it appears.
+
+The gap it fills is measurable. Across 157 git repositories on one machine, **5 had a web app
+manifest and 26 had any icon at all** — every one of them a web project. The other 131, the ML
+repos and CLI tools and libraries you actually open in a terminal, had nowhere to put this.
+Those 131 are what the format is for.
+
+Also in this release: each git worktree can be handed **its own dev-server port and database name**,
+**Grok** joins the Agent Picker as a first-class agent, and the settings that could only be reached
+by hand-editing JSON now have controls.
+
+### Added
+
+- **`repo.json` — an open repository metadata file** ([#1440](https://github.com/receptron/mulmoterminal/pull/1440) spec, [#1445](https://github.com/receptron/mulmoterminal/pull/1445) implementation, closes [#1438](https://github.com/receptron/mulmoterminal/issues/1438) and [#1442](https://github.com/receptron/mulmoterminal/issues/1442)).
+  Four lines give a project a named, coloured, icon-bearing cell:
+
+  ```json
+  { "name": "diffusion-lab", "icon": "docs/logo.png", "color": "#7c3aed" }
+  ```
+
+  **One colour becomes seven.** The header takes it exactly; the badge, border, status dot, buttons
+  and cell body are derived from its hue; the header text is derived for contrast and is never
+  declared, so it stays readable whatever colour a project picks. The derivation is measured, not
+  invented — against eleven hand-tuned palettes it lands at a **median ΔE76 of 1.9, worst case 2.5**,
+  and one derived value came out byte-identical to the hand-picked one. The measurement's finding
+  was that no single rule fits every role: the badge sits *relative* to the brand colour while the
+  surfaces sit at *absolute* lightness, and using either rule alone drifts by ΔE 15–20 at one end of
+  the hue wheel.
+
+  Three layers, general to specific — `repo.json` → `.mulmoterminal.json` →
+  `.mulmoterminal.local.json` — each replacing whatever keys the one below it set. Anything this app
+  understands that the open format doesn't goes under `extensions.mulmoterminal`.
+
+  The [specification](https://receptron.github.io/mulmoterminal/repo-json.html) is written to be
+  implemented by anyone. Its rules are the interesting part: paths resolve against the repository
+  (not a web root, which is what makes every other format web-only), a consumer keeps looking until
+  an icon *resolves* rather than stopping at the first that exists, and text colour is derived
+  rather than declared so two conforming tools reach the same answer.
+
+- **A project's own favicon is picked up with no configuration** ([#1429](https://github.com/receptron/mulmoterminal/pull/1429), closes [#1428](https://github.com/receptron/mulmoterminal/issues/1428)).
+  A directory that names no icon shows the one its repository already ships: `public/favicon.svg`,
+  `apple-touch-icon.png`, `favicon.png`, `favicon.ico`, then a web manifest's largest non-maskable
+  icon. Ordered by how the image survives being drawn at 14px rather than by how common it is, and
+  `docs/logo.png` is deliberately *not* searched — a "logo" is as often a wide README banner as an
+  icon. On by default; Settings → **Directory appearance** turns it off, or `"icon": false` does for
+  one project.
+
+- **An image icon on every cell** ([#1427](https://github.com/receptron/mulmoterminal/pull/1427), closes [#1421](https://github.com/receptron/mulmoterminal/issues/1421)).
+  The mark appears at the **left edge** of the cell header — the browser-tab position — and on the
+  cockpit roster, the filmstrip thumbnails and the launcher's directory chips. PNG, JPEG, **animated
+  GIF** (it plays), WebP, AVIF, SVG, ICO and BMP; a path inside the directory, an `http(s)` URL or a
+  `data:` image. A file is served through a route that types the response from our own extension map
+  and sets `nosniff` + `Content-Security-Policy: sandbox`, so allowing SVG costs nothing.
+
+- **`.mulmoterminal.local.json` — per-checkout overrides** ([#1431](https://github.com/receptron/mulmoterminal/pull/1431), closes [#1430](https://github.com/receptron/mulmoterminal/issues/1430)).
+  Several clones of one repository share a project config and differ only in the colour that tells
+  them apart in the grid. The local file replaces whatever top-level keys it names; the shared file
+  keeps everything else. Both trigger the live reload, and Settings names both files and lists which
+  keys the local one took over — because with more than one file, "which won" is the question.
+
+- **A dev-server port and database name per worktree** ([#1435](https://github.com/receptron/mulmoterminal/pull/1435), closes [#1367](https://github.com/receptron/mulmoterminal/issues/1367)).
+  Declare a variable once and each worktree gets its own value, so two `yarn dev` stop fighting over
+  port 3000.
+
+- **Grok as a fourth first-class agent** ([#1441](https://github.com/receptron/mulmoterminal/pull/1441)), beside Claude, Codex and Antigravity in the Agent Picker.
+
+- **The Agent Picker holds agents you configure** ([#1411](https://github.com/receptron/mulmoterminal/pull/1411)).
+  A `customAgents` entry is your own command line for starting Claude Code — a wrapper, a pinned
+  binary, `ollama launch claude --model … --` — and Claude Code's own arguments are appended to it,
+  so the session still resumes and still reports cost.
+
+- **Settings reaches the keys that needed hand-edited JSON** ([#1412](https://github.com/receptron/mulmoterminal/pull/1412), [#1416](https://github.com/receptron/mulmoterminal/pull/1416), closes [#1401](https://github.com/receptron/mulmoterminal/issues/1401)).
+  An inventory found nine keys no skill documented and twelve with no control anywhere. A test now
+  fails when a new global setting is added without saying where a user can set it.
+
+### Changed
+
+- **This repository ships its own `repo.json` and `favicon.svg`** ([#1448](https://github.com/receptron/mulmoterminal/pull/1448)). The favicon existed only as an inline `data:` SVG in `index.html`; it is now a file the metadata can point at.
+- **`.mulmoterminal.json` is committed rather than gitignored, and worktree inheritance writes `.mulmoterminal.local.json`** ([#1437](https://github.com/receptron/mulmoterminal/pull/1437), closes [#1436](https://github.com/receptron/mulmoterminal/issues/1436)). Committing the shared file used to switch worktree tinting off silently, because the check asked about the file it was *not* writing. A repository set up the old way still works — the shared file remains a fallback.
+- **A launcher chip runs its command line verbatim** ([#1409](https://github.com/receptron/mulmoterminal/pull/1409)). The parser that recognised `claude` or `codex` in a chip's command and rewrote it is gone. A chip that silently ran something other than what it said is what made chips and the Agent Picker impossible to tell apart.
+- **`useSessions` lost the last of the sidebar** ([#1420](https://github.com/receptron/mulmoterminal/pull/1420)) — 231 lines to 70.
+- **Plugin bumps**: `@mulmoclaude/markdown-plugin` 2.1.0 then 2.2.0, `html-plugin` 2.1.0 ([#1434](https://github.com/receptron/mulmoterminal/pull/1434), [#1444](https://github.com/receptron/mulmoterminal/pull/1444)); Antigravity agent updates ([#1446](https://github.com/receptron/mulmoterminal/pull/1446)).
+
+### Fixed
+
+- **A gentle trackpad scroll moved nothing** ([#1414](https://github.com/receptron/mulmoterminal/pull/1414), closes [#1200](https://github.com/receptron/mulmoterminal/issues/1200)). Sub-line deltas were dropped instead of accumulated.
+- **Codex conversations survive a restart** ([#1424](https://github.com/receptron/mulmoterminal/pull/1424), closes [#1418](https://github.com/receptron/mulmoterminal/issues/1418)). The rollout id lived in memory only, so a server restart plus a lost tmux session meant the conversation could not be resumed.
+- **The workspace's "all tools" check counts the agent** ([#1425](https://github.com/receptron/mulmoterminal/pull/1425), closes [#1423](https://github.com/receptron/mulmoterminal/issues/1423)).
+- **Antigravity's shared MCP config is not rewritten on a tmux reattach** ([#1446](https://github.com/receptron/mulmoterminal/pull/1446)).
+
+### Docs
+
+- **The `repo.json` specification** ([#1440](https://github.com/receptron/mulmoterminal/pull/1440)) — published at [receptron.github.io/mulmoterminal/repo-json.html](https://receptron.github.io/mulmoterminal/repo-json.html).
+- **Worktrees and header customization became their own pages** ([#1433](https://github.com/receptron/mulmoterminal/pull/1433)), the latter a screenshot-led beginner's guide.
+- **Antigravity needs Canvas registration in the workspace too** ([#1439](https://github.com/receptron/mulmoterminal/pull/1439)) — plus three places that said the opposite.
+- **The workspace rules brought in line with 4.3.0 and 4.4.0** ([#1408](https://github.com/receptron/mulmoterminal/pull/1408)); the path menu screenshotted ([#1413](https://github.com/receptron/mulmoterminal/pull/1413), [#1415](https://github.com/receptron/mulmoterminal/pull/1415)); `facts.json`'s `$schema` made to resolve ([#1407](https://github.com/receptron/mulmoterminal/pull/1407)).
+
 ## mulmoterminal@4.4.0 — 2026-08-04
 
 > **Setup guide:** [Every cell keeps its own pane, and the Canvas opens a file on its own](https://receptron.github.io/mulmoterminal/guide/en/v4.4.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.4.0.html))
@@ -113,6 +1053,16 @@ most expected and least available.
   was byte-for-byte the same action as clicking the path. `pick-file` stays (it types into the
   prompt, it does not go anywhere) and so does `pr` (it hides itself when there is no PR). If you
   configure `buttons` yourself you are unaffected.
+
+  **The GitHub menu did not go away — it moved.** That icon opened a menu of its own with three
+  items, and the same three sit below the separator in the path menu, with the same destinations and
+  the same `githubUrl` gate: **Repository**, **Issues**, **Pull requests**. Worth stating outright,
+  because the first person to go looking for that icon and conclude the feature had been deleted was
+  the maintainer. **The path menu itself is fixed** — its contents are not configurable, and nothing
+  needs restoring to get those three back. A `gh` button in your own `buttons` list still works
+  exactly as before if you want one as a permanent icon; you then have it in both places. The
+  [setup guide](https://receptron.github.io/mulmoterminal/guide/en/v4.4.0.html#header-icons) now
+  shows the open menu ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.4.0.html#header-icons)).
 
 ### Changed
 
