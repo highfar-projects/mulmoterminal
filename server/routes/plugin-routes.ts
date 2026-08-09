@@ -17,7 +17,11 @@ import { backgroundChatMessage, parseBackgroundChat, spawnModeFor, type SpawnMod
 import { registeredGuiMcpGroups } from "../infra/gui-mcp-registration.js";
 import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups.js";
 import { codexifySkillSeed } from "../agents/codex-skills.js";
-import { manageCollectionHandler } from "../infra/collection-tool.js";
+import { SESSION_HEADER } from "../backends/presentPathRoot.js";
+import { SESSION_ID_RE } from "../config/env.js";
+import { cwdForSession } from "../session/session-cwd.js";
+import { projectScopeForCwd } from "../infra/project-root.js";
+import { manageCollectionHandlerFor } from "../infra/collection-tool.js";
 import { upstreamFailureMessage } from "./plugin-narration.js";
 import type { SpawnClaudePty, SpawnCodexPty, SpawnAntigravityPty, SpawnGrokPty, SpawnMusePty } from "../session/spawners.js";
 
@@ -164,7 +168,18 @@ export function mountPluginRoutes(app: Express, deps: PluginRouteDeps): void {
   // MulmoClaude.
   app.post("/api/plugin/manageCollection", async (req, res) => {
     try {
-      const message = await manageCollectionHandler(isRecord(req.body) ? req.body : {});
+      // Scoped to the SESSION's directory, not the workspace. An agent asked to make a
+      // collection "here" means the folder its cell is open in, and the workspace-bound handler
+      // silently made it somewhere else — the read/write surface was scoped per request while
+      // this, the agent's own data plane, still resolved one fixed root.
+      //
+      // The session id rides in a header from the MCP broker, and `cwdForSession` is the same
+      // lookup presentDocument's relative paths already resolve through, so the tool and the
+      // documents it produces agree on where "here" is.
+      const header = req.get(SESSION_HEADER);
+      const sessionId = header && SESSION_ID_RE.test(header) ? header : null;
+      const handler = manageCollectionHandlerFor(projectScopeForCwd(cwdForSession(sessionId)).workspaceRoot);
+      const message = await handler(isRecord(req.body) ? req.body : {});
       return res.json({ message });
     } catch (err) {
       console.error(`[manageCollection] dispatch failed: ${messageOf(err)}`);

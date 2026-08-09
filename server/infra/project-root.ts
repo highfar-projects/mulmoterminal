@@ -168,6 +168,21 @@ export function projectRootKey(req: Request): string {
   }
 }
 
+/** The root for a SESSION's working directory — the agent's side of the same question the
+ *  query parameter answers for the browser.
+ *
+ *  No membership check, and the difference from `resolveProjectRoot` is the point: a query
+ *  parameter is client input, so it is matched against a list the server owns. A session's cwd is
+ *  the server's OWN record of where it launched that agent (`cwdForSession`), and refusing a
+ *  directory it started an agent in would mean the agent cannot manage the collections of the
+ *  folder it is standing in — which is the whole feature.
+ *
+ *  Falls back to the workspace when the caller has no session: the scheduler, a direct POST, a
+ *  boot path. Their behaviour is exactly what it was. */
+export function projectScopeForCwd(cwd: string | null | undefined): ProjectScope {
+  return { workspaceRoot: cwd && cwd.length > 0 ? cwd : requireWorkspace() };
+}
+
 /** The shared workspace, for callers that have no request: boot paths, the agent tool
  *  dispatch, the completion watchers. Separate from `resolveProjectRoot` so those callers read
  *  as what they are — "the workspace" — rather than as a request that lost its `req`. */

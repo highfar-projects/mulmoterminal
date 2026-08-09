@@ -396,7 +396,7 @@ root and nowhere else, and every item above is a place that assumption was left 
 | 7 | Self-containment check (§11.4) | MulmoTerminal | yes — useful even before 5 |
 | 8 | Watcher per root, or accept workspace-only bells (§7b) | MT + possibly upstream | decide before 5 ships |
 | 9 | No skill staging outside the managed workspace (§6.5, needs U5) | upstream + MT | with 5 |
-| **A** | **Session-scope the agent's `manageCollection` dispatch (§7c A)** | MT | **next — the feature is unusable as intended without it** |
+| **A** | Session-scope the agent's `manageCollection` dispatch (§7c A) | MT | **DONE** — reads `cwdForSession`, the same lookup presentDocument's relative paths use |
 | B | Spawn a collection action's chat in the collection's root (§7c B) | MT | with A |
 | C | Notification deep links carry the project (§7c C) | MT + cross-app | with 8 |
 | D | Canvas cards carry the root they were made for (§7c D) | MT | after A |
