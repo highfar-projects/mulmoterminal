@@ -456,10 +456,14 @@ service cloud.firestore {
                     && request.resource.data[cfg().idField] is string
                     && itemId == request.auth.uid + "_" + request.resource.data[cfg().idField]);
           }
+          // ルールは文字列を timestamp に暗黙変換しない。ISO 文字列と request.time を
+          // 比較すると型エラーで fail closed になるので、publish が epoch millis
+          // （数値）に落としたものを見る（下記「authored と published は別物」）
           function inWindow() {
             return !has("window")
-                || (request.time < cfg().window.until
-                    && (!("from" in cfg().window) || request.time > cfg().window.from));
+                || (request.time.toMillis() < cfg().window.untilMs
+                    && (!("fromMs" in cfg().window)
+                        || request.time.toMillis() > cfg().window.fromMs));
           }
           // 匿名認証でも自分の行には届く（uid 判定に verified を要求しない）
           function ownRow() {
@@ -693,6 +697,13 @@ uid ベースの判定は `authed()`、メール比較だけ `verified()`。
   → S2 は `audience` を外す（ログインした人なら誰でも）形に直し、
   名指し配布にする場合の書き方を併記
 
+**19. `window` の ISO 文字列を `request.time` と比較していた（8 巡目）。**
+ルールは文字列を timestamp に暗黙変換しないので、型エラーで**アンケートの投稿が全部拒否**。
+→ publish が epoch millis（`fromMs` / `untilMs`）に落とし、ルールは
+`request.time.toMillis()` と比較する。**あわせて、サンプルが示しているのは
+authored な `app.json` であって published な `apps/{aid}` ではない**ことを明記した
+（この取り違えが指摘の根にあった）。
+
 ### 同じ形のバグが 3 巡続いた（4 巡目も同じだった）
 
 **4 巡で 10 件が同じ根っこ**だった:
@@ -748,6 +759,29 @@ uid ベースの判定は `authed()`、メール比較だけ `verified()`。
 | **メールが宣言された遷移に伴っていること** | 決定的な `mailId` で重複を封じ、`get() != getAfter()` で**この書き込みが遷移させた**ことを要求 |
 | 宣言した audience と認可の一致 | `roleIn(...) == "participant"`（`!= null` では viewer も投稿できる） |
 | 公開投稿の必須と主要 enum | `hasAll(validate.required)` / `choiceValues.hasAny([...])` |
+
+### authored な `app.json` と published な `apps/{aid}` は別物
+
+サンプルが示しているのは**リポジトリに書く `app.json`**（人が読み書きする形）で、
+Firestore の `apps/{aid}` は **publish が導出した別のドキュメント**。混同すると
+「サンプルどおりに書いたのにルールが通らない」になる。
+
+| authored（git） | published（Firestore） | なぜ変わるか |
+|---|---|---|
+| `window.from` / `window.until`（ISO 文字列） | `window.fromMs` / `window.untilMs`（**数値**） | **ルールは文字列を timestamp に変換しない。** ISO 文字列と `request.time` を比較すると型エラーで fail closed |
+| 各コレクションの `schema.json` | `publishedSchema` + `collections[cid]`（`immutable` / `peerVisibility` / `revealGated` / `gatedFrom` / `revealBy` / `mail`） | ルールが読める平たい形に落とす |
+| `actions[].then.email` | `collections[cid].mail`（`toField` / `statusField` / `on` / `dataFields`） | ルールが宣言を再導出できる形に |
+| フィールド定義（型・required・enum） | `public.submit[cid].validate` | ルールには反復が無いので、検査できる部分集合だけ |
+| — | `publishedCommit` / `publishedBy` / `publishedAt` / `previousPublished` | 記名と rollback |
+
+**epoch millis を選び、Firestore の `Timestamp` 型にしない理由**: `app.json` は JSON で、
+`Timestamp` は JSON で表現できない。数値なら authored 側も published 側も同じ形で書けて、
+エージェントが生成した JSON をそのまま検証できる（サンプル節の JSON 全数検証が成り立つのも
+これのおかげ）。
+
+> **これが D4「publish はコンパイル段階である」の 3 つ目の実例。** git の宣言を、
+> ルールが読める射影に落とす。**変換は必ずここに書く** — 暗黙の変換が 1 つでもあると、
+> 「サンプルどおりで動かない」が再発する。
 
 ### 公開投稿の値検証は、どこまでできるか
 
@@ -1312,6 +1346,7 @@ sandbox された HTML が Firestore ハンドルを持たなくても、**親�
 | 公開投稿コレクションに `validate.required` が無い | **必須欠落のレコードを誰でも投げ込める** |
 | `audience: "participant"` を宣言しているのに `members` / `memberEmails` が無い | **投稿が全部 fail closed**（原因が見えない） |
 | `mail.on` のテンプレートが `actions.*.then.email` と食い違う | 承認メールが常に拒否される |
+| `window` の端点が ISO として解釈できない | publish が `fromMs` / `untilMs` を出せず、**投稿が全部拒否される** |
 | `peerVisibility: "public"` なのに `validate.choiceField` が無い | 集計が enum 外の値で汚染される |
 | `icon` が無い / `actions` がオブジェクトマップ | **既存文法エラー**（必須キー欠落・型不一致）。schema が読み込まれない |
 | `mutate` に `when`（正しくは `require`） | **エラーにならず黙って消える**。ゲートが外れた状態で動く |
@@ -1462,6 +1497,11 @@ HTML に逃がすと元の木阿弥なので、**既存の `when`（`fieldBase`�
 
 **LLM 向けのテンプレート実体。** 4 つのシナリオを実際のスキーマとして書き下ろす。
 
+> **この節が示すのは authored な形**（リポジトリにコミットする `app.json` と `schema.json`）で、
+> Firestore の `apps/{aid}` は publish が導出した別のドキュメント。
+> 対応は「authored な `app.json` と published な `apps/{aid}` は別物」の変換表を参照。
+> 特に `window` の端点は **ISO で書き、publish が epoch millis に落とす**。
+>
 > この節の JSON ブロックは**すべて単体で valid な JSON**（機械検証済み）。
 > 上の各節にある JSON は説明用の**断片**（キーだけを抜き出したもの）なので、そのままでは
 > パースできない。テンプレートとして起こすのはこの節。
@@ -2129,6 +2169,8 @@ session    現在の議題とフェーズ   参加者 read のみ
 - [ ] `/mail` の決定的 ID と `get() != getAfter()` による**この書き込みでの遷移**の要求
       （**クライアントはバッチで書く**）
 - [ ] `audience` は `== "participant"` の厳密一致
+- [ ] **authored → published の変換表**を publish が漏れなく実装すること
+      （特に `window` の ISO → epoch millis。ルールは文字列を timestamp に変換しない）
 - [ ] `session` ドキュメント（主催者が駆動する状態機械）と、それを create 条件に使うこと
 - [ ] **`immutable`（owner にも触れない記録）** — ルールの形に関わる
 - [ ] `peerVisibility: "public"`（記名投票。参加者が全件読める）
