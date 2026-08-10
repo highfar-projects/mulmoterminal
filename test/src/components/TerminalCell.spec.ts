@@ -978,6 +978,12 @@ describe("TerminalCell", () => {
     expect(w.find('[data-testid="cell-hdr-chip"]').text()).toBe("prod"); // custom chip renders its substituted text
     expect(w.find('[data-testid="cell-usage"]').exists()).toBe(true); // usage is listed
     expect(w.find('[data-testid="model-badge"]').exists()).toBe(false); // ctx omitted from the list → hidden despite context set
+    // Both sit ON the header the directory paints with `headerColor`, so their ink names
+    // --cell-header-fg before the theme's dim. The literal chain rather than the constant: the
+    // variable is the contract with cellHeaderStyle.ts, and naming `text-dim` outright is what
+    // left them unreadable on a saturated header (#1591).
+    expect(w.find('[data-testid="cell-usage"]').classes()).toContain("text-[var(--cell-header-fg,var(--text-dim))]");
+    expect(w.find('[data-testid="cell-hdr-chip"]').classes()).toContain("text-[var(--cell-header-fg,var(--text-dim))]");
   });
 
   it("renders duplicate built-in chips without key collisions", async () => {

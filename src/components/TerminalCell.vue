@@ -53,6 +53,7 @@ import {
   CELL_CHIP_BTN,
   CELL_CHIP_ICON,
   CELL_DIR_PATH,
+  CELL_HEADER_INK_DIM,
   CELL_MENU_ITEM,
   CELL_DOT,
   CELL_HEADER_ZOOMABLE,
@@ -1328,14 +1329,16 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                 <span
                   v-else-if="chip.builtin === 'usage' && showUsage"
                   data-testid="cell-usage"
-                  class="flex-none whitespace-nowrap font-mono text-[10px] tracking-[0.02em] text-dim"
+                  class="flex-none whitespace-nowrap font-mono text-[10px] tracking-[0.02em]"
+                  :class="CELL_HEADER_INK_DIM"
                   :title="usageTitle"
                   >{{ usageLabel }}</span
                 >
                 <span
                   v-else-if="chip.custom"
                   data-testid="cell-hdr-chip"
-                  class="flex-none whitespace-nowrap rounded-full border border-border px-1.5 py-px text-[10px] text-dim"
+                  class="flex-none whitespace-nowrap rounded-full border border-border px-1.5 py-px text-[10px]"
+                  :class="CELL_HEADER_INK_DIM"
                   :title="chip.custom.label || chip.custom.text"
                   >{{ chip.custom.text }}</span
                 >
