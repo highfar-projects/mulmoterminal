@@ -2110,7 +2110,7 @@ describe("TerminalCell", () => {
     await flushPromises();
     const idleStyle = idle.find(".cell-header").attributes("style") ?? "";
     expect(idleStyle).toContain("--cell-header-bg: #e8341c");
-    expect(idleStyle).toContain("--cell-header-fg: #1b2430"); // WCAG picks black on this red — see cellHeaderStyle.spec.ts
+    expect(idleStyle).toContain("--cell-header-fg: #000000"); // WCAG picks black on this red, and pure — see cellHeaderStyle.spec.ts
 
     globalThis.fetch = dirConfigOnly(true);
     const busy = mountCell("22222222-2222-2222-2222-222222222222", { initialCwd: "/home/me/hdr-derive-busy" });

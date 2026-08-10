@@ -7,6 +7,7 @@
 // model quietly makes every project's cell the wrong colour.
 import { describe, it, expect } from "vitest";
 import { chromeFromColor, parseHex, normalizeHex, type ChromeColors } from "../../common/chromeFromColor";
+import { contrastRatio, relativeLuminance } from "../../common/contrast";
 
 // ΔE76 in CIE Lab. 2.3 is the classic "just noticeable difference"; the measured worst case across
 // these palettes is 2.5, on one role at the dark end of the hue wheel, so the bound asserted here
@@ -84,6 +85,39 @@ describe("deriving a palette from one colour", () => {
   // The classic YIQ shortcut scores this just under its threshold and picks white, at 1.37:1.
   it("gets vivid green right, where the YIQ approximation does not", () => {
     expect(chromeFromColor("#00ff00")?.headerTextColor).toBe("#1b2430");
+  });
+
+  // The near-black is a preference, not the answer: it is 3.68:1 on this red where pure black is
+  // 4.94:1, so a mid-tone brand colour that looks like it wants softening is exactly the one that
+  // cannot afford it (Codex on #1592).
+  it("drops the softening rather than the contrast on a mid-tone background", () => {
+    expect(chromeFromColor("#e8341c")?.headerTextColor).toBe("#000000");
+    expect(chromeFromColor("#808080")?.headerTextColor).toBe("#000000");
+  });
+
+  // The guarantee, measured rather than sampled by hand: every background in a coarse sweep of the
+  // colour space gets an ink that clears AA for normal text. Three examples cannot say this, and
+  // the ink is chosen by a rule with a branch in it — this is the assertion that branch answers to.
+  it("never derives an ink below WCAG AA (4.5:1) for any background", () => {
+    const STEP = 17; // 16^3 = 4096 backgrounds, coarse enough to stay fast and fine enough to hit the mid-tones
+    const channels = Array.from({ length: 16 }, (_, i) => i * STEP);
+    let worst = { background: "", ink: "", ratio: Infinity };
+    channels.forEach((r) =>
+      channels.forEach((g) =>
+        channels.forEach((b) => {
+          const background = `#${[r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+          const ink = chromeFromColor(background)?.headerTextColor ?? "";
+          const luminance = (hex: string): number => {
+            const rgb = parseHex(hex);
+            if (!rgb) throw new Error(`not a colour: ${hex}`);
+            return relativeLuminance(rgb[0], rgb[1], rgb[2]);
+          };
+          const ratio = contrastRatio(luminance(background), luminance(ink));
+          if (ratio < worst.ratio) worst = { background, ink, ratio };
+        }),
+      ),
+    );
+    expect(worst.ratio, `${worst.ink} on ${worst.background}`).toBeGreaterThanOrEqual(4.5);
   });
 
   it("takes `background` as the cell surface when the file gives one", () => {

@@ -31,10 +31,10 @@ describe("headerStyleFor", () => {
   it("derives the text colour from the background when the directory declared none", () => {
     expect(headerStyleFor("#241640", null, true)).toEqual({ "--cell-header-bg": "#241640", "--cell-header-fg": "#ffffff" });
     expect(headerStyleFor("#ffe8a3", null, true)).toEqual({ "--cell-header-bg": "#ffe8a3", "--cell-header-fg": "#1b2430" });
-    // The issue's own colour, and it goes DARK: #e8341c scores 4.92:1 against black and 4.27:1
-    // against white, so the rule that reads the background beats the eye's guess that a strong red
-    // wants white on it.
-    expect(headerStyleFor("#e8341c", null, true)).toEqual({ "--cell-header-bg": "#e8341c", "--cell-header-fg": "#1b2430" });
+    // The issue's own colour, and it goes DARK rather than the white a strong red looks like it
+    // wants: 4.94:1 against black, 4.27:1 against white. It is also PURE black — the softened ink
+    // this file's pale case gets would be 3.68:1, below AA (see chromeFromColor.spec.ts).
+    expect(headerStyleFor("#e8341c", null, true)).toEqual({ "--cell-header-bg": "#e8341c", "--cell-header-fg": "#000000" });
   });
 
   it("prefers the declared text colour over the derived one", () => {

@@ -15,7 +15,7 @@
 // Snapping every role to absolute values drifts by ΔE 20 at the dark end of the hue wheel; making
 // every role a relative offset drifts by ΔE 15 at the pale end. Both were tried; this is the mix
 // that fits. Anyone retuning these numbers should re-measure rather than reason about them.
-import { readableTextColor } from "./contrast.js";
+import { contrastRatio, readableTextColor, relativeLuminance } from "./contrast.js";
 
 export interface ChromeColors {
   badgeColor: string;
@@ -36,13 +36,27 @@ const BUTTON = { s: 0.67, l: 0.89 };
 
 const clamp01 = (n: number): number => Math.min(1, Math.max(0, n));
 
-// The two inks a header background can be written in. Black is softened to a near-black so a pale
+// The inks a header background can be written in. Black is softened to a near-black so a pale
 // header does not read as a printed page; white is left pure, since anything softer loses contrast
 // on the dark end where it is chosen.
 const DARK_INK = "#1b2430";
+const PURE_DARK_INK = "#000000";
 const LIGHT_INK = "#ffffff";
 
-const inkFor = (rgb: [number, number, number]): string => (readableTextColor(rgb[0], rgb[1], rgb[2]) === "#000" ? DARK_INK : LIGHT_INK);
+// WCAG AA for normal text. These chips run to 10px, so the large-text 3:1 bar does not apply.
+const AA_CONTRAST = 4.5;
+const DARK_INK_LUMINANCE = relativeLuminance(0x1b, 0x24, 0x30);
+
+// The softening is a PREFERENCE, and it costs contrast: on a mid-tone background that cost is what
+// drops the text below AA — `#e8341c` measures 3.68:1 against the softened ink and 4.94:1 against
+// pure black (Codex on #1592, which is right and was worth measuring). So it is applied only while
+// it is free. Falling back always works: at the worst background — the luminance where black and
+// white are equally readable — the pure ink still reaches 4.58:1.
+function inkFor(rgb: [number, number, number]): string {
+  if (readableTextColor(rgb[0], rgb[1], rgb[2]) === "#fff") return LIGHT_INK;
+  const background = relativeLuminance(rgb[0], rgb[1], rgb[2]);
+  return contrastRatio(background, DARK_INK_LUMINANCE) >= AA_CONTRAST ? DARK_INK : PURE_DARK_INK;
+}
 
 /** Which ink a header background wants, or null when it isn't a colour we can read. Exported so a
  *  directory that declares only `headerColor` derives the SAME text colour this file gives a
