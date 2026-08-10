@@ -381,6 +381,10 @@ service cloud.firestore {
                                            && app(aid).collections[cid].peerVisibility == "public"; }
     function gatedCol(aid, cid)     { return colFlag(aid, cid, "revealGated")
                                            && app(aid).collections[cid].revealGated == true; }
+    // 記録の作成を「投稿経路」だけに限る。owner/editor でも直接は作れない。
+    // これが無いと、immutable は「書き換えられない」だけで「捏造できない」を意味しない
+    function submitOnlyCol(aid, cid) { return colFlag(aid, cid, "submitOnly")
+                                           && app(aid).collections[cid].submitOnly == true; }
 
     match /apps/{aid} {
       function membersConsistent() {
@@ -536,30 +540,31 @@ service cloud.firestore {
                       // 自分の行だけ（participant はここまで）
                       || ownRow();
 
-          allow create: if initialOk()
-                        && (writerOf(aid, cid)
+          // 値の検査は宣言があれば **誰の書き込みにも** 効かせる（writer 経由でも）
+          function validateOk() {
+            return !has("validate")
+                || ((!("required" in cfg().validate)
+                     || request.resource.data.keys().hasAll(cfg().validate.required))
+                    && (!("keyFields" in cfg().validate)
+                        || (cfg().validate.keyFields.size() <= 2
+                            && (cfg().validate.keyFields.size() < 1
+                                || (cfg().validate.keyFields[0].field in request.resource.data
+                                    && cfg().validate.keyFields[0].values.hasAny(
+                                         [request.resource.data[cfg().validate.keyFields[0].field]])))
+                            && (cfg().validate.keyFields.size() < 2
+                                || (cfg().validate.keyFields[1].field in request.resource.data
+                                    && cfg().validate.keyFields[1].values.hasAny(
+                                         [request.resource.data[cfg().validate.keyFields[1].field]]))))));
+          }
+
+          allow create: if initialOk() && validateOk()
+                        && ((writerOf(aid, cid) && !submitOnlyCol(aid, cid))
                         || (submitOpen()
                             // 匿名（auth: "none"）で開くならマスタースイッチも要る
                             && (authMode() != "none" || publicOn(aid))
                             && has("createFields")
                             && request.resource.data.keys().hasOnly(cfg().createFields)
                             && request.resource.data.size() <= 200
-                            // 名前だけでなく「必須が揃っているか」と、**集計キーの値**を検査する。
-                            // ルールには反復が無いので、インデックスで明示的に展開する（上限 2）。
-                            // 集計キーが未検査だと、公開された結果が壊れる（下記参照）
-                            && (!has("validate")
-                                || ((!("required" in cfg().validate)
-                                     || request.resource.data.keys().hasAll(cfg().validate.required))
-                                    && (!("keyFields" in cfg().validate)
-                                        || (cfg().validate.keyFields.size() <= 2
-                                            && (cfg().validate.keyFields.size() < 1
-                                                || (cfg().validate.keyFields[0].field in request.resource.data
-                                                    && cfg().validate.keyFields[0].values.hasAny(
-                                                         [request.resource.data[cfg().validate.keyFields[0].field]])))
-                                            && (cfg().validate.keyFields.size() < 2
-                                                || (cfg().validate.keyFields[1].field in request.resource.data
-                                                    && cfg().validate.keyFields[1].values.hasAny(
-                                                         [request.resource.data[cfg().validate.keyFields[1].field]])))))))
                             && (!has("initialStatus")
                                 || (hasColStatus() && colStatus() in request.resource.data
                                     && request.resource.data[colStatus()] == cfg().initialStatus))
@@ -878,6 +883,27 @@ S1 の美容師は**最初から `status: "approved"` の予約を作れる** �
 > 状態機械は辺（transition）だけでなく**入口（initial）も持つ**、というだけの話が、
 > 実際には create と update の 2 経路に分かれて現れる。
 
+**30. writer の近道が投稿経路の検査を全部飛ばしていた（16 巡目）。** `allow create` の
+第 1 分岐 `writerOf(aid, cid)` は、`authOk()` / `emailField` / `idFrom` / `gateOn` /
+`validate` を**すべて迂回する**。S4 では**議長（と editor）が、他の議員の名前で、
+任意の topicId に、投票終了後でも、永久に消えない票を作れた。**
+
+これはプラン自身のテーゼに直接反する。`immutable` を入れた理由は
+「議長が票を書き換えられる投票システムは投票システムではない」だったが、
+**捏造できるなら同じこと** — `immutable` は「書き換えられない」を保証するだけで、
+「捏造できない」は保証しない。
+→ **`collections[cid].submitOnly`** を追加。true のコレクションは owner/editor でも
+直接作成できず、必ず投稿経路を通る。あわせて `validateOk()` を切り出して
+**create の両方の分岐**に効かせた。
+
+主催者自身が参加する場合（議長も投票する）は、**コレクション別ロール**で解く:
+`{"*": "owner", "votes": "participant"}`。`roleIn` は cid を先に見るので、
+議長は votes においてのみ participant として振る舞う。
+
+> **信頼されたロールは、権限の上限であって検査の免除ではない。**
+> 「owner なんだから通してよい」と書いた分岐が、その owner から守るための
+> 仕組み（`immutable`、記名、締切）を全部無効化していた。
+
 ### 同じ形のバグが 3 巡続いた（4 巡目も同じだった）
 
 **4 巡で 10 件が同じ根っこ**だった:
@@ -939,6 +965,8 @@ S1 の美容師は**最初から `status: "approved"` の予約を作れる** �
 | `session` を駆動できるのは owner だけ | `roleIn(aid, '*') == "owner"`（`writerOf` は editor を含む） |
 | **status を消して状態機械を迂回できない** | `nextStatus() != null` を要求し、null の既存レコードは宣言された `initial` にだけ入れる |
 | **create も宣言された初期状態からしか始まらない** | `initialOk()` を create の**両方の分岐**に適用（writer も公開投稿も） |
+| **記録を捏造できない** | `submitOnly` のコレクションは owner/editor でも直接作成できず、投稿経路（`authOk` / `idFrom` / `gateOn` / `emailField` / `validate`）を必ず通る |
+| 値の検査が writer 経由でも効く | `validateOk()` を create の**両方の分岐**に適用 |
 | 公開投稿の必須と**集計キーの値** | `hasAll(validate.required)` / `keyFields[i].values.hasAny([...])` |
 
 ### authored な `app.json` と published な `apps/{aid}` は別物
@@ -1556,6 +1584,8 @@ sandbox された HTML が Firestore ハンドルを持たなくても、**親�
 | `aggregate.by` のフィールドが `validate.keyFields` にも `gateOn.match` にも無い | **公開された集計が壊れる。** 直接クライアントが `q2: "not-a-score"` を投げれば、それが 1 つのグループになる |
 | `validate.keyFields` が 3 つ以上 | ルールに反復が無いので検査されない（集計キーは低カーディナリティ 2 つまで） |
 | `createFields` に身元を表すフィールド（`voter` / `author` / `submittedBy` …）があるのに `emailField` で固定していない | **他人の名前で記録を作れる。** `immutable` + `peerVisibility: "public"` なら誤帰属が永久に公開される |
+| `immutable` かつ参加者が投稿するコレクションに `submitOnly` が無い | **owner/editor が記録を捏造できる。** `immutable` は「書き換えられない」だけで「捏造できない」を意味しない |
+| `submitOnly` のコレクションで、主催者自身も投稿する必要がある | 主催者に**コレクション別の `participant` ロール**を与える（S4 の議長）。`{"*": "owner"}` だけだと議長が投票できない |
 | `icon` が無い / `actions` がオブジェクトマップ | **既存文法エラー**（必須キー欠落・型不一致）。schema が読み込まれない |
 | `mutate` に `when`（正しくは `require`） | **エラーにならず黙って消える**。ゲートが外れた状態で動く |
 
@@ -1949,6 +1979,7 @@ results     集計（aggregate が publish、公開読み取り）
   "collections": {
     "questions": {},
     "responses": { "peerVisibility": "hidden", "statusField": "status",
+                   "submitOnly": true,
                    "transitions": { "initial": ["submitted"] } },
     "results": {}
   },
@@ -2067,7 +2098,7 @@ session     現在の問題とフェーズ  参加者は read のみ
                "student-1@school.jp": { "*": "participant" } },
   "collections": { "questions": {}, "answerKey": { "revealGated": true, "gatedFrom": "questions", "revealBy": "revealed" },
                    "responses": { "peerVisibility": "hidden", "immutable": true,
-                                  "statusField": "status",
+                                  "statusField": "status", "submitOnly": true,
                                   "transitions": { "initial": ["answered"] } },
                    "stats": {} },
   "participantRead": ["questions", "stats"],
@@ -2205,11 +2236,11 @@ session    現在の議題とフェーズ   参加者 read のみ
 ```json
 {
   "aid": "app_council_2026",
-  "members": { "chair@council.jp": { "*": "owner" },
+  "members": { "chair@council.jp": { "*": "owner", "votes": "participant" },
                "member-01@council.jp": { "*": "participant" } },
   "collections": { "topics": { "immutable": true },
                    "votes": { "immutable": true, "peerVisibility": "public",
-                              "statusField": "status",
+                              "statusField": "status", "submitOnly": true,
                               "transitions": { "initial": ["cast"] } } },
   "participantRead": ["topics"],
   "public": {
