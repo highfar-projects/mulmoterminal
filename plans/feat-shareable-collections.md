@@ -2,7 +2,7 @@
 
 **Status**: 実装中（ステップ 2 完了 — Firestore ルール + emulator テスト）
 
-> ### 検証の状態 — 読む前に
+> ## 検証の状態 — 読む前に
 >
 > **ルールは実行された。** 2026-08-10、`../mulmoserver` の branch
 > `feat/shareable-collections-rules`（commit 919b501）で Firestore emulator の
@@ -1024,12 +1024,35 @@ Firestore の `apps/{aid}` は **publish が導出した別のドキュメント
 出会わない。つまりアンケートでも投票でも、**主催者は好きなだけレコードを足せる。**
 
 これを塞ぐのは `audience` ではなく **`submitOnly`**（S4 が記録の捏造防止のために
-入れたもの）。したがって:
+入れたもの）。
 
-> **投稿を受けるためだけに存在するコレクションは `submitOnly: true` を宣言する。**
-> リンターの不変条件にする（`audience` があって `submitOnly` が無い宣言を警告する）。
+**不変条件（`audience` の有無ではない）:**
 
-emulator テスト `rules_scenarios.ts` の S2 が、この 2 つの区別を固定している。
+> **`public.submit[cid]` が、レコードを投稿者の身元に束縛しているなら、その
+> `collections[cid]` は `submitOnly: true` を宣言しなければならない。**
+>
+> 束縛しているとは、次のいずれかが宣言されていること:
+> `idFrom: "auth.uid"` / `idFrom: "auth.uid+field"` / `emailField` / `audience: "participant"`。
+
+なぜこの形か。束縛が宣言されているということは、**そのレコードは「投稿者本人が出した」以外の
+意味を持たない**ということである（一人一回の回答、記名投票、自分の予約）。ところが writer 経路の
+create はその束縛を一度も通らないので、owner / editor が**誰の名前でも**同じ形のレコードを
+作れてしまう。`immutable` の有無は関係ない — S2 の回答は immutable ではないが、水増しは
+同じように成立する（`immutable` を条件にすると S2 が漏れる）。逆に、束縛の無い投稿フォーム
+（S1 の予約の初期案のような、スタッフも代理入力する台帳）は `submitOnly` にすべきではない。
+
+**リンターの警告ではなく publish が拒否する。** 理由はルール本体と同じで、
+**リンターは作者の手元でしか走らない**。publish は D4 の言うコンパイル段階であり、
+Firestore に何が載るかを決める唯一の関門なので、検査はそこに置く（実装順 5）。
+`putSchema`（スキーマの書き込み）でも同じ検査を通すが、そちらは**早く気づかせるため**で
+あって、保証しているのは publish のほう。
+
+ルールはこの不変条件を強制できない — 「このコレクションは投稿を受けるためのものだ」は
+宣言の意図であって、書き込み 1 件を見て判定できることではないから。**ルールが守るのは
+`submitOnly` が宣言された後**（owner / editor の直接 create を拒否する）で、
+**宣言し忘れを捕まえるのが publish**。
+
+emulator テスト `rules_scenarios.ts` の S2 と S4 が、この 2 つの区別を固定している。
 
 ### 公開投稿の値検証は、どこまでできるか
 
@@ -2448,43 +2471,51 @@ session    現在の議題とフェーズ   参加者 read のみ
 ルールは `../mulmoserver` にあり cross-repo のデプロイが要る。**ここに書けないことは製品として
 持てない。** 後から足したくなるものを今洗う:
 
-- [ ] アプリ階層（`apps/{aid}/collections/{cid}/items`）— D1
-- [ ] コレクション別ロール — D1
-- [ ] 公開読み取り（`public.read`）
-- [ ] 制約付き create（`public.submit`）と **`auth` の 3 段階**（A 完全匿名 / B 匿名認証 /
+> **[x] は「ルールに入り、emulator テストで固定された」という意味**（mulmoserver #155、
+> 82 本）。**残る [ ] は、ルールの外に実装が要るもの** — publish、リンター、webview —
+> であって、ルールの形が未決定という意味ではない。
+
+- [x] アプリ階層（`apps/{aid}/collections/{cid}/items`）— D1
+- [x] コレクション別ロール — D1
+- [x] 公開読み取り（`public.read`）
+- [x] 制約付き create（`public.submit`）と **`auth` の 3 段階**（A 完全匿名 / B 匿名認証 /
       C ログイン必須）— 段階を後から足すとルールのデプロイが要る
-- [ ] 申込者の行レベル read（段階 C の「マイ予約」／「自分の回答」）
-- [ ] `idFrom`（一人一回）・`finalize`（書き切り／本人による変更の可否）・`window`（期限）
-- [ ] `aggregate` の公開先（`results`）を誰が読めるか
-- [ ] `mail` キュー（宣言的な副作用）
+- [x] 申込者の行レベル read（段階 C の「マイ予約」／「自分の回答」）
+- [x] `idFrom`（一人一回）・`finalize`（書き切り／本人による変更の可否）・`window`（期限）
+- [x] `aggregate` の公開先（`results`）を誰が読めるか
+- [x] `mail` キュー（宣言的な副作用）
 - [x] フィールド単位の可視性 — **入れる。`gated` によるドキュメント分割**（シナリオ 3 が必須にした）
-- [ ] `participant` ロール（名指しされているが member ではない層）。
+- [x] `participant` ロール（名指しされているが member ではない層）。
       **`listed()` と `reader()` を分離すること**
-- [ ] `createFields` / `selfUpdate`（**状態別**） / `selfTransitions` の分離
-- [ ] `collections[cid].transitions` を **writer にも** 効かせること
-- [ ] `idFrom` の有限 enum（`auto` / `auth.uid` / `auth.uid+field`）
-- [ ] `apps/{aid}/config`（名簿を含まない公開設定）
-- [ ] `auth` の有限 enum（`none` / `anonymous` / `verifiedEmail`）と `emailField` の切り離し
-- [ ] `publicOn()` をマスタースイッチにする + `participantRead`
-- [ ] `revealGated` は**親を `get()` する**形（従属ドキュメントにフラグは無い）
-- [ ] **任意キーの `in` ガード**（`public` / `collections` / `participantRead` /
+- [x] `createFields` / `selfUpdate`（**状態別**） / `selfTransitions` の分離
+- [x] `collections[cid].transitions` を **writer にも** 効かせること
+- [x] `idFrom` の有限 enum（`auto` / `auth.uid` / `auth.uid+field`）
+- [x] `apps/{aid}/config`（名簿を含まない公開設定）
+- [x] `auth` の有限 enum（`none` / `anonymous` / `verifiedEmail`）と `emailField` の切り離し
+- [x] `publicOn()` をマスタースイッチにする + `participantRead`
+- [x] `revealGated` は**親を `get()` する**形（従属ドキュメントにフラグは無い）
+- [x] **任意キーの `in` ガード**（`public` / `collections` / `participantRead` /
       `audience` / `selfUpdate` / `selfTransitions` / `emailField` / `window` / `gateOn`）
-- [ ] `authed()` と `verified()` の分離（匿名認証が自分の行を読めること）
-- [ ] `roleIn()` の `'*'` フォールバックのガード（コレクション別ロールだけのメンバー）
-- [ ] `/mail` を `cid` の書き手にも開く
-- [ ] `get().data` の前に `exists()`、連結材料に `is string`
-- [ ] `list` クエリがルールの条件を写していること（親がクエリを組む）
-- [ ] **`/mail` が宣言（`then.email`）を再導出すること** — 宛先・テンプレート・自由文の禁止
-- [ ] **`validate` 射影**（`required` / `keyFields`）を publish が出すこと。
-      **`aggregate.by` ⊆ `keyFields` ∪ `gateOn.match` ∪ `statusField`** をリンターが保証すること
-- [ ] `/mail` の決定的 ID と `get() != getAfter()` による**この書き込みでの遷移**の要求
+- [x] `authed()` と `verified()` の分離（匿名認証が自分の行を読めること）
+- [x] `roleIn()` の `'*'` フォールバックのガード（コレクション別ロールだけのメンバー）
+- [x] `/mail` を `cid` の書き手にも開く
+- [x] `get().data` の前に `exists()`、連結材料に `is string`
+- [x] `list` クエリがルールの条件を写していること（親がクエリを組む）
+- [x] **`/mail` が宣言（`then.email`）を再導出すること** — 宛先・テンプレート・自由文の禁止
+- [x] **`validate` 射影**（`required` / `keyFields`）— **ルール側は完了**。宣言があれば
+      create にも update にも効く（update を落としていた穴は #155 のレビューで発見）。
+      publish がこの射影を出すこと、**`aggregate.by` ⊆ `keyFields` ∪ `gateOn.match` ∪
+      `statusField`** をリンターが保証することは**まだ**（実装順 5 / 18）
+- [x] **`submitOnly`** — 投稿経路を通っていないレコードを作らせない。ルールに入っている。
+      **どのコレクションが宣言すべきかの不変条件は下記**（実装順 5 / 18 で publish が拒否する）
+- [x] `/mail` の決定的 ID と `get() != getAfter()` による**この書き込みでの遷移**の要求
       （**クライアントはバッチで書く**）
-- [ ] `audience` は `== "participant"` の厳密一致
+- [x] `audience` は `== "participant"` の厳密一致
 - [ ] **authored → published の変換表**を publish が漏れなく実装すること
       （特に `window` の ISO → epoch millis。ルールは文字列を timestamp に変換しない）
-- [ ] `session` ドキュメント（主催者が駆動する状態機械）と、それを create 条件に使うこと
-- [ ] **`immutable`（owner にも触れない記録）** — ルールの形に関わる
-- [ ] `peerVisibility: "public"`（記名投票。参加者が全件読める）
+- [x] `session` ドキュメント（主催者が駆動する状態機械）と、それを create 条件に使うこと
+- [x] **`immutable`（owner にも触れない記録）** — ルールの形に関わる
+- [x] `peerVisibility: "public"`（記名投票。参加者が全件読める）
 - [ ] **生成 HTML の sandbox iframe 隔離 + View Bridge**（Firestore ハンドルを渡さない）—
       ルールでは守れないので webview 側の構造として最初から。
       **ブリッジは宣言されたデータセット名・アクション名のみを公開し、クエリ言語にしない**
@@ -2511,7 +2542,9 @@ session    現在の議題とフェーズ   参加者 read のみ
 4. **discovery の 2 ソース化 + skill materialize** — ディスク ∪ Firestore(memberEmails ∋ 自分)。
    Claude Code はディスクのスキルしか読めないので、購読時に skillText を materialize する
    （`schemaVersion` で張り替えるキャッシュとして）
-5. **publish**（git → Firestore、記名 + 事前検証 + 前版保持）
+5. **publish**（git → Firestore、記名 + 事前検証 + 前版保持）。**`submitOnly` の不変条件を
+   ここで拒否する**（「`audience` は投稿経路しか縛らない」参照）— リンターは作者の手元でしか
+   走らないので、保証はこちらに置く
 6. **onSnapshot watcher** — `CollectionStore.watch` に載せる。
    `hostRunner.ts:154-184` の実装から `docChanges()` の扱いを持ち込む
 7. **worktreeEnv による aid の分岐** — D6
@@ -2546,13 +2579,19 @@ session    現在の議題とフェーズ   参加者 read のみ
 
 ## 未解決の論点
 
-- **emulator テストに上の 4 パターンを含めること** — 3 巡のうち 5 件がこの形。
-  4 シナリオが全部通っても、この 1 本が無いと同じ穴が開く
+- ~~**emulator テストに上の 4 パターンを含めること**~~ — **完了**。
+  `test/rules/rules_roster.ts`（任意キー無しのアプリ / `'*'` を持たないメンバー）、
+  `rules_scenarios.ts`（親の無い gated）、`rules_submit.ts`（status を消す書き込み）、
+  `rules_scenarios.ts` の S3（editor が `session` を書く）で固定してある
 - **スキーマの `.strict()` 化 か、生 JSON リンターか** — `schemaZ.ts` は未知キーを
   バリアントごとに黙って落とすので、新キーは実装が入るまでパースで消え、`mutate` に書いた
   `when` もエラーにならない。**新キーを足す前に決める**（実装順 10）
-- **ルールの `hasOnly` / 動的キー参照 / `roleIn` の三項演算**が仕様通り書けるか — emulator で未検証。
-  `firebase emulators:exec` でユニットテストを 1 本通してから mulmoserver に入れる
+- ~~**ルールの `hasOnly` / 動的キー参照 / `roleIn` の三項演算**が仕様通り書けるか~~ — **検証済み**。
+  3 つとも書ける。書けなかったのは**別のこと**で、そちらが本題だった（上「検証の状態」）:
+  ルール関数は呼び出し箇所ごとにインライン展開され、**1 リクエストの評価上限は 1000 式**。
+  補助関数の連鎖が深いと非自明な経路が全部そこに達し、症状は「権限エラー」ではなく
+  `Unable to evaluate the expression…`。**次にルールへ条件を足すときは、正しさと同じだけ
+  式数を見ること。** 目安は、app ドキュメントを 1 回だけ取得して引数で下へ渡す形を崩さないこと
 - **Storage ルールから `firestore.get()`** でメンバー判定できるか — 仕様上可能のはずだが実機未確認
 - **repo 権限と members のずれ**をどう見せるか（当面は members をヘッダーに常時出すだけ）
 - **email の同一性**（変更・再利用）— 当面受容
