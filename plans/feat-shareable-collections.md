@@ -745,6 +745,20 @@ authored な `app.json` であって published な `apps/{aid}` ではない**�
 **共通の教訓**: `require` も `then` も `selfTransitions` も、**publish が
 `transitions` に落として初めてルールが効く。** 落とさなければ宣言は助言のまま。
 
+**22. S3/S4 のテンプレートが `memberEmails` を欠いていた（10 巡目）。**
+ルートの app ルールは `membersConsistent()`（`memberEmails` == `members.keys()`）を
+create/update で要求するので、**コピーしたそのままでは publish できない**。
+しかも直前の巡回で S2 に「`members` と `memberEmails` を必ず一緒に宣言する」と書いており、
+**二重管理を人に課す方向で塞いでしまっていた。**
+→ 逆にした。**`memberEmails` は authored な `app.json` に書かない**。`members` からの
+純粋な導出で、`members` を書く経路（publish と招待 UI）が生成する。
+`membersConsistent()` は**ずれを書き込めなくする不変条件**であって、人への要求ではない。
+S1 のサンプルからも手書きの `memberEmails` を外した。
+
+> ここまでの 3 巡と同じ形に見えるが、向きが逆。**「publish が落としていない宣言」ではなく、
+> 「publish が生成すべき導出物を人に書かせていた」。** どちらも
+> 「authored と published の境界が曖昧」という同じ原因から出ている。
+
 ### 同じ形のバグが 3 巡続いた（4 巡目も同じだった）
 
 **4 巡で 10 件が同じ根っこ**だった:
@@ -782,7 +796,7 @@ authored な `app.json` であって published な `apps/{aid}` ではない**�
 
 | 保証 | どう |
 |---|---|
-| `memberEmails` と `members` の一貫性 | `.keys().toSet()` 比較。**ずれた状態が書き込めない** |
+| `memberEmails` と `members` の一貫性 | `.keys().toSet()` 比較。**ずれた状態が書き込めない**（`memberEmails` は導出物で、人は書かない） |
 | 所有者が移らない | `resource.data.owner` と比較 |
 | メンバー表を owner 以外が触れない | `roleIn(aid,'*') == "owner"` |
 | publish が owner 限定 | collections の write が owner 限定なので自動的に満たされる |
@@ -813,6 +827,7 @@ Firestore の `apps/{aid}` は **publish が導出した別のドキュメント
 | 各コレクションの `schema.json` | `publishedSchema` + `collections[cid]`（`immutable` / `peerVisibility` / `revealGated` / `gatedFrom` / `revealBy` / `mail`） | ルールが読める平たい形に落とす |
 | `actions[].then.email` | `collections[cid].mail`（`toField` / `statusField` / `on: {template: {from, to}}` / `dataFields`） | ルールが宣言を再導出できる形に |
 | `actions[].require` + `set`（＋ `selfTransitions`） | `collections[cid].transitions`（`{現状態: [遷移先…]}`） | **状態機械を誰に対しても効かせる**。無いと writer が任意に飛べる |
+| `members` | `members` + **`memberEmails`（導出）** | 「自分が参加しているアプリ」を `array-contains` で引くための非正規化。**人が書くものではない** — `members` を書く経路（publish、招待 UI）が必ず一緒に生成し、ルールの `membersConsistent()` がずれを拒否する |
 | フィールド定義（型・required・enum） | `public.submit[cid].validate` | ルールには反復が無いので、検査できる部分集合だけ |
 | — | `publishedCommit` / `publishedBy` / `publishedAt` / `previousPublished` | 記名と rollback |
 
@@ -1389,7 +1404,8 @@ sandbox された HTML が Firestore ハンドルを持たなくても、**親�
 | `gateOn` があるのに `session` を持たないアプリ | create が常に失敗する |
 | `then.email` があるのに `collections[cid].mail`（`toField` / `templates`）を publish していない | 承認メールが常に拒否される |
 | 公開投稿コレクションに `validate.required` が無い | **必須欠落のレコードを誰でも投げ込める** |
-| `audience: "participant"` を宣言しているのに `members` / `memberEmails` が無い | **投稿が全部 fail closed**（原因が見えない） |
+| `audience: "participant"` を宣言しているのに `members` が無い | **投稿が全部 fail closed**（原因が見えない） |
+| authored な `app.json` が `memberEmails` を手書きしている | 導出物の二重管理。`members` と乖離した瞬間に publish がルールに拒否される |
 | `mail.on` のテンプレートが `actions.*.then.email` と食い違う | 承認メールが常に拒否される |
 | `window` の端点が ISO として解釈できない | publish が `fromMs` / `untilMs` を出せず、**投稿が全部拒否される** |
 | `peerVisibility: "public"` なのに `validate.choiceField` が無い | 集計が enum 外の値で汚染される |
@@ -1624,7 +1640,6 @@ services  1 ──< bookings      メニュー（所要時間の供給元）
   "owner": "<uid>",
   "members": { "owner@salon.jp": { "*": "owner" },
                "stylist-a@salon.jp": { "bookings": "editor", "shifts": "viewer", "services": "viewer" } },
-  "memberEmails": ["owner@salon.jp", "stylist-a@salon.jp"],
   "collections": {
     "bookings": {
       "transitions": { "pending": ["approved", "rejected", "cancelled"],
@@ -1810,17 +1825,19 @@ results     集計（aggregate が publish、公開読み取り）
 **この S2 は `audience` を宣言していない** — ログインした人なら誰でも 1 回答えられる、
 という「リンクを知っている人向け」のアンケート。`idFrom: "auth.uid"` が一人一回を担保する。
 
-**名指しの相手だけに配るなら `audience: "participant"` を足すが、そのときは
-`members` と `memberEmails` も必ず一緒に宣言する。** 片方だけだと `listed()` が
-偽になり、**投稿が全部拒否される**（fail closed で、原因が「権限エラー」ではなく
-「なぜか送れない」として現れる）:
+**名指しの相手だけに配るなら `audience: "participant"` を足し、`members` を宣言する。**
+`members` が無いまま `audience` だけ書くと `listed()` が偽になり、**投稿が全部拒否される**
+（fail closed で、原因が「権限エラー」ではなく「なぜか送れない」として現れる）:
 
 ```json
 {
-  "members": { "owner@x.jp": { "*": "owner" }, "member-1@x.jp": { "*": "participant" } },
-  "memberEmails": ["owner@x.jp", "member-1@x.jp"]
+  "members": { "owner@x.jp": { "*": "owner" }, "member-1@x.jp": { "*": "participant" } }
 }
 ```
+
+**`memberEmails` は書かない。** `members` からの純粋な導出で、`members` を書く経路
+（publish と招待 UI）が必ず一緒に生成する。ルールの `membersConsistent()` は
+**ずれた状態を書き込めなくするための不変条件**であって、人に二重管理を課すためのものではない。
 
 **`questions/schema.json`**
 
