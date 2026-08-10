@@ -139,6 +139,17 @@ D1 の帰結。engine の INVARIANT が列挙したもの — キャッシュ、
 通知 id、描画されたカード — が**すべて対象**。ストア実装の中に閉じない変更であり、
 **最初に通すのが正しく、後から通すのが最も高い。**
 
+**2 つの同一性は共存する**（ローカルコレクションは一切変えない、が前提）。したがって engine 側は
+片方に寄せるのではなく、**判別可能なユニオン**にする:
+
+```ts
+export type CollectionKey =
+  | { kind: "local";  root: string; slug: string }
+  | { kind: "shared"; aid: string;  cid: string };
+```
+
+INVARIANT が列挙したものは**この型で鍵を持つ**。実装順 1 の中身はこの抽象化。
+
 ### D3. スキーマとビューは git、レコードは Firestore
 
 ```
@@ -198,6 +209,13 @@ worktree 固有の値を持つ。dev-server のポート、**データベース�
 ```
 
 main の worktree は本番 aid、feature の worktree は自動で別の scratch aid。
+
+**worktree の `aid` は Firestore にまだ存在しない、から始まる。** 明示的な手当てが要る:
+新しい `aid` の `/apps/{aid}` ドキュメントは当然無いので、**worktree で最初に publish した
+とき（または worktree のアプリを最初に開いたとき）に、ホストが主リポジトリの `app.json` から
+`members` と公開設定を読み、新しい `aid` でシードする。** レコードは引き継がない
+（引き継いだら「本番を壊さない」が嘘になる）。シードは所有者本人が実行するので
+`allow create` の条件をそのまま満たす。
 
 裏を返すと、これは目玉でもある: **エージェントが、動いているアプリの定義を、本番データを
 壊さずに書き換えて試せる。** git の分岐がそのままデータの分岐になる。
@@ -316,15 +334,18 @@ service cloud.firestore {
     // 名簿に載っているか（participant を含む）。「データを読める」という意味ではない
     function listed(aid) { return verified() && email() in app(aid).members; }
 
+    // '*' を持たないメンバー（S1 の美容師のようにコレクション別ロールだけの人）が
+    // いるので、フォールバックも `in` でガードする。無いと roleIn 自体が落ちる
     function roleIn(aid, cid) {
-      return listed(aid)
-        ? (cid in app(aid).members[email()] ? app(aid).members[email()][cid]
-                                            : app(aid).members[email()]['*'])
-        : null;
+      return !listed(aid) ? null
+           : cid in app(aid).members[email()] ? app(aid).members[email()][cid]
+           : '*' in app(aid).members[email()] ? app(aid).members[email()]['*']
+           : null;
     }
+    // どれか 1 つでも書き手ロールを持つか（コレクション別ロールだけの人を弾かないため）
+    function writerOf(aid, cid) { return roleIn(aid, cid) in ["owner", "editor"]; }
     // 全件を読める役割。participant は決して含まれない
     function reader(aid, cid) { return roleIn(aid, cid) in ["owner", "editor", "viewer"]; }
-    function writer(aid, cid) { return roleIn(aid, cid) in ["owner", "editor"]; }
 
     // --- 任意キーは必ず `in` でガードしてから読む（規律。理由は本文「同じ形のバグが3巡続いた」）
     function hasPub(aid)          { return "public" in app(aid); }
@@ -354,6 +375,8 @@ service cloud.firestore {
       allow read:   if reader(aid, '*');
       allow create: if verified()
                     && request.resource.data.owner == request.auth.uid
+                    && email() in request.resource.data.members
+                    && '*' in request.resource.data.members[email()]
                     && request.resource.data.members[email()]['*'] == "owner"
                     && membersConsistent();
       allow update: if roleIn(aid, '*') == "owner"
@@ -370,7 +393,7 @@ service cloud.firestore {
       // 主催者が駆動する状態機械（シナリオ 3 / 4）
       match /session {
         allow read:  if listed(aid) || publicOn(aid);
-        allow write: if writer(aid, '*');
+        allow write: if writerOf(aid, '*');
       }
 
       match /collections/{cid} {
@@ -383,6 +406,18 @@ service cloud.firestore {
           function cfg()        { return app(aid).public.submit[cid]; }
           function has(k)       { return submitOpen() && k in cfg(); }
           function session()    { return get(/databases/$(database)/documents/apps/$(aid)/session).data; }
+
+          // 親（gatedFrom）の同 id を見る。exists() を挟まないと未作成時に評価が落ちる
+          function gatedParent(aid, cid, itemId) {
+            return /databases/$(database)/documents/apps/$(aid)/collections/$(app(aid).collections[cid].gatedFrom)/items/$(itemId);
+          }
+          function gatedRevealed(aid, cid, itemId) {
+            return "gatedFrom" in app(aid).collections[cid]
+                && "revealBy" in app(aid).collections[cid]
+                && exists(gatedParent(aid, cid, itemId))
+                && app(aid).collections[cid].revealBy in get(gatedParent(aid, cid, itemId)).data
+                && get(gatedParent(aid, cid, itemId)).data[app(aid).collections[cid].revealBy] == true;
+          }
 
           function authMode() { return has("auth") ? cfg().auth : "none"; }
           function authOk() {
@@ -399,6 +434,8 @@ service cloud.firestore {
                 || cfg().idFrom == "auto"
                 || (cfg().idFrom == "auth.uid" && authed() && itemId == request.auth.uid)
                 || (cfg().idFrom == "auth.uid+field" && authed() && has("idField")
+                    && cfg().idField in request.resource.data
+                    && request.resource.data[cfg().idField] is string
                     && itemId == request.auth.uid + "_" + request.resource.data[cfg().idField]);
           }
           function inWindow() {
@@ -412,6 +449,7 @@ service cloud.firestore {
                    && (itemId == request.auth.uid
                        || itemId.matches(request.auth.uid + "_.*")
                        || (verified() && has("emailField")
+                           && cfg().emailField in resource.data
                            && resource.data[cfg().emailField] == email()));
           }
 
@@ -422,21 +460,22 @@ service cloud.firestore {
                       || (rollCall(aid, cid) && listed(aid))
                       // 段階的公開: フラグの真実は「親」の側にある。gated が生成した
                       // 従属ドキュメントは correctChoice / explanation しか持たないので、
-                      // ここで resource.data.revealed を見ると永久に false になる
-                      || (gatedCol(aid, cid) && listed(aid)
-                          && get(/databases/$(database)/documents/apps/$(aid)/collections/$(app(aid).collections[cid].gatedFrom)/items/$(itemId))
-                               .data[app(aid).collections[cid].revealBy] == true)
+                      // ここで resource.data.revealed を見ると永久に false になる。
+                      // 親が未作成・削除済みだと get().data が例外になるので exists() が要る
+                      || (gatedCol(aid, cid) && listed(aid) && gatedRevealed(aid, cid, itemId))
                       // 自分の行だけ（participant はここまで）
                       || ownRow();
 
-          allow create: if writer(aid, cid)
+          allow create: if writerOf(aid, cid)
                         || (submitOpen()
                             // 匿名（auth: "none"）で開くならマスタースイッチも要る
                             && (authMode() != "none" || publicOn(aid))
                             && has("createFields")
                             && request.resource.data.keys().hasOnly(cfg().createFields)
                             && (!has("statusField")
-                                || request.resource.data[cfg().statusField] == cfg().initialStatus)
+                                || (cfg().statusField in request.resource.data
+                                    && has("initialStatus")
+                                    && request.resource.data[cfg().statusField] == cfg().initialStatus))
                             && authOk()
                             && (!has("audience") || cfg().audience != "participant"
                                 || roleIn(aid, cid) != null)
@@ -451,25 +490,31 @@ service cloud.firestore {
           // hasOnly ではない。status のような system field は差分に現れた時点で拒否される。
           // 宣言された状態遷移（キャンセル等）だけは status の変更を許す
           allow update: if !immutableCol(aid, cid)
-                        && (writer(aid, cid)
+                        && (writerOf(aid, cid)
                             || (ownRow() && !(has("finalize") && cfg().finalize == true) && inWindow()
                                 && ((has("selfUpdateFields")
                                      && request.resource.data.diff(resource.data).affectedKeys()
                                           .hasOnly(cfg().selfUpdateFields))
                                     || (has("selfTransitions") && has("statusField")
+                                        && cfg().statusField in resource.data
+                                        && cfg().statusField in request.resource.data
                                         && request.resource.data.diff(resource.data).affectedKeys()
                                              .hasOnly([cfg().statusField])
                                         && resource.data[cfg().statusField] in cfg().selfTransitions
                                         && cfg().selfTransitions[resource.data[cfg().statusField]]
                                              .hasAny([request.resource.data[cfg().statusField]])))));
 
-          allow delete: if !immutableCol(aid, cid) && writer(aid, cid);
+          allow delete: if !immutableCol(aid, cid) && writerOf(aid, cid);
         }
       }
 
-      // 宣言的な副作用のキュー（Firebase Trigger Email 拡張が読む）
+      // 宣言的な副作用のキュー（Firebase Trigger Email 拡張が読む）。
+      // '*' ロールを持たない人（コレクション別 editor の美容師）が承認メールを
+      // 出せなくなるので、そのアクションが属する cid の書き手も通す
       match /mail/{mailId} {
-        allow create: if writer(aid, '*');
+        allow create: if listed(aid)
+                      && "cid" in request.resource.data
+                      && (writerOf(aid, '*') || writerOf(aid, request.resource.data.cid));
         allow read, update, delete: if false;
       }
     }
@@ -551,9 +596,30 @@ uid ベースの判定は `authed()`、メール比較だけ `verified()`。
 古い語彙が残ることは仕様の二重化そのもの。** → 全て現行語彙に統一（`session` のキーは
 `current` に一本化）。
 
-### 同じ形のバグが 3 巡続いた
+**10. `roleIn()` 自身が無ガードだった（4 巡目）。** `'*'` ロールを持たないメンバー
+（S1 の美容師は `{bookings: editor, shifts: viewer, services: viewer}` だけ）に対して
+フォールバック `members[email()]['*']` を読むので、**`roleIn` の呼び出しが落ちる**。
+症状として最初に見えたのは「美容師が承認してもメールが出ない」（`/mail` の `writerOf(aid,'*')`）
+だが、原因は `/mail` ではなく**最も中心の関数**。
+→ フォールバックも `in` でガードし、`writerOf(aid, cid)` に一本化。`/mail` は
+`request.resource.data.cid` の書き手も通す。
 
-3 巡のうち 5 件が**同じ根っこ**だった:
+**11. `get().data` を `exists()` なしで読んでいた（4 巡目）。** gated の親が未作成・削除済みだと
+評価が落ちる。→ `exists()` を挟み、`revealBy` のキー存在も確認する。
+
+**12. 複合 ID の材料を無検査で連結していた（4 巡目）。** `request.resource.data[cfg().idField]` が
+無い、あるいは文字列でないと、連結が型エラーで落ちる。→ キー存在と `is string` を確認。
+
+**13. `members[email()]` をアプリ作成時に無ガードで読んでいた（4 巡目）。**
+→ `email() in request.resource.data.members` と `'*' in ...` を先に確認。
+
+**14. ドキュメント側のキー存在を確認していなかった（4 巡目）。** `cfg().emailField` /
+`cfg().statusField` が**宣言されていても、そのレコードに無い**ことがある。
+→ `resource.data` / `request.resource.data` 側の存在も確認する。
+
+### 同じ形のバグが 3 巡続いた（4 巡目も同じだった）
+
+**4 巡で 10 件が同じ根っこ**だった:
 
 > **ルールを「サンプルに書いたキー」に対して書いており、「宣言言語の任意性」に対して
 > 書いていなかった。**
@@ -565,9 +631,19 @@ uid ベースの判定は `authed()`、メール比較だけ `verified()`。
 
 したがって規律を 2 つ置く:
 
-1. **任意キーは必ず `in` でガードしてから読む。** 例外なし
-2. **emulator のユニットテストは「キーを宣言しないアプリ」を必ず 1 本含める。**
-   4 シナリオが全部通っても、この 1 本が無いと同じ穴が開く
+1. **任意キーは必ず `in` でガードしてから読む。** 例外なし。
+   **宣言（`cfg()` / `app()`）側だけでなく、ドキュメント（`resource.data`）側も**
+2. **`get().data` の前に必ず `exists()`。** 参照先が消えているのは正常系
+3. **文字列連結の材料は `is string` を確認する**
+4. **emulator のユニットテストは、以下を必ず含める。**
+   4 シナリオが全部通っても、これらが無いと同じ穴が開く:
+   - キーを宣言しないアプリ（`public` / `collections` / `participantRead` 無し）
+   - `'*'` ロールを持たないメンバー（コレクション別ロールだけの人）
+   - 親が存在しない gated ドキュメント
+   - 宣言されたフィールドを持たないレコード
+
+> **3 巡目でこの規律を書いた当人が、4 巡目に `roleIn()` — 最も中心の関数 — で同じことを
+> していた。** 規律を書くだけでは足りず、**テストに落とすまで守られない**という証拠。
 
 あわせて、**名簿（`members`）そのものを `participant` に読ませない**ようにした
 （同級生のメールが見える）。ルールの `get()` は read ルールの影響を受けないので、
@@ -612,6 +688,18 @@ uid ベースの判定は `authed()`、メール比較だけ `verified()`。
 
 **シナリオ 3（正解の秘匿）が、これを必須にした。** → `gated` として宣言で表現し、エンジンが
 分割を生成する（「ライブ・段階的公開・非対称な可視性」参照）。**やらない、という選択肢は消えた。**
+
+### `get()` の予算と、クライアントのクエリ
+
+- **`get()` / `exists()` は 1 リクエストあたり 10 回**（クエリは 20 回）。同一パスの重複は
+  キャッシュされるので、ここで使う相異なるパスは **app ドキュメント / `session` / gated の親**の
+  最大 3。余裕はあるが、条件を足すときは数える
+- **`list` クエリは、ルールの条件をクライアントの `where` が写していないと通らない。**
+  `ownRow()` は `resource.data[emailField]` を見るので、参加者が自分の行を一覧するには
+  **`where(emailField == 自分)` を発行しなければならない**。ルールは「フィルタを補ってくれる」
+  ものではなく「クエリが十分に絞られているか」を見る
+  → **View Bridge の親側がクエリを組み立てるので、この規律は親の中で守り切れる。**
+    生成された HTML にクエリを書かせない設計が、ここでも効く
 
 ### 注意点
 
@@ -1027,6 +1115,21 @@ sandbox された HTML が Firestore ハンドルを持たなくても、**親�
    （監視点 4）の使い分けが**親の中に閉じる**
 4. **資格情報がビューに一切渡らない** — 公開ページを匿名訪問者に配っても認証情報は漏れない
 
+### 親側でも検証する（ルールだけに任せない）
+
+ビューから届く `action` のペイロードを**そのまま Firestore に流さない**。親が、スキーマの
+`actions` に宣言された `mutate` / `set` の仕様、および `createFields` / `selfUpdateFields` に
+照らして**型と許可フィールドを検証してから** SDK を呼ぶ。
+
+ルールが最終防衛線であることは変わらないが、**ルールは理由を返せない**（許可か拒否かだけ）。
+親で弾けば、生成された HTML に意味のあるエラーを返せる。
+
+### ref 解決の深さを区切る
+
+親が ref を解決してから push する（監視点 3）が、**深さは最大 2 階層まで**、循環は検出して
+打ち切る。`bookings → service → duration` が 2 階層で、実用上ここで足りる。無制限にすると
+公開ページのトラフィックで解決コストが読めなくなる。
+
 ### 実装上の制約
 
 - **子側ライブラリは依存ゼロで数 KB** — 生成される HTML すべてにインライン展開されるため。
@@ -1078,7 +1181,15 @@ sandbox された HTML が Firestore ハンドルを持たなくても、**親�
 > - あるいは新キーの導入と同時に**該当バリアントを `.strict()` にする**。
 >   PR #2209 が firestore アームだけ `.strict()` にしたのと同じ判断
 >
-> どちらを取るかは未決。**先に決めないと、リンターが「無い」ものを検査することになる。**
+> **結論: 二者択一ではなく、層が違う。両方要る。**
+>
+> - **Zod（構造）** — 新キーを定義に足し、該当バリアントを `.strict()` にする。
+>   足さなければ新キーはパースで消え、`.strict()` にしなければ `when`/`require` の
+>   取り違えが**エラーにならず消える**
+> - **リンター（意味）** — 「`selfUpdateFields` に `statusField` が入っている」
+>   「`peerVisibility: public` かつ `auth: none`」のような**関係の検査**は Zod では書けない
+>
+> 順序だけは決まっている: **Zod 側が先。** 消えるキーを意味検査しても仕方がない。
 
 ### テンプレートは「業種」ではなく「形」で索引する
 
@@ -1832,6 +1943,10 @@ session    現在の議題とフェーズ   参加者 read のみ
 - [ ] **任意キーの `in` ガード**（`public` / `collections` / `participantRead` /
       `audience` / `selfUpdateFields` / `selfTransitions` / `emailField` / `window` / `gateOn`）
 - [ ] `authed()` と `verified()` の分離（匿名認証が自分の行を読めること）
+- [ ] `roleIn()` の `'*'` フォールバックのガード（コレクション別ロールだけのメンバー）
+- [ ] `/mail` を `cid` の書き手にも開く
+- [ ] `get().data` の前に `exists()`、連結材料に `is string`
+- [ ] `list` クエリがルールの条件を写していること（親がクエリを組む）
 - [ ] `session` ドキュメント（主催者が駆動する状態機械）と、それを create 条件に使うこと
 - [ ] **`immutable`（owner にも触れない記録）** — ルールの形に関わる
 - [ ] `peerVisibility: "public"`（記名投票。参加者が全件読める）
@@ -1894,7 +2009,7 @@ session    現在の議題とフェーズ   参加者 read のみ
 
 ## 未解決の論点
 
-- **emulator テストに「キーを宣言しないアプリ」を含めること** — 3 巡のうち 5 件がこの形。
+- **emulator テストに上の 4 パターンを含めること** — 3 巡のうち 5 件がこの形。
   4 シナリオが全部通っても、この 1 本が無いと同じ穴が開く
 - **スキーマの `.strict()` 化 か、生 JSON リンターか** — `schemaZ.ts` は未知キーを
   バリアントごとに黙って落とすので、新キーは実装が入るまでパースで消え、`mutate` に書いた
