@@ -532,16 +532,22 @@ service cloud.firestore {
                             && has("createFields")
                             && request.resource.data.keys().hasOnly(cfg().createFields)
                             && request.resource.data.size() <= 200
-                            // 名前だけでなく「必須が揃っているか」と、整合性上重要な
-                            // 1 つの enum を検査する（ルールには反復が無いので、
-                            // 任意スキーマの型検査はここまでが限界。下記参照）
+                            // 名前だけでなく「必須が揃っているか」と、**集計キーの値**を検査する。
+                            // ルールには反復が無いので、インデックスで明示的に展開する（上限 2）。
+                            // 集計キーが未検査だと、公開された結果が壊れる（下記参照）
                             && (!has("validate")
                                 || ((!("required" in cfg().validate)
                                      || request.resource.data.keys().hasAll(cfg().validate.required))
-                                    && (!("choiceField" in cfg().validate)
-                                        || (cfg().validate.choiceField in request.resource.data
-                                            && cfg().validate.choiceValues
-                                                 .hasAny([request.resource.data[cfg().validate.choiceField]])))))
+                                    && (!("keyFields" in cfg().validate)
+                                        || (cfg().validate.keyFields.size() <= 2
+                                            && (cfg().validate.keyFields.size() < 1
+                                                || (cfg().validate.keyFields[0].field in request.resource.data
+                                                    && cfg().validate.keyFields[0].values.hasAny(
+                                                         [request.resource.data[cfg().validate.keyFields[0].field]])))
+                                            && (cfg().validate.keyFields.size() < 2
+                                                || (cfg().validate.keyFields[1].field in request.resource.data
+                                                    && cfg().validate.keyFields[1].values.hasAny(
+                                                         [request.resource.data[cfg().validate.keyFields[1].field]])))))))
                             && (!has("statusField")
                                 || (cfg().statusField in request.resource.data
                                     && has("initialStatus")
@@ -833,6 +839,19 @@ S1 のサンプルからも手書きの `memberEmails` を外した。
 > `immutable` と `peerVisibility: "public"` が重なるコレクションでは、
 > この取り違えは**永久に公開される誤帰属**になる。
 
+**28. 集計キーが未検査だった（14 巡目）。** S2 の `q2` は `aggregate.by` に載る一方
+`number` 型で、値の検査が無かった。直接クライアントが `q2: "not-a-score"` を投げれば、
+それが**公開された集計の 1 グループになる**。
+私はこれを「守れないもの（任意フィールドの型）」の表に入れて済ませていたが、
+**集計キーはその中の特別な部分集合**だった — 他のフィールドの型違いは
+「そのレコードが変」で終わるのに対し、**集計キーの型違いはアプリ全体の出力を壊す。**
+→ `choiceField`/`choiceValues`（1 つ）を **`keyFields`（最大 2、インデックス展開）** に一般化し、
+リンターの不変条件 **`aggregate.by` ⊆ `keyFields` ∪ `gateOn.match` ∪ `statusField`** を置いた。
+S2 の `q2` は `enum` に変えた。
+
+> 上限 2 が実務でほぼ効かない理由: 集計結果は 1 MiB のドキュメントに収まる必要があり、
+> **集計キーは低カーディナリティでなければならない**。自由な数値でグループ化する設計自体が誤り。
+
 ### 同じ形のバグが 3 巡続いた（4 巡目も同じだった）
 
 **4 巡で 10 件が同じ根っこ**だった:
@@ -893,7 +912,7 @@ S1 のサンプルからも手書きの `memberEmails` を外した。
 | 宣言した audience と認可の一致 | `roleIn(...) == "participant"`（`!= null` では viewer も投稿できる） |
 | `session` を駆動できるのは owner だけ | `roleIn(aid, '*') == "owner"`（`writerOf` は editor を含む） |
 | **status を消して状態機械を迂回できない** | `nextStatus() != null` を要求し、null の既存レコードは宣言された `initial` にだけ入れる |
-| 公開投稿の必須と主要 enum | `hasAll(validate.required)` / `choiceValues.hasAny([...])` |
+| 公開投稿の必須と**集計キーの値** | `hasAll(validate.required)` / `keyFields[i].values.hasAny([...])` |
 
 ### authored な `app.json` と published な `apps/{aid}` は別物
 
@@ -932,25 +951,40 @@ Firestore の `apps/{aid}` は **publish が導出した別のドキュメント
 publish 時に**ルールで検査可能な射影**を app ドキュメントへ出し、そこまでを守る:
 
 ```json
-"validate": {
-  "required": ["topicId", "choice"],
-  "choiceField": "choice",
-  "choiceValues": ["yes", "no", "abstain"]
+{
+  "validate": {
+    "required": ["topicId", "voter", "choice", "status"],
+    "keyFields": [{ "field": "choice", "values": ["yes", "no", "abstain"] }]
+  }
 }
 ```
+
+**`keyFields` は「集計キー」**。ここが未検査だと、`q2: "not-a-score"` のような値が
+そのまま `aggregate.by` のグループになり、**公開された結果が汚染される**。
+他のフィールドの型違いは「そのレコードが変」で済むが、**集計キーの型違いは
+アプリ全体の出力を壊す**ので、守る側に置く。
+
+ルールに反復が無いので**インデックスで明示的に展開し、上限を 2 とする**。
+これは実務上ほぼ制約にならない — 集計キーは 1 MiB のドキュメントに収まる必要があり、
+**低カーディナリティでなければならない**（無制限の数値でグループ化してはいけない）。
+
+**リンターの不変条件**: `aggregate.by` の各フィールドは、
+`validate.keyFields` に載っているか、`gateOn.match` で固定されているか、`statusField`
+のいずれかでなければならない。S3 / S4 の `questionId` / `topicId` は `gateOn` が
+`session.current` と一致させるので、この条件を満たしている。
 
 | 守れる | 手段 |
 |---|---|
 | 余分なフィールドが無い | `hasOnly(createFields)` |
 | 必須が揃っている | `hasAll(validate.required)` |
 | 初期ステータスが宣言どおり | `statusField == initialStatus` |
-| **整合性上重要な 1 つの enum**（投票の賛否、小テストの選択肢） | `choiceValues.hasAny([...])` |
+| **集計キーの値**（最大 2、投票の賛否、小テストの選択肢、尺度回答） | `keyFields[i].values.hasAny([...])` |
 | ドキュメントが巨大でない | `data.size() <= 200` |
 
 | 守れない | 受け方 |
 |---|---|
 | 任意フィールドの型 | 集計時に除外 + ホストの `validateCollectionRecords` で事後掃除 |
-| 複数 enum / 文字列長 / 正規表現 | 同上。重要な 1 つだけをルールに載せる設計判断 |
+| 3 つ目以降の enum / 文字列長 / 正規表現 | 同上。**集計キーは 2 つまで**という制約に落とす（低カーディナリティが要るので実務上ほぼ効かない） |
 | ref の実在 | `get()` が 10 回上限なので全 ref は見られない。壊れた ref は表示側で欠落として扱う |
 | 大量投稿 | **App Check**（ルールにレート制限は書けない）+ `audience: "participant"` |
 
@@ -1490,7 +1524,8 @@ sandbox された HTML が Firestore ハンドルを持たなくても、**親�
 | authored な `app.json` が `memberEmails` を手書きしている | 導出物の二重管理。`members` と乖離した瞬間に publish がルールに拒否される |
 | `mail.on` のテンプレートが `actions.*.then.email` と食い違う | 承認メールが常に拒否される |
 | `window` の端点が ISO として解釈できない | publish が `fromMs` / `untilMs` を出せず、**投稿が全部拒否される** |
-| `peerVisibility: "public"` なのに `validate.choiceField` が無い | 集計が enum 外の値で汚染される |
+| `aggregate.by` のフィールドが `validate.keyFields` にも `gateOn.match` にも無い | **公開された集計が壊れる。** 直接クライアントが `q2: "not-a-score"` を投げれば、それが 1 つのグループになる |
+| `validate.keyFields` が 3 つ以上 | ルールに反復が無いので検査されない（集計キーは低カーディナリティ 2 つまで） |
 | `createFields` に身元を表すフィールド（`voter` / `author` / `submittedBy` …）があるのに `emailField` で固定していない | **他人の名前で記録を作れる。** `immutable` + `peerVisibility: "public"` なら誤帰属が永久に公開される |
 | `icon` が無い / `actions` がオブジェクトマップ | **既存文法エラー**（必須キー欠落・型不一致）。schema が読み込まれない |
 | `mutate` に `when`（正しくは `require`） | **エラーにならず黙って消える**。ゲートが外れた状態で動く |
@@ -1899,7 +1934,8 @@ results     集計（aggregate が publish、公開読み取り）
         "statusField": "status",
         "initialStatus": "submitted",
         "validate": { "required": ["q1", "status"],
-                      "choiceField": "q1", "choiceValues": ["a", "b", "c"] }
+                      "keyFields": [{ "field": "q1", "values": ["a", "b", "c"] },
+                                    { "field": "q2", "values": ["1", "2", "3", "4", "5"] }] }
       }
     }
   }
@@ -1953,7 +1989,7 @@ results     集計（aggregate が publish、公開読み取り）
   "fields": {
     "id":     { "type": "string", "label": "ID", "primary": true },
     "q1":     { "type": "enum",   "label": "Q1", "values": ["a","b","c"], "required": true },
-    "q2":     { "type": "number", "label": "Q2（1-5）" },
+    "q2":     { "type": "enum",   "label": "Q2（1-5）", "values": ["1","2","3","4","5"] },
     "q3":     { "type": "text",   "label": "Q3 自由記述",
                 "when": { "field": "q1", "in": ["a"] } },
     "status": { "type": "status", "values": ["submitted"] }
@@ -1969,6 +2005,10 @@ results     集計（aggregate が publish、公開読み取り）
 
 - `idFrom: "auth.uid"` を**書き忘れると一人が何回でも回答できる**（リンターが検出）
 - `selfUpdate: {}` は `finalize: true` と重複するが、**明示しておくと意図が読める**
+- **`q2` を `number` ではなく `enum` にしてある。** `aggregate.by` に載るフィールドは
+  ルールが値を検査できなければならず（`validate.keyFields`）、検査できるのは
+  有限の値集合だけ。**尺度回答を自由な数値にすると、直接クライアントが
+  `q2: "not-a-score"` を投げて公開された集計を壊せる**
 - `finalize: true` と `window` は**両方**要る。`window` だけだと締切前に何度でも上書きできる
 - **「一人一回」と「主催者に対して匿名」は両立しない**（サーバーが要る。範囲外）
 
@@ -2008,7 +2048,7 @@ session     現在の問題とフェーズ  参加者は read のみ
         "selfUpdate": {},
         "statusField": "status", "initialStatus": "answered",
         "validate": { "required": ["questionId", "choice", "status"],
-                      "choiceField": "choice", "choiceValues": ["A", "B", "C"] },
+                      "keyFields": [{ "field": "choice", "values": ["A", "B", "C"] }] },
         "gateOn": { "phase": "answering", "match": "questionId" }
       }
     }
@@ -2148,7 +2188,7 @@ session    現在の議題とフェーズ   参加者 read のみ
         "selfUpdate": {},
         "statusField": "status", "initialStatus": "cast",
         "validate": { "required": ["topicId", "voter", "choice", "status"],
-                      "choiceField": "choice", "choiceValues": ["yes", "no", "abstain"] },
+                      "keyFields": [{ "field": "choice", "values": ["yes", "no", "abstain"] }] },
         "gateOn": { "phase": "voting", "match": "topicId" }
       }
     }
@@ -2330,7 +2370,8 @@ session    現在の議題とフェーズ   参加者 read のみ
 - [ ] `get().data` の前に `exists()`、連結材料に `is string`
 - [ ] `list` クエリがルールの条件を写していること（親がクエリを組む）
 - [ ] **`/mail` が宣言（`then.email`）を再導出すること** — 宛先・テンプレート・自由文の禁止
-- [ ] **`validate` 射影**（`required` / `choiceField` / `choiceValues`）を publish が出すこと
+- [ ] **`validate` 射影**（`required` / `keyFields`）を publish が出すこと。
+      **`aggregate.by` ⊆ `keyFields` ∪ `gateOn.match` ∪ `statusField`** をリンターが保証すること
 - [ ] `/mail` の決定的 ID と `get() != getAfter()` による**この書き込みでの遷移**の要求
       （**クライアントはバッチで書く**）
 - [ ] `audience` は `== "participant"` の厳密一致
