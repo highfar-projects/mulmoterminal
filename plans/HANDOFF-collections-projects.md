@@ -285,18 +285,32 @@ something true to say.
 
 **The PANE was checked by hand (2026-08-09) and works.** It is the half this harness cannot reach:
 the button only appears for a cell whose session reports the `data` MCP group, which means a real
-agent session — a grid cell is handed no `--mcp-config` and takes its GUI tools from the
-DIRECTORY's own `.mcp.json`, so a shell cell or a cell with no session never shows it.
+agent session — a shell cell, or a cell with no session, never shows it.
 
-How to repeat it, since the next person will have to: launch a cell in the project with the **data**
-tool-group switch on in the launch form (the workspace gets every group automatically —
-`carriesFullGuiMcp` — so it is the quicker but less interesting case), and note that the switch is
-read at SESSION START, so it takes a relaunch. Then enlarge the cell and press the database button.
+What was exercised: collections listed and opened inside the pane's own shadow root, navigation
+staying in the pane (the app did not move to the full-screen browser), the portability strip
+pressed and answering, and two cells on two projects each showing their own collections. The route
+behind the strip answers `{"portable": true, "findings": []}` for mag2's `newsletters`, so
+"Nothing to fix — it travels." is the reply it renders.
 
-What is worth looking at, being what no spec sees: the pane's height beside the terminal, the
-plugin's views inside ITS shadow root, that opening a collection there does NOT move the whole app
-(nav containment), the portability strip below them, and — the point of the whole arc — two cells
-on two projects each showing their own collections.
+**How to repeat it**, since the next person will have to — and two details here are easy to state
+wrongly, both corrected on review of this very page:
+
+- **Where the group registration lives.** The launch form's `data` switch runs
+  `claude mcp add -s local` (`server/infra/gui-mcp-registration.ts`), which writes
+  **`~/.claude.json`, keyed by the directory** — NOT a `.mcp.json` in the folder. Deliberate:
+  `local` scope keeps a personal tool-group choice out of a repo's diff. A hand-written project
+  `.mcp.json` is a separate, also-supported route, and `registeredGuiMcpGroups` reads ANCESTOR
+  project files and the local/user scopes too — so a cell in `/repo/packages/app` can inherit
+  `data` from `/repo`. Adding a file in the leaf directory to "fix" a missing button is the wrong
+  move.
+- **The registration is read at SESSION START**, so flipping the switch takes a relaunch. That is
+  the detail that makes the check look broken when it is not.
+- **The workspace shortcut is not universal.** A workspace session gets every group automatically
+  only for the agents `agentCarriesFullGuiMcp` admits — **Claude and Codex** (and their custom
+  wrappers). Antigravity, Grok and Muse reach MCP through a config file or an installed plugin
+  with no per-spawn `--mcp-config`, so in the workspace they still get only what their DIRECTORY
+  registered (`common/guiMcpAgents.ts` says why, per agent).
 
 The original lesson stands: server-side correctness was verified by curl and by specs at every
 step, and none of that said the feature was reachable.
