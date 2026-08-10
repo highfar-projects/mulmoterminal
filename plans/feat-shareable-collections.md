@@ -270,6 +270,10 @@ claim する」パターンが要り、owner 限定の update に穴を開ける
 | `viewer` | レコードの読み取り（全件） |
 | `participant` | submit + 自分の行 + public / `revealed` 済みのみ。**全件は読めない** |
 
+> **`participant` は `members` に載るが `reader()` には含まれない。** ルールで
+> 「名簿にいるか（`listed`）」と「全件読めるか（`reader`）」を混同すると、
+> 参加者に全データが漏れる（「レビューで塞いだ穴」1 番）。
+
 repo の権限（① ②）は **members に入れない**。GitHub の仕事。混ぜた瞬間に
 「Firestore が repo の権限を知っている」という嘘が始まる。
 
@@ -305,105 +309,124 @@ service cloud.firestore {
     function signedIn() { return request.auth != null && request.auth.token.email_verified == true; }
     function email()    { return request.auth.token.email; }
     function app(aid)   { return get(/databases/$(database)/documents/apps/$(aid)).data; }
+
+    // 名簿に載っているか（participant を含む）。「データを読める」という意味ではない
+    function listed(aid) { return signedIn() && email() in app(aid).members; }
+
     function roleIn(aid, cid) {
-      return signedIn() && email() in app(aid).members
+      return listed(aid)
         ? (cid in app(aid).members[email()] ? app(aid).members[email()][cid]
                                             : app(aid).members[email()]['*'])
         : null;
     }
-    function member(aid) { return signedIn() && email() in app(aid).members; }
+    // 全件を読める役割。participant は決して含まれない
+    function reader(aid, cid) { return roleIn(aid, cid) in ["owner", "editor", "viewer"]; }
+    function writer(aid, cid) { return roleIn(aid, cid) in ["owner", "editor"]; }
 
     match /apps/{aid} {
-      // 非正規化した memberEmails が members と食い違わないことをルール自身が保証する
       function membersConsistent() {
         return request.resource.data.memberEmails.toSet()
             == request.resource.data.members.keys().toSet();
       }
 
-      allow read:   if member(aid) || app(aid).public.enabled == true;
+      // 名簿そのものは reader だけ。participant に読ませると同級生のメールが見える。
+      // ルールの get() は read ルールの影響を受けないので、これで判定は壊れない
+      allow read:   if reader(aid, '*');
       allow create: if signedIn()
                     && request.resource.data.owner == request.auth.uid
                     && request.resource.data.members[email()]['*'] == "owner"
                     && membersConsistent();
       allow update: if roleIn(aid, '*') == "owner"
-                    && request.resource.data.owner == resource.data.owner   // 所有者は移らない
+                    && request.resource.data.owner == resource.data.owner
                     && membersConsistent();
       allow delete: if roleIn(aid, '*') == "owner";
 
-      // 主催者が駆動する状態機械（シナリオ 3）。参加者は読めるが書けない
+      // participant / 匿名が読む公開設定（名簿を含まない）。owner が publish 時に書く
+      match /config/{docId} {
+        allow read:  if true;
+        allow write: if roleIn(aid, '*') == "owner";
+      }
+
+      // 主催者が駆動する状態機械（シナリオ 3 / 4）
       match /session {
-        allow read:  if member(aid) || app(aid).public.enabled == true;
-        allow write: if roleIn(aid, '*') in ["owner", "editor"];
+        allow read:  if listed(aid) || app(aid).public.enabled == true;
+        allow write: if writer(aid, '*');
       }
 
       match /collections/{cid} {
-        allow read:  if member(aid) || cid in app(aid).public.read;
-        allow write: if roleIn(aid, '*') == "owner";                        // = publish
+        allow read:  if reader(aid, cid) || cid in app(aid).public.read;
+        allow write: if roleIn(aid, '*') == "owner";     // = publish
 
         match /items/{itemId} {
-          function submitOpen(aid, cid) { return cid in app(aid).public.submit.keys(); }
-          function cfg(aid, cid)        { return app(aid).public.submit[cid]; }
-          // コレクションごとの宣言（immutable / peerVisibility）。publish 時に app doc へ載る
-          function colCfg(aid, cid)     { return app(aid).collections[cid]; }
+          function submitOpen() { return cid in app(aid).public.submit.keys(); }
+          function cfg()        { return app(aid).public.submit[cid]; }
+          function colCfg()     { return app(aid).collections[cid]; }
+          function session()    { return get(/databases/$(database)/documents/apps/$(aid)/session).data; }
 
-          // peerVisibility: "public" なら参加者は全件読める（記名投票）
-          allow read: if member(aid)
-                      || cid in app(aid).public.read
-                      || (colCfg(aid, cid).peerVisibility == "public" && roleIn(aid, cid) != null)
-                      // requireAuth のとき、申込者は自分の申込み/回答だけ読める
-                      // （= マイ予約 / 自分の回答の確認）
-                      || (signedIn() && submitOpen(aid, cid) && cfg(aid, cid).requireAuth == true
-                          && (itemId == request.auth.uid
-                              || resource.data[cfg(aid, cid).emailField] == email()));
-
-          // 申込み/回答: 宣言されたフィールドだけ、宣言された初期ステータスで、新規作成のみ。
-          //  - requireAuth が true なら署名必須 + email はサインイン中のものと一致（スパム中継の穴を閉じる）
-          //  - idFrom があればドキュメント ID が身元 → create は 1 回しか成立しない（一人一回）
-          //  - window があれば締切をルールで強制する
-          allow create: if roleIn(aid, cid) in ["owner", "editor"]
-                        || (submitOpen(aid, cid)
-                            && request.resource.data.keys().hasOnly(cfg(aid, cid).fields)
-                            && request.resource.data[cfg(aid, cid).statusField]
-                                 == cfg(aid, cid).initialStatus
-                            && (cfg(aid, cid).requireAuth != true
-                                || (signedIn()
-                                    && request.resource.data[cfg(aid, cid).emailField] == email()))
-                            // audience: "participant" なら名簿（members）に載っている人だけ
-                            && (cfg(aid, cid).audience != "participant"
-                                || roleIn(aid, cid) == "participant")
-                            && (!("idFrom" in cfg(aid, cid)) || itemId == request.auth.uid)
-                            && (!("window" in cfg(aid, cid))
-                                || (request.time < cfg(aid, cid).window.until
-                                    && (!("from" in cfg(aid, cid).window)
-                                        || request.time > cfg(aid, cid).window.from))));
-
-          // immutable: create のみ。owner ですら update / delete できない（投票記録・監査ログ）
-          // owner/editor は常に修正できる（immutable でない場合）。
-          // 申込者本人は finalize が false のときだけ、自分の行を、期限内に、宣言された
-          // フィールドの範囲で更新できる（= マイ予約からのキャンセル/変更）。
-          // finalize: true なら本人の update は成立しない（= 回答は書き切り）。
-          function ownRow(aid, cid) {
-            return signedIn() && submitOpen(aid, cid) && cfg(aid, cid).requireAuth == true
-                   && (itemId == request.auth.uid
-                       || resource.data[cfg(aid, cid).emailField] == email());
+          // ID 戦略は有限の enum。文字列連結で複合 ID を検証する
+          function idOk() {
+            return !("idFrom" in cfg())
+                || cfg().idFrom == "auto"
+                || (cfg().idFrom == "auth.uid" && itemId == request.auth.uid)
+                || (cfg().idFrom == "auth.uid+field"
+                    && itemId == request.auth.uid + "_" + request.resource.data[cfg().idField]);
           }
-          allow update: if colCfg(aid, cid).immutable != true
-                        && (roleIn(aid, cid) in ["owner", "editor"]
-                            || (ownRow(aid, cid)
-                                && cfg(aid, cid).finalize != true
-                                && request.resource.data.keys().hasOnly(cfg(aid, cid).fields)
-                                && (!("window" in cfg(aid, cid))
-                                    || request.time < cfg(aid, cid).window.until)))
-                        && request.resource.data.size() <= 200;
-          allow delete: if colCfg(aid, cid).immutable != true
-                        && roleIn(aid, cid) in ["owner", "editor"];
+          function inWindow() {
+            return !("window" in cfg())
+                || (request.time < cfg().window.until
+                    && (!("from" in cfg().window) || request.time > cfg().window.from));
+          }
+          function ownRow() {
+            return signedIn() && submitOpen()
+                   && (itemId == request.auth.uid
+                       || itemId.matches(request.auth.uid + "_.*")
+                       || resource.data[cfg().emailField] == email());
+          }
+
+          allow read: if reader(aid, cid)
+                      || cid in app(aid).public.read
+                      // 記名投票: 名簿にいる全員が全件読める
+                      || (colCfg().peerVisibility == "public" && listed(aid))
+                      // 段階的公開（gated が生成した従属コレクション）
+                      || (colCfg().revealGated == true && resource.data.revealed == true && listed(aid))
+                      // 自分の行だけ（participant はここまで）
+                      || ownRow();
+
+          allow create: if writer(aid, cid)
+                        || (submitOpen()
+                            && request.resource.data.keys().hasOnly(cfg().createFields)
+                            && request.resource.data[cfg().statusField] == cfg().initialStatus
+                            && (cfg().requireAuth != true
+                                || (signedIn()
+                                    && request.resource.data[cfg().emailField] == email()))
+                            && (cfg().audience != "participant" || roleIn(aid, cid) != null)
+                            && idOk() && inWindow()
+                            && (!("gateOn" in cfg())
+                                || (session().phase == cfg().gateOn.phase
+                                    && session().current
+                                         == request.resource.data[cfg().gateOn.match])));
+
+          // immutable なら誰も（owner でも）更新できない。
+          // 本人の更新は「変わったキーが selfUpdateFields の範囲」— ドキュメント全体の
+          // hasOnly ではない。status のような system field は差分に現れた時点で拒否される。
+          // 宣言された状態遷移（キャンセル等）だけは status の変更を許す
+          allow update: if colCfg().immutable != true
+                        && (writer(aid, cid)
+                            || (ownRow() && cfg().finalize != true && inWindow()
+                                && (request.resource.data.diff(resource.data).affectedKeys()
+                                      .hasOnly(cfg().selfUpdateFields)
+                                    || (request.resource.data.diff(resource.data).affectedKeys()
+                                          .hasOnly([cfg().statusField])
+                                        && cfg().selfTransitions[resource.data[cfg().statusField]]
+                                             .hasAny([request.resource.data[cfg().statusField]])))));
+
+          allow delete: if colCfg().immutable != true && writer(aid, cid);
         }
       }
 
       // 宣言的な副作用のキュー（Firebase Trigger Email 拡張が読む）
-      // 匿名に書かせない — 踏み台になる
       match /mail/{mailId} {
-        allow create: if roleIn(aid, '*') in ["owner", "editor"];
+        allow create: if writer(aid, '*');
         allow read, update, delete: if false;
       }
     }
@@ -415,6 +438,37 @@ service cloud.firestore {
 
 `delete` を `write` から分けているのは、削除時に `request.resource` が null になり
 サイズ判定が壊れるため。
+
+### レビューで塞いだ穴（記録）
+
+初稿のルールには 3 つの実害ある欠陥があった。**同じ間違いが再発しやすいので残す。**
+
+**1. `participant` が全件を読めていた。** `member(aid)` を「名簿にいるか」と定義し、item の read を
+`member(aid)` で許していた。`participant` も名簿（`members`）に載るので、**生徒が同級生の回答を、
+回答者が他人のアンケートを読めた。** シナリオ 2 と 3 の前提が崩れる。
+→ **`listed()`（名簿にいる）と `reader()`（全件読める役割）を分離。** `participant` は
+`reader()` に決して含まれない。名簿に載っていることと、データを読めることは別。
+
+**2. 申込者が自分の予約を `approved` にできた。** `status` は create 時に `initialStatus` を
+検証するため `fields` に必要だが、更新規則が**同じ `fields` に対する `hasOnly`** だったため、
+本人が `status` を書き換えられた。**これは権限昇格。**
+→ **`createFields` と `selfUpdateFields` を分離**し、更新は
+`diff(resource.data).affectedKeys().hasOnly(selfUpdateFields)` で**変わったキー**を見る。
+状態遷移は `selfTransitions` で宣言されたものだけ許す。
+
+> この欠陥は**下のリンター表に自分で書いた項目そのもの**（「`submit.fields` に管理用フィールドが
+> 混ざっている → 権限昇格」）。設計者が自分の検査項目を自分のサンプルで破った。
+> **リンターが要るという主張の、これ以上ない裏付け。**
+
+**3. 複合 ID が表現できていなかった。** `idFrom` があれば `itemId == request.auth.uid`、という
+単一の規則だった。シナリオ 3・4 は `{uid}_{questionId}` を要求するので、**全問・全議題で
+1 ドキュメントしか作れない**（＝ 2 問目以降が投稿できない）。
+→ **`idFrom` を有限の enum** にし、`"auth.uid+field"` + `idField` を文字列連結で明示的に検証する。
+
+あわせて、**名簿（`members`）そのものを `participant` に読ませない**ようにした
+（同級生のメールが見える）。ルールの `get()` は read ルールの影響を受けないので、
+`apps/{aid}` の read を `reader()` に絞っても判定は壊れない。公開設定は
+`apps/{aid}/config` に分けて置く。
 
 ### ルールが保証できること
 
@@ -893,6 +947,10 @@ sandbox された HTML が Firestore ハンドルを持たなくても、**親�
 | `aggregate.visibleFrom: "during"` かつ `peerVisibility: "hidden"` | 誰が集計するのか未定義 |
 | `immutable: true` かつ本人による変更を期待している | 矛盾 |
 | `window` があるのに `session` も `finalize` も無い | 締切後の扱いが未定義 |
+| `selfUpdateFields` に `statusField` が入っている | **本人が自分の承認状態を変えられる（権限昇格）** |
+| `idFrom` が enum 外の文字列 | ルールが解釈できず、投稿が全部拒否される（または 1 件に潰れる） |
+| `gateOn` があるのに `session` を持たないアプリ | create が常に失敗する |
+| `icon` が無い / `actions` がオブジェクトマップ / `mutate` に `when` | **既存文法エラー**。schema が読み込まれない |
 
 **どれもスキーマだけを見て判定できる。** `acceptParsedSchema` の受け入れゲートの延長に置き、
 `putSchema` と publish の両方で走らせる（publish 側は「ライブデータの検証」と同じ関門）。
@@ -1037,7 +1095,15 @@ HTML に逃がすと元の木阿弥なので、フィールドに `showIf` を�
 `derived` `embed` `backlinks` `rollup` `toggle` `flag` は **computed**（レコードに書かれない）。
 
 **既存のアクション種別**: `chat`（可視 LLM） / `agent`（隠しワーカー） / `mutate`（宣言的な書き込み）。
-**既存の可視性述語**: `when: { field, in: [...] }`（アクション・フィールド共通）。
+
+**既存の文法で間違えやすい点**（レビューで実際に間違えた。`schemaZ.ts` で確認済み）:
+
+- **`icon` はコレクション必須**（`CollectionObjectZ`）。省略すると schema が通らない
+- **`actions` は配列**（`z.array(ActionSpecZ)`）。オブジェクトマップではない。各要素に
+  一意な `id` と `label` が要る（`actionBase`、`id` 重複は refine で拒否）
+- **`mutate` アクションのゲートは `require`**、`when` ではない（`when` は `chat`/`agent` 側）。
+  `require` は表示条件かつ**サーバー側の認可条件**でもある
+- **フィールドの条件表示は既存の `when`**（`fieldBase`）。新しいキーを足す必要はない
 
 **この計画が新規に提案するキー**（実装が要る。定義箇所を併記）:
 
@@ -1045,15 +1111,15 @@ HTML に逃がすと元の木阿弥なので、フィールドに `showIf` を�
 |---|---|---|
 | `storage.type: "firestore"` + `cid` | schema | D1 / D2 |
 | `immutable` | schema（コレクション） | シナリオ 4 |
+| `revealGated` | schema（`gated` の生成物） | シナリオ 3 |
 | `peerVisibility` | schema（コレクション） | シナリオ 4 |
 | `gated` | schema（コレクション） | シナリオ 3 |
-| `showIf` | フィールド | 宣言の境界 |
 | `views[].datasets` / `.actions` / `.live` | schema | View Bridge |
 | `views[].type: "schedule"` | schema | 宣言の境界 |
 | `actions.*.then.email` | schema | 宣言的な副作用 |
 | `aggregate` | schema | シナリオ 2 / 3 / 4 |
 | `aid` / `members` / `public` | `app.json` | D1 / 権限モデル |
-| `public.submit[cid].*` | `app.json` | 認証段階・シナリオ 2 |
+| `public.submit[cid].*`（`createFields` / `selfUpdateFields` / `selfTransitions` / `idFrom` / `idField` / `gateOn` …） | `app.json` | 認証段階・シナリオ 2/3/4 |
 | `session` | Firestore ドキュメント | シナリオ 3 |
 
 > **既存の custom view との関係**: `CollectionCustomView` は既に sandbox iframe +
@@ -1096,8 +1162,11 @@ services  1 ──< bookings      メニュー（所要時間の供給元）
       "bookings": {
         "requireAuth": true,
         "emailField": "customerEmail",
+        "idFrom": "auto",
         "finalize": false,
-        "fields": ["customerName","customerEmail","service","stylist","startAt","status"],
+        "createFields": ["customerName","customerEmail","service","stylist","startAt","status"],
+        "selfUpdateFields": ["customerName","startAt","stylist"],
+        "selfTransitions": { "pending": ["cancelled"], "approved": ["cancelled"] },
         "statusField": "status",
         "initialStatus": "pending",
         "window": { "until": "2026-12-31T23:59:59Z" }
@@ -1107,13 +1176,16 @@ services  1 ──< bookings      メニュー（所要時間の供給元）
 }
 ```
 
-`finalize: false` = 客が「マイ予約」からキャンセル・変更できる。
+`finalize: false` = 客が「マイ予約」から変更できる。**`status` は `createFields` にあるが
+`selfUpdateFields` には無い** — 作成時は `initialStatus` の検証のために必要だが、更新で触らせると
+**客が自分の予約を `approved` にできてしまう**（権限昇格）。キャンセルは `selfTransitions` で
+宣言された遷移としてのみ許す。
 
 **`.claude/skills/services/schema.json`**
 
 ```json
 {
-  "slug": "services", "title": "メニュー",
+  "slug": "services", "title": "メニュー", "icon": "content_cut",
   "storage": { "type": "firestore" },
   "primaryKey": "name",
   "fields": {
@@ -1128,7 +1200,7 @@ services  1 ──< bookings      メニュー（所要時間の供給元）
 
 ```json
 {
-  "slug": "stylists", "title": "スタッフ",
+  "slug": "stylists", "title": "スタッフ", "icon": "person",
   "storage": { "type": "firestore" },
   "primaryKey": "name",
   "fields": {
@@ -1143,7 +1215,7 @@ services  1 ──< bookings      メニュー（所要時間の供給元）
 
 ```json
 {
-  "slug": "shifts", "title": "シフト",
+  "slug": "shifts", "title": "シフト", "icon": "schedule",
   "storage": { "type": "firestore" },
   "primaryKey": "id",
   "fields": {
@@ -1160,7 +1232,7 @@ services  1 ──< bookings      メニュー（所要時間の供給元）
 
 ```json
 {
-  "slug": "bookings", "title": "予約",
+  "slug": "bookings", "title": "予約", "icon": "event",
   "storage": { "type": "firestore" },
   "primaryKey": "id",
   "fields": {
@@ -1175,20 +1247,16 @@ services  1 ──< bookings      メニュー（所要時間の供給元）
     "status":        { "type": "status",   "label": "状態",
                        "values": ["pending", "approved", "rejected", "cancelled"] }
   },
-  "actions": {
-    "approve": {
-      "kind": "mutate", "label": "承認する",
-      "when": { "field": "status", "in": ["pending"] },
-      "set":  { "status": "approved" },
-      "then": { "email": { "to": "{{customerEmail}}", "template": "booking-approved" } }
-    },
-    "reject": {
-      "kind": "mutate", "label": "お断りする",
-      "when": { "field": "status", "in": ["pending"] },
-      "set":  { "status": "rejected" },
-      "then": { "email": { "to": "{{customerEmail}}", "template": "booking-rejected" } }
-    }
-  },
+  "actions": [
+    { "id": "approve", "kind": "mutate", "label": "承認する",
+      "require": { "field": "status", "in": ["pending"] },
+      "set":     { "status": "approved" },
+      "then":    { "email": { "to": "{{customerEmail}}", "template": "booking-approved" } } },
+    { "id": "reject", "kind": "mutate", "label": "お断りする",
+      "require": { "field": "status", "in": ["pending"] },
+      "set":     { "status": "rejected" },
+      "then":    { "email": { "to": "{{customerEmail}}", "template": "booking-rejected" } } }
+  ],
   "views": [{
     "id": "book", "type": "schedule", "label": "予約する", "live": false,
     "resource":     "stylists",
@@ -1234,7 +1302,8 @@ results     集計（aggregate が publish、公開読み取り）
         "idFrom": "auth.uid",
         "finalize": true,
         "window": { "from": "2026-09-01T00:00:00Z", "until": "2026-09-30T23:59:59Z" },
-        "fields": ["q1","q2","q3","status"],
+        "createFields": ["q1","q2","q3","status"],
+        "selfUpdateFields": [],
         "statusField": "status",
         "initialStatus": "submitted"
       }
@@ -1249,11 +1318,11 @@ results     集計（aggregate が publish、公開読み取り）
 
 ```json
 {
-  "slug": "questions", "title": "設問",
+  "slug": "questions", "title": "設問", "icon": "help",
   "storage": { "type": "firestore" },
   "primaryKey": "id",
   "fields": {
-    "id":      { "type": "string", "primary": true },
+    "id":      { "type": "string", "label": "ID", "primary": true },
     "order":   { "type": "number", "label": "表示順" },
     "text":    { "type": "text",   "label": "設問文", "required": true },
     "kind":    { "type": "enum",   "label": "形式", "values": ["single","multi","scale","free"] },
@@ -1268,16 +1337,16 @@ results     集計（aggregate が publish、公開読み取り）
 
 ```json
 {
-  "slug": "responses", "title": "回答",
+  "slug": "responses", "title": "回答", "icon": "how_to_reg",
   "storage": { "type": "firestore" },
   "primaryKey": "id",
   "peerVisibility": "hidden",
   "fields": {
-    "id":     { "type": "string", "primary": true },
+    "id":     { "type": "string", "label": "ID", "primary": true },
     "q1":     { "type": "enum",   "label": "Q1", "values": ["a","b","c"], "required": true },
     "q2":     { "type": "number", "label": "Q2（1-5）" },
     "q3":     { "type": "text",   "label": "Q3 自由記述",
-                "showIf": { "field": "q1", "in": ["a"] } },
+                "when": { "field": "q1", "in": ["a"] } },
     "status": { "type": "status", "values": ["submitted"] }
   },
   "aggregate": {
@@ -1290,6 +1359,7 @@ results     集計（aggregate が publish、公開読み取り）
 **罠**
 
 - `idFrom: "auth.uid"` を**書き忘れると一人が何回でも回答できる**（リンターが検出）
+- `selfUpdateFields: []` は `finalize: true` と重複するが、**明示しておくと意図が読める**
 - `finalize: true` と `window` は**両方**要る。`window` だけだと締切前に何度でも上書きできる
 - **「一人一回」と「主催者に対して匿名」は両立しない**（サーバーが要る。範囲外）
 
@@ -1320,30 +1390,36 @@ session     現在の問題とフェーズ  参加者は read のみ
     "submit": {
       "responses": {
         "requireAuth": true, "audience": "participant",
-        "idFrom": "auth.uid+questionId", "finalize": true,
-        "fields": ["questionId","choice","status"],
+        "idFrom": "auth.uid+field", "idField": "questionId",
+        "finalize": true,
+        "createFields": ["questionId","choice","status"],
+        "selfUpdateFields": [],
         "statusField": "status", "initialStatus": "answered",
-        "gateOn": { "session": { "phase": "answering", "match": "questionId" } }
+        "gateOn": { "phase": "answering", "match": "questionId" }
       }
     }
   }
 }
 ```
 
-`gateOn` = create 条件に `session.currentQuestion == questionId && session.phase == "answering"`
-を課す。**締切後の回答＝カンニングがルールで不可能になる。**
+`gateOn` = create 条件に `session.current == questionId && session.phase == "answering"` を課す。
+**締切後の回答＝カンニングがルールで不可能になる。**
+
+`idFrom` は**有限の enum**。`"auth.uid+field"` + `idField` で複合 ID
+（`{uid}_{questionId}`）になり、**問題ごとに一人一回**が成立する。`"auth.uid"` だけだと
+全問で 1 ドキュメントしか作れない。
 
 **`questions/schema.json`**
 
 ```json
 {
-  "slug": "questions", "title": "設問",
+  "slug": "questions", "title": "設問", "icon": "quiz",
   "storage": { "type": "firestore" },
   "primaryKey": "id",
   "gated": { "fields": ["correctChoice", "explanation"], "revealBy": "revealed" },
   "fields": {
-    "id":            { "type": "string", "primary": true },
-    "order":         { "type": "number" },
+    "id":            { "type": "string", "label": "ID", "primary": true },
+    "order":         { "type": "number", "label": "表示順" },
     "text":          { "type": "text",   "label": "問題文", "required": true },
     "choiceA":       { "type": "string", "label": "A", "required": true },
     "choiceB":       { "type": "string", "label": "B", "required": true },
@@ -1368,13 +1444,13 @@ apps/{aid}/collections/answerKey/items/{id}   correctChoice, explanation
 
 ```json
 {
-  "slug": "responses", "title": "回答",
+  "slug": "responses", "title": "回答", "icon": "how_to_reg",
   "storage": { "type": "firestore" },
   "primaryKey": "id",
   "peerVisibility": "hidden",
   "immutable": true,
   "fields": {
-    "id":         { "type": "string", "primary": true },
+    "id":         { "type": "string", "label": "ID", "primary": true },
     "questionId": { "type": "ref",    "collection": "questions", "required": true },
     "choice":     { "type": "enum",   "values": ["A","B","C"], "required": true },
     "correct":    { "type": "derived", "expr": "choice == questionId.correctChoice" },
@@ -1397,7 +1473,7 @@ apps/{aid}/collections/answerKey/items/{id}   correctChoice, explanation
 **`session` ドキュメント**（レコードではなくランタイム状態）
 
 ```json
-{ "currentQuestion": "q3", "phase": "answering", "startedAt": "2026-09-10T01:00:00Z" }
+{ "current": "q3", "phase": "answering", "startedAt": "2026-09-10T01:00:00Z" }
 ```
 
 **罠**
@@ -1407,6 +1483,9 @@ apps/{aid}/collections/answerKey/items/{id}   correctChoice, explanation
 - `correct` は `derived` なので `answerKey` が読めない生徒側では**解決されない** —
   それが正しい（明かす前に正誤が分かってはいけない）
 - `immutable: true` により、生徒も先生も回答を書き換えられない
+- **生徒は `participant` なので `responses` の全件は読めない。** ルールの `reader()` は
+  owner/editor/viewer だけを含み、`participant` は「自分の行」までしか届かない
+  （名簿に載っていることと、データを読めることは別）
 
 ---
 
@@ -1436,9 +1515,12 @@ session    現在の議題とフェーズ   参加者 read のみ
     "submit": {
       "votes": {
         "requireAuth": true, "audience": "participant",
-        "idFrom": "auth.uid+topicId", "finalize": true,
-        "fields": ["topicId","choice"],
-        "gateOn": { "session": { "phase": "voting", "match": "topicId" } }
+        "idFrom": "auth.uid+field", "idField": "topicId",
+        "finalize": true,
+        "createFields": ["topicId","voter","choice","status"],
+        "selfUpdateFields": [],
+        "statusField": "status", "initialStatus": "cast",
+        "gateOn": { "phase": "voting", "match": "topicId" }
       }
     }
   }
@@ -1449,13 +1531,13 @@ session    現在の議題とフェーズ   参加者 read のみ
 
 ```json
 {
-  "slug": "topics", "title": "議題",
+  "slug": "topics", "title": "議題", "icon": "gavel",
   "storage": { "type": "firestore" },
   "primaryKey": "id",
   "immutable": true,
   "fields": {
-    "id":    { "type": "string",   "primary": true },
-    "order": { "type": "number" },
+    "id":    { "type": "string",   "label": "ID", "primary": true },
+    "order": { "type": "number",   "label": "表示順" },
     "title": { "type": "string",   "label": "議題", "required": true },
     "body":  { "type": "markdown", "label": "議案本文" },
     "closedAt": { "type": "datetime", "label": "採決時刻" }
@@ -1467,16 +1549,17 @@ session    現在の議題とフェーズ   参加者 read のみ
 
 ```json
 {
-  "slug": "votes", "title": "投票",
+  "slug": "votes", "title": "投票", "icon": "ballot",
   "storage": { "type": "firestore" },
   "primaryKey": "id",
   "immutable": true,
   "peerVisibility": "public",
   "fields": {
-    "id":      { "type": "string", "primary": true },
-    "topicId": { "type": "ref",    "collection": "topics", "required": true },
+    "id":      { "type": "string", "label": "ID", "primary": true },
+    "topicId": { "type": "ref",    "label": "議題", "collection": "topics", "required": true },
     "voter":   { "type": "string", "label": "議員", "required": true },
-    "choice":  { "type": "enum",   "label": "賛否", "values": ["yes","no","abstain"], "required": true }
+    "choice":  { "type": "enum",   "label": "賛否", "values": ["yes","no","abstain"], "required": true },
+    "status":  { "type": "status", "label": "状態", "values": ["cast"] }
   },
   "aggregate": {
     "from": "votes", "by": ["topicId", "choice"],
@@ -1495,7 +1578,7 @@ session    現在の議題とフェーズ   参加者 read のみ
 **`session` ドキュメント**
 
 ```json
-{ "currentTopic": "t7", "phase": "voting" }
+{ "current": "t7", "phase": "voting" }
 ```
 
 **罠**
@@ -1505,6 +1588,8 @@ session    現在の議題とフェーズ   参加者 read のみ
 - 定足数を出すには**投票していない参加者**を数える必要がある。`members` のうち
   `participant` の数はアプリドキュメントから取れる
 - **無記名投票は範囲外**（サーバーが要る）
+- `peerVisibility: "public"` は `listed(aid)`（名簿にいる全員）に全件読みを許す。
+  **participant が全件を読める唯一の経路**であり、記名投票では意図どおり
 
 ---
 
@@ -1592,7 +1677,11 @@ session    現在の議題とフェーズ   参加者 read のみ
 - [ ] `aggregate` の公開先（`results`）を誰が読めるか
 - [ ] `mail` キュー（宣言的な副作用）
 - [x] フィールド単位の可視性 — **入れる。`gated` によるドキュメント分割**（シナリオ 3 が必須にした）
-- [ ] `participant` ロール（名指しされているが member ではない層）
+- [ ] `participant` ロール（名指しされているが member ではない層）。
+      **`listed()` と `reader()` を分離すること**
+- [ ] `createFields` / `selfUpdateFields` / `selfTransitions` の分離
+- [ ] `idFrom` の有限 enum（`auto` / `auth.uid` / `auth.uid+field`）
+- [ ] `apps/{aid}/config`（名簿を含まない公開設定）
 - [ ] `session` ドキュメント（主催者が駆動する状態機械）と、それを create 条件に使うこと
 - [ ] **`immutable`（owner にも触れない記録）** — ルールの形に関わる
 - [ ] `peerVisibility: "public"`（記名投票。参加者が全件読める）
