@@ -262,7 +262,7 @@ the engine never sees (`putSchema` refuses an unknown collection and tells the a
 by writing SKILL.md + schema.json), so the first moment the host can speak is the schema edit that
 follows. §11.4's "at collection-creation time" is answered by that, not by a hook.
 
-### 3.7 A live browser check — DONE for the overlay, still owed for the pane
+### 3.7 A live browser check — DONE
 
 **How it is run** (repeatable, and it touches neither the live config nor a real project): start a
 server from this checkout with `HOME` pointed at a scratch dir holding its own
@@ -283,11 +283,20 @@ something true to say.
   scoping and the plugin's fetch, working together inside the shadow root.
 - Zero console errors and zero page errors across all three routes.
 
-**What it did NOT reach.** The Collections PANE — and therefore the portability strip and the
-button-visibility rule — needs a cell whose session reports the `data` MCP group, i.e. a real agent
-session. Nothing in this harness can conjure one, and spawning a paid agent was not something to do
-unasked. The pane's own behaviour is covered by component specs; what remains unobserved is its
-height, the plugin views inside ITS shadow root, and the strip's layout beneath them.
+**The PANE was checked by hand (2026-08-09) and works.** It is the half this harness cannot reach:
+the button only appears for a cell whose session reports the `data` MCP group, which means a real
+agent session — a grid cell is handed no `--mcp-config` and takes its GUI tools from the
+DIRECTORY's own `.mcp.json`, so a shell cell or a cell with no session never shows it.
+
+How to repeat it, since the next person will have to: launch a cell in the project with the **data**
+tool-group switch on in the launch form (the workspace gets every group automatically —
+`carriesFullGuiMcp` — so it is the quicker but less interesting case), and note that the switch is
+read at SESSION START, so it takes a relaunch. Then enlarge the cell and press the database button.
+
+What is worth looking at, being what no spec sees: the pane's height beside the terminal, the
+plugin's views inside ITS shadow root, that opening a collection there does NOT move the whole app
+(nav containment), the portability strip below them, and — the point of the whole arc — two cells
+on two projects each showing their own collections.
 
 The original lesson stands: server-side correctness was verified by curl and by specs at every
 step, and none of that said the feature was reachable.
