@@ -323,6 +323,12 @@ service cloud.firestore {
     function reader(aid, cid) { return roleIn(aid, cid) in ["owner", "editor", "viewer"]; }
     function writer(aid, cid) { return roleIn(aid, cid) in ["owner", "editor"]; }
 
+    // 匿名に開くマスタースイッチ。public.read だけでは開かない
+    function publicOn(aid)        { return app(aid).public.enabled == true; }
+    function publicRead(aid, cid) { return publicOn(aid) && cid in app(aid).public.read; }
+    // 名簿にいる人（participant を含む）に全件読みを許すコレクション
+    function partRead(aid, cid)   { return listed(aid) && cid in app(aid).participantRead; }
+
     match /apps/{aid} {
       function membersConsistent() {
         return request.resource.data.memberEmails.toSet()
@@ -349,12 +355,12 @@ service cloud.firestore {
 
       // 主催者が駆動する状態機械（シナリオ 3 / 4）
       match /session {
-        allow read:  if listed(aid) || app(aid).public.enabled == true;
+        allow read:  if listed(aid) || publicOn(aid);
         allow write: if writer(aid, '*');
       }
 
       match /collections/{cid} {
-        allow read:  if reader(aid, cid) || cid in app(aid).public.read;
+        allow read:  if reader(aid, cid) || publicRead(aid, cid) || partRead(aid, cid);
         allow write: if roleIn(aid, '*') == "owner";     // = publish
 
         match /items/{itemId} {
@@ -376,29 +382,47 @@ service cloud.firestore {
                 || (request.time < cfg().window.until
                     && (!("from" in cfg().window) || request.time > cfg().window.from));
           }
+          // emailField は宣言されないことがある（アンケート・投票）。
+          // ガードなしで参照すると存在しないキーへのアクセスでルールが落ちる
           function ownRow() {
             return signedIn() && submitOpen()
                    && (itemId == request.auth.uid
                        || itemId.matches(request.auth.uid + "_.*")
-                       || resource.data[cfg().emailField] == email());
+                       || ("emailField" in cfg()
+                           && resource.data[cfg().emailField] == email()));
+          }
+          // 認証段階は有限の enum。boolean では段階 B（匿名認証）が表現できず、
+          // emailField を宣言しないアプリでは投稿が全部拒否されていた
+          function authOk() {
+            return cfg().auth == "none"
+                || (cfg().auth == "anonymous" && request.auth != null)
+                || (cfg().auth == "verifiedEmail" && signedIn()
+                    && (!("emailField" in cfg())
+                        || request.resource.data[cfg().emailField] == email()));
           }
 
           allow read: if reader(aid, cid)
-                      || cid in app(aid).public.read
+                      || publicRead(aid, cid)
+                      // 名簿にいる全員（participant 含む）に開いたコレクション
+                      || partRead(aid, cid)
                       // 記名投票: 名簿にいる全員が全件読める
                       || (colCfg().peerVisibility == "public" && listed(aid))
-                      // 段階的公開（gated が生成した従属コレクション）
-                      || (colCfg().revealGated == true && resource.data.revealed == true && listed(aid))
+                      // 段階的公開: フラグの真実は「親」の側にある。gated が生成した
+                      // 従属ドキュメントは correctChoice / explanation しか持たないので、
+                      // ここで resource.data.revealed を見ると永久に false になる
+                      || (colCfg().revealGated == true && listed(aid)
+                          && get(/databases/$(database)/documents/apps/$(aid)/collections/$(colCfg().gatedFrom)/items/$(itemId))
+                               .data[colCfg().revealBy] == true)
                       // 自分の行だけ（participant はここまで）
                       || ownRow();
 
           allow create: if writer(aid, cid)
                         || (submitOpen()
+                            // 匿名（auth: "none"）で開くならマスタースイッチも要る
+                            && (cfg().auth != "none" || publicOn(aid))
                             && request.resource.data.keys().hasOnly(cfg().createFields)
                             && request.resource.data[cfg().statusField] == cfg().initialStatus
-                            && (cfg().requireAuth != true
-                                || (signedIn()
-                                    && request.resource.data[cfg().emailField] == email()))
+                            && authOk()
                             && (cfg().audience != "participant" || roleIn(aid, cid) != null)
                             && idOk() && inWindow()
                             && (!("gateOn" in cfg())
@@ -465,6 +489,27 @@ service cloud.firestore {
 1 ドキュメントしか作れない**（＝ 2 問目以降が投稿できない）。
 → **`idFrom` を有限の enum** にし、`"auth.uid+field"` + `idField` を文字列連結で明示的に検証する。
 
+**4. `auth` を boolean にしていたため、S2/S3/S4 の投稿が全部拒否されていた（2 巡目）。**
+`requireAuth: true` のとき `data[cfg().emailField] == email()` を必須にしていたが、
+アンケート・小テスト・投票は `emailField` を宣言しない。ルールが存在しないキーを参照して落ち、
+**create が常に失敗する。** 同じ理由で `ownRow()` も落ちていた。
+→ **`auth` を有限 enum（`none` / `anonymous` / `verifiedEmail`）** にし、email の一致強制は
+`emailField` を宣言したときだけに切り離した。ついでに段階 B（匿名認証）が
+boolean では表現できていなかったことも解消した。
+
+**5. `gated` の公開が永久に効かなかった（2 巡目）。** 読み取り条件を
+`resource.data.revealed == true` にしていたが、**生成される従属ドキュメントは
+`correctChoice` と `explanation` しか持たない。** 正解を明かしても生徒に届かない。
+→ **親（`gatedFrom`）の同じ id を `get()` してフラグを見る。** フラグの真実は親にしかない。
+
+**6. `public.enabled` が何もゲートしていなかった（2 巡目）。** read は
+`cid in public.read` だけを見ていたので、`enabled: false` でも匿名で読めた。
+S3 は `enabled: false` のまま `questions` / `stats` を `public.read` に置いており、
+**授業の問題が誰でも読める状態だった。**
+→ `publicOn()` をマスタースイッチにし、名簿にいる人に開くための
+**`participantRead` を別に用意**した（participant は `reader()` ではないので、これが無いと
+生徒が問題文すら読めない）。
+
 あわせて、**名簿（`members`）そのものを `participant` に読ませない**ようにした
 （同級生のメールが見える）。ルールの `get()` は read ルールの影響を受けないので、
 `apps/{aid}` の read を `reader()` に絞っても判定は壊れない。公開設定は
@@ -519,23 +564,28 @@ service cloud.firestore {
 
 ---
 
-## 申込みの認証段階（`public.submit[cid].requireAuth`）
+## 申込みの認証段階（`public.submit[cid].auth`）
 
 匿名申込みを許すかは、技術ではなく**商売の判断**（ログインを要求すると一定数が離脱する）。
 アプリごとに宣言し、ルールは 3 段階すべてを表現できるようにしておく。
 
-| 段階 | 認証 | email | 自分の申込みを見る | 濫用対策 |
-|---|---|---|---|---|
-| **A. 完全匿名** | なし | フォーム入力・未検証 | 不可（メール一方通行） | App Check |
-| **B. 匿名認証** | Anonymous Auth | 未検証 | uid ベースなら可 | App Check + uid |
-| **C. ログイン必須** | Google 等 | **検証済み・強制一致** | **可** | 身元があるのでブロック可 |
+| 段階 | `auth` | 認証 | email | 自分の申込みを見る | 濫用対策 |
+|---|---|---|---|---|---|
+| **A. 完全匿名** | `"none"` | なし | フォーム入力・未検証 | 不可（メール一方通行） | App Check + `public.enabled` |
+| **B. 匿名認証** | `"anonymous"` | Anonymous Auth | 未検証 | uid ベースなら可 | App Check + uid |
+| **C. ログイン必須** | `"verifiedEmail"` | Google 等 | **検証済み**（`emailField` を宣言したときのみ強制一致） | **可** | 身元があるのでブロック可 |
+
+> **boolean ではなく enum である理由。** 初稿は `requireAuth: true/false` だったが、
+> (1) 段階 B が表現できない、(2) `requireAuth: true` かつ `emailField` を宣言しないアプリ
+> （アンケート・小テスト・投票）で**投稿が全部拒否されていた** — ルールが存在しないキーを
+> 参照して落ちるため。`emailField` の一致強制は「宣言したときだけ」に切り離した。
 
 ```json
 // app.json
 "public": {
   "read": ["services", "shifts", "stylists"],
   "submit": { "bookings": {
-      "requireAuth": true,
+      "auth": "verifiedEmail",
       "emailField": "customerEmail",
       "fields": ["customerName","customerEmail","service","stylist","startAt","status"],
       "statusField": "status", "initialStatus": "pending" } }
@@ -950,10 +1000,24 @@ sandbox された HTML が Firestore ハンドルを持たなくても、**親�
 | `selfUpdateFields` に `statusField` が入っている | **本人が自分の承認状態を変えられる（権限昇格）** |
 | `idFrom` が enum 外の文字列 | ルールが解釈できず、投稿が全部拒否される（または 1 件に潰れる） |
 | `gateOn` があるのに `session` を持たないアプリ | create が常に失敗する |
-| `icon` が無い / `actions` がオブジェクトマップ / `mutate` に `when` | **既存文法エラー**。schema が読み込まれない |
+| `icon` が無い / `actions` がオブジェクトマップ | **既存文法エラー**（必須キー欠落・型不一致）。schema が読み込まれない |
+| `mutate` に `when`（正しくは `require`） | **エラーにならず黙って消える**。ゲートが外れた状態で動く |
 
-**どれもスキーマだけを見て判定できる。** `acceptParsedSchema` の受け入れゲートの延長に置き、
-`putSchema` と publish の両方で走らせる（publish 側は「ライブデータの検証」と同じ関門）。
+**どれもスキーマだけを見て判定できる。** `putSchema` と publish の両方で走らせる
+（publish 側は「ライブデータの検証」と同じ関門）。
+
+> **ただし「パース後」だけでは走らせられない。** `schemaZ.ts` の設計は
+> **未知キーをバリアントごとに黙って落とす**（冒頭コメント: "an unknown key is stripped
+> per-variant"）。`CollectionObjectZ` は `.strict()` ではない。つまり `immutable` `then`
+> `datasets` `gated` のような**新キーは、実装が入るまでパースの時点で消える**し、
+> `mutate` に書いた `when` も**エラーではなく消える**。
+>
+> 帰結は 2 つ:
+> - リンターは **生の JSON** を見る必要がある（`acceptParsedSchema` の延長「だけ」では不十分）
+> - あるいは新キーの導入と同時に**該当バリアントを `.strict()` にする**。
+>   PR #2209 が firestore アームだけ `.strict()` にしたのと同じ判断
+>
+> どちらを取るかは未決。**先に決めないと、リンターが「無い」ものを検査することになる。**
 
 ### テンプレートは「業種」ではなく「形」で索引する
 
@@ -1160,7 +1224,7 @@ services  1 ──< bookings      メニュー（所要時間の供給元）
     "read": ["services", "shifts", "stylists"],
     "submit": {
       "bookings": {
-        "requireAuth": true,
+        "auth": "verifiedEmail",
         "emailField": "customerEmail",
         "idFrom": "auto",
         "finalize": false,
@@ -1297,7 +1361,7 @@ results     集計（aggregate が publish、公開読み取り）
     "read": ["questions", "results"],
     "submit": {
       "responses": {
-        "requireAuth": true,
+        "auth": "verifiedEmail",
         "audience": "participant",
         "idFrom": "auth.uid",
         "finalize": true,
@@ -1384,12 +1448,13 @@ session     現在の問題とフェーズ  参加者は read のみ
   "aid": "app_class_algebra",
   "members": { "teacher@school.jp": { "*": "owner" },
                "student-1@school.jp": { "*": "participant" } },
+  "participantRead": ["questions", "stats"],
   "public": {
     "enabled": false,
-    "read": ["questions", "stats"],
+    "read": [],
     "submit": {
       "responses": {
-        "requireAuth": true, "audience": "participant",
+        "auth": "verifiedEmail", "audience": "participant",
         "idFrom": "auth.uid+field", "idField": "questionId",
         "finalize": true,
         "createFields": ["questionId","choice","status"],
@@ -1438,7 +1503,16 @@ apps/{aid}/collections/questions/items/{id}   id, order, text, choiceA..C, revea
 apps/{aid}/collections/answerKey/items/{id}   correctChoice, explanation
 ```
 
-`answerKey` の read ルール: `resource.data.revealed == true || roleIn(aid,'*') == "owner"`。
+生成されるコレクション設定（`app.collections.answerKey`、publish 時に載る）:
+
+```json
+{ "revealGated": true, "gatedFrom": "questions", "revealBy": "revealed" }
+```
+
+**`answerKey` のドキュメント自身は `revealed` を持たない。** だから read ルールは
+**親（`questions`）の同じ id を `get()` して**フラグを見る。従属側のフラグを見にいくと
+永久に false のままで、正解が明かされても生徒に届かない（初稿の欠陥）。
+`get()` が 1 回増えるが、問題数ぶんしか呼ばれない。
 
 **`responses/schema.json`**
 
@@ -1509,12 +1583,13 @@ session    現在の議題とフェーズ   参加者 read のみ
   "aid": "app_council_2026",
   "members": { "chair@council.jp": { "*": "owner" },
                "member-01@council.jp": { "*": "participant" } },
+  "participantRead": ["topics"],
   "public": {
     "enabled": false,
     "read": [],
     "submit": {
       "votes": {
-        "requireAuth": true, "audience": "participant",
+        "auth": "verifiedEmail", "audience": "participant",
         "idFrom": "auth.uid+field", "idField": "topicId",
         "finalize": true,
         "createFields": ["topicId","voter","choice","status"],
@@ -1682,6 +1757,9 @@ session    現在の議題とフェーズ   参加者 read のみ
 - [ ] `createFields` / `selfUpdateFields` / `selfTransitions` の分離
 - [ ] `idFrom` の有限 enum（`auto` / `auth.uid` / `auth.uid+field`）
 - [ ] `apps/{aid}/config`（名簿を含まない公開設定）
+- [ ] `auth` の有限 enum（`none` / `anonymous` / `verifiedEmail`）と `emailField` の切り離し
+- [ ] `publicOn()` をマスタースイッチにする + `participantRead`
+- [ ] `revealGated` は**親を `get()` する**形（従属ドキュメントにフラグは無い）
 - [ ] `session` ドキュメント（主催者が駆動する状態機械）と、それを create 条件に使うこと
 - [ ] **`immutable`（owner にも触れない記録）** — ルールの形に関わる
 - [ ] `peerVisibility: "public"`（記名投票。参加者が全件読める）
@@ -1695,43 +1773,58 @@ session    現在の議題とフェーズ   参加者 read のみ
 
 ## 実装順
 
+**基盤**
+
 1. **`(aid, cid)` 同一性** — engine の `(root, slug)` INVARIANT を firestore バックエンドについて外す。
    一番深く、一番先。**これを 2 と 3 と同じ PR にしない**（レビューの性質が違う）
-2. **`apps/{aid}` ドキュメント（members + public）+ 静的ルール** — `../mulmoserver` 側の PR が対になる。
-   この時点でメンバーはオーナー 1 人。emulator でルールのユニットテストを書く
+2. **`apps/{aid}` ドキュメント + 静的ルール** — `../mulmoserver` 側の PR が対になる。
+   この時点でメンバーはオーナー 1 人。**emulator でルールのユニットテストを書く。**
+   ルールの形に関わるものは**すべてここで入れる**（後から足すと cross-repo のデプロイになる）:
+   `listed`/`reader` 分離、`participant`、`auth` の 3 段階、`publicOn`、`participantRead`、
+   `createFields`/`selfUpdateFields`/`selfTransitions`、`idFrom` の enum、`gateOn`、
+   `immutable`、`peerVisibility`、`revealGated`（親を `get()` する形）、`mail` キュー
 3. **store を `(aid, cid)` で書き直す** — PR #2209 の中身がここに入る
 4. **discovery の 2 ソース化 + skill materialize** — ディスク ∪ Firestore(memberEmails ∋ 自分)。
-   「他人のアプリが一覧に出る」が初めて成立。Claude Code はディスクのスキルしか読めないので、
-   購読時に skillText をローカルへ materialize する（`schemaVersion` で張り替えるキャッシュとして）
+   Claude Code はディスクのスキルしか読めないので、購読時に skillText を materialize する
+   （`schemaVersion` で張り替えるキャッシュとして）
 5. **publish**（git → Firestore、記名 + 事前検証 + 前版保持）
 6. **onSnapshot watcher** — `CollectionStore.watch` に載せる。
-   `hostRunner.ts:154-184` に本番稼働中の実装があるので `docChanges()` の扱いをそこから持ち込む
+   `hostRunner.ts:154-184` の実装から `docChanges()` の扱いを持ち込む
 7. **worktreeEnv による aid の分岐** — D6
-8. **招待 UI（email 追加）と viewer ロール** — ここで初めて他人が入る
-9. **mulmoserver に webview** — `@mulmoclaude/collection-plugin` を 3 つ目のホストに載せる。
-   新規プロジェクトは不要（Vue 3 + Hosting + Google 認証が既にある）
-10. **公開ページ + App Check** — `requireAuth` の 3 段階を同時に。段階 C なら「マイ予約」も
-11. **`then.email` + Trigger Email 拡張**
-12. **schedule ビュー** — ここまでで美容室シナリオが揃う
-12b. **`idFrom` / `finalize` / `window` / `aggregate` / `showIf`** — ここまでで
-     アンケートシナリオが揃う（ルール側の 3 つは 2 で先に入れておく）
-12c. **`gated` / `session` / `live` / `aggregate` の `on` トリガー** — ここまでで
-     授業シナリオが揃う。`gated` と `participant` はルールの形に関わるので **2 で入れておく**
-12d. **`immutable` / `peerVisibility` / `aggregate.visibleFrom`** — ここまでで議会シナリオが揃う。
-     **`immutable` と `peerVisibility` はルールの形そのものなので 2 で入れておく**
-13b. **View Bridge**（`@mulmoclaude/core/view-bridge`、親側 + 依存ゼロの子側ライブラリ）—
-     HTML ビューを持つ前に入れる。**後から入れると既存の HTML が全部書き直しになる**
-14. **スキーマリンター** — `acceptParsedSchema` の延長。`putSchema` と publish の両方で走らせる
-15. **テンプレート 4 種（P1-P4）+ 罠の注記** — 純粋なデータとして。Discover レジストリに乗せる。
+
+**共有**
+
+8. **招待 UI（email 追加）と viewer / participant ロール** — ここで初めて他人が入る
+9. **mulmoserver に webview** — `@mulmoclaude/collection-plugin` を 3 つ目のホストに載せる
+10. **スキーマの `.strict()` 化 または 生 JSON リンター** — どちらを取るか決める（上記参照）。
+    **新キーを足す前**でないと、書いたキーが黙って消えたまま先に進む
+11. **View Bridge**（`@mulmoclaude/core/view-bridge`、親側 + 依存ゼロの子側ライブラリ）—
+    **HTML ビューを使うシナリオより前。** 後から入れると既存の HTML が全部書き直しになる
+
+**シナリオを揃える**
+
+12. **公開ページ + App Check** — `auth` の 3 段階を同時に
+13. **`then.email` + Trigger Email 拡張**
+14. **`schedule` ビュー** → **美容室シナリオが揃う**
+15. **`idFrom` / `finalize` / `window` / `aggregate`**（UI と集計側）→ **アンケートシナリオが揃う**
+16. **`gated` の分割生成 / `session` / `live` / `aggregate` の `on`** → **授業シナリオが揃う**
+17. **`immutable` / `peerVisibility` / `aggregate.visibleFrom`** → **議会シナリオが揃う**
+
+**仕上げ**
+
+18. **スキーマリンター本体** — 10 で決めた土台の上に、検出表の項目を実装
+19. **テンプレート 4 種（P1-P4）+ 罠の注記** — 純粋なデータとして。Discover レジストリに乗せる。
     実体は「サンプルのテーブル設計とスキーマ」の 4 セットをそのまま起こす
-13. editor ロール + Storage 添付 + エージェント seed アクションの remote-host チャネル接続
+20. **editor ロール + Storage 添付 + エージェント seed アクションの remote-host チャネル接続**
 
-1〜6 が「共有前提の Firebase サポート」の本体、7〜12 が公開アプリ。
-
----
+> 12-17 は HTML ビューを使うので **11 より後**。ルールに関わるものは**すべて 2 に前倒し**して
+> あるので、12-17 はホスト側の実装だけになる。
 
 ## 未解決の論点
 
+- **スキーマの `.strict()` 化 か、生 JSON リンターか** — `schemaZ.ts` は未知キーを
+  バリアントごとに黙って落とすので、新キーは実装が入るまでパースで消え、`mutate` に書いた
+  `when` もエラーにならない。**新キーを足す前に決める**（実装順 10）
 - **ルールの `hasOnly` / 動的キー参照 / `roleIn` の三項演算**が仕様通り書けるか — emulator で未検証。
   `firebase emulators:exec` でユニットテストを 1 本通してから mulmoserver に入れる
 - **Storage ルールから `firestore.get()`** でメンバー判定できるか — 仕様上可能のはずだが実機未確認
