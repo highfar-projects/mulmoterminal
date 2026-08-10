@@ -352,13 +352,21 @@ surface someone adds.
 
 ---
 
-## 4. Open decisions — not bugs, genuinely undecided
+## 4. Decisions — the ones taken, and the two still open
 
-1. **Does the root search walk UP?** Today the root is the session's cwd exactly: a cell opened in
-   `~/proj/src` looks for `~/proj/src/.claude/skills` and finds nothing. Options: leave it (simple,
-   predictable); walk up to `.claude/skills` (git-like, but a subdirectory cell then writes the
-   parent's data); or walk up to `.mulmoterminal.json`, which matches the definition of a Project
-   (D2) and was the recommendation. Nothing depends on this until someone opens a subdirectory.
+1. **Does the root search walk UP? — DECIDED (2026-08-09): NO.** The root stays the session's cwd,
+   exactly. **A collection belongs at the repository root**, which is where anyone would put one,
+   so there is nothing to search for: a walk would exist to rescue a case that should not arise,
+   at the price of a subdirectory cell quietly reading and writing the parent's data.
+
+   This also keeps `(root, slug)` meaning what it says. Every id, token, bell and watcher in this
+   feature is keyed on the root the request named; a root that was DERIVED by walking would be a
+   second, implicit answer to "which project is this", and the whole arc above is about there
+   being exactly one.
+
+   The consequence, accepted: a cell opened in `~/proj/src` finds no collections and the pane says
+   so. If that ever reads as a fault rather than as a fact, the fix is a clearer message naming
+   the repository root — a HINT, not a search.
 2. **A user-scope dependency in a git-tracked collection (§11 L1)** — warn or refuse?
 3. **`generateItemId()` is 4 random bytes.** Two machines creating records offline can collide;
    `primaryKey` avoids it. Widen upstream, or keep the guidance?
