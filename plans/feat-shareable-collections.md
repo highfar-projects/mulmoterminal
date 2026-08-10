@@ -408,10 +408,12 @@ service cloud.firestore {
         allow write: if roleIn(aid, '*') == "owner";
       }
 
-      // 主催者が駆動する状態機械（シナリオ 3 / 4）
+      // 主催者が駆動する状態機械（シナリオ 3 / 4）。
+      // writerOf は editor を含むので、それだと editor が phase を revealed にして
+      // 正解を開示したり、投票を勝手に開閉したりできる。ロール表どおり owner のみ
       match /session {
         allow read:  if listed(aid) || publicOn(aid);
-        allow write: if writerOf(aid, '*');
+        allow write: if roleIn(aid, '*') == "owner";
       }
 
       match /collections/{cid} {
@@ -475,13 +477,21 @@ service cloud.firestore {
           // 宣言された状態遷移は **誰に対しても** 効く。writer は無条件に書ける、では
           // アクションの `require`（pending からのみ承認できる）が助言になり、
           // cancelled の予約をいきなり approved にできてしまう
+          function tGraph() { return app(aid).collections[cid].transitions; }
+          // null を「素通り」にしてはいけない。status を消せると、消してから
+          // 任意の状態に入れて状態機械を丸ごと迂回できる（2 手で pending を経由せず
+          // approved に到達する）。したがって:
+          //   - status を消す / null にする書き込みは拒否（nextStatus() != null）
+          //   - すでに status を持たない既存レコード（取り込み等）は、
+          //     **宣言された復帰口 `initial` にだけ**入れる
           function transitionOk() {
-            return !colFlag(aid, cid, "transitions")
-                || curStatus() == null || nextStatus() == null
-                || curStatus() == nextStatus()
-                || (curStatus() in app(aid).collections[cid].transitions
-                    && app(aid).collections[cid].transitions[curStatus()]
-                         .hasAny([nextStatus()]));
+            return !colFlag(aid, cid, "transitions") || !has("statusField")
+                || (nextStatus() != null
+                    && (curStatus() == nextStatus()
+                        || (curStatus() != null && curStatus() in tGraph()
+                            && tGraph()[curStatus()].hasAny([nextStatus()]))
+                        || (curStatus() == null && "initial" in tGraph()
+                            && tGraph().initial.hasAny([nextStatus()]))));
           }
 
           // 匿名認証でも自分の行には届く（uid 判定に verified を要求しない）
@@ -759,6 +769,25 @@ S1 のサンプルからも手書きの `memberEmails` を外した。
 > 「publish が生成すべき導出物を人に書かせていた」。** どちらも
 > 「authored と published の境界が曖昧」という同じ原因から出ている。
 
+**23-24. 状態機械の 2 つの抜け道（11 巡目）。**
+
+- **`session` を editor が駆動できた。** `writerOf(aid, '*')` は editor を含むので、
+  ロール表が「owner のみ」と書いている `session` を editor が動かせた。
+  **`phase: "revealed"` にして正解を開示**したり、投票を勝手に開閉したりできる。
+  → `roleIn(aid, '*') == "owner"` に。
+- **status を消せば状態機械を迂回できた。** `transitionOk()` の
+  `curStatus() == null || nextStatus() == null` は**ガードのつもりが素通り口**で、
+  1 手目で status を消し、2 手目で任意の状態に入れば **pending を経由せず approved
+  に到達**する。
+  → status の削除／null 化を拒否し（`nextStatus() != null`）、すでに status を持たない
+  既存レコードは**宣言された復帰口 `initial` にだけ**入れる。
+
+> 2 つ目が今回の教訓。**「null なら素通り」という書き方は、ガードの顔をした穴。**
+> 3 巡目から「任意キーは `in` でガードする」と言ってきたが、
+> **ガードした先を `true` に倒すか `false` に倒すか**は別の判断で、
+> 状態機械では `false`（拒否）が正しい。emulator テストに
+> 「status を消す書き込み」を必ず入れる。
+
 ### 同じ形のバグが 3 巡続いた（4 巡目も同じだった）
 
 **4 巡で 10 件が同じ根っこ**だった:
@@ -783,6 +812,8 @@ S1 のサンプルからも手書きの `memberEmails` を外した。
    - `'*'` ロールを持たないメンバー（コレクション別ロールだけの人）
    - 親が存在しない gated ドキュメント
    - 宣言されたフィールドを持たないレコード
+   - **status を消す / null にする書き込み**（状態機械の迂回）
+   - **global `editor` が `session` を書こうとする**
 
 > **3 巡目でこの規律を書いた当人が、4 巡目に `roleIn()` — 最も中心の関数 — で同じことを
 > していた。** 規律を書くだけでは足りず、**テストに落とすまで守られない**という証拠。
@@ -813,6 +844,8 @@ S1 のサンプルからも手書きの `memberEmails` を外した。
 | メール踏み台の防止 | 宛先は**その記録が持つアドレス**、テンプレートは**宣言された `on` のキー**のみ |
 | **メールが宣言された遷移に伴っていること** | 決定的な `mailId` で重複を封じ、`get() != getAfter()` で**この書き込みが遷移させた**ことを要求 |
 | 宣言した audience と認可の一致 | `roleIn(...) == "participant"`（`!= null` では viewer も投稿できる） |
+| `session` を駆動できるのは owner だけ | `roleIn(aid, '*') == "owner"`（`writerOf` は editor を含む） |
+| **status を消して状態機械を迂回できない** | `nextStatus() != null` を要求し、null の既存レコードは宣言された `initial` にだけ入れる |
 | 公開投稿の必須と主要 enum | `hasAll(validate.required)` / `choiceValues.hasAny([...])` |
 
 ### authored な `app.json` と published な `apps/{aid}` は別物
@@ -1400,6 +1433,8 @@ sandbox された HTML が Firestore ハンドルを持たなくても、**親�
 | `selfUpdate` が状態別でなく、承認後も予約枠を触れる | **客が承認済みの予約を黙って移動できる**（枠が移り、再承認されない） |
 | `mail.on[t].from` に `to` と同じ状態が含まれる | 遷移していないのに通知が送れる |
 | `actions` が `require` を宣言しているのに `collections[cid].transitions` が無い | writer が任意の状態遷移をできる（宣言が助言になる） |
+| `transitions` に `initial` が無い | status を持たない既存レコードが**恒久的に書き込み不能**になる |
+| `transitions` の `initial` が終端状態（`approved` 等）を含む | 復帰口から承認済みを作れる |
 | `idFrom` が enum 外の文字列 | ルールが解釈できず、投稿が全部拒否される（または 1 件に潰れる） |
 | `gateOn` があるのに `session` を持たないアプリ | create が常に失敗する |
 | `then.email` があるのに `collections[cid].mail`（`toField` / `templates`）を publish していない | 承認メールが常に拒否される |
@@ -1642,7 +1677,8 @@ services  1 ──< bookings      メニュー（所要時間の供給元）
                "stylist-a@salon.jp": { "bookings": "editor", "shifts": "viewer", "services": "viewer" } },
   "collections": {
     "bookings": {
-      "transitions": { "pending": ["approved", "rejected", "cancelled"],
+      "transitions": { "initial": ["pending"],
+                       "pending": ["approved", "rejected", "cancelled"],
                        "approved": ["cancelled"],
                        "rejected": [], "cancelled": [] },
       "mail": { "toField": "customerEmail",
