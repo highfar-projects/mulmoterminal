@@ -489,6 +489,17 @@ service cloud.firestore {
                             && (authMode() != "none" || publicOn(aid))
                             && has("createFields")
                             && request.resource.data.keys().hasOnly(cfg().createFields)
+                            && request.resource.data.size() <= 200
+                            // 名前だけでなく「必須が揃っているか」と、整合性上重要な
+                            // 1 つの enum を検査する（ルールには反復が無いので、
+                            // 任意スキーマの型検査はここまでが限界。下記参照）
+                            && (!has("validate")
+                                || ((!("required" in cfg().validate)
+                                     || request.resource.data.keys().hasAll(cfg().validate.required))
+                                    && (!("choiceField" in cfg().validate)
+                                        || (cfg().validate.choiceField in request.resource.data
+                                            && cfg().validate.choiceValues
+                                                 .hasAny([request.resource.data[cfg().validate.choiceField]])))))
                             && (!has("statusField")
                                 || (cfg().statusField in request.resource.data
                                     && has("initialStatus")
@@ -529,9 +540,25 @@ service cloud.firestore {
       // '*' ロールを持たない人（コレクション別 editor の美容師）が承認メールを
       // 出せなくなるので、そのアクションが属する cid の書き手も通す
       match /mail/{mailId} {
+        function m()       { return request.resource.data; }
+        function mailCfg() { return app(aid).collections[m().cid].mail; }
+        function srcItem() {
+          return /databases/$(database)/documents/apps/$(aid)/collections/$(m().cid)/items/$(m().itemId);
+        }
+        // 「書き手なら誰でもメールを積める」では、宣言された `then.email` を迂回して
+        // 任意の宛先に任意の内容を送れる（サロンのドメインからのスパム中継）。
+        // ルールは宣言を再導出する: 宛先はその記録が持っているアドレス、
+        // テンプレートは宣言されたもの、自由文は持ち込ませない
         allow create: if listed(aid)
-                      && "cid" in request.resource.data
-                      && (writerOf(aid, '*') || writerOf(aid, request.resource.data.cid));
+                      && m().keys().hasAll(["cid", "itemId", "to", "template"])
+                      && m().keys().hasOnly(["cid", "itemId", "to", "template", "data"])
+                      && hasCol(aid, m().cid) && "mail" in app(aid).collections[m().cid]
+                      && writerOf(aid, m().cid)
+                      && exists(srcItem())
+                      && mailCfg().toField in get(srcItem()).data
+                      && get(srcItem()).data[mailCfg().toField] == m().to
+                      && mailCfg().templates.hasAny([m().template])
+                      && (!("data" in m()) || m().data.keys().hasOnly(mailCfg().dataFields));
         allow read, update, delete: if false;
       }
     }
@@ -685,7 +712,49 @@ uid ベースの判定は `authed()`、メール比較だけ `verified()`。
 | **記録の改竄不可（owner を含む）** | `immutable` → `allow update, delete: if false` |
 | **過去トピックへの投票を弾く** | create 条件に `session.current == topicId` |
 | 巨大ドキュメントの拒否 | `request.resource.data.size()` |
-| メール踏み台の防止 | `mail` は editor 以上のみ create |
+| メール踏み台の防止 | 宛先は**その記録が持つアドレス**、テンプレートは**宣言されたもの**のみ。`then.email` をルールが再導出する |
+| 公開投稿の必須と主要 enum | `hasAll(validate.required)` / `choiceValues.hasAny([...])` |
+
+### 公開投稿の値検証は、どこまでできるか
+
+**`hasOnly(createFields)` はフィールド「名」しか見ない。** 必須の欠落、型違い、enum 外の値、
+壊れた ref は素通りする。そして**公開投稿ではクライアントが攻撃者**なので、
+「3 層の検証」の第 2 層（クライアント側 `validateRecordObject`）は**存在しないのと同じ**。
+
+**Firestore ルールには反復が無い。** `{field: type}` のマップを回して型検査する、が書けない。
+したがって任意スキーマの完全な検証は**原理的に不可能**。
+
+publish 時に**ルールで検査可能な射影**を app ドキュメントへ出し、そこまでを守る:
+
+```json
+"validate": {
+  "required": ["topicId", "choice"],
+  "choiceField": "choice",
+  "choiceValues": ["yes", "no", "abstain"]
+}
+```
+
+| 守れる | 手段 |
+|---|---|
+| 余分なフィールドが無い | `hasOnly(createFields)` |
+| 必須が揃っている | `hasAll(validate.required)` |
+| 初期ステータスが宣言どおり | `statusField == initialStatus` |
+| **整合性上重要な 1 つの enum**（投票の賛否、小テストの選択肢） | `choiceValues.hasAny([...])` |
+| ドキュメントが巨大でない | `data.size() <= 200` |
+
+| 守れない | 受け方 |
+|---|---|
+| 任意フィールドの型 | 集計時に除外 + ホストの `validateCollectionRecords` で事後掃除 |
+| 複数 enum / 文字列長 / 正規表現 | 同上。重要な 1 つだけをルールに載せる設計判断 |
+| ref の実在 | `get()` が 10 回上限なので全 ref は見られない。壊れた ref は表示側で欠落として扱う |
+| 大量投稿 | **App Check**（ルールにレート制限は書けない）+ `audience: "participant"` |
+
+**設計上の含み**: 公開投稿を受けるコレクションは**検疫されたもの**として扱う。
+`initialStatus` で入り、owner/editor と本人以外には見えず、**承認されるまで下流が信用しない**。
+S1 の `pending → approved` はまさにそれで、S2/S3/S4 では**集計が不正レコードを除外する**。
+
+> これは「publish はコンパイル段階である」（D4）の 2 つ目の実例。
+> git のスキーマから、**ルールが読める形に落とした射影**を出す。
 
 ### ルールが保証できないこと
 
@@ -1019,6 +1088,15 @@ owner のブラウザが集計して publish する」必要があったが、�
 **`then.email` という宣言的な副作用**が、現設計に足りていないピース。入れると通知・リマインダー・
 キャンセル連絡が全部同じ機構に乗る。
 
+> **宣言はクライアントが実行するので、ルールが独立に再導出しなければ意味がない。**
+> `then.email` を宣言しただけでは、書き手が `/mail` に任意の宛先・任意の内容を積める
+> （サロンのドメインからのスパム中継）。publish は `collections[cid].mail`
+> （`toField` / `templates` / `dataFields`）を出し、ルールは
+> **宛先 = その記録が持つアドレス**、**テンプレート = 宣言されたもの**、
+> **自由文は不可**を強制する。
+>
+> これは一般則: **宣言をルールが再導出できないなら、その宣言は助言でしかない。**
+
 （SMTP 認証情報を 1 回設定する必要がある。コードではないが、セットアップコストではある。）
 
 ---
@@ -1181,6 +1259,9 @@ sandbox された HTML が Firestore ハンドルを持たなくても、**親�
 | `selfUpdateFields` に `statusField` が入っている | **本人が自分の承認状態を変えられる（権限昇格）** |
 | `idFrom` が enum 外の文字列 | ルールが解釈できず、投稿が全部拒否される（または 1 件に潰れる） |
 | `gateOn` があるのに `session` を持たないアプリ | create が常に失敗する |
+| `then.email` があるのに `collections[cid].mail`（`toField` / `templates`）を publish していない | 承認メールが常に拒否される |
+| 公開投稿コレクションに `validate.required` が無い | **必須欠落のレコードを誰でも投げ込める** |
+| `peerVisibility: "public"` なのに `validate.choiceField` が無い | 集計が enum 外の値で汚染される |
 | `icon` が無い / `actions` がオブジェクトマップ | **既存文法エラー**（必須キー欠落・型不一致）。schema が読み込まれない |
 | `mutate` に `when`（正しくは `require`） | **エラーにならず黙って消える**。ゲートが外れた状態で動く |
 
@@ -1408,7 +1489,12 @@ services  1 ──< bookings      メニュー（所要時間の供給元）
   "members": { "owner@salon.jp": { "*": "owner" },
                "stylist-a@salon.jp": { "bookings": "editor", "shifts": "viewer", "services": "viewer" } },
   "memberEmails": ["owner@salon.jp", "stylist-a@salon.jp"],
-  "collections": { "bookings": {}, "services": {}, "shifts": {}, "stylists": {} },
+  "collections": {
+    "bookings": { "mail": { "toField": "customerEmail",
+                            "templates": ["booking-approved", "booking-rejected"],
+                            "dataFields": ["customerName", "startAt"] } },
+    "services": {}, "shifts": {}, "stylists": {}
+  },
   "participantRead": [],
   "public": {
     "enabled": true,
@@ -1424,6 +1510,7 @@ services  1 ──< bookings      メニュー（所要時間の供給元）
         "selfTransitions": { "pending": ["cancelled"], "approved": ["cancelled"] },
         "statusField": "status",
         "initialStatus": "pending",
+        "validate": { "required": ["customerName", "customerEmail", "service", "startAt", "status"] },
         "window": { "until": "2026-12-31T23:59:59Z" }
       }
     }
@@ -1527,6 +1614,8 @@ services  1 ──< bookings      メニュー（所要時間の供給元）
 
 - `services.price` を `public.read` に入れているので**料金は公開される**。非公開にしたいなら
   `gated` が要る（S3 参照）
+- `then.email` を書くだけでは足りない。**`collections.bookings.mail` を publish しないと
+  承認メールがルールに拒否される**（そして書かないと、書き手が任意の宛先に送れてしまう）
 - `endAt` が `derived` なので**保存されない**。集計や衝突判定は毎回計算される
 - 空き枠計算は `schedule` ビューが持つ。**ここを HTML に逃がすと宣言の意味が消える**
 
@@ -1562,7 +1651,9 @@ results     集計（aggregate が publish、公開読み取り）
         "createFields": ["q1","q2","q3","status"],
         "selfUpdateFields": [],
         "statusField": "status",
-        "initialStatus": "submitted"
+        "initialStatus": "submitted",
+        "validate": { "required": ["q1", "status"],
+                      "choiceField": "q1", "choiceValues": ["a", "b", "c"] }
       }
     }
   }
@@ -1655,6 +1746,8 @@ session     現在の問題とフェーズ  参加者は read のみ
         "createFields": ["questionId","choice","status"],
         "selfUpdateFields": [],
         "statusField": "status", "initialStatus": "answered",
+        "validate": { "required": ["questionId", "choice", "status"],
+                      "choiceField": "choice", "choiceValues": ["A", "B", "C"] },
         "gateOn": { "phase": "answering", "match": "questionId" }
       }
     }
@@ -1792,6 +1885,8 @@ session    現在の議題とフェーズ   参加者 read のみ
         "createFields": ["topicId","voter","choice","status"],
         "selfUpdateFields": [],
         "statusField": "status", "initialStatus": "cast",
+        "validate": { "required": ["topicId", "voter", "choice", "status"],
+                      "choiceField": "choice", "choiceValues": ["yes", "no", "abstain"] },
         "gateOn": { "phase": "voting", "match": "topicId" }
       }
     }
@@ -1964,6 +2059,8 @@ session    現在の議題とフェーズ   参加者 read のみ
 - [ ] `/mail` を `cid` の書き手にも開く
 - [ ] `get().data` の前に `exists()`、連結材料に `is string`
 - [ ] `list` クエリがルールの条件を写していること（親がクエリを組む）
+- [ ] **`/mail` が宣言（`then.email`）を再導出すること** — 宛先・テンプレート・自由文の禁止
+- [ ] **`validate` 射影**（`required` / `choiceField` / `choiceValues`）を publish が出すこと
 - [ ] `session` ドキュメント（主催者が駆動する状態機械）と、それを create 条件に使うこと
 - [ ] **`immutable`（owner にも触れない記録）** — ルールの形に関わる
 - [ ] `peerVisibility: "public"`（記名投票。参加者が全件読める）
