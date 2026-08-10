@@ -494,14 +494,22 @@ service cloud.firestore {
                             && tGraph().initial.hasAny([nextStatus()]))));
           }
 
-          // 匿名認証でも自分の行には届く（uid 判定に verified を要求しない）
+          // 匿名認証でも自分の行には届く（uid 判定に verified を要求しない）。
+          // **宣言された ID 戦略に束縛する**のが要点。前方一致を無条件に許すと、
+          // idFrom: "auto" のコレクション（S1）で攻撃者が `<被害者uid>_x` という id の
+          // レコードを作れてしまい、被害者に他人のレコードの自己編集権が生える。
+          // 複合 id は正規表現の前方一致ではなく、保存されている値から id を
+          // 復元して厳密一致させる（uid に正規表現メタ文字が来ても壊れない）
           function ownRow() {
             return authed() && submitOpen()
-                   && (itemId == request.auth.uid
-                       || itemId.matches(request.auth.uid + "_.*")
-                       || (verified() && has("emailField")
-                           && cfg().emailField in resource.data
-                           && resource.data[cfg().emailField] == email()));
+                   && ((has("idFrom") && cfg().idFrom == "auth.uid"
+                        && itemId == request.auth.uid)
+                    || (has("idFrom") && cfg().idFrom == "auth.uid+field"
+                        && has("idField") && cfg().idField in resource.data
+                        && itemId == request.auth.uid + "_" + resource.data[cfg().idField])
+                    || (verified() && has("emailField")
+                        && cfg().emailField in resource.data
+                        && resource.data[cfg().emailField] == email()));
           }
 
           allow read: if reader(aid, cid)
@@ -607,6 +615,11 @@ service cloud.firestore {
                       // 遷移「先」だけでなく「元」も宣言どおりであること。
                       // to だけだと cancelled/rejected から直接 approved にして
                       // booking-approved を送れる（アクションの require を迂回する）
+                      // 実際に変化したこと。`from` と `to` が素であることは
+                      // リンター項目にしたが、**リンターはルールの代わりにならない**
+                      // （作者の手元でしか走らない）。ここで明示的に要求する
+                      && get(srcItem()).data[mailCfg().statusField]
+                           != getAfter(srcItem()).data[mailCfg().statusField]
                       && mailCfg().on[m().template].from
                            .hasAny([get(srcItem()).data[mailCfg().statusField]])
                       && getAfter(srcItem()).data[mailCfg().statusField]
@@ -788,6 +801,24 @@ S1 のサンプルからも手書きの `memberEmails` を外した。
 > 状態機械では `false`（拒否）が正しい。emulator テストに
 > 「status を消す書き込み」を必ず入れる。
 
+**25-26. 12 巡目。**
+
+- **`ownRow()` の前方一致が ID 戦略に束縛されていなかった。** `idFrom: "auto"` の
+  コレクション（S1）でも `itemId.matches(uid + "_.*")` が効くので、攻撃者が
+  `<被害者uid>_x` という id のレコードを作れば、**被害者に他人のレコードの自己編集権が生える。**
+  → `idFrom` ごとに厳密一致へ。複合 id は正規表現ではなく、保存されている値から
+  id を復元して比較する（uid に正規表現メタ文字が来ても壊れない）。
+  `auto` では所有判定は `emailField` のみ
+- **メールの「実際に変化した」検査を落としていた。** `from` / `to` を入れたとき、
+  「`from` と `to` は宣言上素だから `get() != getAfter()` は不要」と考えて外し、
+  **素であることをリンター項目にした。**
+  → 戻した。両方要求する。
+
+> **リンターはルールの代わりにならない。** リンターは作者の手元で、authored な宣言に対して
+> 一度走る。ルールは**すべての書き込みに対して**走る。ルールが依存している事実を
+> リンターに移した時点で、その事実は**保証ではなく期待**に落ちる。
+> 「静的検査に移したから安全」は、ここでは成立しない。
+
 ### 同じ形のバグが 3 巡続いた（4 巡目も同じだった）
 
 **4 巡で 10 件が同じ根っこ**だった:
@@ -842,7 +873,8 @@ S1 のサンプルからも手書きの `memberEmails` を外した。
 | **過去トピックへの投票を弾く** | create 条件に `session.current == topicId` |
 | 巨大ドキュメントの拒否 | `request.resource.data.size()` |
 | メール踏み台の防止 | 宛先は**その記録が持つアドレス**、テンプレートは**宣言された `on` のキー**のみ |
-| **メールが宣言された遷移に伴っていること** | 決定的な `mailId` で重複を封じ、`get() != getAfter()` で**この書き込みが遷移させた**ことを要求 |
+| **メールが宣言された遷移に伴っていること** | 決定的な `mailId` で重複を封じ、`get() != getAfter()`（実際に変化した）と `from` / `to`（宣言どおりの遷移）の**両方**を要求 |
+| 自分の行の判定が ID 戦略と一致 | `idFrom` ごとに厳密一致。前方一致を無条件に許さない |
 | 宣言した audience と認可の一致 | `roleIn(...) == "participant"`（`!= null` では viewer も投稿できる） |
 | `session` を駆動できるのは owner だけ | `roleIn(aid, '*') == "owner"`（`writerOf` は editor を含む） |
 | **status を消して状態機械を迂回できない** | `nextStatus() != null` を要求し、null の既存レコードは宣言された `initial` にだけ入れる |
@@ -1431,7 +1463,7 @@ sandbox された HTML が Firestore ハンドルを持たなくても、**親�
 | `window` があるのに `session` も `finalize` も無い | 締切後の扱いが未定義 |
 | `selfUpdate` のどれかの状態に `statusField` が入っている | **本人が自分の承認状態を変えられる（権限昇格）** |
 | `selfUpdate` が状態別でなく、承認後も予約枠を触れる | **客が承認済みの予約を黙って移動できる**（枠が移り、再承認されない） |
-| `mail.on[t].from` に `to` と同じ状態が含まれる | 遷移していないのに通知が送れる |
+| `mail.on[t].from` に `to` と同じ状態が含まれる | 設定として無意味（ルール側でも `get() != getAfter()` で拒否されるが、意図の取り違えを早く知らせる） |
 | `actions` が `require` を宣言しているのに `collections[cid].transitions` が無い | writer が任意の状態遷移をできる（宣言が助言になる） |
 | `transitions` に `initial` が無い | status を持たない既存レコードが**恒久的に書き込み不能**になる |
 | `transitions` の `initial` が終端状態（`approved` 等）を含む | 復帰口から承認済みを作れる |
