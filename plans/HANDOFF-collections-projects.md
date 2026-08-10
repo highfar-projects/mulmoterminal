@@ -381,10 +381,16 @@ surface someone adds.
    The consequence, accepted: a cell opened in `~/proj/src` finds no collections and the pane says
    so. If that ever reads as a fault rather than as a fact, the fix is a clearer message naming
    the repository root — a HINT, not a search.
-2. **A user-scope dependency in a git-tracked collection (§11 L1) — DECIDED (2026-08-09), and the
-   answer is neither: it is PROHIBITED, in the engine.** `~` and a project are separate worlds.
-   Standing in a project, a collection under `~/.claude/skills` must not be reachable at all —
-   not listed, and not resolvable by slug.
+2. **A user-scope dependency in a git-tracked collection (§11 L1) — DECIDED (2026-08-09), NOT YET
+   IMPLEMENTED.** The decision is that the answer is neither of the two this question offered: it
+   must be PROHIBITED in the engine. `~` and a project are separate worlds, so standing in a
+   project a collection under `~/.claude/skills` must not be reachable at all — not listed, and
+   not resolvable by slug.
+
+   **Today it still is.** `initCollectionsBackend` hands `configureCollectionHost` one
+   unconditional `userSkillsDir` string for every root, so discovery still merges user scope into
+   a project's list and `loadCollection` still falls back to it. Nothing about this is enforced
+   until both halves below land — do not read the decision as the behaviour.
 
    Warning was the wrong shape because the check runs where someone asks, and the leak lives where
    resolution happens: `loadCollection` falls back to the user dir for ANY root, so `getSchema`,
