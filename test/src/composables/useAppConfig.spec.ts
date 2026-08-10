@@ -1,20 +1,53 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { currentGitlabHosts, useAppConfig } from "../../../src/composables/useAppConfig";
 
-// Echo the posted cwdPresets back as the server would, so presets.value reflects
-// each save. useAppConfig's presets ref is per-call (not a singleton), so every
-// useAppConfig() in these tests starts from an empty list.
 // Where the server keeps the worktrees it created. The GET carries it (the real /api/config does,
 // alongside `home`) because that is the only way this side can tell one of ours from a directory
 // that merely looks like one — see isManagedWorktreePath.
 const WORKTREES_ROOT = "/Users/me/.mulmoterminal/worktrees";
 
-function mockConfigFetch() {
-  globalThis.fetch = vi.fn(async (_url: string, init?: { body?: string }) => {
-    const body = init?.body ? JSON.parse(init.body) : {};
-    return { ok: true, json: async () => ({ cwdPresets: body.cwdPresets ?? [], worktreesRoot: WORKTREES_ROOT }) };
-  }) as unknown as typeof fetch;
+interface Preset {
+  label: string;
+  path: string;
 }
+
+// A stand-in for the SERVER'S list, not an echo of what the client posted — because that is the
+// property under test. Recording a directory is a ONE-ENTRY mutation applied on the server
+// (`/api/config/cwd-presets/record`), so a client whose own copy is empty or stale cannot send it
+// back as the whole list and delete the rest. An echoing fake could not tell the difference
+// between the fix and the bug it replaced, which is why it is gone.
+//
+// `gate` stalls the GET; `snapshot` is what that stalled GET will answer with — taken when it
+// STARTS, so a slow response is genuinely stale rather than magically current.
+function mockServer(initial: Preset[] = [], opts: { gate?: Promise<void>; get?: Record<string, unknown>; delayMs?: number } = {}) {
+  let list: Preset[] = [...initial];
+  globalThis.fetch = vi.fn(async (url: string, init?: { body?: string }) => {
+    const target = String(url);
+    const body: Record<string, unknown> = init?.body ? JSON.parse(init.body) : {};
+    if (opts.delayMs && target.startsWith("/api/config/cwd-presets/")) await new Promise((resolve) => setTimeout(resolve, opts.delayMs));
+    if (target === "/api/config/cwd-presets/record") {
+      const existing = list.find((preset) => preset.path === body.path);
+      list = [existing ?? { label: String(body.label), path: String(body.path) }, ...list.filter((preset) => preset.path !== body.path)];
+      return { ok: true, json: async () => ({ cwdPresets: list }) };
+    }
+    if (target === "/api/config/cwd-presets/remove") {
+      list = list.filter((preset) => preset.path !== body.path);
+      return { ok: true, json: async () => ({ cwdPresets: list }) };
+    }
+    if (!init?.body) {
+      const snapshot = [...list];
+      await opts.gate;
+      return { ok: true, json: async () => ({ cwdPresets: snapshot, worktreesRoot: WORKTREES_ROOT, ...opts.get }) };
+    }
+    // POST /api/config — the genuine replace-all: a settings-UI reorder.
+    if (Array.isArray(body.cwdPresets)) list = body.cwdPresets as Preset[];
+    return { ok: true, json: async () => ({ cwdPresets: list }) };
+  }) as unknown as typeof fetch;
+  // What ANOTHER mulmoterminal doing its own one-entry write looks like from here.
+  return { recordExternally: (preset: Preset) => (list = [preset, ...list.filter((entry) => entry.path !== preset.path)]) };
+}
+
+const mockConfigFetch = () => mockServer();
 
 beforeEach(() => {
   localStorage.clear();
@@ -37,11 +70,13 @@ describe("useAppConfig — auto preset recording", () => {
   });
 
   it("keeps an existing entry's label when bumping it to the front", async () => {
-    const { presets, recordPreset } = useAppConfig();
-    presets.value = [
+    // Seeded on the SERVER — the label the user gave a directory lives in the file, and it is the
+    // server that decides what a record does to it now.
+    mockServer([
       { label: "two", path: "/b/two" },
       { label: "Custom", path: "/a/one" }, // a manual label from legacy cwdPresets
-    ];
+    ]);
+    const { presets, recordPreset } = useAppConfig();
     await recordPreset("/a/one");
     expect(presets.value).toEqual([
       { label: "Custom", path: "/a/one" },
@@ -103,12 +138,12 @@ describe("useAppConfig — auto preset recording", () => {
   // Saved config is the user's, so an entry an earlier version recorded is left where it is
   // rather than dropped — it just stops being maintained (no bump to the front).
   it("leaves an already-saved worktree entry alone instead of bumping it", async () => {
-    const { presets, recordPreset, loadConfig } = useAppConfig();
-    await loadConfig();
-    presets.value = [
+    mockServer([
       { label: "alpha", path: "/home/me/alpha" },
       { label: "myrepo (fix-bug)", path: WORKTREE },
-    ];
+    ]);
+    const { presets, recordPreset, loadConfig } = useAppConfig();
+    await loadConfig();
     const before = vi.mocked(globalThis.fetch).mock.calls.length;
     await recordPreset(WORKTREE);
     expect(vi.mocked(globalThis.fetch).mock.calls).toHaveLength(before); // no POST
@@ -125,11 +160,7 @@ describe("useAppConfig — auto preset recording", () => {
 
   it("imports legacy localStorage recents (recent_dirs_v1) to the FRONT of presets on load, then clears the key", async () => {
     localStorage.setItem("recent_dirs_v1", JSON.stringify(["/r/one", "/r/two"]));
-    globalThis.fetch = vi.fn(async (_url: string, init?: { body?: string }) => {
-      if (!init?.body) return { ok: true, json: async () => ({ cwd: "/w", home: "/h", cwdPresets: [{ label: "kept", path: "/p/kept" }], soundFile: null }) };
-      const body = init.body ? JSON.parse(init.body) : {};
-      return { ok: true, json: async () => ({ cwdPresets: body.cwdPresets ?? [] }) };
-    }) as unknown as typeof fetch;
+    mockServer([{ label: "kept", path: "/p/kept" }], { get: { cwd: "/w", home: "/h", soundFile: null } });
     const { presets, loadConfig } = useAppConfig();
     await loadConfig();
     expect(presets.value).toEqual([
@@ -142,11 +173,7 @@ describe("useAppConfig — auto preset recording", () => {
 
   it("does not duplicate a legacy recent already present, but still clears the key", async () => {
     localStorage.setItem("recent_dirs_v1", JSON.stringify(["/p/kept", "/r/new"]));
-    globalThis.fetch = vi.fn(async (_url: string, init?: { body?: string }) => {
-      if (!init?.body) return { ok: true, json: async () => ({ cwd: "/w", home: "/h", cwdPresets: [{ label: "kept", path: "/p/kept" }], soundFile: null }) };
-      const body = init.body ? JSON.parse(init.body) : {};
-      return { ok: true, json: async () => ({ cwdPresets: body.cwdPresets ?? [] }) };
-    }) as unknown as typeof fetch;
+    mockServer([{ label: "kept", path: "/p/kept" }], { get: { cwd: "/w", home: "/h", soundFile: null } });
     const { presets, loadConfig } = useAppConfig();
     await loadConfig();
     expect(presets.value.map((p) => p.path)).toEqual(["/r/new", "/p/kept"]);
@@ -158,20 +185,65 @@ describe("useAppConfig — auto preset recording", () => {
     const getGate = new Promise<void>((r) => {
       releaseGet = r;
     });
-    globalThis.fetch = vi.fn(async (_url: string, init?: { body?: string }) => {
-      if (!init?.body) {
-        await getGate; // the initial GET stalls until we release it
-        return { ok: true, json: async () => ({ cwd: "/w", home: "/h", cwdPresets: [], soundFile: null }) };
-      }
-      const body = init.body ? JSON.parse(init.body) : {};
-      return { ok: true, json: async () => ({ cwdPresets: body.cwdPresets ?? [] }) };
-    }) as unknown as typeof fetch;
+    mockServer([], { gate: getGate, get: { cwd: "/w", home: "/h", soundFile: null } });
     const { presets, loadConfig, recordPreset } = useAppConfig();
     const loading = loadConfig(); // GET in flight (stalled)
     await recordPreset("/launched/now"); // user launches before the GET resolves
     releaseGet(); // the stale (empty) GET snapshot now lands
     await loading;
     expect(presets.value.map((p) => p.path)).toEqual(["/launched/now"]);
+  });
+
+  // THE BUG THIS PAIR OF ROUTES EXISTS FOR. A launch during (or after a failed) initial GET used
+  // to persist "[the one just launched]" as the WHOLE list, and every other saved directory was
+  // gone from a file every mulmoterminal on the machine shares — taking the projects whose
+  // collections the server serves with it (2026-08-09).
+  it("records a directory WITHOUT deleting the ones this tab has never seen", async () => {
+    mockServer([
+      { label: "mag2", path: "/srv/mag2" },
+      { label: "site", path: "/srv/site" },
+    ]);
+    const { presets, recordPreset } = useAppConfig();
+    // No loadConfig: this tab's own list is empty, exactly as it is during the first GET.
+    expect(presets.value).toEqual([]);
+    await recordPreset("/srv/new");
+    expect(presets.value.map((p) => p.path)).toEqual(["/srv/new", "/srv/mag2", "/srv/site"]);
+  });
+
+  it("removes one directory WITHOUT deleting the ones this tab has never seen", async () => {
+    mockServer([
+      { label: "mag2", path: "/srv/mag2" },
+      { label: "site", path: "/srv/site" },
+    ]);
+    const { presets, removePreset } = useAppConfig();
+    await removePreset("/srv/mag2");
+    expect(presets.value.map((p) => p.path)).toEqual(["/srv/site"]);
+  });
+
+  // The legacy import is ADD-ONLY, so it has no business sending a whole list: an authoritative
+  // GET describes the instant it completed, and another instance can record a directory before
+  // the import's write lands. A replace-all built from the earlier read would delete it.
+  it("imports legacy recents without erasing a directory saved meanwhile", async () => {
+    localStorage.setItem("recent_dirs_v1", JSON.stringify(["/legacy/one"]));
+    const server = mockServer([{ label: "kept", path: "/p/kept" }], { get: { cwd: "/w" } });
+    const { presets, loadConfig } = useAppConfig();
+    const loading = loadConfig();
+    // Another mulmoterminal saves a directory while the import is in flight.
+    server.recordExternally({ label: "other", path: "/srv/other" });
+    await loading;
+    expect(presets.value.map((p) => p.path)).toContain("/srv/other");
+    expect(presets.value.map((p) => p.path)).toContain("/legacy/one");
+    expect(presets.value.map((p) => p.path)).toContain("/p/kept");
+  });
+
+  // A save that fails must lose the RECORD, never the list.
+  it("leaves the list alone when the server refuses the record", async () => {
+    mockServer([{ label: "mag2", path: "/srv/mag2" }]);
+    const { presets, loadConfig, recordPreset } = useAppConfig();
+    await loadConfig();
+    globalThis.fetch = vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) })) as unknown as typeof fetch;
+    await recordPreset("/srv/new");
+    expect(presets.value.map((p) => p.path)).toEqual(["/srv/mag2"]);
   });
 
   // The other side of the test above: a launch that lands before the initial GET has no worktree
@@ -209,14 +281,7 @@ describe("useAppConfig — auto preset recording", () => {
     const getGate = new Promise<void>((r) => {
       releaseGet = r;
     });
-    globalThis.fetch = vi.fn(async (_url: string, init?: { body?: string }) => {
-      if (!init?.body) {
-        await getGate;
-        return { ok: true, json: async () => ({ cwd: "/w", worktreesRoot: WORKTREES_ROOT, cwdPresets: [] }) };
-      }
-      const body = JSON.parse(init.body);
-      return { ok: true, json: async () => ({ cwdPresets: body.cwdPresets ?? [] }) };
-    }) as unknown as typeof fetch;
+    mockServer([], { gate: getGate, get: { cwd: "/w" } });
     const { presets, loadConfig, recordPreset } = useAppConfig();
     const loading = loadConfig();
     const recording = recordPreset(`${WORKTREES_ROOT}/myrepo-1a2b3c4d/fix-bug`);
@@ -227,13 +292,11 @@ describe("useAppConfig — auto preset recording", () => {
   });
 
   it("serializes concurrent records so neither write clobbers the other (#163 review)", async () => {
-    // A slow POST means two un-serialized records would both read the empty list and
-    // the second would overwrite the first. Serialization keeps both.
-    globalThis.fetch = vi.fn(async (_url: string, init?: { body?: string }) => {
-      const body = init?.body ? JSON.parse(init.body) : {};
-      await new Promise((r) => setTimeout(r, 5));
-      return { ok: true, json: async () => ({ cwdPresets: body.cwdPresets ?? [] }) };
-    }) as unknown as typeof fetch;
+    // Two records in flight at once, against a slow server. The clobber this guarded against is
+    // now impossible by construction — the server applies one entry at a time to its own list, so
+    // neither request carries the other's absence. Serialization still decides the ORDER, and the
+    // guarantee the ticket asked for (both survive) is asserted the same way.
+    mockServer([], { delayMs: 5 });
     const { presets, recordPreset } = useAppConfig();
     await Promise.all([recordPreset("/a"), recordPreset("/b")]);
     expect(presets.value.map((p) => p.path).sort()).toEqual(["/a", "/b"]);

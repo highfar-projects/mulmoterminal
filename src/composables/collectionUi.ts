@@ -271,7 +271,22 @@ configureCollectionUi({
   importRegistry: (author, slug, registry) => apiPost<RegistryImportResponse>("/api/collections/registry/import", { author, slug, registry }),
 
   // ── favorites: the shared useShortcuts store over /api/shortcuts. ──
-  reconcileShortcuts: (kind, live) => useShortcuts().reconcile(kind, live),
+  // ONLY EVER FROM THE WORKSPACE'S OWN LIST. This is data loss when it is wrong, and it was:
+  // the pinned-shortcuts file is ONE workspace-global file (shared with MulmoClaude), while the
+  // list the index just fetched is scoped to the surface's project (`withActiveProject`, applied
+  // by `apiGet` above). Reconciling one against the other says "every collection the workspace
+  // pinned is gone" whenever the pane is open on a project — and `reconcile` prunes and PERSISTS.
+  //
+  // That is not hypothetical. On 2026-08-09 opening the Collections pane on a project with one
+  // collection deleted TWENTY-ONE pinned collections from `<workspace>/config/shortcuts.json`, in
+  // both apps, with no undo and nothing on screen to say it had happened. The feeds survived only
+  // because they are a different `kind`.
+  //
+  // So a project-scoped answer reconciles NOTHING. It is not "reconcile the project's pins
+  // instead": pins are not per project, and pretending otherwise would delete the workspace's on
+  // the way. If pins ever become per project, this is the line that has to learn about it — not
+  // the store, which cannot see a scope from where it sits.
+  reconcileShortcuts: (kind, live) => (activeCollectionProjectId() === null ? useShortcuts().reconcile(kind, live) : Promise.resolve()),
   unpin: (kind, slug) => useShortcuts().unpin(kind, slug),
   // ── chat: spawn a new terminal session seeded with the prompt and surface it
   //    (hidden=false → make it visible). Backs the index "create" button + the

@@ -4,6 +4,7 @@
 // from config-routes.ts so the sanitize/load/save logic is unit-testable.
 import { existsSync, copyFileSync } from "node:fs";
 import path from "node:path";
+import { isRecord } from "../../common/isRecord.js";
 import { sanitizePresets } from "./cwd-presets.js";
 import { sanitizeButtons, sanitizeChips } from "./header-config.js";
 import {
@@ -27,7 +28,6 @@ import { isCustomAgentId, type CustomAgent } from "../../common/customAgents.js"
 import { DEFAULT_PUSH_KINDS, PUSH_KINDS, type PushKind } from "../../common/pushKinds.js";
 import { DEFAULT_SOUND_KINDS, NOTIFY_KINDS, type NotifyKind } from "../../common/notifyKinds.js";
 import { parsePresetRef } from "../../common/notifySounds.js";
-import { isRecord } from "../../common/isRecord.js";
 import { MODEL_ID_ALLOWED } from "../../common/modelIds.js";
 import { sanitizeKeymap, type Keymap } from "../../common/keymap.js";
 import { sanitizeCockpitLines, DEFAULT_COCKPIT_LINES, type CockpitLines } from "../../common/cockpitLines.js";

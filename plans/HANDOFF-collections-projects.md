@@ -104,9 +104,10 @@ which is the canonical authoring path.
   generation. `feat-collections-project-root.md` §7b describes the 3.0.0 contract and is now
   historical on that point.
 
-Not done: nothing calls `syncCollectionWatcherRoots` when a directory is recorded, so a project
-launched for the first time waits up to a minute for its watcher. Config writes go through several
-paths (`POST /api/config`, `cli-init`) and the poll covers them all.
+The poll is now the FALLBACK, not the only path: `POST /api/config` reports when the saved-directory
+list actually moved (by path — a relabel is the same directory) and `app-routes.ts` pulls the sync
+forward. `cli-init` writes before the server runs, so it needs nothing. The callback is injected
+rather than imported, so the config module stays config-shaped.
 
 ### 3.2 Notification deep links — DONE
 
@@ -167,8 +168,14 @@ did before.
   per call rather than captured at construction — the one shape a later `project` param could not
   have changed.
 
-Still missing (deliberately, per §8): the phone-side picker, and a command that lets it LEARN the
-`{ id, label }` list.
+`listCollectionProjects` completes the host half: the handlers could already resolve a project a
+command NAMES, and this is how the phone learns which ids exist. It carries id + label and
+deliberately NOT the cwd the browser listing has — the browser needs the path to match a project to
+a cell it is already showing, and the phone, being genuinely remote, must not be handed one.
+`docs/remote-host-protocol.md` documents the parameter, the listing, and the three rules (opaque
+id; omitted means the workspace; an unresolvable id is an error, not a fallback).
+
+Still missing, and it is not in this repo: the phone's own project picker.
 
 ### 3.5 Per-root scheduled feed refresh — BLOCKED UPSTREAM (attempted, reverted)
 
@@ -239,8 +246,19 @@ never heard of, and narrowing would drop a real finding behind a version skew. `
 narrowed — it decides how the row renders. A spec pins that the server only ever produces a
 documented code.
 
-Still missing: an agent-facing form (a tool or a skill step), and a creation-time hook. §11.4 asked
-for "collection-creation time and as a command"; this is the command half.
+**The agent gets it too**, on the one action that can change the answer: a successful `putSchema`
+carries the findings back as a `portability` field beside `written: true`
+(`server/infra/collectionToolPortability.ts`). The agent is the one that chose the storage kind or
+dropped the `primaryKey`, and it is holding the file open at the moment that is cheapest to fix.
+
+Quiet by construction: a clean collection is not mentioned, a refusal (which is PROSE the agent is
+meant to act on) is passed through untouched, every other action is left alone rather than spending
+a git call per listing, and a failure of the check itself changes nothing about the write.
+
+Still missing: a creation-time hook. There is nowhere to put one — creation is a plain file write
+the engine never sees (`putSchema` refuses an unknown collection and tells the agent to create it
+by writing SKILL.md + schema.json), so the first moment the host can speak is the schema edit that
+follows. §11.4's "at collection-creation time" is answered by that, not by a hook.
 
 ### 3.7 A live browser check — DONE for the overlay, still owed for the pane
 

@@ -163,7 +163,12 @@ const isLauncher = (value: unknown): value is Launcher => isRecord(value) && typ
 // `next` from the same stale snapshot — the later POST would clobber the earlier one
 // (last-write-wins, dropping a just-launched dir). `serialize` runs the writes in order so
 // every mutation reads the freshly-saved list before computing its own.
-function createPresetMutations(presets: Ref<CwdPreset[]>, savePresets: (next: CwdPreset[]) => Promise<boolean>) {
+function createPresetMutations(
+  presets: Ref<CwdPreset[]>,
+  hasAuthoritativeList: () => boolean,
+  recordPresetOnServer: (path: string, label: string) => Promise<boolean>,
+  removePresetOnServer: (path: string) => Promise<boolean>,
+) {
   let presetWrite: Promise<unknown> = Promise.resolve();
   function serialize(mutate: () => Promise<void>): Promise<void> {
     const run = presetWrite.then(mutate, mutate);
@@ -200,17 +205,30 @@ function createPresetMutations(presets: Ref<CwdPreset[]>, savePresets: (next: Cw
     if (isManagedWorktreePath(path, worktreesRoot.value)) return;
     return serialize(async () => {
       if (presets.value[0]?.path === path) return; // already most-recent — nothing to reorder
-      const existing = presets.value.find((p) => p.path === path);
-      const entry = existing ?? { label: presetLabel(path), path };
-      await savePresets([entry, ...presets.value.filter((p) => p.path !== path)]);
+      // A ONE-ENTRY MUTATION, applied to the list on disk by the server — never a replace-all
+      // built from `presets.value`.
+      //
+      // This is the fix for a data-loss bug, so it is worth being blunt about: `presets.value` is
+      // this tab's view, and it is EMPTY until the initial GET lands, empty again if that GET
+      // fails, and stale the moment another mulmoterminal (or another tab) saves a directory.
+      // Sending it as the whole list deletes the difference from a file every instance shares —
+      // and that list is what decides which projects the server serves collections for. On
+      // 2026-08-09 a terminal launched during the first GET reduced five saved directories to
+      // one, silently.
+      //
+      // Recording is inherently "add this, keep the rest", so it is expressed that way and the
+      // rest is never in this tab's hands. That also keeps #164's guarantee — a launch during the
+      // initial GET is recorded immediately, with nothing to wait for.
+      await recordPresetOnServer(path, presetLabel(path));
     });
   }
 
   // Drop one preset (the chip's close button). No-op when the path isn't present.
   function removePreset(path: string): Promise<void> {
     return serialize(async () => {
-      if (!presets.value.some((p) => p.path === path)) return;
-      await savePresets(presets.value.filter((p) => p.path !== path));
+      // Server-side for the same reason as recordPreset: filtering this tab's copy and sending it
+      // back would drop every directory this tab had not seen.
+      await removePresetOnServer(path);
     });
   }
 
@@ -220,14 +238,30 @@ function createPresetMutations(presets: Ref<CwdPreset[]>, savePresets: (next: Cw
   // is cleared on success so a chip the user later deletes can't reappear. Dedup keeps it
   // harmless if it runs twice.
   async function migrateLegacyRecents(): Promise<void> {
+    // The list is only consulted to decide what is NEW; the writing below is per entry, so a
+    // stale read costs at most a duplicate the server then dedupes by path.
+    if (!hasAuthoritativeList()) return;
     const legacy = readLegacyRecents();
     if (!legacy.length) return;
     const known = new Set(presets.value.map((p) => p.path));
-    const additions = legacy.filter((path) => !known.has(path)).map((path) => ({ label: presetLabel(path), path }));
+    const additions = legacy.filter((path) => !known.has(path));
     let saved = true;
     if (additions.length) {
       await serialize(async () => {
-        saved = await savePresets([...additions, ...presets.value]);
+        // ONE ENTRY AT A TIME, like every other preset write. An authoritative GET describes the
+        // instant it completed: another mulmoterminal can record a directory before this
+        // migration's POST reaches the config lock, and a replace-all built from the list we read
+        // BEFORE that would delete it. This migration is purely add-only, so it has no business
+        // sending a whole list at all.
+        //
+        // REVERSED, because each record goes to the FRONT: replaying most-recent-last leaves the
+        // legacy order intact ahead of what was already saved.
+        for (const path of [...additions].reverse()) {
+          // A failure stops the import and KEEPS the localStorage key, so the whole thing is
+          // retried on the next load rather than half-migrated and forgotten.
+          saved = await recordPresetOnServer(path, presetLabel(path));
+          if (!saved) return;
+        }
       });
     }
     if (!saved) return; // keep the key so the import retries on the next load
@@ -248,6 +282,18 @@ function createPresetMutations(presets: Ref<CwdPreset[]>, savePresets: (next: Cw
 // resolves would be dropped by the stale GET.
 function createPresetManager(presets: Ref<CwdPreset[]>, saving: Ref<boolean>, error: Ref<string | null>) {
   let version = 0;
+  // True only once a GET (or our own successful save) has authoritatively populated `presets`.
+  //
+  // THIS IS THE DIFFERENCE BETWEEN RECORDING A DIRECTORY AND DELETING EVERY OTHER ONE. The save
+  // is a REPLACE-ALL POST built from `presets.value`, so writing before the list is known sends
+  // the empty default plus the one entry — and the user's whole saved-directory list becomes
+  // that single directory, on disk, in a file every mulmoterminal on the machine shares.
+  //
+  // That happened on 2026-08-09: a terminal launched while the initial GET was still in flight
+  // reduced five saved directories to one, and the collections of the other four stopped being
+  // served (they are the project list — server/infra/project-root.ts). The same guard exists in
+  // useShortcuts for the same reason, on the same kind of file.
+  let loaded = false;
 
   // Persist the directory presets. Posts only cwdPresets — the server keeps the other fields,
   // so this never clobbers them. Returns whether the save succeeded.
@@ -263,6 +309,8 @@ function createPresetManager(presets: Ref<CwdPreset[]>, saving: Ref<boolean>, er
       if (!res.ok) throw new Error(`save failed (${res.status})`);
       const saved: unknown = await res.json();
       presets.value = isRecord(saved) && isUnknownArray(saved.cwdPresets) ? saved.cwdPresets.filter(isCwdPreset) : [];
+      // The server has now told us what the list IS, so the next write may build on it.
+      loaded = true;
       version++;
       return true;
     } catch {
@@ -275,10 +323,45 @@ function createPresetManager(presets: Ref<CwdPreset[]>, saving: Ref<boolean>, er
 
   const snapshotVersion = (): number => version;
   const adoptServerPresets = (list: unknown, capturedVersion: number): void => {
-    if (version === capturedVersion) presets.value = isUnknownArray(list) ? list.filter(isCwdPreset) : [];
+    if (version !== capturedVersion) return;
+    presets.value = isUnknownArray(list) ? list.filter(isCwdPreset) : [];
+    loaded = true;
   };
 
-  return { savePresets, ...createPresetMutations(presets, savePresets), snapshotVersion, adoptServerPresets };
+  /** Apply a one-entry change on the SERVER and adopt the list it answers with. The response is
+   *  the file's real contents after the change, so this tab ends up agreeing with disk even when
+   *  its own copy was empty or stale — which is the point.
+   *
+   *  A failed call leaves the list exactly as it was: the directory is simply not recorded, and
+   *  the next launch tries again. It counts as a local write (`version++`) so a GET already in
+   *  flight cannot re-adopt the pre-change list over it (#164). */
+  async function mutateOneOnServer(url: string, body: Record<string, string>): Promise<boolean> {
+    version++;
+    try {
+      const res = await fetchWithTimeout(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error(`save failed (${res.status})`);
+      const saved: unknown = await res.json();
+      if (isRecord(saved) && isUnknownArray(saved.cwdPresets)) {
+        presets.value = saved.cwdPresets.filter(isCwdPreset);
+        loaded = true;
+      }
+      error.value = null;
+      return true;
+    } catch {
+      error.value = "Couldn't save presets. Check the server and try again.";
+      return false;
+    }
+  }
+
+  const recordPresetOnServer = (path: string, label: string) => mutateOneOnServer("/api/config/cwd-presets/record", { path, label });
+  const removePresetOnServer = (path: string) => mutateOneOnServer("/api/config/cwd-presets/remove", { path });
+
+  return {
+    savePresets,
+    ...createPresetMutations(presets, () => loaded, recordPresetOnServer, removePresetOnServer),
+    snapshotVersion,
+    adoptServerPresets,
+  };
 }
 
 // The single-field savers each persist ONE config field and update its SINGLETON ref, so
