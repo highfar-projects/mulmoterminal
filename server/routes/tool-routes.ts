@@ -6,7 +6,7 @@ import type { Express } from "express";
 import { SESSION_ID_RE } from "../config/env.js";
 import type { createToolStores } from "../session/tool-store.js";
 import { planToolResultUpdate } from "./toolResultPlan.js";
-import { stampCardScope } from "./stampCardScope.js";
+import { stampCardScope, scopeOfStoredCard } from "./stampCardScope.js";
 import { cwdForSession } from "../session/session-cwd.js";
 import { groupOfTool, type ToolGroup } from "../../common/toolGroups.js";
 
@@ -85,7 +85,15 @@ export function mountToolRoutes(app: Express, deps: ToolRouteDeps): void {
     // The card carries the PROJECT it was made in, stamped here — the last place that knows both
     // the payload and the session, and therefore the directory the agent is standing in. Before
     // storing, so a replayed card resolves the same project as the live one (../routes/stampCardScope.ts).
-    const toStore = stampCardScope(plan.toolName, plan.stored, cwdForSession, plan.sessionId);
+    // The card's project is the one it was MADE in, so an update to an existing card carries the
+    // scope forward instead of re-deriving it: this same route persists a view's state change,
+    // and a cell can be relaunched in another directory in between.
+    const prior = (await deps.stores.toolResultsStore.get(plan.sessionId)).find((result) => result.uuid === plan.stored.uuid);
+    const toStore = stampCardScope(plan.toolName, plan.stored, {
+      sessionId: plan.sessionId,
+      cwdOf: cwdForSession,
+      priorScope: scopeOfStoredCard(prior),
+    });
     // A dropped result (a collection placeholder the agent's real card has already beaten) must
     // not publish either: the panel would render a card that no reload would bring back.
     const stored = await deps.stores.storeToolResult(plan.sessionId, toStore);

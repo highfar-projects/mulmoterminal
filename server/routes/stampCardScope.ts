@@ -41,12 +41,33 @@ function cardPayload(stored: Record<string, unknown>): PresentCollectionData | n
  *
  *  An OPAQUE id, never a path: this payload reaches the browser and, through a custom view, an
  *  LLM-authored iframe. */
-export function stampCardScope<T extends Record<string, unknown>>(toolName: string, stored: T, cwdOf: (sessionId: string) => string, sessionId: string): T {
+export function stampCardScope<T extends Record<string, unknown>>(toolName: string, stored: T, where: CardOrigin): T {
   if (toolName !== PRESENT_COLLECTION.name) return stored;
   const data = cardPayload(stored);
   if (!data) return stored;
-  const root = projectScopeForCwd(cwdOf(sessionId)).workspaceRoot;
-  const scope = projectIdForRoot(root) ?? undefined;
+  const scope = where.priorScope ?? projectIdForRoot(projectScopeForCwd(where.cwdOf(where.sessionId)).workspaceRoot) ?? undefined;
   if (scope === undefined) return stored;
   return { ...stored, data: withCardScope(data, scope) };
+}
+
+export interface CardOrigin {
+  sessionId: string;
+  /** Where that session is running — the server's own record (`cwdForSession`). */
+  cwdOf: (sessionId: string) => string;
+  /** The scope the card ALREADY carries, when this is an update to one that exists.
+   *
+   *  A card's project is decided when it is MADE, and a same-uuid update replaces the stored
+   *  entry wholesale — so re-deriving it from the session here would let the card change project
+   *  afterwards. That is not hypothetical: the panel POSTs back through this route to persist a
+   *  view's state, and a cell can be relaunched in another directory between the two. The card
+   *  would then read a project it was never about, which is the whole bug this stamp exists to
+   *  prevent, arriving by the back door. */
+  priorScope?: string | undefined;
+}
+
+/** The scope already stamped on a stored result, if it is a card and has one. */
+export function scopeOfStoredCard(stored: unknown): string | undefined {
+  if (!isRecord(stored) || !isRecord(stored.data)) return undefined;
+  const scope = stored.data.scope;
+  return typeof scope === "string" && scope.length > 0 ? scope : undefined;
 }
