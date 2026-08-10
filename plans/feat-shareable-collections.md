@@ -465,6 +465,25 @@ service cloud.firestore {
                     && (!("fromMs" in cfg().window)
                         || request.time.toMillis() > cfg().window.fromMs));
           }
+          function curStatus()  { return has("statusField") && cfg().statusField in resource.data
+                                  ? resource.data[cfg().statusField] : null; }
+          function nextStatus() { return has("statusField")
+                                       && cfg().statusField in request.resource.data
+                                  ? request.resource.data[cfg().statusField] : null; }
+          function changed()    { return request.resource.data.diff(resource.data).affectedKeys(); }
+
+          // 宣言された状態遷移は **誰に対しても** 効く。writer は無条件に書ける、では
+          // アクションの `require`（pending からのみ承認できる）が助言になり、
+          // cancelled の予約をいきなり approved にできてしまう
+          function transitionOk() {
+            return !colFlag(aid, cid, "transitions")
+                || curStatus() == null || nextStatus() == null
+                || curStatus() == nextStatus()
+                || (curStatus() in app(aid).collections[cid].transitions
+                    && app(aid).collections[cid].transitions[curStatus()]
+                         .hasAny([nextStatus()]));
+          }
+
           // 匿名認証でも自分の行には届く（uid 判定に verified を要求しない）
           function ownRow() {
             return authed() && submitOpen()
@@ -521,23 +540,25 @@ service cloud.firestore {
                                          == request.resource.data[cfg().gateOn.match])));
 
           // immutable なら誰も（owner でも）更新できない。
-          // 本人の更新は「変わったキーが selfUpdateFields の範囲」— ドキュメント全体の
+          // 本人の更新は「変わったキーが selfUpdate[現在の状態] の範囲」— ドキュメント全体の
           // hasOnly ではない。status のような system field は差分に現れた時点で拒否される。
           // 宣言された状態遷移（キャンセル等）だけは status の変更を許す
           allow update: if !immutableCol(aid, cid)
+                        && transitionOk()
                         && (writerOf(aid, cid)
                             || (ownRow() && !(has("finalize") && cfg().finalize == true) && inWindow()
-                                && ((has("selfUpdateFields")
-                                     && request.resource.data.diff(resource.data).affectedKeys()
-                                          .hasOnly(cfg().selfUpdateFields))
-                                    || (has("selfTransitions") && has("statusField")
-                                        && cfg().statusField in resource.data
-                                        && cfg().statusField in request.resource.data
-                                        && request.resource.data.diff(resource.data).affectedKeys()
-                                             .hasOnly([cfg().statusField])
-                                        && resource.data[cfg().statusField] in cfg().selfTransitions
-                                        && cfg().selfTransitions[resource.data[cfg().statusField]]
-                                             .hasAny([request.resource.data[cfg().statusField]])))));
+                                // 本人が触ってよいフィールドは **現在の状態ごと** に宣言する。
+                                // 平坦なリスト（状態を見ない selfUpdate）だと、承認済みの予約の startAt を
+                                // 客が黙って動かせる（枠が移り、承認し直されない）
+                                && ((has("selfUpdate") && curStatus() != null
+                                     && curStatus() in cfg().selfUpdate
+                                     && changed().hasOnly(cfg().selfUpdate[curStatus()]))
+                                    // 宣言された本人遷移（キャンセル等）
+                                    || (has("selfTransitions") && curStatus() != null
+                                        && changed().hasOnly([cfg().statusField])
+                                        && curStatus() in cfg().selfTransitions
+                                        && cfg().selfTransitions[curStatus()]
+                                             .hasAny([nextStatus()])))));
 
           allow delete: if !immutableCol(aid, cid) && writerOf(aid, cid);
         }
@@ -557,9 +578,9 @@ service cloud.firestore {
         // つまり「承認したから送る」というアクションと遷移が助言にとどまる。
         // 2 つで縛る:
         //   - 決定的な mailId → 同じアクションを二度積めない（create は 1 回しか通らない）
-        //   - get() != getAfter() → **この書き込みが遷移させた**こと。
-        //     getAfter() だけでは「結果その状態である」しか言えず、すでに approved の
-        //     予約に対して何も書かずにメールだけ積める（宣言との乖離が残る）
+        //   - get() が `from` に入り getAfter() が `to` である → **この書き込みが、
+        //     宣言された遷移を行った**こと。to だけでは (a) すでに approved の記録に
+        //     何も書かずメールだけ積める (b) cancelled から直接 approved にして送れる
         // クライアントは記録の更新とメールの enqueue を 1 つのバッチで書く必要がある
         allow create: if listed(aid)
                       && m().keys().hasAll(["cid", "itemId", "to", "template"])
@@ -573,11 +594,13 @@ service cloud.firestore {
                       && m().template in mailCfg().on
                       && mailCfg().statusField in get(srcItem()).data
                       && mailCfg().statusField in getAfter(srcItem()).data
+                      // 遷移「先」だけでなく「元」も宣言どおりであること。
+                      // to だけだと cancelled/rejected から直接 approved にして
+                      // booking-approved を送れる（アクションの require を迂回する）
+                      && mailCfg().on[m().template].from
+                           .hasAny([get(srcItem()).data[mailCfg().statusField]])
                       && getAfter(srcItem()).data[mailCfg().statusField]
-                           == mailCfg().on[m().template]
-                      // この書き込みが遷移させたことの証明
-                      && get(srcItem()).data[mailCfg().statusField]
-                           != getAfter(srcItem()).data[mailCfg().statusField]
+                           == mailCfg().on[m().template].to
                       && (!("data" in m()) || m().data.keys().hasOnly(mailCfg().dataFields));
         allow read, update, delete: if false;
       }
@@ -604,8 +627,8 @@ service cloud.firestore {
 **2. 申込者が自分の予約を `approved` にできた。** `status` は create 時に `initialStatus` を
 検証するため `fields` に必要だが、更新規則が**同じ `fields` に対する `hasOnly`** だったため、
 本人が `status` を書き換えられた。**これは権限昇格。**
-→ **`createFields` と `selfUpdateFields` を分離**し、更新は
-`diff(resource.data).affectedKeys().hasOnly(selfUpdateFields)` で**変わったキー**を見る。
+→ **`createFields` と `selfUpdate` を分離**し、更新は
+`diff(resource.data).affectedKeys().hasOnly(selfUpdate[現在の状態])` で**変わったキー**を見る。
 状態遷移は `selfTransitions` で宣言されたものだけ許す。
 
 > この欠陥は**下のリンター表に自分で書いた項目そのもの**（「管理用フィールドが
@@ -641,7 +664,7 @@ S3 は `enabled: false` のまま `questions` / `stats` を `public.read` に置
 **7. 任意キーを無ガードで読んでいた（3 巡目）。** `partRead()` は
 `cid in app(aid).participantRead` を見るが、S1/S2 はそのキーを宣言していない。
 同じ形が `app(aid).collections[cid]`（`immutable` / `peerVisibility` / `revealGated`）、
-`cfg().audience`、`cfg().selfUpdateFields`、`cfg().selfTransitions` にもあった。
+`cfg().audience`、`cfg().selfUpdate`、`cfg().selfTransitions` にもあった。
 **存在しないキーを読むとルールが落ち、自分の予約・自分の回答すら読めなくなる（fail closed）。**
 → **任意キーは必ず `in` でガードしてから読む**という規律に統一し、
 `hasPub` / `hasCol` / `colFlag` / `has(k)` を用意した。サンプルの `app.json` にも
@@ -703,6 +726,24 @@ uid ベースの判定は `authed()`、メール比較だけ `verified()`。
 `request.time.toMillis()` と比較する。**あわせて、サンプルが示しているのは
 authored な `app.json` であって published な `apps/{aid}` ではない**ことを明記した
 （この取り違えが指摘の根にあった）。
+
+**20-21. 宣言された状態機械をルールが持っていなかった（9 巡目）。** 2 件は同じ根。
+
+- **メールが遷移「先」しか見ていなかった。** `writerOf` は無条件に item を更新できるので、
+  書き手は `cancelled` / `rejected` の予約を**同じバッチで直接 `approved` に飛ばして**
+  `booking-approved` を送れた。アクションの `require`（pending からのみ承認できる）が
+  ルールに存在しなかった。
+  → `mail.on` を `{from: [...], to: "..."}` にし、**遷移元も宣言どおり**であることを要求。
+  さらに `collections[cid].transitions` を publish が出し、**writer を含む全員に**
+  状態機械を効かせる
+- **客が承認済みの予約を黙って動かせた。** `selfUpdate` が平坦なリストで、現在の状態を
+  見ずに `startAt` / `stylist` を許していた。承認済みの予約が別の時間帯に移り、
+  `schedule` の busy 判定だけが更新され、**担当者は承認し直していない。**
+  → `selfUpdate` を**状態別**にし、`approved` では名前しか触れない
+  （動かしたければキャンセルして取り直す）
+
+**共通の教訓**: `require` も `then` も `selfTransitions` も、**publish が
+`transitions` に落として初めてルールが効く。** 落とさなければ宣言は助言のまま。
 
 ### 同じ形のバグが 3 巡続いた（4 巡目も同じだった）
 
@@ -770,7 +811,8 @@ Firestore の `apps/{aid}` は **publish が導出した別のドキュメント
 |---|---|---|
 | `window.from` / `window.until`（ISO 文字列） | `window.fromMs` / `window.untilMs`（**数値**） | **ルールは文字列を timestamp に変換しない。** ISO 文字列と `request.time` を比較すると型エラーで fail closed |
 | 各コレクションの `schema.json` | `publishedSchema` + `collections[cid]`（`immutable` / `peerVisibility` / `revealGated` / `gatedFrom` / `revealBy` / `mail`） | ルールが読める平たい形に落とす |
-| `actions[].then.email` | `collections[cid].mail`（`toField` / `statusField` / `on` / `dataFields`） | ルールが宣言を再導出できる形に |
+| `actions[].then.email` | `collections[cid].mail`（`toField` / `statusField` / `on: {template: {from, to}}` / `dataFields`） | ルールが宣言を再導出できる形に |
+| `actions[].require` + `set`（＋ `selfTransitions`） | `collections[cid].transitions`（`{現状態: [遷移先…]}`） | **状態機械を誰に対しても効かせる**。無いと writer が任意に飛べる |
 | フィールド定義（型・required・enum） | `public.submit[cid].validate` | ルールには反復が無いので、検査できる部分集合だけ |
 | — | `publishedCommit` / `publishedBy` / `publishedAt` / `previousPublished` | 記名と rollback |
 
@@ -962,7 +1004,7 @@ owner/editor はどちらでも修正できる。
       "finalize": true,
       "window": { "until": "2026-09-30T23:59:59Z" },
       "createFields": ["q1","q2","q3","submittedAt"],
-      "selfUpdateFields": [],
+      "selfUpdate": {},
       "statusField": "status", "initialStatus": "submitted" } }
 }
 ```
@@ -1296,7 +1338,7 @@ sandbox された HTML が Firestore ハンドルを持たなくても、**親�
 ### 親側でも検証する（ルールだけに任せない）
 
 ビューから届く `action` のペイロードを**そのまま Firestore に流さない**。親が、スキーマの
-`actions` に宣言された `mutate` / `set` の仕様、および `createFields` / `selfUpdateFields` に
+`actions` に宣言された `mutate` / `set` の仕様、および `createFields` / `selfUpdate` に
 照らして**型と許可フィールドを検証してから** SDK を呼ぶ。
 
 ルールが最終防衛線であることは変わらないが、**ルールは理由を返せない**（許可か拒否かだけ）。
@@ -1334,12 +1376,15 @@ sandbox された HTML が Firestore ハンドルを持たなくても、**親�
 | `public.read` のコレクションに正解・単価などが入っている（`gated` 未指定） | 授業で満点、価格の漏洩 |
 | `finalize: true` なのに `idFrom` が無い | 一人一回のつもりが何回でも出せる |
 | `peerVisibility: "public"` かつ `auth: "none"` | 匿名の第三者が全件読める |
-| `selfUpdateFields` に管理用フィールド（`status`、`role` 等）が混ざっている | 申込者が自分で承認できる（権限昇格） |
+| `selfUpdate` に管理用フィールド（`status`、`role` 等）が混ざっている | 申込者が自分で承認できる（権限昇格） |
 | `public` / `collections` / `participantRead` を宣言しない | ルールが存在しないキーを参照して**全部拒否**（ガード必須） |
 | `aggregate.visibleFrom: "during"` かつ `peerVisibility: "hidden"` | 誰が集計するのか未定義 |
 | `immutable: true` かつ本人による変更を期待している | 矛盾 |
 | `window` があるのに `session` も `finalize` も無い | 締切後の扱いが未定義 |
-| `selfUpdateFields` に `statusField` が入っている | **本人が自分の承認状態を変えられる（権限昇格）** |
+| `selfUpdate` のどれかの状態に `statusField` が入っている | **本人が自分の承認状態を変えられる（権限昇格）** |
+| `selfUpdate` が状態別でなく、承認後も予約枠を触れる | **客が承認済みの予約を黙って移動できる**（枠が移り、再承認されない） |
+| `mail.on[t].from` に `to` と同じ状態が含まれる | 遷移していないのに通知が送れる |
+| `actions` が `require` を宣言しているのに `collections[cid].transitions` が無い | writer が任意の状態遷移をできる（宣言が助言になる） |
 | `idFrom` が enum 外の文字列 | ルールが解釈できず、投稿が全部拒否される（または 1 件に潰れる） |
 | `gateOn` があるのに `session` を持たないアプリ | create が常に失敗する |
 | `then.email` があるのに `collections[cid].mail`（`toField` / `templates`）を publish していない | 承認メールが常に拒否される |
@@ -1370,7 +1415,7 @@ sandbox された HTML が Firestore ハンドルを持たなくても、**親�
 > - **Zod（構造）** — 新キーを定義に足し、該当バリアントを `.strict()` にする。
 >   足さなければ新キーはパースで消え、`.strict()` にしなければ `when`/`require` の
 >   取り違えが**エラーにならず消える**
-> - **リンター（意味）** — 「`selfUpdateFields` に `statusField` が入っている」
+> - **リンター（意味）** — 「`selfUpdate` に `statusField` が入っている」
 >   「`peerVisibility: public` かつ `auth: none`」のような**関係の検査**は Zod では書けない
 >
 > 順序だけは決まっている: **Zod 側が先。** 消えるキーを意味検査しても仕方がない。
@@ -1544,7 +1589,7 @@ HTML に逃がすと元の木阿弥なので、**既存の `when`（`fieldBase`�
 | `actions.*.then.email` | schema | 宣言的な副作用 |
 | `aggregate` | schema | シナリオ 2 / 3 / 4 |
 | `aid` / `members` / `public` | `app.json` | D1 / 権限モデル |
-| `public.submit[cid].*`（`createFields` / `selfUpdateFields` / `selfTransitions` / `idFrom` / `idField` / `gateOn` …） | `app.json` | 認証段階・シナリオ 2/3/4 |
+| `public.submit[cid].*`（`createFields` / `selfUpdate` / `selfTransitions` / `idFrom` / `idField` / `gateOn` …） | `app.json` | 認証段階・シナリオ 2/3/4 |
 | `session` | Firestore ドキュメント | シナリオ 3 |
 
 > **既存の custom view との関係**: `CollectionCustomView` は既に sandbox iframe +
@@ -1581,11 +1626,16 @@ services  1 ──< bookings      メニュー（所要時間の供給元）
                "stylist-a@salon.jp": { "bookings": "editor", "shifts": "viewer", "services": "viewer" } },
   "memberEmails": ["owner@salon.jp", "stylist-a@salon.jp"],
   "collections": {
-    "bookings": { "mail": { "toField": "customerEmail",
-                            "statusField": "status",
-                            "on": { "booking-approved": "approved",
-                                    "booking-rejected": "rejected" },
-                            "dataFields": ["customerName", "startAt"] } },
+    "bookings": {
+      "transitions": { "pending": ["approved", "rejected", "cancelled"],
+                       "approved": ["cancelled"],
+                       "rejected": [], "cancelled": [] },
+      "mail": { "toField": "customerEmail",
+                "statusField": "status",
+                "on": { "booking-approved": { "from": ["pending"], "to": "approved" },
+                        "booking-rejected": { "from": ["pending"], "to": "rejected" } },
+                "dataFields": ["customerName", "startAt"] }
+    },
     "services": {}, "shifts": {}, "stylists": {}
   },
   "participantRead": [],
@@ -1599,7 +1649,8 @@ services  1 ──< bookings      メニュー（所要時間の供給元）
         "idFrom": "auto",
         "finalize": false,
         "createFields": ["customerName","customerEmail","service","stylist","startAt","status"],
-        "selfUpdateFields": ["customerName","startAt","stylist"],
+        "selfUpdate": { "pending":  ["customerName","startAt","stylist"],
+                        "approved": ["customerName"] },
         "selfTransitions": { "pending": ["cancelled"], "approved": ["cancelled"] },
         "statusField": "status",
         "initialStatus": "pending",
@@ -1612,9 +1663,13 @@ services  1 ──< bookings      メニュー（所要時間の供給元）
 ```
 
 `finalize: false` = 客が「マイ予約」から変更できる。**`status` は `createFields` にあるが
-`selfUpdateFields` には無い** — 作成時は `initialStatus` の検証のために必要だが、更新で触らせると
+`selfUpdate` には無い** — 作成時は `initialStatus` の検証のために必要だが、更新で触らせると
 **客が自分の予約を `approved` にできてしまう**（権限昇格）。キャンセルは `selfTransitions` で
 宣言された遷移としてのみ許す。
+
+そして **`selfUpdate` は状態ごと**。`approved` の欄に `startAt` / `stylist` が無いのが要点で、
+**承認後に客が枠を動かせない**（動かしたければキャンセルして取り直す）。平坦なリストだと、
+承認済みの予約が黙って別の時間帯に移り、`schedule` ビューの busy 判定だけが更新される。
 
 **`.claude/skills/services/schema.json`**
 
@@ -1741,7 +1796,7 @@ results     集計（aggregate が publish、公開読み取り）
         "finalize": true,
         "window": { "from": "2026-09-01T00:00:00Z", "until": "2026-09-30T23:59:59Z" },
         "createFields": ["q1","q2","q3","status"],
-        "selfUpdateFields": [],
+        "selfUpdate": {},
         "statusField": "status",
         "initialStatus": "submitted",
         "validate": { "required": ["q1", "status"],
@@ -1812,7 +1867,7 @@ results     集計（aggregate が publish、公開読み取り）
 **罠**
 
 - `idFrom: "auth.uid"` を**書き忘れると一人が何回でも回答できる**（リンターが検出）
-- `selfUpdateFields: []` は `finalize: true` と重複するが、**明示しておくと意図が読める**
+- `selfUpdate: {}` は `finalize: true` と重複するが、**明示しておくと意図が読める**
 - `finalize: true` と `window` は**両方**要る。`window` だけだと締切前に何度でも上書きできる
 - **「一人一回」と「主催者に対して匿名」は両立しない**（サーバーが要る。範囲外）
 
@@ -1849,7 +1904,7 @@ session     現在の問題とフェーズ  参加者は read のみ
         "idFrom": "auth.uid+field", "idField": "questionId",
         "finalize": true,
         "createFields": ["questionId","choice","status"],
-        "selfUpdateFields": [],
+        "selfUpdate": {},
         "statusField": "status", "initialStatus": "answered",
         "validate": { "required": ["questionId", "choice", "status"],
                       "choiceField": "choice", "choiceValues": ["A", "B", "C"] },
@@ -1988,7 +2043,7 @@ session    現在の議題とフェーズ   参加者 read のみ
         "idFrom": "auth.uid+field", "idField": "topicId",
         "finalize": true,
         "createFields": ["topicId","voter","choice","status"],
-        "selfUpdateFields": [],
+        "selfUpdate": {},
         "statusField": "status", "initialStatus": "cast",
         "validate": { "required": ["topicId", "voter", "choice", "status"],
                       "choiceField": "choice", "choiceValues": ["yes", "no", "abstain"] },
@@ -2151,14 +2206,15 @@ session    現在の議題とフェーズ   参加者 read のみ
 - [x] フィールド単位の可視性 — **入れる。`gated` によるドキュメント分割**（シナリオ 3 が必須にした）
 - [ ] `participant` ロール（名指しされているが member ではない層）。
       **`listed()` と `reader()` を分離すること**
-- [ ] `createFields` / `selfUpdateFields` / `selfTransitions` の分離
+- [ ] `createFields` / `selfUpdate`（**状態別**） / `selfTransitions` の分離
+- [ ] `collections[cid].transitions` を **writer にも** 効かせること
 - [ ] `idFrom` の有限 enum（`auto` / `auth.uid` / `auth.uid+field`）
 - [ ] `apps/{aid}/config`（名簿を含まない公開設定）
 - [ ] `auth` の有限 enum（`none` / `anonymous` / `verifiedEmail`）と `emailField` の切り離し
 - [ ] `publicOn()` をマスタースイッチにする + `participantRead`
 - [ ] `revealGated` は**親を `get()` する**形（従属ドキュメントにフラグは無い）
 - [ ] **任意キーの `in` ガード**（`public` / `collections` / `participantRead` /
-      `audience` / `selfUpdateFields` / `selfTransitions` / `emailField` / `window` / `gateOn`）
+      `audience` / `selfUpdate` / `selfTransitions` / `emailField` / `window` / `gateOn`）
 - [ ] `authed()` と `verified()` の分離（匿名認証が自分の行を読めること）
 - [ ] `roleIn()` の `'*'` フォールバックのガード（コレクション別ロールだけのメンバー）
 - [ ] `/mail` を `cid` の書き手にも開く
@@ -2192,7 +2248,7 @@ session    現在の議題とフェーズ   参加者 read のみ
    この時点でメンバーはオーナー 1 人。**emulator でルールのユニットテストを書く。**
    ルールの形に関わるものは**すべてここで入れる**（後から足すと cross-repo のデプロイになる）:
    `listed`/`reader` 分離、`participant`、`auth` の 3 段階、`publicOn`、`participantRead`、
-   `createFields`/`selfUpdateFields`/`selfTransitions`、`idFrom` の enum、`gateOn`、
+   `createFields`/`selfUpdate`/`selfTransitions`、`transitions`、`idFrom` の enum、`gateOn`、
    `immutable`、`peerVisibility`、`revealGated`（親を `get()` する形）、`mail` キュー
 3. **store を `(aid, cid)` で書き直す** — PR #2209 の中身がここに入る
 4. **discovery の 2 ソース化 + skill materialize** — ディスク ∪ Firestore(memberEmails ∋ 自分)。
