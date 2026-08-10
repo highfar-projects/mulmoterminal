@@ -104,8 +104,16 @@ export const CELL_CLOSE_BTN = `${CELL_BTN_BOX} ${CELL_BTN_SIZE} cursor-pointer t
 export const DIR_TRUNCATE_FRONT = "truncate text-left [direction:rtl]";
 export const CELL_DIR_PATH = "[unicode-bidi:plaintext]";
 
+// The quiet ink for text sitting ON a header surface — the path, the model/context badge, the
+// token counts, a custom chip. It has to name --cell-header-fg first: a directory paints that
+// header with its own `headerColor`, and a utility that goes straight to the theme's dim keeps a
+// colour chosen for the theme's panel, which on a saturated header is the background (#1591).
+// The chips beside these reach the same colour by inheriting it (GitBranchChip, WorkItemChip);
+// this chain is for the ones that must stay DIMMER than the header's own text.
+export const CELL_HEADER_INK_DIM = "text-[var(--cell-header-fg,var(--text-dim))]";
+
 // Floored at ~15 characters of path so it stays readable in a narrow cell.
-export const CELL_DIR = `min-w-[16ch] max-w-[45%] flex-initial ${DIR_TRUNCATE_FRONT} font-mono text-[11px] text-[var(--cell-header-fg,var(--text-dim))]`;
+export const CELL_DIR = `min-w-[16ch] max-w-[45%] flex-initial ${DIR_TRUNCATE_FRONT} font-mono text-[11px] ${CELL_HEADER_INK_DIM}`;
 
 export const CELL_CMD = "min-w-0 flex-auto truncate font-mono text-[12px] text-secondary";
 

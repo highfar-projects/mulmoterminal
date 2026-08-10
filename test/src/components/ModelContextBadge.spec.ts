@@ -30,6 +30,15 @@ describe("ModelContextBadge", () => {
     expect(mountBadge({ model: null, contextTokens: 1000 }).find("span").exists()).toBe(false);
   });
 
+  // The badge sits ON a header the directory may paint with its own `headerColor`, so its ink has
+  // to name --cell-header-fg before the theme's dim — the literal chain, not just the constant,
+  // since the variable is the contract with cellHeaderStyle.ts. It named `text-dim` outright and
+  // went unreadable on a saturated header (#1591).
+  it("takes the directory's header text colour, falling back to the theme's dim", () => {
+    const badge = mountBadge({ model: "claude-opus-4-20250514", contextTokens: 70_000 }).find('[data-testid="model-badge"]');
+    expect(badge.classes()).toContain("text-[var(--cell-header-fg,var(--text-dim))]");
+  });
+
   // A codex cell: the window comes from the rollout rather than the substring table, which knows
   // no OpenAI model at all — without it this would read `gpt-5.5` with no percentage (#1465).
   it("reads the percentage off the window the agent reported", () => {

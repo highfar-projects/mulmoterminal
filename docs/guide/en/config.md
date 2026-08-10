@@ -188,6 +188,11 @@ pick a different model on Anthropic itself. → [Using another model via OpenRou
 
 All values are `#rrggbb`. The working / needs-you status colors take priority over these background colors (which show when idle).
 
+Leave `headerTextColor` out and the header's text — the path, the title, the model / context and token
+chips — is derived from `headerColor` so it stays readable on it. That derivation applies while the
+directory's own colour is what shows; a cell that is working / needs you has replaced the header
+background with its status tint, so its text goes back to the theme's own.
+
 ### A repository that ships `repo.json` {#repo-json}
 
 [`repo.json`](../../repo-json.html) is an **open repository-metadata format**: one small file, at

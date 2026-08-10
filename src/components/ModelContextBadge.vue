@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { HOVER_TIP_ID, useHoverTipAnchor } from "../composables/useHoverTip";
 import { modelBadge, type BadgeAgent } from "./modelBadge";
 import { badgeTip } from "./tipContent";
+import { CELL_HEADER_INK_DIM } from "./cellChromeClasses";
 
 // Which model is running + how full its context is, e.g. `Opus · ctx 35%`. Nothing renders until
 // the transcript has told us the model; the text and the tip's wording are decided in ./modelBadge.
@@ -26,7 +27,8 @@ const { described, show: showTip, hide: hideTip } = useHoverTipAnchor(() => badg
   <span
     v-if="badge"
     data-testid="model-badge"
-    class="flex-none whitespace-nowrap font-mono text-[10px] tracking-[0.02em] text-dim"
+    class="flex-none whitespace-nowrap font-mono text-[10px] tracking-[0.02em]"
+    :class="CELL_HEADER_INK_DIM"
     :aria-describedby="described ? HOVER_TIP_ID : undefined"
     @pointerenter="showTip"
     @pointerleave="hideTip"

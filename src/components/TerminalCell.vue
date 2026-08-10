@@ -53,6 +53,7 @@ import {
   CELL_CHIP_BTN,
   CELL_CHIP_ICON,
   CELL_DIR_PATH,
+  CELL_HEADER_INK_DIM,
   CELL_MENU_ITEM,
   CELL_DOT,
   CELL_HEADER_ZOOMABLE,
@@ -61,6 +62,7 @@ import {
   DIR_TRUNCATE_FRONT,
 } from "./cellChromeClasses";
 import { CELL_STATUS, DOT_STATUS, HEADER_STATUS } from "./cellStatusClasses";
+import { headerStyleFor } from "./cellHeaderStyle";
 import { handoffTargets, pullLastTurn, slotLabel, type HandoffTarget } from "../composables/useHandoff";
 import { runOneExchange, liveCrossTalkDeps } from "../composables/useCrossTalk";
 import { runRoundTable, liveRoundTableDeps, memberFromTarget, type TableMember } from "../composables/useRoundTable";
@@ -166,7 +168,7 @@ const connectKey = ref(0);
 const cwd = ref<string | null>(props.initialCwd ?? props.defaultCwd);
 // Per-directory overrides (<cwd>/.mulmoterminal.json): pins this cell's terminal
 // palette and shows a project badge. Re-fetched when the effective cwd changes.
-const { config: dirConfig, cellStyle, headerStyle } = useCellChrome(cwd);
+const { config: dirConfig, cellStyle } = useCellChrome(cwd);
 // Whether this cell IS the workspace, for the header badge. Same lexical comparison the launcher
 // chip makes (`launchChips`), so a cell launched from the WORKSPACE chip is badged WORKSPACE.
 const isWorkspace = computed(() => isSameDirPath(cwd.value, props.defaultCwd));
@@ -926,6 +928,10 @@ const statusClass = computed(() => STATUS_CLASS[status.value]);
 // used to live in the .cell.is-* / .cell-header.is-* rules is in cellStatusClasses.ts.
 const cellStatusClass = computed(() => CELL_STATUS[status.value]);
 const headerStatusClass = computed(() => HEADER_STATUS[status.value]);
+// The directory's header colours — computed here rather than taken from useCellChrome because only
+// this cell's header background is REPLACED by a status tint, and whether the directory's colour is
+// what shows is what decides if a text colour may be derived for it (cellHeaderStyle.ts).
+const headerStyle = computed(() => headerStyleFor(dirConfig.value.headerColor, dirConfig.value.headerTextColor, status.value === "idle"));
 // Set aside, and not stopped waiting for an answer (see cellParked.ts). Enlarging it does NOT
 // bring it back — that is how you look at a parked session without waking it.
 const parked = computed(() => props.parked === true);
@@ -1328,14 +1334,16 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                 <span
                   v-else-if="chip.builtin === 'usage' && showUsage"
                   data-testid="cell-usage"
-                  class="flex-none whitespace-nowrap font-mono text-[10px] tracking-[0.02em] text-dim"
+                  class="flex-none whitespace-nowrap font-mono text-[10px] tracking-[0.02em]"
+                  :class="CELL_HEADER_INK_DIM"
                   :title="usageTitle"
                   >{{ usageLabel }}</span
                 >
                 <span
                   v-else-if="chip.custom"
                   data-testid="cell-hdr-chip"
-                  class="flex-none whitespace-nowrap rounded-full border border-border px-1.5 py-px text-[10px] text-dim"
+                  class="flex-none whitespace-nowrap rounded-full border border-border px-1.5 py-px text-[10px]"
+                  :class="CELL_HEADER_INK_DIM"
                   :title="chip.custom.label || chip.custom.text"
                   >{{ chip.custom.text }}</span
                 >
