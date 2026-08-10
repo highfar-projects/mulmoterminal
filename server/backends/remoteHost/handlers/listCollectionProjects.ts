@@ -38,13 +38,45 @@ const MAX_BORROWED_SEGMENTS = 2;
  *  still collide after `MAX_BORROWED_SEGMENTS`, the id's first characters break the tie — ugly,
  *  but ugly and distinct beats pretty and ambiguous. */
 function disambiguated(projects: ProjectSummary[]): { id: string; label: string }[] {
-  const named = projects.map((project) => ({ ...project, label: pathFreeLabel(project) }));
+  const named = projects.map((project) => ({ id: project.id, cwd: project.cwd, label: pathFreeLabel(project) }));
   const counts = new Map<string, number>();
   for (const project of named) counts.set(project.label, (counts.get(project.label) ?? 0) + 1);
   return named.map((project) => ({
     id: project.id,
     label: (counts.get(project.label) ?? 0) > 1 ? distinguish(project, named) : project.label,
   }));
+}
+
+/** The shortest tail of `cwd` that no other project shares, or the (already path-free) label plus
+ *  an id fragment.
+ *
+ *  Every candidate is checked before it is returned, including the last one: this is the final
+ *  thing between a config file full of arbitrary strings and a wire that promises no paths, so it
+ *  ends by proving the answer rather than by trusting where the answer came from. */
+function distinguish(project: SafeProject, projects: SafeProject[]): string {
+  // BOTH separators: splitting on "/" alone leaves `C:\Users\me\project` as ONE segment, so the
+  // "tail" would be the whole absolute path — the no-path rule silently off on Windows.
+  const tailOf = (cwd: string, depth: number) => pathSegments(cwd).slice(-depth).join("/");
+  for (let depth = 2; depth <= MAX_BORROWED_SEGMENTS + 1; depth += 1) {
+    const tail = tailOf(project.cwd, depth);
+    // A tail can fail in two ways, and BOTH have been shipped here: it can be a location in its
+    // own right (a drive letter is a segment like any other), or it can be EMPTY — a filesystem
+    // root has no segments to borrow, so the "distinguishing" label was a blank string.
+    if (tail.length === 0 || looksLikePath(tail)) continue;
+    const shared = projects.some((other) => other.id !== project.id && tailOf(other.cwd, depth) === tail);
+    if (!shared) return tail;
+  }
+  // `project.label` is `pathFreeLabel`'s output, not the saved string — the type says so, which is
+  // the point: a reader should not have to trace where it came from to know it is safe.
+  return `${project.label} (${project.id.slice(0, 6)})`;
+}
+
+/** A project whose label has already been through `pathFreeLabel`. A nominal type would be
+ *  heavier than this is worth; the name is what tells `distinguish` what it is holding. */
+interface SafeProject {
+  id: string;
+  cwd: string;
+  label: string;
 }
 
 /** A label with no path in it — ENFORCED here rather than assumed of what is stored.
@@ -55,14 +87,11 @@ function disambiguated(projects: ProjectSummary[]): { id: string; label: string 
  *  the protocol promises never receives one, publishing the user's home directory over the wire.
  *
  *  The no-path rule is this listing's to keep. A label that looks like a path is replaced by the
- *  directory's own name, which is what the label was supposed to be. */
+ *  directory's own name, and the FALLBACK is checked too, because it can fail the same test: a
+ *  project at a filesystem root has no name to fall back to. */
 function pathFreeLabel(project: ProjectSummary): string {
   const label = project.label.trim();
   if (label.length > 0 && !looksLikePath(label)) return label;
-  // The FALLBACK is checked too, because it can fail the same test: a project at a filesystem
-  // root has no directory name to fall back to — `lastSegment("/")` is `"/"` and a Windows drive
-  // root is `"C:"`. Both would walk straight past the check just made, which is the whole reason
-  // this is one function and not a check followed by a trusting `else`.
   const derived = lastSegment(project.cwd).trim();
   return derived.length > 0 && !looksLikePath(derived) ? derived : ROOT_LABEL;
 }
@@ -72,28 +101,11 @@ function pathFreeLabel(project: ProjectSummary): string {
  *  sharing a label. */
 const ROOT_LABEL = "root";
 
-/** A separator, a home-relative `~`, or a drive letter — the three ways a label carries location
- *  rather than a name. Deliberately broad: a false positive costs a nicer label, a false negative
- *  costs the guarantee. */
+/** A separator, a home-relative `~`, or a drive letter — the ways a label carries location rather
+ *  than a name. Deliberately broad: a false positive costs a nicer label, a false negative costs
+ *  the guarantee. */
 function looksLikePath(label: string): boolean {
   return (
     label.includes("\\") || label.startsWith("~") || label.startsWith("/") || /^[a-z]:/i.test(label) || label.split("/").some((part) => /^[a-z]:$/i.test(part))
   );
-}
-
-/** The shortest tail of `cwd` that no other project shares, or the label plus an id fragment. */
-function distinguish(project: ProjectSummary, projects: ProjectSummary[]): string {
-  // BOTH separators: splitting on "/" alone leaves `C:\\Users\\me\\project` as ONE segment, so the
-  // "tail" would be the whole absolute path — the no-path rule silently off on Windows.
-  const tailOf = (cwd: string, depth: number) => pathSegments(cwd).slice(-depth).join("/");
-  for (let depth = 2; depth <= MAX_BORROWED_SEGMENTS + 1; depth += 1) {
-    const tail = tailOf(project.cwd, depth);
-    // The borrowed segments are RAW path parts, so the tail can be a location in its own right —
-    // a drive letter (`C:`) is a segment like any other. Checked here rather than trusted,
-    // because this is the last thing between the config and the wire.
-    if (looksLikePath(tail)) continue;
-    const shared = projects.some((other) => other.id !== project.id && tailOf(other.cwd, depth) === tail);
-    if (!shared) return tail;
-  }
-  return `${project.label} (${project.id.slice(0, 6)})`;
 }

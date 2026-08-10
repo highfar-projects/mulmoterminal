@@ -165,10 +165,9 @@ const isLauncher = (value: unknown): value is Launcher => isRecord(value) && typ
 // every mutation reads the freshly-saved list before computing its own.
 function createPresetMutations(
   presets: Ref<CwdPreset[]>,
-  savePresets: (next: CwdPreset[]) => Promise<boolean>,
   hasAuthoritativeList: () => boolean,
-  recordPresetOnServer: (path: string, label: string) => Promise<void>,
-  removePresetOnServer: (path: string) => Promise<void>,
+  recordPresetOnServer: (path: string, label: string) => Promise<boolean>,
+  removePresetOnServer: (path: string) => Promise<boolean>,
 ) {
   let presetWrite: Promise<unknown> = Promise.resolve();
   function serialize(mutate: () => Promise<void>): Promise<void> {
@@ -239,19 +238,30 @@ function createPresetMutations(
   // is cleared on success so a chip the user later deletes can't reappear. Dedup keeps it
   // harmless if it runs twice.
   async function migrateLegacyRecents(): Promise<void> {
-    // Same rule as the two above, and stated rather than relied upon: this only runs after a
-    // successful GET today, so the list IS authoritative — but it prepends to `presets.value`
-    // and saves the whole thing, which is the shape that costs the user their directories the
-    // day a caller moves it.
+    // The list is only consulted to decide what is NEW; the writing below is per entry, so a
+    // stale read costs at most a duplicate the server then dedupes by path.
     if (!hasAuthoritativeList()) return;
     const legacy = readLegacyRecents();
     if (!legacy.length) return;
     const known = new Set(presets.value.map((p) => p.path));
-    const additions = legacy.filter((path) => !known.has(path)).map((path) => ({ label: presetLabel(path), path }));
+    const additions = legacy.filter((path) => !known.has(path));
     let saved = true;
     if (additions.length) {
       await serialize(async () => {
-        saved = await savePresets([...additions, ...presets.value]);
+        // ONE ENTRY AT A TIME, like every other preset write. An authoritative GET describes the
+        // instant it completed: another mulmoterminal can record a directory before this
+        // migration's POST reaches the config lock, and a replace-all built from the list we read
+        // BEFORE that would delete it. This migration is purely add-only, so it has no business
+        // sending a whole list at all.
+        //
+        // REVERSED, because each record goes to the FRONT: replaying most-recent-last leaves the
+        // legacy order intact ahead of what was already saved.
+        for (const path of [...additions].reverse()) {
+          // A failure stops the import and KEEPS the localStorage key, so the whole thing is
+          // retried on the next load rather than half-migrated and forgotten.
+          saved = await recordPresetOnServer(path, presetLabel(path));
+          if (!saved) return;
+        }
       });
     }
     if (!saved) return; // keep the key so the import retries on the next load
@@ -325,7 +335,7 @@ function createPresetManager(presets: Ref<CwdPreset[]>, saving: Ref<boolean>, er
    *  A failed call leaves the list exactly as it was: the directory is simply not recorded, and
    *  the next launch tries again. It counts as a local write (`version++`) so a GET already in
    *  flight cannot re-adopt the pre-change list over it (#164). */
-  async function mutateOneOnServer(url: string, body: Record<string, string>): Promise<void> {
+  async function mutateOneOnServer(url: string, body: Record<string, string>): Promise<boolean> {
     version++;
     try {
       const res = await fetchWithTimeout(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -336,8 +346,10 @@ function createPresetManager(presets: Ref<CwdPreset[]>, saving: Ref<boolean>, er
         loaded = true;
       }
       error.value = null;
+      return true;
     } catch {
       error.value = "Couldn't save presets. Check the server and try again.";
+      return false;
     }
   }
 
@@ -346,7 +358,7 @@ function createPresetManager(presets: Ref<CwdPreset[]>, saving: Ref<boolean>, er
 
   return {
     savePresets,
-    ...createPresetMutations(presets, savePresets, () => loaded, recordPresetOnServer, removePresetOnServer),
+    ...createPresetMutations(presets, () => loaded, recordPresetOnServer, removePresetOnServer),
     snapshotVersion,
     adoptServerPresets,
   };

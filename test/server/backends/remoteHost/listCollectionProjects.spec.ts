@@ -137,6 +137,9 @@ describe("listCollectionProjects", () => {
       }
       // Two nameless roots collide, and the normal disambiguation resolves them.
       expect(new Set(labels).size).toBe(2);
+      // A root has NO segments to borrow, so the "distinguishing" tail was a blank string — the
+      // second way a tail can fail, after being a location in its own right.
+      for (const label of labels) expect(label.trim()).not.toBe("");
     });
 
     // A Windows path split on "/" alone is ONE segment, so the "tail" would be the whole absolute

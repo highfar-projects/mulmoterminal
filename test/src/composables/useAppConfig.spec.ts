@@ -39,10 +39,12 @@ function mockServer(initial: Preset[] = [], opts: { gate?: Promise<void>; get?: 
       await opts.gate;
       return { ok: true, json: async () => ({ cwdPresets: snapshot, worktreesRoot: WORKTREES_ROOT, ...opts.get }) };
     }
-    // POST /api/config — the genuine replace-all: a settings-UI reorder, and the legacy import.
+    // POST /api/config — the genuine replace-all: a settings-UI reorder.
     if (Array.isArray(body.cwdPresets)) list = body.cwdPresets as Preset[];
     return { ok: true, json: async () => ({ cwdPresets: list }) };
   }) as unknown as typeof fetch;
+  // What ANOTHER mulmoterminal doing its own one-entry write looks like from here.
+  return { recordExternally: (preset: Preset) => (list = [preset, ...list.filter((entry) => entry.path !== preset.path)]) };
 }
 
 const mockConfigFetch = () => mockServer();
@@ -158,11 +160,7 @@ describe("useAppConfig — auto preset recording", () => {
 
   it("imports legacy localStorage recents (recent_dirs_v1) to the FRONT of presets on load, then clears the key", async () => {
     localStorage.setItem("recent_dirs_v1", JSON.stringify(["/r/one", "/r/two"]));
-    globalThis.fetch = vi.fn(async (_url: string, init?: { body?: string }) => {
-      if (!init?.body) return { ok: true, json: async () => ({ cwd: "/w", home: "/h", cwdPresets: [{ label: "kept", path: "/p/kept" }], soundFile: null }) };
-      const body = init.body ? JSON.parse(init.body) : {};
-      return { ok: true, json: async () => ({ cwdPresets: body.cwdPresets ?? [] }) };
-    }) as unknown as typeof fetch;
+    mockServer([{ label: "kept", path: "/p/kept" }], { get: { cwd: "/w", home: "/h", soundFile: null } });
     const { presets, loadConfig } = useAppConfig();
     await loadConfig();
     expect(presets.value).toEqual([
@@ -175,11 +173,7 @@ describe("useAppConfig — auto preset recording", () => {
 
   it("does not duplicate a legacy recent already present, but still clears the key", async () => {
     localStorage.setItem("recent_dirs_v1", JSON.stringify(["/p/kept", "/r/new"]));
-    globalThis.fetch = vi.fn(async (_url: string, init?: { body?: string }) => {
-      if (!init?.body) return { ok: true, json: async () => ({ cwd: "/w", home: "/h", cwdPresets: [{ label: "kept", path: "/p/kept" }], soundFile: null }) };
-      const body = init.body ? JSON.parse(init.body) : {};
-      return { ok: true, json: async () => ({ cwdPresets: body.cwdPresets ?? [] }) };
-    }) as unknown as typeof fetch;
+    mockServer([{ label: "kept", path: "/p/kept" }], { get: { cwd: "/w", home: "/h", soundFile: null } });
     const { presets, loadConfig } = useAppConfig();
     await loadConfig();
     expect(presets.value.map((p) => p.path)).toEqual(["/r/new", "/p/kept"]);
@@ -224,6 +218,22 @@ describe("useAppConfig — auto preset recording", () => {
     const { presets, removePreset } = useAppConfig();
     await removePreset("/srv/mag2");
     expect(presets.value.map((p) => p.path)).toEqual(["/srv/site"]);
+  });
+
+  // The legacy import is ADD-ONLY, so it has no business sending a whole list: an authoritative
+  // GET describes the instant it completed, and another instance can record a directory before
+  // the import's write lands. A replace-all built from the earlier read would delete it.
+  it("imports legacy recents without erasing a directory saved meanwhile", async () => {
+    localStorage.setItem("recent_dirs_v1", JSON.stringify(["/legacy/one"]));
+    const server = mockServer([{ label: "kept", path: "/p/kept" }], { get: { cwd: "/w" } });
+    const { presets, loadConfig } = useAppConfig();
+    const loading = loadConfig();
+    // Another mulmoterminal saves a directory while the import is in flight.
+    server.recordExternally({ label: "other", path: "/srv/other" });
+    await loading;
+    expect(presets.value.map((p) => p.path)).toContain("/srv/other");
+    expect(presets.value.map((p) => p.path)).toContain("/legacy/one");
+    expect(presets.value.map((p) => p.path)).toContain("/p/kept");
   });
 
   // A save that fails must lose the RECORD, never the list.
@@ -271,14 +281,7 @@ describe("useAppConfig — auto preset recording", () => {
     const getGate = new Promise<void>((r) => {
       releaseGet = r;
     });
-    globalThis.fetch = vi.fn(async (_url: string, init?: { body?: string }) => {
-      if (!init?.body) {
-        await getGate;
-        return { ok: true, json: async () => ({ cwd: "/w", worktreesRoot: WORKTREES_ROOT, cwdPresets: [] }) };
-      }
-      const body = JSON.parse(init.body);
-      return { ok: true, json: async () => ({ cwdPresets: body.cwdPresets ?? [] }) };
-    }) as unknown as typeof fetch;
+    mockServer([], { gate: getGate, get: { cwd: "/w" } });
     const { presets, loadConfig, recordPreset } = useAppConfig();
     const loading = loadConfig();
     const recording = recordPreset(`${WORKTREES_ROOT}/myrepo-1a2b3c4d/fix-bug`);
