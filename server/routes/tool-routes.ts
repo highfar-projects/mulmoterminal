@@ -6,6 +6,8 @@ import type { Express } from "express";
 import { SESSION_ID_RE } from "../config/env.js";
 import type { createToolStores } from "../session/tool-store.js";
 import { planToolResultUpdate } from "./toolResultPlan.js";
+import { stampCardScope } from "./stampCardScope.js";
+import { cwdForSession } from "../session/session-cwd.js";
 import { groupOfTool, type ToolGroup } from "../../common/toolGroups.js";
 
 export interface ToolSummary {
@@ -80,12 +82,16 @@ export function mountToolRoutes(app: Express, deps: ToolRouteDeps): void {
     if (!plan.ok) {
       return res.status(400).json({ error: plan.error });
     }
+    // The card carries the PROJECT it was made in, stamped here — the last place that knows both
+    // the payload and the session, and therefore the directory the agent is standing in. Before
+    // storing, so a replayed card resolves the same project as the live one (../routes/stampCardScope.ts).
+    const toStore = stampCardScope(plan.toolName, plan.stored, cwdForSession, plan.sessionId);
     // A dropped result (a collection placeholder the agent's real card has already beaten) must
     // not publish either: the panel would render a card that no reload would bring back.
-    const stored = await deps.stores.storeToolResult(plan.sessionId, plan.stored);
+    const stored = await deps.stores.storeToolResult(plan.sessionId, toStore);
 
     if (stored && plan.publish) {
-      deps.publish(deps.sessionChannel(plan.sessionId), plan.stored);
+      deps.publish(deps.sessionChannel(plan.sessionId), toStore);
       console.log(`[gui] toolResult ${plan.toolName} for ${plan.sessionId}`);
     }
     res.json({ ok: true });

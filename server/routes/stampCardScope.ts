@@ -1,0 +1,52 @@
+// Stamping the project onto a collection card, at the moment it is published.
+//
+// A card's payload names a SLUG, and a collection's identity is `(root, slug)`. Without the root,
+// the browser re-resolves the slug through whatever binding is current when the card RENDERS —
+// which, in a host that serves several projects, may be a different project than the one the card
+// was made in. A card built in project A then shows project B's records: same slug, same title,
+// different rows, nothing saying so.
+//
+// core carries a `scope` for exactly this, and `executePresentCollection` DELIBERATELY DROPS any
+// scope it is handed in tool arguments — those are a model-controlled channel, and a model that
+// could name the scope could name a project the user never opened. So the host stamps its own,
+// and this is where: the tool-result sink is the last place that knows both the payload and the
+// SESSION, and a session's directory is the server's own record of where it launched that agent.
+//
+// Stamped BEFORE storing, not on the way out, so a replayed card (the panel reloading a session's
+// results from disk) carries the same scope as the live one. A card that changed project on
+// reload would be the same bug arriving later.
+import { withCardScope, TOOL_DEFINITION as PRESENT_COLLECTION, type PresentCollectionData } from "@mulmoclaude/core/collection";
+import { isRecord } from "../../common/isRecord.js";
+import { projectIdForRoot, projectScopeForCwd } from "../infra/project-root.js";
+
+/** The card payload lives under `data` on a tool result; `jsonData` is the narration copy some
+ *  plugins send instead. Only the rendered one is stamped — the other is text for the agent.
+ *
+ *  Narrowed on `collectionSlug` rather than asserted: the payload arrives as JSON from a broker
+ *  that forwards a plugin's output unchanged, so "it is a card" is something to CHECK. A result
+ *  that is not one passes through, which is also what a future payload shape would do — no scope
+ *  rather than a wrong one. */
+function cardPayload(stored: Record<string, unknown>): PresentCollectionData | null {
+  const data = stored.data;
+  if (!isRecord(data) || typeof data.collectionSlug !== "string" || data.collectionSlug.length === 0) return null;
+  return { ...data, collectionSlug: data.collectionSlug };
+}
+
+/** Add this session's project to a `presentCollection` result, in place of nothing.
+ *
+ *  Everything else passes through untouched — another tool, a result with no payload, or a
+ *  session whose directory is not a project the server serves (the workspace, or a directory the
+ *  user never saved). `withCardScope` with `undefined` returns the payload without a `scope`
+ *  property at all, which is exactly what a single-workspace host produces.
+ *
+ *  An OPAQUE id, never a path: this payload reaches the browser and, through a custom view, an
+ *  LLM-authored iframe. */
+export function stampCardScope<T extends Record<string, unknown>>(toolName: string, stored: T, cwdOf: (sessionId: string) => string, sessionId: string): T {
+  if (toolName !== PRESENT_COLLECTION.name) return stored;
+  const data = cardPayload(stored);
+  if (!data) return stored;
+  const root = projectScopeForCwd(cwdOf(sessionId)).workspaceRoot;
+  const scope = projectIdForRoot(root) ?? undefined;
+  if (scope === undefined) return stored;
+  return { ...stored, data: withCardScope(data, scope) };
+}

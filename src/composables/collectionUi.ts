@@ -341,12 +341,12 @@ function makeCollectionUi(projectIdOf: () => string | null): HostBinding {
     //    (hidden=false → make it visible). Backs the index "create" button + the
     //    collection/record action buttons (Repair, etc.). MulmoTerminal has no roles,
     //    so `role` is ignored. ──
-    startChat: (prompt) => void startCollectionChat(prompt, { hidden: false }),
+    startChat: (prompt) => void startCollectionChat(prompt, { hidden: false, project: projectIdOf() }),
     // Open a chat with the prompt prefilled as an editable DRAFT (not auto-sent) — the
     // new-collection template cards + custom views. The text is typed into claude's PTY
     // input box without an Enter (server: spawnBackgroundChat draft:true), so the user
     // reviews / edits / sends. `role` is ignored (MulmoTerminal has no roles).
-    startNewChatDraft: (prompt) => void startCollectionChat(prompt, { hidden: false, draft: true }),
+    startNewChatDraft: (prompt) => void startCollectionChat(prompt, { hidden: false, draft: true, project: projectIdOf() }),
     // Which of this collection's records currently have a completion bell, and how
     // urgent — the Kanban view accents those cards. Read live: `active` is a ref, so
     // reading it inside the call registers the plugin's `computed` as a dependency and

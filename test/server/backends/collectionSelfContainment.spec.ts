@@ -68,8 +68,14 @@ describe("selfContainmentFindings", () => {
   });
 
   it("still BLOCKS it for a collection, where the records are the data", () => {
-    expect(verdict({ source: "project", dataDirIgnored: true })).toBe(false);
-    expect(verdict({ source: "user", dataDirIgnored: true })).toBe(false);
+    for (const source of ["project", "user"] as const) {
+      const findings = selfContainmentFindings({ ...PORTABLE, source, dataDirIgnored: true });
+      // The FINDING's own severity, not just the verdict: a user-scope collection always carries
+      // its own blocker, so `portable === false` would stay true even if this one regressed to a
+      // warning — the assertion would pass while the thing it is about broke.
+      expect(findings.find((f) => f.code === "data-ignored")?.severity, source).toBe("blocker");
+      expect(isPortable(findings)).toBe(false);
+    }
   });
 
   it("says a feed's records come back, rather than repeating the collection wording", () => {

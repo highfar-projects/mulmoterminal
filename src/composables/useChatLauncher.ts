@@ -49,7 +49,10 @@ export interface SpawnedChat {
  *  `draft`, the prompt is prefilled in the input box but NOT submitted. Returns what was spawned
  *  (null if nothing was) — `hidden` callers need it to put the session somewhere of their own,
  *  since suppressing the opener otherwise leaves them no handle on what they started. */
-export async function startCollectionChat(prompt: string, opts: { hidden?: boolean; draft?: boolean } = {}): Promise<SpawnedChat | null> {
+export async function startCollectionChat(
+  prompt: string,
+  opts: { hidden?: boolean; draft?: boolean; project?: string | null } = {},
+): Promise<SpawnedChat | null> {
   const message = prompt.trim();
   if (!message) return null;
   const agent = launchAgent.value;
@@ -65,7 +68,10 @@ export async function startCollectionChat(prompt: string, opts: { hidden?: boole
         // The chat runs where the collection it was started from lives. Without this a starter
         // or action pressed in a project's Collections pane seeds a prompt full of that project's
         // paths and then opens a terminal standing in the workspace.
-        body: JSON.stringify({ message, draft, agent, project: activeCollectionProjectId() }),
+        // The CALLER's project when it has one — a chat started from a card belongs to the
+        // project that card was made in, not to whatever surface is on screen when the button is
+        // pressed. Only the ambient answer is a default, for every caller that is the surface.
+        body: JSON.stringify({ message, draft, agent, project: opts.project === undefined ? activeCollectionProjectId() : opts.project }),
       },
       SLOW_COMMAND_TIMEOUT_MS,
     );
