@@ -153,8 +153,10 @@ function showRooms(): void {
         <!-- The way IN to the workspace's own data, beside the views it is a peer of — the content
              surfaces used to be reachable only from the single view (#886), which left them with
              no door at all once that view goes. One button here rather than four: the rest appear
-             below once you are inside, so the row a terminal user sees does not grow by four. -->
-        <LauncherButton icon="apps" title="Collections" label="Collections" :active="collectionsActive" @click="showCollections" />
+             below once you are inside, so the row a terminal user sees does not grow by four.
+             Same `database` icon as the cell header's collections pane (CellChromeButtons.vue), so
+             the door and the pane read as one thing wherever you meet them. -->
+        <LauncherButton icon="database" title="Collections" label="Collections" :active="collectionsActive" @click="showCollections" />
       </span>
       <!-- The other content surfaces, revealed by being IN the section rather than always present.
            Same reasoning as the fence above: everything here acts within the view you are in. -->
