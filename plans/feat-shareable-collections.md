@@ -1,0 +1,1652 @@
+# feat: 共有コレクション（shareable collection）
+
+**Status**: 計画（未実装）
+**日付**: 2026-08-10
+**関連**: mulmoclaude #2196 / #2197 / PR #2209（ドラフト、Firestore store）、`../mulmoserver`（Firestore ルール）
+
+---
+
+## 何を作るのか
+
+**リポジトリにコミットされた宣言から、ログイン不要で誰でも使える Web アプリを、コードを書かずに公開できるようにする。**
+
+想定シナリオ（設計の全判断はここから導かれる）。**2 つあるのは、突く軸が重ならないから**:
+
+**シナリオ 1 — 美容室の予約サイト**（軸: リソース × 時間 × 承認 × 副作用）
+
+> 美容室のオーナーと美容師が数人。美容師の勤務時間はオーナーが入力する。それが予約表として
+> Web に公開され、**誰でも**予約を申し込める。サービスの種類によって所要時間が異なる。
+> オーナーまたは美容師が承認すると、申込者に承認メールが届く。
+
+**シナリオ 2 — Web アンケート**（軸: 一人一回 × 書き切り × 期限 × 集計）
+
+> 質問をいくつか用意し、**ログインした上で**答えてもらう。同じ人は 1 回しか答えられない。
+> 締切がある。結果は集計して見せたい（ただし個々の回答は本人以外に見せない）。
+
+**シナリオ 3 — オンライン授業の演習**（軸: ライブ × 段階的公開 × 非対称な可視性）
+
+> 先生が生徒に三択問題を**1 問ずつ**提示する。生徒は Web から回答し、答えが揃ったところで
+> 先生が正解を教えながら**正答率を見せる**。全問終わると、**先生には全生徒の成績が見え、
+> 生徒には自分の成績＋全体統計だけが見える。**
+
+**シナリオ 4 — 議会の投票**（軸: 記録の完全性 × 公開性 × ライブ集計）
+
+> 参加者がトピックごとに賛成・反対を投じ、**結果がリアルタイムでグラフ表示される**。
+> 議長がトピックを切り替えると、議員のページも自動的にそのトピックへ進む。
+> **戻って投票先を変えることはできない。**
+
+4 つは要求がほとんど重ならない。**4 つとも宣言だけで書ける範囲が、この製品の宣言的表面の下限**になる。
+
+軸の対比:
+
+| | 軸 | 時間 | 他人の回答 | 一番大事なもの |
+|---|---|---|---|---|
+| 1. 美容室 | リソース × 承認 × 副作用 | 非同期 | 見えない | 到達性（誰でも申し込める） |
+| 2. アンケート | 一人一回 × 書き切り × 期限 | 非同期 | 見えない | プライバシー |
+| 3. 授業 | ライブ × 段階的公開 × 非対称 | **今** | 見えない | **秘匿**（正解が漏れない） |
+| 4. 議会 | 記録の完全性 × 公開性 | **今** | **見える** | **改竄されないこと** |
+
+**シナリオ 3 と 4 は正反対**である点が重要。3 は「隠す」ことが要件、4 は隠すことがむしろ間違い。
+同じ機構で方針が逆になるので、**方針は宣言で持たせるしかない。**
+
+> **これらはサンプルであって、システムの仕様ではない。** システムは汎用に作る。
+> 4 つは「宣言言語がどこまで表現できなければならないか」を決めるための負荷試験であり、
+> 同時に**テンプレートとして同梱**して LLM の参照先にする（「テンプレートとスキーマリンター」参照）。
+
+「誰でも」の強さは**アプリごとの宣言**とする（下の「申込みの認証段階」）。サロンは非ログインで
+始めたいかもしれないが、社内の会議室予約なら迷わずログイン必須にすべきで、同じ機構の上で
+答えが逆になる。**ルールは凍結インフラなので 3 段階とも最初に入れる。**
+
+このとき:
+
+- 客は一度も AI に会わない。サインインもしない。ただの予約サイトを使う
+- オーナーの Mac は**稼働している必要がない**
+- アプリの定義は git にあり、diff がレビューでき、履歴と巻き戻しが効く
+
+## なぜこの形なのか（テーゼ）
+
+既存の AI アプリビルダーの成果物は、プラットフォーム内の不透明な状態か、フルのコードベース。
+**React のコードベースの diff を人間は承認しない。** `schema.json` の diff は 30 秒で読める。
+
+> **宣言的で狭いことは制約ではなく、エージェントに書かせても統治できる唯一のスケールである。**
+
+そして統治の道具を新規発明しない — git、PR、diff、履歴、rollback、deploy をそのまま借りる。
+AI 専用の安全機構は 1 つも要らない。
+
+主張は「AI がアプリを作る」ではなく **「AI が作ったアプリを、既存のエンジニアリング文化が
+そのまま統治する」**。
+
+もう 1 つの形: **スキルとアプリが同一の成果物である。** 同じ 1 つのドキュメントが、
+エージェントには「このデータの扱い方」を教え、人間には UI を描く。片方は LLM を含むランタイム、
+もう片方は含まないランタイム。定義は 1 つ。
+
+---
+
+## 前提として確認済みの事実
+
+調査で確認した、設計がすでに満たしている前提。
+
+**1. MT のプロジェクトスコープは「リポジトリにコミットされた定義」として設計済み**
+（`server/backends/collections.ts:104-158`）
+
+> `~` と project は separate worlds。`~/.claude/skills` の下の collection は
+> *a machine-global thing no clone of a repository can have* … a stray file would shadow
+> **the committed skill**, and it is a second copy of the definition in
+> **a repo that is supposed to be self-contained**
+
+`projectSkillsDir` = `<root>/.claude/skills`、`userSkillsDir` と `skillsStagingDir` は
+プロジェクトルートでは `null`。**git 管理は後付けの要件ではなく、既に満たされている前提。**
+
+**2. MT は explicit-root モードのマルチルートホスト**（同 `workspaceRoot: null`、
+`server/infra/project-root.ts`）。1 プロジェクト = 1 ルート。MulmoClaude は単一ワークスペース。
+
+**3. コレクションの同一性は現在 `(root, slug)`**
+（`@mulmoclaude/core/collection/server/host.d.ts` の INVARIANT）
+
+> a slug is unique within a root and nowhere else. A collection's identity is `(root, slug)`.
+> Anything keyed by slug ALONE — a cache, a pubsub channel, a view token, a notification id,
+> a rendered card — is a cross-root collision waiting to happen.
+
+**共有コレクションには root がない**（相手のマシンにも Web にも存在しない）。ここが変更の核心。
+
+**4. `CollectionStore` に `watch` が既にあり、`StoreChange` は `item` / `collection` の粒度を持つ**
+→ `onSnapshot` の `docChanges()` にそのまま対応する。
+
+**5. Firestore ルールは `../mulmoserver` にあり、MC/MT からは変更できない**
+（cross-repo の PR + デプロイ）。**実質的に凍結されたインフラとして設計する必要がある。**
+
+---
+
+## 設計判断
+
+### D1. 共有の単位は「コレクション」ではなく「アプリ（= リポジトリ）」
+
+美容室シナリオは 4 コレクション（stylists / services / shifts / bookings）が
+**1 つのメンバー表と 1 つの公開設定を共有**する。招待を 4 回やらせるのは論外。
+
+```
+apps/{aid}                               メンバー、公開設定、publish 情報
+apps/{aid}/collections/{cid}             publish されたスキーマ + ビュー
+apps/{aid}/collections/{cid}/items/{id}  レコード
+```
+
+**リポジトリ = アプリ = 共有の単位。** `aid` はリポジトリ内にコミットされるので、
+clone した全員が同じアプリを指す（招待は「見つけるため」ではなく「認可のため」だけになる）。
+
+### D2. 同一性は `(root, slug)` から `(aid, cid)` へ
+
+D1 の帰結。engine の INVARIANT が列挙したもの — キャッシュ、pubsub チャンネル、ビュートークン、
+通知 id、描画されたカード — が**すべて対象**。ストア実装の中に閉じない変更であり、
+**最初に通すのが正しく、後から通すのが最も高い。**
+
+### D3. スキーマとビューは git、レコードは Firestore
+
+```
+git       → schema.json, views/*.html, skill テキスト   （コード。レビュー・履歴・巻き戻し）
+Firestore → items/{id}                                  （データ）
+```
+
+PR #2209 の当初案（レコードだけ Firestore、スキーマはディスク）でも、検討途中の案
+（スキーマも Firestore を真実にする）でもない。**コードとデータを分ける普通のやり方**に落とす。
+ビューは HTML なので、そもそも git に置かれるべきものだった。
+
+### D4. Firestore 上のスキーマは「真実」ではなく「publish された成果物」
+
+Web サイトは git を読めないので、publish が要る。ただし**デプロイとして扱う**:
+
+```
+git (source of truth) ──publish──> apps/{aid}/collections/{cid}.publishedSchema
+                                   + publishedCommit + publishedBy + publishedAt
+                                   + previousPublished（rollback 用）
+```
+
+Web の見た目が古いのは「まだ publish していない」だけ、と原因が一目で分かる。
+
+### D5. MulmoClaude はサポートしない
+
+MC は単一ワークスペース（`~/mulmoclaude`）、MT のプロジェクトルートは separate world。
+**コードを書かなくても MC は共有コレクションを見ない。** 明示するなら `acceptParsedSchema` に
+1 行のゲート:
+
+```ts
+if (schema.storage?.type === "firestore" && isManagedWorkspace(workspaceRoot))
+  return { ok: false, reason: "shareable collections live in a project repository, not the workspace" };
+```
+
+`isManagedWorkspace` は MT に既にある。
+
+### D6. worktree ごとに別のデータを指せるようにする
+
+MT の看板機能は git worktree。**同じリポジトリの worktree 2 つ = コミットされた aid が同じ =
+同じ本番レコード**。feature ブランチでスキーマを変えると、チームが今使っているデータに対して
+破壊的変更が走る。worktree は「安全に試すため」の機能なので期待と真逆になる。
+
+**MT には既に答えの形がある — `worktreeEnv`**（`common/worktreeEnv.ts`。declared variable ごとに
+worktree 固有の値を持つ。dev-server のポート、**データベース名**）。コレクションの aid は
+まさに "a database name"。
+
+しかも**新しい `kind` は要らない**: `WorktreeEnvVar` は
+`{ kind: "port"; base } | { kind: "slug"; prefix? }`（`common/worktreeEnv.ts:51`）で、
+`slug` が worktree 由来の一意な文字列を prefix 付きで作る。そのまま aid に使える。
+
+```json
+// .mulmoterminal.json
+{ "worktreeEnv": { "MT_APP_SALON": { "kind": "slug", "prefix": "app_" } } }
+
+// app.json
+{ "aid": "app_7f3a", "aidEnv": "MT_APP_SALON" }
+```
+
+main の worktree は本番 aid、feature の worktree は自動で別の scratch aid。
+
+裏を返すと、これは目玉でもある: **エージェントが、動いているアプリの定義を、本番データを
+壊さずに書き換えて試せる。** git の分岐がそのままデータの分岐になる。
+
+### D7. ホストはビルド経路にいて、実行経路にはいない（不変条件）
+
+| | ホスト |
+|---|---|
+| スキーマ/ビューをエージェントが書く | 要る |
+| publish（git → Firestore） | 要る（デプロイなので当然） |
+| 公開ページの表示 / 予約申込み / スマホからの承認 / 承認メール / 空き枠計算 | **不要** |
+
+**検証方法**: publish する → ホストを落とす → サイトを一通り操作する。落ちたら漏れがある。
+
+副産物として: オーナーの Mac が壊れてもサイトは動き続ける（定義は git、データは Firestore、
+復旧は clone + サインイン）。**MulmoTerminal が無くなっても公開されたアプリは動き続ける** —
+ロックインが構造的に薄い。
+
+### D8. メンバーシップは email。Cloud Functions を使わない
+
+uid で招待はできない（誰も自分の uid を知らない）。Firestore ルールは
+`request.auth.token.email` / `email_verified` を読めるので、**招待 = members に 1 行足すだけ**で
+完結する。サーバーサイドのコードはゼロ。
+
+弱さ（メールは変わるし再利用されうる）は受け入れる。厳密にやるなら「初回アクセス時に uid を
+claim する」パターンが要り、owner 限定の update に穴を開けることになる。**最初は email のみ。**
+
+### D9. repo の権限と Firestore の members を同期しない
+
+執行系が 2 つあり、互いを参照できない（ルールから「GitHub の write を持つか」は問えない）。
+**同期させるのではなく、どちらが何の権威かを決める:**
+
+> **repo は定義を統治する。Firestore はデータを統治する。片方がもう片方を含意しない。**
+
+片側だけを持つ人がどちらも正当:
+
+- **repo だけ**（メンバーではない） — スキーマを保守するが、顧客データは見るべきでないエンジニア
+- **メンバーだけ**（repo アクセスなし） — **多数派**。webview から使う非エンジニア。
+  この人たちに GitHub アカウントを要求してはいけない
+
+→ **members を repo の collaborator から自動導出しない。**
+
+---
+
+## 権限モデル
+
+3 つではなく、**2 軸（定義 / データ）× 読み書き + publish の 5 つ**。
+
+|  | 読む | 書く |
+|---|---|---|
+| **定義**（スキーマ・ビュー） | repo read | repo write + merge |
+| **定義の反映** | — | **publish**（owner のみ） |
+| **データ**（レコード） | members: viewer | members: editor |
+
+`members` は 4 値 + コレクション別（`participant` は「名指しされているが member ではない」層。
+シナリオ 3 の生徒、シナリオ 2 の限定配布アンケートの対象者）:
+
+```json
+"members": {
+  "owner@salon.jp":  { "*": "owner" },
+  "stylist-a@x.jp":  { "bookings": "editor", "shifts": "viewer", "services": "viewer" },
+  "student-1@school.jp": { "*": "participant" }
+}
+```
+
+| ロール | できること |
+|---|---|
+| `owner` | publish、メンバー管理、`session` の駆動、削除、全件読み取り |
+| `editor` | レコードの読み書き（全件） |
+| `viewer` | レコードの読み取り（全件） |
+| `participant` | submit + 自分の行 + public / `revealed` 済みのみ。**全件は読めない** |
+
+repo の権限（① ②）は **members に入れない**。GitHub の仕事。混ぜた瞬間に
+「Firestore が repo の権限を知っている」という嘘が始まる。
+
+### publish が唯一の危険な操作
+
+PR をマージしても誰の画面も変わらない。publish した瞬間に全員が変わる。しかも 2 つの意味で:
+
+1. **破壊的スキーマ変更** — フィールドの削除/rename で生きているレコードが不整合になる
+2. **ビューは HTML** — **publish 権限 ≒ 全メンバーのブラウザで JS を実行する権限**
+
+対策は既存コードで足りる:
+
+- **publish 前にライブデータを検証する** — `validateCollectionRecords` / `recordFieldProblem`
+  で「新スキーマで既存レコードが何件壊れるか」を出し、0 件でなければ確認を挟む。
+  **publish がそのままマイグレーションのゲートになる**
+- **publish は記名される** — 誰が・どのコミットを・いつ。前版を残して rollback 可能に
+
+CI からの publish には owner ロールを持つサービスアカウントが要り principal の種類が増えるので、
+**最初は手動 + コミットスタンプ**。
+
+---
+
+## Firestore ルール（静的・汎用）
+
+**ルールは静的なまま。ACL は「ルール」ではなく「データ」にする。** コレクションが何個増えても
+ルールファイルは 1 文字も変わらない。
+
+```js
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null && request.auth.token.email_verified == true; }
+    function email()    { return request.auth.token.email; }
+    function app(aid)   { return get(/databases/$(database)/documents/apps/$(aid)).data; }
+    function roleIn(aid, cid) {
+      return signedIn() && email() in app(aid).members
+        ? (cid in app(aid).members[email()] ? app(aid).members[email()][cid]
+                                            : app(aid).members[email()]['*'])
+        : null;
+    }
+    function member(aid) { return signedIn() && email() in app(aid).members; }
+
+    match /apps/{aid} {
+      // 非正規化した memberEmails が members と食い違わないことをルール自身が保証する
+      function membersConsistent() {
+        return request.resource.data.memberEmails.toSet()
+            == request.resource.data.members.keys().toSet();
+      }
+
+      allow read:   if member(aid) || app(aid).public.enabled == true;
+      allow create: if signedIn()
+                    && request.resource.data.owner == request.auth.uid
+                    && request.resource.data.members[email()]['*'] == "owner"
+                    && membersConsistent();
+      allow update: if roleIn(aid, '*') == "owner"
+                    && request.resource.data.owner == resource.data.owner   // 所有者は移らない
+                    && membersConsistent();
+      allow delete: if roleIn(aid, '*') == "owner";
+
+      // 主催者が駆動する状態機械（シナリオ 3）。参加者は読めるが書けない
+      match /session {
+        allow read:  if member(aid) || app(aid).public.enabled == true;
+        allow write: if roleIn(aid, '*') in ["owner", "editor"];
+      }
+
+      match /collections/{cid} {
+        allow read:  if member(aid) || cid in app(aid).public.read;
+        allow write: if roleIn(aid, '*') == "owner";                        // = publish
+
+        match /items/{itemId} {
+          function submitOpen(aid, cid) { return cid in app(aid).public.submit.keys(); }
+          function cfg(aid, cid)        { return app(aid).public.submit[cid]; }
+          // コレクションごとの宣言（immutable / peerVisibility）。publish 時に app doc へ載る
+          function colCfg(aid, cid)     { return app(aid).collections[cid]; }
+
+          // peerVisibility: "public" なら参加者は全件読める（記名投票）
+          allow read: if member(aid)
+                      || cid in app(aid).public.read
+                      || (colCfg(aid, cid).peerVisibility == "public" && roleIn(aid, cid) != null)
+                      // requireAuth のとき、申込者は自分の申込み/回答だけ読める
+                      // （= マイ予約 / 自分の回答の確認）
+                      || (signedIn() && submitOpen(aid, cid) && cfg(aid, cid).requireAuth == true
+                          && (itemId == request.auth.uid
+                              || resource.data[cfg(aid, cid).emailField] == email()));
+
+          // 申込み/回答: 宣言されたフィールドだけ、宣言された初期ステータスで、新規作成のみ。
+          //  - requireAuth が true なら署名必須 + email はサインイン中のものと一致（スパム中継の穴を閉じる）
+          //  - idFrom があればドキュメント ID が身元 → create は 1 回しか成立しない（一人一回）
+          //  - window があれば締切をルールで強制する
+          allow create: if roleIn(aid, cid) in ["owner", "editor"]
+                        || (submitOpen(aid, cid)
+                            && request.resource.data.keys().hasOnly(cfg(aid, cid).fields)
+                            && request.resource.data[cfg(aid, cid).statusField]
+                                 == cfg(aid, cid).initialStatus
+                            && (cfg(aid, cid).requireAuth != true
+                                || (signedIn()
+                                    && request.resource.data[cfg(aid, cid).emailField] == email()))
+                            // audience: "participant" なら名簿（members）に載っている人だけ
+                            && (cfg(aid, cid).audience != "participant"
+                                || roleIn(aid, cid) == "participant")
+                            && (!("idFrom" in cfg(aid, cid)) || itemId == request.auth.uid)
+                            && (!("window" in cfg(aid, cid))
+                                || (request.time < cfg(aid, cid).window.until
+                                    && (!("from" in cfg(aid, cid).window)
+                                        || request.time > cfg(aid, cid).window.from))));
+
+          // immutable: create のみ。owner ですら update / delete できない（投票記録・監査ログ）
+          // owner/editor は常に修正できる（immutable でない場合）。
+          // 申込者本人は finalize が false のときだけ、自分の行を、期限内に、宣言された
+          // フィールドの範囲で更新できる（= マイ予約からのキャンセル/変更）。
+          // finalize: true なら本人の update は成立しない（= 回答は書き切り）。
+          function ownRow(aid, cid) {
+            return signedIn() && submitOpen(aid, cid) && cfg(aid, cid).requireAuth == true
+                   && (itemId == request.auth.uid
+                       || resource.data[cfg(aid, cid).emailField] == email());
+          }
+          allow update: if colCfg(aid, cid).immutable != true
+                        && (roleIn(aid, cid) in ["owner", "editor"]
+                            || (ownRow(aid, cid)
+                                && cfg(aid, cid).finalize != true
+                                && request.resource.data.keys().hasOnly(cfg(aid, cid).fields)
+                                && (!("window" in cfg(aid, cid))
+                                    || request.time < cfg(aid, cid).window.until)))
+                        && request.resource.data.size() <= 200;
+          allow delete: if colCfg(aid, cid).immutable != true
+                        && roleIn(aid, cid) in ["owner", "editor"];
+        }
+      }
+
+      // 宣言的な副作用のキュー（Firebase Trigger Email 拡張が読む）
+      // 匿名に書かせない — 踏み台になる
+      match /mail/{mailId} {
+        allow create: if roleIn(aid, '*') in ["owner", "editor"];
+        allow read, update, delete: if false;
+      }
+    }
+
+    match /{document=**} { allow read, write: if false; }
+  }
+}
+```
+
+`delete` を `write` から分けているのは、削除時に `request.resource` が null になり
+サイズ判定が壊れるため。
+
+### ルールが保証できること
+
+| 保証 | どう |
+|---|---|
+| `memberEmails` と `members` の一貫性 | `.keys().toSet()` 比較。**ずれた状態が書き込めない** |
+| 所有者が移らない | `resource.data.owner` と比較 |
+| メンバー表を owner 以外が触れない | `roleIn(aid,'*') == "owner"` |
+| publish が owner 限定 | collections の write が owner 限定なので自動的に満たされる |
+| 申込みのフィールドと初期ステータス | `hasOnly` + 宣言された `initialStatus` |
+| 申込者のなりすまし防止（C のとき） | `emailField == request.auth.token.email` を強制 |
+| 申込者が他人の申込み/回答を読めない | 行レベル（`emailField == email()` / `itemId == uid`） |
+| **一人一回** | `idFrom` + `allow create` が既存ドキュメントに適用されない性質 |
+| **締切** | `request.time` と宣言された `window` の比較 |
+| **正解の秘匿** | `gated` によるコレクション分割 + `revealed` フラグでの read 制御 |
+| **カンニング防止** | `session.currentQuestion` / `session.phase` を create 条件に入れる |
+| **記録の改竄不可（owner を含む）** | `immutable` → `allow update, delete: if false` |
+| **過去トピックへの投票を弾く** | create 条件に `session.currentTopic == topicId` |
+| 巨大ドキュメントの拒否 | `request.resource.data.size()` |
+| メール踏み台の防止 | `mail` は editor 以上のみ create |
+
+### ルールが保証できないこと
+
+**1. スキーマに沿ったフィールド検証** — 動的スキーマなので不可能。3 層で受ける:
+
+| 層 | 誰が | 何を |
+|---|---|---|
+| ルール | Firestore | メンバーシップ、ロール、不変フィールド、粗い形 |
+| クライアント | MT / webview | `validateRecordObject`（助言的） |
+| 事後 | オーナーのホスト | `validateCollectionRecords` → `recordFieldProblem` を UI に出す |
+
+前提: **editor は「招待した信頼できる人」であって敵ではない。** 置けないなら Functions が要り、
+それは mulmoserver の方針転換になる。既定を viewer にして先送りする。
+
+**2. フィールド単位の可視性** — Firestore の読み取りは全部か無か。「viewer には金額列を見せない」を
+やるなら**ドキュメント分割**しかなく、レコードが増えてからでは移設になる。
+
+**シナリオ 3（正解の秘匿）が、これを必須にした。** → `gated` として宣言で表現し、エンジンが
+分割を生成する（「ライブ・段階的公開・非対称な可視性」参照）。**やらない、という選択肢は消えた。**
+
+### 注意点
+
+- **`get()` は課金される**。単一ドキュメント要求で最大 10 回。ここでは 1 回だが、タダではない
+- **匿名 create（段階 A / B）はスパムの入口**。ルールはレート制限を書けない → **App Check**
+  （静的な設定）が公開フォームを持つ以上、最初から要る。段階 C でも App Check は有効だが、
+  身元があるぶん事後のブロックが効く
+- **このルールファイルは凍結インフラ**。ここに書けないことは製品として持てない
+
+---
+
+## 申込みの認証段階（`public.submit[cid].requireAuth`）
+
+匿名申込みを許すかは、技術ではなく**商売の判断**（ログインを要求すると一定数が離脱する）。
+アプリごとに宣言し、ルールは 3 段階すべてを表現できるようにしておく。
+
+| 段階 | 認証 | email | 自分の申込みを見る | 濫用対策 |
+|---|---|---|---|---|
+| **A. 完全匿名** | なし | フォーム入力・未検証 | 不可（メール一方通行） | App Check |
+| **B. 匿名認証** | Anonymous Auth | 未検証 | uid ベースなら可 | App Check + uid |
+| **C. ログイン必須** | Google 等 | **検証済み・強制一致** | **可** | 身元があるのでブロック可 |
+
+```json
+// app.json
+"public": {
+  "read": ["services", "shifts", "stylists"],
+  "submit": { "bookings": {
+      "requireAuth": true,
+      "emailField": "customerEmail",
+      "fields": ["customerName","customerEmail","service","stylist","startAt","status"],
+      "statusField": "status", "initialStatus": "pending" } }
+}
+```
+
+### C を選ぶと 3 つ得られる
+
+1. **メールが検証済みになる** — 承認メールが届かない・打ち間違いが構造的に消える
+2. **申込者が principal になる** — 行レベルのルールで「自分の申込みだけ読める」が書け、
+   **「マイ予約」ページが成立する**（状況確認・キャンセル・変更）。メール一方通行だったものが
+   双方向になる。**プロダクトの質が一段変わる**
+3. **スパム中継の経路が閉じる** — 匿名だと、攻撃者が被害者のアドレスと攻撃的な本文で申し込み、
+   承認されると**サロンのドメインから被害者に攻撃者の書いた内容が飛ぶ**。手動承認なら気づくが、
+   自動承認や大量なら通る。C なら `customerEmail == request.auth.token.email` を
+   **ルールで強制できる**ので穴が消える
+
+### 失うもの
+
+**コンバージョン。** 髪を切るのに Google アカウントを要求すると離脱がある。サロンのオーナーが
+決めること。**A で始めて、迷惑予約が出たら宣言の 1 行で C に上げる**運用ができるのが要点。
+
+---
+
+## 一人一回・書き切り・期限・集計（シナリオ 2）
+
+アンケートが要求し、予約が要求しなかったもの。いずれも汎用機構として入れる。
+
+### `idFrom` — ドキュメント ID を身元にする（一人一回）
+
+Firestore の `allow create` は**存在しないドキュメントにしか適用されない**。回答のドキュメント ID を
+回答者の uid にすれば、2 回目の送信は「既存ドキュメントへの create」となり**ルールが自動で弾く**。
+専用の重複チェックが要らない。
+
+「1 人 1 票」「1 人 1 エントリー」にも効く汎用機構。
+
+### `finalize` — 送信後は本人が編集できない
+
+**2 つのシナリオが逆を要求するので、フラグにする必要がある。**
+
+- アンケート（`finalize: true`）— 回答は書き切り。本人の update は成立しない
+- 予約（`finalize: false`）— **マイ予約からキャンセル・変更できる**（段階 C の価値の一部）
+
+本人の update は「自分の行 かつ 宣言されたフィールドの範囲 かつ 期限内」に限る。
+owner/editor はどちらでも修正できる。
+
+### `window` — 開始・締切をルールで持つ
+
+`request.time` をアプリドキュメントの `until` / `from` と比較する。**クライアントの善意に頼らず
+締切が効く。** 予約にも使える（「予約は 30 日先まで」）。
+
+### `aggregate` — 集計の公開
+
+回答者は他人の行を読めない（読めたら台無し）ので、**集計はルールでは作れない**。
+オーナー（またはホスト）が集計して 1 つのドキュメントに書き、それを公開する。
+
+```json
+"aggregate": { "from": "responses", "publish": "results",
+               "by": ["q1", "q2"], "visibility": "public" }
+```
+
+**結果はライブである必要がない**ので、D7（ホストは実行経路にいない）を壊さない。
+
+### 宣言の例
+
+```json
+// app.json
+"public": {
+  "read": ["questions", "results"],
+  "submit": { "responses": {
+      "requireAuth": true,
+      "idFrom": "auth.uid",
+      "finalize": true,
+      "window": { "until": "2026-09-30T23:59:59Z" },
+      "fields": ["q1","q2","q3","submittedAt"],
+      "statusField": "status", "initialStatus": "submitted" } }
+}
+```
+
+### 両立しないもの（明記して「やらない」と決める）
+
+> **「一人一回」と「オーナーに対して匿名」は、この構成では両立しない。**
+
+一人一回のためには身元がドキュメント ID になっている必要があり、オーナーはそのドキュメントを
+読めるので匿名は嘘になる。ハッシュ化しても鍵がクライアントにある以上、意味がない。
+**本物の匿名アンケートにはサーバー（Function）が要る。** できそうに見えてできない類なので、
+ドキュメントに明記する。
+
+---
+
+## ライブ・段階的公開・非対称な可視性（シナリオ 3）
+
+### 最重要: `gated` — フィールド単位の可視性は「ドキュメント分割」で実現する
+
+三択問題を公開スキーマに置くと、**`correctChoice` もクライアントから読める**。生徒はネットワークを
+見れば全問正解できる。そして**Firestore の読み取りは全部か無かで、ルールでフィールドは隠せない**
+（「ルールが保証できないこと」参照）。
+
+> **問題文・選択肢と、正解は、別コレクションに分けるしかない。**
+
+```
+questions/{qid}   問題文 + 3 択          public read
+answerKey/{qid}   正解 + 解説            revealed == true のときだけ read
+```
+
+**これをエージェントの記憶に頼ってはいけない。** 分割し忘れても動く。テストも通る。
+**授業で生徒が満点を取るまで誰も気づかない。** だから宣言で表現し、エンジンが分割を生成する:
+
+```json
+// questions/schema.json
+"gated": { "fields": ["correctChoice", "explanation"], "revealBy": "revealed" }
+```
+
+チェックリストの「フィールド単位の可視性 — やらないと決めるか、ドキュメント分割を今入れるか」は、
+**シナリオ 3 が答えを出した: 入れる。** そして**セキュリティを人間の注意力ではなく宣言に持たせる**
+のは、テーゼ（宣言的で狭いことが統治を可能にする）の実例でもある。
+
+### `session` — 主催者がペースを握る状態機械
+
+```
+apps/{aid}/session   { currentQuestion: "q3", phase: "answering" | "revealed" | "closed" }
+```
+
+これまで扱ってきたのは全てレコードだったが、これは**ランタイムの状態**という新しい概念。
+回答の受付もこれで縛る（ルールで `session.currentQuestion == 回答の qid`
+かつ `session.phase == 'answering'`）。**締切後の回答 = カンニングが構造的に不可能になる。**
+
+- write: owner/editor（先生）のみ
+- read: participant 以上
+
+### `live` — ライブリスナーを宣言で切り替える
+
+「公開ページは `onSnapshot` ではなくキャッシュ付き単発取得」（監視点 4）は**コスト都合の既定**で、
+シナリオ 3 では**ライブが必須**。ビューまたはコレクションに `live: true` を宣言できるようにし、
+既定は非ライブのままにする。
+
+### `aggregate` のトリガー — 正答率は先生のブラウザが計算する
+
+生徒は他人の回答を読めないので集計できない。**owner のブラウザ**が集計して `stats` ドキュメントに
+書き、生徒はそれを読む。**ホストの Mac は関係ないので D7 は保たれる**（主催者のブラウザは
+参加者であって、ビルド経路ではない）。
+
+シナリオ 2 の `aggregate` に「フェーズ遷移で再計算」というトリガーを足す:
+
+```json
+"aggregate": { "from": "responses", "publish": "stats",
+               "by": ["questionId", "choice"], "on": "session.phase == 'revealed'",
+               "visibility": "participant" }
+```
+
+### 非対称な可視性のまとめ
+
+| | 先生（owner） | 生徒（participant） |
+|---|---|---|
+| 問題文・選択肢 | 見える | 見える |
+| 正解・解説 | 常に見える | **`revealed` の後だけ** |
+| 自分の回答 | 見える | 見える |
+| 他人の個別回答 | **見える** | 見えない |
+| 全体統計 | 見える | 見える（`stats` 経由） |
+| 全生徒の成績一覧 | **見える** | 見えない |
+
+**全て既存の機構（行レベル read + `gated` + `stats` の publish）で表現でき、新しいルールの
+形は要らない。** 要るのは `gated` の分割生成と `participant` ロール。
+
+### `participant` ロール — 3 つのシナリオに共通する穴
+
+生徒は member ではない（member にすると他人のデータが見える）。かといって
+「リンクを知っている誰でも」では隣のクラスの生徒が入れる。
+
+**「名指しされているが member ではない」層が、今の 3 値（owner / editor / viewer）に無い。**
+
+```
+owner        publish、メンバー管理、session の駆動、全件読み取り
+editor       レコードの読み書き（全件）
+viewer       レコードの読み取り（全件）
+participant  submit + 自分の行 + public/gated-revealed のみ。全件は読めない
+```
+
+**これはシナリオ 2 にも効く** — 「社内の特定メンバーだけに配るアンケート」が今は書けない。
+シナリオ 3 が前の 2 つの穴を照らした形。
+
+---
+
+## 記録の完全性と公開投票（シナリオ 4）
+
+### `immutable` — オーナーにも書き換えられない記録
+
+**設計の最大の欠落。** 現在のルールは owner/editor がいつでも item を update / delete できる。
+**投票記録としては失格** — 議長が後から票を書き換えられる投票システムは、投票システムではない。
+
+```json
+"immutable": true   // create のみ。update / delete は誰も不可（owner も）
+```
+
+ルールでは `allow update, delete: if false` の一行。**「オーナーですら触れない」というカテゴリが
+設計に無かった。** 議会以外にも効く: 監査ログ、同意の記録、検査結果、会計の仕訳。
+
+### `peerVisibility` — 記名投票なら公開が正しい
+
+議会の投票は普通**記名投票（roll call）**で、誰がどう投じたかは記録に残る。
+つまり参加者は**全員の票を読める**。
+
+これが決まると**リアルタイム集計の難問が消える。** シナリオ 3 では「生徒は他人の回答を読めないので
+owner のブラウザが集計して publish する」必要があったが、議会では**各議員のブラウザが自分で数えられる。**
+
+> **集計を担う信頼された計算機が要らない。議長のタブが閉じていても票数は正しい。**
+
+投票システムとしてこれは本質的な性質。宣言で切り替える:
+
+```json
+"peerVisibility": "hidden"   // 授業・アンケート（既定）
+"peerVisibility": "public"   // 議会
+```
+
+`public` のときは `allow read: if roleIn(aid, cid) != null`（参加者なら全件読める）。
+
+### `aggregate.visibleFrom` — 集計をいつ見せるか
+
+シナリオ 3 は「主催者が明かすまで見せない」、シナリオ 4 は「投票中からリアルタイム」。
+**同じ機構で方針が逆。**
+
+投票中に途中経過を見せるのは**バンドワゴン効果を生む**という設計判断でもある（議会では意図的に
+そうすることも、避けることもある）。だから宣言で持つ:
+
+```json
+"aggregate": { "visibleFrom": "during" | "revealed" | "never" }
+```
+
+`peerVisibility: "public"` なら集計は各クライアントが計算するので、`stats` の publish 自体が不要。
+
+### 戻って変えられない
+
+`finalize: true` に加えて、**create 条件に `session.currentTopic == 投票の topicId`** を入れる
+（シナリオ 3 の `currentQuestion` と同じ機構）。過去のトピックへの投票は**ルールが弾く**ので、
+クライアントの善意に頼らない。
+
+### 秘密投票は範囲外（2 度目の同じ限界）
+
+無記名投票にしたいなら、既出の限界に**2 度目に突き当たる**:
+
+> **「一人一回」と「主催者に対して匿名」は両立しない。**
+
+一人一票を保証するには身元がドキュメント ID になっている必要があり、owner はそれを読める。
+**秘密投票にはサーバー（Function）が要る。記名投票は可、無記名投票は範囲外**と明記する。
+
+---
+
+## 宣言的な副作用（メール）
+
+承認メールをホストに送らせると **D7 が壊れる**（オーナーがスマホから承認したとき Mac は寝ている）。
+
+**Firebase の Trigger Email 拡張**を使う。`mail` コレクションにドキュメントを 1 つ書くと送信される。
+カスタム Function のコードはゼロ（mulmoserver の「Functions を避ける」方針と実質的に整合）。
+
+```json
+// bookings/schema.json
+"actions": {
+  "approve": {
+    "kind": "mutate",
+    "set": { "status": "approved" },
+    "then": { "email": { "to": "{{customerEmail}}", "template": "booking-approved" } }
+  }
+}
+```
+
+**`then.email` という宣言的な副作用**が、現設計に足りていないピース。入れると通知・リマインダー・
+キャンセル連絡が全部同じ機構に乗る。
+
+（SMTP 認証情報を 1 回設定する必要がある。コードではないが、セットアップコストではある。）
+
+---
+
+## HTML は生成物、スキーマが統治対象
+
+**この節は、下の「宣言で表現できる範囲」の結論を書き換える。**
+
+当初この計画は「カスタムビューの HTML が革新性の穴とセキュリティの穴を同じ場所に開ける」と
+書いていた。危険は 2 つあり、**片方は消える。**
+
+**(a) diff がレビューできない → 消える。** HTML が**スキーマの射影**であれば、そこに真実は無い。
+使い捨てで、いつでも再生成できる。**ビルド成果物であってソースではない。** レビュー対象は git の
+スキーマだけになる。保つべき規律は 1 つだけ:
+
+> **HTML は、スキーマが持っていない真実を持ってはならない。**
+
+これさえ守れば、LLM が毎回違う HTML を生成してよい。
+
+**(b) メンバーのブラウザでコードが動く → 残る。** ゆえに sandbox iframe に隔離し、
+**Firestore のハンドルを渡さない。** データは親フレームが渡し、生成された HTML は描画だけする。
+これは「HTML を制限する緩和策」ではなく、**「自由に生成してよくするための前提条件」**。位置づけが逆。
+その仕組みが **View Bridge**（下記）— ハンドルを渡さないままリアルタイムを実現する標準機構。
+
+### なぜ生成された HTML を信頼しなくてよいのか
+
+> **アクセス制御がデータ層で効いているから。**
+
+シナリオ 3 の `gated` が効くのはこれ。正解が別コレクションにありルールが読ませないなら、
+**ビューが何をしようと正解は取れない。** 逆に正解が読めるところに置いてあれば、どんなに行儀のいい
+ビューを書いても無意味。
+
+> **ビューの規律はセキュリティに何も寄与しない。ルールとスキーマだけが寄与する。**
+
+**帰結: 統治がスキーマ層に全部移る。** 間違いはすべてスキーマの設計ミスとして現れる。
+
+---
+
+## View Bridge — 親がデータを push し、ビューは Firebase を知らない
+
+sandbox された HTML が Firestore ハンドルを持たなくても、**親フレームが `onSnapshot` で受けた
+データを postMessage で push すれば**リアルタイムに動く。これがこの設計の要。
+
+**要点は、親を汎用プロキシにしないこと。** 「このクエリを実行して」を通したら sandbox の意味が消える。
+
+> **ブリッジが公開するのは、宣言された「データセット名」と「アクション名」だけ。
+> クエリ言語ではない。**
+
+ルール（データ層）とブリッジ（宣言された面）の**二重防御**になる。
+
+### 構造
+
+```
++- 親フレーム（webview シェル / MT のセル）-----------------+
+|  Firebase SDK・認証・onSnapshot・ref 解決・live 判断      |
+|                     | MessageChannel (port)              |
+|  +------------------v-----------------------------+      |
+|  | iframe sandbox="allow-scripts"                  |      |
+|  |  （allow-same-origin なし = origin は null）    |      |
+|  |  LLM が生成した HTML — 描画のみ                 |      |
+|  +-------------------------------------------------+      |
++-----------------------------------------------------------+
+```
+
+`allow-same-origin` を付けないので iframe の origin は `null` になり、**`event.origin` による
+検証は使えない。** `MessageChannel` を使い、親が生成した port を最初の握手で 1 回だけ渡す。
+**port を持っていることが身元。**
+
+### プロトコル
+
+親 → ビュー（push）:
+
+| メッセージ | 中身 |
+|---|---|
+| `init` | スキーマ（フィールド、ラベル、i18n）、ロール、テーマ、protocol version |
+| `data` | 名前付きデータセットのスナップショット（`{ dataset, items, meta }`） |
+| `patch` | 差分（added / modified / removed）。**`CollectionStore` の `StoreChange` 粒度がそのまま乗る** |
+| `state` | `session` ドキュメント（`currentQuestion` / `currentTopic` / `phase`） |
+| `status` | `connecting` / `live` / `stale` / `offline` |
+| `result` / `error` | アクションの結果 |
+
+ビュー → 親（request）:
+
+| メッセージ | 中身 |
+|---|---|
+| `ready` | 握手完了 |
+| `subscribe` | 宣言済みデータセットの購読（**宣言外は拒否**） |
+| `action` | 宣言済みアクションの実行（**宣言外は拒否**）。親が自分の資格情報で書き、ルールが最終判定 |
+| `resize` | 高さ（iframe の自動リサイズ） |
+
+### 宣言
+
+```json
+"views": [{
+  "id": "board", "type": "html", "file": "views/board.html",
+  "datasets": ["questions", "stats"],   // これしか届かない
+  "actions": ["vote"],                  // これしか呼べない
+  "live": true
+}]
+```
+
+親は**宣言されたデータセットにしか `onSnapshot` を張らない**。コストの上限も宣言で決まる。
+
+### 副次的に解決するもの
+
+1. **ref を辿る computed field**（監視点 3）— **親が解決してから渡す。** `service.duration` は
+   解決済みで届き、ビューに ref キャッシュを持たせる必要が消える
+2. **同じ HTML が両方のホストで動く** — 親が違うだけ。MT のセルでも公開 webview でも同じ HTML。
+   **LLM は 1 つ生成すればいい**
+3. **live か否かをビューが知らなくていい** — 「公開側はキャッシュ付き単発取得、メンバー側はライブ」
+   （監視点 4）の使い分けが**親の中に閉じる**
+4. **資格情報がビューに一切渡らない** — 公開ページを匿名訪問者に配っても認証情報は漏れない
+
+### 実装上の制約
+
+- **子側ライブラリは依存ゼロで数 KB** — 生成される HTML すべてにインライン展開されるため。
+  `mt.on("data", …)` / `mt.action("vote", {…})` 程度の API に絞る
+- **その API を LLM が知っている必要がある** — テンプレートとスキルに載せる（生成される HTML の
+  品質はここで決まる）
+- **protocol version を `init` に含める** — publish された HTML はシェルより古いことがある。
+  HTML は再生成できるので致命的ではないが、劣化は graceful に
+- **置き場所** — 両ホスト（MT の Vue セル、mulmoserver の webview）が同じ実装を使う必要がある。
+  `@mulmoclaude/core` のブラウザ安全エントリ（`./remote-view` / `./plugin-vue` と同じ扱い）に
+  `./view-bridge` を足すのが筋。Firebase を import しない（データは親が供給する）ので子側は素の JS
+
+---
+
+## テンプレートとスキーマリンター
+
+### スキーマリンター（新規の成果物）
+
+統治がスキーマ層に移った以上、**機械的に検出できる設計ミス**を潰すのがセキュリティの主戦場になる。
+これまで「エージェントの記憶に頼ってはいけない」と繰り返してきたものが、全部リンターの項目になる。
+
+| 検出できるミス | 何が起きるか |
+|---|---|
+| `public.read` のコレクションに正解・単価などが入っている（`gated` 未指定） | 授業で満点、価格の漏洩 |
+| `finalize: true` なのに `idFrom` が無い | 一人一回のつもりが何回でも出せる |
+| `peerVisibility: "public"` かつ `requireAuth: false` | 匿名の第三者が全件読める |
+| `submit.fields` に管理用フィールド（`status` 以外の状態、`role` 等）が混ざっている | 申込者が自分で承認できる（権限昇格） |
+| `aggregate.visibleFrom: "during"` かつ `peerVisibility: "hidden"` | 誰が集計するのか未定義 |
+| `immutable: true` かつ本人による変更を期待している | 矛盾 |
+| `window` があるのに `session` も `finalize` も無い | 締切後の扱いが未定義 |
+
+**どれもスキーマだけを見て判定できる。** `acceptParsedSchema` の受け入れゲートの延長に置き、
+`putSchema` と publish の両方で走らせる（publish 側は「ライブデータの検証」と同じ関門）。
+
+### テンプレートは「業種」ではなく「形」で索引する
+
+LLM が参照するときに効くのは完成品ではなく、**判断と、間違えたときに何が起きるか**。
+4 つのシナリオはパターンとして抽象化する:
+
+| パターン | 形 | 代表的な設定 |
+|---|---|---|
+| **P1 予約** | リソース × 時間 × 承認 × 通知 | `schedule`, 承認アクション, `then.email` |
+| **P2 収集** | 一人一回 × 期限 × 集計 | `idFrom`, `finalize`, `window`, `aggregate` |
+| **P3 ライブ授業** | 主催者駆動 × 段階的公開 | `session`, `gated`, `live` |
+| **P4 記録** | 不変 × 公開 × ライブ集計 | `immutable`, `peerVisibility`, `visibleFrom` |
+
+「社内の備品貸出」は P1、「読書会の出欠」は P2、「品質検査の記録」は P4。
+**業種名で引くと LLM は 4 つのサンプルの外に出られないが、形で引けば無限に適用できる。**
+
+各テンプレートには**罠を併記する** —「`gated` を忘れると生徒が満点を取る」「`immutable` が無いと
+議長が票を書き換えられる」。テンプレートの価値は完成品ではなくこの注記にある。
+
+配布は既存の Discover レジストリ（`@mulmoclaude/core/collection/registry/server` の
+`listRegistry` / `importRegistry`、公式は `receptron/mulmoclaude-collections`）に乗せられる。
+
+### 汎用性を守る不変条件
+
+> **テンプレートはエンジンを一切拡張しない。純粋なデータである。**
+> **テンプレートを書くのにコード変更が要ったなら、それは宣言言語の欠落であって
+> テンプレートの問題ではない。**
+
+これがテンプレートを「サンプル」に留め、システムを汎用に保つ唯一の防波堤。
+
+---
+
+## 宣言で表現できる範囲 — この構想の寿命を決める場所
+
+> **注: セキュリティ面の結論は上の「HTML は生成物、スキーマが統治対象」で更新済み。**
+> HTML はデータ層で守られた sandbox 内の生成物なので、自由に生成してよい。
+> この節が扱うのは**残る方の問題** — 宣言で書けないことが増えると、
+> スキーマが痩せて HTML に真実が移り、**レビュー対象が消える**という劣化。
+
+宣言で書けない要求が増えると「LLM に HTML を書かせればいい」で済ませたくなり、そのとき
+**HTML はスキーマの射影ではなくなる**（= 上の規律を破る）。そうなると git のスキーマを読んでも
+アプリが何をするか分からず、「git で管理される React アプリ」に戻る。それはもう新しくない。
+
+つまり守るべきは「HTML を書かせない」ことではなく、**「HTML に真実を移させない」**こと。
+そのためには宣言で表現できる範囲を widen し続けるしかない。
+
+**美容室シナリオはこの圧力を即座にかけてくる。** 「シフト − 承認済み予約 − 所要時間 = 空き枠」は
+レコード単位の computed field（`deriveAll`）では書けない、複数レコードを跨ぐ計算だから。
+
+**答えは schedule ビューを宣言的なビュー型として一級市民にすること:**
+
+```json
+"views": [{
+  "type": "schedule",
+  "resource": "stylists",
+  "availability": "shifts",
+  "busy": { "collection": "bookings", "when": "status == 'approved'" },
+  "slot": { "durationFrom": "services.duration" },
+  "submit": "bookings"
+}]
+```
+
+「リソース × 時間 × 所要時間 × 予約」は業種を超えて繰り返し現れる（会議室、設備、面談、レンタル）。
+1 つ作れば何度も効く。**この一手を打てるかどうかが「コードを書かずに」が本当かどうかを決める。**
+
+**アンケートで同じ役割を果たすのが条件分岐（スキップロジック）** — 「Q3 が『はい』なら Q4 を出す」。
+HTML に逃がすと元の木阿弥なので、フィールドに `showIf` を持たせ、**完全なスクリプトではなく
+単純な式に限る**あたりが線。ここも「どこまで宣言で書けるか」の実験場になる。
+
+方針:
+
+- 宣言で表現できる範囲を意図的に広げ続ける（HTML に逃げる理由を減らす — ここが製品開発の中身）
+- HTML ビューは別扱い（publish 時に警告、レビュー必須、webview では sandbox iframe に隔離して
+  Firestore ハンドルを渡さない）
+- 少なくとも **HTML ビューを持つアプリは一覧で見分けがつく**ようにする
+
+---
+
+## D7 が漏れうる箇所（監視点）
+
+1. **メール送信をホスト監視で実装しない** — Trigger Email 拡張の採用は好みではなく不変条件
+2. **publish のペイロードが完結していること** — Web が必要とするもの（スキーマ、ビュー HTML、
+   public 設定）が全部 Firestore/Hosting に載る。実行時にディスクを参照する経路が 1 本でも残ったら嘘になる
+3. **ref を辿る computed field** — 予約の終了時刻は `service.duration` を参照する。
+   remote-host 経路は ref キャッシュがないので諦めている（"formulas that dereference `ref` fields
+   stay absent"）が、**webview では諦められない**。→ **View Bridge の親側が解決してから push する**
+   ことで解決（ビューは解決済みの値を受け取る）。タダではないが、置き場所は決まった
+4. **匿名トラフィックのコスト** — 公開側は既定で `onSnapshot` ではなく**キャッシュ付きの単発取得**。
+   メンバー向け画面はライブでよい。**ただしシナリオ 3 はライブが必須**なので、`live: true` を
+   宣言で切り替えられるようにする（既定は非ライブ）
+
+---
+
+## UI（前提: 種別は 1 つ、状態は隠せない）
+
+**「別の種類のコレクション」ではなく「コレクションの、隠せない属性」。**
+
+- **名詞は分けない** — コレクションはコレクション。バックエンド名（Firestore）を UI に出さない。
+  軸は保存先ではなく**可視範囲**（「共有中 — 5 人」「このMacだけ」）
+- **作成時は明示的な 2 択**。ドロップダウンの 4 番目にしない。既定を持たせない。
+  **エージェント経由も同じ** — 「レストランのリスト作って」から共有が生まれてはいけない
+- **バッジは消えない**。他人が所有するものは別セクション（削除できない・スキーマを変えられないという
+  非対称があるので、同じ棚に並べると失敗の理由が分からなくなる）。
+  未接続時に全操作が失敗する挙動の**エラーの先出し**にもなる
+- **変換は一方向・確認あり**。「何が自分のマシンを離れるか」を名指しする。トグルにしない
+- ヘッダーは 2 行:
+
+```
+共有中 — 5人（owner: satoshi、editor 2、viewer 2）              ← Firestore
+定義 — github.com/receptron/salon @ a1b2c3d（2日前に publish）  ← git
+```
+
+下の行は **publish 忘れが一目で分かる**行でもある。
+
+**スキルとドキュメントだけは分ける** — 共有のセットアップ手順（ログイン、招待、ロール、
+オフラインの意味）は本当に別物。概念は 1 つ、手順書は別。
+
+---
+
+## サンプルのテーブル設計とスキーマ
+
+**LLM 向けのテンプレート実体。** 4 つのシナリオを実際のスキーマとして書き下ろす。
+
+> この節の JSON ブロックは**すべて単体で valid な JSON**（機械検証済み）。
+> 上の各節にある JSON は説明用の**断片**（キーだけを抜き出したもの）なので、そのままでは
+> パースできない。テンプレートとして起こすのはこの節。
+
+### 語彙の区別（重要）
+
+サンプルは**既存の語彙**と**この計画が提案する語彙**を混ぜている。LLM が存在しないキーを
+学習しないよう、区別を明示する。
+
+**既存のフィールド型**（`@mulmoclaude/core/collection` の `FieldSpecZ`、実在を確認済み）:
+
+`string` `text` `markdown` `number` `money` `boolean` `toggle` `date` `datetime`
+`enum` `status` `ref` `email` `image` `file` `location` `table` `derived` `embed`
+`backlinks` `rollup` `flag`
+
+`derived` `embed` `backlinks` `rollup` `toggle` `flag` は **computed**（レコードに書かれない）。
+
+**既存のアクション種別**: `chat`（可視 LLM） / `agent`（隠しワーカー） / `mutate`（宣言的な書き込み）。
+**既存の可視性述語**: `when: { field, in: [...] }`（アクション・フィールド共通）。
+
+**この計画が新規に提案するキー**（実装が要る。定義箇所を併記）:
+
+| キー | 置き場所 | 定義 |
+|---|---|---|
+| `storage.type: "firestore"` + `cid` | schema | D1 / D2 |
+| `immutable` | schema（コレクション） | シナリオ 4 |
+| `peerVisibility` | schema（コレクション） | シナリオ 4 |
+| `gated` | schema（コレクション） | シナリオ 3 |
+| `showIf` | フィールド | 宣言の境界 |
+| `views[].datasets` / `.actions` / `.live` | schema | View Bridge |
+| `views[].type: "schedule"` | schema | 宣言の境界 |
+| `actions.*.then.email` | schema | 宣言的な副作用 |
+| `aggregate` | schema | シナリオ 2 / 3 / 4 |
+| `aid` / `members` / `public` | `app.json` | D1 / 権限モデル |
+| `public.submit[cid].*` | `app.json` | 認証段階・シナリオ 2 |
+| `session` | Firestore ドキュメント | シナリオ 3 |
+
+> **既存の custom view との関係**: `CollectionCustomView` は既に sandbox iframe +
+> **capability トークン + `dataUrl`**（`__MC_VIEW.dataUrl`、`capabilities: ["read","write"]`）
+> でビューにデータを渡している。**ビューが Firestore を触らない、という原則は既に実装済み。**
+> View Bridge はその**ホスト非依存の後継** — 公開 webview にはホストの HTTP エンドポイントが
+> 無いので、fetch ではなく親フレームからの push にする。`capabilities` が `datasets` / `actions`
+> に対応する。**並行して別機構を作らないこと。**
+
+---
+
+### S1 — 美容室の予約（P1 予約パターン）
+
+**テーブル設計**
+
+```
+stylists  1 ──< shifts        美容師のシフト
+stylists  1 ──< bookings      担当
+services  1 ──< bookings      メニュー（所要時間の供給元）
+```
+
+`bookings.endAt` は `services.duration` を ref 越しに参照する `derived`。
+**View Bridge の親側が ref を解決してから push する**（監視点 3）。
+
+**`app.json`**
+
+```json
+{
+  "aid": "app_salon_7f3a",
+  "aidEnv": "MT_APP_SALON",
+  "name": "Sakura Hair 予約",
+  "owner": "<uid>",
+  "members": { "owner@salon.jp": { "*": "owner" },
+               "stylist-a@salon.jp": { "bookings": "editor", "shifts": "viewer", "services": "viewer" } },
+  "memberEmails": ["owner@salon.jp", "stylist-a@salon.jp"],
+  "public": {
+    "enabled": true,
+    "read": ["services", "shifts", "stylists"],
+    "submit": {
+      "bookings": {
+        "requireAuth": true,
+        "emailField": "customerEmail",
+        "finalize": false,
+        "fields": ["customerName","customerEmail","service","stylist","startAt","status"],
+        "statusField": "status",
+        "initialStatus": "pending",
+        "window": { "until": "2026-12-31T23:59:59Z" }
+      }
+    }
+  }
+}
+```
+
+`finalize: false` = 客が「マイ予約」からキャンセル・変更できる。
+
+**`.claude/skills/services/schema.json`**
+
+```json
+{
+  "slug": "services", "title": "メニュー",
+  "storage": { "type": "firestore" },
+  "primaryKey": "name",
+  "fields": {
+    "name":     { "type": "string", "label": "メニュー名", "primary": true, "required": true },
+    "duration": { "type": "number", "label": "所要時間（分）", "required": true },
+    "price":    { "type": "money",  "label": "料金", "currency": "JPY" }
+  }
+}
+```
+
+**`.claude/skills/stylists/schema.json`**
+
+```json
+{
+  "slug": "stylists", "title": "スタッフ",
+  "storage": { "type": "firestore" },
+  "primaryKey": "name",
+  "fields": {
+    "name":   { "type": "string", "label": "名前", "primary": true, "required": true },
+    "photo":  { "type": "image",  "label": "写真" },
+    "active": { "type": "boolean","label": "在籍中" }
+  }
+}
+```
+
+**`.claude/skills/shifts/schema.json`**
+
+```json
+{
+  "slug": "shifts", "title": "シフト",
+  "storage": { "type": "firestore" },
+  "primaryKey": "id",
+  "fields": {
+    "id":      { "type": "string",   "primary": true },
+    "stylist": { "type": "ref",      "label": "担当", "collection": "stylists", "required": true },
+    "date":    { "type": "date",     "label": "日付", "required": true },
+    "startAt": { "type": "datetime", "label": "開始", "required": true },
+    "endAt":   { "type": "datetime", "label": "終了", "required": true }
+  }
+}
+```
+
+**`.claude/skills/bookings/schema.json`**
+
+```json
+{
+  "slug": "bookings", "title": "予約",
+  "storage": { "type": "firestore" },
+  "primaryKey": "id",
+  "fields": {
+    "id":            { "type": "string",   "primary": true },
+    "customerName":  { "type": "string",   "label": "お名前", "required": true },
+    "customerEmail": { "type": "email",    "label": "メール", "required": true },
+    "service":       { "type": "ref",      "label": "メニュー", "collection": "services", "required": true },
+    "stylist":       { "type": "ref",      "label": "担当",     "collection": "stylists" },
+    "startAt":       { "type": "datetime", "label": "開始時刻", "required": true },
+    "endAt":         { "type": "derived",  "label": "終了時刻",
+                       "expr": "startAt + minutes(service.duration)" },
+    "status":        { "type": "status",   "label": "状態",
+                       "values": ["pending", "approved", "rejected", "cancelled"] }
+  },
+  "actions": {
+    "approve": {
+      "kind": "mutate", "label": "承認する",
+      "when": { "field": "status", "in": ["pending"] },
+      "set":  { "status": "approved" },
+      "then": { "email": { "to": "{{customerEmail}}", "template": "booking-approved" } }
+    },
+    "reject": {
+      "kind": "mutate", "label": "お断りする",
+      "when": { "field": "status", "in": ["pending"] },
+      "set":  { "status": "rejected" },
+      "then": { "email": { "to": "{{customerEmail}}", "template": "booking-rejected" } }
+    }
+  },
+  "views": [{
+    "id": "book", "type": "schedule", "label": "予約する", "live": false,
+    "resource":     "stylists",
+    "availability": "shifts",
+    "busy":   { "collection": "bookings", "when": "status == 'approved'" },
+    "slot":   { "durationFrom": "services.duration" },
+    "submit": "bookings"
+  }]
+}
+```
+
+**罠**
+
+- `services.price` を `public.read` に入れているので**料金は公開される**。非公開にしたいなら
+  `gated` が要る（S3 参照）
+- `endAt` が `derived` なので**保存されない**。集計や衝突判定は毎回計算される
+- 空き枠計算は `schedule` ビューが持つ。**ここを HTML に逃がすと宣言の意味が消える**
+
+---
+
+### S2 — Web アンケート（P2 収集パターン）
+
+**テーブル設計**
+
+```
+questions   質問（公開読み取り）
+responses   回答（一人一回・書き切り・本人と owner のみ）
+results     集計（aggregate が publish、公開読み取り）
+```
+
+**`app.json`（抜粋）**
+
+```json
+{
+  "aid": "app_survey_2026q3",
+  "public": {
+    "enabled": true,
+    "read": ["questions", "results"],
+    "submit": {
+      "responses": {
+        "requireAuth": true,
+        "audience": "participant",
+        "idFrom": "auth.uid",
+        "finalize": true,
+        "window": { "from": "2026-09-01T00:00:00Z", "until": "2026-09-30T23:59:59Z" },
+        "fields": ["q1","q2","q3","status"],
+        "statusField": "status",
+        "initialStatus": "submitted"
+      }
+    }
+  }
+}
+```
+
+`audience: "participant"` を外せば「リンクを知っている人なら誰でも」になる。
+
+**`questions/schema.json`**
+
+```json
+{
+  "slug": "questions", "title": "設問",
+  "storage": { "type": "firestore" },
+  "primaryKey": "id",
+  "fields": {
+    "id":      { "type": "string", "primary": true },
+    "order":   { "type": "number", "label": "表示順" },
+    "text":    { "type": "text",   "label": "設問文", "required": true },
+    "kind":    { "type": "enum",   "label": "形式", "values": ["single","multi","scale","free"] },
+    "choices": { "type": "table",  "label": "選択肢",
+                 "fields": { "value": { "type": "string" }, "label": { "type": "string" } } },
+    "required":{ "type": "boolean","label": "必須" }
+  }
+}
+```
+
+**`responses/schema.json`**
+
+```json
+{
+  "slug": "responses", "title": "回答",
+  "storage": { "type": "firestore" },
+  "primaryKey": "id",
+  "peerVisibility": "hidden",
+  "fields": {
+    "id":     { "type": "string", "primary": true },
+    "q1":     { "type": "enum",   "label": "Q1", "values": ["a","b","c"], "required": true },
+    "q2":     { "type": "number", "label": "Q2（1-5）" },
+    "q3":     { "type": "text",   "label": "Q3 自由記述",
+                "showIf": { "field": "q1", "in": ["a"] } },
+    "status": { "type": "status", "values": ["submitted"] }
+  },
+  "aggregate": {
+    "from": "responses", "publish": "results",
+    "by": ["q1", "q2"], "visibleFrom": "revealed", "visibility": "public"
+  }
+}
+```
+
+**罠**
+
+- `idFrom: "auth.uid"` を**書き忘れると一人が何回でも回答できる**（リンターが検出）
+- `finalize: true` と `window` は**両方**要る。`window` だけだと締切前に何度でも上書きできる
+- **「一人一回」と「主催者に対して匿名」は両立しない**（サーバーが要る。範囲外）
+
+---
+
+### S3 — オンライン授業の演習（P3 ライブ授業パターン）
+
+**テーブル設計 — 分割が要点**
+
+```
+questions   問題文 + 3択          public read      ← 正解を入れてはいけない
+answerKey   正解 + 解説           revealed のみ    ← gated が生成する
+responses   生徒の回答            本人 + 先生のみ
+stats       正答率                aggregate が publish
+session     現在の問題とフェーズ  参加者は read のみ
+```
+
+**`app.json`（抜粋）**
+
+```json
+{
+  "aid": "app_class_algebra",
+  "members": { "teacher@school.jp": { "*": "owner" },
+               "student-1@school.jp": { "*": "participant" } },
+  "public": {
+    "enabled": false,
+    "read": ["questions", "stats"],
+    "submit": {
+      "responses": {
+        "requireAuth": true, "audience": "participant",
+        "idFrom": "auth.uid+questionId", "finalize": true,
+        "fields": ["questionId","choice","status"],
+        "statusField": "status", "initialStatus": "answered",
+        "gateOn": { "session": { "phase": "answering", "match": "questionId" } }
+      }
+    }
+  }
+}
+```
+
+`gateOn` = create 条件に `session.currentQuestion == questionId && session.phase == "answering"`
+を課す。**締切後の回答＝カンニングがルールで不可能になる。**
+
+**`questions/schema.json`**
+
+```json
+{
+  "slug": "questions", "title": "設問",
+  "storage": { "type": "firestore" },
+  "primaryKey": "id",
+  "gated": { "fields": ["correctChoice", "explanation"], "revealBy": "revealed" },
+  "fields": {
+    "id":            { "type": "string", "primary": true },
+    "order":         { "type": "number" },
+    "text":          { "type": "text",   "label": "問題文", "required": true },
+    "choiceA":       { "type": "string", "label": "A", "required": true },
+    "choiceB":       { "type": "string", "label": "B", "required": true },
+    "choiceC":       { "type": "string", "label": "C", "required": true },
+    "correctChoice": { "type": "enum",   "label": "正解", "values": ["A","B","C"], "required": true },
+    "explanation":   { "type": "markdown", "label": "解説" },
+    "revealed":      { "type": "boolean", "label": "公開済み" }
+  }
+}
+```
+
+**`gated` が生成する実体**（エージェントが手で書くのではない）:
+
+```
+apps/{aid}/collections/questions/items/{id}   id, order, text, choiceA..C, revealed
+apps/{aid}/collections/answerKey/items/{id}   correctChoice, explanation
+```
+
+`answerKey` の read ルール: `resource.data.revealed == true || roleIn(aid,'*') == "owner"`。
+
+**`responses/schema.json`**
+
+```json
+{
+  "slug": "responses", "title": "回答",
+  "storage": { "type": "firestore" },
+  "primaryKey": "id",
+  "peerVisibility": "hidden",
+  "immutable": true,
+  "fields": {
+    "id":         { "type": "string", "primary": true },
+    "questionId": { "type": "ref",    "collection": "questions", "required": true },
+    "choice":     { "type": "enum",   "values": ["A","B","C"], "required": true },
+    "correct":    { "type": "derived", "expr": "choice == questionId.correctChoice" },
+    "status":     { "type": "status", "values": ["answered"] }
+  },
+  "aggregate": {
+    "from": "responses", "publish": "stats",
+    "by": ["questionId", "choice"],
+    "on": "session.phase == 'revealed'",
+    "visibleFrom": "revealed", "visibility": "participant"
+  },
+  "views": [{
+    "id": "quiz", "type": "html", "file": "views/quiz.html",
+    "datasets": ["questions", "stats", "session"],
+    "actions": ["answer"], "live": true
+  }]
+}
+```
+
+**`session` ドキュメント**（レコードではなくランタイム状態）
+
+```json
+{ "currentQuestion": "q3", "phase": "answering", "startedAt": "2026-09-10T01:00:00Z" }
+```
+
+**罠**
+
+- **`gated` を忘れると生徒は全問正解できる。** 動くしテストも通る。**授業で満点が出るまで
+  誰も気づかない。** これがリンター最優先の項目である理由
+- `correct` は `derived` なので `answerKey` が読めない生徒側では**解決されない** —
+  それが正しい（明かす前に正誤が分かってはいけない）
+- `immutable: true` により、生徒も先生も回答を書き換えられない
+
+---
+
+### S4 — 議会の投票（P4 記録パターン）
+
+**テーブル設計**
+
+```
+topics    議題                    参加者 read
+votes     投票（記名・不変）      参加者が全件 read ← peerVisibility: public
+session    現在の議題とフェーズ   参加者 read のみ
+```
+
+**集計コレクションが無いのが要点。** `peerVisibility: "public"` なので
+**各クライアントが自分で数える**。集計を担う信頼された計算機が要らない。
+
+**`app.json`（抜粋）**
+
+```json
+{
+  "aid": "app_council_2026",
+  "members": { "chair@council.jp": { "*": "owner" },
+               "member-01@council.jp": { "*": "participant" } },
+  "public": {
+    "enabled": false,
+    "read": [],
+    "submit": {
+      "votes": {
+        "requireAuth": true, "audience": "participant",
+        "idFrom": "auth.uid+topicId", "finalize": true,
+        "fields": ["topicId","choice"],
+        "gateOn": { "session": { "phase": "voting", "match": "topicId" } }
+      }
+    }
+  }
+}
+```
+
+**`topics/schema.json`**
+
+```json
+{
+  "slug": "topics", "title": "議題",
+  "storage": { "type": "firestore" },
+  "primaryKey": "id",
+  "immutable": true,
+  "fields": {
+    "id":    { "type": "string",   "primary": true },
+    "order": { "type": "number" },
+    "title": { "type": "string",   "label": "議題", "required": true },
+    "body":  { "type": "markdown", "label": "議案本文" },
+    "closedAt": { "type": "datetime", "label": "採決時刻" }
+  }
+}
+```
+
+**`votes/schema.json`**
+
+```json
+{
+  "slug": "votes", "title": "投票",
+  "storage": { "type": "firestore" },
+  "primaryKey": "id",
+  "immutable": true,
+  "peerVisibility": "public",
+  "fields": {
+    "id":      { "type": "string", "primary": true },
+    "topicId": { "type": "ref",    "collection": "topics", "required": true },
+    "voter":   { "type": "string", "label": "議員", "required": true },
+    "choice":  { "type": "enum",   "label": "賛否", "values": ["yes","no","abstain"], "required": true }
+  },
+  "aggregate": {
+    "from": "votes", "by": ["topicId", "choice"],
+    "visibleFrom": "during", "visibility": "participant"
+  },
+  "views": [{
+    "id": "floor", "type": "html", "file": "views/floor.html",
+    "datasets": ["topics", "votes", "session"],
+    "actions": ["cast"], "live": true
+  }]
+}
+```
+
+`aggregate` に `publish` が**無い**のは意図的 — 全件読めるので各クライアントが計算する。
+
+**`session` ドキュメント**
+
+```json
+{ "currentTopic": "t7", "phase": "voting" }
+```
+
+**罠**
+
+- **`immutable` が無いと議長が票を書き換えられる。** 投票システムとして失格
+- `peerVisibility: "public"` かつ `requireAuth: false` は**匿名の第三者に全票を晒す**（リンターが検出）
+- 定足数を出すには**投票していない参加者**を数える必要がある。`members` のうち
+  `participant` の数はアプリドキュメントから取れる
+- **無記名投票は範囲外**（サーバーが要る）
+
+---
+
+## 美容室シナリオの充足状況
+
+| 要素 | 現設計 | 必要なもの |
+|---|---|---|
+| シフト入力（オーナー） | ○ | — |
+| サービス別の所要時間 | ○ | computed field（ただし ref 解決、監視点 3） |
+| 美容師ごとの権限 | 要追加 | コレクション別ロール（D1） |
+| Web に公開 | 要追加 | `public.read`（ルール） |
+| **誰でも申込み** | **要追加** | **制約付き create + `requireAuth` の 3 段階 + App Check**（ルール） |
+| 客が自分の予約を見る（段階 C） | **要追加** | 行レベル read（`emailField == email()`） |
+| オーナー/美容師が承認 | ○ | mutate アクション |
+| **承認メール** | **要追加** | **`then.email` + Trigger Email 拡張** |
+| 二重予約 | ○ | **承認フローが競合解決そのもの**（両方 pending で入り、片方だけ承認） |
+| **空き枠の表示** | **要追加** | **schedule ビュー**、さもなくば HTML 逃げ道 |
+
+---
+
+## Web アンケートシナリオの充足状況
+
+| 要素 | 現設計 | 必要なもの |
+|---|---|---|
+| 質問の定義 | ○ | schema のフィールド型 |
+| ログインして回答 | 要追加 | `requireAuth: true`（段階 C） |
+| **同じ人は 1 回だけ** | **要追加** | **`idFrom`**（ドキュメント ID を身元に） |
+| 送信後は編集不可 | 要追加 | `finalize: true`（予約は `false` で本人が変更可） |
+| 締切 | 要追加 | `window` + `request.time` |
+| 他人の回答が見えない | ○ | 行レベル read |
+| 自分の回答を確認 | 要追加 | 行レベル read（`itemId == uid`） |
+| **結果の集計を公開** | **要追加** | **`aggregate` → `results` ドキュメント** |
+| 条件分岐（スキップロジック） | **要追加** | `showIf`（単純な式に限る。**宣言の境界の実験場**） |
+| オーナーに対して匿名 | **不可** | サーバーが要る。**やらないと決める** |
+
+---
+
+## オンライン授業シナリオの充足状況
+
+| 要素 | 現設計 | 必要なもの |
+|---|---|---|
+| 三択問題の定義 | ○ | schema のフィールド型 |
+| 生徒がログインして回答 | ○（段階 C） | `requireAuth` |
+| 1 問 1 回答 | ○ | `idFrom`（生徒 uid + 問題 id の複合） |
+| **正解が事前に漏れない** | **要追加** | **`gated`（コレクション分割 + `revealed`）** |
+| **先生が 1 問ずつ進める** | **要追加** | **`session` ドキュメント** |
+| 締切後の回答を弾く | 要追加 | create 条件に `session.phase` / `currentQuestion` |
+| **生徒の画面がライブ更新** | **要追加** | **`live: true`** |
+| 正答率を見せる | 要追加 | `aggregate` + `on: session.phase == 'revealed'` |
+| 生徒は自分の成績のみ | ○ | 行レベル read |
+| 先生は全員の成績 | ○ | owner ロール |
+| **クラスの生徒だけに限定** | **要追加** | **`participant` ロール** |
+
+---
+
+## 議会投票シナリオの充足状況
+
+| 要素 | 現設計 | 必要なもの |
+|---|---|---|
+| トピックごとの賛否 | ○ | schema のフィールド型 |
+| 議長がトピックを切り替える | ○（S3 で追加） | `session.currentTopic` |
+| 議員のページが自動で進む | ○（S3 で追加） | `live: true` |
+| 一人一票 | ○ | `idFrom`（uid + topicId の複合） |
+| **戻って変えられない** | ○ | `finalize: true` + create 条件の `currentTopic` |
+| **リアルタイムのグラフ** | 要追加 | `aggregate.visibleFrom: "during"`。`peerVisibility: "public"` なら各クライアントが計算 |
+| **記名（全員の票が見える）** | **要追加** | **`peerVisibility: "public"`** |
+| **記録が改竄されない** | **要追加** | **`immutable: true`** |
+| 議員だけが投票できる | ○（S3 で追加） | `participant` ロール |
+| 無記名投票 | **不可** | サーバーが要る。**範囲外と明記** |
+
+---
+
+## ルールを凍結する前に決めること（チェックリスト）
+
+ルールは `../mulmoserver` にあり cross-repo のデプロイが要る。**ここに書けないことは製品として
+持てない。** 後から足したくなるものを今洗う:
+
+- [ ] アプリ階層（`apps/{aid}/collections/{cid}/items`）— D1
+- [ ] コレクション別ロール — D1
+- [ ] 公開読み取り（`public.read`）
+- [ ] 制約付き create（`public.submit`）と **`requireAuth` の 3 段階**（A 完全匿名 / B 匿名認証 /
+      C ログイン必須）— 段階を後から足すとルールのデプロイが要る
+- [ ] 申込者の行レベル read（段階 C の「マイ予約」／「自分の回答」）
+- [ ] `idFrom`（一人一回）・`finalize`（書き切り／本人による変更の可否）・`window`（期限）
+- [ ] `aggregate` の公開先（`results`）を誰が読めるか
+- [ ] `mail` キュー（宣言的な副作用）
+- [x] フィールド単位の可視性 — **入れる。`gated` によるドキュメント分割**（シナリオ 3 が必須にした）
+- [ ] `participant` ロール（名指しされているが member ではない層）
+- [ ] `session` ドキュメント（主催者が駆動する状態機械）と、それを create 条件に使うこと
+- [ ] **`immutable`（owner にも触れない記録）** — ルールの形に関わる
+- [ ] `peerVisibility: "public"`（記名投票。参加者が全件読める）
+- [ ] **生成 HTML の sandbox iframe 隔離 + View Bridge**（Firestore ハンドルを渡さない）—
+      ルールでは守れないので webview 側の構造として最初から。
+      **ブリッジは宣言されたデータセット名・アクション名のみを公開し、クエリ言語にしない**
+- [ ] 時限アクセス / 「リンクを知っている人は閲覧可」— やるなら今
+- [ ] Storage（添付）— `firestore.get()` で同じ members を参照。パスと制約を今決める
+
+---
+
+## 実装順
+
+1. **`(aid, cid)` 同一性** — engine の `(root, slug)` INVARIANT を firestore バックエンドについて外す。
+   一番深く、一番先。**これを 2 と 3 と同じ PR にしない**（レビューの性質が違う）
+2. **`apps/{aid}` ドキュメント（members + public）+ 静的ルール** — `../mulmoserver` 側の PR が対になる。
+   この時点でメンバーはオーナー 1 人。emulator でルールのユニットテストを書く
+3. **store を `(aid, cid)` で書き直す** — PR #2209 の中身がここに入る
+4. **discovery の 2 ソース化 + skill materialize** — ディスク ∪ Firestore(memberEmails ∋ 自分)。
+   「他人のアプリが一覧に出る」が初めて成立。Claude Code はディスクのスキルしか読めないので、
+   購読時に skillText をローカルへ materialize する（`schemaVersion` で張り替えるキャッシュとして）
+5. **publish**（git → Firestore、記名 + 事前検証 + 前版保持）
+6. **onSnapshot watcher** — `CollectionStore.watch` に載せる。
+   `hostRunner.ts:154-184` に本番稼働中の実装があるので `docChanges()` の扱いをそこから持ち込む
+7. **worktreeEnv による aid の分岐** — D6
+8. **招待 UI（email 追加）と viewer ロール** — ここで初めて他人が入る
+9. **mulmoserver に webview** — `@mulmoclaude/collection-plugin` を 3 つ目のホストに載せる。
+   新規プロジェクトは不要（Vue 3 + Hosting + Google 認証が既にある）
+10. **公開ページ + App Check** — `requireAuth` の 3 段階を同時に。段階 C なら「マイ予約」も
+11. **`then.email` + Trigger Email 拡張**
+12. **schedule ビュー** — ここまでで美容室シナリオが揃う
+12b. **`idFrom` / `finalize` / `window` / `aggregate` / `showIf`** — ここまでで
+     アンケートシナリオが揃う（ルール側の 3 つは 2 で先に入れておく）
+12c. **`gated` / `session` / `live` / `aggregate` の `on` トリガー** — ここまでで
+     授業シナリオが揃う。`gated` と `participant` はルールの形に関わるので **2 で入れておく**
+12d. **`immutable` / `peerVisibility` / `aggregate.visibleFrom`** — ここまでで議会シナリオが揃う。
+     **`immutable` と `peerVisibility` はルールの形そのものなので 2 で入れておく**
+13b. **View Bridge**（`@mulmoclaude/core/view-bridge`、親側 + 依存ゼロの子側ライブラリ）—
+     HTML ビューを持つ前に入れる。**後から入れると既存の HTML が全部書き直しになる**
+14. **スキーマリンター** — `acceptParsedSchema` の延長。`putSchema` と publish の両方で走らせる
+15. **テンプレート 4 種（P1-P4）+ 罠の注記** — 純粋なデータとして。Discover レジストリに乗せる。
+    実体は「サンプルのテーブル設計とスキーマ」の 4 セットをそのまま起こす
+13. editor ロール + Storage 添付 + エージェント seed アクションの remote-host チャネル接続
+
+1〜6 が「共有前提の Firebase サポート」の本体、7〜12 が公開アプリ。
+
+---
+
+## 未解決の論点
+
+- **ルールの `hasOnly` / 動的キー参照 / `roleIn` の三項演算**が仕様通り書けるか — emulator で未検証。
+  `firebase emulators:exec` でユニットテストを 1 本通してから mulmoserver に入れる
+- **Storage ルールから `firestore.get()`** でメンバー判定できるか — 仕様上可能のはずだが実機未確認
+- **repo 権限と members のずれ**をどう見せるか（当面は members をヘッダーに常時出すだけ）
+- **email の同一性**（変更・再利用）— 当面受容
+- **公開ページの URL 設計** — `/{aid}` か、人間可読な slug を別に持つか
+- **`then.email` のテンプレート**をどこに置くか（git のリポジトリ内 → publish、が自然か）
