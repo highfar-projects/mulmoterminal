@@ -92,8 +92,13 @@ const log = hostLogger;
 
 // Skill roots — the single source of truth for where skills live on disk, shared
 // with the collection engine (below) AND the remote-host listSkills scanner
-// (remoteHost/skills.ts) so both scan the exact same directories and stay
-// consistent about the skill/collection split.
+// (remoteHost/skills.ts) so both scan the exact same directories.
+//
+// The two do NOT apply the same SCOPE to them. The skill scanner reads the user dir for every
+// root, because `claude` itself does — a bundled skill mirrored to `~/.claude/skills` is
+// runnable from any directory. The collection engine reads it only for the managed workspace
+// (see `userSkillsDir` in the host binding below). So in a project a dir holding both SKILL.md
+// and schema.json is a skill and not a collection, which is precisely what it is there.
 /** `~/.claude/skills` — user scope (read-only). */
 export const userSkillsDir = (): string => path.join(os.homedir(), ".claude", "skills");
 /** `<root>/.claude/skills` — project scope. */
@@ -118,8 +123,23 @@ export function initCollectionsBackend(deps: { workspace: string; knownProjects?
     workspaceRoot: null,
     log,
     paths: {
-      // ~/.claude/skills — user scope (read-only).
-      userSkillsDir: userSkillsDir(),
+      // ~/.claude/skills — user scope (read-only), and ONLY for the managed workspace.
+      //
+      // `~` and a project are separate worlds. A collection under `~/.claude/skills` is a
+      // machine-global thing no clone of a repository can have, so standing in a project it must
+      // not be reachable at all — not listed, and not resolvable by slug. Filtering the listing
+      // alone would have been a label on a door that still opens: `loadCollection` is what
+      // getSchema, getItems, putItems, the detail route, the view-token mint and the watcher all
+      // go through, so a slug typed by the agent (or arriving in a URL) would still resolve into
+      // the other world and write to its data dir.
+      //
+      // `null` is what core 3.3.0 added for exactly this — the same shape `skillsStagingDir`
+      // above already had — and it skips the user pass in BOTH discovery and `loadCollection`,
+      // so a user-only slug is a MISS for a project root rather than a quiet hop.
+      //
+      // The managed workspace keeps user scope: it IS the one workspace, exactly as MulmoClaude
+      // binds it, so a project slug there still shadows a user one.
+      userSkillsDir: (root) => (isManagedWorkspace(root) ? userSkillsDir() : null),
       // <root>/.claude/skills — project scope.
       projectSkillsDir,
       // <root>/feeds — feed registry root.
