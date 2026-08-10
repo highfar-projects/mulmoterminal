@@ -1155,6 +1155,14 @@ S1 の `pending → approved` はまさにそれで、S2/S3/S4 では**集計が
 
 ## 申込みの認証段階（`public.submit[cid].auth`）
 
+> **オーナー判断（2026-08-10）: 匿名申込は許さない。** 段階 A（`"none"`）と B（`"anonymous"`）は
+> **採用しない** — 公開投稿は常に段階 C（`verifiedEmail`）。
+> **ルールは変えない**（3 段階すべてを表現できる状態でデプロイ済みの凍結インフラであり、
+> 削ると商売判断が変わったときに cross-repo デプロイをやり直すことになる）。
+> 制約は**宣言側の不変条件**として、publish の事前検証（実装順 5）とリンター（実装順 18）が
+> `auth` に `"none"` / `"anonymous"` を書いたアプリを拒否する形で置く。
+> 下記の表と得失は、なぜ C なのかの記録として残す。
+
 匿名申込みを許すかは、技術ではなく**商売の判断**（ログインを要求すると一定数が離脱する）。
 アプリごとに宣言し、ルールは 3 段階すべてを表現できるようにしておく。
 
@@ -1834,7 +1842,7 @@ HTML に逃がすと元の木阿弥なので、**既存の `when`（`fieldBase`�
 
 | キー | 置き場所 | 定義 |
 |---|---|---|
-| `storage.type: "firestore"` + `cid` | schema | D1 / D2 |
+| `storage.type: "firestore"` | schema | D1 / D2。**`cid` は schema に持たせない** — `cid` は常に collection の slug（実装順 3 の決定 7） |
 | `immutable` | schema（コレクション） | シナリオ 4 |
 | `revealGated` | schema（`gated` の生成物） | シナリオ 3 |
 | `peerVisibility` | schema（コレクション） | シナリオ 4 |
