@@ -819,6 +819,20 @@ S1 のサンプルからも手書きの `memberEmails` を外した。
 > リンターに移した時点で、その事実は**保証ではなく期待**に落ちる。
 > 「静的検査に移したから安全」は、ここでは成立しない。
 
+**27. S4 の `voter` がクライアント申告だった（13 巡目）。** `createFields` に `voter` が
+入っている一方、`emailField` で固定していなかったので、**議員 A が議員 B の名前で投票できた。**
+`immutable` なので取り消せず、`peerVisibility: "public"` なのでそれが公式の記録として
+全員に見える。**記名投票の「記名」が申告制では、記名投票ではない。**
+→ S4 に `emailField: "voter"` を宣言（`voter` の型も `email` に）。
+**新しい語彙は要らなかった** — `authOk()` が既に
+`request.resource.data[emailField] == email()` を強制しており、S1 では最初から使っていた
+機構を S4 が使っていなかっただけ。
+
+> 一般則: **表示される身元をクライアントに書かせるなら、`emailField` で固定する。**
+> 固定しないなら持たせず、**ドキュメント id（`{uid}_…`）を身元とする**。
+> `immutable` と `peerVisibility: "public"` が重なるコレクションでは、
+> この取り違えは**永久に公開される誤帰属**になる。
+
 ### 同じ形のバグが 3 巡続いた（4 巡目も同じだった）
 
 **4 巡で 10 件が同じ根っこ**だった:
@@ -875,6 +889,7 @@ S1 のサンプルからも手書きの `memberEmails` を外した。
 | メール踏み台の防止 | 宛先は**その記録が持つアドレス**、テンプレートは**宣言された `on` のキー**のみ |
 | **メールが宣言された遷移に伴っていること** | 決定的な `mailId` で重複を封じ、`get() != getAfter()`（実際に変化した）と `from` / `to`（宣言どおりの遷移）の**両方**を要求 |
 | 自分の行の判定が ID 戦略と一致 | `idFrom` ごとに厳密一致。前方一致を無条件に許さない |
+| **表示される身元が申告でないこと** | `emailField` が指すフィールドは `request.auth` のメールと一致していなければならない |
 | 宣言した audience と認可の一致 | `roleIn(...) == "participant"`（`!= null` では viewer も投稿できる） |
 | `session` を駆動できるのは owner だけ | `roleIn(aid, '*') == "owner"`（`writerOf` は editor を含む） |
 | **status を消して状態機械を迂回できない** | `nextStatus() != null` を要求し、null の既存レコードは宣言された `initial` にだけ入れる |
@@ -1476,6 +1491,7 @@ sandbox された HTML が Firestore ハンドルを持たなくても、**親�
 | `mail.on` のテンプレートが `actions.*.then.email` と食い違う | 承認メールが常に拒否される |
 | `window` の端点が ISO として解釈できない | publish が `fromMs` / `untilMs` を出せず、**投稿が全部拒否される** |
 | `peerVisibility: "public"` なのに `validate.choiceField` が無い | 集計が enum 外の値で汚染される |
+| `createFields` に身元を表すフィールド（`voter` / `author` / `submittedBy` …）があるのに `emailField` で固定していない | **他人の名前で記録を作れる。** `immutable` + `peerVisibility: "public"` なら誤帰属が永久に公開される |
 | `icon` が無い / `actions` がオブジェクトマップ | **既存文法エラー**（必須キー欠落・型不一致）。schema が読み込まれない |
 | `mutate` に `when`（正しくは `require`） | **エラーにならず黙って消える**。ゲートが外れた状態で動く |
 
@@ -2125,6 +2141,7 @@ session    現在の議題とフェーズ   参加者 read のみ
     "submit": {
       "votes": {
         "auth": "verifiedEmail", "audience": "participant",
+        "emailField": "voter",
         "idFrom": "auth.uid+field", "idField": "topicId",
         "finalize": true,
         "createFields": ["topicId","voter","choice","status"],
@@ -2169,7 +2186,7 @@ session    現在の議題とフェーズ   参加者 read のみ
   "fields": {
     "id":      { "type": "string", "label": "ID", "primary": true },
     "topicId": { "type": "ref",    "label": "議題", "collection": "topics", "required": true },
-    "voter":   { "type": "string", "label": "議員", "required": true },
+    "voter":   { "type": "email",  "label": "議員", "required": true },
     "choice":  { "type": "enum",   "label": "賛否", "values": ["yes","no","abstain"], "required": true },
     "status":  { "type": "status", "label": "状態", "values": ["cast"] }
   },
@@ -2202,6 +2219,13 @@ session    現在の議題とフェーズ   参加者 read のみ
 - **無記名投票は範囲外**（サーバーが要る）
 - `peerVisibility: "public"` は `listed(aid)`（名簿にいる全員）に全件読みを許す。
   **participant が全件を読める唯一の経路**であり、記名投票では意図どおり
+- **`voter` は `emailField` で認証済み本人に固定する。** これが無いと `voter` は
+  クライアントが自由に書ける文字列で、議員 A が**議員 B の名前で投票**できてしまう。
+  `immutable` なので誤帰属は永久に残り、`peerVisibility: "public"` なので
+  それが公式の記録として全員に見える。**記名投票の「記名」が申告制では意味がない**
+- 議員のメールアドレスが議員同士に見えることになる。議会の記名投票としては妥当だが、
+  避けたいなら `voter` を持たせず**投票の id（`{uid}_{topicId}`）を身元とし**、
+  uid → 表示名は `apps/{aid}/config` に owner が公開名簿を置いて解決する
 
 ---
 
