@@ -56,6 +56,33 @@ describe("selfContainmentFindings", () => {
     expect(codes({ dataDirIgnored: null })).not.toContain("data-ignored");
   });
 
+  // A feed's records are a CACHE — re-fetched from a source the clone can reach — so an ignored
+  // data dir costs a refresh rather than the data. The first run of this check over a real
+  // workspace reported three feed collections as unclonable because the workspace ignores
+  // `feeds/` on purpose, and a blocker nobody can act on is how a check stops being read.
+  it("downgrades an ignored data dir to a warning for a FEED", () => {
+    const findings = selfContainmentFindings({ ...PORTABLE, source: "feed", dataDirIgnored: true });
+    expect(findings.map((f) => f.code)).toContain("data-ignored");
+    expect(findings.find((f) => f.code === "data-ignored")?.severity).toBe("warning");
+    expect(isPortable(findings)).toBe(true);
+  });
+
+  it("still BLOCKS it for a collection, where the records are the data", () => {
+    for (const source of ["project", "user"] as const) {
+      const findings = selfContainmentFindings({ ...PORTABLE, source, dataDirIgnored: true });
+      // The FINDING's own severity, not just the verdict: a user-scope collection always carries
+      // its own blocker, so `portable === false` would stay true even if this one regressed to a
+      // warning — the assertion would pass while the thing it is about broke.
+      expect(findings.find((f) => f.code === "data-ignored")?.severity, source).toBe("blocker");
+      expect(isPortable(findings)).toBe(false);
+    }
+  });
+
+  it("says a feed's records come back, rather than repeating the collection wording", () => {
+    const message = selfContainmentFindings({ ...PORTABLE, source: "feed", dataDirIgnored: true }).find((f) => f.code === "data-ignored")?.message ?? "";
+    expect(message).toMatch(/re-fetched/);
+  });
+
   it("blocks a sqlite store in a repo, because git cannot merge one file", () => {
     expect(codes({ storageKind: "sqlite" })).toContain("sqlite-store");
     expect(verdict({ storageKind: "sqlite" })).toBe(false);

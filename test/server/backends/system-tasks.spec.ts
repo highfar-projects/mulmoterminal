@@ -8,6 +8,8 @@ import { describe, it, expect } from "vitest";
 import { buildSystemTasks } from "../../../server/backends/system-tasks.js";
 
 const WORKLOG_OFF = { enabled: false, intervalHours: 6 };
+const buildWithRoots = (feedRoots: string[]) => buildSystemTasks({ workspaceRoot: "/ws", feedRoots, worklog: WORKLOG_OFF, spawnChat: () => "" });
+const feedIds = (tasks: ReturnType<typeof buildSystemTasks>) => tasks.map((task) => task.id).filter((id) => id.startsWith("system:feed-refresh"));
 const build = (worklog = WORKLOG_OFF) => buildSystemTasks({ workspaceRoot: "/ws", worklog, spawnChat: () => "11111111-1111-1111-1111-111111111111" });
 
 describe("buildSystemTasks", () => {
@@ -28,6 +30,36 @@ describe("buildSystemTasks", () => {
       expect(task.name.length).toBeGreaterThan(0);
       expect(task.missedRunPolicy.length).toBeGreaterThan(0);
     }
+  });
+
+  // A project's feeds never refreshed on their schedule while this registered one root. It waited
+  // on core 3.2.0: an `ingest.kind: "agent"` collection dispatches a worker whose seed prompt
+  // addresses records ROOT-RELATIVELY, and until the runner was handed the root, a project's
+  // refresh wrote into the WORKSPACE's same-named collection (shipped and reverted, #1582).
+  it("registers one feed refresh per root, so a project's feeds refresh too", () => {
+    expect(feedIds(buildWithRoots(["/ws", "/srv/mag2"]))).toEqual(["system:feed-refresh:/ws", "system:feed-refresh:/srv/mag2"]);
+  });
+
+  it("keeps the workspace even when it is not among the roots passed in", () => {
+    expect(feedIds(buildWithRoots(["/srv/mag2"]))).toEqual(["system:feed-refresh:/ws", "system:feed-refresh:/srv/mag2"]);
+  });
+
+  // A task id is the scheduler's primary key, and core builds it from the CANONICAL root — so two
+  // spellings make one id, and the second registration replaces the first rather than adding to
+  // it. The dedup has to happen on the resolved path, before that.
+  it("registers a directory once however it is spelled", () => {
+    expect(feedIds(buildWithRoots(["/ws/", "/srv/mag2", "/srv/mag2/./"]))).toEqual(["system:feed-refresh:/ws", "system:feed-refresh:/srv/mag2"]);
+  });
+
+  it("refreshes only the workspace when no roots are given — the pre-projects behaviour", () => {
+    expect(feedIds(build())).toEqual(["system:feed-refresh:/ws"]);
+  });
+
+  // Workspace-only, deliberately: a Google grant is user-scope and its sync marker is workspace
+  // state, so there is no per-project answer to "which account".
+  it("does not multiply the calendar sync per root", () => {
+    const ids = buildWithRoots(["/ws", "/srv/mag2"]).map((task) => task.id);
+    expect(ids.filter((id) => id.startsWith("system:google-calendar-sync"))).toEqual(["system:google-calendar-sync"]);
   });
 
   // Off is the default, so the list must not carry a null through to registerTask.

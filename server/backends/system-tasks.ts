@@ -1,3 +1,4 @@
+import path from "node:path";
 import { feedRefreshTaskDef } from "@mulmoclaude/core/feeds/server";
 import { googleCalendarSyncTaskDef } from "@mulmoclaude/core/google";
 import type { SystemTaskDef } from "@mulmoclaude/core/scheduler";
@@ -6,6 +7,14 @@ import type { ScheduledChatSpawn } from "./scheduled-run.js";
 
 export interface SystemTaskDeps {
   workspaceRoot: string;
+  /** Every root whose feeds should refresh on a schedule — the workspace plus each saved project
+   *  directory. Omitted, only the workspace refreshes, which is what a single-root host wants and
+   *  what this did before projects existed.
+   *
+   *  A root NOT in this list is never refreshed on a schedule; its feeds update only when someone
+   *  asks. That is why the list is passed in rather than inferred here — core says so explicitly,
+   *  and it is the host's decision. */
+  feedRoots?: string[];
   worklog: { enabled: boolean; intervalHours: number };
   spawnChat: ScheduledChatSpawn;
 }
@@ -32,8 +41,26 @@ export interface SystemTaskDeps {
 // and a missed window was skipped forever (#1581).
 export function buildSystemTasks(deps: SystemTaskDeps): SystemTaskDef[] {
   return [
-    feedRefreshTaskDef({ workspaceRoot: deps.workspaceRoot }),
+    // ONE PER ROOT. A task id is the scheduler's primary key and `feedRefreshTaskDef` builds it
+    // from the root, so N roots register N tasks instead of overwriting each other down to the
+    // last one. Deduped by RESOLVED path: core canonicalises the root into the id, so two
+    // spellings of one directory would collapse to a single id and silently drop a registration.
+    ...feedRootsOf(deps).map((root) => feedRefreshTaskDef({ workspaceRoot: root })),
+    // The calendar stays WORKSPACE-ONLY, deliberately. A Google grant is user-scope and its sync
+    // state (`lastSyncedAt`) is workspace state, so a per-project sync would need a per-project
+    // answer to "which account" that nothing in this app has. A project's calendar collections
+    // still sync on demand.
     googleCalendarSyncTaskDef({ workspaceRoot: deps.workspaceRoot }),
     worklogSystemTask({ ...deps.worklog, spawnChat: deps.spawnChat }),
   ].filter((task): task is SystemTaskDef => task !== null);
+}
+
+/** The roots to register a feed refresh for, workspace first and each one once.
+ *
+ *  Resolved before deduping because the workspace and a saved directory can spell the same folder
+ *  differently (a trailing slash, a `.` segment) — and `feedRefreshTaskDef` canonicalises the root
+ *  into the id, so two spellings would produce ONE id and silently drop a registration rather than
+ *  two tasks. */
+function feedRootsOf(deps: SystemTaskDeps): string[] {
+  return [...new Set([deps.workspaceRoot, ...(deps.feedRoots ?? [])].map((root) => path.resolve(root)))];
 }

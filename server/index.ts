@@ -128,6 +128,9 @@ import { stopWhisperSidecar } from "./backends/whisper.js";
 import { startCollectionCompletionWatchers } from "./backends/collectionWatchers.js";
 import { initUserTaskScheduler } from "./backends/scheduler.js";
 import { buildSystemTasks } from "./backends/system-tasks.js";
+import { feedWorkerSpawnOptions } from "./backends/feed-worker-options.js";
+// The projects a request may name — and, at boot, the roots whose feeds refresh on schedule.
+import { listProjectRoots } from "./infra/project-root.js";
 import { initMulmoScriptBackend } from "./backends/mulmoscript.js";
 import { createSessionLifecycle, SESSIONS_CHANNEL } from "./session/lifecycle.js";
 import { mountAppRoutes } from "./routes/app-routes.js";
@@ -583,10 +586,13 @@ initAccountingBackend({ workspace: CLAUDE_CWD, pubsub });
 // completion hook (#1070), which is what turns a failed refresh into a bell instead of silence.
 // `scheduledSessions` is defined further down, which is safe because the system task that calls
 // this is registered later still (initUserTaskScheduler).
-const feedsSpawnWorker: AgentWorkerRunner = async ({ message, hidden, onComplete }) => {
+const feedsSpawnWorker: AgentWorkerRunner = async ({ message, hidden, onComplete, workspaceRoot }) => {
   const sessionId = randomUUID();
   try {
-    runWithHiddenMarker(hidden, sessionId, backgroundMarkers, () => spawnClaudePty(sessionId, null, null, { initialPrompt: message }));
+    // SPAWNED IN THE ROOT THE REFRESH IS FOR (core >= 3.2.0) — see feed-worker-options.ts for why
+    // that one option is the difference between refreshing a project and filling the workspace's
+    // same-named collection instead.
+    runWithHiddenMarker(hidden, sessionId, backgroundMarkers, () => spawnClaudePty(sessionId, null, null, feedWorkerSpawnOptions(message, workspaceRoot)));
     if (hidden) scheduledSessions.register(sessionId);
     // AFTER a successful spawn: a launch that threw has no session to report on, and
     // registering first would leave a hook nothing will ever fire or clear.
@@ -870,6 +876,17 @@ try {
   // (initFeedsBackend, initGoogleBackend, initCollectionsBackend), so both engines can run.
   const systemTasks = buildSystemTasks({
     workspaceRoot: CLAUDE_CWD,
+    // Every project the server serves gets its feeds refreshed on schedule, not just the
+    // workspace — the same set the collection watchers mount for. Read HERE, at boot, because the
+    // scheduler registers once: a directory saved later starts refreshing after the next restart,
+    // and its feeds still update on demand meanwhile.
+    //
+    // This waited on core 3.2.0. An `ingest.kind: "agent"` collection refreshes by dispatching a
+    // worker whose seed prompt addresses records ROOT-RELATIVELY, and the runner used to be handed
+    // no root — so a project's scheduled refresh resolved `data/collections/<slug>/items` against
+    // the WORKSPACE and wrote there instead. It shipped once and was reverted for exactly that
+    // (#1582); `feedsSpawnWorker` now spawns in the root core gives it.
+    feedRoots: listProjectRoots().map((project) => project.cwd),
     worklog: getWorklogConfig(),
     spawnChat: spawnScheduledChat,
   });

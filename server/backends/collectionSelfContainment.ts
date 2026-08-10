@@ -57,11 +57,21 @@ export function selfContainmentFindings(facts: SelfContainmentFacts): SelfContai
   }
 
   if (facts.dataDirIgnored === true) {
+    // A FEED's records are a CACHE, and that changes the verdict rather than the fact. They are
+    // re-fetched from the source the clone can reach too, so "the records do not travel" costs a
+    // refresh, not the data — while for a collection the records ARE the data and nothing brings
+    // them back.
+    //
+    // This is not a hypothetical distinction: the managed workspace ignores `feeds/` on purpose,
+    // so the first run of this check over a real workspace reported three feed collections as
+    // unclonable. A blocker nobody can act on is how a check stops being read.
+    const feed = facts.source === "feed";
     findings.push({
       code: "data-ignored",
-      severity: "blocker",
-      message:
-        "The data directory is excluded by .gitignore, so the schema is committed and every record is not. A clone opens the collection and sees zero rows, which reads as an empty collection rather than as missing data.",
+      severity: feed ? "warning" : "blocker",
+      message: feed
+        ? "The records are excluded by .gitignore, so a clone starts with none. For a feed that costs a refresh rather than the data — they are re-fetched from the source — but the first open shows an empty list."
+        : "The data directory is excluded by .gitignore, so the schema is committed and every record is not. A clone opens the collection and sees zero rows, which reads as an empty collection rather than as missing data.",
     });
   }
 
