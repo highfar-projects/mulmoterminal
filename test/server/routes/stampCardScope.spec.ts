@@ -6,7 +6,7 @@
 // scoped binding is dead code — which is exactly what review caught.
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
-import { stampCardScope, scopeOfStoredCard } from "../../../server/routes/stampCardScope.js";
+import { stampCardScope, priorCardOf } from "../../../server/routes/stampCardScope.js";
 import { initProjectRoots, projectId, resetProjectRootsForTesting } from "../../../server/infra/project-root.js";
 
 const WORKSPACE = "/srv/ws";
@@ -70,19 +70,31 @@ describe("stampCardScope", () => {
   // after the fact. That is the bug the stamp exists to prevent, arriving by the back door.
   it("carries an existing card's scope forward, even when the session has moved", () => {
     const movedSession = "workspace-session"; // the cell now runs in the workspace
-    const out = stampCardScope("presentCollection", card(), { cwdOf, sessionId: movedSession, priorScope: projectId(PROJECT) });
+    const out = stampCardScope("presentCollection", card(), { cwdOf, sessionId: movedSession, prior: { scope: projectId(PROJECT) } });
     expect(out.data).toMatchObject({ scope: projectId(PROJECT) });
   });
 
-  it("derives the scope only when the card does not already have one", () => {
-    const out = stampCardScope("presentCollection", card(), { cwdOf, sessionId: "in-project", priorScope: undefined });
+  // THE MIRROR, and the one an `undefined` scope hides: a workspace card is deliberately
+  // unscoped. Reading that absence as "no prior card" re-derives, and the card silently becomes
+  // a project's the moment its session was relaunched in one.
+  it("keeps a WORKSPACE card unscoped after its session moves into a project", () => {
+    const out = stampCardScope("presentCollection", card(), { cwdOf, sessionId: "in-project", prior: { scope: undefined } });
+    expect(Object.hasOwn(out.data, "scope")).toBe(false);
+  });
+
+  it("derives the scope only when there is no prior card at all", () => {
+    const out = stampCardScope("presentCollection", card(), { cwdOf, sessionId: "in-project" });
     expect(out.data).toMatchObject({ scope: projectId(PROJECT) });
   });
 
-  it("reads a stored card's scope, and nothing else's", () => {
-    expect(scopeOfStoredCard({ uuid: "u", data: { collectionSlug: "tasks", scope: "p1" } })).toBe("p1");
-    for (const stored of [undefined, null, {}, { data: {} }, { data: { scope: "" } }, { data: { scope: 7 } }, "nope"]) {
-      expect(scopeOfStoredCard(stored)).toBeUndefined();
+  // The two answers must not collapse: `{ scope: undefined }` is a workspace card, `undefined` is
+  // no card, and only the second may be re-derived.
+  it("tells a workspace card apart from no card at all", () => {
+    expect(priorCardOf({ uuid: "u", data: { collectionSlug: "tasks", scope: "p1" } })).toEqual({ scope: "p1" });
+    expect(priorCardOf({ uuid: "u", data: { collectionSlug: "tasks" } })).toEqual({ scope: undefined });
+    expect(priorCardOf({ uuid: "u", data: { collectionSlug: "tasks", scope: "" } })).toEqual({ scope: undefined });
+    for (const stored of [undefined, null, {}, { data: {} }, { data: { collectionSlug: 7 } }, "nope"]) {
+      expect(priorCardOf(stored)).toBeUndefined();
     }
   });
 

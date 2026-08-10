@@ -45,7 +45,10 @@ export function stampCardScope<T extends Record<string, unknown>>(toolName: stri
   if (toolName !== PRESENT_COLLECTION.name) return stored;
   const data = cardPayload(stored);
   if (!data) return stored;
-  const scope = where.priorScope ?? projectIdForRoot(projectScopeForCwd(where.cwdOf(where.sessionId)).workspaceRoot) ?? undefined;
+  // A PRIOR CARD DECIDES, including when it decided "no scope". Reading its absent scope as "no
+  // prior card" is the same bug mirrored: a workspace card is deliberately unscoped, and deriving
+  // again would give it a project the moment the session moved into one.
+  const scope = where.prior ? where.prior.scope : (projectIdForRoot(projectScopeForCwd(where.cwdOf(where.sessionId)).workspaceRoot) ?? undefined);
   if (scope === undefined) return stored;
   return { ...stored, data: withCardScope(data, scope) };
 }
@@ -54,20 +57,28 @@ export interface CardOrigin {
   sessionId: string;
   /** Where that session is running — the server's own record (`cwdForSession`). */
   cwdOf: (sessionId: string) => string;
-  /** The scope the card ALREADY carries, when this is an update to one that exists.
+  /** The card this result REPLACES, when there is one — and its scope wins, INCLUDING when it has
+   *  none.
    *
-   *  A card's project is decided when it is MADE, and a same-uuid update replaces the stored
-   *  entry wholesale — so re-deriving it from the session here would let the card change project
-   *  afterwards. That is not hypothetical: the panel POSTs back through this route to persist a
-   *  view's state, and a cell can be relaunched in another directory between the two. The card
-   *  would then read a project it was never about, which is the whole bug this stamp exists to
-   *  prevent, arriving by the back door. */
-  priorScope?: string | undefined;
+   *  A card's project is decided when it is MADE, and a same-uuid update replaces the stored entry
+   *  wholesale, so re-deriving from the session would let a card change project afterwards. Not
+   *  hypothetical: the panel POSTs back through this route to persist a view's state, and a cell
+   *  can be relaunched in another directory between the two.
+   *
+   *  PRESENCE is what this carries, which is why it is the card and not its scope. A workspace
+   *  card is deliberately unscoped; reading that absence as "no prior card" would derive one and
+   *  scope it to whatever project the session had moved into — the same bug, mirrored. */
+  prior?: { scope: string | undefined } | undefined;
 }
 
-/** The scope already stamped on a stored result, if it is a card and has one. */
-export function scopeOfStoredCard(stored: unknown): string | undefined {
-  if (!isRecord(stored) || !isRecord(stored.data)) return undefined;
+/** A stored result read back as "the card this update replaces", or undefined when it is not a
+ *  card at all (nothing stored, or another tool's result).
+ *
+ *  The two answers must not collapse: `{ scope: undefined }` is a workspace card and `undefined`
+ *  is no card, and only the second may be re-derived. Narrowed rather than trusted — this comes
+ *  back from disk, written by an older build for all this one knows. */
+export function priorCardOf(stored: unknown): { scope: string | undefined } | undefined {
+  if (!isRecord(stored) || !isRecord(stored.data) || typeof stored.data.collectionSlug !== "string") return undefined;
   const scope = stored.data.scope;
-  return typeof scope === "string" && scope.length > 0 ? scope : undefined;
+  return { scope: typeof scope === "string" && scope.length > 0 ? scope : undefined };
 }

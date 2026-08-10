@@ -6,7 +6,7 @@ import type { Express } from "express";
 import { SESSION_ID_RE } from "../config/env.js";
 import type { createToolStores } from "../session/tool-store.js";
 import { planToolResultUpdate } from "./toolResultPlan.js";
-import { stampCardScope, scopeOfStoredCard } from "./stampCardScope.js";
+import { stampCardScope, priorCardOf } from "./stampCardScope.js";
 import { cwdForSession } from "../session/session-cwd.js";
 import { groupOfTool, type ToolGroup } from "../../common/toolGroups.js";
 
@@ -92,7 +92,7 @@ export function mountToolRoutes(app: Express, deps: ToolRouteDeps): void {
     const toStore = stampCardScope(plan.toolName, plan.stored, {
       sessionId: plan.sessionId,
       cwdOf: cwdForSession,
-      priorScope: scopeOfStoredCard(prior),
+      prior: priorCardOf(prior),
     });
     // A dropped result (a collection placeholder the agent's real card has already beaten) must
     // not publish either: the panel would render a card that no reload would bring back.
