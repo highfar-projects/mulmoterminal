@@ -553,7 +553,9 @@ service cloud.firestore {
         // つまり「承認したから送る」というアクションと遷移が助言にとどまる。
         // 2 つで縛る:
         //   - 決定的な mailId → 同じアクションを二度積めない（create は 1 回しか通らない）
-        //   - getAfter() → 宣言された遷移が **同じ書き込みの中で** 起きていること
+        //   - get() != getAfter() → **この書き込みが遷移させた**こと。
+        //     getAfter() だけでは「結果その状態である」しか言えず、すでに approved の
+        //     予約に対して何も書かずにメールだけ積める（宣言との乖離が残る）
         // クライアントは記録の更新とメールの enqueue を 1 つのバッチで書く必要がある
         allow create: if listed(aid)
                       && m().keys().hasAll(["cid", "itemId", "to", "template"])
@@ -565,9 +567,13 @@ service cloud.firestore {
                       && mailCfg().toField in get(srcItem()).data
                       && get(srcItem()).data[mailCfg().toField] == m().to
                       && m().template in mailCfg().on
+                      && mailCfg().statusField in get(srcItem()).data
                       && mailCfg().statusField in getAfter(srcItem()).data
                       && getAfter(srcItem()).data[mailCfg().statusField]
                            == mailCfg().on[m().template]
+                      // この書き込みが遷移させたことの証明
+                      && get(srcItem()).data[mailCfg().statusField]
+                           != getAfter(srcItem()).data[mailCfg().statusField]
                       && (!("data" in m()) || m().data.keys().hasOnly(mailCfg().dataFields));
         allow read, update, delete: if false;
       }
@@ -675,9 +681,10 @@ uid ベースの判定は `authed()`、メール比較だけ `verified()`。
 
 - **`/mail` の縛りが半分だった。** 宛先とテンプレートを固定しても、書き手は
   **どんな状態の記録にでも、何度でも**通知を積めた。アクションと遷移が助言のまま。
-  → 決定的な `mailId` で重複を封じ、`getAfter()` で**同じ書き込みの中で宣言された遷移が
-  起きていること**を要求。「承認したから送る」を**「送るなら承認していなければならない」**
-  に反転させた
+  → 決定的な `mailId` で重複を封じ、`get() != getAfter()` で**この書き込みが遷移させたこと**を
+  要求。**7 巡目の追撃**: `getAfter()` だけでは「結果その状態である」しか言えず、すでに
+  `approved` の予約に何も書かずメールだけ積めた。前後の差を見て初めて
+  「送るなら、この書き込みで承認していなければならない」になる
 - **`audience: "participant"` が `roleIn(...) != null` だった。** viewer や editor まで
   投稿できる。読み取り専用のつもりで viewer を配ると、その人が投票できてしまう。
   → 厳密一致に
@@ -738,7 +745,7 @@ uid ベースの判定は `authed()`、メール比較だけ `verified()`。
 | **過去トピックへの投票を弾く** | create 条件に `session.current == topicId` |
 | 巨大ドキュメントの拒否 | `request.resource.data.size()` |
 | メール踏み台の防止 | 宛先は**その記録が持つアドレス**、テンプレートは**宣言された `on` のキー**のみ |
-| **メールが宣言された遷移に伴っていること** | 決定的な `mailId` で重複を封じ、`getAfter()` で同一書き込み内の遷移を要求 |
+| **メールが宣言された遷移に伴っていること** | 決定的な `mailId` で重複を封じ、`get() != getAfter()` で**この書き込みが遷移させた**ことを要求 |
 | 宣言した audience と認可の一致 | `roleIn(...) == "participant"`（`!= null` では viewer も投稿できる） |
 | 公開投稿の必須と主要 enum | `hasAll(validate.required)` / `choiceValues.hasAny([...])` |
 
@@ -1123,13 +1130,19 @@ owner のブラウザが集計して publish する」必要があったが、�
 > - **宛先 = その記録が持つアドレス**
 > - **テンプレート = 宣言された `on` のキー**
 > - **自由文は `dataFields` のみ**
-> - **そのテンプレートが宣言する遷移が、同じ書き込みの中で起きていること**（`getAfter()`）
+> - **そのテンプレートが宣言する遷移が、この書き込みで起きたこと**
+>   （`get() != getAfter()` かつ `getAfter() == on[template]`）
 >
-> 最後の 1 つが要点。宛先とテンプレートだけ縛っても、書き手は**どんな状態の記録にでも
-> `booking-approved` を何度でも**積める。決定的な `mailId`
-> （`{cid}_{itemId}_{template}`）で重複を封じ、`getAfter()` で
-> **「承認したから送る」を「送るなら承認していなければならない」に反転させる。**
-> クライアントは記録の更新とメールの enqueue を **1 つのバッチ**で書く。
+> 最後の 1 つが要点で、しかも**二段階で正しくなった**:
+>
+> 1. 宛先とテンプレートだけ縛っても、書き手は**どんな状態の記録にでも何度でも**積める
+>    → 決定的な `mailId`（`{cid}_{itemId}_{template}`）で重複を封じる
+> 2. `getAfter()` だけでは**「結果その状態である」しか言えない**。すでに `approved` の
+>    予約に対して、**何も書かずにメールだけ**積める
+>    → `get() != getAfter()` で**この書き込みが遷移させたこと**を要求する
+>
+> ここまでで **「承認したから送る」が「送るなら、この書き込みで承認していなければならない」**
+> になる。クライアントは記録の更新とメールの enqueue を **1 つのバッチ**で書く。
 >
 > これは一般則: **宣言をルールが再導出できないなら、その宣言は助言でしかない。**
 
@@ -2113,7 +2126,8 @@ session    現在の議題とフェーズ   参加者 read のみ
 - [ ] `list` クエリがルールの条件を写していること（親がクエリを組む）
 - [ ] **`/mail` が宣言（`then.email`）を再導出すること** — 宛先・テンプレート・自由文の禁止
 - [ ] **`validate` 射影**（`required` / `choiceField` / `choiceValues`）を publish が出すこと
-- [ ] `/mail` の決定的 ID と `getAfter()` による遷移の要求（**クライアントはバッチで書く**）
+- [ ] `/mail` の決定的 ID と `get() != getAfter()` による**この書き込みでの遷移**の要求
+      （**クライアントはバッチで書く**）
 - [ ] `audience` は `== "participant"` の厳密一致
 - [ ] `session` ドキュメント（主催者が駆動する状態機械）と、それを create 条件に使うこと
 - [ ] **`immutable`（owner にも触れない記録）** — ルールの形に関わる
