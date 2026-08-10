@@ -367,7 +367,29 @@ surface someone adds.
    The consequence, accepted: a cell opened in `~/proj/src` finds no collections and the pane says
    so. If that ever reads as a fault rather than as a fact, the fix is a clearer message naming
    the repository root — a HINT, not a search.
-2. **A user-scope dependency in a git-tracked collection (§11 L1)** — warn or refuse?
+2. **A user-scope dependency in a git-tracked collection (§11 L1) — DECIDED (2026-08-09), and the
+   answer is neither: it is PROHIBITED, in the engine.** `~` and a project are separate worlds.
+   Standing in a project, a collection under `~/.claude/skills` must not be reachable at all —
+   not listed, and not resolvable by slug.
+
+   Warning was the wrong shape because the check runs where someone asks, and the leak lives where
+   resolution happens: `loadCollection` falls back to the user dir for ANY root, so `getSchema`,
+   `getItems`, `putItems`, the detail route, a view token and the watcher all reach it whatever a
+   listing shows. Hiding the entry would have been a label on a door that still opens.
+
+   **Upstream**, because the host cannot express it: `paths.userSkillsDir` is one string for every
+   root. The ask is written as `../mulmoclaude/plans/feat-collection-scope-isolation.md` — make it
+   `(workspaceRoot) => string | null`, exactly the shape `skillsStagingDir` already has, and skip
+   both the discovery pass and the load fallback when it is null. MulmoClaude is one workspace and
+   is unaffected.
+
+   MulmoTerminal's half, once that ships: bind `isManagedWorkspace(root) ? <~/.claude/skills> :
+   null`, and bring `server/backends/remoteHost/skills.ts` — which scans both dirs for the phone's
+   skill list — into line.
+
+   Nothing leaks TODAY, and that is luck rather than design: `~/.claude/skills` currently holds 12
+   skills and no `schema.json`, so there are no user-scope collections to merge. One would appear
+   in every project the moment someone wrote one.
 3. **`generateItemId()` is 4 random bytes.** Two machines creating records offline can collide;
    `primaryKey` avoids it. Widen upstream, or keep the guidance?
 4. **A feed's ignored records — DECIDED (2026-08-09): warning, not blocker.** They are a cache
