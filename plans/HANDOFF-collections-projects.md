@@ -262,7 +262,7 @@ the engine never sees (`putSchema` refuses an unknown collection and tells the a
 by writing SKILL.md + schema.json), so the first moment the host can speak is the schema edit that
 follows. §11.4's "at collection-creation time" is answered by that, not by a hook.
 
-### 3.7 A live browser check — DONE for the overlay, still owed for the pane
+### 3.7 A live browser check — DONE
 
 **How it is run** (repeatable, and it touches neither the live config nor a real project): start a
 server from this checkout with `HOME` pointed at a scratch dir holding its own
@@ -283,11 +283,34 @@ something true to say.
   scoping and the plugin's fetch, working together inside the shadow root.
 - Zero console errors and zero page errors across all three routes.
 
-**What it did NOT reach.** The Collections PANE — and therefore the portability strip and the
-button-visibility rule — needs a cell whose session reports the `data` MCP group, i.e. a real agent
-session. Nothing in this harness can conjure one, and spawning a paid agent was not something to do
-unasked. The pane's own behaviour is covered by component specs; what remains unobserved is its
-height, the plugin views inside ITS shadow root, and the strip's layout beneath them.
+**The PANE was checked by hand (2026-08-09) and works.** It is the half this harness cannot reach:
+the button only appears for a cell whose session reports the `data` MCP group, which means a real
+agent session — a shell cell, or a cell with no session, never shows it.
+
+What was exercised: collections listed and opened inside the pane's own shadow root, navigation
+staying in the pane (the app did not move to the full-screen browser), the portability strip
+pressed and answering, and two cells on two projects each showing their own collections. The route
+behind the strip answers `{"portable": true, "findings": []}` for mag2's `newsletters`, so
+"Nothing to fix — it travels." is the reply it renders.
+
+**How to repeat it**, since the next person will have to — and two details here are easy to state
+wrongly, both corrected on review of this very page:
+
+- **Where the group registration lives.** The launch form's `data` switch runs
+  `claude mcp add -s local` (`server/infra/gui-mcp-registration.ts`), which writes
+  **`~/.claude.json`, keyed by the directory** — NOT a `.mcp.json` in the folder. Deliberate:
+  `local` scope keeps a personal tool-group choice out of a repo's diff. A hand-written project
+  `.mcp.json` is a separate, also-supported route, and `registeredGuiMcpGroups` reads ANCESTOR
+  project files and the local/user scopes too — so a cell in `/repo/packages/app` can inherit
+  `data` from `/repo`. Adding a file in the leaf directory to "fix" a missing button is the wrong
+  move.
+- **The registration is read at SESSION START**, so flipping the switch takes a relaunch. That is
+  the detail that makes the check look broken when it is not.
+- **The workspace shortcut is not universal.** A workspace session gets every group automatically
+  only for the agents `agentCarriesFullGuiMcp` admits — **Claude and Codex** (and their custom
+  wrappers). Antigravity, Grok and Muse reach MCP through a config file or an installed plugin
+  with no per-spawn `--mcp-config`, so in the workspace they still get only what their DIRECTORY
+  registered (`common/guiMcpAgents.ts` says why, per agent).
 
 The original lesson stands: server-side correctness was verified by curl and by specs at every
 step, and none of that said the feature was reachable.
@@ -343,14 +366,53 @@ surface someone adds.
 
 ---
 
-## 4. Open decisions — not bugs, genuinely undecided
+## 4. Decisions — the ones taken, and the two still open
 
-1. **Does the root search walk UP?** Today the root is the session's cwd exactly: a cell opened in
-   `~/proj/src` looks for `~/proj/src/.claude/skills` and finds nothing. Options: leave it (simple,
-   predictable); walk up to `.claude/skills` (git-like, but a subdirectory cell then writes the
-   parent's data); or walk up to `.mulmoterminal.json`, which matches the definition of a Project
-   (D2) and was the recommendation. Nothing depends on this until someone opens a subdirectory.
-2. **A user-scope dependency in a git-tracked collection (§11 L1)** — warn or refuse?
+1. **Does the root search walk UP? — DECIDED (2026-08-09): NO.** The root stays the session's cwd,
+   exactly. **A collection belongs at the repository root**, which is where anyone would put one,
+   so there is nothing to search for: a walk would exist to rescue a case that should not arise,
+   at the price of a subdirectory cell quietly reading and writing the parent's data.
+
+   This also keeps `(root, slug)` meaning what it says. Every id, token, bell and watcher in this
+   feature is keyed on the root the request named; a root that was DERIVED by walking would be a
+   second, implicit answer to "which project is this", and the whole arc above is about there
+   being exactly one.
+
+   The consequence, accepted: a cell opened in `~/proj/src` sees THAT directory's collections and
+   only those — so it finds none unless someone put a `.claude/skills` there, which the decision
+   above says is not where collections go. (It must also be a directory the server serves as a
+   project; a directory that is not in `cwdPresets` has no collections here whatever it contains
+   — see §3.4's listing.) If the empty pane ever reads as a fault rather than as a fact, the fix
+   is a clearer message naming the repository root — a HINT, not a search.
+2. **A user-scope dependency in a git-tracked collection (§11 L1) — DECIDED (2026-08-09), NOT YET
+   IMPLEMENTED.** The decision is that the answer is neither of the two this question offered: it
+   must be PROHIBITED in the engine. `~` and a project are separate worlds, so standing in a
+   project a collection under `~/.claude/skills` must not be reachable at all — not listed, and
+   not resolvable by slug.
+
+   **Today it still is.** `initCollectionsBackend` hands `configureCollectionHost` one
+   unconditional `userSkillsDir` string for every root, so discovery still merges user scope into
+   a project's list and `loadCollection` still falls back to it. Nothing about this is enforced
+   until both halves below land — do not read the decision as the behaviour.
+
+   Warning was the wrong shape because the check runs where someone asks, and the leak lives where
+   resolution happens: `loadCollection` falls back to the user dir for ANY root, so `getSchema`,
+   `getItems`, `putItems`, the detail route, a view token and the watcher all reach it whatever a
+   listing shows. Hiding the entry would have been a label on a door that still opens.
+
+   **Upstream**, because the host cannot express it: `paths.userSkillsDir` is one string for every
+   root. The ask is written as `../mulmoclaude/plans/feat-collection-scope-isolation.md` — make it
+   `(workspaceRoot) => string | null`, exactly the shape `skillsStagingDir` already has, and skip
+   both the discovery pass and the load fallback when it is null. MulmoClaude is one workspace and
+   is unaffected.
+
+   MulmoTerminal's half, once that ships: bind `isManagedWorkspace(root) ? <~/.claude/skills> :
+   null`, and bring `server/backends/remoteHost/skills.ts` — which scans both dirs for the phone's
+   skill list — into line.
+
+   Nothing leaks TODAY, and that is luck rather than design: `~/.claude/skills` currently holds 12
+   skills and no `schema.json`, so there are no user-scope collections to merge. One would appear
+   in every project the moment someone wrote one.
 3. **`generateItemId()` is 4 random bytes.** Two machines creating records offline can collide;
    `primaryKey` avoids it. Widen upstream, or keep the guidance?
 4. **A feed's ignored records — DECIDED (2026-08-09): warning, not blocker.** They are a cache
