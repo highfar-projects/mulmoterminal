@@ -5,8 +5,10 @@
 > ## 検証の状態 — 読む前に
 >
 > **ルールは実行された。** 2026-08-10、`../mulmoserver` の branch
-> `feat/shareable-collections-rules`（commit 919b501）で Firestore emulator の
-> ユニットテスト **70 本**が通っている（`yarn test:rules`、CI に独立ジョブ）。
+> `feat/shareable-collections-rules`（**mulmoserver #155**）で Firestore emulator の
+> ユニットテストが通っている（`yarn test:rules`、CI に独立ジョブ）。
+> **本数はこの文書に書かない** — PR に追記されるたびにここが古くなり、同じ文書の別の場所と
+> 食い違う（実際に一度そうなった）。**数は #155 の `rules_test` ジョブが持つ。**
 > 実装順ステップ 2 は**完了**。
 >
 > **最初の実行で分かったのは「穴がある」ではなく「1 つも実行できない」だった。**
@@ -2471,8 +2473,8 @@ session    現在の議題とフェーズ   参加者 read のみ
 ルールは `../mulmoserver` にあり cross-repo のデプロイが要る。**ここに書けないことは製品として
 持てない。** 後から足したくなるものを今洗う:
 
-> **[x] は「ルールに入り、emulator テストで固定された」という意味**（mulmoserver #155、
-> 82 本）。**残る [ ] は、ルールの外に実装が要るもの** — publish、リンター、webview —
+> **[x] は「ルールに入り、emulator テストで固定された」という意味**（mulmoserver #155）。
+> **残る [ ] は、ルールの外に実装が要るもの** — publish、リンター、webview —
 > であって、ルールの形が未決定という意味ではない。
 
 - [x] アプリ階層（`apps/{aid}/collections/{cid}/items`）— D1
@@ -2531,7 +2533,7 @@ session    現在の議題とフェーズ   参加者 read のみ
 1. **`(aid, cid)` 同一性** — engine の `(root, slug)` INVARIANT を firestore バックエンドについて外す。
    一番深く、一番先。**これを 2 と 3 と同じ PR にしない**（レビューの性質が違う）
 2. ~~**`apps/{aid}` ドキュメント + 静的ルール**~~ — **完了**（`../mulmoserver`
-   `feat/shareable-collections-rules`、emulator テスト 70 本）。以下は当初の記述:
+   `feat/shareable-collections-rules`、mulmoserver #155）。以下は当初の記述:
    `../mulmoserver` 側の PR が対になる。
    この時点でメンバーはオーナー 1 人。**emulator でルールのユニットテストを書く。**
    ルールの形に関わるものは**すべてここで入れる**（後から足すと cross-repo のデプロイになる）:
