@@ -349,7 +349,8 @@ service cloud.firestore {
     function app(aid)   { return get(/databases/$(database)/documents/apps/$(aid)).data; }
 
     // 名簿に載っているか（participant を含む）。「データを読める」という意味ではない
-    function listed(aid) { return verified() && email() in app(aid).members; }
+    function listed(aid) { return verified() && "members" in app(aid)
+                                  && email() in app(aid).members; }
 
     // '*' を持たないメンバー（S1 の美容師のようにコレクション別ロールだけの人）が
     // いるので、フォールバックも `in` でガードする。無いと roleIn 自体が落ちる
@@ -505,8 +506,10 @@ service cloud.firestore {
                                     && has("initialStatus")
                                     && request.resource.data[cfg().statusField] == cfg().initialStatus))
                             && authOk()
+                            // `!= null` だと viewer / editor まで投稿できてしまう。
+                            // 宣言した audience と認可を一致させる
                             && (!has("audience") || cfg().audience != "participant"
-                                || roleIn(aid, cid) != null)
+                                || roleIn(aid, cid) == "participant")
                             && idOk() && inWindow()
                             && (!has("gateOn")
                                 || (session().phase == cfg().gateOn.phase
@@ -545,19 +548,26 @@ service cloud.firestore {
         function srcItem() {
           return /databases/$(database)/documents/apps/$(aid)/collections/$(m().cid)/items/$(m().itemId);
         }
-        // 「書き手なら誰でもメールを積める」では、宣言された `then.email` を迂回して
-        // 任意の宛先に任意の内容を送れる（サロンのドメインからのスパム中継）。
-        // ルールは宣言を再導出する: 宛先はその記録が持っているアドレス、
-        // テンプレートは宣言されたもの、自由文は持ち込ませない
+        // 宛先とテンプレートを縛るだけでは足りない。それだけだと書き手は、
+        // どんな状態の予約に対してでも `booking-approved` を何度でも積める。
+        // つまり「承認したから送る」というアクションと遷移が助言にとどまる。
+        // 2 つで縛る:
+        //   - 決定的な mailId → 同じアクションを二度積めない（create は 1 回しか通らない）
+        //   - getAfter() → 宣言された遷移が **同じ書き込みの中で** 起きていること
+        // クライアントは記録の更新とメールの enqueue を 1 つのバッチで書く必要がある
         allow create: if listed(aid)
                       && m().keys().hasAll(["cid", "itemId", "to", "template"])
                       && m().keys().hasOnly(["cid", "itemId", "to", "template", "data"])
                       && hasCol(aid, m().cid) && "mail" in app(aid).collections[m().cid]
                       && writerOf(aid, m().cid)
+                      && mailId == m().cid + "_" + m().itemId + "_" + m().template
                       && exists(srcItem())
                       && mailCfg().toField in get(srcItem()).data
                       && get(srcItem()).data[mailCfg().toField] == m().to
-                      && mailCfg().templates.hasAny([m().template])
+                      && m().template in mailCfg().on
+                      && mailCfg().statusField in getAfter(srcItem()).data
+                      && getAfter(srcItem()).data[mailCfg().statusField]
+                           == mailCfg().on[m().template]
                       && (!("data" in m()) || m().data.keys().hasOnly(mailCfg().dataFields));
         allow read, update, delete: if false;
       }
@@ -661,6 +671,21 @@ uid ベースの判定は `authed()`、メール比較だけ `verified()`。
 `cfg().statusField` が**宣言されていても、そのレコードに無い**ことがある。
 → `resource.data` / `request.resource.data` 側の存在も確認する。
 
+**15-17. CI レビュー（5-6 巡目）。**
+
+- **`/mail` の縛りが半分だった。** 宛先とテンプレートを固定しても、書き手は
+  **どんな状態の記録にでも、何度でも**通知を積めた。アクションと遷移が助言のまま。
+  → 決定的な `mailId` で重複を封じ、`getAfter()` で**同じ書き込みの中で宣言された遷移が
+  起きていること**を要求。「承認したから送る」を**「送るなら承認していなければならない」**
+  に反転させた
+- **`audience: "participant"` が `roleIn(...) != null` だった。** viewer や editor まで
+  投稿できる。読み取り専用のつもりで viewer を配ると、その人が投票できてしまう。
+  → 厳密一致に
+- **S2 のサンプルが `audience` を宣言しながら `members` を持っていなかった。**
+  `listed()` が偽になり**アンケートの投稿が全部拒否される**。
+  → S2 は `audience` を外す（ログインした人なら誰でも）形に直し、
+  名指し配布にする場合の書き方を併記
+
 ### 同じ形のバグが 3 巡続いた（4 巡目も同じだった）
 
 **4 巡で 10 件が同じ根っこ**だった:
@@ -712,7 +737,9 @@ uid ベースの判定は `authed()`、メール比較だけ `verified()`。
 | **記録の改竄不可（owner を含む）** | `immutable` → `allow update, delete: if false` |
 | **過去トピックへの投票を弾く** | create 条件に `session.current == topicId` |
 | 巨大ドキュメントの拒否 | `request.resource.data.size()` |
-| メール踏み台の防止 | 宛先は**その記録が持つアドレス**、テンプレートは**宣言されたもの**のみ。`then.email` をルールが再導出する |
+| メール踏み台の防止 | 宛先は**その記録が持つアドレス**、テンプレートは**宣言された `on` のキー**のみ |
+| **メールが宣言された遷移に伴っていること** | 決定的な `mailId` で重複を封じ、`getAfter()` で同一書き込み内の遷移を要求 |
+| 宣言した audience と認可の一致 | `roleIn(...) == "participant"`（`!= null` では viewer も投稿できる） |
 | 公開投稿の必須と主要 enum | `hasAll(validate.required)` / `choiceValues.hasAny([...])` |
 
 ### 公開投稿の値検証は、どこまでできるか
@@ -1091,9 +1118,18 @@ owner のブラウザが集計して publish する」必要があったが、�
 > **宣言はクライアントが実行するので、ルールが独立に再導出しなければ意味がない。**
 > `then.email` を宣言しただけでは、書き手が `/mail` に任意の宛先・任意の内容を積める
 > （サロンのドメインからのスパム中継）。publish は `collections[cid].mail`
-> （`toField` / `templates` / `dataFields`）を出し、ルールは
-> **宛先 = その記録が持つアドレス**、**テンプレート = 宣言されたもの**、
-> **自由文は不可**を強制する。
+> （`toField` / `statusField` / `on` / `dataFields`）を出し、ルールは 4 つを強制する:
+>
+> - **宛先 = その記録が持つアドレス**
+> - **テンプレート = 宣言された `on` のキー**
+> - **自由文は `dataFields` のみ**
+> - **そのテンプレートが宣言する遷移が、同じ書き込みの中で起きていること**（`getAfter()`）
+>
+> 最後の 1 つが要点。宛先とテンプレートだけ縛っても、書き手は**どんな状態の記録にでも
+> `booking-approved` を何度でも**積める。決定的な `mailId`
+> （`{cid}_{itemId}_{template}`）で重複を封じ、`getAfter()` で
+> **「承認したから送る」を「送るなら承認していなければならない」に反転させる。**
+> クライアントは記録の更新とメールの enqueue を **1 つのバッチ**で書く。
 >
 > これは一般則: **宣言をルールが再導出できないなら、その宣言は助言でしかない。**
 
@@ -1261,6 +1297,8 @@ sandbox された HTML が Firestore ハンドルを持たなくても、**親�
 | `gateOn` があるのに `session` を持たないアプリ | create が常に失敗する |
 | `then.email` があるのに `collections[cid].mail`（`toField` / `templates`）を publish していない | 承認メールが常に拒否される |
 | 公開投稿コレクションに `validate.required` が無い | **必須欠落のレコードを誰でも投げ込める** |
+| `audience: "participant"` を宣言しているのに `members` / `memberEmails` が無い | **投稿が全部 fail closed**（原因が見えない） |
+| `mail.on` のテンプレートが `actions.*.then.email` と食い違う | 承認メールが常に拒否される |
 | `peerVisibility: "public"` なのに `validate.choiceField` が無い | 集計が enum 外の値で汚染される |
 | `icon` が無い / `actions` がオブジェクトマップ | **既存文法エラー**（必須キー欠落・型不一致）。schema が読み込まれない |
 | `mutate` に `when`（正しくは `require`） | **エラーにならず黙って消える**。ゲートが外れた状態で動く |
@@ -1491,7 +1529,9 @@ services  1 ──< bookings      メニュー（所要時間の供給元）
   "memberEmails": ["owner@salon.jp", "stylist-a@salon.jp"],
   "collections": {
     "bookings": { "mail": { "toField": "customerEmail",
-                            "templates": ["booking-approved", "booking-rejected"],
+                            "statusField": "status",
+                            "on": { "booking-approved": "approved",
+                                    "booking-rejected": "rejected" },
                             "dataFields": ["customerName", "startAt"] } },
     "services": {}, "shifts": {}, "stylists": {}
   },
@@ -1644,7 +1684,6 @@ results     集計（aggregate が publish、公開読み取り）
     "submit": {
       "responses": {
         "auth": "verifiedEmail",
-        "audience": "participant",
         "idFrom": "auth.uid",
         "finalize": true,
         "window": { "from": "2026-09-01T00:00:00Z", "until": "2026-09-30T23:59:59Z" },
@@ -1660,7 +1699,20 @@ results     集計（aggregate が publish、公開読み取り）
 }
 ```
 
-`audience: "participant"` を外せば「リンクを知っている人なら誰でも」になる。
+**この S2 は `audience` を宣言していない** — ログインした人なら誰でも 1 回答えられる、
+という「リンクを知っている人向け」のアンケート。`idFrom: "auth.uid"` が一人一回を担保する。
+
+**名指しの相手だけに配るなら `audience: "participant"` を足すが、そのときは
+`members` と `memberEmails` も必ず一緒に宣言する。** 片方だけだと `listed()` が
+偽になり、**投稿が全部拒否される**（fail closed で、原因が「権限エラー」ではなく
+「なぜか送れない」として現れる）:
+
+```json
+{
+  "members": { "owner@x.jp": { "*": "owner" }, "member-1@x.jp": { "*": "participant" } },
+  "memberEmails": ["owner@x.jp", "member-1@x.jp"]
+}
+```
 
 **`questions/schema.json`**
 
@@ -2061,6 +2113,8 @@ session    現在の議題とフェーズ   参加者 read のみ
 - [ ] `list` クエリがルールの条件を写していること（親がクエリを組む）
 - [ ] **`/mail` が宣言（`then.email`）を再導出すること** — 宛先・テンプレート・自由文の禁止
 - [ ] **`validate` 射影**（`required` / `choiceField` / `choiceValues`）を publish が出すこと
+- [ ] `/mail` の決定的 ID と `getAfter()` による遷移の要求（**クライアントはバッチで書く**）
+- [ ] `audience` は `== "participant"` の厳密一致
 - [ ] `session` ドキュメント（主催者が駆動する状態機械）と、それを create 条件に使うこと
 - [ ] **`immutable`（owner にも触れない記録）** — ルールの形に関わる
 - [ ] `peerVisibility: "public"`（記名投票。参加者が全件読める）
