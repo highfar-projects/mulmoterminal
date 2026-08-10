@@ -321,7 +321,7 @@ claim する」パターンが要り、owner 限定の update に穴を開ける
 
 | ロール | できること |
 |---|---|
-| `owner` | publish、メンバー管理、`session` の駆動、削除、全件読み取り |
+| `owner` | publish、メンバー管理、`session` の駆動、レコードの削除、全件読み取り |
 | `editor` | レコードの読み書き（全件） |
 | `viewer` | レコードの読み取り（全件） |
 | `participant` | submit + 自分の行 + public / `revealed` 済みのみ。**全件は読めない** |
@@ -2493,6 +2493,13 @@ session    現在の議題とフェーズ   参加者 read のみ
 - [x] `collections[cid].transitions` を **writer にも** 効かせること
 - [x] `idFrom` の有限 enum（`auto` / `auth.uid` / `auth.uid+field`）
 - [x] `apps/{aid}/config`（名簿を含まない公開設定）
+- [x] **アプリ本体（`apps/{aid}`）はクライアントから削除できない** — Firestore は
+      カスケードしない。ルートを消すと子（`config` / `session` / `items` / `mail`）が
+      残り、子のルールは全部 app ドキュメントを読むので**全員に対して fail closed**、
+      **誰にも消せず読めない**状態が永久に残る。さらに `allow create` は「自分を owner と
+      名乗ること」しか要求しないので、**空いた aid を拾った他人が孤児レコードごと owner に
+      なれる**。ルールは子の有無を見られないので条件付きにもできない → アプリの削除は
+      **再帰削除**（`firebase firestore:delete --recursive` / Admin SDK）に属する
 - [x] `auth` の有限 enum（`none` / `anonymous` / `verifiedEmail`）と `emailField` の切り離し
 - [x] `publicOn()` をマスタースイッチにする + `participantRead`
 - [x] `revealGated` は**親を `get()` する**形（従属ドキュメントにフラグは無い）
