@@ -2573,7 +2573,9 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
    `listed`/`reader` 分離、`participant`、`auth` の 3 段階、`publicOn`、`participantRead`、
    `createFields`/`selfUpdate`/`selfTransitions`、`transitions`、`idFrom` の enum、`gateOn`、
    `immutable`、`peerVisibility`、`revealGated`（親を `get()` する形）、`mail` キュー
-3. **store を `(aid, cid)` で書き直す** — PR #2209 の中身がここに入る
+3. **store を `(aid, cid)` で書き直す** — PR #2209 の中身がここに入る。
+   **引き継ぎ用の切り出し: [`feat-shareable-collections-step3-store.md`](./feat-shareable-collections-step3-store.md)**
+   （作業は `../mulmoclaude`。#2209 の再利用できる部分とプランと衝突する部分の地図つき）
 4. **discovery の 2 ソース化 + skill materialize** — ディスク ∪ Firestore(memberEmails ∋ 自分)。
    Claude Code はディスクのスキルしか読めないので、購読時に skillText を materialize する
    （`schemaVersion` で張り替えるキャッシュとして）
