@@ -384,35 +384,40 @@ surface someone adds.
    project; a directory that is not in `cwdPresets` has no collections here whatever it contains
    — see §3.4's listing.) If the empty pane ever reads as a fault rather than as a fact, the fix
    is a clearer message naming the repository root — a HINT, not a search.
-2. **A user-scope dependency in a git-tracked collection (§11 L1) — DECIDED (2026-08-09), NOT YET
-   IMPLEMENTED.** The decision is that the answer is neither of the two this question offered: it
-   must be PROHIBITED in the engine. `~` and a project are separate worlds, so standing in a
+2. **A user-scope dependency in a git-tracked collection (§11 L1) — DECIDED (2026-08-09), and
+   IMPLEMENTED (2026-08-09, core 3.3.0).** The decision is that the answer is neither of the two
+   this question offered: it must be PROHIBITED in the engine. `~` and a project are separate worlds, so standing in a
    project a collection under `~/.claude/skills` must not be reachable at all — not listed, and
    not resolvable by slug.
 
-   **Today it still is.** `initCollectionsBackend` hands `configureCollectionHost` one
-   unconditional `userSkillsDir` string for every root, so discovery still merges user scope into
-   a project's list and `loadCollection` still falls back to it. Nothing about this is enforced
-   until both halves below land — do not read the decision as the behaviour.
+   **It no longer is.** `initCollectionsBackend` binds
+   `userSkillsDir: (root) => isManagedWorkspace(root) ? ~/.claude/skills : null`, and core 3.3.0
+   skips the user pass in BOTH `discoverCollections` and `loadCollection` when that is null. The
+   managed workspace keeps user scope, exactly as MulmoClaude has it.
+   `test/server/backends/collectionScopeIsolation.spec.ts` pins all three: merged in the
+   workspace, absent from a project's listing, and a MISS on `loadCollection` by slug.
 
    Warning was the wrong shape because the check runs where someone asks, and the leak lives where
-   resolution happens: `loadCollection` falls back to the user dir for ANY root, so `getSchema`,
-   `getItems`, `putItems`, the detail route, a view token and the watcher all reach it whatever a
-   listing shows. Hiding the entry would have been a label on a door that still opens.
+   resolution happens: `loadCollection` fell back to the user dir for ANY root, so `getSchema`,
+   `getItems`, `putItems`, the detail route, a view token and the watcher all reached it whatever a
+   listing showed. Hiding the entry would have been a label on a door that still opens.
 
-   **Upstream**, because the host cannot express it: `paths.userSkillsDir` is one string for every
-   root. The ask is written as `../mulmoclaude/plans/feat-collection-scope-isolation.md` — make it
-   `(workspaceRoot) => string | null`, exactly the shape `skillsStagingDir` already has, and skip
-   both the discovery pass and the load fallback when it is null. MulmoClaude is one workspace and
-   is unaffected.
+   **Upstream shipped it**: `paths.userSkillsDir` is now
+   `string | ((workspaceRoot) => string | null)` (core 3.3.0 — the string form is kept, deprecated,
+   so a host floating on `^3.2.0` does not crash on install). MulmoClaude is one workspace and is
+   unaffected.
 
-   MulmoTerminal's half, once that ships: bind `isManagedWorkspace(root) ? <~/.claude/skills> :
-   null`, and bring `server/backends/remoteHost/skills.ts` — which scans both dirs for the phone's
-   skill list — into line.
+   **The skill list is deliberately NOT brought into line**, which is the one thing here that
+   changed on review of the original ask. `server/backends/remoteHost/skills.ts` still scans
+   `~/.claude/skills` for every root, because `claude` itself does: a bundled skill mirrored there
+   is runnable from any directory, and hiding it would break the Skill menu in every project. The
+   consequence is that a user-scope dir holding both `SKILL.md` and `schema.json` now appears in a
+   project's `listSkills` where it used to be subtracted — correctly, since the reason to subtract
+   is that `listCollections` serves it, and for that root it no longer does. It is a skill there.
 
-   Nothing leaks TODAY, and that is luck rather than design: `~/.claude/skills` currently holds 12
-   skills and no `schema.json`, so there are no user-scope collections to merge. One would appear
-   in every project the moment someone wrote one.
+   Nothing had leaked before the fix, and that was luck rather than design: `~/.claude/skills` held
+   12 skills and no `schema.json`, so there were no user-scope collections to merge. One would have
+   appeared in every project the moment someone wrote one.
 3. **`generateItemId()` is 4 random bytes.** Two machines creating records offline can collide;
    `primaryKey` avoids it. Widen upstream, or keep the guidance?
 4. **A feed's ignored records — DECIDED (2026-08-09): warning, not blocker.** They are a cache

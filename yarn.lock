@@ -1912,10 +1912,10 @@
     js-yaml "^5.2.3"
     zod "^4.4.3"
 
-"@mulmoclaude/core@^3.2.0":
-  version "3.2.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/core/-/core-3.2.0.tgz#daed54c5fa936485adc14e348ce8e54875c06f36"
-  integrity sha512-8rxcd9DV9IwkoIL1/RAS8eBb4JeyP4L6T2xfHUwlWJzi5gPDgcaQQkqX/dDp197+wZjuYUySZwAddazvMls02g==
+"@mulmoclaude/core@^3.3.0":
+  version "3.3.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/core/-/core-3.3.0.tgz#e45795e9f38a995113d5707659420af9cb9d39b2"
+  integrity sha512-YNBWp9Ju7PHss+44sTWSgyR1iHAep95gTG0e+XUSOlSZU2XwgzW+6ClJh4sq0QUunZmMeEq8547xPegDSBs3WA==
   dependencies:
     "@duckdb/node-api" "^1.5.5-r.2"
     "@mulmoclaude/common" "^1.2.0"
