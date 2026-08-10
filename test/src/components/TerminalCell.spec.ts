@@ -2093,6 +2093,33 @@ describe("TerminalCell", () => {
     expect(style).toContain("--cell-header-fg: #ffffff");
   });
 
+  // The issue's own reproduction: `headerColor` alone (#1591). An idle cell shows that colour, so a
+  // readable ink is derived for it; a WORKING one has replaced the background with the status tint
+  // (HEADER_STATUS), and an ink derived for the directory's colour would land on that instead.
+  it("derives a header text colour from headerColor alone — but only while the cell is idle", async () => {
+    const dirConfigOnly = (working: boolean) =>
+      vi.fn(async (url: string) => {
+        const u = String(url);
+        if (u.includes("/api/dir-config")) return { ok: true, json: async () => ({ headerColor: "#e8341c" }) };
+        if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
+        return { ok: true, json: async () => ({ working, waiting: false, lastPrompt: null }) };
+      }) as unknown as typeof fetch;
+
+    globalThis.fetch = dirConfigOnly(false);
+    const idle = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/hdr-derive-idle" });
+    await flushPromises();
+    const idleStyle = idle.find(".cell-header").attributes("style") ?? "";
+    expect(idleStyle).toContain("--cell-header-bg: #e8341c");
+    expect(idleStyle).toContain("--cell-header-fg: #1b2430"); // WCAG picks black on this red — see cellHeaderStyle.spec.ts
+
+    globalThis.fetch = dirConfigOnly(true);
+    const busy = mountCell("22222222-2222-2222-2222-222222222222", { initialCwd: "/home/me/hdr-derive-busy" });
+    await flushPromises();
+    const busyStyle = busy.find(".cell-header").attributes("style") ?? "";
+    expect(busyStyle).toContain("--cell-header-bg: #e8341c");
+    expect(busyStyle).not.toContain("--cell-header-fg");
+  });
+
   it("applies cellColor/cellBorderColor/dotColor/buttonColor as cell-root CSS vars", async () => {
     globalThis.fetch = vi.fn(async (url: string) => {
       const u = String(url);

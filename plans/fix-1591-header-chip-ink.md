@@ -23,7 +23,7 @@
 `text-dim` はテーマのパネル面に合わせて選ばれた色なので、ディレクトリ色で塗られたヘッダーの上では
 「背景に近い色」になり得る。
 
-## 方針（最小・接続のみ）
+## 方針 その1（最小・接続のみ）
 
 チェーンを 1 本の定数にして、3 箇所をそこに接続する。`headerTextColor` 未設定時に `headerColor` から
 自動導出する案は**採らない**（下記「やらないこと」）。
@@ -39,12 +39,32 @@
 未設定のディレクトリでは `--cell-header-fg` が無いのでフォールバックの `--text-dim` が効き、
 見た目は現状と 1px も変わらない。
 
-## やらないこと（と、その理由）
+## 方針 その2（自動導出・Codex レビューを受けて追加）
 
-- **`headerTextColor` 未設定時の自動導出**（`headerColor` から WCAG で白/黒を決める）。
-  `working` / `done` ではヘッダー背景が状態色に置き換わる（`cellStatusClasses.ts` の `HEADER_STATUS`）ため、
-  明るいテーマ＋濃い `headerColor` だと導出した白文字が薄緑の上に乗って**かえって読めなくなる**。
-  「dir 色を常に塗るヘッダー」と idle のセルヘッダーに限定する追加設計が要るので、別 issue に切り出す。
+その1 は `headerTextColor` を設定しているユーザーしか救わない。issue の Steps to reproduce は
+`headerColor: #e8341c` **だけ**を設定する手順なので、報告どおりに再現した人には何も起きない
+（PR #1592 の Codex レビュー指摘）。そこで導出を入れる。
+
+導出そのものより、**「いつ導出してよいか」**が設計の中身になる。`working` / `done` / `blocked` の間、
+セルヘッダーの背景は状態色に置き換わる（`cellStatusClasses.ts` の `HEADER_STATUS`）。
+そこで dir 色から導いた白文字を出すと、明るいテーマでは薄緑のウォッシュの上に乗って**かえって読めない**。
+
+- `headerStyleFor(background, text, dirBackgroundShows)` に第3引数を足し、
+  **「いま実際にディレクトリの色が出ているか」**を呼び出し側に答えさせる（既定値なし。
+  新しい呼び出し側が黙って間違えないように）。
+  - 常に dir 色を塗るヘッダー = `true`（`CockpitHeader` のバー、フィルムストリップ、
+    `terminalHeaderStyleFor` のターミナル行、`CellShell` のコマンド/ランチャセル）
+  - `TerminalCell` の row 1 だけ `status === "idle"`。そのため header style は `useCellChrome` からではなく
+    セル側で計算する（status を知っているのはセル側だから）。
+- 導出の値は `common/chromeFromColor.ts` の `headerTextColorFor()` に切り出して共有する。
+  repo.json の brand color から chrome を作るときと**同じ答え**になり、同じディレクトリが 2 つの色で
+  書かれることがなくなる（`#000` → `#1b2430` / `#fff` → `#ffffff` のマッピングもそこ）。
+- 宣言された `headerTextColor` は常に優先。導出は「宣言していないディレクトリ」だけに答える。
+
+計測メモ: issue の `#e8341c` は WCAG では**黒**が選ばれる（黒 4.92:1 / 白 4.27:1）。
+「強い赤には白」という直感とは逆で、これは spec にも書いてある。
+
+## やらないこと（と、その理由）
 - **`RateLimitGauge.vue`**。issue 本文は原因として挙げているが、これは `AppToolbar.vue` にしか置かれておらず
   （アプリのツールバー）、`headerColor` の影響を受けない。`ctx %` を出しているのは `ModelContextBadge.vue`。
 - **コックピットロースターの `reply` 行**。ディレクトリ色を塗るのは行の上部バー（`CockpitHeader`）だけで、
@@ -56,5 +76,8 @@
 ## 検証
 
 - `yarn format` / `yarn lint` / `yarn typecheck` / `yarn build` / `yarn test`
-- 実機: `headerColor` を設定したディレクトリのセルで、ctx / usage / カスタムチップが
-  `headerTextColor` に追従すること。未設定のディレクトリで見た目が変わらないこと。
+- ビルド後の CSS に `.text-\[var\(--cell-header-fg\,var\(--text-dim\)\)\]` のルールが実在すること
+  （クラス名だけ変えて Tailwind が生成していない、という失敗を潰す）
+- 実機: `headerColor` だけを設定したディレクトリで、idle のセルヘッダーの文字（パス / ctx / usage /
+  カスタムチップ）が読めること。作業中にすると状態色のヘッダーに戻り、そこでも読めること。
+  何も設定していないディレクトリで見た目が変わらないこと。

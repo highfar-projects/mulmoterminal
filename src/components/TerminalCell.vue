@@ -62,6 +62,7 @@ import {
   DIR_TRUNCATE_FRONT,
 } from "./cellChromeClasses";
 import { CELL_STATUS, DOT_STATUS, HEADER_STATUS } from "./cellStatusClasses";
+import { headerStyleFor } from "./cellHeaderStyle";
 import { handoffTargets, pullLastTurn, slotLabel, type HandoffTarget } from "../composables/useHandoff";
 import { runOneExchange, liveCrossTalkDeps } from "../composables/useCrossTalk";
 import { runRoundTable, liveRoundTableDeps, memberFromTarget, type TableMember } from "../composables/useRoundTable";
@@ -167,7 +168,7 @@ const connectKey = ref(0);
 const cwd = ref<string | null>(props.initialCwd ?? props.defaultCwd);
 // Per-directory overrides (<cwd>/.mulmoterminal.json): pins this cell's terminal
 // palette and shows a project badge. Re-fetched when the effective cwd changes.
-const { config: dirConfig, cellStyle, headerStyle } = useCellChrome(cwd);
+const { config: dirConfig, cellStyle } = useCellChrome(cwd);
 // Whether this cell IS the workspace, for the header badge. Same lexical comparison the launcher
 // chip makes (`launchChips`), so a cell launched from the WORKSPACE chip is badged WORKSPACE.
 const isWorkspace = computed(() => isSameDirPath(cwd.value, props.defaultCwd));
@@ -927,6 +928,10 @@ const statusClass = computed(() => STATUS_CLASS[status.value]);
 // used to live in the .cell.is-* / .cell-header.is-* rules is in cellStatusClasses.ts.
 const cellStatusClass = computed(() => CELL_STATUS[status.value]);
 const headerStatusClass = computed(() => HEADER_STATUS[status.value]);
+// The directory's header colours — computed here rather than taken from useCellChrome because only
+// this cell's header background is REPLACED by a status tint, and whether the directory's colour is
+// what shows is what decides if a text colour may be derived for it (cellHeaderStyle.ts).
+const headerStyle = computed(() => headerStyleFor(dirConfig.value.headerColor, dirConfig.value.headerTextColor, status.value === "idle"));
 // Set aside, and not stopped waiting for an answer (see cellParked.ts). Enlarging it does NOT
 // bring it back — that is how you look at a parked session without waking it.
 const parked = computed(() => props.parked === true);

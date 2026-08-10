@@ -36,6 +36,23 @@ const BUTTON = { s: 0.67, l: 0.89 };
 
 const clamp01 = (n: number): number => Math.min(1, Math.max(0, n));
 
+// The two inks a header background can be written in. Black is softened to a near-black so a pale
+// header does not read as a printed page; white is left pure, since anything softer loses contrast
+// on the dark end where it is chosen.
+const DARK_INK = "#1b2430";
+const LIGHT_INK = "#ffffff";
+
+const inkFor = (rgb: [number, number, number]): string => (readableTextColor(rgb[0], rgb[1], rgb[2]) === "#000" ? DARK_INK : LIGHT_INK);
+
+/** Which ink a header background wants, or null when it isn't a colour we can read. Exported so a
+ *  directory that declares only `headerColor` derives the SAME text colour this file gives a
+ *  repo.json brand colour (src/components/cellHeaderStyle.ts) — two answers to one question is how
+ *  one directory ends up written in two different colours. */
+export function headerTextColorFor(background: string): string | null {
+  const rgb = parseHex(background);
+  return rgb ? inkFor(rgb) : null;
+}
+
 /** The seven colours for a brand colour, or null when it isn't a colour we can read. */
 export function chromeFromColor(primary: string, background?: string | null): ChromeColors | null {
   const rgb = parseHex(primary);
@@ -50,7 +67,7 @@ export function chromeFromColor(primary: string, background?: string | null): Ch
     headerColor: normalizeHex(primary),
     // Never taken from the file — see the spec's "text colour is never declared". Deriving it is
     // also what makes two conforming tools agree.
-    headerTextColor: readableTextColor(rgb[0], rgb[1], rgb[2]) === "#000" ? "#1b2430" : "#ffffff",
+    headerTextColor: inkFor(rgb),
     // `background` is the surface the brand colour sits on, which is exactly what a cell body is.
     // Gated on it PARSING, not on it being present: an unusable value here used to win the branch,
     // survive as a non-colour, and then be dropped downstream — leaving no surface at all, neither
