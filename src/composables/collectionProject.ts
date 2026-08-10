@@ -102,7 +102,17 @@ export async function projectIdForCwd(cwd: string | null): Promise<string | null
  *  url minted with its token, and that token is what names their project. A parameter here would
  *  land inside the suffixes the view contract builds by concatenation (`dataUrl + "/query"`). */
 export function withActiveProject(url: string): string {
-  const id = activeCollectionProjectId();
+  return withProject(url, activeCollectionProjectId());
+}
+
+/** Append a NAMED project to a collection API url — the same rule, for a caller that already
+ *  knows which project it means rather than asking what is on screen.
+ *
+ *  That is the difference a chat card needs: a card was made in one project and must keep reading
+ *  it, while `activeCollectionProjectId()` moves with the pane the user is looking at. The card's
+ *  scope comes from its own payload (`PresentCollectionData.scope`, stamped by the host, never by
+ *  the model). */
+export function withProject(url: string, id: string | null): string {
   if (!id || url.includes("/view-data")) return url;
   return `${url}${url.includes("?") ? "&" : "?"}project=${encodeURIComponent(id)}`;
 }

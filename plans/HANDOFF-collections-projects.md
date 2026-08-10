@@ -136,14 +136,22 @@ entry (`drop-legacy`) and republishes, while MulmoClaude's root-less sweep `skip
 alternating between the apps can leave a stale bell MulmoClaude will not clear. Pre-existing since
 #1571, by upstream design, and worth confirming with MulmoClaude before anyone "fixes" it here.
 
-### 3.3 Per-card project scope (§7c D remainder) — blocked
+### 3.3 Per-card project scope — DONE (core 3.2.0 / collection-plugin 3.1.0)
 
-core 3.1.0 ships `withCardScope` and `PresentCollectionData.scope`, and the executor deliberately
-DROPS a `scope` supplied in tool arguments (the model must not choose a project). But
-`@mulmoclaude/collection-plugin@3.0.0` still calls `fetchCollectionDetail(slug)` — it does not read
-the field. **This needs a collection-plugin release built against core 3.1.0.** Until then #1579's
-surface-level scoping covers the real case (one panel, one session's work); what is missing is two
-cards from two projects in the same panel.
+The plugin now reads `PresentCollectionData.scope` and asks the HOST for a binding of its own
+(`withScope`, an optional entry on the binding — a single-workspace host omits it and nothing
+changes). MulmoTerminal implements it by building the whole binding from a PROJECT RESOLVER
+(`makeCollectionUi(projectIdOf)`): the global one resolves the ambient surface, a card's resolves
+the fixed scope it was made in.
+
+The bug it closes: a card built in project A showed project B's records the moment the user moved
+the app — same slug, same title, different rows, nothing saying so.
+
+Everything project-dependent goes through `scopedUrl` / `projectIdOf`, and everything that does
+NOT is built outside the factory (`PROJECT_INDEPENDENT`) — which is where that is proved rather
+than asserted. Navigation is the interesting member of that set: it is per-SURFACE, not per
+project, because a click inside a pane moves that pane and a card's scope has nothing to say
+about where a link goes.
 
 ### 3.4 The phone (§7c E) — PREPARATION DONE
 
@@ -177,36 +185,30 @@ id; omitted means the workspace; an unresolvable id is an error, not a fallback)
 
 Still missing, and it is not in this repo: the phone's own project picker.
 
-### 3.5 Per-root scheduled feed refresh — BLOCKED UPSTREAM (attempted, reverted)
+### 3.5 Per-root scheduled feed refresh — DONE (core 3.2.0), after one revert
 
-Written, reviewed, and taken back out in #1582. The mechanism is sound and the blocker is one
-missing argument in core.
+`buildSystemTasks` registers one `feedRefreshTaskDef` per root — the workspace plus every saved
+project directory. A task id is the scheduler's primary key and core builds it from the root, so N
+roots register N tasks; roots dedupe by RESOLVED path, since core canonicalises the root into the
+id and two spellings would collapse to one registration. Read at boot, because the scheduler
+registers once.
 
-**What it was.** `buildSystemTasks` registers one `feedRefreshTaskDef` per root instead of one for
-the workspace. A task id is the scheduler's primary key and core builds it from the root, so N
-roots register N tasks; roots dedupe by RESOLVED path because core canonicalises the root into the
-id, so two spellings would collapse to one id and silently drop a registration. Read at boot, since
-the scheduler registers once.
+**It shipped once and was reverted (#1582), and the reason is worth keeping.** A collection with
+`ingest.kind: "agent"` refreshes by dispatching a hidden worker, and the seed prompt addresses the
+records ROOT-RELATIVELY (`promptPathsFor` emits the schema's `dataPath` verbatim). The runner was
+handed no root, so the worker started in the host's workspace and a project's scheduled refresh
+wrote into the WORKSPACE's same-named collection — silently, since both paths exist and neither
+side errors.
 
-**Why it cannot ship yet.** A collection with `ingest.kind: "agent"` refreshes by dispatching a
-hidden worker, and the seed prompt core builds carries `dataPath` **straight from the schema** —
-root-relative (`promptPathsFor`). MulmoTerminal's `feedsSpawnWorker` calls `spawnClaudePty` with no
-cwd, so the worker stands in `CLAUDE_CWD`. Schedule a project root and its agent-ingest refresh
-therefore resolves `data/collections/<slug>/items` against the WORKSPACE — writing into the
-workspace's same-named collection. A silent cross-project write, which is the exact failure this
-whole plan exists to remove (invariant 3: the root is the trust boundary).
+core 3.2.0 forwards the root to `AgentWorkerRunner` (the upstream ask written up in
+`../mulmoclaude/plans/feat-collection-multi-root-3.md`, shipped as receptron/mulmoclaude#2849), and
+`feedWorkerSpawnOptions` turns it into the worker's cwd. That one option is the whole difference
+between refreshing a project and filling the workspace instead, which is why it has a file and a
+spec of its own.
 
-**The host cannot fix it alone.** `AgentWorkerRunner`'s args are
-`{ message, roleId, hidden, onComplete }` — no root. Only core knows which root the refresh is for.
-
-**The upstream change:** add `workspaceRoot` to the `AgentWorkerRunner` argument object and pass it
-from `refreshViaAgent`. MulmoTerminal then forwards it as the spawn's cwd. Single-workspace hosts
-ignore the new field, so it is additive. Then re-land the revert in #1582 — the commit is intact in
-history (`26ca37ae`) and its spec still describes the behaviour wanted.
-
-Declarative RSS/JSON feeds were never at risk (they fetch and write through the engine under the
-explicit root, with no agent involved) — but there is no way to register only those, because the
-refresh walks a root's collections internally.
+The calendar stays workspace-only: a Google grant is user-scope and its sync marker is workspace
+state, so a per-project sync would need a per-project answer to "which account" that nothing here
+has.
 
 ### 3.6 The self-containment check — DONE
 
@@ -313,6 +315,34 @@ Two consequences to keep in mind:
 
 ---
 
+### 3.9 What this feature broke, and the shape of it (2026-08-09)
+
+Two data-loss bugs, found because a user noticed their pinned favourites and their saved
+directories had shrunk. Fixed in #1585; recorded here because the SHAPE is what the next person
+needs, and one of them came straight out of this feature.
+
+> **A list that lives in ONE shared file was replaced wholesale from whatever one client happened
+> to hold.**
+
+- **Pinned shortcuts, deleted by a project-scoped index.** `<workspace>/config/shortcuts.json` is
+  workspace-global (shared with MulmoClaude), while the collection index that triggers
+  `reconcileShortcuts` fetches a list scoped to the SURFACE's project. Reconciling one against the
+  other says "every collection the workspace pinned is gone", and reconcile prunes and PERSISTS.
+  Opening the Collections pane on a project deleted 21 pins, in both apps, silently. A
+  project-scoped answer now reconciles nothing.
+- **Saved directories, deleted by a client that had not loaded them.** `recordPreset` sent
+  `presets.value` plus one entry, and that ref is empty until the first GET lands. A terminal
+  launched during that GET persisted `[the one just launched]` — five directories became one, and
+  four projects' collections stopped being served. Recording is now a one-entry mutation applied
+  server-side under a cross-process lock.
+
+**The rule that falls out of both:** "remember this" is an ADD-ONE, not a REPLACE-ALL. A client
+that never holds the list cannot delete it. Anything here that reconciles, prunes or persists a
+shared list against a view of it should be read with that in mind — including the next scoped
+surface someone adds.
+
+---
+
 ## 4. Open decisions — not bugs, genuinely undecided
 
 1. **Does the root search walk UP?** Today the root is the session's cwd exactly: a cell opened in
@@ -323,7 +353,12 @@ Two consequences to keep in mind:
 2. **A user-scope dependency in a git-tracked collection (§11 L1)** — warn or refuse?
 3. **`generateItemId()` is 4 random bytes.** Two machines creating records offline can collide;
    `primaryKey` avoids it. Widen upstream, or keep the guidance?
-4. **Does MulmoTerminal need a skill-bridge for the managed workspace at all?** It declares the
+4. **A feed's ignored records — DECIDED (2026-08-09): warning, not blocker.** They are a cache
+   re-fetched from a source the clone can reach, so the cost is a refresh rather than the data.
+   Found by running the check over a real workspace, which ignores `feeds/` on purpose and
+   therefore reported three feed collections as unclonable — a blocker nobody can act on is how a
+   check stops being read.
+5. **Does MulmoTerminal need a skill-bridge for the managed workspace at all?** It declares the
    staging path and mirrors nothing, so an agent authoring a collection skill in the workspace
    FROM MulmoTerminal writes a draft that never becomes active here.
 

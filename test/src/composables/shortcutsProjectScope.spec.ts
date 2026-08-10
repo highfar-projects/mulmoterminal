@@ -20,6 +20,8 @@ vi.mock("../../../src/composables/useShortcuts", () => ({
 // one is to catch what it registers.
 interface Bound {
   reconcileShortcuts?: (kind: string, live: { slug: string; title: string; icon: string }[]) => Promise<void>;
+  withScope?: (scope: string) => Bound;
+  listCollections?: () => Promise<unknown>;
 }
 let bound: Bound = {};
 vi.mock("@mulmoclaude/collection-plugin/vue", () => ({
@@ -52,6 +54,48 @@ beforeEach(() => {
 
 afterEach(() => {
   for (const surface of surfaces.splice(0)) popCollectionSurface(surface);
+});
+
+// A chat card is not the pane: it was made in one project and must keep reading it, while the
+// ambient project moves with whatever surface is on screen. The plugin (>= 3.1.0) asks the host
+// for a binding of its own; without one, a card built in project A shows project B's records the
+// moment the user walks away from A — same slug, same title, different rows.
+describe("withScope binds a card to the project it was made in", () => {
+  const urlOf = async (ui: Bound, run: (ui: Bound) => unknown): Promise<string> => {
+    let seen = "";
+    globalThis.fetch = vi.fn((url: string) => {
+      seen = String(url);
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
+    }) as unknown as typeof fetch;
+    await run(ui);
+    return seen;
+  };
+
+  it("is offered at all — the plugin only scopes a host that says it can", () => {
+    expect(typeof bound.withScope).toBe("function");
+  });
+
+  it("carries the CARD's project, not the surface's", async () => {
+    showSurface("pane-project");
+    const scoped = bound.withScope?.("card-project");
+    expect(scoped).toBeDefined();
+    const url = await urlOf(scoped as Bound, (ui) => ui.listCollections?.());
+    expect(url).toContain("project=card-project");
+    expect(url).not.toContain("pane-project");
+  });
+
+  it("keeps carrying it after the surface moves — the bug, stated as a test", async () => {
+    const scoped = bound.withScope?.("card-project") as Bound;
+    showSurface("another-project");
+    const url = await urlOf(scoped, (ui) => ui.listCollections?.());
+    expect(url).toContain("project=card-project");
+  });
+
+  it("leaves the global binding following the surface", async () => {
+    showSurface("pane-project");
+    const url = await urlOf(bound, (ui) => ui.listCollections?.());
+    expect(url).toContain("project=pane-project");
+  });
 });
 
 describe("reconcileShortcuts is refused for a project-scoped list", () => {
