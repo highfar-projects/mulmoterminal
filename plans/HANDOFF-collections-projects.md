@@ -378,9 +378,12 @@ surface someone adds.
    second, implicit answer to "which project is this", and the whole arc above is about there
    being exactly one.
 
-   The consequence, accepted: a cell opened in `~/proj/src` finds no collections and the pane says
-   so. If that ever reads as a fault rather than as a fact, the fix is a clearer message naming
-   the repository root — a HINT, not a search.
+   The consequence, accepted: a cell opened in `~/proj/src` sees THAT directory's collections and
+   only those — so it finds none unless someone put a `.claude/skills` there, which the decision
+   above says is not where collections go. (It must also be a directory the server serves as a
+   project; a directory that is not in `cwdPresets` has no collections here whatever it contains
+   — see §3.4's listing.) If the empty pane ever reads as a fault rather than as a fact, the fix
+   is a clearer message naming the repository root — a HINT, not a search.
 2. **A user-scope dependency in a git-tracked collection (§11 L1) — DECIDED (2026-08-09), NOT YET
    IMPLEMENTED.** The decision is that the answer is neither of the two this question offered: it
    must be PROHIBITED in the engine. `~` and a project are separate worlds, so standing in a
