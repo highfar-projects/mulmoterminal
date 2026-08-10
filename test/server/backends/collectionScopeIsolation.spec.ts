@@ -17,6 +17,7 @@ import { discoverCollections, loadCollection } from "@mulmoclaude/core/collectio
 
 import { initCollectionsBackend } from "../../../server/backends/collections.js";
 import { makeTempDir } from "../../support/tempDir";
+import { takeScratchHome, type ScratchHome } from "../../support/scratchHome";
 
 const schemaFor = (title: string, slug: string) => ({
   title,
@@ -36,17 +37,19 @@ const slugs = (collections: Array<{ slug: string }>): string[] => collections.ma
 
 describe("user scope reaches the managed workspace only", () => {
   const savedWorkspaceEnv = process.env.MULMOCLAUDE_WORKSPACE_PATH;
-  const savedHome = process.env.HOME;
+  let home: ScratchHome | null = null;
   let workspace = "";
   let project = "";
 
   // ONE binding for the file — `configureCollectionHost` refuses a second call with a different
-  // host on purpose. HOME is redirected because the binding derives `~/.claude/skills` from
-  // `os.homedir()`, which reads HOME on every call; the real one must never be scanned here.
+  // host on purpose. Home is redirected because the binding derives `~/.claude/skills` from
+  // `os.homedir()`, called afresh on every discovery; the real one must never be scanned here.
+  // Through `takeScratchHome`, which moves HOME *and* USERPROFILE and then verifies os.homedir()
+  // followed — on Windows only the latter counts, and stubbing HOME alone would leave this test
+  // reading the runner's own `~/.claude/skills`.
   beforeAll(() => {
-    const home = makeTempDir("mt-scope-home-");
-    process.env.HOME = home;
-    writeCollection(path.join(home, ".claude", "skills"), "user-only", "User Only");
+    home = takeScratchHome("mt-scope-home-");
+    writeCollection(path.join(home.path, ".claude", "skills"), "user-only", "User Only");
 
     workspace = makeTempDir("mt-scope-ws-");
     project = makeTempDir("mt-scope-proj-");
@@ -63,8 +66,7 @@ describe("user scope reaches the managed workspace only", () => {
   afterAll(() => {
     if (savedWorkspaceEnv === undefined) delete process.env.MULMOCLAUDE_WORKSPACE_PATH;
     else process.env.MULMOCLAUDE_WORKSPACE_PATH = savedWorkspaceEnv;
-    if (savedHome === undefined) delete process.env.HOME;
-    else process.env.HOME = savedHome;
+    home?.release();
   });
 
   it("merges user scope into the managed workspace", async () => {
