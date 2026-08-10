@@ -8,6 +8,87 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.8.1 — 2026-08-10
+
+> **Setup guide:** [A server that stops running out of terminals](https://receptron.github.io/mulmoterminal/guide/en/v4.8.1.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.8.1.html))
+
+**A server that had been up for days could no longer open a terminal at all.** Every spawn leaked
+two file descriptors on macOS — one of them a whole pseudo-terminal — so the count climbed until it
+hit `kern.tty.ptmx_max` (511 by default) and every new session failed with
+`forkpty: Device not configured`. Alongside it, two of the four things 4.8.0 said were missing from
+per-folder collections have landed.
+
+### The PTY file-descriptor leak ([#1597](https://github.com/receptron/mulmoterminal/pull/1597), fixes [#1595](https://github.com/receptron/mulmoterminal/issues/1595))
+
+`node-pty` is pinned to `1.2.0-beta.15`. Nothing in this repository could fix it: the leaked
+descriptors are opened by the native addon and never reach JS. The issue proposed calling node-pty's
+`destroy()` from every `kill()` site, but measurement showed that reclaims nothing — the master it
+closes is already closed by node-pty's own exit path. The two real mistakes are both in that
+library's macOS `pty_posix_spawn`: the parent's slave descriptor is never closed, and the `low_fds`
+cleanup loop skips index 0, which the guard loop leaves as the only entry it took. That second one
+holds a whole pseudo-terminal against the system limit.
+
+Verified on a live server rather than in isolation: six real terminal sessions opened and closed left
+six pseudo-terminals held on `1.1.0` and zero on the beta. `test/server/session/pty-fd-leak.spec.ts`
+counts real descriptors — both classes, since either mistake could return alone — so it keeps
+answering the question for whoever upgrades node-pty next. macOS only; the bug is in that platform's
+spawn path.
+
+One upstream defect remains and is documented rather than worked around: the beta's cleanup loop
+still reads out of bounds if `posix_openpt` fails three times in a row. `1.1.0` has the same read on
+that path *and* leaks, no published version bounds the loop, and the trigger is a system whose
+pseudo-terminals are already exhausted — the state this release removes.
+
+### Per-project feed refresh and per-card project scope ([#1590](https://github.com/receptron/mulmoterminal/pull/1590))
+
+Both items were blocked on the shared library and shipped as core 3.2.0 / collection-plugin 3.1.0.
+
+A collection that refreshes by dispatching an agent can be scheduled in a project folder again. The
+seed prompt addresses records root-relatively while the worker used to start in the host's
+workspace, so a project's scheduled refresh wrote into the **workspace's** same-named collection —
+silently, since both paths exist. core forwards the root now and it becomes the worker's cwd. The
+calendar stays workspace-only: a Google grant is user-scope, so a per-project sync would need a
+per-project answer to "which account".
+
+A card's binding is fixed to the project it was made in, instead of following whichever surface is
+active — which is why a card built in project A showed project B's records after the app moved.
+Everything project-dependent goes through the scoped resolver; what is per-surface rather than
+per-project (navigation) is built outside it.
+
+A feed collection's ignored records are now a warning rather than a portability blocker: a feed's
+records are a cache the clone re-fetches, so the cost is a refresh, not the data. Ordinary
+collections keep the blocker.
+
+### The agent hears the portability verdict; the phone can list projects ([#1585](https://github.com/receptron/mulmoterminal/pull/1585))
+
+A successful `putSchema` carries a `portability` field beside `written: true`. It is `putSchema` and
+nothing else, because that is the only action that can change what the check reads — creation is a
+plain file write the engine never sees. Quiet by construction: a clean collection is not mentioned,
+and a check that cannot run changes nothing about a write that did happen.
+
+`listCollectionProjects` returns `{ id, label }`, workspace first, and deliberately not the `cwd` the
+browser's listing carries — the phone is genuinely remote, and an absolute root in a command or
+artifact publishes the user's home directory over the wire. `docs/remote-host-protocol.md` records
+the three rules: an opaque id is never a path, omitted means the host's workspace, and an
+unresolvable id is an error rather than a fallback. The phone's own picker is still not in this repo.
+
+`POST /api/config` now reports when the saved-directory list actually moved, and the watcher sync is
+pulled forward instead of waiting out the 60-second poll — long enough that a new project's first
+collection read as broken rather than pending. Compared by path, so a relabelled preset wakes
+nothing.
+
+### Header chips follow the directory's ink ([#1592](https://github.com/receptron/mulmoterminal/pull/1592), fixes [#1591](https://github.com/receptron/mulmoterminal/issues/1591))
+
+With a saturated `headerColor`, the model/context badge and the usage chip stayed on `text-dim` and
+could sink into the background while the path and title beside them followed correctly. The
+`--cell-header-fg` chain those two already used is now a single named constant, and the three
+stragglers are connected to it. Unset directories fall back to `--text-dim`, so nothing moves.
+
+### Also
+
+- The toolbar's Collections door wears the pane's own icon ([#1594](https://github.com/receptron/mulmoterminal/pull/1594)).
+- Documentation: the Collections pane's browser verification is recorded ([#1593](https://github.com/receptron/mulmoterminal/pull/1593)), and the 4.8.0 notes say plainly not to put a collection in a project folder yet ([#1588](https://github.com/receptron/mulmoterminal/pull/1588), [#1589](https://github.com/receptron/mulmoterminal/pull/1589)).
+
 ## mulmoterminal@4.8.0 — 2026-08-10
 
 > **Setup guide:** [Collections in the cell, and tasks that catch up](https://receptron.github.io/mulmoterminal/guide/en/v4.8.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.8.0.html))
