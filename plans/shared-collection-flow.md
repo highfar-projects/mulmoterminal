@@ -402,7 +402,7 @@ slug を経由しない経路だけです。aid は UUID なので URL 自体が
 |---|---|
 | コレクション作成 / 名簿 / 反映の本体 | **動く** — ただし `@mulmoclaude/core` 3.8.0（**npm 未公開**、npm は 3.7.0）。**MulmoTerminal が lock しているのは 3.3.0** なので、上げるまでこのリポジトリからは新しい部分に触れない。Firestore ルールは本番に反映済み |
 | **deploy / publish の分割** | **未実装**（決定済み）。いまは core の `publishApp` 1 つが両方やる。分割後は MT 独自ツール `manageSharedApp` が持つ（実装順 7c） |
-| **MulmoClaude を触る変更** | **1 回だけ**（実装順 7a: ホストの能力宣言 + Firestore バインド解除の 2 つ。**export の追加は要らない**）。mulmoclaude#2870 で **PR 済み・未マージ**。以降 MT の作業は core 変更なしで進む |
+| **MulmoClaude を触る変更** | **2 本で打ち止め**（実装順 7a）: mulmoclaude#2870（能力の宣言 + バインド解除、**マージ済み**）と #2871（deploy / publish の投影・staging・appSlugs の置き場所・旧 `publishApp` の削除、**レビュー中**）。以降 MT の作業は core 変更なしで進む |
 | `aid` の UUID 自動生成 | **未実装**（決定済み） |
 | URL slug の確保 + `appSlugs` のルール | **未実装**（決定済み。ルールの 2 回目のデプロイを含む） |
 | **staging（スキーマ・ビューの草稿）** | **未実装**（決定済み）。`match /staging/{cid}` を上と同じデプロイに相乗りさせる |

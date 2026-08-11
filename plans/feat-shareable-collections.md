@@ -234,12 +234,14 @@ PR #2209 の当初案（レコードだけ Firestore、スキーマはディス�
 Web サイトは git を読めないので、Firestore への反映が要る。ただし**デプロイとして扱う**:
 
 ```text
-git (source of truth) ──deploy──> apps/{aid}/collections/{cid}.publishedSchema
-                                  + publishedCommit + publishedBy + publishedAt
-                                  + previousPublished（rollback 用）
+git (source of truth)
+  ──deploy───> apps/{aid}/staging/{cid}       .publishedSchema + そのコレクションの
+                                              ルール設定 + deployedAt/By/Commit
+  ──publish──> apps/{aid}/collections/{cid}   昇格。publishedAt/By/Commit
+               apps/{aid}                     + previousPublished（rollback 用）
 ```
 
-**成果物は 2 段になる**（D10 の staging）。deploy が `staging/{cid}` に書き、publish が
+**成果物は 2 段**（D10 の staging）。deploy が `staging/{cid}` に書き、publish が
 `collections/{cid}` へ昇格させる。公開ページが読むのは後者だけなので、**deploy は公開中の
 アプリのビューを差し替えない**。`/staging/{aid}` は `staging/{cid}` を読むので、publish 前でも
 描画できる。記名と前版の退避（`publishedCommit` / `publishedBy` / `publishedAt` /
@@ -2959,7 +2961,16 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
 6. **onSnapshot watcher** — `CollectionStore.watch` に載せる。
    `hostRunner.ts:154-184` の実装から `docChanges()` の扱いを持ち込む
 7. **worktreeEnv による aid の分岐** — D6
-   - **7a. MulmoClaude を触る唯一の変更**（D5）— **PR 済み・未マージ**
+   - **7a. MulmoClaude を触る変更（2 本で打ち止め）** — **7b 以降はこの 2 本の
+     マージと publish を待つ**:
+     - **mulmoclaude #2870**（マージ済み）— 能力の宣言と受け入れゲート、MC の
+       Firestore バインド解除
+     - **mulmoclaude #2871**（レビュー中）— ホストが deploy / publish を自前で回すのに
+       要る投影（`projectDeploy` / `projectPublish` / `promoteSchema`）、`staging` と
+       `appSlugs` の置き場所、そして **`manageCollection.publishApp` の削除**。
+       削除は必須で、任意ではない（下記）。ホストが依存する export は
+       `test_sharedHostSurface.ts` で固定した
+     以下は当初の 7a の記述（#2870 のみを指していた）— **PR 済み・未マージ**
      （mulmoclaude #2870、`@mulmoclaude/core` 3.9.0 はそのブランチにしか無く、npm にも
      出ていない）。**7b 以降はこれのマージと publish を待つ**:
      1. `setSharedCollectionsSupport()` と `acceptStorageSchema` のゲート
@@ -2972,7 +2983,8 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
      **`setSharedCollectionsSupport(true)` を別に呼ぶ**（`configureCollectionHost` の
      フィールドではない。理由は D5)
    - **7c. MT 独自ツール `manageSharedApp`** — `deploy` / `publish` / `unpublish` の 3 つ。
-     core の `publishApp` は残るが MT からは呼ばない（D5 の移行）。
+     core の `publishApp` は #2871 で**削除済み**なので、書き込み経路はこれ 1 本
+     （「残すが呼ばない」では MT で普通に動いてしまう。D5 の移行）。
      門番と射影は core の純粋関数を呼び、**順序（fail closed）と書き分けは MT が持つ**（D10）。
      `appSlugs` のルール（`published` フラグ）と **`match /staging/{cid}`** を
      mulmoserver に足すのはここ（1 回のデプロイにまとめる）
