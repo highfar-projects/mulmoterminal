@@ -1,5 +1,5 @@
 import { readableTextColor } from "../../common/contrast";
-import { isHexColor } from "./hexColor";
+import { isHexColor } from "../../common/hexColor";
 
 // Inline style for a directory's name badge: the configured color as the
 // background, with black or white text picked for contrast. Shared by the single

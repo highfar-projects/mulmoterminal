@@ -5,6 +5,7 @@ import { isThemeIdLike } from "../../common/themeVars";
 // Shared with the server config schema so the two can't drift — see common/themeColors.ts.
 import { THEME_COLOR_KEYS } from "../../common/themeColors";
 import { EMPTY_DIR_CHROME, type DirChrome } from "../../common/dirChrome";
+import { sanitizeHeaderStatusColors, sanitizeHeaderStatusTint, type HeaderStatusColors } from "../../common/headerStatusColors";
 import { normalizeFontSize } from "../../common/terminalFontSize";
 import { normalizeFontFamily } from "../../common/terminalFontFamily";
 import { normalizeOrderPriority } from "../../common/orderPriority";
@@ -30,6 +31,13 @@ export interface DirConfig extends DirChrome {
 }
 
 const EMPTY: DirConfig = { ...EMPTY_DIR_CHROME, theme: null, colors: null, hasSound: false, iconUrl: null };
+
+// null, not `{}`, when nothing is configured: that is what lets mergeHeaderStatusColors tell
+// "this directory says nothing" from "this directory says exactly nothing applies".
+function dirStatusColors(input: unknown): HeaderStatusColors | null {
+  const colors = sanitizeHeaderStatusColors(input);
+  return Object.keys(colors).length ? colors : null;
+}
 
 function parseColors(input: unknown): Partial<ITheme> | null {
   if (!isRecord(input)) return null;
@@ -71,6 +79,11 @@ function parse(c: unknown): DirConfig {
     badgeColor: typeof c.badgeColor === "string" ? c.badgeColor : null,
     headerColor: typeof c.headerColor === "string" ? c.headerColor : null,
     headerTextColor: typeof c.headerTextColor === "string" ? c.headerTextColor : null,
+    // Re-sanitized here rather than trusted, for the reason `fontSize` states below: the server
+    // validates, but this parser is the boundary, and these values are written into a style
+    // declaration.
+    headerStatusColors: dirStatusColors(c.headerStatusColors),
+    headerStatusTint: sanitizeHeaderStatusTint(c.headerStatusTint),
     cellColor: typeof c.cellColor === "string" ? c.cellColor : null,
     cellBorderColor: typeof c.cellBorderColor === "string" ? c.cellBorderColor : null,
     dotColor: typeof c.dotColor === "string" ? c.dotColor : null,

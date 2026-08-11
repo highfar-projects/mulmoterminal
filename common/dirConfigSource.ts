@@ -14,6 +14,8 @@ export const DIR_CONFIG_KEYS = [
   "badgeColor",
   "headerColor",
   "headerTextColor",
+  "headerStatusColors",
+  "headerStatusTint",
   "cellColor",
   "cellBorderColor",
   "dotColor",

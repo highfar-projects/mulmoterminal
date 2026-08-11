@@ -23,6 +23,7 @@ import { normalizeOrderPriority } from "../../common/orderPriority.js";
 import { SESSION_AGENTS } from "../../common/sessionAgent.js";
 import { NOTIFY_KINDS } from "../../common/notifyKinds.js";
 import { DIR_ICON_MAX_CHARS } from "../../common/dirIcon.js";
+import { HEADER_STATUS_KEYS, HEADER_STATUS_TINTS, sanitizeHeaderStatusColors, sanitizeHeaderStatusTint } from "../../common/headerStatusColors.js";
 import type { QuickCommand } from "../../common/quickCommands.js";
 import { isRecord } from "../../common/isRecord.js";
 import {
@@ -189,6 +190,22 @@ export type UserMcpServer = z.infer<typeof userMcpServerSchema>;
 
 export const dirColorField = hexColor.nullable().catch(null);
 export const dirThemeField = themeIdSchema.nullable().catch(null);
+// Per-status header colours, and whether a status recolours the header at all. The rules live in
+// common/ because the browser applies them and this file only has to let them through — a second
+// copy here is how a config the server accepts starts painting something else.
+export const dirHeaderStatusColorsField = z
+  .unknown()
+  .transform((value) => {
+    const colors = sanitizeHeaderStatusColors(value);
+    return Object.keys(colors).length ? colors : null;
+  })
+  .nullable()
+  .catch(null);
+export const dirHeaderStatusTintField = z
+  .unknown()
+  .transform((value) => sanitizeHeaderStatusTint(value))
+  .nullable()
+  .catch(null);
 // Clamped, not range-checked: normalizeFontSize keeps an out-of-range number at the nearest
 // usable size instead of discarding it, so `fontSize: 99` reads as "as big as allowed" rather
 // than silently falling back to the global size. writableDirConfigSchema below is the strict
@@ -422,6 +439,28 @@ const writableHeaderButtonSchema = z.discriminatedUnion("run", [
 const writableCustomChipSchema = z.object({ label: nonEmptyText, text: nonEmptyText, when: nonEmptyText.optional() });
 const writableHeaderChipSchema = z.union([builtinChipSchema, writableCustomChipSchema]);
 
+// A status may be given one colour or two. The bare string is the common case — recolour the
+// background and let the ink be derived — and accepting it here keeps the authoring form the same
+// shape the runtime already takes (sanitizeHeaderStatusColors).
+//
+// partialRecord for the reason `colors` below states: z.record over an enum marks every key
+// required in the generated JSON Schema, which would reject a config that recolours only `working`.
+const writableHeaderStatusColorsSchema = z.partialRecord(
+  z.enum(HEADER_STATUS_KEYS),
+  z.union([
+    z.string().regex(HEX_COLOR_RE),
+    z
+      .object({
+        background: z.string().regex(HEX_COLOR_RE).optional(),
+        text: z.string().regex(HEX_COLOR_RE).optional(),
+      })
+      // An entry with neither colour says nothing and would read as "configured" downstream.
+      .refine((entry) => entry.background !== undefined || entry.text !== undefined, {
+        message: "a status needs `background`, `text`, or both",
+      }),
+  ]),
+);
+
 const writableDirConfigSchema = z.object({
   name: nonEmptyText.max(NAME_MAX_CHARS).optional(),
   // The IMAGE marking this directory's cells (#1421) — a path relative to this file's own
@@ -434,6 +473,8 @@ const writableDirConfigSchema = z.object({
   badgeColor: z.string().regex(HEX_COLOR_RE).optional(),
   headerColor: z.string().regex(HEX_COLOR_RE).optional(),
   headerTextColor: z.string().regex(HEX_COLOR_RE).optional(),
+  headerStatusColors: writableHeaderStatusColorsSchema.optional(),
+  headerStatusTint: z.enum(HEADER_STATUS_TINTS).optional(),
   cellColor: z.string().regex(HEX_COLOR_RE).optional(),
   cellBorderColor: z.string().regex(HEX_COLOR_RE).optional(),
   dotColor: z.string().regex(HEX_COLOR_RE).optional(),

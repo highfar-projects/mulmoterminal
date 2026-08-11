@@ -31,6 +31,13 @@ import { parsePresetRef } from "../../common/notifySounds.js";
 import { MODEL_ID_ALLOWED } from "../../common/modelIds.js";
 import { sanitizeKeymap, type Keymap } from "../../common/keymap.js";
 import { sanitizeCockpitLines, DEFAULT_COCKPIT_LINES, type CockpitLines } from "../../common/cockpitLines.js";
+import {
+  sanitizeHeaderStatusColors,
+  sanitizeHeaderStatusTint,
+  DEFAULT_HEADER_STATUS_TINT,
+  type HeaderStatusColors,
+  type HeaderStatusTint,
+} from "../../common/headerStatusColors.js";
 import { normalizeFontFamily } from "../../common/terminalFontFamily.js";
 import { readTextFile } from "../infra/read-text-file.js";
 import { writeFileAtomicSync } from "../files/atomic-write.js";
@@ -135,6 +142,12 @@ export interface AppConfig {
   // already ships rather than creating anything, and a project that doesn't want one says
   // `"icon": false` in its own file. This is the switch for turning the whole behaviour off.
   autoDirIcon: boolean;
+  // What a cell header shows once a status replaces the directory's colour — working / done /
+  // blocked (#1617). The DEFAULT for every directory; a `.mulmoterminal.json` that names either
+  // key outranks it. Global rather than per-directory-only because the readable pairing of a
+  // status wash and its ink is a property of the THEME the user runs, not of one project.
+  headerStatusColors: HeaderStatusColors;
+  headerStatusTint: HeaderStatusTint;
   // Colour schemes the user defined, offered in Settings alongside the four built-ins (#996).
   // Server-side rather than per-browser (like `fontFamily`, unlike `fontSize`): a palette you
   // authored is an asset you want on every browser you open the app from. WHICH one is selected
@@ -439,6 +452,8 @@ export const emptyConfig = (): AppConfig => ({
   customAgents: [],
   quickCommands: [],
   userMcpServers: [],
+  headerStatusColors: {},
+  headerStatusTint: DEFAULT_HEADER_STATUS_TINT,
   themes: [],
   buttons: null,
   chips: null,
@@ -524,6 +539,8 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     customAgents: sanitizeCustomAgents(o.customAgents),
     quickCommands: sanitizeQuickCommands(o.quickCommands),
     userMcpServers: sanitizeUserMcpServers(o.userMcpServers),
+    headerStatusColors: sanitizeHeaderStatusColors(o.headerStatusColors),
+    headerStatusTint: sanitizeHeaderStatusTint(o.headerStatusTint) ?? DEFAULT_HEADER_STATUS_TINT,
     themes: sanitizeCustomThemes(o.themes),
     buttons: sanitizeButtons(o.buttons),
     chips: sanitizeChips(o.chips),
@@ -632,6 +649,8 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     customAgents: updated("customAgents", sanitizeCustomAgents, base.customAgents),
     quickCommands: updated("quickCommands", sanitizeQuickCommands, base.quickCommands),
     userMcpServers: updated("userMcpServers", sanitizeUserMcpServers, base.userMcpServers),
+    headerStatusColors: updated("headerStatusColors", sanitizeHeaderStatusColors, base.headerStatusColors),
+    headerStatusTint: updated("headerStatusTint", (input) => sanitizeHeaderStatusTint(input) ?? DEFAULT_HEADER_STATUS_TINT, base.headerStatusTint),
     themes: updated("themes", sanitizeCustomThemes, base.themes),
     buttons: updated("buttons", sanitizeButtons, base.buttons),
     chips: updated("chips", sanitizeChips, base.chips),
@@ -671,6 +690,8 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     customAgents: config.customAgents,
     quickCommands: config.quickCommands,
     userMcpServers: config.userMcpServers,
+    headerStatusColors: config.headerStatusColors,
+    headerStatusTint: config.headerStatusTint,
     themes: config.themes,
     buttons: config.buttons,
     chips: config.chips,

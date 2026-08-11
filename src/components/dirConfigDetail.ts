@@ -1,6 +1,7 @@
 import { isRecord } from "../../common/isRecord";
 import { DIR_ICON_ROUTE } from "../../common/dirIcon";
 import { EMPTY_DIR_CONFIG_SOURCE, type DirConfigSource } from "../../common/dirConfigSource";
+import { HEADER_STATUS_KEYS } from "../../common/headerStatusColors";
 import { presetLabel } from "./presets";
 
 // The settings modal's read-only view of one directory's `.mulmoterminal.json`, built off
@@ -60,6 +61,25 @@ function colorRows(config: Record<string, unknown>): DirConfigRow[] {
     const color = asString(config[key]);
     return color ? [{ key, label, value: color, color }] : [];
   });
+}
+
+// What the header shows once a status takes over the background (#1617). One row per status the
+// file named, plus the tint switch — the reader's question here is "which of these did I set", and
+// a status the file left alone has no row for the same reason an unset colour above has none.
+//
+// The row's swatch is the BACKGROUND, falling back to the text colour for an entry that named only
+// that: the swatch answers "what will I see", and for a text-only entry the ink is the only part
+// of that this file decides.
+function headerStatusRows(config: Record<string, unknown>): DirConfigRow[] {
+  const colors = isRecord(config.headerStatusColors) ? config.headerStatusColors : {};
+  const rows: DirConfigRow[] = HEADER_STATUS_KEYS.flatMap((status) => {
+    const entry = colors[status];
+    const swatch = isRecord(entry) ? (asString(entry.background) ?? asString(entry.text)) : asString(entry);
+    return swatch ? [{ key: "headerStatusColors", label: `Header while ${status}`, value: swatch, color: swatch }] : [];
+  });
+  const tint = asString(config.headerStatusTint);
+  if (tint) rows.push({ key: "headerStatusTint", label: "Status tint", value: tint, color: null });
+  return rows;
 }
 
 function terminalRows(config: Record<string, unknown>): DirConfigRow[] {
@@ -137,6 +157,7 @@ export function dirConfigRows(config: unknown, extras: unknown = {}): DirConfigR
     ...(name ? [{ key: "name", label: "Name", value: name, color: null }] : []),
     ...(iconUrl ? [{ key: "icon", label: "Icon", value: describeIcon(iconUrl, isRecord(extras) ? asString(extras.autoIcon) : null), color: null }] : []),
     ...colorRows(config),
+    ...headerStatusRows(config),
     ...terminalRows(config),
     ...(isRecord(extras) ? extraRows(extras) : []),
   ];
