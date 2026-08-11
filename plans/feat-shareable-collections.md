@@ -597,8 +597,12 @@ unpublish:  apps/{aid}.public を外す ← 最初 → appSlugs.published = fals
 **再 deploy が公開を巻き戻してはならない。** `apps/{aid}` をまるごと置換すると `public` が
 消えて**黙って非公開になる**。だが merge で避けてはいけない（merge は削除できない）—
 **置換して、`public` / `collections` / `participantRead` / `published*` /
-`previousPublished` は現在値をそのまま持ち越す**。`appSlugs.published` には触らない。D4 の「publish されたスキーマ」という言い方は
-**deploy が書く**に読み替える（公開の有無と関係なく、名簿の人が使うスキーマだから）。
+`previousPublished` は現在値をそのまま持ち越す**。`appSlugs.published` には触らない。
+
+> **`publishedSchema` は歴史的なフィールド名**（出荷済みなので改名は移行であって編集では
+> ない）で、**staging と公開の両方の文書で同じ名前が使われる**。名前に引きずられて
+> 「deploy が公開の成果物を書く」と読まないこと — deploy が書くのは `staging/{cid}`、
+> `collections/{cid}` を書くのは publish だけ（D4）。
 
 **publish は繰り返せる。** 公開設定を変えたら publish し直す（`unpublish` してからやり直す
 必要はない）。既に `published: true` の slug に対する publish は**冪等**で、`apps/{aid}.public`
