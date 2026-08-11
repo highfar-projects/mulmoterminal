@@ -269,15 +269,23 @@ MC は単一ワークスペース（`~/mulmoclaude`）、MT のプロジェク�
 core が特定のホストを知ることになり、MC を触る理由が増える。**ホストが能力を宣言する**:
 
 ```ts
-// core: host binding
-configureCollectionHost({ /* … */ sharedCollections: false });   // 既定は false
+// core: ホストが宣言する。setFirestoreAccessor の隣に置く
+setSharedCollectionsSupport(true);   // 既定は false
 
 // core: acceptStorageSchema
 if (storage.type === "firestore" && !hostSupportsSharedCollections())
   return { ok: false, reason: "this host does not support shared collections" };
 ```
 
-MC は宣言しない（既定 false）。MT だけが true にする。**core はどちらのホストの名前も知らない。**
+MC は宣言しない（既定 false）。MT だけが宣言する。**core はどちらのホストの名前も知らない。**
+
+> **`configureCollectionHost` のフィールドにしない。** あれは一度きりのバインドで、
+> 本番とテストが同じものを共有する。フィールドにすると、engine の shared store /
+> watcher を叩くテストが**自分で能力を立てられず**に落ちる（mulmoclaude #2870 で実際に
+> 27 件落ちた）。accessor が `configureCollectionHost` の外にあるのと同じ理由。
+>
+> **accessor から導出もしない。** 「いまセッションがあるか」と「そもそも共有コレクションを
+> 扱うか」は別の問いで、サインインしていないだけでスキーマが「無効」になってはいけない。
 
 ### 共有コレクションは MT だけの機能 — MC を触る回数を 1 回にする
 
@@ -2875,12 +2883,14 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
 6. **onSnapshot watcher** — `CollectionStore.watch` に載せる。
    `hostRunner.ts:154-184` の実装から `docChanges()` の扱いを持ち込む
 7. **worktreeEnv による aid の分岐** — D6
-   - **7a. MulmoClaude を触る唯一の変更**（D5）— 3 つをまとめて 1 本の PR にし、core を
-     publish する。**以降 MT 側の作業は core の変更なしで進む**:
-     1. ホストの能力宣言（`sharedCollections`、既定 false）と `acceptStorageSchema` のゲート
+   - ~~**7a. MulmoClaude を触る唯一の変更**~~（D5）— **実装済み**（mulmoclaude #2870、
+     `@mulmoclaude/core` 3.9.0）。**以降 MT 側の作業は core の変更なしで進む**:
+     1. `setSharedCollectionsSupport()` と `acceptStorageSchema` のゲート
      2. MC の Firestore バインド解除（`initFirestoreCollectionBinding` を落とす）
-     3. MT が deploy / publish を自前で持つのに要る export
-        （`validateCollectionRecords`、`discoverCollections`）
+
+     **export の追加は要らなかった** — `validateCollectionRecords` も
+     `discoverCollections` も `export *` で既に出ており、このリポジトリの
+     `server/backends/collections.ts` が現に import している
    - **7b. MT の Firestore 接続** — `setFirestoreAccessor` を MT で呼び、
      `configureCollectionHost` で `sharedCollections: true` を宣言する
    - **7c. MT 独自ツール `manageSharedApp`** — `deploy` / `publish` / `unpublish`。

@@ -45,8 +45,8 @@
  2. コレクション   を作って」        schemaDocs → putSchema     .claude/skills/<slug>/
  3. 招待        「◯◯さんに権限を」 members を書く             <repo>/app.json
  ──────────────────────────────────────────────────────────────────────────────
- 4. deploy      「deploy して」    deployApp                 apps/{aid}, スキーマ, slug 予約
- 5. publish     「publish して」   publishApp                apps/{aid}.public, config/public
+ 4. deploy      「deploy して」    manageSharedApp/deploy    apps/{aid}, スキーマ, slug 予約
+ 5. publish     「publish して」   manageSharedApp/publish   apps/{aid}.public, config/public
  ──────────────────────────────────────────────────────────────────────────────
  ──────────────────────────────────────────────────────────────────────────────
  6. 他の人      URL を開く         —                         Web ページ
