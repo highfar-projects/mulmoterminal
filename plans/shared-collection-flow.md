@@ -56,7 +56,8 @@
 保存自体を拒否されるので、順序は逆にできません（ステップ 1 の末尾）。
 
 **上の並びは番号の順に一度ずつ起こるのではありません。** deploy を何度も挟んで進み、
-publish は最後に一度だけです:
+publish で外に出ます。**publish も一度きりではありません** — 公開設定を変えたら
+publish し直します（`unpublish` は「公開をやめる」ときだけ）:
 
 ```text
  app.json に何を書いたか        打つもの      その結果
@@ -211,7 +212,7 @@ uid を刻みます）。
 
 > **`memberEmails` は書きません** — deploy が `members` から生成します。Web ページが
 > 「自分が参加しているアプリ」を引くための項目で、手で書くと不一致でルールに拒否されます。
-
+>
 > **足しただけでは効きません。** ルールは `app.json` を読まないので、招待が有効になるのは
 > **次の deploy の後**です。
 
@@ -249,12 +250,21 @@ uid を刻みます）。
 
 ### publish がやること
 
-1. **`apps/{aid}` に `public` ブロックを載せる** — **これが認可の本体**
-2. `config/public` を書く（描画用の射影）
-3. `appSlugs/{slug}` を `published: true` にする
+1. `config/public` を書く（描画用の射影）
+2. `appSlugs/{slug}` を `published: true` にする
+3. **`apps/{aid}` に `public` ブロックを載せる** — **これが認可の本体。だから最後**
 
-取り下げ（`unpublish`）はこの 3 つを戻します。公開設定を変えたいだけなら
-**publish し直せば済みます**（unpublish は要りません）。
+**順序が逆なのは意図的です。** 認可を握っているのは 3 だけなので、**最後に開けば
+途中で失敗しても公開が半端に開きません**。逆順だと「匿名アクセスは有効、描画データは
+古いか無い」という最悪の状態になります。可能なら 1 つの batch で書きます。
+`unpublish` はちょうど逆順（`public` を外すのが最初）。
+
+公開設定を変えたいだけなら **publish し直せば済みます**（`unpublish` は要りません）。
+再 publish は前版を `previousPublished` に退避して置き換えます。
+
+> **再 deploy が公開を巻き戻さないこと。** deploy は `apps/{aid}` を merge で書き、
+> `public` と `appSlugs.published` には触りません。まるごと置換すると `public` が消えて
+> **黙って非公開になります**。
 
 ### できるもの（Firestore）
 
@@ -276,7 +286,8 @@ appSlugs/sakura-hair              ← published: true にする（ここで URL 
 > 射影にすぎません。**deploy がここに `public` を書くと、その瞬間から匿名アクセスが
 > 有効**になり、`config/public` を伏せても止まりません。しかも `submit` 側は
 > `enabled` すら見ないので、「`enabled: false` なら安全」も成り立ちません。
-
+> ブロックが**無い**状態は非公開です（`publicOn` は `"public" in a` を先に見ます）。
+>
 > **予約と公開を分ける理由。** slug は人間可読なので、`appSlugs` が最初から引けると
 > **slug を当てるだけで aid が手に入り**、`/dev/{aid}` が推測可能になります。
 > `allow read: if resource.data.published == true` にすれば、**早く押さえられて、かつ

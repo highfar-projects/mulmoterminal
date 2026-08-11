@@ -310,7 +310,9 @@ main の worktree は本番 aid、feature の worktree は自動で別の scratc
 **worktree の `aid` は Firestore にまだ存在しない、から始まる。** 明示的な手当てが要る:
 新しい `aid` の `/apps/{aid}` ドキュメントは当然無いので、**worktree で最初に publish した
 とき（または worktree のアプリを最初に開いたとき）に、ホストが主リポジトリの `app.json` から
-`members` と公開設定を読み、新しい `aid` でシードする。** レコードは引き継がない
+`members` を読み、新しい `aid` でシードする。** **`public` ブロックは絶対にシードしない** —
+コピーした瞬間、その scratch アプリが公開状態で始まる（D10: `public` を載せるのは publish だけ）。
+レコードは引き継がない
 （引き継いだら「本番を壊さない」が嘘になる）。シードは所有者本人が実行するので
 `allow create` の条件をそのまま満たす。
 
@@ -413,10 +415,43 @@ https://<host>/dev/{aid}   名簿の人の入口。aid を直接指す。slug �
 - **門番の置き場所**: 拒否条件とライブレコードの事前検証は **deploy 側**（スキーマが壊れる話は
   公開の有無と無関係）。publish 側は「公開してよいか」だけ — `public.submit` の不変条件と slug
 
-**書き込み順は「アプリ本体が先」。** `appSlugs` の `allow create` は `get(apps/{aid})` で
-オーナーを確認するので、**`apps/{aid}` が存在しない初回 deploy では slug の予約が拒否される**。
-順序は `apps/{aid}` → `collections/{cid}` → `appSlugs`。既存の publish 実装が
-「app ドキュメントが他の 2 つを authorize するので先に書く」としているのと同じ理由。
+**deploy の書き込み順は「アプリ本体が先」。** `appSlugs` の `allow create` は
+`get(apps/{aid})` でオーナーを確認するので、**`apps/{aid}` が存在しない初回 deploy では
+slug の予約が拒否される**。順序は `apps/{aid}` → `collections/{cid}` → `appSlugs`。
+既存の publish 実装が「app ドキュメントが他の 2 つを authorize するので先に書く」と
+しているのと同じ理由。
+
+**publish の書き込み順は逆で、`public` を最後に置く（fail closed）。** publish は 3 つの
+文書を触るが、**認可を握っているのは `apps/{aid}.public` だけ**。だから
+
+```text
+publish:    config/public → appSlugs.published = true → apps/{aid}.public   ← 最後
+unpublish:  apps/{aid}.public を外す ← 最初 → appSlugs.published = false → config/public 削除
+```
+
+途中で失敗しても、**公開が半端に開くことはない**（射影と URL が先に整い、認可が最後に開く）。
+逆順に書くと、`public` だけ通って残りが落ちた瞬間に「匿名アクセスは有効、描画データは
+古いか無い」という最悪の状態になる。可能なら **1 つの batch（Firestore の WriteBatch は
+原子的）**で書き、batch が使えない経路ではこの順序を守る。**UUID の秘匿を安全弁にしない**
+という原則の帰結でもある。同時 publish の版混在は既知の穴（mulmoclaude #2866）。
+
+**`public` が無い状態は「非公開」。** `publicOn(a)` は `"public" in a` を先に見るので、
+ブロックが無ければ false で閉じる。deploy が `public` を書かない設計はこれに乗っている
+（新しいルールは要らない）。**deploy も worktree のシードも `public` をコピーしない**こと。
+
+**deploy の更新意味論 — 何を上書きし、何を残すか。**
+
+| 文書 | deploy | publish |
+|---|---|---|
+| `apps/{aid}`（名簿・内部設定） | **書く。ただし `public` を触らない**（merge） | `public` **だけ**を書く |
+| `collections/{cid}`（`publishedSchema`） | **書く**（スキーマは公開の有無と無関係） | 触らない |
+| `appSlugs/{slug}` | 無ければ予約（`published: false`）。**`published` を触らない** | `published` を反転 |
+| `config/public` | 触らない | 書く / 消す |
+
+**再 deploy が公開を巻き戻してはならない。** `apps/{aid}` をまるごと置換すると `public` が
+消えて**黙って非公開になる**ので、deploy 側は merge で書き、`public` と
+`appSlugs.published` には触らない。D4 の「publish されたスキーマ」という言い方は
+**deploy が書く**に読み替える（公開の有無と関係なく、名簿の人が使うスキーマだから）。
 
 **publish は繰り返せる。** 公開設定を変えたら publish し直す（`unpublish` してからやり直す
 必要はない）。既に `published: true` の slug に対する publish は**冪等**で、`apps/{aid}.public`
@@ -2671,8 +2706,15 @@ session    現在の議題とフェーズ   参加者 read のみ
 
 - [ ] **`appSlugs/{slug}` とそのルール** — D2b / D10。**まだ入っていない**（ルールの
       2 回目の cross-repo デプロイになる）:
-      - `allow create` — 「その aid のオーナーであること」を `get(apps/{aid})` で確認。
-        原子的な create-if-absent。**`apps/{aid}` を先に書いていること**が前提（D10）
+      - `allow create` — 「その aid のオーナーであること」を `get(apps/{aid})` で確認し、
+        **`request.resource.data.published == false` を要求**する（これが無いと、予約の
+        時点で公開済みとして作れてしまい publish を素通りできる）。原子的な
+        create-if-absent。**`apps/{aid}` を先に書いていること**が前提（D10）
+      - **衝突時の再試行はクライアント側**。予約前の文書は読めない（`published == false`
+        なので `allow read` に落ちる）ので、**空きを事前に調べることはできない**。
+        `already exists` を受けたら次の候補（`-2`、`-3`…）で create し直す。同時 deploy が
+        同じ候補を選ぶことがあるので、**成功した slug を `app.json` に書き戻して以降は
+        再生成しない**
       - `allow update` — **オーナーのみ、かつ `aid` の付け替えを禁止**
         （`request.resource.data.aid == resource.data.aid`）。publish / unpublish が
         `published` を反転させるので、これが無いと既定の deny で両方が失敗する
