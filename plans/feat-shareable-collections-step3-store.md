@@ -151,12 +151,41 @@ publisher の catch に飲まれ、**ライブ更新が理由も告げずに止�
      対応表が要る。`collectionKeyName()` が「索引用であって同一性ではない」と警告している罠を
      わざわざ 2 倍にする形
    - firestore バリアントは `.strict()`（決定 2）。そこに `cid` を足すのは
-     「位置を宣言させない」という論拠に自分で穴を開けること。改名したければ skill ディレクトリを改名する
+     「位置を宣言させない」という論拠に自分で穴を開けること
+   - **ただし「改名したければディレクトリを改名すればよい」ではない。** 下記
    - 文字集合は既に整合している。`slug` は `safeSlugName` を通っており、
      `sharedCollectionKey` の `namePart` が使う `SAFE_SLUG_PATTERN` と同じ規則。
      Firestore のドキュメント id としても安全（`.` / `..` / `/` を含まない）
    - **親プランのキー一覧（「この計画が新規に提案するキー」）は `storage.type: "firestore"` + `cid`
      と書いていたが、これは決定 1 より前の stale な記述。** 同じ PR で修正した
+
+## 改名 — 共有レコードを持つコレクションの slug は不変
+
+`cid == slug`（決定 7）の帰結。ディレクトリを改名すると**コレクションの同一性が変わる**ので、
+`apps/{aid}/collections/<旧 slug>/items` のレコードはそこに残り、改名後のコレクションは
+**空に見える**。Firestore にドキュメントの move は無く、ルールにも別名の仕組みは無い。
+
+> **共有レコードを 1 件でも持つコレクションの slug は不変とする。**
+> 空のうち（publish 前・レコード 0 件）は自由に改名してよい。
+
+改名がどうしても要るなら、それは**コピーと削除**であって rename ではない:
+新しい slug のコレクションを作り、旧 `cid` の items を読んで新 `cid` に書き、旧を消す。
+クライアントから可能かは**コレクションの宣言で決まる**（マージ済みルール）:
+
+| 宣言 | 移行できるか | ルール上の理由 |
+|---|---|---|
+| 素の共有コレクション | できる | writer は create も delete も通る |
+| **`submitOnly: true`** | **書き込めない** | `createWith` の writer 分岐が `!submitOnly` で閉じている — 投稿経路を通っていないレコードを作らせないため |
+| **`immutable: true`** | **消せない** | `itemDelete` が `!immutable` を要求する |
+
+**これは制限ではなく設計そのものである。** `submitOnly` と `immutable` は
+「捏造できない」「改竄できない」を担保するために入れた。移行が通ってしまうなら、
+どちらの保証も成立していない。したがって**議会投票やアンケートのように記録の完全性を
+宣言したコレクションの slug は、レコードが 1 件でもあれば永久に不変**。
+
+ルールを緩めて移行を通す案は採らない（緩めた瞬間に上の 2 つの保証が消える）。
+オーナーが本当に必要とするなら、それは**再帰削除でアプリごと畳んで作り直す**操作であり、
+親プランの削除手順に属する。
 
 ## 匿名申込は許さない（オーナー判断、2026-08-10）
 
@@ -193,10 +222,27 @@ publisher の catch に飲まれ、**ライブ更新が理由も告げずに止�
   それは設計が親プランから外れた合図。**先に立ち止まって確認すること**
   （ルールは cross-repo のデプロイで、凍結インフラ）
 
-コマンド: `cd ../mulmoclaude/packages/core && yarn test && yarn typecheck && yarn lint && yarn build`、
-ルートで `yarn test`。core の version を上げたら
-`yarn run check:launcher-sync` と `node scripts/packages/check-changelog-ships.mjs` も通すこと
-（**両方とも CI のゲートで、バージョンを上げただけで落ちる**）。
+コマンド。**どのディレクトリで走らせるかで別のスイートが走る**ので、明示する
+（`<mulmoclaude>` は `../mulmoclaude` の絶対パス）:
+
+```bash
+# core パッケージ
+cd <mulmoclaude>/packages/core && yarn test && yarn typecheck && yarn lint && yarn build
+
+# mulmoclaude のリポジトリルート（ホスト側のテストとバージョンゲート）
+cd <mulmoclaude> && yarn test
+cd <mulmoclaude> && yarn run check:launcher-sync
+cd <mulmoclaude> && node scripts/packages/check-changelog-ships.mjs
+```
+
+**後ろ 2 つは core の version を上げた瞬間に落ちる CI ゲート**で、直し方が違う:
+
+- `check:launcher-sync` — `packages/mulmoclaude/package.json` と
+  `packages/plugins/google-plugin/package.json` の `@mulmoclaude/core` レンジを
+  新しい version に合わせる
+- `check-changelog-ships.mjs` — `docs/CHANGELOG.md` の **`[Unreleased]` の
+  `Ships` 行**を直す。**公開済みのバージョン節を書き換えてはいけない**
+  （出荷していないバージョンを歴史に書くことになる）
 
 ## 範囲外
 
