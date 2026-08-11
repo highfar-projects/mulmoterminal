@@ -2587,7 +2587,9 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
 4. **discovery の 2 ソース化 + skill materialize** — ディスク ∪ Firestore(memberEmails ∋ 自分)。
    Claude Code はディスクのスキルしか読めないので、購読時に skillText を materialize する
    （`schemaVersion` で張り替えるキャッシュとして）
-5. **publish**（git → Firestore、記名 + 事前検証 + 前版保持）。**`submitOnly` の不変条件を
+5. **publish**（git → Firestore、記名 + 事前検証 + 前版保持）。
+   **引き継ぎ用の切り出し: [`feat-shareable-collections-step5-publish.md`](./feat-shareable-collections-step5-publish.md)**
+   （ルールが実際に読むフィールドの正解表、authored → published 変換表、publish が拒否する不変条件つき）。**`submitOnly` の不変条件を
    ここで拒否する**（「`audience` は投稿経路しか縛らない」参照）— リンターは作者の手元でしか
    走らないので、保証はこちらに置く
 6. **onSnapshot watcher** — `CollectionStore.watch` に載せる。
