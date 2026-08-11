@@ -206,6 +206,33 @@ publisher の catch に飲まれ、**ライブ更新が理由も告げずに止�
 - 招待 UI / メンバー管理（実装順 8）
 - MulmoTerminal 側の配線（core の publish 後）
 
+### 持ち越し: 共有コレクションの完了ベルを `(aid, cid)` で鍵にする
+
+**mulmoclaude #2856 のレビュー（codex, P2）で挙がった。実装順 3 では直さない。**
+
+現状、共有コレクションのベル id は `completionLegacyId(slug, itemId, root)` で作られる
+（`aid` の引数はあるが誰も渡していない）。MulmoClaude は単一ワークスペースなので `root` は
+`undefined`＝従来どおりの素の id になり、**今日の挙動は壊れていない**。壊れるのは
+**MT が同じアプリを 2 つのプロジェクトルートにクローンしたとき** — 同じ
+`(aid, cid, itemId)` がチェックアウトごとに別のベルを生む。
+
+**なぜここで直さないか。** 直すには `sweepVerdict` が決めていない設計判断が要る。今それは
+`aid` を持つエントリを**必ず `skip`** する（「共有のベルを退役させてよいのは共有の watcher
+だけ」）ので、id だけ `aid` 付きに変えると、実装順 3 で入れた
+「`completionField` を消したらベルが消える」が**静かに効かなくなる**。
+決めるべきは「**どのホストが共有ベルを退役させてよいか**」で、これは親プランが持つ判断。
+プランから外れる変更を単独で入れないという、このプランの規律に従って持ち越す。
+
+**やるとき**（実装順 7 = MT の配線 / worktree の `aid` 分岐と同じ回が自然）:
+
+1. `sweepVerdict` に共有の分岐を入れる — そのアプリのコレクションをディスクに持つホストが
+   判定してよい、という規則にする（`isStaleEntry` は slug をディスクで解決するので、
+   持っていないホストが判定すると生きたベルを消す）
+2. `reconcileItem` / `reconcileAllItems` が `collection.appId` を
+   `completionLegacyId` の `aid` に渡す（`root` とは排他。id 側は既に throw で守っている）
+3. `buildNavigateTarget` / `buildPluginData` は adapter の契約なので**署名を変えない** —
+   共有のときは `root: undefined` を渡す。契約変更は MT のポートを伴う
+
 ## 落とし穴（このプランの過去の巡回で実際に起きたもの）
 
 - **静的レビューは「読む限り正しく見える」を止められない。** 実装順 2 のルールは
