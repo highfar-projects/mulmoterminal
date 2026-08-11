@@ -241,7 +241,7 @@ git (source of truth) ──deploy──> apps/{aid}/collections/{cid}.published
 
 **成果物は 2 段になる**（D10 の staging）。deploy が `staging/{cid}` に書き、publish が
 `collections/{cid}` へ昇格させる。公開ページが読むのは後者だけなので、**deploy は公開中の
-アプリのビューを差し替えない**。`/dev/{aid}` は `staging/{cid}` を読むので、publish 前でも
+アプリのビューを差し替えない**。`/staging/{aid}` は `staging/{cid}` を読むので、publish 前でも
 描画できる。記名と前版の退避（`publishedCommit` / `publishedBy` / `publishedAt` /
 `previousPublished`）は**昇格させる側**が書く — 「いま公開されているのはどの版か」は
 publish の問い。
@@ -250,7 +250,7 @@ publish の問い。
 > （`publishProject.ts`）。改名は移行であって編集ではないので、名前はそのまま、
 > **意味は「deploy が書いた版」**と読む。
 
-見た目が古いときの原因は 2 段階で切り分ける: 名簿の人の画面（`/dev/{aid}`）が古ければ
+見た目が古いときの原因は 2 段階で切り分ける: 名簿の人の画面（`/staging/{aid}`）が古ければ
 **deploy していない**、公開ページ（`/{slug}`）だけが古ければ **publish していない**。
 
 ### D5. MulmoClaude はサポートしない
@@ -426,7 +426,7 @@ publish が「Firestore に出す」と「本番にする」を兼ねていた�
 
 ```text
 https://<host>/{slug}      公開の顔。未サインインでも読める。slug を確保して初めて生きる
-https://<host>/dev/{aid}   名簿の人の入口。aid を直接指す。slug を経由しない
+https://<host>/staging/{aid}   名簿の人の入口。aid を直接指す。slug を経由しない
 ```
 
 **認可はすでにルールが持っている** — `public.enabled` が false なら名簿に載っていない人は
@@ -437,7 +437,7 @@ https://<host>/dev/{aid}   名簿の人の入口。aid を直接指す。slug �
 
 入口を分けただけでは足りない。`apps/{aid}/config/*` は `allow read: if true` なので、
 **テストのために反映しただけでアプリ名が世界に読める**。さらに `appSlugs/{slug}` が
-最初から引けると、**人間可読な slug を当てるだけで aid が手に入り**、`/dev/{aid}` の
+最初から引けると、**人間可読な slug を当てるだけで aid が手に入り**、`/staging/{aid}` の
 秘匿が消える。だから操作の側も分ける:
 
 | | 何をするか | 何を書くか | 危険度 |
@@ -477,12 +477,12 @@ https://<host>/dev/{aid}   名簿の人の入口。aid を直接指す。slug �
 公開ページが読めるドキュメントに草稿を入れれば草稿も読まれる。**別のドキュメントに分ける**:
 
 ```text
-apps/{aid}/staging/{cid}       deploy が書く。名簿の人だけが読む。/dev/{aid} が描画に使う
+apps/{aid}/staging/{cid}       deploy が書く。名簿の人だけが読む。/staging/{aid} が描画に使う
 apps/{aid}/collections/{cid}   publish が昇格させる。公開ページが読む（従来どおり）
 ```
 
 - **レコードのツリーは 1 つのまま。** staging はスキーマとビューの置き場所であって、
-  データの分岐ではない。`/dev/{aid}` で試したレコードはそのまま本番のレコード
+  データの分岐ではない。`/staging/{aid}` で試したレコードはそのまま本番のレコード
 - **スキーマ変更は後方互換である限りエラーにならない。** 公開中の古いスキーマは、
   新しく増えたフィールドを知らないだけで、既存のレコードを読み続けられる。
   後方互換でない変更は publish のライブレコード事前検証が止める（`confirm` で強行可能）
@@ -552,20 +552,22 @@ unpublish:  apps/{aid}.public を外す ← 最初 → appSlugs.published = fals
 と `config/public` を新しい版で置き換え、`previousPublished` に前版を退避する。
 `unpublish` は「やめる」ときだけ。同時 publish の版混在は既知の穴（mulmoclaude #2866）。
 
-`/dev/{aid}` は **deploy だけで動く**。つまりテストと招待は publish 抜きで完結する。
+`/staging/{aid}` は **deploy だけで動く**。つまりテストと招待は publish 抜きで完結する。
 
 段階はこうなる。**`publish` は操作、`public` は `app.json` のブロック名**（紛らわしいが別物）:
 
 | | 何をする | 誰に見えるか |
 |---|---|---|
-| 1 | `app.json` + スキーマ → **deploy** | オーナーだけ。`/dev/{aid}` で**実データで**動作確認 |
-| 2 | `members` を足す → **deploy** | 招待した人も `/dev/{aid}` を使える |
+| 1 | `app.json` + スキーマ → **deploy** | オーナーだけ。`/staging/{aid}` で**実データで**動作確認 |
+| 2 | `members` を足す → **deploy** | 招待した人も `/staging/{aid}` を使える |
 | 3 | `public` を足す → **publish** | `/{slug}` が生き、お客さんが来る |
 
-**`/dev/{aid}` は公開後も消えない。** お客さんが `/{slug}`、スタッフが `/dev/{aid}` で
-承認作業をする、という使い分けがそのまま残る。つまりこれは開発環境ではなく、
-**同じ本番アプリを公開の顔抜きで見ている**だけ。名前が実態と合っていないので
-`/app/{aid}` への改名は検討に値するが、未決（「未解決の論点」）。
+**`/staging/{aid}` は公開後も消えない。** お客さんが `/{slug}`、スタッフが `/staging/{aid}` で
+承認作業をする、という使い分けがそのまま残る。**名簿の人が見るのは常に staging の版**
+（`staging/{cid}`）で、お客さんが見るのは昇格済みの版 — 入口の名前と、その入口が読む
+ドキュメントの名前が一致している。
+
+これは開発環境ではない。**データは 1 つ**で、staging なのはスキーマとビューだけ。
 
 ---
 
@@ -2955,9 +2957,9 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
 **共有**
 
 8. **招待 UI（email 追加）と viewer / participant ロール** — ここで初めて他人が入る。
-   **招待は Web の `/dev/{aid}` への招待**であって、相手の MulmoTerminal には何も起きない
+   **招待は Web の `/staging/{aid}` への招待**であって、相手の MulmoTerminal には何も起きない
 9. **mulmoserver に webview** — `@mulmoclaude/collection-plugin` を 3 つ目のホストに載せる。
-   **先に作るのは `/dev/{aid}`**（D10）— サインインしてロールを引く管理側の入口。
+   **先に作るのは `/staging/{aid}`**（D10）— サインインしてロールを引く管理側の入口。
    これが 8 の招待を意味あるものにし、12 より前に**実データでの動作確認**を可能にする
 10. **スキーマの `.strict()` 化 または 生 JSON リンター** — どちらを取るか決める（上記参照）。
     **新キーを足す前**でないと、書いたキーが黙って消えたまま先に進む
@@ -2967,7 +2969,7 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
 **シナリオを揃える**
 
 12. **公開ページ（`/{slug}`）+ App Check** — `auth` の 3 段階を同時に。
-    9 の `/dev/{aid}` とは**別の顔**で、`config/public` だけを読んで未サインインでも描ける（D10）
+    9 の `/staging/{aid}` とは**別の顔**で、`config/public` だけを読んで未サインインでも描ける（D10）
 13. **`then.email` + Trigger Email 拡張**
 14. **`schedule` ビュー** → **美容室シナリオが揃う**
 15. **`idFrom` / `finalize` / `window` / `aggregate`**（UI と集計側）→ **アンケートシナリオが揃う**
@@ -3003,7 +3005,6 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
 - **repo 権限と members のずれ**をどう見せるか（当面は members をヘッダーに常時出すだけ）
 - **email の同一性**（変更・再利用）— 当面受容
 - ~~**公開ページの URL 設計** — `/{aid}` か、人間可読な slug を別に持つか~~ — **決定（D10）**。
-  **両方**で、別の顔を出す: `/{slug}` が公開ページ、`/dev/{aid}` が名簿の人の入口。
-  残る論点は**名前だけ** — `/dev/{aid}` は公開後も使う本番の入口なので `dev` は誤解を招く
-  （`/app/{aid}` が候補）
+  **両方**で、別の顔を出す: `/{slug}` が公開ページ、`/staging/{aid}` が名簿の人の入口。
+  名前は `staging` — その入口が読むドキュメント（`apps/{aid}/staging/{cid}`）と一致する
 - **`then.email` のテンプレート**をどこに置くか（git のリポジトリ内 → publish、が自然か）

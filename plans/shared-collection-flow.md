@@ -62,8 +62,8 @@ publish し直します（`unpublish` は「公開をやめる」ときだけ）
 ```text
  app.json に何を書いたか        打つもの      その結果
  ─────────────────────────────────────────────────────────────────────────
- aid + スキーマ             →   deploy    自分だけが /dev/{aid} で実データを試せる
-   + members（招待）        →   deploy    招待した人も /dev/{aid} を使える
+ aid + スキーマ             →   deploy    自分だけが /staging/{aid} で実データを試せる
+   + members（招待）        →   deploy    招待した人も /staging/{aid} を使える
    + public（公開設定）     →   publish   /{slug} が生き、お客さんが来る
 ```
 
@@ -75,13 +75,13 @@ publish し直します（`unpublish` は「公開をやめる」ときだけ）
 | **publish** | **公開する** | staging の**昇格**（`collections/{cid}`）、**`apps/{aid}.public`（認可の本体）**、`config/public`、`appSlugs` の公開 | 唯一の危険な操作 |
 
 外に出る文書を作るのは publish だけなので、**テストのために deploy しても何も漏れません**。
-`/dev/{aid}` は deploy だけで動きます — 認可はもう `apps/{aid}` の名簿が持っているからです。
+`/staging/{aid}` は deploy だけで動きます — 認可はもう `apps/{aid}` の名簿が持っているからです。
 
 > **`publish` と `public` は別物です。** `publish` は**操作**、`public` は
 > **`app.json` の中のブロック名**（名簿に載っていない人に何を許すかの設定）。
 > `public` を書いて publish すると公開されます。
 
-**Web の入口は 2 つあります**（`/{slug}` は公開の顔、`/dev/{aid}` は名簿の人の入口）。
+**Web の入口は 2 つあります**（`/{slug}` は公開の顔、`/staging/{aid}` は名簿の人の入口）。
 招待や公開の前に本物で試せるのはこのためです — 詳しくはステップ 5。
 
 **ローカルのファイルは、それ自体では誰にも届きません。** Firestore のルールが読むのは
@@ -277,7 +277,7 @@ MT だけの機能だからです。詳しくは本文の D5）
 ```text
 deploy が書く（名簿の人だけ）
 apps/{aid}                        ← 名簿・内部設定。public ブロックは含めない
-  └── staging/bookings            ← スキーマとビューの草稿。/dev/{aid} が描画に使う
+  └── staging/bookings            ← スキーマとビューの草稿。/staging/{aid} が描画に使う
 appSlugs/sakura-hair              ← { aid, published: false } 予約だけ。誰も引けない
 
 publish が書く（外に出る）
@@ -293,7 +293,7 @@ appSlugs/sakura-hair              ← published: true にする（ここで URL 
 > 公開ページが読めるドキュメントに草稿を入れれば草稿も読まれます。
 >
 > **レコードのツリーは 1 つのまま**で、staging はスキーマとビューの置き場所です。
-> だから `/dev/{aid}` で試したレコードはそのまま本番のレコードになります。
+> だから `/staging/{aid}` で試したレコードはそのまま本番のレコードになります。
 > **スキーマの変更は後方互換である限りエラーになりません** — 公開中の古いスキーマは、
 > 増えたフィールドを知らないだけで既存のレコードを読み続けられます。後方互換でない
 > 変更は publish のライブレコード事前検証が止めます。
@@ -307,7 +307,7 @@ appSlugs/sakura-hair              ← published: true にする（ここで URL 
 > ブロックが**無い**状態は非公開です（`publicOn` は `"public" in a` を先に見ます）。
 >
 > **予約と公開を分ける理由。** slug は人間可読なので、`appSlugs` が最初から引けると
-> **slug を当てるだけで aid が手に入り**、`/dev/{aid}` が推測可能になります。
+> **slug を当てるだけで aid が手に入り**、`/staging/{aid}` が推測可能になります。
 > `allow read: if resource.data.published == true` にすれば、**早く押さえられて、かつ
 > 公開まで誰も辿れません**。**UUID の推測しにくさを認可の境界にしない**、が原則です。
 
@@ -337,22 +337,22 @@ appSlugs/sakura-hair              ← published: true にする（ここで URL 
 
 ```text
 https://<host>/sakura-hair     公開の顔。お客さん向け
-https://<host>/dev/{aid}       名簿の人の入口。slug を経由しない
+https://<host>/staging/{aid}       名簿の人の入口。slug を経由しない
 ```
 
 **公開ページ**（`/sakura-hair`）は `appSlugs/sakura-hair` から aid を引き、
 `apps/{aid}/config/public` を読んで描きます。**未ログインでも読めます**
 （`config` だけが `allow read: if true`）。
 
-**名簿の人の入口**（`/dev/{aid}`）はサインインしてからロールを引いて描く管理側の画面です。
+**名簿の人の入口**（`/staging/{aid}`）はサインインしてからロールを引いて描く管理側の画面です。
 **deploy だけで動きます**（publish は要りません）。だから**招待や公開の前に実データで
 動作確認できます**。認可は
 すでにルールが持っているので、Firestore 側に足すものはありません — 足りなかったのは
 slug を経由しない経路だけです。aid は UUID なので URL 自体が推測不能です。
 
-> **これは開発環境ではありません。** 公開後も消えず、お客さんは `/sakura-hair`、
-> スタッフは `/dev/{aid}` で承認作業をする、という使い分けがそのまま残ります。
-> 名前が実態と合っていないので `/app/{aid}` への改名は未決です。
+> **公開後も消えません。** お客さんは `/sakura-hair`、スタッフは `/staging/{aid}` で
+> 承認作業をする、という使い分けがそのまま残ります。名簿の人が見るのは常に
+> **staging の版**（`staging/{cid}`）で、お客さんが見るのは**昇格済みの版**です。
 
 **検証用に別の aid を立てる形は採りません。** テストで入れたデータが本番に持ち越せず、
 「dev では動いたが live に無い」を作るためです。aid もレコードのツリーも 1 つのままです。
@@ -361,7 +361,7 @@ slug を経由しない経路だけです。aid は UUID なので URL 自体が
 
 | 相手 | 何をするか | 認可 |
 |---|---|---|
-| **あなた / 田中さん** | `/dev/{aid}` で実データを試す（公開前でも） | サインイン → ルールが `members` からロールを引く |
+| **あなた / 田中さん** | `/staging/{aid}` で実データを試す（公開前でも） | サインイン → ルールが `members` からロールを引く |
 | **お客さん** | 予約を申し込む | `public.submit` の宣言。`auth: "verifiedEmail"` ならメール確認済みのサインインが要る |
 | **田中さん（editor）** | 予約を承認する | サインイン → ルールが `members` からロールを引く |
 | **あなた（owner）** | 全部 + publish | 同上 |
@@ -369,7 +369,7 @@ slug を経由しない経路だけです。aid は UUID なので URL 自体が
 **MulmoTerminal は要りません。** ルールが `request.auth.token.email` を `members` に
 突き合わせるので、認可はサーバー側（Firestore）で完結します。
 
-**実装状況**: Firestore ルールは本番に反映済みで動く。**Web ページ自体が未実装** — `/dev/{aid}` が実装順 9、
+**実装状況**: Firestore ルールは本番に反映済みで動く。**Web ページ自体が未実装** — `/staging/{aid}` が実装順 9、
 `/{slug}` が実装順 12。
 
 ---
