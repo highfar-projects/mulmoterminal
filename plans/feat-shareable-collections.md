@@ -536,8 +536,13 @@ match /staging/{cid} {
 - **slug の予約は deploy、公開は publish。** `appSlugs/{slug}` に `published: false` を持たせ、
   `allow read: if resource.data.published == true`。**早く押さえられて、かつ公開まで誰も
   辿れない**。`get(apps/{aid})` が要らないので読み取りの式数は増えない（D7 の監視点）
-- **門番の置き場所**: 拒否条件とライブレコードの事前検証は **deploy 側**（スキーマが壊れる話は
-  公開の有無と無関係）。publish 側は「公開してよいか」だけ — `public.submit` の不変条件と slug
+- **門番の置き場所**: 拒否条件は **deploy 側**（スキーマが壊れる話は公開の有無と無関係）。
+  publish 側は「公開してよいか」— `public.submit` の不変条件と slug。
+  **ライブレコードの検証は両方で行う。** deploy の検証は `confirm` で強行できる
+  （移行の途中など、staging で先に進めたいことがある）ので、**強行された草稿がそのまま
+  公開に出ないよう、publish は昇格させる版をもう一度検証して fail closed で止まる**。
+  publish 側の強行には publish 自身の `confirm` が要る — deploy の `confirm` は
+  引き継がれない
 
 **deploy の書き込み順は「アプリ本体が先」。** `appSlugs` の `allow create` は
 `get(apps/{aid})` でオーナーを確認するので、**`apps/{aid}` が存在しない初回 deploy では
