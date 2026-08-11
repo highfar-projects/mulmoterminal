@@ -265,15 +265,41 @@ MC は単一ワークスペース（`~/mulmoclaude`）、MT のプロジェク�
 同じ名簿**になる。「顧客リストの共有相手が血液検査の結果も見える」形になり、D1 の
 「共有範囲はフォルダ境界と一致する」が成り立たない。
 
-**黙って成立させない。** ホストが「この root は共有コレクションを持てない」と宣言する形で、
-コードで拒否する:
+**黙って成立させない。** ただし core が `isManagedWorkspace`（MT の関数）を呼ぶ形にはしない —
+core が特定のホストを知ることになり、MC を触る理由が増える。**ホストが能力を宣言する**:
 
 ```ts
-if (schema.storage?.type === "firestore" && isManagedWorkspace(workspaceRoot))
-  return { ok: false, reason: "shareable collections live in a project repository, not the workspace" };
+// core: host binding
+configureCollectionHost({ /* … */ sharedCollections: false });   // 既定は false
+
+// core: acceptStorageSchema
+if (storage.type === "firestore" && !hostSupportsSharedCollections())
+  return { ok: false, reason: "this host does not support shared collections" };
 ```
 
-`isManagedWorkspace` は MT に既にある。
+MC は宣言しない（既定 false）。MT だけが true にする。**core はどちらのホストの名前も知らない。**
+
+### 共有コレクションは MT だけの機能 — MC を触る回数を 1 回にする
+
+engine は `@mulmoclaude/core` にあり、MC と MT が共有している。だが共有コレクションは
+**MT だけの機能**なので、素直に書くと「MT の機能を足すたびに MC のリポジトリを変更して
+npm に publish して MT で bump する」ことになる。これは設計ではなく事故。
+
+**分け方: core は純粋な部品、MT は順序と操作。**
+
+- **core に残すもの**（すでに export 済み）— `parseAuthoredApp`、`publishProblems` /
+  `bindsSubmitterIdentity`、`projectApp`、`validateCollectionRecords`、`discoverCollections`、
+  `firestoreHandle`。**どれも「何が正しいか」を判定する純粋な関数**で、MC にあっても害がない
+- **MT が持つもの** — `deploy` / `publish` / `unpublish` という**操作**、その**書き込み順**
+  （fail closed）、`aid` の生成、`app.json` への書き戻し。今回決めたのはすべてここ
+
+**`manageCollection` に action を足さない。** あのツールは定義もディスパッチも core にあり、
+足せば core の変更になる。共有アプリの操作は **MT 独自のホストツール `manageSharedApp`** に置く。
+MT だけの機能を MT だけのツールに置くのだから、境界としても自然。
+
+**MC を触るのは 1 回だけ**（実装順 7a）。その 1 回に、この seam と、MC の Firestore
+バインド解除と、MT が必要とする export をまとめて入れる。以降 MT 側の作業は
+**core の変更なしで進む。**
 
 ### D5b. 1 フォルダに共有と非共有を混ぜない
 
@@ -2849,12 +2875,18 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
 6. **onSnapshot watcher** — `CollectionStore.watch` に載せる。
    `hostRunner.ts:154-184` の実装から `docChanges()` の扱いを持ち込む
 7. **worktreeEnv による aid の分岐** — D6
-   - **7a. `deploy` / `publish` の分割**（D10）— いまの `publishApp` を `deployApp` と
-     `publishApp` に割る。`config/public` と `appSlugs` の公開を publish 側に寄せ、門番は
-     deploy 側に残す。`appSlugs` のルール（`published` フラグ）を mulmoserver に足す
-   - **7b. `aid` の UUID 自動生成**（決定 2）— `app.json` を書くときに生成する
-   - **7c. MulmoTerminal の Firestore 接続**（D5 の逆転を解く）— `setFirestoreAccessor` を
-     MT で呼び、MulmoClaude 側にはゲートを入れる
+   - **7a. MulmoClaude を触る唯一の変更**（D5）— 3 つをまとめて 1 本の PR にし、core を
+     publish する。**以降 MT 側の作業は core の変更なしで進む**:
+     1. ホストの能力宣言（`sharedCollections`、既定 false）と `acceptStorageSchema` のゲート
+     2. MC の Firestore バインド解除（`initFirestoreCollectionBinding` を落とす）
+     3. MT が deploy / publish を自前で持つのに要る export
+        （`validateCollectionRecords`、`discoverCollections`）
+   - **7b. MT の Firestore 接続** — `setFirestoreAccessor` を MT で呼び、
+     `configureCollectionHost` で `sharedCollections: true` を宣言する
+   - **7c. MT 独自ツール `manageSharedApp`** — `deploy` / `publish` / `unpublish`。
+     門番と射影は core の純粋関数を呼び、**順序（fail closed）と書き分けは MT が持つ**（D10）。
+     `appSlugs` のルール（`published` フラグ）を mulmoserver に足すのはここ
+   - **7d. `aid` の UUID 自動生成**（決定 2）— `app.json` を書くのは MT なので MT 側
 
 **共有**
 

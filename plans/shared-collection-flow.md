@@ -231,7 +231,9 @@ uid を刻みます）。
 
 ### LLM
 
-`manageCollection` の **`deployApp`** / **`publishApp`**
+MT 独自のホストツール **`manageSharedApp`** の `deploy` / `publish`
+（`manageCollection` には足しません — あれは core にあるツールで、共有アプリの操作は
+MT だけの機能だからです。詳しくは本文の D5）
 
 ### deploy がやること
 
@@ -374,7 +376,8 @@ slug を経由しない経路だけです。aid は UUID なので URL 自体が
 | | 状態 |
 |---|---|
 | コレクション作成 / 名簿 / 反映の本体 | **動く** — ただし `@mulmoclaude/core` 3.8.0（**npm 未公開**、npm は 3.7.0）。**MulmoTerminal が lock しているのは 3.3.0** なので、上げるまでこのリポジトリからは新しい部分に触れない。Firestore ルールは本番に反映済み |
-| **deploy / publish の分割** | **未実装**（決定済み）。いまは `publishApp` 1 つが両方やる |
+| **deploy / publish の分割** | **未実装**（決定済み）。いまは core の `publishApp` 1 つが両方やる。分割後は MT 独自ツール `manageSharedApp` が持つ（実装順 7c） |
+| **MulmoClaude を触る変更** | **1 回だけ**（実装順 7a: ホストの能力宣言 + バインド解除 + export）。以降 MT の作業は core 変更なしで進む |
 | `aid` の UUID 自動生成 | **未実装**（決定済み） |
 | URL slug の確保 + `appSlugs` のルール | **未実装**（決定済み。ルールの 2 回目のデプロイを含む） |
 | 「共有と非共有を混ぜない」規則 | **未実装**（決定済み） |
