@@ -162,7 +162,7 @@ AI 専用の安全機構は 1 つも要らない。
 美容室シナリオは 4 コレクション（stylists / services / shifts / bookings）が
 **1 つのメンバー表と 1 つの公開設定を共有**する。招待を 4 回やらせるのは論外。
 
-```
+```text
 apps/{aid}                               メンバー、公開設定、publish 情報
 apps/{aid}/collections/{cid}             publish されたスキーマ + ビュー
 apps/{aid}/collections/{cid}/items/{id}  レコード
@@ -170,6 +170,12 @@ apps/{aid}/collections/{cid}/items/{id}  レコード
 
 **リポジトリ = アプリ = 共有の単位。** `aid` はリポジトリ内にコミットされるので、
 clone した全員が同じアプリを指す（招待は「見つけるため」ではなく「認可のため」だけになる）。
+
+**1 フォルダ 1 アプリで通す。名簿を分けたければリポジトリを分ける。** monorepo の中で
+名簿だけ分ける形（サブディレクトリごとに `app.json`）は取らない。名簿がフォルダ境界と
+一致していれば「このフォルダを見せる = この人たちに見える」で済むが、入れ子を許した
+瞬間、あるコレクションが誰に見えるかはディレクトリを遡らないと分からなくなる。
+**共有範囲は、辿らずに分かる場所に置く。**
 
 ### D2. 同一性は `(root, slug)` から `(aid, cid)` へ
 
@@ -188,9 +194,33 @@ export type CollectionKey =
 
 INVARIANT が列挙したものは**この型で鍵を持つ**。実装順 1 の中身はこの抽象化。
 
+### D2b. `aid` は UUID、URL の名前は別に持つ
+
+`aid` と `cid` は**名前空間の性質が違う**ので、扱いも違う。
+
+- **`apps/{aid}` は全ユーザー共通の棚**で、ルールの `allow create` が要求するのは
+  「自分をオーナーと名乗ること」だけ。人間可読な aid は**早い者勝ち**で先回りして
+  押さえられ、空いているかも調べられず（`apps/{aid}` は読み取りが絞られている）、
+  削除で窓が開き直す
+- **`cid` は aid の下に閉じている**うえ、フォルダ内のディレクトリ名なので
+  **ファイルシステムが一意性を保証**する。上の 4 つがどれも無い
+
+→ **UUID にするのは `aid` だけ。`cid` は slug のまま**（`schema.json` に `cid` は書かない）。
+**生成はコード**（LLM に発明させない）。`app.json` を書くときに生成する — publish まで
+遅らせると `putSchema` が共有コレクションを拒否する。
+
+**人が配る URL は aid ではない。** 同一性（aid）と名前（URL）を分け、**取り合いの対象を
+捨てても痛くない方に移す**: `app.json` に希望の slug を書き、deploy が予約、publish が
+公開する（D10）。衝突していたら後ろに番号を付ける（`sakura-hair` → `sakura-hair-2`）。
+一度確保したら再生成しない — URL は人が配るもの。
+
+```text
+appSlugs/sakura-hair  →  { aid: "3f2b8c1a-…", published: true }
+```
+
 ### D3. スキーマとビューは git、レコードは Firestore
 
-```
+```text
 git       → schema.json, views/*.html, skill テキスト   （コード。レビュー・履歴・巻き戻し）
 Firestore → items/{id}                                  （データ）
 ```
@@ -199,23 +229,44 @@ PR #2209 の当初案（レコードだけ Firestore、スキーマはディス�
 （スキーマも Firestore を真実にする）でもない。**コードとデータを分ける普通のやり方**に落とす。
 ビューは HTML なので、そもそも git に置かれるべきものだった。
 
-### D4. Firestore 上のスキーマは「真実」ではなく「publish された成果物」
+### D4. Firestore 上のスキーマは「真実」ではなく **deploy された成果物**
 
-Web サイトは git を読めないので、publish が要る。ただし**デプロイとして扱う**:
+Web サイトは git を読めないので、Firestore への反映が要る。ただし**デプロイとして扱う**:
 
+```text
+git (source of truth) ──deploy──> apps/{aid}/collections/{cid}.publishedSchema
+                                  + publishedCommit + publishedBy + publishedAt
+                                  + previousPublished（rollback 用）
 ```
-git (source of truth) ──publish──> apps/{aid}/collections/{cid}.publishedSchema
-                                   + publishedCommit + publishedBy + publishedAt
-                                   + previousPublished（rollback 用）
-```
 
-Web の見た目が古いのは「まだ publish していない」だけ、と原因が一目で分かる。
+**この文書を所有するのは deploy であって publish ではない**（D10）。スキーマが壊れるかどうかは
+公開の有無と無関係で、`/dev/{aid}` は publish 前にこのスキーマで描画するため。記名と前版の
+退避（`publishedCommit` / `publishedBy` / `publishedAt` / `previousPublished`）も**同じ操作が
+書く** — 版の権威が 2 つに割れないように。**publish はこの文書に触らない。**
+
+> **フィールド名の `published*` は歴史的なもの**で、`@mulmoclaude/core` に出荷済み
+> （`publishProject.ts`）。改名は移行であって編集ではないので、名前はそのまま、
+> **意味は「deploy が書いた版」**と読む。
+
+見た目が古いときの原因は 2 段階で切り分ける: 名簿の人の画面（`/dev/{aid}`）が古ければ
+**deploy していない**、公開ページ（`/{slug}`）だけが古ければ **publish していない**。
 
 ### D5. MulmoClaude はサポートしない
 
+> **未実装で、現状は逆になっている。** 下のゲートは書かれておらず、しかも
+> `setFirestoreAccessor` を呼んでいる**唯一のホストが MulmoClaude**。MulmoTerminal は
+> 呼んでいないので共有コレクションを一切扱えない。**本来のホストは MulmoTerminal
+> だけ**であり、この逆転を解くのが実装順の課題（下記）。
+
 MC は単一ワークスペース（`~/mulmoclaude`）、MT のプロジェクトルートは separate world。
-**コードを書かなくても MC は共有コレクションを見ない。** 明示するなら `acceptParsedSchema` に
-1 行のゲート:
+
+**理由は実装の都合ではなく、名簿の粒度。** ワークスペースは雑多な置き場（`47news`
+`blood-tests` `clients` …）で、そこに `app.json` を 1 つ置くと**全部が同じアプリ =
+同じ名簿**になる。「顧客リストの共有相手が血液検査の結果も見える」形になり、D1 の
+「共有範囲はフォルダ境界と一致する」が成り立たない。
+
+**黙って成立させない。** ホストが「この root は共有コレクションを持てない」と宣言する形で、
+コードで拒否する:
 
 ```ts
 if (schema.storage?.type === "firestore" && isManagedWorkspace(workspaceRoot))
@@ -223,6 +274,17 @@ if (schema.storage?.type === "firestore" && isManagedWorkspace(workspaceRoot))
 ```
 
 `isManagedWorkspace` は MT に既にある。
+
+### D5b. 1 フォルダに共有と非共有を混ぜない
+
+`app.json` があるフォルダのコレクションは、**すべて firestore ストレージであること**。
+
+衝突対策ではない — **フォルダの性格を 1 つに定める**ため。混在を許すと、そのフォルダの
+コレクションが共有されているかどうかは `schema.json` を 1 つずつ開くまで分からず、
+D1 の「共有範囲はフォルダ境界と一致する」がここでも崩れる。
+
+**代償**: そのリポジトリに「共有しないメモ」や下書きコレクションを置けない。下書きは
+別のフォルダに置く。**受け入れる** — 判断を 1 回で済ませられることの方が大きい。
 
 ### D6. worktree ごとに別のデータを指せるようにする
 
@@ -234,24 +296,33 @@ MT の看板機能は git worktree。**同じリポジトリの worktree 2 つ =
 worktree 固有の値を持つ。dev-server のポート、**データベース名**）。コレクションの aid は
 まさに "a database name"。
 
-しかも**新しい `kind` は要らない**: `WorktreeEnvVar` は
+**新しい `kind` が要る**（当初は不要と書いていたが誤り。下記）: `WorktreeEnvVar` は
 `{ kind: "port"; base } | { kind: "slug"; prefix? }`（`common/worktreeEnv.ts:51`）で、
-`slug` が worktree 由来の一意な文字列を prefix 付きで作る。そのまま aid に使える。
+`slug` が worktree 由来の一意な文字列を prefix 付きで作るが、**aid には使えない**。
 
 ```json
 // .mulmoterminal.json
-{ "worktreeEnv": { "MT_APP_SALON": { "kind": "slug", "prefix": "app_" } } }
+{ "worktreeEnv": { "MT_APP_SALON": { "kind": "uuid" } } }
 
 // app.json
-{ "aid": "app_7f3a", "aidEnv": "MT_APP_SALON" }
+{ "aid": "3f2b8c1a-…", "aidEnv": "MT_APP_SALON" }
 ```
+
+> **worktree の aid も UUID でなければならない**（D2b）。`kind: "slug"` は worktree 名から
+> **決定的に**導くので、人間可読で推測でき、`apps/{aid}` が早い者勝ちの棚である以上
+> 先回りして押さえられる — D2b が aid を UUID にした理由そのものに当たる。
+> **`kind: "uuid"`（worktree ごとに一度生成して記録する）が要る**。既存の 2 つの kind では
+> 足りない、というのがここでの結論。コミットされる `aid` は本番のもので、`aidEnv` は
+> **その worktree でだけ**それを上書きする（D1 の「clone は同じ aid を指す」は保たれる）。
 
 main の worktree は本番 aid、feature の worktree は自動で別の scratch aid。
 
 **worktree の `aid` は Firestore にまだ存在しない、から始まる。** 明示的な手当てが要る:
 新しい `aid` の `/apps/{aid}` ドキュメントは当然無いので、**worktree で最初に publish した
 とき（または worktree のアプリを最初に開いたとき）に、ホストが主リポジトリの `app.json` から
-`members` と公開設定を読み、新しい `aid` でシードする。** レコードは引き継がない
+`members` を読み、新しい `aid` でシードする。** **`public` ブロックは絶対にシードしない** —
+コピーした瞬間、その scratch アプリが公開状態で始まる（D10: `public` を載せるのは publish だけ）。
+レコードは引き継がない
 （引き継いだら「本番を壊さない」が嘘になる）。シードは所有者本人が実行するので
 `allow create` の条件をそのまま満たす。
 
@@ -295,6 +366,122 @@ claim する」パターンが要り、owner 限定の update に穴を開ける
   この人たちに GitHub アカウントを要求してはいけない
 
 → **members を repo の collaborator から自動導出しない。**
+
+
+### D10. Web の入口は 2 つ。招待の前に、名簿の人が本物で試せる
+
+**普通のアプリは、招待や公開の前にテストする。** この設計にはその段階が無かった。
+publish が「Firestore に出す」と「本番にする」を兼ねていたため、動作確認の手段が
+「先に公開する」しかなかった。
+
+**分けるのはデータではなく、誰に見えるか。** aid は 1 つ、レコードのツリーも 1 つ。
+検証用に別の aid を立てる案は**採らない** — テストで入れたデータが本番に持ち越せず、
+「dev では動いたが live に無い」を作る。分けるべきなのは**入口**だけ:
+
+```text
+https://<host>/{slug}      公開の顔。未サインインでも読める。slug を確保して初めて生きる
+https://<host>/dev/{aid}   名簿の人の入口。aid を直接指す。slug を経由しない
+```
+
+**認可はすでにルールが持っている** — `public.enabled` が false なら名簿に載っていない人は
+何も読めず、載っていれば自分のロールどおりに使える。足りなかったのは権限ではなく、
+`appSlugs/{slug}` を引かずにアプリへ入る経路だけ。
+
+### 操作を 2 つに分ける — `deploy` と `publish`
+
+入口を分けただけでは足りない。`apps/{aid}/config/*` は `allow read: if true` なので、
+**テストのために反映しただけでアプリ名が世界に読める**。さらに `appSlugs/{slug}` が
+最初から引けると、**人間可読な slug を当てるだけで aid が手に入り**、`/dev/{aid}` の
+秘匿が消える。だから操作の側も分ける:
+
+| | 何をするか | 何を書くか | 危険度 |
+|---|---|---|---|
+| **deploy** | 宣言を Firestore に反映する。何度でも | **名簿の人しか読めないもの**だけ（`apps/{aid}`、`collections/{cid}`） | 常に安全 |
+| **publish** | **公開する** | **世界に読めるもの**（`config/public`、`appSlugs/{slug}` の公開） | 唯一の危険な操作 |
+
+**分割の急所は `config/public` ではなく、`apps/{aid}` の `public` ブロック。**
+ルールが匿名アクセスを判定するのに読むのは**アプリ本体のドキュメント**であって、
+公開設定の射影ではない — `publicOn(a)` は `a.public.enabled`、`subOpen(a, cid)` は
+`a.public.submit` を見る（`a = get(apps/{aid})`）。`config/public` は**描画のための射影**で、
+認可には一切使われない。したがって:
+
+> **deploy は `apps/{aid}` に `public` ブロックを書いてはならない。** 書けば、`config/public`
+> が無くても**その瞬間から匿名アクセスが有効**になり、`config/public` を消しても止まらない。
+> `public` を app ドキュメントに載せるのは publish、外すのが unpublish。
+
+これを外すと分割は**見た目だけ**になる（`config/public` を伏せても実際の権限は開いている）。
+`submit` 側はさらに `enabled` すら見ない（`subOpen` は `public.submit` の有無だけ）ので、
+「`enabled: false` で deploy すれば安全」も成り立たない。**UUID の推測しにくさを認可の
+境界にしない**、が原則。
+
+- **deploy が書くもの**: `apps/{aid}`（`public` ブロック**抜き**の名簿・内部設定）、
+  `collections/{cid}`、`appSlugs/{slug}`（`published: false`）
+- **publish が書くもの**: `apps/{aid}.public`（**認可の本体**）、`config/public`（描画用の射影）、
+  `appSlugs/{slug}.published = true`
+- **unpublish**: その 3 つを戻す（`public` を外し、`config/public` を消し、`published` を false に）
+- **slug の予約は deploy、公開は publish。** `appSlugs/{slug}` に `published: false` を持たせ、
+  `allow read: if resource.data.published == true`。**早く押さえられて、かつ公開まで誰も
+  辿れない**。`get(apps/{aid})` が要らないので読み取りの式数は増えない（D7 の監視点）
+- **門番の置き場所**: 拒否条件とライブレコードの事前検証は **deploy 側**（スキーマが壊れる話は
+  公開の有無と無関係）。publish 側は「公開してよいか」だけ — `public.submit` の不変条件と slug
+
+**deploy の書き込み順は「アプリ本体が先」。** `appSlugs` の `allow create` は
+`get(apps/{aid})` でオーナーを確認するので、**`apps/{aid}` が存在しない初回 deploy では
+slug の予約が拒否される**。順序は `apps/{aid}` → `collections/{cid}` → `appSlugs`。
+既存の publish 実装が「app ドキュメントが他の 2 つを authorize するので先に書く」と
+しているのと同じ理由。
+
+**publish の書き込み順は逆で、`public` を最後に置く（fail closed）。** publish は 3 つの
+文書を触るが、**認可を握っているのは `apps/{aid}.public` だけ**。だから
+
+```text
+publish:    config/public → appSlugs.published = true → apps/{aid}.public   ← 最後
+unpublish:  apps/{aid}.public を外す ← 最初 → appSlugs.published = false → config/public 削除
+```
+
+途中で失敗しても、**公開が半端に開くことはない**（射影と URL が先に整い、認可が最後に開く）。
+逆順に書くと、`public` だけ通って残りが落ちた瞬間に「匿名アクセスは有効、描画データは
+古いか無い」という最悪の状態になる。可能なら **1 つの batch（Firestore の WriteBatch は
+原子的）**で書き、batch が使えない経路ではこの順序を守る。**UUID の秘匿を安全弁にしない**
+という原則の帰結でもある。同時 publish の版混在は既知の穴（mulmoclaude #2866）。
+
+**`public` が無い状態は「非公開」。** `publicOn(a)` は `"public" in a` を先に見るので、
+ブロックが無ければ false で閉じる。deploy が `public` を書かない設計はこれに乗っている
+（新しいルールは要らない）。**deploy も worktree のシードも `public` をコピーしない**こと。
+
+**deploy の更新意味論 — 何を上書きし、何を残すか。**
+
+| 文書 | deploy | publish |
+|---|---|---|
+| `apps/{aid}`（名簿・内部設定） | **書く。ただし `public` を触らない**（merge） | `public` **だけ**を書く |
+| `collections/{cid}`（`publishedSchema`） | **書く**（スキーマは公開の有無と無関係） | 触らない |
+| `appSlugs/{slug}` | 無ければ予約（`published: false`）。**`published` を触らない** | `published` を反転 |
+| `config/public` | 触らない | 書く / 消す |
+
+**再 deploy が公開を巻き戻してはならない。** `apps/{aid}` をまるごと置換すると `public` が
+消えて**黙って非公開になる**ので、deploy 側は merge で書き、`public` と
+`appSlugs.published` には触らない。D4 の「publish されたスキーマ」という言い方は
+**deploy が書く**に読み替える（公開の有無と関係なく、名簿の人が使うスキーマだから）。
+
+**publish は繰り返せる。** 公開設定を変えたら publish し直す（`unpublish` してからやり直す
+必要はない）。既に `published: true` の slug に対する publish は**冪等**で、`apps/{aid}.public`
+と `config/public` を新しい版で置き換え、`previousPublished` に前版を退避する。
+`unpublish` は「やめる」ときだけ。同時 publish の版混在は既知の穴（mulmoclaude #2866）。
+
+`/dev/{aid}` は **deploy だけで動く**。つまりテストと招待は publish 抜きで完結する。
+
+段階はこうなる。**`publish` は操作、`public` は `app.json` のブロック名**（紛らわしいが別物）:
+
+| | 何をする | 誰に見えるか |
+|---|---|---|
+| 1 | `app.json` + スキーマ → **deploy** | オーナーだけ。`/dev/{aid}` で**実データで**動作確認 |
+| 2 | `members` を足す → **deploy** | 招待した人も `/dev/{aid}` を使える |
+| 3 | `public` を足す → **publish** | `/{slug}` が生き、お客さんが来る |
+
+**`/dev/{aid}` は公開後も消えない。** お客さんが `/{slug}`、スタッフが `/dev/{aid}` で
+承認作業をする、という使い分けがそのまま残る。つまりこれは開発環境ではなく、
+**同じ本番アプリを公開の顔抜きで見ている**だけ。名前が実態と合っていないので
+`/app/{aid}` への改名は検討に値するが、未決（「未解決の論点」）。
 
 ---
 
@@ -1298,7 +1485,7 @@ owner/editor はどちらでも修正できる。
 
 > **問題文・選択肢と、正解は、別コレクションに分けるしかない。**
 
-```
+```text
 questions/{qid}   問題文 + 3 択          public read
 answerKey/{qid}   正解 + 解説            revealed == true のときだけ read
 ```
@@ -1317,7 +1504,7 @@ answerKey/{qid}   正解 + 解説            revealed == true のときだけ re
 
 ### `session` — 主催者がペースを握る状態機械
 
-```
+```text
 apps/{aid}/session   { current: "q3", phase: "answering" | "revealed" | "closed" }
 ```
 
@@ -1369,7 +1556,7 @@ apps/{aid}/session   { current: "q3", phase: "answering" | "revealed" | "closed"
 
 **「名指しされているが member ではない」層が、今の 3 値（owner / editor / viewer）に無い。**
 
-```
+```text
 owner        publish、メンバー管理、session の駆動、全件読み取り
 editor       レコードの読み書き（全件）
 viewer       レコードの読み取り（全件）
@@ -1542,7 +1729,7 @@ sandbox された HTML が Firestore ハンドルを持たなくても、**親�
 
 ### 構造
 
-```
+```text
 +- 親フレーム（webview シェル / MT のセル）-----------------+
 |  Firebase SDK・認証・onSnapshot・ref 解決・live 判断      |
 |                     | MessageChannel (port)              |
@@ -1803,7 +1990,7 @@ HTML に逃がすと元の木阿弥なので、**既存の `when`（`fieldBase`�
 - **変換は一方向・確認あり**。「何が自分のマシンを離れるか」を名指しする。トグルにしない
 - ヘッダーは 2 行:
 
-```
+```text
 共有中 — 5人（owner: satoshi、editor 2、viewer 2）              ← Firestore
 定義 — github.com/receptron/salon @ a1b2c3d（2日前に publish）  ← git
 ```
@@ -1883,10 +2070,15 @@ HTML に逃がすと元の木阿弥なので、**既存の `when`（`fieldBase`�
 > だから primaryKey を `createFields` に入れると、投稿者は自分に許されたドキュメント ID に
 > 書きながら**他人のレコードの同一性を名乗れる**。
 >
+> **状態（2026-08-11）: この形は mulmoclaude #2868 でレビュー中で、まだ出荷されていない。**
+> 公開済みの `@mulmoclaude/core` 3.7.0 は主キーを合成せず、publish の検査は逆
+> （`createFields` に primaryKey を**要求**する）。#2868 がマージされるまでは、
+> 下の記述は**これからそうなる形**として読むこと。
+>
 > firestore store は読み出し時に**ドキュメント ID から主キーを埋める**ので、投稿された値は
 > 「ID と同じ（無意味）」か「捨てられる嘘」のどちらかにしかならない。値が捨てられる
 > フォーム項目を publish するのは、無いより悪い（作者は投稿者が ID を選べると信じる）。
-> **publish が拒否する。**
+> **publish が拒否する（#2868 以降）。**
 >
 > **これは一度逆に書かれていた。** 当初は「含めなければならない」— 主キーの無いレコードは
 > 全ての読み手に拒否されるから — としていた。症状の見立ては正しく、処方が誤っていた:
@@ -1905,7 +2097,7 @@ HTML に逃がすと元の木阿弥なので、**既存の `when`（`fieldBase`�
 
 **テーブル設計**
 
-```
+```text
 stylists  1 ──< shifts        美容師のシフト
 stylists  1 ──< bookings      担当
 services  1 ──< bookings      メニュー（所要時間の供給元）
@@ -2072,7 +2264,7 @@ services  1 ──< bookings      メニュー（所要時間の供給元）
 
 **テーブル設計**
 
-```
+```text
 questions   質問（公開読み取り）
 responses   回答（一人一回・書き切り・本人と owner のみ）
 results     集計（aggregate が publish、公開読み取り）
@@ -2188,7 +2380,7 @@ results     集計（aggregate が publish、公開読み取り）
 
 **テーブル設計 — 分割が要点**
 
-```
+```text
 questions   問題文 + 3択          public read      ← 正解を入れてはいけない
 answerKey   正解 + 解説           revealed のみ    ← gated が生成する
 responses   生徒の回答            本人 + 先生のみ
@@ -2260,7 +2452,7 @@ session     現在の問題とフェーズ  参加者は read のみ
 
 **`gated` が生成する実体**（エージェントが手で書くのではない）:
 
-```
+```text
 apps/{aid}/collections/questions/items/{id}   id, order, text, choiceA..C, revealed
 apps/{aid}/collections/answerKey/items/{id}   correctChoice, explanation
 ```
@@ -2329,7 +2521,7 @@ apps/{aid}/collections/answerKey/items/{id}   correctChoice, explanation
 
 **テーブル設計**
 
-```
+```text
 topics    議題                    参加者 read
 votes     投票（記名・不変）      参加者が全件 read ← peerVisibility: public
 session    現在の議題とフェーズ   参加者 read のみ
@@ -2522,6 +2714,22 @@ session    現在の議題とフェーズ   参加者 read のみ
 > **残る [ ] は、ルールの外に実装が要るもの** — publish、リンター、webview —
 > であって、ルールの形が未決定という意味ではない。
 
+- [ ] **`appSlugs/{slug}` とそのルール** — D2b / D10。**まだ入っていない**（ルールの
+      2 回目の cross-repo デプロイになる）:
+      - `allow create` — 「その aid のオーナーであること」を `get(apps/{aid})` で確認し、
+        **`request.resource.data.published == false` を要求**する（これが無いと、予約の
+        時点で公開済みとして作れてしまい publish を素通りできる）。原子的な
+        create-if-absent。**`apps/{aid}` を先に書いていること**が前提（D10）
+      - **衝突時の再試行はクライアント側**。予約前の文書は読めない（`published == false`
+        なので `allow read` に落ちる）ので、**空きを事前に調べることはできない**。
+        `already exists` を受けたら次の候補（`-2`、`-3`…）で create し直す。同時 deploy が
+        同じ候補を選ぶことがあるので、**成功した slug を `app.json` に書き戻して以降は
+        再生成しない**
+      - `allow update` — **オーナーのみ、かつ `aid` の付け替えを禁止**
+        （`request.resource.data.aid == resource.data.aid`）。publish / unpublish が
+        `published` を反転させるので、これが無いと既定の deny で両方が失敗する
+      - `allow read: if resource.data.published == true` — 公開前は誰も辿れない
+      - `allow delete: if false` — slug を消すと他人が拾える
 - [x] アプリ階層（`apps/{aid}/collections/{cid}/items`）— D1
 - [x] コレクション別ロール — D1
 - [x] 公開読み取り（`public.read`）
@@ -2623,9 +2831,11 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
 3. **store を `(aid, cid)` で書き直す** — PR #2209 の中身がここに入る。
    **引き継ぎ用の切り出し: [`feat-shareable-collections-step3-store.md`](./feat-shareable-collections-step3-store.md)**
    （作業は `../mulmoclaude`。#2209 の再利用できる部分とプランと衝突する部分の地図つき）
-4. **discovery の 2 ソース化 + skill materialize** — ディスク ∪ Firestore(memberEmails ∋ 自分)。
-   Claude Code はディスクのスキルしか読めないので、購読時に skillText を materialize する
-   （`schemaVersion` で張り替えるキャッシュとして）
+4. ~~**discovery の 2 ソース化 + skill materialize**~~ — **落とした**（mulmoclaude #2867 を
+   クローズ済み）。**使う人は Web から使い、自分の MulmoTerminal では扱わない**ので、
+   購読する相手がいない。skill materialize も届け先が無い。
+   **`memberEmails` は残る** — 引くのがホストから **Web クライアント**に変わるだけで、
+   ルールの `membersConsistent()` も一致を要求し続ける
 5. ~~**publish**（git → Firestore、記名 + 事前検証 + 前版保持）~~ — **完了**
    （mulmoclaude #2860 + mulmoserver #156、`@mulmoclaude/core` 3.7.0）。
    起動は `manageCollection` の `publishApp`。**何が入り、この計画のどこが間違っていたかは
@@ -2639,11 +2849,20 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
 6. **onSnapshot watcher** — `CollectionStore.watch` に載せる。
    `hostRunner.ts:154-184` の実装から `docChanges()` の扱いを持ち込む
 7. **worktreeEnv による aid の分岐** — D6
+   - **7a. `deploy` / `publish` の分割**（D10）— いまの `publishApp` を `deployApp` と
+     `publishApp` に割る。`config/public` と `appSlugs` の公開を publish 側に寄せ、門番は
+     deploy 側に残す。`appSlugs` のルール（`published` フラグ）を mulmoserver に足す
+   - **7b. `aid` の UUID 自動生成**（決定 2）— `app.json` を書くときに生成する
+   - **7c. MulmoTerminal の Firestore 接続**（D5 の逆転を解く）— `setFirestoreAccessor` を
+     MT で呼び、MulmoClaude 側にはゲートを入れる
 
 **共有**
 
-8. **招待 UI（email 追加）と viewer / participant ロール** — ここで初めて他人が入る
-9. **mulmoserver に webview** — `@mulmoclaude/collection-plugin` を 3 つ目のホストに載せる
+8. **招待 UI（email 追加）と viewer / participant ロール** — ここで初めて他人が入る。
+   **招待は Web の `/dev/{aid}` への招待**であって、相手の MulmoTerminal には何も起きない
+9. **mulmoserver に webview** — `@mulmoclaude/collection-plugin` を 3 つ目のホストに載せる。
+   **先に作るのは `/dev/{aid}`**（D10）— サインインしてロールを引く管理側の入口。
+   これが 8 の招待を意味あるものにし、12 より前に**実データでの動作確認**を可能にする
 10. **スキーマの `.strict()` 化 または 生 JSON リンター** — どちらを取るか決める（上記参照）。
     **新キーを足す前**でないと、書いたキーが黙って消えたまま先に進む
 11. **View Bridge**（`@mulmoclaude/core/view-bridge`、親側 + 依存ゼロの子側ライブラリ）—
@@ -2651,7 +2870,8 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
 
 **シナリオを揃える**
 
-12. **公開ページ + App Check** — `auth` の 3 段階を同時に
+12. **公開ページ（`/{slug}`）+ App Check** — `auth` の 3 段階を同時に。
+    9 の `/dev/{aid}` とは**別の顔**で、`config/public` だけを読んで未サインインでも描ける（D10）
 13. **`then.email` + Trigger Email 拡張**
 14. **`schedule` ビュー** → **美容室シナリオが揃う**
 15. **`idFrom` / `finalize` / `window` / `aggregate`**（UI と集計側）→ **アンケートシナリオが揃う**
@@ -2686,5 +2906,8 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
 - **Storage ルールから `firestore.get()`** でメンバー判定できるか — 仕様上可能のはずだが実機未確認
 - **repo 権限と members のずれ**をどう見せるか（当面は members をヘッダーに常時出すだけ）
 - **email の同一性**（変更・再利用）— 当面受容
-- **公開ページの URL 設計** — `/{aid}` か、人間可読な slug を別に持つか
+- ~~**公開ページの URL 設計** — `/{aid}` か、人間可読な slug を別に持つか~~ — **決定（D10）**。
+  **両方**で、別の顔を出す: `/{slug}` が公開ページ、`/dev/{aid}` が名簿の人の入口。
+  残る論点は**名前だけ** — `/dev/{aid}` は公開後も使う本番の入口なので `dev` は誤解を招く
+  （`/app/{aid}` が候補）
 - **`then.email` のテンプレート**をどこに置くか（git のリポジトリ内 → publish、が自然か）
