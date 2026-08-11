@@ -176,11 +176,14 @@ describe("dirConfigJsonSchema", () => {
   // of two shapes. Without the `required` below, the shipped schema accepts `"working": {}` — an
   // entry that says nothing and is then ignored at runtime, which is the silent kind of wrong.
   it("keeps the per-status colours' one-of-two rule in the shipped schema", () => {
-    const props = isRecord(dirConfigJsonSchema().properties) ? dirConfigJsonSchema().properties : {};
+    // Bound to a local before guarding: `isRecord(f()) ? f() : {}` calls f twice, and TypeScript
+    // cannot narrow the second call from a guard on the first.
+    const schema = dirConfigJsonSchema();
+    const props = isRecord(schema.properties) ? schema.properties : {};
     expect(Object.keys(props)).toEqual(expect.arrayContaining(["headerStatusColors", "headerStatusTint"]));
     const colors = isRecord(props.headerStatusColors) ? props.headerStatusColors : {};
     const entry = isRecord(colors.additionalProperties) ? colors.additionalProperties : {};
-    const branches = Array.isArray(entry.anyOf) ? entry.anyOf : [];
+    const branches: unknown[] = Array.isArray(entry.anyOf) ? entry.anyOf : [];
     const required = branches.flatMap((branch) => (isRecord(branch) && Array.isArray(branch.required) ? branch.required : []));
     expect(required.sort()).toEqual(["background", "text"]);
   });
