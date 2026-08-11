@@ -429,6 +429,10 @@ service cloud.firestore {
       allow update: if roleIn(aid, '*') == "owner"
                     && request.resource.data.owner == resource.data.owner
                     && membersConsistent();
+      // 【初稿。実際のルールは違う】 owner に削除を許すと、Firestore は
+      // カスケードしないので子が孤児になり、空いた aid を拾った他人が
+      // owner になれる（下記「アプリの削除（再帰削除）」）。
+      // 実際のルールは `allow delete: if false;` で、削除は再帰削除に属する。
       allow delete: if roleIn(aid, '*') == "owner";
 
       // participant / 匿名が読む公開設定（名簿を含まない）。owner が publish 時に書く
