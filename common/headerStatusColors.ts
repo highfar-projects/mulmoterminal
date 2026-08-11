@@ -77,8 +77,12 @@ export function resolveHeaderPaint(status: HeaderPaintStatus, chrome: HeaderChro
   if (status === "idle") return paintFor(chrome.headerColor, chrome.headerTextColor);
   const declared = chrome.statusColors?.[status];
   if (declared && (isHexColor(declared.background) || isHexColor(declared.text))) return paintFor(declared.background, declared.text);
-  if (chrome.tint === "none" && TINT_NONE_APPLIES_TO.includes(status)) return paintFor(chrome.headerColor, chrome.headerTextColor);
-  return NOTHING;
+  // `none` means "keep the colour I chose", so it needs a colour to keep. A directory with a
+  // `headerTextColor` and no usable `headerColor` has nothing for the ink to have been chosen
+  // against — carrying the ink alone would leave it on the theme's wash, which is the bug this
+  // whole file exists to stop (Codex review on #1619).
+  const keepsDirectoryColour = chrome.tint === "none" && TINT_NONE_APPLIES_TO.includes(status) && isHexColor(chrome.headerColor);
+  return keepsDirectoryColour ? paintFor(chrome.headerColor, chrome.headerTextColor) : NOTHING;
 }
 
 // ---- config parsing -------------------------------------------------------------------------

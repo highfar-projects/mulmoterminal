@@ -76,6 +76,19 @@ describe("resolveHeaderPaint", () => {
     });
   });
 
+  // `none` keeps the colour the ink was chosen against. With no usable `headerColor` there is no
+  // such colour, and carrying the ink alone would put it on the theme's wash — this file's own bug,
+  // re-entered through the switch meant to avoid it (Codex review on #1619).
+  it("keeps nothing when the tint is off and there is no directory colour to keep", () => {
+    expect(resolveHeaderPaint("working", chrome({ headerTextColor: "#ffffff", tint: "none" }))).toEqual({ background: null, text: null });
+    expect(resolveHeaderPaint("working", chrome({ headerColor: "not-a-colour", headerTextColor: "#ffffff", tint: "none" }))).toEqual({
+      background: null,
+      text: null,
+    });
+    // Idle is unaffected: there the ink sits on the theme's own panel, which is what it always did.
+    expect(resolveHeaderPaint("idle", chrome({ headerTextColor: "#ffffff" }))).toEqual({ background: null, text: "#ffffff" });
+  });
+
   it("treats a non-hex background as unconfigured rather than passing it to a style", () => {
     expect(resolveHeaderPaint("working", chrome({ statusColors: { working: { background: "red", text: null } } }))).toEqual({ background: null, text: null });
   });
