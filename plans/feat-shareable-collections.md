@@ -1007,9 +1007,8 @@ Firestore の `apps/{aid}` は **publish が導出した別のドキュメント
 | authored（git） | published（Firestore） | なぜ変わるか |
 |---|---|---|
 | `window.from` / `window.until`（ISO 文字列） | `window.fromMs` / `window.untilMs`（**数値**） | **ルールは文字列を timestamp に変換しない。** ISO 文字列と `request.time` を比較すると型エラーで fail closed |
-| 各コレクションの `schema.json` | `publishedSchema` + `collections[cid]`（`immutable` / `peerVisibility` / `revealGated` / `gatedFrom` / `revealBy` / `mail`） | ルールが読める平たい形に落とす |
-| `actions[].then.email` | `collections[cid].mail`（`toField` / `statusField` / `on: {template: {from, to}}` / `dataFields`） | ルールが宣言を再導出できる形に |
-| `actions[].require` + `set`（＋ `selfTransitions`） | `collections[cid].statusField` + `collections[cid].transitions`（`{initial: […], 現状態: [遷移先…]}`） | **状態機械を誰に対しても、create にも効かせる**。無いと writer が任意の状態でレコードを作れる。`statusField` はコレクション設定が**単一の出所**（submit / mail に散らすと食い違う） |
+| 各コレクションの `schema.json` | `publishedSchema`（そのまま） | ルールは読まない。クライアントが描画に使う |
+| **`app.json` の `collections[cid]`**（`statusField` / `transitions` / `immutable` / `submitOnly` / `peerVisibility` / `revealGated` / `gatedFrom` / `revealBy` / `mail` / `aggregate`） | `collections[cid]`（そのまま） | **いまは authored**。下の「導出はまだ入っていない」を読むこと |
 | `members` | `members` + **`memberEmails`（導出）** | 「自分が参加しているアプリ」を `array-contains` で引くための非正規化。**人が書くものではない** — `members` を書く経路（publish、招待 UI）が必ず一緒に生成し、ルールの `membersConsistent()` がずれを拒否する |
 | `public.read` / `participantRead` | **変わらない（リストのまま）** | ルールは `cid in a.public.read` で見る。rules 言語の `in` はリストなら要素、マップならキーを見るので**どちらでも通る** — だからこそ片方に決める必要があり、**publish は authored の形（リスト）をそのまま出す**。mulmoserver の `test/rules/rules_publish.ts` が実行して固定している |
 | フィールド定義（型・required・enum） | `public.submit[cid].validate` | ルールには反復が無いので、検査できる部分集合だけ |
@@ -1019,6 +1018,16 @@ Firestore の `apps/{aid}` は **publish が導出した別のドキュメント
 `Timestamp` は JSON で表現できない。数値なら authored 側も published 側も同じ形で書けて、
 エージェントが生成した JSON をそのまま検証できる（サンプル節の JSON 全数検証が成り立つのも
 これのおかげ）。
+
+> **導出はまだ入っていない（実装順 5 の実際）。** この表は当初
+> `actions[].then.email` → `collections[cid].mail`、`actions[].require` + `set` →
+> `statusField` + `transitions` の導出を書いていたが、**読むべき schema キーが存在しない** —
+> `schemaZ` に `require` と `set` はあるが `then` は無く、`immutable` / `peerVisibility` /
+> `submitOnly` / `aggregate` も無い。追加は実装順 10（`.strict()` 化）の決着待ちなので、
+> いまそれらは **`app.json` の `collections[cid]` に authored** する。
+> schema が宣言を持てるようになったら、導出が authored の腕を**置き換える**（並存ではない）。
+> 下の語彙表が `immutable` / `peerVisibility` / `gated` / `aggregate` を schema のキーとして
+> 挙げているのは**将来の置き場所**であって、現状ではない。
 
 > **これが D4「publish はコンパイル段階である」の 3 つ目の実例。** git の宣言を、
 > ルールが読める射影に落とす。**変換は必ずここに書く** — 暗黙の変換が 1 つでもあると、
@@ -1866,12 +1875,22 @@ HTML に逃がすと元の木阿弥なので、**既存の `when`（`fieldBase`�
 | `public.submit[cid].*`（`createFields` / `selfUpdate` / `selfTransitions` / `idFrom` / `idField` / `gateOn` …） | `app.json` | 認証段階・シナリオ 2/3/4 |
 | `session` | Firestore ドキュメント | シナリオ 3 |
 
-> **`public.submit[cid].createFields` は、そのコレクションの `primaryKey` を含まなければならない。**
-> ルールが縛るのは**ドキュメント ID**（`idFrom`）だが、エンジンはレコードを **`primaryKey` の
-> フィールド**で識別し、firestore store は書かれたフィールドをそのまま返す（ドキュメント ID は
-> レコードに合成されない）。含めないと、投稿は Firestore に受け入れられて**全ての読み手に拒否
-> される**。ルールはスキーマを知らず、書き込み時点では何も間違っていないので、
-> **publish が拒否する**（実装順 5。レビューで発見され、下のサンプルもこれを踏んでいた）。
+> **`public.submit[cid].createFields` は、そのコレクションの `primaryKey` を含んではならない。**
+> **共有レコードの同一性はドキュメント ID** であり、そこはルールが縛れる唯一の場所である
+> （`idFrom` が投稿者の uid に固定する）。ルールは**フィールドの値**を縛れない —
+> `validateOk` はキーの有無、`keyFieldsOk` は宣言された enum を見るだけで、
+> `request.resource.data[primaryKey]` と書き込み先のパスを比較するものは無い。
+> だから primaryKey を `createFields` に入れると、投稿者は自分に許されたドキュメント ID に
+> 書きながら**他人のレコードの同一性を名乗れる**。
+>
+> firestore store は読み出し時に**ドキュメント ID から主キーを埋める**ので、投稿された値は
+> 「ID と同じ（無意味）」か「捨てられる嘘」のどちらかにしかならない。値が捨てられる
+> フォーム項目を publish するのは、無いより悪い（作者は投稿者が ID を選べると信じる）。
+> **publish が拒否する。**
+>
+> **これは一度逆に書かれていた。** 当初は「含めなければならない」— 主キーの無いレコードは
+> 全ての読み手に拒否されるから — としていた。症状の見立ては正しく、処方が誤っていた:
+> 同一性は**ルールが固定できる ID** に属し、固定できないフィールドには属さない。
 
 > **既存の custom view との関係**: `CollectionCustomView` は既に sandbox iframe +
 > **capability トークン + `dataUrl`**（`__MC_VIEW.dataUrl`、`capabilities: ["read","write"]`）
@@ -1929,7 +1948,7 @@ services  1 ──< bookings      メニュー（所要時間の供給元）
         "emailField": "customerEmail",
         "idFrom": "auto",
         "finalize": false,
-        "createFields": ["id","customerName","customerEmail","service","stylist","startAt","status"],
+        "createFields": ["customerName","customerEmail","service","stylist","startAt","status"],
         "selfUpdate": { "pending":  ["customerName","startAt","stylist"],
                         "approved": ["customerName"] },
         "selfTransitions": { "pending": ["cancelled"], "approved": ["cancelled"] },
@@ -2081,7 +2100,7 @@ results     集計（aggregate が publish、公開読み取り）
         "idFrom": "auth.uid",
         "finalize": true,
         "window": { "from": "2026-09-01T00:00:00Z", "until": "2026-09-30T23:59:59Z" },
-        "createFields": ["id","q1","q2","q3","status"],
+        "createFields": ["q1","q2","q3","status"],
         "selfUpdate": {},
         "initialStatus": "submitted",
         "validate": { "required": ["q1", "status"],
@@ -2198,7 +2217,7 @@ session     現在の問題とフェーズ  参加者は read のみ
         "auth": "verifiedEmail", "audience": "participant",
         "idFrom": "auth.uid+field", "idField": "questionId",
         "finalize": true,
-        "createFields": ["id","questionId","choice","status"],
+        "createFields": ["questionId","choice","status"],
         "selfUpdate": {},
         "initialStatus": "answered",
         "validate": { "required": ["questionId", "choice", "status"],
@@ -2340,7 +2359,7 @@ session    現在の議題とフェーズ   参加者 read のみ
         "emailField": "voter",
         "idFrom": "auth.uid+field", "idField": "topicId",
         "finalize": true,
-        "createFields": ["id","topicId","voter","choice","status"],
+        "createFields": ["topicId","voter","choice","status"],
         "selfUpdate": {},
         "initialStatus": "cast",
         "validate": { "required": ["topicId", "voter", "choice", "status"],
