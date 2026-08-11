@@ -248,8 +248,9 @@ MT だけの機能だからです。詳しくは本文の D5）
 2. **拒否できるものを全部拒否する**（下記）
 3. **ライブレコードを事前検証** — 新スキーマで壊れる既存レコードがあれば**止まる**
    （`confirm` で強行可能）
-4. **`apps/{aid}` を書く** — ただし **`public` ブロックは書かない**（下記）。
-   既存のアプリなら更新として扱われ、前の版は `previousPublished` に退避されます
+4. **`apps/{aid}` を置換で書く** — ただし **`public` ブロックは書かない**（下記）。
+   **`previousPublished` にも触りません** — 巻き戻し先を動かすのは publish だけです。
+   草稿を deploy しただけで rollback の行き先が変わってはいけないので
 5. **`staging/{cid}` に書く** — スキーマとビュー、**そのコレクションのルール設定**
    （`transitions` / `immutable` / `submitOnly` …）、`participantRead` に入るかどうか、
    そして記名（`deployedAt` / `deployedBy` / `deployedCommit`）。公開ページはここを
@@ -262,7 +263,8 @@ MT だけの機能だからです。詳しくは本文の D5）
 ### publish がやること
 
 1. **`staging/{cid}` を `collections/{cid}` に昇格させる** — 公開ページが読むスキーマと
-   ビューが、ここで初めて差し替わる
+   ビューが、ここで初めて差し替わる。**前の版が `previousPublished` に退避されるのも
+   ここ**（巻き戻し先は「いま公開されている版」なので）
 2. `config/public` を書く（描画用の射影）
 3. `appSlugs/{slug}` を `published: true` にする
 4. **`apps/{aid}` に `public` ブロックを載せる** — **これが認可の本体。だから最後**

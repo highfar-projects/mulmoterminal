@@ -313,9 +313,19 @@ npm に publish して MT で bump する」ことになる。これは設計で
 足せば core の変更になる。共有アプリの操作は **MT 独自のホストツール `manageSharedApp`** に置く。
 MT だけの機能を MT だけのツールに置くのだから、境界としても自然。
 
-**MC を触るのは 1 回だけ**（実装順 7a）。その 1 回に入れるのは、この seam と MC の
-Firestore バインド解除の **2 つだけ**。export の追加は要らない（上記のとおり、必要な
-関数は既に出ている）。以降 MT 側の作業は **core の変更なしで進む。**
+**MC を触るのは 2 本で打ち止め**（実装順 7a）。当初は 1 本の見込みだったが、
+#2870 のマージ後に、MT が deploy / publish を自前で回すのに必要な投影がまだ無いことと、
+旧 `publishApp` が MT では実際に動いてしまうことが分かった:
+
+- **mulmoclaude #2870（マージ済み）** — 能力の宣言と受け入れゲート、MC の Firestore
+  バインド解除
+- **mulmoclaude #2871（レビュー中）** — `projectDeploy` / `projectPublish` /
+  `promoteSchema`、`staging` と `appSlugs` の置き場所、そして
+  **`manageCollection.publishApp` の削除**（必須。残せば迂回経路が残る）
+
+**7b 以降は、この 2 本のマージと npm 公開を待つ。** そのあとは MT 側の作業が
+**core の変更なしで進む** — ホストが依存する export は `test_sharedHostSurface.ts` で
+固定してあるので、うっかり落ちれば core 側で先に落ちる。
 
 **`manageSharedApp` が引き取る操作は `deploy` / `publish` / `unpublish` の 3 つ。**
 書き込み経路を 2 本にしないために、移行はこう定める:
