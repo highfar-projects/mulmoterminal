@@ -2115,9 +2115,53 @@ describe("TerminalCell", () => {
     globalThis.fetch = dirConfigOnly(true);
     const busy = mountCell("22222222-2222-2222-2222-222222222222", { initialCwd: "/home/me/hdr-derive-busy" });
     await flushPromises();
+    // NEITHER variable, not just the ink (#1617). The status classes now read the background
+    // through `var(--cell-header-bg, <wash>)`, so emitting the directory's colour here would paint
+    // it over the wash — and the ink would then be the one thing left describing a colour nobody
+    // can see. Both absent hands the whole header back to the theme, which pairs them.
     const busyStyle = busy.find(".cell-header").attributes("style") ?? "";
-    expect(busyStyle).toContain("--cell-header-bg: #e8341c");
+    expect(busyStyle).not.toContain("--cell-header-bg");
     expect(busyStyle).not.toContain("--cell-header-fg");
+  });
+
+  // The reporter's case in #1591, which the derivation above could not reach: a directory that
+  // DECLARED its ink for a dark header, measured at 1.15:1 once a light theme washed the header
+  // pale blue underneath it.
+  it("drops a declared headerTextColor too while a status owns the background", async () => {
+    const declared = (working: boolean) =>
+      vi.fn(async (url: string) => {
+        const u = String(url);
+        if (u.includes("/api/dir-config")) return { ok: true, json: async () => ({ headerColor: "#8e44ad", headerTextColor: "#ffffff" }) };
+        if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
+        return { ok: true, json: async () => ({ working, waiting: false, lastPrompt: null }) };
+      }) as unknown as typeof fetch;
+
+    globalThis.fetch = declared(false);
+    const idle = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/hdr-declared-idle" });
+    await flushPromises();
+    expect(idle.find(".cell-header").attributes("style") ?? "").toContain("--cell-header-fg: #ffffff");
+
+    globalThis.fetch = declared(true);
+    const busy = mountCell("44444444-4444-4444-4444-444444444444", { initialCwd: "/home/me/hdr-declared-busy" });
+    await flushPromises();
+    expect(busy.find(".cell-header").attributes("style") ?? "").not.toContain("--cell-header-fg");
+  });
+
+  // And what the user configures INSTEAD: a colour for that status, whose ink is derived from it.
+  it("paints a configured working colour, with an ink derived from it", async () => {
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/dir-config")) {
+        return { ok: true, json: async () => ({ headerColor: "#8e44ad", headerStatusColors: { working: "#ffe8a3" } }) };
+      }
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
+      return { ok: true, json: async () => ({ working: true, waiting: false, lastPrompt: null }) };
+    }) as unknown as typeof fetch;
+    const w = mountCell("55555555-5555-5555-5555-555555555555", { initialCwd: "/home/me/hdr-status-configured" });
+    await flushPromises();
+    const style = w.find(".cell-header").attributes("style") ?? "";
+    expect(style).toContain("--cell-header-bg: #ffe8a3");
+    expect(style).toContain("--cell-header-fg: #1b2430");
   });
 
   it("applies cellColor/cellBorderColor/dotColor/buttonColor as cell-root CSS vars", async () => {
