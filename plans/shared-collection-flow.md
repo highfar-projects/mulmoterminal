@@ -326,11 +326,14 @@ appSlugs/sakura-hair              ← published: true にする（ここで URL 
   誰も投稿できなくなる（しかも**エラーが出ない**）
 - **リポジトリに無いコレクションを名指ししている** → 宣言が黙って無効になる
 
-> **記名と巻き戻し。** 誰が・どのコミットから・いつ deploy したかが記録され、
-> **前の版が `previousPublished` に保存**されます。作業ツリーが汚れていれば
-> `publishedDirty` が付きます（そのコミットは中身を説明していないため）。
+> **記名。** 誰が・どのコミットから・いつ deploy したかが `deployedAt` /
+> `deployedBy` / `deployedCommit` に記録されます。**「いま公開されている版」を指す
+> `publishedAt` / `publishedBy` / `previousPublished` は publish だけが書きます** —
+> 草稿を deploy しただけで巻き戻し先が動いてしまわないように。作業ツリーが汚れていれば
+> その印が付きます（そのコミットは中身を説明していないため）。
 
-**実装状況**: いまは `publishApp` 1 つが全部やる。**deploy / publish の分割は未実装**。
+**実装状況**: core の `publishApp`（deploy と publish を兼ねた旧経路）は削除済み
+（mulmoclaude#2871）。**MT 側の `manageSharedApp` は未実装**。
 3〜5 は動く。**2（slug の予約）は未実装**で、`appSlugs` のルールを mulmoserver に足す
 必要があります（凍結インフラへの 2 回目のデプロイ）。ステップ 1 の `aid` 自動生成も未実装。
 

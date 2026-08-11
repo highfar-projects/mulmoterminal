@@ -246,9 +246,13 @@ git (source of truth) ──deploy──> apps/{aid}/collections/{cid}.published
 `previousPublished`）は**昇格させる側**が書く — 「いま公開されているのはどの版か」は
 publish の問い。
 
-> **フィールド名の `published*` は歴史的なもの**で、`@mulmoclaude/core` に出荷済み
-> （`publishProject.ts`）。改名は移行であって編集ではないので、名前はそのまま、
-> **意味は「deploy が書いた版」**と読む。
+> **provenance のキーは 2 組ある。** staging の文書と、deploy が書くアプリ文書は
+> `deployedAt` / `deployedBy` / `deployedCommit`。公開された版を指す
+> `publishedAt` / `publishedBy` / `publishedCommit` と `previousPublished` は
+> **publish だけが書く**。同じキーを両方が書くと、草稿を deploy しただけで
+> 「いま公開されている版」と rollback 先の記録が動いてしまう。
+> スキーマ本体のフィールド名が `publishedSchema` のままなのは出荷済みだからで、
+> 改名は移行であって編集ではない。
 
 見た目が古いときの原因は 2 段階で切り分ける: 名簿の人の画面（`/staging/{aid}`）が古ければ
 **deploy していない**、公開ページ（`/{slug}`）だけが古ければ **publish していない**。
@@ -314,12 +318,14 @@ Firestore バインド解除の **2 つだけ**。export の追加は要らな�
 **`manageSharedApp` が引き取る操作は `deploy` / `publish` / `unpublish` の 3 つ。**
 書き込み経路を 2 本にしないために、移行はこう定める:
 
-- core の `manageCollection.publishApp` は**残すが、MT からは呼ばない**。あれは
-  deploy と publish を兼ねた分割前の形で、この設計の順序（fail closed）を持たない
-- **消しにいかない。** 消すのは core の変更 = MC を触る 2 回目になる。しかも能力宣言と
-  accessor の両方が要るので、宣言しないホストでは呼んでも門前払いになる。害が無い
-- したがって**書き込み経路は実質 1 本**（`manageSharedApp`）で、core 側は
-  「宣言したホストだけが到達できる、使われない旧経路」として残る
+- core の `manageCollection.publishApp` は**削除する**（mulmoclaude #2871）。
+  「残すが呼ばない」では済まない — MT は能力を宣言し accessor も繋ぐので、あの action は
+  **MT で普通に動いてしまう**。しかも MT は `manageCollection` をホストツールとして
+  登録し、`/api/plugin/manageCollection` が core のハンドラへ直接ディスパッチするので、
+  エージェントは呼べる。つまり **staging を飛ばして `public` を先に書く 2 本目の
+  書き込み経路**が残り、fail closed の順序が意味を失う
+- したがって**書き込み経路は 1 本**（`manageSharedApp`）。core にはもう
+  whole-app publish は無く、それを固定するテストも置いた（`test_sharedHostSurface.ts`）
 
 ### D5b. 1 フォルダに共有と非共有を混ぜない
 
@@ -538,12 +544,24 @@ unpublish:  apps/{aid}.public を外す ← 最初 → appSlugs.published = fals
 ブロックが無ければ false で閉じる。deploy が `public` を書かない設計はこれに乗っている
 （新しいルールは要らない）。**deploy も worktree のシードも `public` をコピーしない**こと。
 
+**書き方は `set`（置換）で、merge ではない。** merge は**削除できない**ので、
+`members.<email>` を消しても権限が残る — しかもルールが `memberEmails` と `members` の
+一致を要求するため、merge した削除はそもそも拒否される。`public` を `app.json` から
+外して非公開に戻すこともできない。**相手の操作が持つフィールドは、いまの文書から
+そのまま持ち越す**ので、置換しても公開を落としたり招待を巻き戻したりしない。
+
+**`collections` と `participantRead` も staging に載る。** これらは**ルールが公開の
+書き込みを判定するときに読む**設定なので、deploy で着地させると、スキーマは staging に
+留めたまま公開の挙動だけが変わってしまう。代償として `/staging/{aid}` は
+「新しいスキーマ × いま公開中のルール設定」で試すことになるが、間違える方向としては
+こちらが安全。
+
 **deploy の更新意味論 — 何を上書きし、何を残すか。**
 
 | 文書 | deploy | publish |
 |---|---|---|
-| `apps/{aid}`（名簿・内部設定） | **書く。ただし `public` を触らない**（merge） | `public` **だけ**を書く |
-| `staging/{cid}` | **書く**（スキーマとビューの草稿） | 読んで昇格させる |
+| `apps/{aid}`（名簿・内部設定） | **書く**（置換。`public` / `collections` / `participantRead` / `published*` は現在値を持ち越す） | 同じ文書を置換し、**その 4 つだけ**を書く |
+| `staging/{cid}` | **書く**（スキーマ・ビュー・**そのコレクションのルール設定**の草稿） | 読んで昇格させる |
 | `collections/{cid}`（`publishedSchema`） | 触らない | **書く**（staging からの昇格） |
 | `appSlugs/{slug}` | 無ければ予約（`published: false`）。**`published` を触らない** | `published` を反転 |
 | `config/public` | 触らない | 書く / 消す |
