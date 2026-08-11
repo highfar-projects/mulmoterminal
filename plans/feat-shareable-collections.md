@@ -305,9 +305,19 @@ npm に publish して MT で bump する」ことになる。これは設計で
 足せば core の変更になる。共有アプリの操作は **MT 独自のホストツール `manageSharedApp`** に置く。
 MT だけの機能を MT だけのツールに置くのだから、境界としても自然。
 
-**MC を触るのは 1 回だけ**（実装順 7a）。その 1 回に、この seam と、MC の Firestore
-バインド解除と、MT が必要とする export をまとめて入れる。以降 MT 側の作業は
-**core の変更なしで進む。**
+**MC を触るのは 1 回だけ**（実装順 7a）。その 1 回に入れるのは、この seam と MC の
+Firestore バインド解除の **2 つだけ**。export の追加は要らない（上記のとおり、必要な
+関数は既に出ている）。以降 MT 側の作業は **core の変更なしで進む。**
+
+**`manageSharedApp` が引き取る操作は `deploy` / `publish` / `unpublish` の 3 つ。**
+書き込み経路を 2 本にしないために、移行はこう定める:
+
+- core の `manageCollection.publishApp` は**残すが、MT からは呼ばない**。あれは
+  deploy と publish を兼ねた分割前の形で、この設計の順序（fail closed）を持たない
+- **消しにいかない。** 消すのは core の変更 = MC を触る 2 回目になる。しかも能力宣言と
+  accessor の両方が要るので、宣言しないホストでは呼んでも門前払いになる。害が無い
+- したがって**書き込み経路は実質 1 本**（`manageSharedApp`）で、core 側は
+  「宣言したホストだけが到達できる、使われない旧経路」として残る
 
 ### D5b. 1 フォルダに共有と非共有を混ぜない
 
@@ -2883,8 +2893,9 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
 6. **onSnapshot watcher** — `CollectionStore.watch` に載せる。
    `hostRunner.ts:154-184` の実装から `docChanges()` の扱いを持ち込む
 7. **worktreeEnv による aid の分岐** — D6
-   - ~~**7a. MulmoClaude を触る唯一の変更**~~（D5）— **実装済み**（mulmoclaude #2870、
-     `@mulmoclaude/core` 3.9.0）。**以降 MT 側の作業は core の変更なしで進む**:
+   - **7a. MulmoClaude を触る唯一の変更**（D5）— **PR 済み・未マージ**
+     （mulmoclaude #2870、`@mulmoclaude/core` 3.9.0 はそのブランチにしか無く、npm にも
+     出ていない）。**7b 以降はこれのマージと publish を待つ**:
      1. `setSharedCollectionsSupport()` と `acceptStorageSchema` のゲート
      2. MC の Firestore バインド解除（`initFirestoreCollectionBinding` を落とす）
 
@@ -2892,8 +2903,10 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
      `discoverCollections` も `export *` で既に出ており、このリポジトリの
      `server/backends/collections.ts` が現に import している
    - **7b. MT の Firestore 接続** — `setFirestoreAccessor` を MT で呼び、
-     `configureCollectionHost` で `sharedCollections: true` を宣言する
-   - **7c. MT 独自ツール `manageSharedApp`** — `deploy` / `publish` / `unpublish`。
+     **`setSharedCollectionsSupport(true)` を別に呼ぶ**（`configureCollectionHost` の
+     フィールドではない。理由は D5)
+   - **7c. MT 独自ツール `manageSharedApp`** — `deploy` / `publish` / `unpublish` の 3 つ。
+     core の `publishApp` は残るが MT からは呼ばない（D5 の移行）。
      門番と射影は core の純粋関数を呼び、**順序（fail closed）と書き分けは MT が持つ**（D10）。
      `appSlugs` のルール（`published` フラグ）を mulmoserver に足すのはここ
    - **7d. `aid` の UUID 自動生成**（決定 2）— `app.json` を書くのは MT なので MT 側

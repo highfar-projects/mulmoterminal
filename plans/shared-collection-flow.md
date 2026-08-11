@@ -232,6 +232,7 @@ uid を刻みます）。
 ### LLM
 
 MT 独自のホストツール **`manageSharedApp`** の `deploy` / `publish`
+（取り下げは同じツールの `unpublish`。この 3 つで全部です）
 （`manageCollection` には足しません — あれは core にあるツールで、共有アプリの操作は
 MT だけの機能だからです。詳しくは本文の D5）
 
