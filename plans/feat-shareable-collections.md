@@ -229,17 +229,27 @@ PR #2209 の当初案（レコードだけ Firestore、スキーマはディス�
 （スキーマも Firestore を真実にする）でもない。**コードとデータを分ける普通のやり方**に落とす。
 ビューは HTML なので、そもそも git に置かれるべきものだった。
 
-### D4. Firestore 上のスキーマは「真実」ではなく「publish された成果物」
+### D4. Firestore 上のスキーマは「真実」ではなく **deploy された成果物**
 
-Web サイトは git を読めないので、publish が要る。ただし**デプロイとして扱う**:
+Web サイトは git を読めないので、Firestore への反映が要る。ただし**デプロイとして扱う**:
 
 ```text
-git (source of truth) ──publish──> apps/{aid}/collections/{cid}.publishedSchema
-                                   + publishedCommit + publishedBy + publishedAt
-                                   + previousPublished（rollback 用）
+git (source of truth) ──deploy──> apps/{aid}/collections/{cid}.publishedSchema
+                                  + publishedCommit + publishedBy + publishedAt
+                                  + previousPublished（rollback 用）
 ```
 
-Web の見た目が古いのは「まだ publish していない」だけ、と原因が一目で分かる。
+**この文書を所有するのは deploy であって publish ではない**（D10）。スキーマが壊れるかどうかは
+公開の有無と無関係で、`/dev/{aid}` は publish 前にこのスキーマで描画するため。記名と前版の
+退避（`publishedCommit` / `publishedBy` / `publishedAt` / `previousPublished`）も**同じ操作が
+書く** — 版の権威が 2 つに割れないように。**publish はこの文書に触らない。**
+
+> **フィールド名の `published*` は歴史的なもの**で、`@mulmoclaude/core` に出荷済み
+> （`publishProject.ts`）。改名は移行であって編集ではないので、名前はそのまま、
+> **意味は「deploy が書いた版」**と読む。
+
+見た目が古いときの原因は 2 段階で切り分ける: 名簿の人の画面（`/dev/{aid}`）が古ければ
+**deploy していない**、公開ページ（`/{slug}`）だけが古ければ **publish していない**。
 
 ### D5. MulmoClaude はサポートしない
 
