@@ -1007,10 +1007,10 @@ Firestore の `apps/{aid}` は **publish が導出した別のドキュメント
 | authored（git） | published（Firestore） | なぜ変わるか |
 |---|---|---|
 | `window.from` / `window.until`（ISO 文字列） | `window.fromMs` / `window.untilMs`（**数値**） | **ルールは文字列を timestamp に変換しない。** ISO 文字列と `request.time` を比較すると型エラーで fail closed |
-| 各コレクションの `schema.json` | `publishedSchema` + `collections[cid]`（`immutable` / `peerVisibility` / `revealGated` / `gatedFrom` / `revealBy` / `mail`） | ルールが読める平たい形に落とす |
-| `actions[].then.email` | `collections[cid].mail`（`toField` / `statusField` / `on: {template: {from, to}}` / `dataFields`） | ルールが宣言を再導出できる形に |
-| `actions[].require` + `set`（＋ `selfTransitions`） | `collections[cid].statusField` + `collections[cid].transitions`（`{initial: […], 現状態: [遷移先…]}`） | **状態機械を誰に対しても、create にも効かせる**。無いと writer が任意の状態でレコードを作れる。`statusField` はコレクション設定が**単一の出所**（submit / mail に散らすと食い違う） |
+| 各コレクションの `schema.json` | `publishedSchema`（そのまま） | ルールは読まない。クライアントが描画に使う |
+| **`app.json` の `collections[cid]`**（`statusField` / `transitions` / `immutable` / `submitOnly` / `peerVisibility` / `revealGated` / `gatedFrom` / `revealBy` / `mail` / `aggregate`） | `collections[cid]`（そのまま） | **いまは authored**。下の「導出はまだ入っていない」を読むこと |
 | `members` | `members` + **`memberEmails`（導出）** | 「自分が参加しているアプリ」を `array-contains` で引くための非正規化。**人が書くものではない** — `members` を書く経路（publish、招待 UI）が必ず一緒に生成し、ルールの `membersConsistent()` がずれを拒否する |
+| `public.read` / `participantRead` | **変わらない（リストのまま）** | ルールは `cid in a.public.read` で見る。rules 言語の `in` はリストなら要素、マップならキーを見るので**どちらでも通る** — だからこそ片方に決める必要があり、**publish は authored の形（リスト）をそのまま出す**。mulmoserver の `test/rules/rules_publish.ts` が実行して固定している |
 | フィールド定義（型・required・enum） | `public.submit[cid].validate` | ルールには反復が無いので、検査できる部分集合だけ |
 | — | `publishedCommit` / `publishedBy` / `publishedAt` / `previousPublished` | 記名と rollback |
 
@@ -1018,6 +1018,16 @@ Firestore の `apps/{aid}` は **publish が導出した別のドキュメント
 `Timestamp` は JSON で表現できない。数値なら authored 側も published 側も同じ形で書けて、
 エージェントが生成した JSON をそのまま検証できる（サンプル節の JSON 全数検証が成り立つのも
 これのおかげ）。
+
+> **導出はまだ入っていない（実装順 5 の実際）。** この表は当初
+> `actions[].then.email` → `collections[cid].mail`、`actions[].require` + `set` →
+> `statusField` + `transitions` の導出を書いていたが、**読むべき schema キーが存在しない** —
+> `schemaZ` に `require` と `set` はあるが `then` は無く、`immutable` / `peerVisibility` /
+> `submitOnly` / `aggregate` も無い。追加は実装順 10（`.strict()` 化）の決着待ちなので、
+> いまそれらは **`app.json` の `collections[cid]` に authored** する。
+> schema が宣言を持てるようになったら、導出が authored の腕を**置き換える**（並存ではない）。
+> 下の語彙表が `immutable` / `peerVisibility` / `gated` / `aggregate` を schema のキーとして
+> 挙げているのは**将来の置き場所**であって、現状ではない。
 
 > **これが D4「publish はコンパイル段階である」の 3 つ目の実例。** git の宣言を、
 > ルールが読める射影に落とす。**変換は必ずここに書く** — 暗黙の変換が 1 つでもあると、
@@ -1826,8 +1836,14 @@ HTML に逃がすと元の木阿弥なので、**既存の `when`（`fieldBase`�
 **既存のフィールド型**（`@mulmoclaude/core/collection` の `FieldSpecZ`、実在を確認済み）:
 
 `string` `text` `markdown` `number` `money` `boolean` `toggle` `date` `datetime`
-`enum` `status` `ref` `email` `image` `file` `location` `table` `derived` `embed`
+`enum` `ref` `email` `image` `file` `location` `table` `derived` `embed`
 `backlinks` `rollup` `flag`
+
+> **`status` というフィールド型は存在しない。** この一覧は当初 `status` を挙げていたが、
+> `schemaZ.ts` の判別共用体に無い（実装順 5 で、テストのフィクスチャを書いていて判明）。
+> 状態を持つフィールドは **`enum`** で書く。宣言してもエラーにはならず、
+> **discovery がそのコレクションを黙って飛ばすだけ**なので、症状は「コレクションが出てこない」。
+> なお `collections[cid].statusField` は別物で、**publish が出すアプリ設定のキー**として実在する。
 
 `derived` `embed` `backlinks` `rollup` `toggle` `flag` は **computed**（レコードに書かれない）。
 
@@ -1858,6 +1874,23 @@ HTML に逃がすと元の木阿弥なので、**既存の `when`（`fieldBase`�
 | `aid` / `members` / `public` | `app.json` | D1 / 権限モデル |
 | `public.submit[cid].*`（`createFields` / `selfUpdate` / `selfTransitions` / `idFrom` / `idField` / `gateOn` …） | `app.json` | 認証段階・シナリオ 2/3/4 |
 | `session` | Firestore ドキュメント | シナリオ 3 |
+
+> **`public.submit[cid].createFields` は、そのコレクションの `primaryKey` を含んではならない。**
+> **共有レコードの同一性はドキュメント ID** であり、そこはルールが縛れる唯一の場所である
+> （`idFrom` が投稿者の uid に固定する）。ルールは**フィールドの値**を縛れない —
+> `validateOk` はキーの有無、`keyFieldsOk` は宣言された enum を見るだけで、
+> `request.resource.data[primaryKey]` と書き込み先のパスを比較するものは無い。
+> だから primaryKey を `createFields` に入れると、投稿者は自分に許されたドキュメント ID に
+> 書きながら**他人のレコードの同一性を名乗れる**。
+>
+> firestore store は読み出し時に**ドキュメント ID から主キーを埋める**ので、投稿された値は
+> 「ID と同じ（無意味）」か「捨てられる嘘」のどちらかにしかならない。値が捨てられる
+> フォーム項目を publish するのは、無いより悪い（作者は投稿者が ID を選べると信じる）。
+> **publish が拒否する。**
+>
+> **これは一度逆に書かれていた。** 当初は「含めなければならない」— 主キーの無いレコードは
+> 全ての読み手に拒否されるから — としていた。症状の見立ては正しく、処方が誤っていた:
+> 同一性は**ルールが固定できる ID** に属し、固定できないフィールドには属さない。
 
 > **既存の custom view との関係**: `CollectionCustomView` は既に sandbox iframe +
 > **capability トークン + `dataUrl`**（`__MC_VIEW.dataUrl`、`capabilities: ["read","write"]`）
@@ -2000,7 +2033,7 @@ services  1 ──< bookings      メニュー（所要時間の供給元）
     "startAt":       { "type": "datetime", "label": "開始時刻", "required": true },
     "endAt":         { "type": "derived",  "label": "終了時刻",
                        "expr": "startAt + minutes(service.duration)" },
-    "status":        { "type": "status",   "label": "状態",
+    "status":        { "type": "enum",     "label": "状態",
                        "values": ["pending", "approved", "rejected", "cancelled"] }
   },
   "actions": [
@@ -2129,7 +2162,7 @@ results     集計（aggregate が publish、公開読み取り）
     "q2":     { "type": "enum",   "label": "Q2（1-5）", "values": ["1","2","3","4","5"] },
     "q3":     { "type": "text",   "label": "Q3 自由記述",
                 "when": { "field": "q1", "in": ["a"] } },
-    "status": { "type": "status", "values": ["submitted"] }
+    "status": { "type": "enum", "values": ["submitted"] }
   },
   "aggregate": {
     "from": "responses", "publish": "results",
@@ -2257,7 +2290,7 @@ apps/{aid}/collections/answerKey/items/{id}   correctChoice, explanation
     "questionId": { "type": "ref",    "collection": "questions", "required": true },
     "choice":     { "type": "enum",   "values": ["A","B","C"], "required": true },
     "correct":    { "type": "derived", "expr": "choice == questionId.correctChoice" },
-    "status":     { "type": "status", "values": ["answered"] }
+    "status":     { "type": "enum", "values": ["answered"] }
   },
   "aggregate": {
     "from": "responses", "publish": "stats",
@@ -2370,7 +2403,7 @@ session    現在の議題とフェーズ   参加者 read のみ
     "topicId": { "type": "ref",    "label": "議題", "collection": "topics", "required": true },
     "voter":   { "type": "email",  "label": "議員", "required": true },
     "choice":  { "type": "enum",   "label": "賛否", "values": ["yes","no","abstain"], "required": true },
-    "status":  { "type": "status", "label": "状態", "values": ["cast"] }
+    "status":  { "type": "enum", "label": "状態", "values": ["cast"] }
   },
   "aggregate": {
     "from": "votes", "by": ["topicId", "choice"],
@@ -2538,8 +2571,10 @@ session    現在の議題とフェーズ   参加者 read のみ
 - [x] `/mail` の決定的 ID と `get() != getAfter()` による**この書き込みでの遷移**の要求
       （**クライアントはバッチで書く**）
 - [x] `audience` は `== "participant"` の厳密一致
-- [ ] **authored → published の変換表**を publish が漏れなく実装すること
-      （特に `window` の ISO → epoch millis。ルールは文字列を timestamp に変換しない）
+- [x] **authored → published の変換表**を publish が漏れなく実装すること
+      （特に `window` の ISO → epoch millis。ルールは文字列を timestamp に変換しない）—
+      **実装順 5 で完了**。変換は `publishProject.ts` に集約され、`rules_publish.ts` が
+      publish の出力そのものをルールに流して固定している
 - [x] `session` ドキュメント（主催者が駆動する状態機械）と、それを create 条件に使うこと
 - [x] **`immutable`（owner にも触れない記録）** — ルールの形に関わる
 - [x] `peerVisibility: "public"`（記名投票。参加者が全件読める）
@@ -2591,7 +2626,12 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
 4. **discovery の 2 ソース化 + skill materialize** — ディスク ∪ Firestore(memberEmails ∋ 自分)。
    Claude Code はディスクのスキルしか読めないので、購読時に skillText を materialize する
    （`schemaVersion` で張り替えるキャッシュとして）
-5. **publish**（git → Firestore、記名 + 事前検証 + 前版保持）。
+5. ~~**publish**（git → Firestore、記名 + 事前検証 + 前版保持）~~ — **完了**
+   （mulmoclaude #2860 + mulmoserver #156、`@mulmoclaude/core` 3.7.0）。
+   起動は `manageCollection` の `publishApp`。**何が入り、この計画のどこが間違っていたかは
+   [`feat-shareable-collections-step5-publish.md`](./feat-shareable-collections-step5-publish.md)
+   の「着手した結果」**。残った穴は mulmoclaude #2866（同時 publish の版混在）。以下は当初の記述:
+   **publish**（git → Firestore、記名 + 事前検証 + 前版保持）。
    **引き継ぎ用の切り出し: [`feat-shareable-collections-step5-publish.md`](./feat-shareable-collections-step5-publish.md)**
    （ルールが実際に読むフィールドの正解表、authored → published 変換表、publish が拒否する不変条件つき）。**`submitOnly` の不変条件を
    ここで拒否する**（「`audience` は投稿経路しか縛らない」参照）— リンターは作者の手元でしか

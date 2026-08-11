@@ -1,6 +1,8 @@
 # feat: 共有コレクション — 実装順 5「publish（git → Firestore）」
 
-**Status**: 未着手（このファイルは着手する人への引き継ぎ）
+**Status**: **完了**（mulmoclaude #2860 + mulmoserver #156、2026-08-11 に両方マージ。
+`@mulmoclaude/core` 3.7.0 として公開済み）。以下は着手前に書かれた引き継ぎで、
+**実際に何が入り、この文書のどこが間違っていたかは末尾「着手した結果」を読むこと。**
 **日付**: 2026-08-11
 **親プラン**: [`plans/feat-shareable-collections.md`](./feat-shareable-collections.md) — **先に読むこと。**
 **前のステップ**: [`feat-shareable-collections-step3-store.md`](./feat-shareable-collections-step3-store.md)（完了、mulmoclaude #2856）
@@ -219,3 +221,80 @@ cd <mulmoclaude> && node scripts/packages/check-changelog-ships.mjs   # 同上
 - **拒否のテストには必ず対になる成功ケースを書くこと。** 無いと「全部壊れている」実装が
   「安全」に見える
 - **未マージの PR を前提にしないこと。** このファイルの「済み」は main にマージ済みの意味
+
+---
+
+## 着手した結果（2026-08-11、事後に追記）
+
+**mulmoclaude #2860**（`@mulmoclaude/core` 3.6.0 → **3.7.0**）と
+**mulmoserver #156**（emulator の往復テストのみ、**ルールは変更なし**）でマージ済み。
+起動経路は `manageCollection` の **`publishApp`** アクション（オーナー判断）。
+
+### 入ったもの
+
+| ファイル | 役割 |
+|---|---|
+| `publishManifest.ts` | authored な `app.json` の zod パーサ。**未知キーを拒否する**（`schemaZ` と逆） |
+| `publishProject.ts` | authored → published の変換。**純粋関数** |
+| `publishChecks.ts` | publish が拒否するもの（不変条件 + fail-closed の罠） |
+| `publish.ts` | 読む → 拒否する → ライブレコードを事前検証 → 書く |
+| `manageTool.ts` | `publishApp` アクション（+ `confirm`） |
+| `host.ts` | `FirestoreHandle` に **`uid`** を追加（下記） |
+
+### この文書の誤り（着手して分かったもの）
+
+- **`collections[cid]` は `app.json` に authored する。** 上の変換表は
+  `actions[].then.email` → `mail`、`require`+`set` → `transitions` の導出を求めているが、
+  **読むべき schema キーが存在しない** — `schemaZ` に `require` と `set` はあるが `then` は無く、
+  `immutable` / `peerVisibility` / `submitOnly` も無い。追加は実装順 10（`.strict()` 化）の
+  決着待ちなので、導出は「出所を先に発明する」ことになる。schema が宣言を持てるようになったら、
+  この腕は**置き換わる**（並存ではない）。
+- **published な `public.read` / `participantRead` はマップである必要がない。** 上の正解表は
+  `{cid: true}` と書いているが、ルールは `in` で見るのでリストでも通る。**publish は authored の形
+  （リスト）をそのまま出す**ことにし、mulmoserver #156 の往復テストで**実行して**確認した。
+  「どちらでも通る 2 つの綴り」は 2 リポジトリが緑のまま離れる経路なので、片方に決めてある。
+- **`aggregate` は `app.json` の `collections[cid]` に置いた。** 親プランは schema のキーとして
+  挙げているが存在せず、不変条件（集計キー ⊆ 検査済みフィールド）は `public.submit` に関する
+  ものなので、アプリ側の宣言に置くのが筋。schema に入ったらそちらへ移す。
+
+### `FirestoreHandle` に `uid` を足した（破壊的）
+
+名簿は email で引き、レコード操作はそれで足りるが、app ドキュメントの `owner` は uid で、
+ルールは作成時に `owner == request.auth.uid` を要求する。つまり「レコードは読み書きできるが
+アプリは作れない」セッションが成立してしまうので、**必須**にしてコンパイルエラーにした。
+影響は `setFirestoreAccessor` を呼ぶホストだけ（MulmoClaude は更新済み、**MulmoTerminal は
+bind していない** — なので MT から publish はまだ試せない）。
+
+### レビューで塞いだ穴（bot レビューが出した実在の欠陥）
+
+**2 件はこの実装のテストのフィクスチャ自身が踏んでいた。**
+
+- **主キーをめぐる誤り（2 段階で直った）** — 最初のレビューは「`createFields` が schema の
+  primaryKey を含まないと、投稿は Firestore に受け入れられて**全ての読み手に拒否される**」と
+  指摘し、publish は primaryKey を**要求**するようにした。次のレビューがその処方の穴を突いた:
+  ルールは**ドキュメント ID** は縛れても**フィールドの値**は縛れないので、primaryKey を
+  投稿させると、投稿者は自分に許された ID に書きながら**他人のレコードの同一性を名乗れる**。
+  最終的な形は **store がドキュメント ID から主キーを埋める**ことで、同一性はルールが
+  固定できる場所に置かれ、publish は primaryKey を `createFields` に**含めることを拒否**する。
+  症状の見立ては最初から正しく、処方だけが 1 度間違っていた
+- **`emailField` / `idField` が `createFields` に無い** — 入れても入れなくても全部拒否される
+- **ユーザースコープのスキル（`~/.claude/skills`）がリポジトリのアプリに載る** — discovery は
+  ユーザースコープのスキーマにも**ワークスペースの root** を渡して `app.json` を解決するので、
+  マシンに 1 回インストールされた firestore スキルが、publish した**全てのアプリ**に載っていた。
+  ビューは HTML なので「自分のマシンのスキルが全メンバーのブラウザに届く」経路。
+  publish の discovery は `userSkillsDir: null` にした
+- **バックエンド読み取り失敗が `confirm` で握り潰せた** — `confirm` は「合わないと分かった上で
+  通す」意味で、読めなかった場合は移行ゲートが走っていない。`STORE_UNREADABLE` として別扱い
+- **書き込み失敗・事前読み取り失敗が throw で漏れていた** — ツールの契約は行動可能な文章なので
+  結果に変えた。部分書き込みは**着地したものを列挙**する（要約は必ずどこかの失敗地点で外れる）
+- **打ち切られた件数を「at least」と言っていなかった**（拒否側だけ正しかった）
+
+### 残った穴
+
+**mulmoclaude #2866** — 同時 publish が版を混ぜうる。2 人のオーナーが別コミットを publish すると
+app / schema / config の書き込みが交錯して**双方が成功を報告しながら版が混ざる**。
+決めた対処は「受容 + 検出」（書き込み後に `publishedAt` を読み直す）。
+
+**バッチによる原子化は取れない**（emulator で確認済み）: `collections/{cid}` の write 条件が
+`get()` で app を読むので、app を含む同一バッチは**初回 publish で必ず拒否される**。
+真の原子化はルールを `getAfter` ベースに変える cross-repo デプロイ。
