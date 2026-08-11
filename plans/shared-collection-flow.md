@@ -71,8 +71,8 @@ publish し直します（`unpublish` は「公開をやめる」ときだけ）
 
 | | 何をするか | 何を書くか | 危険度 |
 |---|---|---|---|
-| **deploy** | 宣言を Firestore に反映する。何度でも打つ | **名簿の人しか読めないもの**だけ（`apps/{aid}` の `public` **抜き**、スキーマ） | 常に安全。外には何も出ない |
-| **publish** | **公開する** | **`apps/{aid}.public`（認可の本体）**、`config/public`、`appSlugs` の公開 | 唯一の危険な操作 |
+| **deploy** | 宣言を Firestore に反映する。何度でも打つ | **名簿の人しか読めないもの**だけ（`apps/{aid}` の `public` **抜き**、`staging/{cid}` のスキーマとビュー） | 常に安全。**公開中でも**外には何も出ない |
+| **publish** | **公開する** | staging の**昇格**（`collections/{cid}`）、**`apps/{aid}.public`（認可の本体）**、`config/public`、`appSlugs` の公開 | 唯一の危険な操作 |
 
 外に出る文書を作るのは publish だけなので、**テストのために deploy しても何も漏れません**。
 `/dev/{aid}` は deploy だけで動きます — 認可はもう `apps/{aid}` の名簿が持っているからです。
@@ -245,7 +245,8 @@ MT だけの機能だからです。詳しくは本文の D5）
    （`confirm` で強行可能）
 4. **`apps/{aid}` を書く** — ただし **`public` ブロックは書かない**（下記）。
    既存のアプリなら更新として扱われ、前の版は `previousPublished` に退避されます
-5. **スキーマを書く**（`collections/{cid}`）
+5. **スキーマとビューを `staging/{cid}` に書く** — 公開ページはここを読めないので、
+   **公開中のアプリでも見た目は変わりません**（下記）
 6. **URL slug を予約する** — 希望が空いていればそれ、取られていたら番号を付ける。
    予約できたら `app.json` に書き戻す（以降は再生成しない）。**この時点では誰も
    辿れません**（下記）。**4 より後**なのは、`appSlugs` の作成ルールが
@@ -253,9 +254,11 @@ MT だけの機能だからです。詳しくは本文の D5）
 
 ### publish がやること
 
-1. `config/public` を書く（描画用の射影）
-2. `appSlugs/{slug}` を `published: true` にする
-3. **`apps/{aid}` に `public` ブロックを載せる** — **これが認可の本体。だから最後**
+1. **`staging/{cid}` を `collections/{cid}` に昇格させる** — 公開ページが読むスキーマと
+   ビューが、ここで初めて差し替わる
+2. `config/public` を書く（描画用の射影）
+3. `appSlugs/{slug}` を `published: true` にする
+4. **`apps/{aid}` に `public` ブロックを載せる** — **これが認可の本体。だから最後**
 
 **順序が逆なのは意図的です。** 認可を握っているのは 3 だけなので、**最後に開けば
 途中で失敗しても公開が半端に開きません**。逆順だと「匿名アクセスは有効、描画データは
@@ -274,14 +277,26 @@ MT だけの機能だからです。詳しくは本文の D5）
 ```text
 deploy が書く（名簿の人だけ）
 apps/{aid}                        ← 名簿・内部設定。public ブロックは含めない
-  └── collections/bookings        ← publishedSchema（schemaRead のみ）
+  └── staging/bookings            ← スキーマとビューの草稿。/dev/{aid} が描画に使う
 appSlugs/sakura-hair              ← { aid, published: false } 予約だけ。誰も引けない
 
 publish が書く（外に出る）
+apps/{aid}/collections/bookings   ← staging からの昇格。公開ページが読むのはこちら
 apps/{aid} の public ブロック      ← ルールが匿名アクセスを判定するのはここ
 apps/{aid}/config/public          ← 描画用の射影（未ログインでも読める。名簿は含まない）
 appSlugs/sakura-hair              ← published: true にする（ここで URL が生きる）
 ```
+
+> **staging があるので、公開後も deploy は安全です。** 公開ページはスキーマを
+> `collections/{cid}` から読み、deploy が書くのは `staging/{cid}` だからです。
+> ドキュメントを分けているのは、ルールが**フィールド単位では隠せない**ため —
+> 公開ページが読めるドキュメントに草稿を入れれば草稿も読まれます。
+>
+> **レコードのツリーは 1 つのまま**で、staging はスキーマとビューの置き場所です。
+> だから `/dev/{aid}` で試したレコードはそのまま本番のレコードになります。
+> **スキーマの変更は後方互換である限りエラーになりません** — 公開中の古いスキーマは、
+> 増えたフィールドを知らないだけで既存のレコードを読み続けられます。後方互換でない
+> 変更は publish のライブレコード事前検証が止めます。
 
 > **急所は `config/public` ではなく `apps/{aid}` の `public` ブロック**です。ルールが
 > 匿名アクセスを判定するのに読むのはアプリ本体のドキュメント（`publicOn` は
@@ -363,7 +378,8 @@ slug を経由しない経路だけです。aid は UUID なので URL 自体が
 
 | | ローカル（git） | Firestore |
 |---|---|---|
-| **スキーマ** | `.claude/skills/<slug>/schema.json` | `apps/{aid}/collections/{slug}` の `publishedSchema` |
+| **スキーマ・ビュー（草稿）** | `.claude/skills/<slug>/schema.json` | `apps/{aid}/staging/{slug}`（deploy） |
+| **スキーマ・ビュー（公開）** | 同上 | `apps/{aid}/collections/{slug}` の `publishedSchema`（publish が昇格） |
 | **名簿・公開設定** | `app.json` | `apps/{aid}` / `apps/{aid}/config/public` |
 | **URL の予約** | `app.json` の `slug` | `appSlugs/{slug}` |
 | **レコード** | — | `apps/{aid}/collections/{slug}/items/*` |
@@ -381,6 +397,7 @@ slug を経由しない経路だけです。aid は UUID なので URL 自体が
 | **MulmoClaude を触る変更** | **1 回だけ**（実装順 7a: ホストの能力宣言 + Firestore バインド解除の 2 つ。**export の追加は要らない**）。mulmoclaude#2870 で **PR 済み・未マージ**。以降 MT の作業は core 変更なしで進む |
 | `aid` の UUID 自動生成 | **未実装**（決定済み） |
 | URL slug の確保 + `appSlugs` のルール | **未実装**（決定済み。ルールの 2 回目のデプロイを含む） |
+| **staging（スキーマ・ビューの草稿）** | **未実装**（決定済み）。`match /staging/{cid}` を上と同じデプロイに相乗りさせる |
 | 「共有と非共有を混ぜない」規則 | **未実装**（決定済み） |
 | **MulmoTerminal から使えること** | **未実装** — Firestore のセッションを繋いでいない。**いま繋がっているのは MulmoClaude だけで、そちらは設計上サポート対象外**（D5） |
 | MulmoClaude のワークスペースでの拒否 | **未実装**（決定済み） |

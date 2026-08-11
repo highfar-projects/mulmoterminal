@@ -239,10 +239,12 @@ git (source of truth) ──deploy──> apps/{aid}/collections/{cid}.published
                                   + previousPublished（rollback 用）
 ```
 
-**この文書を所有するのは deploy であって publish ではない**（D10）。スキーマが壊れるかどうかは
-公開の有無と無関係で、`/dev/{aid}` は publish 前にこのスキーマで描画するため。記名と前版の
-退避（`publishedCommit` / `publishedBy` / `publishedAt` / `previousPublished`）も**同じ操作が
-書く** — 版の権威が 2 つに割れないように。**publish はこの文書に触らない。**
+**成果物は 2 段になる**（D10 の staging）。deploy が `staging/{cid}` に書き、publish が
+`collections/{cid}` へ昇格させる。公開ページが読むのは後者だけなので、**deploy は公開中の
+アプリのビューを差し替えない**。`/dev/{aid}` は `staging/{cid}` を読むので、publish 前でも
+描画できる。記名と前版の退避（`publishedCommit` / `publishedBy` / `publishedAt` /
+`previousPublished`）は**昇格させる側**が書く — 「いま公開されているのはどの版か」は
+publish の問い。
 
 > **フィールド名の `published*` は歴史的なもの**で、`@mulmoclaude/core` に出荷済み
 > （`publishProject.ts`）。改名は移行であって編集ではないので、名前はそのまま、
@@ -459,9 +461,44 @@ https://<host>/dev/{aid}   名簿の人の入口。aid を直接指す。slug �
 境界にしない**、が原則。
 
 - **deploy が書くもの**: `apps/{aid}`（`public` ブロック**抜き**の名簿・内部設定）、
-  `collections/{cid}`、`appSlugs/{slug}`（`published: false`）
-- **publish が書くもの**: `apps/{aid}.public`（**認可の本体**）、`config/public`（描画用の射影）、
+  **`staging/{cid}`**（下記）、`appSlugs/{slug}`（`published: false`）
+- **publish が書くもの**: `staging/{cid}` → **`collections/{cid}` への昇格**、
+  `apps/{aid}.public`（**認可の本体**）、`config/public`（描画用の射影）、
   `appSlugs/{slug}.published = true`
+
+### staging — スキーマとビューも publish するまで外に出さない
+
+`public` ブロックだけを publish が持つのでは足りない。**公開ページはスキーマを
+`apps/{aid}/collections/{cid}` から直接読む**（`schemaRead` に `publicRead` が入っている）。
+スキーマを deploy が書く形だと、**公開済みのアプリでは deploy した瞬間にビューが差し替わる** —
+「テストのために deploy した」が本番の変更になる。
+
+**同じドキュメントに 2 つの版は置けない。** ルールはフィールド単位で隠せないので、
+公開ページが読めるドキュメントに草稿を入れれば草稿も読まれる。**別のドキュメントに分ける**:
+
+```text
+apps/{aid}/staging/{cid}       deploy が書く。名簿の人だけが読む。/dev/{aid} が描画に使う
+apps/{aid}/collections/{cid}   publish が昇格させる。公開ページが読む（従来どおり）
+```
+
+- **レコードのツリーは 1 つのまま。** staging はスキーマとビューの置き場所であって、
+  データの分岐ではない。`/dev/{aid}` で試したレコードはそのまま本番のレコード
+- **スキーマ変更は後方互換である限りエラーにならない。** 公開中の古いスキーマは、
+  新しく増えたフィールドを知らないだけで、既存のレコードを読み続けられる。
+  後方互換でない変更は publish のライブレコード事前検証が止める（`confirm` で強行可能）
+- **主に変わるのはビュー。** HTML は生成物でスキーマが統治対象（後述）なので、
+  ビューの差し替えもこの 1 本の経路に乗る
+- `unpublish` は `collections/{cid}` を消さない — 公開でなければ誰も読めないので害が無く、
+  再 publish が単なる昇格で済む
+
+**ルールの追加が要る**（`appSlugs` と同じ 2 回目の cross-repo デプロイに相乗りする）:
+
+```
+match /staging/{cid} {
+  allow read:  if listedIn(app(aid));                 // 名簿の人だけ。公開ページは読めない
+  allow write: if role(app(aid), '*') == "owner";     // = deploy
+}
+```
 - **unpublish**: その 3 つを戻す（`public` を外し、`config/public` を消し、`published` を false に）
 - **slug の予約は deploy、公開は publish。** `appSlugs/{slug}` に `published: false` を持たせ、
   `allow read: if resource.data.published == true`。**早く押さえられて、かつ公開まで誰も
@@ -479,8 +516,10 @@ slug の予約が拒否される**。順序は `apps/{aid}` → `collections/{ci
 文書を触るが、**認可を握っているのは `apps/{aid}.public` だけ**。だから
 
 ```text
-publish:    config/public → appSlugs.published = true → apps/{aid}.public   ← 最後
+publish:    collections/{cid}（昇格）→ config/public → appSlugs.published = true
+            → apps/{aid}.public   ← 最後
 unpublish:  apps/{aid}.public を外す ← 最初 → appSlugs.published = false → config/public 削除
+            （collections/{cid} は残す）
 ```
 
 途中で失敗しても、**公開が半端に開くことはない**（射影と URL が先に整い、認可が最後に開く）。
@@ -498,7 +537,8 @@ unpublish:  apps/{aid}.public を外す ← 最初 → appSlugs.published = fals
 | 文書 | deploy | publish |
 |---|---|---|
 | `apps/{aid}`（名簿・内部設定） | **書く。ただし `public` を触らない**（merge） | `public` **だけ**を書く |
-| `collections/{cid}`（`publishedSchema`） | **書く**（スキーマは公開の有無と無関係） | 触らない |
+| `staging/{cid}` | **書く**（スキーマとビューの草稿） | 読んで昇格させる |
+| `collections/{cid}`（`publishedSchema`） | 触らない | **書く**（staging からの昇格） |
 | `appSlugs/{slug}` | 無ければ予約（`published: false`）。**`published` を触らない** | `published` を反転 |
 | `config/public` | 触らない | 書く / 消す |
 
@@ -2908,7 +2948,8 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
    - **7c. MT 独自ツール `manageSharedApp`** — `deploy` / `publish` / `unpublish` の 3 つ。
      core の `publishApp` は残るが MT からは呼ばない（D5 の移行）。
      門番と射影は core の純粋関数を呼び、**順序（fail closed）と書き分けは MT が持つ**（D10）。
-     `appSlugs` のルール（`published` フラグ）を mulmoserver に足すのはここ
+     `appSlugs` のルール（`published` フラグ）と **`match /staging/{cid}`** を
+     mulmoserver に足すのはここ（1 回のデプロイにまとめる）
    - **7d. `aid` の UUID 自動生成**（決定 2）— `app.json` を書くのは MT なので MT 側
 
 **共有**
