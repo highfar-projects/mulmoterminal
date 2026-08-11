@@ -29,9 +29,14 @@ questions a skill asks. Every one of those sections carries a button that launch
 Ask what they want to change — one `AskUserQuestion`, concrete options — then invoke that skill and
 carry on there. Do not re-explain its contents here; the sibling skill is the source of truth.
 
+Two of those areas own a GLOBAL key as well as a per-project one, and the skill owns both halves:
+`mulmoterminal-dirs` for `headerStatusColors` / `headerStatusTint` (the header while a session is
+running), `mulmoterminal-notify` for the sounds. Route rather than editing the global file here.
+
 | They want | Skill |
 |---|---|
 | Colours for a project, colour-coding several, grid/launcher order, a name badge, a project icon image, terminal font size or font | `mulmoterminal-dirs` |
+| The header being unreadable, or changing colour, while a session runs | `mulmoterminal-dirs` |
 | Their **own** colour scheme, appearing in Settings' picker | `mulmoterminal-theme` |
 | Header buttons or info chips, globally or per project | `mulmoterminal-header` |
 | Keyboard shortcuts, copy-on-select, Enter vs. newline | `mulmoterminal-keys` |

@@ -98,6 +98,33 @@ amber を消してしまうのは事故。別の色にしたいディレクト�
 - `headerStatusTint: "none"` でも `blocked` は wash のままであること
 - 既存の `cellHeaderStyle.spec.ts` / `cellStatusClasses.spec.ts` / `TerminalCell.spec.ts` の回帰
 
+## 実測（build 成功 ≠ 動作する）
+
+**ビルド後の実 CSS を実ブラウザ（puppeteer）に読ませ、報告写真に写っている要素そのもの**
+（model バッジ / usage チップ = `text-[var(--cell-header-fg,var(--text-dim))]`）の
+computed color を、ヘッダーの computed background に対して測った。4 テーマ × 4 状態 × 4 ルール = 64 レンダ。
+
+daylight / working（報告者の条件）:
+
+| 何 | 背景 | インク | 比 |
+| --- | --- | --- | --- |
+| 4.8.1（報告写真の実測） | `#d6e4fb` | `#ffffff` | **1.15:1** |
+| 本 PR・無設定 | `#d6e4fb` | `#8492a8`（`--text-dim`） | **2.46:1** |
+| `headerStatusColors.working: "#ffe8a3"` | `#ffe8a3` | `#1b2430`（導出） | **12.91:1** |
+| `headerStatusTint: "none"` | `#8e44ad` | `#ffffff` | **5.87:1** |
+
+**残る 2.46:1 は本 PR が作ったものではない。** working / done / blocked で本 PR は変数を
+**1 つも出さない**ので、そのときの style 属性は無設定のディレクトリと**バイト同一**であり、
+2.46:1 はテーマ既定の `--text-dim` × wash の組み合わせ、つまり**現在すでに全員が見ている値**。
+4 テーマ全部で 1.90〜3.10:1（nord done が最悪の 2.06、solarized done が 1.90）。
+
+→ **別issue候補**: wash がヘッダーを持っているあいだチップのインクを `--text-dim` から
+`--text` に上げるか。全ユーザーの見た目が変わるのでこの PR には入れない。
+
+CSS 側の回帰も同時に確認済み: `bg-[var(--cell-header-bg,<wash>)]` に包み替えても、
+working=`--bg-selected`、done=`color-mix(--done 20%, --bg-panel)`、blocked=`--warn-bg-subtle` は
+包む前と同じ値に解決している（入れ子の `color-mix` フォールバックも生成されている）。
+
 ## ドキュメント（この機能の持ち主）
 
 - `server/skills/mulmoterminal-dirs/SKILL.md` — この設定の持ち主。書き方をここに書く
