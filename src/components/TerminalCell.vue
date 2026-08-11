@@ -932,9 +932,12 @@ const cellStatusClass = computed(() => CELL_STATUS[status.value]);
 const headerStatusClass = computed(() => HEADER_STATUS[status.value]);
 // The directory's header colours — computed here rather than taken from useCellChrome because only
 // this cell's header background is REPLACED by a status tint, so what it paints depends on the
-// status and on what the user configured for that status (common/headerStatusColors.ts). The
-// global defaults are the fallback per key, so a directory can recolour one status and inherit
-// the rest.
+// status and on what the user configured for that status (common/headerStatusColors.ts).
+//
+// The global config is the fallback for each of the two KEYS, not for each status inside them: a
+// directory that names any `headerStatusColors` replaces the global block entire, so the statuses
+// it leaves out fall through to the theme rather than to the global entry for that status
+// (mergeHeaderStatusColors states why, and a spec pins it).
 const headerStyle = computed(() =>
   headerStatusStyleFor(status.value, {
     headerColor: dirConfig.value.headerColor,
