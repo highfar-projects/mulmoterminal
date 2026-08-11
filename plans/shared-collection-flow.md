@@ -45,8 +45,8 @@
  2. コレクション   を作って」        schemaDocs → putSchema     .claude/skills/<slug>/
  3. 招待        「◯◯さんに権限を」 members を書く             <repo>/app.json
  ──────────────────────────────────────────────────────────────────────────────
- 4. deploy      「deploy して」    deployApp                 apps/{aid}, スキーマ, slug 予約
- 5. publish     「publish して」   publishApp                apps/{aid}.public, config/public
+ 4. deploy      「deploy して」    manageSharedApp/deploy    apps/{aid}, スキーマ, slug 予約
+ 5. publish     「publish して」   manageSharedApp/publish   apps/{aid}.public, config/public
  ──────────────────────────────────────────────────────────────────────────────
  ──────────────────────────────────────────────────────────────────────────────
  6. 他の人      URL を開く         —                         Web ページ
@@ -62,26 +62,31 @@ publish し直します（`unpublish` は「公開をやめる」ときだけ）
 ```text
  app.json に何を書いたか        打つもの      その結果
  ─────────────────────────────────────────────────────────────────────────
- aid + スキーマ             →   deploy    自分だけが /dev/{aid} で実データを試せる
-   + members（招待）        →   deploy    招待した人も /dev/{aid} を使える
+ aid + スキーマ             →   deploy    自分だけが /staging/{aid} で実データを試せる
+   + members（招待）        →   deploy    招待した人も /staging/{aid} を使える
    + public（公開設定）     →   publish   /{slug} が生き、お客さんが来る
 ```
 
-**操作は 2 つあります。**
+**操作は 2 つあります。** ひとことで言えば **deploy = staging に出す、publish = staging を
+公開に昇格させる**。
 
 | | 何をするか | 何を書くか | 危険度 |
 |---|---|---|---|
-| **deploy** | 宣言を Firestore に反映する。何度でも打つ | **名簿の人しか読めないもの**だけ（`apps/{aid}` の `public` **抜き**、スキーマ） | 常に安全。外には何も出ない |
-| **publish** | **公開する** | **`apps/{aid}.public`（認可の本体）**、`config/public`、`appSlugs` の公開 | 唯一の危険な操作 |
+| **deploy** | **staging に出す**。何度でも打つ | **名簿の人しか読めないもの**だけ（`apps/{aid}` の `public` **抜き**、`staging/{cid}` のスキーマとビュー） | 常に安全。**公開中でも**外には何も出ない |
+| **publish** | **staging を公開に昇格させる** | staging の**昇格**（`collections/{cid}`）、**`apps/{aid}.public`（認可の本体）**、`config/public`、`appSlugs` の公開 | 唯一の危険な操作 |
+
+> **staging されるのはスキーマとビューだけです。名簿は staging されません** —
+> `members` に足して deploy した招待は**即座に効きます**（そうでないと「招待して一緒に
+> テストする」ができません）。外に出るものだけが publish を待ちます。
 
 外に出る文書を作るのは publish だけなので、**テストのために deploy しても何も漏れません**。
-`/dev/{aid}` は deploy だけで動きます — 認可はもう `apps/{aid}` の名簿が持っているからです。
+`/staging/{aid}` は deploy だけで動きます — 認可はもう `apps/{aid}` の名簿が持っているからです。
 
 > **`publish` と `public` は別物です。** `publish` は**操作**、`public` は
 > **`app.json` の中のブロック名**（名簿に載っていない人に何を許すかの設定）。
 > `public` を書いて publish すると公開されます。
 
-**Web の入口は 2 つあります**（`/{slug}` は公開の顔、`/dev/{aid}` は名簿の人の入口）。
+**Web の入口は 2 つあります**（`/{slug}` は公開の顔、`/staging/{aid}` は名簿の人の入口）。
 招待や公開の前に本物で試せるのはこのためです — 詳しくはステップ 5。
 
 **ローカルのファイルは、それ自体では誰にも届きません。** Firestore のルールが読むのは
@@ -231,7 +236,10 @@ uid を刻みます）。
 
 ### LLM
 
-`manageCollection` の **`deployApp`** / **`publishApp`**
+MT 独自のホストツール **`manageSharedApp`** の `deploy` / `publish`
+（取り下げは同じツールの `unpublish`。この 3 つで全部です）
+（`manageCollection` には足しません — あれは core にあるツールで、共有アプリの操作は
+MT だけの機能だからです。詳しくは本文の D5）
 
 ### deploy がやること
 
@@ -239,10 +247,14 @@ uid を刻みます）。
    （deploy は `aid` を作らない。`apps/{aid}` という**置き場所ができる**のがここ）
 2. **拒否できるものを全部拒否する**（下記）
 3. **ライブレコードを事前検証** — 新スキーマで壊れる既存レコードがあれば**止まる**
-   （`confirm` で強行可能）
-4. **`apps/{aid}` を書く** — ただし **`public` ブロックは書かない**（下記）。
-   既存のアプリなら更新として扱われ、前の版は `previousPublished` に退避されます
-5. **スキーマを書く**（`collections/{cid}`）
+   （`confirm` で強行可能。移行の途中など、staging で先に進めたいことがあるため）
+4. **`apps/{aid}` を置換で書く** — ただし **`public` ブロックは書かない**（下記）。
+   **`previousPublished` にも触りません** — 巻き戻し先を動かすのは publish だけです。
+   草稿を deploy しただけで rollback の行き先が変わってはいけないので
+5. **`staging/{cid}` に書く** — スキーマとビュー、**そのコレクションのルール設定**
+   （`transitions` / `immutable` / `submitOnly` …）、`participantRead` に入るかどうか、
+   そして記名（`deployedAt` / `deployedBy` / `deployedCommit`）。公開ページはここを
+   読めないので、**公開中のアプリでも見た目も挙動も変わりません**（下記）
 6. **URL slug を予約する** — 希望が空いていればそれ、取られていたら番号を付ける。
    予約できたら `app.json` に書き戻す（以降は再生成しない）。**この時点では誰も
    辿れません**（下記）。**4 より後**なのは、`appSlugs` の作成ルールが
@@ -250,35 +262,60 @@ uid を刻みます）。
 
 ### publish がやること
 
-1. `config/public` を書く（描画用の射影）
-2. `appSlugs/{slug}` を `published: true` にする
-3. **`apps/{aid}` に `public` ブロックを載せる** — **これが認可の本体。だから最後**
+1. **昇格する版をもう一度ライブレコードで検証する** — deploy の検証を引き継ぎません。
+   deploy は `confirm` で強行できるので、**強行された草稿がそのまま公開に出ないよう、
+   公開の境界でもう一度見ます**。壊れるなら**止まる**（publish 自身の `confirm` が要る）
+2. **`staging/{cid}` を `collections/{cid}` に昇格させる** — 公開ページが読むスキーマと
+   ビューが、ここで初めて差し替わる。**前の版が `previousPublished` に退避されるのも
+   ここ**（巻き戻し先は「いま公開されている版」なので）
+3. **staging に載っていたルール設定を `apps/{aid}` に載せる** — 各 `staging/{cid}` の
+   ルール設定から `collections` を、`participantRead` に入っていた cid から
+   `participantRead` を組み立てて**置換**します。**2 と一緒でなければいけません** —
+   新しいスキーマを公開しながら公開の書き込みだけ古い制約で判定される、が起きるので
+4. `config/public` を書く（描画用の射影）
+5. `appSlugs/{slug}` を `published: true` にする
+6. **`apps/{aid}` に `public` ブロックを載せる** — **これが認可の本体。だから最後**
 
-**順序が逆なのは意図的です。** 認可を握っているのは 3 だけなので、**最後に開けば
-途中で失敗しても公開が半端に開きません**。逆順だと「匿名アクセスは有効、描画データは
+**順序が逆なのは意図的です。** 匿名アクセスを開くのは **6（`apps/{aid}.public`）だけ**で、
+4 の `config/public` は描画用の射影にすぎません。**最後に開けば途中で失敗しても公開が
+半端に開きません**。逆順だと「匿名アクセスは有効、描画データは
 古いか無い」という最悪の状態になります。可能なら 1 つの batch で書きます。
 `unpublish` はちょうど逆順（`public` を外すのが最初）。
 
 公開設定を変えたいだけなら **publish し直せば済みます**（`unpublish` は要りません）。
 再 publish は前版を `previousPublished` に退避して置き換えます。
 
-> **再 deploy が公開を巻き戻さないこと。** deploy は `apps/{aid}` を merge で書き、
-> `public` と `appSlugs.published` には触りません。まるごと置換すると `public` が消えて
-> **黙って非公開になります**。
+> **書き方は `set`（置換）で、merge ではありません。** merge は**削除できない**ので、
+> `members` から 1 人消しても権限が残り、しかもルールが `memberEmails` との一致を
+> 要求するため**その deploy 自体が拒否**されます。代わりに、相手の操作が持つもの —
+> `public` / `collections` / `participantRead` / `published*` / `previousPublished` —
+> は**現在値をそのまま持ち越す**ので、置換しても公開は巻き戻りません。
 
 ### できるもの（Firestore）
 
 ```text
 deploy が書く（名簿の人だけ）
 apps/{aid}                        ← 名簿・内部設定。public ブロックは含めない
-  └── collections/bookings        ← publishedSchema（schemaRead のみ）
+  └── staging/bookings            ← スキーマとビューの草稿。/staging/{aid} が描画に使う
 appSlugs/sakura-hair              ← { aid, published: false } 予約だけ。誰も引けない
 
 publish が書く（外に出る）
+apps/{aid}/collections/bookings   ← staging からの昇格。公開ページが読むのはこちら
 apps/{aid} の public ブロック      ← ルールが匿名アクセスを判定するのはここ
 apps/{aid}/config/public          ← 描画用の射影（未ログインでも読める。名簿は含まない）
 appSlugs/sakura-hair              ← published: true にする（ここで URL が生きる）
 ```
+
+> **staging があるので、公開後も deploy は安全です。** 公開ページはスキーマを
+> `collections/{cid}` から読み、deploy が書くのは `staging/{cid}` だからです。
+> ドキュメントを分けているのは、ルールが**フィールド単位では隠せない**ため —
+> 公開ページが読めるドキュメントに草稿を入れれば草稿も読まれます。
+>
+> **レコードのツリーは 1 つのまま**で、staging はスキーマとビューの置き場所です。
+> だから `/staging/{aid}` で試したレコードはそのまま本番のレコードになります。
+> **スキーマの変更は後方互換である限りエラーになりません** — 公開中の古いスキーマは、
+> 増えたフィールドを知らないだけで既存のレコードを読み続けられます。後方互換でない
+> 変更は publish のライブレコード事前検証が止めます。
 
 > **急所は `config/public` ではなく `apps/{aid}` の `public` ブロック**です。ルールが
 > 匿名アクセスを判定するのに読むのはアプリ本体のドキュメント（`publicOn` は
@@ -289,7 +326,7 @@ appSlugs/sakura-hair              ← published: true にする（ここで URL 
 > ブロックが**無い**状態は非公開です（`publicOn` は `"public" in a` を先に見ます）。
 >
 > **予約と公開を分ける理由。** slug は人間可読なので、`appSlugs` が最初から引けると
-> **slug を当てるだけで aid が手に入り**、`/dev/{aid}` が推測可能になります。
+> **slug を当てるだけで aid が手に入り**、`/staging/{aid}` が推測可能になります。
 > `allow read: if resource.data.published == true` にすれば、**早く押さえられて、かつ
 > 公開まで誰も辿れません**。**UUID の推測しにくさを認可の境界にしない**、が原則です。
 
@@ -303,11 +340,15 @@ appSlugs/sakura-hair              ← published: true にする（ここで URL 
   誰も投稿できなくなる（しかも**エラーが出ない**）
 - **リポジトリに無いコレクションを名指ししている** → 宣言が黙って無効になる
 
-> **記名と巻き戻し。** 誰が・どのコミットから・いつ deploy したかが記録され、
-> **前の版が `previousPublished` に保存**されます。作業ツリーが汚れていれば
-> `publishedDirty` が付きます（そのコミットは中身を説明していないため）。
+> **記名。** 誰が・どのコミットから・いつ deploy したかが `deployedAt` /
+> `deployedBy` / `deployedCommit` に記録されます。**「いま公開されている版」を指す
+> `publishedAt` / `publishedBy` / `previousPublished` は publish だけが書きます** —
+> 草稿を deploy しただけで巻き戻し先が動いてしまわないように。作業ツリーが汚れていれば
+> その印が付きます（そのコミットは中身を説明していないため）。
 
-**実装状況**: いまは `publishApp` 1 つが全部やる。**deploy / publish の分割は未実装**。
+**実装状況**: core の `publishApp`（deploy と publish を兼ねた旧経路）は
+**mulmoclaude#2871 で削除する予定 — まだレビュー中**なので、いまは生きている。
+**MT 側の `manageSharedApp` は未実装**で、着手は #2871 のマージと npm 公開を待つ。
 3〜5 は動く。**2（slug の予約）は未実装**で、`appSlugs` のルールを mulmoserver に足す
 必要があります（凍結インフラへの 2 回目のデプロイ）。ステップ 1 の `aid` 自動生成も未実装。
 
@@ -319,31 +360,31 @@ appSlugs/sakura-hair              ← published: true にする（ここで URL 
 
 ```text
 https://<host>/sakura-hair     公開の顔。お客さん向け
-https://<host>/dev/{aid}       名簿の人の入口。slug を経由しない
+https://<host>/staging/{aid}       名簿の人の入口。slug を経由しない
 ```
 
 **公開ページ**（`/sakura-hair`）は `appSlugs/sakura-hair` から aid を引き、
 `apps/{aid}/config/public` を読んで描きます。**未ログインでも読めます**
 （`config` だけが `allow read: if true`）。
 
-**名簿の人の入口**（`/dev/{aid}`）はサインインしてからロールを引いて描く管理側の画面です。
+**名簿の人の入口**（`/staging/{aid}`）はサインインしてからロールを引いて描く管理側の画面です。
 **deploy だけで動きます**（publish は要りません）。だから**招待や公開の前に実データで
 動作確認できます**。認可は
 すでにルールが持っているので、Firestore 側に足すものはありません — 足りなかったのは
 slug を経由しない経路だけです。aid は UUID なので URL 自体が推測不能です。
 
-> **これは開発環境ではありません。** 公開後も消えず、お客さんは `/sakura-hair`、
-> スタッフは `/dev/{aid}` で承認作業をする、という使い分けがそのまま残ります。
-> 名前が実態と合っていないので `/app/{aid}` への改名は未決です。
+> **公開後も消えません。** お客さんは `/sakura-hair`、スタッフは `/staging/{aid}` で
+> 承認作業をする、という使い分けがそのまま残ります。名簿の人が見るのは常に
+> **staging の版**（`staging/{cid}`）で、お客さんが見るのは**昇格済みの版**です。
 
 **検証用に別の aid を立てる形は採りません。** テストで入れたデータが本番に持ち越せず、
-「dev では動いたが live に無い」を作るためです。aid もレコードのツリーも 1 つのままです。
+「検証用のアプリでは動いたのに本番にそのデータが無い」を作るためです。aid もレコードのツリーも 1 つのままです。
 
 ### 誰が何をできるか
 
 | 相手 | 何をするか | 認可 |
 |---|---|---|
-| **あなた / 田中さん** | `/dev/{aid}` で実データを試す（公開前でも） | サインイン → ルールが `members` からロールを引く |
+| **あなた / 田中さん** | `/staging/{aid}` で実データを試す（公開前でも） | サインイン → ルールが `members` からロールを引く |
 | **お客さん** | 予約を申し込む | `public.submit` の宣言。`auth: "verifiedEmail"` ならメール確認済みのサインインが要る |
 | **田中さん（editor）** | 予約を承認する | サインイン → ルールが `members` からロールを引く |
 | **あなた（owner）** | 全部 + publish | 同上 |
@@ -351,7 +392,7 @@ slug を経由しない経路だけです。aid は UUID なので URL 自体が
 **MulmoTerminal は要りません。** ルールが `request.auth.token.email` を `members` に
 突き合わせるので、認可はサーバー側（Firestore）で完結します。
 
-**実装状況**: Firestore ルールは本番に反映済みで動く。**Web ページ自体が未実装** — `/dev/{aid}` が実装順 9、
+**実装状況**: Firestore ルールは本番に反映済みで動く。**Web ページ自体が未実装** — `/staging/{aid}` が実装順 9、
 `/{slug}` が実装順 12。
 
 ---
@@ -360,7 +401,8 @@ slug を経由しない経路だけです。aid は UUID なので URL 自体が
 
 | | ローカル（git） | Firestore |
 |---|---|---|
-| **スキーマ** | `.claude/skills/<slug>/schema.json` | `apps/{aid}/collections/{slug}` の `publishedSchema` |
+| **スキーマ・ビュー・ルール設定（草稿）** | `.claude/skills/<slug>/schema.json` + `app.json` の `collections` | `apps/{aid}/staging/{slug}`（deploy） |
+| **スキーマ・ビュー（公開）** | 同上 | `apps/{aid}/collections/{slug}` の `publishedSchema`（publish が昇格） |
 | **名簿・公開設定** | `app.json` | `apps/{aid}` / `apps/{aid}/config/public` |
 | **URL の予約** | `app.json` の `slug` | `appSlugs/{slug}` |
 | **レコード** | — | `apps/{aid}/collections/{slug}/items/*` |
@@ -374,9 +416,11 @@ slug を経由しない経路だけです。aid は UUID なので URL 自体が
 | | 状態 |
 |---|---|
 | コレクション作成 / 名簿 / 反映の本体 | **動く** — ただし `@mulmoclaude/core` 3.8.0（**npm 未公開**、npm は 3.7.0）。**MulmoTerminal が lock しているのは 3.3.0** なので、上げるまでこのリポジトリからは新しい部分に触れない。Firestore ルールは本番に反映済み |
-| **deploy / publish の分割** | **未実装**（決定済み）。いまは `publishApp` 1 つが両方やる |
+| **deploy / publish の分割** | **未実装**（決定済み）。いまは core の `publishApp` 1 つが両方やる。分割後は MT 独自ツール `manageSharedApp` が持つ（実装順 7c） |
+| **MulmoClaude を触る変更** | **2 本で打ち止め**（実装順 7a）: mulmoclaude#2870（能力の宣言 + バインド解除、**マージ済み**）と #2871（deploy / publish の投影・staging・appSlugs の置き場所・旧 `publishApp` の削除、**レビュー中**）。以降 MT の作業は core 変更なしで進む |
 | `aid` の UUID 自動生成 | **未実装**（決定済み） |
 | URL slug の確保 + `appSlugs` のルール | **未実装**（決定済み。ルールの 2 回目のデプロイを含む） |
+| **staging（スキーマ・ビューの草稿）** | **未実装**（決定済み）。`match /staging/{cid}` を上と同じデプロイに相乗りさせる |
 | 「共有と非共有を混ぜない」規則 | **未実装**（決定済み） |
 | **MulmoTerminal から使えること** | **未実装** — Firestore のセッションを繋いでいない。**いま繋がっているのは MulmoClaude だけで、そちらは設計上サポート対象外**（D5） |
 | MulmoClaude のワークスペースでの拒否 | **未実装**（決定済み） |
