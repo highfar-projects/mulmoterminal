@@ -455,9 +455,18 @@ https://<host>/staging/{aid}   名簿の人の入口。aid を直接指す。slu
 | **deploy** | **staging に出す**。何度でも | **名簿の人しか読めないもの**だけ（`apps/{aid}`、`staging/{cid}`） | 常に安全 |
 | **publish** | **staging を公開に昇格させる** | **世界に読めるもの**（`collections/{cid}`、`config/public`、`appSlugs/{slug}` の公開） | 唯一の危険な操作 |
 
-**staging されるのはスキーマとビューだけ。名簿は staging されない** — `members` に足して
-deploy した招待は即座に効く（そうでなければ「招待して一緒にテストする」が成り立たない）。
-staging を挟むのは**外に出るもの**だけ。
+**staging に載るもの（`apps/{aid}/staging/{cid}`、これで全部）:**
+
+| 何 | なぜ staging か |
+|---|---|
+| `publishedSchema`（スキーマとビュー） | 公開ページが `collections/{cid}` から読むので、deploy で書けば公開中の見た目が変わる |
+| そのコレクションの**ルール設定**（`transitions` / `immutable` / `submitOnly` / `peerVisibility` …） | ルールが**公開の書き込みを判定するときに読む** |
+| `participantRead` に入るかどうか | 同上 |
+| `deployedAt` / `deployedBy` / `deployedCommit` | 記名。公開版を指す `published*` とは別（D4） |
+
+**名簿は staging されない** — `members` に足して deploy した招待は即座に効く
+（そうでなければ「招待して一緒にテストする」が成り立たない）。staging を挟むのは
+**外に出るもの**だけ。
 
 **分割の急所は `config/public` ではなく、`apps/{aid}` の `public` ブロック。**
 ルールが匿名アクセスを判定するのに読むのは**アプリ本体のドキュメント**であって、
@@ -522,7 +531,8 @@ match /staging/{cid} {
 
 **deploy の書き込み順は「アプリ本体が先」。** `appSlugs` の `allow create` は
 `get(apps/{aid})` でオーナーを確認するので、**`apps/{aid}` が存在しない初回 deploy では
-slug の予約が拒否される**。順序は `apps/{aid}` → `collections/{cid}` → `appSlugs`。
+slug の予約が拒否される**。順序は `apps/{aid}` → `staging/{cid}` → `appSlugs`
+（`collections/{cid}` は publish が書くので deploy には出てこない）。
 既存の publish 実装が「app ドキュメントが他の 2 つを authorize するので先に書く」と
 しているのと同じ理由。
 
@@ -569,8 +579,9 @@ unpublish:  apps/{aid}.public を外す ← 最初 → appSlugs.published = fals
 | `config/public` | 触らない | 書く / 消す |
 
 **再 deploy が公開を巻き戻してはならない。** `apps/{aid}` をまるごと置換すると `public` が
-消えて**黙って非公開になる**ので、deploy 側は merge で書き、`public` と
-`appSlugs.published` には触らない。D4 の「publish されたスキーマ」という言い方は
+消えて**黙って非公開になる**。だが merge で避けてはいけない（merge は削除できない）—
+**置換して、`public` / `collections` / `participantRead` / `published*` /
+`previousPublished` は現在値をそのまま持ち越す**。`appSlugs.published` には触らない。D4 の「publish されたスキーマ」という言い方は
 **deploy が書く**に読み替える（公開の有無と関係なく、名簿の人が使うスキーマだから）。
 
 **publish は繰り返せる。** 公開設定を変えたら publish し直す（`unpublish` してからやり直す
@@ -603,7 +614,7 @@ unpublish:  apps/{aid}.public を外す ← 最初 → appSlugs.published = fals
 
 |  | 読む | 書く |
 |---|---|---|
-| **定義**（スキーマ・ビュー） | repo read | repo write + merge |
+| **定義**（スキーマ・ビュー） | repo read | repo write + PR |
 | **定義の反映** | — | **publish**（owner のみ） |
 | **データ**（レコード） | members: viewer | members: editor |
 

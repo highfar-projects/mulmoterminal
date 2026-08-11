@@ -250,8 +250,10 @@ MT だけの機能だからです。詳しくは本文の D5）
    （`confirm` で強行可能）
 4. **`apps/{aid}` を書く** — ただし **`public` ブロックは書かない**（下記）。
    既存のアプリなら更新として扱われ、前の版は `previousPublished` に退避されます
-5. **スキーマとビューを `staging/{cid}` に書く** — 公開ページはここを読めないので、
-   **公開中のアプリでも見た目は変わりません**（下記）
+5. **`staging/{cid}` に書く** — スキーマとビュー、**そのコレクションのルール設定**
+   （`transitions` / `immutable` / `submitOnly` …）、`participantRead` に入るかどうか、
+   そして記名（`deployedAt` / `deployedBy` / `deployedCommit`）。公開ページはここを
+   読めないので、**公開中のアプリでも見た目も挙動も変わりません**（下記）
 6. **URL slug を予約する** — 希望が空いていればそれ、取られていたら番号を付ける。
    予約できたら `app.json` に書き戻す（以降は再生成しない）。**この時点では誰も
    辿れません**（下記）。**4 より後**なのは、`appSlugs` の作成ルールが
@@ -273,9 +275,11 @@ MT だけの機能だからです。詳しくは本文の D5）
 公開設定を変えたいだけなら **publish し直せば済みます**（`unpublish` は要りません）。
 再 publish は前版を `previousPublished` に退避して置き換えます。
 
-> **再 deploy が公開を巻き戻さないこと。** deploy は `apps/{aid}` を merge で書き、
-> `public` と `appSlugs.published` には触りません。まるごと置換すると `public` が消えて
-> **黙って非公開になります**。
+> **書き方は `set`（置換）で、merge ではありません。** merge は**削除できない**ので、
+> `members` から 1 人消しても権限が残り、しかもルールが `memberEmails` との一致を
+> 要求するため**その deploy 自体が拒否**されます。代わりに、相手の操作が持つもの —
+> `public` / `collections` / `participantRead` / `published*` / `previousPublished` —
+> は**現在値をそのまま持ち越す**ので、置換しても公開は巻き戻りません。
 
 ### できるもの（Firestore）
 
@@ -386,7 +390,7 @@ slug を経由しない経路だけです。aid は UUID なので URL 自体が
 
 | | ローカル（git） | Firestore |
 |---|---|---|
-| **スキーマ・ビュー（草稿）** | `.claude/skills/<slug>/schema.json` | `apps/{aid}/staging/{slug}`（deploy） |
+| **スキーマ・ビュー・ルール設定（草稿）** | `.claude/skills/<slug>/schema.json` + `app.json` の `collections` | `apps/{aid}/staging/{slug}`（deploy） |
 | **スキーマ・ビュー（公開）** | 同上 | `apps/{aid}/collections/{slug}` の `publishedSchema`（publish が昇格） |
 | **名簿・公開設定** | `app.json` | `apps/{aid}` / `apps/{aid}/config/public` |
 | **URL の予約** | `app.json` の `slug` | `appSlugs/{slug}` |
