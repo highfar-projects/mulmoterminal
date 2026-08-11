@@ -5,6 +5,8 @@ import TerminalCell from "../../../src/components/TerminalCell.vue";
 import { CELL_CHIP_BTN, CELL_CHIP_ICON } from "../../../src/components/cellChromeClasses";
 import { SUNK_CELL } from "../../../src/components/cellParked";
 import { TOOL_GROUPS } from "../../../common/toolGroups";
+import { setHeaderStatusDefaults } from "../../../src/composables/headerStatusColors";
+import { DEFAULT_HEADER_STATUS_TINT } from "../../../common/headerStatusColors";
 
 // Capture the "sessions" pub/sub callback and the reconnect handler so tests can push
 // activity and simulate a dropped-then-restored socket directly.
@@ -74,6 +76,9 @@ beforeEach(() => {
   captured = null;
   reconnect = null;
   mockFetch();
+  // A module singleton, so a test that sets a global default would otherwise leak it into every
+  // test that runs after it (setHeaderStatusDefaults, #1617).
+  setHeaderStatusDefaults({}, DEFAULT_HEADER_STATUS_TINT);
 });
 
 function mountCell(
@@ -2145,6 +2150,57 @@ describe("TerminalCell", () => {
     const busy = mountCell("44444444-4444-4444-4444-444444444444", { initialCwd: "/home/me/hdr-declared-busy" });
     await flushPromises();
     expect(busy.find(".cell-header").attributes("style") ?? "").not.toContain("--cell-header-fg");
+  });
+
+  // The GLOBAL half of the feature, which nothing else reaches: every other test here configures a
+  // directory. A cell that consulted only its own `.mulmoterminal.json` — the shape this component
+  // had before #1617 — would pass all of them, so this is the one that says the global default is
+  // wired to a cell at all. (Observed during Claude review; not flagged by Codex.)
+  it("takes the per-status colours from the global config when the directory names none", async () => {
+    setHeaderStatusDefaults({ working: "#166534" }, "background");
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/dir-config")) return { ok: true, json: async () => ({ headerColor: "#8e44ad" }) };
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
+      return { ok: true, json: async () => ({ working: true, waiting: false, lastPrompt: null }) };
+    }) as unknown as typeof fetch;
+    const w = mountCell("66666666-6666-6666-6666-666666666666", { initialCwd: "/home/me/hdr-global-default" });
+    await flushPromises();
+    const style = w.find(".cell-header").attributes("style") ?? "";
+    expect(style).toContain("--cell-header-bg: #166534");
+    expect(style).toContain("--cell-header-fg: #ffffff"); // derived from the global background
+  });
+
+  // The tint is the OTHER global key, and it falls back by a separate expression. Deleting that
+  // fallback failed nothing until this existed — the test above covers the colours and would have
+  // stayed green.
+  it("takes the tint mode from the global config too", async () => {
+    setHeaderStatusDefaults({}, "none");
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/dir-config")) return { ok: true, json: async () => ({ headerColor: "#8e44ad" }) };
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
+      return { ok: true, json: async () => ({ working: true, waiting: false, lastPrompt: null }) };
+    }) as unknown as typeof fetch;
+    const w = mountCell("88888888-8888-8888-8888-888888888888", { initialCwd: "/home/me/hdr-global-tint" });
+    await flushPromises();
+    // "none" globally means a working cell keeps the directory's own colour instead of the wash.
+    expect(w.find(".cell-header").attributes("style") ?? "").toContain("--cell-header-bg: #8e44ad");
+  });
+
+  // And the direction of the override, which the same wiring decides: a directory that names its
+  // own block replaces the global one rather than merging into it.
+  it("lets a directory's own block outrank the global one", async () => {
+    setHeaderStatusDefaults({ working: "#166534" }, "background");
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/dir-config")) return { ok: true, json: async () => ({ headerStatusColors: { working: "#ffe8a3" } }) };
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
+      return { ok: true, json: async () => ({ working: true, waiting: false, lastPrompt: null }) };
+    }) as unknown as typeof fetch;
+    const w = mountCell("77777777-7777-7777-7777-777777777777", { initialCwd: "/home/me/hdr-dir-outranks" });
+    await flushPromises();
+    expect(w.find(".cell-header").attributes("style") ?? "").toContain("--cell-header-bg: #ffe8a3");
   });
 
   // And what the user configures INSTEAD: a colour for that status, whose ink is derived from it.
