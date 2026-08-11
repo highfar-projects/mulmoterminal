@@ -5,6 +5,7 @@ import path from "node:path";
 import { makeTempDir } from "../../support/tempDir.js";
 import { loadDirConfig } from "../../../server/config/dir-config";
 import { inheritedWorktreeConfig, writeInheritedDirConfig } from "../../../server/config/worktree-dir-config";
+import { DIR_CONFIG_KEYS } from "../../../common/dirConfigSource";
 
 const CONFIG_FILE = ".mulmoterminal.json";
 // What the inherited config is WRITTEN to: the local override (#1436), which is gitignored, so a
@@ -39,6 +40,36 @@ const PROJECT = {
   orderPriority: 30,
 };
 
+// Every key `loadDirConfig` reads is inherited, tinted, or deliberately left behind — and the
+// third case has to be SAID. Nothing failed when `headerStatusColors` was added to the loader and
+// not here (#1617): the project's cell had the colour, its worktrees quietly did not, and only
+// someone opening a worktree beside its parent would see it. The list below is what makes leaving
+// a key out a decision instead of an omission.
+const DELIBERATELY_NOT_INHERITED = ["sound", "sounds", "addDirs", "buttons", "chips", "skills", "appendSystemPrompt"];
+
+describe("every directory setting is inherited or deliberately not", () => {
+  it("accounts for every key the loader reads", () => {
+    // A project that sets EVERY key, so a key missing from the result is missing by rule rather
+    // than because this fixture didn't set it.
+    const everything = {
+      ...PROJECT,
+      icon: "https://example.com/logo.png",
+      worktreeEnv: { PORT: { kind: "port", base: 3000 } },
+      headerStatusColors: { working: "#6d28d9" },
+      headerStatusTint: "none",
+      sound: "./a.mp3", // dropped by the loader (no such file) — it is in the "not inherited" list anyway
+      addDirs: ["."],
+      buttons: [{ id: "pr", label: "PR", run: "shell", cmd: "gh pr create" }],
+      chips: ["git"],
+      skills: ["review"],
+      appendSystemPrompt: false,
+    };
+    const inherited = Object.keys(inheritedFrom(everything, 1));
+    const unaccounted = [...DIR_CONFIG_KEYS].filter((key) => !inherited.includes(key) && !DELIBERATELY_NOT_INHERITED.includes(key));
+    expect(unaccounted).toEqual([]);
+  });
+});
+
 describe("inheritedWorktreeConfig", () => {
   it("carries the project's identity over unchanged", () => {
     expect(inheritedFrom(PROJECT, 1)).toMatchObject({
@@ -50,6 +81,29 @@ describe("inheritedWorktreeConfig", () => {
       provider: "ollama",
       model: "qwen3:8b",
     });
+  });
+
+  // The header a glance lands on is the same header in a worktree, so a project that recoloured
+  // its running state keeps that colour — moved by the same step as the rest of the chrome, or
+  // `working` would be the one part of the cell still reading as the parent's.
+  it("tints the per-status header colours too, and carries the tint MODE unchanged", () => {
+    const project = { ...PROJECT, headerStatusColors: { working: "#2d4ea9", blocked: { background: "#7c2d12", text: "#ffe8a3" } }, headerStatusTint: "none" };
+    const first = inheritedFrom(project, 1);
+    expect(first.headerStatusColors).toEqual({
+      working: { background: first.headerColor }, // the same colour as the header, so the same rotation
+      // #7c2d12 sits at hue 15.3 degrees; a step of 12 puts it at 27.3 with saturation and
+      // lightness untouched, which is #7c4212. The ink moves with it.
+      blocked: { background: "#7c4212", text: "#fffaa3" },
+    });
+    // A mode has no hue to rotate.
+    expect(first.headerStatusTint).toBe("none");
+    // And it steps further out with each worktree, like every other chrome colour.
+    expect(inheritedFrom(project, 2).headerStatusColors).not.toEqual(first.headerStatusColors);
+  });
+
+  it("writes no status block for a project that configured none", () => {
+    expect(inheritedFrom(PROJECT, 1)).not.toHaveProperty("headerStatusColors");
+    expect(inheritedFrom(PROJECT, 1)).not.toHaveProperty("headerStatusTint");
   });
 
   it("tints the chrome colours, a step further for each worktree", () => {
