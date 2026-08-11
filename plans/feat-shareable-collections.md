@@ -330,7 +330,8 @@ MT だけの機能を MT だけのツールに置くのだから、境界とし�
 **`manageSharedApp` が引き取る操作は `deploy` / `publish` / `unpublish` の 3 つ。**
 書き込み経路を 2 本にしないために、移行はこう定める:
 
-- core の `manageCollection.publishApp` は**削除する**（mulmoclaude #2871）。
+- core の `manageCollection.publishApp` を**削除する**（mulmoclaude #2871、**レビュー中**。
+  マージされるまで旧経路は生きている）。
   「残すが呼ばない」では済まない — MT は能力を宣言し accessor も繋ぐので、あの action は
   **MT で普通に動いてしまう**。しかも MT は `manageCollection` をホストツールとして
   登録し、`/api/plugin/manageCollection` が core のハンドラへ直接ディスパッチするので、
@@ -3009,8 +3010,10 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
      **`setSharedCollectionsSupport(true)` を別に呼ぶ**（`configureCollectionHost` の
      フィールドではない。理由は D5)
    - **7c. MT 独自ツール `manageSharedApp`** — `deploy` / `publish` / `unpublish` の 3 つ。
-     core の `publishApp` は #2871 で**削除済み**なので、書き込み経路はこれ 1 本
-     （「残すが呼ばない」では MT で普通に動いてしまう。D5 の移行）。
+     **#2871 のマージと npm 公開を待ってから着手する** — それまで core の `publishApp` は
+     生きており、MT は `manageCollection` をホストツールとして登録しているので、
+     書き込み経路が 2 本ある状態が続く（「残すが呼ばない」では MT で普通に動いてしまう。
+     D5 の移行）。1 本になるのは #2871 が入ってから。
      門番と射影は core の純粋関数を呼び、**順序（fail closed）と書き分けは MT が持つ**（D10）。
      `appSlugs` のルール（`published` フラグ）と **`match /staging/{cid}`** を
      mulmoserver に足すのはここ（1 回のデプロイにまとめる）

@@ -341,8 +341,9 @@ appSlugs/sakura-hair              ← published: true にする（ここで URL 
 > 草稿を deploy しただけで巻き戻し先が動いてしまわないように。作業ツリーが汚れていれば
 > その印が付きます（そのコミットは中身を説明していないため）。
 
-**実装状況**: core の `publishApp`（deploy と publish を兼ねた旧経路）は削除済み
-（mulmoclaude#2871）。**MT 側の `manageSharedApp` は未実装**。
+**実装状況**: core の `publishApp`（deploy と publish を兼ねた旧経路）は
+**mulmoclaude#2871 で削除する予定 — まだレビュー中**なので、いまは生きている。
+**MT 側の `manageSharedApp` は未実装**で、着手は #2871 のマージと npm 公開を待つ。
 3〜5 は動く。**2（slug の予約）は未実装**で、`appSlugs` のルールを mulmoserver に足す
 必要があります（凍結インフラへの 2 回目のデプロイ）。ステップ 1 の `aid` 自動生成も未実装。
 
