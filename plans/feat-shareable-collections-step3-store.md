@@ -233,11 +233,18 @@ cd <mulmoclaude>/packages/core && yarn test && yarn typecheck && yarn lint && ya
 
 # mulmoclaude のリポジトリルート（ホスト側のテストとバージョンゲート）
 cd <mulmoclaude> && yarn test
+cd <mulmoclaude> && yarn run test:coverage
 cd <mulmoclaude> && yarn run check:launcher-sync
 cd <mulmoclaude> && node scripts/packages/check-changelog-ships.mjs
 ```
 
-**後ろ 2 つは core の version を上げた瞬間に落ちる CI ゲート**で、直し方が違う:
+**`yarn test` が通っても `test:coverage` は落ちうる。両方走らせること。**
+2 つはテストファイルの glob が違い（`test:coverage` は 3 階層目を含まない）、
+プロセスの分け方も違うので、**片方だけが拾う失敗がある**。実際 #2856 で、
+共有ベルの assert が古い root ベースの helper を参照したままになっていた問題は、
+`yarn test` では通り `test:coverage` で初めて出た。CI は両方を走らせる。
+
+**最後の 2 つは core の version を上げた瞬間に落ちる CI ゲート**で、直し方が違う:
 
 - `check:launcher-sync` — `packages/mulmoclaude/package.json` と
   `packages/plugins/google-plugin/package.json` の `@mulmoclaude/core` レンジを
