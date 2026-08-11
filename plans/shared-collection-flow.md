@@ -38,17 +38,18 @@
 
 ## 全体像
 
-```
-              👤 あなた            🤖 LLM                   💾 できるもの
+```text
+              あなた            LLM                   できるもの
  ──────────────────────────────────────────────────────────────────────────────
  1. アプリ宣言   「共有コレクション  app.json を書く（aid も）  <repo>/app.json
  2. コレクション   を作って」        schemaDocs → putSchema     .claude/skills/<slug>/
  3. 招待        「◯◯さんに権限を」 members を書く             <repo>/app.json
  ──────────────────────────────────────────────────────────────────────────────
- 4. deploy      「deploy して」    deployApp                 apps/{aid} ほか
- 4'. publish    「publish して」   publishApp                config/public, appSlugs
+ 4. deploy      「deploy して」    deployApp                 apps/{aid}, スキーマ, slug 予約
+ 5. publish     「publish して」   publishApp                apps/{aid}.public, config/public
  ──────────────────────────────────────────────────────────────────────────────
- 5. 他の人      URL を開く         —                         Web ページ
+ ──────────────────────────────────────────────────────────────────────────────
+ 6. 他の人      URL を開く         —                         Web ページ
 ```
 
 **1 と 2 は 1 つの依頼から続けて起こります** — `app.json` が無いと共有コレクションは
@@ -57,7 +58,7 @@
 **上の並びは番号の順に一度ずつ起こるのではありません。** deploy を何度も挟んで進み、
 publish は最後に一度だけです:
 
-```
+```text
  app.json に何を書いたか        打つもの      その結果
  ─────────────────────────────────────────────────────────────────────────
  aid + スキーマ             →   deploy    自分だけが /dev/{aid} で実データを試せる
@@ -69,8 +70,8 @@ publish は最後に一度だけです:
 
 | | 何をするか | 何を書くか | 危険度 |
 |---|---|---|---|
-| **deploy** | 宣言を Firestore に反映する。何度でも打つ | **名簿の人しか読めないもの**だけ（`apps/{aid}`、スキーマ） | 常に安全。外には何も出ない |
-| **publish** | **公開する** | **世界に読めるもの**（`config/public`、`appSlugs/{slug}`） | 唯一の危険な操作 |
+| **deploy** | 宣言を Firestore に反映する。何度でも打つ | **名簿の人しか読めないもの**だけ（`apps/{aid}` の `public` **抜き**、スキーマ） | 常に安全。外には何も出ない |
+| **publish** | **公開する** | **`apps/{aid}.public`（認可の本体）**、`config/public`、`appSlugs` の公開 | 唯一の危険な操作 |
 
 外に出る文書を作るのは publish だけなので、**テストのために deploy しても何も漏れません**。
 `/dev/{aid}` は deploy だけで動きます — 認可はもう `apps/{aid}` の名簿が持っているからです。
@@ -99,15 +100,15 @@ publish は最後に一度だけです:
 **保存を拒否されます**（`a shared collection needs an app: create <root>/app.json
 declaring an 'aid'`）。順序は入れ替えられません。
 
-### 👤 あなた
+### あなた
 
 > 「美容室の予約を管理する**共有**コレクションを作って。URL は sakura-hair にして」
 
-### 🤖 LLM
+### LLM
 
 `app.json` を書く（コレクションを作る前に）
 
-### 💾 できるもの（ローカル）
+### できるもの（ローカル）
 
 ```json
 {
@@ -134,19 +135,19 @@ uid を刻みます）。
 
 ## ステップ 2 — コレクションを作る
 
-### 👤 あなた
+### あなた
 
 同じ依頼の続きです。あなたはもう一度言う必要はありません。
 
-### 🤖 LLM
+### LLM
 
 1. `manageCollection` の **`schemaDocs`** — スキーマの書き方を読む
 2. **`SKILL.md`** と **`schema.json`** を書く（新規作成はファイル書き込み）
 3. `manageCollection` の **`putSchema`** — 検証して保存
 
-### 💾 できるもの（ローカル）
+### できるもの（ローカル）
 
-```
+```text
 <プロジェクトフォルダ>/.claude/skills/bookings/
 ├── SKILL.md
 └── schema.json
@@ -222,12 +223,12 @@ uid を刻みます）。
 
 ローカルの宣言を Firestore に反映する操作が **deploy**、それを外に開く操作が **publish** です。
 
-### 👤 あなた
+### あなた
 
 > 「deploy して」 …… 動作確認と招待はここまでで足ります
 > 「publish して」 …… お客さんに開くときだけ
 
-### 🤖 LLM
+### LLM
 
 `manageCollection` の **`deployApp`** / **`publishApp`**
 
@@ -235,38 +236,51 @@ uid を刻みます）。
 
 1. `app.json` を読む — **`aid` はステップ 1 で決まっているので、そのまま使う**
    （deploy は `aid` を作らない。`apps/{aid}` という**置き場所ができる**のがここ）
-2. **URL slug を予約する** — 希望が空いていればそれ、取られていたら番号を付ける。
-   予約できたら `app.json` に書き戻す（以降は再生成しない）。**この時点では誰も
-   辿れません**（下記）
-3. **拒否できるものを全部拒否する**（下記）
-4. **ライブレコードを事前検証** — 新スキーマで壊れる既存レコードがあれば**止まる**
+2. **拒否できるものを全部拒否する**（下記）
+3. **ライブレコードを事前検証** — 新スキーマで壊れる既存レコードがあれば**止まる**
    （`confirm` で強行可能）
-5. **名簿の人しか読めない文書を書く**。既存のアプリなら更新として扱われ、
-   前の版は `previousPublished` に退避されます
+4. **`apps/{aid}` を書く** — ただし **`public` ブロックは書かない**（下記）。
+   既存のアプリなら更新として扱われ、前の版は `previousPublished` に退避されます
+5. **スキーマを書く**（`collections/{cid}`）
+6. **URL slug を予約する** — 希望が空いていればそれ、取られていたら番号を付ける。
+   予約できたら `app.json` に書き戻す（以降は再生成しない）。**この時点では誰も
+   辿れません**（下記）。**4 より後**なのは、`appSlugs` の作成ルールが
+   `get(apps/{aid})` でオーナーを確認するため — アプリが無いと予約が拒否されます
 
 ### publish がやること
 
-`appSlugs/{slug}` を**公開状態にし**、`config/public` を書きます。**これだけ**が
-世界に読める文書で、**これだけ**が外から見える変化です。取り下げ（`unpublish`）は
-その 2 つを戻します。
+1. **`apps/{aid}` に `public` ブロックを載せる** — **これが認可の本体**
+2. `config/public` を書く（描画用の射影）
+3. `appSlugs/{slug}` を `published: true` にする
 
-### 💾 できるもの（Firestore）
+取り下げ（`unpublish`）はこの 3 つを戻します。公開設定を変えたいだけなら
+**publish し直せば済みます**（unpublish は要りません）。
 
-```
+### できるもの（Firestore）
+
+```text
 deploy が書く（名簿の人だけ）
-apps/{aid}                        ← 名簿・内部設定（readerOf のみ）
+apps/{aid}                        ← 名簿・内部設定。public ブロックは含めない
   └── collections/bookings        ← publishedSchema（schemaRead のみ）
 appSlugs/sakura-hair              ← { aid, published: false } 予約だけ。誰も引けない
 
-publish が書く（世界に読める）
-apps/{aid}/config/public          ← 公開設定（未ログインでも読める。名簿は含まない）
+publish が書く（外に出る）
+apps/{aid} の public ブロック      ← ルールが匿名アクセスを判定するのはここ
+apps/{aid}/config/public          ← 描画用の射影（未ログインでも読める。名簿は含まない）
 appSlugs/sakura-hair              ← published: true にする（ここで URL が生きる）
 ```
 
+> **急所は `config/public` ではなく `apps/{aid}` の `public` ブロック**です。ルールが
+> 匿名アクセスを判定するのに読むのはアプリ本体のドキュメント（`publicOn` は
+> `a.public.enabled`、`subOpen` は `a.public.submit`）で、`config/public` は描画用の
+> 射影にすぎません。**deploy がここに `public` を書くと、その瞬間から匿名アクセスが
+> 有効**になり、`config/public` を伏せても止まりません。しかも `submit` 側は
+> `enabled` すら見ないので、「`enabled: false` なら安全」も成り立ちません。
+
 > **予約と公開を分ける理由。** slug は人間可読なので、`appSlugs` が最初から引けると
 > **slug を当てるだけで aid が手に入り**、`/dev/{aid}` が推測可能になります。
-> ルールを `allow read: if resource.data.published == true` にすれば、**早く押さえられて、
-> かつ公開まで誰も辿れません**。`get(apps/{aid})` が要らないので式数も増えません。
+> `allow read: if resource.data.published == true` にすれば、**早く押さえられて、かつ
+> 公開まで誰も辿れません**。**UUID の推測しにくさを認可の境界にしない**、が原則です。
 
 ### deploy が拒否するもの
 
@@ -292,7 +306,7 @@ appSlugs/sakura-hair              ← published: true にする（ここで URL 
 
 ### 入口は 2 つ
 
-```
+```text
 https://<host>/sakura-hair     公開の顔。お客さん向け
 https://<host>/dev/{aid}       名簿の人の入口。slug を経由しない
 ```
@@ -348,7 +362,7 @@ slug を経由しない経路だけです。aid は UUID なので URL 自体が
 
 | | 状態 |
 |---|---|
-| コレクション作成 / 名簿 / 反映の本体 | **動く**（`@mulmoclaude/core` 3.8.0、Firestore ルールは本番に反映済み） |
+| コレクション作成 / 名簿 / 反映の本体 | **動く** — ただし `@mulmoclaude/core` 3.8.0（**npm 未公開**、npm は 3.7.0）。**MulmoTerminal が lock しているのは 3.3.0** なので、上げるまでこのリポジトリからは新しい部分に触れない。Firestore ルールは本番に反映済み |
 | **deploy / publish の分割** | **未実装**（決定済み）。いまは `publishApp` 1 つが両方やる |
 | `aid` の UUID 自動生成 | **未実装**（決定済み） |
 | URL slug の確保 + `appSlugs` のルール | **未実装**（決定済み。ルールの 2 回目のデプロイを含む） |

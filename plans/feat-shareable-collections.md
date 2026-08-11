@@ -162,7 +162,7 @@ AI 専用の安全機構は 1 つも要らない。
 美容室シナリオは 4 コレクション（stylists / services / shifts / bookings）が
 **1 つのメンバー表と 1 つの公開設定を共有**する。招待を 4 回やらせるのは論外。
 
-```
+```text
 apps/{aid}                               メンバー、公開設定、publish 情報
 apps/{aid}/collections/{cid}             publish されたスキーマ + ビュー
 apps/{aid}/collections/{cid}/items/{id}  レコード
@@ -214,13 +214,13 @@ INVARIANT が列挙したものは**この型で鍵を持つ**。実装順 1 の
 公開する（D10）。衝突していたら後ろに番号を付ける（`sakura-hair` → `sakura-hair-2`）。
 一度確保したら再生成しない — URL は人が配るもの。
 
-```
+```text
 appSlugs/sakura-hair  →  { aid: "3f2b8c1a-…", published: true }
 ```
 
 ### D3. スキーマとビューは git、レコードは Firestore
 
-```
+```text
 git       → schema.json, views/*.html, skill テキスト   （コード。レビュー・履歴・巻き戻し）
 Firestore → items/{id}                                  （データ）
 ```
@@ -233,7 +233,7 @@ PR #2209 の当初案（レコードだけ Firestore、スキーマはディス�
 
 Web サイトは git を読めないので、publish が要る。ただし**デプロイとして扱う**:
 
-```
+```text
 git (source of truth) ──publish──> apps/{aid}/collections/{cid}.publishedSchema
                                    + publishedCommit + publishedBy + publishedAt
                                    + previousPublished（rollback 用）
@@ -286,17 +286,24 @@ MT の看板機能は git worktree。**同じリポジトリの worktree 2 つ =
 worktree 固有の値を持つ。dev-server のポート、**データベース名**）。コレクションの aid は
 まさに "a database name"。
 
-しかも**新しい `kind` は要らない**: `WorktreeEnvVar` は
+**新しい `kind` が要る**（当初は不要と書いていたが誤り。下記）: `WorktreeEnvVar` は
 `{ kind: "port"; base } | { kind: "slug"; prefix? }`（`common/worktreeEnv.ts:51`）で、
-`slug` が worktree 由来の一意な文字列を prefix 付きで作る。そのまま aid に使える。
+`slug` が worktree 由来の一意な文字列を prefix 付きで作るが、**aid には使えない**。
 
 ```json
 // .mulmoterminal.json
-{ "worktreeEnv": { "MT_APP_SALON": { "kind": "slug", "prefix": "app_" } } }
+{ "worktreeEnv": { "MT_APP_SALON": { "kind": "uuid" } } }
 
 // app.json
-{ "aid": "app_7f3a", "aidEnv": "MT_APP_SALON" }
+{ "aid": "3f2b8c1a-…", "aidEnv": "MT_APP_SALON" }
 ```
+
+> **worktree の aid も UUID でなければならない**（D2b）。`kind: "slug"` は worktree 名から
+> **決定的に**導くので、人間可読で推測でき、`apps/{aid}` が早い者勝ちの棚である以上
+> 先回りして押さえられる — D2b が aid を UUID にした理由そのものに当たる。
+> **`kind: "uuid"`（worktree ごとに一度生成して記録する）が要る**。既存の 2 つの kind では
+> 足りない、というのがここでの結論。コミットされる `aid` は本番のもので、`aidEnv` は
+> **その worktree でだけ**それを上書きする（D1 の「clone は同じ aid を指す」は保たれる）。
 
 main の worktree は本番 aid、feature の worktree は自動で別の scratch aid。
 
@@ -359,7 +366,7 @@ publish が「Firestore に出す」と「本番にする」を兼ねていた�
 検証用に別の aid を立てる案は**採らない** — テストで入れたデータが本番に持ち越せず、
 「dev では動いたが live に無い」を作る。分けるべきなのは**入口**だけ:
 
-```
+```text
 https://<host>/{slug}      公開の顔。未サインインでも読める。slug を確保して初めて生きる
 https://<host>/dev/{aid}   名簿の人の入口。aid を直接指す。slug を経由しない
 ```
@@ -380,14 +387,41 @@ https://<host>/dev/{aid}   名簿の人の入口。aid を直接指す。slug �
 | **deploy** | 宣言を Firestore に反映する。何度でも | **名簿の人しか読めないもの**だけ（`apps/{aid}`、`collections/{cid}`） | 常に安全 |
 | **publish** | **公開する** | **世界に読めるもの**（`config/public`、`appSlugs/{slug}` の公開） | 唯一の危険な操作 |
 
-- **`config/public` は publish するまで存在しない。** 「名前だけ書かない」という小細工が要らない
+**分割の急所は `config/public` ではなく、`apps/{aid}` の `public` ブロック。**
+ルールが匿名アクセスを判定するのに読むのは**アプリ本体のドキュメント**であって、
+公開設定の射影ではない — `publicOn(a)` は `a.public.enabled`、`subOpen(a, cid)` は
+`a.public.submit` を見る（`a = get(apps/{aid})`）。`config/public` は**描画のための射影**で、
+認可には一切使われない。したがって:
+
+> **deploy は `apps/{aid}` に `public` ブロックを書いてはならない。** 書けば、`config/public`
+> が無くても**その瞬間から匿名アクセスが有効**になり、`config/public` を消しても止まらない。
+> `public` を app ドキュメントに載せるのは publish、外すのが unpublish。
+
+これを外すと分割は**見た目だけ**になる（`config/public` を伏せても実際の権限は開いている）。
+`submit` 側はさらに `enabled` すら見ない（`subOpen` は `public.submit` の有無だけ）ので、
+「`enabled: false` で deploy すれば安全」も成り立たない。**UUID の推測しにくさを認可の
+境界にしない**、が原則。
+
+- **deploy が書くもの**: `apps/{aid}`（`public` ブロック**抜き**の名簿・内部設定）、
+  `collections/{cid}`、`appSlugs/{slug}`（`published: false`）
+- **publish が書くもの**: `apps/{aid}.public`（**認可の本体**）、`config/public`（描画用の射影）、
+  `appSlugs/{slug}.published = true`
+- **unpublish**: その 3 つを戻す（`public` を外し、`config/public` を消し、`published` を false に）
 - **slug の予約は deploy、公開は publish。** `appSlugs/{slug}` に `published: false` を持たせ、
-  ルールを `allow read: if resource.data.published == true` にする。**早く押さえられて、
-  かつ公開まで誰も辿れない**。`get(apps/{aid})` が要らないので式数も増えない（D7 の監視点）
-- **取り下げが表現できる。** `unpublish` = `published` を戻し `config/public` を消す。
-  「`public.enabled: false` を書いて publish し直す」という遠回りが消える
+  `allow read: if resource.data.published == true`。**早く押さえられて、かつ公開まで誰も
+  辿れない**。`get(apps/{aid})` が要らないので読み取りの式数は増えない（D7 の監視点）
 - **門番の置き場所**: 拒否条件とライブレコードの事前検証は **deploy 側**（スキーマが壊れる話は
   公開の有無と無関係）。publish 側は「公開してよいか」だけ — `public.submit` の不変条件と slug
+
+**書き込み順は「アプリ本体が先」。** `appSlugs` の `allow create` は `get(apps/{aid})` で
+オーナーを確認するので、**`apps/{aid}` が存在しない初回 deploy では slug の予約が拒否される**。
+順序は `apps/{aid}` → `collections/{cid}` → `appSlugs`。既存の publish 実装が
+「app ドキュメントが他の 2 つを authorize するので先に書く」としているのと同じ理由。
+
+**publish は繰り返せる。** 公開設定を変えたら publish し直す（`unpublish` してからやり直す
+必要はない）。既に `published: true` の slug に対する publish は**冪等**で、`apps/{aid}.public`
+と `config/public` を新しい版で置き換え、`previousPublished` に前版を退避する。
+`unpublish` は「やめる」ときだけ。同時 publish の版混在は既知の穴（mulmoclaude #2866）。
 
 `/dev/{aid}` は **deploy だけで動く**。つまりテストと招待は publish 抜きで完結する。
 
@@ -1406,7 +1440,7 @@ owner/editor はどちらでも修正できる。
 
 > **問題文・選択肢と、正解は、別コレクションに分けるしかない。**
 
-```
+```text
 questions/{qid}   問題文 + 3 択          public read
 answerKey/{qid}   正解 + 解説            revealed == true のときだけ read
 ```
@@ -1425,7 +1459,7 @@ answerKey/{qid}   正解 + 解説            revealed == true のときだけ re
 
 ### `session` — 主催者がペースを握る状態機械
 
-```
+```text
 apps/{aid}/session   { current: "q3", phase: "answering" | "revealed" | "closed" }
 ```
 
@@ -1477,7 +1511,7 @@ apps/{aid}/session   { current: "q3", phase: "answering" | "revealed" | "closed"
 
 **「名指しされているが member ではない」層が、今の 3 値（owner / editor / viewer）に無い。**
 
-```
+```text
 owner        publish、メンバー管理、session の駆動、全件読み取り
 editor       レコードの読み書き（全件）
 viewer       レコードの読み取り（全件）
@@ -1650,7 +1684,7 @@ sandbox された HTML が Firestore ハンドルを持たなくても、**親�
 
 ### 構造
 
-```
+```text
 +- 親フレーム（webview シェル / MT のセル）-----------------+
 |  Firebase SDK・認証・onSnapshot・ref 解決・live 判断      |
 |                     | MessageChannel (port)              |
@@ -1911,7 +1945,7 @@ HTML に逃がすと元の木阿弥なので、**既存の `when`（`fieldBase`�
 - **変換は一方向・確認あり**。「何が自分のマシンを離れるか」を名指しする。トグルにしない
 - ヘッダーは 2 行:
 
-```
+```text
 共有中 — 5人（owner: satoshi、editor 2、viewer 2）              ← Firestore
 定義 — github.com/receptron/salon @ a1b2c3d（2日前に publish）  ← git
 ```
@@ -2018,7 +2052,7 @@ HTML に逃がすと元の木阿弥なので、**既存の `when`（`fieldBase`�
 
 **テーブル設計**
 
-```
+```text
 stylists  1 ──< shifts        美容師のシフト
 stylists  1 ──< bookings      担当
 services  1 ──< bookings      メニュー（所要時間の供給元）
@@ -2185,7 +2219,7 @@ services  1 ──< bookings      メニュー（所要時間の供給元）
 
 **テーブル設計**
 
-```
+```text
 questions   質問（公開読み取り）
 responses   回答（一人一回・書き切り・本人と owner のみ）
 results     集計（aggregate が publish、公開読み取り）
@@ -2301,7 +2335,7 @@ results     集計（aggregate が publish、公開読み取り）
 
 **テーブル設計 — 分割が要点**
 
-```
+```text
 questions   問題文 + 3択          public read      ← 正解を入れてはいけない
 answerKey   正解 + 解説           revealed のみ    ← gated が生成する
 responses   生徒の回答            本人 + 先生のみ
@@ -2373,7 +2407,7 @@ session     現在の問題とフェーズ  参加者は read のみ
 
 **`gated` が生成する実体**（エージェントが手で書くのではない）:
 
-```
+```text
 apps/{aid}/collections/questions/items/{id}   id, order, text, choiceA..C, revealed
 apps/{aid}/collections/answerKey/items/{id}   correctChoice, explanation
 ```
@@ -2442,7 +2476,7 @@ apps/{aid}/collections/answerKey/items/{id}   correctChoice, explanation
 
 **テーブル設計**
 
-```
+```text
 topics    議題                    参加者 read
 votes     投票（記名・不変）      参加者が全件 read ← peerVisibility: public
 session    現在の議題とフェーズ   参加者 read のみ
@@ -2636,9 +2670,14 @@ session    現在の議題とフェーズ   参加者 read のみ
 > であって、ルールの形が未決定という意味ではない。
 
 - [ ] **`appSlugs/{slug}` とそのルール** — D2b / D10。**まだ入っていない**（ルールの
-      2 回目の cross-repo デプロイになる）。確保は `create`（原子的な create-if-absent）、
-      `allow create` は「その aid のオーナーであること」を `get(apps/{aid})` で確認、
-      **`allow read: if resource.data.published == true`**（公開前は誰も辿れない）
+      2 回目の cross-repo デプロイになる）:
+      - `allow create` — 「その aid のオーナーであること」を `get(apps/{aid})` で確認。
+        原子的な create-if-absent。**`apps/{aid}` を先に書いていること**が前提（D10）
+      - `allow update` — **オーナーのみ、かつ `aid` の付け替えを禁止**
+        （`request.resource.data.aid == resource.data.aid`）。publish / unpublish が
+        `published` を反転させるので、これが無いと既定の deny で両方が失敗する
+      - `allow read: if resource.data.published == true` — 公開前は誰も辿れない
+      - `allow delete: if false` — slug を消すと他人が拾える
 - [x] アプリ階層（`apps/{aid}/collections/{cid}/items`）— D1
 - [x] コレクション別ロール — D1
 - [x] 公開読み取り（`public.read`）

@@ -67,7 +67,7 @@ aid を作らない。UUID は取り合いが無いので早く決めて損が�
 
 ---
 
-## 決定 3 — URL 用の slug は別に持ち、publish が確保する
+## 決定 3 — URL 用の slug は別に持ち、deploy が予約して publish が公開する
 
 同一性（aid）と名前（URL）を分ける。**取り合いの対象を、捨てても痛くない方に移す。**
 
@@ -79,13 +79,16 @@ aid を作らない。UUID は取り合いが無いので早く決めて損が�
 
 逆引きが要る:
 
-```
+```text
 appSlugs/sakura-hair  →  { aid: "3f2b8c1a-…" }
 ```
 
 - `allow read: if resource.data.published == true`（公開ページは未ログインで引くが、
   **公開前は誰も辿れない** — 決定 8）
 - `allow create` は「その aid のオーナーであること」を `get(apps/{aid})` で確認
+  （したがって **`apps/{aid}` を書いてから予約する**）
+- `allow update` はオーナーのみ、かつ `aid` の付け替え禁止（publish / unpublish が
+  `published` を反転させるので、無いと既定の deny で失敗する）
 - 確保は `create`（原子的な create-if-absent）。継ぎ目に既にある
 
 **これは今やる**（ルールの 2 回目の cross-repo デプロイを含む）。
@@ -137,7 +140,7 @@ appSlugs/sakura-hair  →  { aid: "3f2b8c1a-…" }
 
 **分けるのはデータではなく、誰に見えるか。**
 
-```
+```text
 /{slug}      公開の顔。未サインインでも読める
 /dev/{aid}   名簿の人の入口。slug を経由しない
 ```
