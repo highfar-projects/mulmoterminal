@@ -189,9 +189,37 @@ pick a different model on Anthropic itself. → [Using another model via OpenRou
 All values are `#rrggbb`. The working / needs-you status colors take priority over these background colors (which show when idle).
 
 Leave `headerTextColor` out and the header's text — the path, the title, the model / context and token
-chips — is derived from `headerColor` so it stays readable on it. That derivation applies while the
-directory's own colour is what shows; a cell that is working / needs you has replaced the header
-background with its status tint, so its text goes back to the theme's own.
+chips — is derived from `headerColor` so it stays readable on it.
+
+`headerColor` and `headerTextColor` are the **idle** pair, and they apply only while that colour is
+what shows. A cell that is working, done, or needs you has replaced the header background with the
+theme's status tint, so its text goes back to the theme's own — an ink chosen for your header colour
+is not readable on a tint the theme mixed.
+
+To recolour those states, name them:
+
+```json
+{
+  "headerColor": "#0b2545",
+  "headerStatusColors": {
+    "working": "#6d28d9",
+    "done": { "background": "#166534" },
+    "blocked": { "background": "#7c2d12", "text": "#ffe8a3" }
+  }
+}
+```
+
+Only `working`, `done` and `blocked` — there is no `idle`, because `headerColor` is idle. A status
+you don't name keeps the theme's tint. **Omit `text` and a readable one is derived** from that
+background, so naming a single colour can never come out unreadable.
+
+Or keep your own colour throughout with `"headerStatusTint": "none"`, which leaves `headerColor` in
+place while **working** and **done**; the status still reads from the cell border, the status dot and
+the pill. It deliberately does not reach **blocked** — that is the state where nothing proceeds until
+you answer, so it keeps the theme's amber unless `headerStatusColors.blocked` says otherwise.
+
+Both keys also work in `~/.mulmoterminal/config.json`, where they are the default for every
+directory; a `.mulmoterminal.json` that names either one outranks it for that directory.
 
 ### A repository that ships `repo.json` {#repo-json}
 

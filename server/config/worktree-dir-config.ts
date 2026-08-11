@@ -18,6 +18,7 @@ import path from "node:path";
 import { DIR_LOCAL_CONFIG_FILE, loadDirConfig, type DirConfig } from "./dir-config.js";
 import { dirIconRef } from "./dir-icon.js";
 import { rotateHue } from "./hue-rotate.js";
+import { HEADER_STATUS_KEYS, type HeaderStatusColors } from "../../common/headerStatusColors.js";
 
 // How far around the hue wheel each successive worktree sits from the one before it. Small
 // enough that the whole family still reads as one project, wide enough to tell two cells apart
@@ -31,7 +32,10 @@ const HUE_STEP_DEGREES = 12;
 // `worktreeEnv` is a DECLARATION of what each tree needs its own of (#1367), not a value, so it
 // copies verbatim and the worktree is then reserved its own port and slug. A worktree that did
 // not carry it would be the one tree of the project whose dev server still fought for 3000.
-const INHERITED_KEYS = ["name", "theme", "colors", "fontSize", "fontFamily", "provider", "model", "worktreeEnv"] as const;
+//
+// `headerStatusTint` is here rather than tinted below because it is a MODE, not a colour — there
+// is no hue in "none" to rotate.
+const INHERITED_KEYS = ["name", "theme", "colors", "fontSize", "fontFamily", "provider", "model", "worktreeEnv", "headerStatusTint"] as const;
 
 // The cell's chrome — everything a glance at the grid distinguishes one cell by. These get the
 // tint, so a worktree is recognisable both AS this project and as not the project's main tree.
@@ -40,6 +44,22 @@ const TINTED_COLOR_KEYS = ["badgeColor", "headerColor", "headerTextColor", "cell
 // Deliberately absent: `sound` / `sounds` point at a file inside the parent directory that the
 // worktree has no copy of, and `addDirs` resolves relative to the config's OWN directory — copied
 // verbatim it would silently grant a different set of directories.
+
+/** Each status entry's colours rotated, written in the object form the config accepts. Entries the
+ *  project did not set stay unset, so the worktree's file says what the project's said. */
+function tintedStatusColors(parent: HeaderStatusColors | null, degrees: number): Record<string, Record<string, string>> | null {
+  if (!parent) return null;
+  const out: Record<string, Record<string, string>> = {};
+  HEADER_STATUS_KEYS.forEach((status) => {
+    const entry = parent[status];
+    if (!entry) return;
+    const tinted: Record<string, string> = {};
+    if (entry.background) tinted.background = rotateHue(entry.background, degrees);
+    if (entry.text) tinted.text = rotateHue(entry.text, degrees);
+    if (Object.keys(tinted).length) out[status] = tinted;
+  });
+  return Object.keys(out).length ? out : null;
+}
 
 /** The worktree's rank in the grid's priority sort: one past its parent's, so it sits directly
  *  after the project it came from. Only when the parent declares one — inventing a rank for a
@@ -68,6 +88,12 @@ export function inheritedWorktreeConfig(parent: DirConfig, index: number): Recor
     const value = parent[key];
     if (value !== null) config[key] = rotateHue(value, index * HUE_STEP_DEGREES);
   });
+  // The same tint, one level down. A project that recolours its running header has to keep that
+  // colour in its worktrees — the header a glance lands on is the same header — and it has to move
+  // with the rest of the chrome, or a worktree's `working` state would be the one thing about the
+  // cell that still reads as the parent's.
+  const statusColors = tintedStatusColors(parent.headerStatusColors, index * HUE_STEP_DEGREES);
+  if (statusColors) config.headerStatusColors = statusColors;
   // Written back AS THE PARENT WROTE IT, not as the loader resolved it: a file icon resolves to
   // an absolute path, and this key only accepts relative ones — so the derived config would be
   // rejected by the same rule that produced it. The relative path resolves again inside the

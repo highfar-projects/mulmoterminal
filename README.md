@@ -724,7 +724,13 @@ malformed file is ignored.
   "icon": "docs/logo.png",              // image on this dir's cells (path here, URL, or data:); omit to use the repo's favicon
   "badgeColor": "#cf222e",              // badge color (hex #rrggbb)
   "headerColor": "#190a23",             // cell header background (hex #rrggbb)
-  "headerTextColor": "#ffffff",         // cell header text color (hex #rrggbb)
+  "headerTextColor": "#ffffff",         // cell header text color while idle (hex #rrggbb)
+  "headerStatusColors": {               // what the header shows once a status takes the background over
+    "working": "#6d28d9",               //   just the background — the text colour is derived from it
+    "done": { "background": "#166534" },
+    "blocked": { "background": "#7c2d12", "text": "#ffe8a3" }
+  },
+  "headerStatusTint": "background",     // "none" keeps headerColor while working/done (not blocked)
   "cellColor": "#101014",               // cell body background (hex #rrggbb)
   "cellBorderColor": "#2a2a4e",         // cell border color (hex #rrggbb)
   "dotColor": "#00e676",                // idle status dot (hex #rrggbb)
@@ -786,7 +792,9 @@ Settings → Directory settings names both files and lists which keys the local 
 | `icon`       | An **image** marking this directory — shown in the cell header, the cockpit roster, the filmstrip thumbnails, the launcher's directory chips, and the phone's terminal list and terminal screen. Either a path **relative to this directory** (an absolute path, or a `../` that escapes it, is rejected), an `http(s)://` URL, or a `data:image/…` URI. PNG / JPEG / **GIF (animated plays)** / WebP / AVIF / SVG / ICO / BMP. Not to be confused with a header **button's** `icon`, which is a Material Symbols name. **Omit it and the repository's own favicon is used** (`public/favicon.svg`, `apple-touch-icon.png`, a web manifest — see `autoDirIcon`); `false` means no icon here and stops that search. |
 | `badgeColor` | Badge background color (`#rrggbb`); text auto-contrasts. |
 | `headerColor` | Header **background** color (`#rrggbb`) — the grid cell's header row and the terminal's own header row (grid row 2). While a terminal is working/blocked the status tint still shows; the custom color applies when idle. |
-| `headerTextColor` | Header **text** color (`#rrggbb`) — everything written on the header: the dir path, title and prompt, plus the model/context badge, the token counts and any custom chip. **Omit it and a readable colour is derived from `headerColor`**, while that colour is what shows (a working/blocked cell paints its own header tint, so its text returns to the theme's). |
+| `headerTextColor` | Header **text** color (`#rrggbb`) — everything written on the header: the dir path, title and prompt, plus the model/context badge, the token counts and any custom chip. **Omit it and a readable colour is derived from `headerColor`.** It applies while that colour is what shows: a working/done/blocked cell paints the theme's own status tint, so its text returns to the theme's too — an ink chosen for your header colour is not readable on a tint the theme mixed. Recolour those states with `headerStatusColors` instead. |
+| `headerStatusColors` | What the header shows once a **status** owns the background: an object keyed by `working` / `done` / `blocked` (there is no `idle` — `headerColor` is idle). Each value is a background `#rrggbb`, or `{ "background": …, "text": … }`. **Omit `text` and a readable one is derived from the background**, so naming one colour can never come out unreadable. A status you don't name keeps the theme's tint. |
+| `headerStatusTint` | `"background"` (default) lets a status replace the header background. `"none"` keeps `headerColor` while **working** and **done** — the status still reads from the cell border, the status dot and the pill. It deliberately does **not** reach `blocked`, the one state where nothing proceeds until you answer; give that state a colour of its own in `headerStatusColors` if you want one. |
 | `cellColor` | Cell **body background** color (`#rrggbb`) — the frame around the terminal. |
 | `cellBorderColor` | Cell **border** color (`#rrggbb`). The status frame (working/blocked) still overrides it while active. |
 | `dotColor` | **Idle** status-dot color (`#rrggbb`). The working/waiting colors are unchanged so the activity signal stays intact. |

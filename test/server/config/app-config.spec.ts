@@ -27,6 +27,7 @@ import {
 import { DEFAULT_SOUND_KINDS } from "../../../common/notifyKinds.js";
 import { DEFAULT_PUSH_KINDS } from "../../../common/pushKinds.js";
 import { DEFAULT_COCKPIT_LINES } from "../../../common/cockpitLines.js";
+import { DEFAULT_HEADER_STATUS_TINT } from "../../../common/headerStatusColors.js";
 import { sanitizeWorklogIntervalHours } from "../../../common/worklogInterval.js";
 
 const tmp = () => mkdtempSync(path.join(tmpdir(), "mt-appcfg-"));
@@ -395,6 +396,8 @@ describe("loadAppConfig / saveAppConfig", () => {
     appendSystemPrompt: true,
     autoDirIcon: true,
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },
+    headerStatusColors: {},
+    headerStatusTint: DEFAULT_HEADER_STATUS_TINT,
     fontFamily: null,
   };
   it("round-trips presets + soundFile + prRepos + launchers + userMcpServers through a file", () => {
@@ -432,6 +435,8 @@ describe("loadAppConfig / saveAppConfig", () => {
       appendSystemPrompt: false, // same opt-out shape: defaults ON, so only `false` proves it persisted
       autoDirIcon: false, // same again (#1428): defaults ON, so only `false` proves it persisted
       cockpitLines: { summary: 6, prompt: 2, response: 3 }, // a raised clamp must survive it too
+      headerStatusColors: { working: { background: "#6d28d9", text: null } }, // a per-status header colour must round-trip too
+      headerStatusTint: "none" as const, // non-default, so only "none" proves it persisted
       fontFamily: "Cica, monospace", // already normalized, so it must come back byte-identical
     };
     expect(saveAppConfig(file, cfg, {})).toBe(true);
@@ -481,6 +486,8 @@ describe("loadAppConfig / saveAppConfig", () => {
       themes: [],
       keymap: { "zoom-next": "PageDown" },
       cockpitLines: { ...DEFAULT_COCKPIT_LINES },
+      headerStatusColors: {},
+      headerStatusTint: DEFAULT_HEADER_STATUS_TINT,
       buttons: null,
       chips: null,
       pushEnabled: false,
@@ -609,6 +616,8 @@ describe("#741 corrupt config is not silently wiped by a partial update", () => 
     appendSystemPrompt: true,
     autoDirIcon: true,
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },
+    headerStatusColors: {},
+    headerStatusTint: DEFAULT_HEADER_STATUS_TINT,
     fontFamily: null,
   };
 
@@ -678,6 +687,8 @@ describe("mergeConfigUpdate", () => {
     appendSystemPrompt: true,
     autoDirIcon: true,
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },
+    headerStatusColors: {},
+    headerStatusTint: DEFAULT_HEADER_STATUS_TINT,
     fontFamily: null,
     ...over,
   });

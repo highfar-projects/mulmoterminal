@@ -62,7 +62,9 @@ import {
   DIR_TRUNCATE_FRONT,
 } from "./cellChromeClasses";
 import { CELL_STATUS, DOT_STATUS, HEADER_STATUS } from "./cellStatusClasses";
-import { headerStyleFor } from "./cellHeaderStyle";
+import { headerStatusStyleFor } from "./cellHeaderStyle";
+import { mergeHeaderStatusColors } from "../../common/headerStatusColors";
+import { globalHeaderStatusColors, globalHeaderStatusTint } from "../composables/headerStatusColors";
 import { handoffTargets, pullLastTurn, slotLabel, type HandoffTarget } from "../composables/useHandoff";
 import { runOneExchange, liveCrossTalkDeps } from "../composables/useCrossTalk";
 import { runRoundTable, liveRoundTableDeps, memberFromTarget, type TableMember } from "../composables/useRoundTable";
@@ -929,9 +931,21 @@ const statusClass = computed(() => STATUS_CLASS[status.value]);
 const cellStatusClass = computed(() => CELL_STATUS[status.value]);
 const headerStatusClass = computed(() => HEADER_STATUS[status.value]);
 // The directory's header colours — computed here rather than taken from useCellChrome because only
-// this cell's header background is REPLACED by a status tint, and whether the directory's colour is
-// what shows is what decides if a text colour may be derived for it (cellHeaderStyle.ts).
-const headerStyle = computed(() => headerStyleFor(dirConfig.value.headerColor, dirConfig.value.headerTextColor, status.value === "idle"));
+// this cell's header background is REPLACED by a status tint, so what it paints depends on the
+// status and on what the user configured for that status (common/headerStatusColors.ts).
+//
+// The global config is the fallback for each of the two KEYS, not for each status inside them: a
+// directory that names any `headerStatusColors` replaces the global block entire, so the statuses
+// it leaves out fall through to the theme rather than to the global entry for that status
+// (mergeHeaderStatusColors states why, and a spec pins it).
+const headerStyle = computed(() =>
+  headerStatusStyleFor(status.value, {
+    headerColor: dirConfig.value.headerColor,
+    headerTextColor: dirConfig.value.headerTextColor,
+    statusColors: mergeHeaderStatusColors(globalHeaderStatusColors.value, dirConfig.value.headerStatusColors),
+    tint: dirConfig.value.headerStatusTint ?? globalHeaderStatusTint.value,
+  }),
+);
 // Set aside, and not stopped waiting for an answer (see cellParked.ts). Enlarging it does NOT
 // bring it back — that is how you look at a parked session without waking it.
 const parked = computed(() => props.parked === true);

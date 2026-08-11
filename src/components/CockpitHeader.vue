@@ -76,7 +76,7 @@ const phaseColor = computed(() => PHASE_CLASS[props.phase ?? "none"] ?? "text-[#
 const dirText = computed(() => formatCwd(props.cwd, props.home, props.dirLength ?? 44) || "—");
 // `true`: this bar is tinted with the directory's colour in every status (the status is the dot and
 // the badge), so a text colour derived from that tint is the one that lands on it.
-const barStyle = computed(() => headerStyleFor(props.headerColor, props.headerTextColor, true));
+const barStyle = computed(() => headerStyleFor(props.headerColor, props.headerTextColor));
 </script>
 
 <template>

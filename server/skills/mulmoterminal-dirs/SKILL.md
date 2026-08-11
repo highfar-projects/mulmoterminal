@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-dirs
-description: Colour-code and order the directories you actually work in, from wherever you are. Writes each project's `<project>/.mulmoterminal.json` — name badge, project icon image, the seven chrome colours, xterm palette (`theme` / `colors`), terminal font size, `orderPriority` (where it sits in the grid and in the launcher's chips), and `worktreeEnv` (a value of its own per git worktree for each declared variable — a dev-server port, a database name — so two `yarn dev` do not fight over 3000). Starts from your recent MulmoTerminal directories rather than just the current one, reads the configs you already have, works out the convention you have been following, and continues it for the ones that are unset or off-pattern — so a newly cloned repo gets the colour and rank it should have had. Use when the user wants to colour-code, theme, rename, reorder, or resize projects in MulmoTerminal — "give this project a colour", "colour-code my repos", "keep my main repos at the top", "the new clone has no colour", "make them consistent", "terminal text is too small", "two worktrees fight over port 3000", "give each worktree its own port / database". For inventing a NEW reusable colour scheme that shows up in Settings, use mulmoterminal-theme instead.
+description: Colour-code and order the directories you actually work in, from wherever you are. Writes each project's `<project>/.mulmoterminal.json` — name badge, project icon image, the seven chrome colours, xterm palette (`theme` / `colors`), terminal font size, `orderPriority` (where it sits in the grid and in the launcher's chips), and `worktreeEnv` (a value of its own per git worktree for each declared variable — a dev-server port, a database name — so two `yarn dev` do not fight over 3000). Starts from your recent MulmoTerminal directories rather than just the current one, reads the configs you already have, works out the convention you have been following, and continues it for the ones that are unset or off-pattern — so a newly cloned repo gets the colour and rank it should have had. Also owns what the header shows once a STATUS takes the background over — `headerStatusColors` (a colour per working / done / blocked) and `headerStatusTint` — in a project's file and as the global default in `~/.mulmoterminal/config.json`. Use when the user wants to colour-code, theme, rename, reorder, or resize projects in MulmoTerminal — "give this project a colour", "colour-code my repos", "keep my main repos at the top", "the new clone has no colour", "make them consistent", "terminal text is too small", "two worktrees fight over port 3000", "give each worktree its own port / database" — or when the header is hard to read or changes colour while a session is running: "I can't read the header while it's working", "the colour changes when it runs", "keep my header colour while running". For inventing a NEW reusable colour scheme that shows up in Settings, use mulmoterminal-theme instead.
 ---
 
 # Colour and order the directories you work in
@@ -182,11 +182,59 @@ was dropped rather than trusting the file.
 | `name` | Badge label (≤ 40 chars). |
 | `icon` | An image marking this directory (see below). |
 | `badgeColor` | Name-badge colour. |
-| `headerColor` / `headerTextColor` | The cell header's background / text. |
+| `headerColor` / `headerTextColor` | The cell header's background / text **while the cell is idle**. |
+| `headerStatusColors` / `headerStatusTint` | What the header shows once a status takes over (see below). |
 | `cellColor` | Cell body background. |
 | `cellBorderColor` | Cell border. |
 | `dotColor` | Idle status dot. |
 | `buttonColor` | Header icon buttons. |
+
+### The header while a session is running — `headerStatusColors` / `headerStatusTint`
+
+`headerColor` is the **idle** colour. Once a session is working, done, or blocked, the theme
+replaces the header background with its own wash — selection blue, a green mix, the warning
+amber — so that the grid says whose turn it is from across the room.
+
+That is why `headerTextColor` applies **only while the directory's own background shows**. An ink
+chosen for a dark purple is not readable on a pale wash, which is the whole of #1591: white on
+`#d6e4fb`, 1.15:1. Do not try to fix that by picking a compromise ink — set the status colour.
+
+```jsonc
+{
+  "headerColor": "#8e44ad",
+  "headerTextColor": "#ffffff",
+
+  "headerStatusColors": {
+    "working": "#6d28d9",                                  // shorthand: just the background
+    "done": { "background": "#166534" },
+    "blocked": { "background": "#7c2d12", "text": "#ffe8a3" }
+  }
+}
+```
+
+- **Only `working`, `done` and `blocked`.** There is no `idle` here — `headerColor` is idle.
+- **Omit `text` and it is derived** from `background` by the same WCAG rule as `headerTextColor`
+  above. Prefer omitting it: a background alone can never come out unreadable.
+- A status you do not name keeps the theme's wash.
+- Naming `text` **without** a `background` is allowed and left exactly as written — that is a
+  statement about a wash you can see, so it is on you to check it.
+
+`headerStatusTint: "none"` keeps `headerColor` in `working` and `done` instead of the wash. The
+status still reads from the cell border, the status dot and the pill.
+
+```jsonc
+{ "headerColor": "#8e44ad", "headerStatusTint": "none" }
+```
+
+**`"none"` does not reach `blocked`.** That is the state where nothing proceeds until the user
+answers, and a switch about palette consistency must not take its amber away. A directory that
+genuinely wants another colour there writes `headerStatusColors.blocked`, which is honoured.
+
+**Both keys also work in the global config** (`~/.mulmoterminal/config.json`), where they are the
+DEFAULT for every directory — which is usually where they belong, since the readable pairing of a
+wash and its ink is a property of the theme, not of one project. A `.mulmoterminal.json` that names
+either key outranks the global value for that directory, whole-key: a directory's
+`headerStatusColors` replaces the global block rather than merging into it.
 
 ### Project icon — `icon`
 

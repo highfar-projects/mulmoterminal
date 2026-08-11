@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { currentGitlabHosts, useAppConfig } from "../../../src/composables/useAppConfig";
+import { globalHeaderStatusColors, globalHeaderStatusTint } from "../../../src/composables/headerStatusColors";
+import { DEFAULT_HEADER_STATUS_TINT } from "../../../common/headerStatusColors";
 
 // Where the server keeps the worktrees it created. The GET carries it (the real /api/config does,
 // alongside `home`) because that is the only way this side can tell one of ours from a directory
@@ -380,6 +382,33 @@ describe("useAppConfig — loadConfig validates what the server sends", () => {
     await loadConfig();
 
     expect(currentGitlabHosts()).toEqual(["gitlab.hogefuga.com"]);
+  });
+
+  // The GLOBAL half of #1617. TerminalCell's own specs set the singleton directly, so they prove
+  // the cell READS it and would all still pass if this hydration were deleted and /api/config
+  // stopped filling it — the whole feature would be dead with a green suite. (Codex review on
+  // #1619 asked for exactly this.)
+  it("hydrates the header status defaults from /api/config", async () => {
+    mockConfigGet({ headerStatusColors: { working: "#166534" }, headerStatusTint: "none" });
+    const { loadConfig } = useAppConfig();
+    await loadConfig();
+
+    expect(globalHeaderStatusColors.value).toEqual({ working: { background: "#166534", text: null } });
+    expect(globalHeaderStatusTint.value).toBe("none");
+  });
+
+  // And a config that says nothing must leave the built-ins in place rather than an empty tint,
+  // which would read as a mode nothing paints.
+  it("falls back to the built-in tint when the config names none", async () => {
+    mockConfigGet({ headerStatusColors: { working: "#166534" }, headerStatusTint: "none" });
+    const { loadConfig } = useAppConfig();
+    await loadConfig();
+
+    mockConfigGet({});
+    await loadConfig();
+
+    expect(globalHeaderStatusColors.value).toEqual({});
+    expect(globalHeaderStatusTint.value).toBe(DEFAULT_HEADER_STATUS_TINT);
   });
 
   // A body that is not a JSON object at all must leave what is already shown alone rather than

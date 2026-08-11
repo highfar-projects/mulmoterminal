@@ -4,31 +4,41 @@
 // override the background while idle keeps the custom color, and the dir/prompt text
 // pick up --cell-header-fg. A missing / non-hex value is dropped (the theme default
 // shows through the var fallback). Shared by the grid cell and the single-view header.
-import { isHexColor as isHex } from "./hexColor";
+import { isHexColor as isHex } from "../../common/hexColor";
 import { headerTextColorFor } from "../../common/chromeFromColor";
+import { resolveHeaderPaint, type HeaderChrome, type HeaderPaintStatus } from "../../common/headerStatusColors";
 
-/**
- * @param dirBackgroundShows whether the directory's own `headerColor` is what is painted RIGHT NOW.
- * It decides whether a text colour may be DERIVED for a directory that declared none: a derived ink
- * is only readable against the background it was derived from, and a cell that is working / done /
- * blocked paints its own header background instead (cellStatusClasses.ts). Deriving there would put
- * white text — right for a dark `headerColor` — on the pale status wash a light theme mixes (#1591).
- * A header that always shows the directory's colour (the roster bar, a filmstrip thumbnail, the
- * terminal's own header row) passes true.
- */
-export function headerStyleFor(background: string | null | undefined, text: string | null | undefined, dirBackgroundShows: boolean): Record<string, string> {
+/** For the headers that paint the directory's colour in EVERY state — the roster bar, a filmstrip
+ *  thumbnail, the terminal's own header row, the command / launcher cells. A text colour may
+ *  always be derived here, because the background it would be derived from is the one on screen.
+ *
+ *  A grid cell is the exception and calls headerStatusStyleFor instead: a status REPLACES its
+ *  background, and an ink chosen for the directory's colour lands on that instead (#1591). */
+export function headerStyleFor(background: string | null | undefined, text: string | null | undefined): Record<string, string> {
   const style: Record<string, string> = {};
   if (isHex(background)) style["--cell-header-bg"] = background;
-  const ink = headerInk(background, text, dirBackgroundShows);
+  const ink = declaredOrDerivedInk(background, text);
   if (ink) style["--cell-header-fg"] = ink;
   return style;
 }
 
-// A declared colour always wins; deriving only ever answers for the directory that declared none.
-function headerInk(background: string | null | undefined, text: string | null | undefined, dirBackgroundShows: boolean): string | null {
+function declaredOrDerivedInk(background: string | null | undefined, text: string | null | undefined): string | null {
   if (isHex(text)) return text;
-  if (!dirBackgroundShows || !isHex(background)) return null;
-  return headerTextColorFor(background);
+  return isHex(background) ? headerTextColorFor(background) : null;
+}
+
+/** The grid cell's header, which paints something different in each of the four attention states.
+ *
+ *  Both variables are emitted ONLY for a state whose colour is known here. `cellStatusClasses.ts`
+ *  falls back to the theme's own wash through `var(--cell-header-bg, …)`, so emitting the
+ *  directory's colour for a state the theme washes is precisely what would paint the wrong
+ *  thing — and leaving the ink behind on a wash is what #1591 was. */
+export function headerStatusStyleFor(status: HeaderPaintStatus, chrome: HeaderChrome): Record<string, string> {
+  const paint = resolveHeaderPaint(status, chrome);
+  const style: Record<string, string> = {};
+  if (paint.background) style["--cell-header-bg"] = paint.background;
+  if (paint.text) style["--cell-header-fg"] = paint.text;
+  return style;
 }
 
 // Inline CSS custom properties for the cell frame + accents, set on the cell root so
@@ -59,7 +69,7 @@ export function terminalHeaderStyleFor(
 ): Record<string, string> {
   // No status replaces THIS row's background — it is the directory's colour whatever the session is
   // doing — so a derived text colour is always safe here.
-  const style = headerStyleFor(background, text, true);
+  const style = headerStyleFor(background, text);
   if (isHex(button)) style["--cell-btn"] = button;
   return style;
 }

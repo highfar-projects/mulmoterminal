@@ -21,6 +21,8 @@ const FIXTURES: Record<string, unknown> = {
   badgeColor: "#112233",
   headerColor: "#112233",
   headerTextColor: "#112233",
+  headerStatusColors: { working: "#112233" },
+  headerStatusTint: "none",
   cellColor: "#112233",
   cellBorderColor: "#112233",
   dotColor: "#112233",
