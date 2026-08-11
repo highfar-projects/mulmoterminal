@@ -184,6 +184,20 @@ describe("writeInheritedDirConfig", () => {
     expect(loaded.model).toBe("qwen3:8b");
   });
 
+  // The status block is the one inherited value whose written SHAPE differs from the parent's:
+  // the deriver emits `{ background }` with no `text`, where the parent may have written a bare
+  // hex string. Nothing above reads that back through the loader — `PROJECT` sets no status
+  // colours — so "the loader accepts what the deriver writes" was an assumption, not a tested
+  // fact. (Observed during Claude review; not flagged by Codex.)
+  it("writes per-status colours the loader reads back", () => {
+    const worktree = makeTempDir("mt-wt-");
+    const project = projectDir({ ...PROJECT, headerStatusColors: { working: "#2d4ea9" }, headerStatusTint: "none" });
+    expect(writeInheritedDirConfig(project, worktree, 1)).toBe(true);
+    const loaded = loadDirConfig(worktree);
+    expect(loaded.headerStatusColors).toEqual({ working: { background: "#2d35a9", text: null } });
+    expect(loaded.headerStatusTint).toBe("none");
+  });
+
   it("leaves no file behind when there is nothing to inherit", () => {
     const worktree = makeTempDir("mt-wt-");
     expect(writeInheritedDirConfig(projectDir(null), worktree, 1)).toBe(false);
