@@ -67,12 +67,17 @@ publish し直します（`unpublish` は「公開をやめる」ときだけ）
    + public（公開設定）     →   publish   /{slug} が生き、お客さんが来る
 ```
 
-**操作は 2 つあります。**
+**操作は 2 つあります。** ひとことで言えば **deploy = staging に出す、publish = staging を
+公開に昇格させる**。
 
 | | 何をするか | 何を書くか | 危険度 |
 |---|---|---|---|
-| **deploy** | 宣言を Firestore に反映する。何度でも打つ | **名簿の人しか読めないもの**だけ（`apps/{aid}` の `public` **抜き**、`staging/{cid}` のスキーマとビュー） | 常に安全。**公開中でも**外には何も出ない |
-| **publish** | **公開する** | staging の**昇格**（`collections/{cid}`）、**`apps/{aid}.public`（認可の本体）**、`config/public`、`appSlugs` の公開 | 唯一の危険な操作 |
+| **deploy** | **staging に出す**。何度でも打つ | **名簿の人しか読めないもの**だけ（`apps/{aid}` の `public` **抜き**、`staging/{cid}` のスキーマとビュー） | 常に安全。**公開中でも**外には何も出ない |
+| **publish** | **staging を公開に昇格させる** | staging の**昇格**（`collections/{cid}`）、**`apps/{aid}.public`（認可の本体）**、`config/public`、`appSlugs` の公開 | 唯一の危険な操作 |
+
+> **staging されるのはスキーマとビューだけです。名簿は staging されません** —
+> `members` に足して deploy した招待は**即座に効きます**（そうでないと「招待して一緒に
+> テストする」ができません）。外に出るものだけが publish を待ちます。
 
 外に出る文書を作るのは publish だけなので、**テストのために deploy しても何も漏れません**。
 `/staging/{aid}` は deploy だけで動きます — 認可はもう `apps/{aid}` の名簿が持っているからです。

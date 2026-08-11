@@ -440,10 +440,16 @@ https://<host>/staging/{aid}   名簿の人の入口。aid を直接指す。slu
 最初から引けると、**人間可読な slug を当てるだけで aid が手に入り**、`/staging/{aid}` の
 秘匿が消える。だから操作の側も分ける:
 
+**deploy = staging に出す、publish = staging を公開に昇格させる。**
+
 | | 何をするか | 何を書くか | 危険度 |
 |---|---|---|---|
-| **deploy** | 宣言を Firestore に反映する。何度でも | **名簿の人しか読めないもの**だけ（`apps/{aid}`、`collections/{cid}`） | 常に安全 |
-| **publish** | **公開する** | **世界に読めるもの**（`config/public`、`appSlugs/{slug}` の公開） | 唯一の危険な操作 |
+| **deploy** | **staging に出す**。何度でも | **名簿の人しか読めないもの**だけ（`apps/{aid}`、`staging/{cid}`） | 常に安全 |
+| **publish** | **staging を公開に昇格させる** | **世界に読めるもの**（`collections/{cid}`、`config/public`、`appSlugs/{slug}` の公開） | 唯一の危険な操作 |
+
+**staging されるのはスキーマとビューだけ。名簿は staging されない** — `members` に足して
+deploy した招待は即座に効く（そうでなければ「招待して一緒にテストする」が成り立たない）。
+staging を挟むのは**外に出るもの**だけ。
 
 **分割の急所は `config/public` ではなく、`apps/{aid}` の `public` ブロック。**
 ルールが匿名アクセスを判定するのに読むのは**アプリ本体のドキュメント**であって、
