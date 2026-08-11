@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 
-import { buildDocPath, DOCS_DIR, isDocPath, sanitizeDocPrefix } from "../../../server/backends/docPath.js";
+import { buildDocPath, DOCS_DIR, isDocPath, newDocId, sanitizeDocPrefix } from "../../../server/backends/docPath.js";
 
 describe("isDocPath", () => {
   it("accepts a document under the documents directory", () => {
@@ -9,7 +9,7 @@ describe("isDocPath", () => {
   });
 
   it("accepts the dated path saveNewDoc composes", () => {
-    expect(isDocPath(`${DOCS_DIR}/2026/07/design-review-ab12cd34.md`)).toBe(true);
+    expect(isDocPath(`${DOCS_DIR}/2026/07/design-review-ab12cd34ef56ab78.md`)).toBe(true);
   });
 
   // This is the only thing keeping an LLM-authored path inside the workspace: the write
@@ -160,5 +160,21 @@ describe("buildDocPath", () => {
       expect(underTz("America/Los_Angeles", () => buildDocPath("x", midnightUtcMar1, rand))).toContain("/2026/02/");
       expect(underTz("Asia/Tokyo", () => buildDocPath("x", midnightUtcMar1, rand))).toContain("/2026/03/");
     });
+  });
+});
+
+describe("newDocId", () => {
+  // 64 bits, the same width MulmoClaude's shortId() gives a document filename.
+  it("is 16 lowercase hex characters", () => {
+    expect(newDocId()).toMatch(/^[0-9a-f]{16}$/);
+  });
+
+  it("does not repeat itself", () => {
+    const ids = new Set(Array.from({ length: 1000 }, () => newDocId()));
+    expect(ids.size).toBe(1000);
+  });
+
+  it("composes a path isDocPath accepts", () => {
+    expect(isDocPath(buildDocPath("notes", new Date(), newDocId()))).toBe(true);
   });
 });

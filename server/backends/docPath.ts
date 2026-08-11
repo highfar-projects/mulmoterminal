@@ -9,6 +9,7 @@
 // that never updates on screen.
 
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 
 export const DOCS_DIR = "artifacts/documents";
 
@@ -42,6 +43,16 @@ export function sanitizeDocPrefix(prefix: string): string {
     .replace(/^-|-$/g, "")
     .slice(0, PREFIX_MAX_LENGTH);
   return cleaned || "document";
+}
+
+// 16 hex chars = 64 bits, the same width as MulmoClaude's `shortId()` — a document created
+// through either host gets a name of the same shape. It was 8 chars, and since documents
+// sharing a prefix and a month share one namespace, 32 bits put a birthday collision within
+// reach of an ordinary month's writing (#1623).
+const DOC_ID_HEX_LEN = 16;
+
+export function newDocId(): string {
+  return randomUUID().replace(/-/g, "").slice(0, DOC_ID_HEX_LEN);
 }
 
 // The workspace-relative path a new document is written to: artifacts/documents/YYYY/MM/<prefix>-<rand>.md.
