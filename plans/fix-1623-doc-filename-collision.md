@@ -29,9 +29,16 @@ MulmoClaude — the reference host for this backend — already answers both:
 
 ## The change
 
-1. `server/backends/docPath.ts` — `newDocId()`, 16 hex from a UUID, matching
-   MulmoClaude's `shortId()` width. The generator lives next to `buildDocPath`
-   because they are the two halves of one filename.
+1. `server/backends/docPath.ts` — `newDocId()`, 16 hex characters (8 random
+   bytes), the same shape MulmoClaude's `shortId()` gives a filename. The
+   generator lives next to `buildDocPath` because they are the two halves of one
+   filename.
+
+   Straight `randomBytes(8)` rather than a slice of a UUID: the 13th character
+   of a v4 is the version nibble, always `4`, so 16 characters taken from a
+   UUID carry 60 random bits while reading as 64 (codex review on the PR). A
+   test pins that no position is constant, so a future "just slice a UUID"
+   rewrite has to notice.
 2. `server/backends/markdown.ts` — `createDoc()` writes with `flag: "wx"`, which
    refuses an existing file, and re-rolls the id on `EEXIST` (5 attempts, then
    throws). `saveNewDoc` is now three lines over it.
@@ -51,6 +58,7 @@ restored backup), and no width protects against that.
   exhausting the attempts throws and still leaves the existing document intact;
   50 concurrent creates with one title get 50 distinct paths.
 - `test/server/backends/docPath.spec.ts` — `newDocId` is 16 lowercase hex, 1000
-  rolls are distinct, and the composed path passes `isDocPath`.
+  rolls are distinct, no position is a constant nibble, and the composed path
+  passes `isDocPath`.
 - `test/server/backends/openPath.spec.ts` — the shape assertion for
   `saveNewDoc` moves from `{8}` to `{16}`.

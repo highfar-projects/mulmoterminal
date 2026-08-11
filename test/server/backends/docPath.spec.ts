@@ -164,7 +164,8 @@ describe("buildDocPath", () => {
 });
 
 describe("newDocId", () => {
-  // 64 bits, the same width MulmoClaude's shortId() gives a document filename.
+  // 8 random bytes: 16 hex characters, the shape MulmoClaude's shortId() gives a document
+  // filename, and 64 bits rather than the 60 a same-length slice of a v4 UUID would carry.
   it("is 16 lowercase hex characters", () => {
     expect(newDocId()).toMatch(/^[0-9a-f]{16}$/);
   });
@@ -172,6 +173,13 @@ describe("newDocId", () => {
   it("does not repeat itself", () => {
     const ids = new Set(Array.from({ length: 1000 }, () => newDocId()));
     expect(ids.size).toBe(1000);
+  });
+
+  // The character a v4 UUID pins to "4". Asserted so a future "just slice a UUID" rewrite
+  // has to notice it is spending 4 of the 64 bits on a constant.
+  it("carries no fixed nibble", () => {
+    const thirteenth = new Set(Array.from({ length: 200 }, () => newDocId()[12]));
+    expect(thirteenth.size).toBeGreaterThan(1);
   });
 
   it("composes a path isDocPath accepts", () => {
