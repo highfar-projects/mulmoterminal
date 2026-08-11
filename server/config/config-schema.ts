@@ -445,20 +445,15 @@ const writableHeaderChipSchema = z.union([builtinChipSchema, writableCustomChipS
 //
 // partialRecord for the reason `colors` below states: z.record over an enum marks every key
 // required in the generated JSON Schema, which would reject a config that recolours only `working`.
+// "One of the two colours is required" as a union of two shapes rather than a `.refine` on one:
+// z.toJSONSchema DROPS a refine (the `fontFamily` comment below is the same trap), so the shipped
+// dir-config.schema.json would have accepted `"working": {}` — an entry that says nothing, which
+// the runtime then ignores. Written this way the requirement survives into the schema, and a typo
+// is reported at authoring time, where it can be fixed.
+const statusHex = z.string().regex(HEX_COLOR_RE);
 const writableHeaderStatusColorsSchema = z.partialRecord(
   z.enum(HEADER_STATUS_KEYS),
-  z.union([
-    z.string().regex(HEX_COLOR_RE),
-    z
-      .object({
-        background: z.string().regex(HEX_COLOR_RE).optional(),
-        text: z.string().regex(HEX_COLOR_RE).optional(),
-      })
-      // An entry with neither colour says nothing and would read as "configured" downstream.
-      .refine((entry) => entry.background !== undefined || entry.text !== undefined, {
-        message: "a status needs `background`, `text`, or both",
-      }),
-  ]),
+  z.union([statusHex, z.object({ background: statusHex, text: statusHex.optional() }), z.object({ background: statusHex.optional(), text: statusHex })]),
 );
 
 const writableDirConfigSchema = z.object({
