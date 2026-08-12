@@ -3124,8 +3124,24 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
 
 **シナリオを揃える**
 
-12. **公開ページ（`/{slug}`）+ App Check** — `auth` の 3 段階を同時に。
-    9 の `/staging/{aid}` とは**別の顔**で、`config/public` だけを読んで未サインインでも描ける（D10）
+12. **公開ページ（`/a/{slug}`）+ App Check** — `auth` の 3 段階を同時に。
+    9 の `/staging/{aid}` とは**別の顔**で、`config/public` だけを読んで未サインインでも描ける（D10）。
+
+    **URL は `/a/{slug}`**（2026-08-12 決定）。トップレベルの `/{slug}` は、mulmoserver が
+    すでに持っているページ名（`/account` `/collections` `/staging` …）と**同じ名前空間**に
+    なる。予約語リストで避ける手はあるが、それは**後から破れる約束**で、破れたときに
+    壊れるのは**すでに配られた URL** — しかも `appSlugs` は削除できない設計なので回収も
+    効かない。前置き 1 文字で原理的に消える。
+
+    **`config/public` だけでは足りなかった**（実装時に判明）。公開ページはスキーマを
+    読めない — `schemaRead = readerOf || publicRead || partRead` で、回答者はどれでもない
+    （submit 専用のコレクションは `public.read` に入れない。入れたら回答が全部読める）。
+    つまり**フィールド名しか手元に無く、入力欄が描けない**。訪問者が読める文書は
+    `apps/{aid}/config/*`（`allow read: if true`）だけなので、**publish がそこに
+    フォームの形も載せる**: `createFields` に載っているフィールドだけの
+    `{ label, type, values? }`。core の射影ではなく **MT が書く**（その文書を書いているのは
+    MT なので、MulmoClaude の変更は要らない）。`createFields` の外を載せないのは、
+    書けない欄のラベルを世界に配る理由が無いから
 13. **`then.email` + Trigger Email 拡張**
 14. **`schedule` ビュー** → **美容室シナリオが揃う**
 15. **`idFrom` / `finalize` / `window` / `aggregate`**（UI と集計側）→ **アンケートシナリオが揃う**

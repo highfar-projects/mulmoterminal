@@ -40,6 +40,7 @@ import { ensureAid } from "./ensureAid.js";
 import { gitStamp, sharedAppContext, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
 import { recordRefusal, scanRecords, type RecordScan } from "./records.js";
 import { readStaged, type StagedEntry } from "./staged.js";
+import { publicFormOf, type PublicForm } from "./publicForm.js";
 import { setSlugPublished } from "./slug.js";
 import { runWrites, type WriteStep } from "./writes.js";
 
@@ -115,6 +116,7 @@ function publishSteps(
   stamp: PublishStamp,
   face: ReturnType<typeof projectPublish>,
   slug: string | undefined,
+  form: PublicForm,
 ): WriteStep[] {
   return [
     ...staged.map(({ cid, doc }) => ({
@@ -123,7 +125,11 @@ function publishSteps(
     })),
     {
       what: `the public config document (apps/${aid}/config/${PUBLIC_CONFIG_DOC})`,
-      run: () => handle.docs.set(appConfigPath(aid), PUBLIC_CONFIG_DOC, face.config),
+      // `form` is MulmoTerminal's addition to core's projection, and it has to be here rather
+      // than anywhere else: this is the ONLY document a visitor may read, and without the labels
+      // and the choices the public page cannot draw the form at all (the schema is unreadable to
+      // somebody who is neither on the roster nor granted a public read).
+      run: () => handle.docs.set(appConfigPath(aid), PUBLIC_CONFIG_DOC, { ...face.config, form }),
     },
     // The app document WITHOUT `public`: the promoted rule configuration lands with the schemas it
     // was staged beside, so the public write path is never judged by one version's constraints
@@ -230,7 +236,7 @@ export async function publishSharedApp(root: string, opts: SharedAppOptions = {}
   // reserved is a write the rules refuse, and that refusal is the point of them.
   const slug = typeof existingApp?.slug === "string" ? existingApp.slug : undefined;
 
-  const failure = await runWrites(publishSteps(handle, aid, staged.staged, stamp, face, slug), "publish");
+  const failure = await runWrites(publishSteps(handle, aid, staged.staged, stamp, face, slug, publicFormOf(authored, staged.staged)), "publish");
   if (failure) return failure;
 
   return {
