@@ -12,7 +12,7 @@
 // hand. These only ever change the key they are about.
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { APP_MANIFEST_FILE, firestoreHandle, parseAuthoredApp } from "@mulmoclaude/core/collection/server";
+import { APPS_COLLECTION, APP_MANIFEST_FILE, firestoreHandle, parseAuthoredApp } from "@mulmoclaude/core/collection/server";
 import { isRecord } from "../../../common/isRecord.js";
 import { declarationProblems, sharedCollections, type SharedAppFailure } from "./context.js";
 import { createManifest, newAid, updateManifest } from "./manifestWrite.js";
@@ -64,6 +64,22 @@ export async function initSharedApp(root: string, name: string | undefined, slug
     };
   }
   const aid = newAid();
+  // Claimed in Firestore BEFORE it is written to disk, and the app is refused if the claim fails.
+  //
+  // `apps/{aid}` is a shelf every user of the deployment shares, and its `allow create` asks only
+  // that you name yourself owner. The aid used to be minted into `app.json` — a file meant to be
+  // committed and read in a pull request — while the document stayed absent until the first
+  // deploy. Anyone who read the file in that window could create the document as themselves, and
+  // then it is theirs: the real owner's write becomes an update they are not allowed to make, and
+  // nothing can free the id, because a client may never delete an app document. A UUID stops the
+  // aid being GUESSED; it was never going to stop it being read.
+  //
+  // The reservation carries the roster and nothing else — no `public`, no `collections` — so it
+  // grants exactly one thing: this address is the owner. Deploy's `set` then lands as an update by
+  // the same owner, which is what it always was for an app deployed twice.
+  const reserved = await reserveApp(handle, aid);
+  if (reserved) return reserved;
+
   const manifest: Record<string, unknown> = {
     ...(name === undefined ? {} : { name }),
     ...(slug === undefined ? {} : { slug }),
@@ -71,8 +87,40 @@ export async function initSharedApp(root: string, name: string | undefined, slug
     members: { [handle.email]: { "*": "owner" } },
   };
   const written = await createManifest(root, manifest);
+  // The reservation stays behind if this fails. It is this session's own document, holds no
+  // authorization, and the next `init` mints a fresh aid — an unused shelf entry, not a lockout.
   if (!written.ok) return { ok: false, partial: false, problems: written.problems };
   return { ok: true, aid, owner: handle.email, slug };
+}
+
+/** Take the aid on the shared shelf, as this session, carrying only the roster.
+ *
+ *  Shaped to satisfy the create rule and nothing more: `owner` is the uid (the rules pin it there
+ *  and require it unchanged forever after), `members` is keyed by the address the token carries,
+ *  and `memberEmails` mirrors its keys — `membersConsistent()` compares the two as sets and a
+ *  missing `memberEmails` is an evaluation error, which denies. */
+async function reserveApp(
+  handle: { docs: { set: (c: string, id: string, doc: Record<string, unknown>) => Promise<unknown> }; email: string; uid: string },
+  aid: string,
+): Promise<SharedAppFailure | null> {
+  try {
+    await handle.docs.set(APPS_COLLECTION, aid, {
+      owner: handle.uid,
+      members: { [handle.email]: { "*": "owner" } },
+      memberEmails: [handle.email],
+    });
+    return null;
+  } catch (err) {
+    return {
+      ok: false,
+      partial: false,
+      problems: [
+        `cannot reserve the app (apps/${aid}): ${err instanceof Error ? err.message : String(err)}`,
+        "Nothing was written — this repository still declares no app, and `init` can simply be run again (it mints a new id each time).",
+        "If this keeps happening, the session may not be signed in with a VERIFIED address: the rules require one to create an app.",
+      ],
+    };
+  }
 }
 
 export interface CheckReport {
