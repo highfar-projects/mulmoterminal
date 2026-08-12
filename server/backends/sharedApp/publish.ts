@@ -138,9 +138,11 @@ function publishSteps(
 }
 
 export async function publishSharedApp(root: string, opts: SharedAppOptions = {}): Promise<PublishResult> {
-  const aid_result = await ensureAid(root);
-  if (!aid_result.ok) return { ok: false, partial: false, problems: aid_result.problems };
-  
+  // Before anything reads the declaration: a repository that has never been deployed has no
+  // `aid` yet, and it is generated here rather than invented by the agent (D2b).
+  const ensured = await ensureAid(root);
+  if (!ensured.ok) return { ok: false, partial: false, problems: ensured.problems };
+
   const context = await sharedAppContext(root);
   if (!context.ok) return context;
   const { authored, collections, handle } = context;
