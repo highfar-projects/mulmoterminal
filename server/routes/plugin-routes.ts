@@ -23,6 +23,7 @@ import { SESSION_ID_RE } from "../config/env.js";
 import { cwdForSession } from "../session/session-cwd.js";
 import { projectScopeForCwd, rootForProjectId } from "../infra/project-root.js";
 import { manageCollectionHandlerFor } from "../infra/collection-tool.js";
+import { manageSharedApp } from "../infra/shared-app-tool.js";
 import { upstreamFailureMessage } from "./plugin-narration.js";
 import type { SpawnClaudePty, SpawnCodexPty, SpawnAntigravityPty, SpawnGrokPty, SpawnMusePty } from "../session/spawners.js";
 
@@ -219,6 +220,26 @@ export function mountPluginRoutes(app: Express, deps: PluginRouteDeps): void {
     } catch (err) {
       console.error(`[manageCollection] dispatch failed: ${messageOf(err)}`);
       return res.json({ message: `manageCollection failed: ${messageOf(err)}` });
+    }
+  });
+
+  // Host tool: manageSharedApp — deploy / publish / unpublish for the shared app declared by the
+  // repository's app.json (server/infra/shared-app-tool.ts). MulmoTerminal's own; there is no
+  // counterpart in MulmoClaude to match, which is the point of the tool existing here.
+  //
+  // Scoped to the SESSION's directory for the same reason manageCollection is: an app is a
+  // REPOSITORY, and "deploy this app" means the one the cell is open in. Resolving it to the
+  // workspace would deploy a different app than the agent is looking at — and unlike a misplaced
+  // collection, that one is visible to other people the moment it lands.
+  app.post("/api/plugin/manageSharedApp", async (req, res) => {
+    try {
+      const header = req.get(SESSION_HEADER);
+      const sessionId = header && SESSION_ID_RE.test(header) ? header : null;
+      const root = projectScopeForCwd(cwdForSession(sessionId)).workspaceRoot;
+      return res.json({ message: await manageSharedApp(root, req.body) });
+    } catch (err) {
+      console.error(`[manageSharedApp] dispatch failed: ${messageOf(err)}`);
+      return res.json({ message: `manageSharedApp failed: ${messageOf(err)}` });
     }
   });
 }
