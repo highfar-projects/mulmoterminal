@@ -100,3 +100,39 @@ describe("inviteToSharedApp", () => {
     expect((await manifestAt(root)).members).toEqual(members);
   });
 });
+
+describe("a role that has to be about a collection", () => {
+  // `assignee` means "the rows assigned to you", and what counts as assigned is
+  // declared per collection. An app-wide one is refused by publish — so the
+  // question here is only whether the author finds out now or after a deploy
+  // they believed had worked.
+  it("refuses an app-wide assignee, and writes nothing", async () => {
+    const members = { "o@e.com": { "*": "owner" } };
+    const root = await repoWith(members);
+
+    const result = await inviteToSharedApp(root, "anna@salon.jp", "assignee", "*");
+
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.problems.join(" ")).toContain("cannot be given for the whole app");
+    // Not a warning attached to a write that happened anyway: refused means the
+    // roster still says what it said.
+    expect((await manifestAt(root)).members).toEqual(members);
+  });
+
+  it("takes the same role for a named collection", async () => {
+    const root = await repoWith({ "o@e.com": { "*": "owner" } });
+
+    const result = await inviteToSharedApp(root, "anna@salon.jp", "assignee", "bookings");
+
+    expect(result.ok).toBe(true);
+    expect((await manifestAt(root)).members["anna@salon.jp"]).toEqual({ bookings: "assignee" });
+  });
+
+  it("leaves every other role app-wide", async () => {
+    // The refusal is about this one role, not about `"*"`.
+    const root = await repoWith({ "o@e.com": { "*": "owner" } });
+
+    expect((await inviteToSharedApp(root, "sam@e.com", "viewer", "*")).ok).toBe(true);
+    expect((await manifestAt(root)).members["sam@e.com"]).toEqual({ "*": "viewer" });
+  });
+});

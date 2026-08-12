@@ -24,6 +24,22 @@ the user turns this down.
 - **Who may do what is a list of email addresses** in `app.json`. Inviting somebody is adding a
   line and deploying — they need no account here and no repository.
 
+## Start from a template when one fits
+
+Two shapes are written out in full — declaration, schemas, and the reasoning behind each key:
+
+- **[templates/salon.md](./templates/salon.md)** — a request that a NAMED PERSON approves, and only
+  their own (a salon's bookings, interviews, repairs, review assignments). This is what `assignee`
+  is for.
+- **[templates/gym.md](./templates/gym.md)** — **first come, first served**, with a waiting list and
+  a per-class opening time (a gym class, a workshop, a slot booking). This is what `stampField` and
+  `window.fromField` are for, and it explains why the capacity lives in the VIEW and not in the
+  rules.
+
+Read the matching one before writing `app.json` by hand. Both are checked against the real deploy
+gate by this repository's tests, so what they show is what deploys — and both spend most of their
+length on the traps, which is the part you cannot recover by guessing.
+
 ## The path
 
 Say what you are doing in the user's words ("作っています", "みんなが見えるようにしました"). The
@@ -107,8 +123,16 @@ edits the roster and nothing else; deploy is what makes it real.
 | `editor` | reads and writes the records |
 | `viewer` | reads the records |
 | `participant` | named on the roster, sees only their OWN rows |
+| `assignee` | reads EVERY row, writes only the rows assigned to them |
 
 `cid` narrows it to one collection instead of the whole app.
+
+`assignee` is the one for "the stylist approves their own bookings, not a colleague's" — and it
+needs two things or it silently grants nothing. It needs a `cid` (it cannot be app-wide: which
+rows are yours is a per-collection question), and the collection needs
+`collections.<cid>.assigneeField` naming the field that holds the member's ADDRESS. Not a `ref` to
+a staff collection — a ref stores that record's primary key, and the rules can only compare an
+address. `check` says so; the deploy refuses.
 
 Addresses are written in lower case, because the rules compare one exactly and the sign-in token
 carries a lower-cased address. An entry with capitals matches nobody, and once deployed nothing
@@ -179,6 +203,30 @@ Every line of that is load-bearing, and deploy refuses the declaration without t
   `rollup`, `toggle`, `flag`), which is a value nobody may submit. Such fields stay in the
   collection; they are just not what a stranger fills in. `check` names any that slipped in.
 - **`read: []`** — a survey lists nothing publicly. People answer; they do not browse the answers.
+
+### If people are racing for a limited number of places
+
+Two more keys, and one thing the rules cannot do. Read
+[templates/gym.md](./templates/gym.md) before promising anything here.
+
+- **The rules cannot count.** There is no query and no aggregate in them, so "only 8 people" is not
+  something a declaration can enforce — at all. What works is to stop storing the capacity and
+  derive it: order the rows by when they arrived, and the first 8 are in, the next 2 are waiting.
+  Promotion then costs no write at all — the 9th becomes the 8th the moment the 3rd cancels — and
+  a rush at opening time has nothing to contend over. **Say to the user that the limit is drawn,
+  not enforced**, and that nobody is emailed when they are promoted.
+- **`stampField`** names a `datetime` field the rules pin to the server clock on create and freeze
+  afterwards. Without it the order is whatever each submitter typed, and the queue is decoration.
+  It goes in `createFields` (the rules refuse any key outside that list) and is NOT drawn as an
+  input — the page fills it in.
+- **`window.fromField`** is an opening time that lives on ANOTHER record:
+  `{ "ref": "classId", "collection": "classes", "field": "opensAt" }`. `opensAt` is a **number**,
+  epoch millis, computed by whoever schedules the class — "three days before, at 08:00" is business
+  knowledge, and the rules have no date arithmetic and no local time zone. A `datetime` there is a
+  type error that denies every submission.
+- **Ranking needs READING.** A submitter who can see only their own row cannot be told they are
+  second. That means the members are on the roster (with `peerVisibility: "public"`), and everyone
+  can see who else signed up. Ask before building it.
 
 The simplest correct survey omits status entirely (`submitOnly` + `verifiedEmail` + `emailField`).
 Add a status only when somebody is going to work through the responses.

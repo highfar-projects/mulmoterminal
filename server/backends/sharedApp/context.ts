@@ -24,6 +24,7 @@ import type { PublishStamp } from "@mulmoclaude/core/collection/server";
 import type { CollectionSchema } from "@mulmoclaude/core/collection";
 import { isRecord } from "../../../common/isRecord.js";
 import { publicInputProblems, schemasOfCollections } from "./publicForm.js";
+import { scopedFieldProblems } from "./scopedFields.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -135,6 +136,7 @@ export function declarationProblems(app: AuthoredApp, collections: readonly Load
     handle?.email ?? ownerFromRoster(app) ?? "",
   );
   problems.push(...publicInputProblems(app, schemasOfCollections(collections)));
+  problems.push(...scopedFieldProblems(app, schemasOfCollections(collections)));
   problems.push(...rosterCaseProblems(app, handle?.email));
   if (handle !== null && app.owner !== undefined && app.owner !== handle.uid) {
     // Not fatal on its own — the rules pin `owner` to the EXISTING document on update — but a

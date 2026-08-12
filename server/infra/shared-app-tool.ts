@@ -56,7 +56,8 @@ export const MANAGE_SHARED_APP: ToolDefinition = {
         type: "string",
         enum: [...APP_ROLE_NAMES],
         description:
-          "invite: what they may do. Omit to REMOVE the address. owner publishes; editor writes records; viewer reads them; participant sees only its own rows.",
+          "invite: what they may do. Omit to REMOVE the address. owner publishes; editor writes records; viewer reads them; participant sees only its own rows; " +
+          "assignee reads every row and writes only the ones assigned to it (needs collections.<cid>.assigneeField, and needs a cid — it cannot be app-wide).",
       },
       cid: { type: "string", description: "invite: one collection instead of the whole app. Defaults to the whole app." },
       confirm: {

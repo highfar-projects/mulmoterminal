@@ -133,6 +133,57 @@ describe("publicFormOf", () => {
   });
 });
 
+describe("the field the page stamps rather than asks", () => {
+  // `stampField` is in `createFields` because the rules refuse any key outside
+  // that list — not because a visitor answers it. Drawing it would invite an
+  // answer the rules then deny, and omitting it from the form entirely would
+  // leave the page with no way to learn the name.
+  const stamped = authored({
+    responses: { auth: "verifiedEmail", emailField: "email", createFields: ["name", "createdAt"], stampField: "createdAt" },
+  });
+  const withStamp = [
+    {
+      ...stagedResponses,
+      doc: {
+        ...stagedResponses.doc,
+        publishedSchema: { ...schema, fields: { ...schema.fields, createdAt: { type: "datetime" as const, label: "受付日時" } } },
+      },
+    },
+  ];
+
+  it("is named on the form and not drawn as an input", () => {
+    const form = publicFormOf(stamped, withStamp);
+    expect(form.responses?.stampField).toBe("createdAt");
+    expect(Object.keys(form.responses?.fields ?? {})).toEqual(["name"]);
+  });
+
+  it("keeps a form whose only create field is the stamp", () => {
+    // "Count me in": `idFrom: "auth.uid"` plus a server timestamp is a complete
+    // submission — the identity of whoever pressed the button and the moment
+    // they did. It draws no inputs, and it is still a form: without an entry the
+    // page has no submit target and no way to learn the field the rules insist
+    // on, for a declaration core accepts.
+    const oneClick = authored({
+      responses: { auth: "verifiedEmail", idFrom: "auth.uid", createFields: ["createdAt"], stampField: "createdAt" },
+    });
+    const form = publicFormOf(oneClick, withStamp);
+    // `statusField` rides along as it does for any collection whose staged
+    // configuration names one — the page needs it whether or not it draws
+    // anything.
+    expect(form.responses).toEqual({ fields: {}, stampField: "createdAt", statusField: "status" });
+  });
+
+  it("still drops a collection that draws nothing and stamps nothing", () => {
+    // The guard this sits beside is not weakened: an empty entry with nothing
+    // behind it reads as a form that failed to load.
+    expect(publicFormOf(authored({ responses: { auth: "verifiedEmail", createFields: ["nope"] } }), staged).responses).toBeUndefined();
+  });
+
+  it("is absent when nothing is stamped", () => {
+    expect(publicFormOf(authored(surveySubmit), staged).responses?.stampField).toBeUndefined();
+  });
+});
+
 describe("fields a stranger cannot be asked for", () => {
   // `createFields` is not only what the page draws from — it is the whitelist the deployed rules
   // judge a public create by. So a computed field left in it is a value from the internet landing
