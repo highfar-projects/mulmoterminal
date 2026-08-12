@@ -40,7 +40,7 @@ import { ensureAid } from "./ensureAid.js";
 import { gitStamp, sharedAppContext, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
 import { recordRefusal, scanRecords, type RecordScan } from "./records.js";
 import { readStaged, type StagedEntry } from "./staged.js";
-import { publicFormOf, type PublicForm } from "./publicForm.js";
+import { oversizeProblem, publicFormOf, type PublicForm } from "./publicForm.js";
 import { setSlugPublished } from "./slug.js";
 import { runWrites, type WriteStep } from "./writes.js";
 
@@ -236,7 +236,13 @@ export async function publishSharedApp(root: string, opts: SharedAppOptions = {}
   // reserved is a write the rules refuse, and that refusal is the point of them.
   const slug = typeof existingApp?.slug === "string" ? existingApp.slug : undefined;
 
-  const failure = await runWrites(publishSteps(handle, aid, staged.staged, stamp, face, slug, publicFormOf(authored, staged.staged)), "publish");
+  const form = publicFormOf(authored, staged.staged);
+  // Before the first write: the config document is written in the middle of the run, so a database
+  // refusal there would land with the schemas already promoted.
+  const oversize = oversizeProblem({ ...face.config, form });
+  if (oversize !== null) return { ok: false, partial: false, problems: [oversize] };
+
+  const failure = await runWrites(publishSteps(handle, aid, staged.staged, stamp, face, slug, form), "publish");
   if (failure) return failure;
 
   return {

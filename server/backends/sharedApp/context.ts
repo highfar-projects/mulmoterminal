@@ -23,6 +23,7 @@ import {
 import type { PublishStamp } from "@mulmoclaude/core/collection/server";
 import type { CollectionSchema } from "@mulmoclaude/core/collection";
 import { isRecord } from "../../../common/isRecord.js";
+import { publicInputProblems } from "./publicForm.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -133,6 +134,7 @@ export function declarationProblems(app: AuthoredApp, collections: readonly Load
     // app-wide owner, so it would report a missing owner for every sound declaration.
     handle?.email ?? ownerFromRoster(app) ?? "",
   );
+  problems.push(...publicInputProblems(app, collections));
   if (handle !== null && app.owner !== undefined && app.owner !== handle.uid) {
     // Not fatal on its own — the rules pin `owner` to the EXISTING document on update — but a
     // declaration naming somebody else's uid is either the sample's `<uid>` placeholder or a

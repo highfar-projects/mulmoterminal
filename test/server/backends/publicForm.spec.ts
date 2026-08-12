@@ -5,7 +5,7 @@
 // the form, and this is the projection that makes it so.
 import { describe, it, expect } from "vitest";
 import { parseAuthoredApp } from "@mulmoclaude/core/collection/server";
-import { publicFormOf } from "../../../server/backends/sharedApp/publicForm.js";
+import { oversizeProblem, publicFormOf, publicInputProblems } from "../../../server/backends/sharedApp/publicForm.js";
 
 const schema = {
   title: "Responses",
@@ -118,5 +118,67 @@ describe("publicFormOf", () => {
     // being published as a field nobody wrote.
     const form = publicFormOf(authored({ responses: { auth: "verifiedEmail", emailField: "email", createFields: ["name", "toString", "nope"] } }), staged);
     expect(form.responses?.fields).toEqual({ name: { label: "お名前", type: "string" } });
+  });
+});
+
+describe("fields a stranger cannot be asked for", () => {
+  // `createFields` is not only what the page draws from — it is the whitelist the deployed rules
+  // judge a public create by. So a computed field left in it is a value from the internet landing
+  // in a field the host is supposed to compute; dropping it from the form alone would not stop it.
+  const withField = (name: string, spec: Record<string, unknown>) => [
+    { cid: "responses", doc: { publishedSchema: { ...schema, fields: { ...schema.fields, [name]: spec } }, deployedAt: 1, deployedBy: "o@e.com" } },
+  ];
+
+  it("does not draw a computed field", () => {
+    const app = authored({ responses: { auth: "verifiedEmail", emailField: "email", createFields: ["name", "flagged"] } });
+    const form = publicFormOf(app, withField("flagged", { type: "flag", label: "要対応", where: { field: "score", in: ["1"] } }));
+    expect(Object.keys(form.responses?.fields ?? {})).toEqual(["name"]);
+  });
+
+  it("does not draw a field it cannot describe", () => {
+    const app = authored({ responses: { auth: "verifiedEmail", emailField: "email", createFields: ["name", "owner"] } });
+    const form = publicFormOf(app, withField("owner", { type: "ref", label: "担当", to: "people" }));
+    expect(Object.keys(form.responses?.fields ?? {})).toEqual(["name"]);
+  });
+});
+
+describe("oversizeProblem", () => {
+  it("says nothing about a form that fits", () => {
+    expect(oversizeProblem({ form: publicFormOf(authored(surveySubmit), staged) })).toBeNull();
+  });
+
+  it("stops a form too big for the one document a visitor may read", () => {
+    const values = Array.from({ length: 80000 }, (_, index) => `choice-${index}`);
+    const problem = oversizeProblem({ form: { responses: { fields: { score: { label: "満足度", type: "enum", values } } } } });
+    expect(problem).toContain("one Firestore document");
+  });
+});
+
+describe("publicInputProblems", () => {
+  // The gate that runs before any write — `declarationProblems`, shared by deploy, publish and
+  // check — so the author is told while it is still a declaration.
+  const collection = (fields: Record<string, unknown>) => [{ slug: "responses", schema: { ...schema, fields: { ...schema.fields, ...fields } } } as never];
+
+  it("says nothing about a form of plain fields", () => {
+    expect(publicInputProblems(authored(surveySubmit), collection({}))).toEqual([]);
+  });
+
+  it("refuses a computed field, naming it and saying what to do", () => {
+    const app = authored({ responses: { auth: "verifiedEmail", emailField: "email", createFields: ["name", "flagged"] } });
+    const problems = publicInputProblems(app, collection({ flagged: { type: "flag", label: "要対応", where: { field: "score", in: ["1"] } } }));
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("'flagged'");
+    expect(problems[0]).toContain("computed by the host");
+  });
+
+  it("refuses a field the public page cannot draw", () => {
+    const app = authored({ responses: { auth: "verifiedEmail", emailField: "email", createFields: ["owner"] } });
+    const problems = publicInputProblems(app, collection({ owner: { type: "ref", label: "担当", to: "people" } }));
+    expect(problems[0]).toContain("cannot draw one");
+  });
+
+  it("leaves a collection it has no schema for to the checks that own that", () => {
+    const app = authored({ ghost: { auth: "verifiedEmail", emailField: "email", createFields: ["name"] } });
+    expect(publicInputProblems(app, collection({}))).toEqual([]);
   });
 });
