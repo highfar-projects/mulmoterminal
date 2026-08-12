@@ -177,7 +177,12 @@ describe("forkSharedApp", () => {
     const result = await forkSharedApp(root, undefined, "my-talk-survey");
 
     expect(result.ok).toBe(false);
-    expect(!result.ok && result.problems.join(" ")).toContain("cannot reserve the app");
+    const said = !result.ok ? result.problems.join(" ") : "";
+    expect(said).toContain("cannot reserve the app");
     expect(manifestAt(root)).toEqual(CLONED);
+    // And the retry it names is `fork`, NOT `init` — which would look at the declaration still
+    // sitting there and refuse, leaving the author with no route forward at all.
+    expect(said).toContain("`fork` can simply be run again");
+    expect(said).toContain("Do not reach for `init`");
   });
 });

@@ -86,7 +86,7 @@ export async function initSharedApp(root: string, name: string | undefined, slug
   // The reservation carries the roster and nothing else — no `public`, no `collections` — so it
   // grants exactly one thing: this address is the owner. Deploy's `set` then lands as an update by
   // the same owner, which is what it always was for an app deployed twice.
-  const reserved = await reserveApp(handle, aid);
+  const reserved = await reserveApp(handle, aid, "init");
   if (reserved) return reserved;
 
   const manifest: Record<string, unknown> = {
@@ -123,6 +123,11 @@ export async function initSharedApp(root: string, name: string | undefined, slug
 async function reserveApp(
   handle: { docs: { set: (c: string, id: string, doc: Record<string, unknown>) => Promise<unknown> }; email: string; uid: string },
   aid: string,
+  /** Which operation is asking — because the sentence that says how to RETRY differs, and getting
+   *  it wrong is worse than saying nothing. After a refused `init` the repository declares no app
+   *  and `init` is the retry; after a refused `fork` it still declares the app it was cloned from,
+   *  which `init` would look at and refuse. */
+  retry: "init" | "fork",
 ): Promise<SharedAppFailure | null> {
   try {
     await handle.docs.set(APPS_COLLECTION, aid, {
@@ -137,7 +142,9 @@ async function reserveApp(
       partial: false,
       problems: [
         `cannot reserve the app (apps/${aid}): ${err instanceof Error ? err.message : String(err)}`,
-        "Nothing was written — this repository still declares no app, and `init` can simply be run again (it mints a new id each time).",
+        retry === "init"
+          ? "Nothing was written — this repository still declares no app, and `init` can simply be run again (it mints a new id each time)."
+          : "Nothing was written — app.json still declares the app this repository was cloned from, and `fork` can simply be run again (it mints a new id each time). Do not reach for `init`: it refuses a repository that already declares an app, which this one still does.",
         "If this keeps happening, the session may not be signed in with a VERIFIED address: the rules require one to create an app.",
       ],
     };
@@ -217,7 +224,7 @@ export async function forkSharedApp(root: string, name: string | undefined, slug
   // Same order as `init`, for the same reason: the id is taken on the shared shelf BEFORE it
   // reaches a file that gets committed and read in a pull request.
   const aid = newAid();
-  const reserved = await reserveApp(handle, aid);
+  const reserved = await reserveApp(handle, aid, "fork");
   if (reserved) return reserved;
 
   const taken: ForkNotes = { carried: [], previousSlug: undefined };
