@@ -15,6 +15,7 @@
 // resolve the owner through `get(apps/{aid})`, so on a first deploy nothing else is authorized
 // until that document exists.
 import { isRecord } from "../../../common/isRecord.js";
+import { ensureAid } from "./ensureAid.js";
 import { APPS_COLLECTION, appStagingPath, projectDeploy, type PublishStamp } from "@mulmoclaude/core/collection/server";
 import { gitStamp, schemasOf, sharedAppContext, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
 import { recordRefusal, scanRecords } from "./records.js";
@@ -100,6 +101,9 @@ async function staleStaged(
 export type DeployResult = DeploySuccess | SharedAppFailure;
 
 export async function deploySharedApp(root: string, opts: SharedAppOptions = {}): Promise<DeployResult> {
+  const aid_result = await ensureAid(root);
+  if (!aid_result.ok) return { ok: false, partial: false, problems: aid_result.problems };
+  
   const context = await sharedAppContext(root);
   if (!context.ok) return context;
   const { authored, collections, handle } = context;

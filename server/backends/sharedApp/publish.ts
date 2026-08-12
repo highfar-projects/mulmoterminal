@@ -36,6 +36,7 @@ import {
   type LoadedCollection,
   type PublishStamp,
 } from "@mulmoclaude/core/collection/server";
+import { ensureAid } from "./ensureAid.js";
 import { gitStamp, sharedAppContext, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
 import { recordRefusal, scanRecords } from "./records.js";
 import { readStaged, type StagedEntry } from "./staged.js";
@@ -137,6 +138,9 @@ function publishSteps(
 }
 
 export async function publishSharedApp(root: string, opts: SharedAppOptions = {}): Promise<PublishResult> {
+  const aid_result = await ensureAid(root);
+  if (!aid_result.ok) return { ok: false, partial: false, problems: aid_result.problems };
+  
   const context = await sharedAppContext(root);
   if (!context.ok) return context;
   const { authored, collections, handle } = context;

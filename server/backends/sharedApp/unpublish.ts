@@ -13,6 +13,7 @@
 // decide whether something may go OUT; taking it down has to work when the declaration is broken,
 // which is one of the times an operator most wants it. Only the `aid` is read from `app.json`.
 import { isRecord } from "../../../common/isRecord.js";
+import { ensureAid } from "./ensureAid.js";
 import { APPS_COLLECTION, PUBLIC_CONFIG_DOC, appConfigPath, appManifestReason, firestoreHandle, loadAppManifest } from "@mulmoclaude/core/collection/server";
 import type { SharedAppFailure } from "./context.js";
 import { runWrites } from "./writes.js";
@@ -29,6 +30,9 @@ export interface UnpublishSuccess {
 export type UnpublishResult = UnpublishSuccess | SharedAppFailure;
 
 export async function unpublishSharedApp(root: string): Promise<UnpublishResult> {
+  const aid_result = await ensureAid(root);
+  if (!aid_result.ok) return { ok: false, partial: false, problems: aid_result.problems };
+  
   const handle = firestoreHandle();
   if (!handle) {
     return { ok: false, partial: false, problems: ["unpublish needs a signed-in Firestore session: connect remote-host first."] };
