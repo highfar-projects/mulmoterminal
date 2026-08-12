@@ -188,6 +188,13 @@ export async function readCurrentApp(
     const existing = await handle.docs.get(APPS_COLLECTION, aid);
     return { ok: true, app: isRecord(existing) ? existing : null };
   } catch (err) {
+    // A REFUSAL is not an answer about the document — it is the absence of one.
+    //
+    // The read rule resolves the roster out of the document itself, so a document that does not
+    // exist makes the expression fail and the read is DENIED: the same answer as somebody else's
+    // app. Reported as "no document" so the caller can go on to the only thing that distinguishes
+    // them, which is trying to CREATE it; everything else (network, quota) is still a failure.
+    if (isRefusal(err)) return { ok: true, app: null };
     return {
       ok: false,
       partial: false,
@@ -197,6 +204,15 @@ export async function readCurrentApp(
       ],
     };
   }
+}
+
+/** A rules REFUSAL, as opposed to a failure to ask. The Firestore SDK reports both as a thrown
+ *  error and only the `code` separates them: `permission-denied` is the rules saying no, and
+ *  `failed-precondition` is the document not being what the rules required. Everything else —
+ *  `unavailable`, `deadline-exceeded`, `resource-exhausted`, an offline client — is the question
+ *  never having been answered. */
+export function isRefusal(err: unknown): boolean {
+  return isRecord(err) && (err.code === "permission-denied" || err.code === "failed-precondition");
 }
 
 /** Who, when, and from which commit — resolved the same way by both operations.

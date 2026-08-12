@@ -29,6 +29,13 @@ class FakeDocs implements FirestoreDocs {
   readonly writes: string[] = [];
   /** Path/id whose next write throws — how a half-finished run is produced. */
   failAt: string | null = null;
+  /** Model the rules' actual shape: a shared collection's records are authorized through
+   *  `apps/{aid}`, so while that document is missing, reading them is denied rather than empty. */
+  readsDeniedUntilApp = false;
+  /** Collection path whose listing throws — a transient failure, as opposed to a refusal. */
+  failListing: string | null = null;
+  /** Refuse the app-document read even though it exists — somebody else's app. */
+  readsDeniedForApp = false;
 
   private bucket(collectionPath: string): Map<string, Record<string, unknown>> {
     const existing = this.store.get(collectionPath);
@@ -38,10 +45,30 @@ class FakeDocs implements FirestoreDocs {
     return created;
   }
 
-  list = (collectionPath: string): Promise<FirestoreDoc[]> =>
-    Promise.resolve([...this.bucket(collectionPath)].sort(([left], [right]) => (left < right ? -1 : 1)).map(([id, data]) => ({ id, data })));
+  list = (collectionPath: string): Promise<FirestoreDoc[]> => {
+    if (this.failListing === collectionPath) {
+      return Promise.reject(new Error("unavailable (test)"));
+    }
+    // The rules again: a record listing is authorized through the app document, so while that is
+    // missing the listing is REFUSED rather than empty.
+    if (this.readsDeniedUntilApp && !this.app() && collectionPath.includes("/collections/")) {
+      return Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }));
+    }
+    const docs = [...this.bucket(collectionPath)].sort(([left], [right]) => (left < right ? -1 : 1));
+    return Promise.resolve(docs.map(([id, data]) => ({ id, data })));
+  };
 
-  get = (collectionPath: string, docId: string): Promise<unknown | null> => Promise.resolve(this.bucket(collectionPath).get(docId) ?? null);
+  get = (collectionPath: string, docId: string): Promise<unknown | null> => {
+    // The rules' actual shape: `apps/{aid}`'s read resolves the roster out of the document, so a
+    // document that does not exist makes the expression fail and the read is REFUSED — the same
+    // answer as somebody else's app. A fake that answered `null` would let a first deploy pass a
+    // test the real thing cannot pass.
+    const existing = this.bucket(collectionPath).get(docId);
+    if (collectionPath === "apps" && (!existing || this.readsDeniedForApp)) {
+      return Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }));
+    }
+    return Promise.resolve(existing ?? null);
+  };
 
   set = (collectionPath: string, docId: string, data: Record<string, unknown>): Promise<void> => {
     const key = `${collectionPath}/${docId}`;
@@ -61,6 +88,14 @@ class FakeDocs implements FirestoreDocs {
   };
 
   create = (collectionPath: string, docId: string, data: Record<string, unknown>): Promise<boolean> => {
+    // create-if-absent is a TRANSACTION, and it begins by reading the document. For the two
+    // collections whose read rule resolves out of a document that does not exist yet
+    // (`apps/{aid}`, `appSlugs/{slug}`), that read is refused — so `create` can never claim a
+    // fresh id there, however atomic it looks. Modelled here because the code got it wrong once
+    // and nothing in a fake that answered `false` would have said so.
+    if (!this.bucket(collectionPath).has(docId) && (collectionPath === "apps" || collectionPath === "appSlugs")) {
+      return Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }));
+    }
     if (this.bucket(collectionPath).has(docId)) return Promise.resolve(false);
     this.writes.push(`create ${collectionPath}/${docId}`);
     this.bucket(collectionPath).set(docId, structuredClone(data));
@@ -128,6 +163,7 @@ describe("shared app deploy / publish / unpublish", () => {
 
   it("deploys to the roster only — no public block, no published schema, no public config", async () => {
     const result = await deploySharedApp(root, stamp);
+    expect(result.ok === false ? result.problems : []).toEqual([]);
     expect(result.ok).toBe(true);
     // The one that matters: `publicOn` reads THIS field, not the world-readable projection, so a
     // deploy that wrote it would open the app for anyone testing.
@@ -139,7 +175,90 @@ describe("shared app deploy / publish / unpublish", () => {
     expect(docs.store.get(`apps/${AID}/config`)).toBeUndefined();
   });
 
+  it("creates an app whose records cannot be read yet — the first deploy of all", async () => {
+    // The deadlock this pins: a shared collection's records are authorized THROUGH `apps/{aid}`,
+    // so before that document exists the records cannot be read at all. The migration gate read
+    // that as "the live records could not be read", which is the one refusal `confirm` may not
+    // override — and a new app could never be created.
+    docs.readsDeniedUntilApp = true;
+
+    const result = await deploySharedApp(root, stamp);
+    expect(result.ok).toBe(true);
+    expect(docs.app()).toBeDefined();
+    expect(docs.doc(`apps/${AID}/staging`, "bookings")).toBeDefined();
+  });
+
+  it("runs the migration gate on records that survived their app document", async () => {
+    // Firestore deletes do not cascade: `apps/{aid}` can be gone while the records under it
+    // survive. A missing app document therefore proves only that the records cannot be READ right
+    // now — not that they do not exist — and a deploy that re-creates the app must still check
+    // them, or it hands them to the roster under a schema nothing compared them against.
+    docs.store.set(`apps/${AID}/collections/bookings/items`, new Map([["1", { id: "1" }]]));
+    writeFileSync(
+      path.join(root, ".claude", "skills", "bookings", "schema.json"),
+      JSON.stringify({ ...schemaFor("bookings"), fields: { ...schemaFor("bookings").fields, note: { type: "string", label: "Note", required: true } } }),
+    );
+
+    const result = await deploySharedApp(root, stamp);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.problems.join("\n")).toContain("would not satisfy the schema");
+    // The app document IS live — that is what made the records readable — and the result says so.
+    expect(docs.app()).toBeDefined();
+    expect(result.ok === false && result.partial).toBe(true);
+    // Nothing was staged: the gate stopped before that.
+    expect(docs.store.get(`apps/${AID}/staging`)).toBeUndefined();
+  });
+
+  it("withdraws staging that outlived its app document", async () => {
+    // Firestore leaves `staging/*` behind exactly as it leaves the records. Carried through a
+    // resurrecting deploy, an orphaned staged collection then makes publish fail closed — it
+    // promotes what is staged and refuses a cid the repository does not have.
+    docs.store.set(`apps/${AID}/staging`, new Map([["waitlist", { publishedSchema: { title: "Waitlist" }, deployedAt: 1, deployedBy: OWNER.email }]]));
+
+    const result = await deploySharedApp(root, stamp);
+    expect(result.ok === true && result.withdrawn).toEqual(["waitlist"]);
+    expect(docs.doc(`apps/${AID}/staging`, "waitlist")).toBeUndefined();
+    // And the deploy still did its own job.
+    expect(docs.doc(`apps/${AID}/staging`, "bookings")).toBeDefined();
+  });
+
+  it("says whose app it is when the id is taken and unreadable", async () => {
+    // The two are indistinguishable by reading — both are refusals — so the create is what settles
+    // it, and the message has to name the situation rather than repeat "insufficient permissions".
+    docs.store.set("apps", new Map([[AID, { aid: AID, owner: "somebody-else" }]]));
+    docs.readsDeniedForApp = true;
+    // The rules refuse the WRITE too — an update needs this session to be the app's owner — and
+    // that refusal is the only signal available, because the document cannot be read.
+    docs.failAt = `apps/${AID}`;
+
+    const result = await deploySharedApp(root, stamp);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.problems.join("\n")).toContain("belongs to somebody else's roster");
+    expect(docs.doc(`apps/${AID}/staging`, "bookings")).toBeUndefined();
+  });
+
+  it("says the roster is live when it cannot read staging after creating the app", async () => {
+    // "Nothing was written" about an app that now exists is worse than no report at all: the next
+    // decision — deploy again, or go looking for what half-happened — turns on it.
+    docs.failListing = `apps/${AID}/staging`;
+
+    const result = await deploySharedApp(root, stamp);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.partial).toBe(true);
+    expect(result.ok === false && result.problems.join("\n")).toContain("the roster is live");
+    expect(docs.app()).toBeDefined();
+  });
+
   it("writes the app document before the staged schemas — the staging rules resolve the owner through it", async () => {
+    await deploySharedApp(root, stamp);
+    // The app write, then the staging document. On a first deploy the app write is what makes the
+    // records readable, so it happens before the migration gate rather than beside the staging
+    // writes — and it is a `set`, because create-if-absent is a transaction that reads first and
+    // that read is refused for the very document it would create.
+    expect(docs.writes).toEqual([`set apps/${AID}`, `set apps/${AID}/staging/bookings`]);
+
+    // And on a redeploy, where the app already exists, the same order without the extra write.
+    docs.writes.length = 0;
     await deploySharedApp(root, stamp);
     expect(docs.writes).toEqual([`set apps/${AID}`, `set apps/${AID}/staging/bookings`]);
   });
@@ -232,6 +351,9 @@ describe("shared app deploy / publish / unpublish", () => {
   });
 
   it("stops at live records that would not fit the new schema, and confirming stages it anyway", async () => {
+    // The app has to EXIST for this gate to run: before it does there are no live records, and the
+    // records cannot even be read — the rules resolve their roster from the app document.
+    await deploySharedApp(root, stamp);
     docs.store.set(`apps/${AID}/collections/bookings/items`, new Map([["1", { id: "1" }]]));
     writeFileSync(
       path.join(root, ".claude", "skills", "bookings", "schema.json"),
@@ -241,7 +363,6 @@ describe("shared app deploy / publish / unpublish", () => {
     const refused = await deploySharedApp(root, stamp);
     expect(refused.ok).toBe(false);
     expect(refused.ok === false && refused.problems.join("\n")).toContain("would not satisfy the schema");
-    expect(docs.app()).toBeUndefined();
 
     const confirmed = await deploySharedApp(root, { ...stamp, confirm: true });
     expect(confirmed.ok === true && confirmed.recordIssues).toBe(1);
@@ -266,6 +387,8 @@ describe("shared app deploy / publish / unpublish", () => {
   });
 
   it("does not let a confirmed deploy buy the publish", async () => {
+    // Same reason as above: the gate needs an app to exist before there is anything live in it.
+    await deploySharedApp(root, stamp);
     // The reason the scan runs at BOTH boundaries: deploy's confirm says "let me stage this
     // anyway", which mid-migration is the useful thing. It is not the same sentence as "let
     // everyone have it", so publish asks again and needs its own confirm.
