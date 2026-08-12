@@ -147,7 +147,30 @@ export interface InviteSuccess {
  *  One key, left where it was — the file belongs to the author, and an operation that rewrote it
  *  would be a worse version of editing it by hand. `role: null` removes. */
 export async function inviteToSharedApp(root: string, email: string, role: AppRoleName | null, cid: string): Promise<InviteSuccess | SharedAppFailure> {
-  const updated = await updateManifest(root, (manifest) => nextMembers(manifest, email, role, cid));
+  let orphaned = false;
+  const updated = await updateManifest(root, (manifest) => {
+    const next = nextMembers(manifest, email, role, cid);
+    if (next === null) return null;
+    // An app with no app-wide owner has no publisher: every deploy is refused, INCLUDING the one
+    // that would put an owner back. The file can still be edited by hand, but this tool must not
+    // be the way somebody locks themselves out — removing or demoting an owner is fine once
+    // another one exists.
+    if (!hasOwner(next)) {
+      orphaned = true;
+      return null;
+    }
+    return next;
+  });
+  if (orphaned) {
+    return {
+      ok: false,
+      partial: false,
+      problems: [
+        `that would leave the app with no owner: ${email} is the only address holding \`"*": "owner"\`.`,
+        "An app with no owner cannot be deployed at all — not even to put an owner back. Add another owner first, then remove this one.",
+      ],
+    };
+  }
   if (!updated.ok) return { ok: false, partial: false, problems: updated.problems };
   return { ok: true, email, role, cid };
 }
@@ -167,6 +190,12 @@ function nextMembers(manifest: Record<string, unknown>, email: string, role: App
   const nextRoster = Object.fromEntries(Object.keys(roles).length === 0 ? others : [...others, [email, roles]]);
   if (JSON.stringify(nextRoster) === JSON.stringify(members)) return null;
   return { ...manifest, members: nextRoster };
+}
+
+/** Does this declaration still name somebody who may publish it? */
+function hasOwner(manifest: Record<string, unknown>): boolean {
+  const members = isRecord(manifest.members) ? manifest.members : {};
+  return Object.values(members).some((roles) => isRecord(roles) && roles["*"] === "owner");
 }
 
 async function readManifest(root: string): Promise<{ ok: true; text: string } | SharedAppFailure> {

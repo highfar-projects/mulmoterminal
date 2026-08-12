@@ -13,6 +13,16 @@ import { initCollectionsBackend } from "../../../server/backends/collections.js"
 import { makeTempDir } from "../../support/tempDir";
 import path from "node:path";
 
+/** The accessor hands back a Firestore adapter; `init` never uses it, but the shape is required. */
+const FAKE_DOCS = {
+  list: () => Promise.resolve([]),
+  get: () => Promise.resolve(null),
+  set: () => Promise.resolve(),
+  create: () => Promise.resolve(true),
+  delete: () => Promise.resolve(true),
+  watch: () => () => {},
+};
+
 describe("manageSharedApp, the tool", () => {
   beforeAll(() => {
     // Discovery needs a bound host: `check` reads this repository's collections, and without the
@@ -85,6 +95,40 @@ describe("manageSharedApp, the tool", () => {
     // Removed ENTIRELY rather than left as an empty object: the rules require the roster and its
     // email list to agree, and a half-removed entry is a permission somebody still holds.
     expect(JSON.parse(readFileSync(path.join(root, "app.json"), "utf-8")).members).toEqual({ "o@e.com": { "*": "owner" } });
+  });
+
+  it("writes the SIGNED-IN address as owner, and generates the aid", async () => {
+    // The whole reason `init` is an operation: the owner has to be the address the rules will see,
+    // the agent cannot read it, and the address a user offers is the one that fails at deploy.
+    const root = makeTempDir("mt-shared-tool-");
+    setFirestoreAccessor(() => ({ docs: FAKE_DOCS, email: "signed-in@example.com", uid: "uid-1" }));
+    try {
+      const message = await manageSharedApp(root, { action: "init", name: "Talk feedback", slug: "aug-talk-survey" });
+      expect(message).toContain("signed-in@example.com");
+      const written = JSON.parse(readFileSync(path.join(root, "app.json"), "utf-8"));
+      expect(written.members).toEqual({ "signed-in@example.com": { "*": "owner" } });
+      expect(written.aid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-/);
+      expect(written.name).toBe("Talk feedback");
+      expect(written.slug).toBe("aug-talk-survey");
+    } finally {
+      setFirestoreAccessor(null);
+    }
+  });
+
+  it("refuses to leave the app without an owner", async () => {
+    // An app with no app-wide owner has no publisher: every deploy is refused, including the one
+    // that would put an owner back.
+    const root = makeTempDir("mt-shared-tool-");
+    const roster = { "o@e.com": { "*": "owner" }, "t@e.com": { "*": "viewer" } };
+    writeFileSync(path.join(root, "app.json"), JSON.stringify({ aid: "a1", members: roster }));
+
+    expect(await manageSharedApp(root, { action: "invite", email: "o@e.com" })).toContain("no owner");
+    expect(await manageSharedApp(root, { action: "invite", email: "o@e.com", role: "viewer" })).toContain("no owner");
+    expect(JSON.parse(readFileSync(path.join(root, "app.json"), "utf-8")).members).toEqual(roster);
+
+    // With a second owner in place, the first may go.
+    await manageSharedApp(root, { action: "invite", email: "t@e.com", role: "owner" });
+    expect(await manageSharedApp(root, { action: "invite", email: "o@e.com" })).toContain("Removed");
   });
 
   it("returns every refusal as text rather than throwing", async () => {
