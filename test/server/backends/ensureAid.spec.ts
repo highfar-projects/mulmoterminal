@@ -4,7 +4,7 @@
 // generator behaves like one: it mints exactly once, it keeps what the author wrote, and it
 // refuses rather than inventing a declaration.
 import { describe, it, expect, beforeEach } from "vitest";
-import { chmodSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, lstatSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { ensureAid } from "../../../server/backends/sharedApp/ensureAid.js";
 import { makeTempDir } from "../../support/tempDir";
@@ -104,6 +104,21 @@ describe("ensureAid", () => {
     expect(new Set(results.map((result) => (result.ok ? result.aid : "failed"))).size).toBe(1);
     expect(results.filter((result) => result.ok && result.created)).toHaveLength(1);
     expect(results[0]?.ok === true && results[0].aid).toBe(read().aid);
+  });
+
+  it("updates the file a linked app.json points at, and leaves the link a link", async () => {
+    // `readFile` follows a symlink and `rename` replaces one, so writing beside the NAME would
+    // read the shared declaration through the link and then overwrite the link with a detached
+    // copy — the target never gets the aid, and whoever else reads the target sees a different
+    // app from the one this repository just deployed.
+    const shared = path.join(makeTempDir("mt-ensure-aid-shared-"), "app.json");
+    writeFileSync(shared, JSON.stringify({ name: "Shared" }));
+    symlinkSync(shared, appJson());
+
+    const result = await ensureAid(root);
+    expect(result.ok).toBe(true);
+    expect(JSON.parse(readFileSync(shared, "utf-8")).aid).toBe(result.ok && result.aid);
+    expect(lstatSync(appJson()).isSymbolicLink()).toBe(true);
   });
 
   it("refuses a JSON file that is not an object", async () => {

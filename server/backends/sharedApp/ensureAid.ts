@@ -127,14 +127,21 @@ async function ensureAidOnce(root: string): Promise<EnsureAidResult> {
   //
   // Same directory on purpose — a rename across filesystems is a copy, and the temp directory is
   // routinely on another one.
-  const scratch = path.join(path.dirname(manifestPath), `.${path.basename(manifestPath)}.${aid}.tmp`);
+  //
+  // And beside the RESOLVED file, not beside the name we were given. `readFile` follows a
+  // symlink; `rename` replaces one. A manifest linked to a shared declaration would therefore be
+  // read through the link and then have the link overwritten by a detached copy — the target
+  // never gets the aid, and the next reader of the target is looking at a different app.
+  // Resolving means the link stays a link and the file it points at is what gets updated.
+  const target = await realpath(manifestPath).catch(() => manifestPath);
+  const scratch = path.join(path.dirname(target), `.${path.basename(target)}.${aid}.tmp`);
   try {
     await writeFile(scratch, body, "utf-8");
     // The replacement is a NEW file, so it carries this process's umask rather than the mode the
     // author gave `app.json`. Carrying the declaration through unchanged has to include that: a
     // manifest someone deliberately kept at 0600 would come back 0644 and nothing would say so.
-    await chmod(scratch, (await stat(manifestPath)).mode);
-    await rename(scratch, manifestPath);
+    await chmod(scratch, (await stat(target)).mode);
+    await rename(scratch, target);
   } catch (err) {
     // Best effort: the scratch file is only litter, and the failure being reported is the one
     // worth reporting.
