@@ -5,7 +5,7 @@
 // the form, and this is the projection that makes it so.
 import { describe, it, expect } from "vitest";
 import { parseAuthoredApp } from "@mulmoclaude/core/collection/server";
-import { oversizeProblem, publicFormOf, publicInputProblems } from "../../../server/backends/sharedApp/publicForm.js";
+import { oversizeProblem, publicFormOf, publicInputProblems, schemasOfCollections } from "../../../server/backends/sharedApp/publicForm.js";
 
 const schema = {
   title: "Responses",
@@ -25,9 +25,12 @@ const schema = {
 // what the rules then check a public create against. The form's `statusField` has to come from
 // here rather than from `app.json`, or an edit between deploy and publish moves one and not the
 // other.
-const staged = [
-  { cid: "responses", doc: { publishedSchema: schema, config: { submitOnly: true, statusField: "status" }, deployedAt: 1, deployedBy: "o@e.com" } },
-];
+const stagedResponses = {
+  cid: "responses",
+  doc: { publishedSchema: schema, config: { submitOnly: true, statusField: "status" }, deployedAt: 1, deployedBy: "o@e.com" },
+};
+
+const staged = [stagedResponses];
 
 const authored = (submit: Record<string, unknown>) => {
   const parsed = parseAuthoredApp(
@@ -135,7 +138,7 @@ describe("fields a stranger cannot be asked for", () => {
   // judge a public create by. So a computed field left in it is a value from the internet landing
   // in a field the host is supposed to compute; dropping it from the form alone would not stop it.
   const withField = (name: string, spec: Record<string, unknown>) => [
-    { ...staged[0]!, doc: { ...staged[0]!.doc, publishedSchema: { ...schema, fields: { ...schema.fields, [name]: spec } } } },
+    { ...stagedResponses, doc: { ...stagedResponses.doc, publishedSchema: { ...schema, fields: { ...schema.fields, [name]: spec } } } },
   ];
 
   it("does not draw a computed field", () => {
@@ -166,7 +169,8 @@ describe("oversizeProblem", () => {
 describe("publicInputProblems", () => {
   // The gate that runs before any write — `declarationProblems`, shared by deploy, publish and
   // check — so the author is told while it is still a declaration.
-  const collection = (fields: Record<string, unknown>) => [{ slug: "responses", schema: { ...schema, fields: { ...schema.fields, ...fields } } } as never];
+  const collection = (fields: Record<string, unknown>) =>
+    schemasOfCollections([{ slug: "responses", schema: { ...schema, fields: { ...schema.fields, ...fields } } } as never]);
 
   it("says nothing about a form of plain fields", () => {
     expect(publicInputProblems(authored(surveySubmit), collection({}))).toEqual([]);
@@ -199,12 +203,37 @@ describe("the status field the page writes", () => {
   // key the promoted rule refuses, with nothing on the page to say why.
   it("comes from what was staged, not from app.json", () => {
     const app = authored(surveySubmit);
-    const restaged = [{ ...staged[0]!, doc: { ...staged[0]!.doc, config: { submitOnly: true, statusField: "state" } } }];
+    const restaged = [{ ...stagedResponses, doc: { ...stagedResponses.doc, config: { submitOnly: true, statusField: "state" } } }];
     expect(publicFormOf(app, restaged).responses?.statusField).toBe("state");
   });
 
   it("is absent when the staged configuration names none", () => {
-    const restaged = [{ ...staged[0]!, doc: { ...staged[0]!.doc, config: { submitOnly: true } } }];
+    const restaged = [{ ...stagedResponses, doc: { ...stagedResponses.doc, config: { submitOnly: true } } }];
     expect(publicFormOf(authored(surveySubmit), restaged).responses?.statusField).toBeUndefined();
+  });
+});
+
+describe("a declaration that has moved on since the deploy", () => {
+  // The deploy gate reads the working tree; publish promotes the STAGED schemas. Add a field to
+  // both the schema and `createFields` without deploying again, and the rules being published
+  // would demand a field the published form cannot draw — a visitor filling the form in correctly
+  // is refused, with nothing to fix.
+  const app = authored({ responses: { auth: "verifiedEmail", emailField: "email", createFields: ["name", "referrer"] } });
+
+  it("passes against the tree that has the field", () => {
+    const withNew = { ...schema, fields: { ...schema.fields, referrer: { type: "string" as const, label: "きっかけ" } } };
+    expect(publicInputProblems(app, [{ cid: "responses", schema: withNew }])).toEqual([]);
+  });
+
+  it("is refused against the staged version that does not, and says to deploy again", () => {
+    const problems = publicInputProblems(app, [{ cid: "responses", schema }], "staged");
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("'referrer'");
+    expect(problems[0]).toContain("Run deploy again");
+  });
+
+  it("calls an undeclared name a name, against the tree", () => {
+    const problems = publicInputProblems(app, [{ cid: "responses", schema }]);
+    expect(problems[0]).toContain("does not declare a field called 'referrer'");
   });
 });

@@ -33,6 +33,7 @@ import {
   appSchemasPath,
   promoteSchema,
   projectPublish,
+  type AuthoredApp,
   type LoadedCollection,
   type PublishStamp,
 } from "@mulmoclaude/core/collection/server";
@@ -40,7 +41,7 @@ import { ensureAid } from "./ensureAid.js";
 import { gitStamp, sharedAppContext, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
 import { recordRefusal, scanRecords, type RecordScan } from "./records.js";
 import { readStaged, type StagedEntry } from "./staged.js";
-import { oversizeProblem, publicFormOf, type PublicForm } from "./publicForm.js";
+import { oversizeProblem, publicFormOf, publicInputProblems, type PublicForm } from "./publicForm.js";
 import { setSlugPublished } from "./slug.js";
 import { runWrites, type WriteStep } from "./writes.js";
 
@@ -167,6 +168,7 @@ function publishSteps(
  *  repository, and the live records fit the version about to become public. Split out for the
  *  line budget, and it reads as the one thing it is — the gate. */
 async function stagedGate(
+  authored: AuthoredApp,
   staged: readonly StagedEntry[],
   collections: readonly LoadedCollection[],
   aid: string,
@@ -184,6 +186,15 @@ async function stagedGate(
   }
   const toScan = stagedForValidation(staged, collections);
   if (!toScan.ok) return { ...toScan, partial: false };
+  // Against the STAGED schemas, not the tree the deploy gate already checked: the declaration can
+  // have gained a field since, and publishing it would make the rules demand a field the form
+  // cannot draw.
+  const drifted = publicInputProblems(
+    authored,
+    staged.map((entry) => ({ cid: entry.cid, schema: entry.doc.publishedSchema })),
+    "staged",
+  );
+  if (drifted.length > 0) return { ok: false, partial: false, problems: drifted };
   const scan = await scanRecords(toScan.collections, root);
   const refusal = recordRefusal(scan, "publish", confirm);
   return refusal ? { ok: false, partial: false, problems: refusal } : { ok: true, scan };
@@ -202,7 +213,7 @@ export async function publishSharedApp(root: string, opts: SharedAppOptions = {}
 
   const staged = await readStaged(handle, aid);
   if (!staged.ok) return { ...staged, partial: false };
-  const gate = await stagedGate(staged.staged, collections, aid, root, opts.confirm);
+  const gate = await stagedGate(authored, staged.staged, collections, aid, root, opts.confirm);
   if (!gate.ok) return gate;
   const scan = gate.scan;
 
