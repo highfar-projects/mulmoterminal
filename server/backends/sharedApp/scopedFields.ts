@@ -29,7 +29,7 @@
 // no field to compare, which is the exact fail-closed trap these checks exist
 // to prevent.
 import type { CollectionFieldType, CollectionSchema } from "@mulmoclaude/core/collection";
-import type { AuthoredApp } from "@mulmoclaude/core/collection/server";
+import { promotedRoleProblems, type AuthoredApp } from "@mulmoclaude/core/collection/server";
 import type { StagedEntry } from "./staged.js";
 
 /** What a member's address can be compared against.
@@ -85,29 +85,11 @@ export function stagedScopeProblems(app: AuthoredApp, staged: readonly StagedEnt
     schemaOf: (cid) => schemas.get(cid),
     cids: [...configs.keys()],
   };
-  return [...rosterPairingProblems(app, sources), ...fieldProblems(app, sources, "staged")];
-}
-
-/** A member holding `assignee` on a collection whose PROMOTED configuration
- *  does not say which rows are theirs.
- *
- *  core's `assigneeProblems` asks the same question of the manifest, where the
- *  two keys sit side by side and agree. This asks it of the pair that actually
- *  ships. Only the staged half can be stale, so only that half is named. */
-function rosterPairingProblems(app: AuthoredApp, sources: Sources): string[] {
-  return Object.entries(app.members).flatMap(([email, roles]) =>
-    Object.entries(roles).flatMap(([cid, role]) => {
-      if (role !== "assignee" || cid === "*") return [];
-      // A cid with nothing staged is the staged-set gate's refusal, not this one.
-      if (!sources.cids.includes(cid) && sources.schemaOf(cid) === undefined) return [];
-      if (sources.assigneeFieldOf(cid) !== undefined) return [];
-      return [
-        `members["${email}"] holds "assignee" on '${cid}', and the STAGED version of '${cid}' — the one publish promotes — carries no assigneeField, ` +
-          `even if app.json declares one now. Publish would write the roster from app.json and the configuration from the deploy, leaving that member with nothing ` +
-          `to be compared against: they would be refused every write while the app kept working for everybody else. ${REDEPLOY}`,
-      ];
-    }),
-  );
+  // The roster pairing itself is core's `promotedRoleProblems`: it checks the
+  // value `stagedRuleConfig` produces, which is literally what publish writes.
+  // What is left here is the half core cannot do — the SCHEMAS those names have
+  // to exist in, which its publish surface deliberately does not carry.
+  return [...promotedRoleProblems(app, [...staged]), ...fieldProblems(app, sources, "staged")];
 }
 
 function fieldProblems(app: AuthoredApp, sources: Sources, version: Version): string[] {
