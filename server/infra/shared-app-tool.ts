@@ -1,4 +1,4 @@
-// manageSharedApp — MulmoTerminal's own tool for the three shared-app operations.
+// manageSharedApp — MulmoTerminal's own tool for the shared-app operations.
 //
 // It is NOT an action on `manageCollection`. That tool's definition and dispatch both live in
 // `@mulmoclaude/core`, so adding to it would be a change to MulmoClaude for a feature only
@@ -15,12 +15,12 @@ import type { ToolDefinition } from "gui-chat-protocol";
 import { deploySharedApp } from "../backends/sharedApp/deploy.js";
 import { publishSharedApp } from "../backends/sharedApp/publish.js";
 import { unpublishSharedApp } from "../backends/sharedApp/unpublish.js";
-import { APP_ROLE_NAMES, checkSharedApp, initSharedApp, inviteToSharedApp, type AppRoleName } from "../backends/sharedApp/declare.js";
+import { APP_ROLE_NAMES, checkSharedApp, forkSharedApp, initSharedApp, inviteToSharedApp, type AppRoleName } from "../backends/sharedApp/declare.js";
 import { isRecord } from "../../common/isRecord.js";
 import { manifestKey } from "../backends/sharedApp/manifestWrite.js";
 import { serializeBy } from "../backends/sharedApp/serialize.js";
 
-export const SHARED_APP_ACTIONS = ["init", "check", "invite", "deploy", "publish", "unpublish"] as const;
+export const SHARED_APP_ACTIONS = ["init", "fork", "check", "invite", "deploy", "publish", "unpublish"] as const;
 export type SharedAppAction = (typeof SHARED_APP_ACTIONS)[number];
 
 export const MANAGE_SHARED_APP: ToolDefinition = {
@@ -33,6 +33,7 @@ export const MANAGE_SHARED_APP: ToolDefinition = {
     "A request for something OTHER PEOPLE fill in or read — a survey, a sign-up sheet, a booking form, a form behind a link — is a shared app, and the `mulmoterminal-shared-app` skill is the path from that sentence to this tool. Read it before offering a printable page or a third-party form.\n" +
     "`manageSharedApp` operates on the repository the session is open in — the one holding `app.json` — and it is the only way to write a shared app.\n" +
     "**init** writes `app.json` for a repository that has none, with the SIGNED-IN address as its owner — use it instead of composing the file yourself, because the owner has to be the address this machine is signed in with and you cannot read that.\n" +
+    "**fork** turns a CLONE of somebody else's shared app into the user's own — a new `aid`, a roster of one, the same collections. It is the answer to \"this repository is a clone, make it mine\", and the ONLY one: `init` refuses a repository that already declares an app, so composing the file by hand or deleting `app.json` first are both worse versions of this. It carries `collections` and `public` over unchanged, never touches `.claude/skills/`, and refuses outright when the signed-in address already owns the app.\n" +
     "**check** reports everything wrong with the declaration and this repository's shared collections WITHOUT writing or deploying anything. Run it after any edit to `app.json`; it is the only way to find out whether a declaration is deployable before it is deployed.\n" +
     "**invite** adds, changes or removes ONE address on the roster (`email`, `role`, optional `cid`; omit `role` to remove). It takes effect at the next deploy.\n" +
     "**deploy** is the safe one and is meant to be run often. It writes the roster and internal settings to `apps/{aid}` and each collection's schema to `apps/{aid}/staging/{cid}`, which only people on the roster can read. " +
@@ -47,10 +48,14 @@ export const MANAGE_SHARED_APP: ToolDefinition = {
         type: "string",
         enum: [...SHARED_APP_ACTIONS],
         description:
-          "init = write app.json for a new app; check = report what is wrong without writing; invite = one roster entry; deploy = stage for the roster; publish = promote the staged version and open it; unpublish = close it again.",
+          "init = write app.json for a new app; fork = take over a clone of somebody else's app; check = report what is wrong without writing; invite = one roster entry; deploy = stage for the roster; publish = promote the staged version and open it; unpublish = close it again.",
       },
-      name: { type: "string", description: "init: the app's human name." },
-      slug: { type: "string", description: "init: the wanted URL name (lowercase, hyphens). It is a wish — a taken one gets a number appended." },
+      name: { type: "string", description: "init / fork: the app's human name. fork carries the cloned app's name over when this is omitted." },
+      slug: {
+        type: "string",
+        description:
+          "init / fork: the wanted URL name (lowercase, hyphens). It is a wish — a taken one gets a number appended. fork does NOT carry the cloned app's name over, so ask for one.",
+      },
       email: { type: "string", description: "invite: the address to add, change or remove." },
       role: {
         type: "string",
@@ -148,6 +153,34 @@ async function narrateInit(root: string, body: Record<string, unknown>): Promise
   ].join("\n");
 }
 
+/** `fork`'s report has one job the others do not: saying what did NOT come across. The roster and
+ *  the URL name were in the file a moment ago and are not now, and a fork that silently kept
+ *  either would be the bug this operation exists to prevent. */
+async function narrateFork(root: string, body: Record<string, unknown>): Promise<string> {
+  const result = await forkSharedApp(root, str(body.name), str(body.slug));
+  if (!result.ok) return result.problems.join("\n");
+  const carried =
+    result.carried.length === 0
+      ? "The cloned declaration had no `collections` or `public` block to carry over."
+      : `Carried over unchanged: ${result.carried.join(", ")}.`;
+  return [
+    `This repository now declares YOUR app: a new aid, with ${result.owner} as owner and nobody else on the roster.`,
+    carried,
+    "The collection schemas under `.claude/skills/` were not touched — they are what was cloned, and they are the point.",
+    ...urlName(result.slug, result.previousSlug),
+    "Nothing is deployed: the app this was cloned from is untouched, and its records stay where they are. Next: deploy.",
+  ].join("\n");
+}
+
+/** What to say about the URL name a fork has, or the one it deliberately does not have. */
+function urlName(slug: string | undefined, previous: string | undefined): string[] {
+  if (slug !== undefined) return [`The wanted URL name is '${slug}'; deploy reserves it, and a taken one gets a number appended.`];
+  if (previous === undefined) return [];
+  return [
+    `No URL name: '${previous}' belongs to the app this was cloned from and was deliberately not carried — kept, it would have come back as '${previous}-2'. Ask the user what to call theirs and put it in \`slug\`.`,
+  ];
+}
+
 async function narrateCheck(root: string): Promise<string> {
   const report = await checkSharedApp(root);
   if (!report.ok) return report.problems.join("\n");
@@ -200,9 +233,10 @@ export async function manageSharedApp(root: string, args: unknown): Promise<stri
   // from the record the deploy moved.
   //
   // At the entry point rather than inside each operation, because what must not interleave is the
-  // whole sequence, and this is the only place all three pass through.
+  // whole sequence, and this is the only place they all pass through.
   const key = `operation:${await manifestKey(root)}`;
   if (action === "init") return serializeBy(key, () => narrateInit(root, body));
+  if (action === "fork") return serializeBy(key, () => narrateFork(root, body));
   if (action === "check") return serializeBy(key, () => narrateCheck(root));
   if (action === "invite") return serializeBy(key, () => narrateInvite(root, body));
   if (action === "deploy") return serializeBy(key, () => narrateDeploy(root, confirm));

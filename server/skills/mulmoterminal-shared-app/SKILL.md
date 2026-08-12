@@ -69,6 +69,27 @@ The file is an ordinary committed declaration afterwards — you may read it, an
 it in a pull request. What you should not do is REWRITE it: `invite` changes one roster entry, and
 `check` tells you whether what is there would deploy.
 
+#### The repository is a CLONE of somebody else's app
+
+`manageSharedApp` with `action: "fork"` — not `init`, which refuses here, and above all not by
+editing `app.json` yourself.
+
+A cloned repository already carries a declaration, and the schemas beside it are exactly what the
+user cloned it FOR. `fork` mints a new `aid`, makes the signed-in address the only member, and
+carries `collections` and `public` over unchanged. It does not touch `.claude/skills/`.
+
+The signals are a user saying this is a clone, someone else's address in `members`, or `init`
+telling you an app is already declared. Ask for a `name` and a `slug` before you run it — the
+cloned app's URL name is deliberately NOT carried, because kept it would be honoured as a wish and
+come back as `their-name-2`, which is a name nobody chose.
+
+What the user must be told, in their words: the app they cloned is untouched, and **its answers do
+not come across.** They are getting the same form, empty. And the people on the old roster are not
+on theirs.
+
+`fork` refuses when the signed-in address already owns the app — that is not a clone, and forking
+it would abandon the existing app and every record in it.
+
 ### 2. Write the collection
 
 One collection per kind of record — a survey has one (`responses`), a booking app might have two
