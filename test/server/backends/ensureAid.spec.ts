@@ -4,7 +4,7 @@
 // generator behaves like one: it mints exactly once, it keeps what the author wrote, and it
 // refuses rather than inventing a declaration.
 import { describe, it, expect, beforeEach } from "vitest";
-import { readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, lstatSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { ensureAid } from "../../../server/backends/sharedApp/ensureAid.js";
 import { makeTempDir } from "../../support/tempDir";
@@ -38,7 +38,8 @@ describe("ensureAid", () => {
     expect(first.ok && first.aid).toBe("already-there");
     expect(first.ok && first.created).toBe(false);
     // Twice, because "mints every time" and "mints once" look identical on a single call.
-    expect((await ensureAid(root)).ok && (await ensureAid(root)).aid).toBe("already-there");
+    const second = await ensureAid(root);
+    expect(second.ok && second.aid).toBe("already-there");
   });
 
   it("refuses a missing app.json rather than writing one", async () => {
@@ -54,6 +55,70 @@ describe("ensureAid", () => {
     const result = await ensureAid(root);
     expect(result.ok).toBe(false);
     expect(readFileSync(appJson(), "utf-8")).toBe("{ not json");
+  });
+
+  it("leaves no scratch file behind, and never a half-written declaration", async () => {
+    // The file it would destroy is the author's declaration — the roster and the public settings —
+    // and nothing here could put it back, so the new one is written beside it and renamed into
+    // place. What that has to be checked for is the litter: a scratch file left in the repository
+    // is a file someone commits.
+    writeFileSync(appJson(), JSON.stringify({ name: "Sakura" }));
+    const result = await ensureAid(root);
+    expect(result.ok).toBe(true);
+    expect(readdirSync(root)).toEqual(["app.json"]);
+  });
+
+  it("keeps the mode the author gave app.json", async () => {
+    // The replacement is a new file, so it carries this process's umask unless something says
+    // otherwise. A manifest deliberately kept at 0600 coming back 0644 is a permission change
+    // nobody asked for and nothing reports.
+    writeFileSync(appJson(), JSON.stringify({ name: "Sakura" }));
+    chmodSync(appJson(), 0o600);
+    expect((await ensureAid(root)).ok).toBe(true);
+    expect(statSync(appJson()).mode & 0o777).toBe(0o600);
+  });
+
+  it("mints ONE aid when two calls race", async () => {
+    // Read-mint-write is three steps. Interleaved, both callers see "no aid", mint different
+    // uuids, and each renames its own file — and the loser is the one that goes on to create an
+    // app document, leaving a live apps/{uuid} the declaration no longer names.
+    writeFileSync(appJson(), JSON.stringify({ name: "Sakura" }));
+    const results = await Promise.all([ensureAid(root), ensureAid(root), ensureAid(root)]);
+    const aids = new Set(results.map((result) => (result.ok ? result.aid : "failed")));
+    expect(aids.size).toBe(1);
+    // And exactly one of them did the writing.
+    expect(results.filter((result) => result.ok && result.created)).toHaveLength(1);
+    expect([...aids][0]).toBe(read().aid);
+  });
+
+  it("serializes two SPELLINGS of the same root, not two strings", async () => {
+    // A root arrives as the session's cwd, taken verbatim — so one cell opened at a symlink and
+    // another at its target name the same app.json two ways. Keyed on the spelling, that is two
+    // chains, which is the interleaving the serializer exists to prevent with the lock quietly
+    // not held.
+    writeFileSync(appJson(), JSON.stringify({ name: "Sakura" }));
+    const alias = path.join(makeTempDir("mt-ensure-aid-alias-"), "link");
+    symlinkSync(root, alias);
+
+    const results = await Promise.all([ensureAid(root), ensureAid(alias), ensureAid(path.join(root, "."))]);
+    expect(new Set(results.map((result) => (result.ok ? result.aid : "failed"))).size).toBe(1);
+    expect(results.filter((result) => result.ok && result.created)).toHaveLength(1);
+    expect(results[0]?.ok === true && results[0].aid).toBe(read().aid);
+  });
+
+  it("updates the file a linked app.json points at, and leaves the link a link", async () => {
+    // `readFile` follows a symlink and `rename` replaces one, so writing beside the NAME would
+    // read the shared declaration through the link and then overwrite the link with a detached
+    // copy — the target never gets the aid, and whoever else reads the target sees a different
+    // app from the one this repository just deployed.
+    const shared = path.join(makeTempDir("mt-ensure-aid-shared-"), "app.json");
+    writeFileSync(shared, JSON.stringify({ name: "Shared" }));
+    symlinkSync(shared, appJson());
+
+    const result = await ensureAid(root);
+    expect(result.ok).toBe(true);
+    expect(JSON.parse(readFileSync(shared, "utf-8")).aid).toBe(result.ok && result.aid);
+    expect(lstatSync(appJson()).isSymbolicLink()).toBe(true);
   });
 
   it("refuses a JSON file that is not an object", async () => {
