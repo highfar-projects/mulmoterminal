@@ -502,7 +502,7 @@ describe("shared app deploy / publish / unpublish", () => {
     await deploySharedApp(root, stamp);
     await publishSharedApp(root, stamp);
 
-    expect(docs.doc(`apps/${AID}/config`, "public")?.form).toEqual({ bookings: { note: { label: "Note", type: "string" } } });
+    expect(docs.doc(`apps/${AID}/config`, "public")?.form).toEqual({ bookings: { fields: { note: { label: "Note", type: "string" } } } });
   });
 
   it("does not make the name resolve when the app is not open to anonymous visitors", async () => {

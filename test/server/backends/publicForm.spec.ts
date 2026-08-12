@@ -44,9 +44,15 @@ describe("publicFormOf", () => {
   it("gives the page a label, a type and an enum's choices", () => {
     expect(publicFormOf(authored(surveySubmit), staged)).toEqual({
       responses: {
-        name: { label: "お名前", type: "string" },
-        score: { label: "満足度", type: "enum", values: ["1", "2", "3", "4", "5"] },
-        comment: { label: "ご感想", type: "text" },
+        fields: {
+          name: { label: "お名前", type: "string" },
+          score: { label: "満足度", type: "enum", values: ["1", "2", "3", "4", "5"] },
+          comment: { label: "ご感想", type: "text" },
+        },
+        // Not `status`, and not guessable: the create rule requires the initial value to land in
+        // the field `collections[cid].statusField` names, and core's config projection does not
+        // carry it. A page that assumed the name would be refused.
+        statusField: "status",
       },
     });
   });
@@ -56,8 +62,8 @@ describe("publicFormOf", () => {
     // submitted — and publishing its label would put the app's internal vocabulary on a
     // world-readable document for nobody's benefit.
     const form = publicFormOf(authored(surveySubmit), staged);
-    expect(Object.keys(form.responses ?? {})).not.toContain("status");
-    expect(Object.keys(form.responses ?? {})).not.toContain("id");
+    expect(Object.keys(form.responses?.fields ?? {})).not.toContain("status");
+    expect(Object.keys(form.responses?.fields ?? {})).not.toContain("id");
   });
 
   it("marks a field the rules will insist on — from either declaration", async () => {
@@ -72,10 +78,30 @@ describe("publicFormOf", () => {
       authored({ responses: { auth: "verifiedEmail", emailField: "email", createFields: ["name", "score", "comment"], validate: { required: ["score"] } } }),
       [{ cid: "responses", doc: { publishedSchema: withRequired, deployedAt: 1, deployedBy: "o@e.com" } }],
     );
-    expect(form.responses?.name).toMatchObject({ required: true });
-    expect(form.responses?.score).toMatchObject({ required: true });
+    expect(form.responses?.fields.name).toMatchObject({ required: true });
+    expect(form.responses?.fields.score).toMatchObject({ required: true });
     // And nothing is marked that neither declaration asked for.
-    expect(form.responses?.comment).not.toHaveProperty("required");
+    expect(form.responses?.fields.comment).not.toHaveProperty("required");
+  });
+
+  it("names the status field the rules will check, whatever it is called", async () => {
+    // `status` is a convention, not a rule. The create rule reads `collections[cid].statusField`,
+    // so a collection that calls it `state` refuses a submission that writes `status` — and the
+    // visitor cannot learn the name from anywhere else.
+    const parsed = parseAuthoredApp(
+      JSON.stringify({
+        aid: "a1",
+        members: { "o@e.com": { "*": "owner" } },
+        collections: { responses: { submitOnly: true, statusField: "state" } },
+        public: {
+          enabled: true,
+          read: [],
+          submit: { responses: { auth: "verifiedEmail", emailField: "email", createFields: ["name"], initialStatus: "submitted" } },
+        },
+      }),
+    );
+    if (!parsed.ok) throw new Error(parsed.problems.join("; "));
+    expect(publicFormOf(parsed.app, staged).responses?.statusField).toBe("state");
   });
 
   it("says nothing about a collection the app does not open", () => {
@@ -91,6 +117,6 @@ describe("publicFormOf", () => {
     // Including `toString`: an own-property guard is what keeps an Object.prototype member from
     // being published as a field nobody wrote.
     const form = publicFormOf(authored({ responses: { auth: "verifiedEmail", emailField: "email", createFields: ["name", "toString", "nope"] } }), staged);
-    expect(form.responses).toEqual({ name: { label: "お名前", type: "string" } });
+    expect(form.responses?.fields).toEqual({ name: { label: "お名前", type: "string" } });
   });
 });

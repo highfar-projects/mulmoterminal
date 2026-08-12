@@ -33,7 +33,20 @@ export interface PublicField {
   required?: true;
 }
 
-export type PublicForm = Record<string, Record<string, PublicField>>;
+/** One collection's public form: the inputs, and the field the rules will insist the initial
+ *  status lands in.
+ *
+ *  `statusField` is here because it is NOT `status` by default and NOT guessable: the create rule
+ *  checks `collections[cid].statusField` and requires that field to equal `initialStatus`. A page
+ *  that assumed the name would write the wrong key and be refused — and core's config projection
+ *  carries the submit declaration but not the collection's rule configuration, so this is the only
+ *  place a visitor can learn it. */
+export interface PublicCollectionForm {
+  fields: Record<string, PublicField>;
+  statusField?: string;
+}
+
+export type PublicForm = Record<string, PublicCollectionForm>;
 
 /** The form spec for every collection the declaration opens for public submission.
  *
@@ -50,7 +63,9 @@ export function publicFormOf(authored: AuthoredApp, staged: readonly StagedEntry
     // A collection whose `createFields` name nothing the schema declares publishes no entry at
     // all: an empty object would read as a form that failed to load, where absence is a fact the
     // page can state.
-    return Object.keys(fields).length === 0 ? [] : [[cid, fields] as const];
+    if (Object.keys(fields).length === 0) return [];
+    const statusField = authored.collections?.[cid]?.statusField;
+    return [[cid, { fields, ...(statusField === undefined ? {} : { statusField }) }] as const];
   });
   return Object.fromEntries(entries);
 }
