@@ -33,6 +33,7 @@ import {
   appSchemasPath,
   promoteSchema,
   projectPublish,
+  type AuthoredApp,
   type LoadedCollection,
   type PublishStamp,
 } from "@mulmoclaude/core/collection/server";
@@ -40,6 +41,7 @@ import { ensureAid } from "./ensureAid.js";
 import { gitStamp, sharedAppContext, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
 import { recordRefusal, scanRecords, type RecordScan } from "./records.js";
 import { readStaged, type StagedEntry } from "./staged.js";
+import { oversizeProblem, publicFormOf, publicInputProblems, type PublicForm } from "./publicForm.js";
 import { setSlugPublished } from "./slug.js";
 import { runWrites, type WriteStep } from "./writes.js";
 
@@ -115,6 +117,7 @@ function publishSteps(
   stamp: PublishStamp,
   face: ReturnType<typeof projectPublish>,
   slug: string | undefined,
+  form: PublicForm,
 ): WriteStep[] {
   return [
     ...staged.map(({ cid, doc }) => ({
@@ -123,7 +126,11 @@ function publishSteps(
     })),
     {
       what: `the public config document (apps/${aid}/config/${PUBLIC_CONFIG_DOC})`,
-      run: () => handle.docs.set(appConfigPath(aid), PUBLIC_CONFIG_DOC, face.config),
+      // `form` is MulmoTerminal's addition to core's projection, and it has to be here rather
+      // than anywhere else: this is the ONLY document a visitor may read, and without the labels
+      // and the choices the public page cannot draw the form at all (the schema is unreadable to
+      // somebody who is neither on the roster nor granted a public read).
+      run: () => handle.docs.set(appConfigPath(aid), PUBLIC_CONFIG_DOC, { ...face.config, form }),
     },
     // The app document WITHOUT `public`: the promoted rule configuration lands with the schemas it
     // was staged beside, so the public write path is never judged by one version's constraints
@@ -161,6 +168,7 @@ function publishSteps(
  *  repository, and the live records fit the version about to become public. Split out for the
  *  line budget, and it reads as the one thing it is — the gate. */
 async function stagedGate(
+  authored: AuthoredApp,
   staged: readonly StagedEntry[],
   collections: readonly LoadedCollection[],
   aid: string,
@@ -178,6 +186,15 @@ async function stagedGate(
   }
   const toScan = stagedForValidation(staged, collections);
   if (!toScan.ok) return { ...toScan, partial: false };
+  // Against the STAGED schemas, not the tree the deploy gate already checked: the declaration can
+  // have gained a field since, and publishing it would make the rules demand a field the form
+  // cannot draw.
+  const drifted = publicInputProblems(
+    authored,
+    staged.map((entry) => ({ cid: entry.cid, schema: entry.doc.publishedSchema })),
+    "staged",
+  );
+  if (drifted.length > 0) return { ok: false, partial: false, problems: drifted };
   const scan = await scanRecords(toScan.collections, root);
   const refusal = recordRefusal(scan, "publish", confirm);
   return refusal ? { ok: false, partial: false, problems: refusal } : { ok: true, scan };
@@ -196,7 +213,7 @@ export async function publishSharedApp(root: string, opts: SharedAppOptions = {}
 
   const staged = await readStaged(handle, aid);
   if (!staged.ok) return { ...staged, partial: false };
-  const gate = await stagedGate(staged.staged, collections, aid, root, opts.confirm);
+  const gate = await stagedGate(authored, staged.staged, collections, aid, root, opts.confirm);
   if (!gate.ok) return gate;
   const scan = gate.scan;
 
@@ -230,7 +247,13 @@ export async function publishSharedApp(root: string, opts: SharedAppOptions = {}
   // reserved is a write the rules refuse, and that refusal is the point of them.
   const slug = typeof existingApp?.slug === "string" ? existingApp.slug : undefined;
 
-  const failure = await runWrites(publishSteps(handle, aid, staged.staged, stamp, face, slug), "publish");
+  const form = publicFormOf(authored, staged.staged);
+  // Before the first write: the config document is written in the middle of the run, so a database
+  // refusal there would land with the schemas already promoted.
+  const oversize = oversizeProblem({ ...face.config, form });
+  if (oversize !== null) return { ok: false, partial: false, problems: [oversize] };
+
+  const failure = await runWrites(publishSteps(handle, aid, staged.staged, stamp, face, slug, form), "publish");
   if (failure) return failure;
 
   return {

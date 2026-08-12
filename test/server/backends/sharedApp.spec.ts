@@ -489,6 +489,22 @@ describe("shared app deploy / publish / unpublish", () => {
     expect(docs.writes).toEqual([`set apps/${AID}`, "set appSlugs/sakura-hair", `delete apps/${AID}/config/public`]);
   });
 
+  it("publishes the form the public page draws from", async () => {
+    // The page cannot read the schema, so the config document — the only one a visitor may read —
+    // carries the labels and the choices. Without it the form is a row of unlabelled boxes.
+    writeApp(
+      root,
+      declaration({
+        collections: { bookings: { submitOnly: true } },
+        public: { enabled: true, read: [], submit: { bookings: { auth: "verifiedEmail", emailField: "note", createFields: ["note"] } } },
+      }),
+    );
+    await deploySharedApp(root, stamp);
+    await publishSharedApp(root, stamp);
+
+    expect(docs.doc(`apps/${AID}/config`, "public")?.form).toEqual({ bookings: { fields: { note: { label: "Note", type: "string" } } } });
+  });
+
   it("does not make the name resolve when the app is not open to anonymous visitors", async () => {
     // A published reservation is world-readable, and what it reveals is the aid — the
     // /staging/{aid} entrance. Publishing a roster-only declaration is a normal thing to do, and

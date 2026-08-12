@@ -154,6 +154,12 @@ Every line of that is load-bearing, and deploy refuses the declaration without t
   `createFields`. It is NOT a hole: the rules pin the value to `initialStatus` on create, so a
   respondent can only write `submitted` — listing it is what lets the rules check it. What
   `createFields` must NOT contain is anything else you do not want them setting.
+- **Only simple fields go in `createFields`**: `string`, `text`, `markdown`, `number`, `boolean`,
+  `date`, `datetime`, `email`, and `enum` (whose choices travel with it). A `ref`, `table` or
+  `money` field is refused — the public page reads the published form and nothing else, so it has
+  no way to draw one — and so is anything the host computes (`derived`, `embed`, `backlinks`,
+  `rollup`, `toggle`, `flag`), which is a value nobody may submit. Such fields stay in the
+  collection; they are just not what a stranger fills in. `check` names any that slipped in.
 - **`read: []`** — a survey lists nothing publicly. People answer; they do not browse the answers.
 
 The simplest correct survey omits status entirely (`submitOnly` + `verifiedEmail` + `emailField`).
