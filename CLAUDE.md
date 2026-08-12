@@ -115,8 +115,9 @@ Deliberate divergence is fine — say so in a comment with the reason, and flag 
 `server/backends/sharedApp/` looks like the authority over a shared app and is not. Its checks run
 on the author's machine only; what binds a stranger writing to Firestore directly is
 `../mulmoserver/firestore.rules`, deployed by hand with no CI. So a guarantee added here alone is a
-diagnostic, and a rule that grows a condition is paid for by every app in the deployment (the
-evaluation budget is 1000 expressions per request).
+diagnostic — and a condition added to a rule is paid for by every request that evaluates it, which
+on a shared path (`items` create/update) means every app using that path. The budget is 1000
+expressions per request, so measure the paths a change lands on rather than the change.
 
 Read [`docs/shared-app-principles.md`](docs/shared-app-principles.md) before adding a key, a view,
 or an operation — it is the short list of invariants and where each one is actually held. The
