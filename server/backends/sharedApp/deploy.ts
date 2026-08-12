@@ -159,16 +159,12 @@ async function establishAndScan(
  *  schema staged forever, and publish — which promotes what is staged and refuses to promote a
  *  version it cannot check against the repository — has no way forward at all.
  *
- *  Only asked when the app document already exists: the staging rules resolve the roster through
- *  `get(apps/{aid})`, so on a FIRST deploy the listing is denied rather than empty, and treating
- *  that denial as a real one would make an app impossible to create. */
-async function staleStaged(
-  handle: SharedAppHandle,
-  aid: string,
-  existingApp: Record<string, unknown> | null,
-  keep: ReadonlySet<string>,
-): Promise<{ ok: true; cids: string[] } | SharedAppFailure> {
-  if (existingApp === null) return { ok: true, cids: [] };
+ *  Always asked, because by the time it runs the app document EXISTS: either it already did, or
+ *  this deploy has just written it. That matters for a resurrected aid — Firestore leaves
+ *  `staging/*` behind exactly as it leaves the records — where skipping the listing would carry an
+ *  orphaned staged collection through a successful deploy and into a publish that then fails
+ *  closed. For a genuinely new aid the listing is simply empty. */
+async function staleStaged(handle: SharedAppHandle, aid: string, keep: ReadonlySet<string>): Promise<{ ok: true; cids: string[] } | SharedAppFailure> {
   try {
     const staged = await handle.docs.list(appStagingPath(aid));
     return { ok: true, cids: staged.map((doc) => doc.id).filter((cid) => !keep.has(cid)) };
@@ -244,7 +240,7 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
   if (!gate.ok) return gate;
   const { scan } = gate;
 
-  const stale = await staleStaged(handle, aid, existingApp, new Set(deployed.staging.map((entry) => entry.cid)));
+  const stale = await staleStaged(handle, aid, new Set(deployed.staging.map((entry) => entry.cid)));
   if (!stale.ok) return stale;
 
   const failure = await runWrites(

@@ -178,6 +178,19 @@ describe("shared app deploy / publish / unpublish", () => {
     expect(docs.store.get(`apps/${AID}/staging`)).toBeUndefined();
   });
 
+  it("withdraws staging that outlived its app document", async () => {
+    // Firestore leaves `staging/*` behind exactly as it leaves the records. Carried through a
+    // resurrecting deploy, an orphaned staged collection then makes publish fail closed — it
+    // promotes what is staged and refuses a cid the repository does not have.
+    docs.store.set(`apps/${AID}/staging`, new Map([["waitlist", { publishedSchema: { title: "Waitlist" }, deployedAt: 1, deployedBy: OWNER.email }]]));
+
+    const result = await deploySharedApp(root, stamp);
+    expect(result.ok === true && result.withdrawn).toEqual(["waitlist"]);
+    expect(docs.doc(`apps/${AID}/staging`, "waitlist")).toBeUndefined();
+    // And the deploy still did its own job.
+    expect(docs.doc(`apps/${AID}/staging`, "bookings")).toBeDefined();
+  });
+
   it("writes the app document before the staged schemas — the staging rules resolve the owner through it", async () => {
     await deploySharedApp(root, stamp);
     // One app write, then the staging document — on a first deploy the app write is the one that
