@@ -223,6 +223,12 @@ export function mountPluginRoutes(app: Express, deps: PluginRouteDeps): void {
     }
   });
 
+  mountSharedAppRoute(app);
+}
+
+/** Split out of `mountPluginRoutes` for its line budget, not because it is a different kind of
+ *  thing: it is one more host-tool dispatch route beside manageCollection's. */
+function mountSharedAppRoute(app: Express): void {
   // Host tool: manageSharedApp — deploy / publish / unpublish for the shared app declared by the
   // repository's app.json (server/infra/shared-app-tool.ts). MulmoTerminal's own; there is no
   // counterpart in MulmoClaude to match, which is the point of the tool existing here.

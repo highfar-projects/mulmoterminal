@@ -52,7 +52,8 @@ export const MANAGE_SHARED_APP: ToolDefinition = {
 };
 
 function parseAction(raw: unknown): SharedAppAction | null {
-  return typeof raw === "string" && (SHARED_APP_ACTIONS as readonly string[]).includes(raw) ? (raw as SharedAppAction) : null;
+  if (typeof raw !== "string") return null;
+  return SHARED_APP_ACTIONS.find((action) => action === raw) ?? null;
 }
 
 /** A stamp line both successes end with, because "which commit is this?" is the first question

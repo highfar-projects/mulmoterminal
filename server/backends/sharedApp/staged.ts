@@ -11,6 +11,16 @@ import { isRecord } from "../../../common/isRecord.js";
 import { appStagingPath, type StagedSchemaDoc } from "@mulmoclaude/core/collection/server";
 import type { SharedAppHandle } from "./context.js";
 
+/** A checked narrowing rather than an assertion: these documents come back from Firestore as
+ *  `unknown`, and a hand edit or an older version of this code could have written anything.
+ *
+ *  The provenance keys are part of the check, not decoration. A staged document always carries
+ *  them (deploy writes them in the same projection as the schema), so one that does not is not a
+ *  document this code wrote — and promoting it would publish a schema nobody can attribute. */
+function isStagedDoc(value: unknown): value is StagedSchemaDoc {
+  return isRecord(value) && isRecord(value.publishedSchema) && typeof value.deployedAt === "number" && typeof value.deployedBy === "string";
+}
+
 export interface StagedEntry {
   cid: string;
   doc: StagedSchemaDoc;
@@ -32,11 +42,14 @@ export async function readStaged(handle: SharedAppHandle, aid: string): Promise<
   const staged: StagedEntry[] = [];
   const problems: string[] = [];
   for (const doc of docs) {
-    if (isRecord(doc.data) && isRecord(doc.data.publishedSchema)) {
-      staged.push({ cid: doc.id, doc: doc.data as StagedSchemaDoc });
+    if (isStagedDoc(doc.data)) {
+      staged.push({ cid: doc.id, doc: doc.data });
       continue;
     }
-    problems.push(`apps/${aid}/staging/${doc.id} carries no publishedSchema, so there is nothing to promote for '${doc.id}'. Run deploy again.`);
+    problems.push(
+      `apps/${aid}/staging/${doc.id} is not a staged schema — it carries no publishedSchema, or no record of the deploy that wrote it — ` +
+        `so there is nothing to promote for '${doc.id}'. Run deploy again.`,
+    );
   }
   return problems.length > 0 ? { ok: false, problems } : { ok: true, staged };
 }
