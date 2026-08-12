@@ -14,11 +14,10 @@
 // The write order is "app document first": `appSlugs`' create rule and the staging rules both
 // resolve the owner through `get(apps/{aid})`, so on a first deploy nothing else is authorized
 // until that document exists.
-import { isRecord } from "../../../common/isRecord.js";
 import { ensureAid } from "./ensureAid.js";
-import { APPS_COLLECTION, appStagingPath, projectDeploy, type PublishStamp } from "@mulmoclaude/core/collection/server";
-import { gitStamp, schemasOf, sharedAppContext, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
-import { recordRefusal, scanRecords } from "./records.js";
+import { APPS_COLLECTION, appStagingPath, projectDeploy, type LoadedCollection, type PublishStamp } from "@mulmoclaude/core/collection/server";
+import { gitStamp, readCurrentApp, schemasOf, sharedAppContext, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
+import { recordRefusal, scanRecords, type RecordScan } from "./records.js";
 import { reserveSlug, retireSlug, type SlugResult } from "./slug.js";
 import { runWrites } from "./writes.js";
 
@@ -42,32 +41,6 @@ export interface DeploySuccess {
    *  deploy. Reported because a withdrawal is not what the operator asked for; it is what
    *  deleting a collection's directory MEANT, and the two are easy to confuse. */
   withdrawn: string[];
-}
-
-/** The app document as it stands, or the refusal.
- *
- *  The preflight read decides two things the rules care about: whether `owner` is stamped or
- *  carried forward, and which of publish's fields are carried through the replacement. A rejection
- *  here — permission, network, quota — must become the documented result rather than escape as a
- *  raw exception; it happens before any write, which is what the caller most needs told.
- *
- *  It also normalizes "was there an app document?" ONCE, for the projection and the report both.
- *  Two spellings of that question disagree the moment `get` resolves to something that is neither
- *  a record nor null: the projection stamps a fresh `owner` while the reply says "Updated". */
-async function readCurrentApp(handle: SharedAppHandle, aid: string): Promise<{ ok: true; app: Record<string, unknown> | null } | SharedAppFailure> {
-  try {
-    const existing = await handle.docs.get(APPS_COLLECTION, aid);
-    return { ok: true, app: isRecord(existing) ? existing : null };
-  } catch (err) {
-    return {
-      ok: false,
-      partial: false,
-      problems: [
-        `deploy failed while reading the current app document (apps/${aid}): ${err instanceof Error ? err.message : String(err)}`,
-        "Nothing was written. Deploying again is safe — this read only decides whether the app is created or updated.",
-      ],
-    };
-  }
 }
 
 /** Reserve the declared URL name if this app does not already hold it, and record the result on
@@ -125,6 +98,65 @@ async function reserveHeldSlug(
   return reservation;
 }
 
+/** Write the roster when it is missing, then run the migration gate over the records — or the
+ *  refusal that stops the deploy. Null when it may go on.
+ *
+ *  Split out for the line budget, but the two steps belong together anyway: the write is what
+ *  makes the read possible, and doing them apart is what let a missing parent be mistaken for an
+ *  empty store. */
+async function establishAndScan(
+  handle: SharedAppHandle,
+  aid: string,
+  appDoc: Record<string, unknown>,
+  established: boolean,
+  collections: readonly LoadedCollection[],
+  root: string,
+  confirm: boolean | undefined,
+): Promise<{ ok: true; scan: RecordScan } | SharedAppFailure> {
+  if (established) {
+    const claimed = await claimApp(handle, aid, appDoc);
+    if (claimed) return claimed;
+  }
+  const scan = await scanRecords(collections, root);
+  const refusal = recordRefusal(scan, "deploy", confirm);
+  if (!refusal) return { ok: true, scan };
+  // The app document is live when this call created it just above — the roster, and nothing else.
+  // Saying so is the difference between "nothing happened" and "the app exists now".
+  return { ok: false, partial: established, problems: refusal };
+}
+
+/** Write the app document when it is not there — which is also the only way to LEARN whether it
+ *  was ours to write.
+ *
+ *  `set` and not `create`. The create-if-absent primitive is a transaction that begins by READING
+ *  the document, and that read is refused for exactly the document it is meant to create: the read
+ *  rule resolves the roster out of the document itself, so for a missing one the expression fails
+ *  and the answer is denied. The transaction dies there, every time, on a brand-new aid.
+ *
+ *  A `set` is subject to `allow create` when the document is absent and `allow update` when it is
+ *  not — and both require this session to be the owner. So it succeeds exactly when the app is
+ *  ours to write, and a refusal covers the two cases we cannot tell apart from here. The message
+ *  names both, because both are things the operator can check. */
+async function claimApp(handle: SharedAppHandle, aid: string, appDoc: Record<string, unknown>): Promise<SharedAppFailure | null> {
+  try {
+    await handle.docs.set(APPS_COLLECTION, aid, appDoc);
+    return null;
+  } catch (err) {
+    return {
+      ok: false,
+      partial: false,
+      problems: [
+        `cannot write the app document (apps/${aid}): ${err instanceof Error ? err.message : String(err)}`,
+        "Two things are refused the same way here, and both are worth checking:",
+        `  - the address this session is signed in with is not the one app.json names as owner (it must be a key of \`members\` with \`"*": "owner"\`);`,
+        `  - apps/${aid} already exists and belongs to somebody else's roster — this address was removed from it, or the aid came from a repository you are not on.`,
+        "**Do not edit or remove `aid`.** It is the app's identity: a new one does not repair anything, it creates a SECOND app while the first — and everybody's records in it — stays where it is, reachable only by whoever is still on its roster. Recover access from an owner, or confirm this declaration is the app you meant.",
+        "Nothing was written.",
+      ],
+    };
+  }
+}
+
 /** Staged documents whose collection this repository no longer has.
  *
  *  Dropping them is what makes staging a REPLACEMENT of the repository's shared collections rather
@@ -132,26 +164,30 @@ async function reserveHeldSlug(
  *  schema staged forever, and publish — which promotes what is staged and refuses to promote a
  *  version it cannot check against the repository — has no way forward at all.
  *
- *  Only asked when the app document already exists: the staging rules resolve the roster through
- *  `get(apps/{aid})`, so on a FIRST deploy the listing is denied rather than empty, and treating
- *  that denial as a real one would make an app impossible to create. */
+ *  Always asked, because by the time it runs the app document EXISTS: either it already did, or
+ *  this deploy has just written it. That matters for a resurrected aid — Firestore leaves
+ *  `staging/*` behind exactly as it leaves the records — where skipping the listing would carry an
+ *  orphaned staged collection through a successful deploy and into a publish that then fails
+ *  closed. For a genuinely new aid the listing is simply empty. */
 async function staleStaged(
   handle: SharedAppHandle,
   aid: string,
-  existingApp: Record<string, unknown> | null,
   keep: ReadonlySet<string>,
+  established: boolean,
 ): Promise<{ ok: true; cids: string[] } | SharedAppFailure> {
-  if (existingApp === null) return { ok: true, cids: [] };
   try {
     const staged = await handle.docs.list(appStagingPath(aid));
     return { ok: true, cids: staged.map((doc) => doc.id).filter((cid) => !keep.has(cid)) };
   } catch (err) {
     return {
       ok: false,
-      partial: false,
+      // The roster is LIVE when this deploy created it a moment ago, and a failure report that
+      // says "nothing was written" about an app that now exists is worse than no report.
+      partial: established,
       problems: [
         `deploy failed while reading what is already staged (apps/${aid}/staging): ${err instanceof Error ? err.message : String(err)}`,
-        "Nothing was written. This read is what lets a deleted collection be withdrawn from staging, so deploying without it would leave a stale schema behind for publish to trip over.",
+        established ? "The app document was written and the roster is live; nothing was staged. Deploying again continues from here." : "Nothing was written.",
+        "This read is what lets a deleted collection be withdrawn from staging, so deploying without it would leave a stale schema behind for publish to trip over.",
       ],
     };
   }
@@ -169,12 +205,18 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
   if (!context.ok) return context;
   const { authored, collections, handle } = context;
 
-  const scan = await scanRecords(collections, root);
-  const refusal = recordRefusal(scan, "deploy", opts.confirm);
-  if (refusal) return { ok: false, partial: false, problems: refusal };
-
   const { aid } = authored;
-  const current = await readCurrentApp(handle, aid);
+  // WHAT THE APP DOCUMENT IS, asked in the only way the rules allow.
+  //
+  // Reading `apps/{aid}` cannot tell you it is missing. The read rule resolves the roster out of
+  // the document itself (`readerOf(app(aid), '*')`), so for a document that does not exist the
+  // expression fails and the answer is DENIED — the same answer as somebody else's app. A first
+  // deploy therefore cannot start by reading, and did not: it reported
+  // "Missing or insufficient permissions" and stopped, with nothing else to try.
+  //
+  // So a denial is not conclusive here, and the CREATE is what settles it (below): create-if-absent
+  // is atomic, and only the declared owner may do it.
+  const current = await readCurrentApp(handle, aid, "deploy", "Deploying again is safe — this read only decides whether the app is created or updated.");
   if (!current.ok) return current;
   const stampSource = await (opts.resolveCommit ?? gitStamp)(root);
   const stamp: PublishStamp = {
@@ -187,9 +229,6 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
   const existingApp = current.app;
   const deployed = projectDeploy(authored, schemasOf(collections), stamp, existingApp);
 
-  const stale = await staleStaged(handle, aid, existingApp, new Set(deployed.staging.map((entry) => entry.cid)));
-  if (!stale.ok) return stale;
-
   // The slug this app already holds, carried on the app document because NOTHING ELSE CAN BE
   // ASKED: `appSlugs/{slug}` is unreadable until the app is published, so "do we already have
   // one?" has no other answer. `projectDeploy` does not carry it — the reservation is the host's
@@ -198,9 +237,31 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
   const held = typeof existingApp?.slug === "string" ? existingApp.slug : undefined;
   const appDoc = held === undefined ? deployed.app : { ...deployed.app, slug: held };
 
+  // ESTABLISH THE PARENT, THEN SCAN — rather than deciding that a missing app document means there
+  // are no records.
+  //
+  // It does not. Firestore deletes do not cascade, and this design documents the orphan state that
+  // leaves: `apps/{aid}` can be gone while `collections/*/items` beneath it survives. Reading the
+  // missing parent as an empty store would let a deploy that re-creates it make those records
+  // readable under a schema nothing ever checked them against.
+  //
+  // Writing the roster first is what makes the question ANSWERABLE. It grants nothing outside the
+  // roster — no `public` block is written here, ever — it is the same document this deploy is
+  // about to write anyway, and afterwards the records can be read. So the gate runs for real: on a
+  // new app it finds nothing, and on a resurrected aid it finds whatever survived.
+  const established = existingApp === null;
+  const gate = await establishAndScan(handle, aid, appDoc, established, collections, root, opts.confirm);
+  if (!gate.ok) return gate;
+  const { scan } = gate;
+
+  const stale = await staleStaged(handle, aid, new Set(deployed.staging.map((entry) => entry.cid)), established);
+  if (!stale.ok) return stale;
+
   const failure = await runWrites(
     [
-      { what: `the app document (apps/${aid})`, run: () => handle.docs.set(APPS_COLLECTION, aid, appDoc) },
+      // Not written again when the step above just wrote it, byte for byte: the roster is already
+      // live, and the staging writes below need exactly that and nothing more.
+      ...(established ? [] : [{ what: `the app document (apps/${aid})`, run: () => handle.docs.set(APPS_COLLECTION, aid, appDoc) }]),
       ...deployed.staging.map(({ cid, doc }) => ({
         what: `the staged schema for '${cid}' (apps/${aid}/staging/${cid})`,
         run: () => handle.docs.set(appStagingPath(aid), cid, doc),
@@ -229,7 +290,12 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
     slug: slug?.slug,
     cids: deployed.staging.map((entry) => entry.cid),
     withdrawn: stale.cids,
-    created: existingApp === null,
+    // "Created" means THIS deploy is the first, and that is no longer the same question as
+    // "the document was absent": `init` reserves `apps/{aid}` before it writes `app.json`, so the
+    // document exists from the moment the app is declared. `deployedAt` is written by every
+    // deploy and by nothing else, so its absence is the first-deploy signal that survives the
+    // reservation.
+    created: existingApp === null || existingApp.deployedAt === undefined,
     commit: stamp.commit,
     dirty: stampSource.dirty === true,
     recordIssues: scan.records,

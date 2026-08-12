@@ -23,6 +23,7 @@ import {
 import type { PublishStamp } from "@mulmoclaude/core/collection/server";
 import type { CollectionSchema } from "@mulmoclaude/core/collection";
 import { isRecord } from "../../../common/isRecord.js";
+import { publicInputProblems, schemasOfCollections } from "./publicForm.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -113,14 +114,29 @@ async function readAuthored(root: string): Promise<{ ok: true; app: AuthoredApp 
   return parseAuthoredApp(raw);
 }
 
-/** Everything wrong with the declaration itself, publisher included. */
-function declarationProblems(app: AuthoredApp, collections: readonly LoadedCollection[], handle: SharedAppHandle): string[] {
+/** The first address the declaration makes an app-wide owner, or undefined when it names none. */
+function ownerFromRoster(app: AuthoredApp): string | undefined {
+  return Object.entries(app.members).find(([, roles]) => roles["*"] === "owner")?.[0];
+}
+
+/** Everything wrong with the declaration itself, publisher included.
+ *
+ *  Shared by the gate that runs before a deploy and by `check`, which exists to answer "would a
+ *  deploy be refused?" — two implementations of that question is two answers, and the one `check`
+ *  gave was the optimistic one (it missed the `owner` uid mismatch, and said deployable about a
+ *  declaration the next deploy refused). */
+export function declarationProblems(app: AuthoredApp, collections: readonly LoadedCollection[], handle: { email: string; uid: string } | null): string[] {
   const problems = publishProblems(
     app,
     collections.map((collection) => ({ cid: collection.slug, primaryKey: collection.schema.primaryKey })),
-    handle.email,
+    // Signed out, the caller asks as the owner the declaration NAMES — see `checkSharedApp`. An
+    // empty address is not neutral here: `publishProblems` asks whether the publisher is an
+    // app-wide owner, so it would report a missing owner for every sound declaration.
+    handle?.email ?? ownerFromRoster(app) ?? "",
   );
-  if (app.owner !== undefined && app.owner !== handle.uid) {
+  problems.push(...publicInputProblems(app, schemasOfCollections(collections)));
+  problems.push(...rosterCaseProblems(app, handle?.email));
+  if (handle !== null && app.owner !== undefined && app.owner !== handle.uid) {
     // Not fatal on its own — the rules pin `owner` to the EXISTING document on update — but a
     // declaration naming somebody else's uid is either the sample's `<uid>` placeholder or a
     // misunderstanding of what the key is.
@@ -130,6 +146,26 @@ function declarationProblems(app: AuthoredApp, collections: readonly LoadedColle
     );
   }
   return problems;
+}
+
+/** Roster keys the rules will never match, because of their case.
+ *
+ *  `email() in a.members` is an exact string comparison and rules have no `lower()`. Firebase puts
+ *  a lower-cased address in the token, so `Foo@Example.com` on the roster grants nothing — and the
+ *  deploy succeeds, the file reads correctly to a human, and the person invited is refused
+ *  everything with no error anywhere that names them. Said here rather than repaired, because the
+ *  roster is a committed file people edit by hand and rewriting somebody's key is not ours to do.
+ *
+ *  The signed-in address is exempt whatever its case: it IS what the rules compare against, so a
+ *  provider that hands over capitals is right and this check would be wrong. */
+function rosterCaseProblems(app: AuthoredApp, signedInAs: string | undefined): string[] {
+  return Object.keys(app.members)
+    .filter((address) => address !== address.toLowerCase() && address !== signedInAs)
+    .map(
+      (address) =>
+        `app.json puts "${address}" on the roster, and the rules compare an address exactly — they match a signed-in ` +
+        `"${address.toLowerCase()}" against nothing. Write it in lower case.`,
+    );
 }
 
 export interface SharedAppContext {
@@ -188,6 +224,13 @@ export async function readCurrentApp(
     const existing = await handle.docs.get(APPS_COLLECTION, aid);
     return { ok: true, app: isRecord(existing) ? existing : null };
   } catch (err) {
+    // A REFUSAL is not an answer about the document — it is the absence of one.
+    //
+    // The read rule resolves the roster out of the document itself, so a document that does not
+    // exist makes the expression fail and the read is DENIED: the same answer as somebody else's
+    // app. Reported as "no document" so the caller can go on to the only thing that distinguishes
+    // them, which is trying to CREATE it; everything else (network, quota) is still a failure.
+    if (isRefusal(err)) return { ok: true, app: null };
     return {
       ok: false,
       partial: false,
@@ -197,6 +240,26 @@ export async function readCurrentApp(
       ],
     };
   }
+}
+
+/** A rules REFUSAL, as opposed to a failure to ask.
+ *
+ *  ONLY `permission-denied`. The SDK reports both refusals and faults as thrown errors and the
+ *  `code` is what separates them — but `failed-precondition` is not the rules saying no: it is a
+ *  missing index, a stale transaction, a client the backend wants restarted. Reading it as a
+ *  refusal is dangerous in both places this predicate is used, and in the same direction:
+ *
+ *  - the app document would look ABSENT, so a deploy would rebuild it from the declaration alone
+ *    and drop the `public` block and the held slug — silently unpublishing a live app and
+ *    stranding its URL name;
+ *  - a slug would look like SOMEBODY ELSE'S, so a numbered alternative would be taken while the
+ *    app's own name went on resolving.
+ *
+ *  An unanswered question must stay unanswered: everything else — `unavailable`,
+ *  `deadline-exceeded`, `resource-exhausted`, `failed-precondition`, an offline client — stops the
+ *  operation instead. */
+export function isRefusal(err: unknown): boolean {
+  return isRecord(err) && err.code === "permission-denied";
 }
 
 /** Who, when, and from which commit — resolved the same way by both operations.

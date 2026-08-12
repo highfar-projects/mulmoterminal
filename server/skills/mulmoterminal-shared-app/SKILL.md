@@ -29,37 +29,46 @@ the user turns this down.
 Say what you are doing in the user's words ("作っています", "みんなが見えるようにしました"). The
 words below are for you, not for them: an author does not need to know what a `cid` is.
 
-### 1. Write the declaration
+### 1. Start the app
 
-`app.json` at the repository root:
+`manageSharedApp` with `action: "init"`, and `name` (and `slug`, if you have one worth wanting).
 
-```json
-{
-  "name": "Talk feedback",
-  "slug": "aug-talk-survey",
-  "members": { "owner@example.com": { "*": "owner" } }
-}
-```
+**Do not compose `app.json` yourself.** The declaration names its owner by EMAIL and it has to be
+the address this machine is SIGNED IN with — you cannot read that, and the address the user tells
+you is the one that fails at deploy. `init` writes it, generates the `aid`, and refuses if the
+repository already declares an app.
 
-- `members` is keyed by **email**, and the user's own address goes in as `owner`. Ask for it if
-  you do not know it — it is the one thing you cannot infer.
-- `slug` is the name in the URL people will be given. Take it from what the thing IS
-  (`aug-talk-survey`), lowercase with hyphens. It is a wish: if it is taken, a number is appended
-  and written back here.
-- **Never invent an `aid`.** It is generated for you the moment you write the first collection,
-  and it is a UUID on purpose — a memorable one would be first-come-first-served across every user
-  of the deployment.
+`init` also TAKES the `aid` on the server before it writes the file, so it needs a connected
+session and reports a refusal instead of leaving a half-started app. That is not bookkeeping: the
+id lives on a shelf shared by everyone using this deployment, `app.json` is meant to be committed,
+and an id that is written down but not yet taken can be taken by whoever reads the file first — and
+an app id can never be freed. If the reservation is refused, nothing was written and `init` can
+just be run again.
 
-### 2. Write the collection THROUGH `manageCollection`
+`slug` is the name in the URL people will be given. Take it from what the thing IS
+(`aug-talk-survey`), lowercase with hyphens. It is a wish: if it is taken, a number is appended and
+written back.
+
+The file is an ordinary committed declaration afterwards — you may read it, and the user may edit
+it in a pull request. What you should not do is REWRITE it: `invite` changes one roster entry, and
+`check` tells you whether what is there would deploy.
+
+### 2. Write the collection
 
 One collection per kind of record — a survey has one (`responses`), a booking app might have two
 (`bookings`, `services`).
 
-**Do not hand-write `schema.json`.** Call `manageCollection` with `action: "schemaDocs"` for the
-shape, then `action: "putSchema"` to write it. The shape is not what a reasonable person guesses:
-`fields` is an OBJECT keyed by field name (not a list), `primaryKey` and `icon` are required, and
-the key for a field's human name is `label`. A hand-written file in the shape you would design
-does not parse, and nothing tells you until a deploy finds no collections at all.
+**A NEW collection is created by writing the files**: `SKILL.md` and `schema.json` under
+`.claude/skills/<slug>/`. `putSchema` is EDIT-ONLY and refuses a collection that does not exist
+yet ("unknown collection … create it by writing SKILL.md + schema.json"), so do not try to create
+one with it. Use it afterwards, to CHANGE a schema.
+
+**Read the shape first**: `manageCollection` with `action: "schemaDocs"`, and
+`topic: "Shared storage (firestore)"` for this part specifically. The shape is not what a
+reasonable person guesses — `fields` is an OBJECT keyed by field name (not a list), `primaryKey`
+and `icon` are required, and the key for a field's human name is `label`. A schema in the shape
+you would design does not parse, and a collection whose schema fails validation is **skipped
+silently**: nothing errors, it simply never appears.
 
 The one thing that differs from an ordinary collection:
 
@@ -68,8 +77,13 @@ The one thing that differs from an ordinary collection:
 ```
 
 That is what makes the records shared. Declare no `dataPath` beside it — exactly one of the two.
-Writing this schema is also what generates the app's `aid`, which is why the declaration comes
-first.
+
+**The app already has its `aid`** — `init` wrote it in step 1 — so a shared collection you write
+correctly is discovered straight away. If `getSchema` says "unknown collection" after you have
+written the files, that is the schema FAILING VALIDATION, not something a deploy will fix: read it
+back against `schemaDocs` (`primaryKey` naming a field flagged `primary: true`, `icon` present,
+exactly one of `dataPath` / `dataSource` / `storage`). Deploying past it produces an app with the
+collection missing and no error anywhere.
 
 **Everything in the folder is shared or nothing is.** Do not mix a shared collection and a local
 one in an app's repository.
@@ -84,7 +98,8 @@ Tell the user they can look at it now, and give them the address the tool report
 
 ### 4. Invite
 
-Add the address to `members` and deploy again. Roles:
+`manageSharedApp` with `action: "invite"`, `email`, and `role` (omit `role` to remove them). It
+edits the roster and nothing else; deploy is what makes it real.
 
 | role | what they get |
 |---|---|
@@ -93,8 +108,27 @@ Add the address to `members` and deploy again. Roles:
 | `viewer` | reads the records |
 | `participant` | named on the roster, sees only their OWN rows |
 
-`{ "tanaka@example.com": { "*": "viewer" } }` is the whole app; `{ "bookings": "editor" }` is one
-collection.
+`cid` narrows it to one collection instead of the whole app.
+
+Addresses are written in lower case, because the rules compare one exactly and the sign-in token
+carries a lower-cased address. An entry with capitals matches nobody, and once deployed nothing
+says so — the person is simply refused everything. So `invite` lower-cases a NEW address, and a
+roster edited by hand is checked before a deploy: a key with capitals is reported as a problem and
+the deploy is refused until it is fixed (the exception is the address you are signed in with, which
+is what the rules compare against whatever its case).
+
+An address the roster already has keeps the spelling it has there, and that entry is changed in
+place — `invite` never migrates a key or writes a second one beside it. If a hand edit has left two
+entries for one person differing only in case, `invite` refuses and names them: merge them by hand.
+
+### 4b. Check, whenever you have edited `app.json`
+
+`manageSharedApp` with `action: "check"` runs the gate a deploy runs — the declaration, the
+collections it names — and writes nothing. It needs no connection.
+
+Use it after any hand edit, and before telling the user something is ready. The alternative is
+finding out at deploy, and a deploy that refuses in the middle is where an agent starts editing
+files to recover.
 
 ### 5. Publish, when the user asks to open it
 
@@ -138,6 +172,12 @@ Every line of that is load-bearing, and deploy refuses the declaration without t
   `createFields`. It is NOT a hole: the rules pin the value to `initialStatus` on create, so a
   respondent can only write `submitted` — listing it is what lets the rules check it. What
   `createFields` must NOT contain is anything else you do not want them setting.
+- **Only simple fields go in `createFields`**: `string`, `text`, `markdown`, `number`, `boolean`,
+  `date`, `datetime`, `email`, and `enum` (whose choices travel with it). A `ref`, `table` or
+  `money` field is refused — the public page reads the published form and nothing else, so it has
+  no way to draw one — and so is anything the host computes (`derived`, `embed`, `backlinks`,
+  `rollup`, `toggle`, `flag`), which is a value nobody may submit. Such fields stay in the
+  collection; they are just not what a stranger fills in. `check` names any that slipped in.
 - **`read: []`** — a survey lists nothing publicly. People answer; they do not browse the answers.
 
 The simplest correct survey omits status entirely (`submitOnly` + `verifiedEmail` + `emailField`).
@@ -187,3 +227,17 @@ workspace-data tool group. If they are not in your tool list, **stop and say so*
 cannot be deployed from here, and writing `app.json` and a schema by hand produces files nothing
 can act on. Point the user at the launcher's tool-group switch for this folder rather than
 carrying on.
+
+## Two refusals that are NOT your cue to start editing
+
+The run this skill was written from lost several minutes to each of these, and both times the
+repair made things worse — an `aid` was deleted and a second app was created by accident.
+
+- **`getSchema` / `putSchema` says "unknown collection".** The schema was not ACCEPTED. With
+  `init` having written the `aid`, that means it failed validation — read it back against
+  `schemaDocs` rather than deploying past it. (Before `init` existed this could also mean "no aid
+  yet"; it no longer does, and treating it that way deploys an app with the collection missing.)
+- **Anything about permissions on `apps/{aid}`.** The `aid` in `app.json` is the app's identity.
+  Removing it does not reset anything: the next deploy mints a NEW one and the old app stays where
+  it is, owned by nobody who can reach it. If a deploy is refused, read what it says and fix that;
+  never edit the `aid` by hand.

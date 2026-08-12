@@ -43,6 +43,21 @@ describe("the shared-app skill's sample declarations", () => {
   });
 });
 
+describe("the shared-app skill's operations", () => {
+  // Every one of these was learned by watching the agent do it the other way: compose the
+  // declaration from memory (and guess the owner), rewrite the file to recover from a refusal, and
+  // find out only at deploy that it would not deploy.
+  it("sends the declaration through the tool rather than describing the file", () => {
+    for (const fact of ['action: "init"', 'action: "check"', 'action: "invite"']) {
+      expect(body).toContain(fact);
+    }
+  });
+
+  it("says why the owner cannot be composed by hand", () => {
+    expect(body).toContain("SIGNED IN");
+  });
+});
+
 describe("the shared-app skill's schema advice", () => {
   // The agent that followed this wrote `fields` as a LIST of `{ name, title }`, with no
   // `primaryKey` and no `icon` — a shape nothing in the engine accepts. The skill now sends it to
@@ -53,8 +68,15 @@ describe("the shared-app skill's schema advice", () => {
     expect(body).toContain("putSchema");
   });
 
+  // The run this was written from tried to CREATE a collection with `putSchema` and was refused:
+  // it is edit-only. Getting that backwards costs the agent its whole first attempt.
+  it("says that a new collection is created by writing the files", () => {
+    expect(body).toContain("EDIT-ONLY");
+    expect(body).toContain("SKILL.md");
+  });
+
   it("says what a guessed schema gets wrong", () => {
-    for (const fact of ["`fields` is an OBJECT", "`primaryKey` and `icon` are required", "`label`"]) {
+    for (const fact of ["`fields` is an OBJECT", "`primaryKey`", "`icon` are required", "`label`"]) {
       expect(body).toContain(fact);
     }
   });

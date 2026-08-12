@@ -327,7 +327,21 @@ MT だけの機能を MT だけのツールに置くのだから、境界とし�
 **core の変更なしで進む** — ホストが依存する export は `test_sharedHostSurface.ts` で
 固定してあるので、うっかり落ちれば core 側で先に落ちる。
 
-**`manageSharedApp` が引き取る操作は `deploy` / `publish` / `unpublish` の 3 つ。**
+**`manageSharedApp` が引き取る操作は 6 つ** — `init` / `check` / `invite` と
+`deploy` / `publish` / `unpublish`。当初は後ろの 3 つだけの予定だったが、実機で 4 回
+試した結果、**宣言をエージェントが記憶から書く**ことが失敗の共通の出どころだった:
+
+- **オーナーのアドレスを推測する。** ツールは `handle.email` を持っているのに、
+  エージェントは読めない。ユーザーに聞くと「本人がそう思っているアドレス」が返り、
+  それが deploy で落ちる → `init` がサインイン中のアドレスで書く（`aid` も生成）
+- **書いた宣言が deploy まで検算できない。** 実機では 3 か所同時に誤った `public`
+  ブロックが最後まで通った → `check` が同じ門番を、書かずに・接続なしで回す
+- **失敗すると手でファイルを直す。** `aid` を消して deploy し直し、**孤児のアプリを
+  2 つ**作った → `invite` が名簿の 1 エントリだけを扱い、`aid` は「編集も削除もするな」
+  と明示する
+
+**`app.json` はツールのものにしない。** git に入ってレビューされる宣言なので、手で
+書けるまま。各操作は対象のキーしか触らない。
 書き込み経路を 2 本にしないために、移行はこう定める:
 
 - core の `manageCollection.publishApp` を**削除する**（mulmoclaude #2871、**レビュー中**。
@@ -3011,7 +3025,9 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
    - **7b. MT の Firestore 接続** — `setFirestoreAccessor` を MT で呼び、
      **`setSharedCollectionsSupport(true)` を別に呼ぶ**（`configureCollectionHost` の
      フィールドではない。理由は D5)。**PR 済み・未マージ**（mulmoterminal #1632）
-   - **7c. MT 独自ツール `manageSharedApp`** — `deploy` / `publish` / `unpublish` の 3 つ。
+   - **7c. MT 独自ツール `manageSharedApp`** — `deploy` / `publish` / `unpublish`。
+     **完了**（mulmoterminal #1635）。のちに `init` / `check` / `invite` を追加
+     （#1646、実機の失敗から。理由は D5 の節）。
      **slug の予約を除いて PR 済み・未マージ**（mulmoterminal #1633）。
      書き込み経路が 2 本ある状態（core の `publishApp`）は #2871 のマージで解消済み。
      門番と射影は core の純粋関数を呼び、**順序（fail closed）と書き分けは MT が持つ**（D10）。
@@ -3058,10 +3074,46 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
      - **操作はリポジトリごとに 1 つずつ**。deploy と publish が交差すると、publish が
        deploy の閉じた旧名を開き直す
 
+**実機で確かめた（2026-08-12）**
+
+実際に「講演のアンケートを作って」から一周した。**通った**: skill が起動し、宣言と
+コレクションができ、deploy が `apps/{aid}` と `staging/{cid}` を書き、slug を予約し、
+名簿の人が `/staging/{aid}` で本物のレコードを見た。
+
+**招待も実機で通った。** 別アドレスを `invite` → `deploy` し、その人のブラウザで
+`/staging/{aid}` が開いた。つまり D1 の主張 —「招待は権限の話であって、データの受け渡しでは
+ない」— が実際にそうなっている: 相手はこのリポジトリもこのマシンも持っていない。
+
+**ここまでが今日成立する範囲**で、外に配れるリンクはまだ無い（実装順 12）。
+
+**その過程で塞いだ、設計に書いていなかった穴**（どれも「読めない」ことの帰結）:
+
+- **存在しない `apps/{aid}` の read は拒否される。** 読み取り規則が文書自身から名簿を
+  引くので、無い文書では式が落ちて deny。他人のアプリと同じ答えなので、
+  **「読んでから作る」順序は成立しない**
+- **`create`（create-if-absent）はこのルールでは使えない。** 実装がトランザクションで、
+  最初に対象を READ するため。`apps` も `appSlugs` も同じ理由で `set` を使う
+- **初回は名簿を先に書く。** レコードの認可も `apps/{aid}` 経由なので、それが無いと
+  移行の門番が「レコードが読めない」で止まり、`confirm` でも越えられない
+- **`putSchema` は aid が無くても拒否しない。** ファイルを書き、成功を返し、discovery が
+  黙って飛ばす。だから aid は書き込みの前に用意する（失敗したら巻き戻す）
+
 **共有**
 
-8. **招待 UI（email 追加）と viewer / participant ロール** — ここで初めて他人が入る。
-   **招待は Web の `/staging/{aid}` への招待**であって、相手の MulmoTerminal には何も起きない
+8. ~~**招待 UI（email 追加）**~~ — **作らない（2026-08-12 決定）**。実機で見たとおり、
+   招待も deploy もエージェントが 1 文で回す（`manageSharedApp` の `invite` → `deploy`）。
+   フォームを足すと「UI で招待したのに相手が入れない（deploy していない）」という
+   新しい失敗を作るだけになる。**招待は Web の `/staging/{aid}` への招待**であって、
+   相手の MulmoTerminal には何も起きない、という性質も変わらない。
+   **viewer / participant ロール**の実装は残る（participant は自分の行しか読めないので、
+   `/staging/{aid}` の一覧クエリが通らない — mulmoserver #159 参照）
+
+   **代わりに要るのは「いま何がどうなっているか」**。UI ではなく操作で埋める:
+   `manageSharedApp` の `status` が `app.json` と `apps/{aid}`（オーナーは読める）を
+   突き合わせて答える — 公開されているか（`public` ブロックの有無＝認可の実体）、
+   サーバー側の名簿（app.json とずれていたら **deploy していない**）、URL 名がいま
+   解決するか、staging と公開版の cid の差（＝ **deploy したが publish していない**）。
+   実機で詰まった 4 回とも、遅さの原因は「いまの状態が分からない」だった
 9. **mulmoserver に webview** — `@mulmoclaude/collection-plugin` を 3 つ目のホストに載せる。
    **先に作るのは `/staging/{aid}`**（D10）— サインインしてロールを引く管理側の入口。
    これが 8 の招待を意味あるものにし、12 より前に**実データでの動作確認**を可能にする
@@ -3072,8 +3124,39 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
 
 **シナリオを揃える**
 
-12. **公開ページ（`/{slug}`）+ App Check** — `auth` の 3 段階を同時に。
-    9 の `/staging/{aid}` とは**別の顔**で、`config/public` だけを読んで未サインインでも描ける（D10）
+12. **公開ページ（`/a/{slug}`）+ App Check** — `auth` の 3 段階を同時に。
+    9 の `/staging/{aid}` とは**別の顔**で、`config/public` だけを読んで未サインインでも描ける（D10）。
+
+    **URL は `/a/{slug}`**（2026-08-12 決定）。トップレベルの `/{slug}` は、mulmoserver が
+    すでに持っているページ名（`/account` `/collections` `/staging` …）と**同じ名前空間**に
+    なる。予約語リストで避ける手はあるが、それは**後から破れる約束**で、破れたときに
+    壊れるのは**すでに配られた URL** — しかも `appSlugs` は削除できない設計なので回収も
+    効かない。前置き 1 文字で原理的に消える。
+
+    **`config/public` だけでは足りなかった**（実装時に判明）。公開ページはスキーマを
+    読めない — `schemaRead = readerOf || publicRead || partRead` で、回答者はどれでもない
+    （submit 専用のコレクションは `public.read` に入れない。入れたら回答が全部読める）。
+    つまり**フィールド名しか手元に無く、入力欄が描けない**。訪問者が読める文書は
+    `apps/{aid}/config/*`（`allow read: if true`）だけなので、**publish がそこに
+    フォームの形も載せる**: `createFields` に載っているフィールドだけの
+    `{ label, type, values?, required? }` と、コレクション単位の `statusField`。core の射影では
+    なく **MT が書く**（その文書を書いているのは MT なので、MulmoClaude の変更は要らない）。
+    `createFields` の外を載せないのは、書けない欄のラベルを世界に配る理由が無いから。
+
+    `required` は**スキーマの `required` と `public.submit.<cid>.validate.required` の和**。
+    どちらもルールが公開 create で見るので、片方だけだとページは欄に印を付けられず、訪問者は
+    **どの欄が足りないのか名前の出ない権限エラー**として知ることになる。`statusField` を載せる
+    のは、既定が `status` ではなく**推測できない**から — create ルールは
+    `collections[cid].statusField` の欄が `initialStatus` と等しいことを要求し、core の設定射影は
+    それを運ばない。
+
+    載せる**型も絞る**（実装時に決定）: `string` `text` `markdown` `number` `boolean` `date`
+    `datetime` `email` `enum`。`ref` `table` `money` は、公開ページがこの射影しか読めない以上
+    `to` も行スキーマも通貨設定も届かず**正しく埋められない入力**になる。host が計算する型
+    （`derived` `embed` `backlinks` `rollup` `toggle` `flag` = core の `COMPUTED_TYPES`）は
+    そもそも誰も submit してはいけない。どちらも**宣言の時点で断る** — `createFields` は
+    ページが描く元であるだけでなく、公開 create をルールが判定するホワイトリストそのものなので、
+    射影から落とすだけでは「外部からの値を受け入れ続ける」状態が残るから
 13. **`then.email` + Trigger Email 拡張**
 14. **`schedule` ビュー** → **美容室シナリオが揃う**
 15. **`idFrom` / `finalize` / `window` / `aggregate`**（UI と集計側）→ **アンケートシナリオが揃う**
