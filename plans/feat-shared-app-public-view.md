@@ -1,10 +1,10 @@
 # 共有アプリ: 公開ページを「予約サイト」にする（公開カスタムビュー + 枠の排他）
 
 **状態**: 設計のみ。実装は未着手。2026-08-12 の議論から。
-レビュー（#1658）で見つかった 16 点を反映済み: id の不変性、宣言そのものの変更禁止、
+レビュー（#1658）で見つかった 17 点を反映済み: id の不変性、宣言そのものの変更禁止、
 枠の実在**と状態**の確認（`untilField` を含む）、iframe の `event.source` 検証、
 bridge の `ready` / `submitResult`、`config/view` の撤去と版の一致、公開読み取りを
-`bookings` から `availability` に分離、ホスト用ビューとの契約の分離、publish の順序、
+`bookings` から `slots` に分離（`slots` と予約は対の batch でしか動かない）、ホスト用ビューとの契約の分離、publish の順序、
 顧客は delete できないこと。
 全体設計は [`feat-shareable-collections.md`](./feat-shareable-collections.md)、
 行スコープの承認は [`feat-shared-app-assignee-role.md`](./feat-shared-app-assignee-role.md)、
@@ -268,9 +268,9 @@ window.__MC_VIEW = { slug, token, dataUrl, origin, locale, dict, onChange, openI
 止まり、利用者には壊れて見える。
 
 **拒否のあと、親は `state` を読み直す前に鏡を直す。** 読み直すだけでは同じ古い行を読んで、
-枠がまた選べるように見える（それが `availability` を分けたことで開いた穴）。「取られていた」
-と知ったのはこの拒否なので、`availability` に `taken` を書いてから読み直す — 上の
-「真実しか書けない鏡」がそれを誰にでも許している理由がこれ。
+枠がまた選べるように見える。「取られていた」と知ったのはこの拒否なので、`slots` の
+`state` を `taken` に直してから読み直す — 対の batch が守られていれば普通は起きないが、
+過去のデータや途中で止まった書き込みはこれで追いつく。
 
 ### 親は `event.source` で iframe を同定する
 
@@ -319,8 +319,8 @@ window.__MC_VIEW = { slug, token, dataUrl, origin, locale, dict, onChange, openI
 ```json
 "public": {
   "enabled": true,
-  "read": ["stylists", "availability"],
-  "view": { "path": "views/booking.html", "collections": ["stylists", "availability"] },
+  "read": ["stylists", "slots"],
+  "view": { "path": "views/booking.html", "collections": ["stylists", "slots"] },
   "submit": { "bookings": { ... } }
 }
 ```
@@ -334,37 +334,46 @@ window.__MC_VIEW = { slug, token, dataUrl, origin, locale, dict, onChange, openI
 `public.read` に入れた瞬間、氏名・メールアドレス・電話・備考が匿名の訪問者に全部返る。
 テンプレートの注意書きでは防げない — 宣言が 1 行あれば漏れる。
 
-**公開用のコレクションを分ける。** `availability` は枠ごとに 1 行、持つのは
-「いつ・誰の担当・空いているか」だけで、個人情報を一切持たない。当初の案
-（`bookings` をそのまま見せて注意書きを添える）は**取り下げ**。
+**公開するのは `slots` の方**。枠 1 つに 1 行、持つのは「いつ・誰の担当・解禁・締切・
+空いているか」だけで、個人情報を一切持たない。当初の案（`bookings` をそのまま見せて
+注意書きを添える）は**取り下げ**。
 
-### `availability` は「真実しか書けない鏡」にする
+`availability` という第 3 のコレクションを一度は置いたが、**`slots` と同じもの**だった
+（どちらも枠 1 行・個人情報なし）ので畳んだ。`idIn` が指すのも公開されるのも同じ 1 つで、
+2 つの間の同期という問題自体が消える。
 
-分けた瞬間に、**分けたことが穴になる**。予約が作るのは `bookings/{slot}` だけなので、
-誰かが受付で閉じるまで `availability` は「空き」と言い続ける。格子はその枠を出し続け、
-2 人目は拒否され、拒否のあとに `state` を読み直しても**同じ古い行**を読んで、枠はまた
-選べるように見える。「埋まった枠は選べない」は成立しない。
+### `slots.state` は予約と同じ書き込みで動く
 
-**権威を持つのはドキュメント ID の衝突（`bookings/{slot}` の存在）で、`availability` は
-その射影**、と決める。そして射影への書き込みを、**権威と一致するときだけ**許す:
+予約を分けた瞬間に、**分けたことが穴になる**。予約が作るのは `bookings/{slot}` だけなので、
+誰かが受付で閉じるまで `slots` は「空き」と言い続ける。格子はその枠を出し続け、2 人目は
+拒否され、拒否のあとに読み直しても**同じ古い行**を読んで、枠はまた選べるように見える。
+「埋まった枠は選べない」は成立しない。
+
+**権威を持つのはドキュメント ID の衝突（`bookings/{slot}` の存在）で、`slots.state` は
+その射影**、と決める。そして**両側から**、対になる変更を要求する:
 
 ```text
-match /apps/{aid}/collections/{cid}/items/{slotId} {
-  allow update: if mirrorOf(cid) != null
-                // 触れるのは state だけ。値が真実でも、ついでに担当や時刻を
-                // 書き換えられては公開スケジュールが訪問者のものになる
-                && changed().hasOnly(["state"])
-                && (request.resource.data.state == "taken")
-                   == existsAfter(bookingPath(aid, mirrorOf(cid), slotId));
-}
+// 射影の側 — state 以外は触れず、値は真実でなければならない
+allow update: if mirrorOf(cid) != null
+              && changed().hasOnly(["state"])
+              && (request.resource.data.state == "taken")
+                 == existsAfter(bookingPath(aid, mirrorOf(cid), slotId));
+
+// 予約の側 — 射影を連れてこない予約は作れない
+allow create: if ... && (!("mirror" in s)
+                         || getAfter(slotPath(aid, s.mirror, itemId)).data.state == "taken");
+allow delete: if ... && (!("mirror" in s)
+                         || getAfter(slotPath(aid, s.mirror, itemId)).data.state == "open");
 ```
 
-**`existsAfter` であって `exists` ではない**のが要点。これ 1 つで 2 つの経路が同時に通る:
+**片側だけでは足りない。** 射影の側しか見ていないと、公開の申込み経路から
+`bookings/{slot}` を**直接**作れてしまい、鏡は誰かが気づくまで「空き」のまま — 予約は
+成立しているのに、選べるものとして広告され続ける。両側が相手を要求して初めて、
+**対の batch しか通らない**。
 
-- **同じ batch で予約と鏡を書く**（通常経路）。予約はまだ存在しないが、
-  `existsAfter` は**この書き込みの後**を見るので一致する。batch は原子的なので、
-  どちらか一方だけが残ることはない
-- **あとから鏡を直す**（自己修復）。予約は既にあるので `existsAfter` も真
+**`existsAfter` / `getAfter` であって `exists` / `get` ではない**のが要点。どちらもこの
+書き込みの**後**を見るので、同じ batch の中で相手がまだ存在しなくても一致する。batch は
+原子的なので、片方だけが残ることはない。
 
 当初ここに「batch では解けない、ルールは batch 前の状態しか見ない」と書いたのは**誤り**。
 `getAfter` / `existsAfter` がまさにそのためにあり、このリポジトリのルールは既に使っている
@@ -391,12 +400,12 @@ match /apps/{aid}/collections/{cid}/items/{slotId} {
 宣言は射影であることを言う 1 行:
 
 ```json
-"collections": { "availability": { "mirrorOf": "bookings" } }
+"collections": { "slots": { "mirrorOf": "bookings" } }
 ```
 
 これは同時に、次の 2 つの答えでもある:
 
-- **payload の大きさ。** `bookings` の全履歴を送る設計だったものが、`availability` の
+- **payload の大きさ。** `bookings` の全履歴を送る設計だったものが、`slots` の
   「これから先の枠」になる。期間で切れる形になったので、親のクエリに上限（先 N 日 /
   最大 M 件）を置ける。読み取り・メモリ・structured clone のコストが履歴に比例しなくなる
 - **ビューが何を必要とするか。** `public.read` から推測するのではなく、
@@ -442,8 +451,8 @@ publish が「対になるものを書く」操作である以上、撤去も対
 ここまで来て初めて、テンプレートの `public.read` が意味を持つ。
 
 - `slots`（枠）コレクションを足す。主キーは `stylist-date-time` のような合成スラッグ
-- `availability`（公開用）— 枠ごとに「いつ・誰の担当・空いているか」だけ。**個人情報は持たない**。
-  `public.read` に入れるのはこれで、`bookings` は入れない
+- `slots` は**公開用**でもある。`opensAt` / `closesAt` / `state` と担当・時刻だけで、
+  個人情報は持たない。`public.read` に入れるのはこれで、`bookings` は入れない
 - `bookings` の申込み宣言は**丸ごと書く**。`idFrom` と `idField` だけを書いた
   レシピはこの設計の下では**通らない宣言**で、しかも通してしまえば「架空の枠で
   予約できる」に戻る。省略が効くところではない:
@@ -457,7 +466,8 @@ publish が「対になるものを書く」操作である以上、撤去も対
     "initialStatus": "requested",
     "idFrom": "field",
     "idField": "slot",
-    "idIn": { "collection": "slots", "where": { "field": "status", "equals": "open" } },
+    "idIn": { "collection": "slots", "where": { "field": "state", "equals": "open" } },
+    "mirror": "slots",
     "window": {
       "fromField": { "ref": "slot", "collection": "slots", "field": "opensAt" },
       "untilField": { "ref": "slot", "collection": "slots", "field": "closesAt" }
@@ -466,8 +476,8 @@ publish が「対になるものを書く」操作である以上、撤去も対
 }
 ```
 
-  `slots` の各行は `opensAt`（解禁）・`closesAt`（締切）・`status` を持つ。3 つとも
-  枠を作るときに計算して入れる（[1](#1-idfrom-field--枠は数えなくていい) の
+  `slots` の各行は `opensAt`（解禁）・`closesAt`（締切）・`state` を持つ。前 2 つは
+  枠を作るときに計算して入れ、`state` は予約と同じ batch で動く（[1](#1-idfrom-field--枠は数えなくていい) の
   「3 日前の朝 7 時」と同じで、ルールは導出方法を問わない）
 - `startAt` を客に手で打たせるのをやめる（今そうなっているのは回避ではなく、
   **これしかできなかった**から）
@@ -477,13 +487,14 @@ publish が「対になるものを書く」操作である以上、撤去も対
 - **テンプレートのテストは 4 つ**。`skillTemplates.spec.ts` は宣言が deploy の門を通ることしか
   見ないので、それだけでは「架空の枠で予約できる」が通っても気づかない。ルール側の spec
   （`rules_*.ts`）に、閉じた枠・締切を過ぎた枠・存在しない枠・既に取られた枠の 4 つが
-  拒否されることを入れる
+  拒否されることを入れる。**さらに 3 つ** — 鏡を連れない単独の予約 create が拒否されること、
+  対の batch が通ること、単独の delete が拒否されること
 
 **利用者に先に言うこと**（gym.md と同じ位置に置く）:
 
-- 空き枠は `availability` として**別に持つ**。予約そのもの（氏名・連絡先）は公開しない。
-  Firestore の読み取りはドキュメント単位でフィールドを隠せないので、これは運用の注意では
-  なく**構造**で守る
+- 公開されるのは `slots` だけで、予約そのもの（氏名・連絡先）は公開しない。Firestore の
+  読み取りはドキュメント単位でフィールドを隠せないので、これは運用の注意ではなく
+  **構造**で守る
 - 枠は**先着で本当に排他される**。ジムの順位方式と違い、繰り上げは起きない
 - **顧客がキャンセルしても枠はすぐには空かない。** 受付が戻す操作が要る
 
