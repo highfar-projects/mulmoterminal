@@ -136,9 +136,59 @@ describe("appendBoundedOutput", () => {
     expect(appendBoundedOutput(stream, "", 5)).toBe("rest");
   });
 
+  // A cut lands inside a SURROGATE PAIR as readily as inside an escape sequence (#1639), and
+  // nothing downstream objects: the lone low half is a legal JS string, survives JSON.stringify
+  // as "\udf9f", and first shows up as U+FFFD at the top of the restored screen. Asserted as
+  // "no orphan survives" rather than against a literal, so the rule is what is pinned.
+  const KANJI = "\u{20B9F}"; // a non-BMP kanji; emoji split identically
+  const ORPHANED_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+
+  it("drops the orphaned half when the cut lands inside a surrogate pair", () => {
+    const cut = appendBoundedOutput(`AB${KANJI}CD`, "", 3);
+    expect(cut).toBe("CD");
+    expect(ORPHANED_SURROGATE.test(cut)).toBe(false);
+  });
+
+  it("keeps a pair the cut falls in front of — the guard must not eat a whole character", () => {
+    expect(appendBoundedOutput(`AB${KANJI}CD`, "", 4)).toBe(`${KANJI}CD`);
+  });
+
+  // The two guards compose: moving the cut past the orphan shifts the position the escape scan
+  // starts from, so a sequence that CLOSED before the cut must still be recognised as closed and
+  // its text kept. (The pair cannot itself be split inside a sequence — a surrogate pair among CSI
+  // parameter bytes is not something a terminal emits — so this is the composed case that exists.)
+  it("still resolves the escape scan correctly after skipping an orphan", () => {
+    const stream = `${ESC}[38;5;196m${KANJI}tail`;
+    expect(appendBoundedOutput(stream, "", 5)).toBe("tail");
+  });
+
   it("stays within the limit", () => {
     const stream = `${"z".repeat(500)}\n${"w".repeat(500)}`;
     expect(appendBoundedOutput(stream, "more", 64).length).toBeLessThanOrEqual(64);
+  });
+
+  // The two invariants together, over GENERATED inputs rather than chosen ones — the surrogate
+  // guard moves the cut, so "never longer than the limit" and "never leaves an orphan" have to be
+  // shown to hold at the same time rather than one test each.
+  //
+  // The bound above uses ASCII only, so nothing pinned it across a pair until now. That gap is
+  // what a Codex review on #1640 pointed at; its worked example was wrong about the arithmetic
+  // (`appendBoundedOutput("A𠮟", "", 1)` cuts at 2, not 1, and returns "") but the invariant it
+  // worried about genuinely had no non-BMP coverage.
+  it("never exceeds the limit and never leaves an orphan, at any cut position", () => {
+    const pieces = ["A", KANJI, `${ESC}[31m`, `${ESC}M`, `${ESC}]52;c;QQ${BEL}`, "\n"];
+    const offenders: string[] = [];
+    for (const a of pieces) {
+      for (const b of pieces) {
+        const stream = `${a}${b}${a}`;
+        for (let limit = 0; limit <= stream.length + 1; limit++) {
+          const out = appendBoundedOutput(stream, "", limit);
+          if (out.length > limit) offenders.push(`over limit ${limit}: ${JSON.stringify(out)}`);
+          if (ORPHANED_SURROGATE.test(out)) offenders.push(`orphan at limit ${limit}: ${JSON.stringify(out)}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });
 

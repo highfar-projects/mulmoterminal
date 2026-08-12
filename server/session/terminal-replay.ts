@@ -98,10 +98,32 @@ const splitSequenceLength = (combined: string, cutAt: number, cut: string): numb
 export function appendBoundedOutput(buffer: string, data: string, limit: number): string {
   const combined = buffer + data;
   if (combined.length <= limit) return combined;
-  const cutAt = combined.length - limit;
+  const cutAt = afterOrphanedSurrogate(combined, combined.length - limit);
   const cut = combined.slice(cutAt);
   return cut.slice(splitSequenceLength(combined, cutAt, cut));
 }
+
+// The OTHER boundary a character-count cut can land inside (#1639). `slice` counts UTF-16 code
+// units, so cutting between the halves of a surrogate pair keeps the low half alone — which is
+// not an error anywhere: the string stays a legal JS string, JSON.stringify emits it as
+// "\udf9f", and it first becomes visible as U+FFFD at the top of the restored screen.
+//
+// Resolved where the cut index is decided, so one number answers "where does the tail start"
+// before anything reads it — not because the escape scan below needs it in that order.
+//
+// What it acts on is the POSITION, not the provenance: a low surrogate sitting at the cut is
+// dropped whether this cut orphaned it or it was already there. One further into the retained
+// tail is untouched — nothing here scans the tail.
+//
+// So the helper is not a sanitiser, and does not need to be: its input is decoded pty output,
+// and a UTF-8 decoder answers invalid bytes with U+FFFD — it has no way to emit half a pair.
+//
+// Whether the code unit before it is the matching high half is deliberately not checked: it
+// would only ever agree, since both cases it distinguishes want the same answer.
+const afterOrphanedSurrogate = (text: string, at: number): number => {
+  const code = text.charCodeAt(at);
+  return code >= 0xdc00 && code <= 0xdfff ? at + 1 : at;
+};
 
 // How far past `limit` the retained tail is allowed to run before it is cut back.
 //
