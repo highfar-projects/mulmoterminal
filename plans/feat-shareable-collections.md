@@ -327,7 +327,21 @@ MT だけの機能を MT だけのツールに置くのだから、境界とし�
 **core の変更なしで進む** — ホストが依存する export は `test_sharedHostSurface.ts` で
 固定してあるので、うっかり落ちれば core 側で先に落ちる。
 
-**`manageSharedApp` が引き取る操作は `deploy` / `publish` / `unpublish` の 3 つ。**
+**`manageSharedApp` が引き取る操作は 6 つ** — `init` / `check` / `invite` と
+`deploy` / `publish` / `unpublish`。当初は後ろの 3 つだけの予定だったが、実機で 4 回
+試した結果、**宣言をエージェントが記憶から書く**ことが失敗の共通の出どころだった:
+
+- **オーナーのアドレスを推測する。** ツールは `handle.email` を持っているのに、
+  エージェントは読めない。ユーザーに聞くと「本人がそう思っているアドレス」が返り、
+  それが deploy で落ちる → `init` がサインイン中のアドレスで書く（`aid` も生成）
+- **書いた宣言が deploy まで検算できない。** 実機では 3 か所同時に誤った `public`
+  ブロックが最後まで通った → `check` が同じ門番を、書かずに・接続なしで回す
+- **失敗すると手でファイルを直す。** `aid` を消して deploy し直し、**孤児のアプリを
+  2 つ**作った → `invite` が名簿の 1 エントリだけを扱い、`aid` は「編集も削除もするな」
+  と明示する
+
+**`app.json` はツールのものにしない。** git に入ってレビューされる宣言なので、手で
+書けるまま。各操作は対象のキーしか触らない。
 書き込み経路を 2 本にしないために、移行はこう定める:
 
 - core の `manageCollection.publishApp` を**削除する**（mulmoclaude #2871、**レビュー中**。
@@ -3011,7 +3025,9 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
    - **7b. MT の Firestore 接続** — `setFirestoreAccessor` を MT で呼び、
      **`setSharedCollectionsSupport(true)` を別に呼ぶ**（`configureCollectionHost` の
      フィールドではない。理由は D5)。**PR 済み・未マージ**（mulmoterminal #1632）
-   - **7c. MT 独自ツール `manageSharedApp`** — `deploy` / `publish` / `unpublish` の 3 つ。
+   - **7c. MT 独自ツール `manageSharedApp`** — `deploy` / `publish` / `unpublish`。
+     **完了**（mulmoterminal #1635）。のちに `init` / `check` / `invite` を追加
+     （#1646、実機の失敗から。理由は D5 の節）。
      **slug の予約を除いて PR 済み・未マージ**（mulmoterminal #1633）。
      書き込み経路が 2 本ある状態（core の `publishApp`）は #2871 のマージで解消済み。
      門番と射影は core の純粋関数を呼び、**順序（fail closed）と書き分けは MT が持つ**（D10）。
@@ -3057,6 +3073,24 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
        名前しか見ないので、**下ろしたつもりの URL でアプリが開き続ける**
      - **操作はリポジトリごとに 1 つずつ**。deploy と publish が交差すると、publish が
        deploy の閉じた旧名を開き直す
+
+**実機で確かめた（2026-08-12）**
+
+実際に「講演のアンケートを作って」から一周した。**通った**: skill が起動し、宣言と
+コレクションができ、deploy が `apps/{aid}` と `staging/{cid}` を書き、slug を予約し、
+名簿の人が `/staging/{aid}` で本物のレコードを見た。
+
+**その過程で塞いだ、設計に書いていなかった穴**（どれも「読めない」ことの帰結）:
+
+- **存在しない `apps/{aid}` の read は拒否される。** 読み取り規則が文書自身から名簿を
+  引くので、無い文書では式が落ちて deny。他人のアプリと同じ答えなので、
+  **「読んでから作る」順序は成立しない**
+- **`create`（create-if-absent）はこのルールでは使えない。** 実装がトランザクションで、
+  最初に対象を READ するため。`apps` も `appSlugs` も同じ理由で `set` を使う
+- **初回は名簿を先に書く。** レコードの認可も `apps/{aid}` 経由なので、それが無いと
+  移行の門番が「レコードが読めない」で止まり、`confirm` でも越えられない
+- **`putSchema` は aid が無くても拒否しない。** ファイルを書き、成功を返し、discovery が
+  黙って飛ばす。だから aid は書き込みの前に用意する（失敗したら巻き戻す）
 
 **共有**
 
