@@ -12,14 +12,20 @@
 // prevent — or to deploy an app with no collections first, which is not a step anybody would
 // think of.
 //
-// WHY AFTERWARDS, AND NOT BEFORE. Minting on the way in would write a UUID into `app.json` for a
-// call the engine then rejects for some other reason — an unknown slug, a schema that does not
-// parse — and a refused tool call must leave nothing behind. Running the write first and reading
-// its refusal inverts that: the engine reaches its aid gate only once everything else about the
-// request is in order, so the refusal itself is the evidence that minting is warranted. Then the
-// call is retried, and the agent sees the result it would have got if the aid had been there.
+// WHY BEFORE, AND WHY IT UNDOES ITSELF. Doing it afterwards, by reading the engine's refusal, was
+// the first attempt and it does not work: `putSchema` does not refuse. It writes the file, logs
+// "schema.json rejected after validation, skipping" to the server's stderr, and answers the agent
+// `{"collection":"responses","written":true}` — a success, for a collection that discovery then
+// skips. There is nothing in the reply to react to, and the agent has been told it is done.
+//
+// So the aid is minted first. What that costs — a UUID left in `app.json` after a call the engine
+// rejects for some OTHER reason (an unknown slug, a schema that does not parse) — is paid back by
+// undoing it: a mint that this call made is removed again unless the write actually succeeded. A
+// refused tool call leaves nothing behind, which is the property that matters, and it is kept by
+// reverting rather than by predicting.
 import { isRecord } from "../../common/isRecord.js";
 import { ensureAid } from "../backends/sharedApp/ensureAid.js";
+import { updateManifest } from "../backends/sharedApp/manifestWrite.js";
 
 /** Does this payload write a schema whose records live in the app's Firestore?
  *
@@ -31,29 +37,53 @@ export function declaresSharedStorage(args: Record<string, unknown>): boolean {
   return isRecord(storage) && storage.type === "firestore";
 }
 
-/** Is this refusal the missing aid, and nothing else?
+/** Did the engine actually write the schema?
  *
- *  Matched on the engine's own words because the tool answers in prose — there is no code to read.
- *  Narrow on purpose: two independent markers, so a message about some other part of `app.json`
- *  does not trigger a write. Missing the match costs nothing worse than today's behaviour, which
- *  is the refusal reaching the agent unchanged. */
-export function refusedForMissingAid(narration: string): boolean {
-  return narration.includes("app.json") && narration.includes("declares no `aid`");
+ *  Its success is JSON carrying `written: true`; every refusal is prose. Anything that is not that
+ *  success means the call did not happen, and a mint made for it has to go back. */
+export function wroteSchema(narration: string): boolean {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(narration);
+  } catch {
+    return false;
+  }
+  return isRecord(parsed) && parsed.written === true;
 }
 
-/** Wrap a manageCollection handler so a shared collection's first write mints the app's aid.
+/** Wrap a manageCollection handler so a shared collection's `app.json` has an `aid` before the
+ *  engine reads it — and so a call that then fails leaves the declaration as it found it.
  *
  *  A failure is returned as prose rather than thrown: the agent's contract with this tool is text
  *  it can act on, and "there is no app.json here" is the most actionable thing this step can say. */
 export function withGeneratedAid(handler: (args: Record<string, unknown>) => Promise<string>, rootOf: () => string) {
   return async (args: Record<string, unknown>): Promise<string> => {
-    const narration = await handler(args);
-    if (!declaresSharedStorage(args) || !refusedForMissingAid(narration)) return narration;
-    const ensured = await ensureAid(rootOf());
+    if (!declaresSharedStorage(args)) return handler(args);
+    const root = rootOf();
+    const ensured = await ensureAid(root);
     if (!ensured.ok) return noAppJson(ensured.problems);
-    // The same call again, now that the one thing it was missing is there.
-    return handler(args);
+
+    const narration = await handler(args);
+    if (ensured.created && !wroteSchema(narration)) {
+      await withdrawAid(root, ensured.aid);
+    }
+    return narration;
   };
+}
+
+/** Take back an aid this call minted, and only that one.
+ *
+ *  Guarded on the value: between the mint and the failure, something else may have deployed the
+ *  app — and an aid that is now the identity of a live `apps/{aid}` must not be removed because an
+ *  unrelated schema write was refused. Best effort otherwise: the failure being reported is the
+ *  engine's, and it is the one the agent needs. */
+async function withdrawAid(root: string, minted: string): Promise<void> {
+  await updateManifest(root, (manifest) => {
+    if (manifest.aid !== minted) return null;
+    // Rebuilt without the key rather than deleted from a copy: `no-dynamic-delete` aside, an
+    // explicit filter says what this is — the declaration as the author left it.
+    return Object.fromEntries(Object.entries(manifest).filter(([key]) => key !== "aid"));
+  }).catch(() => ({ ok: false as const, problems: [] }));
 }
 
 function noAppJson(problems: readonly string[]): string {

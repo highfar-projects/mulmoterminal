@@ -10,7 +10,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { declaresSharedStorage, refusedForMissingAid, withGeneratedAid } from "../../../server/infra/collectionToolAid.js";
+import { declaresSharedStorage, withGeneratedAid, wroteSchema } from "../../../server/infra/collectionToolAid.js";
 import { makeTempDir } from "../../support/tempDir";
 
 const firestoreSchema = { title: "Bookings", primaryKey: "id", storage: { type: "firestore" }, fields: {} };
@@ -19,10 +19,6 @@ const localSchema = { title: "Notes", primaryKey: "id", dataPath: "data/notes/it
 let root = "";
 const appJson = () => path.join(root, "app.json");
 const aidOf = () => JSON.parse(readFileSync(appJson(), "utf-8")).aid;
-
-/** The engine's refusal when the only thing missing is the aid — its own words, because that is
- *  what this wrapper reads. */
-const NO_AID = "<root>/app.json declares no `aid` string";
 
 /** A handler that records what reached it and answers differently on each call, so "was it
  *  retried, and with what?" is answerable. */
@@ -46,14 +42,14 @@ describe("declaresSharedStorage", () => {
   });
 });
 
-describe("refusedForMissingAid", () => {
-  it("recognises the engine's refusal and nothing near it", () => {
-    expect(refusedForMissingAid(NO_AID)).toBe(true);
-    // Two independent markers on purpose: a message about some other part of app.json must not
-    // trigger a write.
-    expect(refusedForMissingAid("<root>/app.json is not valid JSON")).toBe(false);
-    expect(refusedForMissingAid("this schema declares no `aid` field")).toBe(false);
-    expect(refusedForMissingAid('{"written":true}')).toBe(false);
+describe("wroteSchema", () => {
+  // The engine's success is JSON with `written: true`; every refusal is prose. Anything else means
+  // the write did not happen, and a mint made for it has to go back.
+  it("recognises the engine's success and nothing else", () => {
+    expect(wroteSchema('{"collection":"responses","written":true}')).toBe(true);
+    expect(wroteSchema('{"collection":"responses","written":false}')).toBe(false);
+    expect(wroteSchema("unknown collection 'responses'")).toBe(false);
+    expect(wroteSchema("")).toBe(false);
   });
 });
 
@@ -62,46 +58,48 @@ describe("withGeneratedAid", () => {
     root = makeTempDir("mt-tool-aid-");
   });
 
-  it("mints the aid on the engine's refusal and runs the write again", async () => {
+  it("mints the aid before the engine reads the declaration", async () => {
     writeFileSync(appJson(), JSON.stringify({ members: { "owner@example.com": { "*": "owner" } } }));
-    const spy = spyHandler(NO_AID, '{"written":true}');
+    const spy = spyHandler('{"written":true}');
     const message = await withGeneratedAid(spy.handler, () => root)({ action: "putSchema", schema: firestoreSchema });
     expect(message).toBe('{"written":true}');
     expect(aidOf()).toMatch(/^[0-9a-f]{8}-/);
-    // The agent sees the result it would have got if the aid had been there — one call, one answer.
-    expect(spy.calls).toHaveLength(2);
+    // One call, not a refusal-and-retry: the engine does not refuse this, it silently skips the
+    // collection and reports success, so there is nothing to react to afterwards.
+    expect(spy.calls).toHaveLength(1);
     expect(JSON.parse(readFileSync(appJson(), "utf-8")).members).toEqual({ "owner@example.com": { "*": "owner" } });
   });
 
-  it("leaves app.json alone when the engine refused for any OTHER reason", async () => {
-    // The whole reason this runs after the engine rather than before it: a refused call must
-    // leave nothing behind, and only the engine knows whether the rest of the request was sound.
+  it("takes the aid back when the write did not happen", async () => {
+    // A refused call must leave nothing behind. Minting first is what makes the write work at all,
+    // so the cost is paid by reverting rather than by trying to predict the engine's answer.
     writeFileSync(appJson(), JSON.stringify({ members: {} }));
-    const spy = spyHandler("unknown collection 'bookings' — create it by writing SKILL.md + schema.json");
+    const spy = spyHandler("unknown collection 'responses' — create it by writing SKILL.md + schema.json");
     const message = await withGeneratedAid(spy.handler, () => root)({ action: "putSchema", schema: firestoreSchema });
     expect(message).toContain("unknown collection");
-    expect(spy.calls).toHaveLength(1);
     expect(JSON.parse(readFileSync(appJson(), "utf-8")).aid).toBeUndefined();
+    // And nothing else about the file changed.
+    expect(JSON.parse(readFileSync(appJson(), "utf-8")).members).toEqual({});
   });
 
-  it("does not run twice when the write succeeded the first time", async () => {
+  it("leaves an aid it did NOT mint alone when the write fails", async () => {
     writeFileSync(appJson(), JSON.stringify({ aid: "already-there", members: {} }));
-    const spy = spyHandler('{"written":true}');
-    await withGeneratedAid(spy.handler, () => root)({ action: "putSchema", schema: firestoreSchema });
-    expect(spy.calls).toHaveLength(1);
+    await withGeneratedAid(spyHandler("refused").handler, () => root)({ action: "putSchema", schema: firestoreSchema });
     expect(aidOf()).toBe("already-there");
   });
 
   it("says what to write when the folder is not a shared app at all", async () => {
-    const spy = spyHandler(NO_AID);
+    const spy = spyHandler('{"written":true}');
     const message = await withGeneratedAid(spy.handler, () => root)({ action: "putSchema", schema: firestoreSchema });
+    // Refused BEFORE the engine: writing the schema would produce a collection nothing discovers,
+    // and the engine would report that as a success.
+    expect(spy.calls).toHaveLength(0);
     expect(message).toContain("app.json");
     expect(message).toContain("members");
-    expect(() => readFileSync(appJson(), "utf-8")).toThrow();
   });
 
   it("does not touch a local collection's write", async () => {
-    const spy = spyHandler(NO_AID);
+    const spy = spyHandler('{"written":true}');
     await withGeneratedAid(spy.handler, () => root)({ action: "putSchema", schema: localSchema });
     expect(spy.calls).toHaveLength(1);
     expect(() => readFileSync(appJson(), "utf-8")).toThrow();
