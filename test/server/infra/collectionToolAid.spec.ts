@@ -22,7 +22,7 @@ const aidOf = () => JSON.parse(readFileSync(appJson(), "utf-8")).aid;
 
 /** The engine's refusal when the only thing missing is the aid — its own words, because that is
  *  what this wrapper reads. */
-const NO_AID = "/tmp/x/app.json declares no `aid` string";
+const NO_AID = "<root>/app.json declares no `aid` string";
 
 /** A handler that records what reached it and answers differently on each call, so "was it
  *  retried, and with what?" is answerable. */
@@ -51,7 +51,7 @@ describe("refusedForMissingAid", () => {
     expect(refusedForMissingAid(NO_AID)).toBe(true);
     // Two independent markers on purpose: a message about some other part of app.json must not
     // trigger a write.
-    expect(refusedForMissingAid("/tmp/x/app.json is not valid JSON")).toBe(false);
+    expect(refusedForMissingAid("<root>/app.json is not valid JSON")).toBe(false);
     expect(refusedForMissingAid("this schema declares no `aid` field")).toBe(false);
     expect(refusedForMissingAid('{"written":true}')).toBe(false);
   });
