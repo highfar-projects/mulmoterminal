@@ -42,7 +42,7 @@
     "dev:client": "vite",
     "build": "vue-tsc -b && vite build",
     "typecheck": "vue-tsc -b",
-    "lint": "eslint .",
+    "lint": "eslint . --cache --cache-strategy content",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "knip": "knip",

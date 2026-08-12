@@ -33,3 +33,7 @@ dist-ssr
 # Run-menu scripts, which are one machine's commands.
 .mulmoterminal.local.json
 script.json
+
+# `yarn lint` caches per-file results here. `content` strategy, not the default `metadata` one:
+# a checkout rewrites every mtime, so a metadata cache is worth nothing on a CI runner.
+.eslintcache
