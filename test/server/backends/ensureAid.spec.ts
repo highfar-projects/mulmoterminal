@@ -38,7 +38,8 @@ describe("ensureAid", () => {
     expect(first.ok && first.aid).toBe("already-there");
     expect(first.ok && first.created).toBe(false);
     // Twice, because "mints every time" and "mints once" look identical on a single call.
-    expect((await ensureAid(root)).ok && (await ensureAid(root)).aid).toBe("already-there");
+    const second = await ensureAid(root);
+    expect(second.ok && second.aid).toBe("already-there");
   });
 
   it("refuses a missing app.json rather than writing one", async () => {
