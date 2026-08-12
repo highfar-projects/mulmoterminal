@@ -11,7 +11,7 @@
 // first collection unopenable until they had published — the wrong end of the process to discover
 // it from.
 import { randomUUID } from "node:crypto";
-import { readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { chmod, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { APP_MANIFEST_FILE } from "@mulmoclaude/core/collection/server";
 import { isRecord } from "../../../common/isRecord.js";
@@ -33,7 +33,41 @@ export type EnsureAidResult = EnsureAidSuccess | { ok: false; problems: string[]
  *
  *  It does NOT create `app.json`. A missing one means this directory is not a shared app at all,
  *  and writing a bare `{ aid }` would turn a typo'd path into an app declaration. */
-export async function ensureAid(root: string): Promise<EnsureAidResult> {
+/** One write at a time per `app.json`, in this process.
+ *
+ *  Read-mint-write is three steps, and two callers interleaving them both see "no aid", mint
+ *  different UUIDs, and each rename its own file. The loser's uuid is the one it goes on to create
+ *  an app document for — leaving a live `apps/{uuid}` that the declaration no longer names, and
+ *  nothing afterwards would notice.
+ *
+ *  A Map keyed by the manifest PATH, not the root: two roots are two files and must not wait on
+ *  each other, while two spellings of one root are one file. The chain is what serializes — each
+ *  caller appends to the previous promise — and entries are dropped when the last one settles so
+ *  the map does not grow with every project ever deployed.
+ *
+ *  In-process is the honest scope, and it is the scope of the problem: MulmoTerminal is ONE server,
+ *  every cell's tool call runs in it, and "two cells deployed at once" is the way this happens. Two
+ *  separate servers over one checkout would still race, and a lock file is what that would need —
+ *  not written, because nothing here can produce that arrangement. */
+const inFlight = new Map<string, Promise<EnsureAidResult>>();
+
+function serialize(key: string, run: () => Promise<EnsureAidResult>): Promise<EnsureAidResult> {
+  const previous = inFlight.get(key) ?? Promise.resolve<EnsureAidResult>({ ok: true, aid: "", created: false });
+  // `catch` before `then`: a rejected predecessor must not reject its successor, and a settled
+  // chain is the only thing this needs from it.
+  const next = previous.catch(() => {}).then(run);
+  inFlight.set(key, next);
+  void next.finally(() => {
+    if (inFlight.get(key) === next) inFlight.delete(key);
+  });
+  return next;
+}
+
+export function ensureAid(root: string): Promise<EnsureAidResult> {
+  return serialize(path.join(root, APP_MANIFEST_FILE), () => ensureAidOnce(root));
+}
+
+async function ensureAidOnce(root: string): Promise<EnsureAidResult> {
   const manifestPath = path.join(root, APP_MANIFEST_FILE);
   let raw: string;
   try {
@@ -78,6 +112,10 @@ export async function ensureAid(root: string): Promise<EnsureAidResult> {
   const scratch = path.join(path.dirname(manifestPath), `.${path.basename(manifestPath)}.${aid}.tmp`);
   try {
     await writeFile(scratch, body, "utf-8");
+    // The replacement is a NEW file, so it carries this process's umask rather than the mode the
+    // author gave `app.json`. Carrying the declaration through unchanged has to include that: a
+    // manifest someone deliberately kept at 0600 would come back 0644 and nothing would say so.
+    await chmod(scratch, (await stat(manifestPath)).mode);
     await rename(scratch, manifestPath);
   } catch (err) {
     // Best effort: the scratch file is only litter, and the failure being reported is the one

@@ -4,7 +4,7 @@
 // generator behaves like one: it mints exactly once, it keeps what the author wrote, and it
 // refuses rather than inventing a declaration.
 import { describe, it, expect, beforeEach } from "vitest";
-import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { chmodSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { ensureAid } from "../../../server/backends/sharedApp/ensureAid.js";
 import { makeTempDir } from "../../support/tempDir";
@@ -66,6 +66,29 @@ describe("ensureAid", () => {
     const result = await ensureAid(root);
     expect(result.ok).toBe(true);
     expect(readdirSync(root)).toEqual(["app.json"]);
+  });
+
+  it("keeps the mode the author gave app.json", async () => {
+    // The replacement is a new file, so it carries this process's umask unless something says
+    // otherwise. A manifest deliberately kept at 0600 coming back 0644 is a permission change
+    // nobody asked for and nothing reports.
+    writeFileSync(appJson(), JSON.stringify({ name: "Sakura" }));
+    chmodSync(appJson(), 0o600);
+    expect((await ensureAid(root)).ok).toBe(true);
+    expect(statSync(appJson()).mode & 0o777).toBe(0o600);
+  });
+
+  it("mints ONE aid when two calls race", async () => {
+    // Read-mint-write is three steps. Interleaved, both callers see "no aid", mint different
+    // uuids, and each renames its own file — and the loser is the one that goes on to create an
+    // app document, leaving a live apps/{uuid} the declaration no longer names.
+    writeFileSync(appJson(), JSON.stringify({ name: "Sakura" }));
+    const results = await Promise.all([ensureAid(root), ensureAid(root), ensureAid(root)]);
+    const aids = new Set(results.map((result) => (result.ok ? result.aid : "failed")));
+    expect(aids.size).toBe(1);
+    // And exactly one of them did the writing.
+    expect(results.filter((result) => result.ok && result.created)).toHaveLength(1);
+    expect([...aids][0]).toBe(read().aid);
   });
 
   it("refuses a JSON file that is not an object", async () => {
