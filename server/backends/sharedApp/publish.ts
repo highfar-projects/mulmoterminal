@@ -42,6 +42,7 @@ import { gitStamp, sharedAppContext, type SharedAppFailure, type SharedAppHandle
 import { recordRefusal, scanRecords, type RecordScan } from "./records.js";
 import { readStaged, type StagedEntry } from "./staged.js";
 import { oversizeProblem, publicFormOf, publicInputProblems, type PublicForm } from "./publicForm.js";
+import { stagedScopeProblems } from "./scopedFields.js";
 import { setSlugPublished } from "./slug.js";
 import { runWrites, type WriteStep } from "./writes.js";
 
@@ -195,6 +196,12 @@ async function stagedGate(
     "staged",
   );
   if (drifted.length > 0) return { ok: false, partial: false, problems: drifted };
+  // The PAIR publish actually writes: the staged rule configuration and schemas
+  // on one side, the manifest's roster on the other. Neither the deploy gate nor
+  // the drift check above looks at that combination, and it is where an
+  // `assignee` can end up with no field to be compared against.
+  const scoped = stagedScopeProblems(authored, staged);
+  if (scoped.length > 0) return { ok: false, partial: false, problems: scoped };
   const scan = await scanRecords(toScan.collections, root);
   const refusal = recordRefusal(scan, "publish", confirm);
   return refusal ? { ok: false, partial: false, problems: refusal } : { ok: true, scan };

@@ -8,7 +8,7 @@
 import { describe, it, expect } from "vitest";
 import { parseAuthoredApp } from "@mulmoclaude/core/collection/server";
 import type { CollectionSchema } from "@mulmoclaude/core/collection";
-import { scopedFieldProblems } from "../../../server/backends/sharedApp/scopedFields.js";
+import { scopedFieldProblems, stagedScopeProblems } from "../../../server/backends/sharedApp/scopedFields.js";
 
 const bookings: CollectionSchema = {
   title: "Bookings",
@@ -134,5 +134,68 @@ describe("window.fromField — when does this one open", () => {
 describe("a declaration that names none of them", () => {
   it("is left alone", () => {
     expect(problemsFor({ collections: { bookings: { statusField: "status" } } })).toEqual([]);
+  });
+});
+
+// --- what publish actually promotes ----------------------------------------
+//
+// publish writes a PAIR: the rule configuration and schemas deploy staged, and
+// the roster the manifest carries now. A check that only reads the manifest
+// sees two keys sitting side by side and agreeing, and passes — while what
+// lands is the staged half beside the new roster.
+
+const STYLIST = "anna@salon.jp";
+
+const stagedEntry = (cid: string, schema: CollectionSchema, config?: Record<string, unknown>) => ({
+  cid,
+  doc: { publishedSchema: schema, deployedAt: 1, deployedBy: "o@e.com", ...(config === undefined ? {} : { config }) },
+});
+
+describe("the staged configuration, paired with the roster being published", () => {
+  const roster = { "o@e.com": { "*": "owner" }, [STYLIST]: { bookings: "assignee" } };
+
+  it("passes when the deploy carried the field", () => {
+    const declared = app({ members: roster, collections: { bookings: { assigneeField: "stylistEmail" } } });
+    expect(stagedScopeProblems(declared, [stagedEntry("bookings", bookings, { assigneeField: "stylistEmail" })] as never)).toEqual([]);
+  });
+
+  it("refuses a role added to app.json after the deploy that would have carried its field", () => {
+    // deploy A (no assigneeField) → edit B (add the field AND the member) →
+    // publish. The manifest is internally sound, so core's check passes; the
+    // promoted configuration is A's, so the stylist would be refused every
+    // write and nothing anywhere would say why.
+    const declared = app({ members: roster, collections: { bookings: { assigneeField: "stylistEmail" } } });
+    const problems = stagedScopeProblems(declared, [stagedEntry("bookings", bookings, {})] as never);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("carries no assigneeField");
+    expect(problems[0]).toContain("Run deploy again");
+  });
+
+  it("refuses a field the staged SCHEMA does not have, however current the tree is", () => {
+    // The mirror of the same drift: the field name is right in the repository
+    // and absent from the version being promoted.
+    const declared = app({ members: roster, collections: { bookings: { assigneeField: "stylistEmail" } } });
+    const stale: CollectionSchema = { ...bookings, fields: { id: { type: "string", label: "ID", primary: true, required: true } } };
+    const problems = stagedScopeProblems(declared, [stagedEntry("bookings", stale, { assigneeField: "stylistEmail" })] as never);
+    expect(problems[0]).toContain("the staged version of 'bookings'");
+    expect(problems[0]).toContain("Run deploy again");
+  });
+
+  it("says nothing about a member whose collection is not staged at all", () => {
+    // That is the staged-set gate's refusal ("not staged, so there is no
+    // reviewed version to promote"), and it names every missing collection at
+    // once. Repeating it per member would bury it.
+    const declared = app({ members: roster, collections: { bookings: { assigneeField: "stylistEmail" } } });
+    expect(stagedScopeProblems(declared, [stagedEntry("classes", classes, {})] as never)).toEqual([]);
+  });
+
+  it("checks the stamped field against the staged schema too", () => {
+    const declared = app({
+      public: { enabled: true, submit: { bookings: { auth: "verifiedEmail", createFields: ["createdAt"], stampField: "createdAt" } } },
+    });
+    const stale: CollectionSchema = { ...bookings, fields: { id: { type: "string", label: "ID", primary: true, required: true } } };
+    const problems = stagedScopeProblems(declared, [stagedEntry("bookings", stale, {})] as never);
+    expect(problems[0]).toContain("stampField names 'createdAt'");
+    expect(problems[0]).toContain("Run deploy again");
   });
 });
