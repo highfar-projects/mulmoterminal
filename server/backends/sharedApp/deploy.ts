@@ -164,17 +164,25 @@ async function establishAndScan(
  *  `staging/*` behind exactly as it leaves the records — where skipping the listing would carry an
  *  orphaned staged collection through a successful deploy and into a publish that then fails
  *  closed. For a genuinely new aid the listing is simply empty. */
-async function staleStaged(handle: SharedAppHandle, aid: string, keep: ReadonlySet<string>): Promise<{ ok: true; cids: string[] } | SharedAppFailure> {
+async function staleStaged(
+  handle: SharedAppHandle,
+  aid: string,
+  keep: ReadonlySet<string>,
+  established: boolean,
+): Promise<{ ok: true; cids: string[] } | SharedAppFailure> {
   try {
     const staged = await handle.docs.list(appStagingPath(aid));
     return { ok: true, cids: staged.map((doc) => doc.id).filter((cid) => !keep.has(cid)) };
   } catch (err) {
     return {
       ok: false,
-      partial: false,
+      // The roster is LIVE when this deploy created it a moment ago, and a failure report that
+      // says "nothing was written" about an app that now exists is worse than no report.
+      partial: established,
       problems: [
         `deploy failed while reading what is already staged (apps/${aid}/staging): ${err instanceof Error ? err.message : String(err)}`,
-        "Nothing was written. This read is what lets a deleted collection be withdrawn from staging, so deploying without it would leave a stale schema behind for publish to trip over.",
+        established ? "The app document was written and the roster is live; nothing was staged. Deploying again continues from here." : "Nothing was written.",
+        "This read is what lets a deleted collection be withdrawn from staging, so deploying without it would leave a stale schema behind for publish to trip over.",
       ],
     };
   }
@@ -193,17 +201,18 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
   const { authored, collections, handle } = context;
 
   const { aid } = authored;
-  // The app document FIRST, because the migration gate below depends on it — not merely for the
-  // projection.
+  // WHAT THE APP DOCUMENT IS, asked in the only way the rules allow.
   //
-  // A shared collection's records are authorized through `apps/{aid}`: the rules resolve the
-  // roster from that document. On a FIRST deploy it does not exist, so reading the records is
-  // denied — and the gate reads that as "the live records could not be read", which is the one
-  // refusal `confirm` may not override. The app could then never be created at all: every deploy
-  // of a new app died on a check about records that do not exist yet.
+  // Reading `apps/{aid}` cannot tell you it is missing. The read rule resolves the roster out of
+  // the document itself (`readerOf(app(aid), '*')`), so for a document that does not exist the
+  // expression fails and the answer is DENIED — the same answer as somebody else's app. A first
+  // deploy therefore cannot start by reading, and did not: it reported
+  // "Missing or insufficient permissions" and stopped, with nothing else to try.
+  //
+  // So a denial is not conclusive here, and the CREATE is what settles it (below): create-if-absent
+  // is atomic, and only the declared owner may do it.
   const current = await readCurrentApp(handle, aid);
   if (!current.ok) return current;
-
   const stampSource = await (opts.resolveCommit ?? gitStamp)(root);
   const stamp: PublishStamp = {
     uid: handle.uid,
@@ -240,7 +249,7 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
   if (!gate.ok) return gate;
   const { scan } = gate;
 
-  const stale = await staleStaged(handle, aid, new Set(deployed.staging.map((entry) => entry.cid)));
+  const stale = await staleStaged(handle, aid, new Set(deployed.staging.map((entry) => entry.cid)), established);
   if (!stale.ok) return stale;
 
   const failure = await runWrites(

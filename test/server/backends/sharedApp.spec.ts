@@ -32,6 +32,8 @@ class FakeDocs implements FirestoreDocs {
   /** Model the rules' actual shape: a shared collection's records are authorized through
    *  `apps/{aid}`, so while that document is missing, reading them is denied rather than empty. */
   readsDeniedUntilApp = false;
+  /** Collection path whose listing throws — a transient failure, as opposed to a refusal. */
+  failListing: string | null = null;
 
   private bucket(collectionPath: string): Map<string, Record<string, unknown>> {
     const existing = this.store.get(collectionPath);
@@ -42,9 +44,11 @@ class FakeDocs implements FirestoreDocs {
   }
 
   list = (collectionPath: string): Promise<FirestoreDoc[]> =>
-    this.readsDeniedUntilApp && !this.app() && collectionPath.includes("/collections/")
-      ? Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }))
-      : Promise.resolve([...this.bucket(collectionPath)].sort(([left], [right]) => (left < right ? -1 : 1)).map(([id, data]) => ({ id, data })));
+    this.failListing === collectionPath
+      ? Promise.reject(new Error("unavailable (test)"))
+      : this.readsDeniedUntilApp && !this.app() && collectionPath.includes("/collections/")
+        ? Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }))
+        : Promise.resolve([...this.bucket(collectionPath)].sort(([left], [right]) => (left < right ? -1 : 1)).map(([id, data]) => ({ id, data })));
 
   get = (collectionPath: string, docId: string): Promise<unknown | null> => Promise.resolve(this.bucket(collectionPath).get(docId) ?? null);
 
@@ -189,6 +193,18 @@ describe("shared app deploy / publish / unpublish", () => {
     expect(docs.doc(`apps/${AID}/staging`, "waitlist")).toBeUndefined();
     // And the deploy still did its own job.
     expect(docs.doc(`apps/${AID}/staging`, "bookings")).toBeDefined();
+  });
+
+  it("says the roster is live when it cannot read staging after creating the app", async () => {
+    // "Nothing was written" about an app that now exists is worse than no report at all: the next
+    // decision — deploy again, or go looking for what half-happened — turns on it.
+    docs.failListing = `apps/${AID}/staging`;
+
+    const result = await deploySharedApp(root, stamp);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.partial).toBe(true);
+    expect(result.ok === false && result.problems.join("\n")).toContain("the roster is live");
+    expect(docs.app()).toBeDefined();
   });
 
   it("writes the app document before the staged schemas — the staging rules resolve the owner through it", async () => {
