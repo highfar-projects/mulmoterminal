@@ -90,12 +90,6 @@ const GROUP_BY_TOOL = new Map<string, ToolGroup>([
   ["presentCollection", "data"],
   ["manageCollection", "data"],
   ["manageAccounting", "data"],
-  // manageSharedApp deploys and publishes the SHARED collections of the directory the cell is
-  // open in, so it belongs where their store does: a cell without the data group has no
-  // collection tools, and a deploy tool beside no collections is a tool with nothing to deploy.
-  // It is not in AUTO_ALLOWED_TOOLS — publish is the one operation here that changes what people
-  // outside the roster can see, and Claude Code's permission prompt is wanted in front of it.
-  ["manageSharedApp", "data"],
 
   ["generateImage", "media"],
   ["presentMulmoScript", "media"],
