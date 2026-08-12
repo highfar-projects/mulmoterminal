@@ -11,7 +11,7 @@
 // first collection unopenable until they had published — the wrong end of the process to discover
 // it from.
 import { randomUUID } from "node:crypto";
-import { chmod, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { chmod, readFile, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { APP_MANIFEST_FILE } from "@mulmoclaude/core/collection/server";
 import { isRecord } from "../../../common/isRecord.js";
@@ -63,8 +63,26 @@ function serialize(key: string, run: () => Promise<EnsureAidResult>): Promise<En
   return next;
 }
 
-export function ensureAid(root: string): Promise<EnsureAidResult> {
-  return serialize(path.join(root, APP_MANIFEST_FILE), () => ensureAidOnce(root));
+export async function ensureAid(root: string): Promise<EnsureAidResult> {
+  return serialize(await manifestKey(root), () => ensureAidOnce(root));
+}
+
+/** The key two callers must AGREE on to be serialized against each other: one file, one key.
+ *
+ *  The caller's spelling will not do. A root arrives as the session's cwd, which is taken
+ *  verbatim — so one cell opened at a symlink and another at the path it points to name the same
+ *  `app.json` in two ways, and two spellings are two chains: exactly the interleaving the
+ *  serializer exists to prevent, with the lock quietly not held.
+ *
+ *  `realpath` resolves both the links and the relative spelling. When it fails — the root does not
+ *  exist — `resolve` is enough: the read is about to fail anyway, and a key that cannot be
+ *  canonicalised must still not collide with another root's. */
+async function manifestKey(root: string): Promise<string> {
+  try {
+    return path.join(await realpath(root), APP_MANIFEST_FILE);
+  } catch {
+    return path.join(path.resolve(root), APP_MANIFEST_FILE);
+  }
 }
 
 async function ensureAidOnce(root: string): Promise<EnsureAidResult> {

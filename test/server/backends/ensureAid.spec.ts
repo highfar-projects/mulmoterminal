@@ -4,7 +4,7 @@
 // generator behaves like one: it mints exactly once, it keeps what the author wrote, and it
 // refuses rather than inventing a declaration.
 import { describe, it, expect, beforeEach } from "vitest";
-import { chmodSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { ensureAid } from "../../../server/backends/sharedApp/ensureAid.js";
 import { makeTempDir } from "../../support/tempDir";
@@ -89,6 +89,21 @@ describe("ensureAid", () => {
     // And exactly one of them did the writing.
     expect(results.filter((result) => result.ok && result.created)).toHaveLength(1);
     expect([...aids][0]).toBe(read().aid);
+  });
+
+  it("serializes two SPELLINGS of the same root, not two strings", async () => {
+    // A root arrives as the session's cwd, taken verbatim — so one cell opened at a symlink and
+    // another at its target name the same app.json two ways. Keyed on the spelling, that is two
+    // chains, which is the interleaving the serializer exists to prevent with the lock quietly
+    // not held.
+    writeFileSync(appJson(), JSON.stringify({ name: "Sakura" }));
+    const alias = path.join(makeTempDir("mt-ensure-aid-alias-"), "link");
+    symlinkSync(root, alias);
+
+    const results = await Promise.all([ensureAid(root), ensureAid(alias), ensureAid(path.join(root, "."))]);
+    expect(new Set(results.map((result) => (result.ok ? result.aid : "failed"))).size).toBe(1);
+    expect(results.filter((result) => result.ok && result.created)).toHaveLength(1);
+    expect(results[0]?.ok === true && results[0].aid).toBe(read().aid);
   });
 
   it("refuses a JSON file that is not an object", async () => {
