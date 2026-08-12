@@ -1,7 +1,7 @@
 # 共有アプリ: 公開ページを「予約サイト」にする（公開カスタムビュー + 枠の排他）
 
 **状態**: 設計のみ。実装は未着手。2026-08-12 の議論から。
-レビュー（#1658）で見つかった 17 点を反映済み: id の不変性、宣言そのものの変更禁止、
+レビュー（#1658）で見つかった 19 点を反映済み: id の不変性、宣言そのものの変更禁止、
 枠の実在**と状態**の確認（`untilField` を含む）、iframe の `event.source` 検証、
 bridge の `ready` / `submitResult`、`config/view` の撤去と版の一致、公開読み取りを
 `bookings` から `slots` に分離（`slots` と予約は対の batch でしか動かない）、ホスト用ビューとの契約の分離、publish の順序、
@@ -162,6 +162,14 @@ create の判定に入っていなければならない。UI の選択結果を�
 ここで壊れるのは記録ではなく**排他の保証**で、壊れたことは誰にも見えない。前に進む道は
 コレクションを空にするか、新しい cid で作り直すこと。そう言う。
 
+**凍らせる対象には鏡の結び付きも入る** — `submit.<cid>.mirror` と、対になる
+`collections.<mirror>.mirrorOf` の両方。ここを変えて publish し直すと、live の delete
+ルールが**新しい行き先**を見るようになる。受付が予約を消しても古い枠の `state` は更新
+されず、**その枠は永久に `taken` のまま**残る。「公開されている枠は `bookings` の射影で
+ある」という不変条件が、誰にも見えないところで崩れる。
+
+`idFrom` / `idField` / `idIn` と同じ扱いにする — 対象コレクションに 1 行でもあれば拒否。
+
 ### `ownRow` には足さないこと
 
 `ownRow`（自分の行の自己編集）は `auth.uid` / `auth.uid+field` / `emailField` を見ている。
@@ -250,6 +258,35 @@ window.__MC_VIEW = { slug, token, dataUrl, origin, locale, dict, onChange, openI
 
 今のモデルより**むしろ安全**になる。信頼できない HTML が資格情報を一切持たず、認可は
 ルールと親にしか無い。ビューが「予約する」と言っても、通るかどうかを決めるのは常にルール。
+
+### 親は「どう書くか」を宣言から受け取る
+
+今の公開フォームは、`config/public` の `form` に**フィールドの仕様だけ**を載せ、親は
+自動 ID で 1 ドキュメントを作る。この設計はそこを 2 か所で変えている — ID は
+`bookings/{slot}` でなければならず、書き込みは鏡と対の batch でなければならない。
+
+**`bookings` / `slot` / `slots` を `PublicApp` に直書きしてはいけない。** 直書きすれば
+宣言は飾りになり、別の名前を使ったアプリは**黙って**既存の単発 create 経路に落ちて、
+自動 ID の予約が作られ、排他も鏡も効かない。エラーは出ない。
+
+`PublicCollectionForm`（`server/backends/sharedApp/publicForm.ts`、既に `statusField` と
+`stampField` を運んでいる）に、**どう書くか**を足す:
+
+```json
+"form": {
+  "bookings": {
+    "fields": { ... },
+    "statusField": "status",
+    "idFrom": "field", "idField": "slot",
+    "mirror": { "collection": "slots", "field": "state", "taken": "taken", "open": "open" }
+  }
+}
+```
+
+親はこれを見て経路を選ぶ。**`idFrom` があるのに単発 create に落ちることはあってはならない**
+ので、そこはテストで縛る — `idFrom: "field"` と `mirror` を持つ宣言の submit が、既存の
+単発 create 経路を通らないこと。バージョンを刻み、親が知らない版なら**描かずに言う**
+（黙って古い経路に落ちるのが一番悪い）。
 
 ### bridge は 4 つのメッセージを持つ
 
