@@ -202,9 +202,12 @@ carrying on.
 The run this skill was written from lost several minutes to each of these, and both times the
 repair made things worse — an `aid` was deleted and a second app was created by accident.
 
-- **`getSchema` / `putSchema` says "unknown collection".** For a collection you just wrote, that
-  means its schema has not been accepted yet — most often because the app has no `aid` until the
-  first deploy. Deploy; do not rewrite the schema, and do not move the directory.
+- **`getSchema` / `putSchema` says "unknown collection".** It means the schema was not ACCEPTED,
+  and there are two reasons: the app has no `aid` yet (nothing is wrong — the first deploy mints
+  it), or the schema failed validation (something is wrong, and it is skipped silently).
+  Tell them apart before acting: re-read the schema against `schemaDocs` — `primaryKey` naming a
+  field flagged `primary: true`, `icon` present, exactly one of `dataPath` / `dataSource` /
+  `storage`. If the schema is sound, deploy; do not rewrite it, and do not move the directory.
 - **Anything about permissions on `apps/{aid}`.** The `aid` in `app.json` is the app's identity.
   Removing it does not reset anything: the next deploy mints a NEW one and the old app stays where
   it is, owned by nobody who can reach it. If a deploy is refused, read what it says and fix that;

@@ -157,7 +157,36 @@ describe("shared app deploy / publish / unpublish", () => {
     expect(docs.doc(`apps/${AID}/staging`, "bookings")).toBeDefined();
   });
 
+  it("runs the migration gate on records that survived their app document", async () => {
+    // Firestore deletes do not cascade: `apps/{aid}` can be gone while the records under it
+    // survive. A missing app document therefore proves only that the records cannot be READ right
+    // now — not that they do not exist — and a deploy that re-creates the app must still check
+    // them, or it hands them to the roster under a schema nothing compared them against.
+    docs.store.set(`apps/${AID}/collections/bookings/items`, new Map([["1", { id: "1" }]]));
+    writeFileSync(
+      path.join(root, ".claude", "skills", "bookings", "schema.json"),
+      JSON.stringify({ ...schemaFor("bookings"), fields: { ...schemaFor("bookings").fields, note: { type: "string", label: "Note", required: true } } }),
+    );
+
+    const result = await deploySharedApp(root, stamp);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.problems.join("\n")).toContain("would not satisfy the schema");
+    // The app document IS live — that is what made the records readable — and the result says so.
+    expect(docs.app()).toBeDefined();
+    expect(result.ok === false && result.partial).toBe(true);
+    // Nothing was staged: the gate stopped before that.
+    expect(docs.store.get(`apps/${AID}/staging`)).toBeUndefined();
+  });
+
   it("writes the app document before the staged schemas — the staging rules resolve the owner through it", async () => {
+    await deploySharedApp(root, stamp);
+    // One app write, then the staging document — on a first deploy the app write is the one that
+    // makes the records readable, which is why it happens before the migration gate rather than
+    // beside the staging writes.
+    expect(docs.writes).toEqual([`set apps/${AID}`, `set apps/${AID}/staging/bookings`]);
+
+    // And on a redeploy, where the app already exists, the same order without the extra write.
+    docs.writes.length = 0;
     await deploySharedApp(root, stamp);
     expect(docs.writes).toEqual([`set apps/${AID}`, `set apps/${AID}/staging/bookings`]);
   });

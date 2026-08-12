@@ -16,9 +16,9 @@
 // until that document exists.
 import { isRecord } from "../../../common/isRecord.js";
 import { ensureAid } from "./ensureAid.js";
-import { APPS_COLLECTION, appStagingPath, projectDeploy, type PublishStamp } from "@mulmoclaude/core/collection/server";
+import { APPS_COLLECTION, appStagingPath, projectDeploy, type LoadedCollection, type PublishStamp } from "@mulmoclaude/core/collection/server";
 import { gitStamp, schemasOf, sharedAppContext, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
-import { EMPTY_SCAN, recordRefusal, scanRecords } from "./records.js";
+import { recordRefusal, scanRecords, type RecordScan } from "./records.js";
 import { reserveSlug, retireSlug, type SlugResult } from "./slug.js";
 import { runWrites } from "./writes.js";
 
@@ -125,6 +125,33 @@ async function reserveHeldSlug(
   return reservation;
 }
 
+/** Write the roster when it is missing, then run the migration gate over the records — or the
+ *  refusal that stops the deploy. Null when it may go on.
+ *
+ *  Split out for the line budget, but the two steps belong together anyway: the write is what
+ *  makes the read possible, and doing them apart is what let a missing parent be mistaken for an
+ *  empty store. */
+async function establishAndScan(
+  handle: SharedAppHandle,
+  aid: string,
+  appDoc: Record<string, unknown>,
+  established: boolean,
+  collections: readonly LoadedCollection[],
+  root: string,
+  confirm: boolean | undefined,
+): Promise<{ ok: true; scan: RecordScan } | SharedAppFailure> {
+  if (established) {
+    const failed = await runWrites([{ what: `the app document (apps/${aid})`, run: () => handle.docs.set(APPS_COLLECTION, aid, appDoc) }], "deploy");
+    if (failed) return failed;
+  }
+  const scan = await scanRecords(collections, root);
+  const refusal = recordRefusal(scan, "deploy", confirm);
+  if (!refusal) return { ok: true, scan };
+  // The app document is live when this call created it just above — the roster, and nothing else.
+  // Saying so is the difference between "nothing happened" and "the app exists now".
+  return { ok: false, partial: established, problems: refusal };
+}
+
 /** Staged documents whose collection this repository no longer has.
  *
  *  Dropping them is what makes staging a REPLACEMENT of the repository's shared collections rather
@@ -181,12 +208,6 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
   const current = await readCurrentApp(handle, aid);
   if (!current.ok) return current;
 
-  // There is nothing live to break before the app exists, so the gate has nothing to say. It
-  // returns in force on the next deploy, when there IS an app and there may be records in it.
-  const scan = current.app === null ? EMPTY_SCAN : await scanRecords(collections, root);
-  const refusal = recordRefusal(scan, "deploy", opts.confirm);
-  if (refusal) return { ok: false, partial: false, problems: refusal };
-
   const stampSource = await (opts.resolveCommit ?? gitStamp)(root);
   const stamp: PublishStamp = {
     uid: handle.uid,
@@ -198,9 +219,6 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
   const existingApp = current.app;
   const deployed = projectDeploy(authored, schemasOf(collections), stamp, existingApp);
 
-  const stale = await staleStaged(handle, aid, existingApp, new Set(deployed.staging.map((entry) => entry.cid)));
-  if (!stale.ok) return stale;
-
   // The slug this app already holds, carried on the app document because NOTHING ELSE CAN BE
   // ASKED: `appSlugs/{slug}` is unreadable until the app is published, so "do we already have
   // one?" has no other answer. `projectDeploy` does not carry it — the reservation is the host's
@@ -209,9 +227,31 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
   const held = typeof existingApp?.slug === "string" ? existingApp.slug : undefined;
   const appDoc = held === undefined ? deployed.app : { ...deployed.app, slug: held };
 
+  // ESTABLISH THE PARENT, THEN SCAN — rather than deciding that a missing app document means there
+  // are no records.
+  //
+  // It does not. Firestore deletes do not cascade, and this design documents the orphan state that
+  // leaves: `apps/{aid}` can be gone while `collections/*/items` beneath it survives. Reading the
+  // missing parent as an empty store would let a deploy that re-creates it make those records
+  // readable under a schema nothing ever checked them against.
+  //
+  // Writing the roster first is what makes the question ANSWERABLE. It grants nothing outside the
+  // roster — no `public` block is written here, ever — it is the same document this deploy is
+  // about to write anyway, and afterwards the records can be read. So the gate runs for real: on a
+  // new app it finds nothing, and on a resurrected aid it finds whatever survived.
+  const established = existingApp === null;
+  const gate = await establishAndScan(handle, aid, appDoc, established, collections, root, opts.confirm);
+  if (!gate.ok) return gate;
+  const { scan } = gate;
+
+  const stale = await staleStaged(handle, aid, existingApp, new Set(deployed.staging.map((entry) => entry.cid)));
+  if (!stale.ok) return stale;
+
   const failure = await runWrites(
     [
-      { what: `the app document (apps/${aid})`, run: () => handle.docs.set(APPS_COLLECTION, aid, appDoc) },
+      // Not written again when the step above just wrote it, byte for byte: the roster is already
+      // live, and the staging writes below need exactly that and nothing more.
+      ...(established ? [] : [{ what: `the app document (apps/${aid})`, run: () => handle.docs.set(APPS_COLLECTION, aid, appDoc) }]),
       ...deployed.staging.map(({ cid, doc }) => ({
         what: `the staged schema for '${cid}' (apps/${aid}/staging/${cid})`,
         run: () => handle.docs.set(appStagingPath(aid), cid, doc),

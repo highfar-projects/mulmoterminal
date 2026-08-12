@@ -25,11 +25,6 @@ export interface RecordScan {
   unreadable: string[];
 }
 
-/** The answer for an app that does not exist yet: nothing is live, so nothing can break. Named
- *  rather than inlined so the reason travels with it — an empty scan is a STATEMENT here, not a
- *  scan that happened to find nothing. */
-export const EMPTY_SCAN: RecordScan = { lines: [], records: 0, capped: false, unreadable: [] };
-
 export async function scanRecords(collections: readonly LoadedCollection[], workspaceRoot: string): Promise<RecordScan> {
   const lines: string[] = [];
   const unreadable: string[] = [];
