@@ -1,9 +1,11 @@
 # 共有アプリ: 公開ページを「予約サイト」にする（公開カスタムビュー + 枠の排他）
 
 **状態**: 設計のみ。実装は未着手。2026-08-12 の議論から。
-レビュー（#1658）で見つかった 7 点を反映済み: id の不変性、宣言そのものの変更禁止、
+レビュー（#1658）で見つかった 13 点を反映済み: id の不変性、宣言そのものの変更禁止、
 枠の実在**と状態**の確認（`untilField` を含む）、iframe の `event.source` 検証、
-`config/view` の撤去、顧客は delete できないこと。
+bridge の `ready` / `submitResult`、`config/view` の撤去と版の一致、公開読み取りを
+`bookings` から `availability` に分離、ホスト用ビューとの契約の分離、publish の順序、
+顧客は delete できないこと。
 全体設計は [`feat-shareable-collections.md`](./feat-shareable-collections.md)、
 行スコープの承認は [`feat-shared-app-assignee-role.md`](./feat-shared-app-assignee-role.md)、
 先着枠は [`feat-shared-app-first-come.md`](./feat-shared-app-first-come.md)。
@@ -217,6 +219,10 @@ match /config/{docId} {
 ここで初めて効く。publish 時に測って、超えたら拒否する（deploy/publish の他の門と同じく、
 live に出てから気づく形にしない）。
 
+**測るのは HTML ファイルのサイズではなく、書き込むドキュメントの実サイズ。** 上限は
+ドキュメント全体にかかり、フィールド名も文字列の UTF-8 長もドキュメント自身のオーバー
+ヘッドも数に入る。ファイルが 1 MiB 未満でも超えうる。余白を残して拒否する。
+
 ### ホスト側の機構はそのまま載らない
 
 `src/utils/customViewSrcdoc.ts` のビューはこう動く:
@@ -244,6 +250,23 @@ window.__MC_VIEW = { slug, token, dataUrl, origin, locale, dict, onChange, openI
 
 今のモデルより**むしろ安全**になる。信頼できない HTML が資格情報を一切持たず、認可は
 ルールと親にしか無い。ビューが「予約する」と言っても、通るかどうかを決めるのは常にルール。
+
+### bridge は 4 つのメッセージを持つ
+
+図の「データを渡す・submit を返す」だけでは足りない。**iframe の listener が立つ前に親が
+送ればデータは落ちるし、他の訪問者に先を越された結果をビューが表示できない。**
+
+| 向き | メッセージ | いつ |
+|---|---|---|
+| view → 親 | `ready` | listener を張り終えた。**親はこれを待ってから送る** |
+| 親 → view | `state` | 全データ。`ready` の直後と、書き込みが起きたあと |
+| view → 親 | `submit` | `requestId` を付ける |
+| 親 → view | `submitResult` | 同じ `requestId`、`ok` または理由 |
+
+`requestId` は「どの申込みの結果か」を言うためのもので、連打や再送で答えが入れ替わらない
+ようにする。拒否（枠が埋まった・締め切った）は**返す**。返さなければビューは押した瞬間で
+止まり、利用者には壊れて見える。拒否のあとは親が `state` を送り直す — 埋まった枠が
+埋まったものとして描き直る。
 
 ### 親は `event.source` で iframe を同定する
 
@@ -274,22 +297,52 @@ window.__MC_VIEW = { slug, token, dataUrl, origin, locale, dict, onChange, openI
 止める理由ではなく、**同じ許可リストを黙って再利用しない**という意味。既定は絞る側に置き、
 緩める必要が出たらそのとき理由付きで足す。
 
-### オーサリング
+### オーサリング — 同じ置き場所、別の契約
 
-ホスト側と同じ `views/*.html`（`isSafeCustomViewPath`、`templatePath.ts:43`）を再利用する。
+パスの規約（`views/*.html`、`isSafeCustomViewPath`、`templatePath.ts:43`）は共有する。
+**中身は共有しない。** ホスト用ビューは `__MC_VIEW.token` と `dataUrl` を読むので、
+公開ページに置けば描画されずに終わる。「同じ `views/*.html` を再利用する」とだけ書くと、
+既存のビューを `public.view.path` に指すのが正しいように読める — それは動かない。
+
+- 公開用ビューは `window.__MC_PUBLIC_VIEW` だけを読む。両対応のアダプタは作らない
+  （2 つの契約を 1 つの HTML が抱えると、LLM はどちらで書いているか分からなくなる）
+- publish の検査で、指されたファイルが `__MC_VIEW` を参照していたら**拒否して理由を言う**
+  — これはホスト用ビューです、と
+- テンプレートの `views/booking.html` は公開用として書き下ろす
+
 どのビューを公開ページに出すかは宣言で名指しする:
 
 ```json
 "public": {
   "enabled": true,
-  "read": ["stylists", "shifts", "bookings"],
-  "view": { "collection": "bookings", "path": "views/booking.html" },
+  "read": ["stylists", "availability"],
+  "view": { "path": "views/booking.html", "collections": ["stylists", "availability"] },
   "submit": { "bookings": { ... } }
 }
 ```
 
 `public.view` があるとき、公開ページはフォームの代わりにビューを描く（`submit` は
 **残す** — ビューが postMessage で使う申込み経路の定義そのものだから）。
+
+### `bookings` を公開読み取りにしてはいけない
+
+**Firestore の読み取りはドキュメント単位で、フィールド単位に絞れない。** `bookings` を
+`public.read` に入れた瞬間、氏名・メールアドレス・電話・備考が匿名の訪問者に全部返る。
+テンプレートの注意書きでは防げない — 宣言が 1 行あれば漏れる。
+
+**公開用のコレクションを分ける。** `availability` は枠ごとに 1 行、持つのは
+「いつ・誰の担当・空いているか」だけで、個人情報を一切持たない。予約が入ったら受付側の
+処理が該当行を閉じる。当初の案（`bookings` をそのまま見せて注意書きを添える）は**取り下げ**。
+
+これは同時に、次の 2 つの答えでもある:
+
+- **payload の大きさ。** `bookings` の全履歴を送る設計だったものが、`availability` の
+  「これから先の枠」になる。期間で切れる形になったので、親のクエリに上限（先 N 日 /
+  最大 M 件）を置ける。読み取り・メモリ・structured clone のコストが履歴に比例しなくなる
+- **ビューが何を必要とするか。** `public.read` から推測するのではなく、
+  `public.view.collections` で**宣言する**。親はその集合だけを送り、publish の検査は
+  そこに挙がったものが `public.read` にあるかを見る（推測だと、ビューが黙って空の格子を
+  描く壊れ方に戻る）
 
 ### 撤去したら消すこと
 
@@ -302,6 +355,17 @@ unpublish しても、`config/view` を明示的に消さない限り **HTML は
 
 publish が「対になるものを書く」操作である以上、撤去も対で行う。#1655 で
 `stagedRuleConfig` の対を落として見つかったのと同じ形の抜け。
+
+### 2 つの公開ドキュメントは同じ版であること
+
+`config/public` と `config/view` は別々の書き込みで、publish は途中で失敗しうる
+（`publish.ts` の `runWrites` は段階を順に実行する）。**新しい `config/public` と古い
+`config/view` の組み合わせ**が残ると、ビューは自分が知らないフィールドの入った状態を
+渡され、黙って描き損なう。
+
+両方に publish の版を刻み、親が**不一致なら描かずに言う**。一括で書ければそれでよいが、
+順序に意味がある（`config/public` は訪問者が読む唯一のもの）ので、版で照合する方が
+この設計には合う。unpublish の削除も同じ扱い。
 
 ### 検査（deploy/publish の門）
 
@@ -318,6 +382,8 @@ publish が「対になるものを書く」操作である以上、撤去も対
 ここまで来て初めて、テンプレートの `public.read` が意味を持つ。
 
 - `slots`（枠）コレクションを足す。主キーは `stylist-date-time` のような合成スラッグ
+- `availability`（公開用）— 枠ごとに「いつ・誰の担当・空いているか」だけ。**個人情報は持たない**。
+  `public.read` に入れるのはこれで、`bookings` は入れない
 - `bookings` は `idFrom: "field"` + `idField: "slot"`
 - `startAt` を客に手で打たせるのをやめる（今そうなっているのは回避ではなく、
   **これしかできなかった**から）
@@ -326,9 +392,9 @@ publish が「対になるものを書く」操作である以上、撤去も対
 
 **利用者に先に言うこと**（gym.md と同じ位置に置く）:
 
-- 空き枠が見えるということは、**訪問者が予約テーブルを読めるということ**。誰が何時に来るかを
-  隠したいなら、`bookings` を `public.read` に入れず、`slots` に「埋まっているか」だけを
-  持たせる設計にする（その場合、埋まりの反映は受付の操作になる）
+- 空き枠は `availability` として**別に持つ**。予約そのもの（氏名・連絡先）は公開しない。
+  Firestore の読み取りはドキュメント単位でフィールドを隠せないので、これは運用の注意では
+  なく**構造**で守る
 - 枠は**先着で本当に排他される**。ジムの順位方式と違い、繰り上げは起きない
 - **顧客がキャンセルしても枠はすぐには空かない。** 受付が戻す操作が要る
 
@@ -355,5 +421,9 @@ publish が「対になるものを書く」操作である以上、撤去も対
 | mulmoclaude | `publishManifest` の enum + `idIn` + `untilField` | `public.view` の宣言 + 検査 | — |
 | mulmoterminal | 排他キーの変更を拒否する門 | publish（`config/view` の書き出しと削除）+ 検査 | テンプレート |
 
-1 は**ルールの deploy が先**（上記）。2 は core の宣言が先で、mulmoserver の描画は後から
-足しても既存アプリを壊さない（`public.view` が無ければ今の挙動）。
+1 は**ルールの deploy が先**（上記）。
+
+2 は **mulmoserver が先**。「`public.view` が無ければ今の挙動」は既存アプリを守るだけで、
+**新しく `public.view` を publish したアプリを守らない** — 古い公開ページはその宣言を
+読めず、訪問者は「記入するものはありません」を見る。publish した本人には成功と見える。
+mulmoserver を先に deploy するか、それが出るまで `public.view` の publish を拒否する。
