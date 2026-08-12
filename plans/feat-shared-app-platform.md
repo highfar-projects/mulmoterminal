@@ -34,7 +34,7 @@
 | 検証 | `validate.required`、`validate.keyFields`（**最大 2 キー**） |
 | 完全性 | `immutable` |
 | 副作用 | `mail`（`on[template].from`/`to`、`toField`、`dataFields`）— **遷移そのもの**に束縛 |
-| 入口 | `/{slug}`（公開）と `/staging/{aid}`（名簿）。予約は削除不可 |
+| 入口 | `/a/{slug}`（公開）と `/staging/{aid}`（名簿）。予約は削除不可 |
 
 ホスト側（MulmoTerminal）にあるのは **deploy / publish / unpublish / check / invite / init / fork**
 と、その門番（移行ゲート、フィールド名検査、公開入力検査）。門番は診断であって権限ではない（原則 2）。
