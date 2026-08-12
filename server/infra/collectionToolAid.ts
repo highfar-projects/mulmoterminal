@@ -78,7 +78,18 @@ export function withGeneratedAid(handler: (args: Record<string, unknown>) => Pro
       const ensured = await ensureAid(root);
       if (!ensured.ok) return noAppJson(ensured.problems);
 
-      const narration = await handler(args);
+      let narration: string;
+      try {
+        narration = await handler(args);
+      } catch (err) {
+        // A THROWN handler is a failed call too — the route turns it into "manageCollection
+        // failed" — and it must not be the one path that keeps the mint. Rolled back and rethrown,
+        // so the route's own error handling is unchanged.
+        if (ensured.created) {
+          await withdrawAid(root, ensured.aid);
+        }
+        throw err;
+      }
       if (ensured.created && !wroteSchema(narration)) {
         await withdrawAid(root, ensured.aid);
       }

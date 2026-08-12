@@ -98,6 +98,18 @@ describe("withGeneratedAid", () => {
     expect(message).toContain("members");
   });
 
+  it("takes the aid back when the write THREW rather than refused", async () => {
+    // The route turns a thrown handler into "manageCollection failed", so it is a failed call like
+    // any other — and it must not be the one path that keeps the mint.
+    writeFileSync(appJson(), JSON.stringify({ members: {} }));
+    const wrapped = withGeneratedAid(
+      () => Promise.reject(new Error("disk went away")),
+      () => root,
+    );
+    await expect(wrapped({ action: "putSchema", schema: firestoreSchema })).rejects.toThrow("disk went away");
+    expect(JSON.parse(readFileSync(appJson(), "utf-8")).aid).toBeUndefined();
+  });
+
   it("does not let a failing write take the aid a successful one is using", async () => {
     // Two shared schema writes racing in one repository both see a manifest with no aid. Without
     // the whole mint/write/rollback being one transaction, the loser's rollback removes the aid the
