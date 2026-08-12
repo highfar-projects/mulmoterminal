@@ -136,6 +136,32 @@ describe("appendBoundedOutput", () => {
     expect(appendBoundedOutput(stream, "", 5)).toBe("rest");
   });
 
+  // A cut lands inside a SURROGATE PAIR as readily as inside an escape sequence (#1639), and
+  // nothing downstream objects: the lone low half is a legal JS string, survives JSON.stringify
+  // as "\udf9f", and first shows up as U+FFFD at the top of the restored screen. Asserted as
+  // "no orphan survives" rather than against a literal, so the rule is what is pinned.
+  const KANJI = "\u{20B9F}"; // a non-BMP kanji; emoji split identically
+  const ORPHANED_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+
+  it("drops the orphaned half when the cut lands inside a surrogate pair", () => {
+    const cut = appendBoundedOutput(`AB${KANJI}CD`, "", 3);
+    expect(cut).toBe("CD");
+    expect(ORPHANED_SURROGATE.test(cut)).toBe(false);
+  });
+
+  it("keeps a pair the cut falls in front of — the guard must not eat a whole character", () => {
+    expect(appendBoundedOutput(`AB${KANJI}CD`, "", 4)).toBe(`${KANJI}CD`);
+  });
+
+  // The two guards compose: moving the cut past the orphan shifts the position the escape scan
+  // starts from, so a sequence that CLOSED before the cut must still be recognised as closed and
+  // its text kept. (The pair cannot itself be split inside a sequence — a surrogate pair among CSI
+  // parameter bytes is not something a terminal emits — so this is the composed case that exists.)
+  it("still resolves the escape scan correctly after skipping an orphan", () => {
+    const stream = `${ESC}[38;5;196m${KANJI}tail`;
+    expect(appendBoundedOutput(stream, "", 5)).toBe("tail");
+  });
+
   it("stays within the limit", () => {
     const stream = `${"z".repeat(500)}\n${"w".repeat(500)}`;
     expect(appendBoundedOutput(stream, "more", 64).length).toBeLessThanOrEqual(64);

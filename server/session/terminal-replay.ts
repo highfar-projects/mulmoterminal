@@ -98,10 +98,25 @@ const splitSequenceLength = (combined: string, cutAt: number, cut: string): numb
 export function appendBoundedOutput(buffer: string, data: string, limit: number): string {
   const combined = buffer + data;
   if (combined.length <= limit) return combined;
-  const cutAt = combined.length - limit;
+  const cutAt = afterOrphanedSurrogate(combined, combined.length - limit);
   const cut = combined.slice(cutAt);
   return cut.slice(splitSequenceLength(combined, cutAt, cut));
 }
+
+// The OTHER boundary a character-count cut can land inside (#1639). `slice` counts UTF-16 code
+// units, so cutting between the halves of a surrogate pair keeps the low half alone — which is
+// not an error anywhere: the string stays a legal JS string, JSON.stringify emits it as
+// "\udf9f", and it first becomes visible as U+FFFD at the top of the restored screen.
+//
+// Resolved BEFORE the escape scan below, so that one sees the real first character.
+//
+// Whether the code unit before it is the matching high half is deliberately not checked: in a
+// well-formed string it must be, and if the buffer already held a lone low surrogate then
+// dropping it is the right answer too — so the extra condition could only ever agree.
+const afterOrphanedSurrogate = (text: string, at: number): number => {
+  const code = text.charCodeAt(at);
+  return code >= 0xdc00 && code <= 0xdfff ? at + 1 : at;
+};
 
 // How far past `limit` the retained tail is allowed to run before it is cut back.
 //
