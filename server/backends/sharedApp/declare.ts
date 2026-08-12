@@ -135,10 +135,33 @@ export interface InviteSuccess {
  *
  *  One key, left where it was — the file belongs to the author, and an operation that rewrote it
  *  would be a worse version of editing it by hand. `role: null` removes. */
-export async function inviteToSharedApp(root: string, email: string, role: AppRoleName | null, cid: string): Promise<InviteSuccess | SharedAppFailure> {
+export async function inviteToSharedApp(root: string, rawEmail: string, role: AppRoleName | null, cid: string): Promise<InviteSuccess | SharedAppFailure> {
+  // Lower-cased, because the roster key is compared to `request.auth.token.email` by a rule that
+  // has no `lower()`. Firebase hands the token a lower-cased address, so an entry typed
+  // `Foo@Example.com` matches nobody — and once deployed the failure is silent in the worst way:
+  // the roster reads correctly to a human, and the person invited is refused everything with no
+  // error naming them. Written correctly here; a hand-edited one is stopped by
+  // `rosterCaseProblems` before a deploy can carry it.
+  const email = rawEmail.toLowerCase();
+  let written = email;
+  let ambiguous: string[] = [];
   let orphaned = false;
   const updated = await updateManifest(root, (manifest) => {
-    const next = nextMembers(manifest, email, role, cid);
+    // A hand edit can leave TWO keys for one person, differing only in case. Whichever this
+    // operation picked would be a guess, and the guess is invisible: the other entry keeps its
+    // permissions while the tool reports the change as done. So it is refused and named.
+    const matches = rosterMatches(manifest, email);
+    if (matches.length > 1) {
+      ambiguous = matches;
+      return null;
+    }
+    // Which key this operation is ABOUT is decided case-insensitively, before the normalization
+    // above can matter. Lower-casing and then looking the key up would make `invite` act on a
+    // different entry than the one on the roster: removing `Foo@Example.com` would find nothing,
+    // leave it in place, and still report success, and changing its role would add a SECOND entry
+    // beside it — two keys for one person, one of which still holds the old permissions.
+    written = matches[0] ?? email;
+    const next = nextMembers(manifest, written, role, cid);
     if (next === null) return null;
     // An app with no app-wide owner has no publisher: every deploy is refused, INCLUDING the one
     // that would put an owner back. The file can still be edited by hand, but this tool must not
@@ -150,18 +173,52 @@ export async function inviteToSharedApp(root: string, email: string, role: AppRo
     }
     return next;
   });
+  if (ambiguous.length > 1) {
+    return {
+      ok: false,
+      partial: false,
+      problems: [
+        `app.json has more than one roster entry for that address, differing only in case: ${quoted(ambiguous)}.`,
+        "Which one carries this person's permissions is not something this tool may guess — changing one and leaving the other is how somebody keeps access they were told they had lost. " +
+          "Merge them by hand into the lower-cased key (the one the rules compare against), then run this again.",
+      ],
+    };
+  }
   if (orphaned) {
     return {
       ok: false,
       partial: false,
       problems: [
-        `that would leave the app with no owner: ${email} is the only address holding \`"*": "owner"\`.`,
+        `that would leave the app with no owner: ${written} is the only address holding \`"*": "owner"\`.`,
         "An app with no owner cannot be deployed at all — not even to put an owner back. Add another owner first, then remove this one.",
       ],
     };
   }
   if (!updated.ok) return { ok: false, partial: false, problems: updated.problems };
-  return { ok: true, email, role, cid };
+  return { ok: true, email: written, role, cid };
+}
+
+/** Every roster key that is this address, differing at most in case — none, one, or (from a hand
+ *  edit) more than one.
+ *
+ *  The one that exists keeps its spelling rather than being migrated, even a spelling
+ *  `rosterCaseProblems` complains about.
+ *
+ *  An existing entry keeps its spelling rather than being migrated, even a spelling
+ *  `rosterCaseProblems` complains about. Two reasons, and the second is the one that bites: the
+ *  file belongs to the author and this tool only ever changes the key it is asked about, and an
+ *  upper-case key can be CORRECT — it is what the rules compare against when the provider hands
+ *  over that address, which is exactly the case `rosterCaseProblems` exempts. Silently lower-casing
+ *  it while changing somebody's role would revoke everything that person has. The deploy-time check
+ *  is where a wrong spelling is reported, and a hand edit is how it gets fixed. */
+/** The keys as they will be shown back to the author: quoted, in the order the file has them. */
+function quoted(keys: readonly string[]): string {
+  return keys.map((key) => JSON.stringify(key)).join(", ");
+}
+
+function rosterMatches(manifest: Record<string, unknown>, email: string): string[] {
+  const members = isRecord(manifest.members) ? manifest.members : {};
+  return Object.keys(members).filter((key) => key.toLowerCase() === email);
 }
 
 /** The declaration with one roster entry changed, or null when it already says that.
