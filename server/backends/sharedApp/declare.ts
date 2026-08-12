@@ -283,12 +283,17 @@ function racedFailure(conflict: string, aid: string): SharedAppFailure {
  *  forking your own app mints a second aid and abandons the first with every record in it, and
  *  nothing on disk would say it happened. */
 function forkConflict(manifest: Record<string, unknown>, checkedAid: string, email: string): string | null {
-  if (manifest.aid !== checkedAid) {
-    return `it declared ${JSON.stringify(checkedAid)} a moment ago and now declares ${JSON.stringify(manifest.aid)}.`;
+  // PARSED here, not just inspected. `updateManifest` establishes only that the new bytes are a
+  // JSON object, so without this the replacement's fields would be carried into the new
+  // declaration having been checked by nothing — the strict parse `fork` ran at the top was of the
+  // OLD file. A replacement with the same aid and a roster that is still not ours would otherwise
+  // sail through both questions below and produce an invalid fork, reported as a success.
+  const reparsed = parseAuthoredApp(JSON.stringify(manifest));
+  if (!reparsed.ok) return `it no longer parses as a declaration — ${reparsed.problems.join("; ")}`;
+  if (reparsed.app.aid !== checkedAid) {
+    return `it declared ${JSON.stringify(checkedAid)} a moment ago and now declares ${JSON.stringify(reparsed.app.aid)}.`;
   }
-  const members = isRecord(manifest.members) ? manifest.members : {};
-  const roles = members[email];
-  if (isRecord(roles) && roles[APP_WIDE] === "owner") {
+  if (reparsed.app.members[email]?.[APP_WIDE] === "owner") {
     return `it now names ${email} — this session's address — as the app's owner, which \`fork\` refuses: there would be nothing to fork, and the fork would abandon that app.`;
   }
   return null;
@@ -314,8 +319,10 @@ interface ForkNotes {
  *  `app.json` can hold, and THAT list grows in core: `participantRead` was already there and an
  *  allowlist of `collections` and `public` silently dropped it, which is a fork quietly changing
  *  who may read what. A new authored key added upstream is carried by default now — and it is safe
- *  to carry sight-unseen because the parse above is `.strict()`, so nothing can be in this file
- *  that core does not already model. The mistake still available to us is a key that should have
+ *  to carry sight-unseen because `forkConflict` has just parsed THESE bytes with the strict parser,
+ *  so nothing can be in this object that core does not already model. It parses them rather than
+ *  trusting the parse `fork` ran at the top: that one was of the file as it stood before the
+ *  reservation, which is not necessarily the file being rewritten here. The mistake still available to us is a key that should have
  *  gone, which is visible in the result, rather than one that vanished, which is not. */
 function forked(
   manifest: Record<string, unknown>,

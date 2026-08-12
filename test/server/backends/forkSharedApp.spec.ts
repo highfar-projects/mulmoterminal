@@ -207,6 +207,23 @@ describe("forkSharedApp", () => {
     expect(manifestAt(root).members).toEqual({ [ME.email]: { "*": "owner" } });
   });
 
+  // Same aid, still somebody else's roster — so both of the conflict questions say "carry on" —
+  // but the declaration itself is no longer valid. `updateManifest` only establishes that the new
+  // bytes are a JSON object, so without a re-parse these fields would be copied into the new
+  // declaration having been checked by nothing, and the fork reported as a success.
+  it("refuses when app.json stops being a valid declaration while the reservation is in flight", async () => {
+    docs.onSet = () => writeFileSync(path.join(root, "app.json"), JSON.stringify({ ...CLONED, whatIsThis: true }, null, 2));
+
+    const result = await forkSharedApp(root, undefined, undefined);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.partial).toBe(true);
+    expect(result.problems.join(" ")).toContain("no longer parses as a declaration");
+    // Untouched — including the key that made it invalid, because repairing it is the author's.
+    expect(JSON.parse(readFileSync(path.join(root, "app.json"), "utf-8")).whatIsThis).toBe(true);
+  });
+
   // The other half: the file became a DIFFERENT app. The checks above were about a file that is
   // gone, so there is nothing to carry over and nothing that was validated.
   it("refuses when app.json becomes a different app while the reservation is in flight", async () => {
