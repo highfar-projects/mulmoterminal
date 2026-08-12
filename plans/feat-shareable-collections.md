@@ -3139,9 +3139,24 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
     つまり**フィールド名しか手元に無く、入力欄が描けない**。訪問者が読める文書は
     `apps/{aid}/config/*`（`allow read: if true`）だけなので、**publish がそこに
     フォームの形も載せる**: `createFields` に載っているフィールドだけの
-    `{ label, type, values? }`。core の射影ではなく **MT が書く**（その文書を書いているのは
-    MT なので、MulmoClaude の変更は要らない）。`createFields` の外を載せないのは、
-    書けない欄のラベルを世界に配る理由が無いから
+    `{ label, type, values?, required? }` と、コレクション単位の `statusField`。core の射影では
+    なく **MT が書く**（その文書を書いているのは MT なので、MulmoClaude の変更は要らない）。
+    `createFields` の外を載せないのは、書けない欄のラベルを世界に配る理由が無いから。
+
+    `required` は**スキーマの `required` と `public.submit.<cid>.validate.required` の和**。
+    どちらもルールが公開 create で見るので、片方だけだとページは欄に印を付けられず、訪問者は
+    **どの欄が足りないのか名前の出ない権限エラー**として知ることになる。`statusField` を載せる
+    のは、既定が `status` ではなく**推測できない**から — create ルールは
+    `collections[cid].statusField` の欄が `initialStatus` と等しいことを要求し、core の設定射影は
+    それを運ばない。
+
+    載せる**型も絞る**（実装時に決定）: `string` `text` `markdown` `number` `boolean` `date`
+    `datetime` `email` `enum`。`ref` `table` `money` は、公開ページがこの射影しか読めない以上
+    `to` も行スキーマも通貨設定も届かず**正しく埋められない入力**になる。host が計算する型
+    （`derived` `embed` `backlinks` `rollup` `toggle` `flag` = core の `COMPUTED_TYPES`）は
+    そもそも誰も submit してはいけない。どちらも**宣言の時点で断る** — `createFields` は
+    ページが描く元であるだけでなく、公開 create をルールが判定するホワイトリストそのものなので、
+    射影から落とすだけでは「外部からの値を受け入れ続ける」状態が残るから
 13. **`then.email` + Trigger Email 拡張**
 14. **`schedule` ビュー** → **美容室シナリオが揃う**
 15. **`idFrom` / `finalize` / `window` / `aggregate`**（UI と集計側）→ **アンケートシナリオが揃う**
