@@ -50,16 +50,22 @@ words below are for you, not for them: an author does not need to know what a `c
   and it is a UUID on purpose — a memorable one would be first-come-first-served across every user
   of the deployment.
 
-### 2. Write the collection THROUGH `manageCollection`
+### 2. Write the collection
 
 One collection per kind of record — a survey has one (`responses`), a booking app might have two
 (`bookings`, `services`).
 
-**Do not hand-write `schema.json`.** Call `manageCollection` with `action: "schemaDocs"` for the
-shape, then `action: "putSchema"` to write it. The shape is not what a reasonable person guesses:
-`fields` is an OBJECT keyed by field name (not a list), `primaryKey` and `icon` are required, and
-the key for a field's human name is `label`. A hand-written file in the shape you would design
-does not parse, and nothing tells you until a deploy finds no collections at all.
+**A NEW collection is created by writing the files**: `SKILL.md` and `schema.json` under
+`.claude/skills/<slug>/`. `putSchema` is EDIT-ONLY and refuses a collection that does not exist
+yet ("unknown collection … create it by writing SKILL.md + schema.json"), so do not try to create
+one with it. Use it afterwards, to CHANGE a schema.
+
+**Read the shape first**: `manageCollection` with `action: "schemaDocs"`, and
+`topic: "Shared storage (firestore)"` for this part specifically. The shape is not what a
+reasonable person guesses — `fields` is an OBJECT keyed by field name (not a list), `primaryKey`
+and `icon` are required, and the key for a field's human name is `label`. A schema in the shape
+you would design does not parse, and a collection whose schema fails validation is **skipped
+silently**: nothing errors, it simply never appears.
 
 The one thing that differs from an ordinary collection:
 
@@ -68,8 +74,11 @@ The one thing that differs from an ordinary collection:
 ```
 
 That is what makes the records shared. Declare no `dataPath` beside it — exactly one of the two.
-Writing this schema is also what generates the app's `aid`, which is why the declaration comes
-first.
+
+**A shared collection is invisible until the app has an `aid`**, which is generated for you — by
+the first deploy, or by `putSchema` when you edit one later. So between writing the files and
+deploying, `getSchema` reporting "unknown collection" is expected, not a mistake to chase. Deploy,
+then look.
 
 **Everything in the folder is shared or nothing is.** Do not mix a shared collection and a local
 one in an app's repository.
@@ -187,3 +196,16 @@ workspace-data tool group. If they are not in your tool list, **stop and say so*
 cannot be deployed from here, and writing `app.json` and a schema by hand produces files nothing
 can act on. Point the user at the launcher's tool-group switch for this folder rather than
 carrying on.
+
+## Two refusals that are NOT your cue to start editing
+
+The run this skill was written from lost several minutes to each of these, and both times the
+repair made things worse — an `aid` was deleted and a second app was created by accident.
+
+- **`getSchema` / `putSchema` says "unknown collection".** For a collection you just wrote, that
+  means its schema has not been accepted yet — most often because the app has no `aid` until the
+  first deploy. Deploy; do not rewrite the schema, and do not move the directory.
+- **Anything about permissions on `apps/{aid}`.** The `aid` in `app.json` is the app's identity.
+  Removing it does not reset anything: the next deploy mints a NEW one and the old app stays where
+  it is, owned by nobody who can reach it. If a deploy is refused, read what it says and fix that;
+  never edit the `aid` by hand.

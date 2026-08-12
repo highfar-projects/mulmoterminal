@@ -53,8 +53,15 @@ describe("the shared-app skill's schema advice", () => {
     expect(body).toContain("putSchema");
   });
 
+  // The run this was written from tried to CREATE a collection with `putSchema` and was refused:
+  // it is edit-only. Getting that backwards costs the agent its whole first attempt.
+  it("says that a new collection is created by writing the files", () => {
+    expect(body).toContain("EDIT-ONLY");
+    expect(body).toContain("SKILL.md");
+  });
+
   it("says what a guessed schema gets wrong", () => {
-    for (const fact of ["`fields` is an OBJECT", "`primaryKey` and `icon` are required", "`label`"]) {
+    for (const fact of ["`fields` is an OBJECT", "`primaryKey`", "`icon` are required", "`label`"]) {
       expect(body).toContain(fact);
     }
   });

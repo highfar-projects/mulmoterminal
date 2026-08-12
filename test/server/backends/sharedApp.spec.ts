@@ -29,6 +29,9 @@ class FakeDocs implements FirestoreDocs {
   readonly writes: string[] = [];
   /** Path/id whose next write throws — how a half-finished run is produced. */
   failAt: string | null = null;
+  /** Model the rules' actual shape: a shared collection's records are authorized through
+   *  `apps/{aid}`, so while that document is missing, reading them is denied rather than empty. */
+  readsDeniedUntilApp = false;
 
   private bucket(collectionPath: string): Map<string, Record<string, unknown>> {
     const existing = this.store.get(collectionPath);
@@ -39,7 +42,9 @@ class FakeDocs implements FirestoreDocs {
   }
 
   list = (collectionPath: string): Promise<FirestoreDoc[]> =>
-    Promise.resolve([...this.bucket(collectionPath)].sort(([left], [right]) => (left < right ? -1 : 1)).map(([id, data]) => ({ id, data })));
+    this.readsDeniedUntilApp && !this.app() && collectionPath.includes("/collections/")
+      ? Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }))
+      : Promise.resolve([...this.bucket(collectionPath)].sort(([left], [right]) => (left < right ? -1 : 1)).map(([id, data]) => ({ id, data })));
 
   get = (collectionPath: string, docId: string): Promise<unknown | null> => Promise.resolve(this.bucket(collectionPath).get(docId) ?? null);
 
@@ -139,6 +144,19 @@ describe("shared app deploy / publish / unpublish", () => {
     expect(docs.store.get(`apps/${AID}/config`)).toBeUndefined();
   });
 
+  it("creates an app whose records cannot be read yet — the first deploy of all", async () => {
+    // The deadlock this pins: a shared collection's records are authorized THROUGH `apps/{aid}`,
+    // so before that document exists the records cannot be read at all. The migration gate read
+    // that as "the live records could not be read", which is the one refusal `confirm` may not
+    // override — and a new app could never be created.
+    docs.readsDeniedUntilApp = true;
+
+    const result = await deploySharedApp(root, stamp);
+    expect(result.ok).toBe(true);
+    expect(docs.app()).toBeDefined();
+    expect(docs.doc(`apps/${AID}/staging`, "bookings")).toBeDefined();
+  });
+
   it("writes the app document before the staged schemas — the staging rules resolve the owner through it", async () => {
     await deploySharedApp(root, stamp);
     expect(docs.writes).toEqual([`set apps/${AID}`, `set apps/${AID}/staging/bookings`]);
@@ -232,6 +250,9 @@ describe("shared app deploy / publish / unpublish", () => {
   });
 
   it("stops at live records that would not fit the new schema, and confirming stages it anyway", async () => {
+    // The app has to EXIST for this gate to run: before it does there are no live records, and the
+    // records cannot even be read — the rules resolve their roster from the app document.
+    await deploySharedApp(root, stamp);
     docs.store.set(`apps/${AID}/collections/bookings/items`, new Map([["1", { id: "1" }]]));
     writeFileSync(
       path.join(root, ".claude", "skills", "bookings", "schema.json"),
@@ -241,7 +262,6 @@ describe("shared app deploy / publish / unpublish", () => {
     const refused = await deploySharedApp(root, stamp);
     expect(refused.ok).toBe(false);
     expect(refused.ok === false && refused.problems.join("\n")).toContain("would not satisfy the schema");
-    expect(docs.app()).toBeUndefined();
 
     const confirmed = await deploySharedApp(root, { ...stamp, confirm: true });
     expect(confirmed.ok === true && confirmed.recordIssues).toBe(1);
@@ -266,6 +286,8 @@ describe("shared app deploy / publish / unpublish", () => {
   });
 
   it("does not let a confirmed deploy buy the publish", async () => {
+    // Same reason as above: the gate needs an app to exist before there is anything live in it.
+    await deploySharedApp(root, stamp);
     // The reason the scan runs at BOTH boundaries: deploy's confirm says "let me stage this
     // anyway", which mid-migration is the useful thing. It is not the same sentence as "let
     // everyone have it", so publish asks again and needs its own confirm.

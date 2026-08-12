@@ -18,7 +18,7 @@ import { isRecord } from "../../../common/isRecord.js";
 import { ensureAid } from "./ensureAid.js";
 import { APPS_COLLECTION, appStagingPath, projectDeploy, type PublishStamp } from "@mulmoclaude/core/collection/server";
 import { gitStamp, schemasOf, sharedAppContext, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
-import { recordRefusal, scanRecords } from "./records.js";
+import { EMPTY_SCAN, recordRefusal, scanRecords } from "./records.js";
 import { reserveSlug, retireSlug, type SlugResult } from "./slug.js";
 import { runWrites } from "./writes.js";
 
@@ -169,13 +169,24 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
   if (!context.ok) return context;
   const { authored, collections, handle } = context;
 
-  const scan = await scanRecords(collections, root);
+  const { aid } = authored;
+  // The app document FIRST, because the migration gate below depends on it — not merely for the
+  // projection.
+  //
+  // A shared collection's records are authorized through `apps/{aid}`: the rules resolve the
+  // roster from that document. On a FIRST deploy it does not exist, so reading the records is
+  // denied — and the gate reads that as "the live records could not be read", which is the one
+  // refusal `confirm` may not override. The app could then never be created at all: every deploy
+  // of a new app died on a check about records that do not exist yet.
+  const current = await readCurrentApp(handle, aid);
+  if (!current.ok) return current;
+
+  // There is nothing live to break before the app exists, so the gate has nothing to say. It
+  // returns in force on the next deploy, when there IS an app and there may be records in it.
+  const scan = current.app === null ? EMPTY_SCAN : await scanRecords(collections, root);
   const refusal = recordRefusal(scan, "deploy", opts.confirm);
   if (refusal) return { ok: false, partial: false, problems: refusal };
 
-  const { aid } = authored;
-  const current = await readCurrentApp(handle, aid);
-  if (!current.ok) return current;
   const stampSource = await (opts.resolveCommit ?? gitStamp)(root);
   const stamp: PublishStamp = {
     uid: handle.uid,
