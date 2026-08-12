@@ -17,6 +17,10 @@ import { isRecord } from "../../../common/isRecord.js";
 import { declarationProblems, sharedCollections, type SharedAppFailure } from "./context.js";
 import { createManifest, newAid, updateManifest } from "./manifestWrite.js";
 
+/** The roster key that means "every collection". A member's roles map is keyed by cid, with this
+ *  as the fallback the rules drop to (`role()` reads `cid` first, then this). */
+const APP_WIDE = "*";
+
 /** The roles the rules understand, in the order a person picks from.
  *
  *  The last two are row-scoped in opposite directions: `participant` reads
@@ -200,6 +204,22 @@ export interface InviteSuccess {
  *  One key, left where it was — the file belongs to the author, and an operation that rewrote it
  *  would be a worse version of editing it by hand. `role: null` removes. */
 export async function inviteToSharedApp(root: string, rawEmail: string, role: AppRoleName | null, cid: string): Promise<InviteSuccess | SharedAppFailure> {
+  // `assignee` is not an app-wide role, and it is refused HERE rather than left
+  // to the deploy for the same reason every other refusal in this file is: the
+  // write would otherwise succeed, the tool would report the invitation as done,
+  // and the author would open `app.json`, find exactly what they asked for, and
+  // have nothing to work back from. Which rows are yours is a per-collection
+  // question, so the role needs a collection to be about.
+  if (role === "assignee" && cid === APP_WIDE) {
+    return {
+      ok: false,
+      partial: false,
+      problems: [
+        `"assignee" cannot be given for the whole app: which rows belong to a member is declared per collection (\`collections.<cid>.assigneeField\`).`,
+        `Name the collection instead — invite ${rawEmail} as assignee with cid "bookings", once for each collection they are responsible for.`,
+      ],
+    };
+  }
   // Lower-cased, because the roster key is compared to `request.auth.token.email` by a rule that
   // has no `lower()`. Firebase hands the token a lower-cased address, so an entry typed
   // `Foo@Example.com` matches nobody — and once deployed the failure is silent in the worst way:
