@@ -15,9 +15,9 @@ because a job that is already red cannot report the next breakage.
 
 ## Cause 1 — POSIX literals as expectations (3 specs)
 
-The class `docs/windows-gotchas.md` already documents under "Tests that handle paths". The code
-canonicalises with the platform's own `path`, which drive-qualifies on Windows, so `"/srv/mag2"`
-as an expectation matches on a developer's machine and nowhere else:
+This is the failure class `docs/windows-gotchas.md` already describes under "Tests that handle
+paths". The code canonicalises with the platform's own `path`, which drive-qualifies on Windows,
+so `"/srv/mag2"` as an expectation matches on a developer's machine and nowhere else:
 
 ```
 expected [ 'D:\srv\mag2', 'D:\srv\site', 'D:\srv\ws' ] to deeply equal [ '/srv/mag2', … ]
