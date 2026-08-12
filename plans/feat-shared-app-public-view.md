@@ -1,8 +1,9 @@
 # 共有アプリ: 公開ページを「予約サイト」にする（公開カスタムビュー + 枠の排他）
 
 **状態**: 設計のみ。実装は未着手。2026-08-12 の議論から。
-レビュー（#1658）で見つかった 5 点を反映済み: id の不変性、枠の実在確認、iframe の
-`event.source` 検証、`config/view` の撤去、顧客は delete できないこと。
+レビュー（#1658）で見つかった 7 点を反映済み: id の不変性、宣言そのものの変更禁止、
+枠の実在**と状態**の確認（`untilField` を含む）、iframe の `event.source` 検証、
+`config/view` の撤去、顧客は delete できないこと。
 全体設計は [`feat-shareable-collections.md`](./feat-shareable-collections.md)、
 行スコープの承認は [`feat-shared-app-assignee-role.md`](./feat-shared-app-assignee-role.md)、
 先着枠は [`feat-shared-app-first-come.md`](./feat-shared-app-first-come.md)。
@@ -64,7 +65,7 @@ idFrom: z.enum(["auto", "auth.uid", "auth.uid+field"])
 
 **`firestore.rules`** — `idOk` に 1 分岐:
 
-```
+```text
 || (s.idFrom == "field" && "idField" in s
     && s.idField in request.resource.data
     && request.resource.data[s.idField] is string
@@ -80,7 +81,7 @@ idFrom: z.enum(["auto", "auth.uid", "auth.uid+field"])
 
 `updateWith` に足す:
 
-```
+```text
 && (!("idFrom" in s) || s.idFrom != "field" || !(s.idField in changed()))
 ```
 
@@ -98,7 +99,7 @@ id の一意性が防ぐのは「**同じ文字列**を 2 回書くこと」だ�
 "idFrom": "field", "idField": "slot", "idIn": "slots"
 ```
 
-```
+```text
 && exists(/databases/$(database)/documents/apps/$(aid)/collections/$(s.idIn)/items/$(request.resource.data[s.idField]))
 ```
 
@@ -108,6 +109,56 @@ id の一意性が防ぐのは「**同じ文字列**を 2 回書くこと」だ�
 
 `idIn` は `idFrom: "field"` のときだけ意味を持つ。**必須にする** — 省略を許せば
 「でっちあげの枠を作れるアプリ」が黙って作れてしまい、それは deploy 時に言うべきこと。
+
+### `exists()` は床であって天井ではない
+
+存在するだけの枠は「空いている枠」ではない。**締め切った枠・取り消した枠・そもそも
+受付前の枠も `exists()` を通る。** 要件は「今空いている枠」なので、枠自身の状態と時刻が
+create の判定に入っていなければならない。UI の選択結果を信頼しないという話は、
+`exists()` で終わりではない。
+
+3 つに分かれ、**2 つは既にあり、1 つは無い**:
+
+| 枠の条件 | 今 |
+|---|---|
+| まだ開いていない | **ある**。`window.fromField`（同じレコードを既に `get()` している） |
+| 枠自体が取り消された・閉じた | **ある**。`idIn` の `get()` に状態の一致を足す（下記） |
+| 受付の締切を過ぎた（枠ごと） | **無い**。`window.untilField` が要る |
+
+状態の一致は `idIn` を単なるコレクション名から広げる:
+
+```json
+"idFrom": "field", "idField": "slot",
+"idIn": { "collection": "slots", "where": { "field": "status", "equals": "open" } }
+```
+
+```text
+&& (!("where" in s.idIn)
+    || get(slotPath).data[s.idIn.where.field] == s.idIn.where.equals)
+```
+
+`exists()` は `get()` に吸収される（存在しなければ `get()` 自体が評価エラーで deny に
+落ちるので、判定は 1 回で済む）。
+
+**`untilField` はこの機能の一部として入れる。** 当初は「あとで足せる対称な機能」と
+書いたが、締切のない予約受付は要件を満たさない。`fromField` の `openedOk` を写して
+比較の向きを変えるだけ（`until` は排他のまま — 半開区間の既存の約束を崩さない）。
+
+### 宣言そのものを後から変えられないようにする
+
+不変にしたのはドキュメントの**フィールド**であって、**宣言**ではない。`idField` を
+`slot` から `slotId` に、`idIn` を別コレクションに変えると、**過去の ID 空間と新しい ID
+空間が分かれる** — 古い行が押さえていたはずの枠を、新しい規則の下で別の ID として
+もう一度取れる。排他はドキュメント ID の衝突ひとつに乗っているので、ID の作り方が
+変わった時点で過去の行は何も押さえていない。
+
+ルールでは検出できない（既存行を走査できない）。**deploy / publish の門で拒否する。**
+そこには既に「新しいスキーマを満たさない既存レコード」を live から読んで数える門が
+あり（`records.ts` の `scanRecords`）、これはその隣に並ぶ同じ種類の問い。
+
+**`confirm` では通さない。** 他の記録の門は「壊れると分かっていて書く」を許すが、
+ここで壊れるのは記録ではなく**排他の保証**で、壊れたことは誰にも見えない。前に進む道は
+コレクションを空にするか、新しい cid で作り直すこと。そう言う。
 
 ### `ownRow` には足さないこと
 
@@ -152,7 +203,7 @@ id の一意性が防ぐのは「**同じ文字列**を 2 回書くこと」だ�
 
 ### 置き場所は既に空いている
 
-```
+```text
 match /config/{docId} {
   allow read:  if true;
   allow write: if role(app(aid), '*') == "owner";
@@ -170,7 +221,7 @@ live に出てから気づく形にしない）。
 
 `src/utils/customViewSrcdoc.ts` のビューはこう動く:
 
-```
+```text
 window.__MC_VIEW = { slug, token, dataUrl, origin, locale, dict, onChange, openItem, startChat, t }
 ```
 
@@ -181,7 +232,7 @@ window.__MC_VIEW = { slug, token, dataUrl, origin, locale, dict, onChange, openI
 
 ### 置き換え — 親が読み、ビューは描くだけ
 
-```
+```text
 親（PublicApp.vue）─ Firestore を訪問者の権限で読む（public.read のコレクション）
       │ postMessage: { collections: { stylists: [...], shifts: [...], bookings: [...] } }
       ▼
@@ -301,8 +352,8 @@ publish が「対になるものを書く」操作である以上、撤去も対
 | | 1 (`idFrom`) | 2 (公開ビュー) | 3 (salon) |
 |---|---|---|---|
 | mulmoserver | `firestore.rules`（+ deploy） | `PublicApp.vue` / `usePublicApp` / bridge | — |
-| mulmoclaude | `publishManifest` の enum + `idIn` | `public.view` の宣言 + 検査 | — |
-| mulmoterminal | — | publish（`config/view` の書き出しと削除）+ 検査 | テンプレート |
+| mulmoclaude | `publishManifest` の enum + `idIn` + `untilField` | `public.view` の宣言 + 検査 | — |
+| mulmoterminal | 排他キーの変更を拒否する門 | publish（`config/view` の書き出しと削除）+ 検査 | テンプレート |
 
 1 は**ルールの deploy が先**（上記）。2 は core の宣言が先で、mulmoserver の描画は後から
 足しても既存アプリを壊さない（`public.view` が無ければ今の挙動）。
