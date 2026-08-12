@@ -11,7 +11,7 @@
 // first collection unopenable until they had published — the wrong end of the process to discover
 // it from.
 import { randomUUID } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { APP_MANIFEST_FILE } from "@mulmoclaude/core/collection/server";
 import { isRecord } from "../../../common/isRecord.js";
@@ -62,14 +62,30 @@ export async function ensureAid(root: string): Promise<EnsureAidResult> {
   if (typeof current === "string" && current.length > 0) return { ok: true, aid: current, created: false };
 
   const aid = randomUUID();
+  // Two spaces and a trailing newline: this file is committed and edited by hand, so it is
+  // written the way the author would have.
+  const body = `${JSON.stringify({ ...parsed, aid }, null, 2)}\n`;
+  // Write beside it and RENAME, rather than writing over it.
+  //
+  // `writeFile` truncates first, so a failure between the truncate and the last byte leaves a
+  // half-written `app.json` — and the file it would destroy is the author's declaration, holding
+  // the roster and the public settings, which nothing here could put back. Rename is atomic
+  // within a directory: a reader sees the old file or the new one. That is also what makes
+  // "nothing else was changed" a promise rather than a hope.
+  //
+  // Same directory on purpose — a rename across filesystems is a copy, and the temp directory is
+  // routinely on another one.
+  const scratch = path.join(path.dirname(manifestPath), `.${path.basename(manifestPath)}.${aid}.tmp`);
   try {
-    // Two spaces and a trailing newline: this file is committed and edited by hand, so it is
-    // written the way the author would have.
-    await writeFile(manifestPath, `${JSON.stringify({ ...parsed, aid }, null, 2)}\n`, "utf-8");
+    await writeFile(scratch, body, "utf-8");
+    await rename(scratch, manifestPath);
   } catch (err) {
+    // Best effort: the scratch file is only litter, and the failure being reported is the one
+    // worth reporting.
+    await unlink(scratch).catch(() => {});
     return {
       ok: false,
-      problems: [`cannot write ${manifestPath}: ${String(err)}`, "Nothing else was changed."],
+      problems: [`cannot write ${manifestPath}: ${String(err)}`, "Nothing else was changed — the declaration is as it was."],
     };
   }
   return { ok: true, aid, created: true };
