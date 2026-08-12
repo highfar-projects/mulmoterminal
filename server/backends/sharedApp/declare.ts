@@ -228,7 +228,21 @@ export async function forkSharedApp(root: string, name: string | undefined, slug
   if (reserved) return reserved;
 
   const taken: ForkNotes = { carried: [], previousSlug: undefined };
-  const written = await updateManifest(root, (manifest) => forked(manifest, { aid, owner: handle.email, name, slug }, taken));
+  // RE-CHECKED under the write lock, against the manifest `updateManifest` re-reads — not against
+  // the copy validated above.
+  //
+  // Everything before this point ran before an awaited network call, and `app.json` is an ordinary
+  // committed file: a checkout, a rebase or a person with an editor can replace it while the
+  // reservation is in flight. What would then be overwritten is a declaration nothing checked —
+  // and the case that matters is the file becoming an app this address DOES own, which is exactly
+  // what the guard above exists to refuse. It would have been refused a moment earlier and
+  // silently obeyed a moment later.
+  const race: { conflict: string | null } = { conflict: null };
+  const written = await updateManifest(root, (manifest) => {
+    race.conflict = forkConflict(manifest, parsed.app.aid, handle.email);
+    return race.conflict === null ? forked(manifest, { aid, owner: handle.email, name, slug }, taken) : null;
+  });
+  if (race.conflict !== null) return racedFailure(race.conflict, aid);
   if (!written.ok) {
     // PARTIAL for `init`'s reason, and one more: app.json is still the app this was CLONED from,
     // so the repository did not half-become anything. The reservation is an unused shelf entry.
@@ -243,6 +257,41 @@ export async function forkSharedApp(root: string, name: string | undefined, slug
     };
   }
   return { ok: true, aid, owner: handle.email, slug, previousSlug: taken.previousSlug, carried: taken.carried };
+}
+
+/** The refusal for a manifest that changed under the fork. PARTIAL: nothing reached the disk, but
+ *  the reservation did — an unused shelf entry rather than a lockout, and named here because this
+ *  is the only place it is ever said. */
+function racedFailure(conflict: string, aid: string): SharedAppFailure {
+  return {
+    ok: false,
+    partial: true,
+    problems: [
+      `app.json changed while the new app id was being reserved: ${conflict}`,
+      "Nothing was written to disk — the declaration that is there now is untouched, and it is not the one this fork was checked against.",
+      `The app id ${aid} was reserved on the server and is owned by this address; it is simply left unused. Look at app.json, and run \`fork\` again if it is still somebody else's app.`,
+    ],
+  };
+}
+
+/** Why the manifest under the write lock is not the one this fork was checked against, or null
+ *  when it is the same app and still somebody else's.
+ *
+ *  Two questions, and the second is the one with teeth. The aid answers "is this even the same
+ *  app" — a different one means the checks above were about a file that is gone. The roster
+ *  answers "is it still not mine", which is the refusal this whole operation is built around:
+ *  forking your own app mints a second aid and abandons the first with every record in it, and
+ *  nothing on disk would say it happened. */
+function forkConflict(manifest: Record<string, unknown>, checkedAid: string, email: string): string | null {
+  if (manifest.aid !== checkedAid) {
+    return `it declared ${JSON.stringify(checkedAid)} a moment ago and now declares ${JSON.stringify(manifest.aid)}.`;
+  }
+  const members = isRecord(manifest.members) ? manifest.members : {};
+  const roles = members[email];
+  if (isRecord(roles) && roles[APP_WIDE] === "owner") {
+    return `it now names ${email} — this session's address — as the app's owner, which \`fork\` refuses: there would be nothing to fork, and the fork would abandon that app.`;
+  }
+  return null;
 }
 
 /** What the rewrite reports back about the declaration it replaced: an out-parameter because

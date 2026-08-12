@@ -38,9 +38,12 @@ class FakeDocs implements FirestoreDocs {
   readonly store = new Map<string, Record<string, unknown>>();
   readonly writes: string[] = [];
   refuseWrites = false;
+  /** Runs INSIDE the reservation — the window between fork's checks and its write. */
+  onSet: (() => void) | null = null;
 
   async set(collectionPath: string, id: string, doc: Record<string, unknown>): Promise<void> {
     if (this.refuseWrites) throw Object.assign(new Error("PERMISSION_DENIED: Missing or insufficient permissions."), { code: "permission-denied" });
+    this.onSet?.();
     this.writes.push(`${collectionPath}/${id}`);
     this.store.set(`${collectionPath}/${id}`, doc);
   }
@@ -182,6 +185,38 @@ describe("forkSharedApp", () => {
     expect(docs.writes).toEqual([]);
     // Untouched: the aid is still the one it was.
     expect(manifestAt(root).aid).toBe(CLONED.aid);
+  });
+
+  // The window the owner guard alone does not cover: it runs BEFORE the awaited reservation, and
+  // `app.json` is an ordinary committed file a checkout or an editor can replace meanwhile. The
+  // fake reserves by writing, so its `set` IS that window.
+  it("refuses when app.json becomes an app this address owns while the reservation is in flight", async () => {
+    docs.onSet = () => writeFileSync(path.join(root, "app.json"), JSON.stringify({ ...CLONED, members: { [ME.email]: { "*": "owner" } } }, null, 2));
+
+    const result = await forkSharedApp(root, undefined, undefined);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    // PARTIAL: the reservation is live, and nothing reached the disk.
+    expect(result.partial).toBe(true);
+    const said = result.problems.join(" ");
+    expect(said).toContain("changed while the new app id was being reserved");
+    expect(said).toContain("Nothing was written to disk");
+    // The app that was there is untouched — including the roster that made it refusable.
+    expect(manifestAt(root).aid).toBe(CLONED.aid);
+    expect(manifestAt(root).members).toEqual({ [ME.email]: { "*": "owner" } });
+  });
+
+  // The other half: the file became a DIFFERENT app. The checks above were about a file that is
+  // gone, so there is nothing to carry over and nothing that was validated.
+  it("refuses when app.json becomes a different app while the reservation is in flight", async () => {
+    docs.onSet = () => writeFileSync(path.join(root, "app.json"), JSON.stringify({ ...CLONED, aid: "99999999-2222-3333-4444-555555555555" }, null, 2));
+
+    const result = await forkSharedApp(root, undefined, undefined);
+
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.problems.join(" ")).toContain("changed while the new app id was being reserved");
+    expect(manifestAt(root).aid).toBe("99999999-2222-3333-4444-555555555555");
   });
 
   it("refuses a repository that declares no app at all, and points at init", async () => {
