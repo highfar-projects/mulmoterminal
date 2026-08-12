@@ -11,6 +11,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import {
+  APPS_COLLECTION,
   APP_MANIFEST_FILE,
   discoverCollections,
   firestoreHandle,
@@ -19,7 +20,9 @@ import {
   type AuthoredApp,
   type LoadedCollection,
 } from "@mulmoclaude/core/collection/server";
+import type { PublishStamp } from "@mulmoclaude/core/collection/server";
 import type { CollectionSchema } from "@mulmoclaude/core/collection";
+import { isRecord } from "../../../common/isRecord.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -158,4 +161,54 @@ export async function sharedAppContext(root: string): Promise<SharedAppContext |
   const problems = declarationProblems(authored.app, collections, handle);
   if (problems.length > 0) return { ok: false, partial: false, problems };
   return { ok: true, authored: authored.app, collections, handle };
+}
+
+/** The app document as it stands, or the refusal — shared by deploy and publish, which read it
+ *  for the same two reasons and must report a failed read the same way.
+ *
+ *  The read decides what the rules care about: whether `owner` is stamped or carried forward, and
+ *  which of the other operation's fields survive the replacement. A rejection — permission,
+ *  network, quota — has to become the documented result rather than escape as a raw exception,
+ *  because a raw one reaches the agent as a tool crash and gets retried rather than reported. It
+ *  happens before any write, which is the part the caller most needs told.
+ *
+ *  It also normalizes "was there an app document?" ONCE, for the projection and the report both.
+ *  Two spellings of that question disagree the moment `get` resolves to something that is neither
+ *  a record nor null: the projection stamps a fresh `owner` while the reply says "Updated".
+ *
+ *  `reassurance` stays the operation's own — the two differ in WHY reading again is safe, and one
+ *  sentence covering both would have to be vague enough to reassure about neither. */
+export async function readCurrentApp(
+  handle: SharedAppHandle,
+  aid: string,
+  what: string,
+  reassurance: string,
+): Promise<{ ok: true; app: Record<string, unknown> | null } | SharedAppFailure> {
+  try {
+    const existing = await handle.docs.get(APPS_COLLECTION, aid);
+    return { ok: true, app: isRecord(existing) ? existing : null };
+  } catch (err) {
+    return {
+      ok: false,
+      partial: false,
+      problems: [
+        `${what} failed while reading the current app document (apps/${aid}): ${err instanceof Error ? err.message : String(err)}`,
+        `Nothing was written. ${reassurance}`,
+      ],
+    };
+  }
+}
+
+/** Who, when, and from which commit — resolved the same way by both operations.
+ *
+ *  Sharing the builder is what keeps the two from drifting into stamping different clocks, or
+ *  dropping `dirty` on one side: a commit that does not describe what was written is worse than
+ *  no commit, because it looks auditable. (The KEY is `publishedAt` whichever operation stamps
+ *  it; the deploy projection re-reads it as `deployedAt`.) */
+export async function stampFor(handle: SharedAppHandle, root: string, opts: SharedAppOptions): Promise<{ stamp: PublishStamp; dirty: boolean }> {
+  const source = await (opts.resolveCommit ?? gitStamp)(root);
+  return {
+    stamp: { uid: handle.uid, email: handle.email, publishedAt: (opts.now ?? Date.now)(), commit: source.commit, dirty: source.dirty },
+    dirty: source.dirty === true,
+  };
 }
