@@ -290,7 +290,12 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
     slug: slug?.slug,
     cids: deployed.staging.map((entry) => entry.cid),
     withdrawn: stale.cids,
-    created: existingApp === null,
+    // "Created" means THIS deploy is the first, and that is no longer the same question as
+    // "the document was absent": `init` reserves `apps/{aid}` before it writes `app.json`, so the
+    // document exists from the moment the app is declared. `deployedAt` is written by every
+    // deploy and by nothing else, so its absence is the first-deploy signal that survives the
+    // reservation.
+    created: existingApp === null || existingApp.deployedAt === undefined,
     commit: stamp.commit,
     dirty: stampSource.dirty === true,
     recordIssues: scan.records,

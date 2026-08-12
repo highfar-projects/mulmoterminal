@@ -38,6 +38,13 @@ the address this machine is SIGNED IN with — you cannot read that, and the add
 you is the one that fails at deploy. `init` writes it, generates the `aid`, and refuses if the
 repository already declares an app.
 
+`init` also TAKES the `aid` on the server before it writes the file, so it needs a connected
+session and reports a refusal instead of leaving a half-started app. That is not bookkeeping: the
+id lives on a shelf shared by everyone using this deployment, `app.json` is meant to be committed,
+and an id that is written down but not yet taken can be taken by whoever reads the file first — and
+an app id can never be freed. If the reservation is refused, nothing was written and `init` can
+just be run again.
+
 `slug` is the name in the URL people will be given. Take it from what the thing IS
 (`aug-talk-survey`), lowercase with hyphens. It is a wish: if it is taken, a number is appended and
 written back.
