@@ -21,6 +21,7 @@ import { chmod, readFile, realpath, rename, stat, unlink, writeFile } from "node
 import path from "node:path";
 import { APP_MANIFEST_FILE } from "@mulmoclaude/core/collection/server";
 import { isRecord } from "../../../common/isRecord.js";
+import { serializeBy } from "./serialize.js";
 
 export type ManifestFailure = { ok: false; problems: string[] };
 
@@ -30,32 +31,11 @@ export type ManifestMutation = (manifest: Record<string, unknown>) => Record<str
 
 export type ManifestUpdate = { ok: true; manifest: Record<string, unknown>; written: boolean } | ManifestFailure;
 
-/** One write at a time per `app.json`, in this process.
- *
- *  In-process is the honest scope, and it is the scope of the problem: MulmoTerminal is ONE
- *  server, every cell's tool call runs in it, and "two cells deployed at once" is how this
- *  happens. Two separate servers over one checkout would still race, and a lock file is what that
- *  would need — not written, because nothing here can produce that arrangement.
- *
- *  Keyed by the manifest PATH so two roots do not wait on each other, and entries are dropped
- *  when the last one settles so the map does not grow with every project ever deployed. */
-const inFlight = new Map<string, Promise<unknown>>();
-
-function serialize<T>(key: string, run: () => Promise<T>): Promise<T> {
-  const previous = inFlight.get(key) ?? Promise.resolve();
-  // `catch` before `then`: a rejected predecessor must not reject its successor, and a settled
-  // chain is the only thing this needs from it.
-  const next = previous.catch(() => {}).then(run);
-  inFlight.set(key, next);
-  void next
-    .catch(() => {})
-    .finally(() => {
-      if (inFlight.get(key) === next) inFlight.delete(key);
-    });
-  return next;
-}
-
 /** The key two callers must AGREE on to be serialized against each other: one file, one key.
+ *
+ *  Exported because a whole shared-app OPERATION serializes on the same repository — one deploy
+ *  landing inside a publish is the same class of interleaving as two writes to `app.json`, and
+ *  keying them differently would leave each holding a lock the other does not.
  *
  *  The caller's spelling will not do. A root arrives as the session's cwd, which is taken
  *  verbatim — so one cell opened at a symlink and another at the path it points to name the same
@@ -65,7 +45,7 @@ function serialize<T>(key: string, run: () => Promise<T>): Promise<T> {
  *  When `realpath` fails — the root does not exist — `resolve` is enough: the read is about to
  *  fail anyway, and a key that cannot be canonicalised must still not collide with another
  *  root's. */
-async function manifestKey(root: string): Promise<string> {
+export async function manifestKey(root: string): Promise<string> {
   try {
     return path.join(await realpath(root), APP_MANIFEST_FILE);
   } catch {
@@ -78,7 +58,7 @@ async function manifestKey(root: string): Promise<string> {
  *  It does NOT create `app.json`. A missing one means this directory is not a shared app at all,
  *  and writing a bare object would turn a mistyped path into an app declaration. */
 export function updateManifest(root: string, mutate: ManifestMutation): Promise<ManifestUpdate> {
-  return manifestKey(root).then((key) => serialize(key, () => updateOnce(root, mutate)));
+  return manifestKey(root).then((key) => serializeBy(`manifest:${key}`, () => updateOnce(root, mutate)));
 }
 
 async function updateOnce(root: string, mutate: ManifestMutation): Promise<ManifestUpdate> {

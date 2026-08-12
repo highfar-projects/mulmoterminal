@@ -16,6 +16,8 @@ import { deploySharedApp } from "../backends/sharedApp/deploy.js";
 import { publishSharedApp } from "../backends/sharedApp/publish.js";
 import { unpublishSharedApp } from "../backends/sharedApp/unpublish.js";
 import { isRecord } from "../../common/isRecord.js";
+import { manifestKey } from "../backends/sharedApp/manifestWrite.js";
+import { serializeBy } from "../backends/sharedApp/serialize.js";
 
 export const SHARED_APP_ACTIONS = ["deploy", "publish", "unpublish"] as const;
 export type SharedAppAction = (typeof SHARED_APP_ACTIONS)[number];
@@ -125,7 +127,16 @@ export async function manageSharedApp(root: string, args: unknown): Promise<stri
   const action = parseAction(body.action);
   if (action === null) return `manageSharedApp: action must be one of ${SHARED_APP_ACTIONS.join(", ")}.`;
   const confirm = body.confirm === true;
-  if (action === "deploy") return narrateDeploy(root, confirm);
-  if (action === "publish") return narratePublish(root, confirm);
-  return narrateUnpublish(root);
+  // ONE operation at a time per repository. Each of these is a read-then-write sequence over the
+  // same documents, and interleaved they undo each other: a publish that read the app document
+  // before a deploy renamed the URL would go on to open the OLD name, which the deploy had just
+  // retired — leaving a resolving name that no later unpublish touches, because unpublish works
+  // from the record the deploy moved.
+  //
+  // At the entry point rather than inside each operation, because what must not interleave is the
+  // whole sequence, and this is the only place all three pass through.
+  const key = `operation:${await manifestKey(root)}`;
+  if (action === "deploy") return serializeBy(key, () => narrateDeploy(root, confirm));
+  if (action === "publish") return serializeBy(key, () => narratePublish(root, confirm));
+  return serializeBy(key, () => narrateUnpublish(root));
 }
