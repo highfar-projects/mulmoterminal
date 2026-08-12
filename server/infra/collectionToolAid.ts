@@ -25,7 +25,9 @@
 // reverting rather than by predicting.
 import { isRecord } from "../../common/isRecord.js";
 import { ensureAid } from "../backends/sharedApp/ensureAid.js";
+import { manifestKey } from "../backends/sharedApp/manifestWrite.js";
 import { updateManifest } from "../backends/sharedApp/manifestWrite.js";
+import { serializeBy } from "../backends/sharedApp/serialize.js";
 
 /** Does this payload write a schema whose records live in the app's Firestore?
  *
@@ -60,14 +62,28 @@ export function withGeneratedAid(handler: (args: Record<string, unknown>) => Pro
   return async (args: Record<string, unknown>): Promise<string> => {
     if (!declaresSharedStorage(args)) return handler(args);
     const root = rootOf();
-    const ensured = await ensureAid(root);
-    if (!ensured.ok) return noAppJson(ensured.problems);
+    // MINT, WRITE and ROLLBACK are one transaction, and each step being atomic on its own is not
+    // enough. Two shared schema writes racing in one repository both see a manifest with no aid;
+    // one mints it and succeeds, the other is refused for its own reason and rolls back — removing
+    // the aid the successful one is now backed by, and leaving a shared collection with no app
+    // identity. Under the lock the loser finds the aid already there, so `created` is false and
+    // there is nothing for it to take back.
+    //
+    // The same key `manageSharedApp` serializes its operations on, deliberately: a deploy reads
+    // the schemas, and running one half-way through a schema write is the interleaving both locks
+    // exist to prevent. `updateManifest` keys on `manifest:` instead, so nothing here waits on
+    // itself.
+    const key = `operation:${await manifestKey(root)}`;
+    return serializeBy(key, async () => {
+      const ensured = await ensureAid(root);
+      if (!ensured.ok) return noAppJson(ensured.problems);
 
-    const narration = await handler(args);
-    if (ensured.created && !wroteSchema(narration)) {
-      await withdrawAid(root, ensured.aid);
-    }
-    return narration;
+      const narration = await handler(args);
+      if (ensured.created && !wroteSchema(narration)) {
+        await withdrawAid(root, ensured.aid);
+      }
+      return narration;
+    });
   };
 }
 

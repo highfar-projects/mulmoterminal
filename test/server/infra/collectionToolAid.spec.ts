@@ -98,6 +98,30 @@ describe("withGeneratedAid", () => {
     expect(message).toContain("members");
   });
 
+  it("does not let a failing write take the aid a successful one is using", async () => {
+    // Two shared schema writes racing in one repository both see a manifest with no aid. Without
+    // the whole mint/write/rollback being one transaction, the loser's rollback removes the aid the
+    // winner's collection is now backed by — a shared collection with no app identity, and nothing
+    // to notice it by.
+    writeFileSync(appJson(), JSON.stringify({ members: {} }));
+    const wrapped = withGeneratedAid(
+      async (args) => {
+        // The refusal resolves LATER than the success, which is the interleaving that breaks it.
+        await new Promise((resolve) => setTimeout(resolve, args.slug === "slow" ? 10 : 0));
+        return args.slug === "slow" ? "refused: unknown collection" : '{"written":true}';
+      },
+      () => root,
+    );
+
+    const [ok, refused] = await Promise.all([
+      wrapped({ action: "putSchema", slug: "fast", schema: firestoreSchema }),
+      wrapped({ action: "putSchema", slug: "slow", schema: firestoreSchema }),
+    ]);
+    expect(ok).toBe('{"written":true}');
+    expect(refused).toContain("refused");
+    expect(aidOf()).toMatch(/^[0-9a-f]{8}-/);
+  });
+
   it("does not touch a local collection's write", async () => {
     const spy = spyHandler('{"written":true}');
     await withGeneratedAid(spy.handler, () => root)({ action: "putSchema", schema: localSchema });
