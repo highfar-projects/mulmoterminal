@@ -1,7 +1,7 @@
 # 共有アプリ: 公開ページを「予約サイト」にする（公開カスタムビュー + 枠の排他）
 
 **状態**: 設計のみ。実装は未着手。2026-08-12 の議論から。
-レビュー（#1658）で見つかった 13 点を反映済み: id の不変性、宣言そのものの変更禁止、
+レビュー（#1658）で見つかった 14 点を反映済み: id の不変性、宣言そのものの変更禁止、
 枠の実在**と状態**の確認（`untilField` を含む）、iframe の `event.source` 検証、
 bridge の `ready` / `submitResult`、`config/view` の撤去と版の一致、公開読み取りを
 `bookings` から `availability` に分離、ホスト用ビューとの契約の分離、publish の順序、
@@ -384,11 +384,39 @@ publish が「対になるものを書く」操作である以上、撤去も対
 - `slots`（枠）コレクションを足す。主キーは `stylist-date-time` のような合成スラッグ
 - `availability`（公開用）— 枠ごとに「いつ・誰の担当・空いているか」だけ。**個人情報は持たない**。
   `public.read` に入れるのはこれで、`bookings` は入れない
-- `bookings` は `idFrom: "field"` + `idField: "slot"`
+- `bookings` の申込み宣言は**丸ごと書く**。`idFrom` と `idField` だけを書いた
+  レシピはこの設計の下では**通らない宣言**で、しかも通してしまえば「架空の枠で
+  予約できる」に戻る。省略が効くところではない:
+
+```json
+"submit": {
+  "bookings": {
+    "auth": "verifiedEmail",
+    "emailField": "customerEmail",
+    "createFields": ["customerName", "customerEmail", "slot", "service", "status"],
+    "initialStatus": "requested",
+    "idFrom": "field",
+    "idField": "slot",
+    "idIn": { "collection": "slots", "where": { "field": "status", "equals": "open" } },
+    "window": {
+      "fromField": { "ref": "slot", "collection": "slots", "field": "opensAt" },
+      "untilField": { "ref": "slot", "collection": "slots", "field": "closesAt" }
+    }
+  }
+}
+```
+
+  `slots` の各行は `opensAt`（解禁）・`closesAt`（締切）・`status` を持つ。3 つとも
+  枠を作るときに計算して入れる（[1](#1-idfrom-field--枠は数えなくていい) の
+  「3 日前の朝 7 時」と同じで、ルールは導出方法を問わない）
 - `startAt` を客に手で打たせるのをやめる（今そうなっているのは回避ではなく、
   **これしかできなかった**から）
 - `views/booking.html` — スタイリスト × 時間の格子。埋まっている枠は選べない
 - キャンセル: 顧客は `status: "cancelled"`、枠を戻すのは受付の delete。**両方書く**
+- **テンプレートのテストは 4 つ**。`skillTemplates.spec.ts` は宣言が deploy の門を通ることしか
+  見ないので、それだけでは「架空の枠で予約できる」が通っても気づかない。ルール側の spec
+  （`rules_*.ts`）に、閉じた枠・締切を過ぎた枠・存在しない枠・既に取られた枠の 4 つが
+  拒否されることを入れる
 
 **利用者に先に言うこと**（gym.md と同じ位置に置く）:
 
