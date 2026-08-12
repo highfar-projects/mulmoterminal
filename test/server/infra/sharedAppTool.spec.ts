@@ -4,11 +4,13 @@
 // likely to break: an operation that throws reaches the agent as a tool crash, which it will
 // retry rather than report. So every path out of here is a string.
 import { describe, it, expect, beforeAll } from "vitest";
+import { writeFileSync } from "node:fs";
 import { MANAGE_SHARED_APP, SHARED_APP_ACTIONS, manageSharedApp } from "../../../server/infra/shared-app-tool.js";
 import { HOST_TOOL_DEFINITIONS } from "../../../server/infra/host-tools.js";
 import { groupOfTool } from "../../../common/toolGroups.js";
 import { setFirestoreAccessor, setSharedCollectionsSupport } from "@mulmoclaude/core/collection/server";
 import { makeTempDir } from "../../support/tempDir";
+import path from "node:path";
 
 describe("manageSharedApp, the tool", () => {
   beforeAll(() => {
@@ -36,6 +38,8 @@ describe("manageSharedApp, the tool", () => {
 
   it("returns every refusal as text rather than throwing", async () => {
     const root = makeTempDir("mt-shared-tool-");
+    // Create a minimal app.json so ensureAid doesn't fail first
+    writeFileSync(path.join(root, "app.json"), JSON.stringify({ name: "test", collections: [] }));
     for (const action of SHARED_APP_ACTIONS) {
       const message = await manageSharedApp(root, { action });
       expect(typeof message).toBe("string");
