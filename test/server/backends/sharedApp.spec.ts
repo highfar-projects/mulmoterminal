@@ -9,7 +9,7 @@
 // somebody was only testing, and a publish that wrote it FIRST would leave anonymous access live
 // against a half-published surface if the next write failed.
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { setFirestoreAccessor, setSharedCollectionsSupport, type FirestoreDocs, type FirestoreDoc } from "@mulmoclaude/core/collection/server";
 import { initCollectionsBackend } from "../../../server/backends/collections.js";
@@ -274,6 +274,67 @@ describe("shared app deploy / publish / unpublish", () => {
 
     const confirmed = await publishSharedApp(root, { ...stamp, confirm: true });
     expect(confirmed.ok).toBe(true);
+  });
+
+  it("reserves the declared URL name at deploy, and records it where it can be read back", async () => {
+    writeApp(root, declaration({ slug: "sakura-hair" }));
+    const result = await deploySharedApp(root, stamp);
+    expect(result.ok === true && result.slug).toBe("sakura-hair");
+    // `published: false` — the reservation exists and nobody can resolve it yet, which is what
+    // keeps /staging/{aid} unguessable while the roster tests the app.
+    expect(docs.doc("appSlugs", "sakura-hair")).toEqual({ aid: AID, published: false });
+    // On the app document, because appSlugs is unreadable until publish: this is the only place
+    // "which name do we hold?" can be asked from.
+    expect(docs.app()?.slug).toBe("sakura-hair");
+  });
+
+  it("does not reserve a SECOND name when the same app is deployed again", async () => {
+    writeApp(root, declaration({ slug: "sakura-hair" }));
+    await deploySharedApp(root, stamp);
+    docs.writes.length = 0;
+
+    const again = await deploySharedApp(root, stamp);
+    expect(again.ok === true && again.slug).toBe("sakura-hair");
+    // A URL is a thing people have already sent to each other (D2b). Re-reserving would hand the
+    // app `sakura-hair-2` on every deploy, and the reservation cannot be read back to notice.
+    expect(docs.writes.filter((write) => write.includes("appSlugs"))).toEqual([]);
+  });
+
+  it("takes the next numbering when the wanted name is held by someone else", async () => {
+    docs.store.set("appSlugs", new Map([["sakura-hair", { aid: "someone-else", published: true }]]));
+    writeApp(root, declaration({ slug: "sakura-hair" }));
+
+    const result = await deploySharedApp(root, stamp);
+    expect(result.ok === true && result.slug).toBe("sakura-hair-2");
+    expect(docs.doc("appSlugs", "sakura-hair")).toEqual({ aid: "someone-else", published: true });
+    // Written BACK to app.json — the reservation cannot be read back, so a deploy that did not
+    // find it there would reserve yet another name and leave this one held by nobody.
+    expect(JSON.parse(readFileSync(path.join(root, "app.json"), "utf-8")).slug).toBe("sakura-hair-2");
+  });
+
+  it("makes the name resolve at publish and stop at unpublish, in that order", async () => {
+    writeApp(root, declaration({ slug: "sakura-hair", public: { enabled: true, read: ["bookings"] } }));
+    await deploySharedApp(root, stamp);
+    docs.writes.length = 0;
+
+    const published = await publishSharedApp(root, stamp);
+    expect(published.ok === true && published.slug).toBe("sakura-hair");
+    expect(docs.doc("appSlugs", "sakura-hair")).toEqual({ aid: AID, published: true });
+    // After everything the name points at, before the authorization: a slug that resolved first
+    // would be a link that 404s inside.
+    expect(docs.writes).toEqual([
+      `set apps/${AID}/collections/bookings`,
+      `set apps/${AID}/config/public`,
+      `set apps/${AID}`,
+      "set appSlugs/sakura-hair",
+      `set apps/${AID}`,
+    ]);
+
+    docs.writes.length = 0;
+    await unpublishSharedApp(root);
+    expect(docs.doc("appSlugs", "sakura-hair")).toEqual({ aid: AID, published: false });
+    // Reversed: what grants is taken away first.
+    expect(docs.writes).toEqual([`set apps/${AID}`, "set appSlugs/sakura-hair", `delete apps/${AID}/config/public`]);
   });
 
   it("says so rather than reporting success when there was nothing open to close", async () => {

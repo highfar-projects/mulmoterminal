@@ -19,6 +19,7 @@ import { ensureAid } from "./ensureAid.js";
 import { APPS_COLLECTION, appStagingPath, projectDeploy, type PublishStamp } from "@mulmoclaude/core/collection/server";
 import { gitStamp, schemasOf, sharedAppContext, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
 import { recordRefusal, scanRecords } from "./records.js";
+import { reserveSlug, type SlugResult } from "./slug.js";
 import { runWrites } from "./writes.js";
 
 export interface DeploySuccess {
@@ -34,6 +35,9 @@ export interface DeploySuccess {
    *  repair is owed, on the one path (a confirmed deploy) where it is already staged. */
   recordIssues: number;
   recordIssuesCapped: boolean;
+  /** The URL name this app holds, once one has been reserved. Absent when `app.json` declares no
+   *  `slug` — an app reachable only at `/staging/{aid}` never needs one. */
+  slug?: string | undefined;
   /** cids that were staged before and are not in the repository any more — dropped by this
    *  deploy. Reported because a withdrawal is not what the operator asked for; it is what
    *  deleting a collection's directory MEANT, and the two are easy to confuse. */
@@ -64,6 +68,41 @@ async function readCurrentApp(handle: SharedAppHandle, aid: string): Promise<{ o
       ],
     };
   }
+}
+
+/** Reserve the declared URL name if this app does not already hold it, and record the result on
+ *  the app document so the next deploy does not reserve a SECOND one.
+ *
+ *  Undefined when the declaration names no slug: an app reachable only at `/staging/{aid}` never
+ *  needs one, and reserving a name nobody asked for would take it from someone who did.
+ *
+ *  The extra app-document write is the price of the ordering: the reservation cannot be made
+ *  before `apps/{aid}` exists, and what was reserved cannot be recorded before it is reserved. It
+ *  happens only on the deploy that actually takes a name. */
+async function reserveHeldSlug(
+  handle: SharedAppHandle,
+  aid: string,
+  root: string,
+  wanted: string | undefined,
+  held: string | undefined,
+  appDoc: Record<string, unknown>,
+): Promise<SlugResult | undefined> {
+  if (wanted === undefined) return undefined;
+  const reservation = await reserveSlug(handle, aid, root, wanted, held === wanted);
+  if (!reservation.ok || !reservation.reserved) return reservation;
+  try {
+    await handle.docs.set(APPS_COLLECTION, aid, { ...appDoc, slug: reservation.slug });
+  } catch (err) {
+    return {
+      ok: false,
+      partial: true,
+      problems: [
+        `the URL name '${reservation.slug}' was reserved and written to app.json, but recording it on apps/${aid} failed: ${err instanceof Error ? err.message : String(err)}`,
+        "Deploy again — it reads the name back from app.json and only records it.",
+      ],
+    };
+  }
+  return reservation;
 }
 
 /** Staged documents whose collection this repository no longer has.
@@ -131,9 +170,17 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
   const stale = await staleStaged(handle, aid, existingApp, new Set(deployed.staging.map((entry) => entry.cid)));
   if (!stale.ok) return stale;
 
+  // The slug this app already holds, carried on the app document because NOTHING ELSE CAN BE
+  // ASKED: `appSlugs/{slug}` is unreadable until the app is published, so "do we already have
+  // one?" has no other answer. `projectDeploy` does not carry it — the reservation is the host's
+  // business and core has no opinion about it — so it is re-attached here, from the document as
+  // it stands, on every deploy.
+  const held = typeof existingApp?.slug === "string" ? existingApp.slug : undefined;
+  const appDoc = held === undefined ? deployed.app : { ...deployed.app, slug: held };
+
   const failure = await runWrites(
     [
-      { what: `the app document (apps/${aid})`, run: () => handle.docs.set(APPS_COLLECTION, aid, deployed.app) },
+      { what: `the app document (apps/${aid})`, run: () => handle.docs.set(APPS_COLLECTION, aid, appDoc) },
       ...deployed.staging.map(({ cid, doc }) => ({
         what: `the staged schema for '${cid}' (apps/${aid}/staging/${cid})`,
         run: () => handle.docs.set(appStagingPath(aid), cid, doc),
@@ -151,9 +198,15 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
   );
   if (failure) return failure;
 
+  // AFTER the app document, because `appSlugs`' create rule resolves the owner through
+  // `get(apps/{aid})` — on a first deploy there is nothing to resolve until it exists.
+  const slug = await reserveHeldSlug(handle, aid, root, authored.slug, held, appDoc);
+  if (slug !== undefined && !slug.ok) return slug;
+
   return {
     ok: true,
     aid,
+    slug: slug?.slug,
     cids: deployed.staging.map((entry) => entry.cid),
     withdrawn: stale.cids,
     created: existingApp === null,
