@@ -95,6 +95,22 @@ describe("initSharedApp reserves the aid", () => {
     expect(existsSync(path.join(root, "app.json"))).toBe(false);
   });
 
+  // The reservation is live once it lands, so a failure after it is not "nothing happened". The
+  // aid is named here because this is the only place it is ever said — it never reached a file.
+  it("reports a partial and names the reserved aid when the file cannot be written", async () => {
+    const missing = path.join(root, "no-such-directory");
+
+    const result = await initSharedApp(missing, "Talk survey", undefined);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.partial).toBe(true);
+    const said = result.problems.join(" ");
+    expect(said).toContain("already reserved on the server");
+    expect(said).toContain(String(docs.writes[0]));
+    expect(existsSync(path.join(missing, "app.json"))).toBe(false);
+  });
+
   it("still refuses a repository that already declares an app, without touching Firestore", async () => {
     writeFileSync(path.join(root, "app.json"), JSON.stringify({ aid: "existing", members: {} }));
 

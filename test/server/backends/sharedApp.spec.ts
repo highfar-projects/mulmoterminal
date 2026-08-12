@@ -164,6 +164,21 @@ describe("shared app deploy / publish / unpublish", () => {
     writeCollection(root, "bookings");
   });
 
+  // `init` now reserves `apps/{aid}` before it writes `app.json`, so the document exists from the
+  // moment the app is declared. "Created" has to keep meaning "this deploy is the first" rather
+  // than "the document was absent", or the very first deploy of every new app reports an update.
+  it("still reports the first deploy as created when init already reserved the app", async () => {
+    docs.store.set("apps", new Map([[AID, { owner: OWNER.uid, members: { [OWNER.email]: { "*": "owner" } }, memberEmails: [OWNER.email] }]]));
+
+    const first = await deploySharedApp(root, stamp);
+    expect(first.ok).toBe(true);
+    expect(first.ok && first.created).toBe(true);
+
+    // And the deploy after it is an update, because that one really is.
+    const second = await deploySharedApp(root, stamp);
+    expect(second.ok && second.created).toBe(false);
+  });
+
   it("deploys to the roster only — no public block, no published schema, no public config", async () => {
     const result = await deploySharedApp(root, stamp);
     expect(result.ok === false ? result.problems : []).toEqual([]);

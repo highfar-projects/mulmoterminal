@@ -87,9 +87,21 @@ export async function initSharedApp(root: string, name: string | undefined, slug
     members: { [handle.email]: { "*": "owner" } },
   };
   const written = await createManifest(root, manifest);
-  // The reservation stays behind if this fails. It is this session's own document, holds no
-  // authorization, and the next `init` mints a fresh aid — an unused shelf entry, not a lockout.
-  if (!written.ok) return { ok: false, partial: false, problems: written.problems };
+  if (!written.ok) {
+    // PARTIAL, because the reservation is already live. It holds no authorization — the roster and
+    // nothing else — and the next `init` mints a fresh aid, so this is an unused shelf entry
+    // rather than a lockout. But "nothing happened" would be false, and the aid is named here
+    // because it is the only place it is ever said: it never reached a file.
+    return {
+      ok: false,
+      partial: true,
+      problems: [
+        ...written.problems,
+        `The app id was already reserved on the server (apps/${aid}) and is owned by this address, but it never reached app.json.`,
+        "Fix the write problem and run `init` again — it mints a new id, and the one above is simply left unused. Nothing else was written.",
+      ],
+    };
+  }
   return { ok: true, aid, owner: handle.email, slug };
 }
 
