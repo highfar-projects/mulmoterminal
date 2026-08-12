@@ -21,7 +21,13 @@ const schema = {
   },
 };
 
-const staged = [{ cid: "responses", doc: { publishedSchema: schema, deployedAt: 1, deployedBy: "o@e.com" } }];
+// `config` is the STAGED rule configuration — what publish promotes onto the app document and
+// what the rules then check a public create against. The form's `statusField` has to come from
+// here rather than from `app.json`, or an edit between deploy and publish moves one and not the
+// other.
+const staged = [
+  { cid: "responses", doc: { publishedSchema: schema, config: { submitOnly: true, statusField: "status" }, deployedAt: 1, deployedBy: "o@e.com" } },
+];
 
 const authored = (submit: Record<string, unknown>) => {
   const parsed = parseAuthoredApp(
@@ -88,6 +94,9 @@ describe("publicFormOf", () => {
     // `status` is a convention, not a rule. The create rule reads `collections[cid].statusField`,
     // so a collection that calls it `state` refuses a submission that writes `status` — and the
     // visitor cannot learn the name from anywhere else.
+    //
+    // Staged and manifest deliberately DISAGREE here: publish promotes the staged copy, so that
+    // is the one the page must be told about.
     const parsed = parseAuthoredApp(
       JSON.stringify({
         aid: "a1",
@@ -101,7 +110,7 @@ describe("publicFormOf", () => {
       }),
     );
     if (!parsed.ok) throw new Error(parsed.problems.join("; "));
-    expect(publicFormOf(parsed.app, staged).responses?.statusField).toBe("state");
+    expect(publicFormOf(parsed.app, staged).responses?.statusField).toBe("status");
   });
 
   it("says nothing about a collection the app does not open", () => {
@@ -126,7 +135,7 @@ describe("fields a stranger cannot be asked for", () => {
   // judge a public create by. So a computed field left in it is a value from the internet landing
   // in a field the host is supposed to compute; dropping it from the form alone would not stop it.
   const withField = (name: string, spec: Record<string, unknown>) => [
-    { cid: "responses", doc: { publishedSchema: { ...schema, fields: { ...schema.fields, [name]: spec } }, deployedAt: 1, deployedBy: "o@e.com" } },
+    { ...staged[0]!, doc: { ...staged[0]!.doc, publishedSchema: { ...schema, fields: { ...schema.fields, [name]: spec } } } },
   ];
 
   it("does not draw a computed field", () => {
@@ -180,5 +189,22 @@ describe("publicInputProblems", () => {
   it("leaves a collection it has no schema for to the checks that own that", () => {
     const app = authored({ ghost: { auth: "verifiedEmail", emailField: "email", createFields: ["name"] } });
     expect(publicInputProblems(app, collection({}))).toEqual([]);
+  });
+});
+
+describe("the status field the page writes", () => {
+  // publish promotes `collections[cid]` from `staging/{cid}` so a manifest edit after deploy
+  // cannot change the rule behaviour being published. The form has to read the same staged copy:
+  // otherwise deploy with `state`, edit `app.json` to `status`, publish — and the page writes a
+  // key the promoted rule refuses, with nothing on the page to say why.
+  it("comes from what was staged, not from app.json", () => {
+    const app = authored(surveySubmit);
+    const restaged = [{ ...staged[0]!, doc: { ...staged[0]!.doc, config: { submitOnly: true, statusField: "state" } } }];
+    expect(publicFormOf(app, restaged).responses?.statusField).toBe("state");
+  });
+
+  it("is absent when the staged configuration names none", () => {
+    const restaged = [{ ...staged[0]!, doc: { ...staged[0]!.doc, config: { submitOnly: true } } }];
+    expect(publicFormOf(authored(surveySubmit), restaged).responses?.statusField).toBeUndefined();
   });
 });

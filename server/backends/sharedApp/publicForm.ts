@@ -79,16 +79,24 @@ export type PublicForm = Record<string, PublicCollectionForm>;
  *  now. */
 export function publicFormOf(authored: AuthoredApp, staged: readonly StagedEntry[]): PublicForm {
   const submit = authored.public?.submit ?? {};
-  const byCid = new Map(staged.map((entry) => [entry.cid, entry.doc.publishedSchema]));
+  const byCid = new Map(staged.map((entry) => [entry.cid, entry.doc]));
   const entries = Object.entries(submit).flatMap(([cid, spec]) => {
-    const schema = byCid.get(cid);
-    if (schema === undefined) return [];
+    const doc = byCid.get(cid);
+    if (doc === undefined) return [];
+    const schema = doc.publishedSchema;
     const fields = fieldsOf(schema, spec.createFields, spec.validate?.required ?? []);
     // A collection whose `createFields` name nothing the schema declares publishes no entry at
     // all: an empty object would read as a form that failed to load, where absence is a fact the
     // page can state.
     if (Object.keys(fields).length === 0) return [];
-    const statusField = authored.collections?.[cid]?.statusField;
+    // From the STAGED rule configuration, not from `app.json`. What the rules will check is
+    // `apps/{aid}.collections[cid].statusField`, and publish promotes that from `staging/{cid}` —
+    // deliberately, so a manifest edit between deploy and publish cannot change the rule behaviour
+    // being published. Reading the manifest here would re-open exactly that gap from the other
+    // side: deploy with `statusField: "state"`, edit it to `status`, publish, and the page writes
+    // a key the promoted rule does not accept, so every submission is denied with nothing on the
+    // page to say why.
+    const statusField = doc.config?.statusField;
     return [[cid, { fields, ...(statusField === undefined ? {} : { statusField }) }] as const];
   });
   return Object.fromEntries(entries);
