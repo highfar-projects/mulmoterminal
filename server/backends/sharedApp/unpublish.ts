@@ -32,7 +32,7 @@ export type UnpublishResult = UnpublishSuccess | SharedAppFailure;
 export async function unpublishSharedApp(root: string): Promise<UnpublishResult> {
   const aid_result = await ensureAid(root);
   if (!aid_result.ok) return { ok: false, partial: false, problems: aid_result.problems };
-  
+
   const handle = firestoreHandle();
   if (!handle) {
     return { ok: false, partial: false, problems: ["unpublish needs a signed-in Firestore session: connect remote-host first."] };

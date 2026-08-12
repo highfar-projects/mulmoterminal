@@ -103,7 +103,7 @@ export type DeployResult = DeploySuccess | SharedAppFailure;
 export async function deploySharedApp(root: string, opts: SharedAppOptions = {}): Promise<DeployResult> {
   const aid_result = await ensureAid(root);
   if (!aid_result.ok) return { ok: false, partial: false, problems: aid_result.problems };
-  
+
   const context = await sharedAppContext(root);
   if (!context.ok) return context;
   const { authored, collections, handle } = context;

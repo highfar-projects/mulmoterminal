@@ -1,8 +1,9 @@
 // Ensure app.json has a valid aid UUID
-import { readFile, writeFile } from 'node:fs/promises';
-import path from 'node:path';
-import { v4 as uuidv4 } from 'uuid';
-import { APP_MANIFEST_FILE } from '@mulmoclaude/core/collection/server';
+import { readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { v4 as uuidv4 } from "uuid";
+import { APP_MANIFEST_FILE } from "@mulmoclaude/core/collection/server";
+import { isRecord } from "../../../common/isRecord.js";
 
 export interface EnsureAidSuccess {
   ok: true;
@@ -18,14 +19,11 @@ export async function ensureAid(root: string): Promise<EnsureAidResult> {
   let app: unknown;
 
   try {
-    raw = await readFile(manifestPath, 'utf-8');
+    raw = await readFile(manifestPath, "utf-8");
   } catch (err) {
     return {
       ok: false,
-      problems: [
-        `cannot read app.json: ${String(err)}`,
-        'Create app.json first with the required fields (name, collections).',
-      ],
+      problems: [`cannot read app.json: ${String(err)}`, "Create app.json first with the required fields (name, collections)."],
     };
   }
 
@@ -38,15 +36,15 @@ export async function ensureAid(root: string): Promise<EnsureAidResult> {
     };
   }
 
-  if (!app || typeof app !== 'object') {
+  if (!isRecord(app)) {
     return {
       ok: false,
-      problems: [`app.json must be an object, got ${typeof app}`],
+      problems: [`app.json must be an object, got ${Array.isArray(app) ? "array" : typeof app}`],
     };
   }
 
-  const current = (app as Record<string, unknown>).aid;
-  if (typeof current === 'string' && current.length > 0) {
+  const current = app.aid;
+  if (typeof current === "string" && current.length > 0) {
     return { ok: true, aid: current, created: false };
   }
 
@@ -54,14 +52,11 @@ export async function ensureAid(root: string): Promise<EnsureAidResult> {
   const updated = { ...app, aid };
 
   try {
-    await writeFile(manifestPath, JSON.stringify(updated, null, 2) + '\n', 'utf-8');
+    await writeFile(manifestPath, JSON.stringify(updated, null, 2) + "\n", "utf-8");
   } catch (err) {
     return {
       ok: false,
-      problems: [
-        `failed to write app.json: ${String(err)}`,
-        'The file must be writable and directory accessible.',
-      ],
+      problems: [`failed to write app.json: ${String(err)}`, "The file must be writable and directory accessible."],
     };
   }
 
