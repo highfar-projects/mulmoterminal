@@ -29,7 +29,15 @@ const codes = (facts: Partial<SelfContainmentFacts>): string[] => selfContainmen
 // The wire type widens `code` to a plain string so a newer server's finding is not dropped by an
 // older client. That widening must not become licence for THIS server to invent one: every code
 // it can produce is pinned to the documented union here.
-const KNOWN_CODES: readonly SelfContainmentCode[] = ["user-scope", "sqlite-store", "csv-runtime", "data-ignored", "no-primary-key", "not-a-repo"];
+const KNOWN_CODES: readonly SelfContainmentCode[] = [
+  "user-scope",
+  "sqlite-store",
+  "csv-runtime",
+  "data-ignored",
+  "no-primary-key",
+  "not-a-repo",
+  "shared-store",
+];
 
 const verdict = (facts: Partial<SelfContainmentFacts>): boolean => isPortable(selfContainmentFindings({ ...PORTABLE, ...facts }));
 
@@ -98,6 +106,29 @@ describe("selfContainmentFindings", () => {
     expect(verdict({ storageKind: "csv" })).toBe(true);
   });
 
+  it("discloses a shared collection without calling it a defect", () => {
+    // Records living in the app's Firestore is what lets two people work on the
+    // same data — the opposite of a portability problem. But this report answers
+    // "what does a clone get?", and for this kind the answer differs from every
+    // other, so silence would read as "the records travel".
+    expect(codes({ storageKind: "firestore" })).toEqual(["shared-store"]);
+    expect(verdict({ storageKind: "firestore" })).toBe(true);
+    const [finding] = selfContainmentFindings({ ...PORTABLE, storageKind: "firestore" });
+    expect(finding?.severity).toBe("info");
+  });
+
+  it("does not call a shared collection unclonable for an ignored local data directory", () => {
+    // The one case where the two rules meet: a shared collection's records are in
+    // Firestore, so the conventional per-slug directory holds nothing and whether git
+    // ignores it says nothing about what a clone gets. The managed workspace really
+    // does ignore `data/`, so this is the ordinary case, not a corner — and a blocker
+    // here would report the records as lost when they are precisely what travels.
+    expect(codes({ storageKind: "firestore", dataDirIgnored: true })).toEqual(["shared-store"]);
+    expect(verdict({ storageKind: "firestore", dataDirIgnored: true })).toBe(true);
+    // Still a blocker for every kind whose records ARE on disk.
+    expect(codes({ dataDirIgnored: true })).toContain("data-ignored");
+  });
+
   it("warns about a missing primaryKey in a repo — two machines can mint one id", () => {
     expect(codes({ hasPrimaryKey: false })).toContain("no-primary-key");
     expect(verdict({ hasPrimaryKey: false })).toBe(true);
@@ -127,6 +158,7 @@ describe("selfContainmentFindings", () => {
     const everyFinding = [
       ...selfContainmentFindings({ source: "user", storageKind: "sqlite", hasPrimaryKey: false, inGitRepo: true, dataDirIgnored: true }),
       ...selfContainmentFindings({ source: "project", storageKind: "csv", hasPrimaryKey: true, inGitRepo: false, dataDirIgnored: null }),
+      ...selfContainmentFindings({ source: "project", storageKind: "firestore", hasPrimaryKey: true, inGitRepo: true, dataDirIgnored: false }),
     ];
     expect(everyFinding.length).toBeGreaterThan(4);
     for (const finding of everyFinding) expect(KNOWN_CODES).toContain(finding.code);

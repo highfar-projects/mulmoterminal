@@ -16,7 +16,7 @@
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { storageKindFor } from "@mulmoclaude/core/collection";
+import { storageKindFor, type CollectionStorageKind } from "@mulmoclaude/core/collection";
 import { loadCollection } from "@mulmoclaude/core/collection/server";
 import type { Express, Request, Response } from "express";
 import { errorStatus, resolveProjectRoot, type ProjectScope } from "../infra/project-root.js";
@@ -31,7 +31,10 @@ const run = promisify(execFile);
  *  exercised without a git repo and a workspace on disk, and so each rule reads as one line. */
 export interface SelfContainmentFacts {
   source: "user" | "project" | "feed";
-  storageKind: "file" | "csv" | "sqlite";
+  /** Widened from core rather than re-listed: core 3.10.0 added `firestore`, and a local
+   *  copy of the union is how this file would stop compiling on the NEXT kind instead of
+   *  reporting it. */
+  storageKind: CollectionStorageKind;
   hasPrimaryKey: boolean;
   inGitRepo: boolean;
   /** Whether git ignores anything the RECORDS need in order to travel — the external
@@ -56,7 +59,12 @@ export function selfContainmentFindings(facts: SelfContainmentFacts): SelfContai
     });
   }
 
-  if (facts.dataDirIgnored === true) {
+  // A SHARED collection has no records on disk to be ignored: they live in the app's Firestore,
+  // and `dataDir` is then only the conventional per-slug directory nothing was ever written to.
+  // Asking git about it answers about the wrong place, so a workspace that ignores `data/` would
+  // call every shared collection unclonable and every record lost — the one verdict this file
+  // exists to keep trustworthy, spent on a collection whose records are exactly what DOES travel.
+  if (facts.dataDirIgnored === true && facts.storageKind !== "firestore") {
     // A FEED's records are a CACHE, and that changes the verdict rather than the fact. They are
     // re-fetched from the source the clone can reach too, so "the records do not travel" costs a
     // refresh, not the data — while for a collection the records ARE the data and nothing brings
@@ -81,6 +89,19 @@ export function selfContainmentFindings(facts: SelfContainmentFacts): SelfContai
       severity: "blocker",
       message:
         "Records are stored in one SQLite file. Git cannot merge a binary file, so two machines editing this collection offline produce a conflict nobody can resolve — where the default one-file-per-record storage merges cleanly.",
+    });
+  }
+
+  if (facts.storageKind === "firestore") {
+    // Not a defect: a shared collection's records are SUPPOSED to live in the app's
+    // Firestore, which is exactly what lets two people work on the same data. But it
+    // answers the question this report asks — "what does a clone get?" — differently
+    // from every other kind, and silence would read as "the records travel".
+    findings.push({
+      code: "shared-store",
+      severity: "info",
+      message:
+        "This is a shared collection: the schema is committed and the records live in the app's Firestore. A clone brings the definition and reaches the same records once its user is on the app's roster — nobody gets a private copy, which is the point.",
     });
   }
 
