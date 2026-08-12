@@ -42,7 +42,7 @@
     "dev:client": "vite",
     "build": "vue-tsc -b && vite build",
     "typecheck": "vue-tsc -b",
-    "lint": "eslint . --format ./scripts/eslint-formatter-summary.mjs",
+    "lint": "eslint . --cache --cache-strategy content --format ./scripts/eslint-formatter-summary.mjs",
     "lint:summary": "eslint . --format json | node scripts/lint-summary.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
