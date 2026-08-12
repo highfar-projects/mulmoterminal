@@ -3012,27 +3012,12 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
      **`setSharedCollectionsSupport(true)` を別に呼ぶ**（`configureCollectionHost` の
      フィールドではない。理由は D5)。**PR 済み・未マージ**（mulmoterminal #1632）
    - **7c. MT 独自ツール `manageSharedApp`** — `deploy` / `publish` / `unpublish` の 3 つ。
-     **slug の予約を除いて PR 済み・未マージ**（mulmoterminal #1633）。
      書き込み経路が 2 本ある状態（core の `publishApp`）は #2871 のマージで解消済み。
      門番と射影は core の純粋関数を呼び、**順序（fail closed）と書き分けは MT が持つ**（D10）。
      ルール側は先行して済んでいる — `appSlugs`（`published` フラグ）と
      **`match /staging/{cid}`** は **mulmoserver #157 でマージし、2026-08-12 に本番へ
      deploy 済み**（mulmoserver に CI は無く、デプロイ状態はどのリポジトリにも記録されない
      ので、ここが唯一の記録）
-
-     実装で分かったことを 2 つ。どちらも設計の穴で、コードを書くまで見えていなかった:
-
-     - **`app.json` に希望の slug を書けない。** `AuthoredAppZ` は strict なので、
-       `slug` を足した `app.json` は core の `parseAuthoredApp` が
-       `Unrecognized key: "slug"` で**丸ごと拒否する**。足すのは core の変更＝
-       「MC を二度と触らない」に反するので、**slug の置き場所は決め直しが要る**
-       （下の「未解決」参照）。7c はそこだけ落として先に入れた — `/staging/{aid}` は
-       slug を経由しないので、招待とテストは slug 無しで最後まで回る
-     - **staging は「積み上げ」ではなく「置換」でなければならない。** コレクションを
-       リポジトリから消しても `staging/{cid}` は残り、publish は
-       「昇格させる版をライブレコードで検証する」ため**リポジトリに無い cid を検証できず
-       止まる**。deploy が消えた cid の staging を**撤回する**ことで解いた
-       （撤回は最後に書く — 何も grant しないので）
    - **7d. `aid` の UUID 自動生成**（決定 2）— `app.json` を書くのは MT なので MT 側
 
 **共有**
@@ -3082,18 +3067,6 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
   補助関数の連鎖が深いと非自明な経路が全部そこに達し、症状は「権限エラー」ではなく
   `Unable to evaluate the expression…`。**次にルールへ条件を足すときは、正しさと同じだけ
   式数を見ること。** 目安は、app ドキュメントを 1 回だけ取得して引数で下へ渡す形を崩さないこと
-- **希望の slug をどこに書くか（未決。7c で判明）** — D10 は「`app.json` に希望の slug を
-  書き、deploy が予約する」としているが、**それは書けない**。`AuthoredAppZ` は strict で、
-  `slug` を含む `app.json` は `parseAuthoredApp` が `Unrecognized key: "slug"` として
-  丸ごと拒否する。core にキーを足すのは「MC を二度と触らない」に反する。残る案は 3 つ:
-  - **(a) MT 所有の別ファイル**（例: リポジトリ直下に slug の予約控えを 1 本）。
-    **git に入って clone に付いていく**のが条件 — 予約は `published: false` の間は
-    ルール上**オーナー自身も読み返せない**ので、Firestore からは復元できない
-  - **(b) `name` から導出**（`slugify(name)`、衝突時は連番）。控えを持たないので、
-    連番が付いた瞬間に再現できなくなる。予約の再利用も検証できない
-  - **(c) slug をやめる** — 公開ページも `/{aid}` にする。URL は人が配るものという
-    D2b の前提を落とすことになる
-  実装済みの `deploy` / `publish` は slug に触っていないので、どれを採っても後から足せる
 - **Storage ルールから `firestore.get()`** でメンバー判定できるか — 仕様上可能のはずだが実機未確認
 - **repo 権限と members のずれ**をどう見せるか（当面は members をヘッダーに常時出すだけ）
 - **email の同一性**（変更・再利用）— 当面受容
