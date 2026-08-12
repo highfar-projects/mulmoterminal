@@ -70,9 +70,14 @@ describe.skipIf(!isWindows)("spawnPty on Windows", () => {
     expect(resolvePtyLaunchForEnv(PROBE, [], process.env)).toEqual({ file: probeExe, args: [] });
   });
 
+  // No `pid` assertion: on Windows node-pty fills it in asynchronously, from the conout
+  // worker's ready callback ("Not available until `ready` event emitted" — its own comment in
+  // windowsTerminal.js), so reading it the moment spawnPty returns is 0 however well the spawn
+  // went. It read >0 until node-pty 1.2.0-beta.15 and 0 after, which failed this test while
+  // every .cmd spawn beside it still passed. The output and exit code below prove a real
+  // process far better than a number does.
   it("spawns a PTY for a bare name whose only match is an .exe", async () => {
     const term = spawnPty(PROBE, ["-e", "process.stdout.write('mt-probe ok')"], dir);
-    expect(term.pid).toBeGreaterThan(0);
     let output = "";
     term.onData((data) => {
       output += data;
