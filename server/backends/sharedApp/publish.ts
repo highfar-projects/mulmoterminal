@@ -38,14 +38,17 @@ import {
 } from "@mulmoclaude/core/collection/server";
 import { ensureAid } from "./ensureAid.js";
 import { gitStamp, sharedAppContext, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
-import { recordRefusal, scanRecords } from "./records.js";
+import { recordRefusal, scanRecords, type RecordScan } from "./records.js";
 import { readStaged, type StagedEntry } from "./staged.js";
+import { setSlugPublished } from "./slug.js";
 import { runWrites, type WriteStep } from "./writes.js";
 
 export interface PublishSuccess {
   ok: true;
   aid: string;
   cids: string[];
+  /** The URL name that now resolves to this app, when it has one. */
+  slug?: string | undefined;
   /** Whether this publish left the app open to anonymous visitors. False is a normal outcome — a
    *  declaration with no `public` block publishes the schemas to the roster's URL and grants the
    *  world nothing — and it is the one thing an operator is most likely to assume wrongly. */
@@ -111,6 +114,7 @@ function publishSteps(
   staged: readonly StagedEntry[],
   stamp: PublishStamp,
   face: ReturnType<typeof projectPublish>,
+  slug: string | undefined,
 ): WriteStep[] {
   return [
     ...staged.map(({ cid, doc }) => ({
@@ -125,6 +129,22 @@ function publishSteps(
     // was staged beside, so the public write path is never judged by one version's constraints
     // against another's schema.
     { what: `the app document (apps/${aid})`, run: () => handle.docs.set(APPS_COLLECTION, aid, face.app) },
+    // The URL name follows the app's own openness — `face.public` — and NOT the fact that a
+    // publish happened.
+    //
+    // A published reservation is world-readable, and what it reveals is the aid, which is the
+    // `/staging/{aid}` entrance this whole feature keeps unguessable. So publishing a declaration
+    // with no `public` block — a roster-only app, which is a normal thing to publish — must not
+    // make its name resolvable: that would hand out the private entrance while the operation
+    // itself reports the app is closed to anonymous visitors.
+    //
+    // Placed here, before the authorization and after everything the name points at: a slug that
+    // resolved first would be a link that 404s inside, and one that resolves late is only a link
+    // that is not ready yet. When the publish CLOSES the app instead, the same position is the
+    // reverse and equally right — the app document above has already dropped `public`.
+    ...(slug === undefined
+      ? []
+      : [{ what: `the URL name '${slug}' (appSlugs/${slug})`, run: () => setSlugPublished(handle, aid, slug, face.public !== undefined) }]),
     // LAST, and only when the declaration asks for it. This is the authorization itself.
     ...(face.public === undefined
       ? []
@@ -137,18 +157,17 @@ function publishSteps(
   ];
 }
 
-export async function publishSharedApp(root: string, opts: SharedAppOptions = {}): Promise<PublishResult> {
-  const aid_result = await ensureAid(root);
-  if (!aid_result.ok) return { ok: false, partial: false, problems: aid_result.problems };
-
-  const context = await sharedAppContext(root);
-  if (!context.ok) return context;
-  const { authored, collections, handle } = context;
-  const { aid } = authored;
-
-  const staged = await readStaged(handle, aid);
-  if (!staged.ok) return { ...staged, partial: false };
-  if (staged.staged.length === 0) {
+/** Everything that must hold before a promotion: something IS staged, the staged set matches the
+ *  repository, and the live records fit the version about to become public. Split out for the
+ *  line budget, and it reads as the one thing it is — the gate. */
+async function stagedGate(
+  staged: readonly StagedEntry[],
+  collections: readonly LoadedCollection[],
+  aid: string,
+  root: string,
+  confirm: boolean | undefined,
+): Promise<{ ok: true; scan: RecordScan } | SharedAppFailure> {
+  if (staged.length === 0) {
     return {
       ok: false,
       partial: false,
@@ -157,12 +176,29 @@ export async function publishSharedApp(root: string, opts: SharedAppOptions = {}
       ],
     };
   }
-
-  const toScan = stagedForValidation(staged.staged, collections);
+  const toScan = stagedForValidation(staged, collections);
   if (!toScan.ok) return { ...toScan, partial: false };
   const scan = await scanRecords(toScan.collections, root);
-  const refusal = recordRefusal(scan, "publish", opts.confirm);
-  if (refusal) return { ok: false, partial: false, problems: refusal };
+  const refusal = recordRefusal(scan, "publish", confirm);
+  return refusal ? { ok: false, partial: false, problems: refusal } : { ok: true, scan };
+}
+
+export async function publishSharedApp(root: string, opts: SharedAppOptions = {}): Promise<PublishResult> {
+  // Before anything reads the declaration: a repository that has never been deployed has no
+  // `aid` yet, and it is generated here rather than invented by the agent (D2b).
+  const ensured = await ensureAid(root);
+  if (!ensured.ok) return { ok: false, partial: false, problems: ensured.problems };
+
+  const context = await sharedAppContext(root);
+  if (!context.ok) return context;
+  const { authored, collections, handle } = context;
+  const { aid } = authored;
+
+  const staged = await readStaged(handle, aid);
+  if (!staged.ok) return { ...staged, partial: false };
+  const gate = await stagedGate(staged.staged, collections, aid, root, opts.confirm);
+  if (!gate.ok) return gate;
+  const scan = gate.scan;
 
   let existing: unknown;
   try {
@@ -185,9 +221,16 @@ export async function publishSharedApp(root: string, opts: SharedAppOptions = {}
     commit: stampSource.commit,
     dirty: stampSource.dirty,
   };
-  const face = projectPublish(authored, staged.staged, stamp, isRecord(existing) ? existing : null);
+  const existingApp = isRecord(existing) ? existing : null;
+  const face = projectPublish(authored, staged.staged, stamp, existingApp);
 
-  const failure = await runWrites(publishSteps(handle, aid, staged.staged, stamp, face), "publish");
+  // The name this app HOLDS, which is the app document's — not necessarily the one `app.json`
+  // wants right now. An author who edits `slug` between deploy and publish has changed what the
+  // next deploy will reserve, not what this publish may flip: flipping a name this app never
+  // reserved is a write the rules refuse, and that refusal is the point of them.
+  const slug = typeof existingApp?.slug === "string" ? existingApp.slug : undefined;
+
+  const failure = await runWrites(publishSteps(handle, aid, staged.staged, stamp, face, slug), "publish");
   if (failure) return failure;
 
   return {
@@ -195,6 +238,7 @@ export async function publishSharedApp(root: string, opts: SharedAppOptions = {}
     aid,
     cids: staged.staged.map((entry) => entry.cid),
     publicOpen: face.public !== undefined,
+    slug,
     commit: stamp.commit,
     dirty: stampSource.dirty === true,
     recordIssues: scan.records,

@@ -9,14 +9,17 @@
 // while the app is closed, so they cost nothing, and re-publishing is then a promotion rather
 // than a rebuild.
 //
-// It deliberately does NOT run the declaration gate that deploy and publish share. Those gates
-// decide whether something may go OUT; taking it down has to work when the declaration is broken,
-// which is one of the times an operator most wants it. Only the `aid` is read from `app.json`.
+// It deliberately does NOT run the declaration gate that deploy and publish share, and it does
+// not mint an `aid` the way they do. Those steps decide whether something may go OUT; taking it
+// down has to work when the declaration is broken, which is one of the times an operator most
+// wants it. And a take-down must not AUTHOR: minting an aid here would write a fresh id into
+// `app.json`, then report "there is no app document at apps/<that id>" — a true sentence about an
+// app nobody ever had, in place of the real reason. Only the `aid` is read.
 import { isRecord } from "../../../common/isRecord.js";
-import { ensureAid } from "./ensureAid.js";
 import { APPS_COLLECTION, PUBLIC_CONFIG_DOC, appConfigPath, appManifestReason, firestoreHandle, loadAppManifest } from "@mulmoclaude/core/collection/server";
 import type { SharedAppFailure } from "./context.js";
 import { runWrites } from "./writes.js";
+import { setSlugPublished } from "./slug.js";
 
 export interface UnpublishSuccess {
   ok: true;
@@ -25,14 +28,13 @@ export interface UnpublishSuccess {
    *  saying out loud — the operator asked for a state, and hearing "done" when nothing changed
    *  reads as confirmation that it HAD been open. */
   wasOpen: boolean;
+  /** The URL name that stopped resolving, when there was one. */
+  slug?: string | undefined;
 }
 
 export type UnpublishResult = UnpublishSuccess | SharedAppFailure;
 
 export async function unpublishSharedApp(root: string): Promise<UnpublishResult> {
-  const aid_result = await ensureAid(root);
-  if (!aid_result.ok) return { ok: false, partial: false, problems: aid_result.problems };
-
   const handle = firestoreHandle();
   if (!handle) {
     return { ok: false, partial: false, problems: ["unpublish needs a signed-in Firestore session: connect remote-host first."] };
@@ -64,9 +66,15 @@ export async function unpublishSharedApp(root: string): Promise<UnpublishResult>
   const closed = Object.fromEntries(Object.entries(existing).filter(([key]) => key !== "public"));
   const wasOpen = "public" in existing;
 
+  // The name stops resolving on the way down, after the authorization is gone and before the
+  // rendering data. Exactly the reverse of publish, for the reverse reason: what is taken away
+  // first is what grants.
+  const slug = typeof existing.slug === "string" ? existing.slug : undefined;
+
   const failure = await runWrites(
     [
       { what: `the public block on apps/${aid} — the authorization itself`, run: () => handle.docs.set(APPS_COLLECTION, aid, closed) },
+      ...(slug === undefined ? [] : [{ what: `the URL name '${slug}' (appSlugs/${slug})`, run: () => setSlugPublished(handle, aid, slug, false) }]),
       {
         what: `the public config document (apps/${aid}/config/${PUBLIC_CONFIG_DOC})`,
         run: async () => {
@@ -77,5 +85,5 @@ export async function unpublishSharedApp(root: string): Promise<UnpublishResult>
     "unpublish",
   );
   if (failure) return failure;
-  return { ok: true, aid, wasOpen };
+  return { ok: true, aid, wasOpen, slug };
 }

@@ -16,6 +16,8 @@ import { deploySharedApp } from "../backends/sharedApp/deploy.js";
 import { publishSharedApp } from "../backends/sharedApp/publish.js";
 import { unpublishSharedApp } from "../backends/sharedApp/unpublish.js";
 import { isRecord } from "../../common/isRecord.js";
+import { manifestKey } from "../backends/sharedApp/manifestWrite.js";
+import { serializeBy } from "../backends/sharedApp/serialize.js";
 
 export const SHARED_APP_ACTIONS = ["deploy", "publish", "unpublish"] as const;
 export type SharedAppAction = (typeof SHARED_APP_ACTIONS)[number];
@@ -64,6 +66,13 @@ function provenance(commit: string | undefined, dirty: boolean): string {
   return dirty ? `Recorded commit ${commit}, but the working tree was MODIFIED — the commit does not describe what was written.` : `Recorded commit ${commit}.`;
 }
 
+/** " at /sakura-hair", or nothing. Two of these rather than an inline conditional inside a
+ *  template, because a sentence that reads well with and without the clause is the only thing
+ *  worth optimising here. */
+const at = (slug: string | undefined): string => (slug === undefined ? "" : ` at /${slug}`);
+
+const noLonger = (slug: string | undefined): string => (slug === undefined ? "" : `, /${slug} no longer resolves`);
+
 function recordNote(issues: number, capped: boolean): string[] {
   if (issues === 0) return [];
   const count = capped ? `at least ${issues}` : String(issues);
@@ -77,6 +86,11 @@ async function narrateDeploy(root: string, confirm: boolean): Promise<string> {
   return [
     `${result.created ? "Created" : "Updated"} apps/${result.aid} and staged ${result.cids.length} collection${plural}: ${result.cids.join(", ") || "(none)"}.`,
     `The roster can try it at /staging/${result.aid}. Nothing is public until you publish.`,
+    ...(result.slug === undefined
+      ? []
+      : [
+          `URL name held: '${result.slug}'. It starts resolving at /${result.slug} when you publish — until then nobody can look it up, which is what keeps /staging/{aid} unguessable.`,
+        ]),
     ...(result.withdrawn.length > 0 ? [`Withdrawn from staging (no longer in this repository): ${result.withdrawn.join(", ")}.`] : []),
     ...recordNote(result.recordIssues, result.recordIssuesCapped),
     provenance(result.commit, result.dirty),
@@ -90,7 +104,7 @@ async function narratePublish(root: string, confirm: boolean): Promise<string> {
   return [
     `Published apps/${result.aid}: promoted ${result.cids.length} staged collection${plural} (${result.cids.join(", ")}).`,
     result.publicOpen
-      ? "The app is now OPEN to anonymous visitors."
+      ? `The app is now OPEN to anonymous visitors${at(result.slug)}.`
       : "The app is NOT open to anonymous visitors — app.json declares no `public` block, so the promoted schemas are readable only by the roster.",
     ...recordNote(result.recordIssues, result.recordIssuesCapped),
     provenance(result.commit, result.dirty),
@@ -101,7 +115,7 @@ async function narrateUnpublish(root: string): Promise<string> {
   const result = await unpublishSharedApp(root);
   if (!result.ok) return result.problems.join("\n");
   return result.wasOpen
-    ? `Unpublished apps/${result.aid}: the public block is gone, so anonymous access is closed, and the public config document was deleted. ` +
+    ? `Unpublished apps/${result.aid}: the public block is gone, so anonymous access is closed${noLonger(result.slug)}, and the public config document was deleted. ` +
         "The promoted schemas were left in place, so publishing again is a promotion."
     : `apps/${result.aid} was already closed to the public — nothing was open to take down. The public config document was deleted if it was still there.`;
 }
@@ -113,7 +127,16 @@ export async function manageSharedApp(root: string, args: unknown): Promise<stri
   const action = parseAction(body.action);
   if (action === null) return `manageSharedApp: action must be one of ${SHARED_APP_ACTIONS.join(", ")}.`;
   const confirm = body.confirm === true;
-  if (action === "deploy") return narrateDeploy(root, confirm);
-  if (action === "publish") return narratePublish(root, confirm);
-  return narrateUnpublish(root);
+  // ONE operation at a time per repository. Each of these is a read-then-write sequence over the
+  // same documents, and interleaved they undo each other: a publish that read the app document
+  // before a deploy renamed the URL would go on to open the OLD name, which the deploy had just
+  // retired — leaving a resolving name that no later unpublish touches, because unpublish works
+  // from the record the deploy moved.
+  //
+  // At the entry point rather than inside each operation, because what must not interleave is the
+  // whole sequence, and this is the only place all three pass through.
+  const key = `operation:${await manifestKey(root)}`;
+  if (action === "deploy") return serializeBy(key, () => narrateDeploy(root, confirm));
+  if (action === "publish") return serializeBy(key, () => narratePublish(root, confirm));
+  return serializeBy(key, () => narrateUnpublish(root));
 }
