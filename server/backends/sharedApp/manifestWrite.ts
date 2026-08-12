@@ -65,8 +65,15 @@ export function updateManifest(root: string, mutate: ManifestMutation): Promise<
 async function updateOnce(root: string, mutate: ManifestMutation): Promise<ManifestUpdate> {
   const manifestPath = path.join(root, APP_MANIFEST_FILE);
   let raw: string;
+  // Stamped from the RESOLVED file, beside the read, so the comparison before the rename is about
+  // the same inode `replaceManifest` is going to replace rather than about a symlink.
+  let read: FileStamp | null;
   try {
     raw = await readFile(manifestPath, "utf-8");
+    read = await realpath(manifestPath)
+      .then(stat)
+      .then(stampOf)
+      .catch(() => null);
   } catch (err) {
     return {
       ok: false,
@@ -90,12 +97,33 @@ async function updateOnce(root: string, mutate: ManifestMutation): Promise<Manif
   const updated = mutate(parsed);
   if (updated === null) return { ok: true, manifest: parsed, written: false };
 
-  const failure = await replaceManifest(manifestPath, updated);
+  const failure = await replaceManifest(manifestPath, updated, read);
   return failure ?? { ok: true, manifest: updated, written: true };
 }
 
+/** What the file was when this update READ it. Re-checked against the file as it stands the
+ *  instant before the rename: `updateManifest` serializes callers inside THIS process and nothing
+ *  more, and `app.json` is a committed file — a checkout, a rebase or an editor can replace it
+ *  while a mutation is deciding what to write, and the rename would then land on bytes nobody
+ *  validated. For `fork`, whose whole refusal is "this is not your app", those bytes could be an
+ *  app that IS yours.
+ *
+ *  This NARROWS the window; it does not close it. POSIX has no compare-and-rename, so what remains
+ *  is the gap between the last `stat` and the `rename` — microseconds, against the seconds an
+ *  awaited network call leaves open. Said plainly rather than described as a lock, because the
+ *  next person to need a guarantee here needs to know which one they are getting. */
+interface FileStamp {
+  ino: number;
+  size: number;
+  mtimeMs: number;
+}
+
+const stampOf = (info: { ino: number; size: number; mtimeMs: number }): FileStamp => ({ ino: info.ino, size: info.size, mtimeMs: info.mtimeMs });
+
+const sameFile = (left: FileStamp, right: FileStamp): boolean => left.ino === right.ino && left.size === right.size && left.mtimeMs === right.mtimeMs;
+
 /** Replace the file, or say why not. Returns null when it landed. */
-async function replaceManifest(manifestPath: string, manifest: Record<string, unknown>): Promise<ManifestFailure | null> {
+async function replaceManifest(manifestPath: string, manifest: Record<string, unknown>, read: FileStamp | null): Promise<ManifestFailure | null> {
   // Two spaces and a trailing newline: this file is committed and edited by hand, so it is
   // written the way the author would have.
   const body = `${JSON.stringify(manifest, null, 2)}\n`;
@@ -110,9 +138,23 @@ async function replaceManifest(manifestPath: string, manifest: Record<string, un
   const scratch = path.join(path.dirname(target), `.${path.basename(target)}.${process.pid}.tmp`);
   try {
     await writeFile(scratch, body, "utf-8");
+    // ONE stat, used for both questions, and taken as late as possible: the mode to carry over,
+    // and whether this is still the file the mutation was decided against.
+    const now = await stat(target);
+    if (read !== null && !sameFile(read, stampOf(now))) {
+      await unlink(scratch).catch(() => {});
+      return {
+        ok: false,
+        problems: [
+          `${manifestPath} changed on disk while this was being written — something outside this server replaced it.`,
+          "Nothing was written: the file that is there now was not the one this change was checked against, and overwriting it would discard whatever wrote it.",
+          "Look at app.json, and run the operation again.",
+        ],
+      };
+    }
     // The replacement is a NEW file, so it carries this process's umask rather than the mode the
     // author gave `app.json`. Carrying the declaration through unchanged has to include that.
-    await chmod(scratch, (await stat(target)).mode);
+    await chmod(scratch, now.mode);
     await rename(scratch, target);
     return null;
   } catch (err) {
