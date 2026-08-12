@@ -46,6 +46,13 @@ class FakeDocs implements FirestoreDocs {
   set = (collectionPath: string, docId: string, data: Record<string, unknown>): Promise<void> => {
     const key = `${collectionPath}/${docId}`;
     if (this.failAt === key) return Promise.reject(new Error("permission-denied (test)"));
+    // The one rule this fake models, because a caller DEPENDS on being refused: `appSlugs`'
+    // update rule pins `aid`, so a write naming a different app is rejected. That refusal is how
+    // the reservation code asks "is this name ours?" about a document it may not read.
+    const existing = this.bucket(collectionPath).get(docId);
+    if (collectionPath === "appSlugs" && existing && existing.aid !== data.aid) {
+      return Promise.reject(new Error("permission-denied: appSlugs.aid is immutable (test)"));
+    }
     this.writes.push(`set ${key}`);
     this.bucket(collectionPath).set(docId, structuredClone(data));
     return Promise.resolve();
@@ -335,6 +342,33 @@ describe("shared app deploy / publish / unpublish", () => {
     expect(docs.doc("appSlugs", "sakura-hair")).toEqual({ aid: AID, published: false });
     // Reversed: what grants is taken away first.
     expect(docs.writes).toEqual([`set apps/${AID}`, "set appSlugs/sakura-hair", `delete apps/${AID}/config/public`]);
+  });
+
+  it("does not make the name resolve when the app is not open to anonymous visitors", async () => {
+    // A published reservation is world-readable, and what it reveals is the aid — the
+    // /staging/{aid} entrance. Publishing a roster-only declaration is a normal thing to do, and
+    // it must not hand that out while the same operation reports the app is closed.
+    writeApp(root, declaration({ slug: "sakura-hair" }));
+    await deploySharedApp(root, stamp);
+    const result = await publishSharedApp(root, stamp);
+    expect(result.ok === true && result.publicOpen).toBe(false);
+    expect(docs.doc("appSlugs", "sakura-hair")).toEqual({ aid: AID, published: false });
+  });
+
+  it("reclaims its own reservation rather than taking a numbered one", async () => {
+    // The record on the app document can be lost — a deploy that reserved and then failed to
+    // record it, a document restored from before. `create` then fails for a name this app already
+    // holds, and taking `-2` would strand the first reservation: live, held by an app that no
+    // longer claims it, and unreadable by anyone who might notice.
+    writeApp(root, declaration({ slug: "sakura-hair" }));
+    await deploySharedApp(root, stamp);
+    const app = docs.app();
+    if (app) delete app.slug;
+
+    const again = await deploySharedApp(root, stamp);
+    expect(again.ok === true && again.slug).toBe("sakura-hair");
+    expect(docs.doc("appSlugs", "sakura-hair-2")).toBeUndefined();
+    expect(docs.app()?.slug).toBe("sakura-hair");
   });
 
   it("says so rather than reporting success when there was nothing open to close", async () => {

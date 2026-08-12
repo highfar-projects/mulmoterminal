@@ -129,10 +129,22 @@ function publishSteps(
     // was staged beside, so the public write path is never judged by one version's constraints
     // against another's schema.
     { what: `the app document (apps/${aid})`, run: () => handle.docs.set(APPS_COLLECTION, aid, face.app) },
-    // The URL name starts resolving here: before the authorization, after everything it points
-    // at. A slug that resolved first would be a link that 404s inside; a slug that resolves late
-    // is only a link that is not ready yet.
-    ...(slug === undefined ? [] : [{ what: `the URL name '${slug}' (appSlugs/${slug})`, run: () => setSlugPublished(handle, aid, slug, true) }]),
+    // The URL name follows the app's own openness — `face.public` — and NOT the fact that a
+    // publish happened.
+    //
+    // A published reservation is world-readable, and what it reveals is the aid, which is the
+    // `/staging/{aid}` entrance this whole feature keeps unguessable. So publishing a declaration
+    // with no `public` block — a roster-only app, which is a normal thing to publish — must not
+    // make its name resolvable: that would hand out the private entrance while the operation
+    // itself reports the app is closed to anonymous visitors.
+    //
+    // Placed here, before the authorization and after everything the name points at: a slug that
+    // resolved first would be a link that 404s inside, and one that resolves late is only a link
+    // that is not ready yet. When the publish CLOSES the app instead, the same position is the
+    // reverse and equally right — the app document above has already dropped `public`.
+    ...(slug === undefined
+      ? []
+      : [{ what: `the URL name '${slug}' (appSlugs/${slug})`, run: () => setSlugPublished(handle, aid, slug, face.public !== undefined) }]),
     // LAST, and only when the declaration asks for it. This is the authorization itself.
     ...(face.public === undefined
       ? []

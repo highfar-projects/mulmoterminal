@@ -50,7 +50,14 @@ function candidates(wanted: string): string[] {
  *  Ordering: this runs AFTER `apps/{aid}` is written, because the reservation's `allow create`
  *  resolves the owner through `get(apps/{aid})` — on a first deploy there is nothing to resolve
  *  until that document exists. */
-export async function reserveSlug(handle: SharedAppHandle, aid: string, root: string, wanted: string, alreadyHeld: boolean): Promise<SlugResult> {
+export async function reserveSlug(
+  handle: SharedAppHandle,
+  aid: string,
+  root: string,
+  wanted: string,
+  alreadyHeld: boolean,
+  appIsPublic: boolean,
+): Promise<SlugResult> {
   if (alreadyHeld) return { ok: true, slug: wanted, reserved: false };
 
   const taken: string[] = [];
@@ -58,20 +65,12 @@ export async function reserveSlug(handle: SharedAppHandle, aid: string, root: st
     let claimed: boolean;
     try {
       // `create`, not `set`: create-if-absent is atomic, so two apps racing for one name cannot
-      // both observe it missing. `set` would take a name somebody else already holds — or, worse,
-      // rewrite `published` on it.
+      // both observe it missing.
       claimed = await handle.docs.create(APP_SLUGS_COLLECTION, candidate, appSlugDoc(aid, false));
     } catch (err) {
-      return {
-        ok: false,
-        partial: true,
-        problems: [
-          `deploy reached the app and its schemas, but could not reserve the URL name '${candidate}': ${err instanceof Error ? err.message : String(err)}`,
-          "The app is deployed and the roster can use /staging/{aid}; only the public URL is unreserved. Deploying again retries just this step.",
-        ],
-      };
+      return reservationFailed(candidate, err);
     }
-    if (!claimed) {
+    if (!claimed && !(await isOurs(handle, aid, candidate, appIsPublic))) {
       taken.push(candidate);
       continue;
     }
@@ -88,6 +87,49 @@ export async function reserveSlug(handle: SharedAppHandle, aid: string, root: st
   };
 }
 
+function reservationFailed(candidate: string, err: unknown): SharedAppFailure {
+  return {
+    ok: false,
+    partial: true,
+    problems: [
+      `deploy reached the app and its schemas, but could not reserve the URL name '${candidate}': ${err instanceof Error ? err.message : String(err)}`,
+      "The app is deployed and the roster can use /staging/{aid}; only the public URL is unreserved. Deploying again retries just this step.",
+    ],
+  };
+}
+
+/** Does an EXISTING reservation belong to this app? Asked by WRITING to it, because it cannot be
+ *  read.
+ *
+ *  This is why a failed `create` is not the end. The rules allow an update only when the caller
+ *  owns the app the document ALREADY names and the `aid` is unchanged — so a write that succeeds
+ *  proves ownership, and one that is refused proves somebody else holds the name. There is no
+ *  other way to ask: `allow read` needs `published == true`, which is exactly the state a
+ *  reservation is not in.
+ *
+ *  Without it, three ordinary situations end with a stranded name: a deploy that reserved and then
+ *  failed to record it, two deploys of one repository at once, and a repository whose app document
+ *  lost the record. Each would see `create` fail, decide the name belonged to somebody else, and
+ *  take `-2` — while the first reservation stayed live, held by an app that no longer claims it,
+ *  and unreadable by anyone who might have noticed.
+ *
+ *  `published` is written from the APP's state rather than guessed: the app document holds the
+ *  `public` block, so it is the authority on whether this app is open, and the reservation should
+ *  say the same. When they agree this is a no-op; when they have drifted it repairs the drift
+ *  toward the app.
+ *
+ *  A refusal is the ANSWER here, not an error, which is why nothing is reported. A real fault
+ *  (network, quota) lands here too and reads as "not ours" — costing a numbered name rather than
+ *  taking a wrong one. */
+async function isOurs(handle: SharedAppHandle, aid: string, slug: string, appIsPublic: boolean): Promise<boolean> {
+  try {
+    await handle.docs.set(APP_SLUGS_COLLECTION, slug, appSlugDoc(aid, appIsPublic));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Write the reserved name back, so the next deploy does not reserve a second one.
  *
  *  Returns a failure only when the write failed, and that failure is REAL rather than cosmetic:
@@ -102,7 +144,7 @@ async function recordSlug(root: string, slug: string): Promise<SharedAppFailure 
     problems: [
       `the URL name '${slug}' was reserved, but writing it back to app.json failed:`,
       ...updated.problems,
-      `Put \`"slug": "${slug}"\` in app.json by hand before deploying again — a reservation cannot be read back, so a deploy that does not find it there will reserve ANOTHER name and leave this one held by nobody.`,
+      "Deploying again is the repair: a deploy that finds the name taken now asks whether it is THIS app's before moving on, so the reservation is not stranded.",
     ],
   };
 }

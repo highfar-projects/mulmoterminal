@@ -88,7 +88,9 @@ async function reserveHeldSlug(
   appDoc: Record<string, unknown>,
 ): Promise<SlugResult | undefined> {
   if (wanted === undefined) return undefined;
-  const reservation = await reserveSlug(handle, aid, root, wanted, held === wanted);
+  // Whether the app is OPEN, from the document that decides it. The reservation's `published`
+  // flag mirrors that, and a reclaim must not change the answer.
+  const reservation = await reserveSlug(handle, aid, root, wanted, held === wanted, appDoc.public !== undefined);
   if (!reservation.ok || !reservation.reserved) return reservation;
   try {
     await handle.docs.set(APPS_COLLECTION, aid, { ...appDoc, slug: reservation.slug });
@@ -98,7 +100,7 @@ async function reserveHeldSlug(
       partial: true,
       problems: [
         `the URL name '${reservation.slug}' was reserved and written to app.json, but recording it on apps/${aid} failed: ${err instanceof Error ? err.message : String(err)}`,
-        "Deploy again — it reads the name back from app.json and only records it.",
+        "Deploy again — the reservation is this app's, and the next deploy recognises that rather than taking a numbered name.",
       ],
     };
   }
