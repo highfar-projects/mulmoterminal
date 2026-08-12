@@ -135,6 +135,7 @@ export function declarationProblems(app: AuthoredApp, collections: readonly Load
     handle?.email ?? ownerFromRoster(app) ?? "",
   );
   problems.push(...publicInputProblems(app, schemasOfCollections(collections)));
+  problems.push(...rosterCaseProblems(app, handle?.email));
   if (handle !== null && app.owner !== undefined && app.owner !== handle.uid) {
     // Not fatal on its own — the rules pin `owner` to the EXISTING document on update — but a
     // declaration naming somebody else's uid is either the sample's `<uid>` placeholder or a
@@ -145,6 +146,26 @@ export function declarationProblems(app: AuthoredApp, collections: readonly Load
     );
   }
   return problems;
+}
+
+/** Roster keys the rules will never match, because of their case.
+ *
+ *  `email() in a.members` is an exact string comparison and rules have no `lower()`. Firebase puts
+ *  a lower-cased address in the token, so `Foo@Example.com` on the roster grants nothing — and the
+ *  deploy succeeds, the file reads correctly to a human, and the person invited is refused
+ *  everything with no error anywhere that names them. Said here rather than repaired, because the
+ *  roster is a committed file people edit by hand and rewriting somebody's key is not ours to do.
+ *
+ *  The signed-in address is exempt whatever its case: it IS what the rules compare against, so a
+ *  provider that hands over capitals is right and this check would be wrong. */
+function rosterCaseProblems(app: AuthoredApp, signedInAs: string | undefined): string[] {
+  return Object.keys(app.members)
+    .filter((address) => address !== address.toLowerCase() && address !== signedInAs)
+    .map(
+      (address) =>
+        `app.json puts "${address}" on the roster, and the rules compare an address exactly — they match a signed-in ` +
+        `"${address.toLowerCase()}" against nothing. Write it in lower case.`,
+    );
 }
 
 export interface SharedAppContext {

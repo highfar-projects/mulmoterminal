@@ -135,7 +135,13 @@ export interface InviteSuccess {
  *
  *  One key, left where it was — the file belongs to the author, and an operation that rewrote it
  *  would be a worse version of editing it by hand. `role: null` removes. */
-export async function inviteToSharedApp(root: string, email: string, role: AppRoleName | null, cid: string): Promise<InviteSuccess | SharedAppFailure> {
+export async function inviteToSharedApp(root: string, rawEmail: string, role: AppRoleName | null, cid: string): Promise<InviteSuccess | SharedAppFailure> {
+  // Lower-cased, because the roster key is compared to `request.auth.token.email` by a rule that
+  // has no `lower()`. Firebase hands the token a lower-cased address, so an entry typed
+  // `Foo@Example.com` matches nothing — and the failure is silent in the worst way: the deploy
+  // succeeds, the roster reads correctly to a human, and the person invited is simply refused
+  // everything with no error naming them.
+  const email = rawEmail.toLowerCase();
   let orphaned = false;
   const updated = await updateManifest(root, (manifest) => {
     const next = nextMembers(manifest, email, role, cid);

@@ -103,6 +103,11 @@ edits the roster and nothing else; deploy is what makes it real.
 
 `cid` narrows it to one collection instead of the whole app.
 
+Addresses are written in lower case, because the rules compare one exactly and the sign-in token
+carries a lower-cased address. An entry with capitals matches nobody, and nothing reports it — the
+deploy succeeds and the person is simply refused everything. `invite` lower-cases what you pass;
+a roster edited by hand is checked at deploy.
+
 ### 4b. Check, whenever you have edited `app.json`
 
 `manageSharedApp` with `action: "check"` runs the gate a deploy runs — the declaration, the
