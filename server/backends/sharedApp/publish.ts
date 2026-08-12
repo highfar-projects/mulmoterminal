@@ -16,6 +16,15 @@
 //
 // A re-publish passes through a moment with no `public` block. That is a brief denial for
 // visitors, not a brief exposure, and it is the trade the ordering is chosen for.
+//
+// The other half of that trade, stated because it is what an ordering review asks about: while a
+// LIVE app is being re-published, the OLD `public` block stays in force across the promotions, so
+// a run that fails part-way leaves the app open on a mixed set of versions. That is accepted, and
+// it is not an access change — the old block is what authorizes those reads, so a collection that
+// only the NEW declaration would have opened stays closed (`publicRead` tests the cid against the
+// `public.read` list that is still live). Closing first would trade a mixed-version window for a
+// deliberate outage on every re-publish, and a failure there leaves the app DARK rather than
+// stale — worse for the person the app is for, and not what the design chose (see D10's ordering).
 import { isRecord } from "../../../common/isRecord.js";
 import {
   APPS_COLLECTION,
@@ -72,6 +81,24 @@ function stagedForValidation(
       continue;
     }
     scanned.push({ ...collection, schema: entry.doc.publishedSchema });
+  }
+  // The other direction, and the one that is not symmetric with it: a collection the repository
+  // HAS and staging does not.
+  //
+  // "staging is non-empty" is not the same question. A deploy writes the staged documents one at
+  // a time, so one that failed part-way leaves a NONEMPTY but incomplete set — and publishing that
+  // opens an app whose declaration names a collection with no published schema behind it. The
+  // deploy said so at the time, but publish must not be the step that ships the subset anyway.
+  //
+  // It also catches the ordinary version of the same mistake: a collection added to the
+  // repository and never deployed. Both answers are the same one — run deploy first.
+  const stagedCids = new Set(staged.map((entry) => entry.cid));
+  const missing = collections.map((collection) => collection.slug).filter((cid) => !stagedCids.has(cid));
+  if (missing.length > 0) {
+    problems.push(
+      `not staged, so there is no reviewed version to promote: ${missing.join(", ")}. ` +
+        "Run deploy first — publishing now would open the app with those collections missing from it, which is not the version anybody reviewed at /staging.",
+    );
   }
   return problems.length > 0 ? { ok: false, problems } : { ok: true, collections: scanned };
 }

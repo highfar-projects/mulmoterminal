@@ -238,6 +238,24 @@ describe("shared app deploy / publish / unpublish", () => {
     expect(confirmed.ok === true && confirmed.recordIssues).toBe(1);
   });
 
+  it("refuses to publish a staging set that is missing a collection the repository has", async () => {
+    // Not the same question as "is staging empty". A deploy writes the staged documents one at a
+    // time, so one that failed part-way leaves a NONEMPTY but incomplete set — and publishing it
+    // opens an app whose declaration names a collection with no schema behind it.
+    await deploySharedApp(root, stamp);
+    writeCollection(root, "waitlist");
+
+    const result = await publishSharedApp(root, stamp);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.problems.join("\n")).toContain("waitlist");
+    expect(docs.store.get(`apps/${AID}/collections`)).toBeUndefined();
+
+    // Deploying is the fix, and it is the same fix for the ordinary version of this: a collection
+    // added to the repository and never deployed.
+    await deploySharedApp(root, stamp);
+    expect((await publishSharedApp(root, stamp)).ok).toBe(true);
+  });
+
   it("does not let a confirmed deploy buy the publish", async () => {
     // The reason the scan runs at BOTH boundaries: deploy's confirm says "let me stage this
     // anyway", which mid-migration is the useful thing. It is not the same sentence as "let
