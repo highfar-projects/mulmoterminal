@@ -18,6 +18,7 @@
 //     both see the old file and one write is lost. Serialized on the RESOLVED path, because two
 //     spellings of one root are one file.
 import { chmod, readFile, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { APP_MANIFEST_FILE } from "@mulmoclaude/core/collection/server";
 import { isRecord } from "../../../common/isRecord.js";
@@ -124,3 +125,33 @@ async function replaceManifest(manifestPath: string, manifest: Record<string, un
     };
   }
 }
+
+/** Write `app.json` for a repository that does not have one.
+ *
+ *  Separate from `updateManifest` because the two must not be one call: updating REFUSES to create
+ *  (a mistyped path would become an app declaration), and creating must refuse to overwrite (an
+ *  existing declaration holds the roster, and re-writing it would revoke everybody silently).
+ *
+ *  `wx` is what makes the refusal atomic rather than a check followed by a write — two sessions
+ *  asked to start the same app cannot both see it missing. It is written directly rather than
+ *  through the rename dance for the same reason: there is no file to protect, and `wx` on the real
+ *  path IS the protection. */
+export async function createManifest(root: string, manifest: Record<string, unknown>): Promise<ManifestUpdate> {
+  const manifestPath = path.join(root, APP_MANIFEST_FILE);
+  return serializeBy(`manifest:${await manifestKey(root)}`, async () => {
+    try {
+      await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, { encoding: "utf-8", flag: "wx" });
+      return { ok: true, manifest, written: true };
+    } catch (err) {
+      if (isRecord(err) && err.code === "EEXIST") {
+        return { ok: false, problems: [`${manifestPath} already exists — this repository already declares an app.`] };
+      }
+      return { ok: false, problems: [`cannot write ${manifestPath}: ${String(err)}`] };
+    }
+  });
+}
+
+/** The `aid` a new declaration gets. Generated here, by code, for the reason D2b gives: `apps/{aid}`
+ *  is a shelf every user of the deployment shares, a memorable id there is first-come-first-served,
+ *  and a model asked to invent an identifier writes a memorable one. */
+export const newAid = (): string => randomUUID();

@@ -36,6 +36,9 @@ class FakeDocs implements FirestoreDocs {
   failListing: string | null = null;
   /** Refuse the app-document read even though it exists — somebody else's app. */
   readsDeniedForApp = false;
+  /** The `code` a refused read carries. `failed-precondition` is a FAULT, not a refusal, and the
+   *  caller has to tell them apart. */
+  readErrorCode = "permission-denied";
 
   private bucket(collectionPath: string): Map<string, Record<string, unknown>> {
     const existing = this.store.get(collectionPath);
@@ -64,8 +67,8 @@ class FakeDocs implements FirestoreDocs {
     // answer as somebody else's app. A fake that answered `null` would let a first deploy pass a
     // test the real thing cannot pass.
     const existing = this.bucket(collectionPath).get(docId);
-    if (collectionPath === "apps" && (!existing || this.readsDeniedForApp)) {
-      return Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }));
+    if (collectionPath === "apps" && (!existing || this.readsDeniedForApp || this.readErrorCode !== "permission-denied")) {
+      return Promise.reject(Object.assign(new Error("read refused (test)"), { code: this.readErrorCode }));
     }
     return Promise.resolve(existing ?? null);
   };
@@ -220,6 +223,23 @@ describe("shared app deploy / publish / unpublish", () => {
     expect(docs.doc(`apps/${AID}/staging`, "waitlist")).toBeUndefined();
     // And the deploy still did its own job.
     expect(docs.doc(`apps/${AID}/staging`, "bookings")).toBeDefined();
+  });
+
+  it("does not mistake a fault for an absent app and rebuild it", async () => {
+    // `failed-precondition` is not the rules saying no — it is a missing index, a stale
+    // transaction, a client the backend wants restarted. Read as a refusal, the app document looks
+    // ABSENT: the deploy would rebuild it from the declaration alone, dropping the `public` block
+    // and the held slug — silently unpublishing a live app and stranding its URL name.
+    writeApp(root, declaration({ slug: "sakura-hair", public: { enabled: true, read: ["bookings"] } }));
+    await deploySharedApp(root, stamp);
+    await publishSharedApp(root, stamp);
+    docs.readErrorCode = "failed-precondition";
+
+    const result = await deploySharedApp(root, stamp);
+    expect(result.ok).toBe(false);
+    // The app is untouched: still public, still holding its name.
+    expect(docs.app()?.public).toMatchObject({ enabled: true });
+    expect(docs.app()?.slug).toBe("sakura-hair");
   });
 
   it("says whose app it is when the id is taken and unreadable", async () => {

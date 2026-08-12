@@ -29,26 +29,22 @@ the user turns this down.
 Say what you are doing in the user's words ("作っています", "みんなが見えるようにしました"). The
 words below are for you, not for them: an author does not need to know what a `cid` is.
 
-### 1. Write the declaration
+### 1. Start the app
 
-`app.json` at the repository root:
+`manageSharedApp` with `action: "init"`, and `name` (and `slug`, if you have one worth wanting).
 
-```json
-{
-  "name": "Talk feedback",
-  "slug": "aug-talk-survey",
-  "members": { "owner@example.com": { "*": "owner" } }
-}
-```
+**Do not compose `app.json` yourself.** The declaration names its owner by EMAIL and it has to be
+the address this machine is SIGNED IN with — you cannot read that, and the address the user tells
+you is the one that fails at deploy. `init` writes it, generates the `aid`, and refuses if the
+repository already declares an app.
 
-- `members` is keyed by **email**, and the user's own address goes in as `owner`. Ask for it if
-  you do not know it — it is the one thing you cannot infer.
-- `slug` is the name in the URL people will be given. Take it from what the thing IS
-  (`aug-talk-survey`), lowercase with hyphens. It is a wish: if it is taken, a number is appended
-  and written back here.
-- **Never invent an `aid`.** It is generated for you the moment you write the first collection,
-  and it is a UUID on purpose — a memorable one would be first-come-first-served across every user
-  of the deployment.
+`slug` is the name in the URL people will be given. Take it from what the thing IS
+(`aug-talk-survey`), lowercase with hyphens. It is a wish: if it is taken, a number is appended and
+written back.
+
+The file is an ordinary committed declaration afterwards — you may read it, and the user may edit
+it in a pull request. What you should not do is REWRITE it: `invite` changes one roster entry, and
+`check` tells you whether what is there would deploy.
 
 ### 2. Write the collection
 
@@ -75,10 +71,12 @@ The one thing that differs from an ordinary collection:
 
 That is what makes the records shared. Declare no `dataPath` beside it — exactly one of the two.
 
-**A shared collection is invisible until the app has an `aid`**, which is generated for you — by
-the first deploy, or by `putSchema` when you edit one later. So between writing the files and
-deploying, `getSchema` reporting "unknown collection" is expected, not a mistake to chase. Deploy,
-then look.
+**The app already has its `aid`** — `init` wrote it in step 1 — so a shared collection you write
+correctly is discovered straight away. If `getSchema` says "unknown collection" after you have
+written the files, that is the schema FAILING VALIDATION, not something a deploy will fix: read it
+back against `schemaDocs` (`primaryKey` naming a field flagged `primary: true`, `icon` present,
+exactly one of `dataPath` / `dataSource` / `storage`). Deploying past it produces an app with the
+collection missing and no error anywhere.
 
 **Everything in the folder is shared or nothing is.** Do not mix a shared collection and a local
 one in an app's repository.
@@ -93,7 +91,8 @@ Tell the user they can look at it now, and give them the address the tool report
 
 ### 4. Invite
 
-Add the address to `members` and deploy again. Roles:
+`manageSharedApp` with `action: "invite"`, `email`, and `role` (omit `role` to remove them). It
+edits the roster and nothing else; deploy is what makes it real.
 
 | role | what they get |
 |---|---|
@@ -102,8 +101,16 @@ Add the address to `members` and deploy again. Roles:
 | `viewer` | reads the records |
 | `participant` | named on the roster, sees only their OWN rows |
 
-`{ "tanaka@example.com": { "*": "viewer" } }` is the whole app; `{ "bookings": "editor" }` is one
-collection.
+`cid` narrows it to one collection instead of the whole app.
+
+### 4b. Check, whenever you have edited `app.json`
+
+`manageSharedApp` with `action: "check"` runs the gate a deploy runs — the declaration, the
+collections it names — and writes nothing. It needs no connection.
+
+Use it after any hand edit, and before telling the user something is ready. The alternative is
+finding out at deploy, and a deploy that refuses in the middle is where an agent starts editing
+files to recover.
 
 ### 5. Publish, when the user asks to open it
 
@@ -202,12 +209,10 @@ carrying on.
 The run this skill was written from lost several minutes to each of these, and both times the
 repair made things worse — an `aid` was deleted and a second app was created by accident.
 
-- **`getSchema` / `putSchema` says "unknown collection".** It means the schema was not ACCEPTED,
-  and there are two reasons: the app has no `aid` yet (nothing is wrong — the first deploy mints
-  it), or the schema failed validation (something is wrong, and it is skipped silently).
-  Tell them apart before acting: re-read the schema against `schemaDocs` — `primaryKey` naming a
-  field flagged `primary: true`, `icon` present, exactly one of `dataPath` / `dataSource` /
-  `storage`. If the schema is sound, deploy; do not rewrite it, and do not move the directory.
+- **`getSchema` / `putSchema` says "unknown collection".** The schema was not ACCEPTED. With
+  `init` having written the `aid`, that means it failed validation — read it back against
+  `schemaDocs` rather than deploying past it. (Before `init` existed this could also mean "no aid
+  yet"; it no longer does, and treating it that way deploys an app with the collection missing.)
 - **Anything about permissions on `apps/{aid}`.** The `aid` in `app.json` is the app's identity.
   Removing it does not reset anything: the next deploy mints a NEW one and the old app stays where
   it is, owned by nobody who can reach it. If a deploy is refused, read what it says and fix that;
