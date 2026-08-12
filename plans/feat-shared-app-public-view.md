@@ -1,6 +1,8 @@
 # 共有アプリ: 公開ページを「予約サイト」にする（公開カスタムビュー + 枠の排他）
 
 **状態**: 設計のみ。実装は未着手。2026-08-12 の議論から。
+レビュー（#1658）で見つかった 5 点を反映済み: id の不変性、枠の実在確認、iframe の
+`event.source` 検証、`config/view` の撤去、顧客は delete できないこと。
 全体設計は [`feat-shareable-collections.md`](./feat-shareable-collections.md)、
 行スコープの承認は [`feat-shared-app-assignee-role.md`](./feat-shared-app-assignee-role.md)、
 先着枠は [`feat-shared-app-first-come.md`](./feat-shared-app-first-come.md)。
@@ -69,6 +71,44 @@ idFrom: z.enum(["auto", "auth.uid", "auth.uid+field"])
     && itemId == request.resource.data[s.idField])
 ```
 
+### id を作った値は不変にする
+
+`idOk` は **create でしか呼ばれない**（`firestore.rules:456`。`updateWith` は呼ばない）。
+`idField` を後から書き換えられると、id `slot-a` のドキュメントの `slot` を `slot-b` に
+変えられ、**そのあと誰かが id `slot-b` を create できる** — 2 件が同じ枠を主張する。
+排他は create の原子性に乗っているので、この 1 点で崩れる。
+
+`updateWith` に足す:
+
+```
+&& (!("idFrom" in s) || s.idFrom != "field" || !(s.idField in changed()))
+```
+
+`stampField` の `stampHeld` と同じ形。「create で決まった値は以後動かない」という
+既に 1 つある考え方の 2 つ目で、新しい概念ではない。
+
+### 値が本物の枠であることは、ルールが確かめる
+
+id の一意性が防ぐのは「**同じ文字列**を 2 回書くこと」だけ。クライアントはビューを通さず
+`slot: "でっちあげ"` で申し込める。UI が枠の妥当性の権威になってはいけない。
+
+宣言に対象コレクションを持たせ、ルールで存在を確かめる:
+
+```json
+"idFrom": "field", "idField": "slot", "idIn": "slots"
+```
+
+```
+&& exists(/databases/$(database)/documents/apps/$(aid)/collections/$(s.idIn)/items/$(request.resource.data[s.idField]))
+```
+
+コストは**書き込み 1 回につき get 1 回**。`window.fromField` が既に同じ枠のレコードを
+`get()` しているので、予約の申込みでは実質 1 回増えるだけ（同じドキュメントだが、
+ルールの `get` はキャッシュされない）。
+
+`idIn` は `idFrom: "field"` のときだけ意味を持つ。**必須にする** — 省略を許せば
+「でっちあげの枠を作れるアプリ」が黙って作れてしまい、それは deploy 時に言うべきこと。
+
 ### `ownRow` には足さないこと
 
 `ownRow`（自分の行の自己編集）は `auth.uid` / `auth.uid+field` / `emailField` を見ている。
@@ -84,12 +124,24 @@ idFrom: z.enum(["auto", "auth.uid", "auth.uid+field"])
 `!("idFrom" in s)` でも `== "auto"` でもない値に落ちて **fail-closed** する
 （拒否側に倒れるので危険ではないが、申込みが全部通らないアプリが live に出る）。
 
-### 未解決 — キャンセルで枠は空くのか
+### キャンセルで枠は空かない（顧客の操作では）
 
-枠 id ＝ ドキュメント id なので、**予約を delete すれば枠は空く**。これは望ましい場合も
-望ましくない場合もある（「キャンセルは受付を通すこと」という店の運用がありうる）。
-`selfUpdate` で `status: "cancelled"` にするだけならドキュメントは残り、枠は空かない。
-どちらを既定にするかは 3（テンプレート）で決める。ルールとしてはどちらも今のまま表現できる。
+「delete か status か」は選べる 2 つではない。**顧客は delete できない** —
+`itemDelete` は `writerOf`（owner / editor）と行スコープの `assignee` だけで、
+`ownRow` は宣言された update と transition しか許さない（`firestore.rules:194`）。
+
+したがって:
+
+| 誰が | どうやって | 枠は |
+|---|---|---|
+| 顧客 | `selfUpdate` で `status: "cancelled"` | **空かない**（ドキュメントが残り id を占有し続ける） |
+| 受付・担当 | delete | 空く |
+
+**これは制約ではなく、たぶん正しい運用**でもある。枠が客の操作で即座に他人に開く必要は
+なく、受付が確認してから戻す方が店の実態に合う。ただし**そう決めたことをテンプレートに
+書く** — 「キャンセルしたのに枠が空かない」は、書いていなければバグに見える。
+
+自動で空けたければ、受付の画面から delete する（`assignee` は自分の担当行を delete できる）。
 
 ---
 
@@ -142,6 +194,19 @@ window.__MC_VIEW = { slug, token, dataUrl, origin, locale, dict, onChange, openI
 今のモデルより**むしろ安全**になる。信頼できない HTML が資格情報を一切持たず、認可は
 ルールと親にしか無い。ビューが「予約する」と言っても、通るかどうかを決めるのは常にルール。
 
+### 親は `event.source` で iframe を同定する
+
+**`event.origin` は使えない。** sandboxed な `srcdoc` iframe のオリジンは opaque（`"null"`）で、
+そのビューを同定しない。同じ値を名乗る窓は他にいくらでもある。
+
+親は `event.source === iframe.contentWindow` を見る。これを落とすと、**このページを開いた
+別の窓が `{ submit: ... }` を送れる** — `verifiedEmail` のアプリで既にサインインしている
+訪問者にとって、それはルール的に正当な書き込みになり、本人が何も触らずに予約が入る。
+
+ホスト側の bridge は既に `event.source` を信頼境界にしている。ここで新しく決めることでは
+なく、**同じ契約を公開ページ側にも書く**という話。メッセージの形（`cid` が `public.submit`
+に実在すること、値が既知のフィールドだけであること）も親が検証する。
+
 **別の bridge であることを名前で示す。** `__MC_VIEW` を名乗らせない
 （`window.__MC_PUBLIC_VIEW` など）。同じ名前で違う契約は、LLM がどちらのビューを書いて
 いるか意識しないまま `token` を読もうとして `undefined` を得る形になる。
@@ -175,6 +240,18 @@ window.__MC_VIEW = { slug, token, dataUrl, origin, locale, dict, onChange, openI
 `public.view` があるとき、公開ページはフォームの代わりにビューを描く（`submit` は
 **残す** — ビューが postMessage で使う申込み経路の定義そのものだから）。
 
+### 撤去したら消すこと
+
+`config/{docId}` は**常に**匿名で読める。`public.view` を宣言から外しても、アプリを
+unpublish しても、`config/view` を明示的に消さない限り **HTML は誰でも取り出せるまま残る**。
+今の unpublish は `config/public` しか消していない。
+
+- `public.view` が無くなった publish → `config/view` を削除
+- unpublish → `config/view` も削除
+
+publish が「対になるものを書く」操作である以上、撤去も対で行う。#1655 で
+`stagedRuleConfig` の対を落として見つかったのと同じ形の抜け。
+
 ### 検査（deploy/publish の門）
 
 - `public.view.path` が実在し、`views/*.html` に収まっていること
@@ -194,7 +271,7 @@ window.__MC_VIEW = { slug, token, dataUrl, origin, locale, dict, onChange, openI
 - `startAt` を客に手で打たせるのをやめる（今そうなっているのは回避ではなく、
   **これしかできなかった**から）
 - `views/booking.html` — スタイリスト × 時間の格子。埋まっている枠は選べない
-- キャンセルの既定（delete か `status` か、上記「未解決」）をここで決めて書く
+- キャンセル: 顧客は `status: "cancelled"`、枠を戻すのは受付の delete。**両方書く**
 
 **利用者に先に言うこと**（gym.md と同じ位置に置く）:
 
@@ -202,6 +279,7 @@ window.__MC_VIEW = { slug, token, dataUrl, origin, locale, dict, onChange, openI
   隠したいなら、`bookings` を `public.read` に入れず、`slots` に「埋まっているか」だけを
   持たせる設計にする（その場合、埋まりの反映は受付の操作になる）
 - 枠は**先着で本当に排他される**。ジムの順位方式と違い、繰り上げは起きない
+- **顧客がキャンセルしても枠はすぐには空かない。** 受付が戻す操作が要る
 
 ---
 
@@ -223,8 +301,8 @@ window.__MC_VIEW = { slug, token, dataUrl, origin, locale, dict, onChange, openI
 | | 1 (`idFrom`) | 2 (公開ビュー) | 3 (salon) |
 |---|---|---|---|
 | mulmoserver | `firestore.rules`（+ deploy） | `PublicApp.vue` / `usePublicApp` / bridge | — |
-| mulmoclaude | `publishManifest` の enum | `public.view` の宣言 + 検査 | — |
-| mulmoterminal | — | publish（`config/view` への書き出し）+ 検査 | テンプレート |
+| mulmoclaude | `publishManifest` の enum + `idIn` | `public.view` の宣言 + 検査 | — |
+| mulmoterminal | — | publish（`config/view` の書き出しと削除）+ 検査 | テンプレート |
 
 1 は**ルールの deploy が先**（上記）。2 は core の宣言が先で、mulmoserver の描画は後から
 足しても既存アプリを壊さない（`public.view` が無ければ今の挙動）。
