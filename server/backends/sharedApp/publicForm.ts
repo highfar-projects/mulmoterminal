@@ -68,6 +68,15 @@ export interface PublicField {
 export interface PublicCollectionForm {
   fields: Record<string, PublicField>;
   statusField?: string;
+  /** The field the page must fill with the SERVER clock, not with an input.
+   *
+   *  Published for the same reason as `statusField`: the deployed rules insist
+   *  on it (`request.resource.data[stampField] == request.time`) and nothing
+   *  else a visitor can read names it. A page that did not know would either
+   *  omit the key — refused, because the rule requires it — or draw it as a
+   *  date box and send whatever the visitor typed, which is refused too. What
+   *  it must send is the store's server-timestamp sentinel. */
+  stampField?: string;
 }
 
 export type PublicForm = Record<string, PublicCollectionForm>;
@@ -84,7 +93,11 @@ export function publicFormOf(authored: AuthoredApp, staged: readonly StagedEntry
     const doc = byCid.get(cid);
     if (doc === undefined) return [];
     const schema = doc.publishedSchema;
-    const fields = fieldsOf(schema, spec.createFields, spec.validate?.required ?? []);
+    // The stamped field is EXCLUDED from the drawn inputs. It is in
+    // `createFields` because the rules refuse any key outside that list, not
+    // because a visitor answers it — drawing it would invite an answer the
+    // rules then deny.
+    const fields = fieldsOf(schema, spec.createFields, spec.validate?.required ?? [], spec.stampField);
     // A collection whose `createFields` name nothing the schema declares publishes no entry at
     // all: an empty object would read as a form that failed to load, where absence is a fact the
     // page can state.
@@ -97,7 +110,11 @@ export function publicFormOf(authored: AuthoredApp, staged: readonly StagedEntry
     // a key the promoted rule does not accept, so every submission is denied with nothing on the
     // page to say why.
     const statusField = doc.config?.statusField;
-    return [[cid, { fields, ...(statusField === undefined ? {} : { statusField }) }] as const];
+    // `stampField` comes from the SUBMIT declaration rather than from the
+    // staged rule configuration, because that is where the rules read it: it
+    // lives in `public.submit[cid]`, which publish writes from the manifest.
+    const stampField = spec.stampField;
+    return [[cid, { fields, ...(statusField === undefined ? {} : { statusField }), ...(stampField === undefined ? {} : { stampField }) }] as const];
   });
   return Object.fromEntries(entries);
 }
@@ -170,9 +187,17 @@ function unknownField(cid: string, name: string, source: SchemaSource): string {
   return `public.submit.${cid}.createFields names '${name}', but ${version}. ${fix}`;
 }
 
-function fieldsOf(schema: CollectionSchema, createFields: readonly string[], requiredBySubmit: readonly string[]): Record<string, PublicField> {
+function fieldsOf(
+  schema: CollectionSchema,
+  createFields: readonly string[],
+  requiredBySubmit: readonly string[],
+  stampField: string | undefined,
+): Record<string, PublicField> {
   const declared = schema.fields;
   const pairs = createFields.flatMap((name) => {
+    // The server-stamped field is carried on the form as `stampField`, not
+    // drawn as an input: the page fills it in, the person does not.
+    if (name === stampField) return [];
     // Own-property guarded: a `createFields` entry of `toString` or `constructor` must miss here
     // rather than read an Object.prototype member and publish a "field" nobody declared.
     if (!Object.hasOwn(declared, name)) return [];

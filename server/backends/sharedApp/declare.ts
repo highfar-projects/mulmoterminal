@@ -17,8 +17,12 @@ import { isRecord } from "../../../common/isRecord.js";
 import { declarationProblems, sharedCollections, type SharedAppFailure } from "./context.js";
 import { createManifest, newAid, updateManifest } from "./manifestWrite.js";
 
-/** The roles the rules understand, in the order a person picks from. */
-export const APP_ROLE_NAMES = ["owner", "editor", "viewer", "participant"] as const;
+/** The roles the rules understand, in the order a person picks from.
+ *
+ *  The last two are row-scoped in opposite directions: `participant` reads
+ *  only the rows it submitted, `assignee` reads every row and writes only the
+ *  ones assigned to it (`collections[cid].assigneeField` says which). */
+export const APP_ROLE_NAMES = ["owner", "editor", "viewer", "participant", "assignee"] as const;
 export type AppRoleName = (typeof APP_ROLE_NAMES)[number];
 
 export interface DeclareSuccess {

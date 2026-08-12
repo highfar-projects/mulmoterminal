@@ -133,6 +133,35 @@ describe("publicFormOf", () => {
   });
 });
 
+describe("the field the page stamps rather than asks", () => {
+  // `stampField` is in `createFields` because the rules refuse any key outside
+  // that list — not because a visitor answers it. Drawing it would invite an
+  // answer the rules then deny, and omitting it from the form entirely would
+  // leave the page with no way to learn the name.
+  const stamped = authored({
+    responses: { auth: "verifiedEmail", emailField: "email", createFields: ["name", "createdAt"], stampField: "createdAt" },
+  });
+  const withStamp = [
+    {
+      ...stagedResponses,
+      doc: {
+        ...stagedResponses.doc,
+        publishedSchema: { ...schema, fields: { ...schema.fields, createdAt: { type: "datetime" as const, label: "受付日時" } } },
+      },
+    },
+  ];
+
+  it("is named on the form and not drawn as an input", () => {
+    const form = publicFormOf(stamped, withStamp);
+    expect(form.responses?.stampField).toBe("createdAt");
+    expect(Object.keys(form.responses?.fields ?? {})).toEqual(["name"]);
+  });
+
+  it("is absent when nothing is stamped", () => {
+    expect(publicFormOf(authored(surveySubmit), staged).responses?.stampField).toBeUndefined();
+  });
+});
+
 describe("fields a stranger cannot be asked for", () => {
   // `createFields` is not only what the page draws from — it is the whitelist the deployed rules
   // judge a public create by. So a computed field left in it is a value from the internet landing
