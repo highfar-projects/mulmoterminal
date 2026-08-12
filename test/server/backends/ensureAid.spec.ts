@@ -4,7 +4,7 @@
 // generator behaves like one: it mints exactly once, it keeps what the author wrote, and it
 // refuses rather than inventing a declaration.
 import { describe, it, expect, beforeEach } from "vitest";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { ensureAid } from "../../../server/backends/sharedApp/ensureAid.js";
 import { makeTempDir } from "../../support/tempDir";
@@ -55,6 +55,17 @@ describe("ensureAid", () => {
     const result = await ensureAid(root);
     expect(result.ok).toBe(false);
     expect(readFileSync(appJson(), "utf-8")).toBe("{ not json");
+  });
+
+  it("leaves no scratch file behind, and never a half-written declaration", async () => {
+    // The file it would destroy is the author's declaration — the roster and the public settings —
+    // and nothing here could put it back, so the new one is written beside it and renamed into
+    // place. What that has to be checked for is the litter: a scratch file left in the repository
+    // is a file someone commits.
+    writeFileSync(appJson(), JSON.stringify({ name: "Sakura" }));
+    const result = await ensureAid(root);
+    expect(result.ok).toBe(true);
+    expect(readdirSync(root)).toEqual(["app.json"]);
   });
 
   it("refuses a JSON file that is not an object", async () => {
