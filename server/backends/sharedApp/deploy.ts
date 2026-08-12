@@ -125,40 +125,35 @@ async function establishAndScan(
   return { ok: false, partial: established, problems: refusal };
 }
 
-/** Create the app document, which is also what SETTLES what a refused read left open.
+/** Write the app document when it is not there — which is also the only way to LEARN whether it
+ *  was ours to write.
  *
- *  `create` is create-if-absent and atomic, and the rules let only the declared owner do it. So:
- *  it succeeds and the app is ours; it reports the id taken, which means the document exists and
- *  the earlier read was refused because this address is not on ITS roster; or it is refused, which
- *  means the declaration does not name this address as owner.
+ *  `set` and not `create`. The create-if-absent primitive is a transaction that begins by READING
+ *  the document, and that read is refused for exactly the document it is meant to create: the read
+ *  rule resolves the roster out of the document itself, so for a missing one the expression fails
+ *  and the answer is denied. The transaction dies there, every time, on a brand-new aid.
  *
- *  Each of those is a different thing to tell the operator, and none of them is "Missing or
- *  insufficient permissions" — the message a first deploy used to end on. */
+ *  A `set` is subject to `allow create` when the document is absent and `allow update` when it is
+ *  not — and both require this session to be the owner. So it succeeds exactly when the app is
+ *  ours to write, and a refusal covers the two cases we cannot tell apart from here. The message
+ *  names both, because both are things the operator can check. */
 async function claimApp(handle: SharedAppHandle, aid: string, appDoc: Record<string, unknown>): Promise<SharedAppFailure | null> {
-  let created: boolean;
   try {
-    created = await handle.docs.create(APPS_COLLECTION, aid, appDoc);
+    await handle.docs.set(APPS_COLLECTION, aid, appDoc);
+    return null;
   } catch (err) {
     return {
       ok: false,
       partial: false,
       problems: [
-        `cannot create the app document (apps/${aid}): ${err instanceof Error ? err.message : String(err)}`,
-        "Creating an app requires the signed-in address to be its OWNER in app.json's `members` — check that the address you are signed in with is the one listed there.",
+        `cannot write the app document (apps/${aid}): ${err instanceof Error ? err.message : String(err)}`,
+        "Two things are refused the same way here, and both are worth checking:",
+        `  - the address this session is signed in with is not the one app.json names as owner (it must be a key of \`members\` with \`"*": "owner"\`);`,
+        `  - apps/${aid} already exists and belongs to somebody else's roster — the aid was not created here, or this address was removed from it. Removing \`aid\` from app.json starts a new app.`,
         "Nothing was written.",
       ],
     };
   }
-  if (created) return null;
-  return {
-    ok: false,
-    partial: false,
-    problems: [
-      `apps/${aid} already exists and this session cannot read it.`,
-      "That combination means the app belongs to somebody else's roster: the aid in app.json was not created here, or the address you are signed in with was removed from it. Ask its owner to add you, or start a new app by removing `aid` from app.json.",
-      "Nothing was written.",
-    ],
-  };
 }
 
 /** Staged documents whose collection this repository no longer has.

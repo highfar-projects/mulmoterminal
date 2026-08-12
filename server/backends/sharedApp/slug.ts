@@ -62,21 +62,19 @@ export async function reserveSlug(
 
   const taken: string[] = [];
   for (const candidate of candidates(wanted)) {
-    let claimed: boolean;
-    try {
-      // `create`, not `set`: create-if-absent is atomic, so two apps racing for one name cannot
-      // both observe it missing.
-      claimed = await handle.docs.create(APP_SLUGS_COLLECTION, candidate, appSlugDoc(aid, false));
-    } catch (err) {
-      return reservationFailed(candidate, err);
-    }
-    if (!claimed) {
-      const ownership = await probeOwnership(handle, aid, candidate, appIsPublic);
-      if (ownership === "unknown") return probeFailed(candidate);
-      if (ownership === "theirs") {
-        taken.push(candidate);
-        continue;
-      }
+    // `set`, not `create`. The create-if-absent primitive is a transaction that READS first, and
+    // that read is refused for a reservation that does not exist yet (`allow read` tests
+    // `resource.data.published`, which is not there) — so it can never claim a free name.
+    //
+    // A `set` is judged by `allow create` when the document is absent and by `allow update` when
+    // it is not, and both require this app's owner: it succeeds exactly when the name is free or
+    // already ours, and is refused when somebody else holds it. That refusal IS the answer, which
+    // is why nothing is reported for it.
+    const claimed = await claimSlug(handle, aid, candidate, appIsPublic);
+    if (claimed === "unknown") return probeFailed(candidate);
+    if (claimed === "theirs") {
+      taken.push(candidate);
+      continue;
     }
     const recorded = await recordSlug(root, candidate);
     return recorded ?? { ok: true, slug: candidate, reserved: true };
@@ -91,45 +89,21 @@ export async function reserveSlug(
   };
 }
 
-function reservationFailed(candidate: string, err: unknown): SharedAppFailure {
-  return {
-    ok: false,
-    partial: true,
-    problems: [
-      `deploy reached the app and its schemas, but could not reserve the URL name '${candidate}': ${err instanceof Error ? err.message : String(err)}`,
-      "The app is deployed and the roster can use /staging/{aid}; only the public URL is unreserved. Deploying again retries just this step.",
-    ],
-  };
-}
-
-/** Whose is an EXISTING reservation? Asked by WRITING to it, because it cannot be read.
- *
- *  This is why a failed `create` is not the end. The rules allow an update only when the caller
- *  owns the app the document ALREADY names and the `aid` is unchanged — so a write that succeeds
- *  proves ownership, and one REFUSED FOR THAT REASON proves somebody else holds the name. There is
- *  no other way to ask: `allow read` needs `published == true`, which is exactly the state a
- *  reservation is not in.
- *
- *  Without it, three ordinary situations end with a stranded name: a deploy that reserved and then
- *  failed to record it, two deploys of one repository at once, and an app document that lost the
- *  record. Each would see `create` fail, decide the name belonged to somebody else, and take `-2`
- *  — while the first reservation stayed live, held by an app that no longer claims it, and
- *  unreadable by anyone who might have noticed.
- *
- *  The third answer is the one that took a review to get right. A timeout or a quota error is NOT
- *  "somebody else's": reading it that way turns an outage into a second reservation, and if the
- *  name being reclaimed was a PUBLIC one, the app records the numbered name while the original
- *  keeps resolving — and can no longer be taken down, because unpublish works from the record.
- *  Only a refusal decides; anything else stops the deploy with the name unresolved, which a retry
- *  fixes and nothing else has to.
+/** Take the name, or find out that somebody else has it. One write, three answers.
  *
  *  `published` is written from the APP's state rather than guessed: the app document holds the
  *  `public` block, so it is the authority on whether this app is open, and the reservation should
  *  say the same. When they agree this is a no-op; when they have drifted it repairs the drift
- *  toward the app. */
+ *  toward the app.
+ *
+ *  A rules refusal means the name is somebody else's — the reservation cannot be read, so this is
+ *  the only way to ask. Anything else (a timeout, a quota) is the question never having been
+ *  answered, and must NOT be read as a collision: doing so turns an outage into a second
+ *  reservation, and if the name being reclaimed was public, the app records the numbered one while
+ *  the original keeps resolving, beyond the reach of unpublish. */
 type Ownership = "ours" | "theirs" | "unknown";
 
-async function probeOwnership(handle: SharedAppHandle, aid: string, slug: string, appIsPublic: boolean): Promise<Ownership> {
+async function claimSlug(handle: SharedAppHandle, aid: string, slug: string, appIsPublic: boolean): Promise<Ownership> {
   try {
     await handle.docs.set(APP_SLUGS_COLLECTION, slug, appSlugDoc(aid, appIsPublic));
     return "ours";

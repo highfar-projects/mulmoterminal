@@ -88,6 +88,14 @@ class FakeDocs implements FirestoreDocs {
   };
 
   create = (collectionPath: string, docId: string, data: Record<string, unknown>): Promise<boolean> => {
+    // create-if-absent is a TRANSACTION, and it begins by reading the document. For the two
+    // collections whose read rule resolves out of a document that does not exist yet
+    // (`apps/{aid}`, `appSlugs/{slug}`), that read is refused — so `create` can never claim a
+    // fresh id there, however atomic it looks. Modelled here because the code got it wrong once
+    // and nothing in a fake that answered `false` would have said so.
+    if (!this.bucket(collectionPath).has(docId) && (collectionPath === "apps" || collectionPath === "appSlugs")) {
+      return Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }));
+    }
     if (this.bucket(collectionPath).has(docId)) return Promise.resolve(false);
     this.writes.push(`create ${collectionPath}/${docId}`);
     this.bucket(collectionPath).set(docId, structuredClone(data));
@@ -219,6 +227,9 @@ describe("shared app deploy / publish / unpublish", () => {
     // it, and the message has to name the situation rather than repeat "insufficient permissions".
     docs.store.set("apps", new Map([[AID, { aid: AID, owner: "somebody-else" }]]));
     docs.readsDeniedForApp = true;
+    // The rules refuse the WRITE too — an update needs this session to be the app's owner — and
+    // that refusal is the only signal available, because the document cannot be read.
+    docs.failAt = `apps/${AID}`;
 
     const result = await deploySharedApp(root, stamp);
     expect(result.ok).toBe(false);
@@ -240,11 +251,11 @@ describe("shared app deploy / publish / unpublish", () => {
 
   it("writes the app document before the staged schemas — the staging rules resolve the owner through it", async () => {
     await deploySharedApp(root, stamp);
-    // CREATE, then the staging document. On a first deploy the app write is what makes the records
-    // readable, so it happens before the migration gate rather than beside the staging writes —
-    // and it is a create because that is the only operation that can tell "this app does not
-    // exist" from "this app is somebody else's", which a refused read cannot.
-    expect(docs.writes).toEqual([`create apps/${AID}`, `set apps/${AID}/staging/bookings`]);
+    // The app write, then the staging document. On a first deploy the app write is what makes the
+    // records readable, so it happens before the migration gate rather than beside the staging
+    // writes — and it is a `set`, because create-if-absent is a transaction that reads first and
+    // that read is refused for the very document it would create.
+    expect(docs.writes).toEqual([`set apps/${AID}`, `set apps/${AID}/staging/bookings`]);
 
     // And on a redeploy, where the app already exists, the same order without the extra write.
     docs.writes.length = 0;
