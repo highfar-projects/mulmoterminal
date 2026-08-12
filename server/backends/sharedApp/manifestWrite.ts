@@ -18,6 +18,7 @@
 //     both see the old file and one write is lost. Serialized on the RESOLVED path, because two
 //     spellings of one root are one file.
 import { chmod, readFile, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
+import type { Stats } from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { APP_MANIFEST_FILE } from "@mulmoclaude/core/collection/server";
@@ -70,10 +71,7 @@ async function updateOnce(root: string, mutate: ManifestMutation): Promise<Manif
   let read: FileStamp | null;
   try {
     raw = await readFile(manifestPath, "utf-8");
-    read = await realpath(manifestPath)
-      .then(stat)
-      .then(stampOf)
-      .catch(() => null);
+    read = await stampAt(manifestPath);
   } catch (err) {
     return {
       ok: false,
@@ -118,7 +116,17 @@ interface FileStamp {
   mtimeMs: number;
 }
 
-const stampOf = (info: { ino: number; size: number; mtimeMs: number }): FileStamp => ({ ino: info.ino, size: info.size, mtimeMs: info.mtimeMs });
+const stampOf = (info: Stats): FileStamp => ({ ino: info.ino, size: info.size, mtimeMs: info.mtimeMs });
+
+/** The stamp of the file a path RESOLVES to, or null when it cannot be taken — a stamp that could
+ *  not be read is not a mismatch, and must not turn every write into a refusal. */
+async function stampAt(manifestPath: string): Promise<FileStamp | null> {
+  try {
+    return stampOf(await stat(await realpath(manifestPath)));
+  } catch {
+    return null;
+  }
+}
 
 const sameFile = (left: FileStamp, right: FileStamp): boolean => left.ino === right.ino && left.size === right.size && left.mtimeMs === right.mtimeMs;
 
