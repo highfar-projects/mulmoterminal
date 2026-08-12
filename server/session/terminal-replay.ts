@@ -109,11 +109,11 @@ export function appendBoundedOutput(buffer: string, data: string, limit: number)
 // "\udf9f", and it first becomes visible as U+FFFD at the top of the restored screen.
 //
 // Resolved where the cut index is decided, so one number answers "where does the tail start"
-// before anything reads it. NOT for the escape scan's benefit: running this after that scan
-// instead was measured to give an identical result on every well-formed input (22,464
-// comparisons, 0 differences). The two orders part only on input that ALREADY held a lone
-// surrogate — which a stateful UTF-8 decoder cannot produce, so neither order is more correct
-// here and this one is simply the one place the boundary is chosen.
+// before anything reads it — not because the escape scan below needs it in that order.
+//
+// It only ever removes an orphan the CUT made. One already in the buffer is left alone, and
+// that is a statement about the input rather than a gap: this is decoded pty output, and a
+// UTF-8 decoder answers invalid bytes with U+FFFD — it has no way to emit half a pair.
 //
 // Whether the code unit before it is the matching high half is deliberately not checked: in a
 // well-formed string it must be, and if the buffer already held a lone low surrogate then
