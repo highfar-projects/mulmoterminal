@@ -196,6 +196,13 @@ export function mountPluginRoutes(app: Express, deps: PluginRouteDeps): void {
     }
   });
 
+  mountCollectionRoute(app);
+  mountSharedAppRoute(app);
+}
+
+/** Split out of `mountPluginRoutes` for its line budget. Both of these are host-tool dispatch
+ *  routes and belong beside each other; only the enclosing function's size moved them out. */
+function mountCollectionRoute(app: Express): void {
   // Host tool: manageCollection — the shared collection data plane
   // (@mulmoclaude/core/collection/server, bound in server/infra/collection-tool.ts).
   // The engine runs in-process against the configured workspace, so the route calls the
@@ -222,12 +229,8 @@ export function mountPluginRoutes(app: Express, deps: PluginRouteDeps): void {
       return res.json({ message: `manageCollection failed: ${messageOf(err)}` });
     }
   });
-
-  mountSharedAppRoute(app);
 }
 
-/** Split out of `mountPluginRoutes` for its line budget, not because it is a different kind of
- *  thing: it is one more host-tool dispatch route beside manageCollection's. */
 function mountSharedAppRoute(app: Express): void {
   // Host tool: manageSharedApp — deploy / publish / unpublish for the shared app declared by the
   // repository's app.json (server/infra/shared-app-tool.ts). MulmoTerminal's own; there is no

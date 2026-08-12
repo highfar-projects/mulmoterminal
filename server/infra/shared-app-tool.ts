@@ -70,6 +70,42 @@ function recordNote(issues: number, capped: boolean): string[] {
   return [`${count} live record${issues === 1 ? "" : "s"} do not satisfy the schema that was just written (you confirmed this) — they need repairing.`];
 }
 
+async function narrateDeploy(root: string, confirm: boolean): Promise<string> {
+  const result = await deploySharedApp(root, { confirm });
+  if (!result.ok) return result.problems.join("\n");
+  const plural = result.cids.length === 1 ? "" : "s";
+  return [
+    `${result.created ? "Created" : "Updated"} apps/${result.aid} and staged ${result.cids.length} collection${plural}: ${result.cids.join(", ") || "(none)"}.`,
+    `The roster can try it at /staging/${result.aid}. Nothing is public until you publish.`,
+    ...(result.withdrawn.length > 0 ? [`Withdrawn from staging (no longer in this repository): ${result.withdrawn.join(", ")}.`] : []),
+    ...recordNote(result.recordIssues, result.recordIssuesCapped),
+    provenance(result.commit, result.dirty),
+  ].join("\n");
+}
+
+async function narratePublish(root: string, confirm: boolean): Promise<string> {
+  const result = await publishSharedApp(root, { confirm });
+  if (!result.ok) return result.problems.join("\n");
+  const plural = result.cids.length === 1 ? "" : "s";
+  return [
+    `Published apps/${result.aid}: promoted ${result.cids.length} staged collection${plural} (${result.cids.join(", ")}).`,
+    result.publicOpen
+      ? "The app is now OPEN to anonymous visitors."
+      : "The app is NOT open to anonymous visitors — app.json declares no `public` block, so the promoted schemas are readable only by the roster.",
+    ...recordNote(result.recordIssues, result.recordIssuesCapped),
+    provenance(result.commit, result.dirty),
+  ].join("\n");
+}
+
+async function narrateUnpublish(root: string): Promise<string> {
+  const result = await unpublishSharedApp(root);
+  if (!result.ok) return result.problems.join("\n");
+  return result.wasOpen
+    ? `Unpublished apps/${result.aid}: the public block is gone, so anonymous access is closed, and the public config document was deleted. ` +
+        "The promoted schemas were left in place, so publishing again is a promotion."
+    : `apps/${result.aid} was already closed to the public — nothing was open to take down. The public config document was deleted if it was still there.`;
+}
+
 /** Run one action against `root` and narrate the result. The agent's whole contract with this
  *  tool is actionable prose, so a refusal is text and never a throw. */
 export async function manageSharedApp(root: string, args: unknown): Promise<string> {
@@ -77,36 +113,7 @@ export async function manageSharedApp(root: string, args: unknown): Promise<stri
   const action = parseAction(body.action);
   if (action === null) return `manageSharedApp: action must be one of ${SHARED_APP_ACTIONS.join(", ")}.`;
   const confirm = body.confirm === true;
-
-  if (action === "unpublish") {
-    const result = await unpublishSharedApp(root);
-    if (!result.ok) return result.problems.join("\n");
-    return result.wasOpen
-      ? `Unpublished apps/${result.aid}: the public block is gone, so anonymous access is closed, and the public config document was deleted. The promoted schemas were left in place, so publishing again is a promotion.`
-      : `apps/${result.aid} was already closed to the public — nothing was open to take down. The public config document was deleted if it was still there.`;
-  }
-
-  if (action === "deploy") {
-    const result = await deploySharedApp(root, { confirm });
-    if (!result.ok) return result.problems.join("\n");
-    const withdrawn = result.withdrawn.length > 0 ? [`Withdrawn from staging (no longer in this repository): ${result.withdrawn.join(", ")}.`] : [];
-    return [
-      `${result.created ? "Created" : "Updated"} apps/${result.aid} and staged ${result.cids.length} collection${result.cids.length === 1 ? "" : "s"}: ${result.cids.join(", ") || "(none)"}.`,
-      `The roster can try it at /staging/${result.aid}. Nothing is public until you publish.`,
-      ...withdrawn,
-      ...recordNote(result.recordIssues, result.recordIssuesCapped),
-      provenance(result.commit, result.dirty),
-    ].join("\n");
-  }
-
-  const result = await publishSharedApp(root, { confirm });
-  if (!result.ok) return result.problems.join("\n");
-  return [
-    `Published apps/${result.aid}: promoted ${result.cids.length} staged collection${result.cids.length === 1 ? "" : "s"} (${result.cids.join(", ")}).`,
-    result.publicOpen
-      ? "The app is now OPEN to anonymous visitors."
-      : "The app is NOT open to anonymous visitors — app.json declares no `public` block, so the promoted schemas are readable only by the roster.",
-    ...recordNote(result.recordIssues, result.recordIssuesCapped),
-    provenance(result.commit, result.dirty),
-  ].join("\n");
+  if (action === "deploy") return narrateDeploy(root, confirm);
+  if (action === "publish") return narratePublish(root, confirm);
+  return narrateUnpublish(root);
 }
