@@ -104,11 +104,15 @@ edits the roster and nothing else; deploy is what makes it real.
 `cid` narrows it to one collection instead of the whole app.
 
 Addresses are written in lower case, because the rules compare one exactly and the sign-in token
-carries a lower-cased address. An entry with capitals matches nobody, and nothing reports it — the
-deploy succeeds and the person is simply refused everything. `invite` lower-cases a NEW address; an address the roster
-already has keeps the spelling it has there — that entry is changed in place, and whether its
-spelling is wrong is the deploy check's business, not this operation's. A roster edited by hand is
-checked at deploy.
+carries a lower-cased address. An entry with capitals matches nobody, and once deployed nothing
+says so — the person is simply refused everything. So `invite` lower-cases a NEW address, and a
+roster edited by hand is checked before a deploy: a key with capitals is reported as a problem and
+the deploy is refused until it is fixed (the exception is the address you are signed in with, which
+is what the rules compare against whatever its case).
+
+An address the roster already has keeps the spelling it has there, and that entry is changed in
+place — `invite` never migrates a key or writes a second one beside it. If a hand edit has left two
+entries for one person differing only in case, `invite` refuses and names them: merge them by hand.
 
 ### 4b. Check, whenever you have edited `app.json`
 

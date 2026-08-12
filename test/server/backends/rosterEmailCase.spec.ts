@@ -85,4 +85,18 @@ describe("inviteToSharedApp", () => {
     // And it reports the key it actually wrote, not the address that was typed.
     expect(result.ok && result.email).toBe("Foo@Example.com");
   });
+
+  // Two keys for one person is a hand edit, and picking one would be an invisible guess: the
+  // other entry keeps its permissions while the tool reports the change as done.
+  it("refuses when the roster spells one address two ways, and names both", async () => {
+    const members = { "o@e.com": { "*": "owner" }, "foo@example.com": { survey: "participant" }, "Foo@Example.com": { survey: "editor" } };
+    const root = await repoWith(members);
+
+    const result = await inviteToSharedApp(root, "foo@example.com", null, "survey");
+
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.problems.join(" ")).toContain('"foo@example.com", "Foo@Example.com"');
+    // Refused means the file is untouched — neither entry half-removed.
+    expect((await manifestAt(root)).members).toEqual(members);
+  });
 });
