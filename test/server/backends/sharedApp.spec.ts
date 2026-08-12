@@ -9,7 +9,7 @@
 // somebody was only testing, and a publish that wrote it FIRST would leave anonymous access live
 // against a half-published surface if the next write failed.
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { setFirestoreAccessor, setSharedCollectionsSupport, type FirestoreDocs, type FirestoreDoc } from "@mulmoclaude/core/collection/server";
 import { initCollectionsBackend } from "../../../server/backends/collections.js";
@@ -46,6 +46,15 @@ class FakeDocs implements FirestoreDocs {
   set = (collectionPath: string, docId: string, data: Record<string, unknown>): Promise<void> => {
     const key = `${collectionPath}/${docId}`;
     if (this.failAt === key) return Promise.reject(new Error("permission-denied (test)"));
+    // The one rule this fake models, because a caller DEPENDS on being refused: `appSlugs`'
+    // update rule pins `aid`, so a write naming a different app is rejected. That refusal is how
+    // the reservation code asks "is this name ours?" about a document it may not read.
+    const existing = this.bucket(collectionPath).get(docId);
+    if (collectionPath === "appSlugs" && existing && existing.aid !== data.aid) {
+      // Rejected the way the SDK rejects: the `code` is what separates "the rules said no" from
+      // "the question never got an answer", and the caller reads exactly that difference.
+      return Promise.reject(Object.assign(new Error("appSlugs.aid is immutable (test)"), { code: "permission-denied" }));
+    }
     this.writes.push(`set ${key}`);
     this.bucket(collectionPath).set(docId, structuredClone(data));
     return Promise.resolve();
@@ -274,6 +283,129 @@ describe("shared app deploy / publish / unpublish", () => {
 
     const confirmed = await publishSharedApp(root, { ...stamp, confirm: true });
     expect(confirmed.ok).toBe(true);
+  });
+
+  it("reserves the declared URL name at deploy, and records it where it can be read back", async () => {
+    writeApp(root, declaration({ slug: "sakura-hair" }));
+    const result = await deploySharedApp(root, stamp);
+    expect(result.ok === true && result.slug).toBe("sakura-hair");
+    // `published: false` — the reservation exists and nobody can resolve it yet, which is what
+    // keeps /staging/{aid} unguessable while the roster tests the app.
+    expect(docs.doc("appSlugs", "sakura-hair")).toEqual({ aid: AID, published: false });
+    // On the app document, because appSlugs is unreadable until publish: this is the only place
+    // "which name do we hold?" can be asked from.
+    expect(docs.app()?.slug).toBe("sakura-hair");
+  });
+
+  it("does not reserve a SECOND name when the same app is deployed again", async () => {
+    writeApp(root, declaration({ slug: "sakura-hair" }));
+    await deploySharedApp(root, stamp);
+    docs.writes.length = 0;
+
+    const again = await deploySharedApp(root, stamp);
+    expect(again.ok === true && again.slug).toBe("sakura-hair");
+    // A URL is a thing people have already sent to each other (D2b). Re-reserving would hand the
+    // app `sakura-hair-2` on every deploy, and the reservation cannot be read back to notice.
+    expect(docs.writes.filter((write) => write.includes("appSlugs"))).toEqual([]);
+  });
+
+  it("takes the next numbering when the wanted name is held by someone else", async () => {
+    docs.store.set("appSlugs", new Map([["sakura-hair", { aid: "someone-else", published: true }]]));
+    writeApp(root, declaration({ slug: "sakura-hair" }));
+
+    const result = await deploySharedApp(root, stamp);
+    expect(result.ok === true && result.slug).toBe("sakura-hair-2");
+    expect(docs.doc("appSlugs", "sakura-hair")).toEqual({ aid: "someone-else", published: true });
+    // Written BACK to app.json — the reservation cannot be read back, so a deploy that did not
+    // find it there would reserve yet another name and leave this one held by nobody.
+    expect(JSON.parse(readFileSync(path.join(root, "app.json"), "utf-8")).slug).toBe("sakura-hair-2");
+  });
+
+  it("makes the name resolve at publish and stop at unpublish, in that order", async () => {
+    writeApp(root, declaration({ slug: "sakura-hair", public: { enabled: true, read: ["bookings"] } }));
+    await deploySharedApp(root, stamp);
+    docs.writes.length = 0;
+
+    const published = await publishSharedApp(root, stamp);
+    expect(published.ok === true && published.slug).toBe("sakura-hair");
+    expect(docs.doc("appSlugs", "sakura-hair")).toEqual({ aid: AID, published: true });
+    // After everything the name points at, before the authorization: a slug that resolved first
+    // would be a link that 404s inside.
+    expect(docs.writes).toEqual([
+      `set apps/${AID}/collections/bookings`,
+      `set apps/${AID}/config/public`,
+      `set apps/${AID}`,
+      "set appSlugs/sakura-hair",
+      `set apps/${AID}`,
+    ]);
+
+    docs.writes.length = 0;
+    await unpublishSharedApp(root);
+    expect(docs.doc("appSlugs", "sakura-hair")).toEqual({ aid: AID, published: false });
+    // Reversed: what grants is taken away first.
+    expect(docs.writes).toEqual([`set apps/${AID}`, "set appSlugs/sakura-hair", `delete apps/${AID}/config/public`]);
+  });
+
+  it("does not make the name resolve when the app is not open to anonymous visitors", async () => {
+    // A published reservation is world-readable, and what it reveals is the aid — the
+    // /staging/{aid} entrance. Publishing a roster-only declaration is a normal thing to do, and
+    // it must not hand that out while the same operation reports the app is closed.
+    writeApp(root, declaration({ slug: "sakura-hair" }));
+    await deploySharedApp(root, stamp);
+    const result = await publishSharedApp(root, stamp);
+    expect(result.ok === true && result.publicOpen).toBe(false);
+    expect(docs.doc("appSlugs", "sakura-hair")).toEqual({ aid: AID, published: false });
+  });
+
+  it("reclaims its own reservation rather than taking a numbered one", async () => {
+    // The record on the app document can be lost — a deploy that reserved and then failed to
+    // record it, a document restored from before. `create` then fails for a name this app already
+    // holds, and taking `-2` would strand the first reservation: live, held by an app that no
+    // longer claims it, and unreadable by anyone who might notice.
+    writeApp(root, declaration({ slug: "sakura-hair" }));
+    await deploySharedApp(root, stamp);
+    const app = docs.app();
+    if (app) delete app.slug;
+
+    const again = await deploySharedApp(root, stamp);
+    expect(again.ok === true && again.slug).toBe("sakura-hair");
+    expect(docs.doc("appSlugs", "sakura-hair-2")).toBeUndefined();
+    expect(docs.app()?.slug).toBe("sakura-hair");
+  });
+
+  it("stops rather than taking a numbered name when the ownership probe cannot be answered", async () => {
+    // An outage is not "somebody else's". Reading it that way turns a timeout into a second
+    // reservation — and if the name being reclaimed was public, the app records the numbered one
+    // while the original keeps resolving, beyond the reach of unpublish.
+    writeApp(root, declaration({ slug: "sakura-hair" }));
+    await deploySharedApp(root, stamp);
+    const app = docs.app();
+    if (app) delete app.slug;
+    docs.failAt = "appSlugs/sakura-hair";
+
+    const result = await deploySharedApp(root, stamp);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.problems.join(" ")).toContain("could not establish");
+    expect(docs.doc("appSlugs", "sakura-hair-2")).toBeUndefined();
+  });
+
+  it("stops the previous name from resolving when the app is renamed", async () => {
+    writeApp(root, declaration({ slug: "sakura-hair", public: { enabled: true, read: ["bookings"] } }));
+    await deploySharedApp(root, stamp);
+    await publishSharedApp(root, stamp);
+    expect(docs.doc("appSlugs", "sakura-hair")).toEqual({ aid: AID, published: true });
+
+    // The author renames the app's URL.
+    writeApp(root, declaration({ slug: "sakura-salon", public: { enabled: true, read: ["bookings"] } }));
+    const renamed = await deploySharedApp(root, stamp);
+    expect(renamed.ok === true && renamed.slug).toBe("sakura-salon");
+
+    // The old one keeps pointing here — it is never deleted, because a freed name is one somebody
+    // else can claim and then serve from a URL already in circulation — but it stops resolving.
+    // Otherwise every later unpublish would act on the new name while the old URL still opened
+    // the app.
+    expect(docs.doc("appSlugs", "sakura-hair")).toEqual({ aid: AID, published: false });
+    expect(docs.app()?.slug).toBe("sakura-salon");
   });
 
   it("says so rather than reporting success when there was nothing open to close", async () => {

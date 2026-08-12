@@ -19,6 +19,7 @@ import { isRecord } from "../../../common/isRecord.js";
 import { APPS_COLLECTION, PUBLIC_CONFIG_DOC, appConfigPath, appManifestReason, firestoreHandle, loadAppManifest } from "@mulmoclaude/core/collection/server";
 import type { SharedAppFailure } from "./context.js";
 import { runWrites } from "./writes.js";
+import { setSlugPublished } from "./slug.js";
 
 export interface UnpublishSuccess {
   ok: true;
@@ -27,6 +28,8 @@ export interface UnpublishSuccess {
    *  saying out loud — the operator asked for a state, and hearing "done" when nothing changed
    *  reads as confirmation that it HAD been open. */
   wasOpen: boolean;
+  /** The URL name that stopped resolving, when there was one. */
+  slug?: string | undefined;
 }
 
 export type UnpublishResult = UnpublishSuccess | SharedAppFailure;
@@ -63,9 +66,15 @@ export async function unpublishSharedApp(root: string): Promise<UnpublishResult>
   const closed = Object.fromEntries(Object.entries(existing).filter(([key]) => key !== "public"));
   const wasOpen = "public" in existing;
 
+  // The name stops resolving on the way down, after the authorization is gone and before the
+  // rendering data. Exactly the reverse of publish, for the reverse reason: what is taken away
+  // first is what grants.
+  const slug = typeof existing.slug === "string" ? existing.slug : undefined;
+
   const failure = await runWrites(
     [
       { what: `the public block on apps/${aid} — the authorization itself`, run: () => handle.docs.set(APPS_COLLECTION, aid, closed) },
+      ...(slug === undefined ? [] : [{ what: `the URL name '${slug}' (appSlugs/${slug})`, run: () => setSlugPublished(handle, aid, slug, false) }]),
       {
         what: `the public config document (apps/${aid}/config/${PUBLIC_CONFIG_DOC})`,
         run: async () => {
@@ -76,5 +85,5 @@ export async function unpublishSharedApp(root: string): Promise<UnpublishResult>
     "unpublish",
   );
   if (failure) return failure;
-  return { ok: true, aid, wasOpen };
+  return { ok: true, aid, wasOpen, slug };
 }
