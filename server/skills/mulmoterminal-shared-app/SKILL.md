@@ -50,17 +50,26 @@ words below are for you, not for them: an author does not need to know what a `c
   and it is a UUID on purpose — a memorable one would be first-come-first-served across every user
   of the deployment.
 
-### 2. Write the collection
+### 2. Write the collection THROUGH `manageCollection`
 
 One collection per kind of record — a survey has one (`responses`), a booking app might have two
-(`bookings`, `services`). It is an ordinary collection skill (`.claude/skills/<slug>/schema.json`
-plus its SKILL.md) with ONE difference:
+(`bookings`, `services`).
+
+**Do not hand-write `schema.json`.** Call `manageCollection` with `action: "schemaDocs"` for the
+shape, then `action: "putSchema"` to write it. The shape is not what a reasonable person guesses:
+`fields` is an OBJECT keyed by field name (not a list), `primaryKey` and `icon` are required, and
+the key for a field's human name is `label`. A hand-written file in the shape you would design
+does not parse, and nothing tells you until a deploy finds no collections at all.
+
+The one thing that differs from an ordinary collection:
 
 ```json
 { "storage": { "type": "firestore" } }
 ```
 
 That is what makes the records shared. Declare no `dataPath` beside it — exactly one of the two.
+Writing this schema is also what generates the app's `aid`, which is why the declaration comes
+first.
 
 **Everything in the folder is shared or nothing is.** Do not mix a shared collection and a local
 one in an app's repository.
@@ -90,34 +99,49 @@ collection.
 ### 5. Publish, when the user asks to open it
 
 Publishing is the one dangerous step: it changes what everybody outside sees, immediately. Do it
-when the user asks for it in those terms ("公開して", "リンクを配りたい"), not as the last step of
-building.
+when the user asks for it in those terms, not as the last step of building.
 
 What being public MEANS is declared in `app.json`, and it is worth reading back to the user before
-you publish:
+you publish. This is a survey anyone may answer once they sign in:
 
 ```json
-"public": {
-  "enabled": true,
-  "read": ["summary"],
-  "submit": {
-    "responses": {
-      "auth": "anonymous",
-      "createFields": ["name", "affiliation", "score", "comment"],
-      "initialStatus": "submitted"
+{
+  "collections": {
+    "responses": { "submitOnly": true, "statusField": "status" }
+  },
+  "public": {
+    "enabled": true,
+    "read": [],
+    "submit": {
+      "responses": {
+        "auth": "verifiedEmail",
+        "emailField": "email",
+        "createFields": ["name", "affiliation", "score", "comment", "email", "status"],
+        "initialStatus": "submitted"
+      }
     }
   }
 }
 ```
 
-- `read` — which collections a visitor may READ. A survey usually lists none: people answer, they
-  do not browse the answers.
-- `submit` — which collections a visitor may WRITE, and **`createFields` is the whole list of
-  fields they may set**. Anything you leave out cannot be written by them. Leave `status` out, or
-  a respondent can mark their own submission approved.
-- `auth`: `none` (nothing at all), `anonymous` (a device identity, so a person can come back to
-  their own row), `verifiedEmail` (a signed-in address, which is what lets a row be tied to a
-  person).
+Every line of that is load-bearing, and deploy refuses the declaration without them:
+
+- **`auth` must be `verifiedEmail`.** `none` and `anonymous` exist in the rules and are REFUSED
+  here — a product decision, not an oversight. So "anyone with the link, no sign-in" is not
+  something you can offer today: a respondent signs in with an email address. Say that to the user
+  rather than promising anonymity and discovering it at deploy.
+- **`emailField` names the field their address lands in**, and it must be in `createFields`.
+- **`submitOnly: true` is required** whenever the submission binds a record to its submitter. The
+  record means "this person said this", and without it an owner or editor could write rows that
+  carry that meaning without having earned it.
+- **`initialStatus` needs `collections.<cid>.statusField`** and that field must be in
+  `createFields`. It is NOT a hole: the rules pin the value to `initialStatus` on create, so a
+  respondent can only write `submitted` — listing it is what lets the rules check it. What
+  `createFields` must NOT contain is anything else you do not want them setting.
+- **`read: []`** — a survey lists nothing publicly. People answer; they do not browse the answers.
+
+The simplest correct survey omits status entirely (`submitOnly` + `verifiedEmail` + `emailField`).
+Add a status only when somebody is going to work through the responses.
 
 Then `manageSharedApp` with `action: "publish"`.
 
@@ -138,7 +162,28 @@ Then `manageSharedApp` with `action: "publish"`.
 Two things are worth asking and the rest are not:
 
 - **their email address**, if you do not have it — nothing works without it in `members`;
-- **who should be able to answer** — anyone with the link, or only invited people. It decides the
-  whole `public` block.
+- **whether people outside the roster should be able to answer** — it decides whether there is a
+  `public` block at all. Ask it in those words: everyone who answers signs in with an email
+  address either way, so "public" here means "anyone who signs in", not "anonymous".
 
 Do not ask which storage to use, whether to make it "an app", or what to call the collection.
+
+## Where people actually look — say what is true today
+
+- **The roster's entrance exists.** After a deploy, `manageSharedApp` reports the address; hand
+  that to the people you invited.
+- **The public page does not exist yet.** Publishing writes everything a public page needs and
+  turns the URL name on, but the page that renders it is not built. So do not promise the user a
+  link to hand out at an event. What works end to end today is an app used by the people on its
+  roster.
+
+Say this at the START, when the user's request implies handing out a link — not after they have
+watched you build it.
+
+## If the tools are not here
+
+`manageSharedApp` and `manageCollection` are only offered in a cell whose directory has the
+workspace-data tool group. If they are not in your tool list, **stop and say so**: a shared app
+cannot be deployed from here, and writing `app.json` and a schema by hand produces files nothing
+can act on. Point the user at the launcher's tool-group switch for this folder rather than
+carrying on.
