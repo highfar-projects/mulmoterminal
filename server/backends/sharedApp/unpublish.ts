@@ -9,11 +9,13 @@
 // while the app is closed, so they cost nothing, and re-publishing is then a promotion rather
 // than a rebuild.
 //
-// It deliberately does NOT run the declaration gate that deploy and publish share. Those gates
-// decide whether something may go OUT; taking it down has to work when the declaration is broken,
-// which is one of the times an operator most wants it. Only the `aid` is read from `app.json`.
+// It deliberately does NOT run the declaration gate that deploy and publish share, and it does
+// not mint an `aid` the way they do. Those steps decide whether something may go OUT; taking it
+// down has to work when the declaration is broken, which is one of the times an operator most
+// wants it. And a take-down must not AUTHOR: minting an aid here would write a fresh id into
+// `app.json`, then report "there is no app document at apps/<that id>" — a true sentence about an
+// app nobody ever had, in place of the real reason. Only the `aid` is read.
 import { isRecord } from "../../../common/isRecord.js";
-import { ensureAid } from "./ensureAid.js";
 import { APPS_COLLECTION, PUBLIC_CONFIG_DOC, appConfigPath, appManifestReason, firestoreHandle, loadAppManifest } from "@mulmoclaude/core/collection/server";
 import type { SharedAppFailure } from "./context.js";
 import { runWrites } from "./writes.js";
@@ -30,9 +32,6 @@ export interface UnpublishSuccess {
 export type UnpublishResult = UnpublishSuccess | SharedAppFailure;
 
 export async function unpublishSharedApp(root: string): Promise<UnpublishResult> {
-  const aid_result = await ensureAid(root);
-  if (!aid_result.ok) return { ok: false, partial: false, problems: aid_result.problems };
-  
   const handle = firestoreHandle();
   if (!handle) {
     return { ok: false, partial: false, problems: ["unpublish needs a signed-in Firestore session: connect remote-host first."] };
