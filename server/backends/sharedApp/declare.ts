@@ -178,7 +178,7 @@ export async function inviteToSharedApp(root: string, rawEmail: string, role: Ap
       ok: false,
       partial: false,
       problems: [
-        `app.json has more than one roster entry for that address, differing only in case: ${ambiguous.map((key) => `"${key}"`).join(", ")}.`,
+        `app.json has more than one roster entry for that address, differing only in case: ${quoted(ambiguous)}.`,
         "Which one carries this person's permissions is not something this tool may guess — changing one and leaving the other is how somebody keeps access they were told they had lost. " +
           "Merge them by hand into the lower-cased key (the one the rules compare against), then run this again.",
       ],
@@ -211,6 +211,11 @@ export async function inviteToSharedApp(root: string, rawEmail: string, role: Ap
  *  over that address, which is exactly the case `rosterCaseProblems` exempts. Silently lower-casing
  *  it while changing somebody's role would revoke everything that person has. The deploy-time check
  *  is where a wrong spelling is reported, and a hand edit is how it gets fixed. */
+/** The keys as they will be shown back to the author: quoted, in the order the file has them. */
+function quoted(keys: readonly string[]): string {
+  return keys.map((key) => JSON.stringify(key)).join(", ");
+}
+
 function rosterMatches(manifest: Record<string, unknown>, email: string): string[] {
   const members = isRecord(manifest.members) ? manifest.members : {};
   return Object.keys(members).filter((key) => key.toLowerCase() === email);
