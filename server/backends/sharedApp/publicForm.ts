@@ -101,7 +101,13 @@ export function publicFormOf(authored: AuthoredApp, staged: readonly StagedEntry
     // A collection whose `createFields` name nothing the schema declares publishes no entry at
     // all: an empty object would read as a form that failed to load, where absence is a fact the
     // page can state.
-    if (Object.keys(fields).length === 0) return [];
+    //
+    // A form with NO INPUTS is not that, though, once something is stamped. "Count me in" is a
+    // real declaration — `idFrom: "auth.uid"` with `createFields: ["createdAt"]` is a button, and
+    // the whole submission is the identity of whoever pressed it and the moment they did. Dropping
+    // it would leave the page with no submit target and no way to learn the field name the rules
+    // insist on, for a declaration core accepts.
+    if (Object.keys(fields).length === 0 && spec.stampField === undefined) return [];
     // From the STAGED rule configuration, not from `app.json`. What the rules will check is
     // `apps/{aid}.collections[cid].statusField`, and publish promotes that from `staging/{cid}` —
     // deliberately, so a manifest edit between deploy and publish cannot change the rule behaviour

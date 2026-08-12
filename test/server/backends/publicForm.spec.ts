@@ -157,6 +157,28 @@ describe("the field the page stamps rather than asks", () => {
     expect(Object.keys(form.responses?.fields ?? {})).toEqual(["name"]);
   });
 
+  it("keeps a form whose only create field is the stamp", () => {
+    // "Count me in": `idFrom: "auth.uid"` plus a server timestamp is a complete
+    // submission — the identity of whoever pressed the button and the moment
+    // they did. It draws no inputs, and it is still a form: without an entry the
+    // page has no submit target and no way to learn the field the rules insist
+    // on, for a declaration core accepts.
+    const oneClick = authored({
+      responses: { auth: "verifiedEmail", idFrom: "auth.uid", createFields: ["createdAt"], stampField: "createdAt" },
+    });
+    const form = publicFormOf(oneClick, withStamp);
+    // `statusField` rides along as it does for any collection whose staged
+    // configuration names one — the page needs it whether or not it draws
+    // anything.
+    expect(form.responses).toEqual({ fields: {}, stampField: "createdAt", statusField: "status" });
+  });
+
+  it("still drops a collection that draws nothing and stamps nothing", () => {
+    // The guard this sits beside is not weakened: an empty entry with nothing
+    // behind it reads as a form that failed to load.
+    expect(publicFormOf(authored({ responses: { auth: "verifiedEmail", createFields: ["nope"] } }), staged).responses).toBeUndefined();
+  });
+
   it("is absent when nothing is stamped", () => {
     expect(publicFormOf(authored(surveySubmit), staged).responses?.stampField).toBeUndefined();
   });
