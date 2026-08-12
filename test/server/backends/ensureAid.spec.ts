@@ -68,7 +68,11 @@ describe("ensureAid", () => {
     expect(readdirSync(root)).toEqual(["app.json"]);
   });
 
-  it("keeps the mode the author gave app.json", async () => {
+  // Skipped on Windows, the way session-settings.spec.ts skips its owner-only check: NTFS has no
+  // POSIX permission bits, so `chmodSync(file, 0o600)` moves the read-only attribute and nothing
+  // else, and the mode reads back 0o666. The setup cannot establish the precondition there, so
+  // the assertion tests nothing — it just goes red (0o666 vs 0o600).
+  it.skipIf(process.platform === "win32")("keeps the mode the author gave app.json", async () => {
     // The replacement is a new file, so it carries this process's umask unless something says
     // otherwise. A manifest deliberately kept at 0600 coming back 0644 is a permission change
     // nobody asked for and nothing reports.
