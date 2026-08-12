@@ -3012,12 +3012,27 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
      **`setSharedCollectionsSupport(true)` を別に呼ぶ**（`configureCollectionHost` の
      フィールドではない。理由は D5)。**PR 済み・未マージ**（mulmoterminal #1632）
    - **7c. MT 独自ツール `manageSharedApp`** — `deploy` / `publish` / `unpublish` の 3 つ。
+     **slug の予約を除いて PR 済み・未マージ**（mulmoterminal #1633）。
      書き込み経路が 2 本ある状態（core の `publishApp`）は #2871 のマージで解消済み。
      門番と射影は core の純粋関数を呼び、**順序（fail closed）と書き分けは MT が持つ**（D10）。
      ルール側は先行して済んでいる — `appSlugs`（`published` フラグ）と
      **`match /staging/{cid}`** は **mulmoserver #157 でマージし、2026-08-12 に本番へ
      deploy 済み**（mulmoserver に CI は無く、デプロイ状態はどのリポジトリにも記録されない
      ので、ここが唯一の記録）
+
+     実装で分かったことを 2 つ。どちらも設計の穴で、コードを書くまで見えていなかった:
+
+     - **`app.json` に希望の slug を書けない。** `AuthoredAppZ` は strict なので、
+       `slug` を足した `app.json` は core の `parseAuthoredApp` が
+       `Unrecognized key: "slug"` で**丸ごと拒否する**。足すのは core の変更＝
+       「MC を二度と触らない」に反するので、**slug の置き場所は決め直しが要る**
+       （下の「未解決」参照）。7c はそこだけ落として先に入れた — `/staging/{aid}` は
+       slug を経由しないので、招待とテストは slug 無しで最後まで回る
+     - **staging は「積み上げ」ではなく「置換」でなければならない。** コレクションを
+       リポジトリから消しても `staging/{cid}` は残り、publish は
+       「昇格させる版をライブレコードで検証する」ため**リポジトリに無い cid を検証できず
+       止まる**。deploy が消えた cid の staging を**撤回する**ことで解いた
+       （撤回は最後に書く — 何も grant しないので）
    - **7d. `aid` の UUID 自動生成**（決定 2）— `app.json` を書くのは MT なので MT 側
 
 **共有**
