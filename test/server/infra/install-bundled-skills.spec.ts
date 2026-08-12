@@ -200,9 +200,13 @@ describe("mulmoterminal-config routes to skills that exist", () => {
   // reader who turns it on needs to be told where the result is consumed. Naming a skill that does
   // not ship is still caught, by the test above.
   it("routes to every skill that writes settings", () => {
-    const writers = BUNDLED_SKILL_NAMES.filter(
-      (name) => name !== "mulmoterminal-config" && name !== "mulmoterminal-bug-report" && name !== "mulmoterminal-decisions",
-    );
+    // The three that are not settings at all, and one that is not MulmoTerminal's settings:
+    // `mulmoterminal-shared-app` builds the user's own app — it writes that repository's `app.json`
+    // and its collections, never anything the router is a table of contents for. Routing to it
+    // would put "make a survey" in a list of places to change fonts and keybindings, and the agent
+    // finds it the way it finds any skill: by what the user asked for.
+    const notSettings = ["mulmoterminal-config", "mulmoterminal-bug-report", "mulmoterminal-decisions", "mulmoterminal-shared-app"];
+    const writers = BUNDLED_SKILL_NAMES.filter((name) => !notSettings.some((excluded) => excluded === name));
     expect(writers.filter((name) => !routed().includes(name))).toEqual([]);
   });
 });

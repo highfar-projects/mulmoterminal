@@ -29,6 +29,7 @@ export const MANAGE_SHARED_APP: ToolDefinition = {
     "Deploy, publish or unpublish this repository's shared app (the one declared by its app.json). " +
     "deploy stages the declaration and the collection schemas where only the app's roster can see them; publish promotes what was staged and opens the app to the public; unpublish closes it again.",
   prompt:
+    "A request for something OTHER PEOPLE fill in or read — a survey, a sign-up sheet, a booking form, a form behind a link — is a shared app, and the `mulmoterminal-shared-app` skill is the path from that sentence to this tool. Read it before offering a printable page or a third-party form.\n" +
     "`manageSharedApp` operates on the repository the session is open in — the one holding `app.json` — and it is the only way to write a shared app.\n" +
     "**deploy** is the safe one and is meant to be run often. It writes the roster and internal settings to `apps/{aid}` and each collection's schema to `apps/{aid}/staging/{cid}`, which only people on the roster can read. " +
     "An invitation added to `members` takes effect at deploy, so the roster can try the real app at `/staging/{aid}` before anybody outside sees it. Deploy never opens the app to the public, and never changes what a published app's visitors are looking at.\n" +
