@@ -3080,6 +3080,12 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
 コレクションができ、deploy が `apps/{aid}` と `staging/{cid}` を書き、slug を予約し、
 名簿の人が `/staging/{aid}` で本物のレコードを見た。
 
+**招待も実機で通った。** 別アドレスを `invite` → `deploy` し、その人のブラウザで
+`/staging/{aid}` が開いた。つまり D1 の主張 —「招待は権限の話であって、データの受け渡しでは
+ない」— が実際にそうなっている: 相手はこのリポジトリもこのマシンも持っていない。
+
+**ここまでが今日成立する範囲**で、外に配れるリンクはまだ無い（実装順 12）。
+
 **その過程で塞いだ、設計に書いていなかった穴**（どれも「読めない」ことの帰結）:
 
 - **存在しない `apps/{aid}` の read は拒否される。** 読み取り規則が文書自身から名簿を
@@ -3094,8 +3100,20 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
 
 **共有**
 
-8. **招待 UI（email 追加）と viewer / participant ロール** — ここで初めて他人が入る。
-   **招待は Web の `/staging/{aid}` への招待**であって、相手の MulmoTerminal には何も起きない
+8. ~~**招待 UI（email 追加）**~~ — **作らない（2026-08-12 決定）**。実機で見たとおり、
+   招待も deploy もエージェントが 1 文で回す（`manageSharedApp` の `invite` → `deploy`）。
+   フォームを足すと「UI で招待したのに相手が入れない（deploy していない）」という
+   新しい失敗を作るだけになる。**招待は Web の `/staging/{aid}` への招待**であって、
+   相手の MulmoTerminal には何も起きない、という性質も変わらない。
+   **viewer / participant ロール**の実装は残る（participant は自分の行しか読めないので、
+   `/staging/{aid}` の一覧クエリが通らない — mulmoserver #159 参照）
+
+   **代わりに要るのは「いま何がどうなっているか」**。UI ではなく操作で埋める:
+   `manageSharedApp` の `status` が `app.json` と `apps/{aid}`（オーナーは読める）を
+   突き合わせて答える — 公開されているか（`public` ブロックの有無＝認可の実体）、
+   サーバー側の名簿（app.json とずれていたら **deploy していない**）、URL 名がいま
+   解決するか、staging と公開版の cid の差（＝ **deploy したが publish していない**）。
+   実機で詰まった 4 回とも、遅さの原因は「いまの状態が分からない」だった
 9. **mulmoserver に webview** — `@mulmoclaude/collection-plugin` を 3 つ目のホストに載せる。
    **先に作るのは `/staging/{aid}`**（D10）— サインインしてロールを引く管理側の入口。
    これが 8 の招待を意味あるものにし、12 より前に**実データでの動作確認**を可能にする
