@@ -206,13 +206,24 @@ export async function readCurrentApp(
   }
 }
 
-/** A rules REFUSAL, as opposed to a failure to ask. The Firestore SDK reports both as a thrown
- *  error and only the `code` separates them: `permission-denied` is the rules saying no, and
- *  `failed-precondition` is the document not being what the rules required. Everything else —
- *  `unavailable`, `deadline-exceeded`, `resource-exhausted`, an offline client — is the question
- *  never having been answered. */
+/** A rules REFUSAL, as opposed to a failure to ask.
+ *
+ *  ONLY `permission-denied`. The SDK reports both refusals and faults as thrown errors and the
+ *  `code` is what separates them — but `failed-precondition` is not the rules saying no: it is a
+ *  missing index, a stale transaction, a client the backend wants restarted. Reading it as a
+ *  refusal is dangerous in both places this predicate is used, and in the same direction:
+ *
+ *  - the app document would look ABSENT, so a deploy would rebuild it from the declaration alone
+ *    and drop the `public` block and the held slug — silently unpublishing a live app and
+ *    stranding its URL name;
+ *  - a slug would look like SOMEBODY ELSE'S, so a numbered alternative would be taken while the
+ *    app's own name went on resolving.
+ *
+ *  An unanswered question must stay unanswered: everything else — `unavailable`,
+ *  `deadline-exceeded`, `resource-exhausted`, `failed-precondition`, an offline client — stops the
+ *  operation instead. */
 export function isRefusal(err: unknown): boolean {
-  return isRecord(err) && (err.code === "permission-denied" || err.code === "failed-precondition");
+  return isRecord(err) && err.code === "permission-denied";
 }
 
 /** Who, when, and from which commit — resolved the same way by both operations.
