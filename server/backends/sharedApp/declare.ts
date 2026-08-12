@@ -79,6 +79,10 @@ export interface CheckReport {
   ok: true;
   aid: string | undefined;
   collections: string[];
+  /** The signed-in address the check ran as, or null when there is no session. */
+  checkedAs: string | null;
+  /** The address the declaration names as app-wide owner, when it names one. */
+  declaredOwner: string | undefined;
   problems: string[];
 }
 
@@ -93,23 +97,42 @@ export async function checkSharedApp(root: string): Promise<CheckReport | Shared
   const raw = await readManifest(root);
   if (!raw.ok) return raw;
   const parsed = parseAuthoredApp(raw.text);
-  if (!parsed.ok) return { ok: true, aid: undefined, collections: [], problems: parsed.problems };
+  if (!parsed.ok) return { ok: true, aid: undefined, collections: [], checkedAs: null, declaredOwner: undefined, problems: parsed.problems };
 
   const collections = await sharedCollections(root);
   const handle = firestoreHandle();
+  // WHOSE deploy is being checked.
+  //
+  // `publishProblems` asks, among other things, whether the publisher is an app-wide owner — so an
+  // empty address is not a neutral value: it reports `members must give you app-wide owner: add
+  // "": {"*": "owner"}` for every declaration, and a signed-out check could never come back clean.
+  //
+  // Signed out, the honest question is "would this deploy for the owner it names?", so the check
+  // runs as that owner and the report says which. Signed in, it is you — which is the stricter and
+  // more useful answer, because being signed in as somebody else is one of the things this catches.
+  const declaredOwner = ownerFromRoster(parsed.app);
+  const publisher = handle?.email ?? declaredOwner ?? "";
   const problems = publishProblems(
     parsed.app,
     collections.map((collection) => ({ cid: collection.slug, primaryKey: collection.schema.primaryKey })),
-    // Without a session there is no address to check the roster against, so that half is skipped
-    // rather than guessed — and the report says so.
-    handle?.email ?? "",
+    publisher,
   );
   return {
     ok: true,
     aid: parsed.app.aid,
     collections: collections.map((collection) => collection.slug),
-    problems: handle ? problems : [...problems, "(not signed in: the check could not compare the roster against your address)"],
+    checkedAs: handle?.email ?? null,
+    declaredOwner,
+    problems,
   };
+}
+
+/** The first address the declaration makes an app-wide owner, or undefined when it names none.
+ *
+ *  Used only to ask the offline question as somebody. A declaration with no app-wide owner is a
+ *  real problem, and passing an empty address is how `publishProblems` is asked to say so. */
+function ownerFromRoster(app: { members: Record<string, Record<string, string>> }): string | undefined {
+  return Object.entries(app.members).find(([, roles]) => roles["*"] === "owner")?.[0];
 }
 
 export interface InviteSuccess {

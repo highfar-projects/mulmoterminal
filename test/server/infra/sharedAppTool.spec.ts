@@ -9,12 +9,17 @@ import { MANAGE_SHARED_APP, SHARED_APP_ACTIONS, manageSharedApp } from "../../..
 import { HOST_TOOL_DEFINITIONS } from "../../../server/infra/host-tools.js";
 import { groupOfTool } from "../../../common/toolGroups.js";
 import { setFirestoreAccessor, setSharedCollectionsSupport } from "@mulmoclaude/core/collection/server";
+import { initCollectionsBackend } from "../../../server/backends/collections.js";
 import { makeTempDir } from "../../support/tempDir";
 import path from "node:path";
 
 describe("manageSharedApp, the tool", () => {
   beforeAll(() => {
-    // Signed out on purpose: the operations then refuse, which is the path being pinned.
+    // Discovery needs a bound host: `check` reads this repository's collections, and without the
+    // binding it throws rather than reporting. ONE call per file — the binding refuses a second.
+    initCollectionsBackend({ workspace: makeTempDir("mt-shared-tool-ws-") });
+    // Signed out on purpose: it is the state `check` has to work in, and the state the other
+    // operations have to refuse in.
     setSharedCollectionsSupport(true);
     setFirestoreAccessor(null);
   });
@@ -41,6 +46,19 @@ describe("manageSharedApp, the tool", () => {
     writeFileSync(path.join(root, "app.json"), JSON.stringify({ aid: "a1", members: {} }));
     // Overwriting would revoke the whole roster without saying so.
     expect(await manageSharedApp(root, { action: "init", name: "Second" })).toContain("already");
+  });
+
+  it("calls a sound declaration deployable while signed out", async () => {
+    // The publisher check asks whether the caller is an app-wide owner, so an empty address is not
+    // neutral — it reported a missing owner for every signed-out call, and `check` could never
+    // come back clean. Signed out, the honest question is "would this deploy for the owner it
+    // names?", and the answer has to be able to be yes.
+    const root = makeTempDir("mt-shared-tool-");
+    writeFileSync(path.join(root, "app.json"), JSON.stringify({ aid: "a1", name: "Survey", members: { "o@e.com": { "*": "owner" } } }));
+
+    const message = await manageSharedApp(root, { action: "check" });
+    expect(message).toContain("deployable");
+    expect(message).toContain("o@e.com");
   });
 
   it("checks the declaration without a session, and without writing", async () => {

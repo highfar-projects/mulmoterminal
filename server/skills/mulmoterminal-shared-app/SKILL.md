@@ -71,10 +71,12 @@ The one thing that differs from an ordinary collection:
 
 That is what makes the records shared. Declare no `dataPath` beside it — exactly one of the two.
 
-**A shared collection is invisible until the app has an `aid`**, which is generated for you — by
-the first deploy, or by `putSchema` when you edit one later. So between writing the files and
-deploying, `getSchema` reporting "unknown collection" is expected, not a mistake to chase. Deploy,
-then look.
+**The app already has its `aid`** — `init` wrote it in step 1 — so a shared collection you write
+correctly is discovered straight away. If `getSchema` says "unknown collection" after you have
+written the files, that is the schema FAILING VALIDATION, not something a deploy will fix: read it
+back against `schemaDocs` (`primaryKey` naming a field flagged `primary: true`, `icon` present,
+exactly one of `dataPath` / `dataSource` / `storage`). Deploying past it produces an app with the
+collection missing and no error anywhere.
 
 **Everything in the folder is shared or nothing is.** Do not mix a shared collection and a local
 one in an app's repository.
@@ -207,12 +209,10 @@ carrying on.
 The run this skill was written from lost several minutes to each of these, and both times the
 repair made things worse — an `aid` was deleted and a second app was created by accident.
 
-- **`getSchema` / `putSchema` says "unknown collection".** It means the schema was not ACCEPTED,
-  and there are two reasons: the app has no `aid` yet (nothing is wrong — the first deploy mints
-  it), or the schema failed validation (something is wrong, and it is skipped silently).
-  Tell them apart before acting: re-read the schema against `schemaDocs` — `primaryKey` naming a
-  field flagged `primary: true`, `icon` present, exactly one of `dataPath` / `dataSource` /
-  `storage`. If the schema is sound, deploy; do not rewrite it, and do not move the directory.
+- **`getSchema` / `putSchema` says "unknown collection".** The schema was not ACCEPTED. With
+  `init` having written the `aid`, that means it failed validation — read it back against
+  `schemaDocs` rather than deploying past it. (Before `init` existed this could also mean "no aid
+  yet"; it no longer does, and treating it that way deploys an app with the collection missing.)
 - **Anything about permissions on `apps/{aid}`.** The `aid` in `app.json` is the app's identity.
   Removing it does not reset anything: the next deploy mints a NEW one and the old app stays where
   it is, owned by nobody who can reach it. If a deploy is refused, read what it says and fix that;
