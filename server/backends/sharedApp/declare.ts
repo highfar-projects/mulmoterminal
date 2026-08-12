@@ -256,8 +256,18 @@ interface ForkNotes {
 /** The declaration a fork replaces the cloned one with, and the note of what did not survive it.
  *
  *  Built from the manifest as it is on disk RIGHT NOW rather than from the copy `fork` parsed:
- *  `updateManifest` re-reads under the write lock, and the two blocks are carried VERBATIM so that
- *  whatever the author wrote in them that the parse does not model comes across too. */
+ *  `updateManifest` re-reads under the write lock, and everything carried comes across VERBATIM so
+ *  that whatever the author wrote that the parse does not model comes across too.
+ *
+ *  Written as "drop these, keep the rest" rather than "keep these" ON PURPOSE. The keys that must
+ *  go are the ones naming the app this was cloned FROM, and that list is closed — it cannot grow
+ *  without someone here deciding it should. The keys that must stay are every rule-facing setting
+ *  `app.json` can hold, and THAT list grows in core: `participantRead` was already there and an
+ *  allowlist of `collections` and `public` silently dropped it, which is a fork quietly changing
+ *  who may read what. A new authored key added upstream is carried by default now — and it is safe
+ *  to carry sight-unseen because the parse above is `.strict()`, so nothing can be in this file
+ *  that core does not already model. The mistake still available to us is a key that should have
+ *  gone, which is visible in the result, rather than one that vanished, which is not. */
 function forked(
   manifest: Record<string, unknown>,
   wanted: { aid: string; owner: string; name: string | undefined; slug: string | undefined },
@@ -265,19 +275,26 @@ function forked(
 ): Record<string, unknown> {
   const chosen = wanted.name ?? (typeof manifest.name === "string" ? manifest.name : undefined);
   taken.previousSlug = typeof manifest.slug === "string" ? manifest.slug : undefined;
-  taken.carried = CARRIED_BLOCKS.filter((key) => isRecord(manifest[key]));
+  const rest = Object.entries(manifest).filter(([key]) => !CLONED_APPS_OWN.has(key));
+  taken.carried = rest.map(([key]) => key);
   return {
     ...(chosen === undefined ? {} : { name: chosen }),
     ...(wanted.slug === undefined ? {} : { slug: wanted.slug }),
     aid: wanted.aid,
     members: { [wanted.owner]: { [APP_WIDE]: "owner" } },
-    ...Object.fromEntries(taken.carried.map((key) => [key, manifest[key]])),
+    ...Object.fromEntries(rest),
   };
 }
 
-/** What a fork keeps: the declaration's half of the collection definitions committed beside it.
- *  Everything else in `app.json` names the app it was cloned FROM. */
-const CARRIED_BLOCKS = ["collections", "public"] as const;
+/** The keys of `app.json` that name the app a fork was cloned FROM, and so must not survive one.
+ *
+ *  `aid`, `members` and `owner` are the cloned app's identity, roster and creator — carried, they
+ *  would be simply wrong. `slug` is the subtle one: it is not wrong, it is a WISH, and honoured it
+ *  comes back as `their-name-2` — a URL derived from somebody else's app name that nobody chose.
+ *  `aidEnv` is the per-worktree aid; nothing reads it yet, and it names the same clone. `name` is
+ *  here because it is replaced rather than dropped: the author's, or the cloned one carried
+ *  forward deliberately. */
+const CLONED_APPS_OWN = new Set(["aid", "slug", "owner", "members", "aidEnv", "name"]);
 
 export interface CheckReport {
   ok: true;

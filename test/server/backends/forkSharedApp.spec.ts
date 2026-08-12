@@ -26,6 +26,10 @@ const CLONED = {
     "helper@example.com": { "*": "viewer" },
   },
   collections: { responses: { submitOnly: true } },
+  // A rule-facing setting that is NEITHER of the two obvious blocks: it says which collections a
+  // participant may read in full. An allowlist-shaped fork dropped it silently, which is a fork
+  // quietly changing who may read what.
+  participantRead: ["questions"],
   public: { enabled: true, read: [], submit: { responses: { auth: "verifiedEmail", emailField: "email", createFields: ["name", "email"] } } },
   aid: "11111111-2222-3333-4444-555555555555",
 };
@@ -66,6 +70,7 @@ interface Manifest {
   members?: Record<string, Record<string, string>>;
   collections?: unknown;
   public?: unknown;
+  participantRead?: unknown;
 }
 
 const manifestAt = (root: string): Manifest => JSON.parse(readFileSync(path.join(root, "app.json"), "utf-8")) as Manifest;
@@ -92,16 +97,36 @@ describe("forkSharedApp", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.aid).not.toBe(CLONED.aid);
-    expect(result.carried).toEqual(["collections", "public"]);
+    expect(result.carried).toEqual(["collections", "participantRead", "public"]);
 
     const written = manifestAt(root);
     expect(written.aid).toBe(result.aid);
     // The roster is REPLACED, not extended: the addresses the cloned declaration listed have no
     // claim on an app they have never heard of.
     expect(written.members).toEqual({ [ME.email]: { "*": "owner" } });
-    // And the two blocks that describe the collections beside it come across verbatim.
+    // And every rule-facing setting comes across verbatim — not just the two obvious blocks.
     expect(written.collections).toEqual(CLONED.collections);
     expect(written.public).toEqual(CLONED.public);
+    expect(written.participantRead).toEqual(CLONED.participantRead);
+  });
+
+  // The other half of the carry rule: everything that NAMES the cloned app goes, and that list is
+  // closed. `owner` is its creator's uid and `aidEnv` its per-worktree id — neither is one of the
+  // two obvious blocks either, and both would follow a fork into an app they do not describe.
+  it("drops every key naming the cloned app, including the ones that are not its aid", async () => {
+    writeFileSync(path.join(root, "app.json"), JSON.stringify({ ...CLONED, owner: "uid-author", aidEnv: "APP_ID" }, null, 2));
+
+    const result = await forkSharedApp(root, undefined, undefined);
+
+    expect(result.ok).toBe(true);
+    const written = JSON.parse(readFileSync(path.join(root, "app.json"), "utf-8")) as Record<string, unknown>;
+    expect(written.owner).toBeUndefined();
+    expect(written.aidEnv).toBeUndefined();
+    expect(written.slug).toBeUndefined();
+    expect(written.aid).not.toBe(CLONED.aid);
+    expect(written.members).toEqual({ [ME.email]: { "*": "owner" } });
+    // And the rule-facing settings still came across.
+    expect(written.participantRead).toEqual(CLONED.participantRead);
   });
 
   it("takes the new aid on the server before it reaches app.json", async () => {
