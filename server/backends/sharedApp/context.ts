@@ -90,9 +90,14 @@ export async function sharedCollections(root: string): Promise<LoadedCollection[
 /** The schemas as the projections want them: sorted, so two runs over the same repository produce
  *  the same documents and a diff of them means something. */
 export function schemasOf(collections: readonly LoadedCollection[]): { cid: string; schema: CollectionSchema }[] {
-  return collections
-    .map((collection) => ({ cid: collection.slug, schema: collection.schema }))
-    .sort((left, right) => (left.cid < right.cid ? -1 : left.cid > right.cid ? 1 : 0));
+  return collections.map((collection) => ({ cid: collection.slug, schema: collection.schema })).sort(byCid);
+}
+
+/** Code-unit order, not `localeCompare`: this is the order Firestore lists document ids in, and
+ *  a projection sorted one way against a listing sorted another is a diff that reads as a change. */
+function byCid(left: { cid: string }, right: { cid: string }): number {
+  if (left.cid === right.cid) return 0;
+  return left.cid < right.cid ? -1 : 1;
 }
 
 async function readAuthored(root: string): Promise<{ ok: true; app: AuthoredApp } | { ok: false; problems: string[] }> {

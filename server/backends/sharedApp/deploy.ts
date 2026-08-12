@@ -39,6 +39,32 @@ export interface DeploySuccess {
   withdrawn: string[];
 }
 
+/** The app document as it stands, or the refusal.
+ *
+ *  The preflight read decides two things the rules care about: whether `owner` is stamped or
+ *  carried forward, and which of publish's fields are carried through the replacement. A rejection
+ *  here — permission, network, quota — must become the documented result rather than escape as a
+ *  raw exception; it happens before any write, which is what the caller most needs told.
+ *
+ *  It also normalizes "was there an app document?" ONCE, for the projection and the report both.
+ *  Two spellings of that question disagree the moment `get` resolves to something that is neither
+ *  a record nor null: the projection stamps a fresh `owner` while the reply says "Updated". */
+async function readCurrentApp(handle: SharedAppHandle, aid: string): Promise<{ ok: true; app: Record<string, unknown> | null } | SharedAppFailure> {
+  try {
+    const existing = await handle.docs.get(APPS_COLLECTION, aid);
+    return { ok: true, app: isRecord(existing) ? existing : null };
+  } catch (err) {
+    return {
+      ok: false,
+      partial: false,
+      problems: [
+        `deploy failed while reading the current app document (apps/${aid}): ${err instanceof Error ? err.message : String(err)}`,
+        "Nothing was written. Deploying again is safe — this read only decides whether the app is created or updated.",
+      ],
+    };
+  }
+}
+
 /** Staged documents whose collection this repository no longer has.
  *
  *  Dropping them is what makes staging a REPLACEMENT of the repository's shared collections rather
@@ -83,24 +109,8 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
   if (refusal) return { ok: false, partial: false, problems: refusal };
 
   const { aid } = authored;
-  // The preflight read decides two things the rules care about: whether `owner` is stamped or
-  // carried forward, and which of publish's fields are carried through the replacement. A
-  // rejection here — permission, network, quota — must become the documented result rather than
-  // escape as a raw exception; it happens before any write, which is what the caller most needs
-  // told.
-  let existing: unknown;
-  try {
-    existing = await handle.docs.get(APPS_COLLECTION, aid);
-  } catch (err) {
-    return {
-      ok: false,
-      partial: false,
-      problems: [
-        `deploy failed while reading the current app document (apps/${aid}): ${err instanceof Error ? err.message : String(err)}`,
-        "Nothing was written. Deploying again is safe — this read only decides whether the app is created or updated.",
-      ],
-    };
-  }
+  const current = await readCurrentApp(handle, aid);
+  if (!current.ok) return current;
   const stampSource = await (opts.resolveCommit ?? gitStamp)(root);
   const stamp: PublishStamp = {
     uid: handle.uid,
@@ -109,11 +119,7 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
     commit: stampSource.commit,
     dirty: stampSource.dirty,
   };
-  // ONE normalization of "was there an app document?", used by the projection and by the report.
-  // Two spellings of the same question disagree the moment `get` resolves to anything that is
-  // neither a record nor null: the projection stamps a fresh `owner` while the reply says
-  // "Updated".
-  const existingApp = isRecord(existing) ? existing : null;
+  const existingApp = current.app;
   const deployed = projectDeploy(authored, schemasOf(collections), stamp, existingApp);
 
   const stale = await staleStaged(handle, aid, existingApp, new Set(deployed.staging.map((entry) => entry.cid)));
