@@ -39,9 +39,7 @@ class FakeDocs implements FirestoreDocs {
   }
 
   list = (collectionPath: string): Promise<FirestoreDoc[]> =>
-    Promise.resolve(
-      [...this.bucket(collectionPath)].sort(([left], [right]) => (left < right ? -1 : 1)).map(([id, data]) => ({ id, data })),
-    );
+    Promise.resolve([...this.bucket(collectionPath)].sort(([left], [right]) => (left < right ? -1 : 1)).map(([id, data]) => ({ id, data })));
 
   get = (collectionPath: string, docId: string): Promise<unknown | null> => Promise.resolve(this.bucket(collectionPath).get(docId) ?? null);
 
@@ -165,12 +163,7 @@ describe("shared app deploy / publish / unpublish", () => {
     expect(result.ok).toBe(true);
     expect(result.ok === true && result.publicOpen).toBe(true);
     // Promotion first, the projection next, and the authorization at the very end.
-    expect(docs.writes).toEqual([
-      `set apps/${AID}/collections/bookings`,
-      `set apps/${AID}/config/public`,
-      `set apps/${AID}`,
-      `set apps/${AID}`,
-    ]);
+    expect(docs.writes).toEqual([`set apps/${AID}/collections/bookings`, `set apps/${AID}/config/public`, `set apps/${AID}`, `set apps/${AID}`]);
     expect(docs.doc(`apps/${AID}/collections`, "bookings")).toMatchObject({ publishedBy: OWNER.email });
     expect(docs.app()?.public).toMatchObject({ enabled: true });
   });

@@ -26,10 +26,7 @@ export async function readStaged(handle: SharedAppHandle, aid: string): Promise<
   } catch (err) {
     return {
       ok: false,
-      problems: [
-        `cannot read the staged schemas (apps/${aid}/staging): ${err instanceof Error ? err.message : String(err)}`,
-        "Nothing was written.",
-      ],
+      problems: [`cannot read the staged schemas (apps/${aid}/staging): ${err instanceof Error ? err.message : String(err)}`, "Nothing was written."],
     };
   }
   const staged: StagedEntry[] = [];

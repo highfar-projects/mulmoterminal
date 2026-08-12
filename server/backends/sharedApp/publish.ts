@@ -77,7 +77,13 @@ function stagedForValidation(
 }
 
 /** The writes, in the order the design fixes: promote, project, then open. */
-function publishSteps(handle: SharedAppHandle, aid: string, staged: readonly StagedEntry[], stamp: PublishStamp, face: ReturnType<typeof projectPublish>): WriteStep[] {
+function publishSteps(
+  handle: SharedAppHandle,
+  aid: string,
+  staged: readonly StagedEntry[],
+  stamp: PublishStamp,
+  face: ReturnType<typeof projectPublish>,
+): WriteStep[] {
   return [
     ...staged.map(({ cid, doc }) => ({
       what: `the published schema for '${cid}' (apps/${aid}/collections/${cid})`,

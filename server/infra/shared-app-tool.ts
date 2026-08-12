@@ -88,8 +88,7 @@ export async function manageSharedApp(root: string, args: unknown): Promise<stri
   if (action === "deploy") {
     const result = await deploySharedApp(root, { confirm });
     if (!result.ok) return result.problems.join("\n");
-    const withdrawn =
-      result.withdrawn.length > 0 ? [`Withdrawn from staging (no longer in this repository): ${result.withdrawn.join(", ")}.`] : [];
+    const withdrawn = result.withdrawn.length > 0 ? [`Withdrawn from staging (no longer in this repository): ${result.withdrawn.join(", ")}.`] : [];
     return [
       `${result.created ? "Created" : "Updated"} apps/${result.aid} and staged ${result.cids.length} collection${result.cids.length === 1 ? "" : "s"}: ${result.cids.join(", ") || "(none)"}.`,
       `The roster can try it at /staging/${result.aid}. Nothing is public until you publish.`,
