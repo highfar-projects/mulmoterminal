@@ -3035,11 +3035,28 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
      **完了**（mulmoterminal #1636 でレビュー対応まで込み）。`app.json` は著者のファイルで
      あってこちらの出力物ではないので、書き込みは**原子的・モード保持・シンボリックリンクの
      実体を更新・1 度に 1 つ**（`manifestWrite.ts`）
-   - **7e. URL slug の予約**（D2b / D10）— deploy が `appSlugs/{slug}` を
+   - **7e. URL slug の予約**（D2b / D10）— **完了**（mulmoterminal #1638）。
+     deploy が `appSlugs/{slug}` を
      `published: false` で押さえ、取られていたら `-2`, `-3`… と番号を付ける。取れた名前は
      `app.json` に書き戻し、**`apps/{aid}.slug` にも記録**して次の deploy が二重に取らない
      ようにする。publish が `published` を反転（**公開の直前、`public` の直前**）、
-     unpublish がその逆順で戻す
+     unpublish がその逆順で戻す。
+
+     レビューで出て設計に足りていなかったもの（いずれも「予約は読めない」の帰結）:
+
+     - **公開の反転は `public` ブロックの有無に従う。** publish したから公開する、では
+       ない — 名簿だけのアプリを publish したときに slug が解決すると、**世界から読める
+       予約が aid を配る**ことになり、それは `/staging/{aid}` の入口
+     - **`create` が false でも、自分の予約かどうかを書いて確かめる**（ルールは「既存文書が
+       名指すアプリのオーナーで aid 不変」の更新だけ許すので、通れば自分のもの）。
+       これが無いと、記録が失われた・同時に走った・記録に失敗した deploy がどれも `-2` を
+       取り、元の名前は**もう名乗らないアプリに握られたまま誰にも読めない**状態で残る。
+       **失敗を一律に「他人のもの」と読んではいけない** — 一時的な失敗まで番号に流すと、
+       公開中の名前が解決したまま unpublish の射程から外れる
+     - **`slug` を変えたら前の名前を閉じる**（削除はしない）。以降の unpublish は新しい
+       名前しか見ないので、**下ろしたつもりの URL でアプリが開き続ける**
+     - **操作はリポジトリごとに 1 つずつ**。deploy と publish が交差すると、publish が
+       deploy の閉じた旧名を開き直す
 
 **共有**
 
