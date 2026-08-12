@@ -389,6 +389,25 @@ describe("shared app deploy / publish / unpublish", () => {
     expect(docs.doc("appSlugs", "sakura-hair-2")).toBeUndefined();
   });
 
+  it("stops the previous name from resolving when the app is renamed", async () => {
+    writeApp(root, declaration({ slug: "sakura-hair", public: { enabled: true, read: ["bookings"] } }));
+    await deploySharedApp(root, stamp);
+    await publishSharedApp(root, stamp);
+    expect(docs.doc("appSlugs", "sakura-hair")).toEqual({ aid: AID, published: true });
+
+    // The author renames the app's URL.
+    writeApp(root, declaration({ slug: "sakura-salon", public: { enabled: true, read: ["bookings"] } }));
+    const renamed = await deploySharedApp(root, stamp);
+    expect(renamed.ok === true && renamed.slug).toBe("sakura-salon");
+
+    // The old one keeps pointing here — it is never deleted, because a freed name is one somebody
+    // else can claim and then serve from a URL already in circulation — but it stops resolving.
+    // Otherwise every later unpublish would act on the new name while the old URL still opened
+    // the app.
+    expect(docs.doc("appSlugs", "sakura-hair")).toEqual({ aid: AID, published: false });
+    expect(docs.app()?.slug).toBe("sakura-salon");
+  });
+
   it("says so rather than reporting success when there was nothing open to close", async () => {
     await deploySharedApp(root, stamp);
     const result = await unpublishSharedApp(root);

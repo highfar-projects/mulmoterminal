@@ -179,6 +179,17 @@ async function recordSlug(root: string, slug: string): Promise<SharedAppFailure 
   };
 }
 
+/** Stop a name this app no longer uses from resolving.
+ *
+ *  An author who renames the app's URL leaves the old reservation behind, and it keeps pointing at
+ *  this aid. If it was published it goes on RESOLVING — and every later unpublish acts on the new
+ *  name, so the URL the owner believes they took down still opens the app. Retiring means flipping
+ *  the old one closed, not deleting it: the rules refuse deletes on purpose, because a freed name
+ *  is one somebody else can claim and then serve from a URL that is already in circulation. */
+export function retireSlug(handle: SharedAppHandle, aid: string, slug: string): Promise<void> {
+  return handle.docs.set(APP_SLUGS_COLLECTION, slug, appSlugDoc(aid, false));
+}
+
 /** Flip the reservation's visibility. `true` is publish (the name starts resolving), `false` is
  *  unpublish (it stops).
  *

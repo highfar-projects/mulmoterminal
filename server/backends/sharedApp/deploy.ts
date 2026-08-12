@@ -19,7 +19,7 @@ import { ensureAid } from "./ensureAid.js";
 import { APPS_COLLECTION, appStagingPath, projectDeploy, type PublishStamp } from "@mulmoclaude/core/collection/server";
 import { gitStamp, schemasOf, sharedAppContext, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
 import { recordRefusal, scanRecords } from "./records.js";
-import { reserveSlug, type SlugResult } from "./slug.js";
+import { reserveSlug, retireSlug, type SlugResult } from "./slug.js";
 import { runWrites } from "./writes.js";
 
 export interface DeploySuccess {
@@ -92,6 +92,24 @@ async function reserveHeldSlug(
   // flag mirrors that, and a reclaim must not change the answer.
   const reservation = await reserveSlug(handle, aid, root, wanted, held === wanted, appDoc.public !== undefined);
   if (!reservation.ok || !reservation.reserved) return reservation;
+  // A rename leaves the previous name pointing here, and a published one goes on RESOLVING —
+  // while every later unpublish acts on the new name, so the URL the owner believes they took
+  // down still opens the app. Retire it before the record moves, so a failure here leaves the
+  // record on the old name and the next deploy repeats exactly this step.
+  if (held !== undefined && held !== reservation.slug) {
+    try {
+      await retireSlug(handle, aid, held);
+    } catch (err) {
+      return {
+        ok: false,
+        partial: true,
+        problems: [
+          `the URL name '${reservation.slug}' was reserved, but the previous name '${held}' could not be retired: ${err instanceof Error ? err.message : String(err)}`,
+          `Deploy again — until '${held}' is closed it still resolves to this app, and later unpublishes would not touch it.`,
+        ],
+      };
+    }
+  }
   try {
     await handle.docs.set(APPS_COLLECTION, aid, { ...appDoc, slug: reservation.slug });
   } catch (err) {
