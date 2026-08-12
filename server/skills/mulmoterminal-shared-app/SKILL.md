@@ -105,8 +105,10 @@ edits the roster and nothing else; deploy is what makes it real.
 
 Addresses are written in lower case, because the rules compare one exactly and the sign-in token
 carries a lower-cased address. An entry with capitals matches nobody, and nothing reports it — the
-deploy succeeds and the person is simply refused everything. `invite` lower-cases what you pass;
-a roster edited by hand is checked at deploy.
+deploy succeeds and the person is simply refused everything. `invite` lower-cases a NEW address; an address the roster
+already has keeps the spelling it has there — that entry is changed in place, and whether its
+spelling is wrong is the deploy check's business, not this operation's. A roster edited by hand is
+checked at deploy.
 
 ### 4b. Check, whenever you have edited `app.json`
 

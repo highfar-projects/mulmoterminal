@@ -42,15 +42,47 @@ describe("declarationProblems: roster address case", () => {
   });
 });
 
+const manifestAt = async (root: string) => JSON.parse(await readFile(path.join(root, "app.json"), "utf-8")) as { members: Record<string, unknown> };
+
+const repoWith = async (members: Record<string, unknown>) => {
+  const root = await mkdtemp(path.join(tmpdir(), "roster-case-"));
+  await writeFile(path.join(root, "app.json"), JSON.stringify({ aid: "a1", members }, null, 2));
+  return root;
+};
+
 describe("inviteToSharedApp", () => {
-  it("writes the address in lower case, so the rules can match it", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "roster-case-"));
-    await writeFile(path.join(root, "app.json"), JSON.stringify({ aid: "a1", members: { "o@e.com": { "*": "owner" } } }, null, 2));
+  it("writes a new address in lower case, so the rules can match it", async () => {
+    const root = await repoWith({ "o@e.com": { "*": "owner" } });
 
     const result = await inviteToSharedApp(root, "Foo@Example.com", "participant", "survey");
 
     expect(result.ok).toBe(true);
-    const written = JSON.parse(await readFile(path.join(root, "app.json"), "utf-8")) as { members: Record<string, unknown> };
-    expect(Object.keys(written.members)).toEqual(["o@e.com", "foo@example.com"]);
+    expect(Object.keys((await manifestAt(root)).members)).toEqual(["o@e.com", "foo@example.com"]);
+  });
+
+  // Which entry the operation is ABOUT is decided before the normalization can matter. Otherwise
+  // a removal looks up a key nobody has, changes nothing, and still reports success.
+  it("removes the entry a roster spells with capitals", async () => {
+    const root = await repoWith({ "o@e.com": { "*": "owner" }, "Foo@Example.com": { survey: "participant" } });
+
+    const result = await inviteToSharedApp(root, "foo@example.com", null, "survey");
+
+    expect(result.ok).toBe(true);
+    expect(Object.keys((await manifestAt(root)).members)).toEqual(["o@e.com"]);
+  });
+
+  // The other half of the same bug: a second key beside the first, one of which still holds the
+  // permissions the operator believed they had just changed.
+  it("changes that entry in place rather than adding a lower-cased twin", async () => {
+    const root = await repoWith({ "o@e.com": { "*": "owner" }, "Foo@Example.com": { survey: "participant" } });
+
+    const result = await inviteToSharedApp(root, "Foo@Example.com", "viewer", "survey");
+
+    expect(result.ok).toBe(true);
+    const members = (await manifestAt(root)).members;
+    expect(Object.keys(members)).toEqual(["o@e.com", "Foo@Example.com"]);
+    expect(members["Foo@Example.com"]).toEqual({ survey: "viewer" });
+    // And it reports the key it actually wrote, not the address that was typed.
+    expect(result.ok && result.email).toBe("Foo@Example.com");
   });
 });
