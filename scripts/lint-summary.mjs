@@ -1,4 +1,4 @@
-import { relative } from "node:path";
+import { relative, sep } from "node:path";
 
 /**
  * Turn eslint results into a markdown report — a pie by area, a rule x area
@@ -61,6 +61,25 @@ function descending(counts) {
   return [...counts.entries()].sort((a, b) => b[1] - a[1]);
 }
 
+/**
+ * Parse what eslint piped over. EMPTY IS AN ERROR, not an empty run: eslint
+ * writes `[]` for a clean one, and produces nothing at all when it dies before
+ * linting (an unreadable config, a plugin that will not load) — where it exits
+ * non-zero with an empty stdout. Reading that as "no findings" reported a broken
+ * lint as a passing one, and the pipeline hid eslint's own status behind this
+ * process's.
+ */
+export function parseEslintJson(text) {
+  if (text.trim() === "") {
+    throw new Error("eslint wrote no output — it failed before linting (a clean run emits `[]`)");
+  }
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    throw new Error(`stdin was not eslint --format json output: ${err.message}`, { cause: err });
+  }
+}
+
 function readJson(stream) {
   return new Promise((resolve, reject) => {
     let text = "";
@@ -68,9 +87,9 @@ function readJson(stream) {
     stream.on("error", reject);
     stream.on("end", () => {
       try {
-        resolve(JSON.parse(text || "[]"));
+        resolve(parseEslintJson(text));
       } catch (err) {
-        reject(new Error(`stdin was not eslint --format json output: ${err.message}`));
+        reject(err);
       }
     });
   });
@@ -120,7 +139,13 @@ export function renderReport(results, cwd = process.cwd()) {
     // `relative`, not a prefix strip: eslint reports absolute paths, and a run
     // whose cwd is not the repo root would otherwise leave every path absolute,
     // dropping every finding into `other`.
-    const path = relative(from, result.filePath);
+    //
+    // Split on the PLATFORM separator and rejoin with `/`: on Windows `relative`
+    // answers `server\session\x.ts`, which every helper below — all of which split
+    // on `/` — reads as one path segment, so every finding lands in `other`. This
+    // repo lints on Windows daily. Splitting on `sep` rather than replacing `\`
+    // leaves a POSIX filename that legitimately contains a backslash alone.
+    const path = relative(from, result.filePath).split(sep).join("/");
     const area = areaOf(path);
     for (const message of result.messages) {
       const rule = message.ruleId ?? "(no rule)";
@@ -164,8 +189,16 @@ export function renderReport(results, cwd = process.cwd()) {
 // here, and `set -o pipefail` is not available in every shell that runs an npm
 // script. Warnings alone exit 0, as eslint does.
 if (import.meta.filename === process.argv[1]) {
-  const results = await readJson(process.stdin);
-  process.stdout.write(renderReport(results));
-  const errors = results.some((r) => r.messages.some((m) => m.severity === 2));
-  if (errors) process.exitCode = 1;
+  // One line on stderr rather than a stack trace: every throw here is about what
+  // arrived on stdin, so the trace through this file's own frames says nothing a
+  // reader of `yarn lint:summary` can act on.
+  try {
+    const results = await readJson(process.stdin);
+    process.stdout.write(renderReport(results));
+    const errors = results.some((r) => r.messages.some((m) => m.severity === 2));
+    if (errors) process.exitCode = 1;
+  } catch (err) {
+    process.stderr.write(`lint:summary — ${err.message}\n`);
+    process.exitCode = 1;
+  }
 }
