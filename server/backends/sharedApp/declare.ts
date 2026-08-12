@@ -6,10 +6,11 @@
 // separate reasons, and when a deploy failed it edited the file by hand — deleting the `aid` and
 // creating a second, orphaned app.
 //
-// So the three things a person actually asks for become operations: start an app, check it, invite
-// somebody. What stays out is anything that would make the file OURS — it is a committed
-// declaration that people read and edit in a pull request, and it must survive being written by
-// hand. These only ever change the key they are about.
+// So the things a person actually asks for become operations: start an app, take over a clone of
+// somebody else's, check it, invite somebody. What stays out is anything that would make the file
+// OURS — it is a committed declaration that people read and edit in a pull request, and it must
+// survive being written by hand. Each of these changes only the keys it is about, and `fork` — the
+// one that rewrites most of the file — is still writing what the author asked for by name.
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { APPS_COLLECTION, APP_MANIFEST_FILE, firestoreHandle, parseAuthoredApp } from "@mulmoclaude/core/collection/server";
@@ -142,6 +143,134 @@ async function reserveApp(
     };
   }
 }
+
+export interface ForkSuccess extends DeclareSuccess {
+  /** The URL name the app this was cloned from holds. Reported because it was deliberately NOT
+   *  carried, and the author is the one who has to notice that. */
+  previousSlug?: string | undefined;
+  /** The top-level blocks carried over verbatim, in the order they were written. */
+  carried: string[];
+}
+
+export type ForkResult = ForkSuccess | SharedAppFailure;
+
+/** Make a CLONE of somebody else's shared app into your own: a new `aid`, a roster of one, and
+ *  the same collections.
+ *
+ *  The operation exists because `init` cannot do it and neither can a person. `init` refuses a
+ *  repository that already declares an app — and a clone always does — so the only route was
+ *  "delete app.json, then run init", which puts an IRREVERSIBLE step (the delete) in front of
+ *  every step that can fail, and takes `collections` and `public` with it. Every recovery from a
+ *  half-done fork went through `git show HEAD:app.json`.
+ *
+ *  What it carries is the answer to "same app, different owner": `collections` and `public` are
+ *  the declaration's half of the collection definitions committed beside it, so a fork that
+ *  dropped them would be a different app wearing the same schemas. What it does NOT carry is
+ *  anything naming the app this was cloned FROM — `aid`, `members`, `slug`, `owner`. Three of
+ *  those would be wrong; the fourth (`slug`) would silently be honoured as a wish and come back
+ *  as `their-name-2`, which is not a name anybody chose.
+ *
+ *  It does not touch `.claude/skills/` at all. The schemas ARE what was cloned. */
+export async function forkSharedApp(root: string, name: string | undefined, slug: string | undefined): Promise<ForkResult> {
+  const raw = await readManifest(root);
+  if (!raw.ok) return raw;
+  const parsed = parseAuthoredApp(raw.text);
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      partial: false,
+      problems: [
+        ...parsed.problems,
+        "`fork` has to know whose app this is before it replaces the roster, and that is the declaration it just failed to read.",
+        "Repair app.json — or, if this repository was never an app, delete it and run `init`.",
+      ],
+    };
+  }
+
+  const handle = firestoreHandle();
+  if (!handle) {
+    return {
+      ok: false,
+      partial: false,
+      problems: [
+        "forking an app needs a signed-in session: connect remote-host first.",
+        "The new declaration names its owner by EMAIL, and it has to be the address this machine is signed in with — guessing it produces an app nobody can deploy.",
+      ],
+    };
+  }
+
+  // The one refusal that matters. `fork` is the only operation here that overwrites a roster, and
+  // run against your OWN app it would not fork anything — it would mint a second aid and leave the
+  // first, with every record in it, behind. Nothing on disk would say that had happened.
+  if (parsed.app.members[handle.email]?.[APP_WIDE] === "owner") {
+    return {
+      ok: false,
+      partial: false,
+      problems: [
+        `app.json already names ${handle.email} — the address this session is signed in with — as this app's owner. There is nothing to fork.`,
+        `\`fork\` mints a NEW aid and replaces the roster, so running it here would leave apps/${parsed.app.aid} and every record in it behind, reachable only by whoever else is on that roster.`,
+        "To change this app, edit app.json (or use `invite` for one address). To start an unrelated one, run `init` in a repository that declares no app.",
+      ],
+    };
+  }
+
+  // Same order as `init`, for the same reason: the id is taken on the shared shelf BEFORE it
+  // reaches a file that gets committed and read in a pull request.
+  const aid = newAid();
+  const reserved = await reserveApp(handle, aid);
+  if (reserved) return reserved;
+
+  const taken: ForkNotes = { carried: [], previousSlug: undefined };
+  const written = await updateManifest(root, (manifest) => forked(manifest, { aid, owner: handle.email, name, slug }, taken));
+  if (!written.ok) {
+    // PARTIAL for `init`'s reason, and one more: app.json is still the app this was CLONED from,
+    // so the repository did not half-become anything. The reservation is an unused shelf entry.
+    return {
+      ok: false,
+      partial: true,
+      problems: [
+        ...written.problems,
+        `The app id was already reserved on the server (apps/${aid}) and is owned by this address, but it never reached app.json — which still declares the app this repository was cloned from.`,
+        "Fix the write problem and run `fork` again — it mints a new id, and the one above is simply left unused. Nothing else was written.",
+      ],
+    };
+  }
+  return { ok: true, aid, owner: handle.email, slug, previousSlug: taken.previousSlug, carried: taken.carried };
+}
+
+/** What the rewrite reports back about the declaration it replaced: an out-parameter because
+ *  `updateManifest`'s mutation returns the new file and nothing else, and both of these are facts
+ *  about the OLD one that only the mutation is holding when it runs. */
+interface ForkNotes {
+  carried: string[];
+  previousSlug: string | undefined;
+}
+
+/** The declaration a fork replaces the cloned one with, and the note of what did not survive it.
+ *
+ *  Built from the manifest as it is on disk RIGHT NOW rather than from the copy `fork` parsed:
+ *  `updateManifest` re-reads under the write lock, and the two blocks are carried VERBATIM so that
+ *  whatever the author wrote in them that the parse does not model comes across too. */
+function forked(
+  manifest: Record<string, unknown>,
+  wanted: { aid: string; owner: string; name: string | undefined; slug: string | undefined },
+  taken: ForkNotes,
+): Record<string, unknown> {
+  const chosen = wanted.name ?? (typeof manifest.name === "string" ? manifest.name : undefined);
+  taken.previousSlug = typeof manifest.slug === "string" ? manifest.slug : undefined;
+  taken.carried = CARRIED_BLOCKS.filter((key) => isRecord(manifest[key]));
+  return {
+    ...(chosen === undefined ? {} : { name: chosen }),
+    ...(wanted.slug === undefined ? {} : { slug: wanted.slug }),
+    aid: wanted.aid,
+    members: { [wanted.owner]: { [APP_WIDE]: "owner" } },
+    ...Object.fromEntries(taken.carried.map((key) => [key, manifest[key]])),
+  };
+}
+
+/** What a fork keeps: the declaration's half of the collection definitions committed beside it.
+ *  Everything else in `app.json` names the app it was cloned FROM. */
+const CARRIED_BLOCKS = ["collections", "public"] as const;
 
 export interface CheckReport {
   ok: true;
