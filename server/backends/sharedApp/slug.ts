@@ -14,8 +14,7 @@
 // there, and a slug already recorded is never re-reserved. "Once you have it, you keep it" is
 // the point (D2b) — a URL is a thing people have already sent to each other.
 import { APP_SLUGS_COLLECTION, appSlugDoc } from "@mulmoclaude/core/collection/server";
-import { isRecord } from "../../../common/isRecord.js";
-import type { SharedAppFailure, SharedAppHandle } from "./context.js";
+import { isRefusal, type SharedAppFailure, type SharedAppHandle } from "./context.js";
 import { updateManifest } from "./manifestWrite.js";
 
 /** How many numbered alternatives to try before giving up. The number is small on purpose: past
@@ -137,15 +136,6 @@ async function probeOwnership(handle: SharedAppHandle, aid: string, slug: string
   } catch (err) {
     return isRefusal(err) ? "theirs" : "unknown";
   }
-}
-
-/** A rules REFUSAL, as opposed to a failure to ask. The Firestore SDK reports both as a thrown
- *  error and only the `code` separates them: `permission-denied` is the rules saying no, and
- *  `failed-precondition` is the document not being what the rules required. Everything else —
- *  `unavailable`, `deadline-exceeded`, `resource-exhausted`, an offline client — is the question
- *  never having been answered. */
-function isRefusal(err: unknown): boolean {
-  return isRecord(err) && (err.code === "permission-denied" || err.code === "failed-precondition");
 }
 
 function probeFailed(candidate: string): SharedAppFailure {

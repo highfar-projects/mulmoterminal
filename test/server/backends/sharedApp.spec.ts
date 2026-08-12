@@ -34,6 +34,8 @@ class FakeDocs implements FirestoreDocs {
   readsDeniedUntilApp = false;
   /** Collection path whose listing throws — a transient failure, as opposed to a refusal. */
   failListing: string | null = null;
+  /** Refuse the app-document read even though it exists — somebody else's app. */
+  readsDeniedForApp = false;
 
   private bucket(collectionPath: string): Map<string, Record<string, unknown>> {
     const existing = this.store.get(collectionPath);
@@ -43,14 +45,30 @@ class FakeDocs implements FirestoreDocs {
     return created;
   }
 
-  list = (collectionPath: string): Promise<FirestoreDoc[]> =>
-    this.failListing === collectionPath
-      ? Promise.reject(new Error("unavailable (test)"))
-      : this.readsDeniedUntilApp && !this.app() && collectionPath.includes("/collections/")
-        ? Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }))
-        : Promise.resolve([...this.bucket(collectionPath)].sort(([left], [right]) => (left < right ? -1 : 1)).map(([id, data]) => ({ id, data })));
+  list = (collectionPath: string): Promise<FirestoreDoc[]> => {
+    if (this.failListing === collectionPath) {
+      return Promise.reject(new Error("unavailable (test)"));
+    }
+    // The rules again: a record listing is authorized through the app document, so while that is
+    // missing the listing is REFUSED rather than empty.
+    if (this.readsDeniedUntilApp && !this.app() && collectionPath.includes("/collections/")) {
+      return Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }));
+    }
+    const docs = [...this.bucket(collectionPath)].sort(([left], [right]) => (left < right ? -1 : 1));
+    return Promise.resolve(docs.map(([id, data]) => ({ id, data })));
+  };
 
-  get = (collectionPath: string, docId: string): Promise<unknown | null> => Promise.resolve(this.bucket(collectionPath).get(docId) ?? null);
+  get = (collectionPath: string, docId: string): Promise<unknown | null> => {
+    // The rules' actual shape: `apps/{aid}`'s read resolves the roster out of the document, so a
+    // document that does not exist makes the expression fail and the read is REFUSED — the same
+    // answer as somebody else's app. A fake that answered `null` would let a first deploy pass a
+    // test the real thing cannot pass.
+    const existing = this.bucket(collectionPath).get(docId);
+    if (collectionPath === "apps" && (!existing || this.readsDeniedForApp)) {
+      return Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }));
+    }
+    return Promise.resolve(existing ?? null);
+  };
 
   set = (collectionPath: string, docId: string, data: Record<string, unknown>): Promise<void> => {
     const key = `${collectionPath}/${docId}`;
@@ -137,6 +155,7 @@ describe("shared app deploy / publish / unpublish", () => {
 
   it("deploys to the roster only — no public block, no published schema, no public config", async () => {
     const result = await deploySharedApp(root, stamp);
+    expect(result.ok === false ? result.problems : []).toEqual([]);
     expect(result.ok).toBe(true);
     // The one that matters: `publicOn` reads THIS field, not the world-readable projection, so a
     // deploy that wrote it would open the app for anyone testing.
@@ -195,6 +214,18 @@ describe("shared app deploy / publish / unpublish", () => {
     expect(docs.doc(`apps/${AID}/staging`, "bookings")).toBeDefined();
   });
 
+  it("says whose app it is when the id is taken and unreadable", async () => {
+    // The two are indistinguishable by reading — both are refusals — so the create is what settles
+    // it, and the message has to name the situation rather than repeat "insufficient permissions".
+    docs.store.set("apps", new Map([[AID, { aid: AID, owner: "somebody-else" }]]));
+    docs.readsDeniedForApp = true;
+
+    const result = await deploySharedApp(root, stamp);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.problems.join("\n")).toContain("belongs to somebody else's roster");
+    expect(docs.doc(`apps/${AID}/staging`, "bookings")).toBeUndefined();
+  });
+
   it("says the roster is live when it cannot read staging after creating the app", async () => {
     // "Nothing was written" about an app that now exists is worse than no report at all: the next
     // decision — deploy again, or go looking for what half-happened — turns on it.
@@ -209,10 +240,11 @@ describe("shared app deploy / publish / unpublish", () => {
 
   it("writes the app document before the staged schemas — the staging rules resolve the owner through it", async () => {
     await deploySharedApp(root, stamp);
-    // One app write, then the staging document — on a first deploy the app write is the one that
-    // makes the records readable, which is why it happens before the migration gate rather than
-    // beside the staging writes.
-    expect(docs.writes).toEqual([`set apps/${AID}`, `set apps/${AID}/staging/bookings`]);
+    // CREATE, then the staging document. On a first deploy the app write is what makes the records
+    // readable, so it happens before the migration gate rather than beside the staging writes —
+    // and it is a create because that is the only operation that can tell "this app does not
+    // exist" from "this app is somebody else's", which a refused read cannot.
+    expect(docs.writes).toEqual([`create apps/${AID}`, `set apps/${AID}/staging/bookings`]);
 
     // And on a redeploy, where the app already exists, the same order without the extra write.
     docs.writes.length = 0;

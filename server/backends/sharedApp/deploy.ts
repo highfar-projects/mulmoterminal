@@ -14,10 +14,9 @@
 // The write order is "app document first": `appSlugs`' create rule and the staging rules both
 // resolve the owner through `get(apps/{aid})`, so on a first deploy nothing else is authorized
 // until that document exists.
-import { isRecord } from "../../../common/isRecord.js";
 import { ensureAid } from "./ensureAid.js";
 import { APPS_COLLECTION, appStagingPath, projectDeploy, type LoadedCollection, type PublishStamp } from "@mulmoclaude/core/collection/server";
-import { gitStamp, schemasOf, sharedAppContext, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
+import { gitStamp, readCurrentApp, schemasOf, sharedAppContext, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
 import { recordRefusal, scanRecords, type RecordScan } from "./records.js";
 import { reserveSlug, retireSlug, type SlugResult } from "./slug.js";
 import { runWrites } from "./writes.js";
@@ -42,32 +41,6 @@ export interface DeploySuccess {
    *  deploy. Reported because a withdrawal is not what the operator asked for; it is what
    *  deleting a collection's directory MEANT, and the two are easy to confuse. */
   withdrawn: string[];
-}
-
-/** The app document as it stands, or the refusal.
- *
- *  The preflight read decides two things the rules care about: whether `owner` is stamped or
- *  carried forward, and which of publish's fields are carried through the replacement. A rejection
- *  here — permission, network, quota — must become the documented result rather than escape as a
- *  raw exception; it happens before any write, which is what the caller most needs told.
- *
- *  It also normalizes "was there an app document?" ONCE, for the projection and the report both.
- *  Two spellings of that question disagree the moment `get` resolves to something that is neither
- *  a record nor null: the projection stamps a fresh `owner` while the reply says "Updated". */
-async function readCurrentApp(handle: SharedAppHandle, aid: string): Promise<{ ok: true; app: Record<string, unknown> | null } | SharedAppFailure> {
-  try {
-    const existing = await handle.docs.get(APPS_COLLECTION, aid);
-    return { ok: true, app: isRecord(existing) ? existing : null };
-  } catch (err) {
-    return {
-      ok: false,
-      partial: false,
-      problems: [
-        `deploy failed while reading the current app document (apps/${aid}): ${err instanceof Error ? err.message : String(err)}`,
-        "Nothing was written. Deploying again is safe — this read only decides whether the app is created or updated.",
-      ],
-    };
-  }
 }
 
 /** Reserve the declared URL name if this app does not already hold it, and record the result on
@@ -141,8 +114,8 @@ async function establishAndScan(
   confirm: boolean | undefined,
 ): Promise<{ ok: true; scan: RecordScan } | SharedAppFailure> {
   if (established) {
-    const failed = await runWrites([{ what: `the app document (apps/${aid})`, run: () => handle.docs.set(APPS_COLLECTION, aid, appDoc) }], "deploy");
-    if (failed) return failed;
+    const claimed = await claimApp(handle, aid, appDoc);
+    if (claimed) return claimed;
   }
   const scan = await scanRecords(collections, root);
   const refusal = recordRefusal(scan, "deploy", confirm);
@@ -150,6 +123,42 @@ async function establishAndScan(
   // The app document is live when this call created it just above — the roster, and nothing else.
   // Saying so is the difference between "nothing happened" and "the app exists now".
   return { ok: false, partial: established, problems: refusal };
+}
+
+/** Create the app document, which is also what SETTLES what a refused read left open.
+ *
+ *  `create` is create-if-absent and atomic, and the rules let only the declared owner do it. So:
+ *  it succeeds and the app is ours; it reports the id taken, which means the document exists and
+ *  the earlier read was refused because this address is not on ITS roster; or it is refused, which
+ *  means the declaration does not name this address as owner.
+ *
+ *  Each of those is a different thing to tell the operator, and none of them is "Missing or
+ *  insufficient permissions" — the message a first deploy used to end on. */
+async function claimApp(handle: SharedAppHandle, aid: string, appDoc: Record<string, unknown>): Promise<SharedAppFailure | null> {
+  let created: boolean;
+  try {
+    created = await handle.docs.create(APPS_COLLECTION, aid, appDoc);
+  } catch (err) {
+    return {
+      ok: false,
+      partial: false,
+      problems: [
+        `cannot create the app document (apps/${aid}): ${err instanceof Error ? err.message : String(err)}`,
+        "Creating an app requires the signed-in address to be its OWNER in app.json's `members` — check that the address you are signed in with is the one listed there.",
+        "Nothing was written.",
+      ],
+    };
+  }
+  if (created) return null;
+  return {
+    ok: false,
+    partial: false,
+    problems: [
+      `apps/${aid} already exists and this session cannot read it.`,
+      "That combination means the app belongs to somebody else's roster: the aid in app.json was not created here, or the address you are signed in with was removed from it. Ask its owner to add you, or start a new app by removing `aid` from app.json.",
+      "Nothing was written.",
+    ],
+  };
 }
 
 /** Staged documents whose collection this repository no longer has.
@@ -211,7 +220,7 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
   //
   // So a denial is not conclusive here, and the CREATE is what settles it (below): create-if-absent
   // is atomic, and only the declared owner may do it.
-  const current = await readCurrentApp(handle, aid);
+  const current = await readCurrentApp(handle, aid, "deploy", "Deploying again is safe — this read only decides whether the app is created or updated.");
   if (!current.ok) return current;
   const stampSource = await (opts.resolveCommit ?? gitStamp)(root);
   const stamp: PublishStamp = {
