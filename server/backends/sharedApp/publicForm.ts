@@ -24,6 +24,13 @@ export interface PublicField {
   type: string;
   /** An `enum`'s choices, so the page renders a select rather than a text box. */
   values?: readonly string[];
+  /** Whether a submission without it is refused.
+   *
+   *  The UNION of two declarations, because the rules and the app can each insist: the schema's
+   *  own `required`, and `public.submit[cid].validate.required` — which is what the deployed rules
+   *  actually check on a public create. Left out, the page cannot mark the field or stop the
+   *  submit, and the visitor learns of it as a permission error with nothing naming the field. */
+  required?: true;
 }
 
 export type PublicForm = Record<string, Record<string, PublicField>>;
@@ -39,7 +46,7 @@ export function publicFormOf(authored: AuthoredApp, staged: readonly StagedEntry
   const entries = Object.entries(submit).flatMap(([cid, spec]) => {
     const schema = byCid.get(cid);
     if (schema === undefined) return [];
-    const fields = fieldsOf(schema, spec.createFields);
+    const fields = fieldsOf(schema, spec.createFields, spec.validate?.required ?? []);
     // A collection whose `createFields` name nothing the schema declares publishes no entry at
     // all: an empty object would read as a form that failed to load, where absence is a fact the
     // page can state.
@@ -48,7 +55,7 @@ export function publicFormOf(authored: AuthoredApp, staged: readonly StagedEntry
   return Object.fromEntries(entries);
 }
 
-function fieldsOf(schema: CollectionSchema, createFields: readonly string[]): Record<string, PublicField> {
+function fieldsOf(schema: CollectionSchema, createFields: readonly string[], requiredBySubmit: readonly string[]): Record<string, PublicField> {
   const declared = schema.fields;
   const pairs = createFields.flatMap((name) => {
     // Own-property guarded: a `createFields` entry of `toString` or `constructor` must miss here
@@ -59,7 +66,13 @@ function fieldsOf(schema: CollectionSchema, createFields: readonly string[]): Re
     // `values` belongs to the `enum` variant alone — read through a narrowing rather than off the
     // union, so a field type that gains choices later has to be added here on purpose.
     const values = "values" in spec ? spec.values : undefined;
-    const field: PublicField = { label: spec.label, type: spec.type, ...(values === undefined ? {} : { values }) };
+    const required = spec.required === true || requiredBySubmit.includes(name);
+    const field: PublicField = {
+      label: spec.label,
+      type: spec.type,
+      ...(values === undefined ? {} : { values }),
+      ...(required ? { required: true as const } : {}),
+    };
     return [[name, field] as const];
   });
   return Object.fromEntries(pairs);

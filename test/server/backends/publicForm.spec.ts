@@ -60,6 +60,24 @@ describe("publicFormOf", () => {
     expect(Object.keys(form.responses ?? {})).not.toContain("id");
   });
 
+  it("marks a field the rules will insist on — from either declaration", async () => {
+    // Two places can insist and the page has to honour both: the schema's own `required`, and
+    // `public.submit[cid].validate.required`, which is what the deployed rules check on a public
+    // create. Dropped, the visitor meets it as a permission error naming no field.
+    const withRequired = {
+      ...schema,
+      fields: { ...schema.fields, name: { type: "string" as const, label: "お名前", required: true } },
+    };
+    const form = publicFormOf(
+      authored({ responses: { auth: "verifiedEmail", emailField: "email", createFields: ["name", "score", "comment"], validate: { required: ["score"] } } }),
+      [{ cid: "responses", doc: { publishedSchema: withRequired, deployedAt: 1, deployedBy: "o@e.com" } }],
+    );
+    expect(form.responses?.name).toMatchObject({ required: true });
+    expect(form.responses?.score).toMatchObject({ required: true });
+    // And nothing is marked that neither declaration asked for.
+    expect(form.responses?.comment).not.toHaveProperty("required");
+  });
+
   it("says nothing about a collection the app does not open", () => {
     expect(publicFormOf(authored({}), staged)).toEqual({});
   });
