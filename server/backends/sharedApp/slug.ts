@@ -14,6 +14,7 @@
 // there, and a slug already recorded is never re-reserved. "Once you have it, you keep it" is
 // the point (D2b) — a URL is a thing people have already sent to each other.
 import { APP_SLUGS_COLLECTION, appSlugDoc } from "@mulmoclaude/core/collection/server";
+import { isRecord } from "../../../common/isRecord.js";
 import type { SharedAppFailure, SharedAppHandle } from "./context.js";
 import { updateManifest } from "./manifestWrite.js";
 
@@ -70,9 +71,13 @@ export async function reserveSlug(
     } catch (err) {
       return reservationFailed(candidate, err);
     }
-    if (!claimed && !(await isOurs(handle, aid, candidate, appIsPublic))) {
-      taken.push(candidate);
-      continue;
+    if (!claimed) {
+      const ownership = await probeOwnership(handle, aid, candidate, appIsPublic);
+      if (ownership === "unknown") return probeFailed(candidate);
+      if (ownership === "theirs") {
+        taken.push(candidate);
+        continue;
+      }
     }
     const recorded = await recordSlug(root, candidate);
     return recorded ?? { ok: true, slug: candidate, reserved: true };
@@ -98,36 +103,61 @@ function reservationFailed(candidate: string, err: unknown): SharedAppFailure {
   };
 }
 
-/** Does an EXISTING reservation belong to this app? Asked by WRITING to it, because it cannot be
- *  read.
+/** Whose is an EXISTING reservation? Asked by WRITING to it, because it cannot be read.
  *
  *  This is why a failed `create` is not the end. The rules allow an update only when the caller
  *  owns the app the document ALREADY names and the `aid` is unchanged — so a write that succeeds
- *  proves ownership, and one that is refused proves somebody else holds the name. There is no
- *  other way to ask: `allow read` needs `published == true`, which is exactly the state a
+ *  proves ownership, and one REFUSED FOR THAT REASON proves somebody else holds the name. There is
+ *  no other way to ask: `allow read` needs `published == true`, which is exactly the state a
  *  reservation is not in.
  *
  *  Without it, three ordinary situations end with a stranded name: a deploy that reserved and then
- *  failed to record it, two deploys of one repository at once, and a repository whose app document
- *  lost the record. Each would see `create` fail, decide the name belonged to somebody else, and
- *  take `-2` — while the first reservation stayed live, held by an app that no longer claims it,
- *  and unreadable by anyone who might have noticed.
+ *  failed to record it, two deploys of one repository at once, and an app document that lost the
+ *  record. Each would see `create` fail, decide the name belonged to somebody else, and take `-2`
+ *  — while the first reservation stayed live, held by an app that no longer claims it, and
+ *  unreadable by anyone who might have noticed.
+ *
+ *  The third answer is the one that took a review to get right. A timeout or a quota error is NOT
+ *  "somebody else's": reading it that way turns an outage into a second reservation, and if the
+ *  name being reclaimed was a PUBLIC one, the app records the numbered name while the original
+ *  keeps resolving — and can no longer be taken down, because unpublish works from the record.
+ *  Only a refusal decides; anything else stops the deploy with the name unresolved, which a retry
+ *  fixes and nothing else has to.
  *
  *  `published` is written from the APP's state rather than guessed: the app document holds the
  *  `public` block, so it is the authority on whether this app is open, and the reservation should
  *  say the same. When they agree this is a no-op; when they have drifted it repairs the drift
- *  toward the app.
- *
- *  A refusal is the ANSWER here, not an error, which is why nothing is reported. A real fault
- *  (network, quota) lands here too and reads as "not ours" — costing a numbered name rather than
- *  taking a wrong one. */
-async function isOurs(handle: SharedAppHandle, aid: string, slug: string, appIsPublic: boolean): Promise<boolean> {
+ *  toward the app. */
+type Ownership = "ours" | "theirs" | "unknown";
+
+async function probeOwnership(handle: SharedAppHandle, aid: string, slug: string, appIsPublic: boolean): Promise<Ownership> {
   try {
     await handle.docs.set(APP_SLUGS_COLLECTION, slug, appSlugDoc(aid, appIsPublic));
-    return true;
-  } catch {
-    return false;
+    return "ours";
+  } catch (err) {
+    return isRefusal(err) ? "theirs" : "unknown";
   }
+}
+
+/** A rules REFUSAL, as opposed to a failure to ask. The Firestore SDK reports both as a thrown
+ *  error and only the `code` separates them: `permission-denied` is the rules saying no, and
+ *  `failed-precondition` is the document not being what the rules required. Everything else —
+ *  `unavailable`, `deadline-exceeded`, `resource-exhausted`, an offline client — is the question
+ *  never having been answered. */
+function isRefusal(err: unknown): boolean {
+  return isRecord(err) && (err.code === "permission-denied" || err.code === "failed-precondition");
+}
+
+function probeFailed(candidate: string): SharedAppFailure {
+  return {
+    ok: false,
+    partial: true,
+    problems: [
+      `the URL name '${candidate}' is taken, and this deploy could not establish whether it is this app's own reservation.`,
+      "Stopping rather than guessing: taking the next numbered name would strand the original, which stays live and — if the app is public — keeps resolving to it.",
+      "The app and its schemas are deployed and the roster can use /staging/{aid}. Deploying again retries just this step.",
+    ],
+  };
 }
 
 /** Write the reserved name back, so the next deploy does not reserve a second one.

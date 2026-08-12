@@ -51,7 +51,9 @@ class FakeDocs implements FirestoreDocs {
     // the reservation code asks "is this name ours?" about a document it may not read.
     const existing = this.bucket(collectionPath).get(docId);
     if (collectionPath === "appSlugs" && existing && existing.aid !== data.aid) {
-      return Promise.reject(new Error("permission-denied: appSlugs.aid is immutable (test)"));
+      // Rejected the way the SDK rejects: the `code` is what separates "the rules said no" from
+      // "the question never got an answer", and the caller reads exactly that difference.
+      return Promise.reject(Object.assign(new Error("appSlugs.aid is immutable (test)"), { code: "permission-denied" }));
     }
     this.writes.push(`set ${key}`);
     this.bucket(collectionPath).set(docId, structuredClone(data));
@@ -369,6 +371,22 @@ describe("shared app deploy / publish / unpublish", () => {
     expect(again.ok === true && again.slug).toBe("sakura-hair");
     expect(docs.doc("appSlugs", "sakura-hair-2")).toBeUndefined();
     expect(docs.app()?.slug).toBe("sakura-hair");
+  });
+
+  it("stops rather than taking a numbered name when the ownership probe cannot be answered", async () => {
+    // An outage is not "somebody else's". Reading it that way turns a timeout into a second
+    // reservation — and if the name being reclaimed was public, the app records the numbered one
+    // while the original keeps resolving, beyond the reach of unpublish.
+    writeApp(root, declaration({ slug: "sakura-hair" }));
+    await deploySharedApp(root, stamp);
+    const app = docs.app();
+    if (app) delete app.slug;
+    docs.failAt = "appSlugs/sakura-hair";
+
+    const result = await deploySharedApp(root, stamp);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.problems.join(" ")).toContain("could not establish");
+    expect(docs.doc("appSlugs", "sakura-hair-2")).toBeUndefined();
   });
 
   it("says so rather than reporting success when there was nothing open to close", async () => {
