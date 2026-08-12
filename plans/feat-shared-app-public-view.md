@@ -1,7 +1,7 @@
 # 共有アプリ: 公開ページを「予約サイト」にする（公開カスタムビュー + 枠の排他）
 
 **状態**: 設計のみ。実装は未着手。2026-08-12 の議論から。
-レビュー（#1658）で見つかった 15 点を反映済み: id の不変性、宣言そのものの変更禁止、
+レビュー（#1658）で見つかった 16 点を反映済み: id の不変性、宣言そのものの変更禁止、
 枠の実在**と状態**の確認（`untilField` を含む）、iframe の `event.source` 検証、
 bridge の `ready` / `submitResult`、`config/view` の撤去と版の一致、公開読み取りを
 `bookings` から `availability` に分離、ホスト用ビューとの契約の分離、publish の順序、
@@ -345,28 +345,39 @@ window.__MC_VIEW = { slug, token, dataUrl, origin, locale, dict, onChange, openI
 2 人目は拒否され、拒否のあとに `state` を読み直しても**同じ古い行**を読んで、枠はまた
 選べるように見える。「埋まった枠は選べない」は成立しない。
 
-**batch では解けない。** ルールは batch 内の他の書き込みを見られず、評価は batch 前の
-状態に対して行われる。予約と鏡を 1 つの batch にしても、鏡の update を判定する時点で
-予約はまだ存在しない。
-
 **権威を持つのはドキュメント ID の衝突（`bookings/{slot}` の存在）で、`availability` は
 その射影**、と決める。そして射影への書き込みを、**権威と一致するときだけ**許す:
 
 ```text
 match /apps/{aid}/collections/{cid}/items/{slotId} {
-  // 射影に「埋まっている」と書けるのは、本当に埋まっているときだけ
   allow update: if mirrorOf(cid) != null
-                && ((request.resource.data.state == "taken"
-                     && exists(bookingPath(aid, mirrorOf(cid), slotId)))
-                 || (request.resource.data.state == "open"
-                     && !exists(bookingPath(aid, mirrorOf(cid), slotId))));
+                // 触れるのは state だけ。値が真実でも、ついでに担当や時刻を
+                // 書き換えられては公開スケジュールが訪問者のものになる
+                && changed().hasOnly(["state"])
+                && (request.resource.data.state == "taken")
+                   == existsAfter(bookingPath(aid, mirrorOf(cid), slotId));
 }
 ```
 
-この形の効き方が要点で、**誰が書いてもよくなる**。嘘は書けないので、権限で絞る必要が
-ない。結果として:
+**`existsAfter` であって `exists` ではない**のが要点。これ 1 つで 2 つの経路が同時に通る:
 
-- 申込みが通った直後、親が鏡を閉じる。失敗しても壊れない
+- **同じ batch で予約と鏡を書く**（通常経路）。予約はまだ存在しないが、
+  `existsAfter` は**この書き込みの後**を見るので一致する。batch は原子的なので、
+  どちらか一方だけが残ることはない
+- **あとから鏡を直す**（自己修復）。予約は既にあるので `existsAfter` も真
+
+当初ここに「batch では解けない、ルールは batch 前の状態しか見ない」と書いたのは**誤り**。
+`getAfter` / `existsAfter` がまさにそのためにあり、このリポジトリのルールは既に使っている
+（`firestore.rules:557`、メールの束縛）。
+
+`changed().hasOnly(["state"])` は既存の慣用（`:494` の `selfUpdate`）と同じ形。これが
+無いと、**値としては真実のまま担当・時刻・メニューを書き換えられ**、公開スケジュールが
+攻撃者の持ち物になる。二重予約は起きないが、見えているものが嘘になる。
+
+そして**誰が書いてもよくなる**。嘘は書けず、書ける範囲も 1 フィールドなので、権限で
+絞る必要がない。結果として:
+
+- 通常経路は予約と鏡が**同じ batch**で、原子的に切り替わる
 - **拒否された 2 人目が鏡を直せる。** 「取られていた」と知ったのはその人なので、
   そのまま `taken` を書いて `state` を読み直す。格子は正しくなる
 - 受付が予約を delete して枠を戻したら、次に来た誰かが `open` に直す
