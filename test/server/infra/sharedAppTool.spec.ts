@@ -131,6 +131,23 @@ describe("manageSharedApp, the tool", () => {
     expect(await manageSharedApp(root, { action: "invite", email: "o@e.com" })).toContain("Removed");
   });
 
+  it("catches, while signed in, what a deploy would refuse about `owner`", async () => {
+    // `check` answers "would a deploy be refused?", so it has to run the SAME gate. A second
+    // implementation answers differently, and this one answered optimistically: a declaration
+    // naming somebody else's uid checked clean and was refused a moment later.
+    const root = makeTempDir("mt-shared-tool-");
+    writeFileSync(
+      path.join(root, "app.json"),
+      JSON.stringify({ aid: "a1", members: { "signed-in@example.com": { "*": "owner" } }, owner: "somebody-elses-uid" }),
+    );
+    setFirestoreAccessor(() => ({ docs: FAKE_DOCS, email: "signed-in@example.com", uid: "uid-1" }));
+    try {
+      expect(await manageSharedApp(root, { action: "check" })).toContain("somebody-elses-uid");
+    } finally {
+      setFirestoreAccessor(null);
+    }
+  });
+
   it("returns every refusal as text rather than throwing", async () => {
     const root = makeTempDir("mt-shared-tool-");
     writeFileSync(path.join(root, "app.json"), JSON.stringify({ aid: "a1", members: {} }));

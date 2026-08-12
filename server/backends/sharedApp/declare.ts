@@ -12,9 +12,9 @@
 // hand. These only ever change the key they are about.
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { APP_MANIFEST_FILE, firestoreHandle, parseAuthoredApp, publishProblems } from "@mulmoclaude/core/collection/server";
+import { APP_MANIFEST_FILE, firestoreHandle, parseAuthoredApp } from "@mulmoclaude/core/collection/server";
 import { isRecord } from "../../../common/isRecord.js";
-import { sharedCollections, type SharedAppFailure } from "./context.js";
+import { declarationProblems, sharedCollections, type SharedAppFailure } from "./context.js";
 import { createManifest, newAid, updateManifest } from "./manifestWrite.js";
 
 /** The roles the rules understand, in the order a person picks from. */
@@ -101,28 +101,17 @@ export async function checkSharedApp(root: string): Promise<CheckReport | Shared
 
   const collections = await sharedCollections(root);
   const handle = firestoreHandle();
-  // WHOSE deploy is being checked.
-  //
-  // `publishProblems` asks, among other things, whether the publisher is an app-wide owner — so an
-  // empty address is not a neutral value: it reports `members must give you app-wide owner: add
-  // "": {"*": "owner"}` for every declaration, and a signed-out check could never come back clean.
-  //
-  // Signed out, the honest question is "would this deploy for the owner it names?", so the check
-  // runs as that owner and the report says which. Signed in, it is you — which is the stricter and
-  // more useful answer, because being signed in as somebody else is one of the things this catches.
-  const declaredOwner = ownerFromRoster(parsed.app);
-  const publisher = handle?.email ?? declaredOwner ?? "";
-  const problems = publishProblems(
-    parsed.app,
-    collections.map((collection) => ({ cid: collection.slug, primaryKey: collection.schema.primaryKey })),
-    publisher,
-  );
+  // The SAME gate a deploy runs, not a second opinion. `check` exists to answer "would a deploy be
+  // refused?", and a separate implementation of that question answers it differently — this one
+  // used to miss the `owner` uid mismatch and call a declaration deployable that deploy then
+  // refused.
+  const problems = declarationProblems(parsed.app, collections, handle);
   return {
     ok: true,
     aid: parsed.app.aid,
     collections: collections.map((collection) => collection.slug),
     checkedAs: handle?.email ?? null,
-    declaredOwner,
+    declaredOwner: ownerFromRoster(parsed.app),
     problems,
   };
 }

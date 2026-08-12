@@ -113,14 +113,27 @@ async function readAuthored(root: string): Promise<{ ok: true; app: AuthoredApp 
   return parseAuthoredApp(raw);
 }
 
-/** Everything wrong with the declaration itself, publisher included. */
-function declarationProblems(app: AuthoredApp, collections: readonly LoadedCollection[], handle: SharedAppHandle): string[] {
+/** The first address the declaration makes an app-wide owner, or undefined when it names none. */
+function ownerFromRoster(app: AuthoredApp): string | undefined {
+  return Object.entries(app.members).find(([, roles]) => roles["*"] === "owner")?.[0];
+}
+
+/** Everything wrong with the declaration itself, publisher included.
+ *
+ *  Shared by the gate that runs before a deploy and by `check`, which exists to answer "would a
+ *  deploy be refused?" — two implementations of that question is two answers, and the one `check`
+ *  gave was the optimistic one (it missed the `owner` uid mismatch, and said deployable about a
+ *  declaration the next deploy refused). */
+export function declarationProblems(app: AuthoredApp, collections: readonly LoadedCollection[], handle: { email: string; uid: string } | null): string[] {
   const problems = publishProblems(
     app,
     collections.map((collection) => ({ cid: collection.slug, primaryKey: collection.schema.primaryKey })),
-    handle.email,
+    // Signed out, the caller asks as the owner the declaration NAMES — see `checkSharedApp`. An
+    // empty address is not neutral here: `publishProblems` asks whether the publisher is an
+    // app-wide owner, so it would report a missing owner for every sound declaration.
+    handle?.email ?? ownerFromRoster(app) ?? "",
   );
-  if (app.owner !== undefined && app.owner !== handle.uid) {
+  if (handle !== null && app.owner !== undefined && app.owner !== handle.uid) {
     // Not fatal on its own — the rules pin `owner` to the EXISTING document on update — but a
     // declaration naming somebody else's uid is either the sample's `<uid>` placeholder or a
     // misunderstanding of what the key is.

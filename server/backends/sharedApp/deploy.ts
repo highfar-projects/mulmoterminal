@@ -149,7 +149,8 @@ async function claimApp(handle: SharedAppHandle, aid: string, appDoc: Record<str
         `cannot write the app document (apps/${aid}): ${err instanceof Error ? err.message : String(err)}`,
         "Two things are refused the same way here, and both are worth checking:",
         `  - the address this session is signed in with is not the one app.json names as owner (it must be a key of \`members\` with \`"*": "owner"\`);`,
-        `  - apps/${aid} already exists and belongs to somebody else's roster — the aid was not created here, or this address was removed from it. Removing \`aid\` from app.json starts a new app.`,
+        `  - apps/${aid} already exists and belongs to somebody else's roster — this address was removed from it, or the aid came from a repository you are not on.`,
+        "**Do not edit or remove `aid`.** It is the app's identity: a new one does not repair anything, it creates a SECOND app while the first — and everybody's records in it — stays where it is, reachable only by whoever is still on its roster. Recover access from an owner, or confirm this declaration is the app you meant.",
         "Nothing was written.",
       ],
     };
