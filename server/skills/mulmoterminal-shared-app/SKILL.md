@@ -29,26 +29,22 @@ the user turns this down.
 Say what you are doing in the user's words ("作っています", "みんなが見えるようにしました"). The
 words below are for you, not for them: an author does not need to know what a `cid` is.
 
-### 1. Write the declaration
+### 1. Start the app
 
-`app.json` at the repository root:
+`manageSharedApp` with `action: "init"`, and `name` (and `slug`, if you have one worth wanting).
 
-```json
-{
-  "name": "Talk feedback",
-  "slug": "aug-talk-survey",
-  "members": { "owner@example.com": { "*": "owner" } }
-}
-```
+**Do not compose `app.json` yourself.** The declaration names its owner by EMAIL and it has to be
+the address this machine is SIGNED IN with — you cannot read that, and the address the user tells
+you is the one that fails at deploy. `init` writes it, generates the `aid`, and refuses if the
+repository already declares an app.
 
-- `members` is keyed by **email**, and the user's own address goes in as `owner`. Ask for it if
-  you do not know it — it is the one thing you cannot infer.
-- `slug` is the name in the URL people will be given. Take it from what the thing IS
-  (`aug-talk-survey`), lowercase with hyphens. It is a wish: if it is taken, a number is appended
-  and written back here.
-- **Never invent an `aid`.** It is generated for you the moment you write the first collection,
-  and it is a UUID on purpose — a memorable one would be first-come-first-served across every user
-  of the deployment.
+`slug` is the name in the URL people will be given. Take it from what the thing IS
+(`aug-talk-survey`), lowercase with hyphens. It is a wish: if it is taken, a number is appended and
+written back.
+
+The file is an ordinary committed declaration afterwards — you may read it, and the user may edit
+it in a pull request. What you should not do is REWRITE it: `invite` changes one roster entry, and
+`check` tells you whether what is there would deploy.
 
 ### 2. Write the collection
 
@@ -93,7 +89,8 @@ Tell the user they can look at it now, and give them the address the tool report
 
 ### 4. Invite
 
-Add the address to `members` and deploy again. Roles:
+`manageSharedApp` with `action: "invite"`, `email`, and `role` (omit `role` to remove them). It
+edits the roster and nothing else; deploy is what makes it real.
 
 | role | what they get |
 |---|---|
@@ -102,8 +99,16 @@ Add the address to `members` and deploy again. Roles:
 | `viewer` | reads the records |
 | `participant` | named on the roster, sees only their OWN rows |
 
-`{ "tanaka@example.com": { "*": "viewer" } }` is the whole app; `{ "bookings": "editor" }` is one
-collection.
+`cid` narrows it to one collection instead of the whole app.
+
+### 4b. Check, whenever you have edited `app.json`
+
+`manageSharedApp` with `action: "check"` runs the gate a deploy runs — the declaration, the
+collections it names — and writes nothing. It needs no connection.
+
+Use it after any hand edit, and before telling the user something is ready. The alternative is
+finding out at deploy, and a deploy that refuses in the middle is where an agent starts editing
+files to recover.
 
 ### 5. Publish, when the user asks to open it
 

@@ -15,22 +15,26 @@ import type { ToolDefinition } from "gui-chat-protocol";
 import { deploySharedApp } from "../backends/sharedApp/deploy.js";
 import { publishSharedApp } from "../backends/sharedApp/publish.js";
 import { unpublishSharedApp } from "../backends/sharedApp/unpublish.js";
+import { APP_ROLE_NAMES, checkSharedApp, initSharedApp, inviteToSharedApp, type AppRoleName } from "../backends/sharedApp/declare.js";
 import { isRecord } from "../../common/isRecord.js";
 import { manifestKey } from "../backends/sharedApp/manifestWrite.js";
 import { serializeBy } from "../backends/sharedApp/serialize.js";
 
-export const SHARED_APP_ACTIONS = ["deploy", "publish", "unpublish"] as const;
+export const SHARED_APP_ACTIONS = ["init", "check", "invite", "deploy", "publish", "unpublish"] as const;
 export type SharedAppAction = (typeof SHARED_APP_ACTIONS)[number];
 
 export const MANAGE_SHARED_APP: ToolDefinition = {
   type: "function",
   name: "manageSharedApp",
   description:
-    "Deploy, publish or unpublish this repository's shared app (the one declared by its app.json). " +
+    "Start, check, invite to, deploy, publish or unpublish this repository's shared app (the one declared by its app.json). " +
     "deploy stages the declaration and the collection schemas where only the app's roster can see them; publish promotes what was staged and opens the app to the public; unpublish closes it again.",
   prompt:
     "A request for something OTHER PEOPLE fill in or read — a survey, a sign-up sheet, a booking form, a form behind a link — is a shared app, and the `mulmoterminal-shared-app` skill is the path from that sentence to this tool. Read it before offering a printable page or a third-party form.\n" +
     "`manageSharedApp` operates on the repository the session is open in — the one holding `app.json` — and it is the only way to write a shared app.\n" +
+    "**init** writes `app.json` for a repository that has none, with the SIGNED-IN address as its owner — use it instead of composing the file yourself, because the owner has to be the address this machine is signed in with and you cannot read that.\n" +
+    "**check** reports everything wrong with the declaration and this repository's shared collections WITHOUT writing or deploying anything. Run it after any edit to `app.json`; it is the only way to find out whether a declaration is deployable before it is deployed.\n" +
+    "**invite** adds, changes or removes ONE address on the roster (`email`, `role`, optional `cid`; omit `role` to remove). It takes effect at the next deploy.\n" +
     "**deploy** is the safe one and is meant to be run often. It writes the roster and internal settings to `apps/{aid}` and each collection's schema to `apps/{aid}/staging/{cid}`, which only people on the roster can read. " +
     "An invitation added to `members` takes effect at deploy, so the roster can try the real app at `/staging/{aid}` before anybody outside sees it. Deploy never opens the app to the public, and never changes what a published app's visitors are looking at.\n" +
     "**publish** is the dangerous one. It promotes the STAGED schemas — not the working tree, so what ships is what the roster reviewed — and then opens the app. Publish it only when the user asks for it in those terms.\n" +
@@ -42,8 +46,19 @@ export const MANAGE_SHARED_APP: ToolDefinition = {
       action: {
         type: "string",
         enum: [...SHARED_APP_ACTIONS],
-        description: "deploy = stage for the roster; publish = promote the staged version and open it; unpublish = close it again.",
+        description:
+          "init = write app.json for a new app; check = report what is wrong without writing; invite = one roster entry; deploy = stage for the roster; publish = promote the staged version and open it; unpublish = close it again.",
       },
+      name: { type: "string", description: "init: the app's human name." },
+      slug: { type: "string", description: "init: the wanted URL name (lowercase, hyphens). It is a wish — a taken one gets a number appended." },
+      email: { type: "string", description: "invite: the address to add, change or remove." },
+      role: {
+        type: "string",
+        enum: [...APP_ROLE_NAMES],
+        description:
+          "invite: what they may do. Omit to REMOVE the address. owner publishes; editor writes records; viewer reads them; participant sees only its own rows.",
+      },
+      cid: { type: "string", description: "invite: one collection instead of the whole app. Defaults to the whole app." },
       confirm: {
         type: "boolean",
         description:
@@ -121,6 +136,49 @@ async function narrateUnpublish(root: string): Promise<string> {
     : `apps/${result.aid} was already closed to the public — nothing was open to take down. The public config document was deleted if it was still there.`;
 }
 
+async function narrateInit(root: string, body: Record<string, unknown>): Promise<string> {
+  const result = await initSharedApp(root, str(body.name), str(body.slug));
+  if (!result.ok) return result.problems.join("\n");
+  return [
+    `Started an app in this repository: app.json now declares it, with ${result.owner} as owner.`,
+    "The `aid` was generated — it is the app's identity and is never chosen or edited by hand.",
+    ...(result.slug === undefined ? [] : [`The wanted URL name is '${result.slug}'; deploy reserves it, and a taken one gets a number appended.`]),
+    "Next: write the collections, then deploy.",
+  ].join("\n");
+}
+
+async function narrateCheck(root: string): Promise<string> {
+  const report = await checkSharedApp(root);
+  if (!report.ok) return report.problems.join("\n");
+  const found = report.collections.length === 0 ? "no shared collections in this repository yet" : `shared collections: ${report.collections.join(", ")}`;
+  if (report.problems.length === 0) {
+    return [`The declaration is deployable. ${found}.`, "Nothing was written or deployed — this only reads."].join("\n");
+  }
+  return [`The declaration would be refused (${found}):`, ...report.problems.map((problem) => `  - ${problem}`), "Nothing was written."].join("\n");
+}
+
+async function narrateInvite(root: string, body: Record<string, unknown>): Promise<string> {
+  const email = str(body.email);
+  if (email === undefined) return "manageSharedApp invite: `email` is required — it is what the roster is keyed by.";
+  const role = parseRole(body.role);
+  if (role === undefined) return `manageSharedApp invite: role must be one of ${APP_ROLE_NAMES.join(", ")}, or omitted to remove the address.`;
+  const cid = str(body.cid) ?? "*";
+  const result = await inviteToSharedApp(root, email, role, cid);
+  if (!result.ok) return result.problems.join("\n");
+  const where = cid === "*" ? "the whole app" : `'${cid}'`;
+  const what = role === null ? `Removed ${email} from ${where}.` : `${email} is now ${role} of ${where}.`;
+  return [what, "It takes effect at the next deploy — nothing has changed in the app yet."].join("\n");
+}
+
+const str = (value: unknown): string | undefined => (typeof value === "string" && value.length > 0 ? value : undefined);
+
+/** `undefined` means the argument was not one of the roles — which is different from being ABSENT,
+ *  and absent is how a removal is spelled. */
+function parseRole(value: unknown): AppRoleName | null | undefined {
+  if (value === undefined || value === null || value === "") return null;
+  return APP_ROLE_NAMES.find((role) => role === value);
+}
+
 /** Run one action against `root` and narrate the result. The agent's whole contract with this
  *  tool is actionable prose, so a refusal is text and never a throw. */
 export async function manageSharedApp(root: string, args: unknown): Promise<string> {
@@ -137,6 +195,9 @@ export async function manageSharedApp(root: string, args: unknown): Promise<stri
   // At the entry point rather than inside each operation, because what must not interleave is the
   // whole sequence, and this is the only place all three pass through.
   const key = `operation:${await manifestKey(root)}`;
+  if (action === "init") return serializeBy(key, () => narrateInit(root, body));
+  if (action === "check") return serializeBy(key, () => narrateCheck(root));
+  if (action === "invite") return serializeBy(key, () => narrateInvite(root, body));
   if (action === "deploy") return serializeBy(key, () => narrateDeploy(root, confirm));
   if (action === "publish") return serializeBy(key, () => narratePublish(root, confirm));
   return serializeBy(key, () => narrateUnpublish(root));
