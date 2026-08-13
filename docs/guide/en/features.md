@@ -53,6 +53,35 @@ MulmoTerminal — a browser terminal for parallel Claude Code and Codex agents �
 | Summary when it hands back | A Claude session ends its reply with **what was asked, what it achieved, and what it left** whenever it finishes or stops to ask. Coming back to a cell later, that is the current state without scrolling back |
 | See why a setting isn't working | Settings' **Directory settings** shows what each directory's `.mulmoterminal.json` actually puts in force, which file it came from, and **the keys dropped or never read** ([config](config.html#dir-settings-preview)) |
 | Update notice | When a new version ships, the header shows an **update badge**; click it for the update command that fits your install (npm / git clone) |
+| Question pane (opt-in) | When a Claude session stops to ask you something, its choices appear as **buttons in a pane** beside the enlarged terminal → [answering a question from the pane](#question-pane) |
+
+### Answering a question from the pane
+{: #question-pane }
+
+A Claude session that stops to ask something puts a dialog in the terminal that you answer with the
+arrow keys. Turn on **Settings → Terminal keys → Question pane** and the same choices also appear as
+buttons beside the enlarged terminal.
+
+![Settings, Terminal keys — the Question pane checkbox beside Copy on select](../images/question-pane-setting.png)
+
+The pane opens by itself on the enlarged cell the moment the question arrives, and closes as soon as
+it is answered. A question that arrives while its cell is tiled opens when you enlarge that cell —
+there is no button for it, because there is nothing to open when nothing is being asked.
+
+![A three-part question: the terminal on the left still showing its own dialog, the pane on the right offering the same choices as buttons with a Send button](../images/question-pane.png)
+
+**The dialog does not go away, and the pane does not replace it.** Picking here presses the arrow
+keys and Enter in the real dialog on the left, so whichever end you answer at wins and someone who
+prefers the keyboard notices no difference. That is also why the pane can only offer what the
+dialog's own list holds: **Type something** and **Chat about this** stay in the terminal.
+
+- **Claude sessions only.** The choices arrive on Claude Code's own hooks, so a codex or shell cell
+  never opens the pane.
+- **One question is answered by the click.** Ask several at once — as the screenshot does — and each
+  gets its own group, multi-select questions take as many as you like, and **Send** goes when every
+  question has an answer.
+- Off unless you turn it on: it lets a pane type into your terminal, which is not something to
+  arrive by default.
 
 ### Editing files beside a terminal
 

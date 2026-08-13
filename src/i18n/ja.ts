@@ -58,6 +58,10 @@ export const ja: Messages = {
       copyOnSelectTitle: "選ぶだけでコピー",
       copyOnSelectHint:
         "マウスの選択が確定した瞬間、キーを押さなくてもクリップボードに入ります。ハイライトしただけのつもりでもクリップボードが書き換わる、唯一の設定です。",
+      questionPane: "質問にサイドペインから答える",
+      questionPaneTitle: "質問ペイン",
+      questionPaneHint:
+        "セッションが質問してきたとき、選択肢をターミナル横のペインにボタンで出します。押すと、ターミナルに出ている実際のダイアログのキーを代わりに押すので、これまでどおりターミナル側で答えることもできます。",
       enterTitle: "Enter キー",
       enterHint:
         "ターミナル内の Claude Code が「送信」として読むバイト列です。お使いの Claude の設定に合わせてください。Claude セッションにだけ適用され、シェルの Enter は変わりません。",

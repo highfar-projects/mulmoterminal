@@ -8,12 +8,33 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+### Answer a Claude question from a pane, without taking the dialog away (#1679)
+
+When a Claude session stops on `AskUserQuestion`, the only way to answer was the terminal's own
+arrow-key dialog. Turn on **Settings → Terminal keys → Question pane** and the same choices also
+appear as buttons beside the enlarged terminal ([guide](https://receptron.github.io/mulmoterminal/guide/en/features.html#question-pane)).
+
+**The pane does not replace the dialog — it drives it.** Picking a button presses the arrow keys and
+Enter in the real dialog, still on screen in the terminal underneath. So whichever end answers first
+wins, someone who prefers the keyboard notices no difference, and there is no second source of truth
+to keep in step. Multi-question and multi-select dialogs work too, including their Submit row and
+review screen; the sequences are measured against the real dialog rather than derived from the tool
+schema, which lists fewer rows than the terminal shows.
+
+Nothing new is registered with Claude Code: the choices ride the `PreToolUse` hook that has reported
+every tool call all along, and `PostToolUse` is what tells the pane the dialog closed — in the
+terminal, in the pane, or with Esc. Off unless asked for, and with the switch off nothing is
+published at all, so a question leaves no trace in the browser.
+
+Claude sessions only, since that is where the hooks are. The dialog's own **Type something** and
+**Chat about this** rows stay in the terminal.
+
 ### Shared apps stop waiting for a MulmoClaude release (#1675)
 
 The code that turns a repository's `app.json` into the documents a published app is made of
 — and the gate that decides what publish refuses — moved out of `@mulmoclaude/core` into
-[`receptron/sharedapp`](https://github.com/receptron/sharedapp), which this repository now
-depends on by git ref.
+[`receptron/sharedapp`](https://github.com/receptron/sharedapp), published as
+`@receptron/sharedapp`, which this repository now depends on.
 
 Nothing an author writes changes, and no published document changes shape. What changes is
 the cost of the next change. Adding a key to `app.json`, a check to the publish gate, or a

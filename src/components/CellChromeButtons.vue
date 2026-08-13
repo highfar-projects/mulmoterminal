@@ -11,13 +11,16 @@
 // inside a button (shouldZoomOnHeaderClick), and stopping here would only hide that.
 import { computed } from "vue";
 import { CELL_BTN, CELL_BTN_ACTIVE, CELL_BTN_DISABLEABLE, CELL_CLOSE_BTN } from "./cellChromeClasses";
+import type { RightPane } from "./gridCell";
 
 const props = defineProps<{
   expanded: boolean;
   filesOpen?: boolean;
-  // Which side pane this cell is showing, so each button can read as pressed. The three share
-  // one slot beside the enlarged terminal, so at most one is ever pressed.
-  rightPane?: "files" | "canvas" | "tools" | "collections" | "github" | null | undefined;
+  // Which side pane this cell is showing, so each button can read as pressed. They share one slot
+  // beside the enlarged terminal, so at most one is ever pressed. The grid's own type rather than
+  // a copy of its members: spelling the union again here is how a new pane came to be a type error
+  // in every caller of this component instead of a value it simply did not recognise.
+  rightPane?: RightPane | null | undefined;
   // Whether this cell's session actually has the drawing tools — i.e. whether its directory has
   // the `render` MCP group registered with Claude Code. False disables the button rather than
   // removing it: the pane would open empty, and that is worth SAYING rather than hiding.

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n";
 import { copyOnSelect, saveCopyOnSelect } from "../../composables/copyOnSelect";
+import { questionPaneEnabled, saveQuestionPaneEnabled } from "../../composables/questionPane";
 import { terminalSubmitMode, saveTerminalSubmitMode } from "../../composables/terminalSubmitMode";
 import { TERMINAL_SUBMIT_MODES, isTerminalSubmitMode } from "../../../common/terminalSubmit";
 
@@ -12,6 +13,10 @@ const { t } = useI18n();
 
 function onCopyOnSelectToggle(e: Event) {
   if (e.target instanceof HTMLInputElement) void saveCopyOnSelect(e.target.checked);
+}
+
+function onQuestionPaneToggle(e: Event) {
+  if (e.target instanceof HTMLInputElement) void saveQuestionPaneEnabled(e.target.checked);
 }
 
 function onSubmitModeChange(e: Event) {
@@ -30,6 +35,21 @@ function onSubmitModeChange(e: Event) {
     />
     <span class="text-[12px]">
       <strong>{{ t("settings.terminalKeys.copyOnSelectTitle") }}</strong> — {{ t("settings.terminalKeys.copyOnSelectHint") }}
+    </span>
+  </label>
+
+  <!-- Here rather than under a pane heading: what the switch turns on is keys being typed into
+       the terminal on the user's behalf, which is what this section is about. -->
+  <label class="mt-1.5 flex cursor-pointer items-start gap-2">
+    <input
+      type="checkbox"
+      class="mt-1 cursor-pointer"
+      :checked="questionPaneEnabled"
+      :aria-label="t('settings.terminalKeys.questionPane')"
+      @change="onQuestionPaneToggle"
+    />
+    <span class="text-[12px]">
+      <strong>{{ t("settings.terminalKeys.questionPaneTitle") }}</strong> — {{ t("settings.terminalKeys.questionPaneHint") }}
     </span>
   </label>
 

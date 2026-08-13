@@ -391,6 +391,7 @@ describe("loadAppConfig / saveAppConfig", () => {
     keymap: {},
     copyOnSelect: false,
     decisionDigest: false,
+    questionPaneEnabled: false,
     issueWorkComments: false,
     prWorkdirFooter: true,
     appendSystemPrompt: true,
@@ -430,6 +431,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       keymap: { "zoom-next": "PageDown" }, // a bound shortcut must survive the round-trip too
       copyOnSelect: true,
       decisionDigest: true, // opt-in, so only `true` proves it persisted rather than defaulted
+      questionPaneEnabled: false,
       issueWorkComments: false, // opt-in, so only `true` proves it persisted rather than defaulted
       prWorkdirFooter: false, // the opt-out: it defaults ON, so only `false` proves it persisted
       appendSystemPrompt: false, // same opt-out shape: defaults ON, so only `false` proves it persisted
@@ -499,6 +501,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       terminalSubmit: "cr",
       copyOnSelect: false,
       decisionDigest: false,
+      questionPaneEnabled: false,
       issueWorkComments: false,
       prWorkdirFooter: true, // absent from the file — every config predating #872 stays enabled
       appendSystemPrompt: true, // absent from the file — every config predating #1062 stays enabled
@@ -611,6 +614,7 @@ describe("#741 corrupt config is not silently wiped by a partial update", () => 
     keymap: {},
     copyOnSelect: false,
     decisionDigest: false,
+    questionPaneEnabled: false,
     issueWorkComments: false,
     prWorkdirFooter: true,
     appendSystemPrompt: true,
@@ -682,6 +686,7 @@ describe("mergeConfigUpdate", () => {
     keymap: {},
     copyOnSelect: false,
     decisionDigest: false,
+    questionPaneEnabled: false,
     issueWorkComments: false,
     prWorkdirFooter: true,
     appendSystemPrompt: true,

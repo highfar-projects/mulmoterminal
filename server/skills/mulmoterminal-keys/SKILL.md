@@ -132,6 +132,28 @@ clipboard **without pressing anything**. Off unless written.
 - **Settings → Terminal keys has a checkbox for it**, applied immediately. Point at that when the
   user only wants it turned on; write the key when they are setting up a machine without a browser.
 
+## `questionPaneEnabled` — answer a question from a side pane
+
+When a Claude session stops to ask something (its `AskUserQuestion` dialog, the one you answer with
+the arrow keys), offer the same choices as buttons in a pane beside the enlarged terminal. Off
+unless written.
+
+```json
+{ "questionPaneEnabled": true }
+```
+
+- **The dialog does not go away, and this does not replace it.** Picking in the pane presses the
+  arrow keys and Enter in the real dialog the terminal is showing, so whichever end answers first
+  wins. Someone who prefers the keyboard notices nothing.
+- **Only write it if asked.** It lets a pane type into the terminal on the user's behalf, which is
+  not something to switch on for someone who did not ask for it.
+- **Claude sessions only.** The choices arrive on Claude Code's own tool hooks; a codex or shell
+  cell has nothing to publish, so the pane never opens there.
+- The pane opens **by itself** on the enlarged cell when that session asks something, and drops its
+  buttons as soon as the question is answered — in the terminal, in the pane, or with Esc.
+- **Settings → Terminal keys has a checkbox for it**, applied immediately. Point at that when the
+  user only wants it turned on; write the key when they are setting up a machine without a browser.
+
 ## `terminalSubmit` — Enter vs. newline
 
 Reach for this when the user says **"Shift+Enter submits my prompt instead of adding a line"** (or
