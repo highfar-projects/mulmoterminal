@@ -78,18 +78,19 @@ describe("createQuestionBox", () => {
     expect(box.has("s1")).toBe(false);
   });
 
-  // Fail-closed applies to a close for a DIFFERENT dialog too: the box cannot tell from here
-  // whether the answer predates it, and the next enlarge asks again.
-  it("refuses a hydration overtaken by any close of that session", async () => {
+  // The other side of it, and the reason closes are remembered BY ID rather than counted: A closes,
+  // B opens right after, the socket drops, and the reconnect's ask legitimately finds B. Discarding
+  // it because *something* closed would leave B unanswerable in the pane — nothing retries.
+  it("accepts a hydration when the close that overtook it named a different dialog", async () => {
     const pending = deferred();
     const box = createQuestionBox(() => pending.promise);
 
     const hydrating = box.hydrate("s1");
-    box.close({ sessionId: "s1", toolUseId: "older", done: true });
-    pending.resolve(event("s1", "t2"));
+    box.close({ sessionId: "s1", toolUseId: "A", done: true });
+    pending.resolve(event("s1", "B"));
     await hydrating;
 
-    expect(box.has("s1")).toBe(false);
+    expect(box.get("s1")?.toolUseId).toBe("B");
   });
 
   it("leaves other sessions' hydrations alone", async () => {

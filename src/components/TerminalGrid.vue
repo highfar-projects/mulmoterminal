@@ -544,6 +544,13 @@ async function answerQuestion(picks: number[][]): Promise<void> {
   // Dropped BEFORE the keys go out: the pane must not be able to send a second sequence into a
   // dialog that is already closing, and this is the same drop the `done` event would do anyway.
   dropQuestion(event.sessionId);
+  // Confirm the dialog is STILL the one on screen before typing into it. The user may have
+  // answered it in the terminal a moment ago, with its close still travelling — dropping the pane
+  // stops a second click, not this first one, and keys aimed at a dialog that has closed reach the
+  // prompt underneath, where an arrow walks the input history and Enter submits what it found. The
+  // server knows from the hooks, so ask rather than trust what the pane was holding.
+  const live = await fetchOpenQuestion(event.sessionId);
+  if (live?.toolUseId !== event.toolUseId) return;
   const sent = await conn.sendKeySequence(`cell-${props.expandedUid}`, keys, QUESTION_KEY_GAP_MS);
   // A sequence abandoned partway (the socket reconnected or the cell was retargeted) may have
   // moved the dialog's highlight without committing it, and the buttons are already gone. The
