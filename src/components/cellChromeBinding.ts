@@ -31,6 +31,20 @@ export interface CellChromeProps {
 // in the spec pins the two lists together so the next button cannot repeat it.
 export type CellChromeEvent = "toggle-expand" | "toggle-files" | "toggle-canvas" | "toggle-tools" | "toggle-collections" | "toggle-github" | "close";
 
+// Every event that is a PLAIN forward, which is all of them but `close` — the one a cell may want
+// to intercept. Spelling them once means a new button reaches both bindings together; when each
+// spelled its own set, the two could disagree and only the cell type nobody opened would show it.
+type CellChromeToggle = Exclude<CellChromeEvent, "close">;
+
+const toggleForwards = (emit: (event: CellChromeToggle) => void): Record<CellChromeToggle, () => void> => ({
+  "toggle-expand": () => emit("toggle-expand"),
+  "toggle-files": () => emit("toggle-files"),
+  "toggle-canvas": () => emit("toggle-canvas"),
+  "toggle-tools": () => emit("toggle-tools"),
+  "toggle-collections": () => emit("toggle-collections"),
+  "toggle-github": () => emit("toggle-github"),
+});
+
 // Bound as two objects rather than spelled out in each template.
 //
 // The command, launcher and terminal cells wired the same four props and the same five events, and
@@ -56,12 +70,7 @@ export function cellChromeBinding(
       collectionsAvailable: source.collectionsAvailable ?? false,
     })),
     chromeEvents: {
-      "toggle-expand": () => emit("toggle-expand"),
-      "toggle-files": () => emit("toggle-files"),
-      "toggle-canvas": () => emit("toggle-canvas"),
-      "toggle-tools": () => emit("toggle-tools"),
-      "toggle-collections": () => emit("toggle-collections"),
-      "toggle-github": () => emit("toggle-github"),
+      ...toggleForwards(emit),
       close,
     },
   };
@@ -77,12 +86,7 @@ export function cellShellEvents(emit: {
   (event: "move", dir: -1 | 1): void;
 }): Record<CellChromeEvent, () => void> & { move: (dir: -1 | 1) => void } {
   return {
-    "toggle-expand": () => emit("toggle-expand"),
-    "toggle-files": () => emit("toggle-files"),
-    "toggle-canvas": () => emit("toggle-canvas"),
-    "toggle-tools": () => emit("toggle-tools"),
-    "toggle-collections": () => emit("toggle-collections"),
-    "toggle-github": () => emit("toggle-github"),
+    ...toggleForwards(emit),
     close: () => emit("close"),
     move: (dir: -1 | 1) => emit("move", dir),
   };

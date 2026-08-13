@@ -16,7 +16,7 @@ import { mountConfigRoutes } from "../config/config-routes.js";
 import { mountFilesBrowseRoutes } from "../files/files-browse.js";
 import { mountTmuxRoutes } from "../infra/tmux-routes.js";
 import { survivingSessions } from "../session/surviving-sessions.js";
-import { getSessionIdleReapDays } from "../config/config-routes.js";
+import { getSessionIdleReapDays, getQuestionPaneEnabled } from "../config/config-routes.js";
 import { sweepIdleSessions } from "../session/reap-idle-sessions.js";
 import { mountHookRoute } from "../routes/hook-routes.js";
 import { mountPluginRoutes } from "../routes/plugin-routes.js";
@@ -71,6 +71,7 @@ import { cwdForSession } from "../session/session-cwd.js";
 import { mountMulmoScriptDispatchRoute, mountMulmoScriptMediaRoute } from "../backends/mulmoscript.js";
 import { CLAUDE_CWD, MULMOTERMINAL_HOME, PORT, SESSION_ID_RE } from "../config/env.js";
 import { FILE_WRITE_CHANNEL, type FileWriteEvent } from "../../common/fileWriteChannel.js";
+import { ASK_QUESTION_CHANNEL, shouldPublishQuestion, type AskQuestionDone, type AskQuestionEvent } from "../../common/askQuestion.js";
 import type { createToolStores } from "../session/tool-store.js";
 import type { createClaudeSpawner } from "../session/spawn-claude.js";
 import type { createCodexSpawner } from "../session/spawn-codex.js";
@@ -109,6 +110,14 @@ export interface AppRouteDeps extends SessionActivityDeps {
 
 // The channel a directory-config change is announced on.
 const DIR_CONFIG_CHANNEL = "dir-config";
+
+// A live AskUserQuestion dialog, offered to the pane (#1679). Gated HERE rather than in the pane:
+// with the switch off no question is published, so a user who has not asked for this feature has
+// their questions leave no trace in the browser. The CLOSE is not gated — see shouldPublishQuestion
+// for why a switch flipped mid-dialog would otherwise leave live buttons over a closed dialog.
+const publishQuestion = (publish: AppRouteDeps["publish"], event: AskQuestionEvent | AskQuestionDone): void => {
+  if (shouldPublishQuestion(event, getQuestionPaneEnabled())) publish(ASK_QUESTION_CHANNEL, event);
+};
 
 // The two signals behind both halves of the broker-fed history: whether it is written at all, and
 // whether the pane tells the user it holds the GUI tools alone. Read here so the two answers are
@@ -282,11 +291,31 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
 // The session-facing half: hooks, tool history, and everything the browser asks about a
 // directory or a repository. Split from the block above only to keep each readable — the
 // order across the two is still the order they are mounted in.
+
+// What the tools pane's routes need, gathered here so the mount list below stays a list.
+const toolRouteDeps = (deps: AppRouteDeps): Parameters<typeof mountToolRoutes>[1] => ({
+  stores: deps.toolStores,
+  toolSummaries: deps.toolSummaries,
+  sessionToolGroups,
+  sessionToolGroupsHydrated,
+  hasAllGuiTools,
+  allToolsSessionsHydrated,
+  isGridSession: (id) => devTerminalSessions.has(id),
+  devTerminalSessionsHydrated,
+  // Built from the same two signals as the broker's recorder, but with the stricter rule the
+  // user-facing claim needs — see historyIsGuiOnly for why the pane must not answer this the
+  // moment a session id exists.
+  guiOnlyHistory: (id) => historyIsGuiOnly(sessionCallReporting(deps, id)),
+  publish: (c, d) => deps.publish(c, d),
+  sessionChannel: deps.sessionChannel,
+  questionPaneEnabled: getQuestionPaneEnabled,
+});
+
 function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
   mountHookRoute(app, {
-    setWorking: (id, working, event) => deps.setWorking(id, working, event),
-    setWaiting: (id, waiting, event) => deps.setWaiting(id, waiting, event),
-    publishActivity: (id) => deps.publishActivity(id),
+    setWorking: deps.setWorking,
+    setWaiting: deps.setWaiting,
+    publishActivity: deps.publishActivity,
     forgetTitle: deps.forgetTitle,
     noteTitleTurn: deps.noteTitleTurn,
     noteWorkPhase: deps.noteWorkPhase,
@@ -295,6 +324,7 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
     recordToolCallEnd: deps.toolStores.recordToolCallEnd,
     publishDirConfig: (cwd) => deps.publish(DIR_CONFIG_CHANNEL, { cwd }),
     publishFileWrite: (file) => deps.publish(FILE_WRITE_CHANNEL, { file } satisfies FileWriteEvent),
+    publishQuestion: (event) => publishQuestion(deps.publish, event),
     // Express serves the built SPA on PORT; under `yarn dev` the UI is Vite's own server,
     // whose port the backend only knows when CLIENT_PORT is set in its environment.
     uiPort: String(process.env.CLIENT_PORT || PORT),
@@ -302,22 +332,7 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
 
   // The tools pane: the toolResult sink, its replay, the available-tool list and the
   // call history (see routes/tool-routes.ts).
-  mountToolRoutes(app, {
-    stores: deps.toolStores,
-    toolSummaries: deps.toolSummaries,
-    sessionToolGroups,
-    sessionToolGroupsHydrated,
-    hasAllGuiTools,
-    allToolsSessionsHydrated,
-    isGridSession: (id) => devTerminalSessions.has(id),
-    devTerminalSessionsHydrated,
-    // Built from the same two signals as the broker's recorder, but with the stricter rule the
-    // user-facing claim needs — see historyIsGuiOnly for why the pane must not answer this the
-    // moment a session id exists.
-    guiOnlyHistory: (id) => historyIsGuiOnly(sessionCallReporting(deps, id)),
-    publish: (c, d) => deps.publish(c, d),
-    sessionChannel: deps.sessionChannel,
-  });
+  mountToolRoutes(app, toolRouteDeps(deps));
 
   // The /prs and /issues views (see routes/repo-routes.ts).
   mountRepoRoutes(app);

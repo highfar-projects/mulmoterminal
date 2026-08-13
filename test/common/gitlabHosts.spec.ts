@@ -13,6 +13,12 @@ describe("normalizeGitlabHost", () => {
     ["a pasted https URL", "https://gitlab.hogefuga.com/", "gitlab.hogefuga.com"],
     ["a pasted http URL", "http://gitlab.internal.example", "gitlab.internal.example"],
     ["a hyphenated host", "git-lab.example.co.jp", "git-lab.example.co.jp"],
+    // The rest of this table and the one below pin what a LABEL may be, because the check reads
+    // labels one at a time: a hyphen is fine anywhere except at either end of one, and the shortest
+    // label is a single character. Nothing in the type system holds this.
+    ["doubled hyphens inside a label", "git--lab.example.com", "git--lab.example.com"],
+    ["single-character labels", "a.b", "a.b"],
+    ["a label of only digits", "12.example.com", "12.example.com"],
   ])("accepts %s", (_case, input, expected) => {
     expect(normalizeGitlabHost(input)).toBe(expected);
   });
@@ -29,6 +35,16 @@ describe("normalizeGitlabHost", () => {
     // host, so a declaration like this would sit in the config doing nothing.
     ["a dotless name", "gitlab"],
     ["a port", "gitlab.hogefuga.com:8443"],
+    ["a label starting with a hyphen", "-gitlab.example.com"],
+    ["a label ending with a hyphen", "gitlab-.example.com"],
+    ["a later label starting with a hyphen", "gitlab.-example.com"],
+    ["a last label ending with a hyphen", "gitlab.example-"],
+    // An empty label. Each of these is one `split(".")` away from looking like a valid host, and
+    // they are the three ways to spell it: in the middle, at the front, at the end.
+    ["a doubled dot", "gitlab..example.com"],
+    ["a leading dot", ".gitlab.example.com"],
+    ["a trailing dot", "gitlab.example.com."],
+    ["nothing but hyphens and a dot", "-.-"],
   ])("rejects %s", (_case, input) => {
     expect(normalizeGitlabHost(input)).toBeNull();
   });

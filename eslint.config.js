@@ -8,6 +8,13 @@ import prettierRecommended from "eslint-plugin-prettier/recommended";
 
 export default [
   { ignores: ["dist/", "node_modules/"] },
+  {
+    // A disable comment that no longer suppresses anything is worse than none: it names a rule as
+    // the reason for the code below it, and that reason has stopped being true. ESLint reports
+    // these at warn by default, which is how one for `no-new-func` — a rule this config does not
+    // even enable — sat in a spec. At error the comment has to be narrowed when it goes stale.
+    linterOptions: { reportUnusedDisableDirectives: "error" },
+  },
   js.configs.recommended,
   ...tseslint.configs.strict,
   ...pluginVue.configs["flat/recommended"],
@@ -99,9 +106,11 @@ export default [
   },
   {
     // Complexity / size guards. Cognitive complexity is already covered by sonarjs
-    // (error@15). All ERRORS (enforced going forward) except max-params, which stays WARN
-    // for its one intentional offender: spawnClaudePty's 7 params (hot path, not worth
-    // churning 5 call sites into an options object) — flip it to error once resolved.
+    // (error@15). All ERRORS — including max-params, which spent long enough as a WARN to
+    // show what a warning is worth here: it was left at warn for spawnClaudePty's 7 params,
+    // that function became an options object and took itself off the list, nobody flipped the
+    // rule, and TWO new offenders arrived in its shadow (one at nine). A rule nothing enforces
+    // is a rule that documents the violation it invites.
     //
     // max-lines is per FILE and was the gap: the per-function guards were all passing while
     // TerminalCell.vue reached 2000 lines, because nothing was watching the file. Counted
@@ -113,7 +122,7 @@ export default [
       "max-lines-per-function": ["error", { max: 60, skipBlankLines: true, skipComments: true, IIFEs: true }],
       complexity: ["error", 20],
       "max-depth": ["error", 4],
-      "max-params": ["warn", 6],
+      "max-params": ["error", 6],
       "max-nested-callbacks": ["error", 4],
     },
   },
@@ -228,13 +237,15 @@ export default [
       // arrow's `: void` body and none of them a promise; those are block bodies now.
       "sonarjs/void-use": "error",
       //
-      // WARN — the findings are external APIs we use ON PURPOSE, so this cannot reach zero, but a
-      // NEW deprecation is worth seeing. The five standing ones: `Server` from the MCP SDK (x3),
-      // whose own notice says to keep using it for the low-level `setRequestHandler` API we are on;
-      // `document.execCommand("copy")`, the synchronous copy that works on an existing selection
-      // where the async Clipboard API does not; and `e.returnValue`, which legacy Chrome/Edge still
-      // require to raise the beforeunload prompt.
-      "sonarjs/deprecation": "warn",
+      // ERROR, with the three files that hold the deliberate uses listed further down. It was a
+      // warning because "the findings are external APIs we use on purpose, so this cannot reach
+      // zero" — but that reasoning applies to those three files, not to the rule, and as a warning
+      // it could not tell a fourth file from the three. The five deliberate ones: `Server` from the
+      // MCP SDK (x3), whose own notice says to keep using it for the low-level `setRequestHandler`
+      // API we are on; `document.execCommand("copy")`, the synchronous copy that works on an
+      // existing selection where the async Clipboard API does not; and `e.returnValue`, which
+      // legacy Chrome/Edge still require to raise the beforeunload prompt.
+      "sonarjs/deprecation": "error",
       //
       // OFF — every finding was a false positive, and the reason is structural rather than
       // incidental, so the rule will keep producing them:
@@ -357,11 +368,12 @@ export default [
     rules: {
       "max-lines-per-function": "off",
       "max-nested-callbacks": "off",
-      // The FILE limit still applies here, but as a warning: a 1900-line spec is worth
-      // seeing, and yet splitting one moves assertions away from each other — the same
-      // trade-off the paragraph below describes for stubs. Warn says so without making a
-      // long-standing spec block anyone's CI.
-      "max-lines": ["warn", { max: 600, skipBlankLines: true, skipComments: true }],
+      // The FILE limit applies here at full strength. It was a warning, on the reasoning that
+      // splitting a spec moves assertions away from each other — true, and the reason the
+      // files already over it are listed below rather than split. But a warning let SEVEN
+      // specs cross the line, the worst at 2264, because nothing ever failed. The list below
+      // holds those seven; a spec written tomorrow gets the same 600 as everything else.
+      "max-lines": ["error", { max: 600, skipBlankLines: true, skipComments: true }],
       // Same reasoning for components: a spec defines throwaway stubs next to the case that
       // uses them (useCaptureKeydown, useNewTerminal). Splitting one-line stubs into their own
       // files would put the fixture further from the assertion, which is the opposite of what
@@ -377,6 +389,16 @@ export default [
     files: [
       "src/components/TerminalCell.vue", // 1078 — the launch form is out (#1122); the running cell's chrome (header chips, diff panel, close confirm, handoff menu) is what's left
       "src/components/TerminalGrid.vue", //  815 — layout state machine + its documented <style> exception (#1125)
+      // The specs that were already over the limit when it stopped being a warning. Splitting one
+      // moves assertions away from each other, so these are carried as debt rather than cut up —
+      // but they are the WHOLE debt, and the rule holds every other spec at 600.
+      "test/server/backends/collections.spec.ts", //  875
+      "test/server/config/app-config.spec.ts", //  648
+      "test/src/components/CellLaunchForm.spec.ts", //  902
+      "test/src/components/GridView.spec.ts", //  785
+      "test/src/components/TerminalCell.spec.ts", // 2264
+      "test/src/components/TerminalGrid.spec.ts", //  767
+      "test/src/components/gridTabs.spec.ts", //  921
     ],
     rules: {
       "max-lines": "off",
@@ -391,6 +413,25 @@ export default [
       "security/detect-non-literal-fs-filename": "off",
       "security/detect-object-injection": "off",
       "security/detect-non-literal-regexp": "off",
+      // `recommended` ships every rule at warn. This one is at zero and is worth keeping there:
+      // a quantifier inside a quantifier is a shape, not a judgement call, and the fix is always
+      // to say the rule a different way (gitlabHosts tests per label instead of per hostname).
+      "security/detect-unsafe-regex": "error",
+    },
+  },
+  {
+    // The deliberate uses of a deprecated external API, listed here rather than silenced at the
+    // scene, for the reason the max-lines list above gives: countable in one place, and deleting an
+    // entry re-arms the rule for that file. Each one is explained where it is used.
+    //
+    // The exception is per FILE, so each entry has to be a file where the deprecated API is the
+    // SUBJECT — otherwise it also covers the next one added there by accident. That is why
+    // `writeTerminalSelection` was lifted out of useTerminalConnections.ts (several hundred lines,
+    // one deprecated call) into a file of its own. The other two are already that shape: broker.ts
+    // is the MCP server, and useUnloadGuard.ts is the beforeunload handler.
+    files: ["server/mcp/broker.ts", "src/utils/terminalSelectionClipboard.ts", "src/composables/useUnloadGuard.ts"],
+    rules: {
+      "sonarjs/deprecation": "off",
     },
   },
   prettierRecommended,

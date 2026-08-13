@@ -11,7 +11,8 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { CollectionSchemaZ, parseAuthoredApp, publishProblems } from "@mulmoclaude/core/collection/server";
+import { CollectionSchemaZ } from "@mulmoclaude/core/collection/server";
+import { parseAuthoredApp, publishProblems } from "@receptron/sharedapp";
 
 const SKILL = path.join(process.cwd(), "server/skills/mulmoterminal-shared-app/SKILL.md");
 const body = readFileSync(SKILL, "utf-8");

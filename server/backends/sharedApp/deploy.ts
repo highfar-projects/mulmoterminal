@@ -15,8 +15,9 @@
 // resolve the owner through `get(apps/{aid})`, so on a first deploy nothing else is authorized
 // until that document exists.
 import { ensureAid } from "./ensureAid.js";
-import { APPS_COLLECTION, appStagingPath, projectDeploy, type LoadedCollection, type PublishStamp } from "@mulmoclaude/core/collection/server";
-import { gitStamp, readCurrentApp, schemasOf, sharedAppContext, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
+import { type LoadedCollection } from "@mulmoclaude/core/collection/server";
+import { APPS_COLLECTION, appStagingPath, projectDeploy, type PublishStamp } from "@receptron/sharedapp";
+import { readCurrentApp, schemasOf, sharedAppContext, stampFor, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
 import { allTierWrites, pageIdsOf, planTierWrites, type PlannedTier } from "./appViews.js";
 import { recordRefusal, scanRecords, type RecordScan } from "./records.js";
 import { reserveSlug, retireSlug, type SlugResult } from "./slug.js";
@@ -109,15 +110,25 @@ async function reserveHeldSlug(
  *  Split out for the line budget, but the two steps belong together anyway: the write is what
  *  makes the read possible, and doing them apart is what let a missing parent be mistaken for an
  *  empty store. */
-async function establishAndScan(
-  handle: SharedAppHandle,
-  aid: string,
-  appDoc: Record<string, unknown>,
-  established: boolean,
-  collections: readonly LoadedCollection[],
-  root: string,
-  confirm: boolean | undefined,
-): Promise<{ ok: true; scan: RecordScan } | SharedAppFailure> {
+interface EstablishAndScanInput {
+  handle: SharedAppHandle;
+  aid: string;
+  appDoc: Record<string, unknown>;
+  established: boolean;
+  collections: readonly LoadedCollection[];
+  root: string;
+  confirm: boolean | undefined;
+}
+
+async function establishAndScan({
+  handle,
+  aid,
+  appDoc,
+  established,
+  collections,
+  root,
+  confirm,
+}: EstablishAndScanInput): Promise<{ ok: true; scan: RecordScan } | SharedAppFailure> {
   if (established) {
     const claimed = await claimApp(handle, aid, appDoc);
     if (claimed) return claimed;
@@ -267,14 +278,7 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
   // is atomic, and only the declared owner may do it.
   const current = await readCurrentApp(handle, aid, "deploy", "Deploying again is safe — this read only decides whether the app is created or updated.");
   if (!current.ok) return current;
-  const stampSource = await (opts.resolveCommit ?? gitStamp)(root);
-  const stamp: PublishStamp = {
-    uid: handle.uid,
-    email: handle.email,
-    publishedAt: (opts.now ?? Date.now)(),
-    commit: stampSource.commit,
-    dirty: stampSource.dirty,
-  };
+  const { stamp, dirty } = await stampFor(handle, root, opts);
   const existingApp = current.app;
   const deployed = projectDeploy(authored, schemasOf(collections), stamp, existingApp);
 
@@ -299,7 +303,7 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
   // about to write anyway, and afterwards the records can be read. So the gate runs for real: on a
   // new app it finds nothing, and on a resurrected aid it finds whatever survived.
   const established = existingApp === null;
-  const gate = await establishAndScan(handle, aid, appDoc, established, collections, root, opts.confirm);
+  const gate = await establishAndScan({ handle, aid, appDoc, established, collections, root, confirm: opts.confirm });
   if (!gate.ok) return gate;
   const { scan } = gate;
 
@@ -335,7 +339,7 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
     // reservation.
     created: existingApp === null || existingApp.deployedAt === undefined,
     commit: stamp.commit,
-    dirty: stampSource.dirty === true,
+    dirty,
     recordIssues: scan.records,
     recordIssuesCapped: scan.capped,
   };

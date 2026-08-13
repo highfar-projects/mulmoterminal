@@ -10,7 +10,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { chmodSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import type { AuthoredApp, FirestoreDoc, FirestoreDocs } from "@mulmoclaude/core/collection/server";
+import type { FirestoreDoc, FirestoreDocs } from "@mulmoclaude/core/collection/server";
+import type { AuthoredApp } from "@receptron/sharedapp";
 import { readAppViewFile, viewDocumentBytes } from "../../../server/backends/sharedApp/publicView.js";
 import { frozenKeyProblems } from "../../../server/backends/sharedApp/exclusivity.js";
 import { makeTempDir } from "../../support/tempDir";

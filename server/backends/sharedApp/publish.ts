@@ -26,6 +26,7 @@
 // deliberate outage on every re-publish, and a failure there leaves the app DARK rather than
 // stale — worse for the person the app is for, and not what the design chose (see D10's ordering).
 import { isRecord } from "../../../common/isRecord.js";
+import { type LoadedCollection } from "@mulmoclaude/core/collection/server";
 import {
   APPS_COLLECTION,
   PUBLIC_CONFIG_DOC,
@@ -35,11 +36,10 @@ import {
   projectPublish,
   stagedRuleConfig,
   type AuthoredApp,
-  type LoadedCollection,
   type PublishStamp,
-} from "@mulmoclaude/core/collection/server";
+} from "@receptron/sharedapp";
 import { ensureAid } from "./ensureAid.js";
-import { gitStamp, sharedAppContext, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
+import { sharedAppContext, stampFor, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
 import { recordRefusal, scanRecords, type RecordScan } from "./records.js";
 import { readStaged, type StagedEntry } from "./staged.js";
 import { oversizeProblem, publicFormOf, publicInputProblems, type PublicForm } from "./publicForm.js";
@@ -122,17 +122,19 @@ function stagedForValidation(
 }
 
 /** The writes, in the order the design fixes: promote, project, then open. */
-function publishSteps(
-  handle: SharedAppHandle,
-  aid: string,
-  staged: readonly StagedEntry[],
-  stamp: PublishStamp,
-  face: ReturnType<typeof projectPublish>,
-  slug: string | undefined,
-  form: PublicForm,
-  view: ViewFile | null,
-  tiers: readonly TierPromotion[],
-): WriteStep[] {
+interface PublishStepsInput {
+  handle: SharedAppHandle;
+  aid: string;
+  staged: readonly StagedEntry[];
+  stamp: PublishStamp;
+  face: ReturnType<typeof projectPublish>;
+  slug: string | undefined;
+  form: PublicForm;
+  view: ViewFile | null;
+  tiers: readonly TierPromotion[];
+}
+
+function publishSteps({ handle, aid, staged, stamp, face, slug, form, view, tiers }: PublishStepsInput): WriteStep[] {
   return [
     ...staged.map(({ cid, doc }) => ({
       what: `the published schema for '${cid}' (apps/${aid}/collections/${cid})`,
@@ -325,14 +327,7 @@ export async function publishSharedApp(root: string, opts: SharedAppOptions = {}
       ],
     };
   }
-  const stampSource = await (opts.resolveCommit ?? gitStamp)(root);
-  const stamp: PublishStamp = {
-    uid: handle.uid,
-    email: handle.email,
-    publishedAt: (opts.now ?? Date.now)(),
-    commit: stampSource.commit,
-    dirty: stampSource.dirty,
-  };
+  const { stamp, dirty } = await stampFor(handle, root, opts);
   const existingApp = isRecord(existing) ? existing : null;
   const face = projectPublish(authored, staged.staged, stamp, existingApp);
 
@@ -360,7 +355,8 @@ export async function publishSharedApp(root: string, opts: SharedAppOptions = {}
   const pages = await promotableTiers(handle, aid, stamp, staged.staged);
   if (!pages.ok) return pages;
 
-  const failure = await runWrites(publishSteps(handle, aid, staged.staged, stamp, face, slug, form, page.view, pages.tiers), "publish");
+  const steps = publishSteps({ handle, aid, staged: staged.staged, stamp, face, slug, form, view: page.view, tiers: pages.tiers });
+  const failure = await runWrites(steps, "publish");
   if (failure) return failure;
 
   return {
@@ -377,7 +373,7 @@ export async function publishSharedApp(root: string, opts: SharedAppOptions = {}
     participantPages: promotedIdsOf(pages.tiers, "roster"),
     slug,
     commit: stamp.commit,
-    dirty: stampSource.dirty === true,
+    dirty,
     recordIssues: scan.records,
     recordIssuesCapped: scan.capped,
   };

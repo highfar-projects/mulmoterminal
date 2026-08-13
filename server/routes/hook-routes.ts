@@ -5,6 +5,7 @@
 import type { Express, Request, Response } from "express";
 import { SESSION_ID_RE } from "../config/env.js";
 import { isRecord } from "../../common/isRecord.js";
+import { ASK_QUESTION_TOOL, parseAskQuestions, type AskQuestionDone, type AskQuestionEvent } from "../../common/askQuestion.js";
 import { dirConfigWriteTarget } from "../config/dir-config.js";
 import { writtenFilePath } from "../files/tool-writes.js";
 import { activityHookEffects, pushKindFor, resolveHookCwd, resolveHookSessionId } from "../session/activity-hook.js";
@@ -28,6 +29,8 @@ export interface HookDeps extends SessionActivityDeps {
   /** Tell clients watching that directory to re-read its .mulmoterminal.json. */
   publishDirConfig: (cwd: string) => void;
   publishFileWrite: (file: string) => void;
+  /** Offer a live AskUserQuestion dialog's choices to the pane. No-op while the switch is off. */
+  publishQuestion: (event: AskQuestionEvent | AskQuestionDone) => void;
   /** Which port this host's UI answers on, so a receiver can open it instead of guessing. */
   uiPort: string;
 }
@@ -68,12 +71,37 @@ const toolPayload = (body: Record<string, unknown>): ToolHookPayload => ({
   duration_ms: typeof body.duration_ms === "number" ? body.duration_ms : undefined,
 });
 
+// A live AskUserQuestion dialog, offered to the pane as buttons (#1679). It rides the hook that
+// ALREADY reports every tool call, so nothing extra is registered with Claude Code — the choices
+// have been arriving here all along, unread. Nothing is answered from this side: the pane types
+// into the same dialog the terminal is showing, which is what lets either end answer it.
+function offerQuestion(deps: HookDeps, sessionId: string, call: ToolCallStart): void {
+  if (call.toolName !== ASK_QUESTION_TOOL || !call.toolUseId) return;
+  const questions = parseAskQuestions(call.toolInput);
+  if (questions) deps.publishQuestion({ sessionId, toolUseId: call.toolUseId, questions });
+}
+
+// The other half, and not optional: PostToolUse is how the pane learns the dialog CLOSED, whether
+// it was answered in the terminal, answered from the pane, or cancelled with Esc. Without it the
+// buttons stay live over a prompt, where the keys they send would walk the input history and
+// submit whatever they landed on.
+function closeQuestion(deps: HookDeps, sessionId: string, call: ToolCallStart): void {
+  if (call.toolName !== ASK_QUESTION_TOOL || !call.toolUseId) return;
+  deps.publishQuestion({ sessionId, toolUseId: call.toolUseId, done: true });
+}
+
 // Pre/PostToolUse hooks feed the per-session tool-call history; toolHookRecord decides what
 // each event means and this applies it.
 async function handleToolHook(deps: HookDeps, sessionId: string, event: string, p: ToolHookPayload, cwd: string | undefined) {
   const record = toolHookRecord(event, p);
-  if (record?.phase === "start") await deps.recordToolCallStart(sessionId, record.call);
-  if (record?.phase === "end") await deps.recordToolCallEnd(sessionId, record.call);
+  if (record?.phase === "start") {
+    await deps.recordToolCallStart(sessionId, record.call);
+    offerQuestion(deps, sessionId, record.call);
+  }
+  if (record?.phase === "end") {
+    await deps.recordToolCallEnd(sessionId, record.call);
+    closeQuestion(deps, sessionId, record.call);
+  }
   // A SUCCESSFUL write to <dir>/.mulmoterminal.json is the live-reload signal: the hook that already
   // reports every tool call tells the client to re-read that directory's config, so no fs watchers.
   // `cwd` is the request-wide resolved cwd (body.cwd over the spawn dir) — a relative file_path

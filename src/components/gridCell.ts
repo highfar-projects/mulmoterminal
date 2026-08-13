@@ -13,7 +13,7 @@ import type { AttentionStatus } from "./attentionStatus";
 // once — the row is already `roster | terminal | pane`, and a fourth column leaves the terminal
 // unreadable on a laptop. Declared with the rest of the grid's contract because every cell type
 // renders the toggles and none of them owns the state.
-export type RightPane = "files" | "canvas" | "tools" | "collections" | "github";
+export type RightPane = "files" | "canvas" | "tools" | "collections" | "github" | "question";
 
 export interface GridCellProps {
   expanded: boolean;

@@ -10,7 +10,18 @@ import { GITHUB_HOST, GITLAB_HOST } from "./repoEntry.js";
 // A hostname, lower case, with at least one dot. The dot is not cosmetic: `parseRepoEntry` reads a
 // leading segment as a host ONLY when it contains one, so a dotless declaration could never match
 // an entry and would sit in the config doing nothing.
-const HOSTNAME_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
+// Tested per label rather than as one hostname pattern: the single-regex form nested `[a-z0-9-]*`
+// inside the repeated dotted group, which is the shape that goes exponential on input that almost
+// matches. Measured, this one did not — but the per-label form removes the class instead of
+// depending on that, and reads as the rule it enforces.
+const LABEL_RE = /^[a-z0-9][a-z0-9-]*$/;
+
+const isLabel = (label: string): boolean => LABEL_RE.test(label) && !label.endsWith("-");
+
+const isHostname = (host: string): boolean => {
+  const labels = host.split(".");
+  return labels.length > 1 && labels.every(isLabel);
+};
 
 const SCHEME_RE = /^https?:\/\//;
 
@@ -26,7 +37,7 @@ const GITLAB_HOSTS_MAX = 20;
 export function normalizeGitlabHost(input: unknown): string | null {
   if (typeof input !== "string") return null;
   const host = input.trim().toLowerCase().replace(SCHEME_RE, "").replace(/\/$/, "");
-  return HOSTNAME_RE.test(host) ? host : null;
+  return isHostname(host) ? host : null;
 }
 
 /** The declared hosts, de-duplicated and capped. Anything unusable is dropped rather than failing
