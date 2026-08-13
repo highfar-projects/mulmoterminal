@@ -8,7 +8,7 @@
 // visitor "there is nothing here"; an id space that moved leaves old records
 // holding nothing, in an app that goes on working.
 import { describe, it, expect, beforeEach } from "vitest";
-import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { AuthoredApp, FirestoreDoc, FirestoreDocs } from "@mulmoclaude/core/collection/server";
 import { readPublicViewFile, viewDocumentBytes } from "../../../server/backends/sharedApp/publicView.js";
@@ -95,6 +95,18 @@ describe("the file a published view names", () => {
     const result = await readPublicViewFile(root, { path: "views/leak.html" }, STAMP);
     expect(result.ok).toBe(false);
     expect(result.ok === false && result.problems.join(" ")).toContain("resolves outside this repository");
+  });
+
+  it("refuses, rather than throwing, when the file goes between stat and read", async () => {
+    // A delete or a permission change in that window. The gate's contract is
+    // problems and no writes; a rejection escaping it would surface as an
+    // exception out of publish, which is the one shape callers do not handle.
+    const declared = withView(root, "<p>here for now</p>");
+    chmodSync(path.join(root, "views", "booking.html"), 0o000);
+    const result = await readPublicViewFile(root, { path: declared }, STAMP);
+    chmodSync(path.join(root, "views", "booking.html"), 0o644);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.problems.join(" ")).toContain("could not be read");
   });
 
   it("takes a page that only mentions the PUBLIC bridge", async () => {

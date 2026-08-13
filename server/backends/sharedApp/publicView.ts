@@ -84,7 +84,21 @@ export async function readPublicViewFile(root: string, view: { path: string }, p
   const problems = await missingFileProblems(full, view.path);
   if (problems.length > 0) return { ok: false, problems };
 
-  const html = await readFile(full, "utf8");
+  // Between the stat above and this read the file can go: deleted, or its
+  // permissions changed. The gate's whole contract is that it answers with
+  // problems and writes nothing, so a rejection escaping here would come out of
+  // publish as an exception instead — the one shape every caller is written not
+  // to expect.
+  const html = await readFile(full, "utf8").catch(() => null);
+  if (html === null) {
+    return {
+      ok: false,
+      problems: [
+        `public.view.path names '${view.path}', which could not be read. ` +
+          "It was there a moment ago, so it has just been removed or its permissions have changed. Nothing was written.",
+      ],
+    };
+  }
   const bytes = viewDocumentBytes({ html, publishedAt });
   return contentProblems(html, bytes, view.path) ?? { ok: true, view: { html, bytes } };
 }
