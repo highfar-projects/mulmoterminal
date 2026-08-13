@@ -20,7 +20,7 @@
 //   IT MUST BE DELETED, not merely stopped being written. `config/{docId}` is
 //   `allow read: if true` forever: withdraw `public.view` from the declaration
 //   and the old page stays fetchable by anyone until something removes it.
-import { readFile, stat } from "node:fs/promises";
+import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 
 import type { AuthoredApp } from "@mulmoclaude/core/collection/server";
@@ -78,13 +78,42 @@ const HOST_VIEW_GLOBAL = "__MC_VIEW";
  *  page: a path to nothing, a page too large to publish, or a view written
  *  against the host's bridge. */
 export async function readPublicViewFile(root: string, view: { path: string }, publishedAt: number): Promise<ViewFileResult> {
-  const full = path.join(root, view.path);
+  const inside = await containedPath(root, view.path);
+  if (!inside.ok) return inside;
+  const full = inside.full;
   const problems = await missingFileProblems(full, view.path);
   if (problems.length > 0) return { ok: false, problems };
 
   const html = await readFile(full, "utf8");
   const bytes = viewDocumentBytes({ html, publishedAt });
   return contentProblems(html, bytes, view.path) ?? { ok: true, view: { html, bytes } };
+}
+
+/** The file this path REALLY names, and only if it is still in the repository.
+ *
+ *  Not a second opinion about the declaration's shape — publish already refuses
+ *  a path that is not one name under `views/`. This is about what the file
+ *  system does with it: `..` normalises away silently, and a symlink no regex
+ *  can see points wherever it likes. What is published lands on a document
+ *  whose rule is `allow read: if true`, so a mistake here is not a broken page
+ *  but somebody's `.env` handed to the world.
+ *
+ *  Both ends are resolved (`realpath`) before comparing, because a repository
+ *  reached through a symlinked parent would otherwise fail this test while
+ *  being entirely legitimate. */
+async function containedPath(root: string, declared: string): Promise<{ ok: true; full: string } | { ok: false; problems: string[] }> {
+  const real = await realpath(root).catch(() => path.resolve(root));
+  const full = await realpath(path.resolve(real, declared)).catch(() => path.resolve(real, declared));
+  if (full === real || full.startsWith(real + path.sep)) {
+    return { ok: true, full };
+  }
+  return {
+    ok: false,
+    problems: [
+      `public.view.path names '${declared}', which resolves outside this repository. ` +
+        "A published view is one file inside it — what gets published is world-readable, so a path that leaves (through `..`, or through a symlink) would hand out whatever it landed on.",
+    ],
+  };
 }
 
 async function missingFileProblems(full: string, declared: string): Promise<string[]> {

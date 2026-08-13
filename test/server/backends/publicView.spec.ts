@@ -8,7 +8,7 @@
 // visitor "there is nothing here"; an id space that moved leaves old records
 // holding nothing, in an app that goes on working.
 import { describe, it, expect, beforeEach } from "vitest";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { AuthoredApp, FirestoreDoc, FirestoreDocs } from "@mulmoclaude/core/collection/server";
 import { readPublicViewFile, viewDocumentBytes } from "../../../server/backends/sharedApp/publicView.js";
@@ -73,6 +73,28 @@ describe("the file a published view names", () => {
   it("counts the whole document, not just the HTML", () => {
     const bytes = viewDocumentBytes({ html: "abc", publishedAt: STAMP });
     expect(bytes).toBeGreaterThan("abc".length);
+  });
+
+  it("refuses a path that climbs out of the repository", async () => {
+    // `path.join` normalises `..` away silently, and what is published lands on
+    // a document whose rule is `allow read: if true` — so this is not a broken
+    // page but somebody's secrets handed to the world.
+    writeFileSync(path.join(root, "..", "outside.html"), "<p>secret</p>");
+    const result = await readPublicViewFile(root, { path: "views/../../outside.html" }, STAMP);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.problems.join(" ")).toContain("resolves outside this repository");
+  });
+
+  it("refuses a view that is a symlink out of the repository", async () => {
+    // No regex over the declaration can see this one: the path is a perfectly
+    // ordinary `views/<name>.html`, and the file system does the leaving.
+    const secret = path.join(root, "..", "secret.html");
+    writeFileSync(secret, "<p>secret</p>");
+    mkdirSync(path.join(root, "views"), { recursive: true });
+    symlinkSync(secret, path.join(root, "views", "leak.html"));
+    const result = await readPublicViewFile(root, { path: "views/leak.html" }, STAMP);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.problems.join(" ")).toContain("resolves outside this repository");
   });
 
   it("takes a page that only mentions the PUBLIC bridge", async () => {
@@ -211,6 +233,25 @@ describe("the keys that decide which document a submission claims", () => {
 
     const withoutMirrorOf = salon({ collections: { slots: {} } });
     expect((await frozenKeyProblems(withoutMirrorOf, live, handleWith({ [slotsPath]: 8 }))).join(" ")).toContain("mirrorOf: bookings → (absent)");
+  });
+
+  it("reads a reordered declaration as the same declaration", async () => {
+    // `idIn` is compared as text, and JSON.stringify keeps INSERTION order — so
+    // without canonicalising, tidying the keys in `app.json` would read as a
+    // moved identity key and refuse a re-publish that changes nothing.
+    const reordered = salon({
+      public: {
+        ...live.public,
+        submit: {
+          bookings: {
+            ...live.public.submit.bookings,
+            idIn: { where: { equals: "open", field: "state" }, collection: "slots" },
+          },
+        },
+      },
+    });
+    const problems = await frozenKeyProblems(reordered, live, handleWith({ [bookingsPath]: 5 }));
+    expect(problems).toEqual([]);
   });
 
   it("says nothing about a FIRST publish", async () => {

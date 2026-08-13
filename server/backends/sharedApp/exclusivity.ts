@@ -66,7 +66,24 @@ const declaredPins = (submit: AuthoredSubmit): Record<string, string> => ({
 const text = (value: unknown): string => {
   if (value === undefined || value === null) return "";
   if (typeof value === "string") return value;
-  return JSON.stringify(value);
+  return JSON.stringify(canonical(value));
+};
+
+/** The same value with every map's keys in a fixed order.
+ *
+ *  `idIn` is compared as text, and `JSON.stringify` preserves INSERTION order —
+ *  so re-ordering the keys in `app.json`, which changes nothing about what the
+ *  rules do, would otherwise read as a moved identity key and refuse a
+ *  re-publish. The gate is meant to catch a changed CONSTRAINT, not a changed
+ *  spelling of the same one. */
+const canonical = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, canonical(value[key])]),
+  );
 };
 
 /** What differs between the live declaration and the one about to be written. */
