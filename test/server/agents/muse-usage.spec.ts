@@ -1,3 +1,4 @@
+// @vitest-environment node
 // What the muse badges are folded out of. Every record here is the shape a real session.jsonl
 // holds (measured against muse's own log on 2026-08-06), because the whole risk in this file is
 // reading a number that means something else.
