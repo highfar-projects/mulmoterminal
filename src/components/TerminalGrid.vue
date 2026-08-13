@@ -45,8 +45,9 @@ import { isDrawnResult } from "../utils/drawnResult";
 import { hasCanvasGroup, hasCollectionsGroup } from "../../common/toolGroups";
 import type { RightPane } from "./gridCell";
 import QuestionPane from "./QuestionPane.vue";
-import { ASK_QUESTION_CHANNEL, isAskQuestionDone, isAskQuestionEvent, keysForAnswers, type AskQuestionEvent } from "../../common/askQuestion";
+import { ASK_QUESTION_CHANNEL, isAskQuestionDone, isAskQuestionEvent, keysForAnswers } from "../../common/askQuestion";
 import { fetchOpenQuestion } from "../composables/openQuestion";
+import { createQuestionBox } from "../composables/questionBox";
 import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
 import { isRecord } from "../../common/isRecord";
 import type { SessionAgent, TerminalAgent } from "../../common/sessionAgent";
@@ -476,54 +477,40 @@ onBeforeUnmount(() => unsubscribeDrawn?.());
 // The live AskUserQuestion dialogs, by session (#1679). Held for EVERY session rather than the
 // enlarged one alone: the question arrives whenever the agent asks, and a user who enlarges that
 // cell a minute later should still find its buttons. Nothing arrives at all while the switch is
-// off — the server does not publish (see routes/app-routes.ts).
-const questionBySession = ref(new Map<string, AskQuestionEvent>());
-const expandedQuestion = computed(() => (expandedSessionId.value ? (questionBySession.value.get(expandedSessionId.value) ?? null) : null));
-
-// Replacing the Map rather than mutating it: a `ref` over a Map does not track its own writes.
-const setQuestion = (sessionId: string, event: AskQuestionEvent | null): void => {
-  const next = new Map(questionBySession.value);
-  if (event) next.set(sessionId, event);
-  else next.delete(sessionId);
-  questionBySession.value = next;
-};
+// off — the server does not publish (see routes/app-routes.ts). The bookkeeping — including which
+// dialogs have closed, which is what stops a late hydration from resurrecting one — is in
+// composables/questionBox.ts; what stays here is the PANE, which is the grid's own business.
+const questionBox = createQuestionBox(fetchOpenQuestion);
+const expandedQuestion = computed(() => (expandedSessionId.value ? (questionBox.questions.value.get(expandedSessionId.value) ?? null) : null));
 
 // Answered — in the terminal, in the pane, or cancelled with Esc. The pane goes with the question
 // it was opened for: it exists to answer one, and leaving an empty panel behind is something the
 // user then has to close by hand.
 const dropQuestion = (sessionId: string): void => {
-  setQuestion(sessionId, null);
+  questionBox.drop(sessionId);
   if (sessionId === expandedSessionId.value && rightPane.value === "question") setRightPane(null, paneUid.value);
 };
 
 const unsubscribeQuestion = subscribeSession(ASK_QUESTION_CHANNEL, (data) => {
   if (isAskQuestionEvent(data)) {
-    setQuestion(data.sessionId, data);
+    questionBox.offer(data);
     // Opened for the user, not merely made available: a question nobody sees is a session that
     // sits blocked. Only for the cell already on screen — enlarging some other cell to reveal a
     // pane would take the user off whatever they were reading.
     if (data.sessionId === expandedSessionId.value) setRightPane("question", props.expandedUid);
     return;
   }
-  if (isAskQuestionDone(data) && questionBySession.value.get(data.sessionId)?.toolUseId === data.toolUseId) dropQuestion(data.sessionId);
+  if (isAskQuestionDone(data) && questionBox.close(data)) dropQuestion(data.sessionId);
 });
 onBeforeUnmount(() => unsubscribeQuestion());
 
 // The question a session is blocked on, for a browser that was not listening when it arrived — a
 // reload or a socket reconnect between the question and its answer. The channel replays nothing,
 // and nothing but an arriving question opens this pane, so without this ask the dialog cannot be
-// answered from the browser at all. Dropped if the zoom moved while the fetch was in flight, or if
-// the live channel got there first.
-async function hydrateQuestion(sessionId: string): Promise<void> {
-  if (questionBySession.value.has(sessionId)) return;
-  const open = await fetchOpenQuestion(sessionId);
-  if (!open || expandedSessionId.value !== sessionId || questionBySession.value.has(sessionId)) return;
-  setQuestion(sessionId, open);
-}
-
+// answered from the browser at all. Not revealed if the zoom moved while the ask was in flight.
 async function revealQuestion(sessionId: string): Promise<void> {
-  await hydrateQuestion(sessionId);
-  if (questionBySession.value.has(sessionId)) setRightPane("question", props.expandedUid);
+  await questionBox.hydrate(sessionId);
+  if (questionBox.has(sessionId) && expandedSessionId.value === sessionId) setRightPane("question", props.expandedUid);
 }
 
 // A question that arrived while its cell was tiled — or on another page of the grid — still has a
@@ -541,7 +528,7 @@ watch(
 // A reconnect is the other way to have missed one: pub/sub replays room membership, not the events
 // that landed while the socket was down.
 const unsubscribeQuestionReconnect = onPubSubReconnect(() => {
-  if (expandedSessionId.value) void hydrateQuestion(expandedSessionId.value);
+  if (expandedSessionId.value) void revealQuestion(expandedSessionId.value);
 });
 onBeforeUnmount(() => unsubscribeQuestionReconnect());
 
