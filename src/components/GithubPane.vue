@@ -21,8 +21,11 @@ import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
-const props = defineProps<{ cwd?: string | null }>();
-defineEmits<{ (e: "close"): void }>();
+// `expanded` is the grid's paneFull: the pane may be widened over the terminal. It MUST come with
+// the control to undo it — `paneFull` covers every pane except files, so without the button a cell
+// that remembered this pane could open full-width with no route back to the split (Codex review).
+const props = defineProps<{ cwd?: string | null; expanded?: boolean }>();
+const emit = defineEmits<{ (e: "close" | "toggleExpand"): void }>();
 
 const { loadRepoDirs, startError, repoDirs } = useIssueStart();
 
@@ -125,15 +128,30 @@ onMounted(() => void load());
         <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
       </button>
       <span v-if="loading" class="text-[12px] text-muted">Loading…</span>
-      <button
-        type="button"
-        class="ml-auto h-6 w-[26px] cursor-pointer rounded-md border border-border bg-base text-[14px] text-secondary hover:bg-hover hover:text-fg"
-        title="Close"
-        aria-label="Close GitHub pane"
-        @click="$emit('close')"
-      >
-        <span class="material-symbols-outlined" aria-hidden="true">close</span>
-      </button>
+      <!-- Expand then close, in that order, exactly as the Canvas and Tools headers have them: the
+           panes share one slot, so the same control must be in the same place in each. -->
+      <div class="ml-auto flex items-center gap-1">
+        <button
+          type="button"
+          data-testid="github-expand-btn"
+          class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
+          :title="expanded ? 'Restore the terminal beside GitHub' : 'Expand GitHub over the terminal'"
+          :aria-label="expanded ? 'Restore GitHub pane width' : 'Expand GitHub pane'"
+          :aria-pressed="expanded === true"
+          @click="emit('toggleExpand')"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">{{ expanded ? "close_fullscreen" : "open_in_full" }}</span>
+        </button>
+        <button
+          type="button"
+          class="h-6 w-[26px] cursor-pointer rounded-md border border-border bg-base text-[14px] text-secondary hover:bg-hover hover:text-fg"
+          title="Close"
+          aria-label="Close GitHub pane"
+          @click="emit('close')"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
     </header>
     <div class="min-w-0 flex-auto overflow-y-auto px-4 pb-16 pt-3">
       <p v-if="!loading && !prsError && !issuesError && repos.length === 0 && issueRepos.length === 0" class="px-1 py-6 text-[13px] text-muted">

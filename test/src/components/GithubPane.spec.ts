@@ -210,4 +210,26 @@ describe("GithubPane", () => {
     expect(root.classes()).toContain("min-w-0");
     expect(root.classes()).toContain("h-full");
   });
+
+  // paneFull covers every pane except files, so this one CAN be widened over the terminal. The
+  // control to undo that has to travel with it: without the button, a cell that remembered this
+  // pane could open full-width with no route back to the split (Codex review) — the same class of
+  // trap as the missing min-w-0, reached a different way.
+  it("offers a way back from full width, and says which state it is in", async () => {
+    mockFetch([{ repo: "octo/first", prs: [pr(1, "one")] }]);
+    const w = mount(GithubPane, { props: { expanded: true } });
+    await flushPromises();
+    const btn = w.find('[data-testid="github-expand-btn"]');
+    expect(btn.exists()).toBe(true);
+    expect(btn.attributes("aria-label")).toContain("Restore");
+    await btn.trigger("click");
+    expect(w.emitted("toggleExpand")).toBeTruthy();
+  });
+
+  it("offers the expand control when it is beside the terminal", async () => {
+    mockFetch([{ repo: "octo/first", prs: [pr(1, "one")] }]);
+    const w = mount(GithubPane);
+    await flushPromises();
+    expect(w.find('[data-testid="github-expand-btn"]').attributes("aria-label")).toContain("Expand");
+  });
 });
