@@ -340,12 +340,27 @@ await window.__MC_APP_VIEW.transition(cid, itemId, to);  // approve, reject, can
 await window.__MC_APP_VIEW.assign(cid, itemId, address); // hand a row to a colleague
 ```
 
-Each returns `{ ok, error }`. The page is told **what this reader may actually do** in the second
-argument to `onState` — `{ transitionAny, transitionOwn, assign, assignees }` per collection, with
-the roles already resolved — and should draw only those buttons. It never sees a role name:
-branching on `"editor"` in a page would be the rules written a second time, where nobody reviews
-them. The same answer is applied again to every call, so a page that ignores it is refused rather
-than obeyed.
+Each returns `{ ok, error }`. The page is told **who the reader is and what they may actually do**
+in the second argument to `onState`:
+
+```js
+view.onState((data, viewer) => {
+  const can = viewer.can.bookings ?? {};
+  // can.transitionAny  — may approve any row  (owner / editor)
+  // can.transitionOwn  — may approve the rows assigned to them  (assignee)
+  // can.assigneeField  — the field a row carries its owner's address in
+  // can.assign         — may hand a row to somebody else
+  // can.assignees      — who may be named
+  // viewer.me          — this reader's own address
+  const mine = (row) => can.transitionAny || (can.transitionOwn && row[can.assigneeField] === viewer.me);
+});
+```
+
+Draw only those buttons, and for `transitionOwn` only on the rows that pass that comparison —
+`transitionOwn` alone cannot say WHICH rows, which is why `me` and `assigneeField` come with it.
+The page never sees a role name: branching on `"editor"` would be the rules written a second time,
+where nobody reviews them. The write applies the same comparison, so a page that ignores this is
+refused rather than obeyed.
 
 `submit` is the visitor's path and **the page confirms with the reader before writing** — the HTML
 is not trusted to have been asked. The other two are the

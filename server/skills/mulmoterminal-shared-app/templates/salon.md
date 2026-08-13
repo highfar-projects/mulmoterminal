@@ -228,17 +228,24 @@ await view.assign("bookings", booking.id, "stylist@salon.jp");  // 担当の付�
 別のコレクションだけに editor を持つ人も、受付と同じページを開けます。
 **入れることは権限ではありません。**
 
-そこで `onState` の**第 2 引数**に、この読み手が実際にできることが渡ります:
+そこで `onState` の**第 2 引数**に、読み手が誰で、実際に何ができるかが渡ります:
 
 ```js
-view.onState((data, can) => {
-  const desk = can.bookings ?? {};
+view.onState((data, viewer) => {
+  const desk = viewer.can.bookings ?? {};
   // desk.transitionAny  全部の行を承認できる（owner / editor）
   // desk.transitionOwn  自分に割り当てられた行だけ（assignee）
+  // desk.assigneeField  行の担当者アドレスが入っているフィールド名
   // desk.assign         付け替えられる
   // desk.assignees      付け替え先の候補
+  // viewer.me           この読み手自身のアドレス
+  const 押せる = (行) => desk.transitionAny || (desk.transitionOwn && 行[desk.assigneeField] === viewer.me);
 });
 ```
+
+`transitionOwn` だけでは**どの行か**が分かりません。だから `me` と `assigneeField` が
+一緒に来ます — 全行にボタンを出す（大半が拒否される）か 1 つも出さないか、
+のどちらかしかなくなるためです。
 
 **ロール名は渡りません。** ページが `"editor"` で分岐するのは、誰もレビューしない
 場所にルールをもう一度書くことになるためです。描くのは渡された能力のとおりに。

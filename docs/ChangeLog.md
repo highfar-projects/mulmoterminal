@@ -38,7 +38,8 @@ await window.__MC_APP_VIEW.assign(cid, itemId, address); // hand a row to a coll
 - **Being shown the page is not permission.** `/m/{slug}` admits anybody holding a role anywhere in
   the app, so a `viewer` reads the same declaration as the front desk. The projection therefore
   carries the roster's answer — who may write every row, and who only their own — and the page
-  hands the view a capability with the roles already resolved. A view never sees a role name, and
+  hands the view its own address and a capability with the roles already resolved — both, because
+  "may approve the rows assigned to you" cannot be drawn without knowing which rows those are. A view never sees a role name, and
   the same answer is applied again to every write. **A staff page published before this is
   read-only until it is published again** — a projection without those lists cannot tell a
   receptionist from an observer, so it refuses rather than assuming.
