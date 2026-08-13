@@ -6,6 +6,30 @@ import sonarjs from "eslint-plugin-sonarjs";
 import security from "eslint-plugin-security";
 import prettierRecommended from "eslint-plugin-prettier/recommended";
 
+// Take a preset at its word about WHICH rules to run, and overrule it on how much they matter: a
+// warning does not fail CI, so a rule left at warn is a rule that reports a violation and ships it.
+// This repo has the receipt — `max-params` sat at warn behind a note saying to raise it once its one
+// offender was resolved, the offender was resolved, nobody raised it, and two new violations arrived
+// in the shadow of the note (#1682). Warn is for a human reading output; nothing here reads output.
+//
+// Written as a transform rather than a list of rule names because the list is what rots: a preset
+// that adds a warn-level rule in some future release arrives already enforced, instead of silently
+// re-opening the gap this closes. Severity only — the preset's own options are preserved, and a rule
+// it ships as `off` stays off (it chose not to run it, which is a different decision).
+//
+// A rule that genuinely must not fail the build gets turned off, by name, with the reason, in one of
+// the blocks below. Warn is the state in between, and it does not survive contact with time: it is
+// either a decision that has expired — the two promise rules further down were held at warn while
+// their findings were read down to zero, and then stayed there — or no decision at all.
+const raise = (entry) => {
+  const severity = Array.isArray(entry) ? entry[0] : entry;
+  if (severity !== 1 && severity !== "warn") return entry;
+  return Array.isArray(entry) ? ["error", ...entry.slice(1)] : "error";
+};
+
+const enforced = (config) =>
+  config.rules ? { ...config, rules: Object.fromEntries(Object.entries(config.rules).map(([id, entry]) => [id, raise(entry)])) } : config;
+
 export default [
   { ignores: ["dist/", "node_modules/"] },
   {
@@ -15,11 +39,11 @@ export default [
     // even enable — sat in a spec. At error the comment has to be narrowed when it goes stale.
     linterOptions: { reportUnusedDisableDirectives: "error" },
   },
-  js.configs.recommended,
-  ...tseslint.configs.strict,
-  ...pluginVue.configs["flat/recommended"],
-  sonarjs.configs.recommended,
-  security.configs.recommended,
+  enforced(js.configs.recommended),
+  ...tseslint.configs.strict.map(enforced),
+  ...pluginVue.configs["flat/recommended"].map(enforced),
+  enforced(sonarjs.configs.recommended),
+  enforced(security.configs.recommended),
   {
     files: ["**/*.vue"],
     languageOptions: {
@@ -167,9 +191,10 @@ export default [
     // Type-aware lint, on the APP ONLY — the two promise rules from #1301's sibling (#1300).
     //
     // Scoped to server/src/common rather than everything: the type program is the whole cost of
-    // this pass, so keeping tests out of it keeps that program smaller. WARN, not error, for the
-    // same reason #1231 started at warn — the count stays visible without CI going red while the
-    // real ones are read one at a time.
+    // this pass, so keeping tests out of it keeps that program smaller. These started at WARN for
+    // the reason #1231 did — keep the count visible without CI going red while the real findings
+    // are read one at a time. That reading finished: the count has been zero since, so the warning
+    // had nothing left to show and they are errors now (#1688).
     //
     // Only these two: they catch things NO syntactic rule can. A missing `await` makes a rejection
     // vanish and the call look like it succeeded; an async callback handed to an API that ignores
@@ -201,8 +226,8 @@ export default [
       },
     },
     rules: {
-      "@typescript-eslint/no-floating-promises": "warn",
-      "@typescript-eslint/no-misused-promises": "warn",
+      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/no-misused-promises": "error",
       // Two more from the type-aware family, at ERROR because both are now at zero and each
       // catches something no syntactic rule can: an `await` on a value that is not a promise
       // (which reads as async and is not), and a template/String() that turns an object into the
@@ -271,8 +296,8 @@ export default [
     // `project` + `extraFileExtensions` THROUGH vue-eslint-parser to tseslint.parser.
     files: ["src/**/*.vue"],
     rules: {
-      "@typescript-eslint/no-floating-promises": "warn",
-      "@typescript-eslint/no-misused-promises": "warn",
+      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/no-misused-promises": "error",
       // OFF here, error everywhere else (#1300). The rule calls an interface holding nothing but
       // CALL signatures "a type without members", so `GridCellEmits & { (e: "session", id): void }`
       // reads as a useless intersection. That composition is how Vue's type-based `defineEmits<>`
@@ -362,12 +387,19 @@ export default [
     },
   },
   {
-    // Test files: a describe/it suite is one big (nested) callback by design, so the
-    // length + callback-nesting guards are noise here. Keep the logic-complexity guards on.
+    // Test files. Only ONE guard comes off here, and it comes off because it cannot be satisfied
+    // rather than because it is inconvenient: the outermost `describe(…)` callback holds the entire
+    // file, so `max-lines-per-function` measures the file and no limit short of the file's length
+    // can pass. Raising the number would not help — it is the wrong shape, not the wrong size. The
+    // per-FILE guard is what covers specs instead, and it is an error here like everywhere else.
+    //
+    // `max-nested-callbacks` used to come off with it, on the same sentence about a suite being one
+    // big nested callback. That one was never measured: a suite is `describe > it > callback`, which
+    // is three, and the limit is four. Turning it back on across 702 specs cost three violations in
+    // two files, both fixed by hoisting a fixture to the top of its file (#1688).
     files: ["**/*.spec.{ts,js}", "**/*.test.{ts,js}"],
     rules: {
       "max-lines-per-function": "off",
-      "max-nested-callbacks": "off",
       // The FILE limit applies here at full strength. It was a warning, on the reasoning that
       // splitting a spec moves assertions away from each other — true, and the reason the
       // files already over it are listed below rather than split. But a warning let SEVEN
