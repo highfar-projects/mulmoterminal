@@ -109,11 +109,26 @@ npm を通すと、逃げたはずの**人手の publish ゲートが戻って�
 
 名前に `mulmo` スコープを付けない。MulmoClaude のものではないことを名前で示す。
 
-**先に確かめること（スパイク）**: git 依存は**ビルド済み JS を配る**必要がある。
-yarn 1（MT）も vite（MS）も、`node_modules` の生 TS を素通しはしない。
-yarn は git 依存の `prepare` を install 時に走らせるので、そこで `tsc` すれば足りる
-はずだが、**MT（yarn 1.22）と MS（vite + vue-tsc）の両方で実際に通ることを、
-中身を移す前に空のモジュールで確かめる。** ここが通らないなら決定 3 を作り直す。
+**スパイク済み（2026-08-13）— 両方で通った。**
+`zod` を持つ最小モジュールをローカル git リポジトリにして、`prepare: tsc` を置き、
+`git+file://…#<sha>` で両リポジトリに install した。
+
+| | MulmoTerminal（yarn 1.22） | mulmoserver（vite + vue-tsc） |
+| --- | --- | --- |
+| install で `prepare` が走り `dist` が出る | 通る | 通る |
+| `--frozen-lockfile` でも `prepare` が走る | — | 通る（`Building fresh packages...`） |
+| 型が越える（`z.infer` 込み） | `vue-tsc -b` 通る | `tsc -p test/tsconfig.json` 通る |
+| 実行できる | vitest / tsx 通る | `node:test`（tsx）通る |
+| 本番ビルド | `vite build` 通る | `vue-tsc && vite build` 通る |
+| 推移的依存（`zod`）が解決される | 通る | 通る |
+
+lockfile には
+`"sharedapp@git+file://…#<sha>": resolved "…#<sha>"` と sha 付きで固定される。
+`files: ["dist"]` で `dist` だけが配られることも確認した。
+
+**残る 1 点**: 検証は `git+file://` で行った。CI が `github:receptron/sharedapp#sha` を
+引く場合、**repo が private だと認証情報が要る**（公開なら不要）。ここは repo を
+作るときに決める。
 
 ## 決定 4. ゴールデン文書は残す。ただし役割が変わる
 
@@ -132,8 +147,9 @@ yarn は git 依存の `prepare` を install 時に走らせるので、そこ�
 
 ## リポジトリ横断と依存順
 
-0. **スパイク**: 空の `receptron/sharedapp` を作り、MT と MS の両方から git ref で
-   install してビルドが通ることを確かめる。**ここが最初。**
+0. **[済] スパイク**: `git+file://` の最小モジュールで、MT と MS の両方の
+   install / typecheck / test / build が通ることを確認した（決定 3 の表）。
+   残るのは repo を private にするかどうかだけ。
 1. **sharedapp**: 4 ファイル + MT の `appViewProjection.ts` を入れ、テストを移す
    （core の `test_appViews.ts` / `test_publishChecks.ts` などの該当分）。
 2. **core**: 移した分を削り、`index.ts` から外す。`test_sharedHostSurface.ts` は
@@ -164,9 +180,10 @@ yarn は git 依存の `prepare` を install 時に走らせるので、そこ�
 
 ## 開いている問い
 
-- **スパイクが通らなかったら。** git ref でビルド済みを配れないなら、
-  選択肢は (a) dist をリポジトリにコミットする、(b) npm に出す（publish ゲートが戻る）、
-  (c) MT に取り込んで mulmoserver は文書だけ読む（前案の形に戻る）。
+- **`receptron/sharedapp` を public にするか private にするか。** private なら
+  両リポジトリの CI に GitHub の認証情報が要る（`git+ssh` かトークン）。
+  public なら何も要らない。中身は共有アプリの宣言スキーマとコンパイラで、
+  秘密は含まない。
 - **`sharedapp` 自体のバージョニング**: sha 固定か tag か。tag だと「リリース」が
   復活しかねない。
 - **`sharedapp` の CI**: core のテストを移すので node:test をそのまま使えるが、
