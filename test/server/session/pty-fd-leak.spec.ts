@@ -1,3 +1,4 @@
+// @vitest-environment node
 // A spawned pty must give back every fd it took. node-pty 1.1.0 kept two per spawn on macOS — an
 // unused `/dev/ptmx` its own cleanup loop skipped, and the slave the parent never closed — so a
 // server that had started a few hundred sessions could no longer open a pty at all, and the only

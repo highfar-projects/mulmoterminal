@@ -1,3 +1,4 @@
+// @vitest-environment node
 // What `--env-file-if-exists` actually does to a key — pinned against the real node this
 // repo runs on, not against the docs. The launcher passes this flag so a `.env` beside the
 // user's shell reaches the server (#795), and the whole feature is "which value does the key
