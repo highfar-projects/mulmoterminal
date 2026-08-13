@@ -39,10 +39,12 @@ const defaultDeps = (): RemoteHostRouteDeps => ({
 
 // ONE listening server for the file, with deps swapped between tests instead of a fresh mount per
 // request. supertest calls `app.listen(0)` on EVERY `request(app)` — 13 times here — and that
-// ephemeral-port churn is what made this file flaky: measured over 8 processes x 2500 requests, 3
-// landed on a server other than their own, one answering 200 where this file asserts 403 (#1626).
-// The same measurement with a single listener: zero. Neither vitest's worker parallelism nor
-// keep-alive socket reuse is involved — it reproduces in one process, and survives keepAlive:false.
+// ephemeral-port churn is what made this file flaky: over 8 processes x 2500 requests, 3 landed on
+// a server other than their own, and across runs of that measurement a request got a 200 where its
+// test asserts 403 — the shape of #1626. With a single listener the same measurement is zero, and
+// the count of `listen` calls for these 13 requests goes 13 -> 0. Neither vitest's worker
+// parallelism nor keep-alive socket reuse is involved: it reproduces in one process, and survives
+// keepAlive:false.
 //
 // Swapping fields on the mounted object is what re-mounting used to buy, minus the listener:
 // mountRemoteHostRoutes reads every dep off it at REQUEST time, never at mount time.
@@ -51,10 +53,9 @@ const app = express();
 app.use(express.json());
 mountRemoteHostRoutes(app, deps);
 
-let server: Server;
+const server = app.listen(0);
 
 beforeAll(async () => {
-  server = app.listen(0);
   if (!server.listening) await once(server, "listening");
 });
 
