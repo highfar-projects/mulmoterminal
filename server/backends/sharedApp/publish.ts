@@ -43,7 +43,7 @@ import { gitStamp, sharedAppContext, type SharedAppFailure, type SharedAppHandle
 import { recordRefusal, scanRecords, type RecordScan } from "./records.js";
 import { readStaged, type StagedEntry } from "./staged.js";
 import { oversizeProblem, publicFormOf, publicInputProblems, type PublicForm } from "./publicForm.js";
-import { planTierPromotion, promotedIdsOf, promotionWrites, type TierPromotion } from "./appViews.js";
+import { generationProblems, planTierPromotion, promotedIdsOf, promotionWrites, type TierPromotion } from "./appViews.js";
 import { PUBLIC_VIEW_DOC, declaredView, readAppViewFile, type ViewFile } from "./publicView.js";
 import { frozenKeyProblems } from "./exclusivity.js";
 import { stagedScopeProblems } from "./scopedFields.js";
@@ -277,6 +277,24 @@ async function pageGate(
   return { ok: true, view: view === null ? null : view.view };
 }
 
+/** The tiers to promote, once they are known to belong to the SAME deploy as
+ *  the schemas beside them.
+ *
+ *  The two are written by one run, in sequence, and a run can stop between
+ *  them — see `generationProblems`. Asked here, where both have been read and
+ *  nothing has been written. */
+async function promotableTiers(
+  handle: SharedAppHandle,
+  aid: string,
+  stamp: PublishStamp,
+  staged: readonly StagedEntry[],
+): Promise<{ ok: true; tiers: TierPromotion[] } | SharedAppFailure> {
+  const tiers = await planTierPromotion(handle, aid, stamp);
+  if (!tiers.ok) return tiers;
+  const mixed = generationProblems(aid, staged, tiers.tiers);
+  return mixed.length > 0 ? { ok: false, partial: false, problems: mixed } : tiers;
+}
+
 export async function publishSharedApp(root: string, opts: SharedAppOptions = {}): Promise<PublishResult> {
   // Before anything reads the declaration: a repository that has never been deployed has no
   // `aid` yet, and it is generated here rather than invented by the agent (D2b).
@@ -339,7 +357,7 @@ export async function publishSharedApp(root: string, opts: SharedAppOptions = {}
 
   // The members' and participants' pages, PROMOTED from what deploy staged —
   // not re-read from the working tree. See `planTierPromotion`.
-  const pages = await planTierPromotion(handle, aid, stamp);
+  const pages = await promotableTiers(handle, aid, stamp, staged.staged);
   if (!pages.ok) return pages;
 
   const failure = await runWrites(publishSteps(handle, aid, staged.staged, stamp, face, slug, form, page.view, pages.tiers), "publish");

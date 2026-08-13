@@ -291,6 +291,8 @@ export const pageIdsOf = (tiers: readonly PlannedTier[], tier: "member" | "roste
  *  the staged set no longer names. */
 export interface TierPromotion {
   tier: "member" | "roster";
+  /** The deploy this tier's staged documents came from, when they say. */
+  deployId?: string | undefined;
   promote: { docId: string; data: Record<string, unknown> }[];
   stale: string[];
 }
@@ -427,7 +429,9 @@ export async function planTierPromotion(
     }));
     const keep = new Set(promote.map((entry) => entry.docId));
     const stale = existing.map((doc) => doc.id).filter((id) => id.startsWith("live:") && !keep.has(id));
-    tiers.push({ tier, promote, stale });
+    const settings = staged.find((doc) => doc.id === "staged:config");
+    const deployId = isRecord(settings?.data) && typeof settings.data.deployId === "string" ? settings.data.deployId : undefined;
+    tiers.push({ tier, deployId, promote, stale });
   }
   return { ok: true, tiers };
 }
@@ -458,3 +462,33 @@ export const promotedIdsOf = (tiers: readonly TierPromotion[], tier: "member" | 
     .filter((entry) => entry.tier === tier)
     .flatMap((entry) => entry.promote.map((page) => page.docId.slice("live:".length)))
     .filter((id) => id !== "config");
+
+/** Do the schemas and the pages come from ONE deploy?
+ *
+ *  They are written by the same run, in sequence, and `runWrites` can stop
+ *  between them — so a redeploy that changes a schema AND a page can leave the
+ *  new schema staged beside the previous page. Both would then be promoted, and
+ *  the page would draw fields that the version it was written against did not
+ *  have. Neither document is wrong on its own; the PAIR is.
+ *
+ *  Only documents that carry an id are compared. Staged schemas exist in the
+ *  wild from before this field, and refusing to publish every app until it is
+ *  redeployed would be a worse failure than the one this guards. What is
+ *  refused is a disagreement we can actually see. */
+export function generationProblems(aid: string, staged: readonly { cid: string; doc: Record<string, unknown> }[], tiers: readonly TierPromotion[]): string[] {
+  const seen = new Map<string, string[]>();
+  for (const entry of staged) {
+    if (typeof entry.doc.deployId !== "string") continue;
+    seen.set(entry.doc.deployId, [...(seen.get(entry.doc.deployId) ?? []), `staging/${entry.cid}`]);
+  }
+  for (const tier of tiers) {
+    if (tier.deployId === undefined) continue;
+    seen.set(tier.deployId, [...(seen.get(tier.deployId) ?? []), `${tier.tier}/staged:config`]);
+  }
+  if (seen.size < 2) return [];
+  const groups = [...seen.values()].map((where) => where.join(", "));
+  return [
+    `apps/${aid} has staged documents from more than one deploy (${groups.join(" | ")}). A deploy stopped part-way, so what is staged is a mixture: a page ` +
+      "would be promoted beside a schema it was not written against. Deploy again — that stages one complete set. Nothing was written.",
+  ];
+}

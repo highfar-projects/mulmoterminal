@@ -812,6 +812,43 @@ describe("shared app deploy / publish / unpublish", () => {
     expect(result.ok === false && result.problems.join(" ")).toContain("staged by a different deploy");
   });
 
+  it("refuses to publish a schema and a page that came from different deploys", async () => {
+    // They are written by one run, in sequence, and `runWrites` can stop
+    // between them. Promote a new schema beside the previous page and the page
+    // draws fields the version it was written against did not have. Neither
+    // document is wrong on its own; the pair is.
+    withPages();
+    await deploySharedApp(root, stamp);
+    const schema = docs.doc(`apps/${AID}/staging`, "bookings");
+    expect(typeof schema?.deployId).toBe("string");
+
+    // A schema left by an earlier deploy, beside pages from this one.
+    await docs.set(`apps/${AID}/staging`, "bookings", { ...schema, deployId: "an-earlier-run" });
+
+    const result = await publishSharedApp(root, stamp);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.problems.join(" ")).toContain("more than one deploy");
+    expect(docs.doc(`apps/${AID}/member`, "live:desk")).toBeUndefined();
+
+    // Deploying again stages one complete set, and then it publishes.
+    await deploySharedApp(root, stamp);
+    const again = await publishSharedApp(root, stamp);
+    expect(again.ok === false ? again.problems : []).toEqual([]);
+  });
+
+  it("still publishes an app whose staged schemas predate the deploy identity", async () => {
+    // Staged schemas exist in the wild from before this field. Refusing every
+    // one of those until it is redeployed would be a worse failure than the one
+    // the check guards.
+    await deploySharedApp(root, stamp);
+    const schema = docs.doc(`apps/${AID}/staging`, "bookings") ?? {};
+    delete schema.deployId;
+    await docs.set(`apps/${AID}/staging`, "bookings", schema);
+
+    const result = await publishSharedApp(root, stamp);
+    expect(result.ok === false ? result.problems : []).toEqual([]);
+  });
+
   it("publishes the pages before the settings that name them", async () => {
     // The listing these come from is ordered by document id, which puts
     // `config` before every page — so the order has to be imposed rather than

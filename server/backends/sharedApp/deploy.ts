@@ -224,9 +224,13 @@ function deploySteps(
     // Not written again when `establishAndScan` just wrote it, byte for byte: the roster is
     // already live, and the staging writes below need exactly that and nothing more.
     ...(what.established ? [] : [{ what: `the app document (apps/${aid})`, run: () => handle.docs.set(APPS_COLLECTION, aid, what.appDoc) }]),
+    // The schemas carry this run's identity too, so a publish can tell a
+    // complete deploy from two halves of different ones. A page is written
+    // against the fields a schema declares: promote a NEW schema beside an OLD
+    // page (or the reverse) and the page draws something nobody reviewed.
     ...what.deployed.staging.map(({ cid, doc }) => ({
       what: `the staged schema for '${cid}' (apps/${aid}/staging/${cid})`,
-      run: () => handle.docs.set(appStagingPath(aid), cid, doc),
+      run: () => handle.docs.set(appStagingPath(aid), cid, { ...doc, deployId: what.deployId }),
     })),
     ...allTierWrites(handle, aid, what.pages, what.stamp, what.deployId),
     ...what.stale.map((cid) => ({
