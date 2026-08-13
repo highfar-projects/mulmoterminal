@@ -360,7 +360,7 @@ Each returns `{ ok, error }`. The page is told **who the reader is and what they
 in the second argument to `onState`:
 
 ```js
-view.onState((data, viewer) => {
+window.__MC_APP_VIEW.onState((data, viewer) => {
   const can = viewer.can.bookings ?? {};
   // can.transitionAny  — may approve any row  (owner / editor)
   // can.transitionOwn  — may approve the rows assigned to them  (assignee)

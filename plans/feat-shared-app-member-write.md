@@ -1,10 +1,11 @@
 # 共有アプリ: 名簿の人が「書く」— 承認・担当の付け替えと、参加者の入口
 
-**状態**: 実装中（2026-08-13）。core mulmoclaude#2891 はマージ済みだが
-**3.15.0 は npm 未公開**（MT はまだ 3.14.0）/ ランタイム mulmoserver#171・#172 は
-マージ済み・**deploy 未実施** / スキルとテンプレートはこの PR。**ルールの変更は無い**。
-core が公開され、アプリを publish し直すまで**スタッフ用ページは読み取り専用**のまま
-（射影が `writers` を運ばないので member 階層は fail closed）。
+**状態**: 実装中（2026-08-13）。core mulmoclaude#2891 はマージ済み・**3.15.0 は npm 公開済み**
+（この PR が pin する）/ ランタイム mulmoserver#171・#172 はマージ済み・**deploy 未実施** /
+スキルとテンプレートはこの PR。**ルールの変更は無い**。
+残る前提は 2 つだけ: **mulmoserver の deploy** と、**アプリを publish し直すこと**。
+それまでスタッフ用ページは読み取り専用のまま（射影が `writers` を運ばないので
+member 階層は fail closed）。
 [`feat-shared-app-member-view.md`](./feat-shared-app-member-view.md)
 が残した 2 つの宿題 — **メンバーからの書き込み**と**participant の入口** — を 1 つの計画にする。
 どちらも同じところに着地するので分けない: 「書く」の中身は participant にもあり
@@ -268,12 +269,13 @@ after[c.statusField] == mc.on[template].to
 | | 1 宣言・射影 | 2 ランタイム | 3 ホスト | PR |
 |---|---|---|---|---|
 | mulmoclaude core | 階層ごとの遷移表・`writers` / `rowWriters`・`mail` を `{tier}/config` に載せる（候補リストは publish しない — 親が 2 つの和で導く） | — | — | #2891 |
-| mulmoserver | — | 意図の受け口、`/p/{slug}`、`/a/` の導線 | — | #171 |
+| mulmoserver | — | 意図の受け口、`/p/{slug}`、`/a/` の導線 | ラウンドトリップ | #171 / #172 / #173 |
 | mulmoterminal | — | — | テンプレート、スキル | この PR |
 
-publish 側のコードは増えない（core の射影をそのまま書く）。増えるのは**テスト**で、
-それは **core 3.15.0 が npm に出てから** — いま MT が見ているのは 3.14.0 で、
-`write` がまだ存在しない。
+publish 側のコードは増えない（core の射影をそのまま書く）。増えたのは**テスト**で、
+core 3.15.0 の公開後に入れた: MT が `test/server/backends/appViewTiers.spec.ts`、
+mulmoserver が `test/composables/test_appViewRoundTrip.ts`（射影 → 読み手のラウンドトリップ、
+mulmoserver#173）。
 
 **2 は 3 より先**（前回と同じ理由: 古いランタイムに新しい射影を publish すると、
 名簿の人は「何もありません」を見て、publish した本人には成功に見える）。
