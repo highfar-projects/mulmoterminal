@@ -37,7 +37,7 @@ import {
   type AppViewTier,
   type AuthoredApp,
   type PublishStamp,
-} from "@mulmoclaude/core/collection/server";
+} from "sharedapp";
 
 import { randomUUID } from "node:crypto";
 

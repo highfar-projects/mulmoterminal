@@ -8,6 +8,32 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+### Shared apps stop waiting for a MulmoClaude release (#1675)
+
+The code that turns a repository's `app.json` into the documents a published app is made of
+— and the gate that decides what publish refuses — moved out of `@mulmoclaude/core` into
+[`receptron/sharedapp`](https://github.com/receptron/sharedapp), which this repository now
+depends on by git ref.
+
+Nothing an author writes changes, and no published document changes shape. What changes is
+the cost of the next change. Adding a key to `app.json`, a check to the publish gate, or a
+field to a projected document used to be a change to MulmoClaude, a CI run, a merge, and a
+**human npm publish** before the work here could continue. In the 90 days before this, 24
+commits went that way — and MulmoClaude used none of that code: it neither writes nor reads
+a shared collection.
+
+The collection RUNTIME stays in `@mulmoclaude/core` — discovery, the store, the Firestore
+backend, the host seam — because MulmoClaude does use those. The line is declaration to
+document; anything touching a live collection is on the other side of it.
+
+`sharedapp` is distributed by git ref and never npm, because an npm release would put back
+the gate it exists to remove. It builds on install, so nothing is published anywhere.
+
+`test/fixtures/sharedAppGolden/` keeps a picture of the two `{tier}/config` documents, so a
+change to what a published app carries shows up as a diff rather than only as a test.
+
+Design: [`plans/refactor-shared-app-module.md`](https://github.com/receptron/mulmoterminal/blob/main/plans/refactor-shared-app-module.md).
+
 ### The staff page can approve, and the people on the roster have an entrance of their own (#1671)
 
 > **Needs a mulmoserver deploy, and every app published again.** `@mulmoclaude/core` 3.15.0

@@ -15,7 +15,8 @@
 // resolve the owner through `get(apps/{aid})`, so on a first deploy nothing else is authorized
 // until that document exists.
 import { ensureAid } from "./ensureAid.js";
-import { APPS_COLLECTION, appStagingPath, projectDeploy, type LoadedCollection, type PublishStamp } from "@mulmoclaude/core/collection/server";
+import { type LoadedCollection } from "@mulmoclaude/core/collection/server";
+import { APPS_COLLECTION, appStagingPath, projectDeploy, type PublishStamp } from "sharedapp";
 import { gitStamp, readCurrentApp, schemasOf, sharedAppContext, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
 import { allTierWrites, pageIdsOf, planTierWrites, type PlannedTier } from "./appViews.js";
 import { recordRefusal, scanRecords, type RecordScan } from "./records.js";

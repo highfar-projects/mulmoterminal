@@ -8,7 +8,7 @@ import { describe, it, expect } from "vitest";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { parseAuthoredApp } from "@mulmoclaude/core/collection/server";
+import { parseAuthoredApp } from "sharedapp";
 import { declarationProblems } from "../../../server/backends/sharedApp/context.js";
 import { inviteToSharedApp } from "../../../server/backends/sharedApp/declare.js";
 

@@ -13,7 +13,8 @@
 // one that rewrites most of the file — is still writing what the author asked for by name.
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { APPS_COLLECTION, APP_MANIFEST_FILE, firestoreHandle, parseAuthoredApp } from "@mulmoclaude/core/collection/server";
+import { APP_MANIFEST_FILE, firestoreHandle } from "@mulmoclaude/core/collection/server";
+import { APPS_COLLECTION, parseAuthoredApp } from "sharedapp";
 import { isRecord } from "../../../common/isRecord.js";
 import { declarationProblems, sharedCollections, type SharedAppFailure } from "./context.js";
 import { createManifest, newAid, updateManifest } from "./manifestWrite.js";

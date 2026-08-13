@@ -10,17 +10,9 @@ import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import {
-  APPS_COLLECTION,
-  APP_MANIFEST_FILE,
-  discoverCollections,
-  firestoreHandle,
-  parseAuthoredApp,
-  publishProblems,
-  type AuthoredApp,
-  type LoadedCollection,
-} from "@mulmoclaude/core/collection/server";
-import type { PublishStamp } from "@mulmoclaude/core/collection/server";
+import { APP_MANIFEST_FILE, discoverCollections, firestoreHandle, type LoadedCollection } from "@mulmoclaude/core/collection/server";
+import { APPS_COLLECTION, parseAuthoredApp, publishProblems, type AuthoredApp } from "sharedapp";
+import type { PublishStamp } from "sharedapp";
 import type { CollectionSchema } from "@mulmoclaude/core/collection";
 import { isRecord } from "../../../common/isRecord.js";
 import { publicInputProblems, schemasOfCollections } from "./publicForm.js";

@@ -28,7 +28,7 @@
 // The way forward is to empty the collection or to build the new arrangement
 // under a new cid.
 import { isRecord } from "../../../common/isRecord.js";
-import { appSchemasPath, type AuthoredApp, type AuthoredSubmit } from "@mulmoclaude/core/collection/server";
+import { appSchemasPath, type AuthoredApp, type AuthoredSubmit } from "sharedapp";
 import type { SharedAppHandle } from "./context.js";
 
 /** Where a shared collection's records live. Built from core's schemas path so

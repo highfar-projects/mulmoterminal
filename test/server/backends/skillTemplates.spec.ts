@@ -13,7 +13,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { CollectionSchema } from "@mulmoclaude/core/collection";
 import { declarationProblems } from "../../../server/backends/sharedApp/context.js";
-import { parseAuthoredApp } from "@mulmoclaude/core/collection/server";
+import { parseAuthoredApp } from "sharedapp";
 
 const TEMPLATES = path.join(process.cwd(), "server", "skills", "mulmoterminal-shared-app", "templates");
 

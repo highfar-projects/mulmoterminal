@@ -23,7 +23,7 @@
 import { constants, lstat, open, realpath } from "node:fs/promises";
 import path from "node:path";
 
-import { normalizeViews, type AuthoredApp } from "@mulmoclaude/core/collection/server";
+import { normalizeViews, type AuthoredApp } from "sharedapp";
 
 /** The document the public page reads the HTML from. Beside core's
  *  `PUBLIC_CONFIG_DOC` ("public") under `apps/{aid}/config`. */

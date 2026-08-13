@@ -3,12 +3,11 @@
 // What MulmoTerminal actually writes to `apps/{aid}/{tier}/staged:config` —
 // specifically the half that says what each audience may CHANGE.
 //
-// The projection itself belongs to `@mulmoclaude/core` and is tested there.
-// What is pinned HERE is the join: this repository is the only caller of
-// `projectAppViews` anywhere, it decides which core it is pinned to, and the
-// document it produces is read by a mulmoserver that hand-declares its own
-// parser. So a core bump that renames a field, or drops the per-tier split,
-// has nothing between it and a live app except this file.
+// The projection itself belongs to `sharedapp` and is tested there. What is
+// pinned HERE is the JOIN: the pages read off disk, the tier they land in, and
+// the config document that names them. The document is read by a mulmoserver
+// that hand-declares its own parser, so a change to the shape has nothing
+// between it and a live app except this file and `appViewGolden.spec.ts`.
 //
 // The failure it guards against is the one that is invisible on both sides: a
 // participant handed the STAFF transition table draws an approve button, the
@@ -20,7 +19,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { AuthoredAppZ, type AuthoredApp, type PublishStamp } from "@mulmoclaude/core/collection/server";
+import { AuthoredAppZ, type AuthoredApp, type PublishStamp } from "sharedapp";
 import { planAppViewTiers } from "../../../server/backends/sharedApp/appViews.js";
 import { makeTempDir } from "../../support/tempDir";
 

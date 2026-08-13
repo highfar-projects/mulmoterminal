@@ -13,7 +13,7 @@
 // slug an app already holds, so `app.json` is the record: the reserved name is written back
 // there, and a slug already recorded is never re-reserved. "Once you have it, you keep it" is
 // the point (D2b) — a URL is a thing people have already sent to each other.
-import { APP_SLUGS_COLLECTION, appSlugDoc } from "@mulmoclaude/core/collection/server";
+import { APP_SLUGS_COLLECTION, appSlugDoc } from "sharedapp";
 import { isRefusal, type SharedAppFailure, type SharedAppHandle } from "./context.js";
 import { updateManifest } from "./manifestWrite.js";
 
