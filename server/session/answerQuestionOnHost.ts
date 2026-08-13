@@ -1,5 +1,5 @@
 import { answerQuestion, type AnswerResult } from "./answerQuestion.js";
-import { writeToSession } from "./write-to-session.js";
+import { otherWriteCount, writeAnswerKey } from "./write-to-session.js";
 import { isUnknownArray } from "../../common/isUnknownArray.js";
 
 // Between the keystrokes that answer a dialog: it rebuilds itself between questions, so a burst
@@ -26,7 +26,7 @@ const readPicks = (picks: unknown): number[][] | null => {
 export async function answerQuestionOnHost(sessionId: string, toolUseId: string, picks: unknown, callsOf: CallsOf): Promise<AnswerResult> {
   const chosen = readPicks(picks);
   if (!chosen) return { ok: false, reason: "bad-picks" };
-  return answerQuestion({ callsOf, write: writeToSession, pause, gapMs: QUESTION_KEY_GAP_MS }, { sessionId, toolUseId, picks: chosen });
+  return answerQuestion({ callsOf, write: writeAnswerKey, otherWriteCount, pause, gapMs: QUESTION_KEY_GAP_MS }, { sessionId, toolUseId, picks: chosen });
 }
 
 /** The session's recorded tool calls — injected so this module holds no store of its own. */

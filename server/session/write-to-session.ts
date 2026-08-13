@@ -7,7 +7,7 @@ import { ptys } from "./registry.js";
 // Its own module rather than a helper in index.ts, because it now has two callers that reach it
 // from different directions — the RemoteHost handlers and an /api route — and index.ts is the file
 // this repo keeps splitting apart (#548).
-export const writeToSession = (sessionId: string, chunk: string): boolean => {
+const write = (sessionId: string, chunk: string): boolean => {
   const entry = ptys.get(sessionId);
   if (!entry) return false;
   try {
@@ -18,3 +18,32 @@ export const writeToSession = (sessionId: string, chunk: string): boolean => {
     return false;
   }
 };
+
+// How many times something OTHER than an in-flight answer has typed into this session.
+//
+// Answering a question takes ~300ms of paced keystrokes (#1685), and the person at the keyboard can
+// answer or cancel that same dialog inside one of those pauses. The remaining Down/Enter would then
+// reach the prompt underneath and walk its history. No snapshot of the dialog can see that coming:
+// the tool-call close arrives asynchronously, well after the screen changed.
+//
+// So every ordinary writer bumps this counter, and an answer in flight watches it. The counter
+// rather than a lock, because the answer must not BLOCK the user's own typing — it must yield to it.
+const otherWrites = new Map<string, number>();
+
+export const otherWriteCount = (sessionId: string): number => otherWrites.get(sessionId) ?? 0;
+
+/** Say that something other than an answer has typed here — for a writer that holds its own pty.
+ *  The browser's keystroke path does its own write (it already has the entry, and going through a
+ *  registry lookup on every keypress would drop input in any window where the two disagree). */
+export const noteOtherWrite = (sessionId: string): void => {
+  otherWrites.set(sessionId, otherWriteCount(sessionId) + 1);
+};
+
+/** Write on behalf of anything but an answer: the phone's typing, and anything added later. */
+export const writeToSession = (sessionId: string, chunk: string): boolean => {
+  noteOtherWrite(sessionId);
+  return write(sessionId, chunk);
+};
+
+/** The keystrokes an answer types. Deliberately NOT counted — it must not interrupt itself. */
+export const writeAnswerKey = (sessionId: string, chunk: string): boolean => write(sessionId, chunk);

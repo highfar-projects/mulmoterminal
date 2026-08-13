@@ -29,6 +29,7 @@ const CALL = (toolUseId: string, status: string, multiSelect = false): RecordedC
 const deps = (calls: RecordedCall[], write = vi.fn(() => true)): AnswerQuestionDeps & { write: ReturnType<typeof vi.fn> } => ({
   callsOf: async () => calls,
   write,
+  otherWriteCount: () => 0,
   pause: async () => {},
   gapMs: 0,
 });
@@ -130,5 +131,25 @@ describe("answerQuestion", () => {
 
     const after = deps([CALL("t1", "running")]);
     expect(await answerQuestion(after, { sessionId: "s1", toolUseId: "t1", picks: [[0]] })).toEqual({ ok: true });
+  });
+
+  // The lock keeps two ANSWERS apart. This is the other half: the person at the keyboard answers the
+  // dialog inside one of the pauses, and the rest of the sequence would land on the prompt beneath.
+  it("stops as soon as anything else types into the session", async () => {
+    let others = 0;
+    const write = vi.fn(() => true);
+    const d: AnswerQuestionDeps & { write: ReturnType<typeof vi.fn> } = {
+      callsOf: async () => [CALL("t1", "running", true)],
+      write,
+      otherWriteCount: () => others,
+      // The user's keystroke lands in the gap after the first key goes out.
+      pause: async () => {
+        if (write.mock.calls.length === 1) others = 1;
+      },
+      gapMs: 0,
+    };
+
+    expect(await answerQuestion(d, { sessionId: "s9", toolUseId: "t1", picks: [[0, 1]] })).toEqual({ ok: false, reason: "closed" });
+    expect(write.mock.calls).toHaveLength(1); // nothing after the interruption
   });
 });

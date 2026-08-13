@@ -40,6 +40,8 @@ export interface AnswerQuestionDeps {
   callsOf: (sessionId: string) => Promise<readonly RecordedCall[]>;
   /** Write to the session's live PTY. False when this process holds none. */
   write: (sessionId: string, chunk: string) => boolean;
+  /** How many times anything ELSE has typed into this session — see write-to-session.ts. */
+  otherWriteCount: (sessionId: string) => number;
   /** Between keystrokes: the dialog rebuilds itself between questions (#1679). */
   pause: (ms: number) => Promise<void>;
   gapMs: number;
@@ -53,12 +55,22 @@ export interface AnswerQuestionRequest {
   picks: readonly (readonly number[])[];
 }
 
-const sendPaced = async (deps: AnswerQuestionDeps, sessionId: string, keys: readonly string[]): Promise<boolean> =>
-  keys.reduce(async (previous, key) => {
-    if (!(await previous)) return false;
-    await deps.pause(deps.gapMs);
-    return deps.write(sessionId, key);
-  }, Promise.resolve(true));
+// Abandoned the moment anything else types into this session. The lock above keeps two ANSWERS
+// apart; this is what keeps an answer out of the way of the person at the keyboard, who can close
+// the dialog inside one of these pauses and leave the rest of the sequence aimed at a prompt.
+const sendPaced = async (deps: AnswerQuestionDeps, sessionId: string, keys: readonly string[]): Promise<AnswerResult> => {
+  const before = deps.otherWriteCount(sessionId);
+  return keys.reduce<Promise<AnswerResult>>(
+    async (previous, key) => {
+      const sofar = await previous;
+      if (!sofar.ok) return sofar;
+      await deps.pause(deps.gapMs);
+      if (deps.otherWriteCount(sessionId) !== before) return { ok: false, reason: "closed" };
+      return deps.write(sessionId, key) ? { ok: true } : { ok: false, reason: "unwritable" };
+    },
+    Promise.resolve<AnswerResult>({ ok: true }),
+  );
+};
 
 const answerHeld = async (deps: AnswerQuestionDeps, { sessionId, toolUseId, picks }: AnswerQuestionRequest): Promise<AnswerResult> => {
   const open = openQuestionOf(await deps.callsOf(sessionId), sessionId);
@@ -67,7 +79,7 @@ const answerHeld = async (deps: AnswerQuestionDeps, { sessionId, toolUseId, pick
   if (!keys) return { ok: false, reason: "bad-picks" };
   // The questions come from the HOST's own record of the dialog, not from the request: a caller
   // cannot widen its picks by describing a different question than the one on screen.
-  return (await sendPaced(deps, sessionId, keys)) ? { ok: true } : { ok: false, reason: "unwritable" };
+  return sendPaced(deps, sessionId, keys);
 };
 
 export async function answerQuestion(deps: AnswerQuestionDeps, request: AnswerQuestionRequest): Promise<AnswerResult> {
