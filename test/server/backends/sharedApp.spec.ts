@@ -684,6 +684,37 @@ describe("shared app deploy / publish / unpublish", () => {
     expect(docs.doc(`apps/${AID}/roster`, "live:mine")).toBeDefined();
   });
 
+  it("publishes the page the roster reviewed, not the one in the working tree", async () => {
+    // The whole reason for the split: `/staging/{aid}` is where the roster
+    // tried this page. Re-reading the file at publish would let an edit made
+    // after the last deploy go live with nobody having looked at it — the same
+    // guarantee `readStaged` makes about the schemas.
+    withPages();
+    await deploySharedApp(root, stamp);
+    writeFileSync(path.join(root, "views", "desk.html"), "<p>edited after the deploy</p>");
+
+    const published = await publishSharedApp(root, stamp);
+    expect(published.ok === false ? published.problems : []).toEqual([]);
+    expect(docs.doc(`apps/${AID}/member`, "live:desk")).toMatchObject({ html: "<p>front desk</p>" });
+
+    // And a deploy is what makes the edit publishable, as it is for a schema.
+    await deploySharedApp(root, stamp);
+    await publishSharedApp(root, stamp);
+    expect(docs.doc(`apps/${AID}/member`, "live:desk")).toMatchObject({ html: "<p>edited after the deploy</p>" });
+  });
+
+  it("stamps the projection and every page with the SAME publish", async () => {
+    // They are separate documents, and the runtime refuses to draw a pair that
+    // disagrees — a view handed fields it has never seen.
+    withPages();
+    await deploySharedApp(root, stamp);
+    await publishSharedApp(root, stamp);
+    const config = docs.doc(`apps/${AID}/member`, "live:config");
+    const page = docs.doc(`apps/${AID}/member`, "live:desk");
+    expect(config?.publishedAt).toBe(1_700_000_000_000);
+    expect(page?.publishedAt).toBe(config?.publishedAt);
+  });
+
   it("takes the published pages down on unpublish and leaves the staged ones alone", async () => {
     withPages({ public: { enabled: true, read: ["bookings"] } });
     await deploySharedApp(root, stamp);

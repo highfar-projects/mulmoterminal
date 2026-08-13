@@ -39,6 +39,7 @@ import {
   type PublishStamp,
 } from "@mulmoclaude/core/collection/server";
 
+import { isRecord } from "../../../common/isRecord.js";
 import type { SharedAppFailure, SharedAppHandle } from "./context.js";
 import { readAppViewFile } from "./publicView.js";
 import type { WriteStep } from "./writes.js";
@@ -101,16 +102,11 @@ function unreachableProblems(
  *  `promoted` is the `participantRead` that will actually be in force — at
  *  publish, what deploy staged rather than what `app.json` says now. Getting
  *  this wrong publishes `scope: "all"` for a collection the rules then deny. */
-export async function planAppViewTiers(
-  root: string,
-  authored: AuthoredApp,
-  stamp: PublishStamp,
-  promoted?: { participantRead?: readonly string[] },
-): Promise<TierPlanResult> {
-  const tiers: AppViewTier[] = projectAppViews(authored, stamp, promoted);
+export async function planAppViewTiers(root: string, authored: AuthoredApp, stamp: PublishStamp): Promise<TierPlanResult> {
+  const tiers: AppViewTier[] = projectAppViews(authored, stamp);
   const problems: string[] = [];
   const plans: TierPlan[] = [];
-  const participantRead = promoted?.participantRead ?? authored.participantRead ?? [];
+  const participantRead = authored.participantRead ?? [];
   for (const tier of tiers) {
     const pages: TierPage[] = [];
     for (const view of tier.views) {
@@ -125,9 +121,9 @@ export async function planAppViewTiers(
 }
 
 /** Document ids in a tier that this operation is about to write, at one stage. */
-const wantedDocIds = (stage: "live" | "staged", plan: TierPlan): Set<string> => {
+const wantedDocIds = (plan: TierPlan): Set<string> => {
   if (plan.config === null) return new Set();
-  return new Set([viewConfigDocId(stage), ...plan.pages.map((page) => viewDocId(stage, page.id))]);
+  return new Set([viewConfigDocId("staged"), ...plan.pages.map((page) => viewDocId("staged", page.id))]);
 };
 
 /** Documents at this stage that the declaration no longer names.
@@ -140,23 +136,17 @@ const wantedDocIds = (stage: "live" | "staged", plan: TierPlan): Set<string> => 
  *  Only this stage's documents are considered. `unpublish` deletes `live:*` and
  *  keeps `staged:*` on purpose — closing the doors is not undeploying — so a
  *  publish that tidied the other prefix would quietly undo that. */
-export async function staleViewDocs(
-  handle: SharedAppHandle,
-  aid: string,
-  stage: "live" | "staged",
-  plan: TierPlan,
-  what: string,
-): Promise<{ ok: true; ids: string[] } | SharedAppFailure> {
-  const keep = wantedDocIds(stage, plan);
+export async function staleViewDocs(handle: SharedAppHandle, aid: string, plan: TierPlan): Promise<{ ok: true; ids: string[] } | SharedAppFailure> {
+  const keep = wantedDocIds(plan);
   try {
     const existing = await handle.docs.list(appViewTierPath(aid, plan.tier));
-    return { ok: true, ids: existing.map((doc) => doc.id).filter((id) => id.startsWith(`${stage}:`) && !keep.has(id)) };
+    return { ok: true, ids: existing.map((doc) => doc.id).filter((id) => id.startsWith("staged:") && !keep.has(id)) };
   } catch (err) {
     return {
       ok: false,
       partial: false,
       problems: [
-        `${what} failed while reading the pages already at apps/${aid}/${plan.tier}: ${err instanceof Error ? err.message : String(err)}`,
+        `deploy failed while reading the pages already at apps/${aid}/${plan.tier}: ${err instanceof Error ? err.message : String(err)}`,
         "Nothing was written. This read is what lets a page withdrawn from `views` be removed, so writing without it would leave the old one readable by everybody it was ever readable by.",
       ],
     };
@@ -171,14 +161,7 @@ export async function staleViewDocs(
  *  offers a page that is not there yet — visibly missing — rather than serving
  *  a page nobody knows how to feed. Withdrawals go last because they grant
  *  nothing. */
-export function tierWrites(
-  handle: SharedAppHandle,
-  aid: string,
-  stage: "live" | "staged",
-  plan: TierPlan,
-  stale: readonly string[],
-  stamp: PublishStamp,
-): WriteStep[] {
+export function tierWrites(handle: SharedAppHandle, aid: string, plan: TierPlan, stale: readonly string[], stamp: PublishStamp): WriteStep[] {
   const at = appViewTierPath(aid, plan.tier);
   const config = plan.config;
   return [
@@ -186,13 +169,13 @@ export function tierWrites(
       ? []
       : [
           {
-            what: `the ${plan.tier} page settings (${at}/${viewConfigDocId(stage)})`,
-            run: () => handle.docs.set(at, viewConfigDocId(stage), config),
+            what: `the ${plan.tier} page settings (${at}/${viewConfigDocId("staged")})`,
+            run: () => handle.docs.set(at, viewConfigDocId("staged"), config),
           },
         ]),
     ...plan.pages.map((page) => ({
-      what: `the ${plan.tier} page '${page.id}' (${at}/${viewDocId(stage, page.id)})`,
-      run: () => handle.docs.set(at, viewDocId(stage, page.id), { html: page.html, publishedAt: stamp.publishedAt }),
+      what: `the ${plan.tier} page '${page.id}' (${at}/${viewDocId("staged", page.id)})`,
+      run: () => handle.docs.set(at, viewDocId("staged", page.id), { html: page.html, publishedAt: stamp.publishedAt }),
     })),
     ...stale.map((id) => ({
       what: `the withdrawal of ${at}/${id}`,
@@ -265,20 +248,13 @@ export interface PlannedTier {
 export async function planTierWrites(
   handle: SharedAppHandle,
   aid: string,
-  request: {
-    root: string;
-    authored: AuthoredApp;
-    stamp: PublishStamp;
-    stage: "live" | "staged";
-    what: string;
-    promoted?: { participantRead?: readonly string[] } | undefined;
-  },
+  request: { root: string; authored: AuthoredApp; stamp: PublishStamp },
 ): Promise<{ ok: true; tiers: PlannedTier[] } | SharedAppFailure> {
-  const planned = await planAppViewTiers(request.root, request.authored, request.stamp, request.promoted);
+  const planned = await planAppViewTiers(request.root, request.authored, request.stamp);
   if (!planned.ok) return { ok: false, partial: false, problems: planned.problems };
   const tiers: PlannedTier[] = [];
   for (const plan of planned.plans) {
-    const stale = await staleViewDocs(handle, aid, request.stage, plan, request.what);
+    const stale = await staleViewDocs(handle, aid, plan);
     if (!stale.ok) return stale;
     tiers.push({ plan, stale: stale.ids });
   }
@@ -286,14 +262,87 @@ export async function planTierWrites(
 }
 
 /** The writes for every tier, in one list. */
-export const allTierWrites = (
-  handle: SharedAppHandle,
-  aid: string,
-  stage: "live" | "staged",
-  tiers: readonly PlannedTier[],
-  stamp: PublishStamp,
-): WriteStep[] => tiers.flatMap(({ plan, stale }) => tierWrites(handle, aid, stage, plan, stale, stamp));
+export const allTierWrites = (handle: SharedAppHandle, aid: string, tiers: readonly PlannedTier[], stamp: PublishStamp): WriteStep[] =>
+  tiers.flatMap(({ plan, stale }) => tierWrites(handle, aid, plan, stale, stamp));
 
 /** The page ids one tier put in place, for the operation's report. */
 export const pageIdsOf = (tiers: readonly PlannedTier[], tier: "member" | "roster"): string[] =>
   tiers.filter(({ plan }) => plan.tier === tier).flatMap(({ plan }) => plan.pages.map((page) => page.id));
+
+/** One tier's promotion: the staged documents to copy live, and the live ones
+ *  the staged set no longer names. */
+export interface TierPromotion {
+  tier: "member" | "roster";
+  promote: { docId: string; data: Record<string, unknown> }[];
+  stale: string[];
+}
+
+/** What publish will do to the tiers, read from what DEPLOY staged.
+ *
+ *  Not re-projected from the working tree, and this is the whole point of the
+ *  split: `/staging/{aid}` is where the roster tried these pages, so publish
+ *  promotes exactly that. Reading the files again here would let an edit made
+ *  after the last deploy go live without anybody having looked at it — the same
+ *  guarantee `readStaged` makes about the schemas, in the same words.
+ *
+ *  It also removes a question that cannot be answered correctly from the
+ *  manifest: the participant scopes in a staged projection were computed
+ *  against the `participantRead` that deploy staged, which is exactly the one
+ *  publish promotes. */
+export async function planTierPromotion(
+  handle: SharedAppHandle,
+  aid: string,
+  stamp: PublishStamp,
+): Promise<{ ok: true; tiers: TierPromotion[] } | SharedAppFailure> {
+  const tiers: TierPromotion[] = [];
+  for (const tier of ["member", "roster"] as const) {
+    const at = appViewTierPath(aid, tier);
+    let existing;
+    try {
+      existing = await handle.docs.list(at);
+    } catch (err) {
+      return {
+        ok: false,
+        partial: false,
+        problems: [
+          `publish failed while reading the staged pages at ${at}: ${err instanceof Error ? err.message : String(err)}`,
+          "Nothing was written. Publishing again is safe.",
+        ],
+      };
+    }
+    const staged = existing.filter((doc) => doc.id.startsWith("staged:"));
+    // Re-stamped, like `promoteSchema`: the stamp answers "which version is
+    // live right now", so it belongs to the operation that changes the answer.
+    // It also has to match across the projection and every page, because the
+    // runtime refuses to draw a pair that disagrees.
+    const promote = staged.map((doc) => ({
+      docId: `live:${doc.id.slice("staged:".length)}`,
+      data: { ...(isRecord(doc.data) ? doc.data : {}), publishedAt: stamp.publishedAt },
+    }));
+    const keep = new Set(promote.map((entry) => entry.docId));
+    const stale = existing.map((doc) => doc.id).filter((id) => id.startsWith("live:") && !keep.has(id));
+    tiers.push({ tier, promote, stale });
+  }
+  return { ok: true, tiers };
+}
+
+/** The writes that promote one publish's pages: the copies, then the
+ *  withdrawals. Withdrawals last because they grant nothing. */
+export const promotionWrites = (handle: SharedAppHandle, aid: string, tiers: readonly TierPromotion[]): WriteStep[] =>
+  tiers.flatMap((tier) => {
+    const at = appViewTierPath(aid, tier.tier);
+    return [
+      ...tier.promote.map((entry) => ({
+        what: `the ${tier.tier} page (${at}/${entry.docId})`,
+        run: () => handle.docs.set(at, entry.docId, entry.data),
+      })),
+      ...tier.stale.map((docId) => tierDelete(handle, aid, tier.tier, docId)),
+    ];
+  });
+
+/** The page ids one publish put live, for its report. */
+export const promotedIdsOf = (tiers: readonly TierPromotion[], tier: "member" | "roster"): string[] =>
+  tiers
+    .filter((entry) => entry.tier === tier)
+    .flatMap((entry) => entry.promote.map((page) => page.docId.slice("live:".length)))
+    .filter((id) => id !== "config");

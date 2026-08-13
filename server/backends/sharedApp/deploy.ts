@@ -224,7 +224,7 @@ function deploySteps(
       what: `the staged schema for '${cid}' (apps/${aid}/staging/${cid})`,
       run: () => handle.docs.set(appStagingPath(aid), cid, doc),
     })),
-    ...allTierWrites(handle, aid, "staged", what.pages, what.stamp),
+    ...allTierWrites(handle, aid, what.pages, what.stamp),
     ...what.stale.map((cid) => ({
       what: `the withdrawal of the staged schema for '${cid}' (apps/${aid}/staging/${cid})`,
       run: async (): Promise<void> => {
@@ -299,7 +299,7 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
   if (!stale.ok) return stale;
 
   // The app's own pages, staged beside the schemas (see `planTierWrites`).
-  const pages = await planTierWrites(handle, aid, { root, authored, stamp, stage: "staged", what: "deploy" });
+  const pages = await planTierWrites(handle, aid, { root, authored, stamp });
   if (!pages.ok) return { ...pages, partial: established };
 
   const failure = await runWrites(deploySteps(handle, aid, { deployed, stale: stale.cids, pages: pages.tiers, appDoc, established, stamp }), "deploy");
