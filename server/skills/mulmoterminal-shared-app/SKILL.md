@@ -335,6 +335,19 @@ is DELETED at both ends rather than left behind.
 
 ### What a page may WRITE
 
+**`transition` and `assign` need the runtime deployed, and they do not fail softly.** `submit` has
+been on the bridge since public forms; these two and the `/p/{slug}` entrance arrived with the
+shared-app runtime, and on anything older they are simply ABSENT — a page calling one throws
+`__MC_APP_VIEW.transition is not a function`, which in an iframe looks like a page that does
+nothing. So before offering the author these controls, check that the runtime serving `/m/` and
+`/p/` has them.
+
+Draw from `viewer.can` (below) rather than from the method's existence, and this is handled for
+you: an app published before the runtime landed carries no `writers` in its projection, so every
+capability comes back empty and the page draws a read-only view of itself. It stays that way until
+the app is published again — a projection without those lists cannot tell a receptionist from an
+observer, and refuses rather than assuming.
+
 Three calls, and a page cannot name a field in any of them:
 
 ```js

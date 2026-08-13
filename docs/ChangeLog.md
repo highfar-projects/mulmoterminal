@@ -10,9 +10,9 @@ Entries here are folded into the next release's heading when it ships.
 
 ### The staff page can approve, and the people on the roster have an entrance of their own (#1671)
 
-> **Not usable yet.** Needs `@mulmoclaude/core` 3.15.0 (mulmoclaude#2891 — merged, not yet on
-> npm; MulmoTerminal is still on 3.14.0, which has no `write` in the projection) and a mulmoserver
-> deploy. Until both land and an app is published again, the staff page stays read-only.
+> **Needs a mulmoserver deploy, and every app published again.** `@mulmoclaude/core` 3.15.0
+> (mulmoclaude#2891) is in, and it is what projects `write`; until the runtime is deployed and an
+> app is published on top of it, its staff page stays read-only rather than guessing.
 
 The staff page shipped read-only: seeing today's bookings was possible from a phone, approving one
 still meant opening the owner's Mac. And a `participant` page — declarable since #1667, published
