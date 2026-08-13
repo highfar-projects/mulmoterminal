@@ -10,6 +10,8 @@ import { stampCardScope, priorCardOf } from "./stampCardScope.js";
 import { cwdForSession } from "../session/session-cwd.js";
 import { groupOfTool, type ToolGroup } from "../../common/toolGroups.js";
 import { openQuestionOf } from "../../common/askQuestion.js";
+import { answerQuestionOnHost } from "../session/answerQuestionOnHost.js";
+import { isRecord } from "../../common/isRecord.js";
 
 export interface ToolSummary {
   toolName: string;
@@ -72,7 +74,25 @@ export function narrowedTools(tools: readonly ToolSummary[], groups: readonly To
   return tools.filter((tool) => hasGroup(groupOfTool(tool.toolName), groups));
 }
 
+// Answering that dialog (#1685). Every client comes through here — the pane beside the terminal and
+// the phone alike — so ONE place checks the dialog is still open and ONE decides which bytes reach
+// the PTY. The caller sends option INDEXES; nothing it sends is ever written. Its own mount because
+// it is the only route here that WRITES to a terminal.
+function mountAnswerRoute(app: Express, deps: ToolRouteDeps): void {
+  app.post("/api/question/:sessionId/answer", async (req, res) => {
+    const { sessionId } = req.params;
+    if (!SESSION_ID_RE.test(sessionId)) return res.status(400).json({ error: "invalid sessionId" });
+    if (!deps.questionPaneEnabled()) return res.status(409).json({ ok: false, reason: "closed" });
+    const body: unknown = req.body;
+    if (!isRecord(body) || typeof body.toolUseId !== "string") return res.status(400).json({ error: "toolUseId is required" });
+    const result = await answerQuestionOnHost(sessionId, body.toolUseId, body.picks, (id) => deps.stores.toolCallsStore.get(id));
+    res.status(result.ok ? 200 : 409).json(result);
+  });
+}
+
 export function mountToolRoutes(app: Express, deps: ToolRouteDeps): void {
+  mountAnswerRoute(app, deps);
+
   // The GUI toolResult sink. Two callers POST here:
   //   - the MCP broker, after a plugin produces a result (data gates rendering);
   //   - the GUI panel, to persist a plugin view's state change (e.g. a submitted

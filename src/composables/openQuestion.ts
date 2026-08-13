@@ -21,3 +21,26 @@ export async function fetchOpenQuestion(sessionId: string): Promise<AskQuestionE
     return null;
   }
 }
+
+/** Why an answer did not go out, as the host reported it. */
+export type AnswerFailure = "closed" | "bad-picks" | "unwritable";
+
+// Answering goes through the HOST (#1685), not the terminal socket: it is the side that knows
+// whether the dialog is still open, and having it build the keystrokes keeps the check and the
+// typing in one step. The phone reaches the same code, so a third client would too.
+export async function postAnswer(sessionId: string, toolUseId: string, picks: number[][]): Promise<AnswerFailure | null> {
+  try {
+    const res = await fetchWithTimeout(
+      `/api/question/${encodeURIComponent(sessionId)}/answer`,
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ toolUseId, picks }) },
+      REQUEST_TIMEOUT_MS,
+    );
+    if (res.ok) return null;
+    const body: unknown = await res.json().catch(() => null);
+    return isRecord(body) && isAnswerFailure(body.reason) ? body.reason : "unwritable";
+  } catch {
+    return "unwritable";
+  }
+}
+
+const isAnswerFailure = (value: unknown): value is AnswerFailure => value === "closed" || value === "bad-picks" || value === "unwritable";

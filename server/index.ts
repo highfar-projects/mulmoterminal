@@ -38,6 +38,9 @@ import { mcpConfigJson } from "./session/mcp-config.js";
 import { createClaudeSpawner } from "./session/spawn-claude.js";
 import { issueSpawnOptions } from "./session/issue-spawn-options.js";
 import { spawnPty } from "./session/pty-spawn.js";
+import { writeToSession } from "./session/write-to-session.js";
+import { answerQuestionOnHost } from "./session/answerQuestionOnHost.js";
+import { openQuestionOf } from "../common/askQuestion.js";
 import { createRateLimitStore } from "./agents/rate-limit-store.js";
 import { startRateLimitProbe } from "./agents/rate-limit-probe.js";
 import { hasBinary } from "./infra/has-binary.js";
@@ -712,21 +715,6 @@ const remoteHostListTerminalSessions = async () => {
   return withDirIcons(sessions, dirIconSources);
 };
 
-// Write a chunk to a session's live PTY for the phone's terminal input (#445).
-// Only sessions attached in THIS process are writable: a tmux session that outlived
-// a restart is still viewable through capture-pane, but we hold no pty to type into.
-const remoteHostWriteToSession = (sessionId: string, chunk: string): boolean => {
-  const entry = ptys.get(sessionId);
-  if (!entry) return false;
-  try {
-    entry.term.write(chunk);
-    return true;
-  } catch {
-    // pty died between the lookup and the write
-    return false;
-  }
-};
-
 // Whether the phone's typing may empty the input box before pasting, so only the
 // phone's text is submitted (#572). The rule itself lives with the sender.
 const remoteHostCanClearBox = (sessionId: string): boolean => canClearInputBox(ptys.get(sessionId)?.agent, activity.get(sessionId)?.working);
@@ -803,7 +791,11 @@ initRemoteHostBackend({
   launchTerminal: remoteHostLaunchTerminal,
   listTerminalSessions: remoteHostListTerminalSessions,
   captureTerminalScreen: remoteHostCaptureTerminalScreen,
-  writeToSession: remoteHostWriteToSession,
+  writeToSession,
+  // The same two functions the browser's pane reaches through /api/question (#1685): one place
+  // decides whether a dialog is still open, and one place decides which bytes reach the PTY.
+  openQuestion: async (id) => openQuestionOf(await toolStores.toolCallsStore.get(id), id),
+  answerQuestion: (id, toolUseId, picks) => answerQuestionOnHost(id, toolUseId, picks, (sid) => toolStores.toolCallsStore.get(sid)),
   canClearBox: remoteHostCanClearBox,
   // The byte(s) that submit for this session (#772), resolved live from config so the
   // phone's "send" commits the paste the same way the keyboard does. Scoped to the

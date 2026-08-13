@@ -7,6 +7,7 @@ import path from "node:path";
 import { createRemoteHostHandlers } from "./handlers/index.js";
 import type { SessionScreen } from "./terminalScreen.js";
 import { initCollectionsBackend } from "../collections.js";
+import type { AnswerResult } from "../../session/answerQuestion.js";
 
 const unusedTerminalDeps = {
   spawnIssueSeed: () => "unused-session",
@@ -17,6 +18,8 @@ const unusedTerminalDeps = {
   submitSequence: () => "\r",
   sessionAgent: () => "claude" as const,
   launchTerminal: () => ({ ok: true }) as const,
+  openQuestion: async () => null,
+  answerQuestion: async (): Promise<AnswerResult> => ({ ok: true }),
 };
 
 describe("createRemoteHostHandlers", () => {

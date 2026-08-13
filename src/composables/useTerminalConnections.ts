@@ -905,35 +905,6 @@ export function insertText(key: string, text: string) {
   c.term.focus();
 }
 
-const pause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
-// Raw bytes, for driving a TUI dialog the agent has put on screen (#1679) — arrows, then Enter.
-//
-// NOT wrapped in bracketed paste, unlike pasteText: a menu ignores a pasted block entirely
-// (measured in #781 — the keys never arrive and nothing appears on screen either), while the same
-// bytes sent plain move its highlight. No focus() either: the click that chose the answer was in a
-// pane, and stealing focus back to the terminal on every keystroke fights the user.
-//
-// Paced, because the dialog rebuilds itself between questions and a burst risks arriving while it
-// does — which is what makes the socket identity load-bearing. The whole sequence is pinned to the
-// socket it started on and ABANDONED if that changes: a reconnect or a `retarget` partway through
-// would otherwise deliver the rest of the keys to a different session's terminal, where an arrow
-// walks the input history and Enter submits what it found. Same rule as pasteAndSubmit's.
-//
-// Answers whether every key went out, so a caller can recover what a half-sent sequence left.
-export async function sendKeySequence(key: string, keys: readonly string[], gapMs: number): Promise<boolean> {
-  const c = conns.get(key);
-  const sock = c?.ws ?? null;
-  if (!c || !sock) return false;
-  return keys.reduce(async (previous, data) => {
-    if (!(await previous)) return false;
-    await pause(gapMs);
-    if (c.ws !== sock || sock.readyState !== WebSocket.OPEN) return false;
-    sock.send(JSON.stringify({ type: "input", data }));
-    return true;
-  }, Promise.resolve(true));
-}
-
 export function focus(key: string) {
   conns.get(key)?.term.focus();
 }

@@ -8,9 +8,25 @@ import { toJsonObject, type CommandHandlers, type JsonObject } from "@mulmoclaud
 import { createTerminalInputSender } from "../terminalInput.js";
 import type { RemoteHostHandlerDeps } from "./deps.js";
 
+// What the phone shows when an answer is refused. Wording rather than a code: the phone has no
+// notion of question dialogs beyond the buttons it drew.
+const ANSWER_REFUSED = {
+  closed: "That question was already answered.",
+  "bad-picks": "Those choices do not match the question.",
+  unwritable: "This session cannot be typed into — it outlived a server restart.",
+} as const;
+
 type TerminalSessionDeps = Pick<
   RemoteHostHandlerDeps,
-  "listTerminalSessions" | "captureTerminalScreen" | "writeToSession" | "canClearBox" | "submitSequence" | "sessionAgent" | "launchTerminal"
+  | "listTerminalSessions"
+  | "captureTerminalScreen"
+  | "writeToSession"
+  | "canClearBox"
+  | "submitSequence"
+  | "sessionAgent"
+  | "launchTerminal"
+  | "openQuestion"
+  | "answerQuestion"
 >;
 
 export const createTerminalSessionHandlers = ({
@@ -21,6 +37,8 @@ export const createTerminalSessionHandlers = ({
   submitSequence,
   sessionAgent,
   launchTerminal,
+  openQuestion,
+  answerQuestion,
 }: TerminalSessionDeps): CommandHandlers => {
   // One sender per host, so its per-session ordering actually spans every command.
   const sendInput = createTerminalInputSender({ writeToSession, canClearBox, submitSequence, sessionAgent });
@@ -48,6 +66,29 @@ export const createTerminalSessionHandlers = ({
       if (!sessionId) throw new Error("sessionId is required");
       const text = typeof params.text === "string" ? params.text : "";
       return toJsonObject(await sendInput(sessionId, text));
+    },
+
+    // The AskUserQuestion dialog this session is blocked on, if any (#1685). Answered from the
+    // phone by INDEX, never by keystroke: the phone says which options it chose and the host turns
+    // that into the arrows and Enter that drive the real dialog. So nothing the phone sends can
+    // reach the terminal as a control byte — the same boundary sendTerminalInput draws, drawn
+    // tighter, since here there is no free text at all.
+    getOpenQuestion: async (params: JsonObject) => {
+      const sessionId = typeof params.sessionId === "string" ? params.sessionId : "";
+      if (!sessionId) throw new Error("sessionId is required");
+      return toJsonObject({ question: await openQuestion(sessionId) });
+    },
+
+    // Throwing on refusal rather than returning it: the reason is what the phone shows, and every
+    // one of them is something the user can act on — the dialog was answered from somewhere else,
+    // or this session outlived a server restart and has no PTY to type into.
+    answerQuestion: async (params: JsonObject) => {
+      const sessionId = typeof params.sessionId === "string" ? params.sessionId : "";
+      const toolUseId = typeof params.toolUseId === "string" ? params.toolUseId : "";
+      if (!sessionId || !toolUseId) throw new Error("sessionId and toolUseId are required");
+      const result = await answerQuestion(sessionId, toolUseId, params.picks);
+      if (!result.ok) throw new Error(ANSWER_REFUSED[result.reason]);
+      return toJsonObject(result);
     },
 
     // Open a NEW grid terminal in the directory of the session the phone is viewing (#831).
