@@ -123,6 +123,21 @@ CI の cold は 1 の対処で減らす。
   **落ちているのは Test ステップで Lint は success（105〜124s）**なので、lint の効果は測れる。
 - `CLAUDE.md` — `yarn lint` の行に 2 本ある理由。
 
+## 2 本は同じ `.eslintcache` を共有する
+
+strategy が違うので、**ローカルで `yarn lint:ci` を挟むと前後の run が 1 回ずつ cold になる**。
+項目の照合が mtime とハッシュで食い違い、全件が「変わった」と判定されるため。実測:
+
+| 順に実行 | 時間 |
+|---|---:|
+| `yarn lint`（warm） | 3.1s |
+| `yarn lint:ci`（同じキャッシュ上） | 56.6s |
+| `yarn lint` | 19.7s |
+| `yarn lint`（落ち着いたあと） | 1.8s |
+
+壊れるわけではなく、次の run で元に戻る。CI を手元で再現するときだけ踏むので、キャッシュファイルを
+分ける（`--cache-location` + workflow 側の path + `.gitignore` の 2 本目）より、ここに 1 行書くほうを選んだ。
+
 ## 確認できないこと
 
 CI 側は最初の run が定義上ミスなので、このブランチでは効果が出ない。Node バージョンをキーに
