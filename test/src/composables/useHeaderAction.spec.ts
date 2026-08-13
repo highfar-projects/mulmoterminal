@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const m = vi.hoisted(() => ({
   filesGotoIndex: vi.fn(),
-  prsGotoIndex: vi.fn(),
+  githubGotoIndex: vi.fn(),
   wikiGotoIndex: vi.fn(),
   browseGotoIndex: vi.fn(),
   accountingViewOpen: vi.fn(),
@@ -11,7 +11,7 @@ const m = vi.hoisted(() => ({
   openTerminalAt: vi.fn(),
 }));
 vi.mock("../../../src/composables/useFilesView", () => ({ filesGotoIndex: m.filesGotoIndex }));
-vi.mock("../../../src/composables/usePrsView", () => ({ prsGotoIndex: m.prsGotoIndex }));
+vi.mock("../../../src/composables/useGithubView", () => ({ githubGotoIndex: m.githubGotoIndex }));
 vi.mock("../../../src/composables/useWikiBrowse", () => ({ wikiGotoIndex: m.wikiGotoIndex }));
 vi.mock("../../../src/composables/useCollectionBrowse", () => ({ browseGotoIndex: m.browseGotoIndex }));
 vi.mock("../../../src/composables/useAccountingView", () => ({ accountingViewOpen: m.accountingViewOpen }));
@@ -57,8 +57,10 @@ describe("runHeaderButton", () => {
   it("open files → filesGotoIndex; open view routes to the matching nav (else files)", () => {
     runHeaderButton(btn({ run: "open", open: { files: "/dir" } }), null, null);
     expect(m.filesGotoIndex).toHaveBeenCalledWith("/dir");
+    // `"prs"` stays the config value even though the view is now called GitHub: it is what users
+    // have written in their own header configs, documented in both guides and the -header skill.
     runHeaderButton(btn({ run: "open", open: { view: "prs" } }), null, null);
-    expect(m.prsGotoIndex).toHaveBeenCalled();
+    expect(m.githubGotoIndex).toHaveBeenCalled();
     runHeaderButton(btn({ run: "open", open: { view: "diff" } }), null, "/c");
     expect(m.filesGotoIndex).toHaveBeenLastCalledWith("/c");
   });
