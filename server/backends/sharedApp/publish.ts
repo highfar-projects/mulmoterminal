@@ -37,7 +37,7 @@ import {
   stagedRuleConfig,
   type AuthoredApp,
   type PublishStamp,
-} from "sharedapp";
+} from "@receptron/sharedapp";
 import { ensureAid } from "./ensureAid.js";
 import { gitStamp, sharedAppContext, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
 import { recordRefusal, scanRecords, type RecordScan } from "./records.js";

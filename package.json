@@ -1,7 +1,7 @@
 {
   "name": "mulmoterminal",
   "version": "4.8.2",
-  "description": "Run multiple Claude Code and Codex sessions in parallel — a browser terminal grid that shows which agent needs you. Local, tmux-backed.",
+  "description": "Run multiple Claude Code and Codex sessions in parallel \u2014 a browser terminal grid that shows which agent needs you. Local, tmux-backed.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -87,6 +87,7 @@
     "@mulmoclaude/markdown-plugin": "^3.0.0",
     "@mulmoclaude/mulmoscript-plugin": "^2.1.0",
     "@mulmoclaude/x-plugin": "^1.0.3",
+    "@receptron/sharedapp": "^0.1.0",
     "@receptron/task-scheduler": "^1.0.3",
     "@xterm/addon-canvas": "^0.7.0",
     "@xterm/addon-clipboard": "^0.2.0",
@@ -106,7 +107,6 @@
     "mulmocast": "^2.9.2",
     "node-pty": "1.2.0-beta.15",
     "puppeteer": "^25.6.0",
-    "sharedapp": "git+https://github.com/receptron/sharedapp.git#be85a938d25e685f71694116dd73f674b147db6e",
     "sharp": "^0.35.3",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",

@@ -2302,6 +2302,13 @@
     modern-tar "^0.8.0"
     yargs "^18.0.0"
 
+"@receptron/sharedapp@^0.1.0":
+  version "0.1.0"
+  resolved "https://registry.yarnpkg.com/@receptron/sharedapp/-/sharedapp-0.1.0.tgz#a2fcc70f461f2052e6d202d22cd9dd1a34a9443e"
+  integrity sha512-lqw51Plstw3PaI/cqT9hWABdrFbfJXZZnXj9cHSmZN00KVjMh6RkPdYZTfyvmQ1VN1cZMAmZmiPztuV5Hb1Azg==
+  dependencies:
+    zod "^4.1.13"
+
 "@receptron/task-scheduler@^1.0.3":
   version "1.0.3"
   resolved "https://registry.yarnpkg.com/@receptron/task-scheduler/-/task-scheduler-1.0.3.tgz#58903cdb16aee9b839faf34f529b146391a89948"
@@ -7165,12 +7172,6 @@ setprototypeof@~1.2.0:
   version "1.2.0"
   resolved "https://registry.yarnpkg.com/setprototypeof/-/setprototypeof-1.2.0.tgz#66c9a24a73f9fc28cbe66b09fed3d33dcaf1b424"
   integrity sha512-E5LDX7Wrp85Kil5bhZv46j8jOeboKq5JMmYM3gVGdGH8xFpPWXUMsNrlODCrkoxMEeNi/XZIwuRvY4XNwYMJpw==
-
-"sharedapp@git+https://github.com/receptron/sharedapp.git#be85a938d25e685f71694116dd73f674b147db6e":
-  version "0.1.0"
-  resolved "git+https://github.com/receptron/sharedapp.git#be85a938d25e685f71694116dd73f674b147db6e"
-  dependencies:
-    zod "^4.1.13"
 
 sharp@^0.35.3:
   version "0.35.3"

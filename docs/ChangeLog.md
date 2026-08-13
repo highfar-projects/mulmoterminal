@@ -26,8 +26,11 @@ The collection RUNTIME stays in `@mulmoclaude/core` — discovery, the store, th
 backend, the host seam — because MulmoClaude does use those. The line is declaration to
 document; anything touching a live collection is on the other side of it.
 
-`sharedapp` is distributed by git ref and never npm, because an npm release would put back
-the gate it exists to remove. It builds on install, so nothing is published anywhere.
+It ships as `@receptron/sharedapp` on npm. A git-ref dependency was the plan and does not
+work here: MulmoTerminal is itself an npm package and ships `server/`, so every
+`npx mulmoterminal` user would clone that repository and run `tsc` before their terminal
+started. The gate it replaces is not the one it escapes — releasing it is one package with
+no dependents to bump, no plugin peer ranges, no changelog check and no e2e suite.
 
 `test/fixtures/sharedAppGolden/` keeps a picture of the two `{tier}/config` documents, so a
 change to what a published app carries shows up as a diff rather than only as a test.

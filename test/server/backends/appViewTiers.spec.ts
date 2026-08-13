@@ -19,7 +19,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { AuthoredAppZ, type AuthoredApp, type PublishStamp } from "sharedapp";
+import { AuthoredAppZ, type AuthoredApp, type PublishStamp } from "@receptron/sharedapp";
 import { planAppViewTiers } from "../../../server/backends/sharedApp/appViews.js";
 import { makeTempDir } from "../../support/tempDir";
 

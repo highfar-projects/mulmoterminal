@@ -17,7 +17,7 @@
 // app nobody ever had, in place of the real reason. Only the `aid` is read.
 import { isRecord } from "../../../common/isRecord.js";
 import { appManifestReason, firestoreHandle, loadAppManifest } from "@mulmoclaude/core/collection/server";
-import { APPS_COLLECTION, PUBLIC_CONFIG_DOC, appConfigPath } from "sharedapp";
+import { APPS_COLLECTION, PUBLIC_CONFIG_DOC, appConfigPath } from "@receptron/sharedapp";
 import { PUBLIC_VIEW_DOC } from "./publicView.js";
 import { liveTierDocs, tierDelete } from "./appViews.js";
 import type { SharedAppFailure } from "./context.js";

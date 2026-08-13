@@ -6,7 +6,7 @@
 // So each case below states the refusal AND the neighbouring declaration that
 // must still pass.
 import { describe, it, expect } from "vitest";
-import { parseAuthoredApp } from "sharedapp";
+import { parseAuthoredApp } from "@receptron/sharedapp";
 import type { CollectionSchema } from "@mulmoclaude/core/collection";
 import { scopedFieldProblems, stagedScopeProblems } from "../../../server/backends/sharedApp/scopedFields.js";
 

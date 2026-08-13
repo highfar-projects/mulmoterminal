@@ -16,7 +16,7 @@
 // until that document exists.
 import { ensureAid } from "./ensureAid.js";
 import { type LoadedCollection } from "@mulmoclaude/core/collection/server";
-import { APPS_COLLECTION, appStagingPath, projectDeploy, type PublishStamp } from "sharedapp";
+import { APPS_COLLECTION, appStagingPath, projectDeploy, type PublishStamp } from "@receptron/sharedapp";
 import { gitStamp, readCurrentApp, schemasOf, sharedAppContext, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
 import { allTierWrites, pageIdsOf, planTierWrites, type PlannedTier } from "./appViews.js";
 import { recordRefusal, scanRecords, type RecordScan } from "./records.js";

@@ -26,7 +26,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { AuthoredAppZ, projectAppViews } from "sharedapp";
+import { AuthoredAppZ, projectAppViews } from "@receptron/sharedapp";
 
 const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../fixtures/sharedAppGolden");
 

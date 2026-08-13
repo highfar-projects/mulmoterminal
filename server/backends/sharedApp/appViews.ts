@@ -37,7 +37,7 @@ import {
   type AppViewTier,
   type AuthoredApp,
   type PublishStamp,
-} from "sharedapp";
+} from "@receptron/sharedapp";
 
 import { randomUUID } from "node:crypto";
 

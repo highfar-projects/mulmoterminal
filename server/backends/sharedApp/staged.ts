@@ -8,7 +8,7 @@
 // They come back from Firestore as `unknown`, and they are documents a previous version of this
 // code (or a hand edit) could have written, so they are checked rather than asserted.
 import { isRecord } from "../../../common/isRecord.js";
-import { appStagingPath, type StagedSchemaDoc } from "sharedapp";
+import { appStagingPath, type StagedSchemaDoc } from "@receptron/sharedapp";
 import type { SharedAppHandle } from "./context.js";
 
 /** A checked narrowing rather than an assertion: these documents come back from Firestore as
