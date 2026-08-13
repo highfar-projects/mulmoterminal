@@ -23,7 +23,23 @@ jobs:
         id: setup-node
         with:
           node-version: 22
-          cache: yarn
+
+      # node_modules directly, rather than `cache: yarn` on setup-node above. The yarn cache is
+      # 1.6 GB here and restoring it only shortens an install that still has to run: on macOS that
+      # was 43s of restore plus 41s of install for a tree that is 1.2 GB when already built.
+      # Caching the built tree pays the transfer once. Same shape as windows-daily.yaml.
+      #
+      # The lockfile hash is the key, with a prefix restore so a changed lockfile starts from the
+      # previous tree and yarn reconciles the difference instead of resolving everything. The
+      # resolved node version is in the key for the native builds (node-pty ships per-ABI
+      # prebuilds), and `yarn install` still runs — warm, it is "Already up-to-date" plus the
+      # postinstall, which is where server/fix-pty-perms.js fixes the prebuilt spawn-helper.
+      - uses: actions/cache@v5
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-node${{ steps.setup-node.outputs.node-version }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: |
+            node-modules-${{ runner.os }}-node${{ steps.setup-node.outputs.node-version }}-
 
       - run: yarn install --frozen-lockfile
 
