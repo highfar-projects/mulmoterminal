@@ -43,7 +43,8 @@ import { gitStamp, sharedAppContext, type SharedAppFailure, type SharedAppHandle
 import { recordRefusal, scanRecords, type RecordScan } from "./records.js";
 import { readStaged, type StagedEntry } from "./staged.js";
 import { oversizeProblem, publicFormOf, publicInputProblems, type PublicForm } from "./publicForm.js";
-import { PUBLIC_VIEW_DOC, declaredView, readPublicViewFile, type ViewFile } from "./publicView.js";
+import { allTierWrites, pageIdsOf, planTierWrites, type PlannedTier } from "./appViews.js";
+import { PUBLIC_VIEW_DOC, declaredView, readAppViewFile, type ViewFile } from "./publicView.js";
 import { frozenKeyProblems } from "./exclusivity.js";
 import { stagedScopeProblems } from "./scopedFields.js";
 import { setSlugPublished } from "./slug.js";
@@ -59,6 +60,13 @@ export interface PublishSuccess {
    *  declaration with no `public` block publishes the schemas to the roster's URL and grants the
    *  world nothing — and it is the one thing an operator is most likely to assume wrongly. */
   publicOpen: boolean;
+  /** Pages this publish put live for the app's staff, by id. Reported because
+   *  what a members' page is handed is NOT public data: the argument that made
+   *  the public view safe — a view can only carry off what any stranger could
+   *  already fetch — does not hold for the real records. */
+  memberPages: string[];
+  /** Pages a participant sees of their own row, by id. */
+  participantPages: string[];
   commit?: string | undefined;
   dirty: boolean;
   recordIssues: number;
@@ -123,6 +131,7 @@ function publishSteps(
   slug: string | undefined,
   form: PublicForm,
   view: ViewFile | null,
+  tiers: readonly PlannedTier[],
 ): WriteStep[] {
   return [
     ...staged.map(({ cid, doc }) => ({
@@ -156,6 +165,12 @@ function publishSteps(
         await handle.docs.set(appConfigPath(aid), PUBLIC_VIEW_DOC, { html: view.html, publishedAt: stamp.publishedAt });
       },
     },
+    // The members' and participants' pages, promoted from `staged:` to `live:`
+    // and withdrawn when the declaration dropped them. Before the app document
+    // and the authorization, like everything else that is only DATA: a run that
+    // stops here leaves an app whose pages are newer than its roster, which is
+    // the direction to be wrong in.
+    ...allTierWrites(handle, aid, "live", tiers, stamp),
     // The app document WITHOUT `public`: the promoted rule configuration lands with the schemas it
     // was staged beside, so the public write path is never judged by one version's constraints
     // against another's schema.
@@ -245,7 +260,7 @@ async function pageGate(
   publishedAt: number,
 ): Promise<{ ok: true; view: ViewFile | null } | { ok: false; problems: string[] }> {
   const declared = declaredView(authored);
-  const view = declared === null ? null : await readPublicViewFile(root, declared, publishedAt);
+  const view = declared === null ? null : await readAppViewFile(root, declared, publishedAt);
   if (view !== null && !view.ok) return view;
   // The other question about the same live records, and the one the migration
   // scan cannot ask: not "do these rows still fit the schema" but "does this
@@ -322,7 +337,14 @@ export async function publishSharedApp(root: string, opts: SharedAppOptions = {}
   const page = await pageGate(root, authored, staged.staged, existingApp, handle, stamp.publishedAt);
   if (!page.ok) return { ok: false, partial: false, problems: page.problems };
 
-  const failure = await runWrites(publishSteps(handle, aid, staged.staged, stamp, face, slug, form, page.view), "publish");
+  // The members' and participants' pages, on the same timing and for the same
+  // reason. The participant scope comes from what THIS PUBLISH PROMOTES rather
+  // than from the manifest — see `planTierWrites`.
+  const promoted = { participantRead: stagedRuleConfig([...staged.staged]).participantRead ?? [] };
+  const pages = await planTierWrites(handle, aid, { root, authored, stamp, stage: "live", what: "publish", promoted });
+  if (!pages.ok) return pages;
+
+  const failure = await runWrites(publishSteps(handle, aid, staged.staged, stamp, face, slug, form, page.view, pages.tiers), "publish");
   if (failure) return failure;
 
   return {
@@ -330,6 +352,13 @@ export async function publishSharedApp(root: string, opts: SharedAppOptions = {}
     aid,
     cids: staged.staged.map((entry) => entry.cid),
     publicOpen: face.public !== undefined,
+    // Which pages this publish put live, per tier. Said out loud because the
+    // data behind a members' page is NOT public data — the argument that made
+    // the public view safe (a view can only carry off what any stranger could
+    // fetch) does not hold here, and the operator should know they published
+    // one.
+    memberPages: pageIdsOf(pages.tiers, "member"),
+    participantPages: pageIdsOf(pages.tiers, "roster"),
     slug,
     commit: stamp.commit,
     dirty: stampSource.dirty === true,

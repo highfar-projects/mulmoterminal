@@ -17,9 +17,10 @@
 import { ensureAid } from "./ensureAid.js";
 import { APPS_COLLECTION, appStagingPath, projectDeploy, type LoadedCollection, type PublishStamp } from "@mulmoclaude/core/collection/server";
 import { gitStamp, readCurrentApp, schemasOf, sharedAppContext, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
+import { allTierWrites, pageIdsOf, planTierWrites, type PlannedTier } from "./appViews.js";
 import { recordRefusal, scanRecords, type RecordScan } from "./records.js";
 import { reserveSlug, retireSlug, type SlugResult } from "./slug.js";
-import { runWrites } from "./writes.js";
+import { runWrites, type WriteStep } from "./writes.js";
 
 export interface DeploySuccess {
   ok: true;
@@ -37,6 +38,10 @@ export interface DeploySuccess {
   /** The URL name this app holds, once one has been reserved. Absent when `app.json` declares no
    *  `slug` — an app reachable only at `/staging/{aid}` never needs one. */
   slug?: string | undefined;
+  /** The app's own pages that this deploy staged, by id. Reported because the
+   *  roster has somewhere new to look: `/staging/{aid}` lists them, and a page
+   *  nobody knows was deployed is a page nobody tries. */
+  pages: string[];
   /** cids that were staged before and are not in the repository any more — dropped by this
    *  deploy. Reported because a withdrawal is not what the operator asked for; it is what
    *  deleting a collection's directory MEANT, and the two are easy to confuse. */
@@ -193,6 +198,42 @@ async function staleStaged(
   }
 }
 
+/** Everything one deploy writes, in order.
+ *
+ *  The order is the design: the app document (when it is not already live), then
+ *  the staged schemas it authorizes, then the app's own pages, and withdrawals
+ *  LAST — they grant nothing, and doing them after the writes keeps a failure
+ *  part-way through from leaving the roster with fewer collections than it had. */
+function deploySteps(
+  handle: SharedAppHandle,
+  aid: string,
+  what: {
+    deployed: ReturnType<typeof projectDeploy>;
+    stale: readonly string[];
+    pages: readonly PlannedTier[];
+    appDoc: Record<string, unknown>;
+    established: boolean;
+    stamp: PublishStamp;
+  },
+): WriteStep[] {
+  return [
+    // Not written again when `establishAndScan` just wrote it, byte for byte: the roster is
+    // already live, and the staging writes below need exactly that and nothing more.
+    ...(what.established ? [] : [{ what: `the app document (apps/${aid})`, run: () => handle.docs.set(APPS_COLLECTION, aid, what.appDoc) }]),
+    ...what.deployed.staging.map(({ cid, doc }) => ({
+      what: `the staged schema for '${cid}' (apps/${aid}/staging/${cid})`,
+      run: () => handle.docs.set(appStagingPath(aid), cid, doc),
+    })),
+    ...allTierWrites(handle, aid, "staged", what.pages, what.stamp),
+    ...what.stale.map((cid) => ({
+      what: `the withdrawal of the staged schema for '${cid}' (apps/${aid}/staging/${cid})`,
+      run: async (): Promise<void> => {
+        await handle.docs.delete(appStagingPath(aid), cid);
+      },
+    })),
+  ];
+}
+
 export type DeployResult = DeploySuccess | SharedAppFailure;
 
 export async function deploySharedApp(root: string, opts: SharedAppOptions = {}): Promise<DeployResult> {
@@ -257,26 +298,11 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
   const stale = await staleStaged(handle, aid, new Set(deployed.staging.map((entry) => entry.cid)), established);
   if (!stale.ok) return stale;
 
-  const failure = await runWrites(
-    [
-      // Not written again when the step above just wrote it, byte for byte: the roster is already
-      // live, and the staging writes below need exactly that and nothing more.
-      ...(established ? [] : [{ what: `the app document (apps/${aid})`, run: () => handle.docs.set(APPS_COLLECTION, aid, appDoc) }]),
-      ...deployed.staging.map(({ cid, doc }) => ({
-        what: `the staged schema for '${cid}' (apps/${aid}/staging/${cid})`,
-        run: () => handle.docs.set(appStagingPath(aid), cid, doc),
-      })),
-      // Withdrawals last: they grant nothing, and doing them after the writes keeps a failure
-      // part-way through from leaving the roster with fewer collections than it had.
-      ...stale.cids.map((cid) => ({
-        what: `the withdrawal of the staged schema for '${cid}' (apps/${aid}/staging/${cid})`,
-        run: async (): Promise<void> => {
-          await handle.docs.delete(appStagingPath(aid), cid);
-        },
-      })),
-    ],
-    "deploy",
-  );
+  // The app's own pages, staged beside the schemas (see `planTierWrites`).
+  const pages = await planTierWrites(handle, aid, { root, authored, stamp, stage: "staged", what: "deploy" });
+  if (!pages.ok) return { ...pages, partial: established };
+
+  const failure = await runWrites(deploySteps(handle, aid, { deployed, stale: stale.cids, pages: pages.tiers, appDoc, established, stamp }), "deploy");
   if (failure) return failure;
 
   // AFTER the app document, because `appSlugs`' create rule resolves the owner through
@@ -289,6 +315,7 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
     aid,
     slug: slug?.slug,
     cids: deployed.staging.map((entry) => entry.cid),
+    pages: [...pageIdsOf(pages.tiers, "member"), ...pageIdsOf(pages.tiers, "roster")],
     withdrawn: stale.cids,
     // "Created" means THIS deploy is the first, and that is no longer the same question as
     // "the document was absent": `init` reserves `apps/{aid}` before it writes `app.json`, so the

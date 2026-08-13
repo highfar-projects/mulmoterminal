@@ -598,4 +598,138 @@ describe("shared app deploy / publish / unpublish", () => {
     const result = await unpublishSharedApp(root);
     expect(result.ok === true && result.wasOpen).toBe(false);
   });
+
+  // --- the app's own pages, per audience -------------------------------------
+
+  /** A declaration with a page for the front desk and one for a participant.
+   *
+   *  `participantRead` is what makes the second one publishable at all: without
+   *  it the participant reaches nothing in `bookings`, and the gate refuses the
+   *  page rather than publishing one the rules would deny. */
+  const withPages = (extra: Record<string, unknown> = {}) => {
+    mkdirSync(path.join(root, "views"), { recursive: true });
+    writeFileSync(path.join(root, "views", "desk.html"), "<p>front desk</p>");
+    writeFileSync(path.join(root, "views", "mine.html"), "<p>your booking</p>");
+    writeApp(
+      root,
+      declaration({
+        participantRead: ["bookings"],
+        views: [
+          { id: "desk", audience: "member", path: "views/desk.html", collections: ["bookings"] },
+          { id: "mine", audience: "participant", path: "views/mine.html", collections: ["bookings"] },
+        ],
+        ...extra,
+      }),
+    );
+  };
+
+  it("stages a page in the tier its audience can read, and nowhere else", async () => {
+    withPages();
+    const result = await deploySharedApp(root, stamp);
+    expect(result.ok === false ? result.problems : []).toEqual([]);
+    expect(result.ok && result.pages).toEqual(["desk", "mine"]);
+
+    // The staff page is in the tier only a role-holder reads; the participant's
+    // is in the one the whole roster reads. Splitting the PROJECTION alone would
+    // not do this — the HTML itself carries the app's vocabulary.
+    expect(docs.doc(`apps/${AID}/member`, "staged:desk")).toMatchObject({ html: "<p>front desk</p>" });
+    expect(docs.doc(`apps/${AID}/roster`, "staged:mine")).toMatchObject({ html: "<p>your booking</p>" });
+    expect(docs.doc(`apps/${AID}/member`, "staged:mine")).toBeUndefined();
+    expect(docs.doc(`apps/${AID}/roster`, "staged:desk")).toBeUndefined();
+
+    // Deploy stages and publishes NOTHING: the members' page is not live until
+    // publish, exactly like the schemas beside it.
+    expect(docs.doc(`apps/${AID}/member`, "live:desk")).toBeUndefined();
+  });
+
+  it("tells each audience how to read its own data, and only its own", async () => {
+    withPages();
+    await deploySharedApp(root, stamp);
+
+    // A member reads the collection whole; every read a role opens is unscoped.
+    expect(docs.doc(`apps/${AID}/member`, "staged:config")).toMatchObject({
+      views: [{ id: "desk", collections: [{ cid: "bookings", scope: "all" }] }],
+    });
+    // A participant reads it whole too HERE, because `participantRead` says so —
+    // and the page is told which, since an unscoped list on an own-row collection
+    // is denied rather than narrowed.
+    expect(docs.doc(`apps/${AID}/roster`, "staged:config")).toMatchObject({
+      views: [{ id: "mine", collections: [{ cid: "bookings", scope: "all" }] }],
+    });
+    // The roster itself is in neither: this document is read by every
+    // participant, and the addresses on it are their classmates'.
+    expect(docs.doc(`apps/${AID}/roster`, "staged:config")).not.toHaveProperty("members");
+  });
+
+  it("promotes the pages on publish and withdraws the one the declaration dropped", async () => {
+    withPages();
+    await deploySharedApp(root, stamp);
+    const published = await publishSharedApp(root, stamp);
+    expect(published.ok === false ? published.problems : []).toEqual([]);
+    expect(published.ok && published.memberPages).toEqual(["desk"]);
+    expect(published.ok && published.participantPages).toEqual(["mine"]);
+    expect(docs.doc(`apps/${AID}/member`, "live:desk")).toMatchObject({ html: "<p>front desk</p>" });
+
+    // The author withdraws the staff page. Merely not writing it again is not
+    // enough: the tier is readable by everyone it admits, forever.
+    writeApp(
+      root,
+      declaration({ participantRead: ["bookings"], views: [{ id: "mine", audience: "participant", path: "views/mine.html", collections: ["bookings"] }] }),
+    );
+    await deploySharedApp(root, stamp);
+    expect(docs.doc(`apps/${AID}/member`, "staged:desk")).toBeUndefined();
+    const again = await publishSharedApp(root, stamp);
+    expect(again.ok === false ? again.problems : []).toEqual([]);
+    expect(docs.doc(`apps/${AID}/member`, "live:desk")).toBeUndefined();
+    expect(docs.doc(`apps/${AID}/roster`, "live:mine")).toBeDefined();
+  });
+
+  it("takes the published pages down on unpublish and leaves the staged ones alone", async () => {
+    withPages({ public: { enabled: true, read: ["bookings"] } });
+    await deploySharedApp(root, stamp);
+    await publishSharedApp(root, stamp);
+    expect(docs.doc(`apps/${AID}/member`, "live:desk")).toBeDefined();
+
+    const closed = await unpublishSharedApp(root);
+    expect(closed.ok === false ? closed.problems : []).toEqual([]);
+    // Closed: the staff page is readable by everyone that tier admits whatever
+    // else is shut, so leaving it would be a live page on a taken-down app.
+    expect(docs.doc(`apps/${AID}/member`, "live:desk")).toBeUndefined();
+    expect(docs.doc(`apps/${AID}/roster`, "live:mine")).toBeUndefined();
+    // NOT undeployed. `/staging/{aid}` is where the owner works between
+    // publishes, and taking that away would leave them unable to look at their
+    // own app until they published it again.
+    expect(docs.doc(`apps/${AID}/member`, "staged:desk")).toBeDefined();
+  });
+
+  it("refuses a page that cannot be read, before anything is written", async () => {
+    mkdirSync(path.join(root, "views"), { recursive: true });
+    writeApp(root, declaration({ views: [{ id: "desk", audience: "member", path: "views/missing.html", collections: ["bookings"] }] }));
+    const result = await deploySharedApp(root, stamp);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.problems.join(" ")).toContain("views[0].path");
+    // The name of the key the author can go and edit — not `public.view`, which
+    // is not in this file.
+    expect(result.ok === false && result.problems.join(" ")).not.toContain("public.view.path");
+  });
+
+  it("refuses a participant page whose collection the PROMOTED rules will not open", async () => {
+    // The trap: `participantRead` is added to app.json and publish is run
+    // without a deploy. Publish promotes what DEPLOY staged, so the rules would
+    // deny the read while the page was published, offered, and then refused.
+    mkdirSync(path.join(root, "views"), { recursive: true });
+    writeFileSync(path.join(root, "views", "mine.html"), "<p>your booking</p>");
+    writeApp(root, declaration({ views: [{ id: "mine", audience: "participant", path: "views/mine.html", collections: ["bookings"] }] }));
+    const refused = await deploySharedApp(root, stamp);
+    expect(refused.ok).toBe(false);
+    expect(refused.ok === false && refused.problems.join(" ")).toContain("a participant cannot read");
+
+    // The neighbouring declaration: the same page, deployed with the read it needs.
+    writeApp(
+      root,
+      declaration({ participantRead: ["bookings"], views: [{ id: "mine", audience: "participant", path: "views/mine.html", collections: ["bookings"] }] }),
+    );
+    const deployed = await deploySharedApp(root, stamp);
+    expect(deployed.ok === false ? deployed.problems : []).toEqual([]);
+  });
 });

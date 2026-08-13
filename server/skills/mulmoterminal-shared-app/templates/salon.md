@@ -47,10 +47,13 @@
     },
     "slots": { "mirrorOf": "bookings" }
   },
+  "views": [
+    { "id": "public", "audience": "public", "path": "views/booking.html", "collections": ["stylists", "services", "slots"] },
+    { "id": "desk", "audience": "member", "path": "views/desk.html", "collections": ["bookings", "slots"] }
+  ],
   "public": {
     "enabled": true,
     "read": ["services", "stylists", "slots"],
-    "view": { "path": "views/booking.html", "collections": ["stylists", "services", "slots"] },
     "submit": {
       "bookings": {
         "auth": "verifiedEmail",
@@ -138,7 +141,7 @@
 ```html
 <div id="grid"></div>
 <script>
-  const view = window.__MC_PUBLIC_VIEW;
+  const view = window.__MC_APP_VIEW;
   view.onState(({ stylists = [], slots = [] }) => {
     const open = slots.filter((slot) => slot.state === "open");
     document.getElementById("grid").innerHTML = open
@@ -167,6 +170,35 @@
 **押した瞬間には書き込まれません。** 親が送られてきた値を iframe の外に描いて確認を
 取り、訪問者が押してから書きます。これはビューの HTML が信頼されていないためで、
 読み込んだ瞬間に `submit()` を呼ぶページがあっても、勝手に予約が入ることはありません。
+
+## views/desk.html — 受付の画面
+
+`audience: "member"` のページです。**ロールを持つ人だけ**が読めるドキュメントに publish され、
+入口は `/m/{slug}`。店主の Mac が閉じたままでも、受付とスタイリストが自分のスマホで
+その日の予約を見られる、というのがこれの目的です。
+
+契約は公開ビューと**同じ**（`window.__MC_APP_VIEW` / `onState` / `ready`）。違うのは
+渡されるものだけで、`collections` に書いたものが**その人の資格情報で**読まれます。
+
+```html
+<ul id="today"></ul>
+<script>
+  const view = window.__MC_APP_VIEW;
+  view.onState(({ bookings = [] }) => {
+    document.getElementById("today").innerHTML = bookings
+      .map((booking) => `<li>${booking.startAt ?? booking.slot} ${booking.customerName} — ${booking.status}</li>`)
+      .join("");
+  });
+  view.ready();
+</script>
+```
+
+**ここに渡るのは公開データではありません。** 公開ビューは「誰でも取れるデータしか
+渡さない」と言えましたが、この画面が受け取るのは氏名と連絡先を含む予約そのものです。
+書くのはオーナー、データもオーナーのもの、読むのはオーナーの名簿にいる人 — なので
+プラットフォームはこれを止めませんが、**そういうものを書いている**ことは知っておいてください。
+
+**書き込み（承認・担当の付け替え）は今のところこの画面からはできません。** 見るところまでです。
 
 ---
 

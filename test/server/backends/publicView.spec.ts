@@ -11,7 +11,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { chmodSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { AuthoredApp, FirestoreDoc, FirestoreDocs } from "@mulmoclaude/core/collection/server";
-import { readPublicViewFile, viewDocumentBytes } from "../../../server/backends/sharedApp/publicView.js";
+import { readAppViewFile, viewDocumentBytes } from "../../../server/backends/sharedApp/publicView.js";
 import { frozenKeyProblems } from "../../../server/backends/sharedApp/exclusivity.js";
 import { makeTempDir } from "../../support/tempDir";
 
@@ -37,7 +37,7 @@ describe("the file a published view names", () => {
     // skill folder would ask which collection owns a page belonging to the
     // whole app — a question an app with three of them cannot answer.
     const declared = withView(root, "<div id='grid'></div>");
-    const result = await readPublicViewFile(root, { path: declared }, STAMP);
+    const result = await readAppViewFile(root, { path: declared }, STAMP);
     expect(result.ok).toBe(true);
     expect(result.ok && result.view.html).toContain("<div id='grid'></div>");
   });
@@ -45,7 +45,7 @@ describe("the file a published view names", () => {
   it("refuses a path that names nothing", async () => {
     // The failure it prevents is silent: the page renders, the HTML is empty,
     // and the visitor is told there is nothing here.
-    const result = await readPublicViewFile(root, { path: "views/missing.html" }, STAMP);
+    const result = await readAppViewFile(root, { path: "views/missing.html" }, STAMP);
     expect(result.ok).toBe(false);
     expect(result.ok === false && result.problems.join(" ")).toContain("could not be opened as a plain file");
   });
@@ -59,7 +59,7 @@ describe("the file a published view names", () => {
     writeFileSync(path.join(root, "inside.html"), "<p>inside</p>");
     mkdirSync(path.join(root, "views"), { recursive: true });
     symlinkSync(path.join(root, "inside.html"), path.join(root, "views", "booking.html"));
-    const result = await readPublicViewFile(root, { path: "views/booking.html" }, STAMP);
+    const result = await readAppViewFile(root, { path: "views/booking.html" }, STAMP);
     expect(result.ok).toBe(false);
     expect(result.ok === false && result.problems.join(" ")).toContain("without following links");
   });
@@ -69,7 +69,7 @@ describe("the file a published view names", () => {
     // capability token and fetches its own data. The public page has neither,
     // so this would publish cleanly and render blank.
     const declared = withView(root, "<script>const t = window.__MC_VIEW.token;</script>");
-    const result = await readPublicViewFile(root, { path: declared }, STAMP);
+    const result = await readAppViewFile(root, { path: declared }, STAMP);
     expect(result.ok).toBe(false);
     expect(result.ok === false && result.problems.join(" ")).toContain("HOST's custom-view contract");
   });
@@ -79,7 +79,7 @@ describe("the file a published view names", () => {
     // names and UTF-8 lengths included. Measuring the file would be measuring
     // the wrong thing, and the answer arrives as a refused write.
     const declared = withView(root, "x".repeat(950_000));
-    const result = await readPublicViewFile(root, { path: declared }, STAMP);
+    const result = await readAppViewFile(root, { path: declared }, STAMP);
     expect(result.ok).toBe(false);
     expect(result.ok === false && result.problems.join(" ")).toContain("as a Firestore document");
   });
@@ -94,7 +94,7 @@ describe("the file a published view names", () => {
     // a document whose rule is `allow read: if true` — so this is not a broken
     // page but somebody's secrets handed to the world.
     writeFileSync(path.join(root, "..", "outside.html"), "<p>secret</p>");
-    const result = await readPublicViewFile(root, { path: "views/../../outside.html" }, STAMP);
+    const result = await readAppViewFile(root, { path: "views/../../outside.html" }, STAMP);
     expect(result.ok).toBe(false);
     expect(result.ok === false && result.problems.join(" ")).toContain("resolves outside this repository");
   });
@@ -110,7 +110,7 @@ describe("the file a published view names", () => {
     writeFileSync(secret, "<p>secret</p>");
     mkdirSync(path.join(root, "views"), { recursive: true });
     symlinkSync(secret, path.join(root, "views", "leak.html"));
-    const result = await readPublicViewFile(root, { path: "views/leak.html" }, STAMP);
+    const result = await readAppViewFile(root, { path: "views/leak.html" }, STAMP);
     expect(result.ok).toBe(false);
     expect(result.ok === false && result.problems.join(" ")).toContain("without following links");
   });
@@ -121,7 +121,7 @@ describe("the file a published view names", () => {
     // exception out of publish, which is the one shape callers do not handle.
     const declared = withView(root, "<p>here for now</p>");
     chmodSync(path.join(root, "views", "booking.html"), 0o000);
-    const result = await readPublicViewFile(root, { path: declared }, STAMP);
+    const result = await readAppViewFile(root, { path: declared }, STAMP);
     chmodSync(path.join(root, "views", "booking.html"), 0o644);
     expect(result.ok).toBe(false);
     expect(result.ok === false && result.problems.join(" ")).toContain("Nothing was written");
@@ -134,7 +134,7 @@ describe("the file a published view names", () => {
     const elsewhere = makeTempDir("mt-public-view-elsewhere-");
     writeFileSync(path.join(elsewhere, "booking.html"), "<p>not ours</p>");
     symlinkSync(elsewhere, path.join(root, "views"));
-    const result = await readPublicViewFile(root, { path: "views/booking.html" }, STAMP);
+    const result = await readAppViewFile(root, { path: "views/booking.html" }, STAMP);
     expect(result.ok).toBe(false);
     expect(result.ok === false && result.problems.join(" ")).toContain("is a symbolic link");
   });
@@ -143,7 +143,7 @@ describe("the file a published view names", () => {
     // The neighbouring declaration that must still publish — otherwise the
     // check above is satisfied by refusing everything.
     const declared = withView(root, "<script>window.__MC_PUBLIC_VIEW.ready();</script>");
-    const result = await readPublicViewFile(root, { path: declared }, STAMP);
+    const result = await readAppViewFile(root, { path: declared }, STAMP);
     expect(result.ok).toBe(true);
   });
 });
