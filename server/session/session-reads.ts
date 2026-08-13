@@ -28,7 +28,7 @@ import { classifyWorkPhase, type WorkPhase } from "./workPhase.js";
 import { sessionListTitle } from "./sessionListTitle.js";
 import { activity, aiTitles, codexRollouts, codexRolloutsHydrated, isBackgroundSession, isFailedWorker, knownSessions, sessionMemos } from "./registry.js";
 import { projectSessionsDir } from "./project-dir.js";
-import { lastTurnFromClaudeParsed, lastTurnFromCodexRolloutDocs, EMPTY_TURN, type LastTurn } from "./last-turn.js";
+import { currentTurnReplyFromClaudeParsed, lastTurnFromClaudeParsed, lastTurnFromCodexRolloutDocs, EMPTY_TURN, type LastTurn } from "./last-turn.js";
 import { forEachJsonlRecordIn, readTailRecords } from "../infra/jsonl-file.js";
 import { copySummaryState, emptySummaryState, foldSummary, summaryPartsOf, type SummaryState } from "./summary-scan.js";
 import { partitionPending } from "./partitionPending.js";
@@ -256,6 +256,18 @@ async function codexLastTurn(sessionKey: string): Promise<LastTurn> {
 // nothing. The last turn is in the last few lines either way, so the size of the file behind it
 // stopped mattering: the same read now costs 256 KB whatever the transcript weighs. There is
 // consequently no size limit here at all, and no "too large" answer for a caller to handle.
+
+// The reply to the turn that just ENDED, for the phone push — null when that turn produced none,
+// never an older exchange (#1650, and the invariant readLatestResponse states above). Claude only:
+// codex reaches the same push from codex-activity-track, which decides a turn ended by reading the
+// very record that carries its reply, so its trigger cannot outrun its own data.
+export async function claudeCurrentTurnReply(cwd: string, id: string): Promise<string | null> {
+  try {
+    return currentTurnReplyFromClaudeParsed(readTailRecords(path.join(projectSessionsDir(cwd), `${id}.jsonl`)));
+  } catch {
+    return null; // no transcript on disk yet
+  }
+}
 
 export async function sessionLastTurn(cwd: string, id: string, agent: TerminalAgent): Promise<LastTurn> {
   if (agent === "codex") return codexLastTurn(id);
