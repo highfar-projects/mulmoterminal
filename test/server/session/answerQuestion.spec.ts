@@ -30,6 +30,8 @@ const deps = (calls: RecordedCall[], write = vi.fn(() => true)): AnswerQuestionD
   callsOf: async () => calls,
   write,
   otherWriteCount: () => 0,
+  watchOtherWrites: () => {},
+  stopWatchingOtherWrites: () => {},
   pause: async () => {},
   gapMs: 0,
 });
@@ -142,6 +144,8 @@ describe("answerQuestion", () => {
       callsOf: async () => [CALL("t1", "running", true)],
       write,
       otherWriteCount: () => others,
+      watchOtherWrites: () => {},
+      stopWatchingOtherWrites: () => {},
       // The user's keystroke lands in the gap after the first key goes out.
       pause: async () => {
         if (write.mock.calls.length === 1) others = 1;

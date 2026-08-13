@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { createConnectionHandlers, handleCommandFrame } from "../../../server/session/pty-connection.js";
 import type { PtyEntry } from "../../../server/session/types.js";
-import { otherWriteCount } from "../../../server/session/write-to-session";
+import { otherWriteCount, stopWatchingOtherWrites, watchOtherWrites } from "../../../server/session/write-to-session";
 
 const OPEN = 1;
 const CLOSED = 3;
@@ -90,14 +90,25 @@ describe("handleClientFrame", () => {
 
   // The keystroke is also ANNOUNCED, which is what stops an answer that is mid-sequence from
   // typing the rest of its keys into whatever the user's own input turned the screen into (#1685).
+  // Counted only while an answer is listening — otherwise every session the process ever served
+  // would keep a counter nobody reads.
   it("announces the keystroke so an in-flight answer yields to it", () => {
     const { handleClientFrame } = setup();
     const t = fakeTerm();
     const s = fakeSocket();
     const entry = entryWith({ term: t.term as never, ws: s.ws as never });
-    const before = otherWriteCount(SESSION);
+
     handleClientFrame(entry, s.ws as never, frame({ type: "input", data: "x" }), SESSION);
-    expect(otherWriteCount(SESSION)).toBe(before + 1);
+    expect(otherWriteCount(SESSION)).toBe(0); // nobody answering: nothing kept
+
+    watchOtherWrites(SESSION);
+    try {
+      handleClientFrame(entry, s.ws as never, frame({ type: "input", data: "y" }), SESSION);
+      expect(otherWriteCount(SESSION)).toBe(1);
+    } finally {
+      stopWatchingOtherWrites(SESSION);
+    }
+    expect(otherWriteCount(SESSION)).toBe(0); // and forgotten again
   });
 
   it("resizes on a valid resize frame", () => {

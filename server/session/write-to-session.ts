@@ -26,17 +26,35 @@ const write = (sessionId: string, chunk: string): boolean => {
 // reach the prompt underneath and walk its history. No snapshot of the dialog can see that coming:
 // the tool-call close arrives asynchronously, well after the screen changed.
 //
-// So every ordinary writer bumps this counter, and an answer in flight watches it. The counter
-// rather than a lock, because the answer must not BLOCK the user's own typing — it must yield to it.
-const otherWrites = new Map<string, number>();
+// So every ordinary writer announces itself, and an answer in flight counts those announcements.
+// A counter rather than a lock, because the answer must not BLOCK the user's own typing — it is the
+// answer that yields.
+//
+// Only while an answer is actually in flight: keeping a counter per session forever would grow with
+// every session the process ever served, to answer a question nobody is asking. An entry lives for
+// the ~300ms of one answer and is removed in its `finally`, so this holds at most one per session
+// answering right now.
+const watched = new Map<string, number>();
 
-export const otherWriteCount = (sessionId: string): number => otherWrites.get(sessionId) ?? 0;
+/** Start counting for this session's answer. */
+export const watchOtherWrites = (sessionId: string): void => {
+  watched.set(sessionId, 0);
+};
+
+/** Stop counting, and forget the session. */
+export const stopWatchingOtherWrites = (sessionId: string): void => {
+  watched.delete(sessionId);
+};
+
+export const otherWriteCount = (sessionId: string): number => watched.get(sessionId) ?? 0;
 
 /** Say that something other than an answer has typed here — for a writer that holds its own pty.
  *  The browser's keystroke path does its own write (it already has the entry, and going through a
- *  registry lookup on every keypress would drop input in any window where the two disagree). */
+ *  registry lookup on every keypress would drop input in any window where the two disagree).
+ *  A no-op unless an answer is listening, which is the ordinary case. */
 export const noteOtherWrite = (sessionId: string): void => {
-  otherWrites.set(sessionId, otherWriteCount(sessionId) + 1);
+  const seen = watched.get(sessionId);
+  if (seen !== undefined) watched.set(sessionId, seen + 1);
 };
 
 /** Write on behalf of anything but an answer: the phone's typing, and anything added later. */
