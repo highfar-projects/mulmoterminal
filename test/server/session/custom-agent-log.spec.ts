@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { applyCustomAgentSession, customAgentSessionLine, customAgentSessionRecord, type CustomAgentSession } from "../../../server/session/custom-agent-log";
 import { isCustomAgentId } from "../../../common/customAgents";

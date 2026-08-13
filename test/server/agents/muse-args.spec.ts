@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { buildMuseArgs } from "../../../server/agents/muse-args.js";
 

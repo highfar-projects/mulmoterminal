@@ -23,7 +23,23 @@ jobs:
         id: setup-node
         with:
           node-version: 22
-          cache: yarn
+
+      # node_modules directly, rather than `cache: yarn` on setup-node above. The yarn cache is
+      # 1.6 GB here and restoring it only shortens an install that still has to run: on macOS that
+      # was 43s of restore plus 41s of install for a tree that is 1.2 GB when already built.
+      # Caching the built tree pays the transfer once. Same shape as windows-daily.yaml.
+      #
+      # The lockfile hash is the key, with a prefix restore so a changed lockfile starts from the
+      # previous tree and yarn reconciles the difference instead of resolving everything. The
+      # resolved node version is in the key for the native builds (node-pty ships per-ABI
+      # prebuilds), and `yarn install` still runs — warm, it is "Already up-to-date" plus the
+      # postinstall, which is where server/fix-pty-perms.js fixes the prebuilt spawn-helper.
+      - uses: actions/cache@v5
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-node${{ steps.setup-node.outputs.node-version }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: |
+            node-modules-${{ runner.os }}-node${{ steps.setup-node.outputs.node-version }}-
 
       - run: yarn install --frozen-lockfile
 
@@ -38,12 +54,20 @@ jobs:
       # lint step back to 110s twice while macOS stayed at 5s. Per-version keys let each one keep
       # its own cache across the flip; no `-${{ runner.os }}-` fallback, since a cache from another
       # version restores fine and then yields zero usable entries.
+      #
+      # The LOCKFILE hash is in the key for correctness, not speed. What eslint hashes into an
+      # entry is its own version, the node version and the config — NOT the dependency tree. The
+      # type-aware rules read their types out of node_modules, so a cached result computed against
+      # the old tree is served again for a file that did not change, which is exactly the shape of
+      # a dependency bump: only yarn.lock moves, and every finding the new types would produce is
+      # skipped. Demonstrated locally in the other direction — a lint run made before `yarn install`
+      # cached 300 "error typed" findings and kept reporting them after the install fixed the tree.
       - uses: actions/cache@v5
         with:
           path: .eslintcache
-          key: eslint-cache-${{ runner.os }}-node${{ steps.setup-node.outputs.node-version }}-${{ github.run_id }}
+          key: eslint-cache-${{ runner.os }}-node${{ steps.setup-node.outputs.node-version }}-${{ hashFiles('yarn.lock') }}-${{ github.run_id }}
           restore-keys: |
-            eslint-cache-${{ runner.os }}-node${{ steps.setup-node.outputs.node-version }}-
+            eslint-cache-${{ runner.os }}-node${{ steps.setup-node.outputs.node-version }}-${{ hashFiles('yarn.lock') }}-
 
       # lint:ci, not lint: `content` is what survives checkout rewriting every mtime, and it is
       # also why CI does not run workers — see plans/perf-lint-ci-local-split.md.

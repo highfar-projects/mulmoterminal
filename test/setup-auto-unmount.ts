@@ -9,7 +9,14 @@
 //
 // Global rather than per-file: 18 spec files mounted without ever unmounting, and the next
 // one written would have joined them.
-import { enableAutoUnmount } from "@vue/test-utils";
+//
+// Behind the same `window` check as setup-i18n.ts, and for the same reason: setupFiles run for
+// EVERY environment, and the 400-odd specs marked `@vitest-environment node` mount nothing — so a
+// static import made each of them pull @vue/test-utils' module graph to register a hook that can
+// never fire.
 import { afterEach } from "vitest";
 
-enableAutoUnmount(afterEach);
+if (typeof window !== "undefined") {
+  const { enableAutoUnmount } = await import("@vue/test-utils");
+  enableAutoUnmount(afterEach);
+}
