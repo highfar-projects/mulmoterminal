@@ -21,6 +21,39 @@ describe("repoForCwd", () => {
     expect(repoForCwd("/srv/mt2", REPO_DIRS)).toBe("receptron/mulmoterminal");
   });
 
+  // Codex review: an exact match left every cell that was not sitting at the clone ROOT leading
+  // with the wrong repo — and a cell is very often somewhere under it (the user cd'd into `src/`,
+  // or it was started there).
+  it("finds the repo from a directory INSIDE the clone", () => {
+    expect(repoForCwd("/srv/mt/src/components", REPO_DIRS)).toBe("receptron/mulmoterminal");
+  });
+
+  it("does not take a mere prefix for containment", () => {
+    // `/srv/mt-marketing` starts with `/srv/mt` as a string. The separator is what makes it a
+    // boundary — without it a sibling directory borrows its neighbour's repo.
+    expect(repoForCwd("/srv/mt-marketing", REPO_DIRS)).toBeNull();
+  });
+
+  it("takes the DEEPEST clone when they nest", () => {
+    // Clones nest here — a worktree under a repo's managed root, or one repo vendored inside
+    // another. The innermost is the repository the cell is actually in.
+    const nested = [
+      { repo: "outer/one", dirs: dirs("/srv/outer") },
+      { repo: "inner/two", dirs: dirs("/srv/outer/vendor/inner") },
+    ];
+    expect(repoForCwd("/srv/outer/vendor/inner/src", nested)).toBe("inner/two");
+    expect(repoForCwd("/srv/outer/src", nested)).toBe("outer/one");
+  });
+
+  it("folds a trailing slash, a dot segment and both separators", () => {
+    // The browser has no filesystem, so this is what dirPathKey buys: one spelling for the
+    // several a path can arrive as.
+    expect(repoForCwd("/srv/mt/", REPO_DIRS)).toBe("receptron/mulmoterminal");
+    expect(repoForCwd("/srv/mt/./src", REPO_DIRS)).toBe("receptron/mulmoterminal");
+    expect(repoForCwd("/srv/mt/src/..", REPO_DIRS)).toBe("receptron/mulmoterminal");
+    expect(repoForCwd("\\srv\\mt\\src", [{ repo: "receptron/mulmoterminal", dirs: dirs("\\srv\\mt") }])).toBe("receptron/mulmoterminal");
+  });
+
   it("answers null for a directory nobody registered", () => {
     // The decision this encodes: that cell opens the pane in the conventional order rather than
     // erroring. It is also the mundane explanation for "my repo did not float to the top".

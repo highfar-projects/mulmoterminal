@@ -8,6 +8,7 @@
 //
 // Pure and shared so it can be tested without mounting the pane, and so the PR list and the issue
 // list cannot drift into ordering themselves differently.
+import { dirPathKey } from "./dirPathKey.js";
 
 /** The only field either list is ordered by. Both `RepoPrs` and `RepoIssues` carry it. */
 export interface RepoGrouped {
@@ -18,23 +19,50 @@ export interface RepoGrouped {
 const sameRepo = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
 /**
+ * Whether `cwd` is the clone at `base`, or anywhere inside it.
+ *
+ * CONTAINMENT, not equality: a cell is very often somewhere under the clone rather than at its
+ * root — the user cd'd into `src/`, or the cell was started there — and an exact match left every
+ * one of those leading with the wrong repo (Codex review).
+ *
+ * Through `dirPathKey` because the browser has no filesystem: it folds both separators, a trailing
+ * slash, `.` and `..` into one spelling. Lexical only, so it cannot see through a symlink — which
+ * is right here, where the answer decides presentation. (server/infra/path-within.ts carries the
+ * strict rule for the places where it is a boundary.) Case-folded on top: Windows and the default
+ * macOS volume both treat two spellings of one directory as the same one.
+ */
+const isWithinDir = (base: string, cwd: string): boolean => {
+  const root = dirPathKey(base).toLowerCase();
+  const target = dirPathKey(cwd).toLowerCase();
+  if (root === "" || target === "") return false;
+  if (target === root) return true;
+  // A prefix is NOT containment — `/srv/project-old` starts with `/srv/project`. The separator is
+  // what makes it a boundary. `dirPathKey` leaves one only on a filesystem root ("/", "C:/").
+  return target.startsWith(root.endsWith("/") ? root : `${root}/`);
+};
+
+/**
  * `owner/repo` for the directory a cell is in, from the reverse map `/api/repo-dirs` already
- * serves — no extra request and no `git` subprocess, since the overlay fetches it anyway for the
+ * serves — no extra request and no `git` subprocess, since the view fetches it anyway for the
  * issue rows' start control.
  *
- * Compared with the CANONICAL spelling `cwdPresets` stores, which is what the candidates carry,
- * so this is a same-path test rather than a containment one. `null` for a directory that names no
- * repository — not a git repo, no `origin`, a forge we cannot act on, or simply a clone the user
- * never registered in Settings. All four are ordinary, and the caller leaves the order alone.
+ * `null` for a directory that names no repository — not a git repo, no `origin`, a forge we cannot
+ * act on, or simply a clone the user never registered in Settings. All four are ordinary, and the
+ * caller leaves the order alone.
  */
 export function repoForCwd(cwd: string | null | undefined, repoDirs: readonly { repo: string; dirs: readonly { path: string }[] }[]): string | null {
   if (!cwd) return null;
-  // Case-insensitive on the path too: Windows and the default macOS volume both treat two
-  // spellings of one directory as the same one, and this decides presentation rather than access,
-  // so the looser answer is the safe one here. (server/infra/path-within.ts carries the strict
-  // rule for the places where it is a boundary.)
-  const wanted = cwd.toLowerCase();
-  return repoDirs.find((entry) => entry.dirs.some((dir) => dir.path.toLowerCase() === wanted))?.repo ?? null;
+  // The DEEPEST match wins. Clones nest here — a worktree under a repo's managed root, or a repo
+  // vendored inside another — and the innermost one is the repository the cell is actually in.
+  let best: { repo: string; depth: number } | null = null;
+  for (const entry of repoDirs) {
+    for (const dir of entry.dirs) {
+      if (!isWithinDir(dir.path, cwd)) continue;
+      const depth = dirPathKey(dir.path).length;
+      if (!best || depth > best.depth) best = { repo: entry.repo, depth };
+    }
+  }
+  return best?.repo ?? null;
 }
 
 /**
