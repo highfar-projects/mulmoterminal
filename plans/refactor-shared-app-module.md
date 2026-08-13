@@ -1,6 +1,8 @@
 # 共有アプリのコンパイラを `receptron/sharedapp` に出す
 
-**状態**: 提案（2026-08-13）。実装は未着手。
+**状態**: **実装済み**（2026-08-13）。`receptron/sharedapp` は作られ、4 リポジトリに
+PR が出ている — sharedapp（`1ece783`、main にマージ済み）、mulmoterminal#1675、
+mulmoclaude#2894、mulmoserver#175。
 [`refactor-shared-app-wire-contract.md`](./refactor-shared-app-wire-contract.md) の**決定 1 を
 差し替える**もの（あちらは射影の書き込み側だけを MT に引き取る案で、実装まで行ったが
 **保留にした** — mulmoclaude#2892 / mulmoterminal#1672 / mulmoserver#174 は draft）。
@@ -149,21 +151,51 @@ lockfile には
 
 0. **[済] スパイク**: `git+file://` の最小モジュールで、MT と MS の両方の
    install / typecheck / test / build が通ることを確認した（決定 3 の表）。
-   残るのは repo を private にするかどうかだけ。
-1. **sharedapp**: 4 ファイル + MT の `appViewProjection.ts` を入れ、テストを移す
+   repo は **public**。
+1. **[済] sharedapp**: 4 ファイル + MT の `appViewProjection.ts` を入れ、テストを移す
    （core の `test_appViews.ts` / `test_publishChecks.ts` などの該当分）。
-2. **core**: 移した分を削り、`index.ts` から外す。`test_sharedHostSurface.ts` は
+2. **[済] core**（mulmoclaude#2894）: 移した分を削り、`index.ts` から外す。`test_sharedHostSurface.ts` は
    「ホストが戻ってこなくて済むか」を測る装置なので、**共有アプリの分が丸ごと減るのが正しい**。
    `@mulmoclaude/core` **4.0.0**（1 回だけのメジャー）。
    同梱プラグイン 7 本の peer が `^3.6.0` なので、**7 本とも major を上げて publish する**
    （mulmoclaude#2892 で判明。レンジを直すだけでは足りない — npm に出ている版が
    `^3.6.0` と言っている以上、strict な peer 解決が新規 install を拒み得る）。
-3. **MT**: import を `@mulmoclaude/core/collection/server` から `sharedapp` に付け替える
+3. **[済] MT**（mulmoterminal#1675）: import を `@mulmoclaude/core/collection/server` から `sharedapp` に付け替える
    （33 シンボル）。`appViewProjection.ts` を消してモジュールを指す。
-4. **mulmoserver**: `rules_publish.ts` と `test_appViewRoundTrip.ts` を `sharedapp` に向ける。
+4. **[済] mulmoserver**（mulmoserver#175）: `rules_publish.ts` と `test_appViewRoundTrip.ts` を `sharedapp` に向ける。
 
 2 と 3 は **1 回の core リリース**を使う（前案と同じ「削るための最後の publish」）。
 以後、`app.json` のキーも publish ゲートも `{tier}/config` も、**core のリリース無しで動く**。
+
+## 実装して分かったこと
+
+**yarn 1 の `github:owner/repo#sha` 短縮形は `prepare` を走らせない。** codeload の
+tarball を取るだけなので、`dist` の無いパッケージが入る（`src/` と `test/` がそのまま
+`node_modules` に置かれ、import が解決できない）。**`git+https://github.com/…​.git#sha`
+と明示すると clone して prepare が走る。** スパイクを `git+file://` でやったせいで
+最初は気づかず、MT に入れて初めて出た。両リポジトリの `package.json` は明示形。
+
+**tsconfig の `moduleResolution` は core と同じ `Bundler` にするしかない。**
+core が配る `.d.ts` は相対 re-export に拡張子が無く、`NodeNext` では解決できない —
+バレルの `export *` が全部消え、`isValidCollectionName` も `CollectionSchema` も
+「そんな export は無い」になる。自分の emit は `src` の import に `.js` を明記して
+あるので、Node からは解ける。
+
+**`CollectionSchemaZ` は `@mulmoclaude/core/collection` からは出ていない**
+（`collection/server` から出ている）。`test_projectDeploy` がそれを使っていた。
+
+**`projectSubmit` を export する話は消えた。** 前案では `tierSubmit` が core に残る
+`projectSubmit` を必要としたので core 側で export したが、スタックごと移したので
+両方とも同じモジュールの中に入り、公開する必要が無くなった。
+
+**MT の PR は core の publish を待たない。** MT は `sharedapp` からしか import しない
+ので、`@mulmoclaude/core` は 3.15.0 のままで動く。core からの削除（4.0.0 +
+プラグイン 7 本）は独立にマージ・publish できる。前案では MT が publish 待ちで
+draft のままだった。
+
+**`test_sharedHostSurface.ts` は 16 シンボル短くなった。** あのファイルは
+「ホストが戻ってこなくて済むか」の帳簿なので、減るのが正しい。併せて
+「コンパイラは戻ってこない」ことを否定テストで固定した。
 
 ## やらないこと
 
