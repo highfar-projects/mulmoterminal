@@ -28,12 +28,19 @@ full-screen frame and its route), the division `FilesPane` / `FilesOverlay` alre
 exclusivity needed nothing new — `paneByCell` already holds one pane per cell, so `"github"`
 inherits the rule.
 
-**Reordering, not scrolling.** A scroll that lands slightly off looks like nothing happened, it has
-to re-run on every reload, and a repository with no open PRs and no open issues has nothing to
-scroll to — where an empty section at the top still answers "yours: none". Resolving the cell's
-repository costs no extra request: `/api/repo-dirs` serves the reverse map and the view already
-fetches it. A cell that is not a git repo, has no `origin`, sits on an unsupported forge, or is a
-clone not registered in Settings opens in the configured order.
+**A block of its own, not a scroll.** A scroll that lands slightly off looks like nothing happened,
+it has to re-run on every reload, and a repository with no open PRs and no open issues has nothing
+to scroll to — where `No open PRs` at the top still answers "yours: none". The cell's repository is
+lifted out into one section carrying both its PRs and its issues, above a rule.
+
+Resolving which repository that is costs no extra request and no `git` subprocess at pane time:
+`/api/repo-dirs` serves the reverse map (built from the registered `cwdPresets` by reading each
+one's `origin`) and the view already fetches it. The match is **containment** — a cell in `repo/src`
+leads with `repo`, and the deepest registered directory wins so nested clones and worktrees resolve
+to the one the cell is actually in. Two conditions, both required: the cell's directory is inside a
+registered directory that names a repository (so not-a-git-repo, no `origin` and an unreadable forge
+all fall out here), and that repository is among the configured `prRepos`, since the lead block is a
+section of that list. Otherwise the pane opens in the configured order.
 
 `"prs"` stays a header-config value and `/prs` stays a route (redirecting to `/github`) — both are
 things users wrote down, so the rename is the name they *reach*, not the name they *type*.

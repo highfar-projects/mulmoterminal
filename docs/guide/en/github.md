@@ -98,10 +98,12 @@ Files and Collections are one-at-a-time per cell, and GitHub is one of them.
 - A **Pull requests** section on top, an **Issues** section below. Both are grouped **per repository**
   (an `owner/repo` heading with a count).
 - Only **open** items are shown. Order is your registration order (repos) and whatever `gh` returns (items).
-- **In the pane, the cell's own repository is moved to the front** — including when it has nothing
-  open, where an empty section is still the answer. It stays in the configured order if the cell's
-  directory is not a git repo, has no `origin`, sits on a forge this app does not read, or is a
-  clone you have not registered as a working directory.
+- **In the pane, the cell's own repository is lifted into a block of its own at the top** — its PRs
+  and its issues together — including when it has nothing open, where `No open PRs` / `No open
+  issues` is still the answer. Two conditions: the cell's directory is **inside a working directory
+  you registered** (the clone or anywhere under it; a directory that is not a git repo, has no
+  `origin`, or sits on a forge this app cannot read names no repository), **and** that repository is
+  in the list above. Otherwise the pane opens in the configured order.
 - **Clicking a row opens it on GitHub in a new tab** (nothing opens in-app).
 - **↻ (Reload)** at the top re-fetches. **There is no auto-refresh** — it loads once when you open the
   view, then only on Reload.
