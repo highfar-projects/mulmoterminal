@@ -294,8 +294,11 @@ entry per page, each naming **who it is for**:
 |---|---|---|
 | `public` | anybody, signed out | `/a/{slug}` |
 | `member` | anybody holding a role in the app — the front desk | `/m/{slug}` |
-| `participant` | somebody on the roster with no role: their own row | `/a/{slug}`, signed in |
+| `participant` | anybody on the roster, seeing their own row | `/p/{slug}` |
 
+- **The two are not exclusive.** An owner who also books is on both, and each address shows one
+  face — so a staff member opening `/p/{slug}` sees their own booking, not the front desk. Write
+  the participant page for everybody on the roster, not only for the people with no role.
 - **`audience` is what decides who can read the page**, and it is a PLACE, not a filter: each one
   is published to a different document with a different rule. That is also why a staff page must
   not be declared `public` — the HTML itself carries the app's internal vocabulary (status names,
@@ -314,21 +317,93 @@ entry per page, each naming **who it is for**:
   draws an empty page, which is the one failure nothing reports. Publish refuses a `public` page
   fed a collection outside `public.read`, and a `participant` page fed one a participant cannot
   reach at all (neither in `participantRead` nor their own row through `public.submit`).
-- The view asks for writes through `window.__MC_APP_VIEW.submit(cid, values)` and **the page
-  confirms with the reader before writing anything** — the HTML is not trusted to have been asked.
+- The view asks for writes through `window.__MC_APP_VIEW` — see the next section.
   (`window.__MC_PUBLIC_VIEW` is the same object under its former name, kept for one release.)
 - **`public.view` is the older spelling** of the first row above. It still works and normalizes to
   `id: "public"`. Declaring both `views` and `public.view` is refused — write one.
 
 **Say this out loud when an author adds a `member` page.** What the public page is handed is data
 any stranger could already fetch, so a view carrying it off costs nothing. A members' page is
-handed the real records — names, phone numbers, who is coming at 3pm. The platform does not stop
-an owner's own page from moving an owner's own data, and does not pretend to; the author should
-know that is what they are writing.
+handed the real records — names, phone numbers, who is coming at 3pm — and, for every collection it
+can change, the addresses of the colleagues who may change it. The platform does
+not stop an owner's own page from moving an owner's own data, and does not pretend to; the author
+should know that is what they are writing.
 
 Deploy stages the pages the way it stages schemas, so the roster can try the staff page at
 `/staging/{aid}` before any customer sees it. Publish promotes them; a page dropped from `views`
 is DELETED at both ends rather than left behind.
+
+### What a page may WRITE
+
+**`transition` and `assign` need the runtime deployed, and they do not fail softly.** `submit` has
+been on the bridge since public forms; these two and the `/p/{slug}` entrance arrived with the
+shared-app runtime, and on anything older they are simply ABSENT — a page calling one throws
+`__MC_APP_VIEW.transition is not a function`, which in an iframe looks like a page that does
+nothing. So before offering the author these controls, check that the runtime serving `/m/` and
+`/p/` has them.
+
+Draw from `viewer.can` (below) rather than from the method's existence, and this is handled for
+you: an app published before the runtime landed carries no `writers` in its projection, so every
+capability comes back empty and the page draws a read-only view of itself. It stays that way until
+the app is published again — a projection without those lists cannot tell a receptionist from an
+observer, and refuses rather than assuming.
+
+Three calls, and a page cannot name a field in any of them:
+
+```js
+await window.__MC_APP_VIEW.submit(cid, values);          // a new record
+await window.__MC_APP_VIEW.transition(cid, itemId, to);  // approve, reject, cancel
+await window.__MC_APP_VIEW.assign(cid, itemId, address); // hand a row to a colleague
+```
+
+Each returns `{ ok, error }`. The page is told **who the reader is and what they may actually do**
+in the second argument to `onState`:
+
+```js
+window.__MC_APP_VIEW.onState((data, viewer) => {
+  const can = viewer.can.bookings ?? {};
+  // can.transitionAny  — may approve any row  (owner / editor)
+  // can.transitionOwn  — may approve the rows assigned to them  (assignee)
+  // can.assigneeField  — the field a row carries its owner's address in
+  // can.assign         — may hand a row to somebody else
+  // can.assignees      — who may be named
+  // viewer.me          — this reader's own address
+  const mine = (row) => can.transitionAny || (can.transitionOwn && row[can.assigneeField] === viewer.me);
+});
+```
+
+Draw only those buttons, and for `transitionOwn` only on the rows that pass that comparison —
+`transitionOwn` alone cannot say WHICH rows, which is why `me` and `assigneeField` come with it.
+The page never sees a role name: branching on `"editor"` would be the rules written a second time,
+where nobody reviews them. The write applies the same comparison, so a page that ignores this is
+refused rather than obeyed.
+
+`submit` is the visitor's path and **the page confirms with the reader before writing** — the HTML
+is not trusted to have been asked. The other two are the
+roster's, and they do NOT confirm: the person pressing them is on the app's own roster doing
+their own work, and a modal in front of a button used forty times a day is abandoned rather than
+read. The page prints what happened above the frame instead, from what was written.
+
+- **`transition` moves ONE field** — `collections.<cid>.statusField` — and only along
+  `transitions` (for a member) or `public.submit.<cid>.selfTransitions` (for a participant). Those
+  are different tables, so a staff page and a participant page draw different buttons for the same
+  collection. Ask for a move the record cannot make and the answer names it.
+- **`assign` moves `assigneeField`**, and only to an address holding `owner`, `editor` or
+  `assignee` on that collection (`assignees` in the capability above). Anything else would write a
+  row NOBODY could touch afterwards. An `assignee` cannot hand a row on at all, their own
+  included: the rules require the row to be theirs before AND after.
+- **Being shown the page is not permission.** `/m/{slug}` admits anybody holding a role ANYWHERE in
+  the app, so a `viewer`, or somebody scoped to a different collection, reads the same declaration
+  as the front desk. That is why the capability exists and why it is per reader.
+- **A staff page published before this shipped is READ-ONLY until it is published again.** The
+  capability is computed from lists the projection carries, and a projection without them cannot
+  tell a receptionist from an observer — so it refuses rather than assuming. Re-run
+  `manageSharedApp` with `action: "publish"` and the buttons come back.
+- **The notice is not the page's to choose.** If `collections.<cid>.mail` declares a template for
+  the move being made, it is queued IN THE SAME WRITE, addressed from the record. A page that
+  could name a template could mail "your booking is approved" about one it had just rejected.
+- **Nothing here grants anything.** The rules already decide what this member may write; these
+  calls only let the page ask, and let the refusal say which assumption in the page was wrong.
 
 The simplest correct survey omits status entirely (`submitOnly` + `verifiedEmail` + `emailField`).
 Add a status only when somebody is going to work through the responses.

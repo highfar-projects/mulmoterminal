@@ -49,7 +49,8 @@
   },
   "views": [
     { "id": "public", "audience": "public", "path": "views/booking.html", "collections": ["stylists", "services", "slots"] },
-    { "id": "desk", "audience": "member", "path": "views/desk.html", "collections": ["bookings", "slots"] }
+    { "id": "desk", "audience": "member", "path": "views/desk.html", "collections": ["bookings", "slots"] },
+    { "id": "mine", "audience": "participant", "path": "views/mine.html", "collections": ["bookings"] }
   ],
   "public": {
     "enabled": true,
@@ -198,7 +199,71 @@
 書くのはオーナー、データもオーナーのもの、読むのはオーナーの名簿にいる人 — なので
 プラットフォームはこれを止めませんが、**そういうものを書いている**ことは知っておいてください。
 
-**書き込み（承認・担当の付け替え）は今のところこの画面からはできません。** 見るところまでです。
+### 承認と、担当の付け替え
+
+この画面からできます。呼べるのは 2 つで、**どちらもフィールド名を名乗れません**:
+
+```js
+await view.transition("bookings", booking.id, "approved");  // 承認・却下
+await view.assign("bookings", booking.id, "stylist@salon.jp");  // 担当の付け替え
+```
+
+どちらも `{ ok, error }` を返します。
+
+- **動くのは 1 フィールドだけ。** `transition` は `statusField`、`assign` は
+  `assigneeField`。どのフィールドかを決めるのは宣言で、ページではありません
+- **遷移は宣言どおりにしか動きません。** `collections.bookings.transitions` に無い移動は
+  拒否され、理由が返ります。参加者のページ（`views/mine.html`）には**別の表**
+  （`selfTransitions`）が渡るので、同じコレクションでも描けるボタンが違います
+- **承認メールは同じ書き込みに入ります。** `collections.bookings.mail` に
+  その遷移のテンプレートがあれば、レコードと 1 回で書かれます。宛先もテンプレートも
+  レコードと遷移から決まるので、却下した予約に「承認しました」を送ることはできません
+- **確認ダイアログは出ません**（公開の `submit` とはここが違います）。押した人は
+  この店の名簿にいて、自分の仕事をしているためです。代わりに、**何が起きたかは
+  iframe の外に親が必ず出します** — ページが何を描くかとは無関係に
+
+### 誰がそのボタンを押せるか
+
+`/m/{slug}` に入れるのは**どこかにロールを 1 つ持っている人**なので、`viewer` も、
+別のコレクションだけに editor を持つ人も、受付と同じページを開けます。
+**入れることは権限ではありません。**
+
+そこで `onState` の**第 2 引数**に、読み手が誰で、実際に何ができるかが渡ります:
+
+```js
+view.onState((data, viewer) => {
+  const desk = viewer.can.bookings ?? {};
+  // desk.transitionAny  全部の行を承認できる（owner / editor）
+  // desk.transitionOwn  自分に割り当てられた行だけ（assignee）
+  // desk.assigneeField  行の担当者アドレスが入っているフィールド名
+  // desk.assign         付け替えられる
+  // desk.assignees      付け替え先の候補
+  // viewer.me           この読み手自身のアドレス
+  const 押せる = (行) => desk.transitionAny || (desk.transitionOwn && 行[desk.assigneeField] === viewer.me);
+});
+```
+
+`transitionOwn` だけでは**どの行か**が分かりません。だから `me` と `assigneeField` が
+一緒に来ます — 全行にボタンを出す（大半が拒否される）か 1 つも出さないか、
+のどちらかしかなくなるためです。
+
+**ロール名は渡りません。** ページが `"editor"` で分岐するのは、誰もレビューしない
+場所にルールをもう一度書くことになるためです。描くのは渡された能力のとおりに。
+
+親は同じ判定を**押されたときにもう一度**行うので、これを無視したページは
+拒否されるだけです（`not-permitted`）。`assignee` は他人の行を動かせず、
+**自分の行も渡せません**（ルールが前後の両方で本人を要求するため）。
+
+## views/mine.html — 予約した人の画面
+
+`audience: "participant"`。入口は **`/p/{slug}`** で、公開ページの下にリンクがあります。
+自分の行しか読めないので `collections` に書けるのは `bookings` だけ、渡るのも自分の予約だけです。
+
+キャンセルは同じ `transition` で、**表が違うだけ**です:
+
+```js
+await view.transition("bookings", booking.id, "cancelled");
+```
 
 ---
 
