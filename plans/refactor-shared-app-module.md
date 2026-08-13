@@ -98,13 +98,33 @@ grep して **0 件**。core の中でも、この 4 ファイルを import し�
 
 `@mulmoclaude/common` の `isRecord` は 1 行なので、モジュール内に置いて依存を 1 つ減らす。
 
-## 決定 3. 配布は **git ref**。npm を通さない
+## 決定 3. 配布は **npm**（`@receptron/sharedapp`）
+
+**当初「git ref、npm を通さない」と決め、そう実装した。撤回する。**
+
+理由は MulmoTerminal 自身が **npm パッケージ**であること（`npx mulmoterminal`、4.8.2）。
+published tarball に `server/` を含み、そこがこのモジュールを**実行時に** import する。
+git 依存にすると、**エンドユーザー全員がこのリポジトリを clone して `tsc` を走らせてから**
+ターミナルが起動する。git とツールチェーンが要り、遅く、ネットワーク次第で失敗する。
+`dependencies` に入れた時点でそうなることを、決定を書くときに確かめていなかった。
+
+**ただし置き換わるゲートは、逃げようとしたゲートとは別物。** ここのリリースは
+**1 パッケージ**で、bump する依存も、プラグインの peer レンジも、changelog チェックも
+e2e も無い。`@mulmoclaude/core` のリリースは 8 パッケージと CI マトリクス全部で、
+`app.json` のキー 1 つごとにそれを払っていた。
+
+**mulmoclaude の monorepo には置かない**（そのリリースを相続するため）。
+**MT のモノレポ化もしない** — mulmoserver が MT の CLI 全体を dev ツリーに引く。
+
+### 旧・決定 3（git ref）のスパイク結果
 
 ```json
-"receptron/sharedapp": "github:receptron/sharedapp#<sha>"
+"@receptron/sharedapp": "^0.1.0"
 ```
 
-npm を通すと、逃げたはずの**人手の publish ゲートが戻ってくる**。
+git ref のときの検証は下に残す。**yarn 1 の `github:owner/repo#sha` 短縮形は
+`prepare` を走らせず、`dist` の無いパッケージが入る**（`git+https://…​.git#sha` と
+明示すれば clone して走る）という発見は、将来 git 依存を使うときのために有用。
 **mulmoclaude の monorepo には置かない**（同じ理由でリリースを相続する）。
 **MT のモノレポ化もしない** — mulmoserver が `github:receptron/mulmoterminal#sha` を
 引くと、MT の CLI 全体が MS の dev ツリーに入る。
@@ -168,6 +188,11 @@ lockfile には
 以後、`app.json` のキーも publish ゲートも `{tier}/config` も、**core のリリース無しで動く**。
 
 ## 実装して分かったこと
+
+**配布を npm に変えた。決定 3 を参照** — MulmoTerminal 自身が npm パッケージで、
+published tarball の `server/` がこれを実行時に import する。git 依存だと
+`npx mulmoterminal` のたびに clone + `tsc` が走る。`dependencies` に入れた時点で
+そうなることを、決定を書くときに確かめていなかった。
 
 **yarn 1 の `github:owner/repo#sha` 短縮形は `prepare` を走らせない。** codeload の
 tarball を取るだけなので、`dist` の無いパッケージが入る（`src/` と `test/` がそのまま
