@@ -292,7 +292,6 @@ const PANE_CHROME_PX = SEPARATOR_PX + 1;
 // Between the keystrokes that answer a question dialog. The dialog rebuilds itself between
 // questions and after a toggle, so the keys are paced rather than written as one block.
 const QUESTION_KEY_GAP_MS = 30;
-const pause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 const rowWidth = () => Math.max(0, (zoomRow.value?.clientWidth ?? 0) - (rightPane.value ? PANE_CHROME_PX : 0));
 // Mirrored into a ref so the separator can announce its range (a plain function call would not
 // re-render when the row resizes). The pane's floor gives way to the terminal's on a narrow row,
@@ -522,6 +521,11 @@ async function hydrateQuestion(sessionId: string): Promise<void> {
   setQuestion(sessionId, open);
 }
 
+async function revealQuestion(sessionId: string): Promise<void> {
+  await hydrateQuestion(sessionId);
+  if (questionBySession.value.has(sessionId)) setRightPane("question", props.expandedUid);
+}
+
 // A question that arrived while its cell was tiled — or on another page of the grid — still has a
 // session blocked on it, so enlarging that cell is when to show it. Nothing else opens this pane:
 // it has no header button, because a control for the rare case would sit in every cell's chrome
@@ -529,9 +533,7 @@ async function hydrateQuestion(sessionId: string): Promise<void> {
 watch(
   expandedSessionId,
   async (sessionId) => {
-    if (!sessionId) return;
-    await hydrateQuestion(sessionId);
-    if (questionBySession.value.has(sessionId)) setRightPane("question", props.expandedUid);
+    if (sessionId) await revealQuestion(sessionId);
   },
   { immediate: true },
 );
@@ -555,12 +557,11 @@ async function answerQuestion(picks: number[][]): Promise<void> {
   // Dropped BEFORE the keys go out: the pane must not be able to send a second sequence into a
   // dialog that is already closing, and this is the same drop the `done` event would do anyway.
   dropQuestion(event.sessionId);
-  const slot = `cell-${props.expandedUid}`;
-  await keys.reduce(async (previous, key) => {
-    await previous;
-    await pause(QUESTION_KEY_GAP_MS);
-    conn.sendKeys(slot, key);
-  }, Promise.resolve());
+  const sent = await conn.sendKeySequence(`cell-${props.expandedUid}`, keys, QUESTION_KEY_GAP_MS);
+  // A sequence abandoned partway (the socket reconnected or the cell was retargeted) may have
+  // moved the dialog's highlight without committing it, and the buttons are already gone. The
+  // server knows whether that dialog is still open, so ask it rather than assume either way.
+  if (!sent) await revealQuestion(event.sessionId);
 }
 
 // GUI -> LLM for the enlarged cell (a submitted form's answer). App.vue routes this through the
