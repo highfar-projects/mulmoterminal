@@ -11,7 +11,12 @@ anything not covered here.
 
 ## Run after changes
 - `yarn format` — Prettier. `.prettierignore` excludes `*.md`, so Markdown is not reformatted.
-- `yarn lint` — ESLint.
+- `yarn lint` — ESLint. There are two scripts and they are not interchangeable: `lint` pairs
+  `--cache-strategy metadata` with `--concurrency auto`, which is what makes an unchanged run cost
+  0 workers (auto counts only the files whose cached result is stale, and it can only do that
+  under `metadata`). `lint:ci` uses `content` and no workers, because `actions/checkout` rewrites
+  every mtime — and `content` makes auto count ALL files, so the two together spawn workers that
+  find nothing to do. Numbers in [`plans/perf-lint-ci-local-split.md`](plans/perf-lint-ci-local-split.md).
 - `yarn typecheck` — `vue-tsc -b`, and it covers the whole repo: the root `tsconfig.json`
   references all five projects (app, node, server, and the two spec ones — including the specs
   colocated under `server/` rather than in `test/`). Adding a project means adding it there too,

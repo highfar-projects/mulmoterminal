@@ -20,6 +20,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v6
+        id: setup-node
         with:
           node-version: 22
           cache: yarn
@@ -30,15 +31,24 @@ jobs:
       # saves its own. Deliberately NOT keyed on file contents: reuse across commits that changed
       # source is the whole saving, and eslint already decides per file what is still valid —
       # including dropping the lot when eslint.config.js changes.
+      #
+      # The RESOLVED node version is in the key because eslint hashes `process.version` into every
+      # cache entry, so one patch bump invalidates the lot. `node-version: 22` above resolves to
+      # whatever the runner ships, and ubuntu flip-flopping 22.23.1 <-> 22.23.2 is what put the
+      # lint step back to 110s twice while macOS stayed at 5s. Per-version keys let each one keep
+      # its own cache across the flip; no `-${{ runner.os }}-` fallback, since a cache from another
+      # version restores fine and then yields zero usable entries.
       - uses: actions/cache@v5
         with:
           path: .eslintcache
-          key: eslint-cache-${{ runner.os }}-${{ github.run_id }}
+          key: eslint-cache-${{ runner.os }}-node${{ steps.setup-node.outputs.node-version }}-${{ github.run_id }}
           restore-keys: |
-            eslint-cache-${{ runner.os }}-
+            eslint-cache-${{ runner.os }}-node${{ steps.setup-node.outputs.node-version }}-
 
+      # lint:ci, not lint: `content` is what survives checkout rewriting every mtime, and it is
+      # also why CI does not run workers — see plans/perf-lint-ci-local-split.md.
       - name: Lint
-        run: yarn lint
+        run: yarn lint:ci
 
       # Covers app, server and the specs: root tsconfig.json references all five
       # projects. Specs need their own step's worth of attention because vitest
