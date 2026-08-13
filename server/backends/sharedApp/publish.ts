@@ -26,6 +26,7 @@
 // deliberate outage on every re-publish, and a failure there leaves the app DARK rather than
 // stale — worse for the person the app is for, and not what the design chose (see D10's ordering).
 import { isRecord } from "../../../common/isRecord.js";
+import { type LoadedCollection } from "@mulmoclaude/core/collection/server";
 import {
   APPS_COLLECTION,
   PUBLIC_CONFIG_DOC,
@@ -35,9 +36,8 @@ import {
   projectPublish,
   stagedRuleConfig,
   type AuthoredApp,
-  type LoadedCollection,
   type PublishStamp,
-} from "@mulmoclaude/core/collection/server";
+} from "@receptron/sharedapp";
 import { ensureAid } from "./ensureAid.js";
 import { sharedAppContext, stampFor, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
 import { recordRefusal, scanRecords, type RecordScan } from "./records.js";

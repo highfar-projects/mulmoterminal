@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Which GUI MCP surface muse gets, asserted where both sides read it: the launcher form decides
 // from this list what it tells the user (#1423), and the server decides from it what it hands a
 // spawn.

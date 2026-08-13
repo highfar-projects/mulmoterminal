@@ -1,3 +1,4 @@
+// @vitest-environment node
 // A self-hosted GitLab, declared in `gitlabHosts` (#1332). Nothing in a URL says whether
 // `gitlab.hogefuga.com` is a GitLab, a Gitea or a wiki, so the user says so — and from there it has
 // to behave exactly as gitlab.com does, all the way down to the argv `glab` is handed.

@@ -15,7 +15,7 @@
 // internal vocabulary (`status`, a reviewer's note) on a world-readable document for nobody's
 // benefit.
 import { COMPUTED_TYPES, type CollectionFieldType, type CollectionSchema } from "@mulmoclaude/core/collection";
-import type { AuthoredApp } from "@mulmoclaude/core/collection/server";
+import type { AuthoredApp } from "@receptron/sharedapp";
 import type { LoadedCollection } from "@mulmoclaude/core/collection/server";
 import type { StagedEntry } from "./staged.js";
 

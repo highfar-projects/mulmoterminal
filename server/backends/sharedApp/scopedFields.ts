@@ -29,7 +29,7 @@
 // no field to compare, which is the exact fail-closed trap these checks exist
 // to prevent.
 import type { CollectionFieldType, CollectionSchema } from "@mulmoclaude/core/collection";
-import { promotedRoleProblems, type AuthoredApp } from "@mulmoclaude/core/collection/server";
+import { promotedRoleProblems, type AuthoredApp } from "@receptron/sharedapp";
 import type { StagedEntry } from "./staged.js";
 
 /** What a member's address can be compared against.

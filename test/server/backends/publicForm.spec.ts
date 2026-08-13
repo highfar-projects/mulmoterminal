@@ -4,7 +4,7 @@
 // and the person answering a survey is none of those. So what it CAN read has to be enough to draw
 // the form, and this is the projection that makes it so.
 import { describe, it, expect } from "vitest";
-import { parseAuthoredApp } from "@mulmoclaude/core/collection/server";
+import { parseAuthoredApp } from "@receptron/sharedapp";
 import { oversizeProblem, publicFormOf, publicInputProblems, schemasOfCollections } from "../../../server/backends/sharedApp/publicForm.js";
 
 const schema = {

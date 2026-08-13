@@ -1,3 +1,4 @@
+// @vitest-environment node
 // What the launcher adds to the server's environment — and, the reason this file exists, what
 // it must NOT add. The server hands its own environment to every PTY it spawns, so anything
 // set here is set in every terminal of every cell: NODE_ENV=production shipped from the first
