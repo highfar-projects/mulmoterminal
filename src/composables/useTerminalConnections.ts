@@ -55,6 +55,7 @@ import { isCopyOnSelectEnabled } from "./copyOnSelect";
 import { createFilePathLinkProvider } from "./terminalFilePathLinkProvider";
 import { tryOpenInPane } from "./filesPaneOpener";
 import { filesGotoFile } from "./useFilesView";
+import { writeTerminalSelection } from "../utils/terminalSelectionClipboard";
 import type { TerminalAgent } from "../../common/sessionAgent";
 
 export type ConnStatus = "connecting" | "connected" | "disconnected";
@@ -241,36 +242,6 @@ const clipboardProvider: IClipboardProvider = {
     }
   },
 };
-
-// Put the terminal's selection on the system clipboard, by whichever route the browser allows.
-//
-// `navigator.clipboard` is the direct one, but it is secure-context-only: at `http://<lan-ip>` it
-// does not exist AT ALL, and reaching this app that way from a second machine is ordinary. The
-// fallback hands the job back to xterm — with its helper textarea focused, `execCommand("copy")`
-// fires xterm's own `copy` listener, which writes THE CURRENT SELECTION.
-//
-// Which is why this takes the terminal's host and not merely a string: it can only ever copy what
-// the terminal has selected, and must not be generalised into "write this text to the clipboard".
-async function writeTerminalSelection(host: HTMLDivElement, text: string): Promise<boolean> {
-  if (navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch {
-      // document not focused, or permission refused — fall through instead of giving up
-    }
-  }
-  // Focus is NOT taken here. Reaching this line means the user just dragged inside this terminal,
-  // so xterm has already focused its textarea; if something else holds focus by now, stealing it
-  // back would be worse than not copying.
-  const textarea = host.querySelector(".xterm-helper-textarea");
-  if (!textarea || document.activeElement !== textarea) return false;
-  try {
-    return document.execCommand("copy");
-  } catch {
-    return false;
-  }
-}
 
 // How long the selection must hold still before it is copied. xterm fires onSelectionChange on
 // every coordinate change during a drag, so writing on each one would put every intermediate
