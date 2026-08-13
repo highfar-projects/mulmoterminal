@@ -8,6 +8,114 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.8.2 — 2026-08-13
+
+> **Setup guide:** [GitHub beside the cell, and a header you can read while it runs](https://receptron.github.io/mulmoterminal/guide/en/v4.8.2.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.8.2.html))
+
+**Two screens stopped fighting the grid.** The GitHub view no longer takes the whole window to show
+one project's issues, and a coloured header no longer becomes unreadable the moment its cell starts
+working — with the colours for those states now yours to choose.
+
+### GitHub opens in the cell's pane, on that cell's repository ([#1665](https://github.com/receptron/mulmoterminal/pull/1665), refs [#1664](https://github.com/receptron/mulmoterminal/issues/1664))
+
+The view lists pull requests **and** issues, and it took over the whole screen to do it — reading one
+project's issues meant leaving the grid and finding that project in a list of every registered repo.
+It is now the **GitHub** view, it opens in the right pane beside an enlarged cell, and it **leads
+with that cell's repository**.
+
+Split rather than rewritten: `PrsOverlay` became `GithubPane` (the list) + `GithubOverlay` (the
+full-screen frame and its route), the division `FilesPane` / `FilesOverlay` already used. Pane
+exclusivity needed nothing new — `paneByCell` already holds one pane per cell, so `"github"`
+inherits the rule.
+
+**A block of its own, not a scroll.** A scroll that lands slightly off looks like nothing happened,
+it has to re-run on every reload, and a repository with no open PRs and no open issues has nothing
+to scroll to — where `No open PRs` at the top still answers "yours: none". The cell's repository is
+lifted out into one section carrying both its PRs and its issues, above a rule.
+
+Resolving which repository that is costs no extra request and no `git` subprocess at pane time:
+`/api/repo-dirs` serves the reverse map (built from the registered `cwdPresets` by reading each
+one's `origin`) and the view already fetches it. The match is **containment** — a cell in `repo/src`
+leads with `repo`, and the deepest registered directory wins so nested clones and worktrees resolve
+to the one the cell is actually in. Two conditions, both required: the cell's directory is inside a
+registered directory that names a repository (so not-a-git-repo, no `origin` and an unreadable forge
+all fall out here), and that repository is among the configured `prRepos`, since the lead block is a
+section of that list. Otherwise the pane opens in the configured order.
+
+`"prs"` stays a header-config value and `/prs` stays a route (redirecting to `/github`) — both are
+things users wrote down, so the rename is the name they *reach*, not the name they *type*.
+
+### The header's colours are resolved per status, and configurable ([#1619](https://github.com/receptron/mulmoterminal/pull/1619), fixes [#1617](https://github.com/receptron/mulmoterminal/issues/1617), refs [#1591](https://github.com/receptron/mulmoterminal/issues/1591))
+
+A cell whose directory set `headerColor` + `headerTextColor` became unreadable **while it was
+running**. Measured off the reporter's screenshot rather than described: the header background goes
+from the directory's `#8e44ad` to the theme's `#d6e4fb` wash, and the declared white ink stayed on
+top of it — **1.15:1**.
+
+A *derived* ink was already dropped in those states; a *declared* `headerTextColor` was returned
+before that check ever ran. So:
+
+1. **A declared ink follows the same rule as a derived one** — it applies while the directory's own
+   background is what shows. In `working` / `done` the theme's ink is used on the theme's wash, the
+   pair they were designed as.
+2. **Per-status header colours**, valid in a directory's `.mulmoterminal.json` and in
+   `~/.mulmoterminal/config.json` as the default for every directory:
+
+```jsonc
+{
+  "headerColor": "#8e44ad",
+  "headerStatusColors": { "working": "#6d28d9", "done": { "background": "#166534" } },
+  "headerStatusTint": "background"   // "none" keeps headerColor while working and done
+}
+```
+
+`text` omitted derives an AA ink from `background` through the same `headerTextColorFor` a
+`headerColor` already uses, so setting one colour cannot produce an unreadable header. There is no
+`idle` — `headerColor` *is* idle, and a second way to say the same thing is how one directory ends
+up written in two colours. `headerStatusTint: "none"` deliberately does **not** reach `blocked`: that
+is the state where nothing proceeds until the user answers, and a switch whose purpose is "keep my
+palette" taking the amber off it is an accident waiting to happen.
+
+Both layers are resolved in one place (`common/headerStatusColors.ts`), so every caller asks "what
+shows now" instead of combining the pieces itself.
+
+**Not fixed by this**: with nothing configured, the theme's dim chip ink on its status tint measures
+1.9–3.1:1 across the four themes. The reported case goes from 1.15:1 to about 2.5:1; naming
+`headerStatusColors.working` reaches 12.9:1. Whether to raise that floor for everyone is still open.
+
+### A `finished` push no longer carries the previous turn's reply ([#1666](https://github.com/receptron/mulmoterminal/pull/1666), refs [#1650](https://github.com/receptron/mulmoterminal/issues/1650))
+
+The phone's completion banner read `lastTurnFromClaudeParsed`, which returns the last **completed
+exchange** and falls back to the previous one while a turn is in flight. That is the answer handoff
+wants and is intended (#254 / #1487) — but push wants "what did the turn that just ended produce",
+and the two diverge exactly when **a turn ends without producing a reply**: interrupted with ESC, or
+finished on a tool call. `Stop` fires, there is no reply, and the turn before it was announced under
+"finished".
+
+Measured on this machine's real transcripts — **11,489 files, 13,200 turn boundaries**: 193
+boundaries return an older turn's reply even with the whole turn on disk, and 1,629 do if the read
+is one record early, returning stale text rather than `null` so the caller cannot detect it.
+
+A turn-scoped read (conclusions after the newest prompt only) was added and **only claude's push**
+uses it; unreadable leaves `null` and falls through to the existing chain (last prompt → AI title →
+a generic line). Silence beats confidently showing an old answer. codex is deliberately untouched:
+its `task_complete` record carries the reply itself, so the trigger cannot outrun its own data.
+
+The issue stays open on purpose — Web Push **delivery order** is a second possible route that has
+not been ruled out.
+
+### Fixes
+
+- **A replayed scrollback no longer starts with `�`** ([#1640](https://github.com/receptron/mulmoterminal/pull/1640), fixes [#1639](https://github.com/receptron/mulmoterminal/issues/1639)). The bounded tail already guarded a cut landing inside an escape sequence, but `slice` counts UTF-16 code units, so a cut between the halves of a surrogate pair kept the low half alone — legal JS, serialised without complaint, and visible as `U+FFFD` at the top of the screen restored on reattach. The guard now skips the orphan before the escape scan runs, and keeps the pair intact when the cut falls in front of it.
+- **A new document can no longer overwrite an existing one** ([#1624](https://github.com/receptron/mulmoterminal/pull/1624), fixes [#1623](https://github.com/receptron/mulmoterminal/issues/1623)). `saveNewDoc` built `artifacts/documents/YYYY/MM/<prefix>-<rand>.md` from 32 bits of randomness, with the prefix coming from the LLM's title — so documents from one month sharing a prefix shared a 32-bit namespace — and wrote with a plain `writeFile`, which replaced the loser silently and returned success. The id is now 64 bits from `randomBytes(8)` (matching MulmoClaude's `shortId()`) and the write uses `flag: "wx"`, retrying on `EEXIST` and throwing after five attempts rather than giving up quietly.
+
+### Under the hood
+
+- **`yarn lint` caches** — 57.8s to 4.2s locally ([#1645](https://github.com/receptron/mulmoterminal/pull/1645), refs [#1644](https://github.com/receptron/mulmoterminal/issues/1644)), and the dead-code scan caches yarn too ([#1621](https://github.com/receptron/mulmoterminal/pull/1621), refs [#1618](https://github.com/receptron/mulmoterminal/issues/1618)).
+- **The Windows daily job is green again** — five specs, three causes ([#1654](https://github.com/receptron/mulmoterminal/pull/1654), refs [#1653](https://github.com/receptron/mulmoterminal/issues/1653)).
+- **`yarn lint:summary`** reports lint findings as a report rather than a wall ([#1647](https://github.com/receptron/mulmoterminal/pull/1647)).
+- **Shared collections and shared apps** continue under the surface and are **not documented yet** — that work gets its own release entry and guide page when it ships. Nothing in an existing setup changes because of it.
+
 ## mulmoterminal@4.8.1 — 2026-08-10
 
 > **Setup guide:** [A server that stops running out of terminals](https://receptron.github.io/mulmoterminal/guide/en/v4.8.1.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.8.1.html))
