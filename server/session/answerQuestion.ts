@@ -61,19 +61,21 @@ export interface AnswerQuestionRequest {
 // Abandoned the moment anything else types into this session. The lock above keeps two ANSWERS
 // apart; this is what keeps an answer out of the way of the person at the keyboard, who can close
 // the dialog inside one of these pauses and leave the rest of the sequence aimed at a prompt.
-const sendPaced = async (deps: AnswerQuestionDeps, sessionId: string, keys: readonly string[]): Promise<AnswerResult> => {
-  const before = deps.otherWriteCount(sessionId);
-  return keys.reduce<Promise<AnswerResult>>(
+const sendPaced = async (deps: AnswerQuestionDeps, sessionId: string, keys: readonly string[]): Promise<AnswerResult> =>
+  keys.reduce<Promise<AnswerResult>>(
     async (previous, key) => {
       const sofar = await previous;
       if (!sofar.ok) return sofar;
       await deps.pause(deps.gapMs);
-      if (deps.otherWriteCount(sessionId) !== before) return { ok: false, reason: "closed" };
+      // Against ZERO, not a baseline read here: counting starts when the answer is claimed, which
+      // is BEFORE the dialog is read. A keystroke during that read is one this answer must yield to
+      // just as much as one between its keys — a baseline taken afterwards would fold it in and let
+      // the sequence carry on into a dialog the user had already closed.
+      if (deps.otherWriteCount(sessionId) !== 0) return { ok: false, reason: "closed" };
       return deps.write(sessionId, key) ? { ok: true } : { ok: false, reason: "unwritable" };
     },
     Promise.resolve<AnswerResult>({ ok: true }),
   );
-};
 
 const answerHeld = async (deps: AnswerQuestionDeps, { sessionId, toolUseId, picks }: AnswerQuestionRequest): Promise<AnswerResult> => {
   const open = openQuestionOf(await deps.callsOf(sessionId), sessionId);

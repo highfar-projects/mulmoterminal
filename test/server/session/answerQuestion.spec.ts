@@ -156,4 +156,29 @@ describe("answerQuestion", () => {
     expect(await answerQuestion(d, { sessionId: "s9", toolUseId: "t1", picks: [[0, 1]] })).toEqual({ ok: false, reason: "closed" });
     expect(write.mock.calls).toHaveLength(1); // nothing after the interruption
   });
+
+  // The dialog is read asynchronously, and a keystroke can land during that read. Counting starts
+  // when the answer is claimed — BEFORE the read — so this one is seen; taking a baseline after the
+  // read would fold it in and let the sequence carry on into a dialog the user had already closed.
+  it("yields to a keystroke that lands while the dialog is being read", async () => {
+    let others = 0;
+    const write = vi.fn(() => true);
+    const d: AnswerQuestionDeps & { write: ReturnType<typeof vi.fn> } = {
+      callsOf: async () => {
+        others = 1; // the user answers in the terminal while we are reading the history
+        return [CALL("t1", "running")];
+      },
+      write,
+      otherWriteCount: () => others,
+      watchOtherWrites: () => {
+        others = 0;
+      },
+      stopWatchingOtherWrites: () => {},
+      pause: async () => {},
+      gapMs: 0,
+    };
+
+    expect(await answerQuestion(d, { sessionId: "s10", toolUseId: "t1", picks: [[0]] })).toEqual({ ok: false, reason: "closed" });
+    expect(write).not.toHaveBeenCalled();
+  });
 });
