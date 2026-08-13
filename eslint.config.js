@@ -423,7 +423,13 @@ export default [
     // The deliberate uses of a deprecated external API, listed here rather than silenced at the
     // scene, for the reason the max-lines list above gives: countable in one place, and deleting an
     // entry re-arms the rule for that file. Each one is explained where it is used.
-    files: ["server/mcp/broker.ts", "src/composables/useTerminalConnections.ts", "src/composables/useUnloadGuard.ts"],
+    //
+    // The exception is per FILE, so each entry has to be a file where the deprecated API is the
+    // SUBJECT — otherwise it also covers the next one added there by accident. That is why
+    // `writeTerminalSelection` was lifted out of useTerminalConnections.ts (several hundred lines,
+    // one deprecated call) into a file of its own. The other two are already that shape: broker.ts
+    // is the MCP server, and useUnloadGuard.ts is the beforeunload handler.
+    files: ["server/mcp/broker.ts", "src/utils/terminalSelectionClipboard.ts", "src/composables/useUnloadGuard.ts"],
     rules: {
       "sonarjs/deprecation": "off",
     },
