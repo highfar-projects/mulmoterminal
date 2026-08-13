@@ -121,13 +121,15 @@ match /member/{docId} {
 - **両方書いてある** → 拒否。どちらを採ったかを黙って決めない
 - **正規化した結果を書く**。`config` に載るのは常に `views[]` の形で、読む側は 1 形しか知らない
 - **`audience` の値は閉じた集合**。知らない値は publish 前に拒否（原則 10: 語彙は有限）
-- **同じ audience が 2 つ** → 拒否。しかも **deploy の時点で**（下記）
+- **`id` は必須で、アプリの中で一意**。重複は拒否、しかも **deploy の時点で**（下記）。
+  同じ `audience` が 2 つ以上あるのは**正常**（決定 4 の「タスクで分ける」）— 分けるのは
+  audience ではなく `id`
 - **同じ正規化を 3 か所に置かない**。core が持ち、`declarationProblems` と
   MulmoTerminal 側が呼ぶ。いまの MT は `declaredView` が `authored.public?.view` しか
   見ないので、`views[]` で書かれた宣言は publish に届かない — ここが最初の作業
 
-**重複の拒否は deploy に置く。** publish だけに置くと、deploy が `member/staged` を書く
-時点で「2 つのうちどちらか」を黙って選ぶことになり、名簿の人が試したページと
+**重複の拒否は deploy に置く。** publish だけに置くと、deploy が staged を書く時点で
+「同じ置き場所に 2 つ」を黙って上書きすることになり、名簿の人が試したページと
 著者が意図したページが違い得る。deploy が拒否すれば publish はその不変条件に乗れる。
 
 ### 決定 3. URL — 決定済み: `/m/{slug}` は**メンバー**（owner / editor / viewer / assignee）の入口
@@ -180,18 +182,28 @@ participant にスタッフ用の `collections` や `submit` を渡すと、親�
 **ルール拒否でビューが落ちる**（見えないのではなく、失敗する）:
 
 ```text
-apps/{aid}/member/config        staffOf が読む。スタッフ用の collections と submit
-apps/{aid}/member/view          staffOf が読む。/m/{slug} の HTML
-apps/{aid}/roster/config        listedIn が読む。participantRead のものだけ
-apps/{aid}/roster/view          listedIn が読む。participant 向け HTML（要るまで書かない）
+apps/{aid}/member/{docId}       staffOf が読む
+   live:config                    スタッフ用の collections と submit、および id の一覧
+   live:{id}                      /m/{slug} が描く HTML。ビュー 1 つに 1 ドキュメント
+   staged:config / staged:{id}    deploy が書く。/staging/{aid} が描く
+apps/{aid}/roster/{docId}       listedIn が読む。同じ 4 つの形
 ```
+
+**`id` がそのまま置き場所になる**（`views[]` の `id`）。1 つの階層に複数のタスクを
+置けるのはこれがあるからで、`id` が無ければ 2 つ目のビューは名前も置き場所も持てない。
+`config` と `{id}` を同じ `match /member/{docId}` で扱えるよう、接頭辞は **`live:` と
+`staged:`** の 2 つだけにする（ルールは 1 つ、`config` は予約語で `id` に使えない）。
+
+**HTML は 1 ビュー 1 ドキュメント。** まとめると Firestore の 1 MiB がビューの数だけ
+早く来るし、1 つ直すたびに全部を書き直すことになる（公開ビューを `config/public` から
+分けたのと同じ理由）。
 
 **HTML 自体も階層で守る。** participant にとって他の participant は他人であり、
 受付の画面は取得できてはいけない — データが拒否されるかどうかとは別に、
 **内部語彙が漏れる**（状態名・査読メモの見出し・担当の付け方）。
 
 **同じ audience の中は、ロールではなく「タスク」で分ける。** 受付の画面と
-在庫の画面が要るなら `views[]` に名前付きで 2 つ置き、入り口は**その人が実際に開けるもの**
+在庫の画面が要るなら `views[]` に `id` 付きで 2 つ置き、入り口は**その人が実際に開けるもの**
 （宣言されたコレクションの読みが通るもの）だけを出す。開けるものが 1 つならそこへ直行する。
 ロール名で分岐するのはページの仕事ではないし、プラットフォームの仕事でもない。
 
@@ -209,8 +221,8 @@ apps/{aid}/roster/view          listedIn が読む。participant 向け HTML（�
 
 ```text
 views/desk.html
-   ──deploy───> apps/{aid}/member/staged   名簿だけが読む。/staging/{aid} が使う
-   ──publish──> apps/{aid}/member/view     名簿だけが読む。/m/{slug} が使う
+   ──deploy───> apps/{aid}/member/staged:desk   staffOf が読む。/staging/{aid} が使う
+   ──publish──> apps/{aid}/member/live:desk     staffOf が読む。/m/{slug} が使う
 ```
 
 これで「スタッフ用の画面を、客に見せる前に試す」が publish 前にできる。
@@ -219,16 +231,17 @@ views/desk.html
 `StagedApp.vue`）。今はコレクションのカードを並べるだけなので、**アプリ単位のビューの枠を
 1 つ上に足す**のがこの計画の担当分:
 
-- `member/staged` があればそれを bridge で描く（`/m/{slug}` と同じ機構・同じ射影）
+- `staged:config` があれば、そこに載っている `id` を `staged:{id}` から bridge で描く
+  （`/m/{slug}` と同じ機構・同じ射影）
 - 無ければ**今のカード一覧のまま**。「無い」は異常ではなく、ビューを宣言していない
   アプリが普通にある
 - 順序: **staging の描画を先に**入れる。deploy が誰も読めない成果物を書く期間を作らない
 
 **deploy も撤去する。** publish / unpublish だけでは足りない — `views[]` から
-`audience: "member"` を消して deploy した場合、`member/staged` が残り、
+`views[]` から 1 つ消して deploy した場合、その `staged:{id}` が残り、
 `/staging/{aid}` は宣言に無いページを出し続け、次の publish がそれを昇格させ得る。
 既存の `staleStaged`（宣言から消えたコレクションの staging を畳む）と同じ扱いにする。
-`unpublish` が `member/staged` を残すのは変えない — あれは「公開を閉じる」であって
+`unpublish` が `staged:*` を残すのは変えない — あれは「公開を閉じる」であって
 「デプロイを取り消す」ではないため、非対称は意図的。
 公開ビュー（`config/view`）に staging が無いのは、**公開の顔には試す場所が無い**から
 （`/staging/{aid}` は名簿のもの）で、非対称は意図的。
@@ -254,8 +267,9 @@ publish が `published` を立てるのは**公開の顔があるときだけ**�
 
 `member/*` は `config/*` と同じく、**宣言から消しただけでは残る**。
 
-- `views[]` から `audience: "member"` が消えた publish → `member/view` を削除
-- `unpublish` → `member/view` を削除。`member/staged` は**残す**（deploy の産物であり、
+- `views[]` から消えた `id` がある publish → その `live:{id}` を削除。宣言に残った
+  `id` だけが `live:config` に載る（`config` と HTML は必ず同じ publish で揃う）
+- `unpublish` → `live:*` を全部削除。`staged:*` は**残す**（deploy の産物であり、
   unpublish は「公開を閉じる」であって「デプロイを取り消す」ではない）
 
 ### bridge は 1 つ、監査対象で渡すものが違うだけ
@@ -311,7 +325,7 @@ publish が `published` を立てるのは**公開の顔があるときだけ**�
 |---|---|---|---|---|
 | mulmoserver | `match /member/{docId}` + emulator | — | `/m/{slug}` と bridge の再利用 | — |
 | mulmoclaude core | — | `views[]` + `audience` + 門 | — | 射影（`member` に何を載せるか） |
-| mulmoterminal | — | — | — | `member/config` `member/staged` `member/view` の書き出しと撤去、テンプレート |
+| mulmoterminal | — | — | — | `member/*` `roster/*`（`live:` / `staged:`）の書き出しと撤去、テンプレート |
 
 **1 が先**（ルールは手で deploy）。**3 は 4 より先**（古いランタイムに新しい宣言を
 publish すると、名簿の人は「何もありません」を見る。publish した本人には成功に見える）。
@@ -336,6 +350,7 @@ publish すると、名簿の人は「何もありません」を見る。publis
 - **participant の入口。** `/a/{slug}` にサインイン後の「自分の行」を出すのが推奨だが未確定。
   第 3 の入口を作る案もある（そのときだけ `roster/view` が要る）
 - **`Map.values()`** が rules で使えるか（`staffOf` の書き方が変わる）
-- **`views[]` の順序**に意味を持たせるか。当面は **audience ごとに 1 つ**とし、
-  2 つ目は **deploy が**拒否する（上記）。順序に意味を持たせるのは、
-  1 つの audience に複数のビューを持たせると決めたときの話
+- **`views[]` の順序**に意味を持たせるか（入り口に 2 つ以上並んだときの並び順）。
+  当面は宣言順で出す。`id` は一意で、重複は deploy が拒否する（上記）
+- **`/m/{slug}` の中で `id` をどう指すか**（`/m/{slug}/{id}` か、クエリか、画面内の切替か）。
+  1 つしか開けない人には出さない、は決まっている
