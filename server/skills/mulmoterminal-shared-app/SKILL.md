@@ -294,8 +294,11 @@ entry per page, each naming **who it is for**:
 |---|---|---|
 | `public` | anybody, signed out | `/a/{slug}` |
 | `member` | anybody holding a role in the app — the front desk | `/m/{slug}` |
-| `participant` | somebody on the roster with no role: their own row | `/p/{slug}` |
+| `participant` | anybody on the roster, seeing their own row | `/p/{slug}` |
 
+- **The two are not exclusive.** An owner who also books is on both, and each address shows one
+  face — so a staff member opening `/p/{slug}` sees their own booking, not the front desk. Write
+  the participant page for everybody on the roster, not only for the people with no role.
 - **`audience` is what decides who can read the page**, and it is a PLACE, not a filter: each one
   is published to a different document with a different rule. That is also why a staff page must
   not be declared `public` — the HTML itself carries the app's internal vocabulary (status names,

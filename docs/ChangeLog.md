@@ -34,7 +34,9 @@ await window.__MC_APP_VIEW.assign(cid, itemId, address); // hand a row to a coll
   approve button on a customer's page that the rules refuse when pressed.
 - **The approval notice is written in the same batch as the record**, because the rules require it:
   `mailAgainst` compares the record before and after and demands the status actually moved, so a
-  separate write could never have sent one. There is therefore no "approved, but nobody was told".
+  separate write could never have sent one. There is therefore no "approved" state with no notice
+  queued beside it — what happens to the queue afterwards is the mail extension's business, not
+  something a batch can promise.
 - **Being shown the page is not permission.** `/m/{slug}` admits anybody holding a role anywhere in
   the app, so a `viewer` reads the same declaration as the front desk. The projection therefore
   carries the roster's answer — who may write every row, and who only their own — and the page

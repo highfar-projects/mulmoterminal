@@ -264,7 +264,7 @@ after[c.statusField] == mc.on[template].to
 
 | | 1 宣言・射影 | 2 ランタイム | 3 ホスト | PR |
 |---|---|---|---|---|
-| mulmoclaude core | 階層ごとの遷移表・`assignees`・`mail` を `{tier}/config` に載せる | — | — | #2891 |
+| mulmoclaude core | 階層ごとの遷移表・`writers` / `rowWriters`・`mail` を `{tier}/config` に載せる（候補リストは publish しない — 親が 2 つの和で導く） | — | — | #2891 |
 | mulmoserver | — | 意図の受け口、`/p/{slug}`、`/a/` の導線 | — | #171 |
 | mulmoterminal | — | — | テンプレート、スキル | この PR |
 
