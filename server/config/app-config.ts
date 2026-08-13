@@ -137,6 +137,11 @@ export interface AppConfig {
   // it is a vision-stage idea rather than something every user needs, and it writes a file
   // (under ~/.mulmoterminal/decisions/) that would otherwise never exist.
   decisionDigest: boolean;
+  // Offer a session's AskUserQuestion choices as buttons in a right pane (#1679). OFF unless
+  // asked for: answering from the pane types into the live terminal dialog, so a user who has
+  // not asked for it should not have a pane driving their keyboard. The terminal dialog is
+  // unaffected either way — the pane is a second way to answer it, never a replacement.
+  questionPaneEnabled: boolean;
   // Pick up a project's own favicon when its `.mulmoterminal.json` names no `icon` (#1428).
   // ON unless turned off, unlike the opt-in flags above: it shows a picture the repository
   // already ships rather than creating anything, and a project that doesn't want one says
@@ -418,6 +423,10 @@ export function sanitizeDecisionDigest(input: unknown): boolean {
   return input === true;
 }
 
+export function sanitizeQuestionPaneEnabled(input: unknown): boolean {
+  return input === true;
+}
+
 // Inverted against every other boolean here: this one defaults ON, so anything that is not
 // an explicit `false` — including a missing key, which is what every existing config file
 // has — leaves it enabled.
@@ -467,6 +476,7 @@ export const emptyConfig = (): AppConfig => ({
   keymap: {},
   copyOnSelect: false,
   decisionDigest: false,
+  questionPaneEnabled: false,
   issueWorkComments: false,
   prWorkdirFooter: true,
   appendSystemPrompt: true,
@@ -554,6 +564,7 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     keymap: sanitizeKeymap(o.keymap),
     copyOnSelect: sanitizeCopyOnSelect(o.copyOnSelect),
     decisionDigest: sanitizeDecisionDigest(o.decisionDigest),
+    questionPaneEnabled: sanitizeQuestionPaneEnabled(o.questionPaneEnabled),
     issueWorkComments: sanitizeIssueWorkComments(o.issueWorkComments),
     prWorkdirFooter: sanitizePrWorkdirFooter(o.prWorkdirFooter),
     appendSystemPrompt: sanitizeAppendSystemPrompt(o.appendSystemPrompt),
@@ -664,6 +675,7 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     keymap: updated("keymap", sanitizeKeymap, base.keymap),
     copyOnSelect: updated("copyOnSelect", sanitizeCopyOnSelect, base.copyOnSelect),
     decisionDigest: updated("decisionDigest", sanitizeDecisionDigest, base.decisionDigest),
+    questionPaneEnabled: updated("questionPaneEnabled", sanitizeQuestionPaneEnabled, base.questionPaneEnabled),
     issueWorkComments: updated("issueWorkComments", sanitizeIssueWorkComments, base.issueWorkComments),
     fontFamily: updated("fontFamily", normalizeFontFamily, base.fontFamily),
     prWorkdirFooter: updated("prWorkdirFooter", sanitizePrWorkdirFooter, base.prWorkdirFooter),
@@ -704,6 +716,7 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     keymap: config.keymap,
     copyOnSelect: config.copyOnSelect,
     decisionDigest: config.decisionDigest,
+    questionPaneEnabled: config.questionPaneEnabled,
     issueWorkComments: config.issueWorkComments,
     prWorkdirFooter: config.prWorkdirFooter,
     appendSystemPrompt: config.appendSystemPrompt,

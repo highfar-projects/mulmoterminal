@@ -44,6 +44,8 @@ import { usePubSub } from "../composables/usePubSub";
 import { isDrawnResult } from "../utils/drawnResult";
 import { hasCanvasGroup, hasCollectionsGroup } from "../../common/toolGroups";
 import type { RightPane } from "./gridCell";
+import QuestionPane from "./QuestionPane.vue";
+import { ASK_QUESTION_CHANNEL, isAskQuestionDone, isAskQuestionEvent, keysForAnswers, type AskQuestionEvent } from "../../common/askQuestion";
 import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
 import { isRecord } from "../../common/isRecord";
 import type { SessionAgent, TerminalAgent } from "../../common/sessionAgent";
@@ -195,7 +197,7 @@ const remember = (key: string, value: string): void => {
 //   canvas — what the agent DREW: the GUI plugin views for this cell's session.
 //   tools  — which GUI tools this session actually has, read-only.
 const isRightPane = (value: unknown): value is RightPane =>
-  value === "files" || value === "canvas" || value === "tools" || value === "collections" || value === "github";
+  value === "files" || value === "canvas" || value === "tools" || value === "collections" || value === "github" || value === "question";
 
 // Which cell the pane is on — the identity everything else hangs off. The UID rather than the
 // directory: two terminals in the same repository is the ordinary case here, and keying on the
@@ -285,6 +287,11 @@ const SEPARATOR_PX = 5;
 // The pane keeps its 1px left border even with its content squeezed to nothing, so that pixel
 // exists for as long as the pane is open and is not the terminal's to spend either.
 const PANE_CHROME_PX = SEPARATOR_PX + 1;
+
+// Between the keystrokes that answer a question dialog. The dialog rebuilds itself between
+// questions and after a toggle, so the keys are paced rather than written as one block.
+const QUESTION_KEY_GAP_MS = 30;
+const pause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 const rowWidth = () => Math.max(0, (zoomRow.value?.clientWidth ?? 0) - (rightPane.value ? PANE_CHROME_PX : 0));
 // Mirrored into a ref so the separator can announce its range (a plain function call would not
 // re-render when the row resizes). The pane's floor gives way to the terminal's on a narrow row,
@@ -465,6 +472,70 @@ watch(
   { immediate: true },
 );
 onBeforeUnmount(() => unsubscribeDrawn?.());
+
+// The live AskUserQuestion dialogs, by session (#1679). Held for EVERY session rather than the
+// enlarged one alone: the question arrives whenever the agent asks, and a user who enlarges that
+// cell a minute later should still find its buttons. Nothing arrives at all while the switch is
+// off — the server does not publish (see routes/app-routes.ts).
+const questionBySession = ref(new Map<string, AskQuestionEvent>());
+const expandedQuestion = computed(() => (expandedSessionId.value ? (questionBySession.value.get(expandedSessionId.value) ?? null) : null));
+
+// Replacing the Map rather than mutating it: a `ref` over a Map does not track its own writes.
+const setQuestion = (sessionId: string, event: AskQuestionEvent | null): void => {
+  const next = new Map(questionBySession.value);
+  if (event) next.set(sessionId, event);
+  else next.delete(sessionId);
+  questionBySession.value = next;
+};
+
+// Answered — in the terminal, in the pane, or cancelled with Esc. The pane goes with the question
+// it was opened for: it exists to answer one, and leaving an empty panel behind is something the
+// user then has to close by hand.
+const dropQuestion = (sessionId: string): void => {
+  setQuestion(sessionId, null);
+  if (sessionId === expandedSessionId.value && rightPane.value === "question") setRightPane(null, paneUid.value);
+};
+
+const unsubscribeQuestion = subscribeSession(ASK_QUESTION_CHANNEL, (data) => {
+  if (isAskQuestionEvent(data)) {
+    setQuestion(data.sessionId, data);
+    // Opened for the user, not merely made available: a question nobody sees is a session that
+    // sits blocked. Only for the cell already on screen — enlarging some other cell to reveal a
+    // pane would take the user off whatever they were reading.
+    if (data.sessionId === expandedSessionId.value) setRightPane("question", props.expandedUid);
+    return;
+  }
+  if (isAskQuestionDone(data) && questionBySession.value.get(data.sessionId)?.toolUseId === data.toolUseId) dropQuestion(data.sessionId);
+});
+onBeforeUnmount(() => unsubscribeQuestion());
+
+// A question that arrived while its cell was tiled — or on another page of the grid — still has a
+// session blocked on it, so enlarging that cell is when to show it. Nothing else opens this pane:
+// it has no header button, because a control for the rare case would sit in every cell's chrome
+// forever, and the moment the question lands is the only other time it opens itself.
+watch(expandedSessionId, (sessionId) => {
+  if (sessionId && questionBySession.value.has(sessionId)) setRightPane("question", props.expandedUid);
+});
+
+// Answering the enlarged cell's dialog: the picks become the keystrokes that drive the REAL
+// dialog, still on screen in the terminal underneath (common/askQuestion.ts holds the sequences,
+// all of them measured). Sent one at a time with a gap — the dialog re-renders between questions,
+// and a burst written in one go risks arriving while it is rebuilding.
+async function answerQuestion(picks: number[][]): Promise<void> {
+  const event = expandedQuestion.value;
+  if (!event || props.expandedUid === null) return;
+  const keys = keysForAnswers(event.questions, picks);
+  if (!keys) return;
+  // Dropped BEFORE the keys go out: the pane must not be able to send a second sequence into a
+  // dialog that is already closing, and this is the same drop the `done` event would do anyway.
+  dropQuestion(event.sessionId);
+  const slot = `cell-${props.expandedUid}`;
+  await keys.reduce(async (previous, key) => {
+    await previous;
+    await pause(QUESTION_KEY_GAP_MS);
+    conn.sendKeys(slot, key);
+  }, Promise.resolve());
+}
 
 // GUI -> LLM for the enlarged cell (a submitted form's answer). App.vue routes this through the
 // single view's Terminal ref; here the slot key is derivable from the uid, so the connection
@@ -1202,6 +1273,17 @@ watch(
              which repo's section LEADS (common/githubPaneOrder.ts). A directory that names no
              repository is an ordinary case and gets the configured order — a plain shell cell can
              still read the list. -->
+        <!-- The buttons of a live AskUserQuestion dialog (#1679). Opens itself when the question
+             arrives; the terminal underneath keeps showing the real dialog either way. -->
+        <QuestionPane
+          v-else-if="rightPane === 'question'"
+          :event="expandedQuestion"
+          :expanded="paneFull"
+          :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
+          @answer="answerQuestion"
+          @toggle-expand="togglePaneExpanded"
+          @close="setRightPane(null, paneUid)"
+        />
         <GithubPane
           v-else-if="rightPane === 'github'"
           :cwd="expandedCwd"

@@ -934,6 +934,18 @@ export function insertText(key: string, text: string) {
   c.term.focus();
 }
 
+// Raw bytes, for driving a TUI dialog the agent has put on screen (#1679) — an arrow, an Enter.
+// NOT wrapped in bracketed paste, unlike pasteText: a menu ignores a pasted block entirely
+// (measured in #781 — the keys never arrive and nothing appears on screen either), while the
+// same bytes sent plain move its highlight. No focus() either: the click that chose the answer
+// was in a pane, and stealing focus back to the terminal on every keystroke fights the user.
+export function sendKeys(key: string, data: string): boolean {
+  const c = conns.get(key);
+  if (!c || c.ws?.readyState !== WebSocket.OPEN) return false;
+  c.ws.send(JSON.stringify({ type: "input", data }));
+  return true;
+}
+
 export function focus(key: string) {
   conns.get(key)?.term.focus();
 }

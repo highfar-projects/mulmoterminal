@@ -196,6 +196,14 @@ export function getAppendSystemPrompt(): boolean {
   return loadAppConfig(CONFIG_FILE).appendSystemPrompt;
 }
 
+// Whether a session's AskUserQuestion choices are offered as buttons in a pane (#1679). Read
+// from disk per question, like the two above: questions are rare (one JSON read next to a
+// terminal dialog a human is about to read), and a user who has just turned the switch on
+// expects the NEXT question to show up rather than the next server start.
+export function getQuestionPaneEnabled(): boolean {
+  return loadAppConfig(CONFIG_FILE).questionPaneEnabled;
+}
+
 /** Called after a config write that CHANGED the saved directories. Injected rather than imported,
  *  so this module stays config-shaped and does not reach into a backend: the collection watchers
  *  are the caller's concern, not the config route's. */

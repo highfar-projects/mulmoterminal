@@ -16,7 +16,7 @@ import { mountConfigRoutes } from "../config/config-routes.js";
 import { mountFilesBrowseRoutes } from "../files/files-browse.js";
 import { mountTmuxRoutes } from "../infra/tmux-routes.js";
 import { survivingSessions } from "../session/surviving-sessions.js";
-import { getSessionIdleReapDays } from "../config/config-routes.js";
+import { getSessionIdleReapDays, getQuestionPaneEnabled } from "../config/config-routes.js";
 import { sweepIdleSessions } from "../session/reap-idle-sessions.js";
 import { mountHookRoute } from "../routes/hook-routes.js";
 import { mountPluginRoutes } from "../routes/plugin-routes.js";
@@ -71,6 +71,7 @@ import { cwdForSession } from "../session/session-cwd.js";
 import { mountMulmoScriptDispatchRoute, mountMulmoScriptMediaRoute } from "../backends/mulmoscript.js";
 import { CLAUDE_CWD, MULMOTERMINAL_HOME, PORT, SESSION_ID_RE } from "../config/env.js";
 import { FILE_WRITE_CHANNEL, type FileWriteEvent } from "../../common/fileWriteChannel.js";
+import { ASK_QUESTION_CHANNEL, type AskQuestionDone, type AskQuestionEvent } from "../../common/askQuestion.js";
 import type { createToolStores } from "../session/tool-store.js";
 import type { createClaudeSpawner } from "../session/spawn-claude.js";
 import type { createCodexSpawner } from "../session/spawn-codex.js";
@@ -109,6 +110,13 @@ export interface AppRouteDeps extends SessionActivityDeps {
 
 // The channel a directory-config change is announced on.
 const DIR_CONFIG_CHANNEL = "dir-config";
+
+// A live AskUserQuestion dialog, offered to the pane (#1679). Gated HERE rather than in the pane:
+// with the switch off nothing is published at all, so a user who has not asked for this feature
+// has their questions leave no trace in the browser.
+const publishQuestion = (publish: AppRouteDeps["publish"], event: AskQuestionEvent | AskQuestionDone): void => {
+  if (getQuestionPaneEnabled()) publish(ASK_QUESTION_CHANNEL, event);
+};
 
 // The two signals behind both halves of the broker-fed history: whether it is written at all, and
 // whether the pane tells the user it holds the GUI tools alone. Read here so the two answers are
@@ -295,6 +303,7 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
     recordToolCallEnd: deps.toolStores.recordToolCallEnd,
     publishDirConfig: (cwd) => deps.publish(DIR_CONFIG_CHANNEL, { cwd }),
     publishFileWrite: (file) => deps.publish(FILE_WRITE_CHANNEL, { file } satisfies FileWriteEvent),
+    publishQuestion: (event) => publishQuestion(deps.publish, event),
     // Express serves the built SPA on PORT; under `yarn dev` the UI is Vite's own server,
     // whose port the backend only knows when CLIENT_PORT is set in its environment.
     uiPort: String(process.env.CLIENT_PORT || PORT),
