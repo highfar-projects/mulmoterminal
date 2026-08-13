@@ -16,6 +16,8 @@ running grid. Already set up? `npx mulmoterminal@latest` is the whole thing.
 [Getting started — from zero to running](getting-started.html){: .btn .btn-purple .fs-5 .mb-4 .mb-md-0 .mr-2 }
 [Basics — how to read the screen](basics.html){: .btn .fs-5 .mb-4 .mb-md-0 }
 
+> **[What's new in 4.8.2](v4.8.2.html)** — **GitHub beside the cell, and a header you can read while it runs**. The GitHub view no longer takes over the screen: an enlarged cell opens open PRs and issues **in its own right pane**, with **that cell's repository at the top** (the full-screen view, `/prs` and `"view": "prs"` all still work). And a project's `headerColor` stopped becoming unreadable the moment its cell started working — the theme's status tint no longer keeps your ink, and you can **name the colours for working / done / blocked yourself** with `headerStatusColors`, or keep your own colour throughout with `"headerStatusTint": "none"`. Also fixed: a **"finished" push carrying the previous turn's reply** when the turn itself produced none, a replayed terminal starting with `�`, and a new document silently overwriting an existing one (as of 2026-08-13)
+>
 > **[What's new in 4.8.1](v4.8.1.html)** — **a server that stops running out of terminals**. After a few days of uptime every new session failed with `forkpty: Device not configured`, because each spawn leaked two file descriptors on macOS — one of them a whole pseudo-terminal — until the machine hit its limit of 511. **Nothing to configure; restart onto this version.** Also: a project folder's collection now **refreshes on schedule** instead of writing into the workspace's same-named collection, and a **card stays with the project it was made in** rather than showing another project's rows after the app moves (as of 2026-08-10)
 >
 > **[What's new in 4.8.0](v4.8.0.html)** — **collections in the cell, and tasks that catch up**. A **Collections pane** sits in each cell's right pane beside Canvas / Tools / Files and lists the collections of **that cell's directory** — no project picker, because a cell already names a folder. **Keep your collections in the workspace for now**: the per-folder feature is not finished (no scheduled refresh there, no phone access, and cards from two projects cannot share a panel), and the release page says exactly what is missing. Separately, a scheduled task no longer loses a run because the server was off at its UTC window: every run is recorded and **the missed one is made up at startup** — which is why a dev worklog you enabled may never have produced a page (as of 2026-08-10)
@@ -209,7 +211,7 @@ installing Node.js / Claude Code / git / gh on macOS and Windows, the
 7. [Configuration](config.html) (settings modal · `config.json` · `.mulmoterminal.json` · the **DSL**)
 8. [Mobile notifications (Web Push)](notifications.html) (iPhone / Android setup)
 9. [From your phone](phone.html) (watch, reply with your own chips, start a terminal)
-10. [GitHub — cross-repo PRs & Issues](github.html) (open PRs and issues from your registered repos on one screen)
+10. [GitHub — cross-repo PRs & Issues](github.html) (open PRs and issues from your registered repos — beside a cell, led by its repository, or on one screen)
 11. [Using another model via OpenRouter](providers.html) (run Kimi / DeepSeek / Gemini, with measured data)
 12. [Local models with claude-ollama](claude-ollama.html) (fully local, offline, via Ollama)
 13. [Glossary](glossary.html)
