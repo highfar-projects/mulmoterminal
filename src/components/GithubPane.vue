@@ -11,11 +11,11 @@
 // repo's section leads (common/githubPaneOrder.ts). A directory that names no repository is an
 // ordinary case — the list renders in the configured order.
 import { computed, ref, onMounted } from "vue";
-import type { CiState, RepoIssues, RepoPrs } from "../../common/ghItems";
+import type { RepoIssues, RepoPrs } from "../../common/ghItems";
 import { leadWithRepo, repoForCwd } from "../../common/githubPaneOrder";
 import { useIssueStart } from "../composables/useIssueStart";
-import { relativeTimeFromIso } from "./cellDisplay";
-import IssueStartButton from "./IssueStartButton.vue";
+import GithubPrRepo from "./GithubPrRepo.vue";
+import GithubIssueRepo from "./GithubIssueRepo.vue";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
@@ -33,8 +33,31 @@ const issueRepos = ref<RepoIssues[]>([]);
 // the issue rows' start control either way), so leading with the cell's repo costs no request and
 // no `git` subprocess of its own.
 const leadRepo = computed(() => repoForCwd(props.cwd, repoDirs.value));
-const orderedPrs = computed(() => leadWithRepo(repos.value, leadRepo.value));
-const orderedIssues = computed(() => leadWithRepo(issueRepos.value, leadRepo.value));
+
+// The cell's own repo is pulled OUT of both lists and shown as a pair at the top — its PRs and its
+// issues together, under one heading — with everything else below a rule in the familiar
+// two-section form. Leading with it inside the existing sections was the first cut; the pair reads
+// better because the question at a cell is "what is open on THIS repo", and that answer was split
+// across two places the user had to scroll between.
+const sameRepo = (a: string, b: string | null) => !!b && a.toLowerCase() === b.toLowerCase();
+const leadPrs = computed(() => repos.value.find((r) => sameRepo(r.repo, leadRepo.value)) ?? null);
+const leadIssues = computed(() => issueRepos.value.find((r) => sameRepo(r.repo, leadRepo.value)) ?? null);
+const hasLead = computed(() => leadPrs.value !== null || leadIssues.value !== null);
+
+// `leadWithRepo` still orders the remainder: with the lead extracted it is a no-op, but it stays
+// the single answer to "what order do these come in" for the host that passes no cwd at all.
+const otherPrs = computed(() =>
+  leadWithRepo(
+    repos.value.filter((r) => !sameRepo(r.repo, leadRepo.value)),
+    leadRepo.value,
+  ),
+);
+const otherIssues = computed(() =>
+  leadWithRepo(
+    issueRepos.value.filter((r) => !sameRepo(r.repo, leadRepo.value)),
+    leadRepo.value,
+  ),
+);
 const loading = ref(false);
 const prsError = ref<string | null>(null);
 const issuesError = ref<string | null>(null);
@@ -78,25 +101,6 @@ async function load(): Promise<void> {
 // with `v-if`, the grid pane when `rightPane` becomes "github"), so mounting IS being entered —
 // and open PRs change as work lands elsewhere, so a stale list is worth one fetch.
 onMounted(() => void load());
-
-const CI_TITLE: Record<CiState, string> = { passing: "Checks passing", failing: "Checks failing", pending: "Checks running", none: "No checks" };
-const REVIEW_LABEL: Record<string, string> = { APPROVED: "approved", CHANGES_REQUESTED: "changes requested", REVIEW_REQUIRED: "review required" };
-
-// CI dot colour: passing green (hardcoded, token-less), failing/pending on the
-// theme err/amber tokens, no-checks the dim default.
-function ciDotClass(ci: CiState): string {
-  if (ci === "passing") return "bg-[#3fae6b]";
-  if (ci === "failing") return "bg-err-text";
-  if (ci === "pending") return "bg-amber";
-  return "bg-dim";
-}
-// Review-tag colour: approved green, changes-requested red; anything else keeps
-// the neutral tag colours. Returns text + border together so there's no cascade race.
-function reviewTagClass(review: string): string {
-  if (review === "APPROVED") return "border-[#3fae6b] text-[#3fae6b]";
-  if (review === "CHANGES_REQUESTED") return "border-err-text text-err-text";
-  return "border-border text-muted";
-}
 </script>
 
 <template>
@@ -136,87 +140,45 @@ function reviewTagClass(review: string): string {
         No repositories configured. Add <code>owner/repo</code> entries under Settings → Pull request repos.
       </p>
       <template v-else>
+        <!-- The cell's own repo, both halves under one heading. Rendered only when it HAS a
+             section: a cell whose directory names no repository, or one whose repo is not among
+             the configured ones, falls straight through to the list below — the decision that a
+             cell like that still opens a useful pane. -->
+        <section v-if="hasLead" data-testid="github-lead" class="mb-4">
+          <h2 class="mb-2 mt-1 border-b border-border pb-1 font-mono text-[13px] font-semibold text-fg">{{ leadRepo }}</h2>
+          <template v-if="leadPrs">
+            <h3 class="mb-1 mt-2 text-[11px] font-bold uppercase tracking-[0.06em] text-muted">Pull requests</h3>
+            <GithubPrRepo :repo="leadPrs" hide-heading />
+          </template>
+          <template v-if="leadIssues">
+            <h3 class="mb-1 mt-2 text-[11px] font-bold uppercase tracking-[0.06em] text-muted">Issues</h3>
+            <p v-if="startError" data-testid="issue-start-error" class="px-1 py-2 text-[13px] text-err">{{ startError }}</p>
+            <GithubIssueRepo :repo="leadIssues" hide-heading />
+          </template>
+        </section>
+        <hr v-if="hasLead && (otherPrs.length > 0 || otherIssues.length > 0)" class="mb-4 border-0 border-t-2 border-border" />
+
         <h2
+          v-if="otherPrs.length > 0 || prsError"
           class="mb-3 mt-1 text-[11px] font-bold uppercase tracking-[0.06em] text-muted [&:not(:first-child)]:mt-7 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-border [&:not(:first-child)]:pt-4"
         >
           Pull requests
         </h2>
         <p v-if="prsError" class="px-1 py-6 text-[13px] text-err">{{ prsError }}</p>
-        <section v-for="r in orderedPrs" :key="`pr-${r.repo}`" class="mb-5">
-          <h3 class="my-1.5 flex items-center gap-2 border-b border-border pb-1 font-mono text-[13px] font-semibold text-fg">
-            {{ r.repo }}
-            <span v-if="r.prs" class="text-[11px] font-normal text-muted">{{ r.prs.length }}</span>
-          </h3>
-          <p v-if="r.error" class="px-1 py-6 text-[13px] text-err">{{ r.error }}</p>
-          <p v-else-if="r.prs && r.prs.length === 0" class="px-1 py-2 text-[13px] text-muted">No open PRs</p>
-          <ul v-else-if="r.prs" class="m-0 list-none p-0">
-            <li v-for="pr in r.prs" :key="pr.number">
-              <a
-                data-testid="prs-row"
-                class="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2 py-[7px] text-left text-[13px] text-secondary no-underline hover:bg-hover hover:text-fg"
-                :href="pr.url"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <span
-                  class="h-[9px] w-[9px] flex-none rounded-full"
-                  :class="ciDotClass(pr.ci)"
-                  role="img"
-                  :aria-label="CI_TITLE[pr.ci]"
-                  :title="CI_TITLE[pr.ci]"
-                />
-                <span class="flex-none font-[ui-monospace,monospace] text-dim">#{{ pr.number }}</span>
-                <span class="min-w-0 flex-auto truncate">{{ pr.title }}</span>
-                <span v-if="pr.isDraft" class="flex-none rounded-[10px] border border-border px-1.5 py-px text-[11px] text-dim">draft</span>
-                <span v-if="pr.review" class="flex-none rounded-[10px] border px-1.5 py-px text-[11px]" :class="reviewTagClass(pr.review)">{{
-                  REVIEW_LABEL[pr.review] ?? pr.review.toLowerCase()
-                }}</span>
-                <span class="flex-none text-[11px] text-dim">{{ pr.author }} · {{ relativeTimeFromIso(pr.updatedAt, Date.now()) }}</span>
-              </a>
-            </li>
-          </ul>
-          <p v-if="r.truncated" class="px-1 py-2 text-[13px] text-muted">Showing the first {{ r.prs?.length ?? 0 }} — this repo has more open PRs.</p>
-        </section>
+        <GithubPrRepo v-for="r in otherPrs" :key="`pr-${r.repo}`" :repo="r" />
 
         <h2
+          v-if="otherIssues.length > 0 || issuesError"
           class="mb-3 mt-1 text-[11px] font-bold uppercase tracking-[0.06em] text-muted [&:not(:first-child)]:mt-7 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-border [&:not(:first-child)]:pt-4"
         >
           Issues
         </h2>
         <p v-if="issuesError" class="px-1 py-6 text-[13px] text-err">{{ issuesError }}</p>
         <!-- One place for the whole section: only one start can be in flight at a time, so a
-             per-repo copy would be the same message repeated down the page. -->
-        <p v-if="startError" data-testid="issue-start-error" class="px-1 py-2 text-[13px] text-err">{{ startError }}</p>
-        <section v-for="r in orderedIssues" :key="`iss-${r.repo}`" class="mb-5">
-          <h3 class="my-1.5 flex items-center gap-2 border-b border-border pb-1 font-mono text-[13px] font-semibold text-fg">
-            {{ r.repo }}
-            <span v-if="r.issues" class="text-[11px] font-normal text-muted">{{ r.issues.length }}</span>
-          </h3>
-          <p v-if="r.error" class="px-1 py-6 text-[13px] text-err">{{ r.error }}</p>
-          <p v-else-if="r.issues && r.issues.length === 0" class="px-1 py-2 text-[13px] text-muted">No open issues</p>
-          <ul v-else-if="r.issues" class="m-0 list-none p-0">
-            <!-- The row is a link to GitHub and the control STARTS work here, so they cannot be
-                 one element: the button sits beside the anchor rather than inside it. -->
-            <li v-for="iss in r.issues" :key="iss.number" class="flex items-center gap-1.5 rounded-md pr-2 hover:bg-hover">
-              <a
-                data-testid="prs-row"
-                class="flex min-w-0 flex-auto cursor-pointer items-center gap-2.5 rounded-md px-2 py-[7px] text-left text-[13px] text-secondary no-underline hover:text-fg"
-                :href="iss.url"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <span class="flex-none font-[ui-monospace,monospace] text-dim">#{{ iss.number }}</span>
-                <span class="min-w-0 flex-auto truncate">{{ iss.title }}</span>
-                <span class="flex-none text-[11px] text-dim">{{ iss.author }} · {{ relativeTimeFromIso(iss.updatedAt, Date.now()) }}</span>
-              </a>
-              <IssueStartButton :repo="r.repo" :issue="iss.number" />
-            </li>
-          </ul>
-          <p v-if="r.truncated" class="px-1 py-2 text-[13px] text-muted">
-            Showing the latest {{ r.issues?.length ?? 0 }} —
-            <a :href="r.url" target="_blank" rel="noopener noreferrer" data-testid="prs-link" class="text-accent underline">see all open issues on GitHub</a>.
-          </p>
-        </section>
+             per-repo copy would be the same message repeated down the page. It rides with the lead
+             block instead when that is where the button was pressed. -->
+        <p v-if="startError && !hasLead" data-testid="issue-start-error" class="px-1 py-2 text-[13px] text-err">{{ startError }}</p>
+        <GithubIssueRepo v-for="r in otherIssues" :key="`iss-${r.repo}`" :repo="r" />
       </template>
     </div>
   </div>

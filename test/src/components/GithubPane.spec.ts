@@ -142,8 +142,30 @@ describe("GithubPane", () => {
     );
     const w = mount(GithubPane, { props: { cwd: "/srv/mine" } });
     await flushPromises();
-    const headings = w.findAll("h3").map((h) => h.text());
-    expect(headings[0]).toContain("octo/mine");
+    const lead = w.find('[data-testid="github-lead"]');
+    expect(lead.exists()).toBe(true);
+    // The repo is named ONCE, above both halves — the pair is the point, not two sections the
+    // user scrolls between.
+    expect(lead.text()).toContain("octo/mine");
+    expect(lead.text()).toContain("two");
+    // …and it is pulled OUT of the list below, rather than repeated there.
+    expect(lead.text()).not.toContain("octo/first");
+    expect(w.text().indexOf("octo/mine")).toBeLessThan(w.text().indexOf("octo/first"));
+  });
+
+  it("pairs the lead repo's PRs and issues under one heading", async () => {
+    mockFetch(
+      [{ repo: "octo/mine", prs: [pr(2, "a pr")] }],
+      [{ repo: "octo/mine", issues: [{ number: 9, title: "an issue", author: "bob", updatedAt: new Date().toISOString(), url: "u9" }] }],
+      {
+        repoDirs: [{ repo: "octo/mine", dirs: [{ path: "/srv/mine", label: "mine", orderPriority: null }], primary: null }],
+      },
+    );
+    const w = mount(GithubPane, { props: { cwd: "/srv/mine" } });
+    await flushPromises();
+    const lead = w.find('[data-testid="github-lead"]');
+    expect(lead.text()).toContain("a pr");
+    expect(lead.text()).toContain("an issue");
   });
 
   // The decision behind this: a plain shell cell, or a clone the user never registered in
@@ -161,8 +183,11 @@ describe("GithubPane", () => {
     );
     const w = mount(GithubPane, { props: { cwd: "/srv/unregistered" } });
     await flushPromises();
+    // No lead block at all, and nothing lost: both repos still render, in the configured order.
+    expect(w.find('[data-testid="github-lead"]').exists()).toBe(false);
     const headings = w.findAll("h3").map((h) => h.text());
     expect(headings[0]).toContain("octo/first");
+    expect(w.text()).toContain("octo/second");
   });
 
   it("renders without a cwd at all — the toolbar's full-screen host", async () => {
