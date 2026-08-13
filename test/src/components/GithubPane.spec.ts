@@ -1,11 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import { ref } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
-import PrsOverlay from "../../../src/components/PrsOverlay.vue";
+import GithubPane from "../../../src/components/GithubPane.vue";
 
-// The view is route-driven; stub usePrsView so the overlay is "open" without a router.
-vi.mock("../../../src/composables/usePrsView", () => ({
-  usePrsView: () => ({ isOpen: ref(true), close: vi.fn() }),
+// The pane is no longer route-driven — it fetches on mount — so there is nothing to stub for it
+// to be "open". What remains stubbed is only what a router would otherwise be needed for.
+vi.mock("../../../src/composables/useGithubView", () => ({
+  useGithubView: () => ({ isOpen: ref(true), close: vi.fn() }),
 }));
 
 type Repo = { repo: string; prs?: unknown[]; error?: string; truncated?: boolean };
@@ -13,9 +14,14 @@ type IssueRepo = { repo: string; issues?: unknown[]; error?: string; truncated?:
 
 // The overlay fetches /api/prs and /api/issues in parallel; route the mock by path.
 // opts.failPrs / opts.failIssues make that endpoint return a non-ok response.
-function mockFetch(prs: Repo[], issues: IssueRepo[] = [], opts: { failPrs?: boolean; failIssues?: boolean } = {}) {
+function mockFetch(prs: Repo[], issues: IssueRepo[] = [], opts: { failPrs?: boolean; failIssues?: boolean; repoDirs?: unknown[] } = {}) {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
-    const isIssues = String(input).includes("/api/issues");
+    const path = String(input);
+    // The pane reads the reverse map to know which repo a cell's directory belongs to. It is the
+    // same request the issue rows' start control already made, so it is answered here rather than
+    // stubbed away — a pane that could not read it would silently stop leading with the repo.
+    if (path.includes("/api/repo-dirs")) return { ok: true, json: async () => ({ repos: opts.repoDirs ?? [] }) };
+    const isIssues = path.includes("/api/issues");
     if ((isIssues && opts.failIssues) || (!isIssues && opts.failPrs)) {
       return { ok: false, status: 500, json: async () => ({}) };
     }
@@ -27,7 +33,7 @@ function pr(number: number, title: string) {
   return { number, title, author: "alice", updatedAt: new Date().toISOString(), isDraft: false, url: `u${number}`, review: null, ci: "none" };
 }
 
-describe("PrsOverlay", () => {
+describe("GithubPane", () => {
   it("groups repos and lists their open PRs", async () => {
     mockFetch([
       {
@@ -48,7 +54,7 @@ describe("PrsOverlay", () => {
       },
       { repo: "octo/empty", prs: [] },
     ]);
-    const w = mount(PrsOverlay);
+    const w = mount(GithubPane);
     await flushPromises();
     expect(w.text()).toContain("octo/hello");
     expect(w.text()).toContain("#3");
@@ -76,7 +82,7 @@ describe("PrsOverlay", () => {
         { repo: "octo/quiet", issues: [] },
       ],
     );
-    const w = mount(PrsOverlay);
+    const w = mount(GithubPane);
     await flushPromises();
     expect(w.text()).toContain("Issues");
     expect(w.text()).toContain("#42");
@@ -91,7 +97,7 @@ describe("PrsOverlay", () => {
   it("keeps rendering one section when the other endpoint fails", async () => {
     // /api/issues fails → PRs must still render, issue section shows its own error.
     mockFetch([{ repo: "octo/hello", prs: [pr(3, "still visible")] }], [], { failIssues: true });
-    const w1 = mount(PrsOverlay);
+    const w1 = mount(GithubPane);
     await flushPromises();
     expect(w1.text()).toContain("still visible"); // PR dashboard not blanked
     expect(w1.text()).toContain("HTTP 500"); // issue section error
@@ -100,7 +106,7 @@ describe("PrsOverlay", () => {
     mockFetch([], [{ repo: "octo/hello", issues: [{ number: 9, title: "issue shows", author: "bob", updatedAt: new Date().toISOString(), url: "u9" }] }], {
       failPrs: true,
     });
-    const w2 = mount(PrsOverlay);
+    const w2 = mount(GithubPane);
     await flushPromises();
     expect(w2.text()).toContain("issue shows");
     expect(w2.text()).toContain("HTTP 500");
@@ -108,15 +114,61 @@ describe("PrsOverlay", () => {
 
   it("shows a per-repo error", async () => {
     mockFetch([{ repo: "octo/x", error: "no access" }]);
-    const w = mount(PrsOverlay);
+    const w = mount(GithubPane);
     await flushPromises();
     expect(w.text()).toContain("no access");
   });
 
   it("hints to configure repos when none are set", async () => {
     mockFetch([]);
-    const w = mount(PrsOverlay);
+    const w = mount(GithubPane);
     await flushPromises();
     expect(w.text()).toContain("No repositories configured");
+  });
+
+  // The whole point of the pane form: opened beside a cell, the list leads with that cell's repo
+  // rather than making the user find it. Reordering rather than scrolling — an empty section at
+  // the top still answers "yours: none", where a scroll would have nothing to land on.
+  it("leads with the repo of the cell it was opened beside", async () => {
+    mockFetch(
+      [
+        { repo: "octo/first", prs: [pr(1, "one")] },
+        { repo: "octo/mine", prs: [pr(2, "two")] },
+      ],
+      [],
+      {
+        repoDirs: [{ repo: "octo/mine", dirs: [{ path: "/srv/mine", label: "mine", orderPriority: null }], primary: null }],
+      },
+    );
+    const w = mount(GithubPane, { props: { cwd: "/srv/mine" } });
+    await flushPromises();
+    const headings = w.findAll("h3").map((h) => h.text());
+    expect(headings[0]).toContain("octo/mine");
+  });
+
+  // The decision behind this: a plain shell cell, or a clone the user never registered in
+  // Settings, still opens a useful list. It must not error and must not blank.
+  it("keeps the configured order for a cell whose directory names no repo", async () => {
+    mockFetch(
+      [
+        { repo: "octo/first", prs: [pr(1, "one")] },
+        { repo: "octo/second", prs: [pr(2, "two")] },
+      ],
+      [],
+      {
+        repoDirs: [{ repo: "octo/second", dirs: [{ path: "/srv/elsewhere", label: "e", orderPriority: null }], primary: null }],
+      },
+    );
+    const w = mount(GithubPane, { props: { cwd: "/srv/unregistered" } });
+    await flushPromises();
+    const headings = w.findAll("h3").map((h) => h.text());
+    expect(headings[0]).toContain("octo/first");
+  });
+
+  it("renders without a cwd at all — the toolbar's full-screen host", async () => {
+    mockFetch([{ repo: "octo/first", prs: [pr(1, "one")] }]);
+    const w = mount(GithubPane);
+    await flushPromises();
+    expect(w.text()).toContain("octo/first");
   });
 });

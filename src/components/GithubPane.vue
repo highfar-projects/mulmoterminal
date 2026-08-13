@@ -1,12 +1,18 @@
 <script setup lang="ts">
-// Full-screen cross-repo PR + issue list, a sibling of WikiBrowseOverlay /
-// AccountingOverlay. Driven by usePrsView (the /prs route). Fetches /api/prs and
-// /api/issues (the repos set in Settings, aggregated server-side via `gh`) on open and
-// on the reload button, grouped by repo. Read-only: a row click opens it on GitHub.
-import { ref, watch } from "vue";
+// The cross-repo PR + issue list itself — the whole GitHub view except where it is mounted.
+// Two hosts render it: GithubOverlay (full screen, route-driven) and TerminalGrid (the right-hand
+// pane beside a zoomed cell), the same split FilesPane / FilesOverlay already use.
+//
+// Fetches /api/prs and /api/issues (the repos set in Settings, aggregated server-side via `gh`)
+// when it mounts and on the reload button, grouped by repo. Read-only apart from IssueStartButton:
+// a row click opens it on GitHub.
+//
+// `cwd` is the directory of the cell this was opened beside, and all it does is decide which
+// repo's section leads (common/githubPaneOrder.ts). A directory that names no repository is an
+// ordinary case — the list renders in the configured order.
+import { computed, ref, onMounted } from "vue";
 import type { CiState, RepoIssues, RepoPrs } from "../../common/ghItems";
-import { usePrsView } from "../composables/usePrsView";
-import { useEscapeToClose } from "../composables/useEscapeToClose";
+import { leadWithRepo, repoForCwd } from "../../common/githubPaneOrder";
 import { useIssueStart } from "../composables/useIssueStart";
 import { relativeTimeFromIso } from "./cellDisplay";
 import IssueStartButton from "./IssueStartButton.vue";
@@ -15,11 +21,20 @@ import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
-const { isOpen, close } = usePrsView();
-const { loadRepoDirs, startError } = useIssueStart();
+const props = defineProps<{ cwd?: string | null }>();
+defineEmits<{ (e: "close"): void }>();
+
+const { loadRepoDirs, startError, repoDirs } = useIssueStart();
 
 const repos = ref<RepoPrs[]>([]);
 const issueRepos = ref<RepoIssues[]>([]);
+
+// Resolved from the reverse map /api/repo-dirs already serves (loadRepoDirs below fetches it for
+// the issue rows' start control either way), so leading with the cell's repo costs no request and
+// no `git` subprocess of its own.
+const leadRepo = computed(() => repoForCwd(props.cwd, repoDirs.value));
+const orderedPrs = computed(() => leadWithRepo(repos.value, leadRepo.value));
+const orderedIssues = computed(() => leadWithRepo(issueRepos.value, leadRepo.value));
 const loading = ref(false);
 const prsError = ref<string | null>(null);
 const issuesError = ref<string | null>(null);
@@ -59,8 +74,10 @@ async function load(): Promise<void> {
   loading.value = false;
 }
 
-// Re-fetch each time the view is entered (open PRs change as work lands elsewhere).
-watch(isOpen, (open) => open && load(), { immediate: true });
+// On mount rather than on a route change: each host mounts this fresh when it opens (the overlay
+// with `v-if`, the grid pane when `rightPane` becomes "github"), so mounting IS being entered —
+// and open PRs change as work lands elsewhere, so a stale list is worth one fetch.
+onMounted(() => void load());
 
 const CI_TITLE: Record<CiState, string> = { passing: "Checks passing", failing: "Checks failing", pending: "Checks running", none: "No checks" };
 const REVIEW_LABEL: Record<string, string> = { APPROVED: "approved", CHANGES_REQUESTED: "changes requested", REVIEW_REQUIRED: "review required" };
@@ -80,14 +97,14 @@ function reviewTagClass(review: string): string {
   if (review === "CHANGES_REQUESTED") return "border-err-text text-err-text";
   return "border-border text-muted";
 }
-
-useEscapeToClose(isOpen, close);
 </script>
 
 <template>
-  <div v-if="isOpen" class="fixed inset-x-0 top-10 bottom-0 z-50 bg-deep flex flex-col" role="region" aria-label="Pull requests and issues">
+  <div class="flex min-h-0 flex-col bg-deep" role="region" aria-label="GitHub pull requests and issues">
     <header class="flex flex-none items-center gap-2.5 border-b border-border bg-panel px-4 py-2">
-      <span class="text-[14px] font-[650] text-fg">PRs &amp; Issues</span>
+      <!-- Each host writes its own title: the overlay names the view, the grid pane says which
+           cell's repo it is leading with. -->
+      <slot name="title"><span class="text-[14px] font-[650] text-fg">GitHub</span></slot>
       <button
         type="button"
         class="h-6 w-[26px] cursor-pointer rounded-md border border-border bg-base text-[14px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-50"
@@ -99,6 +116,15 @@ useEscapeToClose(isOpen, close);
         <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
       </button>
       <span v-if="loading" class="text-[12px] text-muted">Loading…</span>
+      <button
+        type="button"
+        class="ml-auto h-6 w-[26px] cursor-pointer rounded-md border border-border bg-base text-[14px] text-secondary hover:bg-hover hover:text-fg"
+        title="Close"
+        aria-label="Close GitHub pane"
+        @click="$emit('close')"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+      </button>
     </header>
     <div class="flex-auto overflow-y-auto px-4 pb-16 pt-3">
       <p v-if="!loading && !prsError && !issuesError && repos.length === 0 && issueRepos.length === 0" class="px-1 py-6 text-[13px] text-muted">
@@ -111,7 +137,7 @@ useEscapeToClose(isOpen, close);
           Pull requests
         </h2>
         <p v-if="prsError" class="px-1 py-6 text-[13px] text-err">{{ prsError }}</p>
-        <section v-for="r in repos" :key="`pr-${r.repo}`" class="mb-5">
+        <section v-for="r in orderedPrs" :key="`pr-${r.repo}`" class="mb-5">
           <h3 class="my-1.5 flex items-center gap-2 border-b border-border pb-1 font-mono text-[13px] font-semibold text-fg">
             {{ r.repo }}
             <span v-if="r.prs" class="text-[11px] font-normal text-muted">{{ r.prs.length }}</span>
@@ -156,7 +182,7 @@ useEscapeToClose(isOpen, close);
         <!-- One place for the whole section: only one start can be in flight at a time, so a
              per-repo copy would be the same message repeated down the page. -->
         <p v-if="startError" data-testid="issue-start-error" class="px-1 py-2 text-[13px] text-err">{{ startError }}</p>
-        <section v-for="r in issueRepos" :key="`iss-${r.repo}`" class="mb-5">
+        <section v-for="r in orderedIssues" :key="`iss-${r.repo}`" class="mb-5">
           <h3 class="my-1.5 flex items-center gap-2 border-b border-border pb-1 font-mono text-[13px] font-semibold text-fg">
             {{ r.repo }}
             <span v-if="r.issues" class="text-[11px] font-normal text-muted">{{ r.issues.length }}</span>

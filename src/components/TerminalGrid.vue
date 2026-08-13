@@ -23,6 +23,7 @@ import { formatCwd } from "./cwdDisplay";
 import FilesPane, { type FilesPaneState } from "./FilesPane.vue";
 import GuiPanel from "./GuiPanel.vue";
 import CollectionsPane from "./CollectionsPane.vue";
+import GithubPane from "./GithubPane.vue";
 import ToolsPane from "./ToolsPane.vue";
 import {
   clampPaneWidth,
@@ -193,7 +194,8 @@ const remember = (key: string, value: string): void => {
 //   files  — the file tree/editor (the original occupant).
 //   canvas — what the agent DREW: the GUI plugin views for this cell's session.
 //   tools  — which GUI tools this session actually has, read-only.
-const isRightPane = (value: unknown): value is RightPane => value === "files" || value === "canvas" || value === "tools" || value === "collections";
+const isRightPane = (value: unknown): value is RightPane =>
+  value === "files" || value === "canvas" || value === "tools" || value === "collections" || value === "github";
 
 // Which cell the pane is on — the identity everything else hangs off. The UID rather than the
 // directory: two terminals in the same repository is the ordinary case here, and keying on the
@@ -589,6 +591,7 @@ const gridCellEvents = (cell: Cell) => ({
   "open-canvas": () => openCanvasFor(cell.uid),
   "toggle-tools": () => toggleRightPane("tools", cell.uid),
   "toggle-collections": () => toggleRightPane("collections", cell.uid),
+  "toggle-github": () => toggleRightPane("github", cell.uid),
   close: () => emit("close", cell.uid),
   move: (dir: -1 | 1) => emit("move", cell.uid, dir),
   status: (value: AttentionStatus) => emit("status", cell.uid, value),
@@ -1194,6 +1197,17 @@ watch(
           :cwd="expandedCwd"
           :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
           class="border-l border-border"
+        />
+        <!-- Every configured repo, whatever the cell is: what the cell's directory decides is
+             which repo's section LEADS (common/githubPaneOrder.ts). A directory that names no
+             repository is an ordinary case and gets the configured order — a plain shell cell can
+             still read the list. -->
+        <GithubPane
+          v-else-if="rightPane === 'github'"
+          :cwd="expandedCwd"
+          :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
+          class="border-l border-border"
+          @close="setRightPane(null, paneUid)"
         />
       </template>
     </div>
