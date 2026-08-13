@@ -121,6 +121,14 @@ const holdsRecords = async (handle: SharedAppHandle, aid: string, cid: string): 
  *  empty one. */
 const child = (value: unknown, key: string): unknown => (isRecord(value) ? value[key] : undefined);
 
+/** Every collection the LIVE app document configures. Its own reader because
+ *  the gate has to look at collections the new declaration no longer mentions:
+ *  those are exactly the ones whose halves are being dropped. */
+const liveCollectionCids = (live: Record<string, unknown> | null): string[] => {
+  const collections = child(live, "collections");
+  return isRecord(collections) ? Object.keys(collections) : [];
+};
+
 /** The live declaration, as the app document has it now. */
 const liveSubmit = (live: Record<string, unknown> | null, cid: string): Record<string, unknown> | undefined => {
   const entry = child(child(child(live, "public"), "submit"), cid);
@@ -157,9 +165,15 @@ export async function frozenKeyProblems(
   // From what DEPLOY staged, because that is what publish promotes. Reading
   // `app.json` here would let an author deploy a changed mirror, revert the
   // key locally, and publish a promotion this gate never saw.
-  for (const [cid, config] of Object.entries(promoted)) {
+  //
+  // The UNION with what is live, not just what is promoted: deploy withdraws
+  // the staging document of a collection the repository no longer has, so a
+  // mirror REMOVED that way is absent from `promoted` entirely — and a loop
+  // over `promoted` alone would never compare it against the live half it is
+  // about to drop.
+  for (const cid of new Set([...Object.keys(promoted), ...liveCollectionCids(live)])) {
     const was = liveMirrorOf(live, cid);
-    const now = text(config.mirrorOf);
+    const now = text(promoted[cid]?.mirrorOf);
     if (was === now) continue;
     problems.push(
       ...(await movedUnderRecords(handle, authored.aid, cid, [{ key: "mirrorOf", was, now }], "the projection those records are the public face of")),

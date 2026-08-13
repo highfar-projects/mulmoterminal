@@ -20,7 +20,7 @@
 //   IT MUST BE DELETED, not merely stopped being written. `config/{docId}` is
 //   `allow read: if true` forever: withdraw `public.view` from the declaration
 //   and the old page stays fetchable by anyone until something removes it.
-import { constants, open, realpath } from "node:fs/promises";
+import { constants, lstat, open, realpath } from "node:fs/promises";
 import path from "node:path";
 
 import type { AuthoredApp } from "@mulmoclaude/core/collection/server";
@@ -104,6 +104,35 @@ export async function readPublicViewFile(root: string, view: { path: string }, p
  *
  *  Errors are values here for the same reason as everywhere else in this gate:
  *  publish answers with problems and writes nothing. */
+/** The first directory between the repository and the view that is a symlink,
+ *  or null when none is.
+ *
+ *  `O_NOFOLLOW` covers the last component only, so without this a `views/`
+ *  replaced by a link would be followed. Checked with `lstat`, which does not
+ *  follow, one component at a time.
+ *
+ *  This closes the MISTAKE — a stray link somebody made — completely. It does
+ *  not close a race against a process that swaps a directory between this walk
+ *  and the open below, and no pure-Node implementation can: that needs
+ *  descriptor-relative opens (`openat`), which the runtime does not expose.
+ *
+ *  Which is worth stating precisely, because it bounds what this check is for.
+ *  Publish reads the AUTHOR's own repository as the author. A process able to
+ *  win that race is a process with write access to the repository being
+ *  published — and it does not need a symlink at all: it can put the secret
+ *  into `views/booking.html`, or rewrite `app.json`. The boundary this file
+ *  guards is between a declaration and the world, not between two processes on
+ *  one machine. */
+async function symlinkedAncestor(root: string, dir: string): Promise<string | null> {
+  let at = dir;
+  while (at !== root && at.startsWith(root + path.sep)) {
+    const info = await lstat(at).catch(() => null);
+    if (info?.isSymbolicLink() === true) return at;
+    at = path.dirname(at);
+  }
+  return null;
+}
+
 async function openContained(full: string, declared: string): Promise<{ ok: true; html: string } | { ok: false; problems: string[] }> {
   let handle;
   try {
@@ -147,6 +176,19 @@ async function openContained(full: string, declared: string): Promise<{ ok: true
 async function containedPath(root: string, declared: string): Promise<{ ok: true; full: string } | { ok: false; problems: string[] }> {
   const real = await realpath(root).catch(() => path.resolve(root));
   const wanted = path.resolve(real, declared);
+  // The DECLARED components, before anything is resolved: resolving first
+  // would replace a linked directory with its target, and there would be
+  // nothing left to object to.
+  const linked = await symlinkedAncestor(real, path.dirname(wanted));
+  if (linked !== null) {
+    return {
+      ok: false,
+      problems: [
+        `public.view.path names '${declared}', and '${path.relative(real, linked) || linked}' on the way to it is a symbolic link. ` +
+          "A published view is read without following links, directories included — what gets published is world-readable, so every step has to be inside the repository as written.",
+      ],
+    };
+  }
   const dir = await realpath(path.dirname(wanted)).catch(() => path.dirname(wanted));
   if (dir === real || dir.startsWith(real + path.sep)) {
     return { ok: true, full: path.join(dir, path.basename(wanted)) };

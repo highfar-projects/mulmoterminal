@@ -127,6 +127,18 @@ describe("the file a published view names", () => {
     expect(result.ok === false && result.problems.join(" ")).toContain("Nothing was written");
   });
 
+  it("refuses a view reached through a symlinked DIRECTORY", async () => {
+    // `O_NOFOLLOW` covers the last component only, so the directories on the
+    // way have to be checked separately — otherwise a `views/` that is a link
+    // to somewhere else is followed silently.
+    const elsewhere = makeTempDir("mt-public-view-elsewhere-");
+    writeFileSync(path.join(elsewhere, "booking.html"), "<p>not ours</p>");
+    symlinkSync(elsewhere, path.join(root, "views"));
+    const result = await readPublicViewFile(root, { path: "views/booking.html" }, STAMP);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.problems.join(" ")).toContain("is a symbolic link");
+  });
+
   it("takes a page that only mentions the PUBLIC bridge", async () => {
     // The neighbouring declaration that must still publish — otherwise the
     // check above is satisfied by refusing everything.
@@ -318,6 +330,15 @@ describe("the keys that decide which document a submission claims", () => {
     const problems = await frozenKeyProblems(moved, PROMOTED, live, { docs: new UnreadableDocs(), email: "me@example.com", uid: "uid-me" });
     expect(problems.join(" ")).toContain("could not be read");
     expect(problems.join(" ")).toContain("not something `confirm` overrides");
+  });
+
+  it("refuses a mirror WITHDRAWN with its collection", async () => {
+    // Deploy drops the staging document of a collection the repository no
+    // longer has, so the promoted map omits it entirely — and a gate that
+    // walked only the promoted keys would never notice the live half it is
+    // about to drop, which is the invariant it exists to hold.
+    const problems = await frozenKeyProblems(salon(), {}, live, handleWith({ [slotsPath]: 4 }));
+    expect(problems.join(" ")).toContain("mirrorOf: bookings → (absent)");
   });
 
   it("says nothing about a FIRST publish", async () => {
