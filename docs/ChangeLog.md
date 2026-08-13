@@ -10,11 +10,15 @@ Entries here are folded into the next release's heading when it ships.
 
 ### The staff page can approve, and the people on the roster have an entrance of their own (#1671)
 
+> **Not usable yet.** Needs `@mulmoclaude/core` 3.15.0 (mulmoclaude#2891 — merged, not yet on
+> npm; MulmoTerminal is still on 3.14.0, which has no `write` in the projection) and a mulmoserver
+> deploy. Until both land and an app is published again, the staff page stays read-only.
+
 The staff page shipped read-only: seeing today's bookings was possible from a phone, approving one
 still meant opening the owner's Mac. And a `participant` page — declarable since #1667, published
 to the roster tier — had no URL after publish, so it reached nobody.
 
-Both are now real, and **no Firestore rule changed to do it**: `updateWith` already admitted a
+Both are answered here, and **no Firestore rule changed to do it**: `updateWith` already admitted a
 writer, a row's own assignee, and a participant editing their own row, with the declared state
 machine binding all three. What was missing was the client.
 
@@ -53,8 +57,7 @@ await window.__MC_APP_VIEW.assign(cid, itemId, address); // hand a row to a coll
   out and shows nothing of the app's internal vocabulary. The two are not exclusive — an owner who
   also books is on both, and each address shows one face.
 
-Needs mulmoserver deployed and `@mulmoclaude/core` 3.15.0 (mulmoclaude#2891), which projects what
-each tier may change. Design: `plans/feat-shared-app-member-write.md`.
+Design: `plans/feat-shared-app-member-write.md`.
 
 ### A shared app can have a page for its staff, not only for its visitors (#1667)
 

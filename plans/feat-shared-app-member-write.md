@@ -1,7 +1,10 @@
 # 共有アプリ: 名簿の人が「書く」— 承認・担当の付け替えと、参加者の入口
 
-**状態**: 実装中（2026-08-13）。core mulmoclaude#2891（3.15.0、npm 未公開）/
-ランタイム mulmoserver#171 / スキルとテンプレートはこの PR。**ルールの変更は無い**。
+**状態**: 実装中（2026-08-13）。core mulmoclaude#2891 はマージ済みだが
+**3.15.0 は npm 未公開**（MT はまだ 3.14.0）/ ランタイム mulmoserver#171・#172 は
+マージ済み・**deploy 未実施** / スキルとテンプレートはこの PR。**ルールの変更は無い**。
+core が公開され、アプリを publish し直すまで**スタッフ用ページは読み取り専用**のまま
+（射影が `writers` を運ばないので member 階層は fail closed）。
 [`feat-shared-app-member-view.md`](./feat-shared-app-member-view.md)
 が残した 2 つの宿題 — **メンバーからの書き込み**と**participant の入口** — を 1 つの計画にする。
 どちらも同じところに着地するので分けない: 「書く」の中身は participant にもあり
