@@ -39,7 +39,9 @@ await window.__MC_APP_VIEW.assign(cid, itemId, address); // hand a row to a coll
   the app, so a `viewer` reads the same declaration as the front desk. The projection therefore
   carries the roster's answer — who may write every row, and who only their own — and the page
   hands the view a capability with the roles already resolved. A view never sees a role name, and
-  the same answer is applied again to every write.
+  the same answer is applied again to every write. **A staff page published before this is
+  read-only until it is published again** — a projection without those lists cannot tell a
+  receptionist from an observer, so it refuses rather than assuming.
 - **No confirmation dialog**, unlike the public path — the person pressing the button is on the
   app's own roster doing their own work. What replaces it is an account *outside* the frame: the
   page prints what was written, whatever the view chooses to draw about itself.

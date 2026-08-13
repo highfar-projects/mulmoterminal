@@ -364,6 +364,10 @@ read. The page prints what happened above the frame instead, from what was writt
 - **Being shown the page is not permission.** `/m/{slug}` admits anybody holding a role ANYWHERE in
   the app, so a `viewer`, or somebody scoped to a different collection, reads the same declaration
   as the front desk. That is why the capability exists and why it is per reader.
+- **A staff page published before this shipped is READ-ONLY until it is published again.** The
+  capability is computed from lists the projection carries, and a projection without them cannot
+  tell a receptionist from an observer — so it refuses rather than assuming. Re-run
+  `manageSharedApp` with `action: "publish"` and the buttons come back.
 - **The notice is not the page's to choose.** If `collections.<cid>.mail` declares a template for
   the move being made, it is queued IN THE SAME WRITE, addressed from the record. A page that
   could name a template could mail "your booking is approved" about one it had just rejected.

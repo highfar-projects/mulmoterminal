@@ -116,10 +116,14 @@ principal ごとの射影にはできない（publish で 1 回書かれ、多�
 ルールが実際に読む 2 つと食い違いうるだけになる。`viewer` と `participant` は
 どちらにも入らない — 名簿に無いアドレスと同じく、**誰も触れない行**になるため。
 
-**リストが無いことは「拒否」ではなく「意見が無い」。** `roster` 階層は運ばない
-（participant の権限はロールではなく**レコード**が決める）し、この設計より前に
-publish されたアプリも運ばない。無いことを拒否と読むと、**その全部が黙って
-read-only になる**。
+**リストが無いとき何を意味するかは、階層が決める。** `roster` 階層は運ばない —
+participant の権限はロールではなく**レコード**が決めるので、欠けているロールが
+そもそも無い。**`member` 階層で無いことは「拒否」**である: リストを出さない
+publisher が書いた射影は受付と観覧者を区別できず、それを「意見が無い」と読むと
+階層に入れる全員にスタッフの操作を渡すことになる。しかもこれは狭い legacy の
+話ではなく、**再 publish されるまでの世界中の射影全部**なので、fail closed の
+向きでなければならない（原則 8）。代償は「再 publish するまでスタッフ用ページが
+読み取り専用」で、publish の出力がそう言う。
 
 **これは権威ではない。** 権威はルールで、ルールは**生きたレコードと生きた名簿**に
 対して答える。前回の publish 以降に増えたメンバーはこのリストに無く、ここでは
@@ -271,11 +275,13 @@ publish 側のコードは増えない（core の射影をそのまま書く）�
 順序:
 
 1. **core**: `AppViewConfigDoc` に `write` を足す。階層ごとに、コレクションごとに、
-   `statusField` / 使える遷移 / `assigneeField` / `assignees` / `mail`。
+   `statusField` / 使える遷移 / `assigneeField` / `writers` / `rowWriters` / `mail`。
    `projectAppViews` が階層で出し分ける。門は既存（`normalizeViews`）に乗る
 2. **mulmoserver**: `viewConfigFrom` が `write` を読む。意図の判定
-   （`appIntent.ts`、`publicViewMessage.ts` と同じ形の純関数）。
-   書き込み（`updateDoc` 1 フィールド、続いて `mail` の create）。
+   （`appIntent.ts`、`publicViewMessage.ts` と同じ形の純関数）と、
+   読み手ごとの能力（`appCapability.ts`、決定 3）。
+   書き込みは**レコードとメールを 1 つの `writeBatch`** で（上記のとおり、
+   分けるとルールがメールを永久に拒む）。
    `AppViewFrame` が結果を返す。`/p/{slug}` と `/p/{slug}/{id}`。`/a/` の導線
 3. **mulmoterminal**: `mulmoterminal-shared-app` スキルとテンプレートに
    「承認できるページ」の書き方。publish 側は core の射影をそのまま書くので
