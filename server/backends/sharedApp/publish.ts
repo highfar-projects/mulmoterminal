@@ -33,6 +33,7 @@ import {
   appSchemasPath,
   promoteSchema,
   projectPublish,
+  stagedRuleConfig,
   type AuthoredApp,
   type LoadedCollection,
   type PublishStamp,
@@ -42,6 +43,8 @@ import { gitStamp, sharedAppContext, type SharedAppFailure, type SharedAppHandle
 import { recordRefusal, scanRecords, type RecordScan } from "./records.js";
 import { readStaged, type StagedEntry } from "./staged.js";
 import { oversizeProblem, publicFormOf, publicInputProblems, type PublicForm } from "./publicForm.js";
+import { PUBLIC_VIEW_DOC, declaredView, readPublicViewFile, type ViewFile } from "./publicView.js";
+import { frozenKeyProblems } from "./exclusivity.js";
 import { stagedScopeProblems } from "./scopedFields.js";
 import { setSlugPublished } from "./slug.js";
 import { runWrites, type WriteStep } from "./writes.js";
@@ -119,6 +122,7 @@ function publishSteps(
   face: ReturnType<typeof projectPublish>,
   slug: string | undefined,
   form: PublicForm,
+  view: ViewFile | null,
 ): WriteStep[] {
   return [
     ...staged.map(({ cid, doc }) => ({
@@ -132,6 +136,25 @@ function publishSteps(
       // and the choices the public page cannot draw the form at all (the schema is unreadable to
       // somebody who is neither on the roster nor granted a public read).
       run: () => handle.docs.set(appConfigPath(aid), PUBLIC_CONFIG_DOC, { ...face.config, form }),
+    },
+    // The page itself, carrying the SAME stamp as the config above. The
+    // runtime refuses to draw a pair that disagrees, and these are two writes:
+    // a run that stops between them leaves a new declaration beside the
+    // previous page, which is a view handed fields it has never seen.
+    //
+    // The DELETE is not tidiness. `config/{docId}` is `allow read: if true`
+    // forever, so a view withdrawn from the declaration and merely not
+    // rewritten stays fetchable by anybody who asks for it.
+    {
+      what:
+        view === null ? `removing the published view (apps/${aid}/config/${PUBLIC_VIEW_DOC})` : `the published view (apps/${aid}/config/${PUBLIC_VIEW_DOC})`,
+      run: async () => {
+        if (view === null) {
+          await handle.docs.delete(appConfigPath(aid), PUBLIC_VIEW_DOC);
+          return;
+        }
+        await handle.docs.set(appConfigPath(aid), PUBLIC_VIEW_DOC, { html: view.html, publishedAt: stamp.publishedAt });
+      },
     },
     // The app document WITHOUT `public`: the promoted rule configuration lands with the schemas it
     // was staged beside, so the public write path is never judged by one version's constraints
@@ -207,6 +230,38 @@ async function stagedGate(
   return refusal ? { ok: false, partial: false, problems: refusal } : { ok: true, scan };
 }
 
+/** The two questions that are asked of the PAGE and of the live records before
+ *  anything is written — both of them things a run cannot take back once the
+ *  schemas have been promoted.
+ *
+ *  Together because they share that timing, not because they are alike: one
+ *  reads a file off disk, the other reads what the app already holds. */
+async function pageGate(
+  root: string,
+  authored: AuthoredApp,
+  staged: readonly StagedEntry[],
+  live: Record<string, unknown> | null,
+  handle: SharedAppHandle,
+  publishedAt: number,
+): Promise<{ ok: true; view: ViewFile | null } | { ok: false; problems: string[] }> {
+  const declared = declaredView(authored);
+  const view = declared === null ? null : await readPublicViewFile(root, declared, publishedAt);
+  if (view !== null && !view.ok) return view;
+  // The other question about the same live records, and the one the migration
+  // scan cannot ask: not "do these rows still fit the schema" but "does this
+  // change move the id space they were written into". See ./exclusivity.ts —
+  // `confirm` deliberately does not reach it.
+  //
+  // The collection half is read from what DEPLOY staged, because that is what
+  // this publish promotes: `stagedRuleConfig` is the same function the
+  // projection uses, so the value judged is the value written.
+  // Copied because `stagedRuleConfig` takes a mutable array; the entries
+  // themselves are not touched.
+  const frozen = await frozenKeyProblems(authored, stagedRuleConfig([...staged]).collections ?? {}, live, handle);
+  if (frozen.length > 0) return { ok: false, problems: frozen };
+  return { ok: true, view: view === null ? null : view.view };
+}
+
 export async function publishSharedApp(root: string, opts: SharedAppOptions = {}): Promise<PublishResult> {
   // Before anything reads the declaration: a repository that has never been deployed has no
   // `aid` yet, and it is generated here rather than invented by the agent (D2b).
@@ -260,7 +315,14 @@ export async function publishSharedApp(root: string, opts: SharedAppOptions = {}
   const oversize = oversizeProblem({ ...face.config, form });
   if (oversize !== null) return { ok: false, partial: false, problems: [oversize] };
 
-  const failure = await runWrites(publishSteps(handle, aid, staged.staged, stamp, face, slug, form), "publish");
+  // Also before the first write, and for the same reason: the page is read
+  // from disk and judged here, so a missing file or one written against the
+  // host's bridge stops the run rather than landing after the schemas have
+  // been promoted.
+  const page = await pageGate(root, authored, staged.staged, existingApp, handle, stamp.publishedAt);
+  if (!page.ok) return { ok: false, partial: false, problems: page.problems };
+
+  const failure = await runWrites(publishSteps(handle, aid, staged.staged, stamp, face, slug, form, page.view), "publish");
   if (failure) return failure;
 
   return {

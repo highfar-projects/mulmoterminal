@@ -17,6 +17,7 @@
 // app nobody ever had, in place of the real reason. Only the `aid` is read.
 import { isRecord } from "../../../common/isRecord.js";
 import { APPS_COLLECTION, PUBLIC_CONFIG_DOC, appConfigPath, appManifestReason, firestoreHandle, loadAppManifest } from "@mulmoclaude/core/collection/server";
+import { PUBLIC_VIEW_DOC } from "./publicView.js";
 import type { SharedAppFailure } from "./context.js";
 import { runWrites } from "./writes.js";
 import { setSlugPublished } from "./slug.js";
@@ -79,6 +80,17 @@ export async function unpublishSharedApp(root: string): Promise<UnpublishResult>
         what: `the public config document (apps/${aid}/config/${PUBLIC_CONFIG_DOC})`,
         run: async () => {
           await handle.docs.delete(appConfigPath(aid), PUBLIC_CONFIG_DOC);
+        },
+      },
+      // The page comes down with the settings. `config/{docId}` is
+      // `allow read: if true` whatever else is closed, so a view left behind
+      // is a page anybody can still fetch from an app that has been taken
+      // down — the same shape of leak as the config document above, and the
+      // reason both deletions are here rather than left to the next publish.
+      {
+        what: `the published view (apps/${aid}/config/${PUBLIC_VIEW_DOC})`,
+        run: async () => {
+          await handle.docs.delete(appConfigPath(aid), PUBLIC_VIEW_DOC);
         },
       },
     ],
