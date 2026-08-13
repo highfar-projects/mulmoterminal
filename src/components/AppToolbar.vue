@@ -11,7 +11,7 @@ import { useCollectionBrowse, browseGotoIndex } from "../composables/useCollecti
 import { filesGotoIndex } from "../composables/useFilesView";
 import { useAccountingView, accountingViewOpen } from "../composables/useAccountingView";
 import { useWikiBrowse, wikiGotoIndex, wikiGotoTag } from "../composables/useWikiBrowse";
-import { usePrsView, prsGotoIndex } from "../composables/usePrsView";
+import { useGithubView, githubGotoIndex } from "../composables/useGithubView";
 import { useRoomsView, roomsViewOpen } from "../composables/useRoomsView";
 import { useSoundEnabled } from "../composables/useSoundEnabled";
 import { audioBlocked } from "../composables/audioUnlockState";
@@ -51,7 +51,7 @@ const hasSummary = computed(() => summary.value.show);
 const { view: browseView } = useCollectionBrowse();
 const { isOpen: accountingOpen } = useAccountingView();
 const { isOpen: wikiOpen } = useWikiBrowse();
-const { isOpen: prsOpen } = usePrsView();
+const { isOpen: prsOpen } = useGithubView();
 const { isOpen: roomsOpen } = useRoomsView();
 const { enabled: soundEnabled, toggle: toggleSound } = useSoundEnabled();
 const soundButton = computed(() => soundButtonState(soundEnabled.value, audioBlocked.value));
@@ -131,7 +131,7 @@ function showWorklog(): void {
   wikiGotoTag(WORKLOG_TAG);
 }
 function showPrs(): void {
-  prsGotoIndex();
+  githubGotoIndex();
 }
 // Beside PRs rather than behind the Collections door, for the same reason PRs is: a room is the
 // record of what the terminals in the grid said to each other, not workspace content.

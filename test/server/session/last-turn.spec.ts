@@ -1,6 +1,12 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { lastTurnFromClaudeJsonl, lastTurnFromClaudeParsed, lastTurnFromCodexRollout, EMPTY_TURN } from "../../../server/session/last-turn.js";
+import {
+  currentTurnReplyFromClaudeParsed,
+  lastTurnFromClaudeJsonl,
+  lastTurnFromClaudeParsed,
+  lastTurnFromCodexRollout,
+  EMPTY_TURN,
+} from "../../../server/session/last-turn.js";
 import { parseJsonl } from "../../../server/session/transcript.js";
 
 const line = (o: unknown) => JSON.stringify(o);
@@ -79,6 +85,43 @@ describe("lastTurnFromClaudeParsed", () => {
   it("skips slash-command wrappers, which are not typed prompts", () => {
     const raw = [user("real prompt"), user("<local-command-stdout>ok</local-command-stdout>"), assistant("answer")].join("\n");
     expect(lastTurnFromClaudeJsonl(raw)).toEqual({ prompt: "real prompt", reply: "answer" });
+  });
+});
+
+// The push body's read. Everything above answers "what was the last complete exchange"; this one
+// answers "what did the turn that just ended produce", and the difference is the whole point: it
+// must go silent rather than hand the phone an older turn's reply (#1650).
+describe("currentTurnReplyFromClaudeParsed", () => {
+  const reply = (raw: string) => currentTurnReplyFromClaudeParsed(parseJsonl(raw));
+
+  it("returns the concluding prose of the newest turn", () => {
+    expect(reply([user("first"), concluding("first answer"), user("second"), concluding("second answer")].join("\n"))).toBe("second answer");
+  });
+
+  it("takes the turn's last prose, not the preamble before its tools", () => {
+    expect(reply([user("do X"), narrating("let me look"), toolUse("Read"), concluding("done — here is why")].join("\n"))).toBe("done — here is why");
+  });
+
+  // #1650: the previous turn's reply is exactly what a stale push carried, so it may not survive
+  // a new prompt. A read that lands while the turn is still running gets nothing at all.
+  it("does not borrow the previous turn's reply while the newest turn is still running", () => {
+    expect(reply([user("first"), concluding("first answer"), user("second"), narrating("let me look"), toolUse("Bash")].join("\n"))).toBeNull();
+  });
+
+  // The deterministic half of #1650: an interrupted turn (or one that finished on a tool call)
+  // ends with no prose, yet Stop still fires and a push still goes out.
+  it("is null for a turn that ended without any prose", () => {
+    expect(reply([user("first"), concluding("first answer"), user("second"), toolUse("Bash")].join("\n"))).toBeNull();
+  });
+
+  it("is not reset by a slash-command wrapper, which is not a typed prompt", () => {
+    expect(reply([user("real prompt"), concluding("answer"), user("<local-command-stdout>ok</local-command-stdout>")].join("\n"))).toBe("answer");
+  });
+
+  it("reports a reply that has no preceding prompt, and is null for an empty transcript", () => {
+    expect(reply(concluding("resumed context"))).toBe("resumed context");
+    expect(reply("")).toBeNull();
+    expect(reply(user("hello"))).toBeNull();
   });
 });
 

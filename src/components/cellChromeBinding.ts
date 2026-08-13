@@ -29,7 +29,7 @@ export interface CellChromeProps {
 // handler waits for something nothing ever sends it. That is what happened to the collections
 // button, which shipped in #1573 and never once opened the pane. `cellChromeEventsAreComplete`
 // in the spec pins the two lists together so the next button cannot repeat it.
-export type CellChromeEvent = "toggle-expand" | "toggle-files" | "toggle-canvas" | "toggle-tools" | "toggle-collections" | "close";
+export type CellChromeEvent = "toggle-expand" | "toggle-files" | "toggle-canvas" | "toggle-tools" | "toggle-collections" | "toggle-github" | "close";
 
 // Bound as two objects rather than spelled out in each template.
 //
@@ -61,6 +61,7 @@ export function cellChromeBinding(
       "toggle-canvas": () => emit("toggle-canvas"),
       "toggle-tools": () => emit("toggle-tools"),
       "toggle-collections": () => emit("toggle-collections"),
+      "toggle-github": () => emit("toggle-github"),
       close,
     },
   };
@@ -81,6 +82,7 @@ export function cellShellEvents(emit: {
     "toggle-canvas": () => emit("toggle-canvas"),
     "toggle-tools": () => emit("toggle-tools"),
     "toggle-collections": () => emit("toggle-collections"),
+    "toggle-github": () => emit("toggle-github"),
     close: () => emit("close"),
     move: (dir: -1 | 1) => emit("move", dir),
   };

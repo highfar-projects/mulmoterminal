@@ -3,7 +3,7 @@
 // Terminal.vue (it emits `run` to open a command cell), so it never reaches here — the branch below
 // is only a defensive no-op warn.
 import { filesGotoIndex } from "./useFilesView";
-import { prsGotoIndex } from "./usePrsView";
+import { githubGotoIndex } from "./useGithubView";
 import { wikiGotoIndex } from "./useWikiBrowse";
 import { browseGotoIndex } from "./useCollectionBrowse";
 import { accountingViewOpen } from "./useAccountingView";
@@ -57,7 +57,9 @@ const revealFailureText = (body: Record<string, unknown>, status: number): strin
   typeof body.error === "string" && body.error.length > 0 ? body.error : `Could not open the folder (HTTP ${status}).`;
 
 function openView(view: string, cwd: string | null): void {
-  if (view === "prs") prsGotoIndex();
+  // `"prs"` is the value users have written in their own header configs (documented in both
+  // guides and the -header skill), so it stays what it is. Only the view it opens was renamed.
+  if (view === "prs") githubGotoIndex();
   else if (view === "wiki") wikiGotoIndex();
   else if (view === "collections") browseGotoIndex("collection");
   else if (view === "accounting") accountingViewOpen();

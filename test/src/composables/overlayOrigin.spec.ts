@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { flushPromises } from "@vue/test-utils";
 import { router } from "../../../src/router/index";
-import { prsGotoIndex, prsClose } from "../../../src/composables/usePrsView";
+import { githubGotoIndex, githubClose } from "../../../src/composables/useGithubView";
 import { accountingViewOpen, accountingViewClose } from "../../../src/composables/useAccountingView";
 import { wikiGotoIndex, wikiGotoPage, wikiGotoGraph, wikiClose } from "../../../src/composables/useWikiBrowse";
 import { browseGotoIndex, browseGotoDetail, browseClose } from "../../../src/composables/useCollectionBrowse";
@@ -13,7 +13,7 @@ const settle = () => flushPromises();
 // Every full-screen overlay, as (name, open, close). Same contract for all of them, so the
 // cases below are one table rather than four near-identical blocks (#886).
 const OVERLAYS = [
-  ["PRs", () => prsGotoIndex(), () => prsClose(), "prs"],
+  ["GitHub", () => githubGotoIndex(), () => githubClose(), "github"],
   ["accounting", () => accountingViewOpen(), () => accountingViewClose(), "accounting"],
   ["wiki", () => wikiGotoIndex(), () => wikiClose(), "wiki"],
   ["collections", () => browseGotoIndex("collection"), () => browseClose(), "collections"],
@@ -125,7 +125,7 @@ describe("overlay return-to-origin", () => {
     await router.push("/terminals");
     await settle();
 
-    prsGotoIndex();
+    githubGotoIndex();
     await settle();
     wikiGotoIndex();
     await settle();
