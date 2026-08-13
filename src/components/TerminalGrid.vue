@@ -1205,6 +1205,7 @@ watch(
         <GithubPane
           v-else-if="rightPane === 'github'"
           :cwd="expandedCwd"
+          can-expand
           :expanded="paneFull"
           :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
           class="border-l border-border"

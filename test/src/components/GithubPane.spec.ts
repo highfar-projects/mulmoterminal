@@ -217,7 +217,7 @@ describe("GithubPane", () => {
   // trap as the missing min-w-0, reached a different way.
   it("offers a way back from full width, and says which state it is in", async () => {
     mockFetch([{ repo: "octo/first", prs: [pr(1, "one")] }]);
-    const w = mount(GithubPane, { props: { expanded: true } });
+    const w = mount(GithubPane, { props: { expanded: true, canExpand: true } });
     await flushPromises();
     const btn = w.find('[data-testid="github-expand-btn"]');
     expect(btn.exists()).toBe(true);
@@ -228,8 +228,20 @@ describe("GithubPane", () => {
 
   it("offers the expand control when it is beside the terminal", async () => {
     mockFetch([{ repo: "octo/first", prs: [pr(1, "one")] }]);
-    const w = mount(GithubPane);
+    const w = mount(GithubPane, { props: { canExpand: true } });
     await flushPromises();
     expect(w.find('[data-testid="github-expand-btn"]').attributes("aria-label")).toContain("Expand");
+  });
+
+  // The overlay IS the whole screen, so there is nothing to expand over — and it listens for no
+  // toggleExpand, which made the button a visible no-op there (Codex review). Absence is the fix,
+  // not a disabled state: a control that cannot do anything should not be offered.
+  it("hides the expand control in a host that has nothing to expand over", async () => {
+    mockFetch([{ repo: "octo/first", prs: [pr(1, "one")] }]);
+    const w = mount(GithubPane);
+    await flushPromises();
+    expect(w.find('[data-testid="github-expand-btn"]').exists()).toBe(false);
+    // The close button is NOT conditional — every host needs it.
+    expect(w.find('[aria-label="Close GitHub pane"]').exists()).toBe(true);
   });
 });

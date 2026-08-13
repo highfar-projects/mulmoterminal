@@ -21,10 +21,15 @@ import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
-// `expanded` is the grid's paneFull: the pane may be widened over the terminal. It MUST come with
-// the control to undo it — `paneFull` covers every pane except files, so without the button a cell
-// that remembered this pane could open full-width with no route back to the split (Codex review).
-const props = defineProps<{ cwd?: string | null; expanded?: boolean }>();
+// `expanded` is the grid's paneFull: the pane may be widened over the terminal, and it MUST come
+// with the control to undo that — `paneFull` covers every pane except files, so without the button
+// a cell that remembered this pane could open full-width with no route back to the split.
+//
+// `canExpand` is which HOST is rendering. Only the grid has a terminal to expand over; the overlay
+// is already the whole screen, and it showed the button as a visible no-op because it listens for
+// no `toggleExpand` (both Codex review). It cannot be inferred from `expanded` — Vue casts an
+// absent boolean prop to `false`, so "not expanded" and "cannot expand" arrive identical.
+const props = defineProps<{ cwd?: string | null; expanded?: boolean; canExpand?: boolean }>();
 const emit = defineEmits<{ (e: "close" | "toggleExpand"): void }>();
 
 const { loadRepoDirs, startError, repoDirs } = useIssueStart();
@@ -132,6 +137,7 @@ onMounted(() => void load());
            panes share one slot, so the same control must be in the same place in each. -->
       <div class="ml-auto flex items-center gap-1">
         <button
+          v-if="canExpand"
           type="button"
           data-testid="github-expand-btn"
           class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
