@@ -42,6 +42,25 @@ export function lastTurnFromClaudeParsed(records: Record<string, unknown>[]): La
 
 export const lastTurnFromClaudeJsonl = (raw: string): LastTurn => lastTurnFromClaudeParsed(parseJsonl(raw));
 
+// The reply belonging to the NEWEST prompt, or null when that prompt has not been answered yet.
+//
+// The fallback above is what a handoff wants and what a push must never have: a turn that ended
+// without prose — interrupted, or finished on a tool call — leaves the previous exchange as the
+// newest complete one, and announcing it as this turn's outcome tells the user the wrong thing
+// about the wrong turn (#1650). Over 11,489 real transcripts the fallback named an older turn at 193
+// of 13,200 boundaries with the whole turn on disk, and at 1,629 of them for a read that landed one
+// record early — an older reply every time rather than nothing, so there is no shape of that mistake
+// the caller could have detected for itself.
+export function currentTurnReplyFromClaudeParsed(records: Record<string, unknown>[]): string | null {
+  let reply: string | null = null;
+  for (const turn of conversationTurnsFromParsed(records)) {
+    // A new prompt spends whatever answered the previous one: this turn has not replied yet.
+    if (turn.role === "user") reply = null;
+    else if (turn.endsTurn) reply = turn.text;
+  }
+  return reply;
+}
+
 // codex tags only its turn BOUNDARIES with a turn_id (task_started / turn_context /
 // task_complete) — the user_message and agent_message rows in between carry none. So a
 // turn is the positional span between a task_started and its matching task_complete,
