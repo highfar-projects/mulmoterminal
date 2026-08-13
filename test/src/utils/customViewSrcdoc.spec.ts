@@ -63,7 +63,7 @@ describe("buildCustomViewSrcdoc", () => {
     // The bootstrap only EXISTS as a string (it is inlined into the iframe's <script>), so running it
     // is the only way to assert what a view actually gets. The input is this repo's own literal, not
     // anything a user or collection author can influence.
-    // eslint-disable-next-line sonarjs/code-eval, no-new-func
+    // eslint-disable-next-line sonarjs/code-eval
     new Function("window", script)(win);
     return win.__MC_VIEW as ReturnType<typeof runBootstrap>;
   };

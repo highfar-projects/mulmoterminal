@@ -122,17 +122,19 @@ function stagedForValidation(
 }
 
 /** The writes, in the order the design fixes: promote, project, then open. */
-function publishSteps(
-  handle: SharedAppHandle,
-  aid: string,
-  staged: readonly StagedEntry[],
-  stamp: PublishStamp,
-  face: ReturnType<typeof projectPublish>,
-  slug: string | undefined,
-  form: PublicForm,
-  view: ViewFile | null,
-  tiers: readonly TierPromotion[],
-): WriteStep[] {
+interface PublishStepsInput {
+  handle: SharedAppHandle;
+  aid: string;
+  staged: readonly StagedEntry[];
+  stamp: PublishStamp;
+  face: ReturnType<typeof projectPublish>;
+  slug: string | undefined;
+  form: PublicForm;
+  view: ViewFile | null;
+  tiers: readonly TierPromotion[];
+}
+
+function publishSteps({ handle, aid, staged, stamp, face, slug, form, view, tiers }: PublishStepsInput): WriteStep[] {
   return [
     ...staged.map(({ cid, doc }) => ({
       what: `the published schema for '${cid}' (apps/${aid}/collections/${cid})`,
@@ -353,7 +355,8 @@ export async function publishSharedApp(root: string, opts: SharedAppOptions = {}
   const pages = await promotableTiers(handle, aid, stamp, staged.staged);
   if (!pages.ok) return pages;
 
-  const failure = await runWrites(publishSteps(handle, aid, staged.staged, stamp, face, slug, form, page.view, pages.tiers), "publish");
+  const steps = publishSteps({ handle, aid, staged: staged.staged, stamp, face, slug, form, view: page.view, tiers: pages.tiers });
+  const failure = await runWrites(steps, "publish");
   if (failure) return failure;
 
   return {

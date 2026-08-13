@@ -109,15 +109,25 @@ async function reserveHeldSlug(
  *  Split out for the line budget, but the two steps belong together anyway: the write is what
  *  makes the read possible, and doing them apart is what let a missing parent be mistaken for an
  *  empty store. */
-async function establishAndScan(
-  handle: SharedAppHandle,
-  aid: string,
-  appDoc: Record<string, unknown>,
-  established: boolean,
-  collections: readonly LoadedCollection[],
-  root: string,
-  confirm: boolean | undefined,
-): Promise<{ ok: true; scan: RecordScan } | SharedAppFailure> {
+interface EstablishAndScanInput {
+  handle: SharedAppHandle;
+  aid: string;
+  appDoc: Record<string, unknown>;
+  established: boolean;
+  collections: readonly LoadedCollection[];
+  root: string;
+  confirm: boolean | undefined;
+}
+
+async function establishAndScan({
+  handle,
+  aid,
+  appDoc,
+  established,
+  collections,
+  root,
+  confirm,
+}: EstablishAndScanInput): Promise<{ ok: true; scan: RecordScan } | SharedAppFailure> {
   if (established) {
     const claimed = await claimApp(handle, aid, appDoc);
     if (claimed) return claimed;
@@ -292,7 +302,7 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
   // about to write anyway, and afterwards the records can be read. So the gate runs for real: on a
   // new app it finds nothing, and on a resurrected aid it finds whatever survived.
   const established = existingApp === null;
-  const gate = await establishAndScan(handle, aid, appDoc, established, collections, root, opts.confirm);
+  const gate = await establishAndScan({ handle, aid, appDoc, established, collections, root, confirm: opts.confirm });
   if (!gate.ok) return gate;
   const { scan } = gate;
 
