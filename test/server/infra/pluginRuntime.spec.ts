@@ -10,6 +10,14 @@ import { initArtifactsBackend, artifactsRoot } from "../../../server/backends/ar
 
 const PKG = "@scope/demo-plugin";
 
+// A server that accepts the request and then says nothing — the shape a timeout has to be able to
+// end. It settles only through the caller's own abort signal, so a runtime that failed to arm one
+// would hang the test rather than fail it.
+const neverSettlingFetch = (_url: string, init?: RequestInit): Promise<Response> =>
+  new Promise((_resolve, reject) => {
+    init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+  });
+
 describe("createPluginRuntime", () => {
   let ws: string;
   let published: { channel: string; data: unknown }[];
@@ -95,11 +103,7 @@ describe("createPluginRuntime", () => {
     });
 
     it("aborts a hung request once the timeout elapses", async () => {
-      vi.stubGlobal("fetch", (_url: string, init?: RequestInit) => {
-        return new Promise((_resolve, reject) => {
-          init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
-        });
-      });
+      vi.stubGlobal("fetch", neverSettlingFetch);
       const runtime = createPluginRuntime(PKG);
       await expect(runtime.fetch("https://api.example.com/slow", { timeoutMs: 5 })).rejects.toThrow(/aborted/);
     });
