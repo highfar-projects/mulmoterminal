@@ -63,7 +63,7 @@ function problemsFor(file: string, owner: string, extraCids: readonly string[]) 
 
 describe("the shared-app templates", () => {
   it("salon.md deploys as written", () => {
-    expect(problemsFor("salon.md", "owner@salon.jp", ["stylists", "services", "shifts"])).toEqual([]);
+    expect(problemsFor("salon.md", "owner@salon.jp", ["stylists", "services"])).toEqual([]);
   });
 
   it("gym.md deploys as written", () => {
@@ -73,7 +73,7 @@ describe("the shared-app templates", () => {
   it("each template shows every collection whose shape carries a decision", () => {
     // A guard on the guard: if a template stopped showing its schemas the
     // checks above would still pass, against nothing.
-    expect([...blocksOf("salon.md").keys()]).toContain(".claude/skills/bookings/schema.json");
+    expect([...blocksOf("salon.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/bookings/schema.json", ".claude/skills/slots/schema.json"]));
     expect([...blocksOf("gym.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/classes/schema.json", ".claude/skills/bookings/schema.json"]));
   });
 });

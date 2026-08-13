@@ -326,7 +326,16 @@ describe("shared app deploy / publish / unpublish", () => {
     expect(result.ok).toBe(true);
     expect(result.ok === true && result.publicOpen).toBe(true);
     // Promotion first, the projection next, and the authorization at the very end.
-    expect(docs.writes).toEqual([`set apps/${AID}/collections/bookings`, `set apps/${AID}/config/public`, `set apps/${AID}`, `set apps/${AID}`]);
+    // The `delete` is unconditional and that is the point: `config/{docId}` is world-readable
+    // forever, so a view withdrawn from the declaration and merely not rewritten stays fetchable.
+    // An app that never had one pays one idempotent delete for the guarantee.
+    expect(docs.writes).toEqual([
+      `set apps/${AID}/collections/bookings`,
+      `set apps/${AID}/config/public`,
+      `delete apps/${AID}/config/view`,
+      `set apps/${AID}`,
+      `set apps/${AID}`,
+    ]);
     expect(docs.doc(`apps/${AID}/collections`, "bookings")).toMatchObject({ publishedBy: OWNER.email });
     expect(docs.app()?.public).toMatchObject({ enabled: true });
   });
@@ -378,7 +387,8 @@ describe("shared app deploy / publish / unpublish", () => {
 
     const result = await unpublishSharedApp(root);
     expect(result.ok === true && result.wasOpen).toBe(true);
-    expect(docs.writes).toEqual([`set apps/${AID}`, `delete apps/${AID}/config/public`]);
+    // The page comes down with the settings, for the reason the publish above deletes it.
+    expect(docs.writes).toEqual([`set apps/${AID}`, `delete apps/${AID}/config/public`, `delete apps/${AID}/config/view`]);
     expect(docs.app()).not.toHaveProperty("public");
     // Nobody can read them while the app is closed, so they cost nothing — and re-publishing is
     // then a promotion rather than a rebuild.
@@ -492,6 +502,7 @@ describe("shared app deploy / publish / unpublish", () => {
     expect(docs.writes).toEqual([
       `set apps/${AID}/collections/bookings`,
       `set apps/${AID}/config/public`,
+      `delete apps/${AID}/config/view`,
       `set apps/${AID}`,
       "set appSlugs/sakura-hair",
       `set apps/${AID}`,
@@ -501,7 +512,7 @@ describe("shared app deploy / publish / unpublish", () => {
     await unpublishSharedApp(root);
     expect(docs.doc("appSlugs", "sakura-hair")).toEqual({ aid: AID, published: false });
     // Reversed: what grants is taken away first.
-    expect(docs.writes).toEqual([`set apps/${AID}`, "set appSlugs/sakura-hair", `delete apps/${AID}/config/public`]);
+    expect(docs.writes).toEqual([`set apps/${AID}`, "set appSlugs/sakura-hair", `delete apps/${AID}/config/public`, `delete apps/${AID}/config/view`]);
   });
 
   it("publishes the form the public page draws from", async () => {

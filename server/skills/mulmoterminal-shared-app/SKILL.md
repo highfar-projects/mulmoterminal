@@ -249,6 +249,52 @@ Two more keys, and one thing the rules cannot do. Read
   second. That means the members are on the roster (with `peerVisibility: "public"`), and everyone
   can see who else signed up. Ask before building it.
 
+### If people are racing for ONE thing rather than for a place in a queue
+
+A class has a capacity and the rules cannot count it, so the queue above is drawn rather than
+enforced. **A slot is different: it is one thing, so nothing needs counting.** Put its id into the
+booking's id and the second person to want it is writing a document that already exists — which is
+an update, which the public submission path never allows. Firestore decides that atomically. Read
+[templates/salon.md](./templates/salon.md) before building one.
+
+- **`idFrom: "field"` + `idField`** make the record's id the value of one of its fields. That
+  field cannot be changed afterwards, and the id it produced is what holds the slot.
+- **`idIn`** is REQUIRED with it, and says which collection that id must be found in — with the
+  state it must be in — `"idIn": { "collection": "slots", "where": { "field": "state", "equals": "open" } }`.
+  Without it the id is any string a submitter likes, and the app quietly accepts bookings for
+  things that do not exist. Publish refuses the declaration.
+- **`window.untilField`** is `fromField`'s twin: a per-slot deadline, epoch millis on the same
+  record. A desk that opens per slot and never closes is not a booking desk.
+- **`mirror` (on the submission) and `mirrorOf` (on the collection)** are the two halves of the
+  PUBLIC face. A booking carries a name and a phone number and Firestore cannot hide a field, so
+  the public page must never read bookings — it reads the slot rows, whose `state` is a copy of
+  "does a booking with this id exist". The rules accept the two writes only as one batch, in both
+  directions. **Declare both halves or neither**; publish refuses one on its own.
+- **These five keys freeze once records exist.** `confirm` does not override that, because what
+  breaks is not a visible schema mismatch — it is the exclusivity itself, silently, in an app that
+  goes on working. Say so before an author starts renaming things.
+
+### If a form is not enough to choose from
+
+A form ANSWERS something. Choosing from what is available — a stylist-by-hour grid — is not the
+far end of a table, so an app may publish one HTML page instead:
+
+```json
+{ "view": { "path": "views/booking.html", "collections": ["stylists", "slots"] } }
+```
+
+- The path is **relative to the repository root** (`views/<name>.html`, one file, no
+  sub-directories) — `app.json` is there.
+- **It is not the host's custom view.** A page written against the collection pane reads
+  `__MC_VIEW.token` and fetches its own data; the public page has neither and hands the view its
+  data instead. Publish refuses a file that mentions `__MC_VIEW`, because otherwise it would render
+  blank with nothing to say why.
+- **`collections` is declared, not inferred from `public.read`.** A view fed the wrong data renders
+  perfectly and draws an empty page, which is the one failure nothing reports. Publish refuses a
+  dataset that is not in `public.read`.
+- The view asks for writes through `window.__MC_PUBLIC_VIEW.submit(cid, values)` and **the page
+  confirms with the visitor before writing anything** — the HTML is not trusted to have been asked.
+
 The simplest correct survey omits status entirely (`submitOnly` + `verifiedEmail` + `emailField`).
 Add a status only when somebody is going to work through the responses.
 

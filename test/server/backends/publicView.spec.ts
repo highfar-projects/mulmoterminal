@@ -1,0 +1,222 @@
+// @vitest-environment node
+//
+// The page a published app shows instead of the generated form, and the keys
+// that must not move once anything has claimed a document.
+//
+// Both are gates: they refuse before the first write, because everything they
+// guard against is invisible afterwards. A view that cannot be drawn shows a
+// visitor "there is nothing here"; an id space that moved leaves old records
+// holding nothing, in an app that goes on working.
+import { describe, it, expect, beforeEach } from "vitest";
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import type { AuthoredApp, FirestoreDoc, FirestoreDocs } from "@mulmoclaude/core/collection/server";
+import { readPublicViewFile, viewDocumentBytes } from "../../../server/backends/sharedApp/publicView.js";
+import { frozenKeyProblems } from "../../../server/backends/sharedApp/exclusivity.js";
+import { makeTempDir } from "../../support/tempDir";
+
+const AID = "11111111-2222-3333-4444-555555555555";
+const STAMP = 1_700_000_000_000;
+
+const withView = (root: string, html: string): string => {
+  mkdirSync(path.join(root, "views"), { recursive: true });
+  writeFileSync(path.join(root, "views", "booking.html"), html);
+  return "views/booking.html";
+};
+
+describe("the file a published view names", () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = makeTempDir("mt-public-view-");
+  });
+
+  it("is read from the repository root, where app.json is", async () => {
+    // `public.view` is declared in `app.json`, which sits at the root, so a
+    // path written there is relative to it. Resolving inside a collection's
+    // skill folder would ask which collection owns a page belonging to the
+    // whole app — a question an app with three of them cannot answer.
+    const declared = withView(root, "<div id='grid'></div>");
+    const result = await readPublicViewFile(root, { path: declared }, STAMP);
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.view.html).toContain("<div id='grid'></div>");
+  });
+
+  it("refuses a path that names nothing", async () => {
+    // The failure it prevents is silent: the page renders, the HTML is empty,
+    // and the visitor is told there is nothing here.
+    const result = await readPublicViewFile(root, { path: "views/missing.html" }, STAMP);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.problems.join(" ")).toContain("does not exist in this repository");
+  });
+
+  it("refuses a page written against the HOST's bridge", async () => {
+    // `__MC_VIEW` is the collection pane's contract, where a view holds a
+    // capability token and fetches its own data. The public page has neither,
+    // so this would publish cleanly and render blank.
+    const declared = withView(root, "<script>const t = window.__MC_VIEW.token;</script>");
+    const result = await readPublicViewFile(root, { path: declared }, STAMP);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.problems.join(" ")).toContain("HOST's custom-view contract");
+  });
+
+  it("refuses a page too large to be a Firestore document", async () => {
+    // The limit is per DOCUMENT, so what is measured is the document — field
+    // names and UTF-8 lengths included. Measuring the file would be measuring
+    // the wrong thing, and the answer arrives as a refused write.
+    const declared = withView(root, "x".repeat(950_000));
+    const result = await readPublicViewFile(root, { path: declared }, STAMP);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.problems.join(" ")).toContain("as a Firestore document");
+  });
+
+  it("counts the whole document, not just the HTML", () => {
+    const bytes = viewDocumentBytes({ html: "abc", publishedAt: STAMP });
+    expect(bytes).toBeGreaterThan("abc".length);
+  });
+
+  it("takes a page that only mentions the PUBLIC bridge", async () => {
+    // The neighbouring declaration that must still publish — otherwise the
+    // check above is satisfied by refusing everything.
+    const declared = withView(root, "<script>window.__MC_PUBLIC_VIEW.ready();</script>");
+    const result = await readPublicViewFile(root, { path: declared }, STAMP);
+    expect(result.ok).toBe(true);
+  });
+});
+
+/** The app document as Firestore has it, plus whatever records the test says
+ *  the collections hold. */
+class LiveDocs implements FirestoreDocs {
+  constructor(private readonly items: Record<string, number>) {}
+  async list(collectionPath: string): Promise<FirestoreDoc[]> {
+    const held = this.items[collectionPath] ?? 0;
+    return Array.from({ length: held }, (_unused, index) => ({ id: `row-${index}`, data: {} }));
+  }
+  async get(): Promise<unknown | null> {
+    return null;
+  }
+  async set(): Promise<void> {}
+  async create(): Promise<boolean> {
+    return true;
+  }
+  async delete(): Promise<boolean> {
+    return true;
+  }
+  watch(): () => void {
+    return () => {};
+  }
+}
+
+const handleWith = (items: Record<string, number>) => ({ docs: new LiveDocs(items), email: "me@example.com", uid: "uid-me" });
+const bookingsPath = `apps/${AID}/collections/bookings/items`;
+const slotsPath = `apps/${AID}/collections/slots/items`;
+
+const salon = (overrides: Record<string, unknown> = {}): AuthoredApp =>
+  ({
+    aid: AID,
+    members: { "me@example.com": { "*": "owner" } },
+    collections: { slots: { mirrorOf: "bookings" } },
+    public: {
+      enabled: true,
+      read: ["slots"],
+      submit: {
+        bookings: {
+          auth: "verifiedEmail",
+          emailField: "customerEmail",
+          createFields: ["slot", "customerName", "customerEmail", "status"],
+          idFrom: "field",
+          idField: "slot",
+          idIn: { collection: "slots", where: { field: "state", equals: "open" } },
+          mirror: "slots",
+        },
+      },
+    },
+    ...overrides,
+  }) as AuthoredApp;
+
+/** The app document as it stands after a publish of the declaration above. */
+const live = {
+  aid: AID,
+  collections: { slots: { mirrorOf: "bookings" } },
+  public: {
+    enabled: true,
+    read: ["slots"],
+    submit: {
+      bookings: {
+        auth: "verifiedEmail",
+        emailField: "customerEmail",
+        createFields: ["slot", "customerName", "customerEmail", "status"],
+        idFrom: "field",
+        idField: "slot",
+        idIn: { collection: "slots", where: { field: "state", equals: "open" } },
+        mirror: "slots",
+      },
+    },
+  },
+};
+
+describe("the keys that decide which document a submission claims", () => {
+  it("lets an unchanged declaration through, records or no records", async () => {
+    // First, because every refusal below is only meaningful against a
+    // re-publish that must keep working: an app is published again for all
+    // sorts of reasons that have nothing to do with its identity keys.
+    const problems = await frozenKeyProblems(salon(), live, handleWith({ [bookingsPath]: 12 }));
+    expect(problems).toEqual([]);
+  });
+
+  it("lets them move while nothing has been claimed", async () => {
+    // An empty collection has no rows whose claim could be stranded, which is
+    // exactly the window an author fixes a mistake in.
+    const moved = salon({
+      public: { ...live.public, submit: { bookings: { ...live.public.submit.bookings, idField: "slotId" } } },
+    });
+    const problems = await frozenKeyProblems(moved, live, handleWith({}));
+    expect(problems).toEqual([]);
+  });
+
+  it("refuses moving the field the id is built from", async () => {
+    // Every existing booking would stop holding the slot it was written for —
+    // and that slot becomes bookable again by somebody else, while the
+    // original booking sits there looking valid.
+    const moved = salon({
+      public: { ...live.public, submit: { bookings: { ...live.public.submit.bookings, idField: "slotId" } } },
+    });
+    const problems = await frozenKeyProblems(moved, live, handleWith({ [bookingsPath]: 3 }));
+    expect(problems.join(" ")).toContain("idField: slot → slotId");
+    expect(problems.join(" ")).toContain("not something `confirm` overrides");
+  });
+
+  it("refuses moving where the claimed record must be found", async () => {
+    const moved = salon({
+      public: {
+        ...live.public,
+        submit: { bookings: { ...live.public.submit.bookings, idIn: { collection: "chairs" } } },
+      },
+    });
+    const problems = await frozenKeyProblems(moved, live, handleWith({ [bookingsPath]: 1 }));
+    expect(problems.join(" ")).toContain("idIn:");
+  });
+
+  it("refuses dropping the mirror from either side", async () => {
+    // Half a mirror is the failure the pair exists to prevent: a staff delete
+    // consults the new destination, so the old slot is never returned to
+    // `open` and is unsellable for good.
+    const withoutMirror = salon({
+      public: {
+        ...live.public,
+        submit: { bookings: { ...live.public.submit.bookings, mirror: undefined } },
+      },
+    });
+    expect((await frozenKeyProblems(withoutMirror, live, handleWith({ [bookingsPath]: 1 }))).join(" ")).toContain("mirror: slots → (absent)");
+
+    const withoutMirrorOf = salon({ collections: { slots: {} } });
+    expect((await frozenKeyProblems(withoutMirrorOf, live, handleWith({ [slotsPath]: 8 }))).join(" ")).toContain("mirrorOf: bookings → (absent)");
+  });
+
+  it("says nothing about a FIRST publish", async () => {
+    // There is no live declaration to have moved away from, and the app
+    // document does not exist yet.
+    const problems = await frozenKeyProblems(salon(), null, handleWith({}));
+    expect(problems).toEqual([]);
+  });
+});
