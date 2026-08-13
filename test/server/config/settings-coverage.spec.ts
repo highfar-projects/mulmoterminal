@@ -54,6 +54,7 @@ const REACHABLE_BY: Record<string, Reachable> = {
   terminalSubmit: { ui: true, skill: "mulmoterminal-keys" },
   keymap: { skill: "mulmoterminal-keys" },
   copyOnSelect: { ui: true, skill: "mulmoterminal-keys" },
+  questionPaneEnabled: { ui: true, skill: "mulmoterminal-keys" },
   decisionDigest: { ui: true, skill: CONFIG_SKILL },
   issueWorkComments: { ui: true, skill: CONFIG_SKILL },
   prWorkdirFooter: { ui: true, skill: CONFIG_SKILL },

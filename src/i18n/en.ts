@@ -61,6 +61,10 @@ export const en = {
       copyOnSelectTitle: "Copy on select",
       copyOnSelectHint:
         "put a mouse selection on the clipboard the moment it settles, with no key pressed. It is the one setting that writes the clipboard when you only meant to highlight.",
+      questionPane: "Answer a question from a side pane",
+      questionPaneTitle: "Question pane",
+      questionPaneHint:
+        "when a session asks you something, offer its choices as buttons in a pane beside the terminal. Picking one presses the keys in the dialog the terminal is already showing, so you can still answer there instead.",
       enterTitle: "Enter key",
       enterHint:
         'which bytes the Claude Code running in the terminal reads as "submit". Match it to how you have Claude configured; it applies to Claude sessions only, so a shell\'s Enter is untouched.',
