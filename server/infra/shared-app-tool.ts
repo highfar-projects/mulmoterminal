@@ -101,6 +101,29 @@ function recordNote(issues: number, capped: boolean): string[] {
   return [`${count} live record${issues === 1 ? "" : "s"} do not satisfy the schema that was just written (you confirmed this) — they need repairing.`];
 }
 
+/** What a published members' page means, said out loud.
+ *
+ *  Required rather than nice: the argument that makes a PUBLIC view safe — it
+ *  can only carry off data any stranger could already fetch — does not hold
+ *  here. A members' page is handed the real records: names, contact details,
+ *  who is coming at three. The platform does not stop an owner's own page from
+ *  moving an owner's own data anywhere, and does not pretend to, so the person
+ *  publishing one should know that is what they are doing. */
+function pageNote(memberPages: readonly string[], participantPages: readonly string[]): string[] {
+  const lines: string[] = [];
+  if (memberPages.length > 0) {
+    lines.push(
+      `Staff pages live at /m/{slug}: ${memberPages.join(", ")}. These are handed the app's REAL records — a page you publish here can show, and can carry off, whatever the person opening it may read. Only people holding a role in this app can open them.`,
+    );
+  }
+  if (participantPages.length > 0) {
+    lines.push(
+      `Participant pages published: ${participantPages.join(", ")}. Each person sees only their own row, which is the rules' answer rather than the page's.`,
+    );
+  }
+  return lines;
+}
+
 async function narrateDeploy(root: string, confirm: boolean): Promise<string> {
   const result = await deploySharedApp(root, { confirm });
   if (!result.ok) return result.problems.join("\n");
@@ -113,6 +136,11 @@ async function narrateDeploy(root: string, confirm: boolean): Promise<string> {
       : [
           `URL name held: '${result.slug}'. It starts resolving at /${result.slug} when you publish — until then nobody can look it up, which is what keeps /staging/{aid} unguessable.`,
         ]),
+    ...(result.pages.length > 0
+      ? [
+          `Staged ${result.pages.length} page${result.pages.length === 1 ? "" : "s"}: ${result.pages.join(", ")}. Try them from /staging/${result.aid} before publishing.`,
+        ]
+      : []),
     ...(result.withdrawn.length > 0 ? [`Withdrawn from staging (no longer in this repository): ${result.withdrawn.join(", ")}.`] : []),
     ...recordNote(result.recordIssues, result.recordIssuesCapped),
     provenance(result.commit, result.dirty),
@@ -128,6 +156,7 @@ async function narratePublish(root: string, confirm: boolean): Promise<string> {
     result.publicOpen
       ? `The app is now OPEN to anonymous visitors${at(result.slug)}.`
       : "The app is NOT open to anonymous visitors — app.json declares no `public` block, so the promoted schemas are readable only by the roster.",
+    ...pageNote(result.memberPages, result.participantPages),
     ...recordNote(result.recordIssues, result.recordIssuesCapped),
     provenance(result.commit, result.dirty),
   ].join("\n");

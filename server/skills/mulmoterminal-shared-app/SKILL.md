@@ -277,23 +277,58 @@ an update, which the public submission path never allows. Firestore decides that
 ### If a form is not enough to choose from
 
 A form ANSWERS something. Choosing from what is available — a stylist-by-hour grid — is not the
-far end of a table, so an app may publish one HTML page instead:
+far end of a table, so an app may publish HTML pages instead. They are declared in `views`, one
+entry per page, each naming **who it is for**:
 
 ```json
-{ "view": { "path": "views/booking.html", "collections": ["stylists", "slots"] } }
+{
+  "views": [
+    { "id": "public", "audience": "public",      "path": "views/booking.html", "collections": ["stylists", "slots"] },
+    { "id": "desk",   "audience": "member",      "path": "views/desk.html",    "collections": ["bookings", "slots"] },
+    { "id": "mine",   "audience": "participant", "path": "views/mine.html",    "collections": ["bookings"] }
+  ]
+}
 ```
 
+| `audience` | who reads it | where they go |
+|---|---|---|
+| `public` | anybody, signed out | `/a/{slug}` |
+| `member` | anybody holding a role in the app — the front desk | `/m/{slug}` |
+| `participant` | somebody on the roster with no role: their own row | `/a/{slug}`, signed in |
+
+- **`audience` is what decides who can read the page**, and it is a PLACE, not a filter: each one
+  is published to a different document with a different rule. That is also why a staff page must
+  not be declared `public` — the HTML itself carries the app's internal vocabulary (status names,
+  review-note headings, how work is assigned).
+- **`id` becomes the document the page is published at**, so it must be unique in the app and
+  lowercase letters, digits and hyphens (`front-desk`). `config` is reserved. One audience may
+  have as many pages as it needs — the front desk and the stock room — except `public`, which is
+  published at one document and so may have only one.
 - The path is **relative to the repository root** (`views/<name>.html`, one file, no
   sub-directories) — `app.json` is there.
 - **It is not the host's custom view.** A page written against the collection pane reads
-  `__MC_VIEW.token` and fetches its own data; the public page has neither and hands the view its
-  data instead. Publish refuses a file that mentions `__MC_VIEW`, because otherwise it would render
+  `__MC_VIEW.token` and fetches its own data; a published page has neither and is handed its data
+  instead. Publish refuses a file that mentions `__MC_VIEW`, because otherwise it would render
   blank with nothing to say why.
-- **`collections` is declared, not inferred from `public.read`.** A view fed the wrong data renders
-  perfectly and draws an empty page, which is the one failure nothing reports. Publish refuses a
-  dataset that is not in `public.read`.
-- The view asks for writes through `window.__MC_PUBLIC_VIEW.submit(cid, values)` and **the page
-  confirms with the visitor before writing anything** — the HTML is not trusted to have been asked.
+- **`collections` is declared, not inferred.** A view fed the wrong data renders perfectly and
+  draws an empty page, which is the one failure nothing reports. Publish refuses a `public` page
+  fed a collection outside `public.read`, and a `participant` page fed one a participant cannot
+  reach at all (neither in `participantRead` nor their own row through `public.submit`).
+- The view asks for writes through `window.__MC_APP_VIEW.submit(cid, values)` and **the page
+  confirms with the reader before writing anything** — the HTML is not trusted to have been asked.
+  (`window.__MC_PUBLIC_VIEW` is the same object under its former name, kept for one release.)
+- **`public.view` is the older spelling** of the first row above. It still works and normalizes to
+  `id: "public"`. Declaring both `views` and `public.view` is refused — write one.
+
+**Say this out loud when an author adds a `member` page.** What the public page is handed is data
+any stranger could already fetch, so a view carrying it off costs nothing. A members' page is
+handed the real records — names, phone numbers, who is coming at 3pm. The platform does not stop
+an owner's own page from moving an owner's own data, and does not pretend to; the author should
+know that is what they are writing.
+
+Deploy stages the pages the way it stages schemas, so the roster can try the staff page at
+`/staging/{aid}` before any customer sees it. Publish promotes them; a page dropped from `views`
+is DELETED at both ends rather than left behind.
 
 The simplest correct survey omits status entirely (`submitOnly` + `verifiedEmail` + `emailField`).
 Add a status only when somebody is going to work through the responses.

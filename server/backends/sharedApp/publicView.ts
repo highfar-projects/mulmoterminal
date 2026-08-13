@@ -23,7 +23,7 @@
 import { constants, lstat, open, realpath } from "node:fs/promises";
 import path from "node:path";
 
-import type { AuthoredApp } from "@mulmoclaude/core/collection/server";
+import { normalizeViews, type AuthoredApp } from "@mulmoclaude/core/collection/server";
 
 /** The document the public page reads the HTML from. Beside core's
  *  `PUBLIC_CONFIG_DOC` ("public") under `apps/{aid}/config`. */
@@ -72,19 +72,24 @@ export type ViewFileResult = { ok: true; view: ViewFile } | { ok: false; problem
  *  error anywhere. */
 const HOST_VIEW_GLOBAL = "__MC_VIEW";
 
-/** Read and judge the file `public.view.path` names.
+/** Read and judge the file a view's `path` names.
  *
- *  Every refusal here is a thing the visitor would otherwise meet as an empty
+ *  Every refusal here is a thing the reader would otherwise meet as an empty
  *  page: a path to nothing, a page too large to publish, or a view written
- *  against the host's bridge. */
-export async function readPublicViewFile(root: string, view: { path: string }, publishedAt: number): Promise<ViewFileResult> {
-  const inside = await containedPath(root, view.path);
+ *  against the host's bridge.
+ *
+ *  `where` is the key the author can go and edit — `public.view` for the older
+ *  spelling, `views[2]` for one of the list. It is a parameter rather than a
+ *  constant because the same file is now read for three audiences, and a
+ *  refusal naming the wrong key sends the author to a line that is not there. */
+export async function readAppViewFile(root: string, view: { path: string }, publishedAt: number, where = "public.view"): Promise<ViewFileResult> {
+  const inside = await containedPath(root, view.path, where);
   if (!inside.ok) return inside;
 
-  const opened = await openContained(inside.full, view.path);
+  const opened = await openContained(inside.full, view.path, where);
   if (!opened.ok) return opened;
   const bytes = viewDocumentBytes({ html: opened.html, publishedAt });
-  return contentProblems(opened.html, bytes, view.path) ?? { ok: true, view: { html: opened.html, bytes } };
+  return contentProblems(opened.html, bytes, view.path, where) ?? { ok: true, view: { html: opened.html, bytes } };
 }
 
 /** Read the file, through a handle that cannot be talked into reading another
@@ -133,7 +138,7 @@ async function symlinkedAncestor(root: string, dir: string): Promise<string | nu
   return null;
 }
 
-async function openContained(full: string, declared: string): Promise<{ ok: true; html: string } | { ok: false; problems: string[] }> {
+async function openContained(full: string, declared: string, where: string): Promise<{ ok: true; html: string } | { ok: false; problems: string[] }> {
   let handle;
   try {
     handle = await open(full, constants.O_RDONLY | constants.O_NOFOLLOW);
@@ -141,7 +146,7 @@ async function openContained(full: string, declared: string): Promise<{ ok: true
     return {
       ok: false,
       problems: [
-        `public.view.path names '${declared}', which could not be opened as a plain file in this repository. ` +
+        `${where}.path names '${declared}', which could not be opened as a plain file in this repository. ` +
           "A published view is read without following links — what gets published is world-readable, so the file checked and the file read have to be the same one. " +
           "If it was there a moment ago, it has just been removed, replaced, or had its permissions changed. Nothing was written.",
       ],
@@ -150,13 +155,13 @@ async function openContained(full: string, declared: string): Promise<{ ok: true
   try {
     const info = await handle.stat();
     if (!info.isFile()) {
-      return { ok: false, problems: [`public.view.path names '${declared}', which is not a file.`] };
+      return { ok: false, problems: [`${where}.path names '${declared}', which is not a file.`] };
     }
     return { ok: true, html: await handle.readFile("utf8") };
   } catch {
     return {
       ok: false,
-      problems: [`public.view.path names '${declared}', which could not be read. Nothing was written.`],
+      problems: [`${where}.path names '${declared}', which could not be read. Nothing was written.`],
     };
   } finally {
     await handle.close().catch(() => {});
@@ -173,7 +178,7 @@ async function openContained(full: string, declared: string): Promise<{ ok: true
  *
  *  What is published lands on a document whose rule is `allow read: if true`,
  *  so a mistake here is not a broken page but somebody's `.env` handed out. */
-async function containedPath(root: string, declared: string): Promise<{ ok: true; full: string } | { ok: false; problems: string[] }> {
+async function containedPath(root: string, declared: string, where: string): Promise<{ ok: true; full: string } | { ok: false; problems: string[] }> {
   const real = await realpath(root).catch(() => path.resolve(root));
   const wanted = path.resolve(real, declared);
   // The DECLARED components, before anything is resolved: resolving first
@@ -184,7 +189,7 @@ async function containedPath(root: string, declared: string): Promise<{ ok: true
     return {
       ok: false,
       problems: [
-        `public.view.path names '${declared}', and '${path.relative(real, linked) || linked}' on the way to it is a symbolic link. ` +
+        `${where}.path names '${declared}', and '${path.relative(real, linked) || linked}' on the way to it is a symbolic link. ` +
           "A published view is read without following links, directories included — what gets published is world-readable, so every step has to be inside the repository as written.",
       ],
     };
@@ -196,18 +201,18 @@ async function containedPath(root: string, declared: string): Promise<{ ok: true
   return {
     ok: false,
     problems: [
-      `public.view.path names '${declared}', which resolves outside this repository. ` +
+      `${where}.path names '${declared}', which resolves outside this repository. ` +
         "A published view is one file inside it — what gets published is world-readable, so a path that leaves (through `..`, or through a symlinked directory) would hand out whatever it landed on.",
     ],
   };
 }
 
-function contentProblems(html: string, bytes: number, declared: string): { ok: false; problems: string[] } | null {
+function contentProblems(html: string, bytes: number, declared: string, where: string): { ok: false; problems: string[] } | null {
   if (bytes > MAX_VIEW_BYTES) {
     return {
       ok: false,
       problems: [
-        `public.view.path names '${declared}', which comes to ${bytes.toLocaleString()} bytes as a Firestore document — over the ${MAX_VIEW_BYTES.toLocaleString()} this publishes. ` +
+        `${where}.path names '${declared}', which comes to ${bytes.toLocaleString()} bytes as a Firestore document — over the ${MAX_VIEW_BYTES.toLocaleString()} this publishes. ` +
           "The hard limit is 1 MiB per document and it counts field names and string lengths, not the file on disk, so the margin is not spare room. " +
           "Move what is big out of the page: the datasets arrive from the app, not from the HTML.",
       ],
@@ -217,15 +222,26 @@ function contentProblems(html: string, bytes: number, declared: string): { ok: f
     return {
       ok: false,
       problems: [
-        `public.view.path names '${declared}', which reads \`${HOST_VIEW_GLOBAL}\` — that is the HOST's custom-view contract, where a view is handed a capability token and fetches its own data. ` +
-          "The public page has neither: it reads Firestore itself and hands the view its data, and the view asks for writes through `window.__MC_PUBLIC_VIEW`. " +
-          "Published as it stands, this page would render blank with nothing anywhere to say why. Write the public view against the public bridge.",
+        `${where}.path names '${declared}', which reads \`${HOST_VIEW_GLOBAL}\` — that is the HOST's custom-view contract, where a view is handed a capability token and fetches its own data. ` +
+          "A published page has neither: the page it is embedded in reads Firestore itself and hands the view its data, and the view asks through `window.__MC_APP_VIEW` " +
+          "(`window.__MC_PUBLIC_VIEW` is the same object under its former name). " +
+          "Published as it stands, this page would render blank with nothing anywhere to say why. Write it against the app bridge.",
       ],
     };
   }
   return null;
 }
 
-/** The view the declaration asks to publish, if any. Null for an app with no
- *  `public.view` — which is most of them, and is not a problem. */
-export const declaredView = (authored: AuthoredApp): { path: string } | null => authored.public?.view ?? null;
+/** The PUBLIC page the declaration asks to publish, if any. Null for an app
+ *  with none — which is most of them, and is not a problem.
+ *
+ *  Read through core's normalization rather than off `public.view`, because
+ *  `views[{audience:"public"}]` is the current spelling and an app that used it
+ *  would otherwise publish a config saying "there is a view" beside no view at
+ *  all. A declaration that cannot be normalized returns null and is refused by
+ *  the gate, which runs before anything here. */
+export const declaredView = (authored: AuthoredApp): { path: string } | null => {
+  const normalized = normalizeViews(authored);
+  if (!normalized.ok) return null;
+  return normalized.views.find((view) => view.audience === "public") ?? null;
+};

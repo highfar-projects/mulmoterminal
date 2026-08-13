@@ -8,6 +8,45 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+### A shared app can have a page for its staff, not only for its visitors (#1667)
+
+A published app had two faces: `/a/{slug}` for anonymous visitors, and `/staging/{aid}`, which
+means "deployed, not yet published". A receptionist wanting today's bookings on their phone had
+nowhere to go — and using staging after publish makes the live app and an unreleased version
+indistinguishable.
+
+`app.json` now declares pages per audience, generalising `public.view` (which still works and
+normalizes into the first row):
+
+```json
+"views": [
+  { "id": "public", "audience": "public", "path": "views/booking.html", "collections": ["slots"] },
+  { "id": "desk",   "audience": "member", "path": "views/desk.html",    "collections": ["bookings"] }
+]
+```
+
+`audience` decides which document the page is published to and therefore who may read it — a
+Firestore rule cannot hide a field, so "the front desk sees this" is a **place**, not a filter.
+`member` pages go where only a role-holder can read them, `participant` pages where the whole
+roster can, and `public` keeps `config/view`. Splitting the data alone would not do it: the HTML
+itself carries the app's internal vocabulary — status names, review-note headings, how work is
+assigned.
+
+Deploy stages the pages beside the schemas, so the roster can try the staff page at
+`/staging/{aid}` before any customer sees it, and publish promotes exactly that — **never the
+working tree**, so an edit made after the last deploy cannot go live unreviewed. A page dropped
+from `views` is deleted at both ends rather than left readable.
+
+**What a staff page is handed is not public data**, and publish says so in its output. The
+argument that makes a public view safe — it can only carry off what any stranger could already
+fetch — does not hold for the real records. The platform does not stop an owner's own page from
+moving an owner's own data, and does not pretend to.
+
+Needs `@mulmoclaude/core@3.14.0`, the Firestore rules from mulmoserver#168 (deployed), and the
+`/m/{slug}` runtime from mulmoserver#169. Design and open questions:
+[`plans/feat-shared-app-member-view.md`](https://github.com/receptron/mulmoterminal/blob/main/plans/feat-shared-app-member-view.md).
+Writing from a member page — approving a booking, reassigning it — is not in this release.
+
 ## mulmoterminal@4.8.2 — 2026-08-13
 
 > **Setup guide:** [GitHub beside the cell, and a header you can read while it runs](https://receptron.github.io/mulmoterminal/guide/en/v4.8.2.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.8.2.html))

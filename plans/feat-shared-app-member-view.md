@@ -1,6 +1,18 @@
 # 共有アプリ: 公開後のアプリに「名簿の人の顔」を作る
 
-**状態**: 設計のみ。実装は未着手。2026-08-13 の指摘から。
+**状態**: 実装中（2026-08-13 着手）。設計は 2026-08-13 の指摘から。
+
+| | PR | 状態 |
+|---|---|---|
+| 1 ルール（`member` / `roster`） | mulmoserver#168 | レビュー中。マージ後に**手で deploy** |
+| 2 宣言（`views[]`、core 3.14.0） | mulmoclaude#2877 | レビュー中。npm 公開は 4 より先 |
+| 3 ランタイム（`/m/{slug}`） | mulmoserver#169 | レビュー中 |
+| 4 publish（階層への書き出し） | mulmoterminal#1667 | core 3.14.0 待ちで draft |
+
+**書き込みはまだ無い。** メンバーの書き込みは投稿ではなく既存レコードの更新
+（承認・担当の付け替え）で、`public.submit` ではなくロールに対して判定される。
+3 も 4 も読みだけで、ビューが `submit` を送ったら「read-only」と答える。
+
 前提: [`docs/shared-app-principles.md`](../docs/shared-app-principles.md)（不変条件）、
 [`feat-shareable-collections.md`](./feat-shareable-collections.md)（D1–D10）、
 [`feat-shared-app-public-view.md`](./feat-shared-app-public-view.md)（公開ビュー、実装済み）。
