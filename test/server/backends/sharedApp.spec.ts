@@ -715,6 +715,41 @@ describe("shared app deploy / publish / unpublish", () => {
     expect(page?.publishedAt).toBe(config?.publishedAt);
   });
 
+  it("refuses to publish what a half-finished deploy left", async () => {
+    // `runWrites` can stop after any successful write, so a redeploy can leave
+    // the new settings beside the previous deploy's HTML. Staging NOTICES that
+    // — the two carry different stamps and the runtime refuses to draw — but
+    // publish re-stamps everything it promotes, which would make the mismatched
+    // pair look like one publish and hand the page fields it has never seen.
+    withPages();
+    await deploySharedApp(root, stamp);
+
+    // The page vanishes while its settings stay: what an interrupted deploy
+    // (or a hand edit) leaves behind.
+    docs.store.get(`apps/${AID}/member`)?.delete("staged:desk");
+
+    const result = await publishSharedApp(root, stamp);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.problems.join(" ")).toContain("which is not staged");
+    // Nothing was written: the refusal has to come before the schemas are promoted.
+    expect(docs.doc(`apps/${AID}/member`, "live:config")).toBeUndefined();
+
+    // Deploying again is the repair, and then it publishes.
+    await deploySharedApp(root, stamp);
+    const again = await publishSharedApp(root, stamp);
+    expect(again.ok === false ? again.problems : []).toEqual([]);
+  });
+
+  it("stages the pages before the settings that name them", async () => {
+    // The order decides what a half-finished deploy leaves: a page nobody has
+    // been told about (invisible, harmless) rather than a name pointing at a
+    // page that is not there.
+    withPages();
+    await deploySharedApp(root, stamp);
+    const wrote = docs.writes.filter((line) => line.includes(`apps/${AID}/member/staged:`));
+    expect(wrote.indexOf(`set apps/${AID}/member/staged:desk`)).toBeLessThan(wrote.indexOf(`set apps/${AID}/member/staged:config`));
+  });
+
   it("takes the published pages down on unpublish and leaves the staged ones alone", async () => {
     withPages({ public: { enabled: true, read: ["bookings"] } });
     await deploySharedApp(root, stamp);

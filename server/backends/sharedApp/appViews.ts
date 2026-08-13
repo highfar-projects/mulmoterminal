@@ -153,18 +153,23 @@ export async function staleViewDocs(handle: SharedAppHandle, aid: string, plan: 
   }
 }
 
-/** The writes for one tier at one stage: the projection, the pages, then the
- *  withdrawals.
- *
- *  The projection goes FIRST for the reason the public config does: it is what
- *  a reader consults to know a page exists at all, so a run that stops after it
- *  offers a page that is not there yet — visibly missing — rather than serving
- *  a page nobody knows how to feed. Withdrawals go last because they grant
- *  nothing. */
+/** The writes for one tier: the pages, the settings that name them, then the
+ *  withdrawals. Withdrawals go last because they grant nothing. */
 export function tierWrites(handle: SharedAppHandle, aid: string, plan: TierPlan, stale: readonly string[], stamp: PublishStamp): WriteStep[] {
   const at = appViewTierPath(aid, plan.tier);
   const config = plan.config;
   return [
+    // The PAGES first, then the settings that name them.
+    //
+    // `runWrites` can stop after any successful write, so the order decides
+    // what a half-finished deploy leaves. Settings-first leaves a document
+    // naming a page that is not there — the entrance offers it and it cannot be
+    // drawn. Pages-first leaves a page nobody has been told about, which is
+    // invisible and harmless, and the next deploy completes it.
+    ...plan.pages.map((page) => ({
+      what: `the ${plan.tier} page '${page.id}' (${at}/${viewDocId("staged", page.id)})`,
+      run: () => handle.docs.set(at, viewDocId("staged", page.id), { html: page.html, publishedAt: stamp.publishedAt }),
+    })),
     ...(config === null
       ? []
       : [
@@ -173,10 +178,6 @@ export function tierWrites(handle: SharedAppHandle, aid: string, plan: TierPlan,
             run: () => handle.docs.set(at, viewConfigDocId("staged"), config),
           },
         ]),
-    ...plan.pages.map((page) => ({
-      what: `the ${plan.tier} page '${page.id}' (${at}/${viewDocId("staged", page.id)})`,
-      run: () => handle.docs.set(at, viewDocId("staged", page.id), { html: page.html, publishedAt: stamp.publishedAt }),
-    })),
     ...stale.map((id) => ({
       what: `the withdrawal of ${at}/${id}`,
       run: async (): Promise<void> => {
@@ -289,6 +290,46 @@ export interface TierPromotion {
  *  manifest: the participant scopes in a staged projection were computed
  *  against the `participantRead` that deploy staged, which is exactly the one
  *  publish promotes. */
+/** Is what deploy left INTERNALLY consistent, before publish re-stamps it?
+ *
+ *  This check exists because promotion erases the evidence. Deploy writes a
+ *  tier's pages and then the settings that name them, and `runWrites` can stop
+ *  between any two writes — so a redeploy interrupted part-way leaves the new
+ *  settings beside the previous deploy's HTML. The runtime NOTICES that in
+ *  staging (the two carry different stamps and it refuses to draw), but publish
+ *  stamps everything it promotes with the publish stamp, which would make the
+ *  mismatched pair look like one publish and hand a page fields it has never
+ *  seen.
+ *
+ *  So the refusal is here rather than a repair: what a half-finished deploy
+ *  left is not a state publish can reason about, and deploying again is one
+ *  command. */
+function stagedProblems(aid: string, tier: "member" | "roster", staged: readonly { id: string; data: unknown }[]): string[] {
+  const config = staged.find((doc) => doc.id === "staged:config");
+  if (config === undefined) return [];
+  const settings = isRecord(config.data) ? config.data : {};
+  const stamp = settings.publishedAt;
+  const declared = Array.isArray(settings.views) ? settings.views : [];
+  const at = `apps/${aid}/${tier}`;
+  return declared.flatMap((view) => {
+    if (!isRecord(view) || typeof view.id !== "string") return [];
+    const page = staged.find((doc) => doc.id === `staged:${view.id}`);
+    if (page === undefined) {
+      return [
+        `${at}/staged:config names the page '${view.id}', which is not staged. A deploy stopped part-way, so what is staged is not what the declaration says. ` +
+          "Deploy again — publish promotes what the roster reviewed, and this is not it. Nothing was written.",
+      ];
+    }
+    if (typeof stamp === "number" && isRecord(page.data) && page.data.publishedAt !== stamp) {
+      return [
+        `${at}/staged:${view.id} was staged by a different deploy from ${at}/staged:config. A deploy stopped between the two, so the page and the datasets it ` +
+          "would be handed do not belong together. Deploy again. Nothing was written.",
+      ];
+    }
+    return [];
+  });
+}
+
 export async function planTierPromotion(
   handle: SharedAppHandle,
   aid: string,
@@ -311,6 +352,8 @@ export async function planTierPromotion(
       };
     }
     const staged = existing.filter((doc) => doc.id.startsWith("staged:"));
+    const incoherent = stagedProblems(aid, tier, staged);
+    if (incoherent.length > 0) return { ok: false, partial: false, problems: incoherent };
     // Re-stamped, like `promoteSchema`: the stamp answers "which version is
     // live right now", so it belongs to the operation that changes the answer.
     // It also has to match across the projection and every page, because the
