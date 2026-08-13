@@ -9,9 +9,11 @@
 | 3 ランタイム（`/m/{slug}`） | mulmoserver#169 | レビュー中 |
 | 4 publish（階層への書き出し） | mulmoterminal#1667 | core 3.14.0 待ちで draft |
 
-**書き込みはまだ無い。** メンバーの書き込みは投稿ではなく既存レコードの更新
+**書き込みはこの計画には無い。** メンバーの書き込みは投稿ではなく既存レコードの更新
 （承認・担当の付け替え）で、`public.submit` ではなくロールに対して判定される。
-3 も 4 も読みだけで、ビューが `submit` を送ったら「read-only」と答える。
+ここでは 3 も 4 も読みだけで、ビューが `submit` を送ったら「read-only」と答える。
+続きは [`feat-shared-app-member-write.md`](./feat-shared-app-member-write.md) —
+participant の入口（`/p/{slug}`）もそちらで決めた。
 
 前提: [`docs/shared-app-principles.md`](../docs/shared-app-principles.md)（不変条件）、
 [`feat-shareable-collections.md`](./feat-shareable-collections.md)（D1–D10）、

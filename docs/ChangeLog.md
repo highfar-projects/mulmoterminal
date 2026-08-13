@@ -8,6 +8,44 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+### The staff page can approve, and the people on the roster have an entrance of their own (#1671)
+
+The staff page shipped read-only: seeing today's bookings was possible from a phone, approving one
+still meant opening the owner's Mac. And a `participant` page — declarable since #1667, published
+to the roster tier — had no URL after publish, so it reached nobody.
+
+Both are now real, and **no Firestore rule changed to do it**: `updateWith` already admitted a
+writer, a row's own assignee, and a participant editing their own row, with the declared state
+machine binding all three. What was missing was the client.
+
+A view may now call, besides `submit`:
+
+```js
+await window.__MC_APP_VIEW.transition(cid, itemId, to);  // approve, reject, cancel
+await window.__MC_APP_VIEW.assign(cid, itemId, address); // hand a row to a colleague
+```
+
+- **The vocabulary is closed and a page cannot name a field.** `transition` moves
+  `collections.<cid>.statusField`, `assign` moves `assigneeField`, and nothing moves anything else.
+  A general patch would be no less safe — the rules bind either way — but a mis-wired button would
+  reach as far as the member's role does, with nothing above able to say what happened.
+- **Each audience gets its own transition table.** Staff move along `transitions`, the person who
+  booked along `public.submit.<cid>.selfTransitions`. Publishing one table to both would draw an
+  approve button on a customer's page that the rules refuse when pressed.
+- **The approval notice is written in the same batch as the record**, because the rules require it:
+  `mailAgainst` compares the record before and after and demands the status actually moved, so a
+  separate write could never have sent one. There is therefore no "approved, but nobody was told".
+- **No confirmation dialog**, unlike the public path — the person pressing the button is on the
+  app's own roster doing their own work. What replaces it is an account *outside* the frame: the
+  page prints what was written, whatever the view chooses to draw about itself.
+- **`/p/{slug}`** is the participant's entrance, linked from the public page beside the staff one.
+  Not a signed-in branch inside `/a/{slug}`: that page's guarantee is that it draws itself signed
+  out and shows nothing of the app's internal vocabulary. The two are not exclusive — an owner who
+  also books is on both, and each address shows one face.
+
+Needs mulmoserver deployed and `@mulmoclaude/core` 3.15.0 (mulmoclaude#2891), which projects what
+each tier may change. Design: `plans/feat-shared-app-member-write.md`.
+
 ### A shared app can have a page for its staff, not only for its visitors (#1667)
 
 A published app had two faces: `/a/{slug}` for anonymous visitors, and `/staging/{aid}`, which

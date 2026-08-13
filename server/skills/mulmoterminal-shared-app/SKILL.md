@@ -294,7 +294,7 @@ entry per page, each naming **who it is for**:
 |---|---|---|
 | `public` | anybody, signed out | `/a/{slug}` |
 | `member` | anybody holding a role in the app — the front desk | `/m/{slug}` |
-| `participant` | somebody on the roster with no role: their own row | `/a/{slug}`, signed in |
+| `participant` | somebody on the roster with no role: their own row | `/p/{slug}` |
 
 - **`audience` is what decides who can read the page**, and it is a PLACE, not a filter: each one
   is published to a different document with a different rule. That is also why a staff page must
@@ -314,21 +314,50 @@ entry per page, each naming **who it is for**:
   draws an empty page, which is the one failure nothing reports. Publish refuses a `public` page
   fed a collection outside `public.read`, and a `participant` page fed one a participant cannot
   reach at all (neither in `participantRead` nor their own row through `public.submit`).
-- The view asks for writes through `window.__MC_APP_VIEW.submit(cid, values)` and **the page
-  confirms with the reader before writing anything** — the HTML is not trusted to have been asked.
+- The view asks for writes through `window.__MC_APP_VIEW` — see the next section.
   (`window.__MC_PUBLIC_VIEW` is the same object under its former name, kept for one release.)
 - **`public.view` is the older spelling** of the first row above. It still works and normalizes to
   `id: "public"`. Declaring both `views` and `public.view` is refused — write one.
 
 **Say this out loud when an author adds a `member` page.** What the public page is handed is data
 any stranger could already fetch, so a view carrying it off costs nothing. A members' page is
-handed the real records — names, phone numbers, who is coming at 3pm. The platform does not stop
-an owner's own page from moving an owner's own data, and does not pretend to; the author should
-know that is what they are writing.
+handed the real records — names, phone numbers, who is coming at 3pm — and, where the collection
+declares an `assigneeField`, the addresses of everybody who may be assigned it. The platform does
+not stop an owner's own page from moving an owner's own data, and does not pretend to; the author
+should know that is what they are writing.
 
 Deploy stages the pages the way it stages schemas, so the roster can try the staff page at
 `/staging/{aid}` before any customer sees it. Publish promotes them; a page dropped from `views`
 is DELETED at both ends rather than left behind.
+
+### What a page may WRITE
+
+Three calls, and a page cannot name a field in any of them:
+
+```js
+await window.__MC_APP_VIEW.submit(cid, values);          // a new record
+await window.__MC_APP_VIEW.transition(cid, itemId, to);  // approve, reject, cancel
+await window.__MC_APP_VIEW.assign(cid, itemId, address); // hand a row to a colleague
+```
+
+Each returns `{ ok, error }`. `submit` is the visitor's path and **the page confirms with the
+reader before writing** — the HTML is not trusted to have been asked. The other two are the
+roster's, and they do NOT confirm: the person pressing them is on the app's own roster doing
+their own work, and a modal in front of a button used forty times a day is abandoned rather than
+read. The page prints what happened above the frame instead, from what was written.
+
+- **`transition` moves ONE field** — `collections.<cid>.statusField` — and only along
+  `transitions` (for a member) or `public.submit.<cid>.selfTransitions` (for a participant). Those
+  are different tables, so a staff page and a participant page draw different buttons for the same
+  collection. Ask for a move the record cannot make and the answer names it.
+- **`assign` moves `assigneeField`**, and only to an address holding `owner`, `editor` or
+  `assignee` on that collection. Anything else would write a row NOBODY could touch afterwards.
+  The page can read the choices out of the projection it is handed.
+- **The notice is not the page's to choose.** If `collections.<cid>.mail` declares a template for
+  the move being made, it is queued IN THE SAME WRITE, addressed from the record. A page that
+  could name a template could mail "your booking is approved" about one it had just rejected.
+- **Nothing here grants anything.** The rules already decide what this member may write; these
+  calls only let the page ask, and let the refusal say which assumption in the page was wrong.
 
 The simplest correct survey omits status entirely (`submitOnly` + `verifiedEmail` + `emailField`).
 Add a status only when somebody is going to work through the responses.
