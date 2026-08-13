@@ -110,6 +110,20 @@ had no rule until now.
 
 Deliberate divergence is fine — say so in a comment with the reason, and flag it in the PR.
 
+## A shared app is enforced by Firestore rules, not by this repo
+
+`server/backends/sharedApp/` looks like the authority over a shared app and is not. Its checks run
+on the author's machine only; what binds a stranger writing to Firestore directly is
+`../mulmoserver/firestore.rules`, deployed by hand with no CI. So a guarantee added here alone is a
+diagnostic — and a condition added to a rule is paid for by every request that evaluates it, which
+on a shared path (`items` create/update) means every app using that path. The budget is 1000
+expressions per request, so measure the paths a change lands on rather than the change.
+
+Read [`docs/shared-app-principles.md`](docs/shared-app-principles.md) before adding a key, a view,
+or an operation — it is the short list of invariants and where each one is actually held. The
+decisions behind them are D1–D10 in `plans/feat-shareable-collections.md`; what is planned next is
+[`plans/feat-shared-app-platform.md`](plans/feat-shared-app-platform.md).
+
 ## The GUI MCP has three server-id shapes, and they are not meant to match
 
 The same tool is called `mcp__mt__presentChart` in a workspace cell,
