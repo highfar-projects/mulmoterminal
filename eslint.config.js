@@ -18,7 +18,9 @@ import prettierRecommended from "eslint-plugin-prettier/recommended";
 // it ships as `off` stays off (it chose not to run it, which is a different decision).
 //
 // A rule that genuinely must not fail the build gets turned off, by name, with the reason, in one of
-// the blocks below. That is a decision someone made; a warn is the absence of one.
+// the blocks below. Warn is the state in between, and it does not survive contact with time: it is
+// either a decision that has expired — the two promise rules further down were held at warn while
+// their findings were read down to zero, and then stayed there — or no decision at all.
 const raise = (entry) => {
   const severity = Array.isArray(entry) ? entry[0] : entry;
   if (severity !== 1 && severity !== "warn") return entry;
@@ -189,9 +191,10 @@ export default [
     // Type-aware lint, on the APP ONLY — the two promise rules from #1301's sibling (#1300).
     //
     // Scoped to server/src/common rather than everything: the type program is the whole cost of
-    // this pass, so keeping tests out of it keeps that program smaller. WARN, not error, for the
-    // same reason #1231 started at warn — the count stays visible without CI going red while the
-    // real ones are read one at a time.
+    // this pass, so keeping tests out of it keeps that program smaller. These started at WARN for
+    // the reason #1231 did — keep the count visible without CI going red while the real findings
+    // are read one at a time. That reading finished: the count has been zero since, so the warning
+    // had nothing left to show and they are errors now (#1688).
     //
     // Only these two: they catch things NO syntactic rule can. A missing `await` makes a rejection
     // vanish and the call look like it succeeded; an async callback handed to an API that ignores
@@ -223,10 +226,6 @@ export default [
       },
     },
     rules: {
-      // The two that catch a promise nobody waits for — a rejection that becomes an unhandled
-      // rejection, and an async callback passed where a sync one was expected, whose failure the
-      // caller cannot see. They stood at warn with no reason given, alone in a file where every
-      // other judgement carries one, and at zero the whole time.
       "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/no-misused-promises": "error",
       // Two more from the type-aware family, at ERROR because both are now at zero and each
