@@ -15,6 +15,21 @@ import { contrastRatio, relativeLuminance } from "../../common/contrast";
 // the model is welcome; loosening this number to make a change pass is not.
 const MEASURED_WORST = 2.6;
 
+// The colour space the AA sweep below walks: 16 steps per channel, 4096 backgrounds — coarse enough
+// to stay fast and fine enough to hit the mid-tones, where the ink rule's branch actually turns.
+// Built here rather than inside the assertion so the sweep reads as one pass over a named set.
+const SWEEP_STEP = 17;
+const SWEEP_CHANNELS = Array.from({ length: 16 }, (_, i) => i * SWEEP_STEP);
+const SWEEP_BACKGROUNDS = SWEEP_CHANNELS.flatMap((r) =>
+  SWEEP_CHANNELS.flatMap((g) => SWEEP_CHANNELS.map((b) => `#${[r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("")}`)),
+);
+
+const luminanceOf = (hex: string): number => {
+  const rgb = parseHex(hex);
+  if (!rgb) throw new Error(`not a colour: ${hex}`);
+  return relativeLuminance(rgb[0], rgb[1], rgb[2]);
+};
+
 function deltaE(a: string, b: string): number {
   const lab = (hex: string): [number, number, number] => {
     const rgb = parseHex(hex);
@@ -99,24 +114,12 @@ describe("deriving a palette from one colour", () => {
   // colour space gets an ink that clears AA for normal text. Three examples cannot say this, and
   // the ink is chosen by a rule with a branch in it — this is the assertion that branch answers to.
   it("never derives an ink below WCAG AA (4.5:1) for any background", () => {
-    const STEP = 17; // 16^3 = 4096 backgrounds, coarse enough to stay fast and fine enough to hit the mid-tones
-    const channels = Array.from({ length: 16 }, (_, i) => i * STEP);
     let worst = { background: "", ink: "", ratio: Infinity };
-    channels.forEach((r) =>
-      channels.forEach((g) =>
-        channels.forEach((b) => {
-          const background = `#${[r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
-          const ink = chromeFromColor(background)?.headerTextColor ?? "";
-          const luminance = (hex: string): number => {
-            const rgb = parseHex(hex);
-            if (!rgb) throw new Error(`not a colour: ${hex}`);
-            return relativeLuminance(rgb[0], rgb[1], rgb[2]);
-          };
-          const ratio = contrastRatio(luminance(background), luminance(ink));
-          if (ratio < worst.ratio) worst = { background, ink, ratio };
-        }),
-      ),
-    );
+    SWEEP_BACKGROUNDS.forEach((background) => {
+      const ink = chromeFromColor(background)?.headerTextColor ?? "";
+      const ratio = contrastRatio(luminanceOf(background), luminanceOf(ink));
+      if (ratio < worst.ratio) worst = { background, ink, ratio };
+    });
     expect(worst.ratio, `${worst.ink} on ${worst.background}`).toBeGreaterThanOrEqual(4.5);
   });
 
