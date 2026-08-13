@@ -10,7 +10,7 @@ import type { TerminalSessionListing } from "../dirIcons.js";
 import type { IngestResult } from "../ingestAttachments.js";
 import type { SessionScreen } from "../terminalScreen.js";
 import type { AskQuestionEvent } from "../../../../common/askQuestion.js";
-import type { AnswerResult } from "../../../session/answerQuestion.js";
+import type { AnswerResult } from "../../../../common/askQuestion.js";
 
 export interface RemoteHostHandlerDeps {
   workspace: string;

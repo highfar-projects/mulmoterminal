@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import type { AskQuestionEvent } from "../../common/askQuestion";
+import type { AnswerFailure, AskQuestionEvent } from "../../common/askQuestion";
 
 // The choices of a live AskUserQuestion dialog, as buttons (#1679).
 //
@@ -14,8 +14,19 @@ const props = defineProps<{
   // Null when the session has no question up: the pane shows its empty state rather than unmounting,
   // so a question answered in the terminal leaves an explanation behind instead of a vanished pane.
   event: AskQuestionEvent | null;
+  // Why the last answer did not reach the dialog, when it did not. The buttons come back either
+  // way, and coming back with no explanation is the failure mode this exists to avoid — pressing
+  // them again would fail the same way, silently.
+  failure?: AnswerFailure | null;
   expanded?: boolean;
 }>();
+
+// `closed` never reaches here: the pane simply goes, because the question is genuinely answered.
+const FAILURE_TEXT: Record<AnswerFailure, string> = {
+  closed: "That question was already answered.",
+  "bad-picks": "Those choices did not fit the question. It may have changed — try again.",
+  unwritable: "This terminal cannot be typed into from here. It outlived a server restart, so answer in the terminal itself.",
+};
 
 const emit = defineEmits<{ answer: [picks: number[][]]; close: []; toggleExpand: [] }>();
 
@@ -98,6 +109,10 @@ function choose(qi: number, oi: number): void {
       <p v-if="!event" class="text-dim">Nothing is being asked right now. The pane opens by itself when this session asks something.</p>
 
       <template v-else>
+        <p v-if="failure" data-testid="question-failure" class="mb-3 rounded border border-border bg-panel px-3 py-2 text-[12px]" role="alert">
+          {{ FAILURE_TEXT[failure] }}
+        </p>
+
         <div v-for="(question, qi) in questions" :key="`${event.toolUseId}-${qi}`" class="mb-4">
           <div v-if="question.header" class="mb-1 text-[11px] font-semibold tracking-wide text-dim uppercase">{{ question.header }}</div>
           <div class="mb-2 leading-snug">{{ question.question }}</div>

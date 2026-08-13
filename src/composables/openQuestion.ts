@@ -1,5 +1,5 @@
 import { isRecord } from "../../common/isRecord";
-import { isAskQuestionEvent, type AskQuestionEvent } from "../../common/askQuestion";
+import { isAnswerFailure, isAskQuestionEvent, type AnswerFailure, type AskQuestionEvent } from "../../common/askQuestion";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 const REQUEST_TIMEOUT_MS = 5000;
@@ -22,9 +22,6 @@ export async function fetchOpenQuestion(sessionId: string): Promise<AskQuestionE
   }
 }
 
-/** Why an answer did not go out, as the host reported it. */
-export type AnswerFailure = "closed" | "bad-picks" | "unwritable";
-
 // Answering goes through the HOST (#1685), not the terminal socket: it is the side that knows
 // whether the dialog is still open, and having it build the keystrokes keeps the check and the
 // typing in one step. The phone reaches the same code, so a third client would too.
@@ -42,5 +39,3 @@ export async function postAnswer(sessionId: string, toolUseId: string, picks: nu
     return "unwritable";
   }
 }
-
-const isAnswerFailure = (value: unknown): value is AnswerFailure => value === "closed" || value === "bad-picks" || value === "unwritable";

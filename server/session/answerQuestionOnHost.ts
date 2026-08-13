@@ -1,4 +1,5 @@
-import { answerQuestion, type AnswerResult } from "./answerQuestion.js";
+import { answerQuestion } from "./answerQuestion.js";
+import type { AnswerResult } from "../../common/askQuestion.js";
 import { otherWriteCount, stopWatchingOtherWrites, watchOtherWrites, writeAnswerKey } from "./write-to-session.js";
 import { isUnknownArray } from "../../common/isUnknownArray.js";
 

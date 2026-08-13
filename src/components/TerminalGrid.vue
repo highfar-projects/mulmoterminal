@@ -47,6 +47,7 @@ import type { RightPane } from "./gridCell";
 import QuestionPane from "./QuestionPane.vue";
 import { ASK_QUESTION_CHANNEL, isAskQuestionDone, isAskQuestionEvent } from "../../common/askQuestion";
 import { fetchOpenQuestion, postAnswer } from "../composables/openQuestion";
+import type { AnswerFailure } from "../../common/askQuestion";
 import { createQuestionBox } from "../composables/questionBox";
 import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
 import { isRecord } from "../../common/isRecord";
@@ -480,6 +481,10 @@ onBeforeUnmount(() => unsubscribeDrawn?.());
 // dialogs have closed, which is what stops a late hydration from resurrecting one — is in
 // composables/questionBox.ts; what stays here is the PANE, which is the grid's own business.
 const questionBox = createQuestionBox(fetchOpenQuestion);
+// Why the enlarged cell's last answer did not send. Dropped whenever a question arrives or the
+// zoom moves, so it can only ever describe the buttons currently on screen.
+const answerFailure = ref<AnswerFailure | null>(null);
+
 const expandedQuestion = computed(() => (expandedSessionId.value ? (questionBox.questions.value.get(expandedSessionId.value) ?? null) : null));
 
 // Answered — in the terminal, in the pane, or cancelled with Esc. The pane goes with the question
@@ -493,6 +498,7 @@ const dropQuestion = (sessionId: string): void => {
 const unsubscribeQuestion = subscribeSession(ASK_QUESTION_CHANNEL, (data) => {
   if (isAskQuestionEvent(data)) {
     questionBox.offer(data);
+    answerFailure.value = null;
     // Opened for the user, not merely made available: a question nobody sees is a session that
     // sits blocked. Only for the cell already on screen — enlarging some other cell to reveal a
     // pane would take the user off whatever they were reading.
@@ -519,6 +525,7 @@ async function revealQuestion(sessionId: string): Promise<void> {
 watch(
   expandedSessionId,
   async (sessionId) => {
+    answerFailure.value = null;
     if (sessionId) await revealQuestion(sessionId);
   },
   { immediate: true },
@@ -544,8 +551,11 @@ async function answerQuestion(picks: number[][]): Promise<void> {
   // travelling — and doing both there makes them one step rather than two with a gap between.
   const failure = await postAnswer(event.sessionId, event.toolUseId, picks);
   // `closed` is the ordinary outcome of answering twice and needs nothing said. Anything else left
-  // the dialog up, so put the buttons back rather than leaving a blocked session with no pane.
-  if (failure && failure !== "closed") await revealQuestion(event.sessionId);
+  // the dialog up, so put the buttons back — WITH the reason, since coming back unexplained means
+  // pressing them again and failing the same way.
+  if (!failure || failure === "closed") return;
+  answerFailure.value = failure;
+  await revealQuestion(event.sessionId);
 }
 
 // GUI -> LLM for the enlarged cell (a submitted form's answer). App.vue routes this through the
@@ -1289,6 +1299,7 @@ watch(
         <QuestionPane
           v-else-if="rightPane === 'question'"
           :event="expandedQuestion"
+          :failure="answerFailure"
           :expanded="paneFull"
           :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
           @answer="answerQuestion"

@@ -106,4 +106,21 @@ describe("QuestionPane", () => {
 
     expect(w.emitted("answer")).toEqual([[[[]]]]);
   });
+
+  // A pane that comes back with no explanation invites the same failing click again. `unwritable` is
+  // the one that cannot be retried at all — the session outlived a server restart — so it has to say
+  // where the answer CAN be given.
+  it("says why the last answer did not send", async () => {
+    const w = mount(QuestionPane, { props: { event: event([question("Color", ["Red", "Blue"])]), failure: "unwritable" as const } });
+
+    const note = w.find('[data-testid="question-failure"]');
+    expect(note.exists()).toBe(true);
+    expect(note.text()).toContain("answer in the terminal");
+    expect(options(w)).toHaveLength(2); // and the buttons are still there
+  });
+
+  it("says nothing when the last answer went out", () => {
+    const w = mountPane([question("Color", ["Red", "Blue"])]);
+    expect(w.find('[data-testid="question-failure"]').exists()).toBe(false);
+  });
 });

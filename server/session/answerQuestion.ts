@@ -1,4 +1,4 @@
-import { keysForAnswers, openQuestionOf, type RecordedCall } from "../../common/askQuestion.js";
+import { keysForAnswers, openQuestionOf, type AnswerResult, type RecordedCall } from "../../common/askQuestion.js";
 
 // Answering a live AskUserQuestion dialog, from whichever client asked (#1685).
 //
@@ -13,17 +13,6 @@ import { keysForAnswers, openQuestionOf, type RecordedCall } from "../../common/
 // keys aimed at a dialog that has closed reach the prompt underneath — where an arrow walks the
 // input history and Enter submits what it found.
 
-/** Why an answer did not go out. Each is a different thing to tell the user. */
-export type AnswerFailure =
-  /** The dialog was answered (in the terminal, or by another client) before this arrived. */
-  | "closed"
-  /** picks do not fit the questions — wrong count, out of range, or not ascending. */
-  | "bad-picks"
-  /** No PTY in this process to type into: the session outlived a server restart. */
-  | "unwritable";
-
-export type AnswerResult = { ok: true } | { ok: false; reason: AnswerFailure };
-
 // One answer at a time per session, held across the check AND the whole key sequence.
 //
 // The check and the typing are only atomic together. Two clients — the pane and the phone, which
@@ -34,6 +23,25 @@ export type AnswerResult = { ok: true } | { ok: false; reason: AnswerFailure };
 //
 // In-process is the right scope: the PTY table it writes to is this process's.
 const answering = new Set<string>();
+
+// What we have already answered, until the record catches up.
+//
+// The lock above is released at the last keystroke, but the tool-call close arrives later — the
+// terminal has to process that final Enter and Claude has to report it. Until then openQuestionOf
+// still calls the dialog `running`, so a second request would pass the check and type its sequence
+// into whatever the screen became. Refusing a toolUseId we have already answered closes that window
+// without holding a lock for an unbounded time (nothing guarantees the close ever arrives).
+//
+// Cleared as soon as the record moves on, which the next request for that session observes; the cap
+// is for a process that answers questions in sessions it then never hears from again.
+const SUBMITTED_MEMORY = 100;
+const submitted = new Map<string, string>();
+
+const rememberSubmitted = (sessionId: string, toolUseId: string): void => {
+  submitted.set(sessionId, toolUseId);
+  const oldest = submitted.size > SUBMITTED_MEMORY ? submitted.keys().next().value : undefined;
+  if (oldest !== undefined) submitted.delete(oldest);
+};
 
 export interface AnswerQuestionDeps {
   /** The session's recorded tool calls — what openQuestionOf reads the live dialog out of. */
@@ -79,12 +87,16 @@ const sendPaced = async (deps: AnswerQuestionDeps, sessionId: string, keys: read
 
 const answerHeld = async (deps: AnswerQuestionDeps, { sessionId, toolUseId, picks }: AnswerQuestionRequest): Promise<AnswerResult> => {
   const open = openQuestionOf(await deps.callsOf(sessionId), sessionId);
-  if (open?.toolUseId !== toolUseId) return { ok: false, reason: "closed" };
+  // The record has moved on to another dialog (or none): what we answered is history now.
+  if (submitted.get(sessionId) !== open?.toolUseId) submitted.delete(sessionId);
+  if (open?.toolUseId !== toolUseId || submitted.get(sessionId) === toolUseId) return { ok: false, reason: "closed" };
   const keys = keysForAnswers(open.questions, picks);
   if (!keys) return { ok: false, reason: "bad-picks" };
   // The questions come from the HOST's own record of the dialog, not from the request: a caller
   // cannot widen its picks by describing a different question than the one on screen.
-  return sendPaced(deps, sessionId, keys);
+  const result = await sendPaced(deps, sessionId, keys);
+  if (result.ok) rememberSubmitted(sessionId, toolUseId);
+  return result;
 };
 
 export async function answerQuestion(deps: AnswerQuestionDeps, request: AnswerQuestionRequest): Promise<AnswerResult> {

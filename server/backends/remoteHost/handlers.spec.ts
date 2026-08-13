@@ -7,7 +7,7 @@ import path from "node:path";
 import { createRemoteHostHandlers } from "./handlers/index.js";
 import type { SessionScreen } from "./terminalScreen.js";
 import { initCollectionsBackend } from "../collections.js";
-import type { AnswerResult } from "../../session/answerQuestion.js";
+import type { AnswerResult } from "../../../common/askQuestion.js";
 
 const unusedTerminalDeps = {
   spawnIssueSeed: () => "unused-session",

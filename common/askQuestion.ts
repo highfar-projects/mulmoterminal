@@ -95,6 +95,21 @@ export const openQuestionOf = (calls: readonly RecordedCall[], sessionId: string
   return questions && open?.toolUseId ? { sessionId, toolUseId: open.toolUseId, questions } : null;
 };
 
+/** Why an answer did not reach the dialog. Serialized by the host, rendered by every client, so
+ *  the values live here rather than once per layer — a drift between them is a client showing the
+ *  wrong explanation, or none. */
+export type AnswerFailure =
+  /** The dialog was answered (in the terminal, or by another client) before this arrived. */
+  | "closed"
+  /** picks do not fit the questions — wrong count, out of range, or not ascending. */
+  | "bad-picks"
+  /** No PTY in this process to type into: the session outlived a server restart. */
+  | "unwritable";
+
+export type AnswerResult = { ok: true } | { ok: false; reason: AnswerFailure };
+
+export const isAnswerFailure = (value: unknown): value is AnswerFailure => value === "closed" || value === "bad-picks" || value === "unwritable";
+
 const KEY_DOWN = "\x1b[B";
 const KEY_ENTER = "\r";
 

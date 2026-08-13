@@ -17,7 +17,7 @@ import { listFeeds } from "@mulmoclaude/core/feeds/server";
 import { createRemoteHostHandlers } from "./handlers/index.js";
 import { createGetFeed, type GetFeedDeps } from "./handlers/getFeed.js";
 import { initCollectionsBackend } from "../collections.js";
-import type { AnswerResult } from "../../session/answerQuestion.js";
+import type { AnswerResult } from "../../../common/askQuestion.js";
 
 // Only listFeeds is stubbed; storeFor/toDetail/deriveItems/pageResult stay real.
 vi.mock("@mulmoclaude/core/feeds/server", () => ({ listFeeds: vi.fn(), readFeedState: vi.fn() }));
