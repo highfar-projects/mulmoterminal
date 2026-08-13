@@ -153,6 +153,17 @@ export async function staleViewDocs(handle: SharedAppHandle, aid: string, plan: 
   }
 }
 
+/** Withdrawals with the settings document last.
+ *
+ *  The mirror of writing it last. Deleting `staged:config` first and then
+ *  stopping leaves pages with nothing naming them — which publish has to refuse
+ *  rather than promote, because it cannot tell them from a deploy that meant to
+ *  keep them. */
+const withdrawalOrder = (stale: readonly string[]): string[] => [
+  ...stale.filter((id) => !id.endsWith(":config")),
+  ...stale.filter((id) => id.endsWith(":config")),
+];
+
 /** The writes for one tier: the pages, the settings that name them, then the
  *  withdrawals. Withdrawals go last because they grant nothing. */
 export function tierWrites(handle: SharedAppHandle, aid: string, plan: TierPlan, stale: readonly string[], stamp: PublishStamp): WriteStep[] {
@@ -178,7 +189,11 @@ export function tierWrites(handle: SharedAppHandle, aid: string, plan: TierPlan,
             run: () => handle.docs.set(at, viewConfigDocId("staged"), config),
           },
         ]),
-    ...stale.map((id) => ({
+    // Withdrawals last, because they grant nothing — and the SETTINGS last
+    // among them, for the reason they are written last: a run that stops
+    // part-way should leave a page nobody is told about rather than a name with
+    // nothing behind it.
+    ...withdrawalOrder(stale).map((id) => ({
       what: `the withdrawal of ${at}/${id}`,
       run: async (): Promise<void> => {
         await handle.docs.delete(at, id);
@@ -305,12 +320,24 @@ export interface TierPromotion {
  *  left is not a state publish can reason about, and deploying again is one
  *  command. */
 function stagedProblems(aid: string, tier: "member" | "roster", staged: readonly { id: string; data: unknown }[]): string[] {
+  const at = `apps/${aid}/${tier}`;
   const config = staged.find((doc) => doc.id === "staged:config");
-  if (config === undefined) return [];
+  if (config === undefined) {
+    // Pages with no settings is the OTHER half-finished deploy: withdrawing a
+    // tier deletes its settings and its pages, and a run that stopped between
+    // the two leaves exactly this. Promoting what survived would make a page
+    // live that the last deploy was in the middle of taking away — and with no
+    // settings to name it, nothing would list it either.
+    return staged.length === 0
+      ? []
+      : [
+          `${at} has staged pages (${staged.map((doc) => doc.id).join(", ")}) and no staged:config. A deploy stopped part-way through withdrawing them. ` +
+            "Deploy again — that finishes the withdrawal. Nothing was written.",
+        ];
+  }
   const settings = isRecord(config.data) ? config.data : {};
   const stamp = settings.publishedAt;
   const declared = Array.isArray(settings.views) ? settings.views : [];
-  const at = `apps/${aid}/${tier}`;
   return declared.flatMap((view) => {
     if (!isRecord(view) || typeof view.id !== "string") return [];
     const page = staged.find((doc) => doc.id === `staged:${view.id}`);

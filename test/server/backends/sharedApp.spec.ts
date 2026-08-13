@@ -740,6 +740,32 @@ describe("shared app deploy / publish / unpublish", () => {
     expect(again.ok === false ? again.problems : []).toEqual([]);
   });
 
+  it("refuses to promote a page whose settings were already withdrawn", async () => {
+    // The other half-finished deploy: withdrawing a tier deletes its settings
+    // and its pages, and a run that stopped between the two leaves the page.
+    // Promoting it would make live a page the last deploy was in the middle of
+    // taking away — with nothing to list it, and readable by everyone the tier
+    // admits.
+    withPages();
+    await deploySharedApp(root, stamp);
+    docs.store.get(`apps/${AID}/member`)?.delete("staged:config");
+
+    const result = await publishSharedApp(root, stamp);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.problems.join(" ")).toContain("and no staged:config");
+    expect(docs.doc(`apps/${AID}/member`, "live:desk")).toBeUndefined();
+  });
+
+  it("withdraws the settings last, so a stopped run never leaves a name with nothing behind it", async () => {
+    withPages();
+    await deploySharedApp(root, stamp);
+    // Every page dropped: the whole tier is withdrawn.
+    writeApp(root, declaration({ participantRead: ["bookings"] }));
+    await deploySharedApp(root, stamp);
+    const removed = docs.writes.filter((line) => line.startsWith(`delete apps/${AID}/member/staged:`));
+    expect(removed.indexOf(`delete apps/${AID}/member/staged:desk`)).toBeLessThan(removed.indexOf(`delete apps/${AID}/member/staged:config`));
+  });
+
   it("stages the pages before the settings that name them", async () => {
     // The order decides what a half-finished deploy leaves: a page nobody has
     // been told about (invisible, harmless) rather than a name pointing at a
