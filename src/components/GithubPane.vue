@@ -100,7 +100,12 @@ function reviewTagClass(review: string): string {
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-col bg-deep" role="region" aria-label="GitHub pull requests and issues">
+  <!-- `h-full` and `min-w-0` are load-bearing, and neither was needed while this was a
+       full-screen `fixed` overlay. As a flex item its default `min-width: auto` refuses to go
+       narrower than its content, and a PR title is long — so the pane grew past the width the
+       grid gave it and squeezed the terminal beside it to nothing. `truncate` on the rows only
+       works with an unbroken min-w-0 chain above it, which is why the scroller carries it too. -->
+  <div class="flex h-full min-h-0 min-w-0 flex-col bg-deep" role="region" aria-label="GitHub pull requests and issues">
     <header class="flex flex-none items-center gap-2.5 border-b border-border bg-panel px-4 py-2">
       <!-- Each host writes its own title: the overlay names the view, the grid pane says which
            cell's repo it is leading with. -->
@@ -126,7 +131,7 @@ function reviewTagClass(review: string): string {
         <span class="material-symbols-outlined" aria-hidden="true">close</span>
       </button>
     </header>
-    <div class="flex-auto overflow-y-auto px-4 pb-16 pt-3">
+    <div class="min-w-0 flex-auto overflow-y-auto px-4 pb-16 pt-3">
       <p v-if="!loading && !prsError && !issuesError && repos.length === 0 && issueRepos.length === 0" class="px-1 py-6 text-[13px] text-muted">
         No repositories configured. Add <code>owner/repo</code> entries under Settings → Pull request repos.
       </p>

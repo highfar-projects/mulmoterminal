@@ -171,4 +171,18 @@ describe("GithubPane", () => {
     await flushPromises();
     expect(w.text()).toContain("octo/first");
   });
+
+  // A layout guard, weak on purpose: jsdom does no layout, so this cannot catch a squeezed
+  // terminal. What it CAN do is stop the two constraints being dropped again. They were missing on
+  // the first cut and the pane — a flex item whose default `min-width: auto` refuses to go
+  // narrower than a long PR title — grew past the width the grid gave it and pushed the terminal
+  // out of view entirely. Neither was needed while this was a full-screen `fixed` overlay.
+  it("keeps the flex constraints that let the grid size it", async () => {
+    mockFetch([{ repo: "octo/first", prs: [pr(1, "one")] }]);
+    const w = mount(GithubPane);
+    await flushPromises();
+    const root = w.find('[role="region"]');
+    expect(root.classes()).toContain("min-w-0");
+    expect(root.classes()).toContain("h-full");
+  });
 });
