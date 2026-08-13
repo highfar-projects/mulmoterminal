@@ -97,19 +97,21 @@ const changed = (was: Record<string, string>, now: Record<string, string>): Pinn
 const describe = (pins: Pinned[]): string =>
   pins.map((pin) => `${pin.key}: ${pin.was === "" ? "(absent)" : pin.was} → ${pin.now === "" ? "(absent)" : pin.now}`).join(", ");
 
-/** Does this collection hold anything?
+/** Does this collection hold anything — or could we not tell?
  *
- *  One document is enough to answer, but the handle lists rather than counts —
- *  and a collection nobody may read yet (a fresh app) is EMPTY for this
- *  purpose: there is nothing whose claim could be stranded. A read failure is
- *  deliberately not a refusal here; the gate beside this one already stops a
- *  publish whose records could not be read at all. */
-const holdsRecords = async (handle: SharedAppHandle, aid: string, cid: string): Promise<boolean> => {
+ *  Three answers rather than two, because the third one is the dangerous one.
+ *  Treating a failed listing as "empty" lets a changed identity key through on
+ *  a transient error, stranding every existing claim; and the migration scan
+ *  next door cannot cover for it, since that is a SEPARATE read which may well
+ *  have succeeded a moment earlier. */
+type Held = "some" | "none" | "unknown";
+
+const holdsRecords = async (handle: SharedAppHandle, aid: string, cid: string): Promise<Held> => {
   try {
     const docs = await handle.docs.list(itemsPath(aid, cid));
-    return docs.length > 0;
+    return docs.length > 0 ? "some" : "none";
   } catch {
-    return false;
+    return "unknown";
   }
 };
 
@@ -132,23 +134,54 @@ const liveMirrorOf = (live: Record<string, unknown> | null, cid: string): string
  *  Empty for the ordinary case — a first publish, a collection with nothing in
  *  it, or a declaration whose identity keys did not move — which is why the
  *  reads only happen for collections that changed. */
-export async function frozenKeyProblems(authored: AuthoredApp, live: Record<string, unknown> | null, handle: SharedAppHandle): Promise<string[]> {
+export async function frozenKeyProblems(
+  authored: AuthoredApp,
+  promoted: Record<string, { mirrorOf?: string | undefined }>,
+  live: Record<string, unknown> | null,
+  handle: SharedAppHandle,
+): Promise<string[]> {
   const problems: string[] = [];
+  // The submission side is published from the MANIFEST, so that is what this
+  // compares. The collection side below is not.
   for (const [cid, submit] of Object.entries(authored.public?.submit ?? {})) {
-    const moved = changed(submitPins(liveSubmit(live, cid)), declaredPins(submit));
-    if (moved.length > 0 && (await holdsRecords(handle, authored.aid, cid))) {
-      problems.push(refusal(cid, moved, "the ids those records were written under"));
-    }
+    problems.push(
+      ...(await movedUnderRecords(
+        handle,
+        authored.aid,
+        cid,
+        changed(submitPins(liveSubmit(live, cid)), declaredPins(submit)),
+        "the ids those records were written under",
+      )),
+    );
   }
-  for (const [cid, config] of Object.entries(authored.collections ?? {})) {
+  // From what DEPLOY staged, because that is what publish promotes. Reading
+  // `app.json` here would let an author deploy a changed mirror, revert the
+  // key locally, and publish a promotion this gate never saw.
+  for (const [cid, config] of Object.entries(promoted)) {
     const was = liveMirrorOf(live, cid);
     const now = text(config.mirrorOf);
-    if (was !== now && (await holdsRecords(handle, authored.aid, cid))) {
-      problems.push(refusal(cid, [{ key: "mirrorOf", was, now }], "the projection those records are the public face of"));
-    }
+    if (was === now) continue;
+    problems.push(
+      ...(await movedUnderRecords(handle, authored.aid, cid, [{ key: "mirrorOf", was, now }], "the projection those records are the public face of")),
+    );
   }
   return problems;
 }
+
+/** The refusal for one collection whose keys moved — including the one for a
+ *  collection we could not read. */
+async function movedUnderRecords(handle: SharedAppHandle, aid: string, cid: string, moved: Pinned[], what: string): Promise<string[]> {
+  if (moved.length === 0) return [];
+  const held = await holdsRecords(handle, aid, cid);
+  if (held === "none") return [];
+  if (held === "unknown") return [unreadable(cid, moved)];
+  return [refusal(cid, moved, what)];
+}
+
+const unreadable = (cid: string, moved: Pinned[]): string =>
+  `this changes what a submission to '${cid}' claims (${describe(moved)}), and its live records could not be read — so nothing knows whether anything is holding a claim under the old keys. ` +
+  "Publishing anyway would strand those claims silently if there are any. This is not something `confirm` overrides: confirming means accepting a KNOWN breakage, and here there is no reading at all. " +
+  "Fix the access (or the connection) and try again.";
 
 const refusal = (cid: string, moved: Pinned[], what: string): string =>
   `'${cid}' holds records, and this changes ${what}: ${describe(moved)}. ` +

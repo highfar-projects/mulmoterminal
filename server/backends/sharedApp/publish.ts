@@ -33,6 +33,7 @@ import {
   appSchemasPath,
   promoteSchema,
   projectPublish,
+  stagedRuleConfig,
   type AuthoredApp,
   type LoadedCollection,
   type PublishStamp,
@@ -238,23 +239,25 @@ async function stagedGate(
 async function pageGate(
   root: string,
   authored: AuthoredApp,
+  staged: readonly StagedEntry[],
   live: Record<string, unknown> | null,
   handle: SharedAppHandle,
   publishedAt: number,
 ): Promise<{ ok: true; view: ViewFile | null } | { ok: false; problems: string[] }> {
   const declared = declaredView(authored);
-  if (declared !== null) {
-    const view = await readPublicViewFile(root, declared, publishedAt);
-    if (!view.ok) return view;
-    const frozen = await frozenKeyProblems(authored, live, handle);
-    return frozen.length > 0 ? { ok: false, problems: frozen } : { ok: true, view: view.view };
-  }
+  const view = declared === null ? null : await readPublicViewFile(root, declared, publishedAt);
+  if (view !== null && !view.ok) return view;
   // The other question about the same live records, and the one the migration
   // scan cannot ask: not "do these rows still fit the schema" but "does this
   // change move the id space they were written into". See ./exclusivity.ts —
   // `confirm` deliberately does not reach it.
-  const frozen = await frozenKeyProblems(authored, live, handle);
-  return frozen.length > 0 ? { ok: false, problems: frozen } : { ok: true, view: null };
+  //
+  // The collection half is read from what DEPLOY staged, because that is what
+  // this publish promotes: `stagedRuleConfig` is the same function the
+  // projection uses, so the value judged is the value written.
+  const frozen = await frozenKeyProblems(authored, stagedRuleConfig(staged).collections ?? {}, live, handle);
+  if (frozen.length > 0) return { ok: false, problems: frozen };
+  return { ok: true, view: view === null ? null : view.view };
 }
 
 export async function publishSharedApp(root: string, opts: SharedAppOptions = {}): Promise<PublishResult> {
@@ -314,7 +317,7 @@ export async function publishSharedApp(root: string, opts: SharedAppOptions = {}
   // from disk and judged here, so a missing file or one written against the
   // host's bridge stops the run rather than landing after the schemas have
   // been promoted.
-  const page = await pageGate(root, authored, existingApp, handle, stamp.publishedAt);
+  const page = await pageGate(root, authored, staged.staged, existingApp, handle, stamp.publishedAt);
   if (!page.ok) return { ok: false, partial: false, problems: page.problems };
 
   const failure = await runWrites(publishSteps(handle, aid, staged.staged, stamp, face, slug, form, page.view), "publish");

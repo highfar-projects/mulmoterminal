@@ -129,7 +129,22 @@ class LiveDocs implements FirestoreDocs {
   }
 }
 
+/** A handle whose listing fails, as a transient permission or network error
+ *  does. */
+class UnreadableDocs extends LiveDocs {
+  constructor() {
+    super({});
+  }
+  override async list(): Promise<FirestoreDoc[]> {
+    throw new Error("UNAVAILABLE: the backend is currently unavailable");
+  }
+}
+
 const handleWith = (items: Record<string, number>) => ({ docs: new LiveDocs(items), email: "me@example.com", uid: "uid-me" });
+
+/** What DEPLOY staged for the collections — the half publish promotes, and the
+ *  half this gate must judge (app.json's copy of it is not what goes live). */
+const PROMOTED = { slots: { mirrorOf: "bookings" } };
 const bookingsPath = `apps/${AID}/collections/bookings/items`;
 const slotsPath = `apps/${AID}/collections/slots/items`;
 
@@ -182,7 +197,7 @@ describe("the keys that decide which document a submission claims", () => {
     // First, because every refusal below is only meaningful against a
     // re-publish that must keep working: an app is published again for all
     // sorts of reasons that have nothing to do with its identity keys.
-    const problems = await frozenKeyProblems(salon(), live, handleWith({ [bookingsPath]: 12 }));
+    const problems = await frozenKeyProblems(salon(), PROMOTED, live, handleWith({ [bookingsPath]: 12 }));
     expect(problems).toEqual([]);
   });
 
@@ -192,7 +207,7 @@ describe("the keys that decide which document a submission claims", () => {
     const moved = salon({
       public: { ...live.public, submit: { bookings: { ...live.public.submit.bookings, idField: "slotId" } } },
     });
-    const problems = await frozenKeyProblems(moved, live, handleWith({}));
+    const problems = await frozenKeyProblems(moved, PROMOTED, live, handleWith({}));
     expect(problems).toEqual([]);
   });
 
@@ -203,7 +218,7 @@ describe("the keys that decide which document a submission claims", () => {
     const moved = salon({
       public: { ...live.public, submit: { bookings: { ...live.public.submit.bookings, idField: "slotId" } } },
     });
-    const problems = await frozenKeyProblems(moved, live, handleWith({ [bookingsPath]: 3 }));
+    const problems = await frozenKeyProblems(moved, PROMOTED, live, handleWith({ [bookingsPath]: 3 }));
     expect(problems.join(" ")).toContain("idField: slot → slotId");
     expect(problems.join(" ")).toContain("not something `confirm` overrides");
   });
@@ -215,7 +230,7 @@ describe("the keys that decide which document a submission claims", () => {
         submit: { bookings: { ...live.public.submit.bookings, idIn: { collection: "chairs" } } },
       },
     });
-    const problems = await frozenKeyProblems(moved, live, handleWith({ [bookingsPath]: 1 }));
+    const problems = await frozenKeyProblems(moved, PROMOTED, live, handleWith({ [bookingsPath]: 1 }));
     expect(problems.join(" ")).toContain("idIn:");
   });
 
@@ -229,10 +244,10 @@ describe("the keys that decide which document a submission claims", () => {
         submit: { bookings: { ...live.public.submit.bookings, mirror: undefined } },
       },
     });
-    expect((await frozenKeyProblems(withoutMirror, live, handleWith({ [bookingsPath]: 1 }))).join(" ")).toContain("mirror: slots → (absent)");
+    expect((await frozenKeyProblems(withoutMirror, PROMOTED, live, handleWith({ [bookingsPath]: 1 }))).join(" ")).toContain("mirror: slots → (absent)");
 
-    const withoutMirrorOf = salon({ collections: { slots: {} } });
-    expect((await frozenKeyProblems(withoutMirrorOf, live, handleWith({ [slotsPath]: 8 }))).join(" ")).toContain("mirrorOf: bookings → (absent)");
+    // The collection half comes from what DEPLOY staged, not from app.json.
+    expect((await frozenKeyProblems(salon(), { slots: {} }, live, handleWith({ [slotsPath]: 8 }))).join(" ")).toContain("mirrorOf: bookings → (absent)");
   });
 
   it("reads a reordered declaration as the same declaration", async () => {
@@ -250,14 +265,35 @@ describe("the keys that decide which document a submission claims", () => {
         },
       },
     });
-    const problems = await frozenKeyProblems(reordered, live, handleWith({ [bookingsPath]: 5 }));
+    const problems = await frozenKeyProblems(reordered, PROMOTED, live, handleWith({ [bookingsPath]: 5 }));
     expect(problems).toEqual([]);
+  });
+
+  it("judges the STAGED mirror, not the one in app.json", async () => {
+    // Deploy a changed mirror, revert the key locally, publish: the manifest
+    // agrees with the live document while the promotion does not, so a gate
+    // reading app.json would see nothing at all.
+    const problems = await frozenKeyProblems(salon(), { slots: { mirrorOf: "somewhere-else" } }, live, handleWith({ [slotsPath]: 2 }));
+    expect(problems.join(" ")).toContain("mirrorOf: bookings → somewhere-else");
+  });
+
+  it("refuses when it cannot tell whether anything is held", async () => {
+    // A failed listing is not an empty collection. Treating it as one lets a
+    // changed identity key through on a transient error and strands every
+    // existing claim — and the migration scan cannot cover for it, being a
+    // separate read that may have succeeded a moment earlier.
+    const moved = salon({
+      public: { ...live.public, submit: { bookings: { ...live.public.submit.bookings, idField: "slotId" } } },
+    });
+    const problems = await frozenKeyProblems(moved, PROMOTED, live, { docs: new UnreadableDocs(), email: "me@example.com", uid: "uid-me" });
+    expect(problems.join(" ")).toContain("could not be read");
+    expect(problems.join(" ")).toContain("not something `confirm` overrides");
   });
 
   it("says nothing about a FIRST publish", async () => {
     // There is no live declaration to have moved away from, and the app
     // document does not exist yet.
-    const problems = await frozenKeyProblems(salon(), null, handleWith({}));
+    const problems = await frozenKeyProblems(salon(), PROMOTED, null, handleWith({}));
     expect(problems).toEqual([]);
   });
 });
