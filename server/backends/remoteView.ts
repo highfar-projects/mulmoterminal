@@ -114,10 +114,24 @@ function unhandledFailure(result: never, slug: string): string {
   return `unhandled failure on collection '${slug}': ${JSON.stringify(result)}`;
 }
 
+/** The two kinds every one of the three operations below can hit, answered once.
+ *
+ * The sentence IS the error UI, so a wording fixed on one operation and not the others gives the
+ * same situation two explanations depending on which button the phone pressed. Taken as a pair
+ * rather than one function per kind so each caller spends a single branch on both — which is what
+ * leaves `result` narrowed to `never` at the end of each chain, and the exhaustiveness check
+ * (`unhandledFailure`) doing its job. */
+type SharedViewFailure = { kind: "view-not-found"; viewId: string } | { kind: "not-mobile"; viewId: string };
+
+function sharedViewFailureMessage(result: SharedViewFailure, slug: string): string {
+  return result.kind === "view-not-found"
+    ? `custom view '${result.viewId}' not found on collection '${slug}'`
+    : `custom view '${result.viewId}' is not a mobile view — declare target: "mobile" in its views[] entry`;
+}
+
 /** One message per failure kind, thrown by the channel handler. */
 export function remoteViewFailureMessage(result: Exclude<RemoteViewBuildResult, { kind: "ok" }>, slug: string): string {
-  if (result.kind === "view-not-found") return `custom view '${result.viewId}' not found on collection '${slug}'`;
-  if (result.kind === "not-mobile") return `custom view '${result.viewId}' is not a mobile view — declare target: "mobile" in its views[] entry`;
+  if (result.kind === "view-not-found" || result.kind === "not-mobile") return sharedViewFailureMessage(result, slug);
   // Names `.claude/skills`, not the workspace's `data/skills` staging tree. A view now belongs to
   // whichever FOLDER the collection is in, and outside the managed workspace there is no staging
   // mirror to write into — telling the author to use one would send them to a path nothing reads
@@ -328,17 +342,15 @@ export const remoteViewItemsFor = (scope: ProjectScope) =>
 
 /** Message per non-ok item-page kind, thrown by the channel handler. */
 export function remoteViewItemsFailureMessage(result: Exclude<RemoteViewItemsResult, { kind: "ok" }>, slug: string): string {
-  if (result.kind === "not-mobile") return `custom view '${result.viewId}' is not a mobile view — declare target: "mobile" in its views[] entry`;
+  if (result.kind === "view-not-found" || result.kind === "not-mobile") return sharedViewFailureMessage(result, slug);
   if (result.kind === "too-large")
     return `mobile view page is ${result.bytes} bytes — over the ${REMOTE_VIEW_ITEMS_MAX_BYTES}-byte command-channel budget; narrow \`fields\` (drop an embed column), lower \`limit\`, or slim the records`;
-  if (result.kind === "view-not-found") return `custom view '${result.viewId}' not found on collection '${slug}'`;
   return unhandledFailure(result, slug);
 }
 
 /** Message per non-ok mutate kind, thrown by the channel handler. */
 export function mutateRemoteViewFailureMessage(result: Exclude<MutateRemoteViewResult, { kind: "ok" }>, slug: string): string {
-  if (result.kind === "view-not-found") return `custom view '${result.viewId}' not found on collection '${slug}'`;
-  if (result.kind === "not-mobile") return `custom view '${result.viewId}' is not a mobile view — declare target: "mobile" in its views[] entry`;
+  if (result.kind === "view-not-found" || result.kind === "not-mobile") return sharedViewFailureMessage(result, slug);
   if (result.kind === "not-writable")
     return `mobile view '${result.viewId}' is read-only — declare editableFields and/or allowDelete in its views[] entry to allow writes`;
   if (result.kind === "read-only-collection")

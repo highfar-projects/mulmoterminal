@@ -39,7 +39,7 @@ import {
   type PublishStamp,
 } from "@mulmoclaude/core/collection/server";
 import { ensureAid } from "./ensureAid.js";
-import { gitStamp, sharedAppContext, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
+import { sharedAppContext, stampFor, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
 import { recordRefusal, scanRecords, type RecordScan } from "./records.js";
 import { readStaged, type StagedEntry } from "./staged.js";
 import { oversizeProblem, publicFormOf, publicInputProblems, type PublicForm } from "./publicForm.js";
@@ -325,14 +325,7 @@ export async function publishSharedApp(root: string, opts: SharedAppOptions = {}
       ],
     };
   }
-  const stampSource = await (opts.resolveCommit ?? gitStamp)(root);
-  const stamp: PublishStamp = {
-    uid: handle.uid,
-    email: handle.email,
-    publishedAt: (opts.now ?? Date.now)(),
-    commit: stampSource.commit,
-    dirty: stampSource.dirty,
-  };
+  const { stamp, dirty } = await stampFor(handle, root, opts);
   const existingApp = isRecord(existing) ? existing : null;
   const face = projectPublish(authored, staged.staged, stamp, existingApp);
 
@@ -377,7 +370,7 @@ export async function publishSharedApp(root: string, opts: SharedAppOptions = {}
     participantPages: promotedIdsOf(pages.tiers, "roster"),
     slug,
     commit: stamp.commit,
-    dirty: stampSource.dirty === true,
+    dirty,
     recordIssues: scan.records,
     recordIssuesCapped: scan.capped,
   };

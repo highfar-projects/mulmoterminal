@@ -11,7 +11,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { CollectionsIndexView, CollectionView, FeedsView } from "@mulmoclaude/collection-plugin/vue";
 import PluginFrame from "./PluginFrame.vue";
 import { collectionShadowCss } from "../collectionShadowCss";
-import { pushCollectionTeleportTarget, popCollectionTeleportTarget } from "../composables/collectionUi";
+import { useCollectionTeleportTarget } from "../composables/useCollectionTeleportTarget";
 import { pushCollectionSurface, popCollectionSurface, type CollectionNavSurface, type CollectionSurface } from "../composables/collectionSurface";
 import { projectIdForCwd } from "../composables/collectionProject";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
@@ -164,25 +164,10 @@ const SEVERITY_CLASS: Record<SelfContainmentSeverity, string> = {
   info: "text-dim",
 };
 
-// Register this pane's shadow root as the record-modal teleport target — same getRootNode()
-// trick as CollectionsBrowseOverlay, which is where the comment explaining it lives.
+// The probe sits inside the PluginFrame shadow, which is what lets the composable resolve
+// this pane's shadow root as the record modal's teleport target.
 const probe = ref<HTMLElement>();
-let registered: HTMLElement | ShadowRoot | null = null;
-function unregister(): void {
-  if (registered) {
-    popCollectionTeleportTarget(registered);
-    registered = null;
-  }
-}
-watch(probe, (el) => {
-  unregister();
-  const root = el?.getRootNode();
-  if (root instanceof ShadowRoot) {
-    registered = root;
-    pushCollectionTeleportTarget(root);
-  }
-});
-onBeforeUnmount(unregister);
+useCollectionTeleportTarget(probe);
 </script>
 
 <template>
