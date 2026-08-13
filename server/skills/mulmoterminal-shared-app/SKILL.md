@@ -321,8 +321,8 @@ entry per page, each naming **who it is for**:
 
 **Say this out loud when an author adds a `member` page.** What the public page is handed is data
 any stranger could already fetch, so a view carrying it off costs nothing. A members' page is
-handed the real records — names, phone numbers, who is coming at 3pm — and, where the collection
-declares an `assigneeField`, the addresses of everybody who may be assigned it. The platform does
+handed the real records — names, phone numbers, who is coming at 3pm — and, for every collection it
+can change, the addresses of the colleagues who may change it. The platform does
 not stop an owner's own page from moving an owner's own data, and does not pretend to; the author
 should know that is what they are writing.
 
@@ -340,8 +340,15 @@ await window.__MC_APP_VIEW.transition(cid, itemId, to);  // approve, reject, can
 await window.__MC_APP_VIEW.assign(cid, itemId, address); // hand a row to a colleague
 ```
 
-Each returns `{ ok, error }`. `submit` is the visitor's path and **the page confirms with the
-reader before writing** — the HTML is not trusted to have been asked. The other two are the
+Each returns `{ ok, error }`. The page is told **what this reader may actually do** in the second
+argument to `onState` — `{ transitionAny, transitionOwn, assign, assignees }` per collection, with
+the roles already resolved — and should draw only those buttons. It never sees a role name:
+branching on `"editor"` in a page would be the rules written a second time, where nobody reviews
+them. The same answer is applied again to every call, so a page that ignores it is refused rather
+than obeyed.
+
+`submit` is the visitor's path and **the page confirms with the reader before writing** — the HTML
+is not trusted to have been asked. The other two are the
 roster's, and they do NOT confirm: the person pressing them is on the app's own roster doing
 their own work, and a modal in front of a button used forty times a day is abandoned rather than
 read. The page prints what happened above the frame instead, from what was written.
@@ -351,8 +358,12 @@ read. The page prints what happened above the frame instead, from what was writt
   are different tables, so a staff page and a participant page draw different buttons for the same
   collection. Ask for a move the record cannot make and the answer names it.
 - **`assign` moves `assigneeField`**, and only to an address holding `owner`, `editor` or
-  `assignee` on that collection. Anything else would write a row NOBODY could touch afterwards.
-  The page can read the choices out of the projection it is handed.
+  `assignee` on that collection (`assignees` in the capability above). Anything else would write a
+  row NOBODY could touch afterwards. An `assignee` cannot hand a row on at all, their own
+  included: the rules require the row to be theirs before AND after.
+- **Being shown the page is not permission.** `/m/{slug}` admits anybody holding a role ANYWHERE in
+  the app, so a `viewer`, or somebody scoped to a different collection, reads the same declaration
+  as the front desk. That is why the capability exists and why it is per reader.
 - **The notice is not the page's to choose.** If `collections.<cid>.mail` declares a template for
   the move being made, it is queued IN THE SAME WRITE, addressed from the record. A page that
   could name a template could mail "your booking is approved" about one it had just rejected.
