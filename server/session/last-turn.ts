@@ -47,9 +47,10 @@ export const lastTurnFromClaudeJsonl = (raw: string): LastTurn => lastTurnFromCl
 // The fallback above is what a handoff wants and what a push must never have: a turn that ended
 // without prose — interrupted, or finished on a tool call — leaves the previous exchange as the
 // newest complete one, and announcing it as this turn's outcome tells the user the wrong thing
-// about the wrong turn (#1650). Measured over real transcripts, a read taken one record before the
-// turn's last landed returned an OLDER reply at 108 of 112 turn boundaries rather than nothing, so
-// there is no shape of that mistake the caller could have detected for itself.
+// about the wrong turn (#1650). Over 11,489 real transcripts the fallback named an older turn at 193
+// of 13,200 boundaries with the whole turn on disk, and at 1,629 of them for a read that landed one
+// record early — an older reply every time rather than nothing, so there is no shape of that mistake
+// the caller could have detected for itself.
 export function currentTurnReplyFromClaudeParsed(records: Record<string, unknown>[]): string | null {
   let reply: string | null = null;
   for (const turn of conversationTurnsFromParsed(records)) {

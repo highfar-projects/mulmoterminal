@@ -25,12 +25,14 @@ const PUSH_BODY_MAX = 160;
 // is worse than saying nothing. Which log to read depends on the agent, so it goes
 // through session-reads rather than assuming a claude transcript.
 //
-// Claude is asked for THIS turn's reply, not the last complete exchange: a turn the user
+// Claude is asked for THIS turn's reply rather than the last complete exchange: a turn the user
 // interrupted, or one that ended on a tool call, has no reply, and sessionLastTurn answers such a
-// turn with the previous one's (#1650). Every other agent keeps that read — see claudeCurrentTurnReply.
+// turn with the PREVIOUS one's (#1650). Every other agent keeps that read, for the reason given at
+// claudeCurrentTurnReply.
 async function latestReply(sessionId: string, cwd: string): Promise<string | null> {
   const agent = asTerminalAgent(ptys.get(sessionId)?.agent);
-  const reply = (agent === "claude" ? await claudeCurrentTurnReply(cwd, sessionId) : (await sessionLastTurn(cwd, sessionId, agent)).reply)?.trim();
+  const turnReply = agent === "claude" ? await claudeCurrentTurnReply(cwd, sessionId) : (await sessionLastTurn(cwd, sessionId, agent)).reply;
+  const reply = turnReply?.trim();
   // Capped like every other writer of lastResponses — the map is declared as holding
   // truncated text, and it is served in the roster payload for every listed session.
   return reply ? reply.slice(0, LAST_RESPONSE_MAX) : null;

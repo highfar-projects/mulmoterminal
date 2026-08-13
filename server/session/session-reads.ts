@@ -257,18 +257,6 @@ async function codexLastTurn(sessionKey: string): Promise<LastTurn> {
 // stopped mattering: the same read now costs 256 KB whatever the transcript weighs. There is
 // consequently no size limit here at all, and no "too large" answer for a caller to handle.
 
-// The reply to the turn that just ENDED, for the phone push — null when that turn produced none,
-// never an older exchange (#1650, and the invariant readLatestResponse states above). Claude only:
-// codex reaches the same push from codex-activity-track, which decides a turn ended by reading the
-// very record that carries its reply, so its trigger cannot outrun its own data.
-export async function claudeCurrentTurnReply(cwd: string, id: string): Promise<string | null> {
-  try {
-    return currentTurnReplyFromClaudeParsed(readTailRecords(path.join(projectSessionsDir(cwd), `${id}.jsonl`)));
-  } catch {
-    return null; // no transcript on disk yet
-  }
-}
-
 export async function sessionLastTurn(cwd: string, id: string, agent: TerminalAgent): Promise<LastTurn> {
   if (agent === "codex") return codexLastTurn(id);
   // Neither log is read yet, and each is a real file rather than a missing feature: agy's brain
@@ -282,6 +270,21 @@ export async function sessionLastTurn(cwd: string, id: string, agent: TerminalAg
     return lastTurnFromClaudeParsed(readTailRecords(path.join(projectSessionsDir(cwd), `${id}.jsonl`)));
   } catch {
     return EMPTY_TURN; // no transcript on disk yet
+  }
+}
+
+// The reply to the turn that just ENDED, for the phone push — null when that turn produced none,
+// never an older exchange (#1650, which is the invariant readLatestResponse states above and this
+// path was breaking). Reads the same tail as sessionLastTurn, and differs only in which turn it
+// will speak for.
+//
+// Claude only: codex reaches the same push from codex-activity-track, which decides a turn ended by
+// reading the very record that carries its reply, so its trigger cannot outrun its own data.
+export async function claudeCurrentTurnReply(cwd: string, id: string): Promise<string | null> {
+  try {
+    return currentTurnReplyFromClaudeParsed(readTailRecords(path.join(projectSessionsDir(cwd), `${id}.jsonl`)));
+  } catch {
+    return null; // no transcript on disk yet
   }
 }
 
