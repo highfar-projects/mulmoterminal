@@ -41,10 +41,14 @@ function cell(value) {
   return `\`${value.replaceAll("`", "'").replaceAll("|", "\\|").replaceAll("\n", " ")}\``;
 }
 
-function bar(count, max) {
-  if (max === 0) return "";
-  const filled = Math.max(1, Math.round((count / max) * BAR_WIDTH));
-  return "\u2588".repeat(filled);
+/**
+ * `max(1, \u2026)` keeps a rule with one finding visible beside one with five hundred,
+ * so zero has to be caught before it or an empty row draws the shortest bar rather
+ * than none. Exported because nothing here can pass a zero yet \u2014 only a test can.
+ */
+export function bar(count, max) {
+  if (count === 0 || max === 0) return "";
+  return "\u2588".repeat(Math.max(1, Math.round((count / max) * BAR_WIDTH)));
 }
 
 function tally(counts, key) {
