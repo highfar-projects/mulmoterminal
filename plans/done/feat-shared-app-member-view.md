@@ -1,6 +1,8 @@
 # 共有アプリ: 公開後のアプリに「名簿の人の顔」を作る
 
-**状態**: 実装中（2026-08-13 着手）。設計は 2026-08-13 の指摘から。
+**状態**: **完了**（2026-08-13）。下の 4 本はすべてマージ済みで、ルールは手で deploy 済み。
+のちに mulmoserver#170（拒否と「聞けなかった」の分離）と mulmoserver#179
+（`/m/{slug}/records/{cid}` のレコード表）が続いた。設計は 2026-08-13 の指摘から。
 
 | | PR | 状態 |
 |---|---|---|
@@ -15,8 +17,8 @@
 続きは [`feat-shared-app-member-write.md`](./feat-shared-app-member-write.md) —
 participant の入口（`/p/{slug}`）もそちらで決めた。
 
-前提: [`docs/shared-app-principles.md`](../docs/shared-app-principles.md)（不変条件）、
-[`feat-shareable-collections.md`](./feat-shareable-collections.md)（D1–D10）、
+前提: [`docs/shared-app-principles.md`](../../docs/shared-app-principles.md)（不変条件）、
+[`feat-shareable-collections.md`](../feat-shareable-collections.md)（D1–D10）、
 [`feat-shared-app-public-view.md`](./feat-shared-app-public-view.md)（公開ビュー、実装済み）。
 
 ---

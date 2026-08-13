@@ -1,8 +1,9 @@
 # 共有アプリ: 行スコープの書き手ロール `assignee`
 
-**状態**: 設計のみ。実装は未着手。2026-08-12 の議論から。
-全体設計は [`feat-shareable-collections.md`](./feat-shareable-collections.md)、
-流れは [`shared-collection-flow.md`](./shared-collection-flow.md)。
+**状態**: **完了**（2026-08-12）。ルール mulmoserver#162 / 宣言 mulmoclaude#2874 /
+MT 側の追従とテンプレート mulmoterminal#1655 — いずれもマージ済み。設計は 2026-08-12 の議論から。
+全体設計は [`feat-shareable-collections.md`](../feat-shareable-collections.md)、
+流れは [`shared-collection-flow.md`](../shared-collection-flow.md)。
 
 **この変更は 3 リポジトリにまたがる** — `../mulmoserver`（ルール）、
 `../mulmoclaude/packages/core`（宣言と検査）、ここ（MulmoTerminal）。順序が重要なので

@@ -1,12 +1,14 @@
 # 共有アプリ: 公開ページを「予約サイト」にする（公開カスタムビュー + 枠の排他）
 
-**状態**: 設計のみ。実装は未着手。2026-08-12 の議論から。
+**状態**: **完了**（2026-08-13）。3 つとも入った — 1 枠の排他 mulmoclaude#2876 +
+mulmoserver#164、2 公開カスタムビュー mulmoserver#165（#167 で回答済みの再表示を修正）+
+mulmoterminal#1662（publish）、3 `salon.md` の更新 mulmoterminal#1662。設計は 2026-08-12 の議論から。
 レビュー（#1658）で見つかった 20 点を反映済み: id の不変性、宣言そのものの変更禁止、
 枠の実在**と状態**の確認（`untilField` を含む）、iframe の `event.source` 検証、
 bridge の `ready` / `submitResult`、`config/view` の撤去と版の一致、公開読み取りを
 `bookings` から `slots` に分離（`slots` と予約は対の batch でしか動かない）、ホスト用ビューとの契約の分離、publish の順序、
 顧客は delete できないこと。
-全体設計は [`feat-shareable-collections.md`](./feat-shareable-collections.md)、
+全体設計は [`feat-shareable-collections.md`](../feat-shareable-collections.md)、
 行スコープの承認は [`feat-shared-app-assignee-role.md`](./feat-shared-app-assignee-role.md)、
 先着枠は [`feat-shared-app-first-come.md`](./feat-shared-app-first-come.md)。
 

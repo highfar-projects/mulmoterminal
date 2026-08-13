@@ -4,7 +4,7 @@
 次のステップは [`feat-shareable-collections-step5-publish.md`](./feat-shareable-collections-step5-publish.md)。
 このファイルは着手する人への引き継ぎとして書かれ、いまは #2856 の設計記録も兼ねる。
 **日付**: 2026-08-10（#2856 の進行に合わせて更新）
-**親プラン**: [`plans/feat-shareable-collections.md`](./feat-shareable-collections.md) — **先に読むこと。**
+**親プラン**: [`plans/feat-shareable-collections.md`](../feat-shareable-collections.md) — **先に読むこと。**
 このファイルは親プランを前提に、ステップ 3 だけを切り出したもの。
 
 **作業リポジトリ**: `../mulmoclaude`（`@mulmoclaude/core`）。**MulmoTerminal のコードは 1 行も変わらない。**

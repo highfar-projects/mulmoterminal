@@ -21,7 +21,7 @@
 // from `sharedapp`, and mulmoserver generates its own documents again
 // (`test/composables/test_appViewRoundTrip.ts`). #1673 closed with that.
 //
-// Design: plans/refactor-shared-app-module.md
+// Design: plans/done/refactor-shared-app-module.md
 import { describe, it, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";

@@ -7,8 +7,8 @@ mulmoclaude#2894、mulmoserver#175。
 差し替える**もの（あちらは射影の書き込み側だけを MT に引き取る案で、実装まで行ったが
 **保留にした** — mulmoclaude#2892 / mulmoterminal#1672 / mulmoserver#174 は draft）。
 ゴールデン文書（決定 2・3）はそのまま生きる。
-前提は [`docs/shared-app-principles.md`](../docs/shared-app-principles.md)、
-決定は [`feat-shareable-collections.md`](./feat-shareable-collections.md) の D1–D10。
+前提は [`docs/shared-app-principles.md`](../../docs/shared-app-principles.md)、
+決定は [`feat-shareable-collections.md`](../feat-shareable-collections.md) の D1–D10。
 
 ---
 
