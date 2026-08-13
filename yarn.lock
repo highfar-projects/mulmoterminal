@@ -7166,9 +7166,9 @@ setprototypeof@~1.2.0:
   resolved "https://registry.yarnpkg.com/setprototypeof/-/setprototypeof-1.2.0.tgz#66c9a24a73f9fc28cbe66b09fed3d33dcaf1b424"
   integrity sha512-E5LDX7Wrp85Kil5bhZv46j8jOeboKq5JMmYM3gVGdGH8xFpPWXUMsNrlODCrkoxMEeNi/XZIwuRvY4XNwYMJpw==
 
-"sharedapp@git+https://github.com/receptron/sharedapp.git#1ece7837949aef932bf6a5a1b082be96eda38eff":
+"sharedapp@git+https://github.com/receptron/sharedapp.git#0599c5b89be620e4d65b4a4b4af7161d3b1b8635":
   version "0.1.0"
-  resolved "git+https://github.com/receptron/sharedapp.git#1ece7837949aef932bf6a5a1b082be96eda38eff"
+  resolved "git+https://github.com/receptron/sharedapp.git#0599c5b89be620e4d65b4a4b4af7161d3b1b8635"
   dependencies:
     zod "^4.1.13"
 

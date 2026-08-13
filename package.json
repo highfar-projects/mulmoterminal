@@ -106,7 +106,7 @@
     "mulmocast": "^2.9.2",
     "node-pty": "1.2.0-beta.15",
     "puppeteer": "^25.6.0",
-    "sharedapp": "git+https://github.com/receptron/sharedapp.git#1ece7837949aef932bf6a5a1b082be96eda38eff",
+    "sharedapp": "git+https://github.com/receptron/sharedapp.git#0599c5b89be620e4d65b4a4b4af7161d3b1b8635",
     "sharp": "^0.35.3",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
