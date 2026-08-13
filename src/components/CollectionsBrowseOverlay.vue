@@ -11,7 +11,7 @@ import PluginFrame from "./PluginFrame.vue";
 import { collectionShadowCss } from "../collectionShadowCss";
 import { useCollectionBrowse, browseGotoDetail } from "../composables/useCollectionBrowse";
 import { useEscapeToClose } from "../composables/useEscapeToClose";
-import { pushCollectionTeleportTarget, popCollectionTeleportTarget } from "../composables/collectionUi";
+import { useCollectionTeleportTarget } from "../composables/useCollectionTeleportTarget";
 import { pushCollectionSurface, popCollectionSurface, type CollectionSurface } from "../composables/collectionSurface";
 import {
   browseGotoIndex,
@@ -45,27 +45,10 @@ const { view, isOpen, close } = useCollectionBrowse();
 const { shortcuts } = useShortcuts();
 const favActive = (s: Shortcut): boolean => view.value.mode === "detail" && view.value.kind === s.kind && view.value.slug === s.slug;
 
-// Register this overlay's shadow root as the record-modal teleport target while a
-// detail page is open (the package's CollectionRecordModal teleports there; the
-// global binding can't otherwise know which shadow root to use). Same getRootNode()
-// trick as CollectionCardView — the probe sits inside the PluginFrame shadow.
+// The probe sits inside the PluginFrame shadow, which is what lets the composable resolve
+// this overlay's shadow root as the record modal's teleport target.
 const probe = ref<HTMLElement>();
-let registered: HTMLElement | ShadowRoot | null = null;
-function unregister(): void {
-  if (registered) {
-    popCollectionTeleportTarget(registered);
-    registered = null;
-  }
-}
-watch(probe, (el) => {
-  unregister();
-  const root = el?.getRootNode();
-  if (root instanceof ShadowRoot) {
-    registered = root;
-    pushCollectionTeleportTarget(root);
-  }
-});
-onBeforeUnmount(unregister);
+useCollectionTeleportTarget(probe);
 
 // The overlay registers itself as a SURFACE while it is open, and that is not symmetry for its
 // own sake: a Collections pane may still be mounted behind it (panes are per cell and do not

@@ -180,7 +180,16 @@ export default [
       // Explicit projects, not `projectService: true`: the root tsconfig.json references only
       // app and node, so the service could not place any server/** file and reported 321 parse
       // errors. Naming both projects is what actually covers the code these rules are for.
-      parserOptions: { project: ["./tsconfig.app.json", "./tsconfig.server.json"], tsconfigRootDir: import.meta.dirname },
+      // `extraFileExtensions` here even though this block never lints a .vue: it names the same
+      // tsconfig.app.json as the .vue block above, and the type program is cached per tsconfig. A
+      // program built from THIS block without it holds no .vue file, so whoever builds first
+      // decides whether SFCs can be placed — invisible single-threaded, 95 parse errors under
+      // `--concurrency`, where each worker builds its own.
+      parserOptions: {
+        project: ["./tsconfig.app.json", "./tsconfig.server.json"],
+        tsconfigRootDir: import.meta.dirname,
+        extraFileExtensions: [".vue"],
+      },
     },
     rules: {
       "@typescript-eslint/no-floating-promises": "warn",

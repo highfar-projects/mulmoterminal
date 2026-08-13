@@ -17,7 +17,7 @@
 import { ensureAid } from "./ensureAid.js";
 import { type LoadedCollection } from "@mulmoclaude/core/collection/server";
 import { APPS_COLLECTION, appStagingPath, projectDeploy, type PublishStamp } from "@receptron/sharedapp";
-import { gitStamp, readCurrentApp, schemasOf, sharedAppContext, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
+import { readCurrentApp, schemasOf, sharedAppContext, stampFor, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
 import { allTierWrites, pageIdsOf, planTierWrites, type PlannedTier } from "./appViews.js";
 import { recordRefusal, scanRecords, type RecordScan } from "./records.js";
 import { reserveSlug, retireSlug, type SlugResult } from "./slug.js";
@@ -268,14 +268,7 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
   // is atomic, and only the declared owner may do it.
   const current = await readCurrentApp(handle, aid, "deploy", "Deploying again is safe — this read only decides whether the app is created or updated.");
   if (!current.ok) return current;
-  const stampSource = await (opts.resolveCommit ?? gitStamp)(root);
-  const stamp: PublishStamp = {
-    uid: handle.uid,
-    email: handle.email,
-    publishedAt: (opts.now ?? Date.now)(),
-    commit: stampSource.commit,
-    dirty: stampSource.dirty,
-  };
+  const { stamp, dirty } = await stampFor(handle, root, opts);
   const existingApp = current.app;
   const deployed = projectDeploy(authored, schemasOf(collections), stamp, existingApp);
 
@@ -336,7 +329,7 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
     // reservation.
     created: existingApp === null || existingApp.deployedAt === undefined,
     commit: stamp.commit,
-    dirty: stampSource.dirty === true,
+    dirty,
     recordIssues: scan.records,
     recordIssuesCapped: scan.capped,
   };
