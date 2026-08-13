@@ -24,6 +24,17 @@ export type AnswerFailure =
 
 export type AnswerResult = { ok: true } | { ok: false; reason: AnswerFailure };
 
+// One answer at a time per session, held across the check AND the whole key sequence.
+//
+// The check and the typing are only atomic together. Two clients — the pane and the phone, which
+// is the pair this change exists to create — can both read the dialog as `running`, and their
+// paced keystrokes then interleave: the first stream commits the dialog and the second's leftovers
+// land at the prompt underneath, where an arrow reaches the input history and Enter runs it. That
+// is the outcome the toolUseId check was meant to prevent, so the check alone is not enough.
+//
+// In-process is the right scope: the PTY table it writes to is this process's.
+const answering = new Set<string>();
+
 export interface AnswerQuestionDeps {
   /** The session's recorded tool calls — what openQuestionOf reads the live dialog out of. */
   callsOf: (sessionId: string) => Promise<readonly RecordedCall[]>;
@@ -49,7 +60,7 @@ const sendPaced = async (deps: AnswerQuestionDeps, sessionId: string, keys: read
     return deps.write(sessionId, key);
   }, Promise.resolve(true));
 
-export async function answerQuestion(deps: AnswerQuestionDeps, { sessionId, toolUseId, picks }: AnswerQuestionRequest): Promise<AnswerResult> {
+const answerHeld = async (deps: AnswerQuestionDeps, { sessionId, toolUseId, picks }: AnswerQuestionRequest): Promise<AnswerResult> => {
   const open = openQuestionOf(await deps.callsOf(sessionId), sessionId);
   if (open?.toolUseId !== toolUseId) return { ok: false, reason: "closed" };
   const keys = keysForAnswers(open.questions, picks);
@@ -57,4 +68,16 @@ export async function answerQuestion(deps: AnswerQuestionDeps, { sessionId, tool
   // The questions come from the HOST's own record of the dialog, not from the request: a caller
   // cannot widen its picks by describing a different question than the one on screen.
   return (await sendPaced(deps, sessionId, keys)) ? { ok: true } : { ok: false, reason: "unwritable" };
+};
+
+export async function answerQuestion(deps: AnswerQuestionDeps, request: AnswerQuestionRequest): Promise<AnswerResult> {
+  // The loser is told `closed` rather than "busy": from its side the dialog IS about to be gone,
+  // and that is the one outcome a client already knows to treat as ordinary rather than an error.
+  if (answering.has(request.sessionId)) return { ok: false, reason: "closed" };
+  answering.add(request.sessionId);
+  try {
+    return await answerHeld(deps, request);
+  } finally {
+    answering.delete(request.sessionId);
+  }
 }

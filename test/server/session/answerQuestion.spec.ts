@@ -94,4 +94,41 @@ describe("answerQuestion", () => {
     const written = d.write.mock.calls.map((call) => call[1]);
     expect(written.every((chunk) => chunk === DOWN || chunk === ENTER)).toBe(true);
   });
+
+  // Two clients answering at once is not hypothetical here: the pane and the phone are exactly the
+  // pair this module was written to serve. Both can read the dialog as still open, and their paced
+  // keystrokes would then interleave — the first commits the dialog and the second's leftovers land
+  // at the prompt underneath, where an arrow reaches the input history and Enter runs it.
+  it("lets one answer through at a time, per session", async () => {
+    const d = deps([CALL("t1", "running", true)]);
+    const first = answerQuestion(d, { sessionId: "s1", toolUseId: "t1", picks: [[0, 1]] });
+    const second = answerQuestion(d, { sessionId: "s1", toolUseId: "t1", picks: [[0]] });
+
+    expect(await second).toEqual({ ok: false, reason: "closed" });
+    expect(await first).toEqual({ ok: true });
+    // Exactly one stream's worth: toggle, down, toggle, down x2 to Submit, enter, review enter.
+    expect(d.write.mock.calls).toHaveLength(7);
+  });
+
+  it("holds the lock per session, not across them", async () => {
+    const d = deps([CALL("t1", "running")]);
+    const [a, b] = await Promise.all([
+      answerQuestion(d, { sessionId: "s1", toolUseId: "t1", picks: [[0]] }),
+      answerQuestion(d, { sessionId: "s2", toolUseId: "t1", picks: [[0]] }),
+    ]);
+
+    expect([a, b]).toEqual([{ ok: true }, { ok: true }]);
+  });
+
+  // A failed answer must not leave the session unanswerable for the rest of the process's life.
+  it("releases the lock when an answer fails", async () => {
+    const d = deps(
+      [CALL("t1", "running")],
+      vi.fn(() => false),
+    );
+    expect(await answerQuestion(d, { sessionId: "s1", toolUseId: "t1", picks: [[0]] })).toEqual({ ok: false, reason: "unwritable" });
+
+    const after = deps([CALL("t1", "running")]);
+    expect(await answerQuestion(after, { sessionId: "s1", toolUseId: "t1", picks: [[0]] })).toEqual({ ok: true });
+  });
 });
