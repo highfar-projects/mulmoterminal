@@ -211,6 +211,10 @@ function deploySteps(
     deployed: ReturnType<typeof projectDeploy>;
     stale: readonly string[];
     pages: readonly PlannedTier[];
+    /** This run's identity, written on every document it stages — see
+     *  `planTierWrites`. A clock cannot serve: two deploys can share a
+     *  millisecond, and then a half-applied pair compares equal. */
+    deployId: string;
     appDoc: Record<string, unknown>;
     established: boolean;
     stamp: PublishStamp;
@@ -224,7 +228,7 @@ function deploySteps(
       what: `the staged schema for '${cid}' (apps/${aid}/staging/${cid})`,
       run: () => handle.docs.set(appStagingPath(aid), cid, doc),
     })),
-    ...allTierWrites(handle, aid, what.pages, what.stamp),
+    ...allTierWrites(handle, aid, what.pages, what.stamp, what.deployId),
     ...what.stale.map((cid) => ({
       what: `the withdrawal of the staged schema for '${cid}' (apps/${aid}/staging/${cid})`,
       run: async (): Promise<void> => {
@@ -302,7 +306,10 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
   const pages = await planTierWrites(handle, aid, { root, authored, stamp });
   if (!pages.ok) return { ...pages, partial: established };
 
-  const failure = await runWrites(deploySteps(handle, aid, { deployed, stale: stale.cids, pages: pages.tiers, appDoc, established, stamp }), "deploy");
+  const failure = await runWrites(
+    deploySteps(handle, aid, { deployed, stale: stale.cids, pages: pages.tiers, appDoc, established, stamp, deployId: pages.deployId }),
+    "deploy",
+  );
   if (failure) return failure;
 
   // AFTER the app document, because `appSlugs`' create rule resolves the owner through

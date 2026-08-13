@@ -794,6 +794,24 @@ describe("shared app deploy / publish / unpublish", () => {
     expect(removed.indexOf(`delete apps/${AID}/member/staged:desk`)).toBeLessThan(removed.indexOf(`delete apps/${AID}/member/staged:config`));
   });
 
+  it("tells two deploys apart by identity, not by the clock", async () => {
+    // `publishedAt` is a millisecond and a millisecond is not an identity: the
+    // fixture's injected clock returns the same value every run, which is
+    // exactly the collision a coarse clock or two concurrent deploys produce.
+    // A mixed staged set must still be refused.
+    withPages();
+    await deploySharedApp(root, stamp);
+    const staged = docs.doc(`apps/${AID}/member`, "staged:desk");
+    expect(typeof staged?.deployId).toBe("string");
+
+    // A page from ANOTHER deploy, at the same millisecond.
+    await docs.set(`apps/${AID}/member`, "staged:desk", { html: "<p>other deploy</p>", publishedAt: 1_700_000_000_000, deployId: "another-run" });
+
+    const result = await publishSharedApp(root, stamp);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.problems.join(" ")).toContain("staged by a different deploy");
+  });
+
   it("stages the pages before the settings that name them", async () => {
     // The order decides what a half-finished deploy leaves: a page nobody has
     // been told about (invisible, harmless) rather than a name pointing at a

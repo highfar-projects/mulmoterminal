@@ -39,6 +39,8 @@ import {
   type PublishStamp,
 } from "@mulmoclaude/core/collection/server";
 
+import { randomUUID } from "node:crypto";
+
 import { isRecord } from "../../../common/isRecord.js";
 import type { SharedAppFailure, SharedAppHandle } from "./context.js";
 import { readAppViewFile } from "./publicView.js";
@@ -166,7 +168,7 @@ const withdrawalOrder = (stale: readonly string[]): string[] => [
 
 /** The writes for one tier: the pages, the settings that name them, then the
  *  withdrawals. Withdrawals go last because they grant nothing. */
-export function tierWrites(handle: SharedAppHandle, aid: string, plan: TierPlan, stale: readonly string[], stamp: PublishStamp): WriteStep[] {
+export function tierWrites(handle: SharedAppHandle, aid: string, plan: TierPlan, stale: readonly string[], stamp: PublishStamp, deployId: string): WriteStep[] {
   const at = appViewTierPath(aid, plan.tier);
   const config = plan.config;
   return [
@@ -179,14 +181,14 @@ export function tierWrites(handle: SharedAppHandle, aid: string, plan: TierPlan,
     // invisible and harmless, and the next deploy completes it.
     ...plan.pages.map((page) => ({
       what: `the ${plan.tier} page '${page.id}' (${at}/${viewDocId("staged", page.id)})`,
-      run: () => handle.docs.set(at, viewDocId("staged", page.id), { html: page.html, publishedAt: stamp.publishedAt }),
+      run: () => handle.docs.set(at, viewDocId("staged", page.id), { html: page.html, publishedAt: stamp.publishedAt, deployId }),
     })),
     ...(config === null
       ? []
       : [
           {
             what: `the ${plan.tier} page settings (${at}/${viewConfigDocId("staged")})`,
-            run: () => handle.docs.set(at, viewConfigDocId("staged"), config),
+            run: () => handle.docs.set(at, viewConfigDocId("staged"), { ...config, deployId }),
           },
         ]),
     // Withdrawals last, because they grant nothing — and the SETTINGS last
@@ -265,7 +267,7 @@ export async function planTierWrites(
   handle: SharedAppHandle,
   aid: string,
   request: { root: string; authored: AuthoredApp; stamp: PublishStamp },
-): Promise<{ ok: true; tiers: PlannedTier[] } | SharedAppFailure> {
+): Promise<{ ok: true; tiers: PlannedTier[]; deployId: string } | SharedAppFailure> {
   const planned = await planAppViewTiers(request.root, request.authored, request.stamp);
   if (!planned.ok) return { ok: false, partial: false, problems: planned.problems };
   const tiers: PlannedTier[] = [];
@@ -274,12 +276,12 @@ export async function planTierWrites(
     if (!stale.ok) return stale;
     tiers.push({ plan, stale: stale.ids });
   }
-  return { ok: true, tiers };
+  return { ok: true, tiers, deployId: randomUUID() };
 }
 
 /** The writes for every tier, in one list. */
-export const allTierWrites = (handle: SharedAppHandle, aid: string, tiers: readonly PlannedTier[], stamp: PublishStamp): WriteStep[] =>
-  tiers.flatMap(({ plan, stale }) => tierWrites(handle, aid, plan, stale, stamp));
+export const allTierWrites = (handle: SharedAppHandle, aid: string, tiers: readonly PlannedTier[], stamp: PublishStamp, deployId: string): WriteStep[] =>
+  tiers.flatMap(({ plan, stale }) => tierWrites(handle, aid, plan, stale, stamp, deployId));
 
 /** The page ids one tier put in place, for the operation's report. */
 export const pageIdsOf = (tiers: readonly PlannedTier[], tier: "member" | "roster"): string[] =>
@@ -318,7 +320,12 @@ export interface TierPromotion {
  *
  *  So the refusal is here rather than a repair: what a half-finished deploy
  *  left is not a state publish can reason about, and deploying again is one
- *  command. */
+ *  command.
+ *
+ *  It is checked on a `deployId` rather than on the CLOCK. `publishedAt` is a
+ *  millisecond, and a millisecond is not an identity: two deploys can share one
+ *  (a coarse clock, two runs at once, the injected `now` a test uses), and then
+ *  a mixed set compares equal and passes. A per-run UUID cannot. */
 function stagedProblems(aid: string, tier: "member" | "roster", staged: readonly { id: string; data: unknown }[]): string[] {
   const at = `apps/${aid}/${tier}`;
   const config = staged.find((doc) => doc.id === "staged:config");
@@ -336,8 +343,14 @@ function stagedProblems(aid: string, tier: "member" | "roster", staged: readonly
         ];
   }
   const settings = isRecord(config.data) ? config.data : {};
-  const stamp = settings.publishedAt;
+  const deployId = settings.deployId;
   const declared = Array.isArray(settings.views) ? settings.views : [];
+  if (typeof deployId !== "string") {
+    return [
+      `${at}/staged:config carries no deployId, so there is no way to tell which deploy its pages came from. Deploy again — publish promotes a set it can ` +
+        "check, and this is not one. Nothing was written.",
+    ];
+  }
   return declared.flatMap((view) => {
     if (!isRecord(view) || typeof view.id !== "string") return [];
     const page = staged.find((doc) => doc.id === `staged:${view.id}`);
@@ -347,7 +360,7 @@ function stagedProblems(aid: string, tier: "member" | "roster", staged: readonly
           "Deploy again — publish promotes what the roster reviewed, and this is not it. Nothing was written.",
       ];
     }
-    if (typeof stamp === "number" && isRecord(page.data) && page.data.publishedAt !== stamp) {
+    if (!isRecord(page.data) || page.data.deployId !== deployId) {
       return [
         `${at}/staged:${view.id} was staged by a different deploy from ${at}/staged:config. A deploy stopped between the two, so the page and the datasets it ` +
           "would be handed do not belong together. Deploy again. Nothing was written.",
