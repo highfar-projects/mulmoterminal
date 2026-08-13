@@ -20,7 +20,7 @@
 //   IT MUST BE DELETED, not merely stopped being written. `config/{docId}` is
 //   `allow read: if true` forever: withdraw `public.view` from the declaration
 //   and the old page stays fetchable by anyone until something removes it.
-import { readFile, realpath, stat } from "node:fs/promises";
+import { constants, open, realpath } from "node:fs/promises";
 import path from "node:path";
 
 import type { AuthoredApp } from "@mulmoclaude/core/collection/server";
@@ -80,67 +80,84 @@ const HOST_VIEW_GLOBAL = "__MC_VIEW";
 export async function readPublicViewFile(root: string, view: { path: string }, publishedAt: number): Promise<ViewFileResult> {
   const inside = await containedPath(root, view.path);
   if (!inside.ok) return inside;
-  const full = inside.full;
-  const problems = await missingFileProblems(full, view.path);
-  if (problems.length > 0) return { ok: false, problems };
 
-  // Between the stat above and this read the file can go: deleted, or its
-  // permissions changed. The gate's whole contract is that it answers with
-  // problems and writes nothing, so a rejection escaping here would come out of
-  // publish as an exception instead — the one shape every caller is written not
-  // to expect.
-  const html = await readFile(full, "utf8").catch(() => null);
-  if (html === null) {
+  const opened = await openContained(inside.full, view.path);
+  if (!opened.ok) return opened;
+  const bytes = viewDocumentBytes({ html: opened.html, publishedAt });
+  return contentProblems(opened.html, bytes, view.path) ?? { ok: true, view: { html: opened.html, bytes } };
+}
+
+/** Read the file, through a handle that cannot be talked into reading another
+ *  one.
+ *
+ *  Checking the path and then reading the path resolves it TWICE, and the
+ *  second one is what gets published: a process that swaps the validated file
+ *  for a symlink in between wins, and what lands on the world-readable document
+ *  is whatever the link points at. So the containment check and the bytes have
+ *  to be about the same object.
+ *
+ *  `O_NOFOLLOW` refuses at open time if the last component is a link, and
+ *  everything after that — the type check and the read — goes through the
+ *  descriptor rather than the name. The remaining theoretical window is an
+ *  ANCESTOR directory replaced between `realpath` and this open; Node exposes
+ *  no `openat`, so that one is named rather than closed.
+ *
+ *  Errors are values here for the same reason as everywhere else in this gate:
+ *  publish answers with problems and writes nothing. */
+async function openContained(full: string, declared: string): Promise<{ ok: true; html: string } | { ok: false; problems: string[] }> {
+  let handle;
+  try {
+    handle = await open(full, constants.O_RDONLY | constants.O_NOFOLLOW);
+  } catch {
     return {
       ok: false,
       problems: [
-        `public.view.path names '${view.path}', which could not be read. ` +
-          "It was there a moment ago, so it has just been removed or its permissions have changed. Nothing was written.",
+        `public.view.path names '${declared}', which could not be opened as a plain file in this repository. ` +
+          "A published view is read without following links — what gets published is world-readable, so the file checked and the file read have to be the same one. " +
+          "If it was there a moment ago, it has just been removed, replaced, or had its permissions changed. Nothing was written.",
       ],
     };
   }
-  const bytes = viewDocumentBytes({ html, publishedAt });
-  return contentProblems(html, bytes, view.path) ?? { ok: true, view: { html, bytes } };
+  try {
+    const info = await handle.stat();
+    if (!info.isFile()) {
+      return { ok: false, problems: [`public.view.path names '${declared}', which is not a file.`] };
+    }
+    return { ok: true, html: await handle.readFile("utf8") };
+  } catch {
+    return {
+      ok: false,
+      problems: [`public.view.path names '${declared}', which could not be read. Nothing was written.`],
+    };
+  } finally {
+    await handle.close().catch(() => {});
+  }
 }
 
-/** The file this path REALLY names, and only if it is still in the repository.
+/** Where the file must be, resolved ONCE, and the name it must have there.
  *
- *  Not a second opinion about the declaration's shape — publish already refuses
- *  a path that is not one name under `views/`. This is about what the file
- *  system does with it: `..` normalises away silently, and a symlink no regex
- *  can see points wherever it likes. What is published lands on a document
- *  whose rule is `allow read: if true`, so a mistake here is not a broken page
- *  but somebody's `.env` handed to the world.
+ *  The directory is resolved with `realpath` (so a repository reached through a
+ *  symlinked parent is still judged fairly) and must be inside the repository.
+ *  The BASENAME is deliberately left unresolved: resolving it would follow a
+ *  link and hand back its target, so the check would be about one file and the
+ *  read about another. Following it is refused outright at the open below.
  *
- *  Both ends are resolved (`realpath`) before comparing, because a repository
- *  reached through a symlinked parent would otherwise fail this test while
- *  being entirely legitimate. */
+ *  What is published lands on a document whose rule is `allow read: if true`,
+ *  so a mistake here is not a broken page but somebody's `.env` handed out. */
 async function containedPath(root: string, declared: string): Promise<{ ok: true; full: string } | { ok: false; problems: string[] }> {
   const real = await realpath(root).catch(() => path.resolve(root));
-  const full = await realpath(path.resolve(real, declared)).catch(() => path.resolve(real, declared));
-  if (full === real || full.startsWith(real + path.sep)) {
-    return { ok: true, full };
+  const wanted = path.resolve(real, declared);
+  const dir = await realpath(path.dirname(wanted)).catch(() => path.dirname(wanted));
+  if (dir === real || dir.startsWith(real + path.sep)) {
+    return { ok: true, full: path.join(dir, path.basename(wanted)) };
   }
   return {
     ok: false,
     problems: [
       `public.view.path names '${declared}', which resolves outside this repository. ` +
-        "A published view is one file inside it — what gets published is world-readable, so a path that leaves (through `..`, or through a symlink) would hand out whatever it landed on.",
+        "A published view is one file inside it — what gets published is world-readable, so a path that leaves (through `..`, or through a symlinked directory) would hand out whatever it landed on.",
     ],
   };
-}
-
-async function missingFileProblems(full: string, declared: string): Promise<string[]> {
-  try {
-    const info = await stat(full);
-    if (info.isFile()) return [];
-    return [`public.view.path names '${declared}', which is not a file.`];
-  } catch {
-    return [
-      `public.view.path names '${declared}', which does not exist in this repository. ` +
-        "The public page has nothing to draw and would tell a visitor there is nothing here.",
-    ];
-  }
 }
 
 function contentProblems(html: string, bytes: number, declared: string): { ok: false; problems: string[] } | null {

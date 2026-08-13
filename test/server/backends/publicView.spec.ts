@@ -47,7 +47,21 @@ describe("the file a published view names", () => {
     // and the visitor is told there is nothing here.
     const result = await readPublicViewFile(root, { path: "views/missing.html" }, STAMP);
     expect(result.ok).toBe(false);
-    expect(result.ok === false && result.problems.join(" ")).toContain("does not exist in this repository");
+    expect(result.ok === false && result.problems.join(" ")).toContain("could not be opened as a plain file");
+  });
+
+  it("refuses to READ through a symlink, even one that stays inside", async () => {
+    // The second layer, and the one that survives a race: checking the path
+    // and then reading the path resolves it twice, so a process that swaps the
+    // validated file for a link in between wins. This link points at a file in
+    // the repository — containment has nothing to object to — and the read
+    // still refuses, because it goes through a handle opened with O_NOFOLLOW.
+    writeFileSync(path.join(root, "inside.html"), "<p>inside</p>");
+    mkdirSync(path.join(root, "views"), { recursive: true });
+    symlinkSync(path.join(root, "inside.html"), path.join(root, "views", "booking.html"));
+    const result = await readPublicViewFile(root, { path: "views/booking.html" }, STAMP);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.problems.join(" ")).toContain("without following links");
   });
 
   it("refuses a page written against the HOST's bridge", async () => {
@@ -88,13 +102,17 @@ describe("the file a published view names", () => {
   it("refuses a view that is a symlink out of the repository", async () => {
     // No regex over the declaration can see this one: the path is a perfectly
     // ordinary `views/<name>.html`, and the file system does the leaving.
+    //
+    // It is refused for being a LINK rather than for where it points, which is
+    // the stronger of the two: the check and the read are then about the same
+    // object, so swapping the file for a link after validation wins nothing.
     const secret = path.join(root, "..", "secret.html");
     writeFileSync(secret, "<p>secret</p>");
     mkdirSync(path.join(root, "views"), { recursive: true });
     symlinkSync(secret, path.join(root, "views", "leak.html"));
     const result = await readPublicViewFile(root, { path: "views/leak.html" }, STAMP);
     expect(result.ok).toBe(false);
-    expect(result.ok === false && result.problems.join(" ")).toContain("resolves outside this repository");
+    expect(result.ok === false && result.problems.join(" ")).toContain("without following links");
   });
 
   it("refuses, rather than throwing, when the file goes between stat and read", async () => {
@@ -106,7 +124,7 @@ describe("the file a published view names", () => {
     const result = await readPublicViewFile(root, { path: declared }, STAMP);
     chmodSync(path.join(root, "views", "booking.html"), 0o644);
     expect(result.ok).toBe(false);
-    expect(result.ok === false && result.problems.join(" ")).toContain("could not be read");
+    expect(result.ok === false && result.problems.join(" ")).toContain("Nothing was written");
   });
 
   it("takes a page that only mentions the PUBLIC bridge", async () => {
