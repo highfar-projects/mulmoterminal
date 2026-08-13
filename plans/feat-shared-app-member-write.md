@@ -1,6 +1,8 @@
 # 共有アプリ: 名簿の人が「書く」— 承認・担当の付け替えと、参加者の入口
 
-**状態**: 設計（2026-08-13）。[`feat-shared-app-member-view.md`](./feat-shared-app-member-view.md)
+**状態**: 実装中（2026-08-13）。core mulmoclaude#2891（3.15.0、npm 未公開）/
+ランタイム mulmoserver#171 / スキルとテンプレートはこの PR。**ルールの変更は無い**。
+[`feat-shared-app-member-view.md`](./feat-shared-app-member-view.md)
 が残した 2 つの宿題 — **メンバーからの書き込み**と**participant の入口** — を 1 つの計画にする。
 どちらも同じところに着地するので分けない: 「書く」の中身は participant にもあり
 （自分の予約を取り消す）、入口を決めないとその書き込みの置き場所が決まらない。
@@ -226,11 +228,15 @@ after[c.statusField] == mc.on[template].to
 
 **ルールの変更は無い**（上記）。だから手 deploy を待つ段が無く、順は 3 つ:
 
-| | 1 宣言・射影 | 2 ランタイム | 3 ホスト |
-|---|---|---|---|
-| mulmoclaude core | 階層ごとの遷移表・`assignees`・`mail` を `{tier}/config` に載せる | — | — |
-| mulmoserver | — | 意図の受け口、`/p/{slug}`、`/a/` の導線 | — |
-| mulmoterminal | — | — | テンプレート、スキル、publish のテスト |
+| | 1 宣言・射影 | 2 ランタイム | 3 ホスト | PR |
+|---|---|---|---|---|
+| mulmoclaude core | 階層ごとの遷移表・`assignees`・`mail` を `{tier}/config` に載せる | — | — | #2891 |
+| mulmoserver | — | 意図の受け口、`/p/{slug}`、`/a/` の導線 | — | #171 |
+| mulmoterminal | — | — | テンプレート、スキル | この PR |
+
+publish 側のコードは増えない（core の射影をそのまま書く）。増えるのは**テスト**で、
+それは **core 3.15.0 が npm に出てから** — いま MT が見ているのは 3.14.0 で、
+`write` がまだ存在しない。
 
 **2 は 3 より先**（前回と同じ理由: 古いランタイムに新しい射影を publish すると、
 名簿の人は「何もありません」を見て、publish した本人には成功に見える）。
