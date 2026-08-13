@@ -9,6 +9,7 @@ import { planToolResultUpdate } from "./toolResultPlan.js";
 import { stampCardScope, priorCardOf } from "./stampCardScope.js";
 import { cwdForSession } from "../session/session-cwd.js";
 import { groupOfTool, type ToolGroup } from "../../common/toolGroups.js";
+import { openQuestionOf } from "../../common/askQuestion.js";
 
 export interface ToolSummary {
   toolName: string;
@@ -43,6 +44,8 @@ export interface ToolRouteDeps {
   guiOnlyHistory: (sessionId: string) => boolean;
   publish: (channel: string, data: unknown) => void;
   sessionChannel: (id: string) => string;
+  /** Whether the question pane is switched on — the same gate the publisher uses. */
+  questionPaneEnabled: () => boolean;
 }
 
 // An UNGROUPED tool (spawnBackgroundChat) belongs to no group URL, so it cannot have reached a
@@ -103,6 +106,18 @@ export function mountToolRoutes(app: Express, deps: ToolRouteDeps): void {
       console.log(`[gui] toolResult ${plan.toolName} for ${plan.sessionId}`);
     }
     res.json({ ok: true });
+  });
+
+  // The dialog a session is blocked on RIGHT NOW (#1679), rebuilt from the tool-call history the
+  // hooks already write. The pane's channel is event-only and usePubSub replays nothing, so a
+  // browser that reloads (or reconnects) between the question and its answer arrives blind — and
+  // since nothing but an arriving question opens the pane, that dialog becomes unanswerable from
+  // the browser. Answers null while the switch is off, like the publisher.
+  app.get("/api/question/:sessionId", async (req, res) => {
+    const { sessionId } = req.params;
+    if (!SESSION_ID_RE.test(sessionId)) return res.status(400).json({ error: "invalid sessionId" });
+    if (!deps.questionPaneEnabled()) return res.json({ question: null });
+    res.json({ question: openQuestionOf(await deps.stores.toolCallsStore.get(sessionId), sessionId) });
   });
 
   // Replay a session's stored toolResults so the panel can render them when the

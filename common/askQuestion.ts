@@ -69,6 +69,32 @@ export const isAskQuestionEvent = (data: unknown): data is AskQuestionEvent =>
 
 export const isAskQuestionDone = (data: unknown): data is AskQuestionDone => identifiesADialog(data) && data.done === true;
 
+// The close is published even while the pane is switched OFF, and only the offer is gated.
+// Turning the switch off mid-dialog would otherwise strand a pane that is already showing
+// buttons: the dialog closes, nothing says so, and the next click sends Down/Enter into the
+// prompt underneath — the exact stale-input case the close exists to prevent. A close for a
+// question that was never offered is a no-op in the pane, so this costs nothing when the switch
+// was off all along, and it carries no question text either way.
+export const shouldPublishQuestion = (event: AskQuestionEvent | AskQuestionDone, paneEnabled: boolean): boolean => isAskQuestionDone(event) || paneEnabled;
+
+/** As much of a recorded tool call as picking the open dialog out of a history needs. */
+export interface RecordedCall {
+  toolUseId?: string | undefined;
+  toolName?: string | undefined;
+  toolInput?: unknown;
+  status?: string | undefined;
+}
+
+// The dialog a session is blocked on right now, rebuilt from its tool-call history. The pane's
+// channel is event-only and replays nothing on reconnect, so a browser that reloads between the
+// question and its answer would otherwise never learn about a session that is waiting — and with
+// no button to open the pane, that question becomes unanswerable from the browser entirely.
+export const openQuestionOf = (calls: readonly RecordedCall[], sessionId: string): AskQuestionEvent | null => {
+  const open = [...calls].reverse().find((call) => call.toolName === ASK_QUESTION_TOOL && call.status === "running" && call.toolUseId);
+  const questions = open ? parseAskQuestions(open.toolInput) : null;
+  return questions && open?.toolUseId ? { sessionId, toolUseId: open.toolUseId, questions } : null;
+};
+
 const KEY_DOWN = "\x1b[B";
 const KEY_ENTER = "\r";
 

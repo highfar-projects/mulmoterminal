@@ -4,7 +4,15 @@
 // schema does not mention ("Type something", "Submit") and only three of the four question
 // shapes end with a review screen. Derived from the schema alone, the sequences are wrong.
 import { describe, it, expect } from "vitest";
-import { parseAskQuestions, keysForAnswers, isAskQuestionEvent, type AskQuestion } from "../../common/askQuestion";
+import {
+  parseAskQuestions,
+  keysForAnswers,
+  isAskQuestionEvent,
+  openQuestionOf,
+  shouldPublishQuestion,
+  type AskQuestion,
+  type AskQuestionDone,
+} from "../../common/askQuestion";
 
 const DOWN = "\x1b[B";
 const ENTER = "\r";
@@ -132,5 +140,51 @@ describe("keysForAnswers", () => {
   it("refuses multi-select picks that are not ascending", () => {
     expect(keysForAnswers([multi(["a", "b", "c"])], [[2, 0]])).toBeNull();
     expect(keysForAnswers([multi(["a", "b", "c"])], [[1, 1]])).toBeNull();
+  });
+});
+
+describe("shouldPublishQuestion", () => {
+  const offer = { sessionId: "s", toolUseId: "t", ...CAPTURED };
+  const close: AskQuestionDone = { sessionId: "s", toolUseId: "t", done: true };
+
+  it("offers a question only while the pane is switched on", () => {
+    expect(shouldPublishQuestion(offer, true)).toBe(true);
+    expect(shouldPublishQuestion(offer, false)).toBe(false);
+  });
+
+  // The regression this exists for: the switch turned off DURING a dialog that was already
+  // offered. Gating the close too would leave the pane holding live buttons over a dialog that
+  // has since closed, where the next click walks the prompt's input history and submits it.
+  it("closes a dialog even when the pane has been switched off since", () => {
+    expect(shouldPublishQuestion(close, false)).toBe(true);
+    expect(shouldPublishQuestion(close, true)).toBe(true);
+  });
+});
+
+describe("openQuestionOf", () => {
+  const running = { toolUseId: "t1", toolName: "AskUserQuestion", toolInput: CAPTURED, status: "running" };
+
+  it("rebuilds the dialog a session is still blocked on", () => {
+    expect(openQuestionOf([{ toolUseId: "b", toolName: "Bash", toolInput: {}, status: "completed" }, running], "s1")).toEqual({
+      sessionId: "s1",
+      toolUseId: "t1",
+      questions: CAPTURED.questions,
+    });
+  });
+
+  it("ignores a question that has already been answered", () => {
+    expect(openQuestionOf([{ ...running, status: "completed" }], "s1")).toBeNull();
+    expect(openQuestionOf([{ ...running, status: "failed" }], "s1")).toBeNull();
+    expect(openQuestionOf([], "s1")).toBeNull();
+  });
+
+  // Two dialogs cannot be open at once, but a history holding an unfinished older entry (a hook
+  // that never reported its end) must not win over the one that is actually on screen.
+  it("takes the most recent open question", () => {
+    expect(openQuestionOf([running, { ...running, toolUseId: "t2" }], "s1")?.toolUseId).toBe("t2");
+  });
+
+  it("ignores every other running tool", () => {
+    expect(openQuestionOf([{ toolUseId: "b", toolName: "Bash", toolInput: { command: "ls" }, status: "running" }], "s1")).toBeNull();
   });
 });

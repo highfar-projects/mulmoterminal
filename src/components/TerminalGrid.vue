@@ -46,6 +46,7 @@ import { hasCanvasGroup, hasCollectionsGroup } from "../../common/toolGroups";
 import type { RightPane } from "./gridCell";
 import QuestionPane from "./QuestionPane.vue";
 import { ASK_QUESTION_CHANNEL, isAskQuestionDone, isAskQuestionEvent, keysForAnswers, type AskQuestionEvent } from "../../common/askQuestion";
+import { fetchOpenQuestion } from "../composables/openQuestion";
 import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
 import { isRecord } from "../../common/isRecord";
 import type { SessionAgent, TerminalAgent } from "../../common/sessionAgent";
@@ -450,7 +451,7 @@ const expandedSessionId = computed(() => props.cells.find((c) => c.uid === props
 //
 // It re-opens every time, including after the user closed the pane by hand: closing is how you
 // dismiss the drawing in front of you, not a standing preference against the next one.
-const { subscribe: subscribeSession } = usePubSub();
+const { subscribe: subscribeSession, onReconnect: onPubSubReconnect } = usePubSub();
 let unsubscribeDrawn: (() => void) | undefined;
 
 watch(
@@ -509,13 +510,38 @@ const unsubscribeQuestion = subscribeSession(ASK_QUESTION_CHANNEL, (data) => {
 });
 onBeforeUnmount(() => unsubscribeQuestion());
 
+// The question a session is blocked on, for a browser that was not listening when it arrived — a
+// reload or a socket reconnect between the question and its answer. The channel replays nothing,
+// and nothing but an arriving question opens this pane, so without this ask the dialog cannot be
+// answered from the browser at all. Dropped if the zoom moved while the fetch was in flight, or if
+// the live channel got there first.
+async function hydrateQuestion(sessionId: string): Promise<void> {
+  if (questionBySession.value.has(sessionId)) return;
+  const open = await fetchOpenQuestion(sessionId);
+  if (!open || expandedSessionId.value !== sessionId || questionBySession.value.has(sessionId)) return;
+  setQuestion(sessionId, open);
+}
+
 // A question that arrived while its cell was tiled — or on another page of the grid — still has a
 // session blocked on it, so enlarging that cell is when to show it. Nothing else opens this pane:
 // it has no header button, because a control for the rare case would sit in every cell's chrome
 // forever, and the moment the question lands is the only other time it opens itself.
-watch(expandedSessionId, (sessionId) => {
-  if (sessionId && questionBySession.value.has(sessionId)) setRightPane("question", props.expandedUid);
+watch(
+  expandedSessionId,
+  async (sessionId) => {
+    if (!sessionId) return;
+    await hydrateQuestion(sessionId);
+    if (questionBySession.value.has(sessionId)) setRightPane("question", props.expandedUid);
+  },
+  { immediate: true },
+);
+
+// A reconnect is the other way to have missed one: pub/sub replays room membership, not the events
+// that landed while the socket was down.
+const unsubscribeQuestionReconnect = onPubSubReconnect(() => {
+  if (expandedSessionId.value) void hydrateQuestion(expandedSessionId.value);
 });
+onBeforeUnmount(() => unsubscribeQuestionReconnect());
 
 // Answering the enlarged cell's dialog: the picks become the keystrokes that drive the REAL
 // dialog, still on screen in the terminal underneath (common/askQuestion.ts holds the sequences,
