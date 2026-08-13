@@ -437,12 +437,18 @@ export async function planTierPromotion(
 export const promotionWrites = (handle: SharedAppHandle, aid: string, tiers: readonly TierPromotion[]): WriteStep[] =>
   tiers.flatMap((tier) => {
     const at = appViewTierPath(aid, tier.tier);
+    // The same order deploy uses, and for the same reason: the PAGES first,
+    // then the settings that name them. The listing these came from is by
+    // document id, which puts `config` before every page — so without this the
+    // first publish of a tier could advertise a page that is not there yet if
+    // the run stopped in between.
+    const promote = [...tier.promote.filter((entry) => !entry.docId.endsWith(":config")), ...tier.promote.filter((entry) => entry.docId.endsWith(":config"))];
     return [
-      ...tier.promote.map((entry) => ({
+      ...promote.map((entry) => ({
         what: `the ${tier.tier} page (${at}/${entry.docId})`,
         run: () => handle.docs.set(at, entry.docId, entry.data),
       })),
-      ...tier.stale.map((docId) => tierDelete(handle, aid, tier.tier, docId)),
+      ...withdrawalOrder(tier.stale).map((docId) => tierDelete(handle, aid, tier.tier, docId)),
     ];
   });
 

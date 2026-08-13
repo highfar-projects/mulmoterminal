@@ -812,6 +812,19 @@ describe("shared app deploy / publish / unpublish", () => {
     expect(result.ok === false && result.problems.join(" ")).toContain("staged by a different deploy");
   });
 
+  it("publishes the pages before the settings that name them", async () => {
+    // The listing these come from is ordered by document id, which puts
+    // `config` before every page — so the order has to be imposed rather than
+    // inherited, or a first publish that stops part-way advertises a page that
+    // is not there.
+    withPages();
+    await deploySharedApp(root, stamp);
+    docs.writes.length = 0;
+    await publishSharedApp(root, stamp);
+    const wrote = docs.writes.filter((line) => line.includes(`apps/${AID}/member/live:`));
+    expect(wrote.indexOf(`set apps/${AID}/member/live:desk`)).toBeLessThan(wrote.indexOf(`set apps/${AID}/member/live:config`));
+  });
+
   it("stages the pages before the settings that name them", async () => {
     // The order decides what a half-finished deploy leaves: a page nobody has
     // been told about (invisible, harmless) rather than a name pointing at a
