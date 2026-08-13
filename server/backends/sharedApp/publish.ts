@@ -255,7 +255,9 @@ async function pageGate(
   // The collection half is read from what DEPLOY staged, because that is what
   // this publish promotes: `stagedRuleConfig` is the same function the
   // projection uses, so the value judged is the value written.
-  const frozen = await frozenKeyProblems(authored, stagedRuleConfig(staged).collections ?? {}, live, handle);
+  // Copied because `stagedRuleConfig` takes a mutable array; the entries
+  // themselves are not touched.
+  const frozen = await frozenKeyProblems(authored, stagedRuleConfig([...staged]).collections ?? {}, live, handle);
   if (frozen.length > 0) return { ok: false, problems: frozen };
   return { ok: true, view: view === null ? null : view.view };
 }
