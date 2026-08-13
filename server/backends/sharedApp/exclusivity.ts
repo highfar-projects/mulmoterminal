@@ -81,7 +81,9 @@ const canonical = (value: unknown): unknown => {
   if (!isRecord(value)) return value;
   return Object.fromEntries(
     Object.keys(value)
-      .sort()
+      // A stable order is all this needs — the strings are never shown, only
+      // compared with another canonicalisation of the same shape.
+      .sort((left, right) => left.localeCompare(right))
       .map((key) => [key, canonical(value[key])]),
   );
 };
