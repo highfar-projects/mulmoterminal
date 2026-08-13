@@ -11,5 +11,6 @@ export interface EslintResult {
   messages: EslintMessage[];
 }
 
+export function bar(count: number, max: number): string;
 export function parseEslintJson(text: string): EslintResult[];
 export function renderReport(results: EslintResult[], cwd?: string): string;

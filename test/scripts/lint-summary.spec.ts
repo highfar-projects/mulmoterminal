@@ -2,11 +2,32 @@
 import { describe, it, expect } from "vitest";
 import path from "node:path";
 
-import { parseEslintJson, renderReport } from "../../scripts/lint-summary.mjs";
+import { bar, parseEslintJson, renderReport } from "../../scripts/lint-summary.mjs";
 
 const result = (filePath: string, ruleId = "max-lines", severity = 2) => ({
   filePath,
   messages: [{ ruleId, severity }],
+});
+
+const BLOCK = "█";
+
+describe("bar", () => {
+  // `Math.max(1, …)` exists so one finding beside five hundred still draws
+  // something. Reached with a count of zero it invented a block, and the row read
+  // as the smallest non-empty one rather than as empty.
+  it("draws nothing for a count of zero", () => {
+    expect(bar(0, 5)).toBe("");
+    expect(bar(0, 0)).toBe("");
+  });
+
+  it("still draws one block for the smallest non-zero count", () => {
+    expect(bar(1, 500)).toBe(BLOCK);
+  });
+
+  it("scales the full width to the maximum", () => {
+    expect(bar(500, 500)).toBe(BLOCK.repeat(24));
+    expect(bar(250, 500)).toBe(BLOCK.repeat(12));
+  });
 });
 
 describe("parseEslintJson", () => {
