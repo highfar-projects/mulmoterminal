@@ -756,6 +756,34 @@ describe("shared app deploy / publish / unpublish", () => {
     expect(docs.doc(`apps/${AID}/member`, "live:desk")).toBeUndefined();
   });
 
+  it("promotes what the settings name, not whatever is lying in the tier", async () => {
+    // A redeploy that drops a page writes the new settings and then deletes the
+    // old staged document. If that deletion fails, the settings are perfectly
+    // coherent and the withdrawn page is still there — promoting everything
+    // staged would put it back, live and named by nothing.
+    withPages();
+    writeFileSync(path.join(root, "views", "stock.html"), "<p>stock room</p>");
+    const member = (ids: string[]) =>
+      declaration({
+        participantRead: ["bookings"],
+        views: ids.map((id) => ({ id, audience: "member", path: `views/${id}.html`, collections: ["bookings"] })),
+      });
+    // The tier KEEPS a page, so its settings are still there and still
+    // coherent — this is not the withdrawn-tier case above.
+    writeApp(root, member(["desk", "stock"]));
+    await deploySharedApp(root, stamp);
+    writeApp(root, member(["stock"]));
+    await deploySharedApp(root, stamp);
+    // The deletion that failed, reproduced: the page is back in the tier while
+    // the settings say nothing about it.
+    await docs.set(`apps/${AID}/member`, "staged:desk", { html: "<p>withdrawn</p>", publishedAt: 1 });
+
+    const result = await publishSharedApp(root, stamp);
+    expect(result.ok === false ? result.problems : []).toEqual([]);
+    expect(docs.doc(`apps/${AID}/member`, "live:desk")).toBeUndefined();
+    expect(result.ok && result.memberPages).toEqual(["stock"]);
+  });
+
   it("withdraws the settings last, so a stopped run never leaves a name with nothing behind it", async () => {
     withPages();
     await deploySharedApp(root, stamp);

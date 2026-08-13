@@ -357,6 +357,21 @@ function stagedProblems(aid: string, tier: "member" | "roster", staged: readonly
   });
 }
 
+/** The staged documents this publish promotes: the settings, and exactly the
+ *  pages they name.
+ *
+ *  Everything else staged is left where it is. It is deploy's to tidy — the
+ *  next one repeats the deletion that failed — and until then it is invisible:
+ *  nothing lists a page the settings do not name, here or at `/staging/{aid}`. */
+function promotable(staged: readonly { id: string; data: unknown }[]): { id: string; data: unknown }[] {
+  const config = staged.find((doc) => doc.id === "staged:config");
+  if (config === undefined) return [];
+  const settings = isRecord(config.data) ? config.data : {};
+  const declared = Array.isArray(settings.views) ? settings.views : [];
+  const wanted = new Set(declared.flatMap((view) => (isRecord(view) && typeof view.id === "string" ? [`staged:${view.id}`] : [])));
+  return staged.filter((doc) => doc.id === "staged:config" || wanted.has(doc.id));
+}
+
 export async function planTierPromotion(
   handle: SharedAppHandle,
   aid: string,
@@ -381,11 +396,19 @@ export async function planTierPromotion(
     const staged = existing.filter((doc) => doc.id.startsWith("staged:"));
     const incoherent = stagedProblems(aid, tier, staged);
     if (incoherent.length > 0) return { ok: false, partial: false, problems: incoherent };
+    // What the SETTINGS name, not what happens to be lying in the tier.
+    //
+    // A redeploy that drops a page writes the new settings and then deletes the
+    // old `staged:` document; if that deletion fails, the settings are perfectly
+    // coherent and the withdrawn page is still there. Promoting everything
+    // staged would put it back — live, and named by nothing.
+    //
     // Re-stamped, like `promoteSchema`: the stamp answers "which version is
     // live right now", so it belongs to the operation that changes the answer.
-    // It also has to match across the projection and every page, because the
+    // It also has to match across the settings and every page, because the
     // runtime refuses to draw a pair that disagrees.
-    const promote = staged.map((doc) => ({
+    const named = promotable(staged);
+    const promote = named.map((doc) => ({
       docId: `live:${doc.id.slice("staged:".length)}`,
       data: { ...(isRecord(doc.data) ? doc.data : {}), publishedAt: stamp.publishedAt },
     }));
