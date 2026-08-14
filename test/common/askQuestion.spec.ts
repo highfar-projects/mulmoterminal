@@ -8,6 +8,7 @@ import {
   parseAskQuestions,
   keysForAnswers,
   keysToAnswerInWords,
+  readAnswerRequest,
   isAskQuestionEvent,
   openQuestionOf,
   shouldPublishQuestion,
@@ -223,5 +224,32 @@ describe("keysToAnswerInWords", () => {
   it("refuses to send nothing", () => {
     expect(keysToAnswerInWords([single(["Red", "Blue"])], "")).toBeNull();
     expect(keysToAnswerInWords([], "green")).toBeNull();
+  });
+});
+
+// The body of POST /api/question/:sessionId/answer, read by the server and written by every client
+// — so its shape lives in common/ rather than once per layer.
+describe("readAnswerRequest", () => {
+  it("reads a picks request and a words request", () => {
+    expect(readAnswerRequest({ toolUseId: "t1", picks: [[0], [1, 2]] })).toEqual({ toolUseId: "t1", picks: [[0], [1, 2]] });
+    expect(readAnswerRequest({ toolUseId: "t1", text: "green please" })).toEqual({ toolUseId: "t1", text: "green please" });
+  });
+
+  it("insists on the dialog it is answering", () => {
+    expect(readAnswerRequest({ picks: [[0]] })).toBeNull();
+    expect(readAnswerRequest(null)).toBeNull();
+    expect(readAnswerRequest({ toolUseId: 7 })).toBeNull();
+  });
+
+  // Dropped to an empty row rather than coerced: the host then refuses it, and a coerced pick is a
+  // keystroke aimed at a row nobody chose.
+  it("does not invent picks out of what it cannot read", () => {
+    expect(readAnswerRequest({ toolUseId: "t1", picks: ["nope"] })).toEqual({ toolUseId: "t1", picks: [[]] });
+    expect(readAnswerRequest({ toolUseId: "t1", picks: [[0, "x"]] })).toEqual({ toolUseId: "t1", picks: [[0]] });
+    expect(readAnswerRequest({ toolUseId: "t1", picks: "nope" })).toEqual({ toolUseId: "t1", picks: [] });
+  });
+
+  it("carries no text when none was sent", () => {
+    expect(readAnswerRequest({ toolUseId: "t1", text: 7 })).toEqual({ toolUseId: "t1" });
   });
 });

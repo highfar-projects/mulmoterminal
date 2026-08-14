@@ -9,9 +9,8 @@ import { planToolResultUpdate } from "./toolResultPlan.js";
 import { stampCardScope, priorCardOf } from "./stampCardScope.js";
 import { cwdForSession } from "../session/session-cwd.js";
 import { groupOfTool, type ToolGroup } from "../../common/toolGroups.js";
-import { openQuestionOf } from "../../common/askQuestion.js";
+import { openQuestionOf, readAnswerRequest } from "../../common/askQuestion.js";
 import { answerQuestionOnHost } from "../session/answerQuestionOnHost.js";
-import { isRecord } from "../../common/isRecord.js";
 
 export interface ToolSummary {
   toolName: string;
@@ -83,9 +82,9 @@ function mountAnswerRoute(app: Express, deps: ToolRouteDeps): void {
     const { sessionId } = req.params;
     if (!SESSION_ID_RE.test(sessionId)) return res.status(400).json({ error: "invalid sessionId" });
     if (!deps.questionPaneEnabled()) return res.status(409).json({ ok: false, reason: "closed" });
-    const body: unknown = req.body;
-    if (!isRecord(body) || typeof body.toolUseId !== "string") return res.status(400).json({ error: "toolUseId is required" });
-    const result = await answerQuestionOnHost(sessionId, body.toolUseId, body.picks, (id) => deps.stores.toolCallsStore.get(id), body.text);
+    const asked = readAnswerRequest(req.body);
+    if (!asked) return res.status(400).json({ error: "toolUseId is required" });
+    const result = await answerQuestionOnHost(sessionId, asked.toolUseId, asked.picks, (id) => deps.stores.toolCallsStore.get(id), asked.text);
     res.status(result.ok ? 200 : 409).json(result);
   });
 }

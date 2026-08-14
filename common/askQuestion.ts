@@ -119,6 +119,29 @@ export type AnswerFailure =
 
 export type AnswerResult = { ok: true } | { ok: false; reason: AnswerFailure };
 
+/** The body of `POST /api/question/:sessionId/answer`. The session comes from the route path, not
+ *  from here — a client names the dialog it is answering, never the session it belongs to. */
+export interface AnswerRequestBody {
+  toolUseId: string;
+  /** Chosen option indexes, one entry per question. */
+  picks?: number[][];
+  /** Or the user's own words, for the dialog's text row. */
+  text?: string;
+}
+
+/** Read a request body's SHAPE. Whether the picks or the words fit the dialog is decided against
+ *  the questions the host itself recorded — see server/session/answerQuestion.ts. */
+export const readAnswerRequest = (body: unknown): AnswerRequestBody | null => {
+  if (!isRecord(body) || typeof body.toolUseId !== "string") return null;
+  const text = typeof body.text === "string" ? { text: body.text } : {};
+  return { toolUseId: body.toolUseId, ...(body.picks === undefined ? {} : { picks: readPickRows(body.picks) }), ...text };
+};
+
+// Rows of numbers, or nothing. A row that is not that is dropped to `[]` rather than coerced: the
+// host then refuses it as bad-picks, and a coerced pick is a keystroke aimed at a row nobody chose.
+const readPickRows = (picks: unknown): number[][] =>
+  Array.isArray(picks) ? picks.map((row) => (Array.isArray(row) ? row.filter((idx): idx is number => typeof idx === "number") : [])) : [];
+
 export const isAnswerFailure = (value: unknown): value is AnswerFailure =>
   value === "closed" || value === "bad-picks" || value === "unwritable" || value === "partial";
 

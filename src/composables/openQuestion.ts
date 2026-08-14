@@ -1,5 +1,5 @@
 import { isRecord } from "../../common/isRecord";
-import { isAnswerFailure, isAskQuestionEvent, type AnswerFailure, type AskQuestionEvent } from "../../common/askQuestion";
+import { isAnswerFailure, isAskQuestionEvent, type AnswerFailure, type AnswerRequestBody, type AskQuestionEvent } from "../../common/askQuestion";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 const REQUEST_TIMEOUT_MS = 5000;
@@ -37,7 +37,7 @@ export async function postWords(sessionId: string, toolUseId: string, text: stri
   return postToAnswerRoute(sessionId, { toolUseId, text });
 }
 
-async function postToAnswerRoute(sessionId: string, body: Record<string, unknown>): Promise<AnswerFailure | null> {
+async function postToAnswerRoute(sessionId: string, body: AnswerRequestBody): Promise<AnswerFailure | null> {
   try {
     const res = await fetchWithTimeout(
       `/api/question/${encodeURIComponent(sessionId)}/answer`,
