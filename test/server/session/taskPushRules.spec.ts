@@ -4,34 +4,34 @@ import { describe, it, expect } from "vitest";
 import { buildPushDetail, pushWhere, shouldSuppressPush, wantsPushKind, NO_CWD_LABEL } from "../../../server/session/taskPushRules.js";
 
 describe("buildPushDetail", () => {
-  it("prefers the reply over the last prompt and the AI title", () => {
-    expect(buildPushDetail({ reply: "did the thing", lastPrompt: "do the thing", aiTitle: "the thing" })).toBe("did the thing");
+  it("prefers the reply over the AI title", () => {
+    expect(buildPushDetail({ reply: "did the thing", aiTitle: "the thing" })).toBe("did the thing");
   });
 
-  it("falls back to the last prompt when there is no reply", () => {
-    expect(buildPushDetail({ reply: null, lastPrompt: "do the thing", aiTitle: "the thing" })).toBe("do the thing");
-  });
-
-  it("falls back to the AI title when there is neither reply nor last prompt", () => {
-    expect(buildPushDetail({ reply: null, lastPrompt: undefined, aiTitle: "the thing" })).toBe("the thing");
+  it("falls back to the AI title when there is no reply", () => {
+    expect(buildPushDetail({ reply: null, aiTitle: "the thing" })).toBe("the thing");
   });
 
   // `||`, not `??`: an empty string at any tier means "nothing usable here", so it is skipped
   // rather than pinned as the body.
-  it("skips an empty-string reply and takes the last prompt", () => {
-    expect(buildPushDetail({ reply: "", lastPrompt: "do the thing", aiTitle: "the thing" })).toBe("do the thing");
-  });
-
-  it("skips an empty-string last prompt and takes the AI title", () => {
-    expect(buildPushDetail({ reply: null, lastPrompt: "", aiTitle: "the thing" })).toBe("the thing");
+  it("skips an empty-string reply and takes the AI title", () => {
+    expect(buildPushDetail({ reply: "", aiTitle: "the thing" })).toBe("the thing");
   });
 
   it("returns the empty string when nothing is present", () => {
-    expect(buildPushDetail({ reply: null, lastPrompt: undefined, aiTitle: undefined })).toBe("");
+    expect(buildPushDetail({ reply: null, aiTitle: undefined })).toBe("");
   });
 
   it("returns the empty string when every tier is empty", () => {
-    expect(buildPushDetail({ reply: "", lastPrompt: "", aiTitle: "" })).toBe("");
+    expect(buildPushDetail({ reply: "", aiTitle: "" })).toBe("");
+  });
+
+  // The user's own prompt was a tier here, between the reply and the title, and it is what the
+  // phone showed whenever the reply could not be read — their words read back to them, saying
+  // nothing about the turn (#1696). Nothing may put it back: the type no longer carries it, and
+  // this pins the reason so a later "the body is empty, use what we have" doesn't re-add it.
+  it("says nothing rather than reading the user's own prompt back to them", () => {
+    expect(buildPushDetail({ reply: null, aiTitle: undefined })).toBe("");
   });
 });
 
