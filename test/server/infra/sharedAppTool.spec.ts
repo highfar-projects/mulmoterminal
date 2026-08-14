@@ -167,12 +167,22 @@ describe("manageSharedApp, the tool", () => {
   // an address that opens nothing. It shipped that way: a published app was announced as "OPEN to
   // anonymous visitors at /meeting-rooms" while the booking page was at /a/meeting-rooms, and the
   // author went looking for the form at the URL the tool gave them.
-  it("prints every entrance under the prefix the router actually serves", () => {
+  //
+  // The ORIGIN is pinned for the same reason and cannot be inferred: this runs on the author's
+  // own machine, which is not where the app is served, so a path alone is nothing they can paste
+  // into an invitation.
+  it("prints every entrance absolute, under the prefix the router actually serves", () => {
     const source = readFileSync(new URL("../../../server/infra/shared-app-tool.ts", import.meta.url), "utf8");
-    const urls = [...source.matchAll(/(.{0,2})\/\$\{(?:result\.)?(?:slug|name)\}/g)];
+    const before = (index: number): string => source.slice(0, index);
+    // Every slug or aid written as a PATH SEGMENT is an entrance, whatever sentence it sits in.
+    const entrances = [...source.matchAll(/\$\{(?:result\.)?(?:slug|name|aid)\}/g)].filter((hit) => before(hit.index).endsWith("/"));
     // Not zero: a spec that passes because the strings were renamed out from under it is not a
-    // guard. Every one of them, and each under a/, m/ or p/.
-    expect(urls.length).toBeGreaterThan(3);
-    expect(urls.filter((url) => !/\/[amp]$/.test(url[1])).map((url) => url[0])).toEqual([]);
+    // guard. `apps/${aid}` is a Firestore path rather than an address, hence the `[amp]|staging`.
+    expect(entrances.length).toBeGreaterThan(4);
+    for (const hit of entrances) {
+      const path = before(hit.index).match(/(\$\{MULMOSERVER_ORIGIN\})?\/?([a-z]+)\/$/);
+      if (path?.[2] === "apps") continue;
+      expect(before(hit.index)).toMatch(/\$\{MULMOSERVER_ORIGIN\}\/(?:[amp]|staging)\/$/);
+    }
   });
 });

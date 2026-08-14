@@ -29,11 +29,13 @@ import { remoteHostAlarm, remoteHostView } from "./remoteHostView";
 import { usePubSub } from "../composables/usePubSub";
 import type { RunnerHealth } from "../../common/remoteHostHealth";
 import { isRecord } from "../../common/isRecord";
+import { MULMOSERVER_ORIGIN } from "../../common/firebaseConfig";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
-// Mobile companion PWA — shown in the dropdown as help text (not fetched here).
-const MOBILE_URL = "https://mulmoserver.web.app";
+// Mobile companion PWA — shown in the dropdown as help text (not fetched here). The origin is
+// shared with the server, which prints it into a shared app's addresses (see common/).
+const MOBILE_URL = MULMOSERVER_ORIGIN;
 // Rendered to a data URL (uqr output is ASCII-only SVG) so no v-html is needed.
 const qrDataUrl = `data:image/svg+xml;base64,${btoa(renderSVG(MOBILE_URL))}`;
 
