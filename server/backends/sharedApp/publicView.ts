@@ -90,12 +90,17 @@ const HOST_VIEW_GLOBAL = "__MC_VIEW";
  *  Exported so the shipped templates are held to the same reading as an author's page — a sample
  *  nobody can publish teaches a page nobody can use. */
 export const modalCallIn = (html: string): string | null => {
-  const code = html.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
-  const call = /(?<![\w.$])(?:(window|self|globalThis|top)\s*\.\s*)?(alert|confirm|prompt)\s*\(/.exec(code);
-  if (call === null) return null;
-  // A dotted call is only ours when the receiver above matched; anything else reached this regex
-  // by being undotted in the first place.
-  return call[1] === undefined ? (call[2] ?? null) : `${call[1]}.${call[2]}`;
+  // Whitespace is collapsed FIRST so the pattern below needs only ` ?` between its pieces: two
+  // adjacent `\s*` around the dot is the shape a linter reads as exponential backtracking, and it
+  // is not worth arguing with over a page-sized string.
+  const code = html
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/(^|[^:])\/\/[^\n]*/g, "$1")
+    .replace(/\s+/g, " ")
+    // The receivers that ARE the global: dropping them leaves the bare call the test below is
+    // about, and keeps that test one simple pattern.
+    .replace(/\b(?:window|self|globalThis|top) ?\. ?/g, "");
+  return /(?<![\w.$])(alert|confirm|prompt) ?\(/.exec(code)?.[1] ?? null;
 };
 
 /** Read and judge the file a view's `path` names.
