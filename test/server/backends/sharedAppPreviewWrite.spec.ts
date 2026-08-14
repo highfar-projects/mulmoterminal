@@ -1,0 +1,308 @@
+// @vitest-environment node
+//
+// The preview's STATE-CHANGING half: what a submission becomes in the database, and what taking it
+// back restores.
+//
+// Pinned here because these are the only operations in the feature that alter anything, and each of
+// them has a wrong version that looks identical from the pane:
+//
+//   the RECORD. The address is not the visitor's to type and the status is pinned to
+//   `initialStatus`; a host that wrote what the page sent and nothing else builds a document the
+//   rules refuse, and the refusal names nothing.
+//
+//   the ID. For `idFrom: "field"` it IS the thing being claimed. A random one would take nothing,
+//   successfully, while the slot stayed free.
+//
+//   CREATE, never overwrite. `items` carries `allow update` and the author is the owner, so a `set`
+//   on an id somebody already holds would silently replace a real visitor's booking with a test.
+//
+//   the MIRROR travels in the SAME write. The rules read it with `getAfter()`, so a pair written
+//   singly is refused — and an undo that deleted the record alone would leave the slot saying
+//   `taken` about a booking that no longer exists.
+import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { setFirestoreAccessor, setSharedCollectionsSupport, type FirestoreDocs, type FirestoreDoc } from "@mulmoclaude/core/collection/server";
+import { initCollectionsBackend } from "../../../server/backends/collections.js";
+import { undoPreviewSubmission, writePreviewSubmission } from "../../../server/backends/sharedApp/previewWrite.js";
+import { makeTempDir } from "../../support/tempDir";
+
+const AID = "app-under-write";
+const OWNER = { uid: "uid-owner", email: "owner@example.com" };
+
+/** Every operation a batch performed, in order. The ORDER and the PAIRING are the assertions — a
+ *  store that only kept final state would pass a host that wrote the two documents separately, and
+ *  that is precisely what the deployed rules refuse. */
+const batched: string[] = [];
+let batchFails = false;
+
+vi.mock("firebase/firestore", () => ({
+  collection: (_db: unknown, collectionPath: string) => ({ collectionPath }),
+  doc: (parent: { collectionPath: string }, docId: string) => ({ path: `${parent.collectionPath}/${docId}` }),
+  writeBatch: () => {
+    const ops: string[] = [];
+    return {
+      set: (ref: { path: string }, data: Record<string, unknown>) => ops.push(`set ${ref.path} ${JSON.stringify(data)}`),
+      update: (ref: { path: string }, data: Record<string, unknown>) => ops.push(`update ${ref.path} ${JSON.stringify(data)}`),
+      delete: (ref: { path: string }) => ops.push(`delete ${ref.path}`),
+      commit: () => {
+        if (batchFails) return Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }));
+        // Recorded only on COMMIT: an uncommitted batch changed nothing, and a test that counted
+        // the calls instead would pass on a host that built the pair and never sent it.
+        batched.push(...ops);
+        return Promise.resolve();
+      },
+    };
+  },
+}));
+
+vi.mock("../../../server/backends/remoteHost/session.js", () => ({ currentFirestore: () => ({}) }));
+
+class Docs implements FirestoreDocs {
+  readonly store = new Map<string, Map<string, Record<string, unknown>>>();
+  readonly writes: string[] = [];
+
+  private read(collectionPath: string): Map<string, Record<string, unknown>> {
+    return this.store.get(collectionPath) ?? new Map();
+  }
+  private bucket(collectionPath: string): Map<string, Record<string, unknown>> {
+    const existing = this.store.get(collectionPath);
+    if (existing) return existing;
+    const created = new Map<string, Record<string, unknown>>();
+    this.store.set(collectionPath, created);
+    return created;
+  }
+
+  list = (collectionPath: string): Promise<FirestoreDoc[]> =>
+    Promise.resolve([...this.read(collectionPath)].sort(([l], [r]) => (l < r ? -1 : 1)).map(([id, data]) => ({ id, data })));
+
+  get = (collectionPath: string, docId: string): Promise<unknown | null> => {
+    const existing = this.read(collectionPath).get(docId);
+    // The rules' shape: a missing app document is REFUSED, not absent.
+    if (collectionPath === "apps" && !existing) return Promise.reject(Object.assign(new Error("refused"), { code: "permission-denied" }));
+    return Promise.resolve(existing ?? null);
+  };
+
+  create = (collectionPath: string, docId: string, data: Record<string, unknown>): Promise<boolean> => {
+    this.writes.push(`create ${collectionPath}/${docId} ${JSON.stringify(data)}`);
+    if (this.read(collectionPath).has(docId)) return Promise.resolve(false);
+    this.bucket(collectionPath).set(docId, data);
+    return Promise.resolve(true);
+  };
+
+  set = (collectionPath: string, docId: string, data: Record<string, unknown>): Promise<void> => {
+    this.writes.push(`set ${collectionPath}/${docId}`);
+    this.bucket(collectionPath).set(docId, data);
+    return Promise.resolve();
+  };
+
+  delete = (collectionPath: string, docId: string): Promise<boolean> => {
+    this.writes.push(`delete ${collectionPath}/${docId}`);
+    return Promise.resolve(this.bucket(collectionPath).delete(docId));
+  };
+
+  watch = (): (() => void) => () => {};
+}
+
+let docs = new Docs();
+let root = "";
+
+const schemaFor = (slug: string, fields: Record<string, unknown>) => ({
+  title: slug,
+  icon: "star",
+  primaryKey: "id",
+  storage: { type: "firestore" },
+  fields: { id: { type: "string", label: "ID", primary: true, required: true }, ...fields },
+});
+
+function writeCollection(slug: string, fields: Record<string, unknown>): void {
+  mkdirSync(path.join(root, ".claude", "skills", slug), { recursive: true });
+  writeFileSync(path.join(root, ".claude", "skills", slug, "schema.json"), JSON.stringify(schemaFor(slug, fields)));
+}
+
+function writeApp(app: Record<string, unknown>): void {
+  writeFileSync(path.join(root, "app.json"), JSON.stringify(app));
+}
+
+/** A booking app shaped like the real one: the id is the slot, the address is stamped, the status is
+ *  pinned, and a mirror travels with the write. */
+const bookingApp = (over: Record<string, unknown> = {}) => ({
+  aid: AID,
+  name: "Rooms",
+  members: { [OWNER.email]: { "*": "owner" } },
+  collections: { bookings: { submitOnly: true, statusField: "status", transitions: { initial: ["booked"] } }, slots: { mirrorOf: "bookings" } },
+  public: {
+    enabled: true,
+    read: ["slots"],
+    submit: {
+      bookings: {
+        auth: "verifiedEmail",
+        emailField: "requesterEmail",
+        createFields: ["requesterName", "requesterEmail", "slot", "status"],
+        initialStatus: "booked",
+        idFrom: "field",
+        idField: "slot",
+        idIn: { collection: "slots", where: { field: "state", equals: "open" } },
+        mirror: "slots",
+        ...(over.submit ?? {}),
+      },
+    },
+  },
+});
+
+describe("shared app preview writes", () => {
+  beforeAll(() => {
+    initCollectionsBackend({ workspace: makeTempDir("mt-write-ws-") });
+    setSharedCollectionsSupport(true);
+    setFirestoreAccessor(() => ({ docs, email: OWNER.email, uid: OWNER.uid }));
+  });
+
+  beforeEach(() => {
+    docs = new Docs();
+    batched.length = 0;
+    batchFails = false;
+    root = makeTempDir("mt-write-");
+    writeCollection("bookings", {
+      requesterName: { type: "string", label: "Name", required: true },
+      requesterEmail: { type: "email", label: "Email", required: true },
+      slot: { type: "string", label: "Slot", required: true },
+      status: { type: "enum", label: "Status", values: ["booked"] },
+    });
+    writeCollection("slots", { state: { type: "enum", label: "State", values: ["open", "taken"], required: true } });
+    writeApp(bookingApp());
+    docs.store.set("apps", new Map([[AID, { owner: OWNER.uid, members: { [OWNER.email]: { "*": "owner" } }, memberEmails: [OWNER.email] }]]));
+    docs.store.set(`apps/${AID}/collections/slots/items`, new Map([["roomA-1000", { state: "open" }]]));
+  });
+
+  it("writes the record the DECLARATION describes, not the one the page sent", async () => {
+    const result = await writePreviewSubmission(root, "bookings", { requesterName: "客", slot: "roomA-1000" });
+
+    expect(result.ok === false ? result.error : "").toBe("");
+    const written = batched.find((op) => op.startsWith("set apps/"));
+    const record = JSON.parse(written?.slice(written.indexOf("{")) ?? "{}") as Record<string, unknown>;
+    // The address comes from the ACCOUNT — the rules compare it to the token, so a page that sent
+    // one could only get it wrong — and the status from `initialStatus`, in the field the
+    // collection names.
+    expect(record).toEqual({ requesterName: "客", slot: "roomA-1000", requesterEmail: OWNER.email, status: "booked" });
+  });
+
+  it("makes the id the thing being claimed, and pairs the mirror in ONE batch", async () => {
+    const result = await writePreviewSubmission(root, "bookings", { requesterName: "客", slot: "roomA-1000" });
+
+    expect(result.ok).toBe(true);
+    // Both operations, committed together. The rules read the second with `getAfter()`, so a pair
+    // written singly is refused — and a random id would have taken nothing while the slot stayed
+    // free.
+    expect(batched.map((op) => op.split(" ").slice(0, 2).join(" "))).toEqual([
+      `set apps/${AID}/collections/bookings/items/roomA-1000`,
+      `update apps/${AID}/collections/slots/items/roomA-1000`,
+    ]);
+    expect(batched[1]).toContain('"state":"taken"');
+    expect(result.ok && result.written).toEqual({ cid: "bookings", id: "roomA-1000", mirror: { cid: "slots", id: "roomA-1000" }, token: expect.any(String) });
+  });
+
+  it("refuses an id somebody already holds rather than replacing their record", async () => {
+    docs.store.set(`apps/${AID}/collections/bookings/items`, new Map([["roomA-1000", { requesterName: "先客" }]]));
+
+    const result = await writePreviewSubmission(root, "bookings", { requesterName: "客", slot: "roomA-1000" });
+
+    // `items` carries `allow update` and the author is the owner, so an overwrite would SUCCEED and
+    // silently replace a real visitor's booking with a test one.
+    expect(result).toEqual({ ok: false, error: "already-taken" });
+    expect(batched).toEqual([]);
+  });
+
+  it("reports a refused batch instead of claiming the booking was made", async () => {
+    batchFails = true;
+
+    const result = await writePreviewSubmission(root, "bookings", { requesterName: "客", slot: "roomA-1000" });
+
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.error).toContain("insufficient permissions");
+  });
+
+  it("refuses to delete a record this session did not write", async () => {
+    // The attack the token exists for. Undo runs through the AUTHOR's handle, which may delete
+    // anything in their own app — so a caller naming a collection and an id would be naming a
+    // stranger's real booking, and every write would be perfectly authorized.
+    const forged = await undoPreviewSubmission("bookings/roomA-1000");
+
+    expect(forged.ok).toBe(false);
+    expect(forged.ok === false && forged.error).toBe("not-this-session");
+    expect(batched).toEqual([]);
+  });
+
+  it("spends the token, so one write cannot be taken back twice", async () => {
+    const made = await writePreviewSubmission(root, "bookings", { requesterName: "客", slot: "roomA-1000" });
+    const token = made.ok ? made.written.token : "";
+    expect(await undoPreviewSubmission(token)).toEqual(expect.objectContaining({ ok: true }));
+    batched.length = 0;
+
+    // A second use could only name a record this preview no longer wrote — which, by then, is
+    // whatever somebody else has put in its place.
+    const again = await undoPreviewSubmission(token);
+
+    expect(again.ok).toBe(false);
+    expect(batched).toEqual([]);
+  });
+
+  it("names the missing answer instead of writing a record the rules would refuse", async () => {
+    const result = await writePreviewSubmission(root, "bookings", { slot: "roomA-1000" });
+
+    // `requesterName` is required. Refused here so the answer names the field — the rules would
+    // refuse the same document a moment later, and name nothing.
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.error).toContain("missing:");
+    expect(batched).toEqual([]);
+  });
+
+  it("gives the slot back when the write is taken away", async () => {
+    const made = await writePreviewSubmission(root, "bookings", { requesterName: "客", slot: "roomA-1000" });
+    expect(made.ok).toBe(true);
+    batched.length = 0;
+
+    const undone = await undoPreviewSubmission(made.ok ? made.written.token : "");
+
+    expect(undone.ok).toBe(true);
+    // The record goes and the slot reopens IN ONE WRITE, exactly as a participant's `selfDelete`
+    // does. Deleting the record alone would leave the mirror saying `taken` about a booking that no
+    // longer exists — the orphan the pairing exists to prevent.
+    expect(batched.map((op) => op.split(" ").slice(0, 2).join(" "))).toEqual([
+      `delete apps/${AID}/collections/bookings/items/roomA-1000`,
+      `update apps/${AID}/collections/slots/items/roomA-1000`,
+    ]);
+    expect(batched[1]).toContain('"state":"open"');
+  });
+
+  it("writes a mirrorless submission through the ordinary seam, create-only", async () => {
+    // A survey: one answer per person, no resource being claimed, so no mirror and no `idIn`.
+    writeApp({
+      aid: AID,
+      name: "Survey",
+      members: { [OWNER.email]: { "*": "owner" } },
+      collections: { bookings: { submitOnly: true, statusField: "status", transitions: { initial: ["booked"] } } },
+      public: {
+        enabled: true,
+        read: [],
+        submit: {
+          bookings: {
+            auth: "verifiedEmail",
+            emailField: "requesterEmail",
+            createFields: ["requesterName", "requesterEmail", "slot", "status"],
+            initialStatus: "booked",
+            idFrom: "auth.uid",
+          },
+        },
+      },
+    });
+
+    const result = await writePreviewSubmission(root, "bookings", { requesterName: "客", slot: "roomA-1000" });
+
+    expect(result.ok === false ? result.error : "").toBe("");
+    // No batch at all — and `create`, not `set`, so an id already taken is refused rather than
+    // replaced. The id is the submitter's uid, which is what "one answer per person" means.
+    expect(batched).toEqual([]);
+    expect(docs.writes.some((write) => write.startsWith(`create apps/${AID}/collections/bookings/items/${OWNER.uid} `))).toBe(true);
+    expect(result.ok && result.written).toEqual({ cid: "bookings", id: OWNER.uid, token: expect.any(String) });
+  });
+});
