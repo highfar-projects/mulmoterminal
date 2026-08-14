@@ -29,11 +29,12 @@ export async function postAnswer(sessionId: string, toolUseId: string, picks: nu
   return postToAnswerRoute(sessionId, { toolUseId, picks });
 }
 
-// Taking the dialog's `Type something` row, which ENDS it as declined and returns the terminal to
-// its ordinary prompt (#1693). Only the keys that close the dialog go through the host; what the
-// user then says is a normal message and travels the way every other message does.
-export async function postDecline(sessionId: string, toolUseId: string): Promise<AnswerFailure | null> {
-  return postToAnswerRoute(sessionId, { toolUseId, decline: true });
+// Answering in the user's own words, through the dialog's `Type something` row (#1693). The same
+// route as the buttons, because it is the same act: the host checks the dialog is still the one on
+// screen, then types. The words are sanitized there — this is the one thing a client sends that is
+// not an index.
+export async function postWords(sessionId: string, toolUseId: string, text: string): Promise<AnswerFailure | null> {
+  return postToAnswerRoute(sessionId, { toolUseId, text });
 }
 
 async function postToAnswerRoute(sessionId: string, body: Record<string, unknown>): Promise<AnswerFailure | null> {

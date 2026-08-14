@@ -18,9 +18,6 @@ const props = defineProps<{
   // way, and coming back with no explanation is the failure mode this exists to avoid — pressing
   // them again would fail the same way, silently.
   failure?: AnswerFailure | null;
-  // Words the terminal would not take after the question was already declined. Shown so they are
-  // handed back rather than lost — there is no question left to re-offer them through.
-  unsentText?: string | null;
   expanded?: boolean;
 }>();
 
@@ -47,9 +44,9 @@ const answerable = computed(() => props.failure !== "partial" && props.failure !
 // row (common/askQuestion.ts rejects it outright rather than sending it).
 const picks = ref<number[][]>([]);
 
-// None of the above. The dialog's own `Type something` row is not a text field: taking it ENDS the
-// question as declined and hands the terminal back its ordinary prompt (#1693), which is where what
-// the user typed here is then said. So this is one action to the reader and two to the machine.
+// None of the options fits. The dialog's own `Type something` row IS a text field, so these words
+// go there and come back as the answer (#1693) — the same act as pressing a button, in the user's
+// own words.
 const other = ref("");
 
 function sayOther(): void {
@@ -127,11 +124,6 @@ function choose(qi: number, oi: number): void {
     </div>
 
     <div class="flex-1 overflow-y-auto px-4 py-3 font-sans text-[13px] text-fg">
-      <div v-if="unsentText" data-testid="question-unsent" class="mb-3 rounded border border-border bg-panel px-3 py-2 text-[12px]" role="alert">
-        <p class="mb-1">The question was declined, but this message could not be sent — the terminal was not connected. Copy it before closing.</p>
-        <p class="font-mono break-words whitespace-pre-wrap">{{ unsentText }}</p>
-      </div>
-
       <p v-if="!event" class="text-dim">Nothing is being asked right now. The pane opens by itself when this session asks something.</p>
 
       <template v-else>
@@ -173,7 +165,7 @@ function choose(qi: number, oi: number): void {
         <!-- None of the options fits. Declining is what the dialog itself offers here, so this says
              so rather than pretending the text goes into the question. -->
         <div v-if="answerable" class="mt-3 border-t border-border pt-3">
-          <label class="mb-1 block text-[12px] text-dim" for="question-other">Say something else instead</label>
+          <label class="mb-1 block text-[12px] text-dim" for="question-other">Answer in your own words</label>
           <textarea
             id="question-other"
             v-model="other"
@@ -190,9 +182,9 @@ function choose(qi: number, oi: number): void {
             :disabled="other.trim().length === 0"
             @click="sayOther"
           >
-            Send instead of choosing
+            Answer with this
           </button>
-          <p class="mt-1 text-[12px] text-dim">This declines the question and sends your words as an ordinary message.</p>
+          <p class="mt-1 text-[12px] text-dim">Typed into the question's own “Type something” field, so it comes back as your answer.</p>
         </div>
 
         <!-- Said plainly because it is the one thing about this pane that surprises people: the

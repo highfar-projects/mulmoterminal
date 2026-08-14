@@ -143,7 +143,7 @@ describe("QuestionPane", () => {
 
 // "None of the above" (#1693). The pane emits the words; declining the dialog and then saying them
 // is the grid's job, because only it can reach the terminal.
-describe("saying something else", () => {
+describe("answering in your own words", () => {
   const other = (w: ReturnType<typeof mountPane>) => w.find('[data-testid="question-other"]');
 
   it("emits what was typed, trimmed", async () => {
@@ -176,22 +176,5 @@ describe("saying something else", () => {
   it("offers no text box for a failure that cannot be retried", () => {
     const w = mount(QuestionPane, { props: { event: event([question("Color", ["Red", "Blue"])]), failure: "partial" as const } });
     expect(w.find('[data-testid="question-other"]').exists()).toBe(false);
-  });
-});
-
-// The question is already declined by the time this can happen, so there is nothing to re-offer the
-// words through — handing them back is all that is left, and losing them silently is not an option.
-describe("words the terminal would not take", () => {
-  it("hands them back, even with no question left", () => {
-    const w = mount(QuestionPane, { props: { event: null, unsentText: "use green instead" } });
-
-    const note = w.find('[data-testid="question-unsent"]');
-    expect(note.exists()).toBe(true);
-    expect(note.text()).toContain("use green instead");
-  });
-
-  it("says nothing when there is nothing unsent", () => {
-    const w = mount(QuestionPane, { props: { event: null } });
-    expect(w.find('[data-testid="question-unsent"]').exists()).toBe(false);
   });
 });

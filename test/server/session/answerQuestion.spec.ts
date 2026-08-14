@@ -263,28 +263,35 @@ describe("answerQuestion", () => {
   });
 });
 
-// "None of the above" (#1693): the same guarded path, but the keys take the dialog's `Type
-// something` row, which ends it as declined. What the user then says is an ordinary message and
-// never passes through here.
-describe("declining", () => {
-  it("presses past the options to the decline row", async () => {
+// Answering in the user's own words (#1693): the same guarded path, with the keys aimed at the
+// dialog's `Type something` row — which is a text FIELD, not a decline.
+describe("answering in words", () => {
+  it("walks to the text row, types, and commits", async () => {
     const d = deps([CALL("t1", "running")]);
 
-    expect(await answerQuestion(d, { sessionId: "dec1", toolUseId: "t1", decline: true })).toEqual({ ok: true });
-    expect(d.write.mock.calls.map((call) => call[1])).toEqual([DOWN, DOWN, ENTER]); // two options, then the row
+    expect(await answerQuestion(d, { sessionId: "w1", toolUseId: "t1", text: "green please" })).toEqual({ ok: true });
+    expect(d.write.mock.calls.map((call) => call[1])).toEqual([DOWN, DOWN, "green please", ENTER]);
   });
 
-  it("refuses to decline a dialog that is not the one on screen", async () => {
+  it("refuses a dialog that is not the one on screen", async () => {
     const d = deps([CALL("t2", "running")]);
 
-    expect(await answerQuestion(d, { sessionId: "dec2", toolUseId: "t1", decline: true })).toEqual({ ok: false, reason: "closed" });
+    expect(await answerQuestion(d, { sessionId: "w2", toolUseId: "t1", text: "green" })).toEqual({ ok: false, reason: "closed" });
     expect(d.write).not.toHaveBeenCalled();
   });
 
-  it("claims the dialog it declined, like any other answer", async () => {
+  it("claims the dialog it answered, like any other answer", async () => {
     const d = deps([CALL("t1", "running")]);
-    await answerQuestion(d, { sessionId: "dec3", toolUseId: "t1", decline: true });
+    await answerQuestion(d, { sessionId: "w3", toolUseId: "t1", text: "green" });
 
-    expect(await answerQuestion(d, { sessionId: "dec3", toolUseId: "t1", decline: true })).toEqual({ ok: false, reason: "closed" });
+    expect(await answerQuestion(d, { sessionId: "w3", toolUseId: "t1", text: "again" })).toEqual({ ok: false, reason: "closed" });
+  });
+
+  // Empty text would land on the row and press Enter, which DECLINES the question outright.
+  it("refuses empty words rather than declining by accident", async () => {
+    const d = deps([CALL("t1", "running")]);
+
+    expect(await answerQuestion(d, { sessionId: "w4", toolUseId: "t1", text: "" })).toEqual({ ok: false, reason: "bad-picks" });
+    expect(d.write).not.toHaveBeenCalled();
   });
 });

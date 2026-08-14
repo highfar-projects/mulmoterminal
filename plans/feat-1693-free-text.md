@@ -1,46 +1,39 @@
-# 質問ペインから「その他」で答える (#1693)
+# 質問ペインから自分の言葉で答える (#1693)
 
 選択肢のどれでもないことを言いたいとき、いまはターミナルに切り替えるしかない。
 
-## 実測が設計を決めた
+## 実測が設計を決めた（そして一度読み違えた）
 
-`Type something` は**入力欄ではない。質問を辞退して、普通のプロンプトに戻る。**
+ダイアログの `Type something` は**テキスト入力欄**。カーソルを合わせてから打つと、その行が
+打った文字に変わり、Enter で**答えとして**確定する:
 
 ```
-❯ 3. Type something.
-⏺ User declined to answer questions
-  ⎿  · Pick a colour: red or blue? (Red / Blue)
-❯                        ← 普通の入力欄
+❯ 3. green please               ← 打った文字がそのまま行になる
+⎿ · Red or blue? → green please  ← 答えとして届く
+PostToolUse answers = {"Red or blue?": "green please"}
 ```
 
-複数問でも同じで、**1問目で選ぶと全体が辞退される**（辞退の一覧に両方の質問が並ぶ）。
-行は `options` の直後、つまり最初の質問の `options.length`（0 始まり）。
+**最初はこれを「辞退」と読み違えた。** 空のまま Enter を押すと `User declined to answer questions`
+になるので、そこだけを見て「Type something = 辞退」と決めてしまい、「辞退してから普通の
+メッセージを送る」という別物を作った。実機で「押しても何も入らない」と報告されて測り直すまで、
+テストも lint も CI も全部緑のままだった。
 
-**辞退では hook が飛ばない。** `PostToolUse` も `PostToolUseFailure` も来ず、`PreToolUse` だけ。
-tool-call の記録は `running` のまま残る — ユーザが実機で見つけた「答えないで次に進むと消えない」
-の正体はこれ。#1690 の「`openQuestionOf` は履歴の最後の1件だけを見る」がこの場面で効く。
-
-## だから「その他」は2段になる
-
-1. **辞退**（ホストがキー列を送る）
-2. **テキストを普通のメッセージとして送る**
-
-そして 2 は**新しい経路を作らない**。web は `submitText`、電話は `sendTerminalInput` を既に持って
-いて、どちらもサニタイズ済み・エージェント別の submit バイトまで解決済み。ホストに「テキストを
-受け取って端末に書く」口を新設すると、#1685 で引いた「クライアントは整数だけ送る」という境界に
-穴を開けることになるので、そうしない。
-
-つまりホストに増えるのは **`decline`（キー列だけ）** ひとつ。#1690 の保護（直列化・本人の入力への
-譲り・送信済みの主張・部分送信の押さえ）はそのまま効く。
+行は、画面に出ている質問（＝最初の質問）の `options` の直後。
 
 ## 実装
 
-- `common/askQuestion.ts` — `keysToDecline(questions)`。最初の質問の `options.length` だけ下って Enter
-- `answerQuestion` — `picks` の代わりに `decline: true` を受ける形。以降の経路は同じ
-- `POST /api/question/:sessionId/answer` — `decline` を受ける
-- ペイン — 自由入力欄。送信で `decline` → 成功したらテキストをターミナルに送る（グリッド経由）
-- RemoteHost の `answerQuestion` も `decline` を受ける（電話の UI は別 issue）
+選択肢を押すのと**同じ行為**なので、同じ経路を通す:
+
+- `common/askQuestion.ts` — `keysToAnswerInWords(questions, text)`。`options.length` だけ下って、
+  テキストを書いて、Enter
+- `answerQuestion` — `picks` の代わりに `text` を受ける。#1690 の保護（直列化・本人の入力への
+  譲り・送信済みの主張・部分送信の押さえ）はそのまま効く
+- **テキストはホストで sanitize する。** クライアントが送るもので唯一「整数のインデックス」で
+  ないので、`sanitizeTerminalInput`（#445 から電話の打鍵が通っている経路）を再利用する。
+  これが無いと ESC や bracketed paste 終端を他人の端末に送り込める
+- 空文字は拒む。**空のまま Enter は「辞退」になってしまう** — 自分の言葉で答えようとした人が
+  いちばん望まない結果
 
 ## 範囲外
 
-電話側の UI。`Chat about this`（辞退の下にもう1行あるが、用途が違う）。
+電話側の UI（コマンドは同じ形で受ける）。`Chat about this`。

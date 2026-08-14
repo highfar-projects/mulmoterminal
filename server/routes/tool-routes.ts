@@ -85,7 +85,7 @@ function mountAnswerRoute(app: Express, deps: ToolRouteDeps): void {
     if (!deps.questionPaneEnabled()) return res.status(409).json({ ok: false, reason: "closed" });
     const body: unknown = req.body;
     if (!isRecord(body) || typeof body.toolUseId !== "string") return res.status(400).json({ error: "toolUseId is required" });
-    const result = await answerQuestionOnHost(sessionId, body.toolUseId, body.picks, (id) => deps.stores.toolCallsStore.get(id), body.decline === true);
+    const result = await answerQuestionOnHost(sessionId, body.toolUseId, body.picks, (id) => deps.stores.toolCallsStore.get(id), body.text);
     res.status(result.ok ? 200 : 409).json(result);
   });
 }

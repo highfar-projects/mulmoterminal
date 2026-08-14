@@ -161,18 +161,18 @@ const picksValid = (question: AskQuestion, picks: readonly number[]): boolean =>
 // the prompt once it has closed.
 const needsReview = (questions: readonly AskQuestion[]): boolean => questions.length > 1 || questions.some((question) => question.multiSelect);
 
-// The keystrokes that DECLINE the dialog — its `Type something` row, which is not a text field at
-// all: choosing it ends the whole call as "User declined to answer questions" and returns the user
-// to the ordinary prompt, where anything they type is a normal message. Measured against claude
-// 2.1.231, on a single question and on a two-question wizard, where declining the first declines
-// both.
+// Answering in the user's own words, through the dialog's own `Type something` row.
 //
-// The row sits directly after the options of the question ON SCREEN, which is always the first one:
-// declining ends the call, so there is no later question to decline from.
-export const keysToDecline = (questions: readonly AskQuestion[]): string[] | null => {
+// That row IS a text field, and the way in is to highlight it and type: the row then reads back what
+// was typed, and Enter commits it as the ANSWER — `answers` carries the words, not a decline.
+// Measured against claude 2.1.231. (Enter on the row while it is still empty declines instead,
+// which is what a first reading of it mistook for its whole behaviour.)
+//
+// It sits directly after that question's options.
+export const keysToAnswerInWords = (questions: readonly AskQuestion[], text: string): string[] | null => {
   const first = questions[0];
-  if (!first) return null;
-  return [...moveDown(0, first.options.length), KEY_ENTER];
+  if (!first || !text) return null;
+  return [...moveDown(0, first.options.length), text, KEY_ENTER];
 };
 
 /**

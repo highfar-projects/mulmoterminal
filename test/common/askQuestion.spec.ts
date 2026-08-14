@@ -7,7 +7,7 @@ import { describe, it, expect } from "vitest";
 import {
   parseAskQuestions,
   keysForAnswers,
-  keysToDecline,
+  keysToAnswerInWords,
   isAskQuestionEvent,
   openQuestionOf,
   shouldPublishQuestion,
@@ -199,20 +199,23 @@ describe("openQuestionOf", () => {
   });
 });
 
-// MEASURED: `Type something` is not a text field — it ends the call as declined and hands the user
-// back the ordinary prompt. It sits right after the options of the question on screen, and on a
-// multi-question wizard declining the first declines them all, so the first is the only one to aim at.
-describe("keysToDecline", () => {
-  it("walks past the options to the decline row and takes it", () => {
-    expect(keysToDecline([single(["Red", "Blue"])])).toEqual([DOWN, DOWN, ENTER]);
-    expect(keysToDecline([multi(["Nuts", "Cream", "Honey"])])).toEqual([DOWN, DOWN, DOWN, ENTER]);
+// MEASURED: `Type something` is a text FIELD. Highlight it, type, and Enter commits the words as the
+// answer — PostToolUse carries `{"Red or blue?": "green please"}`. (Enter while it is still empty
+// declines instead; reading only that is what first sent this feature down the wrong road.)
+describe("keysToAnswerInWords", () => {
+  it("walks past the options to the text row, types, and commits", () => {
+    expect(keysToAnswerInWords([single(["Red", "Blue"])], "green please")).toEqual([DOWN, DOWN, "green please", ENTER]);
+    expect(keysToAnswerInWords([multi(["Nuts", "Cream", "Honey"])], "olives")).toEqual([DOWN, DOWN, DOWN, "olives", ENTER]);
   });
 
-  it("aims at the first question of a wizard — declining it declines the rest", () => {
-    expect(keysToDecline([single(["Small", "Large"]), single(["Hot", "Cold", "Warm"])])).toEqual([DOWN, DOWN, ENTER]);
+  it("aims at the first question — that is the one on screen", () => {
+    expect(keysToAnswerInWords([single(["Small", "Large"]), single(["Hot", "Cold", "Warm"])], "medium")).toEqual([DOWN, DOWN, "medium", ENTER]);
   });
 
-  it("has nothing to decline with no questions", () => {
-    expect(keysToDecline([])).toBeNull();
+  // Empty text would land on the row and press Enter, which DECLINES the whole question — the one
+  // thing a user typing an answer never meant.
+  it("refuses to send nothing", () => {
+    expect(keysToAnswerInWords([single(["Red", "Blue"])], "")).toBeNull();
+    expect(keysToAnswerInWords([], "green")).toBeNull();
   });
 });

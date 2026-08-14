@@ -310,19 +310,19 @@ describe("question commands", () => {
     await expect(refusing("partial").answerQuestion({ sessionId: "a", toolUseId: "t1", picks: [] })).rejects.toThrow(/Finish it in the terminal/);
   });
 
-  // "None of the above" from the phone (#1693): the flag rides the same command, and what the user
-  // then says goes through sendTerminalInput as any message does.
-  it("passes a decline through", async () => {
+  // Answering in words from the phone (#1693): the text rides the same command, and the host is
+  // what sanitizes it and types it into the dialog's own field.
+  it("passes words through", async () => {
     const seen: unknown[] = [];
     const handlers = handlersWith({
-      answerQuestion: async (_sessionId, _toolUseId, picks, decline): Promise<AnswerResult> => {
-        seen.push({ picks, decline });
+      answerQuestion: async (_sessionId, _toolUseId, picks, text): Promise<AnswerResult> => {
+        seen.push({ picks, text });
         return { ok: true };
       },
     });
 
-    await handlers.answerQuestion({ sessionId: "a", toolUseId: "t1", decline: true });
-    expect(seen).toEqual([{ picks: undefined, decline: true }]);
+    await handlers.answerQuestion({ sessionId: "a", toolUseId: "t1", text: "green please" });
+    expect(seen).toEqual([{ picks: undefined, text: "green please" }]);
   });
 
   it("rejects a request missing either id", async () => {

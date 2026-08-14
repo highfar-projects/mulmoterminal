@@ -46,7 +46,7 @@ import { hasCanvasGroup, hasCollectionsGroup } from "../../common/toolGroups";
 import type { RightPane } from "./gridCell";
 import QuestionPane from "./QuestionPane.vue";
 import { ASK_QUESTION_CHANNEL, isAskQuestionDone, isAskQuestionEvent } from "../../common/askQuestion";
-import { fetchOpenQuestion, postAnswer, postDecline } from "../composables/openQuestion";
+import { fetchOpenQuestion, postAnswer, postWords } from "../composables/openQuestion";
 import type { AnswerFailure } from "../../common/askQuestion";
 import { createQuestionBox } from "../composables/questionBox";
 import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
@@ -291,12 +291,6 @@ const SEPARATOR_PX = 5;
 // exists for as long as the pane is open and is not the terminal's to spend either.
 const PANE_CHROME_PX = SEPARATOR_PX + 1;
 
-// After a question is declined, before the words that replace it are typed. MEASURED: with no gap
-// the terminal is still closing the dialog and swallows the paste entirely — the pane reports a
-// send that never arrives, which is exactly how this first shipped. 200ms was enough in every run;
-// this leaves room over it, and nobody notices a quarter second after a click.
-const DECLINE_SETTLE_MS = 250;
-
 // Between the keystrokes that answer a question dialog. The dialog rebuilds itself between
 // questions and after a toggle, so the keys are paced rather than written as one block.
 const rowWidth = () => Math.max(0, (zoomRow.value?.clientWidth ?? 0) - (rightPane.value ? PANE_CHROME_PX : 0));
@@ -491,10 +485,6 @@ const questionBox = createQuestionBox(fetchOpenQuestion);
 // zoom moves, so it can only ever describe the buttons currently on screen.
 const answerFailure = ref<AnswerFailure | null>(null);
 
-// Words the user meant to say instead of choosing, that the terminal would not take (#1693). Kept
-// so they are returned rather than dropped — the question they replaced is already declined.
-const unsentText = ref<string | null>(null);
-
 const expandedQuestion = computed(() => (expandedSessionId.value ? (questionBox.questions.value.get(expandedSessionId.value) ?? null) : null));
 
 // Answered — in the terminal, in the pane, or cancelled with Esc. The pane goes with the question
@@ -509,7 +499,6 @@ const unsubscribeQuestion = subscribeSession(ASK_QUESTION_CHANNEL, (data) => {
   if (isAskQuestionEvent(data)) {
     questionBox.offer(data);
     answerFailure.value = null;
-    unsentText.value = null;
     // Opened for the user, not merely made available: a question nobody sees is a session that
     // sits blocked. Only for the cell already on screen — enlarging some other cell to reveal a
     // pane would take the user off whatever they were reading.
@@ -540,7 +529,6 @@ watch(
   expandedSessionId,
   async (sessionId) => {
     answerFailure.value = null;
-    unsentText.value = null;
     if (sessionId) await revealQuestion(sessionId);
   },
   { immediate: true },
@@ -561,32 +549,18 @@ function dismissQuestionPane(): void {
   setRightPane(null, paneUid.value);
 }
 
-// None of the options fits (#1693). Two steps, and the ORDER is the point: the dialog is declined
-// first — by the host, under the same guards as any other answer — and only once it is gone does the
-// text go where it belongs, the ordinary prompt underneath. Sent the way any other message is, so
-// nothing new carries user text to the terminal.
+// None of the options fits, so the user says it in their own words (#1693). The dialog's own
+// `Type something` row is a text FIELD: the host walks to it, types, and presses Enter, and the
+// words come back as the ANSWER. Same route and same guards as the buttons — it is the same act.
 async function sayInsteadOfChoosing(text: string): Promise<void> {
   const event = expandedQuestion.value;
-  if (!event || props.expandedUid === null) return;
-  const slot = `cell-${props.expandedUid}`;
-  // Asked BEFORE declining, because declining cannot be taken back: it ends the question, and the
-  // words that were meant to replace it would have nowhere to go.
-  if (!conn.canSend(slot)) {
-    answerFailure.value = "unwritable";
-    return;
+  if (!event) return;
+  dropQuestion(event.sessionId);
+  const failure = await postWords(event.sessionId, event.toolUseId, text);
+  if (failure && failure !== "closed") {
+    answerFailure.value = failure;
+    await revealQuestion(event.sessionId);
   }
-  const failure = await postDecline(event.sessionId, event.toolUseId);
-  if (failure) {
-    // `closed` means someone got there first; the pane goes, as it does for any answered question.
-    if (failure === "closed") dropQuestion(event.sessionId);
-    else answerFailure.value = failure;
-    return;
-  }
-  // The question is declined now, so the words have nowhere else to go. The pane is closed only
-  // once they are actually delivered — closing first is how a failed send became invisible.
-  await new Promise((resolve) => setTimeout(resolve, DECLINE_SETTLE_MS));
-  if (conn.submitText(slot, text)) dropQuestion(event.sessionId);
-  else unsentText.value = text;
 }
 
 // Answering the enlarged cell's dialog. The picks go to the host, which turns them into the
@@ -1351,7 +1325,6 @@ watch(
           v-else-if="rightPane === 'question'"
           :event="expandedQuestion"
           :failure="answerFailure"
-          :unsent-text="unsentText"
           :expanded="paneFull"
           :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
           @answer="answerQuestion"
