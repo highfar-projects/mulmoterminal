@@ -21,7 +21,7 @@
 // tell whether the Firestore rules a new declaration needs have been deployed at all.
 import { computed, onBeforeUnmount, ref, shallowRef, toRaw, watch } from "vue";
 import { portChannel, publicViewSrcdoc, viewBridge, viewNonce, type PendingSubmit } from "@receptron/sharedapp/view";
-import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 import { isRecord } from "../../common/isRecord";
 import { previewPageKey, type PreviewAudience, type PreviewDataset, type PreviewPage, type SharedAppPreview } from "../../common/sharedAppPreview";
 
@@ -109,16 +109,12 @@ const cells = { pending: ref<PendingSubmit | null>(null), sending: ref(false), r
 const bridge = viewBridge(
   {
     channel: () => portChannel(frame.value, (message) => structuredCloneable(message)),
-    // NOT WIRED YET, and refused out loud rather than dropped. A request with no answer is, on the
-    // author's screen, a button that does nothing — which is the exact failure this whole feature
-    // exists to catch, and it would be a poor joke to ship it here first. Writing goes to the real
-    // Firestore, with a mark and a way to clear it (the plan's section 5); until that lands the
-    // view is told why.
+    // The REAL write, to the real database, performed by the server as the author.
     //
-    // A submission only reaches this after the parent has judged it against the declaration below,
-    // which is the point: `unknown-collection`, `not-a-submission` and `undeclared-field` are the
-    // three findings a preview is FOR, and this line is what a correct submission is told.
-    submit: () => Promise.resolve({ ok: false, error: "preview-cannot-write-yet" }),
+    // A submission only reaches this after the parent has judged it against the declaration below
+    // and a person has pressed a button: `unknown-collection`, `not-a-submission` and
+    // `undeclared-field` are answered before it, which is what a preview is FOR.
+    submit: (pending) => send(pending),
     state: () => datasets.value,
   },
   // The REAL declaration, never an empty map.
@@ -186,7 +182,100 @@ watch(
 // New data, same document — the view asked once and cannot ask again.
 watch(datasets, () => bridge.sendState(), { deep: true });
 
+/** Every record this preview session wrote, newest first.
+ *
+ *  HERE and not on the records. The rules read a public create with `hasOnly(createFields)`, so an
+ *  extra key does not annotate the document — it refuses the whole write. What the author wrote
+ *  from a preview is therefore indistinguishable in the database from what a visitor wrote, and
+ *  this list is the only place it can be remembered. It dies with the pane, which is why the button
+ *  below says so. */
+const written = ref<{ cid: string; id: string; mirror?: { cid: string; id: string } }[]>([]);
+const clearing = ref(false);
+
+/** The projection route, scoped to the cell's directory. */
+const previewUrl = (): string => {
+  const scope = props.cwd === null ? "" : `?cwd=${encodeURIComponent(props.cwd)}`;
+  return `/api/shared-app/preview${scope}`;
+};
+
+const writeUrl = (path: string): string => {
+  const scope = props.cwd === null ? "" : `?cwd=${encodeURIComponent(props.cwd)}`;
+  return `/api/shared-app/preview/${path}${scope}`;
+};
+
+/** Perform one accepted submission and remember what it made. */
+async function send(pending: PendingSubmit): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetchWithTimeout(
+      writeUrl("submit"),
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cid: pending.cid, values: pending.values }) },
+      SLOW_COMMAND_TIMEOUT_MS,
+    );
+    const body: unknown = await res.json();
+    if (!isRecord(body) || body.ok !== true) {
+      return { ok: false, error: isRecord(body) && typeof body.error === "string" ? body.error : "write-failed" };
+    }
+    const made = isRecord(body.written) ? body.written : null;
+    if (made !== null && typeof made.cid === "string" && typeof made.id === "string") {
+      const raw = made.mirror;
+      const mirror = isRecord(raw) && typeof raw.cid === "string" && typeof raw.id === "string" ? { cid: raw.cid, id: raw.id } : undefined;
+      written.value = [{ cid: made.cid, id: made.id, ...(mirror === undefined ? {} : { mirror }) }, ...written.value];
+    }
+    // NOT awaited, and NOT `load()`. The bridge answers the page immediately after this resolves,
+    // and `load()` blanks the payload on its way — which empties `pages`, changes the page being
+    // drawn, and restarts the bridge. The answer would then be posted on a channel that had just
+    // been closed, and the page would wait for ever on a request that had actually succeeded.
+    void refresh();
+    return { ok: true };
+  } catch {
+    // A throw here is the dangerous case: the write may have landed and the read after it may be
+    // what failed. Reported as a failure, and the list below is what the author checks.
+    return { ok: false, error: "write-failed" };
+  }
+}
+
+/** Take them all back, through the app's own withdrawal shape where one is declared. */
+async function clearWritten(): Promise<void> {
+  if (clearing.value) return;
+  clearing.value = true;
+  try {
+    for (const record of [...written.value]) {
+      const res = await fetchWithTimeout(
+        writeUrl("undo"),
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ written: record }) },
+        SLOW_COMMAND_TIMEOUT_MS,
+      );
+      const body: unknown = await res.json();
+      // Kept in the list when it could not be removed. A cleanup that quietly forgets what it
+      // failed to delete is how a test booking outlives the session that made it.
+      if (isRecord(body) && body.ok === true) written.value = written.value.filter((entry) => entry !== record);
+    }
+  } finally {
+    clearing.value = false;
+    await load();
+  }
+}
+
 let generation = 0;
+
+/** The same read as `load`, without the reset.
+ *
+ *  A write changes the records, so the frame has to be told — but the DOCUMENT has not changed, and
+ *  tearing it down to say so would throw away the conversation it is having. Only the payload is
+ *  swapped; the page, its nonce and its channel all stay. */
+async function refresh(): Promise<void> {
+  const mine = ++generation;
+  try {
+    const res = await fetchWithTimeout(previewUrl());
+    const body: unknown = await res.json();
+    if (mine !== generation || !isRecord(body) || body.ok !== true) return;
+    const next = asPayload(body.preview);
+    if (next !== null) payload.value = next;
+  } catch {
+    // The records on screen are now older than the truth, and saying so would take the pane away
+    // from an author in the middle of something. The next render says it.
+  }
+}
 
 async function load(): Promise<void> {
   const mine = ++generation;
@@ -195,9 +284,7 @@ async function load(): Promise<void> {
   payload.value = null;
   declared.value = false;
   try {
-    const cwd = props.cwd;
-    const query = cwd === null ? "" : `?cwd=${encodeURIComponent(cwd)}`;
-    const res = await fetchWithTimeout(`/api/shared-app/preview${query}`);
+    const res = await fetchWithTimeout(previewUrl());
     const body: unknown = await res.json();
     if (mine !== generation) return;
     if (!isRecord(body)) {
@@ -299,6 +386,32 @@ watch(() => props.cwd, load, { immediate: true });
         </ul>
       </div>
 
+      <!-- WHAT THIS SESSION WROTE, and the way to take it back.
+           Kept by the pane rather than marked on the records: a public create is read with
+           `hasOnly(createFields)`, so an extra key does not annotate the document — it refuses the
+           whole write. In the database these are ordinary records, which is why forgetting them is
+           the same as leaving them, and why the offer to remove them is here rather than later. -->
+      <div v-if="written.length" class="flex-none border-t border-border px-2.5 py-1.5 font-sans">
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] text-amber">{{ written.length }} record{{ written.length === 1 ? "" : "s" }} written from this preview</span>
+          <button
+            type="button"
+            class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg hover:border-accent disabled:cursor-default disabled:opacity-60"
+            :disabled="clearing"
+            title="Remove them, restoring anything they were holding"
+            @click="clearWritten"
+          >
+            {{ clearing ? "Removing…" : "Remove them" }}
+          </button>
+        </div>
+        <ul class="mt-1 flex list-none flex-col gap-0.5 p-0">
+          <li v-for="record in written" :key="`${record.cid}/${record.id}`" class="text-[11px] leading-[1.4] text-dim">{{ record.cid }} / {{ record.id }}</li>
+        </ul>
+        <!-- Said out loud because it is the failure mode: this list is the pane's, not the
+             database's, so closing the pane loses the only record of which rows were tests. -->
+        <p class="mt-1 text-[11px] text-dim">This list is not stored. Close the pane and these become ordinary records.</p>
+      </div>
+
       <!-- THE CONFIRMATION, drawn by the parent, outside the frame.
            `event.source` proves which window sent the message; it does not prove a person asked
            for it, and the author's HTML can call submit the moment it loads. So the values are
@@ -336,8 +449,8 @@ watch(() => props.cwd, load, { immediate: true });
             Cancel
           </button>
           <!-- Said at the button rather than only in the strip above: this is the moment the author
-               is deciding, and "nothing is written yet" is what they need to know here. -->
-          <span class="text-[11px] text-dim">Sending answers the page. Nothing reaches Firestore yet.</span>
+               is deciding, and what it costs is what they need to know here. -->
+          <span class="text-[11px] text-dim">This writes a real record, as you.</span>
         </div>
       </div>
     </template>

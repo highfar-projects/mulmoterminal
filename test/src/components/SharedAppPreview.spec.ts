@@ -37,6 +37,20 @@ const payload = (over: Record<string, unknown> = {}) => ({
 
 const answering = (body: unknown) => vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(body) });
 
+/** A fetch that answers the projection route and the write routes separately, and records the
+ *  writes it was asked to make. */
+const answeringWrites = (write: unknown, preview: unknown = payload()) => {
+  const posted: { url: string; body: unknown }[] = [];
+  const fetcher = vi.fn().mockImplementation((url: string, init?: { body?: string }) => {
+    if (url.includes("/preview/")) {
+      posted.push({ url, body: init?.body === undefined ? null : JSON.parse(init.body) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(write) });
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(preview) });
+  });
+  return { fetcher, posted };
+};
+
 beforeEach(() => {
   vi.stubGlobal("fetch", answering(payload()));
 });
@@ -230,7 +244,9 @@ describe("SharedAppPreview", () => {
       expect(wrapper.text()).toContain("roomA-1000");
     });
 
-    it("settles the page's promise when the author sends it — a request with no answer is a button that does nothing", async () => {
+    it("writes the record when the author sends it, and answers the page", async () => {
+      const { fetcher, posted } = answeringWrites({ ok: true, written: { cid: "bookings", id: "roomA-1000" } });
+      vi.stubGlobal("fetch", fetcher);
       const wrapper = await mountPreview();
       const { port, answers } = await connect(wrapper);
 
@@ -242,10 +258,62 @@ describe("SharedAppPreview", () => {
         ?.trigger("click");
       await settle();
 
-      // The write is not wired up, and the page is TOLD so. What must never happen is silence: a
-      // submit has no timeout, so a promise that never settles leaves the page on "確認の画面が
-      // 出ます" forever with nothing anywhere saying why.
-      expect(answers).toContainEqual(expect.objectContaining({ requestId: "r-4", ok: false, error: "preview-cannot-write-yet" }));
+      // The submission reaches the server as the author accepted it — and the page is told, because
+      // a submit has no timeout and a promise that never settles is a button that does nothing.
+      expect(posted[0]?.url).toContain("/preview/submit");
+      expect(posted[0]?.body).toEqual({ cid: "bookings", values: { slot: "roomA-1000" } });
+      expect(answers).toContainEqual(expect.objectContaining({ requestId: "r-4", ok: true }));
+    });
+
+    it("carries the server's refusal back to the page rather than reporting success", async () => {
+      const { fetcher } = answeringWrites({ ok: false, error: "missing: 予約者" });
+      vi.stubGlobal("fetch", fetcher);
+      const wrapper = await mountPreview();
+      const { port, answers } = await connect(wrapper);
+
+      port.postMessage({ type: "mc-public-view:submit", requestId: "r-6", cid: "bookings", values: { slot: "roomA-1000" } });
+      await settle();
+      await wrapper
+        .findAll("button")
+        .filter((button) => button.text() === "Send it")[0]
+        ?.trigger("click");
+      await settle();
+
+      expect(answers).toContainEqual(expect.objectContaining({ requestId: "r-6", ok: false, error: "missing: 予約者" }));
+    });
+
+    it("remembers what it wrote, and offers to take it back with its mirror", async () => {
+      const { fetcher, posted } = answeringWrites({
+        ok: true,
+        written: { cid: "bookings", id: "roomA-1000", mirror: { cid: "slots", id: "roomA-1000" } },
+      });
+      vi.stubGlobal("fetch", fetcher);
+      const wrapper = await mountPreview();
+      const { port } = await connect(wrapper);
+
+      port.postMessage({ type: "mc-public-view:submit", requestId: "r-7", cid: "bookings", values: { slot: "roomA-1000" } });
+      await settle();
+      await wrapper
+        .findAll("button")
+        .filter((button) => button.text() === "Send it")[0]
+        ?.trigger("click");
+      await settle();
+
+      // The rules read a public create with `hasOnly(createFields)`, so nothing marks these records
+      // in the database. This list is the only place they are known to be tests.
+      expect(wrapper.text()).toContain("1 record written from this preview");
+      expect(wrapper.text()).toContain("bookings / roomA-1000");
+
+      await wrapper
+        .findAll("button")
+        .filter((button) => button.text() === "Remove them")[0]
+        ?.trigger("click");
+      await settle();
+
+      // The MIRROR travels with it: a bare delete would leave the slot saying `taken` about a
+      // booking that no longer exists.
+      const undo = posted.find((entry) => entry.url.includes("/preview/undo"));
+      expect(undo?.body).toEqual({ written: { cid: "bookings", id: "roomA-1000", mirror: { cid: "slots", id: "roomA-1000" } } });
     });
 
     it("answers the page when the author cancels, rather than leaving it waiting", async () => {

@@ -15,6 +15,9 @@ import { access } from "node:fs/promises";
 import path from "node:path";
 import { APP_MANIFEST_FILE } from "@mulmoclaude/core/collection/server";
 import { previewSharedApp } from "./sharedApp/preview.js";
+import { undoPreviewSubmission, writePreviewSubmission } from "./sharedApp/previewWrite.js";
+import { requestBody } from "../routes/requestBody.js";
+import { isRecord } from "../../common/isRecord.js";
 import { workspaceForRoute } from "../routes/routeParams.js";
 import type { SharedAppPreview, SharedAppPreviewResponse } from "../../common/sharedAppPreview.js";
 
@@ -83,7 +86,68 @@ async function respondPreview(req: Request, res: Response): Promise<void> {
   res.json({ declared: true, ok: true, preview } satisfies SharedAppPreviewResponse);
 }
 
+/** The submission a preview accepted, narrowed off the request. */
+function submissionOf(body: unknown): { cid: string; values: Record<string, string> } | null {
+  if (!isRecord(body) || typeof body.cid !== "string" || !isRecord(body.values)) return null;
+  const entries = Object.entries(body.values).filter((entry): entry is [string, string] => typeof entry[1] === "string");
+  // STRINGS ONLY, and the whole submission is refused rather than trimmed: the rules compare stored
+  // values without coercing, so writing the string half of a mixed payload would produce a record
+  // that differs BY TYPE from the identical-looking one the published page writes.
+  if (entries.length !== Object.keys(body.values).length) return null;
+  return { cid: body.cid, values: Object.fromEntries(entries) };
+}
+
+/** One write this preview made, as the pane hands it back to be taken away. */
+function writtenOf(body: unknown): { cid: string; id: string; mirror?: { cid: string; id: string } } | null {
+  if (!isRecord(body) || !isRecord(body.written)) return null;
+  const written = body.written;
+  if (typeof written.cid !== "string" || typeof written.id !== "string") return null;
+  const raw = written.mirror;
+  const mirror = isRecord(raw) && typeof raw.cid === "string" && typeof raw.id === "string" ? { cid: raw.cid, id: raw.id } : null;
+  return { cid: written.cid, id: written.id, ...(mirror === null ? {} : { mirror }) };
+}
+
 export function mountSharedAppPreviewRoutes(app: Express): void {
+  // The write the author accepted in the confirmation, performed as them.
+  //
+  // A POST because it writes, and separate from the projection route for the same reason: that one
+  // is asked constantly and answers a question, this one happens once and changes the database.
+  app.post("/api/shared-app/preview/submit", (req, res) => {
+    void (async () => {
+      try {
+        const cwd = workspaceForRoute(req.query.cwd, res);
+        if (cwd === null) return;
+        const submission = submissionOf(requestBody(req.body));
+        if (submission === null) {
+          res.json({ ok: false, error: "not-a-submission" });
+          return;
+        }
+        res.json(await writePreviewSubmission(cwd, submission.cid, submission.values));
+      } catch (err) {
+        fail(res, err);
+      }
+    })();
+  });
+
+  // Taking one back. Its own route rather than a flag on the one above, because the author presses
+  // a different button for a different reason and the two must not be able to be confused.
+  app.post("/api/shared-app/preview/undo", (req, res) => {
+    void (async () => {
+      try {
+        const cwd = workspaceForRoute(req.query.cwd, res);
+        if (cwd === null) return;
+        const written = writtenOf(requestBody(req.body));
+        if (written === null) {
+          res.json({ ok: false, error: "not-a-record" });
+          return;
+        }
+        res.json(await undoPreviewSubmission(cwd, written));
+      } catch (err) {
+        fail(res, err);
+      }
+    })();
+  });
+
   // "Is there anything to preview here?" — one `stat`, and its own route rather than a flag on the
   // one below. The pane asks it for every directory a cell is open in, and computing a whole
   // publish projection to answer "no" would put a Firestore session behind a question about a

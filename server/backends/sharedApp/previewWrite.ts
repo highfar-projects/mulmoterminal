@@ -1,0 +1,171 @@
+// A submission made FROM the preview, written to the real database.
+//
+// It goes to Firestore, and that is the decision rather than an omission. An app's records live in
+// Firebase and nowhere else (`plans/feat-shared-app-preview.md`), so a scratch layer here would be a
+// second implementation of the one path nobody has tested — "did the write actually land" is the
+// question the preview exists to answer, and a fake destination answers it with a yes it did not
+// earn. The author writes as themselves, with their own credentials, through the same rules a
+// visitor meets.
+//
+// WHAT IS BORROWED AND WHAT IS OURS. The record, its id and whether a second document travels with
+// it are `@receptron/sharedapp/view`'s — the same functions mulmoserver's public page uses, because
+// a record built differently here would be a record the rules judge differently. What is ours is
+// the seam to the database.
+//
+// AND THAT SEAM NEEDED A SECOND DOOR. Everything else under `sharedApp/` writes through
+// `handle.docs`, which has `set` / `create` / `delete` and no batch. A declared `mirror` cannot be
+// written that way: `firestore.rules:425` reads the second document with `getAfter()` precisely
+// because "both writes are in one batch", so a mirror written singly is REFUSED — safely, and with
+// nothing to tell the author about it. So a paired write goes through `writeBatch` on the Firestore
+// this host already holds (`currentFirestore()`), and nothing else does.
+//
+// The alternative was to add a batch to `@mulmoclaude/core`'s `FirestoreDocs`. It was not taken:
+// that seam exists so CORE's store code can be host-agnostic, and MulmoClaude declares no support
+// for shared collections at all (it unbound its accessor — see `sharedCollections.ts`). There is no
+// second host to serve, and a shared app's operations are this host's by design (D5).
+import { doc, collection, writeBatch } from "firebase/firestore";
+import { randomUUID } from "node:crypto";
+import { appSchemasPath, type PublishedConfigDoc } from "@receptron/sharedapp";
+import {
+  MIRROR_OPEN,
+  missingRequired,
+  plannedWrite,
+  recordId,
+  recordOf,
+  writableFields,
+  type DrawnForm,
+  type PlannedWrite,
+  type SubmitSpec,
+} from "@receptron/sharedapp/view";
+import { isRecord } from "../../../common/isRecord.js";
+import { currentFirestore } from "../remoteHost/session.js";
+import { previewSharedApp } from "./preview.js";
+import { sharedAppContext, type SharedAppHandle } from "./context.js";
+
+/** Where a shared collection's records live. */
+const itemsPath = (aid: string, cid: string): string => `${appSchemasPath(aid)}/${cid}/items`;
+
+export interface PreviewWriteSuccess {
+  ok: true;
+  /** What was written, so the pane can mark it and offer to take it back.
+   *
+   *  The mark is HERE and not on the record. The rules read a public create with
+   *  `hasOnly(createFields)`, so an extra key does not annotate the document — it refuses the whole
+   *  write. Whatever the author writes from a preview is therefore indistinguishable, in the
+   *  database, from what a visitor writes; the only place it can be remembered is this host. */
+  written: { cid: string; id: string; mirror?: { cid: string; id: string } | undefined };
+}
+
+export interface PreviewWriteFailure {
+  ok: false;
+  /** Named, and named by the HOST's vocabulary. What the rules answer is
+   *  "Missing or insufficient permissions", which tells an author nothing about which of their
+   *  declarations it was. */
+  error: string;
+}
+
+export type PreviewWriteResult = PreviewWriteSuccess | PreviewWriteFailure;
+
+/** One collection's declaration and form, out of the projection this publish would write. */
+function specFor(config: PublishedConfigDoc, form: Record<string, DrawnForm>, cid: string): { submit: SubmitSpec; drawn: DrawnForm } | null {
+  const raw = config.submit?.[cid];
+  const drawn = form[cid];
+  if (!isRecord(raw) || drawn === undefined) return null;
+  const createFields = Array.isArray(raw.createFields) ? raw.createFields.filter((field): field is string => typeof field === "string") : [];
+  const text = (key: string): string | undefined => (typeof raw[key] === "string" ? raw[key] : undefined);
+  return {
+    submit: {
+      createFields,
+      auth: text("auth"),
+      emailField: text("emailField"),
+      initialStatus: text("initialStatus"),
+      idFrom: text("idFrom"),
+      idField: text("idField"),
+      mirror: text("mirror"),
+    },
+    drawn,
+  };
+}
+
+/** The write itself. Single through the ordinary seam; paired through a batch, for the reason at
+ *  the top of this file. */
+async function commit(handle: SharedAppHandle, aid: string, plan: PlannedWrite): Promise<string | null> {
+  try {
+    if (plan.mirror === undefined) {
+      await handle.docs.set(itemsPath(aid, plan.cid), plan.id, plan.record);
+      return null;
+    }
+    const db = currentFirestore();
+    const batch = writeBatch(db);
+    batch.set(doc(collection(db, itemsPath(aid, plan.cid)), plan.id), plan.record);
+    batch.update(doc(collection(db, itemsPath(aid, plan.mirror.cid)), plan.mirror.id), { state: plan.mirror.state });
+    await batch.commit();
+    return null;
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
+}
+
+/** Write one submission the author accepted in the preview.
+ *
+ *  `values` has already been judged by the parent in the browser against `createFields`; it is
+ *  judged again here because that parent is reached over a port from a sandboxed frame, and a check
+ *  made on the far side of an untrusted boundary is a courtesy, not a gate. */
+export async function writePreviewSubmission(root: string, cid: string, values: Record<string, string>): Promise<PreviewWriteResult> {
+  const context = await sharedAppContext(root);
+  if (!context.ok) return { ok: false, error: context.problems.join(" ") };
+  const { handle } = context;
+
+  const preview = await previewSharedApp(root);
+  if (!preview.ok) return { ok: false, error: preview.problems.join(" ") };
+
+  const spec = specFor(preview.config, preview.form, cid);
+  if (spec === null) return { ok: false, error: "unknown-collection" };
+  // `needsAccount` is not asked. A handle exists only when the session has a VERIFIED address —
+  // `setFirestoreAccessor` returns null otherwise (`sharedCollections.ts`) — so by the time
+  // `sharedAppContext` has answered, the author is signed in. The check belongs to a host whose
+  // reader may be anonymous, which is mulmoserver's public page and not this one.
+
+  const fields = writableFields(spec.drawn, spec.submit.createFields, spec.submit.emailField);
+  const missing = missingRequired(fields, values);
+  if (missing.length > 0) return { ok: false, error: `missing: ${missing.join(" / ")}` };
+
+  const record = recordOf(fields, spec.drawn, spec.submit, values, { uid: handle.uid, email: handle.email });
+  const id = recordId(spec.submit, handle.uid, record, randomUUID());
+  if (id === "") return { ok: false, error: "no-id" };
+
+  const plan = plannedWrite(cid, spec.submit, id, record);
+  const failed = await commit(handle, preview.aid, plan);
+  if (failed !== null) return { ok: false, error: failed };
+  return { ok: true, written: { cid: plan.cid, id: plan.id, ...(plan.mirror === undefined ? {} : { mirror: { cid: plan.mirror.cid, id: plan.mirror.id } }) } };
+}
+
+/** Take one of those writes back.
+ *
+ *  Through the app's OWN withdrawal shape rather than a bare delete where a mirror is involved: the
+ *  record goes and the slot it was holding returns to `open`, in one write, exactly as a
+ *  participant's `selfDelete` does. A delete on its own would leave the mirror saying `taken` about
+ *  a booking that no longer exists — the orphan this whole pairing exists to prevent. */
+export async function undoPreviewSubmission(
+  root: string,
+  written: { cid: string; id: string; mirror?: { cid: string; id: string } | undefined },
+): Promise<PreviewWriteResult> {
+  const context = await sharedAppContext(root);
+  if (!context.ok) return { ok: false, error: context.problems.join(" ") };
+  const { handle, authored } = context;
+  const aid = authored.aid;
+  try {
+    if (written.mirror === undefined) {
+      await handle.docs.delete(itemsPath(aid, written.cid), written.id);
+    } else {
+      const db = currentFirestore();
+      const batch = writeBatch(db);
+      batch.delete(doc(collection(db, itemsPath(aid, written.cid)), written.id));
+      batch.update(doc(collection(db, itemsPath(aid, written.mirror.cid)), written.mirror.id), { state: MIRROR_OPEN });
+      await batch.commit();
+    }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+  return { ok: true, written };
+}
