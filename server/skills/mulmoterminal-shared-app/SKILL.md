@@ -315,6 +315,11 @@ entry per page, each naming **who it is for**:
 | `member` | anybody holding a role in the app — the front desk | `/m/{slug}` |
 | `participant` | anybody on the roster, seeing their own row | `/p/{slug}` |
 
+- **Hand these out ABSOLUTE, with `https://mulmoserver.web.app` in front.** Nothing is served
+  from the machine this runs on, and there is no bare `/{slug}` — a path on its own is not
+  something the person you are telling can open, and `/{slug}` is a not-found page. `deploy` and
+  `publish` print the whole address; say what they print.
+
 - **The two are not exclusive.** An owner who also books is on both, and each address shows one
   face — so a staff member opening `/p/{slug}` sees their own booking, not the front desk. Write
   the participant page for everybody on the roster, not only for the people with no role.
