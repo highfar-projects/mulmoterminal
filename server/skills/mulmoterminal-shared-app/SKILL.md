@@ -347,6 +347,13 @@ entry per page, each naming **who it is for**:
   writes it. The reason is not fussiness: the generated form path sends strings, and the rules
   compare stored values without coercing, so a number would write a record that differs BY TYPE
   from the identical-looking one a form wrote.
+
+  **The schema does not have to change for that.** A submitted value is stored exactly as it
+  arrives — nothing coerces it on the way in, and the rules check no field's type — while a
+  `number` field accepts a NUMERIC STRING at both check tiers (`"3"` passes; only `"abc"` is
+  reported, and only under `strict`). So `attendees: "3"` against `"type": "number"` writes and
+  validates. What it does affect is anything that later READS the value expecting arithmetic —
+  sort it, add it up, and it is a string.
 - **A submission is CONFIRMED outside the frame, so do not narrate it as sent.** The parent draws
   the values in a dialog of its own and writes only when the visitor accepts — so between the
   click and the answer, nothing has been sent and the promise is simply waiting for a person. A
