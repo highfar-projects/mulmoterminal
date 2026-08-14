@@ -104,11 +104,16 @@ export type AnswerFailure =
   /** picks do not fit the questions — wrong count, out of range, or not ascending. */
   | "bad-picks"
   /** No PTY in this process to type into: the session outlived a server restart. */
-  | "unwritable";
+  | "unwritable"
+  /** Some keys reached the dialog before the rest were abandoned. Its cursor has moved and its
+   *  boxes may be ticked, so where it stands is no longer knowable from here — a fresh sequence
+   *  would be computed from a state the dialog left behind and could commit a different answer. */
+  | "partial";
 
 export type AnswerResult = { ok: true } | { ok: false; reason: AnswerFailure };
 
-export const isAnswerFailure = (value: unknown): value is AnswerFailure => value === "closed" || value === "bad-picks" || value === "unwritable";
+export const isAnswerFailure = (value: unknown): value is AnswerFailure =>
+  value === "closed" || value === "bad-picks" || value === "unwritable" || value === "partial";
 
 const KEY_DOWN = "\x1b[B";
 const KEY_ENTER = "\r";

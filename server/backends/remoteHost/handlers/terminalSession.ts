@@ -14,6 +14,7 @@ const ANSWER_REFUSED = {
   closed: "That question was already answered.",
   "bad-picks": "Those choices do not match the question.",
   unwritable: "This session cannot be typed into — it outlived a server restart.",
+  partial: "Part of that answer went in before it was interrupted. Finish it in the terminal.",
 } as const;
 
 type TerminalSessionDeps = Pick<

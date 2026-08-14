@@ -7,7 +7,7 @@ import path from "node:path";
 import { createRemoteHostHandlers } from "./handlers/index.js";
 import type { SessionScreen } from "./terminalScreen.js";
 import { initCollectionsBackend } from "../collections.js";
-import type { AnswerResult } from "../../../common/askQuestion.js";
+import type { AnswerFailure, AnswerResult } from "../../../common/askQuestion.js";
 
 const unusedTerminalDeps = {
   spawnIssueSeed: () => "unused-session",
@@ -302,11 +302,12 @@ describe("question commands", () => {
   // Thrown rather than returned: the command layer turns a rejection into the message the phone
   // shows, and each of these is something the person holding it can act on.
   it("turns each refusal into a sentence the phone can show", async () => {
-    const refusing = (reason: "closed" | "bad-picks" | "unwritable") => handlersWith({ answerQuestion: async () => ({ ok: false, reason }) });
+    const refusing = (reason: AnswerFailure) => handlersWith({ answerQuestion: async () => ({ ok: false, reason }) });
 
     await expect(refusing("closed").answerQuestion({ sessionId: "a", toolUseId: "t1", picks: [] })).rejects.toThrow(/already answered/);
     await expect(refusing("bad-picks").answerQuestion({ sessionId: "a", toolUseId: "t1", picks: [] })).rejects.toThrow(/do not match/);
     await expect(refusing("unwritable").answerQuestion({ sessionId: "a", toolUseId: "t1", picks: [] })).rejects.toThrow(/outlived a server restart/);
+    await expect(refusing("partial").answerQuestion({ sessionId: "a", toolUseId: "t1", picks: [] })).rejects.toThrow(/Finish it in the terminal/);
   });
 
   it("rejects a request missing either id", async () => {

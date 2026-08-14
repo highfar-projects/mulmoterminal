@@ -80,12 +80,34 @@ describe("answerQuestion", () => {
     expect(await answerQuestion(d, { sessionId: "sess5a", toolUseId: "t1", picks: [[0]] })).toEqual({ ok: false, reason: "unwritable" });
   });
 
-  it("stops writing once the PTY refuses a key", async () => {
+  // A sequence that stopped part way has already moved the dialog; "unwritable" would invite a
+  // retry, and a retry computes its keys from a state the dialog is no longer in.
+  it("reports a part-answered dialog as partial, not as a plain failure", async () => {
     const write = vi.fn().mockReturnValueOnce(true).mockReturnValue(false);
     const d = deps([CALL("t1", "running", true)], write);
 
-    expect(await answerQuestion(d, { sessionId: "sess6a", toolUseId: "t1", picks: [[0]] })).toEqual({ ok: false, reason: "unwritable" });
+    expect(await answerQuestion(d, { sessionId: "sess6a", toolUseId: "t1", picks: [[0]] })).toEqual({ ok: false, reason: "partial" });
     expect(write.mock.calls).toHaveLength(2); // the refused one, and nothing after it
+  });
+
+  it("reports a dialog it could not type into at all as unwritable", async () => {
+    const d = deps(
+      [CALL("t1", "running")],
+      vi.fn(() => false),
+    );
+
+    expect(await answerQuestion(d, { sessionId: "sess6c", toolUseId: "t1", picks: [[0]] })).toEqual({ ok: false, reason: "unwritable" });
+  });
+
+  // And it is CLAIMED, so no client can replay a fresh sequence over the state it left behind.
+  it("claims a dialog it left part-answered", async () => {
+    const write = vi.fn().mockReturnValueOnce(true).mockReturnValue(false);
+    const partial = deps([CALL("t1", "running", true)], write);
+    await answerQuestion(partial, { sessionId: "sess6b", toolUseId: "t1", picks: [[0]] });
+
+    const retry = deps([CALL("t1", "running", true)]);
+    expect(await answerQuestion(retry, { sessionId: "sess6b", toolUseId: "t1", picks: [[1]] })).toEqual({ ok: false, reason: "closed" });
+    expect(retry.write).not.toHaveBeenCalled();
   });
 
   // THE INVARIANT. Everything written is a key this module built; nothing the caller sent appears.
@@ -153,8 +175,28 @@ describe("answerQuestion", () => {
       gapMs: 0,
     };
 
-    expect(await answerQuestion(d, { sessionId: "s9", toolUseId: "t1", picks: [[0, 1]] })).toEqual({ ok: false, reason: "closed" });
+    // `partial`, not `closed`: one key already went in, so the dialog is not where a retry would
+    // assume it is.
+    expect(await answerQuestion(d, { sessionId: "s9", toolUseId: "t1", picks: [[0, 1]] })).toEqual({ ok: false, reason: "partial" });
     expect(write.mock.calls).toHaveLength(1); // nothing after the interruption
+  });
+
+  // Interrupted before anything went out, the dialog is untouched — an ordinary `closed`, which the
+  // pane passes over in silence.
+  it("reports an interruption that beat the first key as closed", async () => {
+    const write = vi.fn(() => true);
+    const d: AnswerQuestionDeps & { write: ReturnType<typeof vi.fn> } = {
+      callsOf: async () => [CALL("t1", "running", true)],
+      write,
+      otherWriteCount: () => 1,
+      watchOtherWrites: () => {},
+      stopWatchingOtherWrites: () => {},
+      pause: async () => {},
+      gapMs: 0,
+    };
+
+    expect(await answerQuestion(d, { sessionId: "s9b", toolUseId: "t1", picks: [[0]] })).toEqual({ ok: false, reason: "closed" });
+    expect(write).not.toHaveBeenCalled();
   });
 
   // The dialog is read asynchronously, and a keystroke can land during that read. Counting starts

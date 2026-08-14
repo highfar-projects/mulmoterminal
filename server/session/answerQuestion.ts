@@ -1,4 +1,4 @@
-import { keysForAnswers, openQuestionOf, type AnswerResult, type RecordedCall } from "../../common/askQuestion.js";
+import { keysForAnswers, openQuestionOf, type AnswerFailure, type AnswerResult, type RecordedCall } from "../../common/askQuestion.js";
 
 // Answering a live AskUserQuestion dialog, from whichever client asked (#1685).
 //
@@ -74,20 +74,27 @@ export interface AnswerQuestionRequest {
 // Abandoned the moment anything else types into this session. The lock above keeps two ANSWERS
 // apart; this is what keeps an answer out of the way of the person at the keyboard, who can close
 // the dialog inside one of these pauses and leave the rest of the sequence aimed at a prompt.
-const sendPaced = async (deps: AnswerQuestionDeps, sessionId: string, keys: readonly string[]): Promise<AnswerResult> =>
-  keys.reduce<Promise<AnswerResult>>(
+/** How far a sequence got, because stopping PART WAY is a different situation from not starting. */
+interface Sent {
+  keys: number;
+  failure: AnswerFailure | null;
+}
+
+const sendPaced = async (deps: AnswerQuestionDeps, sessionId: string, keys: readonly string[]): Promise<Sent> =>
+  keys.reduce<Promise<Sent>>(
     async (previous, key) => {
       const sofar = await previous;
-      if (!sofar.ok) return sofar;
+      if (sofar.failure) return sofar;
       await deps.pause(deps.gapMs);
       // Against ZERO, not a baseline read here: counting starts when the answer is claimed, which
       // is BEFORE the dialog is read. A keystroke during that read is one this answer must yield to
       // just as much as one between its keys — a baseline taken afterwards would fold it in and let
       // the sequence carry on into a dialog the user had already closed.
-      if (deps.otherWriteCount(sessionId) !== 0) return { ok: false, reason: "closed" };
-      return deps.write(sessionId, key) ? { ok: true } : { ok: false, reason: "unwritable" };
+      if (deps.otherWriteCount(sessionId) !== 0) return { ...sofar, failure: "closed" };
+      if (!deps.write(sessionId, key)) return { ...sofar, failure: "unwritable" };
+      return { keys: sofar.keys + 1, failure: null };
     },
-    Promise.resolve<AnswerResult>({ ok: true }),
+    Promise.resolve<Sent>({ keys: 0, failure: null }),
   );
 
 const answerHeld = async (deps: AnswerQuestionDeps, { sessionId, toolUseId, picks }: AnswerQuestionRequest): Promise<AnswerResult> => {
@@ -101,9 +108,14 @@ const answerHeld = async (deps: AnswerQuestionDeps, { sessionId, toolUseId, pick
   if (!keys) return { ok: false, reason: "bad-picks" };
   // The questions come from the HOST's own record of the dialog, not from the request: a caller
   // cannot widen its picks by describing a different question than the one on screen.
-  const result = await sendPaced(deps, sessionId, keys);
-  if (result.ok) submitted.set(sessionId, toolUseId);
-  return result;
+  const sent = await sendPaced(deps, sessionId, keys);
+  // Claimed whenever ANY key went out, not only on success. A sequence that stopped part way has
+  // already moved the dialog's cursor and may have ticked boxes; a retry would compute a fresh
+  // sequence from the state it assumes rather than the one the dialog is in, and commit an answer
+  // nobody chose. From here the dialog can only be finished at the keyboard.
+  if (sent.keys > 0) submitted.set(sessionId, toolUseId);
+  if (!sent.failure) return { ok: true };
+  return { ok: false, reason: sent.keys > 0 ? "partial" : sent.failure };
 };
 
 export async function answerQuestion(deps: AnswerQuestionDeps, request: AnswerQuestionRequest): Promise<AnswerResult> {

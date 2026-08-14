@@ -26,6 +26,7 @@ const FAILURE_TEXT: Record<AnswerFailure, string> = {
   closed: "That question was already answered.",
   "bad-picks": "Those choices did not fit the question. It may have changed — try again.",
   unwritable: "This terminal cannot be typed into from here. It outlived a server restart, so answer in the terminal itself.",
+  partial: "Part of the answer reached the dialog before it was interrupted, so where it stands is no longer known from here. Finish it in the terminal.",
 };
 
 const emit = defineEmits<{ answer: [picks: number[][]]; close: []; toggleExpand: [] }>();
