@@ -43,6 +43,28 @@ describe("the file a published view names", () => {
     expect(result.ok && result.view.html).toContain("<div id='grid'></div>");
   });
 
+  it("refuses a page that asks through a modal the sandbox eats", async () => {
+    // `sandbox="allow-scripts"` with no `allow-modals`: the browser ignores all three, nothing
+    // throws, and `confirm` answers `false`. So a page built on `prompt` submits the value it
+    // never asked for, and a withdrawal behind `confirm` is a dead button — with one console line
+    // as the only sign. Every shipped template used to be written this way, and the author who
+    // hit it reported the app as broken.
+    for (const html of ['<script>const n = prompt("name");</script>', "<script>if (!confirm('sure')) return;</script>", "<script>alert('taken')</script>"]) {
+      const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
+      expect(result.ok).toBe(false);
+      expect(result.ok === false && result.problems.join(" ")).toContain("allow-modals");
+    }
+  });
+
+  it("leaves a method of the page's own — and a comment about the rule — alone", async () => {
+    // The refusal is about the three globals actually being CALLED. A page with its own
+    // `ui.alert(…)`, and the comment explaining why `confirm()` is not used, are both fine; a
+    // refusal an author cannot act on would be worse than the bug it is about.
+    const html = "<script>// confirm() は使えない\nui.alert('hi'); row.confirm(1); /* prompt() も */</script>";
+    const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
+    expect(result.ok).toBe(true);
+  });
+
   it("refuses a path that names nothing", async () => {
     // The failure it prevents is silent: the page renders, the HTML is empty,
     // and the visitor is told there is nothing here.

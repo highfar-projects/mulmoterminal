@@ -341,6 +341,12 @@ entry per page, each naming **who it is for**:
   draws an empty page, which is the one failure nothing reports. Publish refuses a `public` page
   fed a collection outside `public.read`, and a `participant` page fed one a participant cannot
   reach at all (neither in `participantRead` nor their own row through `public.submit`).
+- **`alert`, `confirm` and `prompt` DO NOTHING.** Every view — public, staff, participant — is
+  rendered in `sandbox="allow-scripts"`, and without `allow-modals` the browser ignores the call
+  and logs *"Ignored call to 'prompt()'. The document is sandboxed, and the 'allow-modals'
+  keyword is not set."* Nothing throws, so a page that asks for a name with `prompt` submits an
+  empty one, or looks like a button that does nothing. Ask with an `<input>` in the page and
+  answer in an element of its own; that is the only thing that works here.
 - The view asks for writes through `window.__MC_APP_VIEW` — see the next section.
   (`window.__MC_PUBLIC_VIEW` is the same object under its former name, kept for one release.)
 - **`public.view` is the older spelling** of the first row above. It still works and normalizes to
@@ -420,6 +426,12 @@ either — but it deletes a record and, where there is a `mirror`, hands the slo
 next, so there is nothing to undo and nothing left to read afterwards. That is not the same kind
 of button as approving a booking for the fortieth time today. Put the confirmation in the page,
 and say what it costs: 取り下げると枠はすぐ他の人が取れるようになります。
+
+**In the page means IN THE PAGE — not `confirm()`**, which the sandbox ignores (above). A
+`if (!confirm(…)) return;` guard is worse than none: the call returns `false`, so the button
+silently does nothing, and the author who tested it once concludes withdrawal is broken. Draw the
+question — a button that arms itself, a row that expands into 「取り下げる / やめる」 — and put
+the cost in the text the reader can see.
 
 - **`transition` moves ONE field** — `collections.<cid>.statusField` — and only along
   `transitions` (for a member) or `public.submit.<cid>.selfTransitions` (for a participant). Those

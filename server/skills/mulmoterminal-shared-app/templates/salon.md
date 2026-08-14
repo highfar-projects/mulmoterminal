@@ -139,11 +139,19 @@
 `views/<name>.html` の 1 枚だけ）。ホスト側のカスタムビューとは**別の契約**です —
 `__MC_VIEW` を読むビューをここに指すと publish が拒否します。
 
+**`prompt` / `alert` / `confirm` は動きません** — ビューは `sandbox="allow-scripts"` の中で、
+`allow-modals` が無い呼び出しは無視されます（コンソールに `Ignored call to 'prompt()'.` と
+出るだけ）。訊くのはページの中の `<input>`、報せるのはページの中の要素です。
+
 ```html
+<label>お名前 <input id="who" maxlength="40" /></label>
+<p id="say" role="status"></p>
 <div id="grid"></div>
 <script>
   const view = window.__MC_APP_VIEW;
   const grid = document.getElementById("grid");
+  const who = document.getElementById("who");
+  const say = document.getElementById("say");
   view.onState(({ stylists = [], slots = [] }) => {
     // textContent と dataset で組み立てること。レコードの値（担当者名、メニュー名）は
     // 人が入力するもので、文字列連結で innerHTML に入れると公開ページでそれが動きます。
@@ -161,11 +169,15 @@
   grid.addEventListener("click", async (event) => {
     const slot = event.target.dataset?.slot;
     if (!slot) return;
-    const customerName = (prompt("お名前") ?? "").trim();
-    if (customerName === "") return;
+    const customerName = who.value.trim();
+    if (customerName === "") {
+      say.textContent = "お名前を入れてください。";
+      who.focus();
+      return;
+    }
     const result = await view.submit("bookings", { slot, customerName, status: "pending" });
     // 失敗の理由は二重予約とは限りません（締切、サインイン、必須項目）。
-    if (!result.ok) alert(result.error ? `予約できませんでした: ${result.error}` : "その枠は取られました");
+    say.textContent = result.ok ? "受け付けました。" : result.error ? `予約できませんでした: ${result.error}` : "その枠は取られました。";
   });
   view.ready();
 </script>

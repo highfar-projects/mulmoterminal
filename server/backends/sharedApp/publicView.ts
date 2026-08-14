@@ -72,6 +72,28 @@ export type ViewFileResult = { ok: true; view: ViewFile } | { ok: false; problem
  *  error anywhere. */
 const HOST_VIEW_GLOBAL = "__MC_VIEW";
 
+/** The three the sandbox eats, called from a view — or null.
+ *
+ *  Every view is rendered in `sandbox="allow-scripts"` with no `allow-modals`, so the browser
+ *  IGNORES `alert` / `confirm` / `prompt`: nothing is shown, nothing throws, and `confirm` returns
+ *  `false`. A page that asks for a name with `prompt` submits an empty one; a withdrawal behind
+ *  `if (!confirm(…)) return;` is a button that does nothing at all. The only sign is a console
+ *  line the author has to be looking at — which is the same class of silent blank page as
+ *  `__MC_VIEW`, so it is refused in the same place.
+ *
+ *  Two things it must NOT catch, because a refusal an author cannot act on is worse than the bug:
+ *  a method or field of their own (`ui.alert`, `this.confirm`), hence the lookbehind; and the
+ *  words in a COMMENT — including the comment saying not to use them, which is how a template
+ *  explains this. Comments are stripped first, imperfectly on purpose: the failure it can have is
+ *  a modal inside a string going unnoticed, and this gate is a help rather than a boundary.
+ *
+ *  Exported so the shipped templates are held to the same reading as an author's page — a sample
+ *  nobody can publish teaches a page nobody can use. */
+export const modalCallIn = (html: string): string | null => {
+  const code = html.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+  return /(?<![\w.$])(alert|confirm|prompt)\s*\(/.exec(code)?.[1] ?? null;
+};
+
 /** Read and judge the file a view's `path` names.
  *
  *  Every refusal here is a thing the reader would otherwise meet as an empty
@@ -215,6 +237,18 @@ function contentProblems(html: string, bytes: number, declared: string, where: s
         `${where}.path names '${declared}', which comes to ${bytes.toLocaleString()} bytes as a Firestore document — over the ${MAX_VIEW_BYTES.toLocaleString()} this publishes. ` +
           "The hard limit is 1 MiB per document and it counts field names and string lengths, not the file on disk, so the margin is not spare room. " +
           "Move what is big out of the page: the datasets arrive from the app, not from the HTML.",
+      ],
+    };
+  }
+  const modal = modalCallIn(html);
+  if (modal !== null) {
+    return {
+      ok: false,
+      problems: [
+        `${where}.path names '${declared}', which calls \`${modal}()\`. Views run sandboxed with no \`allow-modals\`, so the browser ignores all three of ` +
+          "`alert`, `confirm` and `prompt` — nothing appears, nothing throws, and `confirm` answers `false`. " +
+          "Published as it stands, this page would ask nobody for the value it then sends, or draw a button that silently does nothing. " +
+          "Ask with an `<input>` in the page, answer in an element of its own, and make a confirmation a second press rather than a modal.",
       ],
     };
   }

@@ -14,6 +14,8 @@ import path from "node:path";
 import type { CollectionSchema } from "@mulmoclaude/core/collection";
 import { declarationProblems } from "../../../server/backends/sharedApp/context.js";
 import { parseAuthoredApp } from "@receptron/sharedapp";
+import { modalCallIn } from "../../../server/backends/sharedApp/publicView.js";
+import { readdirSync } from "node:fs";
 
 const TEMPLATES = path.join(process.cwd(), "server", "skills", "mulmoterminal-shared-app", "templates");
 
@@ -72,6 +74,18 @@ describe("the shared-app templates", () => {
 
   it("meeting-room.md deploys as written", () => {
     expect(problemsFor("meeting-room.md", "facility@example.co.jp", ["rooms"])).toEqual([]);
+  });
+
+  it("shows no page the sandbox would silently break", () => {
+    // Publish refuses `alert` / `confirm` / `prompt` in a view, because the frame has no
+    // `allow-modals` and eats all three. A template is copied verbatim, so a sample using one
+    // teaches a page that publish rejects — and before that refusal existed, it taught the page
+    // an author shipped and reported as broken: "Ignored call to 'prompt()'".
+    for (const file of readdirSync(TEMPLATES).filter((name) => name.endsWith(".md"))) {
+      for (const [, html] of readFileSync(path.join(TEMPLATES, file), "utf8").matchAll(/^```html\n([\s\S]*?)\n```/gm)) {
+        expect(`${file}: ${modalCallIn(html ?? "") ?? ""}`).toBe(`${file}: `);
+      }
+    }
   });
 
   it("each template shows every collection whose shape carries a decision", () => {
