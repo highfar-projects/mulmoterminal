@@ -24,6 +24,7 @@ import { constants, lstat, open, realpath } from "node:fs/promises";
 import path from "node:path";
 
 import { normalizeViews, type AuthoredApp } from "@receptron/sharedapp";
+import { hasErrnoCode } from "../../errors.js";
 import { modalCallIn } from "./modalCall.js";
 
 /** The document the public page reads the HTML from. Beside core's
@@ -146,10 +147,63 @@ async function symlinkedAncestor(root: string, dir: string): Promise<string | nu
   return null;
 }
 
+/** `O_NOFOLLOW` where the platform has it, 0 where it does not.
+ *
+ *  Windows has no such flag, so `constants.O_NOFOLLOW` is undefined there — and
+ *  `O_RDONLY | undefined` is plain `O_RDONLY`, which follows the link with
+ *  nothing anywhere to say the guard had gone (#1709). Named rather than left
+ *  as a bare `0` because that silent 0 IS the bug: the constant vanishing has
+ *  to be visible in the source, next to the check that stands in for it. */
+const NOFOLLOW_IF_SUPPORTED = constants.O_NOFOLLOW ?? 0;
+
+/** What the last component is, without following it.
+ *
+ *  `"gone"` is the ONLY failure allowed through to the open below, which owns
+ *  that message and says it better. Every other `lstat` error refuses here: a
+ *  Windows reparse point libuv cannot classify answers an error rather than
+ *  "symbolic link", and reading that as "not a link" would leave `open` as the
+ *  only judge — which, without `O_NOFOLLOW`, it is not. A gate whose failure
+ *  mode is a world-readable document fails closed. */
+async function finalComponent(full: string): Promise<"link" | "plain" | "gone" | "unreadable"> {
+  try {
+    return (await lstat(full)).isSymbolicLink() ? "link" : "plain";
+  } catch (reason) {
+    return hasErrnoCode(reason) && reason.code === "ENOENT" ? "gone" : "unreadable";
+  }
+}
+
 async function openContained(full: string, declared: string, where: string): Promise<{ ok: true; html: string } | { ok: false; problems: string[] }> {
+  // `lstat` first, on every platform. Where `O_NOFOLLOW` works this only makes the
+  // refusal say what is actually wrong; where it does not, it is the whole defence
+  // — and it is deliberately not behind a platform branch, since a Windows-only
+  // path would never run in the CI that gates a merge.
+  //
+  // What it closes is the MISTAKE, completely: a link somebody left in the tree.
+  // The race it does not close is the one `symlinkedAncestor` already names above,
+  // and it is bounded the same way — winning it needs write access to the
+  // repository being published, which needs no symlink to leak anything.
+  const itself = await finalComponent(full);
+  if (itself === "link") {
+    return {
+      ok: false,
+      problems: [
+        `${where}.path names '${declared}', which is a symbolic link. ` +
+          "A published view is read without following links — what gets published is world-readable, so the file checked and the file read have to be the same one.",
+      ],
+    };
+  }
+  if (itself === "unreadable") {
+    return {
+      ok: false,
+      problems: [
+        `${where}.path names '${declared}', which could not be checked for being a link. ` +
+          "A published view is read without following links — what gets published is world-readable, so anything that cannot be shown NOT to be one is refused rather than opened. Nothing was written.",
+      ],
+    };
+  }
   let handle;
   try {
-    handle = await open(full, constants.O_RDONLY | constants.O_NOFOLLOW);
+    handle = await open(full, constants.O_RDONLY | NOFOLLOW_IF_SUPPORTED);
   } catch {
     return {
       ok: false,
