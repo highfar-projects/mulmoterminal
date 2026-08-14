@@ -189,7 +189,7 @@ describe("shared app preview", () => {
     const result = await previewSharedApp(root, stamp);
 
     expect(result.ok === false ? result.problems : []).toEqual([]);
-    expect(result.ok && result.publicPage?.html).toBe(html);
+    expect(result.ok && result.pages).toEqual([{ id: "public", html, audience: "public" }]);
     expect(docs.writes).toEqual([]);
   });
 
@@ -202,6 +202,35 @@ describe("shared app preview", () => {
     expect(result.ok === false && result.problems.length).toBeGreaterThan(0);
     // A refusal from a run that writes nothing is never partial.
     expect(result.ok === false && result.partial).toBe(false);
+  });
+
+  it("hands each page only the collections ITS OWN projection names", async () => {
+    // `notes` is open to the roster and NOT in `public.read`. Both pages exist, and the member one
+    // draws a collection a visitor may never see.
+    mkdirSync(path.join(root, "views"), { recursive: true });
+    writeApp(
+      root,
+      declaration({
+        public: { read: ["bookings"] },
+        views: [
+          { id: "public", path: "views/front.html", audience: "public", collections: ["bookings"] },
+          { id: "desk", path: "views/desk.html", audience: "member", collections: ["notes"] },
+        ],
+      }),
+    );
+    writeFileSync(path.join(root, "views", "desk.html"), "<p>desk</p>");
+    writeFileSync(path.join(root, "views", "front.html"), "<p>front</p>");
+    docs.store.set(`apps/${AID}/collections/bookings/items`, new Map([["b1", { slot: "10:00" }]]));
+    docs.store.set(`apps/${AID}/collections/notes/items`, new Map([["n1", { body: "private" }]]));
+
+    const result = await previewSharedApp(root, stamp);
+
+    expect(result.ok === false ? result.problems : []).toEqual([]);
+    // The public page must NOT receive `notes`. One map for the whole app would hand it over — the
+    // preview showing MORE than production, which is the one direction it may never fail in.
+    expect(result.ok && Object.keys(result.datasets["public:public"] ?? {})).toEqual(["bookings"]);
+    expect(result.ok && Object.keys(result.datasets["member:desk"] ?? {})).toEqual(["notes"]);
+    expect(docs.writes).toEqual([]);
   });
 
   it("carries the live app's keys forward when there is one to read", async () => {

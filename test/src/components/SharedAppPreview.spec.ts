@@ -23,12 +23,11 @@ const payload = (over: Record<string, unknown> = {}) => ({
   ok: true,
   preview: {
     aid: "aid-1",
-    config: { read: ["bookings"] },
-    publicPage: { id: "public", html: PAGE },
-    tiers: [],
+    pages: [{ id: "public", html: PAGE, audience: "public" }],
     publicOpen: true,
     fromLiveApp: false,
-    datasets: { bookings: [] },
+    generatedForm: false,
+    datasets: { "public:public": { bookings: [] } },
     unreadable: [],
     warnings: [],
     ...over,
@@ -121,7 +120,7 @@ describe("SharedAppPreview", () => {
   });
 
   it("draws nothing but a note for an app that publishes only schemas", async () => {
-    vi.stubGlobal("fetch", answering(payload({ publicPage: null, tiers: [] })));
+    vi.stubGlobal("fetch", answering(payload({ pages: [] })));
 
     const wrapper = await mountPreview();
 
@@ -129,14 +128,26 @@ describe("SharedAppPreview", () => {
     expect(wrapper.text()).toContain("publishes no pages");
   });
 
+  it("does not report a generated-form app as having nothing to draw", async () => {
+    vi.stubGlobal("fetch", answering(payload({ pages: [], generatedForm: true })));
+
+    const wrapper = await mountPreview();
+
+    // Same empty frame, opposite meanings. "There is nothing here" over a survey that publishes
+    // perfectly well sends the author looking for a bug that is not there.
+    expect(wrapper.text()).toContain("generated form");
+    expect(wrapper.text()).not.toContain("publishes no pages");
+  });
+
   it("offers every tier's pages, not only the public one", async () => {
     vi.stubGlobal(
       "fetch",
       answering(
         payload({
-          tiers: [
-            { tier: "member", pages: [{ id: "desk", html: "<p>desk</p>" }] },
-            { tier: "roster", pages: [{ id: "mine", html: "<p>mine</p>" }] },
+          pages: [
+            { id: "public", html: PAGE, audience: "public" },
+            { id: "desk", html: "<p>desk</p>", audience: "member" },
+            { id: "mine", html: "<p>mine</p>", audience: "roster" },
           ],
         }),
       ),
@@ -150,5 +161,37 @@ describe("SharedAppPreview", () => {
     expect(options.some((text) => text.includes("public"))).toBe(true);
     expect(options.some((text) => text.includes("desk"))).toBe(true);
     expect(options.some((text) => text.includes("mine"))).toBe(true);
+  });
+
+  it("starts with the picker on the page it is drawing", async () => {
+    const wrapper = await mountPreview();
+
+    // A blank picker over a page that is right there reads as "nothing selected", and the first
+    // thing the author does is click the thing that was already showing.
+    expect((wrapper.find("select").element as HTMLSelectElement).value).toBe("public:public");
+  });
+
+  it("hands a page only ITS OWN records", async () => {
+    vi.stubGlobal(
+      "fetch",
+      answering(
+        payload({
+          pages: [
+            { id: "public", html: PAGE, audience: "public" },
+            { id: "desk", html: "<p>desk</p>", audience: "member" },
+          ],
+          datasets: { "public:public": { bookings: [] }, "member:desk": { notes: [{ id: "1" }] } },
+        }),
+      ),
+    );
+
+    const wrapper = await mountPreview();
+    await wrapper.find("select").setValue("member:desk");
+    await flushPromises();
+
+    // The frame is per document and the records are per page. One map for the app would hand the
+    // member page's rows to the public page's frame — the preview showing MORE than production,
+    // the one direction it must never fail in.
+    expect(wrapper.find("iframe").attributes("srcdoc")).toContain("desk");
   });
 });

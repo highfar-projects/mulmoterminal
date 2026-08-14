@@ -23,47 +23,22 @@ import { computed, onBeforeUnmount, ref, shallowRef, toRaw, watch } from "vue";
 import { portChannel, publicViewSrcdoc, viewBridge, viewNonce, type PendingSubmit } from "@receptron/sharedapp/view";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { isRecord } from "../../common/isRecord";
+import { previewPageKey, type PreviewAudience, type PreviewDataset, type PreviewPage, type SharedAppPreview } from "../../common/sharedAppPreview";
 
 const props = defineProps<{ cwd: string | null }>();
-
-/** One page the author can look at, flattened out of the payload's tiers. */
-interface PreviewPage {
-  id: string;
-  html: string;
-  /** Who this page was written for. It decides the label and nothing else — the tiers are
-   *  separate documents with separate rules, not one page shown three ways. */
-  audience: "public" | "member" | "roster";
-}
-
-interface PreviewPayload {
-  aid: string;
-  config: { read: string[]; view?: { collections: string[] } };
-  publicPage: { id: string; html: string } | null;
-  tiers: { tier: "member" | "roster"; pages: { id: string; html: string }[] }[];
-  publicOpen: boolean;
-  fromLiveApp: boolean;
-  datasets: Record<string, Record<string, unknown>[]>;
-  unreadable: string[];
-  warnings: string[];
-}
 
 /** The payload, narrowed rather than asserted. Every field has a floor, because a pane that threw
  *  on an unexpected shape would report a server it could not read as an app that will not publish —
  *  two very different things to be told while you are trying to fix a page. */
-function asPayload(value: unknown): PreviewPayload | null {
+function asPayload(value: unknown): SharedAppPreview | null {
   if (!isRecord(value)) return null;
-  const config = isRecord(value.config) ? value.config : {};
   return {
     aid: typeof value.aid === "string" ? value.aid : "",
-    config: {
-      read: strings(config.read),
-      ...(isRecord(config.view) ? { view: { collections: strings(config.view.collections) } } : {}),
-    },
-    publicPage: asPage(value.publicPage),
-    tiers: Array.isArray(value.tiers) ? value.tiers.flatMap(asTier) : [],
+    pages: Array.isArray(value.pages) ? value.pages.flatMap(asPage) : [],
     publicOpen: value.publicOpen === true,
     fromLiveApp: value.fromLiveApp === true,
-    datasets: asDatasets(value.datasets),
+    generatedForm: value.generatedForm === true,
+    datasets: isRecord(value.datasets) ? Object.fromEntries(Object.entries(value.datasets).map(([key, rows]) => [key, asDatasets(rows)])) : {},
     unreadable: strings(value.unreadable),
     warnings: strings(value.warnings),
   };
@@ -71,23 +46,15 @@ function asPayload(value: unknown): PreviewPayload | null {
 
 const strings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : []);
 
-const asPage = (value: unknown): { id: string; html: string } | null =>
-  isRecord(value) && typeof value.id === "string" && typeof value.html === "string" ? { id: value.id, html: value.html } : null;
+const AUDIENCES: PreviewAudience[] = ["public", "member", "roster"];
 
-const asPages = (value: unknown): { id: string; html: string }[] => {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((entry) => {
-    const page = asPage(entry);
-    return page === null ? [] : [page];
-  });
+const asPage = (value: unknown): PreviewPage[] => {
+  if (!isRecord(value) || typeof value.id !== "string" || typeof value.html !== "string") return [];
+  const audience = AUDIENCES.find((candidate) => candidate === value.audience);
+  return audience === undefined ? [] : [{ id: value.id, html: value.html, audience }];
 };
 
-const asTier = (value: unknown): { tier: "member" | "roster"; pages: { id: string; html: string }[] }[] => {
-  if (!isRecord(value) || (value.tier !== "member" && value.tier !== "roster")) return [];
-  return [{ tier: value.tier, pages: asPages(value.pages) }];
-};
-
-const asDatasets = (value: unknown): Record<string, Record<string, unknown>[]> => {
+const asDatasets = (value: unknown): Record<string, PreviewDataset> => {
   if (!isRecord(value)) return {};
   return Object.fromEntries(
     Object.entries(value).map(([cid, rows]) => [cid, Array.isArray(rows) ? rows.filter((row): row is Record<string, unknown> => isRecord(row)) : []]),
@@ -97,7 +64,7 @@ const asDatasets = (value: unknown): Record<string, Record<string, unknown>[]> =
 const loading = ref(true);
 const declared = ref(false);
 const problems = ref<string[]>([]);
-const payload = shallowRef<PreviewPayload | null>(null);
+const payload = shallowRef<SharedAppPreview | null>(null);
 const selectedId = ref<string | null>(null);
 
 const AUDIENCE_LABEL: Record<PreviewPage["audience"], string> = {
@@ -106,15 +73,18 @@ const AUDIENCE_LABEL: Record<PreviewPage["audience"], string> = {
   roster: "The person who signed up",
 };
 
-const pages = computed<PreviewPage[]>(() => {
-  const data = payload.value;
-  if (data === null) return [];
-  const publicPage: PreviewPage[] = data.publicPage === null ? [] : [{ ...data.publicPage, audience: "public" }];
-  const tiered = data.tiers.flatMap((tier) => tier.pages.map((page) => ({ ...page, audience: tier.tier })));
-  return [...publicPage, ...tiered];
-});
+const pages = computed<PreviewPage[]>(() => payload.value?.pages ?? []);
 
-const page = computed(() => pages.value.find((candidate) => candidate.id === selectedId.value) ?? pages.value[0] ?? null);
+/** The key the picker binds to. Audience-qualified for the same reason the datasets are: a view id
+ *  is unique inside its tier, not across them. */
+const keyOf = (candidate: PreviewPage): string => previewPageKey(candidate.audience, candidate.id);
+
+const page = computed(() => pages.value.find((candidate) => keyOf(candidate) === selectedId.value) ?? pages.value[0] ?? null);
+
+/** ONLY this page's records. A member page may name a collection `public.read` does not open, so
+ *  one map for the app would either starve that page or hand its rows to the public one — and the
+ *  second would show the author a public page drawing private data. */
+const datasets = computed(() => (page.value === null ? {} : (payload.value?.datasets[keyOf(page.value)] ?? {})));
 
 /** A fresh name per rendered document, for the reason the package gives: reusing one would let a
  *  document that navigated away go on answering. */
@@ -126,8 +96,6 @@ const frame = ref<HTMLIFrameElement | null>(null);
 // The bridge's state, owned HERE. The package holds no framework of its own so that a second copy
 // of Vue cannot end up on a page — see its own note — so the cells are this host's `ref`s.
 const cells = { pending: ref<PendingSubmit | null>(null), sending: ref(false), readied: ref(false) };
-
-const datasets = computed(() => payload.value?.datasets ?? {});
 
 const bridge = viewBridge(
   {
@@ -225,7 +193,10 @@ async function load(): Promise<void> {
       return;
     }
     payload.value = asPayload(body.preview);
-    selectedId.value = null;
+    // The picker starts ON the page being drawn. Left null it renders blank while the frame below
+    // it shows the first page, which reads as "no page selected" over a page that is right there.
+    const first = payload.value?.pages[0];
+    selectedId.value = first === undefined ? null : keyOf(first);
   } catch {
     if (mine === generation) problems.value = ["Could not reach the server."];
   } finally {
@@ -253,13 +224,22 @@ watch(() => props.cwd, load, { immediate: true });
       </ul>
     </div>
 
+    <!-- Two states that put the same empty frame on screen and mean opposite things. Saying only
+         "no pages" over an app that publishes a generated form tells the author their survey cannot
+         be previewed BECAUSE there is nothing there, which is untrue and unactionable. -->
+    <div v-else-if="pages.length === 0 && payload?.generatedForm" class="p-3 text-[12px] text-dim">
+      This app publishes a generated form rather than a page of its own. Drawing that form here is not wired up yet — the published site builds it from what
+      <code>public.submit</code> declares.
+    </div>
     <div v-else-if="pages.length === 0" class="p-3 text-[12px] text-dim">This app publishes no pages — only its schemas. There is nothing to draw.</div>
 
     <template v-else>
       <div class="flex flex-none flex-wrap items-center gap-2 border-b border-border px-2.5 py-1.5">
         <label class="text-[11px] text-dim" for="mt-preview-page">Page</label>
         <select id="mt-preview-page" v-model="selectedId" class="rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg">
-          <option v-for="candidate in pages" :key="candidate.id" :value="candidate.id">{{ candidate.id }} — {{ AUDIENCE_LABEL[candidate.audience] }}</option>
+          <option v-for="candidate in pages" :key="keyOf(candidate)" :value="keyOf(candidate)">
+            {{ candidate.id }} — {{ AUDIENCE_LABEL[candidate.audience] }}
+          </option>
         </select>
         <!-- Which face this is, said in the pane rather than only in the picker: the three tiers
              are separate documents with separate rules, and reading the wrong one as "the app" is

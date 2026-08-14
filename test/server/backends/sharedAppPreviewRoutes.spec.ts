@@ -102,12 +102,23 @@ describe("shared app preview routes", () => {
 
   it("hands the payload through untouched when there is one", async () => {
     writeFileSync(path.join(root, "app.json"), JSON.stringify({ aid: "a", name: "n" }));
-    const payload = { ok: true, aid: "a", publicOpen: true, datasets: { bookings: [] }, unreadable: [], warnings: [] };
-    preview.mockResolvedValue(payload);
+    const wire = {
+      aid: "a",
+      pages: [],
+      publicOpen: true,
+      fromLiveApp: false,
+      generatedForm: false,
+      datasets: { "public:public": { bookings: [] } },
+      unreadable: [],
+      warnings: [],
+    };
+    // The backend also carries the full published projection and the generated form's inputs.
+    preview.mockResolvedValue({ ok: true, config: { read: ["bookings"], enabled: true }, form: { bookings: {} }, ...wire });
 
     const result = await get(`/api/shared-app/preview?cwd=${encodeURIComponent(root)}`);
 
-    expect(result.body).toEqual({ declared: true, ok: true, preview: payload });
+    // Named field by field, so neither of those reaches the browser for nobody to read.
+    expect(result.body).toEqual({ declared: true, ok: true, preview: wire });
     expect(preview).toHaveBeenCalledWith(root);
   });
 

@@ -41,50 +41,16 @@ import { planAppViewTiers, type TierPlan } from "./appViews.js";
 import { publicFormOf, type PublicForm } from "./publicForm.js";
 import { declaredView, readAppViewFile } from "./publicView.js";
 import { isRecord } from "../../../common/isRecord.js";
+import { previewPageKey, type PreviewDataset, type PreviewDatasets, type PreviewPage, type SharedAppPreview } from "../../../common/sharedAppPreview.js";
 
-/** One page as the preview will render it: the id a host names it by, and the author's HTML. */
-export interface PreviewPage {
-  id: string;
-  html: string;
-}
-
-export interface PreviewSuccess {
+/** The wire shape is in `common/` — both ends decide it. What is added here is the projection the
+ *  headless runner (P5) and the publish gates read and the browser has no use for. */
+export interface PreviewSuccess extends SharedAppPreview {
   ok: true;
-  aid: string;
   /** `config/public` as this publish would write it — the document the anonymous page reads. */
   config: PublishedConfigDoc;
-  /** The generated form's inputs, for an app that publishes a form rather than a page. */
+  /** The generated form's inputs, for an app that publishes a form rather than a page of its own. */
   form: PublicForm;
-  /** The page at `/a/{slug}`, or null when the app publishes no public view. */
-  publicPage: PreviewPage | null;
-  /** The pages at `/m/{slug}` and `/p/{slug}`, with the config each tier's parent needs in order
-   *  to query for its datasets. Empty when the declaration names no pages for that audience. */
-  tiers: TierPlan[];
-  /** Whether this publish would leave the app open to anonymous visitors. False is normal: an app
-   *  with no `public` block is one only its roster ever sees. */
-  publicOpen: boolean;
-  /** What was read out of `apps/{aid}`, or null when there is nothing there yet — which is the
-   *  ordinary state of an app being previewed for the first time.
-   *
-   *  Said out loud because the projection DEPENDS on it: keys publish does not own are carried
-   *  forward from the live document, so a preview computed without one is the projection of a
-   *  FIRST publish, not of the next one. */
-  fromLiveApp: boolean;
-  /** The app's REAL records, per collection, for the collections the projection opens.
-   *
-   *  Real rather than generated from the declaration, and this is a decision rather than
-   *  convenience: an app's records live in Firebase and nowhere else, so a second source on this
-   *  machine would be one more thing that can agree with the author's screen and disagree with a
-   *  visitor's. The author reads them with their own credentials, as the owner they already are,
-   *  and nothing is written. An empty collection draws an empty page — which is a state worth
-   *  seeing rather than a gap to fill with samples. */
-  datasets: Record<string, Record<string, unknown>[]>;
-  /** Collections the projection opens but whose records could not be read. Reported rather than
-   *  silently empty: "no bookings yet" and "the read was refused" put identical pixels on the
-   *  screen and mean opposite things to the author. */
-  unreadable: string[];
-  /** Pages that will go out but are worth looking at first — see `viewWarnings`. */
-  warnings: string[];
 }
 
 export type PreviewResult = PreviewSuccess | SharedAppFailure;
@@ -100,31 +66,106 @@ function stagedFromWorkingTree(
   return projectDeploy(authored, schemasOf(collections), stamp, existing).staging;
 }
 
-/** The app's records for one set of collections, read with the author's own credentials.
+/** One collection as a page asks for it: every row, or only the reader's own.
+ *
+ *  The narrow shape of `ProjectedViewCollection`, restated rather than imported, because only these
+ *  three fields decide what to read and the rest of that type is about how a tier is projected. */
+interface RequestedCollection {
+  cid: string;
+  scope: "all" | "own";
+  emailField?: string | undefined;
+  ownDocId?: "auth.uid" | undefined;
+}
+
+/** One collection's records, read with the author's own credentials.
  *
  *  A refusal is carried back rather than thrown. The most common one is the ordinary state of an
  *  app that has never been deployed — `apps/{aid}` does not exist, so the rules cannot resolve an
  *  owner for anything beneath it — and refusing to preview at all because there are no records yet
- *  would make the feature useless exactly when it is most wanted. */
+ *  would make the feature useless exactly when it is most wanted.
+ *
+ *  `scope: "own"` IS APPLIED, and this is the part that matters. Reading as the owner would return
+ *  every row for a page whose reader is only ever shown their own — which makes the preview show
+ *  MORE than production, the one direction it must never fail in. The author is a real reader, so
+ *  the honest answer is their own rows, found the same way the page will find them. */
+async function readCollection(handle: SharedAppHandle, aid: string, want: RequestedCollection): Promise<PreviewDataset> {
+  const docs = await handle.docs.list(`${appSchemasPath(aid)}/${want.cid}/items`);
+  // The id is put ON the record. The rules use the document id as the record's identity
+  // (a booking's id IS its slot), and a page that renders a list needs it as a field.
+  const rows: PreviewDataset = docs.map((doc) => ({ ...(isRecord(doc.data) ? doc.data : {}), id: doc.id }));
+  if (want.scope === "all") return rows;
+  if (want.ownDocId === "auth.uid") return rows.filter((row) => row.id === handle.uid);
+  const field = want.emailField;
+  if (field === undefined) return [];
+  return rows.filter((row) => row[field] === handle.email);
+}
+
+/** Every page's records, each page asking only for what its own projection names.
+ *
+ *  Read once per collection and shared where two pages want the same one, but kept in per-page maps
+ *  so that a collection only a member page opens never reaches the public page's frame. */
 async function readDatasets(
   handle: SharedAppHandle,
   aid: string,
-  cids: readonly string[],
-): Promise<{ datasets: Record<string, Record<string, unknown>[]>; unreadable: string[] }> {
-  const datasets: Record<string, Record<string, unknown>[]> = {};
-  const unreadable: string[] = [];
-  for (const cid of cids) {
-    try {
-      const docs = await handle.docs.list(`${appSchemasPath(aid)}/${cid}/items`);
-      // The id is put ON the record. The rules use the document id as the record's identity
-      // (a booking's id IS its slot), and a page that renders a list needs it as a field.
-      datasets[cid] = docs.map((doc) => ({ ...(isRecord(doc.data) ? doc.data : {}), id: doc.id }));
-    } catch {
-      unreadable.push(cid);
+  wanted: { key: string; collections: RequestedCollection[] }[],
+): Promise<{ datasets: PreviewDatasets; unreadable: string[] }> {
+  const datasets: PreviewDatasets = {};
+  const unreadable = new Set<string>();
+  const cache = new Map<string, PreviewDataset | null>();
+  for (const page of wanted) {
+    const forPage: Record<string, PreviewDataset> = {};
+    for (const want of page.collections) {
+      // Keyed on the SCOPE too: the same collection read `all` for the front desk and `own` for the
+      // participant is two different answers, and sharing one would hand a page rows it may not see.
+      const key = `${want.cid}:${want.scope}:${want.emailField ?? ""}:${want.ownDocId ?? ""}`;
+      if (!cache.has(key)) {
+        cache.set(key, await readCollection(handle, aid, want).catch(() => null));
+      }
+      const rows = cache.get(key) ?? null;
+      if (rows === null) unreadable.add(want.cid);
+      else forPage[want.cid] = rows;
     }
+    datasets[page.key] = forPage;
   }
-  return { datasets, unreadable };
+  // Code-unit order, like every other list this feature reports: the same order Firestore lists
+  // ids in, so a projection sorted one way against a listing sorted another does not read as a
+  // change.
+  return { datasets, unreadable: [...unreadable].sort((left, right) => (left < right ? -1 : 1)) };
 }
+
+/** What one tier's projection says each of its pages may query for. */
+function tierRequests(plan: TierPlan): { key: string; collections: RequestedCollection[] }[] {
+  const config = plan.config;
+  const views = isRecord(config) && Array.isArray(config.views) ? config.views : [];
+  const byId = new Map<string, RequestedCollection[]>();
+  for (const view of views) {
+    if (!isRecord(view) || typeof view.id !== "string") continue;
+    byId.set(view.id, Array.isArray(view.collections) ? view.collections.flatMap(asRequested) : []);
+  }
+  return plan.pages.map((page) => ({ key: previewPageKey(plan.tier, page.id), collections: byId.get(page.id) ?? [] }));
+}
+
+const asRequested = (value: unknown): RequestedCollection[] => {
+  if (!isRecord(value) || typeof value.cid !== "string") return [];
+  const scope = value.scope === "own" ? "own" : "all";
+  return [
+    {
+      cid: value.cid,
+      scope,
+      ...(typeof value.emailField === "string" ? { emailField: value.emailField } : {}),
+      ...(value.ownDocId === "auth.uid" ? { ownDocId: "auth.uid" as const } : {}),
+    },
+  ];
+};
+
+/** The public page has no view id of its own — it is the app's one anonymous face, and the
+ *  projection names it nowhere. */
+const PUBLIC_PAGE_ID = "public";
+
+/** What the anonymous page may query for. Everything at `scope: "all"`: a visitor holds no identity
+ *  the rules could narrow a read by, which is why `public.read` is a list of whole collections. */
+const publicRequests = (config: PublishedConfigDoc): RequestedCollection[] =>
+  (config.view?.collections ?? config.read).map((cid) => ({ cid, scope: "all" as const }));
 
 export async function previewSharedApp(root: string, opts: SharedAppOptions = {}): Promise<PreviewResult> {
   const context = await sharedAppContext(root);
@@ -150,20 +191,33 @@ export async function previewSharedApp(root: string, opts: SharedAppOptions = {}
   const tiers = await planAppViewTiers(root, authored, stamp);
   if (!tiers.ok) return { ok: false, partial: false, problems: tiers.problems };
 
-  // WHICH collections, asked of the PROJECTION rather than of the declaration. `public.read` is
-  // what a visitor may see; a preview that read everything on disk would draw a page the author
-  // cannot ship, and the gap would show up for the first time in somebody else's browser.
-  const { datasets, unreadable } = await readDatasets(handle, aid, face.config.view?.collections ?? face.config.read);
+  const publicHtml = page !== null && page.ok ? page.view.html : null;
+  const publicPages: PreviewPage[] = publicHtml === null ? [] : [{ id: PUBLIC_PAGE_ID, html: publicHtml, audience: "public" }];
+  const tierPages: PreviewPage[] = tiers.plans.flatMap((plan) =>
+    plan.pages.map((tierPage): PreviewPage => ({ id: tierPage.id, html: tierPage.html, audience: plan.tier })),
+  );
+  const pages = [...publicPages, ...tierPages];
+
+  // WHICH collections, asked of each page's own PROJECTION rather than of the declaration —
+  // `public.read` is what a visitor may see, and reading everything on disk would draw a page the
+  // author cannot ship. Per page rather than one list for the app, because a member page may name a
+  // collection the public one must never receive.
+  const { datasets, unreadable } = await readDatasets(handle, aid, [
+    ...(publicHtml === null ? [] : [{ key: previewPageKey("public", PUBLIC_PAGE_ID), collections: publicRequests(face.config) }]),
+    ...tiers.plans.flatMap(tierRequests),
+  ]);
+
+  const form = publicFormOf(authored, staged);
 
   return {
     ok: true,
     aid,
     config: face.config,
-    form: publicFormOf(authored, staged),
-    publicPage: page === null || !page.ok ? null : { id: "public", html: page.view.html },
-    tiers: tiers.plans,
+    form,
+    pages,
     publicOpen: face.public !== undefined,
     fromLiveApp: existingApp !== null,
+    generatedForm: publicHtml === null && Object.keys(form).length > 0,
     datasets,
     unreadable,
     warnings: [...(page !== null && page.ok ? page.view.warnings : []), ...tiers.warnings],

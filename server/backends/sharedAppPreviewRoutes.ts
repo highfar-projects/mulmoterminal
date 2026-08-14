@@ -16,6 +16,7 @@ import path from "node:path";
 import { APP_MANIFEST_FILE } from "@mulmoclaude/core/collection/server";
 import { previewSharedApp } from "./sharedApp/preview.js";
 import { workspaceForRoute } from "../routes/routeParams.js";
+import type { SharedAppPreview, SharedAppPreviewResponse } from "../../common/sharedAppPreview.js";
 
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
@@ -28,6 +29,18 @@ async function declaresAnApp(root: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** The one way this pair of routes fails.
+ *
+ *  `headersSent` is checked because the handlers write their own answers — a throw after that would
+ *  otherwise try to write a finished response and log `ERR_HTTP_HEADERS_SENT` over the real cause.
+ *
+ *  The message goes to the LOG and a fixed string to the browser: a Firestore error carries absolute
+ *  paths off this machine and internals of a database the page has no business learning about. */
+function fail(res: Response, err: unknown): void {
+  console.error(`[shared-app preview] ${messageOf(err)}`);
+  if (!res.headersSent) res.status(500).json({ error: "the preview could not be computed" });
 }
 
 async function respondPreview(req: Request, res: Response): Promise<void> {
@@ -50,10 +63,23 @@ async function respondPreview(req: Request, res: Response): Promise<void> {
     // 200 with the problems on it. The declaration being wrong is an answer to the question asked,
     // not a failure to answer it — and the pane's whole job is to put those problems in front of
     // the author, which it cannot do from a status code.
-    res.json({ declared: true, ok: false, problems: result.problems });
+    res.json({ declared: true, ok: false, problems: result.problems } satisfies SharedAppPreviewResponse);
     return;
   }
-  res.json({ declared: true, ok: true, preview: result });
+  // The WIRE shape, named field by field rather than spread. `previewSharedApp` also carries the
+  // full published projection and the generated form's inputs, which this pane has no use for and
+  // which would go to the browser for nobody to read.
+  const preview: SharedAppPreview = {
+    aid: result.aid,
+    pages: result.pages,
+    publicOpen: result.publicOpen,
+    fromLiveApp: result.fromLiveApp,
+    generatedForm: result.generatedForm,
+    datasets: result.datasets,
+    unreadable: result.unreadable,
+    warnings: result.warnings,
+  };
+  res.json({ declared: true, ok: true, preview } satisfies SharedAppPreviewResponse);
 }
 
 export function mountSharedAppPreviewRoutes(app: Express): void {
@@ -63,9 +89,15 @@ export function mountSharedAppPreviewRoutes(app: Express): void {
   // file's existence.
   app.get("/api/shared-app/declared", (req, res) => {
     void (async () => {
-      const cwd = workspaceForRoute(req.query.cwd, res);
-      if (cwd === null) return;
-      res.json({ declared: await declaresAnApp(cwd) });
+      try {
+        const cwd = workspaceForRoute(req.query.cwd, res);
+        if (cwd === null) return;
+        res.json({ declared: await declaresAnApp(cwd) });
+      } catch (err) {
+        // `declaresAnApp` swallows its own failures, but the guard and the write can still throw,
+        // and an unhandled rejection here is a request that never gets an answer at all.
+        fail(res, err);
+      }
     })();
   });
 
@@ -74,8 +106,7 @@ export function mountSharedAppPreviewRoutes(app: Express): void {
       try {
         await respondPreview(req, res);
       } catch (err) {
-        console.error(`[shared-app preview] ${messageOf(err)}`);
-        res.status(500).json({ error: messageOf(err) });
+        fail(res, err);
       }
     })();
   });
