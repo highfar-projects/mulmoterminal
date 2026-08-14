@@ -177,11 +177,11 @@ describe("manageSharedApp, the tool", () => {
     // Every slug or aid written as a PATH SEGMENT is an entrance, whatever sentence it sits in.
     const entrances = [...source.matchAll(/\$\{(?:result\.)?(?:slug|name|aid)\}/g)].filter((hit) => before(hit.index).endsWith("/"));
     // Not zero: a spec that passes because the strings were renamed out from under it is not a
-    // guard. `apps/${aid}` is a Firestore path rather than an address, hence the `[amp]|staging`.
+    // guard.
     expect(entrances.length).toBeGreaterThan(4);
     for (const hit of entrances) {
-      const path = before(hit.index).match(/(\$\{MULMOSERVER_ORIGIN\})?\/?([a-z]+)\/$/);
-      if (path?.[2] === "apps") continue;
+      // `apps/${aid}` is a Firestore path rather than an address.
+      if (before(hit.index).endsWith("apps/")) continue;
       expect(before(hit.index)).toMatch(/\$\{MULMOSERVER_ORIGIN\}\/(?:[amp]|staging)\/$/);
     }
   });
