@@ -555,14 +555,16 @@ function dismissQuestionPane(): void {
 async function sayInsteadOfChoosing(text: string): Promise<void> {
   const event = expandedQuestion.value;
   if (!event) return;
-  dropQuestion(event.sessionId);
+  // The pane is left standing until this succeeds. Closing first unmounts it, and the words the
+  // user typed go with it — a refusal would then ask them to write the sentence again.
   const failure = await postWords(event.sessionId, event.toolUseId, text);
+  if (!failure) {
+    dropQuestion(event.sessionId);
+    return;
+  }
   // Unlike a button press, `closed` is NOT passed over in silence here: the user wrote a sentence,
   // and a pane that simply vanishes tells them nothing about where it went.
-  if (failure) {
-    answerFailure.value = failure;
-    await revealQuestion(event.sessionId);
-  }
+  answerFailure.value = failure;
 }
 
 // Answering the enlarged cell's dialog. The picks go to the host, which turns them into the

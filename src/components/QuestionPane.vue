@@ -39,6 +39,11 @@ const questions = computed(() => props.event?.questions ?? []);
 // controls do not.
 const answerable = computed(() => props.failure !== "partial" && props.failure !== "unwritable");
 
+// Words go into the text row of the question ON SCREEN, and committing them moves a wizard to its
+// NEXT question rather than finishing it — while the host, quite rightly, treats that dialog as
+// answered. So this is offered for a lone question only; a wizard is answered with its buttons.
+const canUseWords = computed(() => answerable.value && questions.value.length === 1);
+
 // One entry per question, holding the chosen option indexes. Kept ASCENDING: the keystrokes that
 // answer the dialog only ever walk DOWN the list, so an out-of-order pick would toggle the wrong
 // row (common/askQuestion.ts rejects it outright rather than sending it).
@@ -164,7 +169,7 @@ function choose(qi: number, oi: number): void {
 
         <!-- None of the options fits. Declining is what the dialog itself offers here, so this says
              so rather than pretending the text goes into the question. -->
-        <div v-if="answerable" class="mt-3 border-t border-border pt-3">
+        <div v-if="canUseWords" class="mt-3 border-t border-border pt-3">
           <label class="mb-1 block text-[12px] text-dim" for="question-other">Answer in your own words</label>
           <textarea
             id="question-other"

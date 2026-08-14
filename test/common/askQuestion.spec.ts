@@ -208,8 +208,10 @@ describe("keysToAnswerInWords", () => {
     expect(keysToAnswerInWords([multi(["Nuts", "Cream", "Honey"])], "olives")).toEqual([DOWN, DOWN, DOWN, "olives", ENTER]);
   });
 
-  it("aims at the first question — that is the one on screen", () => {
-    expect(keysToAnswerInWords([single(["Small", "Large"]), single(["Hot", "Cold", "Warm"])], "medium")).toEqual([DOWN, DOWN, "medium", ENTER]);
+  // Committing words moves a wizard to its NEXT question rather than finishing it, and the dialog
+  // would be claimed as answered with pages still unanswered. A wizard is answered with its buttons.
+  it("refuses a dialog that holds more than one question", () => {
+    expect(keysToAnswerInWords([single(["Small", "Large"]), single(["Hot", "Cold"])], "medium")).toBeNull();
   });
 
   // Empty text would land on the row and press Enter, which DECLINES the whole question — the one

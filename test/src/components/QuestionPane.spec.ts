@@ -172,6 +172,13 @@ describe("answering in your own words", () => {
     expect((other(w).element as HTMLTextAreaElement).value).toBe("");
   });
 
+  // Committing words moves a WIZARD to its next question rather than finishing it, while the host
+  // treats the dialog as answered — so the box is offered for a lone question only.
+  it("offers no text box when the dialog holds more than one question", () => {
+    const w = mountPane([question("Color", ["Red", "Blue"]), question("Size", ["Small", "Large"])]);
+    expect(w.find('[data-testid="question-other"]').exists()).toBe(false);
+  });
+
   // Same rule as the option buttons: a failure that cannot be retried offers no controls.
   it("offers no text box for a failure that cannot be retried", () => {
     const w = mount(QuestionPane, { props: { event: event([question("Color", ["Red", "Blue"])]), failure: "partial" as const } });
