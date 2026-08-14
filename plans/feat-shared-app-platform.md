@@ -47,7 +47,7 @@
 
 ## 0. 決定済み・未実装（先にこれ）
 
-[`plans/feat-shared-app-public-view.md`](./feat-shared-app-public-view.md)（#1658、マージ済み）の
+[`plans/done/feat-shared-app-public-view.md`](./done/feat-shared-app-public-view.md)（#1658、マージ済み）の
 3 つ。レビューを 20 件通した設計で、**この計画はそれを前提にする**。要点だけ:
 
 1. **`idFrom: "field"` + `idIn` + `window.untilField`** — 枠 id を予約の id にして、

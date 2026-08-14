@@ -56,7 +56,7 @@ no dependents to bump, no plugin peer ranges, no changelog check and no e2e suit
 `test/fixtures/sharedAppGolden/` keeps a picture of the two `{tier}/config` documents, so a
 change to what a published app carries shows up as a diff rather than only as a test.
 
-Design: [`plans/refactor-shared-app-module.md`](https://github.com/receptron/mulmoterminal/blob/main/plans/refactor-shared-app-module.md).
+Design: [`plans/done/refactor-shared-app-module.md`](https://github.com/receptron/mulmoterminal/blob/main/plans/done/refactor-shared-app-module.md).
 
 ### The staff page can approve, and the people on the roster have an entrance of their own (#1671)
 
@@ -107,7 +107,7 @@ await window.__MC_APP_VIEW.assign(cid, itemId, address); // hand a row to a coll
   out and shows nothing of the app's internal vocabulary. The two are not exclusive — an owner who
   also books is on both, and each address shows one face.
 
-Design: `plans/feat-shared-app-member-write.md`.
+Design: `plans/done/feat-shared-app-member-write.md`.
 
 ### A shared app can have a page for its staff, not only for its visitors (#1667)
 
@@ -145,7 +145,7 @@ moving an owner's own data, and does not pretend to.
 
 Needs `@mulmoclaude/core@3.14.0`, the Firestore rules from mulmoserver#168 (deployed), and the
 `/m/{slug}` runtime from mulmoserver#169. Design and open questions:
-[`plans/feat-shared-app-member-view.md`](https://github.com/receptron/mulmoterminal/blob/main/plans/feat-shared-app-member-view.md).
+[`plans/done/feat-shared-app-member-view.md`](https://github.com/receptron/mulmoterminal/blob/main/plans/done/feat-shared-app-member-view.md).
 Writing from a member page — approving a booking, reassigning it — is not in this release.
 
 ## mulmoterminal@4.8.2 — 2026-08-13

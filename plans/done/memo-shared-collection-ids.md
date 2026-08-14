@@ -1,8 +1,8 @@
 # メモ: 共有コレクションの識別子と置き場所
 
 **状態**: **本文への反映は完了**（2026-08-11）。
-[`feat-shareable-collections.md`](./feat-shareable-collections.md) と
-[`shared-collection-flow.md`](./shared-collection-flow.md) が正で、このメモは
+[`feat-shareable-collections.md`](../feat-shareable-collections.md) と
+[`shared-collection-flow.md`](../shared-collection-flow.md) が正で、このメモは
 **決定の理由**の記録として残す（本文は「何をするか」、ここは「なぜそう決めたか」）。
 **日付**: 2026-08-11
 **きっかけ**: mulmoclaude #2867 のレビューが「別アプリの同名コレクションが 1 つの一覧で

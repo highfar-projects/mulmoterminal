@@ -115,7 +115,7 @@ uid に正規表現メタ文字が入っても壊れないためであり、`<vi
   `allow read: if true` なので、受付の画面をそこに置くとアプリの内部語彙 — 状態名・査読メモの
   見出し・担当の付け方 — が世界に出る。そして**射影を分けるだけでは足りない**: participant は
   スタッフ用のドキュメントをパスで直接取得でき、語彙は HTML そのものに書いてある。
-  分けるものはルールで分ける（[`plans/feat-shared-app-member-view.md`](../plans/feat-shared-app-member-view.md)）
+  分けるものはルールで分ける（[`plans/done/feat-shared-app-member-view.md`](../plans/done/feat-shared-app-member-view.md)）
 
 **破れ方**: 個人情報を含む行を「公開の表に出したい」と言われて、注意書きを添えて `public.read` に
 足すこと。注意書きは強制ではない。**別コレクションに割る**のが唯一の答えである。
@@ -226,7 +226,7 @@ sandbox の中の HTML は自由に生成してよい（Firestore ハンドル�
 React アプリに戻っただけで、それはもう新しくない。
 
 守られている場所: View Bridge の分割（親が Firebase を持ち、ビューは受け取った値を描くだけ）と、
-公開ビューについては [`plans/feat-shared-app-public-view.md`](../plans/feat-shared-app-public-view.md)。
+公開ビューについては [`plans/done/feat-shared-app-public-view.md`](../plans/done/feat-shared-app-public-view.md)。
 公開ビューでは**`event.source` の検証では足りない** — それは「どのウィンドウか」を示すだけで
 「人が選んだ」を示さない。書くと決めるのは**親**であり、親が自分で描いた確認を挟む。
 
@@ -242,7 +242,7 @@ React アプリに戻っただけで、それはもう新しくない。
   渡すのは氏名・連絡先を含む本物のレコードである。**これは越えられる境界ではない**と判断している:
   ビューを書くのはオーナー、データもオーナーのもの、読むのはオーナーの名簿にいる人で、
   ビューを書かなくてもコレクションの画面から書き出せる。**ただし publish の出力がそう言う**
-- **名簿の人の書き込みには確認を挟まない**（[`plans/feat-shared-app-member-write.md`](../plans/feat-shared-app-member-write.md)）。
+- **名簿の人の書き込みには確認を挟まない**（[`plans/done/feat-shared-app-member-write.md`](../plans/done/feat-shared-app-member-write.md)）。
   公開側で確認が要るのは、ページを書いた人と責任を負う人が違うためで、メンバー側はそこが逆
   （店のページ・店のデータ・本人のロールが上限）。1 日に何十回押すボタンの前のモーダルは、
   安全性を上げずに使うのをやめさせる。**代わりに、何が起きたかを親が iframe の外に必ず出す** —

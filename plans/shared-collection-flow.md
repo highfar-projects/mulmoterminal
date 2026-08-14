@@ -1,7 +1,7 @@
 # 共有コレクション: 作成から公開までの流れ
 
 **状態**: 2026-08-11 の設計議論を反映したシナリオ。決定の根拠は
-[`memo-shared-collection-ids.md`](./memo-shared-collection-ids.md)、
+[`memo-shared-collection-ids.md`](./done/memo-shared-collection-ids.md)、
 全体設計は [`feat-shareable-collections.md`](./feat-shareable-collections.md)。
 **実装済みと未実装が混在している** — 各ステップ末尾と最後の表を参照。
 

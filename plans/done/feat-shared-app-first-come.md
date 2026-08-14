@@ -1,7 +1,9 @@
 # 共有アプリ: 先着枠つき予約（解禁時刻・申込み順・定員をビューで出す）
 
-**状態**: 設計のみ。実装は未着手。2026-08-12 の議論から。
-全体設計は [`feat-shareable-collections.md`](./feat-shareable-collections.md)、
+**状態**: **完了**（2026-08-12）。`assignee` と同じ 3 本（mulmoserver#162 /
+mulmoclaude#2874 / mulmoterminal#1655）で入り、解禁の瞬間の扱いは mulmoserver#163 で直した。
+設計は 2026-08-12 の議論から。
+全体設計は [`feat-shareable-collections.md`](../feat-shareable-collections.md)、
 行スコープの承認は [`feat-shared-app-assignee-role.md`](./feat-shared-app-assignee-role.md)。
 
 **追加する宣言は 2 つだけ**（`stampField` と相対的な解禁時刻）で、定員と繰り上げは
