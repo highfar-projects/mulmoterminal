@@ -73,6 +73,11 @@ describe("the file a published view names", () => {
       // An attribute value does not have to be quoted, and an optional call is still a call.
       "<button onclick=prompt()>go</button>",
       "<a href=javascript:confirm()>go</a>",
+      // An attribute is DECODED before it is compiled as a handler or followed as a URL, so the
+      // call — and the scheme itself — can be written as character references and still run.
+      "<button onclick=\"prom&#112;t('name')\">go</button>",
+      "<a href=\"java&#x73;cript:confirm('sure')\">go</a>",
+      "<a href=\"javascript:&#97;lert('x')\">go</a>",
       '<script>prompt?.("name")</script>',
       '<script>window.prompt?.("name")</script>',
       // A template literal's TEXT is a string, but its `${…}` is code — and building markup out of
@@ -98,6 +103,10 @@ describe("the file a published view names", () => {
       // A template that interpolates a NAME, and an object literal inside a substitution: the
       // braces have to be counted, or the walker leaves the substitution at the wrong `}`.
       "<script>const t = `hello ${name} there`; const o = `${ {a:1} } ok`;</script>",
+      // A `<script>` body is raw text: the browser does NOT decode references in it, so neither
+      // does this — and an ordinary `&amp;` in a URL must not be read as anything at all.
+      "<script>const s = '&#112;rompt(';</script>",
+      '<a href="/a/hq-rooms?x=1&amp;y=2">ok</a>',
     ].join("\n");
     const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
     expect(result.ok).toBe(true);

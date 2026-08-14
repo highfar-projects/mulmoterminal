@@ -30,13 +30,41 @@
 const SCRIPT_BODY = /<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi;
 // An attribute value may be quoted either way OR bare — `<button onclick=prompt()>` is valid HTML
 // and runs, so an extractor that insists on quotes reads a working call as no code at all.
-const INLINE_HANDLER = /\son[a-z]+\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
-const JAVASCRIPT_URL = /=\s*(?:"\s*javascript:([^"]*)"|'\s*javascript:([^']*)'|javascript:([^\s"'>]+))/gi;
+const ATTRIBUTE = /\s([a-z][a-z0-9-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
+
+/** A named reference worth the table: the ones a page actually contains. Anything else is left as
+ *  written — an unknown name decodes to itself, which can only cost a miss, never a false alarm. */
+const NAMED_REFERENCE: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", Tab: "\t", NewLine: "\n" };
+
+/** An attribute value as the BROWSER sees it.
+ *
+ *  Character references are decoded in attributes before the value is compiled as a handler or
+ *  followed as a URL, so `onclick="prom&#112;t('x')"` runs `prompt` and
+ *  `href="java&#x73;cript:confirm('x')"` is a `javascript:` URL. Reading the raw text finds
+ *  neither. A `<script>` BODY is the opposite — its content is raw text and is NOT decoded — which
+ *  is why this is applied to attributes only.
+ *
+ *  The semicolon is optional for a numeric reference because browsers accept it that way in an
+ *  attribute, and being permissive here can only find more code, not less. */
+const decoded = (value: string): string =>
+  value.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);?/gi, (whole: string, body: string): string => {
+    if (!body.startsWith("#")) return NAMED_REFERENCE[body] ?? whole;
+    const code = body.startsWith("#x") || body.startsWith("#X") ? Number.parseInt(body.slice(2), 16) : Number.parseInt(body.slice(1), 10);
+    return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
+  });
+
+/** The code an attribute carries: an `on*` handler's body, or what follows `javascript:` in a URL.
+ *  Decided AFTER decoding, since the scheme itself can be written `java&#x73;cript:`. */
+const attributeCode = (name: string, raw: string): string | null => {
+  const value = decoded(raw);
+  if (name.startsWith("on")) return value;
+  const url = value.trimStart();
+  return /^javascript:/i.test(url) ? url.slice(url.indexOf(":") + 1) : null;
+};
 
 const scriptsOf = (html: string): string[] => [
   ...[...html.matchAll(SCRIPT_BODY)].map((hit) => hit[1] ?? ""),
-  ...[...html.matchAll(INLINE_HANDLER)].map((hit) => hit[1] ?? hit[2] ?? hit[3] ?? ""),
-  ...[...html.matchAll(JAVASCRIPT_URL)].map((hit) => hit[1] ?? hit[2] ?? hit[3] ?? ""),
+  ...[...html.matchAll(ATTRIBUTE)].map((hit) => attributeCode(hit[1] ?? "", hit[2] ?? hit[3] ?? hit[4] ?? "")).filter((code): code is string => code !== null),
 ];
 
 /** What the walker is in the middle of. `code` is the only state that reaches the match. */
