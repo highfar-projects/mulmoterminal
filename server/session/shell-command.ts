@@ -1,8 +1,10 @@
-// The two decisions spawn-shell.ts makes before it touches a PTY: which shell invocation
-// runs a command, and which configured launcher an index refers to. Both are pure and both
-// are load-bearing — the invocation differs per platform (and only Windows CI would catch
-// a mistake), and the index guard is what stops a browser-supplied number from reaching
-// outside the configured allowlist.
+// The decisions spawn-shell.ts and the launch route make before they touch a PTY: which shell
+// invocation runs a command, what a Shell cell runs when no launcher is configured, and which
+// configured launcher an index refers to. All pure and all load-bearing — the invocation differs
+// per platform (and only Windows CI would catch a mistake), and the index guard is what stops a
+// browser-supplied number from reaching outside the configured allowlist.
+import { envValue } from "../infra/pty-env.js";
+import { runExecutableCommand } from "../infra/shell-quote.js";
 
 export interface ShellInvocation {
   shell: string;
@@ -18,6 +20,29 @@ export interface ShellInvocation {
 export function shellInvocation(command: string, replaceShell: boolean, platform: string, shellPath: string | undefined): ShellInvocation {
   if (platform === "win32") return { shell: "powershell.exe", args: ["-NoLogo", "-Command", command] };
   return { shell: shellPath || "/bin/bash", args: ["-lc", replaceShell ? `exec ${command}` : command] };
+}
+
+const POSIX_FALLBACK_SHELL = "/bin/sh";
+// Not `/bin/sh`: on Windows that resolves to `<drive>:\bin\sh` and names nothing, so the fallback
+// looked present and protected nobody. ComSpec is where Windows itself records its command
+// processor; powershell.exe is the last resort because it is what runs the command anyway.
+const WINDOWS_FALLBACK_SHELL = "powershell.exe";
+
+/** What a Shell cell runs when no launcher is configured.
+ *
+ *  `$SHELL` is an executable PATH, and the value it feeds is parsed AGAIN by the shell that runs
+ *  it — so it has to arrive as one quoted, invoked thing. Git for Windows sets it to
+ *  `C:\Program Files\Git\usr\bin\bash.exe`, which PowerShell split at the first space and reported
+ *  as an unknown command `C:\Program` (#1717). POSIX only escaped that by the accident of `$SHELL`
+ *  having no space in it.
+ *
+ *  The shell itself is unchanged — a configured `$SHELL` is still honoured on both platforms.
+ *  `env` and `platform` are parameters so both arms are checkable from any host, and the lookup is
+ *  case-insensitive because Windows spells these names however it likes. */
+export function defaultShellCommand(platform: NodeJS.Platform, env: NodeJS.ProcessEnv): string {
+  const configured = envValue(env, "SHELL");
+  if (platform !== "win32") return runExecutableCommand(configured || POSIX_FALLBACK_SHELL, platform);
+  return runExecutableCommand(configured || envValue(env, "ComSpec") || WINDOWS_FALLBACK_SHELL, platform);
 }
 
 /** The entry at `index`, or null when the index is not a real position in the list. The

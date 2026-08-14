@@ -14,9 +14,11 @@ import { CLAUDE_CWD, SESSION_ID_RE } from "../config/env.js";
 import { workspaceRequest } from "../config/workspace.js";
 import { getHeaderConfig } from "../config/config-routes.js";
 import { buildHeaderContext, loadHeaderConfig } from "../config/header-context.js";
-import { resolveButtonCommand, shellQuoteFor } from "../config/header-resolve.js";
+import { resolveButtonCommand } from "../config/header-resolve.js";
 import { resolveScript } from "../files/scripts.js";
+import { shellQuoteFor } from "../infra/shell-quote.js";
 import { tmuxHasSession } from "../infra/tmux.js";
+import { defaultShellCommand } from "../session/shell-command.js";
 import { launchChoiceFromParams } from "../session/launch-choice.js";
 import { codexSessionsRoot } from "../agents/codex-session.js";
 import { antigravityBrainRoot, antigravityConversationExists } from "../agents/antigravity-session.js";
@@ -101,10 +103,11 @@ export interface WsRouteDeps {
 // resume an on-disk transcript, attach a live tmux session, else a fresh id. The flag
 // decision lives in resolveSession (pure/tested); this only gathers the live facts —
 // lazily, so a live pty short-circuits the tmux + disk probes.
-// The command a launcher runs when spawned fresh. On a tmux reattach it's ignored
-// (tmux new-session -A attaches the running program), so a surviving session with no
-// resolvable launcher index still reattaches via this harmless fallback.
-const DEFAULT_LAUNCH_CMD = process.env.SHELL || "/bin/sh";
+// The command a launcher runs when spawned fresh — and what the Shell cell in the Agent Picker
+// runs, since it carries no launcher index. On a tmux reattach it's ignored (tmux new-session -A
+// attaches the running program), so a surviving session with no resolvable launcher index still
+// reattaches via this harmless fallback.
+const DEFAULT_LAUNCH_CMD = defaultShellCommand(process.platform, process.env);
 
 function resolveClaudeSession(requested: string | null, cwd: string): SessionResolution {
   const hasLivePty = !!requested && ptys.has(requested);
