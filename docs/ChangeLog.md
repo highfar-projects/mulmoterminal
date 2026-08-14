@@ -8,6 +8,35 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.8.3 — 2026-08-14
+
+> **Setup guide:** [Answering a question, at the desk and on the phone](https://receptron.github.io/mulmoterminal/guide/en/v4.8.3.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.8.3.html))
+
+### Answer a Claude question from your phone (#1685, #1693, receptron/mulmoserver#182)
+
+A Claude session that stops on `AskUserQuestion` can now be answered **from the phone**, as a card
+under the terminal screen: the question, and every choice as a button
+([guide](https://receptron.github.io/mulmoterminal/guide/en/phone.html#question-card)).
+
+**The phone sends neither keys nor bytes.** The host hands it the question as Claude declared it —
+header, labels, descriptions, multiSelect — and the phone answers with the option INDEXES. The host
+then builds the arrows and Enter against the dialog **it** recorded. So nothing a remote client
+sends can reach the PTY as a control byte, which is the boundary `sendTerminalInput` has drawn since
+#445, drawn tighter: here there is no free text on the wire at all, except the one case below.
+
+**Answering in your own words** works when a dialog asks one question and takes one answer: the words
+go into the dialog's own **Type something** row, sanitized host-side like any other text. Several
+questions at once, or a multi-select one, get buttons only — the keystrokes for words would stop at a
+review screen or the next question, which is not an answer.
+
+Unlike the pane, **the phone needs nothing turned on**. `questionPaneEnabled` is about a panel that
+types into the terminal you are sitting at; on a phone nobody is at that keyboard, and without the
+card there are no arrow keys to answer with at all.
+
+One answer wins: the first to arrive claims the dialog, so the pane, the phone and the keyboard
+cannot half-answer each other. A question answered elsewhere, a session with no live terminal, or an
+answer that only partly reached the terminal are each reported to the phone in words it can act on.
+
 ### Answer a Claude question from a pane, without taking the dialog away (#1679)
 
 When a Claude session stops on `AskUserQuestion`, the only way to answer was the terminal's own
@@ -26,8 +55,12 @@ every tool call all along, and `PostToolUse` is what tells the pane the dialog c
 terminal, in the pane, or with Esc. Off unless asked for, and with the switch off nothing is
 published at all, so a question leaves no trace in the browser.
 
-Claude sessions only, since that is where the hooks are. The dialog's own **Type something** and
-**Chat about this** rows stay in the terminal.
+**None of the options fits?** The pane offers a text box for the dialog's own **Type something** row
+(#1693), on the one shape it was measured on: a dialog asking a single question that takes a single
+answer. What you write becomes the answer, exactly as typing it into the dialog would. Several
+questions at once, or a multi-select one, get buttons only.
+
+Claude sessions only, since that is where the hooks are. **Chat about this** stays in the terminal.
 
 ### Shared apps stop waiting for a MulmoClaude release (#1675)
 
@@ -147,6 +180,34 @@ Needs `@mulmoclaude/core@3.14.0`, the Firestore rules from mulmoserver#168 (depl
 `/m/{slug}` runtime from mulmoserver#169. Design and open questions:
 [`plans/done/feat-shared-app-member-view.md`](https://github.com/receptron/mulmoterminal/blob/main/plans/done/feat-shared-app-member-view.md).
 Writing from a member page — approving a booking, reassigning it — is not in this release.
+
+### Someone who booked can take their own booking back (#1695)
+
+A shared app's visitor could add a row and then had to ask the owner to remove it. An app can now
+declare `selfDelete`, and the person who created a row gets a way to withdraw it — the collection it
+belongs to reopens, so the slot is free again.
+
+Withdrawing is the visitor's own row only, and it is a different act from the owner's "cancel": the
+owner is deciding for somebody else, so the two are worded and confirmed differently rather than
+sharing one button. Enforced where it has to be — [`firestore.rules`](https://github.com/receptron/mulmoserver), not here.
+
+### Fixes
+
+- A `lint` summary drew one block for a count of **zero**, so the emptiest row looked like the
+  smallest non-empty one (#1676).
+- Tests that reach the server through supertest were each starting their own listener, which could
+  land a request on the wrong one (#1677).
+
+### Under the hood
+
+- `lint` is split into a **local** and a **CI** script, because the two want opposite cache
+  strategies — cold 62.8s → 22.2s locally, and CI back to 110s (#1680, closes #1644). Test jobs
+  declare their environment, `node_modules` is cached, and the eslint cache no longer misses a
+  dependency (#1687, closes #1686).
+- Lint warnings are down to **zero kinds**, with four rules that had been left loose raised to
+  errors (#1683, #1689), and four duplicate-code alerts resolved by extraction (#1681).
+- Ten finished shared-app plans moved to `plans/done/` (#1691), and the plan for moving the shared-app
+  compiler out of `@mulmoclaude/core` is written down (#1674).
 
 ## mulmoterminal@4.8.2 — 2026-08-13
 
