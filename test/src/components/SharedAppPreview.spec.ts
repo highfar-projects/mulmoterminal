@@ -224,9 +224,44 @@ describe("SharedAppPreview", () => {
       await settle();
 
       // It got PAST the declaration check — which an empty `submit` map makes impossible — and the
-      // parent is now holding it for the author to confirm.
+      // parent is now holding it for the author to confirm, with the values shown OUTSIDE the frame.
       expect(answers.filter((answer) => answer.type === "mc-public-view:submitResult")).toEqual([]);
-      expect(wrapper.text()).toContain("asked to write a record");
+      expect(wrapper.text()).toContain("asks to write to");
+      expect(wrapper.text()).toContain("roomA-1000");
+    });
+
+    it("settles the page's promise when the author sends it — a request with no answer is a button that does nothing", async () => {
+      const wrapper = await mountPreview();
+      const { port, answers } = await connect(wrapper);
+
+      port.postMessage({ type: "mc-public-view:submit", requestId: "r-4", cid: "bookings", values: { slot: "roomA-1000" } });
+      await settle();
+      await wrapper
+        .findAll("button")
+        .filter((button) => button.text() === "Send it")[0]
+        ?.trigger("click");
+      await settle();
+
+      // The write is not wired up, and the page is TOLD so. What must never happen is silence: a
+      // submit has no timeout, so a promise that never settles leaves the page on "確認の画面が
+      // 出ます" forever with nothing anywhere saying why.
+      expect(answers).toContainEqual(expect.objectContaining({ requestId: "r-4", ok: false, error: "preview-cannot-write-yet" }));
+    });
+
+    it("answers the page when the author cancels, rather than leaving it waiting", async () => {
+      const wrapper = await mountPreview();
+      const { port, answers } = await connect(wrapper);
+
+      port.postMessage({ type: "mc-public-view:submit", requestId: "r-5", cid: "bookings", values: { slot: "roomA-1000" } });
+      await settle();
+      await wrapper
+        .findAll("button")
+        .filter((button) => button.text() === "Cancel")[0]
+        ?.trigger("click");
+      await settle();
+
+      expect(answers).toContainEqual(expect.objectContaining({ requestId: "r-5", ok: false, error: "cancelled" }));
+      expect(wrapper.text()).not.toContain("asks to write to");
     });
 
     it("still refuses a cid the declaration does not name", async () => {

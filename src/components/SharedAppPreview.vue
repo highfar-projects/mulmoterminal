@@ -297,9 +297,48 @@ watch(() => props.cwd, load, { immediate: true });
         <ul v-if="payload && payload.warnings.length" class="mt-1 flex list-none flex-col gap-1 p-0">
           <li v-for="warning in payload.warnings" :key="warning" class="text-[11px] leading-[1.4] text-amber">{{ warning }}</li>
         </ul>
-        <p v-if="cells.pending.value" class="mt-1 text-[11px] text-amber">
-          The page asked to write a record. Writing from a preview is not wired up yet, so it was refused and told why.
+      </div>
+
+      <!-- THE CONFIRMATION, drawn by the parent, outside the frame.
+           `event.source` proves which window sent the message; it does not prove a person asked
+           for it, and the author's HTML can call submit the moment it loads. So the values are
+           shown here, where the view cannot touch them — and the page's promise does not settle
+           until one of these two buttons is pressed.
+           Not optional, and not "for later": without it a submission is accepted and then nothing
+           can resolve it, so the page waits forever on a request with no timeout. That is a button
+           that does nothing — the exact failure this feature exists to catch, manufactured by the
+           thing meant to catch it. -->
+      <div v-if="cells.pending.value" class="flex-none border-t border-border px-2.5 py-2 font-sans">
+        <p class="mb-1 text-[11px] text-fg">
+          The page asks to write to <code>{{ cells.pending.value.cid }}</code>
         </p>
+        <dl class="mb-2 flex list-none flex-col gap-0.5 p-0">
+          <div v-for="[field, value] in Object.entries(cells.pending.value.values)" :key="field" class="flex gap-2 text-[11px]">
+            <dt class="w-24 shrink-0 text-dim">{{ field }}</dt>
+            <dd class="min-w-0 flex-1 break-words text-fg">{{ value }}</dd>
+          </div>
+        </dl>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg hover:border-accent disabled:cursor-default disabled:opacity-60"
+            :disabled="cells.sending.value"
+            @click="bridge.accept()"
+          >
+            Send it
+          </button>
+          <button
+            type="button"
+            class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg hover:border-accent disabled:cursor-default disabled:opacity-60"
+            :disabled="cells.sending.value"
+            @click="bridge.decline()"
+          >
+            Cancel
+          </button>
+          <!-- Said at the button rather than only in the strip above: this is the moment the author
+               is deciding, and "nothing is written yet" is what they need to know here. -->
+          <span class="text-[11px] text-dim">Sending answers the page. Nothing reaches Firestore yet.</span>
+        </div>
       </div>
     </template>
   </div>
