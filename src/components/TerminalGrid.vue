@@ -569,16 +569,17 @@ async function sayInsteadOfChoosing(text: string): Promise<void> {
     answerFailure.value = "unwritable";
     return;
   }
-  dropQuestion(event.sessionId);
   const failure = await postDecline(event.sessionId, event.toolUseId);
   if (failure) {
-    if (failure !== "closed") answerFailure.value = failure;
-    await revealQuestion(event.sessionId);
+    // `closed` means someone got there first; the pane goes, as it does for any answered question.
+    if (failure === "closed") dropQuestion(event.sessionId);
+    else answerFailure.value = failure;
     return;
   }
-  // The question is gone now. If the socket went with it in between, the words must not go quietly:
-  // hand them back rather than leave the user believing they were sent.
-  if (!conn.submitText(slot, text)) unsentText.value = text;
+  // The question is declined now, so the words have nowhere else to go. The pane is closed only
+  // once they are actually delivered — closing first is how a failed send became invisible.
+  if (conn.submitText(slot, text)) dropQuestion(event.sessionId);
+  else unsentText.value = text;
 }
 
 // Answering the enlarged cell's dialog. The picks go to the host, which turns them into the
