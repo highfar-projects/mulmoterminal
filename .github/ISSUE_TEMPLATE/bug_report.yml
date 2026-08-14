@@ -1,0 +1,165 @@
+name: Bug report
+description: Something in MulmoTerminal behaves in a way you believe is a defect.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Run the bug report skill first
+
+        In any Claude Code session that MulmoTerminal started, type:
+
+        ```
+        /mulmoterminal-bug-report
+        ```
+
+        The skill reads your real configuration file, the schema in the source, and the version
+        you are running, so it can tell you when the behaviour is a setting or is working as
+        designed. That is the outcome you actually want, because it unblocks you today instead
+        of in a future release. It also searches the existing issues, collects the environment
+        details, and replaces anything that looks like a key or a token with `***` before it
+        shows you the report.
+
+        The fields below are the headings the skill produces, in the same order, so you can
+        paste its output straight in.
+
+        Cannot run it — because you are writing this from a browser, or because MulmoTerminal
+        will not start at all? Say so in **Anything else** at the bottom, and fill in as much
+        as you can by hand.
+
+        ## Write every word out in full
+
+        Do not use abbreviations or short forms. Write "MulmoTerminal", not "MT". Write "steps
+        to reproduce", not "repro". Write "configuration file", not "conf". Issues here are read
+        by people and by coding agents, and a short form that is obvious to you is a guess for
+        whoever picks this up.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before you submit
+      options:
+        - label: I ran the `mulmoterminal-bug-report` skill, or I have said below why I could not.
+          required: true
+        - label: I searched the existing issues, open and closed, and this is not one of them.
+          required: true
+        - label: I removed every key, token, password and credential from what I pasted below.
+          required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, in the order you saw it. Describe the behaviour rather than your explanation of it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-expected
+    attributes:
+      label: What you expected instead
+      description: What you thought would happen, and what made you think so — the guide, an earlier version, another terminal.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps, starting from a freshly started MulmoTerminal. Someone who has never seen your setup has to be able to follow them.
+      placeholder: |
+        1. Start MulmoTerminal in a directory that has no worktree.
+        2. Open the enlarged view and switch to the roster.
+        3. ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: MulmoTerminal version
+      description: Open Settings and read the version under the title, or run `npx mulmoterminal --version`.
+      placeholder: "4.8.4"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: how-started
+    attributes:
+      label: How you started it
+      options:
+        - npx mulmoterminal
+        - A global installation
+        - From a clone of this repository, with yarn dev
+        - Something else, described below
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: The skill collects all of this. Each supporting command may be absent on your machine, and that is worth saying too.
+      value: |
+        - Operating system:
+        - Node.js version:
+        - Browser and version:
+        - tmux:
+        - GitHub command line (gh):
+        - claude:
+        - codex:
+    validations:
+      required: true
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where it happens
+      options:
+        - A cell in the tiled grid
+        - The enlarged view — the roster
+        - The enlarged view — the filmstrip
+        - The single view
+        - The file browser
+        - Settings
+        - On a phone
+        - While starting up, before anything is drawn
+        - Somewhere else, or not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Which agent the cell was running
+      options:
+        - claude
+        - codex
+        - A plain shell
+        - A launcher chip
+        - Not specific to one agent, or no agent involved
+    validations:
+      required: true
+
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: How often it happens
+      options:
+        - Every time
+        - Sometimes
+        - It happened once
+    validations:
+      required: true
+
+  - type: textarea
+    id: anything-else
+    attributes:
+      label: Anything else
+      description: |
+        Screenshots, red errors from the browser console, the part of your configuration file that
+        matters. A terminal screenshot carries your prompt text and your directory paths — look at
+        it before you attach it.
+    validations:
+      required: false

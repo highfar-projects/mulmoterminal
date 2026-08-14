@@ -1,0 +1,12 @@
+# Blank issues stay enabled on purpose. Maintainers file internal work — lint sweeps,
+# performance, refactors — that fits neither template, and forcing a form on those only
+# creates headings nobody fills in.
+blank_issues_enabled: true
+
+contact_links:
+  - name: How is this supposed to work? (documentation)
+    url: https://receptron.github.io/mulmoterminal/guide/en/
+    about: Installation, configuration files, keyboard shortcuts and the view modes are covered in the guide. Read it before opening an issue about intended behaviour.
+  - name: Question, or an idea that is not yet a problem statement (discussion)
+    url: https://github.com/receptron/mulmoterminal/discussions
+    about: Start a discussion for questions, for anything you are not sure is a defect, and for ideas you want to talk through before writing them up.
