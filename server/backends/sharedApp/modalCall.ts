@@ -23,13 +23,17 @@
 // cannot see is a call built out of pieces (`window["pro" + "mpt"]`), which is not the mistake
 // this is about — the gate is a help to an author, not a boundary against one.
 
-/** Where code lives in a page: `<script>` bodies, and inline `on*` handlers. */
+/** Where code lives in a page. All three RUN, and the sandbox eats a modal in each of them
+ *  identically — an `onclick` and a `javascript:` href are as executable as a `<script>`, and a
+ *  gate that reads only the third would pass the other two straight through. */
 const SCRIPT_BODY = /<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi;
 const INLINE_HANDLER = /\son[a-z]+\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
+const JAVASCRIPT_URL = /=\s*(?:"\s*javascript:([^"]*)"|'\s*javascript:([^']*)')/gi;
 
 const scriptsOf = (html: string): string[] => [
   ...[...html.matchAll(SCRIPT_BODY)].map((hit) => hit[1] ?? ""),
   ...[...html.matchAll(INLINE_HANDLER)].map((hit) => hit[1] ?? hit[2] ?? ""),
+  ...[...html.matchAll(JAVASCRIPT_URL)].map((hit) => hit[1] ?? hit[2] ?? ""),
 ];
 
 /** What the walker is in the middle of. `code` is the only state that reaches the match. */

@@ -317,8 +317,10 @@ entry per page, each naming **who it is for**:
 
 - **Hand these out ABSOLUTE, with `https://mulmoserver.web.app` in front.** Nothing is served
   from the machine this runs on, and there is no bare `/{slug}` — a path on its own is not
-  something the person you are telling can open, and `/{slug}` is a not-found page. `deploy` and
-  `publish` print the whole address; say what they print.
+  something the person you are telling can open, and `/{slug}` is a not-found page. With a `slug`
+  declared, `deploy` and `publish` print the whole address — say what they print. **Without one
+  there is no address at all**, and they say that instead: an app may publish staff and
+  participant pages while declaring no URL name, and both entrances need one.
 
 - **The two are not exclusive.** An owner who also books is on both, and each address shows one
   face — so a staff member opening `/p/{slug}` sees their own booking, not the front desk. Write

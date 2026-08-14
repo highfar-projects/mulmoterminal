@@ -69,6 +69,7 @@ describe("the file a published view names", () => {
       // all of these in a minified file.
       '<script>const cdn = "//cdn.example/x"; prompt("name");</script>',
       "<button onclick=\"prompt('name')\">go</button>",
+      "<a href=\"javascript:confirm('sure')\">go</a>",
     ]) {
       const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
       expect(result.ok).toBe(false);
