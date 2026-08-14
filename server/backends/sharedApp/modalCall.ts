@@ -324,14 +324,28 @@ const asMemberAccess = (source: string): string =>
  *  receiver of the author's own (`ui.alert`, `this.confirm`) keeps its dot and is left alone. */
 const GLOBAL_RECEIVER = /\b(?:window|self|globalThis|top) ?\. ?/g;
 
-const CALL = /(?<![\w.$])(alert|confirm|prompt) ?\(/;
+const CALL = /(?<![\w.$])(alert|confirm|prompt) ?\(/g;
+
+/** A name the page BINDS is the page's own, whatever it is called.
+ *
+ *  `const alert = (text) => banner.textContent = text;` is an ordinary thing to write in a page
+ *  that shows its messages in the page — which is exactly what this gate tells authors to do — and
+ *  refusing it would be refusing a view that works, with a message about a sandbox that has
+ *  nothing to do with it.
+ *
+ *  A binding anywhere in the script exempts that name everywhere in it. Real scoping would need a
+ *  parser; what this trades away is a page that shadows the name in one function and calls the
+ *  global in another, or one that shadows it and then reaches the global through `window.` — both
+ *  rarer than the case above, and both on the side of missing rather than of refusing. */
+const DECLARED = /\b(?:const|let|var|function|class)\s+(alert|confirm|prompt)\b/g;
 
 /** The name of the first modal call in this page's code, or null. */
 export const modalCallIn = (html: string): string | null => {
   for (const script of scriptsOf(html)) {
     const code = bare(asMemberAccess(script)).replace(/\s+/g, " ").replace(GLOBAL_RECEIVER, "");
-    const call = CALL.exec(code);
-    if (call !== null) return call[1] ?? null;
+    const own = new Set([...code.matchAll(DECLARED)].map((hit) => hit[1]));
+    const call = [...code.matchAll(CALL)].find((hit) => !own.has(hit[1]));
+    if (call !== undefined) return call[1] ?? null;
   }
   return null;
 };

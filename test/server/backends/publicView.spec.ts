@@ -90,6 +90,8 @@ describe("the file a published view names", () => {
       // Ordinary formatting around a member access: newlines, tabs, more than one space.
       '<script>window\n  .  prompt("name")</script>',
       "<script>window\t.\tconfirm()</script>",
+      // Binding ONE of the three does not exempt the others.
+      "<script>const confirm = (v) => v; prompt('name');</script>",
       '<a href="javascript:prompt&lpar;&rpar;">go</a>',
       "<button ONCLICK=\"prompt('x')\">go</button>",
       "<button OnClick=prompt()>go</button>",
@@ -132,6 +134,11 @@ describe("the file a published view names", () => {
       // `prompt(` on purpose, and running the scanner over it refuses a page that works.
       '<script type="text/plain">prompt()</script>',
       '<script type="application/json">{"a":"prompt("}</script>',
+      // A name the page BINDS is the page's own. `const alert = …` is an ordinary thing to write
+      // in a page that shows its messages in the page — which is what the skill asks for.
+      "<script>const confirm = (value) => value; confirm(true);</script>",
+      "<script>const alert = (m) => { say.textContent = m; }; alert('done');</script>",
+      "<script>function prompt() {} prompt();</script>",
     ].join("\n");
     const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
     expect(result.ok).toBe(true);
