@@ -111,6 +111,27 @@ describe("handleClientFrame", () => {
     expect(otherWriteCount(SESSION)).toBe(0); // and forgotten again
   });
 
+  // The emulator answers the application's queries on this channel — device attributes, colours,
+  // mouse, focus. Counting those as typing refused every answer from the question pane (#1693).
+  it("does not count a terminal reply as the user typing", () => {
+    const { handleClientFrame } = setup();
+    const t = fakeTerm();
+    const s = fakeSocket();
+    const entry = entryWith({ term: t.term as never, ws: s.ws as never });
+
+    watchOtherWrites(SESSION);
+    try {
+      handleClientFrame(entry, s.ws as never, frame({ type: "input", data: "\u001b[?1;2c" }), SESSION);
+      expect(otherWriteCount(SESSION)).toBe(0);
+      expect(t.writes).toContain("\u001b[?1;2c"); // still delivered to the terminal
+
+      handleClientFrame(entry, s.ws as never, frame({ type: "input", data: "x" }), SESSION);
+      expect(otherWriteCount(SESSION)).toBe(1);
+    } finally {
+      stopWatchingOtherWrites(SESSION);
+    }
+  });
+
   it("resizes on a valid resize frame", () => {
     const { handleClientFrame } = setup();
     const t = fakeTerm();

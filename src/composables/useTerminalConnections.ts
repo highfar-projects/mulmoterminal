@@ -905,6 +905,10 @@ export function insertText(key: string, text: string) {
   c.term.focus();
 }
 
+// Whether this slot could take input RIGHT NOW. Asked before an action that cannot be undone once
+// started — declining a question commits to sending the words that replace it (#1693).
+export const canSend = (key: string): boolean => conns.get(key)?.ws?.readyState === WebSocket.OPEN;
+
 export function focus(key: string) {
   conns.get(key)?.term.focus();
 }

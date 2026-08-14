@@ -262,3 +262,36 @@ describe("answerQuestion", () => {
     expect(write).not.toHaveBeenCalled();
   });
 });
+
+// Answering in the user's own words (#1693): the same guarded path, with the keys aimed at the
+// dialog's `Type something` row — which is a text FIELD, not a decline.
+describe("answering in words", () => {
+  it("walks to the text row, types, and commits", async () => {
+    const d = deps([CALL("t1", "running")]);
+
+    expect(await answerQuestion(d, { sessionId: "w1", toolUseId: "t1", text: "green please" })).toEqual({ ok: true });
+    expect(d.write.mock.calls.map((call) => call[1])).toEqual([DOWN, DOWN, "green please", ENTER]);
+  });
+
+  it("refuses a dialog that is not the one on screen", async () => {
+    const d = deps([CALL("t2", "running")]);
+
+    expect(await answerQuestion(d, { sessionId: "w2", toolUseId: "t1", text: "green" })).toEqual({ ok: false, reason: "closed" });
+    expect(d.write).not.toHaveBeenCalled();
+  });
+
+  it("claims the dialog it answered, like any other answer", async () => {
+    const d = deps([CALL("t1", "running")]);
+    await answerQuestion(d, { sessionId: "w3", toolUseId: "t1", text: "green" });
+
+    expect(await answerQuestion(d, { sessionId: "w3", toolUseId: "t1", text: "again" })).toEqual({ ok: false, reason: "closed" });
+  });
+
+  // Empty text would land on the row and press Enter, which DECLINES the question outright.
+  it("refuses empty words rather than declining by accident", async () => {
+    const d = deps([CALL("t1", "running")]);
+
+    expect(await answerQuestion(d, { sessionId: "w4", toolUseId: "t1", text: "" })).toEqual({ ok: false, reason: "bad-picks" });
+    expect(d.write).not.toHaveBeenCalled();
+  });
+});

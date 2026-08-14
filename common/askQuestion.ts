@@ -119,6 +119,29 @@ export type AnswerFailure =
 
 export type AnswerResult = { ok: true } | { ok: false; reason: AnswerFailure };
 
+/** The body of `POST /api/question/:sessionId/answer`. The session comes from the route path, not
+ *  from here — a client names the dialog it is answering, never the session it belongs to. */
+export interface AnswerRequestBody {
+  toolUseId: string;
+  /** Chosen option indexes, one entry per question. */
+  picks?: number[][];
+  /** Or the user's own words, for the dialog's text row. */
+  text?: string;
+}
+
+/** Read a request body's SHAPE. Whether the picks or the words fit the dialog is decided against
+ *  the questions the host itself recorded — see server/session/answerQuestion.ts. */
+export const readAnswerRequest = (body: unknown): AnswerRequestBody | null => {
+  if (!isRecord(body) || typeof body.toolUseId !== "string") return null;
+  const text = typeof body.text === "string" ? { text: body.text } : {};
+  return { toolUseId: body.toolUseId, ...(body.picks === undefined ? {} : { picks: readPickRows(body.picks) }), ...text };
+};
+
+// Rows of numbers, or nothing. A row that is not that is dropped to `[]` rather than coerced: the
+// host then refuses it as bad-picks, and a coerced pick is a keystroke aimed at a row nobody chose.
+const readPickRows = (picks: unknown): number[][] =>
+  Array.isArray(picks) ? picks.map((row) => (Array.isArray(row) ? row.filter((idx): idx is number => typeof idx === "number") : [])) : [];
+
 export const isAnswerFailure = (value: unknown): value is AnswerFailure =>
   value === "closed" || value === "bad-picks" || value === "unwritable" || value === "partial";
 
@@ -160,6 +183,24 @@ const picksValid = (question: AskQuestion, picks: readonly number[]): boolean =>
 // shapes were measured; guessing here either leaves the dialog open or drops a stray Enter into
 // the prompt once it has closed.
 const needsReview = (questions: readonly AskQuestion[]): boolean => questions.length > 1 || questions.some((question) => question.multiSelect);
+
+// Answering in the user's own words, through the dialog's own `Type something` row.
+//
+// That row IS a text field, and the way in is to highlight it and type: the row then reads back what
+// was typed, and Enter commits it as the ANSWER — `answers` carries the words, not a decline.
+// Measured against claude 2.1.231. (Enter on the row while it is still empty declines instead,
+// which is what a first reading of it mistook for its whole behaviour.)
+//
+// It sits directly after that question's options.
+export const keysToAnswerInWords = (questions: readonly AskQuestion[], text: string): string[] | null => {
+  const only = questions.length === 1 ? questions[0] : undefined;
+  // The one shape this was measured on: a lone SINGLE-select question, where the text row's Enter
+  // is the whole answer. The others each end somewhere this sequence does not reach — a wizard
+  // moves on to its next question, and a multi-select dialog stops at its review screen — and the
+  // host would claim the dialog while the terminal still waits for something the pane cannot send.
+  if (!only || only.multiSelect || !text) return null;
+  return [...moveDown(0, only.options.length), text, KEY_ENTER];
+};
 
 /**
  * The keystrokes that answer a live AskUserQuestion dialog. `picks[i]` holds the chosen option

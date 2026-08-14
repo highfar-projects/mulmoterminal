@@ -23,31 +23,51 @@ const props = defineProps<{
 
 // `closed` never reaches here: the pane simply goes, because the question is genuinely answered.
 const FAILURE_TEXT: Record<AnswerFailure, string> = {
-  closed: "That question was already answered.",
+  closed: "That question is no longer the one on screen — it was answered or cancelled elsewhere.",
   "bad-picks": "Those choices did not fit the question. It may have changed — try again.",
   unwritable: "This terminal cannot be typed into from here. It outlived a server restart, so answer in the terminal itself.",
   partial: "Part of the answer reached the dialog before it was interrupted, so where it stands is no longer known from here. Finish it in the terminal.",
 };
 
-const emit = defineEmits<{ answer: [picks: number[][]]; close: []; toggleExpand: [] }>();
+const emit = defineEmits<{ answer: [picks: number[][]]; say: [text: string]; close: []; toggleExpand: [] }>();
 
 const questions = computed(() => props.event?.questions ?? []);
 
-// Two failures cannot be retried from here, and offering the buttons anyway guarantees a click that
-// is refused and a pane that closes saying nothing: `partial` left the dialog in a state only the
-// keyboard can resolve, and `unwritable` has no PTY to type into at all. The message stays; the
-// controls do not.
-const answerable = computed(() => props.failure !== "partial" && props.failure !== "unwritable");
+// A failure — any of them — turns the pane into an explanation. None can be retried from here:
+// `partial` left the dialog in a state only the keyboard can resolve, `unwritable` has no PTY to
+// type into, and `closed` means the dialog on screen is no longer this one. Leaving the controls
+// live would offer a click that is refused, and taking that click unmounts the pane — discarding
+// the sentence the user had typed along with the explanation of why it did not go.
+//
+// The controls come back with the next question, which clears the failure.
+const answerable = computed(() => props.failure == null);
+
+// Offered on the one shape it was measured on: a lone SINGLE-select question, where the text row's
+// Enter is the whole answer. A wizard moves on to its next question instead of finishing, and a
+// multi-select dialog stops at its review screen — both would leave the terminal waiting for
+// something this pane cannot send. Those are answered with their buttons.
+const canUseWords = computed(() => answerable.value && questions.value.length === 1 && questions.value[0]?.multiSelect !== true);
 
 // One entry per question, holding the chosen option indexes. Kept ASCENDING: the keystrokes that
 // answer the dialog only ever walk DOWN the list, so an out-of-order pick would toggle the wrong
 // row (common/askQuestion.ts rejects it outright rather than sending it).
 const picks = ref<number[][]>([]);
 
+// None of the options fits. The dialog's own `Type something` row IS a text field, so these words
+// go there and come back as the answer (#1693) — the same act as pressing a button, in the user's
+// own words.
+const other = ref("");
+
+function sayOther(): void {
+  const text = other.value.trim();
+  if (text) emit("say", text);
+}
+
 watch(
   () => props.event?.toolUseId,
   () => {
     picks.value = questions.value.map(() => []);
+    other.value = "";
   },
   { immediate: true },
 );
@@ -150,6 +170,31 @@ function choose(qi: number, oi: number): void {
         >
           Send
         </button>
+
+        <!-- None of the options fits. Declining is what the dialog itself offers here, so this says
+             so rather than pretending the text goes into the question. -->
+        <div v-if="canUseWords" class="mt-3 border-t border-border pt-3">
+          <label class="mb-1 block text-[12px] text-dim" for="question-other">Answer in your own words</label>
+          <textarea
+            id="question-other"
+            v-model="other"
+            data-testid="question-other"
+            rows="2"
+            class="w-full resize-y rounded border border-border bg-elevated px-2 py-1.5 text-[13px] text-fg"
+            placeholder="Answer in your own words"
+            @keydown.enter.meta.prevent="sayOther"
+          />
+          <button
+            type="button"
+            data-testid="question-other-btn"
+            class="mt-1 w-full cursor-pointer rounded border border-border bg-panel px-3 py-2 text-[13px] font-medium text-fg disabled:cursor-not-allowed disabled:text-dim"
+            :disabled="other.trim().length === 0"
+            @click="sayOther"
+          >
+            Answer with this
+          </button>
+          <p class="mt-1 text-[12px] text-dim">Typed into the question's own “Type something” field, so it comes back as your answer.</p>
+        </div>
 
         <!-- Said plainly because it is the one thing about this pane that surprises people: the
              terminal dialog never went away, and answering it there is still the faster path. -->

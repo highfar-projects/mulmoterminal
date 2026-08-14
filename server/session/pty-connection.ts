@@ -12,7 +12,7 @@ import { isResizeFrame } from "./ws-frames.js";
 import { isRecord } from "../../common/isRecord.js";
 import { boundedTail, stripTerminalQueries, terminalModePrefix } from "./terminal-replay.js";
 import type { PtyEntry } from "./types.js";
-import { noteOtherWrite } from "./write-to-session.js";
+import { noteInput } from "./write-to-session.js";
 
 /** A frame as it arrives off the socket. Only `toString()` is used — ws hands us a
  *  Buffer, and narrowing to this lets a test pass one without a live connection. */
@@ -149,7 +149,13 @@ export function createConnectionHandlers(deps: ConnectionDeps) {
         // Announced before it is written: this is what tells an in-flight answer that the person at
         // the keyboard has typed, so it stops rather than finishing its keystrokes into whatever the
         // screen became (#1685). The write itself stays on the entry we already hold.
-        noteOtherWrite(sessionId);
+        //
+        // Terminal REPLIES do not count. The emulator answers the application's own queries on
+        // this channel — device attributes, colours, cursor position, focus — and counting those as
+        // typing refused every answer from the question pane after any attach or theme read
+        // (#1693). A MOUSE report does count: a click can pick an option in the dialog. The split
+        // an escape sequence can arrive in is handled per session, in noteInput.
+        noteInput(sessionId, msg.data);
         entry.term.write(msg.data);
       } else if (isResizeFrame(msg)) {
         entry.term.resize(msg.cols, msg.rows);

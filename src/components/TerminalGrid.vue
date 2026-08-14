@@ -46,7 +46,7 @@ import { hasCanvasGroup, hasCollectionsGroup } from "../../common/toolGroups";
 import type { RightPane } from "./gridCell";
 import QuestionPane from "./QuestionPane.vue";
 import { ASK_QUESTION_CHANNEL, isAskQuestionDone, isAskQuestionEvent } from "../../common/askQuestion";
-import { fetchOpenQuestion, postAnswer } from "../composables/openQuestion";
+import { fetchOpenQuestion, postAnswer, postWords } from "../composables/openQuestion";
 import type { AnswerFailure } from "../../common/askQuestion";
 import { createQuestionBox } from "../composables/questionBox";
 import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
@@ -547,6 +547,24 @@ onBeforeUnmount(() => unsubscribeQuestionReconnect());
 function dismissQuestionPane(): void {
   if (expandedSessionId.value) questionBox.dismiss(expandedSessionId.value);
   setRightPane(null, paneUid.value);
+}
+
+// None of the options fits, so the user says it in their own words (#1693). The dialog's own
+// `Type something` row is a text FIELD: the host walks to it, types, and presses Enter, and the
+// words come back as the ANSWER. Same route and same guards as the buttons — it is the same act.
+async function sayInsteadOfChoosing(text: string): Promise<void> {
+  const event = expandedQuestion.value;
+  if (!event) return;
+  // The pane is left standing until this succeeds. Closing first unmounts it, and the words the
+  // user typed go with it — a refusal would then ask them to write the sentence again.
+  const failure = await postWords(event.sessionId, event.toolUseId, text);
+  if (!failure) {
+    dropQuestion(event.sessionId);
+    return;
+  }
+  // Unlike a button press, `closed` is NOT passed over in silence here: the user wrote a sentence,
+  // and a pane that simply vanishes tells them nothing about where it went.
+  answerFailure.value = failure;
 }
 
 // Answering the enlarged cell's dialog. The picks go to the host, which turns them into the
@@ -1314,6 +1332,7 @@ watch(
           :expanded="paneFull"
           :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
           @answer="answerQuestion"
+          @say="sayInsteadOfChoosing"
           @toggle-expand="togglePaneExpanded"
           @close="dismissQuestionPane"
         />

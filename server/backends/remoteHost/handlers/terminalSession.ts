@@ -87,7 +87,9 @@ export const createTerminalSessionHandlers = ({
       const sessionId = typeof params.sessionId === "string" ? params.sessionId : "";
       const toolUseId = typeof params.toolUseId === "string" ? params.toolUseId : "";
       if (!sessionId || !toolUseId) throw new Error("sessionId and toolUseId are required");
-      const result = await answerQuestion(sessionId, toolUseId, params.picks);
+      // `text` answers in the user's own words, through the dialog's own `Type something` field
+      // (#1693). Sanitized host-side like any other text the phone sends.
+      const result = await answerQuestion(sessionId, toolUseId, params.picks, params.text);
       if (!result.ok) throw new Error(ANSWER_REFUSED[result.reason]);
       return toJsonObject(result);
     },

@@ -120,23 +120,68 @@ describe("QuestionPane", () => {
 
   // A click after `partial` is refused by the host by design, and a refusal closes the pane without
   // a word — so the buttons must not come back offering one.
-  it("offers no buttons for a failure that cannot be retried", () => {
-    (["partial", "unwritable"] as const).forEach((failure) => {
+  // Every failure, not only the unretryable ones. A live button after a refusal offers a click that
+  // is refused in turn — and taking it unmounts the pane, discarding both the explanation and the
+  // sentence the user had typed. The next question clears the failure and brings the controls back.
+  it("offers no controls after any failure", () => {
+    (["closed", "bad-picks", "partial", "unwritable"] as const).forEach((failure) => {
       const w = mount(QuestionPane, { props: { event: event([question("Color", ["Red", "Blue"])]), failure } });
-      expect(w.find('[data-testid="question-failure"]').exists()).toBe(true);
       expect(options(w)).toHaveLength(0);
-      expect(w.find('[data-testid="question-send-btn"]').exists()).toBe(false);
+      expect(w.find('[data-testid="question-other"]').exists()).toBe(false);
+      expect(w.find('[data-testid="question-failure"]').exists()).toBe(true);
     });
-  });
-
-  // `bad-picks` is retryable: the dialog may have moved on to a different question.
-  it("keeps the buttons for a failure that can be retried", () => {
-    const w = mount(QuestionPane, { props: { event: event([question("Color", ["Red", "Blue"])]), failure: "bad-picks" as const } });
-    expect(options(w)).toHaveLength(2);
   });
 
   it("says nothing when the last answer went out", () => {
     const w = mountPane([question("Color", ["Red", "Blue"])]);
     expect(w.find('[data-testid="question-failure"]').exists()).toBe(false);
+  });
+});
+
+// "None of the above" (#1693). The pane emits the words; declining the dialog and then saying them
+// is the grid's job, because only it can reach the terminal.
+describe("answering in your own words", () => {
+  const other = (w: ReturnType<typeof mountPane>) => w.find('[data-testid="question-other"]');
+
+  it("emits what was typed, trimmed", async () => {
+    const w = mountPane([question("Color", ["Red", "Blue"])]);
+    await other(w).setValue("  neither, use green  ");
+    await w.find('[data-testid="question-other-btn"]').trigger("click");
+
+    expect(w.emitted("say")).toEqual([["neither, use green"]]);
+  });
+
+  it("will not send nothing", async () => {
+    const w = mountPane([question("Color", ["Red", "Blue"])]);
+    expect(w.find('[data-testid="question-other-btn"]').attributes("disabled")).toBeDefined();
+
+    await other(w).setValue("   ");
+    await w.find('[data-testid="question-other-btn"]').trigger("click");
+    expect(w.emitted("say")).toBeUndefined();
+  });
+
+  it("forgets what was typed when a new question arrives", async () => {
+    const w = mountPane([question("Color", ["Red", "Blue"])]);
+    await other(w).setValue("about to be stale");
+
+    await w.setProps({ event: { sessionId: "s1", toolUseId: "t2", questions: [question("Color", ["Red", "Blue"])] } });
+
+    expect((other(w).element as HTMLTextAreaElement).value).toBe("");
+  });
+
+  // Offered on the one shape it was measured on. A wizard moves on to its next question instead of
+  // finishing, and a multi-select dialog stops at its review screen — the pane cannot finish either.
+  it("offers no text box for a wizard or a multi-select question", () => {
+    const wizard = mountPane([question("Color", ["Red", "Blue"]), question("Size", ["Small", "Large"])]);
+    expect(wizard.find('[data-testid="question-other"]').exists()).toBe(false);
+
+    const many = mountPane([question("Toppings", ["Nuts", "Cream"], true)]);
+    expect(many.find('[data-testid="question-other"]').exists()).toBe(false);
+  });
+
+  // Same rule as the option buttons: a failure that cannot be retried offers no controls.
+  it("offers no text box for a failure that cannot be retried", () => {
+    const w = mount(QuestionPane, { props: { event: event([question("Color", ["Red", "Blue"])]), failure: "partial" as const } });
+    expect(w.find('[data-testid="question-other"]').exists()).toBe(false);
   });
 });

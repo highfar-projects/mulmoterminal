@@ -7,6 +7,8 @@ import { describe, it, expect } from "vitest";
 import {
   parseAskQuestions,
   keysForAnswers,
+  keysToAnswerInWords,
+  readAnswerRequest,
   isAskQuestionEvent,
   openQuestionOf,
   shouldPublishQuestion,
@@ -195,5 +197,59 @@ describe("openQuestionOf", () => {
 
   it("ignores every other running tool", () => {
     expect(openQuestionOf([{ toolUseId: "b", toolName: "Bash", toolInput: { command: "ls" }, status: "running" }], "s1")).toBeNull();
+  });
+});
+
+// MEASURED: `Type something` is a text FIELD. Highlight it, type, and Enter commits the words as the
+// answer — PostToolUse carries `{"Red or blue?": "green please"}`. (Enter while it is still empty
+// declines instead; reading only that is what first sent this feature down the wrong road.)
+describe("keysToAnswerInWords", () => {
+  it("walks past the options to the text row, types, and commits", () => {
+    expect(keysToAnswerInWords([single(["Red", "Blue"])], "green please")).toEqual([DOWN, DOWN, "green please", ENTER]);
+  });
+
+  // Every shape but the measured one ends somewhere this sequence does not reach: a wizard moves on
+  // to its next question, a multi-select dialog stops at its review screen. Claiming the dialog
+  // there would leave the terminal waiting for something the pane cannot send.
+  it("refuses a dialog that holds more than one question", () => {
+    expect(keysToAnswerInWords([single(["Small", "Large"]), single(["Hot", "Cold"])], "medium")).toBeNull();
+  });
+
+  it("refuses a multi-select question, review screen and all", () => {
+    expect(keysToAnswerInWords([multi(["Nuts", "Cream", "Honey"])], "olives")).toBeNull();
+  });
+
+  // Empty text would land on the row and press Enter, which DECLINES the whole question — the one
+  // thing a user typing an answer never meant.
+  it("refuses to send nothing", () => {
+    expect(keysToAnswerInWords([single(["Red", "Blue"])], "")).toBeNull();
+    expect(keysToAnswerInWords([], "green")).toBeNull();
+  });
+});
+
+// The body of POST /api/question/:sessionId/answer, read by the server and written by every client
+// — so its shape lives in common/ rather than once per layer.
+describe("readAnswerRequest", () => {
+  it("reads a picks request and a words request", () => {
+    expect(readAnswerRequest({ toolUseId: "t1", picks: [[0], [1, 2]] })).toEqual({ toolUseId: "t1", picks: [[0], [1, 2]] });
+    expect(readAnswerRequest({ toolUseId: "t1", text: "green please" })).toEqual({ toolUseId: "t1", text: "green please" });
+  });
+
+  it("insists on the dialog it is answering", () => {
+    expect(readAnswerRequest({ picks: [[0]] })).toBeNull();
+    expect(readAnswerRequest(null)).toBeNull();
+    expect(readAnswerRequest({ toolUseId: 7 })).toBeNull();
+  });
+
+  // Dropped to an empty row rather than coerced: the host then refuses it, and a coerced pick is a
+  // keystroke aimed at a row nobody chose.
+  it("does not invent picks out of what it cannot read", () => {
+    expect(readAnswerRequest({ toolUseId: "t1", picks: ["nope"] })).toEqual({ toolUseId: "t1", picks: [[]] });
+    expect(readAnswerRequest({ toolUseId: "t1", picks: [[0, "x"]] })).toEqual({ toolUseId: "t1", picks: [[0]] });
+    expect(readAnswerRequest({ toolUseId: "t1", picks: "nope" })).toEqual({ toolUseId: "t1", picks: [] });
+  });
+
+  it("carries no text when none was sent", () => {
+    expect(readAnswerRequest({ toolUseId: "t1", text: 7 })).toEqual({ toolUseId: "t1" });
   });
 });

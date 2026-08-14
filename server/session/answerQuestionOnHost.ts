@@ -2,6 +2,7 @@ import { answerQuestion } from "./answerQuestion.js";
 import type { AnswerResult } from "../../common/askQuestion.js";
 import { otherWriteCount, writeAnswerKey } from "./write-to-session.js";
 import { isUnknownArray } from "../../common/isUnknownArray.js";
+import { sanitizeTerminalInput } from "../backends/remoteHost/terminalInput.js";
 
 // Between the keystrokes that answer a dialog: it rebuilds itself between questions, so a burst
 // written in one go risks arriving while it does (measured in #1679).
@@ -24,10 +25,18 @@ const readPicks = (picks: unknown): number[][] | null => {
  * Every client goes through here — the pane beside the terminal, and the phone — so the check and
  * the keystrokes have one implementation between them.
  */
-export async function answerQuestionOnHost(sessionId: string, toolUseId: string, picks: unknown, callsOf: CallsOf): Promise<AnswerResult> {
+export async function answerQuestionOnHost(sessionId: string, toolUseId: string, picks: unknown, callsOf: CallsOf, text?: unknown): Promise<AnswerResult> {
+  const deps = { callsOf, write: writeAnswerKey, otherWriteCount, pause, gapMs: QUESTION_KEY_GAP_MS };
+  // Words rather than indexes (#1693). The ONE thing a client sends that is not a number, so it is
+  // sanitized to printable text first — the same rule the phone's typing has followed since #445.
+  // Without it a caller could put an ESC or a bracketed-paste terminator into somebody's terminal.
+  if (typeof text === "string") {
+    const clean = sanitizeTerminalInput(text);
+    if (!clean) return { ok: false, reason: "bad-picks" };
+    return answerQuestion(deps, { sessionId, toolUseId, text: clean });
+  }
   const chosen = readPicks(picks);
   if (!chosen) return { ok: false, reason: "bad-picks" };
-  const deps = { callsOf, write: writeAnswerKey, otherWriteCount, pause, gapMs: QUESTION_KEY_GAP_MS };
   return answerQuestion(deps, { sessionId, toolUseId, picks: chosen });
 }
 

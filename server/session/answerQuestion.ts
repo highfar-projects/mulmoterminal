@@ -1,4 +1,4 @@
-import { keysForAnswers, openQuestionOf, type AnswerFailure, type AnswerResult, type RecordedCall } from "../../common/askQuestion.js";
+import { keysForAnswers, keysToAnswerInWords, openQuestionOf, type AnswerFailure, type AnswerResult, type RecordedCall } from "../../common/askQuestion.js";
 
 // Answering a live AskUserQuestion dialog, from whichever client asked (#1685).
 //
@@ -64,8 +64,11 @@ export interface AnswerQuestionRequest {
   sessionId: string;
   /** The dialog the caller believes it is answering. Stale ids are refused, never guessed at. */
   toolUseId: string;
-  /** Chosen option indexes, one entry per question. */
-  picks: readonly (readonly number[])[];
+  /** Chosen option indexes, one entry per question. Absent when declining. */
+  picks?: readonly (readonly number[])[] | undefined;
+  /** Answer in the user's own words, through the dialog's `Type something` row (#1693). Sanitized
+   *  before it reaches the terminal: this is the one thing a client sends that is not an index. */
+  text?: string | undefined;
 }
 
 // Abandoned the moment anything else types into this session. The lock above keeps two ANSWERS
@@ -94,7 +97,7 @@ const sendPaced = async (deps: AnswerQuestionDeps, sessionId: string, keys: read
     Promise.resolve<Sent>({ keys: 0, failure: null }),
   );
 
-const answerHeld = async (deps: AnswerQuestionDeps, { sessionId, toolUseId, picks }: AnswerQuestionRequest): Promise<AnswerResult> => {
+const answerHeld = async (deps: AnswerQuestionDeps, { sessionId, toolUseId, picks, text }: AnswerQuestionRequest): Promise<AnswerResult> => {
   const open = openQuestionOf(await deps.callsOf(sessionId), sessionId);
   const openId = open?.toolUseId ?? null;
   const claimed = submitted.get(sessionId) ?? null;
@@ -106,7 +109,7 @@ const answerHeld = async (deps: AnswerQuestionDeps, { sessionId, toolUseId, pick
   // cancelled, or merely moved; from here they are indistinguishable, and all three make a sequence
   // built from the recorded question wrong.
   if (deps.otherWriteCount(sessionId) !== 0) return { ok: false, reason: "closed" };
-  const keys = keysForAnswers(open.questions, picks);
+  const keys = text === undefined ? keysForAnswers(open.questions, picks ?? []) : keysToAnswerInWords(open.questions, text);
   if (!keys) return { ok: false, reason: "bad-picks" };
   // The questions come from the HOST's own record of the dialog, not from the request: a caller
   // cannot widen its picks by describing a different question than the one on screen.

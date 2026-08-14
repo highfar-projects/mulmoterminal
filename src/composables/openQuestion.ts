@@ -1,5 +1,5 @@
 import { isRecord } from "../../common/isRecord";
-import { isAnswerFailure, isAskQuestionEvent, type AnswerFailure, type AskQuestionEvent } from "../../common/askQuestion";
+import { isAnswerFailure, isAskQuestionEvent, type AnswerFailure, type AnswerRequestBody, type AskQuestionEvent } from "../../common/askQuestion";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 const REQUEST_TIMEOUT_MS = 5000;
@@ -26,15 +26,27 @@ export async function fetchOpenQuestion(sessionId: string): Promise<AskQuestionE
 // whether the dialog is still open, and having it build the keystrokes keeps the check and the
 // typing in one step. The phone reaches the same code, so a third client would too.
 export async function postAnswer(sessionId: string, toolUseId: string, picks: number[][]): Promise<AnswerFailure | null> {
+  return postToAnswerRoute(sessionId, { toolUseId, picks });
+}
+
+// Answering in the user's own words, through the dialog's `Type something` row (#1693). The same
+// route as the buttons, because it is the same act: the host checks the dialog is still the one on
+// screen, then types. The words are sanitized there — this is the one thing a client sends that is
+// not an index.
+export async function postWords(sessionId: string, toolUseId: string, text: string): Promise<AnswerFailure | null> {
+  return postToAnswerRoute(sessionId, { toolUseId, text });
+}
+
+async function postToAnswerRoute(sessionId: string, body: AnswerRequestBody): Promise<AnswerFailure | null> {
   try {
     const res = await fetchWithTimeout(
       `/api/question/${encodeURIComponent(sessionId)}/answer`,
-      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ toolUseId, picks }) },
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
       REQUEST_TIMEOUT_MS,
     );
     if (res.ok) return null;
-    const body: unknown = await res.json().catch(() => null);
-    return isRecord(body) && isAnswerFailure(body.reason) ? body.reason : "unwritable";
+    const answered: unknown = await res.json().catch(() => null);
+    return isRecord(answered) && isAnswerFailure(answered.reason) ? answered.reason : "unwritable";
   } catch {
     return "unwritable";
   }
