@@ -83,6 +83,39 @@ function specFor(config: PublishedConfigDoc, form: Record<string, DrawnForm>, ci
   };
 }
 
+/** WHY THE RULES SAID NO, asked only once they have.
+ *
+ *  A refusal names nothing — "Missing or insufficient permissions" is the whole of it — and the
+ *  author is the one person who could act on the answer. So when a write is denied, the declaration
+ *  is walked against the record to find a condition that does not hold, and THAT is reported.
+ *
+ *  AFTERWARDS, never before. The rules judge against `request.time` on Google's clock; this runs on
+ *  the author's. A pre-flight check would refuse writes that would have succeeded on a machine
+ *  whose clock is a minute slow, which is the preview becoming an authority it is not (constraint 3
+ *  in the plan). Asked after a denial it cannot cause one — it can only explain one.
+ *
+ *  It answers null when it finds nothing, and the bare refusal is passed through rather than
+ *  dressed up. A guess would be worse than the truth. */
+async function explainRefusal(handle: SharedAppHandle, aid: string, raw: Record<string, unknown>, record: Record<string, unknown>): Promise<string | null> {
+  const window = isRecord(raw.window) ? raw.window : null;
+  if (window === null) return null;
+  const now = Date.now();
+  const bound = async (side: unknown, kind: "opens" | "closes"): Promise<string | null> => {
+    if (!isRecord(side) || typeof side.ref !== "string" || typeof side.collection !== "string" || typeof side.field !== "string") return null;
+    const id = record[side.ref];
+    if (typeof id !== "string") return null;
+    const doc = await handle.docs.get(itemsPath(aid, side.collection), id);
+    if (!isRecord(doc)) return null;
+    const at = doc[side.field];
+    if (typeof at !== "number") return null;
+    // The same comparisons the rules make: opening is inclusive, closing is exclusive.
+    if (kind === "opens" && now < at) return `the window for ${side.collection}/${id} opens at ${new Date(at).toISOString()}`;
+    if (kind === "closes" && now >= at) return `the window for ${side.collection}/${id} closed at ${new Date(at).toISOString()}`;
+    return null;
+  };
+  return (await bound(window.untilField, "closes")) ?? (await bound(window.fromField, "opens"));
+}
+
 /** The write itself. Single through the ordinary seam; paired through a batch, for the reason at
  *  the top of this file.
  *
@@ -144,7 +177,11 @@ export async function writePreviewSubmission(root: string, cid: string, values: 
 
   const plan = plannedWrite(cid, spec.submit, id, record);
   const failed = await commit(handle, preview.aid, plan);
-  if (failed !== null) return { ok: false, error: failed };
+  if (failed !== null) {
+    const raw = preview.config.submit?.[cid];
+    const why = isRecord(raw) ? await explainRefusal(handle, preview.aid, raw, record) : null;
+    return { ok: false, error: why === null ? failed : `${why} (${failed})` };
+  }
   return { ok: true, written: { cid: plan.cid, id: plan.id, ...(plan.mirror === undefined ? {} : { mirror: { cid: plan.mirror.cid, id: plan.mirror.id } }) } };
 }
 

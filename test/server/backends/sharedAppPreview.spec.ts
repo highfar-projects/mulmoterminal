@@ -64,8 +64,12 @@ class RecordingDocs implements FirestoreDocs {
 
   /** Create-if-absent. Recorded like any other write: a preview that "only created" the app
    *  document would still have written one. */
+  /** Refuse every write, the way the deployed rules refuse one they will not authorize. */
+  denyWrites = false;
+
   create = (collectionPath: string, docId: string, data: Record<string, unknown>): Promise<boolean> => {
     this.writes.push(`create ${collectionPath}/${docId}`);
+    if (this.denyWrites) return Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }));
     if (this.read(collectionPath).has(docId)) return Promise.resolve(false);
     this.bucket(collectionPath).set(docId, data);
     return Promise.resolve(true);
@@ -243,6 +247,37 @@ describe("shared app preview", () => {
     // open — it refuses EVERY submission as `unknown-collection`, which reads as "your declaration
     // is wrong" about a declaration that is right.
     expect(result.ok && result.submit).toEqual({ bookings: { createFields: ["note"] } });
+  });
+
+  it("names the declaration a refused write fell foul of, rather than relaying a bare denial", async () => {
+    const { writePreviewSubmission } = await import("../../../server/backends/sharedApp/previewWrite.js");
+    const closed = 1_600_000_000_000;
+    writeApp(
+      root,
+      declaration({
+        public: {
+          read: ["bookings"],
+          submit: {
+            bookings: {
+              auth: "verifiedEmail",
+              createFields: ["note"],
+              window: { untilField: { ref: "note", collection: "bookings", field: "closesAt" } },
+            },
+          },
+        },
+      }),
+    );
+    docs.store.set(`apps/${AID}/collections/bookings/items`, new Map([["slot-1", { closesAt: closed }]]));
+    // Every write is refused, exactly as the deployed rules refuse one whose window has passed.
+    docs.denyWrites = true;
+
+    const result = await writePreviewSubmission(root, "bookings", { note: "slot-1" });
+
+    // "Missing or insufficient permissions" names nothing, and the author is the one person who
+    // could act on the answer. The declaration is walked to find the condition that does not hold.
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.error).toContain("closed at");
+    expect(result.ok === false && result.error).toContain("bookings/slot-1");
   });
 
   it("carries the live app's keys forward when there is one to read", async () => {
