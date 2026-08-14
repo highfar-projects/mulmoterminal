@@ -353,14 +353,18 @@ const setValue = (cid: string, field: string, value: string): void => {
   formValues.value = { ...formValues.value, [cid]: { ...(formValues.value[cid] ?? {}), [field]: value } };
 };
 
-/** What the box is, from the schema's type. The default is a plain text box rather than nothing:
- *  an unrecognised type is still a field the rules will accept a string in. */
+/** What the box is, from the schema's type — and DELIBERATELY the same short list as the published
+ *  site's (`PublicSubmitForm.vue` in mulmoserver). Everything else is a text box.
+ *
+ *  Copied rather than improved on, because a richer control here would make the preview draw
+ *  something a visitor never gets. A `checkbox` is the clearest case: it would post `"on"` whether
+ *  ticked or cleared — the values on this wire are strings, since the rules compare stored values
+ *  without coercing — so the author would test a record the real form cannot produce, and either
+ *  see it accepted here and refused there, or the reverse. */
 const inputType = (type: string): string => {
+  if (type === "email") return "email";
   if (type === "number") return "number";
   if (type === "date") return "date";
-  if (type === "datetime") return "datetime-local";
-  if (type === "email") return "email";
-  if (type === "boolean") return "checkbox";
   return "text";
 };
 

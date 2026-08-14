@@ -54,7 +54,14 @@ class RecordingDocs implements FirestoreDocs {
   // The rules' actual shape: `apps/{aid}`'s read resolves the roster out of the document itself, so
   // a document that does not exist is REFUSED rather than absent. A preview of an app nobody has
   // published yet meets this on its very first call, and must not treat it as a failure.
+  /** Refuse the diagnostic READ as well. The rules that just denied a write are entitled to deny
+   *  the read that asks why, and the two denials are independent. */
+  denyItemReads = false;
+
   get = (collectionPath: string, docId: string): Promise<unknown | null> => {
+    if (this.denyItemReads && collectionPath.includes("/collections/")) {
+      return Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }));
+    }
     const existing = this.read(collectionPath).get(docId);
     if (collectionPath === "apps" && !existing) {
       return Promise.reject(Object.assign(new Error("read refused (test)"), { code: "permission-denied" }));
@@ -320,6 +327,35 @@ describe("shared app preview", () => {
     expect(result.ok).toBe(false);
     expect(result.ok === false && result.error).toContain("closed at");
     expect(result.ok === false && result.error).toContain("bookings/slot-1");
+  });
+
+  it("still reports the refusal when the read that would explain it is refused too", async () => {
+    const { writePreviewSubmission } = await import("../../../server/backends/sharedApp/previewWrite.js");
+    writeApp(
+      root,
+      declaration({
+        public: {
+          read: ["bookings"],
+          submit: {
+            bookings: {
+              auth: "verifiedEmail",
+              createFields: ["note"],
+              window: { untilField: { ref: "note", collection: "bookings", field: "closesAt" } },
+            },
+          },
+        },
+      }),
+    );
+    docs.denyWrites = true;
+    docs.denyItemReads = true;
+
+    const result = await writePreviewSubmission(root, "bookings", { note: "slot-1" });
+
+    // The diagnostic is BEST EFFORT. It runs only because a write was already refused, and that
+    // refusal is the answer being reported — letting the second denial throw would replace a named
+    // failure with a 500 the route turns into nothing on the author's screen.
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.error).toContain("insufficient permissions");
   });
 
   it("carries the live app's keys forward when there is one to read", async () => {

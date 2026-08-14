@@ -231,6 +231,33 @@ describe("SharedAppPreview", () => {
     expect(posted[0]?.body).toEqual({ cid: "signups", values: { name: "中島", plan: "B" } });
   });
 
+  it("draws the same input kinds the published site does, and no richer ones", async () => {
+    vi.stubGlobal(
+      "fetch",
+      answering(
+        payload({
+          pages: [],
+          generatedForm: true,
+          submit: { signups: { createFields: ["agreed", "when", "count"] } },
+          formInputs: {
+            signups: [
+              { name: "agreed", label: "Agreed", required: false, type: "boolean" },
+              { name: "when", label: "When", required: false, type: "datetime" },
+              { name: "count", label: "Count", required: false, type: "number" },
+            ],
+          },
+        }),
+      ),
+    );
+
+    const wrapper = await mountPreview();
+
+    // `PublicSubmitForm.vue` in mulmoserver knows email / number / date and draws everything else
+    // as text. A checkbox here would post "on" whether ticked or cleared — this wire carries
+    // strings — so the author would be testing a record the real form cannot produce.
+    expect(wrapper.findAll("input").map((input) => input.attributes("type"))).toEqual(["text", "text", "number"]);
+  });
+
   it("offers to take back what a generated form wrote", async () => {
     // The records strip used to live inside the pages branch, so an app with only a form could
     // write real rows and have nowhere to take them back from — the list is the ONLY place they

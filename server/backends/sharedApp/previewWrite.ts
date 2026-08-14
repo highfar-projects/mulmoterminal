@@ -104,7 +104,11 @@ async function explainRefusal(handle: SharedAppHandle, aid: string, raw: Record<
     if (!isRecord(side) || typeof side.ref !== "string" || typeof side.collection !== "string" || typeof side.field !== "string") return null;
     const id = record[side.ref];
     if (typeof id !== "string") return null;
-    const doc = await handle.docs.get(itemsPath(aid, side.collection), id);
+    // BEST EFFORT, and that is the whole contract of this function. It runs because a write was
+    // already refused, and the refusal is the answer being reported — if this read is refused too
+    // (the same rules, a moment later, are entitled to say no to it), letting it throw would
+    // replace a named failure the author can act on with a 500 the route turns into nothing.
+    const doc = await handle.docs.get(itemsPath(aid, side.collection), id).catch(() => null);
     if (!isRecord(doc)) return null;
     const at = doc[side.field];
     if (typeof at !== "number") return null;
