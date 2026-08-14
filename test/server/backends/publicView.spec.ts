@@ -158,6 +158,12 @@ describe("the file a published view names", () => {
       // `prompt(` on purpose, and running the scanner over it refuses a page that works.
       '<script type="text/plain">prompt()</script>',
       '<script type="application/json">{"a":"prompt("}</script>',
+      // A `<script src=…>` ignores whatever is written between its tags.
+      '<script src="/x.js">prompt()</script>',
+      // Raw-text elements hold TEXT, not markup: a textarea showing an example draws no button.
+      "<textarea><button onclick=\"prompt('x')\">go</button></textarea>",
+      "<title>alert() は無視されます</title>",
+      "<style>/* prompt( */ .a { color: red }</style>",
       // A name the page BINDS is the page's own. `const alert = …` is an ordinary thing to write
       // in a page that shows its messages in the page — which is what the skill asks for.
       "<script>const confirm = (value) => value; confirm(true);</script>",

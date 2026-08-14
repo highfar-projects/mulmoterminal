@@ -33,7 +33,10 @@
  *  identically — an `onclick` and a `javascript:` href are as executable as a `<script>`, and a
  *  gate that reads only the third would pass the other two straight through. */
 const SCRIPT_BODY = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
-const SCRIPT_ELEMENT = /(<script\b[^>]*>)[\s\S]*?<\/script\s*>/gi;
+/** The elements whose CONTENT the parser does not read as markup: a `<textarea>` holding an
+ *  example, a `<title>`, a stylesheet. Their start tags are kept — those carry attributes that do
+ *  run — and only what is between them goes. */
+const RAW_TEXT_ELEMENT = /(<(script|style|textarea|title)\b[^>]*>)[\s\S]*?<\/\2\s*>/gi;
 // Attributes are read out of START TAGS, and out of a document the scripts have been taken out of
 // — not off the raw page. `<script>const sample = "<button onclick=alert()>";</script>` is a
 // STRING that draws nothing and calls nothing, and reading the whole document for attribute-shaped
@@ -219,6 +222,10 @@ const JAVASCRIPT_TYPES = new Set([
   "application/x-ecmascript",
 ]);
 
+/** A `<script src=…>` IGNORES whatever is written between its tags. Scanning that body refuses a
+ *  page for code the browser never runs. */
+const hasSource = (attributes: string): boolean => /\ssrc\s*=/i.test(attributes);
+
 const runsAsScript = (attributes: string): boolean => {
   const declared = TYPE_ATTRIBUTE.exec(attributes);
   const type = decoded(declared?.[1] ?? declared?.[2] ?? declared?.[3] ?? "")
@@ -232,11 +239,15 @@ const runsAsScript = (attributes: string): boolean => {
  *
  *  Kept because that tag carries attributes of its own, and they run: a `<script src=…>` that fails
  *  to load fires its `onerror`. Removing the whole element took that handler out of the page along
- *  with the body, so nothing ever read it. */
-const withoutScriptBodies = (html: string): string => html.replace(SCRIPT_ELEMENT, "$1 ");
+ *  with the body, so nothing ever read it.
+ *
+ *  Raw-text elements go the same way for the opposite reason: `<textarea><button
+ *  onclick="prompt()"></textarea>` draws no button — the parser reads that as the textarea's TEXT —
+ *  and reading it as live markup refuses a page whose only crime is showing an example. */
+const withoutScriptBodies = (html: string): string => html.replace(RAW_TEXT_ELEMENT, "$1 ");
 
 const scriptsOf = (html: string): string[] => [
-  ...[...html.matchAll(SCRIPT_BODY)].filter((hit) => runsAsScript(hit[1] ?? "")).map((hit) => hit[2] ?? ""),
+  ...[...html.matchAll(SCRIPT_BODY)].filter((hit) => runsAsScript(hit[1] ?? "") && !hasSource(hit[1] ?? "")).map((hit) => hit[2] ?? ""),
   // Attributes are read from EVERY start tag, executable body or not: a data block's own `onerror`
   // still fires.
   ...attributesOf(withoutScriptBodies(html)),
