@@ -210,10 +210,7 @@ useCollectionTeleportTarget(probe);
       This directory has no collections yet. Collections live in <code>.claude/skills</code> under the folder the cell is open in.
     </div>
     <template v-else-if="previewing">
-      <div class="min-h-0 flex-1">
-        <SharedAppPreview :cwd="cwd" />
-      </div>
-      <div class="flex-none border-t border-border px-2.5 py-1.5 font-sans">
+      <div class="flex-none border-b border-border px-2.5 py-1.5 font-sans">
         <button
           type="button"
           class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg hover:border-accent"
@@ -222,8 +219,26 @@ useCollectionTeleportTarget(probe);
           Back to collections
         </button>
       </div>
+      <div class="min-h-0 flex-1">
+        <SharedAppPreview :cwd="cwd" />
+      </div>
     </template>
     <template v-else>
+      <!-- The shared app this directory declares, if it declares one. ABOVE the collections rather
+           than below them: the pane's own surface fills the height, so a strip under it sat past
+           the fold and was not found at all. Its own control rather than part of the collection
+           strip at the bottom — the question is about the APP, every collection it publishes and
+           the pages built over them, not about the one collection on screen. -->
+      <div v-if="declaresApp" class="flex-none border-b border-border px-2.5 py-1.5 font-sans">
+        <button
+          type="button"
+          class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg hover:border-accent"
+          title="Draw the pages publishing this app would put on screen. Nothing is written."
+          @click="previewing = true"
+        >
+          Preview the shared app
+        </button>
+      </div>
       <div class="min-h-0 flex-1">
         <PluginFrame :css="collectionShadowCss" height="100%">
           <div ref="probe" style="height: 100%">
@@ -236,19 +251,6 @@ useCollectionTeleportTarget(probe);
       <!-- The portability check, on a strip of its own below the plugin's own surface: it is the
            HOST's question about the collection (does it survive a clone), not part of the
            collection's data, and it must not be inside the shadow root the package styles. -->
-      <!-- The shared app this directory declares, if it declares one. Its own control rather than
-           part of the collection strip below: the question is about the APP — every collection it
-           publishes, and the pages built over them — not about the one collection on screen. -->
-      <div v-if="declaresApp" class="flex-none border-t border-border px-2.5 py-1.5 font-sans">
-        <button
-          type="button"
-          class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg hover:border-accent"
-          title="Draw the pages publishing this app would put on screen. Nothing is written."
-          @click="previewing = true"
-        >
-          Preview the shared app
-        </button>
-      </div>
       <div v-if="openSlug" class="flex-none border-t border-border px-2.5 py-1.5 font-sans">
         <div class="flex items-center gap-2">
           <button
