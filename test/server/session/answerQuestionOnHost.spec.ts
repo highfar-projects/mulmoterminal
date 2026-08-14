@@ -66,6 +66,11 @@ describe("answerQuestionOnHost picks", () => {
     expect(await answer([{ nope: [1] }])).toEqual({ result: { ok: false, reason: "bad-picks" }, keys: [] });
   });
 
+  // Neither client sends this, so reading it would be guessing at what somebody meant.
+  it("refuses a wrapper inside a wrapper", async () => {
+    expect(await answer([{ options: { options: [1] } }])).toEqual({ result: { ok: false, reason: "bad-picks" }, keys: [] });
+  });
+
   it("still refuses what neither shape allows", async () => {
     expect(await answer("1")).toEqual({ result: { ok: false, reason: "bad-picks" }, keys: [] });
     expect(await answer([1])).toEqual({ result: { ok: false, reason: "bad-picks" }, keys: [] });

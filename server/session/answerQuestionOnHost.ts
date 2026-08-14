@@ -16,11 +16,17 @@ const pause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 // command is a Firestore document, and Firestore cannot store an array inside an array — a
 // `number[][]` is rejected outright by addDoc, so the phone wraps each row one map deep.
 // Same meaning, and both are read into the same `number[]`.
-const readRow = (row: unknown): number[] | null => {
-  if (isRecord(row)) return readRow(row.options);
+const readIndexes = (row: unknown): number[] | null => {
   if (!isUnknownArray(row)) return null;
   if (!row.every((idx) => typeof idx === "number")) return null;
   return row.filter((idx): idx is number => typeof idx === "number");
+};
+
+// Exactly one wrapper deep, never more: `{ options: { options: [1] } }` is not a shape either
+// client sends, and reading it would be guessing at what somebody meant.
+const readRow = (row: unknown): number[] | null => {
+  if (isRecord(row)) return readIndexes(row.options);
+  return readIndexes(row);
 };
 
 // The picks as they arrive from a client, read rather than trusted. Only the SHAPE is decided
