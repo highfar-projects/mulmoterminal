@@ -73,7 +73,12 @@ there is no button for it, because there is nothing to open when nothing is bein
 **The dialog does not go away, and the pane does not replace it.** Picking here presses the arrow
 keys and Enter in the real dialog on the left, so whichever end you answer at wins and someone who
 prefers the keyboard notices no difference. That is also why the pane can only offer what the
-dialog's own list holds: **Type something** and **Chat about this** stay in the terminal.
+dialog's own list holds: **Chat about this** stays in the terminal.
+
+**Answering in your own words** works when there is a single question and it takes one answer: a
+text box appears under the buttons, and what you write goes into the dialog's own **Type something**
+row. It is not offered for several questions at once, or for a multi-select one — the keystrokes
+would stop somewhere that is not an answer.
 
 - **Claude sessions only.** The choices arrive on Claude Code's own hooks, so a codex or shell cell
   never opens the pane.
