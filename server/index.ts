@@ -795,7 +795,7 @@ initRemoteHostBackend({
   // The same two functions the browser's pane reaches through /api/question (#1685): one place
   // decides whether a dialog is still open, and one place decides which bytes reach the PTY.
   openQuestion: async (id) => openQuestionOf(await toolStores.toolCallsStore.get(id), id),
-  answerQuestion: (id, toolUseId, picks) => answerQuestionOnHost(id, toolUseId, picks, (sid) => toolStores.toolCallsStore.get(sid)),
+  answerQuestion: (id, toolUseId, picks, decline) => answerQuestionOnHost(id, toolUseId, picks, (sid) => toolStores.toolCallsStore.get(sid), decline),
   canClearBox: remoteHostCanClearBox,
   // The byte(s) that submit for this session (#772), resolved live from config so the
   // phone's "send" commits the paste the same way the keyboard does. Scoped to the

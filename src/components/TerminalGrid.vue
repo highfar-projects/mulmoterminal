@@ -46,7 +46,7 @@ import { hasCanvasGroup, hasCollectionsGroup } from "../../common/toolGroups";
 import type { RightPane } from "./gridCell";
 import QuestionPane from "./QuestionPane.vue";
 import { ASK_QUESTION_CHANNEL, isAskQuestionDone, isAskQuestionEvent } from "../../common/askQuestion";
-import { fetchOpenQuestion, postAnswer } from "../composables/openQuestion";
+import { fetchOpenQuestion, postAnswer, postDecline } from "../composables/openQuestion";
 import type { AnswerFailure } from "../../common/askQuestion";
 import { createQuestionBox } from "../composables/questionBox";
 import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
@@ -547,6 +547,23 @@ onBeforeUnmount(() => unsubscribeQuestionReconnect());
 function dismissQuestionPane(): void {
   if (expandedSessionId.value) questionBox.dismiss(expandedSessionId.value);
   setRightPane(null, paneUid.value);
+}
+
+// None of the options fits (#1693). Two steps, and the ORDER is the point: the dialog is declined
+// first — by the host, under the same guards as any other answer — and only once it is gone does the
+// text go where it belongs, the ordinary prompt underneath. Sent the way any other message is, so
+// nothing new carries user text to the terminal.
+async function sayInsteadOfChoosing(text: string): Promise<void> {
+  const event = expandedQuestion.value;
+  if (!event || props.expandedUid === null) return;
+  dropQuestion(event.sessionId);
+  const failure = await postDecline(event.sessionId, event.toolUseId);
+  if (failure) {
+    if (failure !== "closed") answerFailure.value = failure;
+    await revealQuestion(event.sessionId);
+    return;
+  }
+  conn.submitText(`cell-${props.expandedUid}`, text);
 }
 
 // Answering the enlarged cell's dialog. The picks go to the host, which turns them into the
@@ -1314,6 +1331,7 @@ watch(
           :expanded="paneFull"
           :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
           @answer="answerQuestion"
+          @say="sayInsteadOfChoosing"
           @toggle-expand="togglePaneExpanded"
           @close="dismissQuestionPane"
         />

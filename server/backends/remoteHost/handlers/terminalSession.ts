@@ -87,7 +87,10 @@ export const createTerminalSessionHandlers = ({
       const sessionId = typeof params.sessionId === "string" ? params.sessionId : "";
       const toolUseId = typeof params.toolUseId === "string" ? params.toolUseId : "";
       if (!sessionId || !toolUseId) throw new Error("sessionId and toolUseId are required");
-      const result = await answerQuestion(sessionId, toolUseId, params.picks);
+      // `decline` takes the dialog's own `Type something` row, which ends it and returns the
+      // terminal to its prompt (#1693). What the phone then says goes through sendTerminalInput,
+      // the path it already has — no text reaches the terminal through this command.
+      const result = await answerQuestion(sessionId, toolUseId, params.picks, params.decline === true);
       if (!result.ok) throw new Error(ANSWER_REFUSED[result.reason]);
       return toJsonObject(result);
     },

@@ -140,3 +140,41 @@ describe("QuestionPane", () => {
     expect(w.find('[data-testid="question-failure"]').exists()).toBe(false);
   });
 });
+
+// "None of the above" (#1693). The pane emits the words; declining the dialog and then saying them
+// is the grid's job, because only it can reach the terminal.
+describe("saying something else", () => {
+  const other = (w: ReturnType<typeof mountPane>) => w.find('[data-testid="question-other"]');
+
+  it("emits what was typed, trimmed", async () => {
+    const w = mountPane([question("Color", ["Red", "Blue"])]);
+    await other(w).setValue("  neither, use green  ");
+    await w.find('[data-testid="question-other-btn"]').trigger("click");
+
+    expect(w.emitted("say")).toEqual([["neither, use green"]]);
+  });
+
+  it("will not send nothing", async () => {
+    const w = mountPane([question("Color", ["Red", "Blue"])]);
+    expect(w.find('[data-testid="question-other-btn"]').attributes("disabled")).toBeDefined();
+
+    await other(w).setValue("   ");
+    await w.find('[data-testid="question-other-btn"]').trigger("click");
+    expect(w.emitted("say")).toBeUndefined();
+  });
+
+  it("forgets what was typed when a new question arrives", async () => {
+    const w = mountPane([question("Color", ["Red", "Blue"])]);
+    await other(w).setValue("about to be stale");
+
+    await w.setProps({ event: { sessionId: "s1", toolUseId: "t2", questions: [question("Color", ["Red", "Blue"])] } });
+
+    expect((other(w).element as HTMLTextAreaElement).value).toBe("");
+  });
+
+  // Same rule as the option buttons: a failure that cannot be retried offers no controls.
+  it("offers no text box for a failure that cannot be retried", () => {
+    const w = mount(QuestionPane, { props: { event: event([question("Color", ["Red", "Blue"])]), failure: "partial" as const } });
+    expect(w.find('[data-testid="question-other"]').exists()).toBe(false);
+  });
+});

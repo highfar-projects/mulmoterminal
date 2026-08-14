@@ -29,7 +29,7 @@ const FAILURE_TEXT: Record<AnswerFailure, string> = {
   partial: "Part of the answer reached the dialog before it was interrupted, so where it stands is no longer known from here. Finish it in the terminal.",
 };
 
-const emit = defineEmits<{ answer: [picks: number[][]]; close: []; toggleExpand: [] }>();
+const emit = defineEmits<{ answer: [picks: number[][]]; say: [text: string]; close: []; toggleExpand: [] }>();
 
 const questions = computed(() => props.event?.questions ?? []);
 
@@ -44,10 +44,21 @@ const answerable = computed(() => props.failure !== "partial" && props.failure !
 // row (common/askQuestion.ts rejects it outright rather than sending it).
 const picks = ref<number[][]>([]);
 
+// None of the above. The dialog's own `Type something` row is not a text field: taking it ENDS the
+// question as declined and hands the terminal back its ordinary prompt (#1693), which is where what
+// the user typed here is then said. So this is one action to the reader and two to the machine.
+const other = ref("");
+
+function sayOther(): void {
+  const text = other.value.trim();
+  if (text) emit("say", text);
+}
+
 watch(
   () => props.event?.toolUseId,
   () => {
     picks.value = questions.value.map(() => []);
+    other.value = "";
   },
   { immediate: true },
 );
@@ -150,6 +161,31 @@ function choose(qi: number, oi: number): void {
         >
           Send
         </button>
+
+        <!-- None of the options fits. Declining is what the dialog itself offers here, so this says
+             so rather than pretending the text goes into the question. -->
+        <div v-if="answerable" class="mt-3 border-t border-border pt-3">
+          <label class="mb-1 block text-[12px] text-dim" for="question-other">Say something else instead</label>
+          <textarea
+            id="question-other"
+            v-model="other"
+            data-testid="question-other"
+            rows="2"
+            class="w-full resize-y rounded border border-border bg-elevated px-2 py-1.5 text-[13px] text-fg"
+            placeholder="Answer in your own words"
+            @keydown.enter.meta.prevent="sayOther"
+          />
+          <button
+            type="button"
+            data-testid="question-other-btn"
+            class="mt-1 w-full cursor-pointer rounded border border-border bg-panel px-3 py-2 text-[13px] font-medium text-fg disabled:cursor-not-allowed disabled:text-dim"
+            :disabled="other.trim().length === 0"
+            @click="sayOther"
+          >
+            Send instead of choosing
+          </button>
+          <p class="mt-1 text-[12px] text-dim">This declines the question and sends your words as an ordinary message.</p>
+        </div>
 
         <!-- Said plainly because it is the one thing about this pane that surprises people: the
              terminal dialog never went away, and answering it there is still the faster path. -->

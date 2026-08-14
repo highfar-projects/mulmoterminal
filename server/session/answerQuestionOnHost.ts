@@ -24,7 +24,12 @@ const readPicks = (picks: unknown): number[][] | null => {
  * Every client goes through here — the pane beside the terminal, and the phone — so the check and
  * the keystrokes have one implementation between them.
  */
-export async function answerQuestionOnHost(sessionId: string, toolUseId: string, picks: unknown, callsOf: CallsOf): Promise<AnswerResult> {
+export async function answerQuestionOnHost(sessionId: string, toolUseId: string, picks: unknown, callsOf: CallsOf, decline = false): Promise<AnswerResult> {
+  // Declining needs no picks: the keys are the same whatever the questions offered.
+  if (decline) {
+    const deps = { callsOf, write: writeAnswerKey, otherWriteCount, pause, gapMs: QUESTION_KEY_GAP_MS };
+    return answerQuestion(deps, { sessionId, toolUseId, decline: true });
+  }
   const chosen = readPicks(picks);
   if (!chosen) return { ok: false, reason: "bad-picks" };
   const deps = { callsOf, write: writeAnswerKey, otherWriteCount, pause, gapMs: QUESTION_KEY_GAP_MS };

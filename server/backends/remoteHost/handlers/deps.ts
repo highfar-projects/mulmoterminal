@@ -32,7 +32,7 @@ export interface RemoteHostHandlerDeps {
   /** The AskUserQuestion dialog this session is blocked on, or null (#1685). */
   openQuestion: (sessionId: string) => Promise<AskQuestionEvent | null>;
   /** Answer it by option index. The host owns every byte that reaches the PTY. */
-  answerQuestion: (sessionId: string, toolUseId: string, picks: unknown) => Promise<AnswerResult>;
+  answerQuestion: (sessionId: string, toolUseId: string, picks: unknown, decline?: boolean) => Promise<AnswerResult>;
   // Whether typing may empty the session's input box first, so only the phone's text
   // is submitted (#572). Answered in server/index.ts, where the agent kind and the
   // turn state live.

@@ -26,15 +26,26 @@ export async function fetchOpenQuestion(sessionId: string): Promise<AskQuestionE
 // whether the dialog is still open, and having it build the keystrokes keeps the check and the
 // typing in one step. The phone reaches the same code, so a third client would too.
 export async function postAnswer(sessionId: string, toolUseId: string, picks: number[][]): Promise<AnswerFailure | null> {
+  return postToAnswerRoute(sessionId, { toolUseId, picks });
+}
+
+// Taking the dialog's `Type something` row, which ENDS it as declined and returns the terminal to
+// its ordinary prompt (#1693). Only the keys that close the dialog go through the host; what the
+// user then says is a normal message and travels the way every other message does.
+export async function postDecline(sessionId: string, toolUseId: string): Promise<AnswerFailure | null> {
+  return postToAnswerRoute(sessionId, { toolUseId, decline: true });
+}
+
+async function postToAnswerRoute(sessionId: string, body: Record<string, unknown>): Promise<AnswerFailure | null> {
   try {
     const res = await fetchWithTimeout(
       `/api/question/${encodeURIComponent(sessionId)}/answer`,
-      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ toolUseId, picks }) },
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
       REQUEST_TIMEOUT_MS,
     );
     if (res.ok) return null;
-    const body: unknown = await res.json().catch(() => null);
-    return isRecord(body) && isAnswerFailure(body.reason) ? body.reason : "unwritable";
+    const answered: unknown = await res.json().catch(() => null);
+    return isRecord(answered) && isAnswerFailure(answered.reason) ? answered.reason : "unwritable";
   } catch {
     return "unwritable";
   }

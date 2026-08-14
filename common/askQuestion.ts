@@ -161,6 +161,20 @@ const picksValid = (question: AskQuestion, picks: readonly number[]): boolean =>
 // the prompt once it has closed.
 const needsReview = (questions: readonly AskQuestion[]): boolean => questions.length > 1 || questions.some((question) => question.multiSelect);
 
+// The keystrokes that DECLINE the dialog — its `Type something` row, which is not a text field at
+// all: choosing it ends the whole call as "User declined to answer questions" and returns the user
+// to the ordinary prompt, where anything they type is a normal message. Measured against claude
+// 2.1.231, on a single question and on a two-question wizard, where declining the first declines
+// both.
+//
+// The row sits directly after the options of the question ON SCREEN, which is always the first one:
+// declining ends the call, so there is no later question to decline from.
+export const keysToDecline = (questions: readonly AskQuestion[]): string[] | null => {
+  const first = questions[0];
+  if (!first) return null;
+  return [...moveDown(0, first.options.length), KEY_ENTER];
+};
+
 /**
  * The keystrokes that answer a live AskUserQuestion dialog. `picks[i]` holds the chosen option
  * indexes of `questions[i]` — exactly one for a single-select question, any ascending set for a

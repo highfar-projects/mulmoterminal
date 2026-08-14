@@ -262,3 +262,29 @@ describe("answerQuestion", () => {
     expect(write).not.toHaveBeenCalled();
   });
 });
+
+// "None of the above" (#1693): the same guarded path, but the keys take the dialog's `Type
+// something` row, which ends it as declined. What the user then says is an ordinary message and
+// never passes through here.
+describe("declining", () => {
+  it("presses past the options to the decline row", async () => {
+    const d = deps([CALL("t1", "running")]);
+
+    expect(await answerQuestion(d, { sessionId: "dec1", toolUseId: "t1", decline: true })).toEqual({ ok: true });
+    expect(d.write.mock.calls.map((call) => call[1])).toEqual([DOWN, DOWN, ENTER]); // two options, then the row
+  });
+
+  it("refuses to decline a dialog that is not the one on screen", async () => {
+    const d = deps([CALL("t2", "running")]);
+
+    expect(await answerQuestion(d, { sessionId: "dec2", toolUseId: "t1", decline: true })).toEqual({ ok: false, reason: "closed" });
+    expect(d.write).not.toHaveBeenCalled();
+  });
+
+  it("claims the dialog it declined, like any other answer", async () => {
+    const d = deps([CALL("t1", "running")]);
+    await answerQuestion(d, { sessionId: "dec3", toolUseId: "t1", decline: true });
+
+    expect(await answerQuestion(d, { sessionId: "dec3", toolUseId: "t1", decline: true })).toEqual({ ok: false, reason: "closed" });
+  });
+});

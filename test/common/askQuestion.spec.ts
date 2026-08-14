@@ -7,6 +7,7 @@ import { describe, it, expect } from "vitest";
 import {
   parseAskQuestions,
   keysForAnswers,
+  keysToDecline,
   isAskQuestionEvent,
   openQuestionOf,
   shouldPublishQuestion,
@@ -195,5 +196,23 @@ describe("openQuestionOf", () => {
 
   it("ignores every other running tool", () => {
     expect(openQuestionOf([{ toolUseId: "b", toolName: "Bash", toolInput: { command: "ls" }, status: "running" }], "s1")).toBeNull();
+  });
+});
+
+// MEASURED: `Type something` is not a text field — it ends the call as declined and hands the user
+// back the ordinary prompt. It sits right after the options of the question on screen, and on a
+// multi-question wizard declining the first declines them all, so the first is the only one to aim at.
+describe("keysToDecline", () => {
+  it("walks past the options to the decline row and takes it", () => {
+    expect(keysToDecline([single(["Red", "Blue"])])).toEqual([DOWN, DOWN, ENTER]);
+    expect(keysToDecline([multi(["Nuts", "Cream", "Honey"])])).toEqual([DOWN, DOWN, DOWN, ENTER]);
+  });
+
+  it("aims at the first question of a wizard — declining it declines the rest", () => {
+    expect(keysToDecline([single(["Small", "Large"]), single(["Hot", "Cold", "Warm"])])).toEqual([DOWN, DOWN, ENTER]);
+  });
+
+  it("has nothing to decline with no questions", () => {
+    expect(keysToDecline([])).toBeNull();
   });
 });
