@@ -151,9 +151,10 @@ export function createConnectionHandlers(deps: ConnectionDeps) {
         // the keyboard has typed, so it stops rather than finishing its keystrokes into whatever the
         // screen became (#1685). The write itself stays on the entry we already hold.
         //
-        // Terminal REPLIES do not count. The emulator answers the application's own queries on
-        // this channel — device attributes, colours, mouse, focus — and counting those as typing
-        // refused every answer from the question pane after any attach or theme read (#1693).
+        // Terminal REPLIES do not count. The emulator answers the application's own queries on this
+        // channel — device attributes, colours, cursor position, focus — and counting those as
+        // typing refused every answer from the question pane after any attach or theme read
+        // (#1693). A MOUSE report does count: a click can pick an option in the dialog.
         if (!isTerminalReplyOnly(msg.data)) noteOtherWrite(sessionId);
         entry.term.write(msg.data);
       } else if (isResizeFrame(msg)) {

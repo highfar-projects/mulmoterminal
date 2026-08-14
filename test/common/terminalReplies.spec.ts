@@ -15,13 +15,17 @@ describe("isTerminalReplyOnly", () => {
     expect(isTerminalReplyOnly(`${ESC}]11;rgb:f4f4/f6f6/fbfb${ESC}\\`)).toBe(true); // background colour
   });
 
-  it("recognises mouse and focus reports", () => {
-    expect(isTerminalReplyOnly(`${ESC}[<0;12;34M`)).toBe(true);
-    expect(isTerminalReplyOnly(`${ESC}[<0;1;1M${ESC}[<0;1;1m`)).toBe(true);
-    expect(isTerminalReplyOnly(`${ESC}[M\u0020\u0021\u0022`)).toBe(true);
+  it("recognises focus and cursor-position reports", () => {
     expect(isTerminalReplyOnly(`${ESC}[I`)).toBe(true);
     expect(isTerminalReplyOnly(`${ESC}[O`)).toBe(true);
     expect(isTerminalReplyOnly(`${ESC}[24;80R`)).toBe(true);
+  });
+
+  // A mouse report looks the same on the wire but is the USER: a click can select an option, so an
+  // answer already being typed has to yield to it exactly as it yields to a keystroke.
+  it("does not excuse mouse reports", () => {
+    expect(isTerminalReplyOnly(`${ESC}[<0;12;34M`)).toBe(false);
+    expect(isTerminalReplyOnly(`${ESC}[M\u0020\u0021\u0022`)).toBe(false);
   });
 
   // The other half, and the one that must not slip: these ARE the user answering.

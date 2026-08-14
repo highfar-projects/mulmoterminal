@@ -1,8 +1,12 @@
 // What a terminal emulator sends back on the INPUT channel without anyone typing.
 //
 // xterm.js answers the application's own queries there: device attributes, the foreground and
-// background colours, the cursor position. It also reports mouse movement and focus changes, both
-// of which the running TUI asked for. All of it arrives exactly as a keystroke does.
+// background colours, the cursor position. It also says when the terminal gained or lost focus.
+// All of it arrives exactly as a keystroke does, and none of it is the user answering anything.
+//
+// MOUSE reports are deliberately NOT here. They look the same on the wire, but a click can select
+// an option in the dialog — that is the user answering, and an answer already being typed must
+// yield to it exactly as it yields to a keystroke.
 //
 // That matters to anything asking "has the user typed since this question appeared?"
 // (server/session/write-to-session.ts). Counting these replies meant an answer from the question
@@ -15,8 +19,6 @@ const ESC = "\u001b";
 const BEL = "\u0007";
 
 const REPLIES: RegExp[] = [
-  new RegExp(`${ESC}\\[<\\d+;\\d+;\\d+[Mm]`, "g"), // mouse, SGR — the mode this app enables
-  new RegExp(`${ESC}\\[M[\\s\\S]{3}`, "g"), // mouse, X10 (payload is three raw bytes)
   new RegExp(`${ESC}\\[[IO]`, "g"), // focus in / out
   new RegExp(`${ESC}\\[\\?[\\d;]*c`, "g"), // primary device attributes
   new RegExp(`${ESC}\\[>[\\d;]*c`, "g"), // secondary / tertiary device attributes
