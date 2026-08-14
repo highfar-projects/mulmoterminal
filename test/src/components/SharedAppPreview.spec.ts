@@ -165,11 +165,14 @@ describe("SharedAppPreview", () => {
     expect(wrapper.text()).toContain("Could not read records for: bookings");
   });
 
-  it("says out loud that the rules were not run", async () => {
+  it("says out loud that this is not what a stranger would be allowed to see", async () => {
     const wrapper = await mountPreview();
 
-    // The one claim a preview must never let anyone make. What it proves is that the page DRAWS.
-    expect(wrapper.text()).toContain("the rules are not run");
+    // The one claim a preview must never let anyone make. What it proves is that the page DRAWS —
+    // the records reached it through the AUTHOR's credentials, so a page drawing a collection no
+    // visitor may read looks identical here to one that is correctly open.
+    expect(wrapper.text()).toContain("not as a visitor");
+    expect(wrapper.text()).toContain("what a stranger would be allowed to see");
   });
 
   it("draws nothing but a note for an app that publishes only schemas", async () => {
@@ -229,6 +232,17 @@ describe("SharedAppPreview", () => {
 
     expect(posted[0]?.url).toContain("/preview/submit");
     expect(posted[0]?.body).toEqual({ cid: "signups", values: { name: "中島", plan: "B" } });
+  });
+
+  it("does not tell the author that nothing is written", async () => {
+    const wrapper = await mountPreview();
+
+    // The copy predates the write path and said "nothing here is written" after submissions started
+    // creating real records. A preview that describes itself more kindly than it behaves is the one
+    // failure this whole feature exists to prevent, turned on its own screen.
+    expect(wrapper.text()).not.toContain("Nothing here is written");
+    expect(wrapper.text()).toContain("real record in the live app");
+    expect(wrapper.text()).toContain("Computing it writes nothing");
   });
 
   it("draws the same input kinds the published site does, and no richer ones", async () => {

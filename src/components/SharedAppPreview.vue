@@ -567,9 +567,15 @@ watch(() => props.cwd, load, { immediate: true });
       <!-- OUTSIDE the frame, because a page cannot be trusted to describe its own success. What is
            said here is what the parent knows, not what the view drew. -->
       <div class="flex-none border-t border-border px-2.5 py-1.5" role="status" aria-live="polite">
+        <!-- TWO halves, and they must not be merged. Computing the projection writes nothing, which
+             is what makes the preview safe to open on a repository at any moment. Accepting a
+             submission is the opposite: it is a real create, judged by the deployed rules, and it
+             stays there. This said "nothing here is written" until writing shipped, which is the
+             one thing this pane must never do — tell the author something kinder than the truth. -->
         <p class="text-[11px] text-dim">
-          Real records, read as you. Nothing here is written, and the rules are not run — this shows what DRAWS, not what a stranger would be allowed to do.
+          Records read as you, not as a visitor — this shows what DRAWS, not what a stranger would be allowed to see. Computing it writes nothing.
         </p>
+        <p class="mt-1 text-[11px] text-amber">A submission you accept is a real record in the live app, and the rules do run on that.</p>
         <p v-if="payload && !payload.fromLiveApp" class="mt-1 text-[11px] text-dim">This app has never been published, so nothing was carried over.</p>
         <p v-if="payload && payload.unreadable.length" class="mt-1 text-[11px] text-amber">
           Could not read records for: {{ payload.unreadable.join(", ") }} — an empty page below may be a refusal rather than an empty collection.
