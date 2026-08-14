@@ -261,15 +261,23 @@ async function clearWritten(): Promise<void> {
     // Only the ones with an id. An uncertain write has nothing to send, and guessing at one would
     // be a delete aimed at a document this pane never learned the name of.
     for (const record of written.value.filter(isNamed)) {
-      const res = await fetchWithTimeout(
-        writeUrl("undo"),
-        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ written: record }) },
-        SLOW_COMMAND_TIMEOUT_MS,
-      );
-      const body: unknown = await res.json();
-      // Kept in the list when it could not be removed. A cleanup that quietly forgets what it
-      // failed to delete is how a test booking outlives the session that made it.
-      if (isRecord(body) && body.ok === true) written.value = written.value.filter((entry) => entry !== record);
+      // EACH ONE ON ITS OWN. `fetchWithTimeout` rejects on a timeout or a dropped connection, and
+      // an uncaught rejection here would leave the loop — so one slow undo would silently decide
+      // that none of the records after it get attempted, under a button that said it would take
+      // them all back. They stay in the list either way; what must not happen is not trying.
+      try {
+        const res = await fetchWithTimeout(
+          writeUrl("undo"),
+          { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ written: record }) },
+          SLOW_COMMAND_TIMEOUT_MS,
+        );
+        const body: unknown = await res.json();
+        // Kept in the list when it could not be removed. A cleanup that quietly forgets what it
+        // failed to delete is how a test booking outlives the session that made it.
+        if (isRecord(body) && body.ok === true) written.value = written.value.filter((entry) => entry !== record);
+      } catch {
+        // Kept, for the same reason and more so: this does not know whether the delete landed.
+      }
     }
   } finally {
     clearing.value = false;

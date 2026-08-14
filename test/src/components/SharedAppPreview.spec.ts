@@ -15,6 +15,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import SharedAppPreview from "../../../src/components/SharedAppPreview.vue";
+import { isRecord } from "../../../common/isRecord.js";
 
 const PAGE = "<h1>Book</h1>";
 
@@ -314,6 +315,58 @@ describe("SharedAppPreview", () => {
       // booking that no longer exists.
       const undo = posted.find((entry) => entry.url.includes("/preview/undo"));
       expect(undo?.body).toEqual({ written: { cid: "bookings", id: "roomA-1000", mirror: { cid: "slots", id: "roomA-1000" } } });
+    });
+
+    it("keeps taking records back after one undo request fails outright", async () => {
+      // One undo REJECTS — a timeout, a dropped connection — rather than answering `ok: false`.
+      // The records were written under a button that says it takes them all back, so the one that
+      // failed must not decide the fate of the ones after it.
+      const posted: { url: string; body: unknown }[] = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation((url: string, init?: { body?: string }) => {
+          const body: unknown = init?.body === undefined ? null : JSON.parse(init.body);
+          if (url.includes("/preview/submit")) {
+            const slot = isRecord(body) && isRecord(body.values) ? String(body.values.slot) : "";
+            return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, written: { cid: "bookings", id: slot } }) });
+          }
+          if (url.includes("/preview/undo")) {
+            posted.push({ url, body });
+            const id = isRecord(body) && isRecord(body.written) ? body.written.id : "";
+            if (id === "roomA-1100") return Promise.reject(new Error("timed out"));
+            return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) });
+          }
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(payload()) });
+        }),
+      );
+      const wrapper = await mountPreview();
+      const { port } = await connect(wrapper);
+
+      for (const slot of ["roomA-1000", "roomA-1100"]) {
+        port.postMessage({ type: "mc-public-view:submit", requestId: `r-${slot}`, cid: "bookings", values: { slot } });
+        await settle();
+        await wrapper
+          .findAll("button")
+          .filter((button) => button.text() === "Send it")[0]
+          ?.trigger("click");
+        await settle();
+      }
+      expect(wrapper.text()).toContain("2 records written from this preview");
+
+      await wrapper
+        .findAll("button")
+        .filter((button) => button.text() === "Remove them")[0]
+        ?.trigger("click");
+      await settle();
+
+      // BOTH were attempted, and the one that could not be removed is still named on screen — the
+      // author cannot delete by hand what this pane has forgotten.
+      expect(posted.map((entry) => (isRecord(entry.body) && isRecord(entry.body.written) ? entry.body.written.id : null))).toEqual([
+        "roomA-1100",
+        "roomA-1000",
+      ]);
+      expect(wrapper.text()).toContain("bookings / roomA-1100");
+      expect(wrapper.text()).not.toContain("bookings / roomA-1000");
     });
 
     it("answers the page when the author cancels, rather than leaving it waiting", async () => {
