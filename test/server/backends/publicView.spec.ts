@@ -60,11 +60,33 @@ describe("the file a published view names", () => {
       "<script>if (!self.confirm('sure')) return;</script>",
       "<script>globalThis.alert('taken')</script>",
       "<script>top . prompt('spaced')</script>",
+      // Reached through the forms that are still the same global.
+      '<script>window?.prompt("name")</script>',
+      "<script>self[\"confirm\"]('sure')</script>",
+      "<script>globalThis ?. alert('x')</script>",
+      // A protocol-relative URL is not a comment. Before the scanner, this line was cut at the
+      // `//` inside the string and the real call after it was never seen — the likeliest shape of
+      // all of these in a minified file.
+      '<script>const cdn = "//cdn.example/x"; prompt("name");</script>',
+      "<button onclick=\"prompt('name')\">go</button>",
     ]) {
       const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
       expect(result.ok).toBe(false);
       expect(result.ok === false && result.problems.join(" ")).toContain("allow-modals");
     }
+  });
+
+  it("does not read a page's PROSE as code", async () => {
+    // The other direction, and the more expensive one: a refusal the author cannot act on. The
+    // words are allowed to appear — in markup that explains the rule, and in a string that is
+    // never called — because what is scanned is the script text with its strings removed.
+    const html = [
+      "<p>Browser alert() is unsupported here.</p>",
+      "<pre>if (!confirm('sure')) return;</pre>",
+      "<script>const label = \"confirm(\"; const url = '//x/prompt(';</script>",
+    ].join("\n");
+    const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
+    expect(result.ok).toBe(true);
   });
 
   it("leaves a method of the page's own — and a comment about the rule — alone", async () => {

@@ -24,6 +24,7 @@ import { constants, lstat, open, realpath } from "node:fs/promises";
 import path from "node:path";
 
 import { normalizeViews, type AuthoredApp } from "@receptron/sharedapp";
+import { modalCallIn } from "./modalCall.js";
 
 /** The document the public page reads the HTML from. Beside core's
  *  `PUBLIC_CONFIG_DOC` ("public") under `apps/{aid}/config`. */
@@ -71,37 +72,6 @@ export type ViewFileResult = { ok: true; view: ViewFile } | { ok: false; problem
  *  public page — so pointing `public.view` at one produces a blank page and no
  *  error anywhere. */
 const HOST_VIEW_GLOBAL = "__MC_VIEW";
-
-/** The three the sandbox eats, called from a view — or null.
- *
- *  Every view is rendered in `sandbox="allow-scripts"` with no `allow-modals`, so the browser
- *  IGNORES `alert` / `confirm` / `prompt`: nothing is shown, nothing throws, and `confirm` returns
- *  `false`. A page that asks for a name with `prompt` submits an empty one; a withdrawal behind
- *  `if (!confirm(…)) return;` is a button that does nothing at all. The only sign is a console
- *  line the author has to be looking at — which is the same class of silent blank page as
- *  `__MC_VIEW`, so it is refused in the same place.
- *
- *  Two things it must NOT catch, because a refusal an author cannot act on is worse than the bug:
- *  a method or field of their own (`ui.alert`, `this.confirm`), hence the lookbehind; and the
- *  words in a COMMENT — including the comment saying not to use them, which is how a template
- *  explains this. Comments are stripped first, imperfectly on purpose: the failure it can have is
- *  a modal inside a string going unnoticed, and this gate is a help rather than a boundary.
- *
- *  Exported so the shipped templates are held to the same reading as an author's page — a sample
- *  nobody can publish teaches a page nobody can use. */
-export const modalCallIn = (html: string): string | null => {
-  // Whitespace is collapsed FIRST so the pattern below needs only ` ?` between its pieces: two
-  // adjacent `\s*` around the dot is the shape a linter reads as exponential backtracking, and it
-  // is not worth arguing with over a page-sized string.
-  const code = html
-    .replace(/\/\*[\s\S]*?\*\//g, " ")
-    .replace(/(^|[^:])\/\/[^\n]*/g, "$1")
-    .replace(/\s+/g, " ")
-    // The receivers that ARE the global: dropping them leaves the bare call the test below is
-    // about, and keeps that test one simple pattern.
-    .replace(/\b(?:window|self|globalThis|top) ?\. ?/g, "");
-  return /(?<![\w.$])(alert|confirm|prompt) ?\(/.exec(code)?.[1] ?? null;
-};
 
 /** Read and judge the file a view's `path` names.
  *

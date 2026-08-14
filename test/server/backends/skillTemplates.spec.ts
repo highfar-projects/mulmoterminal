@@ -14,7 +14,7 @@ import path from "node:path";
 import type { CollectionSchema } from "@mulmoclaude/core/collection";
 import { declarationProblems } from "../../../server/backends/sharedApp/context.js";
 import { parseAuthoredApp } from "@receptron/sharedapp";
-import { modalCallIn } from "../../../server/backends/sharedApp/publicView.js";
+import { modalCallIn } from "../../../server/backends/sharedApp/modalCall.js";
 import { readdirSync } from "node:fs";
 
 const TEMPLATES = path.join(process.cwd(), "server", "skills", "mulmoterminal-shared-app", "templates");
