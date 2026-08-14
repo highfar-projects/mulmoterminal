@@ -49,9 +49,9 @@ function applyBoundary(sessionId: string, boundary: CodexTurnBoundary, deps: Cod
     if (eff.kind === "working") deps.setWorking(sessionId, eff.value, event);
     else deps.setWaiting(sessionId, eff.value, event);
   }
-  // `message` is empty: codex has no Notification equivalent, and a finished turn's body
-  // comes from its reply, not from a hook payload.
-  if (push) void notifyTaskFinished(sessionId, push, "", deps.uiPort);
+  // Nothing to hand over: codex has no Notification equivalent, and no hook that could carry a
+  // finished turn's reply — that one is read back out of the rollout.
+  if (push) void notifyTaskFinished(sessionId, push, { message: "" }, deps.uiPort);
 }
 
 // Start tailing; it stops on its own once the session is gone. `startAtEnd` skips a

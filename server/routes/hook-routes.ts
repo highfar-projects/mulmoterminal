@@ -39,8 +39,9 @@ export interface HookDeps extends SessionActivityDeps {
 // Activity hooks update a session's working / needs-attention flags. `active` (this
 // session is the user's actively-viewed pane) suppresses the attention flag — see
 // activityHookEffects for why a mere attached socket doesn't count in the grid.
-function handleActivityHook(deps: HookDeps, sessionId: string, event: string, active: boolean, message: string, notificationType?: string) {
-  for (const eff of activityHookEffects(event, active, notificationType)) {
+function handleActivityHook(deps: HookDeps, sessionId: string, active: boolean, fields: HookFields) {
+  const { event } = fields;
+  for (const eff of activityHookEffects(event, active, fields.notificationType)) {
     if (eff.kind === "working") deps.setWorking(sessionId, eff.value, event);
     else deps.setWaiting(sessionId, eff.value, event);
   }
@@ -48,8 +49,12 @@ function handleActivityHook(deps: HookDeps, sessionId: string, event: string, ac
   // A finished turn (Stop) and a blocked one (Notification) both reach here; the kind
   // decides the wording. Stop is one event per finished turn, so this fires once even
   // though a background Stop publishes twice.
-  const kind = pushKindFor(event, notificationType);
-  if (kind) void notifyTaskFinished(sessionId, kind, message, deps.uiPort);
+  //
+  // The payload is handed over whole: what a push can say about this moment is what the hook
+  // reported about it, and reading either half back off disk is what put the user's own prompt
+  // on their phone (#1696).
+  const kind = pushKindFor(event, fields.notificationType);
+  if (kind) void notifyTaskFinished(sessionId, kind, { message: fields.message, reply: fields.lastAssistantMessage }, deps.uiPort);
   // A finished turn is the ONLY success signal a PTY-hosted agent gives us (#1070). It is not
   // a process exit — `claude` sits at its prompt afterwards — so a worker that never reaches
   // Stop (blocked on a permission dialog nobody can answer, or dead before its first turn) is
@@ -185,11 +190,17 @@ function hookFields(body: Record<string, unknown>) {
     event: typeof body.hook_event_name === "string" ? body.hook_event_name : "",
     toolName: typeof body.tool_name === "string" ? body.tool_name : undefined,
     message: typeof body.message === "string" ? body.message : "",
+    // What a Stop says the turn ended with. Claude Code hands the reply to the very event that
+    // reports the turn, so the push no longer has to reconstruct it from the transcript (#1696).
+    // Absent on a Claude Code that predates the field, which is why nothing downstream requires it.
+    lastAssistantMessage: typeof body.last_assistant_message === "string" ? body.last_assistant_message : undefined,
     // Which KIND of notification — a subagent finishing arrives here as `agent_completed`, and
     // must not be read as the agent waiting on the user (#874).
     notificationType: typeof body.notification_type === "string" ? body.notification_type : undefined,
   };
 }
+
+type HookFields = ReturnType<typeof hookFields>;
 
 // Claude hooks (Stop / Notification / Pre|PostToolUse / SessionStart) POST their payload here so
 // we can flag which background sessions have new activity / build tool history.
@@ -198,7 +209,8 @@ async function handleHookRequest(deps: HookDeps, req: Request, res: Response) {
   // this is a request body from outside, not a shape anything has verified.
   const body: Record<string, unknown> = isRecord(req.body) ? req.body : {};
   const sessionId = resolveHookSessionId(req.headers["x-mt-session"], body.session_id, (id) => SESSION_ID_RE.test(id));
-  const { event, toolName, message, notificationType } = hookFields(body);
+  const fields = hookFields(body);
+  const { event, toolName } = fields;
   if (!sessionId && body.session_id) {
     // Rejecting silently would make hooks look simply broken; the id shape is the
     // precondition for using it as a Firestore doc id and as push routing.
@@ -215,7 +227,7 @@ async function handleHookRequest(deps: HookDeps, req: Request, res: Response) {
     // pty — so tracking an id with no pty (any well-formed uuid may be posted here) would never be
     // reclaimed. A session whose pty is gone simply reports no phase, as it does before its first tool.
     if (entry) deps.noteWorkPhase(sessionId, event, toolName);
-    handleActivityHook(deps, sessionId, event, active, message, notificationType);
+    handleActivityHook(deps, sessionId, active, fields);
     await handleToolHook(deps, sessionId, event, toolPayload(body), cwd);
     // A hidden translation worker that ends its turn while still pending never called
     // submitTranslation — fail it now rather than hang until the timeout. (When it DID

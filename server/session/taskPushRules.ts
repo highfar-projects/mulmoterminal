@@ -7,18 +7,21 @@ import type { PushKind } from "../../common/pushKinds.js";
 
 export interface PushDetailInput {
   reply: string | null;
-  lastPrompt: string | undefined;
   aiTitle: string | undefined;
 }
 
 export const NO_CWD_LABEL = "session";
 
-// A finished turn should say what the agent DID, so the reply wins; the last prompt and the AI
-// title are fallbacks for when there is no reply (a blocked turn, or a read that came back
-// empty). `||`, not `??`: every tier is a string that must be SKIPPED when empty — an empty
-// reply means "nothing to report about the outcome", not a value to pin as the body.
+// A finished turn should say what the agent DID, so the reply wins; the AI title is the fallback
+// for when there is no reply (a blocked turn, or a read that came back empty).
+//
+// The last PROMPT used to sit between them, and it is what the phone showed whenever the reply was
+// missing: the user's own words read back to them, saying nothing about the turn that just ended
+// (#1696). The title at least names what the session is about. `||`, not `??`: every tier is a
+// string that must be SKIPPED when empty — an empty reply means "nothing to report about the
+// outcome", not a value to pin as the body.
 export function buildPushDetail(input: PushDetailInput): string {
-  return input.reply || input.lastPrompt || input.aiTitle || "";
+  return input.reply || input.aiTitle || "";
 }
 
 // Background workers and translation workers aren't real user tasks, so a turn ending on one
