@@ -49,7 +49,18 @@ describe("the file a published view names", () => {
     // never asked for, and a withdrawal behind `confirm` is a dead button — with one console line
     // as the only sign. Every shipped template used to be written this way, and the author who
     // hit it reported the app as broken.
-    for (const html of ['<script>const n = prompt("name");</script>', "<script>if (!confirm('sure')) return;</script>", "<script>alert('taken')</script>"]) {
+    // Including through the receivers that ARE the global: `window.prompt(…)` is `prompt(…)`, and
+    // the sandbox eats it identically — exempting it with everything else that carries a dot let
+    // the silent failure straight back in.
+    for (const html of [
+      '<script>const n = prompt("name");</script>',
+      "<script>if (!confirm('sure')) return;</script>",
+      "<script>alert('taken')</script>",
+      '<script>const n = window.prompt("name");</script>',
+      "<script>if (!self.confirm('sure')) return;</script>",
+      "<script>globalThis.alert('taken')</script>",
+      "<script>top . prompt('spaced')</script>",
+    ]) {
       const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
       expect(result.ok).toBe(false);
       expect(result.ok === false && result.problems.join(" ")).toContain("allow-modals");

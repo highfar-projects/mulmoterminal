@@ -91,7 +91,11 @@ const HOST_VIEW_GLOBAL = "__MC_VIEW";
  *  nobody can publish teaches a page nobody can use. */
 export const modalCallIn = (html: string): string | null => {
   const code = html.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
-  return /(?<![\w.$])(alert|confirm|prompt)\s*\(/.exec(code)?.[1] ?? null;
+  const call = /(?<![\w.$])(?:(window|self|globalThis|top)\s*\.\s*)?(alert|confirm|prompt)\s*\(/.exec(code);
+  if (call === null) return null;
+  // A dotted call is only ours when the receiver above matched; anything else reached this regex
+  // by being undotted in the first place.
+  return call[1] === undefined ? (call[2] ?? null) : `${call[1]}.${call[2]}`;
 };
 
 /** Read and judge the file a view's `path` names.
