@@ -7,6 +7,9 @@ import { describe, it, expect, vi } from "vitest";
 import { answerQuestion, type AnswerQuestionDeps } from "../../../server/session/answerQuestion";
 import type { RecordedCall } from "../../../common/askQuestion";
 
+// The clock a submitted-answer claim ages against; tests that care move it themselves.
+let clock = 1_000_000;
+
 const DOWN = "\x1b[B";
 const ENTER = "\r";
 
@@ -33,6 +36,7 @@ const deps = (calls: RecordedCall[], write = vi.fn(() => true)): AnswerQuestionD
   watchOtherWrites: () => {},
   stopWatchingOtherWrites: () => {},
   pause: async () => {},
+  now: () => clock,
   gapMs: 0,
 });
 
@@ -146,6 +150,7 @@ describe("answerQuestion", () => {
       otherWriteCount: () => others,
       watchOtherWrites: () => {},
       stopWatchingOtherWrites: () => {},
+      now: () => clock,
       // The user's keystroke lands in the gap after the first key goes out.
       pause: async () => {
         if (write.mock.calls.length === 1) others = 1;
@@ -174,6 +179,7 @@ describe("answerQuestion", () => {
         others = 0;
       },
       stopWatchingOtherWrites: () => {},
+      now: () => clock,
       pause: async () => {},
       gapMs: 0,
     };
@@ -201,5 +207,17 @@ describe("answerQuestion", () => {
 
     const second = deps([CALL("t2", "running")]);
     expect(await answerQuestion(second, { sessionId: "s12", toolUseId: "t2", picks: [[0]] })).toEqual({ ok: true });
+  });
+
+  // A claim must not be evicted while it is still needed. Age is what retires it — after long
+  // enough that no close could still be in flight, the same dialog may be answered again.
+  it("lets an old claim go, so a much later request is not refused forever", async () => {
+    const d = deps([CALL("t1", "running")]);
+    expect(await answerQuestion(d, { sessionId: "aged", toolUseId: "t1", picks: [[0]] })).toEqual({ ok: true });
+    expect(await answerQuestion(d, { sessionId: "aged", toolUseId: "t1", picks: [[0]] })).toEqual({ ok: false, reason: "closed" });
+
+    clock += 60_000;
+    expect(await answerQuestion(d, { sessionId: "aged", toolUseId: "t1", picks: [[0]] })).toEqual({ ok: true });
+    clock = 1_000_000;
   });
 });

@@ -27,7 +27,7 @@ const readPicks = (picks: unknown): number[][] | null => {
 export async function answerQuestionOnHost(sessionId: string, toolUseId: string, picks: unknown, callsOf: CallsOf): Promise<AnswerResult> {
   const chosen = readPicks(picks);
   if (!chosen) return { ok: false, reason: "bad-picks" };
-  const deps = { callsOf, write: writeAnswerKey, otherWriteCount, watchOtherWrites, stopWatchingOtherWrites, pause, gapMs: QUESTION_KEY_GAP_MS };
+  const deps = { callsOf, write: writeAnswerKey, otherWriteCount, watchOtherWrites, stopWatchingOtherWrites, pause, now: Date.now, gapMs: QUESTION_KEY_GAP_MS };
   return answerQuestion(deps, { sessionId, toolUseId, picks: chosen });
 }
 
