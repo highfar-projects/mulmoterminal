@@ -57,6 +57,28 @@ that was relaying your keystrokes is gone.
   as a chip. Your phone has no Tab key, so the chip is how you accept it.
 - **Type** — the text box sends a line as if you'd typed it at the keyboard.
 
+### A question Claude asked {#question-card}
+
+When a Claude session stops to ask you something, the dialog it drew in the terminal also arrives
+as a **card under the screen** — the question, and every choice as a button.
+
+![The phone: the terminal above still showing Claude's own dialog, and below it a card offering the same two questions as buttons](../images/phone-question-card.png)
+
+Tapping a choice presses the arrow keys and Enter in the real dialog, the same way the desktop's
+[question pane](features.html#question-pane) does. The dialog above stays where it is and updates
+as the answer lands, so whichever end you answer at wins.
+
+- **Ask several at once and each gets its own group**, as the screenshot shows. The button under
+  them goes when every question has an answer.
+- **A question on its own can be answered in your own words.** A text box appears under its
+  buttons, for the dialog's own **Type something** row. Several questions at once, or a
+  multi-select one, get buttons only.
+- **Nothing to turn on.** The desktop's question pane is off until you ask for it, because it lets
+  a pane type into a terminal you are sitting at. The phone is the opposite case: it has no arrow
+  keys, so without the card the question could not be answered from here at all.
+- **Claude sessions only**, and only for questions Claude asked with its question tool. A
+  permission prompt is a numbered menu like any other, and you answer it by tapping its number.
+
 ### Your own phrases (quick commands) {#quick-commands}
 
 The replies above are short. For the sentences you send over and over — "PR作って",
