@@ -253,9 +253,17 @@ export const tmuxSessionName = (id: string): string => `${SESSION_PREFIX}${id}`;
 // With `-A` the flag only applies when the session is CREATED; reattaching an existing one
 // keeps the environment it was created with, which is what we want (its claude process is
 // already running with the value it was given).
+//
+// `-u` forces this client's output to UTF-8 instead of deciding from LC_ALL/LC_CTYPE/LANG.
+// Without it a client that finds no UTF-8 name among those writes every character it cannot
+// map to DEC ACS as one `_` per cell, so Japanese arrives as pairs of underscores (#1634).
+// Forcing it is not a guess about the user's terminal: the reader of this client's output is
+// our own xterm.js, which is always UTF-8. pty-env.ts supplies a LANG for everything else in
+// the session, but only where the environment named no locale at all — `-u` also covers a
+// machine that explicitly names a non-UTF-8 one.
 export function tmuxNewSessionArgs(id: string, file: string, args: string[], cwd: string, env: Readonly<Record<string, string>> = {}): string[] {
   const envArgs = Object.entries(env).flatMap(([key, value]) => ["-e", `${key}=${value}`]);
-  return ["-L", SERVER_SOCKET, "-f", CONF_FILE, "new-session", "-A", "-s", tmuxSessionName(id), "-c", cwd, ...envArgs, "--", file, ...args];
+  return ["-L", SERVER_SOCKET, "-f", CONF_FILE, "-u", "new-session", "-A", "-s", tmuxSessionName(id), "-c", cwd, ...envArgs, "--", file, ...args];
 }
 
 // Is a persistent session for this id currently alive in our tmux server?

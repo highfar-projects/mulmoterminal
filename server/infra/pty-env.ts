@@ -73,6 +73,37 @@ export function sanitizePathEntries(pathValue: string, delimiter: string): strin
     .join(delimiter);
 }
 
+// Read in this order by every locale-aware program; the first non-empty one wins.
+const LOCALE_NAMES = ["LC_ALL", "LC_CTYPE", "LANG"];
+
+// tmux itself tries this name first, and a client decides UTF-8 by looking for the
+// substring "UTF-8" in the value — so this still fixes the rendering on a machine where
+// the locale of that name does not actually exist.
+const FALLBACK_LOCALE = "en_US.UTF-8";
+
+// `env` with a UTF-8 LANG added when it names no locale at all (#1634).
+//
+// A process launched from a macOS GUI inherits launchd's environment, which carries no
+// locale variable, and nothing between there and here supplies one. A tmux client that
+// finds no UTF-8 name switches to its non-UTF-8 output path and writes any character it
+// cannot map to DEC ACS as one `_` per CELL — so Japanese (width 2) arrives as pairs of
+// underscores while the box-drawing around it, which ACS does cover, still looks right.
+//
+// Only when there is NO name: LC_ALL and LC_CTYPE outrank LANG, so writing LANG could not
+// change a machine that has one, and a user's own `LANG=ja_JP.UTF-8` has to survive. An
+// empty value does not count as a name — a login shell can export a bare `LANG=` beside a
+// real LC_ALL.
+//
+// Not on Windows: it has neither the convention nor tmux, and git-bash reads LANG, so
+// introducing a variable that was never there is a different bug waiting to happen.
+// Names matched exactly, not the case-insensitive way envValue does it: Windows is already
+// out, and everywhere else `lang` is simply a different variable from `LANG`.
+export function withFallbackLocale(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): NodeJS.ProcessEnv {
+  if (platform === "win32") return env;
+  if (LOCALE_NAMES.some((name) => (env[name] ?? "") !== "")) return env;
+  return { ...env, LANG: FALLBACK_LOCALE };
+}
+
 // A copy of `env` safe to hand to a spawned PTY: launcher vars dropped, PATH
 // (any casing — Windows uses "Path") cleaned. Never mutates the input.
 export function sanitizePtyEnv(env: NodeJS.ProcessEnv, delimiter: string): NodeJS.ProcessEnv {
