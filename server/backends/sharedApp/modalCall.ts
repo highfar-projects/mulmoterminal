@@ -438,7 +438,7 @@ export const modalCallIn = (html: string): string | null => {
     if (qualified !== null) return qualified[1] ?? null;
     const bareCode = code.replace(GLOBAL_RECEIVER, "");
     const own = boundAtTopLevel(bareCode);
-    const call = [...bareCode.matchAll(CALL)].find((hit) => !own.has(hit[1]));
+    const call = [...bareCode.matchAll(CALL)].find((hit) => !own.has(hit[1] ?? ""));
     if (call !== undefined) return call[1] ?? null;
   }
   return null;
