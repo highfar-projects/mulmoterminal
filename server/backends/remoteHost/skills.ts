@@ -16,6 +16,7 @@ import { join, resolve } from "node:path";
 
 import { userSkillsDir, projectSkillsDir } from "../collections.js";
 import { SLUG_RE } from "../../agents/codex-skills.js";
+import { hiddenSkills } from "./skillOverrides.js";
 
 const SKILL_FILE = "SKILL.md";
 
@@ -116,13 +117,21 @@ const bySlugAsc = (left: DiscoveredSkill, right: DiscoveredSkill): number => lef
  * (working-dir) skills lead the list**, then user-scope ones, alphabetical within
  * each group. A project skill also shadows a user skill of the same slug (its
  * description wins). Map insertion order gives the project-first ordering.
+ *
+ * A skill claude's `skillOverrides` turns `"off"` is left out: picking it types its name into the
+ * cell, and claude answers that with an error rather than running it (#1698).
  */
 export const discoverSkills = async (opts: DiscoverSkillNamesOptions): Promise<DiscoveredSkill[]> => {
-  const [userSkills, projectSkills] = await Promise.all([collectSkills(opts.userDir ?? userSkillsDir()), collectSkills(projectSkillsDir(opts.workspaceRoot))]);
+  const userDir = opts.userDir ?? userSkillsDir();
+  const [userSkills, projectSkills, hidden] = await Promise.all([
+    collectSkills(userDir),
+    collectSkills(projectSkillsDir(opts.workspaceRoot)),
+    hiddenSkills({ workspaceRoot: opts.workspaceRoot, userSkillsDir: userDir }),
+  ]);
   const bySlug = new Map<string, DiscoveredSkill>();
   for (const skill of [...projectSkills].sort(bySlugAsc)) bySlug.set(skill.slug, skill); // project first + shadows user
   for (const skill of [...userSkills].sort(bySlugAsc)) if (!bySlug.has(skill.slug)) bySlug.set(skill.slug, skill);
-  return [...bySlug.values()];
+  return [...bySlug.values()].filter((skill) => !hidden.has(skill.slug));
 };
 
 /**

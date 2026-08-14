@@ -170,3 +170,58 @@ describe("applySkillFilter", () => {
     expect(applySkillFilter(skills, ["nope"])).toEqual([]);
   });
 });
+
+// A skill claude's `skillOverrides` turns `"off"` cannot be run: picking it types its name into
+// the cell, and claude answers with the skillOverrides error. Listing it offers a button that
+// always fails (#1698). The precedence between the settings scopes is pinned in
+// skillOverrides.spec.ts; what these pin is that discovery consults it at all — for the menu
+// (`discoverSkills`) and for the ids advertised to Remote Control (`discoverSkillNames`).
+describe("skills turned off in claude's settings", () => {
+  let userHome: string;
+  let ws: string;
+
+  beforeEach(() => {
+    userHome = mkdtempSync(path.join(tmpdir(), "mt-skills-user-"));
+    ws = mkdtempSync(path.join(tmpdir(), "mt-skills-ws-"));
+  });
+  afterEach(() => {
+    rmSync(userHome, { recursive: true, force: true });
+    rmSync(ws, { recursive: true, force: true });
+  });
+
+  const userDir = () => path.join(userHome, ".claude", "skills");
+  const writeUserSettings = (contents: unknown): void => {
+    mkdirSync(path.join(userHome, ".claude"), { recursive: true });
+    writeFileSync(path.join(userHome, ".claude", "settings.json"), JSON.stringify(contents));
+  };
+
+  it("leaves an off user skill out of the menu", async () => {
+    writeSkill(userHome, "kept", SKILL_MD);
+    writeSkill(userHome, "gone", SKILL_MD);
+    writeUserSettings({ skillOverrides: { gone: "off" } });
+    expect((await discoverSkills({ workspaceRoot: ws, userDir: userDir() })).map((s) => s.slug)).toEqual(["kept"]);
+  });
+
+  it("leaves an off project skill out too", async () => {
+    writeSkill(ws, "gone", SKILL_MD);
+    writeUserSettings({ skillOverrides: { gone: "off" } });
+    expect(await discoverSkills({ workspaceRoot: ws, userDir: userDir() })).toEqual([]);
+  });
+
+  it("leaves it out of the ids advertised to Remote Control", async () => {
+    writeSkill(userHome, "kept", SKILL_MD);
+    writeSkill(userHome, "gone", SKILL_MD);
+    writeUserSettings({ skillOverrides: { gone: "off" } });
+    expect(await discoverSkillNames({ workspaceRoot: ws, userDir: userDir() })).toEqual(["kept"]);
+  });
+
+  // The states that are not "off" leave a skill runnable, so removing them would take away
+  // working buttons.
+  it("keeps a skill in the other three states", async () => {
+    writeSkill(userHome, "terse", SKILL_MD);
+    writeSkill(userHome, "handsOff", SKILL_MD);
+    writeSkill(userHome, "plain", SKILL_MD);
+    writeUserSettings({ skillOverrides: { terse: "name-only", handsOff: "user-invocable-only", plain: "on" } });
+    expect((await discoverSkillNames({ workspaceRoot: ws, userDir: userDir() })).sort()).toEqual(["handsOff", "plain", "terse"]);
+  });
+});
