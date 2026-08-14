@@ -33,6 +33,12 @@ const emit = defineEmits<{ answer: [picks: number[][]]; close: []; toggleExpand:
 
 const questions = computed(() => props.event?.questions ?? []);
 
+// Two failures cannot be retried from here, and offering the buttons anyway guarantees a click that
+// is refused and a pane that closes saying nothing: `partial` left the dialog in a state only the
+// keyboard can resolve, and `unwritable` has no PTY to type into at all. The message stays; the
+// controls do not.
+const answerable = computed(() => props.failure !== "partial" && props.failure !== "unwritable");
+
 // One entry per question, holding the chosen option indexes. Kept ASCENDING: the keystrokes that
 // answer the dialog only ever walk DOWN the list, so an out-of-order pick would toggle the wrong
 // row (common/askQuestion.ts rejects it outright rather than sending it).
@@ -114,7 +120,7 @@ function choose(qi: number, oi: number): void {
           {{ FAILURE_TEXT[failure] }}
         </p>
 
-        <div v-for="(question, qi) in questions" :key="`${event.toolUseId}-${qi}`" class="mb-4">
+        <div v-for="(question, qi) in answerable ? questions : []" :key="`${event.toolUseId}-${qi}`" class="mb-4">
           <div v-if="question.header" class="mb-1 text-[11px] font-semibold tracking-wide text-dim uppercase">{{ question.header }}</div>
           <div class="mb-2 leading-snug">{{ question.question }}</div>
           <div class="flex flex-col gap-1">
@@ -135,7 +141,7 @@ function choose(qi: number, oi: number): void {
         </div>
 
         <button
-          v-if="!immediate"
+          v-if="!immediate && answerable"
           type="button"
           data-testid="question-send-btn"
           class="w-full cursor-pointer rounded border border-border bg-panel px-3 py-2 font-medium text-fg disabled:cursor-not-allowed disabled:text-dim"
@@ -147,7 +153,7 @@ function choose(qi: number, oi: number): void {
 
         <!-- Said plainly because it is the one thing about this pane that surprises people: the
              terminal dialog never went away, and answering it there is still the faster path. -->
-        <p class="mt-3 text-[12px] text-dim">Answering here presses the keys in the terminal. You can still answer the dialog directly.</p>
+        <p v-if="answerable" class="mt-3 text-[12px] text-dim">Answering here presses the keys in the terminal. You can still answer the dialog directly.</p>
       </template>
     </div>
   </section>

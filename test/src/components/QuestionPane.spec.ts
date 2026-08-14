@@ -115,8 +115,24 @@ describe("QuestionPane", () => {
 
     const note = w.find('[data-testid="question-failure"]');
     expect(note.exists()).toBe(true);
-    expect(note.text()).toContain("answer in the terminal");
-    expect(options(w)).toHaveLength(2); // and the buttons are still there
+    expect(note.text()).toContain("answer in the terminal itself");
+  });
+
+  // A click after `partial` is refused by the host by design, and a refusal closes the pane without
+  // a word — so the buttons must not come back offering one.
+  it("offers no buttons for a failure that cannot be retried", () => {
+    (["partial", "unwritable"] as const).forEach((failure) => {
+      const w = mount(QuestionPane, { props: { event: event([question("Color", ["Red", "Blue"])]), failure } });
+      expect(w.find('[data-testid="question-failure"]').exists()).toBe(true);
+      expect(options(w)).toHaveLength(0);
+      expect(w.find('[data-testid="question-send-btn"]').exists()).toBe(false);
+    });
+  });
+
+  // `bad-picks` is retryable: the dialog may have moved on to a different question.
+  it("keeps the buttons for a failure that can be retried", () => {
+    const w = mount(QuestionPane, { props: { event: event([question("Color", ["Red", "Blue"])]), failure: "bad-picks" as const } });
+    expect(options(w)).toHaveLength(2);
   });
 
   it("says nothing when the last answer went out", () => {
