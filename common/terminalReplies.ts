@@ -36,7 +36,11 @@ const ANY_REPLY = new RegExp(REPLIES, "g");
 //
 // It stops before the terminating letter, which is what keeps a real key out of the holding pen:
 // `ESC[B` (Down) carries its `B` already and cannot be waiting for anything.
-const STILL_GROWING = new RegExp(`^${ESC}(?:\\[[?>]?[\\d;]*|\\][\\d;]*(?:rgb:[\\da-fA-F/]*)?)?$`);
+//
+// A LONE Escape is never held. It is how the user cancels the dialog, and holding it would let a
+// paced answer carry on typing into a question they had just dismissed — while the reply it might
+// theoretically have grown into is written whole by the emulator, in one frame, every time.
+const STILL_GROWING = new RegExp(`^${ESC}(?:\\[[?>]?[\\d;]*|\\][\\d;]*(?:rgb:[\\da-fA-F/]*)?)$`);
 
 /** The longest tail worth holding. Bounded so a stream of junk cannot accumulate. */
 const MAX_PENDING = 64;

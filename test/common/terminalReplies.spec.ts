@@ -65,6 +65,12 @@ describe("scanForUserInput", () => {
     expect(scan("x", `${ESC}[?1`).fromUser).toBe(true); // the tail turned out not to be a reply
   });
 
+  // Escape is how the dialog is CANCELLED. Holding it would let a paced answer carry on typing into
+  // a question the user had just dismissed.
+  it("reads a lone Escape as the user, never as an unfinished reply", () => {
+    expect(scan(ESC)).toEqual({ fromUser: true, pending: "" });
+  });
+
   it("has nothing to report for an empty chunk", () => {
     expect(scan("")).toEqual({ fromUser: false, pending: "" });
   });
