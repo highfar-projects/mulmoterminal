@@ -1,6 +1,6 @@
 import { answerQuestion } from "./answerQuestion.js";
 import type { AnswerResult } from "../../common/askQuestion.js";
-import { otherWriteCount, stopWatchingOtherWrites, watchOtherWrites, writeAnswerKey } from "./write-to-session.js";
+import { otherWriteCount, writeAnswerKey } from "./write-to-session.js";
 import { isUnknownArray } from "../../common/isUnknownArray.js";
 
 // Between the keystrokes that answer a dialog: it rebuilds itself between questions, so a burst
@@ -27,7 +27,7 @@ const readPicks = (picks: unknown): number[][] | null => {
 export async function answerQuestionOnHost(sessionId: string, toolUseId: string, picks: unknown, callsOf: CallsOf): Promise<AnswerResult> {
   const chosen = readPicks(picks);
   if (!chosen) return { ok: false, reason: "bad-picks" };
-  const deps = { callsOf, write: writeAnswerKey, otherWriteCount, watchOtherWrites, stopWatchingOtherWrites, pause, gapMs: QUESTION_KEY_GAP_MS };
+  const deps = { callsOf, write: writeAnswerKey, otherWriteCount, pause, gapMs: QUESTION_KEY_GAP_MS };
   return answerQuestion(deps, { sessionId, toolUseId, picks: chosen });
 }
 

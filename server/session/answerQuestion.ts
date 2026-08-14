@@ -55,9 +55,6 @@ export interface AnswerQuestionDeps {
   write: (sessionId: string, chunk: string) => boolean;
   /** How many times anything ELSE has typed into this session — see write-to-session.ts. */
   otherWriteCount: (sessionId: string) => number;
-  /** Start / stop counting those. Held for exactly this answer, so nothing accumulates. */
-  watchOtherWrites: (sessionId: string) => void;
-  stopWatchingOtherWrites: (sessionId: string) => void;
   /** Between keystrokes: the dialog rebuilds itself between questions (#1679). */
   pause: (ms: number) => Promise<void>;
   gapMs: number;
@@ -104,6 +101,11 @@ const answerHeld = async (deps: AnswerQuestionDeps, { sessionId, toolUseId, pick
   // The record has moved on to another dialog (or none): what we answered is history now.
   if (claimed !== openId) submitted.delete(sessionId);
   if (!open || openId !== toolUseId || claimed === toolUseId) return { ok: false, reason: "closed" };
+  // Anything typed since this dialog appeared — before this request as much as during it — means
+  // the dialog is no longer the one these keystrokes were computed for. It may have been answered,
+  // cancelled, or merely moved; from here they are indistinguishable, and all three make a sequence
+  // built from the recorded question wrong.
+  if (deps.otherWriteCount(sessionId) !== 0) return { ok: false, reason: "closed" };
   const keys = keysForAnswers(open.questions, picks);
   if (!keys) return { ok: false, reason: "bad-picks" };
   // The questions come from the HOST's own record of the dialog, not from the request: a caller
@@ -123,13 +125,9 @@ export async function answerQuestion(deps: AnswerQuestionDeps, request: AnswerQu
   // and that is the one outcome a client already knows to treat as ordinary rather than an error.
   if (answering.has(request.sessionId)) return { ok: false, reason: "closed" };
   answering.add(request.sessionId);
-  // Watch from BEFORE the dialog is read: a keystroke during that read is one this answer must
-  // yield to just as much as one between its own keys.
-  deps.watchOtherWrites(request.sessionId);
   try {
     return await answerHeld(deps, request);
   } finally {
-    deps.stopWatchingOtherWrites(request.sessionId);
     answering.delete(request.sessionId);
   }
 }

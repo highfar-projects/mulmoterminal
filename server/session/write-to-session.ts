@@ -26,17 +26,19 @@ const write = (sessionId: string, chunk: string): boolean => {
 // reach the prompt underneath and walk its history. No snapshot of the dialog can see that coming:
 // the tool-call close arrives asynchronously, well after the screen changed.
 //
-// So every ordinary writer announces itself, and an answer in flight counts those announcements.
-// A counter rather than a lock, because the answer must not BLOCK the user's own typing — it is the
+// So every ordinary writer announces itself, and the count runs from the moment the DIALOG appeared
+// — not from when an answer request arrives. Anything typed in between is exactly what makes the
+// dialog no longer the one our keystrokes were computed for, whether it answered it, cancelled it,
+// or merely moved its cursor; and a count that started at the request could not see it.
+//
+// A counter rather than a lock, because an answer must not BLOCK the user's own typing — it is the
 // answer that yields.
 //
-// Only while an answer is actually in flight: keeping a counter per session forever would grow with
-// every session the process ever served, to answer a question nobody is asking. An entry lives for
-// the ~300ms of one answer and is removed in its `finally`, so this holds at most one per session
-// answering right now.
+// One entry per session with a live question, reset when the next one opens and dropped when the
+// session is reaped.
 const watched = new Map<string, number>();
 
-/** Start counting for this session's answer. */
+/** Start (or restart) counting for this session's newly opened dialog. */
 export const watchOtherWrites = (sessionId: string): void => {
   watched.set(sessionId, 0);
 };

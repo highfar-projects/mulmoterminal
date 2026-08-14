@@ -30,8 +30,6 @@ const deps = (calls: RecordedCall[], write = vi.fn(() => true)): AnswerQuestionD
   callsOf: async () => calls,
   write,
   otherWriteCount: () => 0,
-  watchOtherWrites: () => {},
-  stopWatchingOtherWrites: () => {},
   pause: async () => {},
   gapMs: 0,
 });
@@ -166,8 +164,6 @@ describe("answerQuestion", () => {
       callsOf: async () => [CALL("t1", "running", true)],
       write,
       otherWriteCount: () => others,
-      watchOtherWrites: () => {},
-      stopWatchingOtherWrites: () => {},
       // The user's keystroke lands in the gap after the first key goes out.
       pause: async () => {
         if (write.mock.calls.length === 1) others = 1;
@@ -189,8 +185,6 @@ describe("answerQuestion", () => {
       callsOf: async () => [CALL("t1", "running", true)],
       write,
       otherWriteCount: () => 1,
-      watchOtherWrites: () => {},
-      stopWatchingOtherWrites: () => {},
       pause: async () => {},
       gapMs: 0,
     };
@@ -212,10 +206,6 @@ describe("answerQuestion", () => {
       },
       write,
       otherWriteCount: () => others,
-      watchOtherWrites: () => {
-        others = 0;
-      },
-      stopWatchingOtherWrites: () => {},
       pause: async () => {},
       gapMs: 0,
     };
@@ -254,5 +244,21 @@ describe("answerQuestion", () => {
 
     forgetAnsweredQuestion("gone");
     expect(await answerQuestion(d, { sessionId: "gone", toolUseId: "t1", picks: [[0]] })).toEqual({ ok: true });
+  });
+
+  // The count runs from when the DIALOG appeared, so a keystroke that landed BEFORE this request
+  // reached the host is seen too — the case a watcher installed per request could never observe.
+  it("refuses when the terminal was typed into before the request arrived", async () => {
+    const write = vi.fn(() => true);
+    const d: AnswerQuestionDeps & { write: ReturnType<typeof vi.fn> } = {
+      callsOf: async () => [CALL("t1", "running")],
+      write,
+      otherWriteCount: () => 1, // the user answered in the terminal a moment ago
+      pause: async () => {},
+      gapMs: 0,
+    };
+
+    expect(await answerQuestion(d, { sessionId: "before", toolUseId: "t1", picks: [[0]] })).toEqual({ ok: false, reason: "closed" });
+    expect(write).not.toHaveBeenCalled();
   });
 });
