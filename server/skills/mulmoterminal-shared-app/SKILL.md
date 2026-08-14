@@ -315,6 +315,13 @@ entry per page, each naming **who it is for**:
 | `member` | anybody holding a role in the app — the front desk | `/m/{slug}` |
 | `participant` | anybody on the roster, seeing their own row | `/p/{slug}` |
 
+- **Hand these out ABSOLUTE, with `https://mulmoserver.web.app` in front.** Nothing is served
+  from the machine this runs on, and there is no bare `/{slug}` — a path on its own is not
+  something the person you are telling can open, and `/{slug}` is a not-found page. With a `slug`
+  declared, `deploy` and `publish` print the whole address — say what they print. **Without one
+  there is no address at all**, and they say that instead: an app may publish staff and
+  participant pages while declaring no URL name, and both entrances need one.
+
 - **The two are not exclusive.** An owner who also books is on both, and each address shows one
   face — so a staff member opening `/p/{slug}` sees their own booking, not the front desk. Write
   the participant page for everybody on the roster, not only for the people with no role.
@@ -336,6 +343,31 @@ entry per page, each naming **who it is for**:
   draws an empty page, which is the one failure nothing reports. Publish refuses a `public` page
   fed a collection outside `public.read`, and a `participant` page fed one a participant cannot
   reach at all (neither in `participantRead` nor their own row through `public.submit`).
+- **`submit` carries STRINGS and nothing else.** A number, a boolean or a nested object in
+  `values` is not read as a partial submission — the whole message stops being one, and the view
+  is answered `not-a-submission`, which names no field. `attendees: 3` breaks a booking; `"3"`
+  writes it. The reason is not fussiness: the generated form path sends strings, and the rules
+  compare stored values without coercing, so a number would write a record that differs BY TYPE
+  from the identical-looking one a form wrote.
+
+  **The schema does not have to change for that.** A submitted value is stored exactly as it
+  arrives — nothing coerces it on the way in, and the rules check no field's type — while a
+  `number` field accepts a NUMERIC STRING at both check tiers (`"3"` passes; only `"abc"` is
+  reported, and only under `strict`). So `attendees: "3"` against `"type": "number"` writes and
+  validates. What it does affect is anything that later READS the value expecting arithmetic —
+  sort it, add it up, and it is a string.
+- **A submission is CONFIRMED outside the frame, so do not narrate it as sent.** The parent draws
+  the values in a dialog of its own and writes only when the visitor accepts — so between the
+  click and the answer, nothing has been sent and the promise is simply waiting for a person. A
+  page that says 送信中… there is describing a step that has not happened, and reads as stuck.
+- **`alert`, `confirm` and `prompt` DO NOTHING.** (`deploy` and `publish` warn when a page looks
+  like it calls one, and go through anyway — the check reads the page without parsing it, so it
+  is a hint, not a verdict. A page it stays quiet about can still be wrong.) Every view — public, staff, participant — is
+  rendered in `sandbox="allow-scripts"`, and without `allow-modals` the browser ignores the call
+  and logs *"Ignored call to 'prompt()'. The document is sandboxed, and the 'allow-modals'
+  keyword is not set."* Nothing throws, so a page that asks for a name with `prompt` submits an
+  empty one, or looks like a button that does nothing. Ask with an `<input>` in the page and
+  answer in an element of its own; that is the only thing that works here.
 - The view asks for writes through `window.__MC_APP_VIEW` — see the next section.
   (`window.__MC_PUBLIC_VIEW` is the same object under its former name, kept for one release.)
 - **`public.view` is the older spelling** of the first row above. It still works and normalizes to
@@ -415,6 +447,12 @@ either — but it deletes a record and, where there is a `mirror`, hands the slo
 next, so there is nothing to undo and nothing left to read afterwards. That is not the same kind
 of button as approving a booking for the fortieth time today. Put the confirmation in the page,
 and say what it costs: 取り下げると枠はすぐ他の人が取れるようになります。
+
+**In the page means IN THE PAGE — not `confirm()`**, which the sandbox ignores (above). A
+`if (!confirm(…)) return;` guard is worse than none: the call returns `false`, so the button
+silently does nothing, and the author who tested it once concludes withdrawal is broken. Draw the
+question — a button that arms itself, a row that expands into 「取り下げる / やめる」 — and put
+the cost in the text the reader can see.
 
 - **`transition` moves ONE field** — `collections.<cid>.statusField` — and only along
   `transitions` (for a member) or `public.submit.<cid>.selfTransitions` (for a participant). Those

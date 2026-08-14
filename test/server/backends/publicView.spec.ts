@@ -43,6 +43,163 @@ describe("the file a published view names", () => {
     expect(result.ok && result.view.html).toContain("<div id='grid'></div>");
   });
 
+  it("WARNS about a page that asks through a modal the sandbox eats", async () => {
+    // `sandbox="allow-scripts"` with no `allow-modals`: the browser ignores all three, nothing
+    // throws, and `confirm` answers `false`. So a page built on `prompt` submits the value it
+    // never asked for, and a withdrawal behind `confirm` is a dead button — with one console line
+    // as the only sign. Every shipped template used to be written this way, and the author who
+    // hit it reported the app as broken.
+    //
+    // Warned rather than refused: reading a page for this means reading HTML and JavaScript with
+    // something that is not a parser for either, and the false alarms it produced were the
+    // expensive half — each one refused a page that works. See `viewWarnings`.
+    // Including through the receivers that ARE the global: `window.prompt(…)` is `prompt(…)`, and
+    // the sandbox eats it identically — exempting it with everything else that carries a dot let
+    // the silent failure straight back in.
+    for (const html of [
+      '<script>const n = prompt("name");</script>',
+      "<script>if (!confirm('sure')) return;</script>",
+      "<script>alert('taken')</script>",
+      '<script>const n = window.prompt("name");</script>',
+      "<script>if (!self.confirm('sure')) return;</script>",
+      "<script>globalThis.alert('taken')</script>",
+      "<script>top . prompt('spaced')</script>",
+      // Reached through the forms that are still the same global.
+      '<script>window?.prompt("name")</script>',
+      "<script>self[\"confirm\"]('sure')</script>",
+      "<script>globalThis ?. alert('x')</script>",
+      // A protocol-relative URL is not a comment. Before the scanner, this line was cut at the
+      // `//` inside the string and the real call after it was never seen — the likeliest shape of
+      // all of these in a minified file.
+      '<script>const cdn = "//cdn.example/x"; prompt("name");</script>',
+      "<button onclick=\"prompt('name')\">go</button>",
+      "<a href=\"javascript:confirm('sure')\">go</a>",
+      // An attribute value does not have to be quoted, and an optional call is still a call.
+      "<button onclick=prompt()>go</button>",
+      // …and a comment does not swallow the live markup after it.
+      "<!-- 昔の版 --><button onclick=\"prompt('name')\">go</button>",
+      // …and a doctype is not a comment: the markup after it is live.
+      "<!DOCTYPE html><button onclick=prompt()>go</button>",
+      // `<!--` inside a quoted VALUE opens nothing, so the live handler after it is still read.
+      '<div title="<!--"></div><button onclick="prompt(\'x\')">go</button>',
+      "<a href=javascript:confirm()>go</a>",
+      // An attribute is DECODED before it is compiled as a handler or followed as a URL, so the
+      // call — and the scheme itself — can be written as character references and still run.
+      "<button onclick=\"prom&#112;t('name')\">go</button>",
+      "<a href=\"java&#x73;cript:confirm('sure')\">go</a>",
+      "<a href=\"javascript:&#97;lert('x')\">go</a>",
+      // A quoted value may carry a `>`, so the tag cannot be read to the first one.
+      "<button onclick=\"if (a > b) prompt('x')\">go</button>",
+      // Named references, and an attribute name in any case — both are how a browser reads it.
+      '<a href="javascript&colon;confirm()">go</a>',
+      // The URL parser drops ASCII tab/LF/CR anywhere in a URL, the scheme included.
+      '<a href="java&#x0A;script:confirm()">go</a>',
+      '<a href="java&#9;script:prompt()">go</a>',
+      // A `<script>` START TAG carries handlers of its own — `onerror` fires when the src fails.
+      '<script src="/missing.js" onerror="prompt(\'name\')"></script>',
+      // Ordinary formatting around a member access: newlines, tabs, more than one space.
+      '<script>window\n  .  prompt("name")</script>',
+      "<script>window\t.\tconfirm()</script>",
+      // Binding ONE of the three does not exempt the others.
+      "<script>const confirm = (v) => v; prompt('name');</script>",
+      // A `//` inside a REGEX is not a comment, and the rest of that line is still code.
+      '<script>const slash = /[//]/; prompt("name")</script>',
+      "<script>const re = /a\\/\\/b/; alert('x')</script>",
+      // Naming the global outright is never exempted by the page's own binding.
+      "<script>const confirm = (v) => v; window.confirm('x');</script>",
+      // A regex may follow a KEYWORD, where the character before the slash is a letter.
+      '<script>function m(v) { return /[//]/.test(v); } prompt("name")</script>',
+      // `frames` is the window, so this is the same disabled global under another name.
+      '<script>frames.prompt("x")</script>',
+      // A regex as an unbraced control-statement body: the `)` before it ends a HEAD, so what
+      // follows starts a statement.
+      '<script>if (enabled) /[//]/.test(value); prompt("name")</script>',
+      // A binding inside a function says nothing about a call outside it.
+      '<script>function format() { const prompt = () => ""; } prompt("name")</script>',
+      "<script>const confirm = (v) => v; frames.confirm('x');</script>",
+      '<a href="javascript:prompt&lpar;&rpar;">go</a>',
+      "<button ONCLICK=\"prompt('x')\">go</button>",
+      "<button OnClick=prompt()>go</button>",
+      '<script>prompt?.("name")</script>',
+      '<script>window.prompt?.("name")</script>',
+      // A template literal's TEXT is a string, but its `${…}` is code — and building markup out of
+      // a substitution is ordinary, so dropping the whole literal read a real call as no code.
+      '<script>const name = `${prompt("Name?")}`;</script>',
+      "<script>el.innerHTML = `<b>${confirm('x')}</b>`;</script>",
+      "<script>const n = `${ `${alert('deep')}` }`;</script>",
+    ]) {
+      const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.view.warnings.join(" ")).toContain("allow-modals");
+    }
+  });
+
+  it("does not read a page's PROSE as code", async () => {
+    // The other direction, and the more expensive one: a refusal the author cannot act on. The
+    // words are allowed to appear — in markup that explains the rule, and in a string that is
+    // never called — because what is scanned is the script text with its strings removed.
+    const html = [
+      "<p>Browser alert() is unsupported here.</p>",
+      "<pre>if (!confirm('sure')) return;</pre>",
+      "<script>const label = \"confirm(\"; const url = '//x/prompt(';</script>",
+      // A template that interpolates a NAME, and an object literal inside a substitution: the
+      // braces have to be counted, or the walker leaves the substitution at the wrong `}`.
+      "<script>const t = `hello ${name} there`; const o = `${ {a:1} } ok`;</script>",
+      // A `<script>` body is raw text: the browser does NOT decode references in it, so neither
+      // does this — and an ordinary `&amp;` in a URL must not be read as anything at all.
+      "<script>const s = '&#112;rompt(';</script>",
+      '<a href="/a/hq-rooms?x=1&amp;y=2">ok</a>',
+      // Attribute-SHAPED text that is not an attribute: a sample inside a script string, and the
+      // same words as prose. Neither draws anything or calls anything.
+      '<script>const sample = "<button onclick=alert()>";</script>',
+      "<p>onclick=alert() と書いても動きません</p>",
+      "<p>&colon; と書いただけ</p>",
+      // Markup inside an HTML COMMENT draws nothing and runs nothing. Commenting a widget out
+      // while it is being written is ordinary; refusing the page for it is not.
+      "<!-- <button onclick=\"prompt('name')\">go</button> -->",
+      // An unterminated comment runs to the end of the document, as it does in a browser.
+      "<!-- <button onclick=prompt()>",
+      // A bogus comment — `<!` that is not `<!--` — swallows everything to the next `>`, so a
+      // pasted `<![CDATA[…]]>` example draws nothing.
+      '<![CDATA[<button onclick="prompt()">]]>',
+      '<a href="https://example.com/prompt(">ok</a>',
+      // A data block is not JavaScript: it is often exactly where a page keeps a sample that says
+      // `prompt(` on purpose, and running the scanner over it refuses a page that works.
+      '<script type="text/plain">prompt()</script>',
+      '<script type="application/json">{"a":"prompt("}</script>',
+      // A `<script src=…>` ignores whatever is written between its tags.
+      '<script src="/x.js">prompt()</script>',
+      // Raw-text elements hold TEXT, not markup: a textarea showing an example draws no button.
+      "<textarea><button onclick=\"prompt('x')\">go</button></textarea>",
+      "<title>alert() は無視されます</title>",
+      "<style>/* prompt( */ .a { color: red }</style>",
+      // A name the page BINDS is the page's own. `const alert = …` is an ordinary thing to write
+      // in a page that shows its messages in the page — which is what the skill asks for.
+      "<script>const confirm = (value) => value; confirm(true);</script>",
+      "<script>const alert = (m) => { say.textContent = m; }; alert('done');</script>",
+      "<script>function prompt() {} prompt();</script>",
+      // Division after an ordinary grouping is still division.
+      "<script>const parts = (a + b) / c; ui.alert('x')</script>",
+      // Division, then a real comment — the other half of the same ambiguity.
+      '<script>const half = total / count; // prompt("x")\n</script>',
+      // A regex that MATCHES the call is not the call.
+      "<script>const re = /prompt\\(/g;</script>",
+    ].join("\n");
+    const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
+    // Not merely published — SILENT. Now that a modal only warns, `ok` alone would pass on a page
+    // this still misread, and the warning is the thing that would be wrong.
+    expect(result.ok && result.view.warnings).toEqual([]);
+  });
+
+  it("leaves a method of the page's own — and a comment about the rule — alone", async () => {
+    // The refusal is about the three globals actually being CALLED. A page with its own
+    // `ui.alert(…)`, and the comment explaining why `confirm()` is not used, are both fine; a
+    // refusal an author cannot act on would be worse than the bug it is about.
+    const html = "<script>// confirm() は使えない\nui.alert('hi'); row.confirm(1); /* prompt() も */</script>";
+    const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
+    expect(result.ok && result.view.warnings).toEqual([]);
+  });
+
   it("refuses a path that names nothing", async () => {
     // The failure it prevents is silent: the page renders, the HTML is empty,
     // and the visitor is told there is nothing here.

@@ -133,11 +133,22 @@
 
 ## views/grid.html — 公開の空き枠グリッド
 
+**`prompt` も `alert` も `confirm` も動きません。** ビューは `sandbox="allow-scripts"` の中で、
+`allow-modals` が無いので呼び出しは無視されます（コンソールに `Ignored call to 'prompt()'.` と
+出るだけで、例外にはなりません）。名前は**ページの中の `<input>`** で訊き、結果は**ページの中の
+要素**に書きます。
+
 ```html
+<label>お名前 <input id="who" maxlength="40" /></label>
+<label>用件 <input id="why" maxlength="60" /></label>
+<p id="say" role="status"></p>
 <div id="grid"></div>
 <script>
   const view = window.__MC_APP_VIEW;
   const grid = document.getElementById("grid");
+  const who = document.getElementById("who");
+  const why = document.getElementById("why");
+  const say = document.getElementById("say");
   view.onState(({ rooms = [], slots = [] }) => {
     const name = Object.fromEntries(rooms.map((room) => [room.id, room.title ?? room.id]));
     grid.replaceChildren(
@@ -158,14 +169,21 @@
     const slot = event.target.dataset?.slot;
     if (!slot) return;
     // requesterName は createFields にあり、スキーマで required。空文字は
-    // 拒否されるので、送る前に見ます（prompt を取り消したら何もしない）。
-    const requesterName = (prompt("お名前") ?? "").trim();
-    if (requesterName === "") return;
-    const result = await view.submit("bookings", { slot, requesterName, purpose: (prompt("用件") ?? "").trim(), status: "booked" });
-    if (result.ok) return;
+    // 拒否されるので、送る前に見ます。
+    const requesterName = who.value.trim();
+    if (requesterName === "") {
+      say.textContent = "お名前を入れてください。";
+      who.focus();
+      return;
+    }
+    const result = await view.submit("bookings", { slot, requesterName, purpose: why.value.trim(), status: "booked" });
+    if (result.ok) {
+      say.textContent = "予約しました。";
+      return;
+    }
     // 失敗を全部「取られました」と言わないこと。締切、サインイン、必須項目の
     // どれでもここに来ます。理由は result.error にあります。
-    alert(result.error ? `予約できませんでした: ${result.error}` : "その枠は取られました");
+    say.textContent = result.error ? `予約できませんでした: ${result.error}` : "その枠は取られました。";
   });
   view.ready();
 </script>
@@ -174,6 +192,11 @@
 3 つだけ守れば形は自由です。
 
 - **`ready()` を最後に呼ぶ。** 呼ばないとデータは永久に来ません
+- **送るのは文字列だけ。** `values` に数値や真偽値が 1 つでも混ざると、部分的に無視される
+  のではなく**メッセージ全体が申込みでなくなり**、`not-a-submission` として拒否されます
+  （人数は `String(n)` で送ること）
+- **モーダルを使わない。** `prompt` / `alert` / `confirm` はサンドボックスが無視します。
+  訊くのも報せるのもページの中の要素で
 - **`submit()` の結果を見て、失敗を 1 つの文言にまとめない。** 二重予約だけでなく、
   受付の締切（`window`）、サインインしていない、必須項目が空、のどれでも `ok: false` で
   返ります。全部を「その枠は取られました」と言うと、直せる失敗が直せなくなる — 理由は
@@ -195,13 +218,13 @@
 
 ```html
 <ul id="mine"></ul>
+<p id="say" role="status"></p>
 <script>
   const view = window.__MC_APP_VIEW;
   const list = document.getElementById("mine");
-  let can = {};
+  const say = document.getElementById("say");
   view.onState(({ bookings = [] }, viewer = {}) => {
-    can = viewer.can?.bookings ?? {};
-    const withdrawable = can.withdrawFrom ?? [];
+    const withdrawable = viewer.can?.bookings?.withdrawFrom ?? [];
     list.replaceChildren(
       ...bookings.map((booking) => {
         const row = document.createElement("li");
@@ -217,11 +240,19 @@
     );
   });
   list.addEventListener("click", async (event) => {
-    const id = event.target.dataset?.id;
+    const button = event.target;
+    const id = button.dataset?.id;
     if (!id) return;
-    if (!confirm("取り下げます。枠はすぐ他の人が取れるようになります。")) return;
+    // 確認はページの中で。confirm() はサンドボックスに無視され、false が
+    // 返るので、「確認しているつもりで何も起きないボタン」になります。
+    // 1 回目は文言を変えるだけ、2 回目で書きます。
+    if (button.dataset.armed !== "yes") {
+      button.dataset.armed = "yes";
+      button.textContent = "取り下げる（枠はすぐ他の人が取れるようになります）";
+      return;
+    }
     const result = await view.withdraw("bookings", id);
-    if (!result.ok) alert("取り下げられませんでした");
+    if (!result.ok) say.textContent = result.error ? `取り下げられませんでした: ${result.error}` : "取り下げられませんでした。";
   });
   view.ready();
 </script>
@@ -229,7 +260,8 @@
 
 - **`withdraw` は行き先を持ちません。** 行が消えるので、動く先がない
 - **戻せません。** 取り下げた瞬間に枠は他の人のものになりうるので、確認は**ページが**出す
-  こと（参加者の操作に親は確認を挟みません）
+  こと（参加者の操作に親は確認を挟みません）。ただし `confirm()` は使えません —
+  サンドボックスが無視するので、押しても何も起きないボタンになります
 - **`can.withdrawFrom` が空なら宣言していないということ。** `selfDelete` を書いていないか、
   ルールがまだ deploy されていないか、アプリを publish し直していないかのいずれかです
 

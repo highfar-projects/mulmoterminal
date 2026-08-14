@@ -71,6 +71,8 @@ export interface PublishSuccess {
   dirty: boolean;
   recordIssues: number;
   recordIssuesCapped: boolean;
+  /** Said about the published page without stopping it — see `viewWarnings`. */
+  warnings: string[];
 }
 
 export type PublishResult = PublishSuccess | SharedAppFailure;
@@ -376,5 +378,6 @@ export async function publishSharedApp(root: string, opts: SharedAppOptions = {}
     dirty,
     recordIssues: scan.records,
     recordIssuesCapped: scan.capped,
+    warnings: page.view?.warnings ?? [],
   };
 }

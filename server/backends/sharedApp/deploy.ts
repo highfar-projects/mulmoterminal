@@ -43,6 +43,8 @@ export interface DeploySuccess {
    *  roster has somewhere new to look: `/staging/{aid}` lists them, and a page
    *  nobody knows was deployed is a page nobody tries. */
   pages: string[];
+  /** Said about a staged page without stopping it — see `viewWarnings`. */
+  warnings: string[];
   /** cids that were staged before and are not in the repository any more — dropped by this
    *  deploy. Reported because a withdrawal is not what the operator asked for; it is what
    *  deleting a collection's directory MEANT, and the two are easy to confuse. */
@@ -331,6 +333,7 @@ export async function deploySharedApp(root: string, opts: SharedAppOptions = {})
     slug: slug?.slug,
     cids: deployed.staging.map((entry) => entry.cid),
     pages: [...pageIdsOf(pages.tiers, "member"), ...pageIdsOf(pages.tiers, "roster")],
+    warnings: pages.warnings,
     withdrawn: stale.cids,
     // "Created" means THIS deploy is the first, and that is no longer the same question as
     // "the document was absent": `init` reserves `apps/{aid}` before it writes `app.json`, so the

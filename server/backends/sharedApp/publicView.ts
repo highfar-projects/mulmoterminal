@@ -24,6 +24,7 @@ import { constants, lstat, open, realpath } from "node:fs/promises";
 import path from "node:path";
 
 import { normalizeViews, type AuthoredApp } from "@receptron/sharedapp";
+import { modalCallIn } from "./modalCall.js";
 
 /** The document the public page reads the HTML from. Beside core's
  *  `PUBLIC_CONFIG_DOC` ("public") under `apps/{aid}/config`. */
@@ -62,6 +63,8 @@ export const viewDocumentBytes = (doc: PublicViewDoc): number => Buffer.byteLeng
 export interface ViewFile {
   html: string;
   bytes: number;
+  /** What is wrong with this page but does not stop it going out. See `viewWarnings`. */
+  warnings: string[];
 }
 
 export type ViewFileResult = { ok: true; view: ViewFile } | { ok: false; problems: string[] };
@@ -89,7 +92,12 @@ export async function readAppViewFile(root: string, view: { path: string }, publ
   const opened = await openContained(inside.full, view.path, where);
   if (!opened.ok) return opened;
   const bytes = viewDocumentBytes({ html: opened.html, publishedAt });
-  return contentProblems(opened.html, bytes, view.path, where) ?? { ok: true, view: { html: opened.html, bytes } };
+  return (
+    contentProblems(opened.html, bytes, view.path, where) ?? {
+      ok: true,
+      view: { html: opened.html, bytes, warnings: viewWarnings(opened.html, view.path, where) },
+    }
+  );
 }
 
 /** Read the file, through a handle that cannot be talked into reading another
@@ -205,6 +213,30 @@ async function containedPath(root: string, declared: string, where: string): Pro
         "A published view is one file inside it — what gets published is world-readable, so a path that leaves (through `..`, or through a symlinked directory) would hand out whatever it landed on.",
     ],
   };
+}
+
+/** What this page will probably get wrong, said WITHOUT stopping it.
+ *
+ *  A modal call is a real defect — the frame runs sandboxed with no `allow-modals`, so `alert`,
+ *  `confirm` and `prompt` are ignored, nothing throws, and `confirm` answers `false` — but reading
+ *  a page for one means reading HTML and JavaScript with something that is not a parser for either.
+ *  Over one review of this check that produced 12 misses and 9 FALSE ALARMS, and the false alarms
+ *  were the expensive half: each refused a page that works, and several refused the very shape the
+ *  skill tells authors to write (`const alert = (m) => …`, an `alert()` mentioned in prose, a
+ *  `type="text/plain"` sample). A refusal has to be right; a warning only has to be useful.
+ *
+ *  So this reports and publish goes on. What the author cannot be told at all is the far worse
+ *  case, and that belongs to the runtime instead — see `plans/feat-shared-app-view-diagnostics.md`. */
+export function viewWarnings(html: string, declared: string, where: string): string[] {
+  const modal = modalCallIn(html);
+  if (modal === null) return [];
+  return [
+    `${where}.path names '${declared}', which appears to call \`${modal}()\`. Views run sandboxed with no \`allow-modals\`, so the browser ignores all three of ` +
+      "`alert`, `confirm` and `prompt` — nothing appears, nothing throws, and `confirm` answers `false`. " +
+      "A page built on one asks nobody for the value it then sends, or draws a button that silently does nothing. " +
+      "Ask with an `<input>` in the page, answer in an element of its own, and make a confirmation a second press rather than a modal. " +
+      "(Published anyway: this is read without parsing the page, so it can be wrong.)",
+  ];
 }
 
 function contentProblems(html: string, bytes: number, declared: string, where: string): { ok: false; problems: string[] } | null {
