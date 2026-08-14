@@ -291,6 +291,12 @@ const SEPARATOR_PX = 5;
 // exists for as long as the pane is open and is not the terminal's to spend either.
 const PANE_CHROME_PX = SEPARATOR_PX + 1;
 
+// After a question is declined, before the words that replace it are typed. MEASURED: with no gap
+// the terminal is still closing the dialog and swallows the paste entirely — the pane reports a
+// send that never arrives, which is exactly how this first shipped. 200ms was enough in every run;
+// this leaves room over it, and nobody notices a quarter second after a click.
+const DECLINE_SETTLE_MS = 250;
+
 // Between the keystrokes that answer a question dialog. The dialog rebuilds itself between
 // questions and after a toggle, so the keys are paced rather than written as one block.
 const rowWidth = () => Math.max(0, (zoomRow.value?.clientWidth ?? 0) - (rightPane.value ? PANE_CHROME_PX : 0));
@@ -578,6 +584,7 @@ async function sayInsteadOfChoosing(text: string): Promise<void> {
   }
   // The question is declined now, so the words have nowhere else to go. The pane is closed only
   // once they are actually delivered — closing first is how a failed send became invisible.
+  await new Promise((resolve) => setTimeout(resolve, DECLINE_SETTLE_MS));
   if (conn.submitText(slot, text)) dropQuestion(event.sessionId);
   else unsentText.value = text;
 }
