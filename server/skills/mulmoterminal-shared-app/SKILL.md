@@ -399,10 +399,16 @@ where nobody reviews them. The write applies the same comparison, so a page that
 refused rather than obeyed.
 
 `submit` is the visitor's path and **the page confirms with the reader before writing** — the HTML
-is not trusted to have been asked. The other three are the
+is not trusted to have been asked. `transition` and `assign` are the
 roster's, and they do NOT confirm: the person pressing them is on the app's own roster doing
 their own work, and a modal in front of a button used forty times a day is abandoned rather than
 read. The page prints what happened above the frame instead, from what was written.
+
+**`withdraw` is the exception, and the page is what has to ask.** The parent does not confirm it
+either — but it deletes a record and, where there is a `mirror`, hands the slot to whoever clicks
+next, so there is nothing to undo and nothing left to read afterwards. That is not the same kind
+of button as approving a booking for the fortieth time today. Put the confirmation in the page,
+and say what it costs: 取り下げると枠はすぐ他の人が取れるようになります。
 
 - **`transition` moves ONE field** — `collections.<cid>.statusField` — and only along
   `transitions` (for a member) or `public.submit.<cid>.selfTransitions` (for a participant). Those
