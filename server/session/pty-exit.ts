@@ -12,6 +12,7 @@
 // live agent in it, and forgets the title, which is what drops the row from the phone's list.
 import { ptys } from "./registry.js";
 import { tmuxHasSession } from "../infra/tmux.js";
+import { forgetAnsweredQuestion } from "./answerQuestion.js";
 
 /** What the pty's death is evidence of. */
 export type PtyExitDisposition = "reap" | "keep" | "gone";
@@ -47,6 +48,7 @@ export function handlePtyExit(sessionId: string, reap: (id: string) => void): Pt
     // reads as "there is a live pty here", and a dead one left in the table would be reused instead
     // of reattached.
     ptys.delete(sessionId);
+    forgetAnsweredQuestion(sessionId); // no pty to answer into; the claim has nothing left to guard
     console.log(`[pty] ${sessionId} lost its client, but its tmux session is still running — keeping it (reattaches on the next connect)`);
   } else if (disposition === "reap") {
     reap(sessionId);

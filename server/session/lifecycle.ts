@@ -43,6 +43,7 @@ import { cleanupSessionDrops } from "./session-drops.js";
 import { runCompletionHook } from "./completion-hooks.js";
 import { messageOf } from "../errors.js";
 import { tmuxKillSession } from "../infra/tmux.js";
+import { forgetAnsweredQuestion } from "./answerQuestion.js";
 
 // The channel every session row is published on.
 export const SESSIONS_CHANNEL = "sessions";
@@ -147,6 +148,9 @@ function reap(deps: SessionLifecycleDeps, id: string) {
   // The GUI tools a muse session was entitled to die with it too: the record exists for a bridge
   // that is a child of this pty, and there is no bridge left to ask.
   forgetEntitledToolGroups(id);
+  // And what we remembered about answering its questions (#1685): the claim that stops a duplicate
+  // answer is scoped to the session, so it ends with it.
+  forgetAnsweredQuestion(id);
   // NOT customAgentSessions: the transcript outlives the pty, and a resume ignores the picker, so
   // dropping the mapping here would silently continue that conversation on plain claude (a
   // different model). Persisted for the same reason — see custom-agent-log.ts.

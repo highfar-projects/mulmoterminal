@@ -32,28 +32,19 @@ const answering = new Set<string>();
 // into whatever the screen became. Refusing a toolUseId we have already answered closes that window
 // without holding a lock for an unbounded time (nothing guarantees the close ever arrives).
 //
-// Cleared as soon as the record moves on, which the next request for that session observes — and
-// otherwise by AGE. Not by a count of entries: a cap evicts whichever claim is oldest, which is the
-// one still waiting for its close, so bounding the map that way reopens the hole it exists to shut.
-// A claim outlives its usefulness the moment the close could no longer be in flight.
-const CLAIM_TTL_MS = 30_000;
-const submitted = new Map<string, { toolUseId: string; at: number }>();
+// Held until the record moves on — which the next request for that session observes — and dropped
+// with the session itself (forgetAnsweredQuestion, called from the reap paths).
+//
+// Neither a count nor a clock bounds it, and both were tried: a cap evicts whichever claim is
+// OLDEST, which is exactly the one still waiting for its close, and a TTL releases a claim while
+// the host still reports that dialog open — each reopening the window this shuts. What genuinely
+// ends a claim's usefulness is the session going away, so that is what ends it. One short string
+// per live session, and sessions are already bounded by the pty table.
+const submitted = new Map<string, string>();
 
-const claimOf = (sessionId: string, now: number): string | null => {
-  const claim = submitted.get(sessionId);
-  if (!claim) return null;
-  if (now - claim.at <= CLAIM_TTL_MS) return claim.toolUseId;
+/** The session is gone; so is anything we remembered about answering its questions. */
+export const forgetAnsweredQuestion = (sessionId: string): void => {
   submitted.delete(sessionId);
-  return null;
-};
-
-const rememberSubmitted = (sessionId: string, toolUseId: string, now: number): void => {
-  // Sweep here rather than on a timer: this runs once per answer, and everything it drops is a
-  // claim no close could still be coming for.
-  submitted.forEach((claim, id) => {
-    if (now - claim.at > CLAIM_TTL_MS) submitted.delete(id);
-  });
-  submitted.set(sessionId, { toolUseId, at: now });
 };
 
 export interface AnswerQuestionDeps {
@@ -68,8 +59,6 @@ export interface AnswerQuestionDeps {
   stopWatchingOtherWrites: (sessionId: string) => void;
   /** Between keystrokes: the dialog rebuilds itself between questions (#1679). */
   pause: (ms: number) => Promise<void>;
-  /** Now, in ms — how a submitted-answer claim ages out. Injected so a test owns the clock. */
-  now: () => number;
   gapMs: number;
 }
 
@@ -103,7 +92,7 @@ const sendPaced = async (deps: AnswerQuestionDeps, sessionId: string, keys: read
 const answerHeld = async (deps: AnswerQuestionDeps, { sessionId, toolUseId, picks }: AnswerQuestionRequest): Promise<AnswerResult> => {
   const open = openQuestionOf(await deps.callsOf(sessionId), sessionId);
   const openId = open?.toolUseId ?? null;
-  const claimed = claimOf(sessionId, deps.now());
+  const claimed = submitted.get(sessionId) ?? null;
   // The record has moved on to another dialog (or none): what we answered is history now.
   if (claimed !== openId) submitted.delete(sessionId);
   if (!open || openId !== toolUseId || claimed === toolUseId) return { ok: false, reason: "closed" };
@@ -112,7 +101,7 @@ const answerHeld = async (deps: AnswerQuestionDeps, { sessionId, toolUseId, pick
   // The questions come from the HOST's own record of the dialog, not from the request: a caller
   // cannot widen its picks by describing a different question than the one on screen.
   const result = await sendPaced(deps, sessionId, keys);
-  if (result.ok) rememberSubmitted(sessionId, toolUseId, deps.now());
+  if (result.ok) submitted.set(sessionId, toolUseId);
   return result;
 };
 
