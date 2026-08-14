@@ -33,6 +33,7 @@
  *  identically — an `onclick` and a `javascript:` href are as executable as a `<script>`, and a
  *  gate that reads only the third would pass the other two straight through. */
 const SCRIPT_BODY = /<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi;
+const SCRIPT_ELEMENT = /(<script\b[^>]*>)[\s\S]*?<\/script\s*>/gi;
 // Attributes are read out of START TAGS, and out of a document the scripts have been taken out of
 // — not off the raw page. `<script>const sample = "<button onclick=alert()>";</script>` is a
 // STRING that draws nothing and calls nothing, and reading the whole document for attribute-shaped
@@ -160,7 +161,14 @@ const attributesOf = (markup: string): string[] =>
     .map((hit) => attributeCode(hit[1] ?? "", hit[2] ?? hit[3] ?? hit[4] ?? ""))
     .filter((code): code is string => code !== null);
 
-const scriptsOf = (html: string): string[] => [...[...html.matchAll(SCRIPT_BODY)].map((hit) => hit[1] ?? ""), ...attributesOf(html.replace(SCRIPT_BODY, " "))];
+/** The page with every script's CONTENT gone and its START TAG kept.
+ *
+ *  Kept because that tag carries attributes of its own, and they run: a `<script src=…>` that fails
+ *  to load fires its `onerror`. Removing the whole element took that handler out of the page along
+ *  with the body, so nothing ever read it. */
+const withoutScriptBodies = (html: string): string => html.replace(SCRIPT_ELEMENT, "$1 ");
+
+const scriptsOf = (html: string): string[] => [...[...html.matchAll(SCRIPT_BODY)].map((hit) => hit[1] ?? ""), ...attributesOf(withoutScriptBodies(html))];
 
 /** What the walker is in the middle of. `code` is the only state that reaches the match. */
 type Mode = "code" | "line" | "block" | "'" | '"' | "`";

@@ -85,6 +85,11 @@ describe("the file a published view names", () => {
       // The URL parser drops ASCII tab/LF/CR anywhere in a URL, the scheme included.
       '<a href="java&#x0A;script:confirm()">go</a>',
       '<a href="java&#9;script:prompt()">go</a>',
+      // A `<script>` START TAG carries handlers of its own — `onerror` fires when the src fails.
+      '<script src="/missing.js" onerror="prompt(\'name\')"></script>',
+      // Ordinary formatting around a member access: newlines, tabs, more than one space.
+      '<script>window\n  .  prompt("name")</script>',
+      "<script>window\t.\tconfirm()</script>",
       '<a href="javascript:prompt&lpar;&rpar;">go</a>',
       "<button ONCLICK=\"prompt('x')\">go</button>",
       "<button OnClick=prompt()>go</button>",
