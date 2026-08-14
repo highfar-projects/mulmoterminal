@@ -158,6 +158,9 @@ const attributeRegion = (markup: string, from: number): string => {
 /** Where a start tag's name ends, or 0 when this `<` opens no tag. */
 const TAG_START = /^<[a-z][a-z0-9-]*/i;
 
+/** The openings the parser reads as a bogus comment rather than as markup. */
+const BOGUS_COMMENT = /^<(?:[!?]|\/[^a-z])/i;
+
 /** Every attribute of every START TAG in the markup — the scripts already gone.
  *
  *  Walked rather than pattern-matched over the whole string, because the two things it has to tell
@@ -175,6 +178,15 @@ const attributesOf = (markup: string): string[] => {
       const closed = markup.indexOf("-->", open + 4);
       // An unterminated comment runs to the end of the document, as it does in a browser.
       index = closed === -1 ? markup.length : closed + 3;
+      continue;
+    }
+    if (BOGUS_COMMENT.test(markup.slice(open, open + 3))) {
+      // A BOGUS COMMENT: `<!` that is not `<!--` (a doctype, a `<![CDATA[…]]>` someone pasted as
+      // an example), `<?`, or `</` with no name after it. The parser swallows all of it to the
+      // NEXT `>` and draws nothing — including any tag-shaped text inside, which is exactly what
+      // a page showing an example contains.
+      const closed = markup.indexOf(">", open + 2);
+      index = closed === -1 ? markup.length : closed + 1;
       continue;
     }
     const name = TAG_START.exec(markup.slice(open, open + 64))?.[0];

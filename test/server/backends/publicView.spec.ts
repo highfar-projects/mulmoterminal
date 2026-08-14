@@ -74,6 +74,8 @@ describe("the file a published view names", () => {
       "<button onclick=prompt()>go</button>",
       // …and a comment does not swallow the live markup after it.
       "<!-- 昔の版 --><button onclick=\"prompt('name')\">go</button>",
+      // …and a doctype is not a comment: the markup after it is live.
+      "<!DOCTYPE html><button onclick=prompt()>go</button>",
       // `<!--` inside a quoted VALUE opens nothing, so the live handler after it is still read.
       '<div title="<!--"></div><button onclick="prompt(\'x\')">go</button>',
       "<a href=javascript:confirm()>go</a>",
@@ -153,6 +155,9 @@ describe("the file a published view names", () => {
       "<!-- <button onclick=\"prompt('name')\">go</button> -->",
       // An unterminated comment runs to the end of the document, as it does in a browser.
       "<!-- <button onclick=prompt()>",
+      // A bogus comment — `<!` that is not `<!--` — swallows everything to the next `>`, so a
+      // pasted `<![CDATA[…]]>` example draws nothing.
+      '<![CDATA[<button onclick="prompt()">]]>',
       '<a href="https://example.com/prompt(">ok</a>',
       // A data block is not JavaScript: it is often exactly where a page keeps a sample that says
       // `prompt(` on purpose, and running the scanner over it refuses a page that works.
