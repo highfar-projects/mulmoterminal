@@ -8,6 +8,85 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.8.4 — 2026-08-15
+
+> **Setup guide:** [The notification body, and Japanese in the terminal](https://receptron.github.io/mulmoterminal/guide/en/v4.8.4.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.8.4.html))
+
+Fixes only. Nothing to configure.
+
+### A push notification whose body was your own prompt (#1696, #1710)
+
+The body of a phone push was sometimes **the prompt the user had just typed**, word for word, on
+finished turns and blocked ones alike. Reading your own words back says nothing about the turn
+that ended.
+
+The body is built from the agent's reply, and the reply was **re-read from the transcript file**;
+`buildPushDetail`'s last resort when that read came back empty was the last prompt. Empty reads
+are real — measured on this machine's transcripts, a turn ends with no reply at 1.5%–13.5% of
+boundaries depending on how a boundary is counted (a turn stopped with ESC, or one that ended on a
+tool call, genuinely has nothing to report).
+
+**A `/clear`ed session hit it on every turn afterwards.** `notifyTaskFinished` skips the transcript
+read while `clearedTranscripts` holds the session (#1085 — after a `/clear`, our copy is frozen on
+the conversation the user ended), and that mark lifts only when *that* file grows. Claude writes to
+a different file after a `/clear`, so it never does.
+
+Two changes. The finished body now comes from the Stop hook's own **`last_assistant_message`** —
+the reply, carried by the very event that reports the turn ending, so it cannot race the transcript
+write, guess the wrong project directory, or miss a session id Claude reissued. The field was
+present in every Stop payload captured from Claude Code 2.1.232 and was read nowhere in this repo.
+The transcript read stays as the fallback for a Claude Code that predates the field and for codex,
+which has no hooks at all. And **the last prompt is gone from the fallback chain**: the body is now
+`reply || aiTitle || "the task finished"`, and for a blocked turn `message || aiTitle ||
+"waiting for input"`.
+
+Verified by running the new route spec against the old code: five of its six cases fail there with
+the body equal to the user's prompt.
+
+### Terminal Japanese arriving as runs of `_` (#1634, #1708)
+
+An agent's Japanese output could arrive as `__________`, with box-drawing characters and `·`
+unaffected — an asymmetry that pointed investigations at fonts and renderers.
+
+The substitution is tmux's, at the moment its **client** writes to the pty (`tty_check_codeset`).
+A client that finds no `UTF-8` / `UTF8` in the first non-empty of `LC_ALL` / `LC_CTYPE` / `LANG`
+replaces every character with no DEC ACS fallback with **one `_` per cell** — two for a full-width
+character. A process launched from a GUI inherits launchd's environment, which names no locale at
+all.
+
+Two fixes with different reach. The tmux client is now started with **`-u`**, which forces its
+output to UTF-8 rather than deciding from the locale — not a guess about the user's terminal, since
+the reader of that client's output is our own xterm.js. This is what closes #1634, and it covers a
+machine that explicitly names a non-UTF-8 locale too. Separately, on macOS only, `LANG=en_US.UTF-8`
+is supplied to a session's environment **when no locale name is present at all**, for everything
+else in the session that decides its output encoding from the locale (a curses TUI, Python's
+stdout). `LC_ALL` / `LC_CTYPE` take precedence over `LANG`, so an environment that already sets one
+is untouched.
+
+### A shared app's publish handed out a URL that does not open (#1697)
+
+`publish` reported the app as open "at /{slug}", but the public page is served from **`/a/{slug}`**
+— a bare `/{slug}` route does not exist and falls through to NotFound. The author passes that
+string straight to visitors, so this was a broken address rather than an awkward message. The
+roster and participant pages were also printed with a literal `/m/{slug}` placeholder instead of
+the slug that is already known; the participant page named no address at all.
+
+### The public view's link refusal did nothing on Windows (#1709, #1711)
+
+`openContained`'s symlink defence rested entirely on `O_NOFOLLOW`, which **does not exist on
+Windows**: `constants.O_NOFOLLOW` is `undefined` there, and `O_RDONLY | undefined` is `O_RDONLY`,
+so the open silently degraded to an ordinary read with no error and no warning. This is what turned
+`windows-daily` red from 2026-08-13; two of its three failing cases were the implementation, not
+the test.
+
+### Internal
+
+- `github/codeql-action/upload-sarif` pinned to v4.37.7, up from v3.37.1 (#1712). The v3-to-v4
+  difference is the runtime only — v4 runs on Node.js 24 — and `upload-sarif`'s inputs are
+  unchanged.
+- Design notes for shared-app view diagnostics and for previewing a shared app locally before
+  publishing (#1701, #1704). No code.
+
 ## mulmoterminal@4.8.3 — 2026-08-14
 
 > **Setup guide:** [Answering a question, at the desk and on the phone](https://receptron.github.io/mulmoterminal/guide/en/v4.8.3.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.8.3.html))
