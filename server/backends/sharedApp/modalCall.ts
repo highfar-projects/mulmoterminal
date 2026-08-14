@@ -32,7 +32,7 @@
 /** Where code lives in a page. All three RUN, and the sandbox eats a modal in each of them
  *  identically — an `onclick` and a `javascript:` href are as executable as a `<script>`, and a
  *  gate that reads only the third would pass the other two straight through. */
-const SCRIPT_BODY = /<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi;
+const SCRIPT_BODY = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
 const SCRIPT_ELEMENT = /(<script\b[^>]*>)[\s\S]*?<\/script\s*>/gi;
 // Attributes are read out of START TAGS, and out of a document the scripts have been taken out of
 // — not off the raw page. `<script>const sample = "<button onclick=alert()>";</script>` is a
@@ -161,6 +161,44 @@ const attributesOf = (markup: string): string[] =>
     .map((hit) => attributeCode(hit[1] ?? "", hit[2] ?? hit[3] ?? hit[4] ?? ""))
     .filter((code): code is string => code !== null);
 
+/** The `type` a `<script>` declares, lower-cased and without its parameters. */
+const TYPE_ATTRIBUTE = /\stype\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/i;
+
+/** The MIME types a browser EXECUTES. Everything else — `text/plain`, `application/json`,
+ *  `text/x-template`, `importmap` — is a data block: inert, and often holding a sample or a
+ *  template that says `prompt(` on purpose. Feeding those to the scanner refuses a page that
+ *  works, which is the expensive way to be wrong.
+ *
+ *  An absent or empty `type` means a classic script, and `module` is the modern spelling; the rest
+ *  are the legacy MIME strings browsers still honour.
+ *
+ *  The trade-off is named rather than hidden: a `text/x-template` block whose markup the page later
+ *  puts into the DOM has its handlers become live at that moment, and this will not have looked at
+ *  them. Refusing every data block instead would refuse the far commoner page that merely SHOWS a
+ *  sample, so the miss is the side chosen. */
+const JAVASCRIPT_TYPES = new Set([
+  "module",
+  "text/javascript",
+  "text/ecmascript",
+  "text/jscript",
+  "text/livescript",
+  "text/x-javascript",
+  "text/x-ecmascript",
+  "application/javascript",
+  "application/ecmascript",
+  "application/x-javascript",
+  "application/x-ecmascript",
+]);
+
+const runsAsScript = (attributes: string): boolean => {
+  const declared = TYPE_ATTRIBUTE.exec(attributes);
+  const type = decoded(declared?.[1] ?? declared?.[2] ?? declared?.[3] ?? "")
+    .split(";")[0]
+    ?.trim()
+    .toLowerCase();
+  return type === undefined || type === "" || JAVASCRIPT_TYPES.has(type);
+};
+
 /** The page with every script's CONTENT gone and its START TAG kept.
  *
  *  Kept because that tag carries attributes of its own, and they run: a `<script src=…>` that fails
@@ -168,7 +206,12 @@ const attributesOf = (markup: string): string[] =>
  *  with the body, so nothing ever read it. */
 const withoutScriptBodies = (html: string): string => html.replace(SCRIPT_ELEMENT, "$1 ");
 
-const scriptsOf = (html: string): string[] => [...[...html.matchAll(SCRIPT_BODY)].map((hit) => hit[1] ?? ""), ...attributesOf(withoutScriptBodies(html))];
+const scriptsOf = (html: string): string[] => [
+  ...[...html.matchAll(SCRIPT_BODY)].filter((hit) => runsAsScript(hit[1] ?? "")).map((hit) => hit[2] ?? ""),
+  // Attributes are read from EVERY start tag, executable body or not: a data block's own `onerror`
+  // still fires.
+  ...attributesOf(withoutScriptBodies(html)),
+];
 
 /** What the walker is in the middle of. `code` is the only state that reaches the match. */
 type Mode = "code" | "line" | "block" | "'" | '"' | "`";

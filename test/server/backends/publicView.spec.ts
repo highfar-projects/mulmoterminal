@@ -128,6 +128,10 @@ describe("the file a published view names", () => {
       "<p>onclick=alert() と書いても動きません</p>",
       "<p>&colon; と書いただけ</p>",
       '<a href="https://example.com/prompt(">ok</a>',
+      // A data block is not JavaScript: it is often exactly where a page keeps a sample that says
+      // `prompt(` on purpose, and running the scanner over it refuses a page that works.
+      '<script type="text/plain">prompt()</script>',
+      '<script type="application/json">{"a":"prompt("}</script>',
     ].join("\n");
     const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
     expect(result.ok).toBe(true);
