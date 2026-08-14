@@ -220,6 +220,12 @@ describe("the file a published view names", () => {
     const result = await readAppViewFile(root, { path: "views/booking.html" }, STAMP);
     expect(result.ok).toBe(false);
     expect(result.ok === false && result.problems.join(" ")).toContain("without following links");
+    // Named, not merely refused. `O_NOFOLLOW` alone would answer "could not be
+    // opened", which sends the author looking for a file that is right there —
+    // and on Windows, where the flag does not exist, it answers nothing at all
+    // (#1709). Asserted here so the lstat that stands in for it is pinned on
+    // every platform, not only the one where it is the sole defence.
+    expect(result.ok === false && result.problems.join(" ")).toContain("which is a symbolic link");
   });
 
   it("refuses a page written against the HOST's bridge", async () => {
@@ -271,9 +277,17 @@ describe("the file a published view names", () => {
     const result = await readAppViewFile(root, { path: "views/leak.html" }, STAMP);
     expect(result.ok).toBe(false);
     expect(result.ok === false && result.problems.join(" ")).toContain("without following links");
+    expect(result.ok === false && result.problems.join(" ")).toContain("which is a symbolic link");
+    // The secret is what this is guarding, so say so: nothing of it may appear
+    // in what the refusal hands back either.
+    expect(JSON.stringify(result)).not.toContain("secret</p>");
   });
 
-  it("refuses, rather than throwing, when the file goes between stat and read", async () => {
+  // Skipped on Windows because the SETUP cannot happen there: NTFS has no POSIX
+  // permission bits, so `chmod 0o000` moves the read-only attribute and the file
+  // stays perfectly readable — the read succeeds and the assertion is about
+  // nothing (docs/windows-gotchas.md, same shape as #1484).
+  it.skipIf(process.platform === "win32")("refuses, rather than throwing, when the file goes between stat and read", async () => {
     // A delete or a permission change in that window. The gate's contract is
     // problems and no writes; a rejection escaping it would surface as an
     // exception out of publish, which is the one shape callers do not handle.

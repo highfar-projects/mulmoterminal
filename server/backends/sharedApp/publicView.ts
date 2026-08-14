@@ -146,10 +146,38 @@ async function symlinkedAncestor(root: string, dir: string): Promise<string | nu
   return null;
 }
 
+/** `O_NOFOLLOW` where the platform has it, 0 where it does not.
+ *
+ *  Windows has no such flag, so `constants.O_NOFOLLOW` is undefined there — and
+ *  `O_RDONLY | undefined` is plain `O_RDONLY`, which follows the link with
+ *  nothing anywhere to say the guard had gone (#1709). Named rather than left
+ *  as a bare `0` because that silent 0 IS the bug: the constant vanishing has
+ *  to be visible in the source, next to the check that stands in for it. */
+const NOFOLLOW_IF_SUPPORTED = constants.O_NOFOLLOW ?? 0;
+
 async function openContained(full: string, declared: string, where: string): Promise<{ ok: true; html: string } | { ok: false; problems: string[] }> {
+  // `lstat` first, on every platform. Where `O_NOFOLLOW` works this only makes the
+  // refusal say what is actually wrong; where it does not, it is the whole defence
+  // — and it is deliberately not behind a platform branch, since a Windows-only
+  // path would never run in the CI that gates a merge.
+  //
+  // What it closes is the MISTAKE, completely: a link somebody left in the tree.
+  // The race it does not close is the one `symlinkedAncestor` already names above,
+  // and it is bounded the same way — winning it needs write access to the
+  // repository being published, which needs no symlink to leak anything.
+  const itself = await lstat(full).catch(() => null);
+  if (itself?.isSymbolicLink() === true) {
+    return {
+      ok: false,
+      problems: [
+        `${where}.path names '${declared}', which is a symbolic link. ` +
+          "A published view is read without following links — what gets published is world-readable, so the file checked and the file read have to be the same one.",
+      ],
+    };
+  }
   let handle;
   try {
-    handle = await open(full, constants.O_RDONLY | constants.O_NOFOLLOW);
+    handle = await open(full, constants.O_RDONLY | NOFOLLOW_IF_SUPPORTED);
   } catch {
     return {
       ok: false,
