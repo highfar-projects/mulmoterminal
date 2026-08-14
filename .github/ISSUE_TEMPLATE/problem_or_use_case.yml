@@ -1,0 +1,105 @@
+name: Problem or use case
+description: Something you were trying to get done, and what got in the way.
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Describe the problem, not the feature
+
+        Write about the situation you were in, what you were trying to get done, and what got in
+        the way. Leave the feature you have in mind out of it wherever you can.
+
+        That is not modesty, it is what gets the problem solved. A proposal narrows the answer to
+        the one you already thought of, and someone who knows how the pieces fit together often
+        has a cheaper answer — or finds the thing already exists under a name you did not search
+        for. A proposal also buries the problem: when a proposal is turned down, the problem it
+        came from is thrown away with it, and nobody ever solves it.
+
+        If you cannot leave your idea out, put it in the second to last field, where it sits as
+        one idea among others rather than as the thing being asked for.
+
+        ## Do not write code
+
+        No patch, no difference against a file, no file-by-file implementation plan, no "change
+        this function so that". How it gets built is decided after the problem is understood, in
+        a plan file and a pull request.
+
+        ## Write every word out in full
+
+        Do not use abbreviations or short forms. Write "MulmoTerminal", not "MT". Write
+        "configuration file", not "conf". Issues here are read by people and by coding agents,
+        and a short form that is obvious to you is a guess for whoever picks this up.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before you submit
+      options:
+        - label: I described the situation I was in and what got in the way, rather than a design.
+          required: true
+        - label: This issue contains no code, no patch and no difference against a file.
+          required: true
+        - label: I checked the guide and Settings, and this is not something I can already configure.
+          required: true
+        - label: I searched the existing issues, open and closed, and this is not one of them.
+          required: true
+
+  - type: textarea
+    id: trying-to-do
+    attributes:
+      label: What were you trying to get done
+      description: The actual task, told concretely. Name the real work, not a generic version of it.
+      placeholder: |
+        I keep six cells open across two repositories, and I was going through them one by one to
+        see which ones had finished and were waiting on me.
+    validations:
+      required: true
+
+  - type: textarea
+    id: got-in-the-way
+    attributes:
+      label: What got in the way
+      description: What happened at the point you got stuck, and why it stopped you.
+      placeholder: |
+        The roster shows every cell, but I could not tell a finished cell from one still working
+        without opening each one, so I opened all six and lost my place twice.
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: What you do about it today
+      description: The workaround you use now, however clumsy — or say that you gave up on it. This is what says how much the problem costs.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: How often you run into this
+      options:
+        - Several times a day
+        - A few times a week
+        - Occasionally
+        - Once so far
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: If you already have an idea, it goes here
+      description: Optional, and deliberately last. One idea among others, in behaviour a person could see — still no code.
+    validations:
+      required: false
+
+  - type: textarea
+    id: anything-else
+    attributes:
+      label: Anything else
+      description: Screenshots, the other tool that solves this well, anyone else you know who hits the same thing.
+    validations:
+      required: false
