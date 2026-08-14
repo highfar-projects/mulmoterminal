@@ -117,17 +117,26 @@ function recordNote(issues: number, capped: boolean): string[] {
  *  who is coming at three. The platform does not stop an owner's own page from
  *  moving an owner's own data anywhere, and does not pretend to, so the person
  *  publishing one should know that is what they are doing. */
-function pageNote(memberPages: readonly string[], participantPages: readonly string[], slug: string | undefined): string[] {
+/** "live at https://…/m/sakura-hair: desk." — or, when no URL name is declared, the truth in
+ *  place of an address. `/m/:slug` and `/p/:slug` both need one, and an app may publish pages
+ *  without declaring any; printing `/m/{slug}` there hands back exactly what the rest of this
+ *  file exists to prevent, a URL that opens the not-found page. Exported for the spec beside it:
+ *  the no-slug branch is a sentence nobody sees until an author hits it. */
+export const entrance = (url: string | null, tier: string, pages: readonly string[]): string =>
+  url === null
+    ? `published: ${pages.join(", ")}. No address reaches them yet — /${tier}/:slug needs a URL name, and app.json declares no \`slug\`.`
+    : `live at ${url}: ${pages.join(", ")}.`;
+
+export function pageNote(memberPages: readonly string[], participantPages: readonly string[], slug: string | undefined): string[] {
   const lines: string[] = [];
-  const name = slug ?? "{slug}";
   if (memberPages.length > 0) {
     lines.push(
-      `Staff pages live at ${MULMOSERVER_ORIGIN}/m/${name}: ${memberPages.join(", ")}. These are handed the app's REAL records — a page you publish here can show, and can carry off, whatever the person opening it may read. Only people holding a role in this app can open them.`,
+      `Staff pages ${entrance(slug === undefined ? null : `${MULMOSERVER_ORIGIN}/m/${slug}`, "m", memberPages)} These are handed the app's REAL records — a page you publish here can show, and can carry off, whatever the person opening it may read. Only people holding a role in this app can open them.`,
     );
   }
   if (participantPages.length > 0) {
     lines.push(
-      `Participant pages live at ${MULMOSERVER_ORIGIN}/p/${name}: ${participantPages.join(", ")}. Each person sees only their own row, which is the rules' answer rather than the page's.`,
+      `Participant pages ${entrance(slug === undefined ? null : `${MULMOSERVER_ORIGIN}/p/${slug}`, "p", participantPages)} Each person sees only their own row, which is the rules' answer rather than the page's.`,
     );
   }
   return lines;

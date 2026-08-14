@@ -5,7 +5,7 @@
 // retry rather than report. So every path out of here is a string.
 import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
-import { MANAGE_SHARED_APP, SHARED_APP_ACTIONS, manageSharedApp } from "../../../server/infra/shared-app-tool.js";
+import { MANAGE_SHARED_APP, SHARED_APP_ACTIONS, manageSharedApp, pageNote } from "../../../server/infra/shared-app-tool.js";
 import { HOST_TOOL_DEFINITIONS } from "../../../server/infra/host-tools.js";
 import { groupOfTool } from "../../../common/toolGroups.js";
 import { setFirestoreAccessor, setSharedCollectionsSupport } from "@mulmoclaude/core/collection/server";
@@ -184,5 +184,26 @@ describe("manageSharedApp, the tool", () => {
       if (before(hit.index).endsWith("apps/")) continue;
       expect(before(hit.index)).toMatch(/\$\{MULMOSERVER_ORIGIN\}\/(?:[amp]|staging)\/$/);
     }
+  });
+
+  // An app may publish pages and declare no `slug` — `withPages()` in sharedApp.spec.ts does
+  // exactly that, and `PublishSuccess.slug` is optional for it. Both entrances need a URL name,
+  // so there is no address to give, and the placeholder this used to print (`/m/{slug}`) is the
+  // same unpasteable non-resolving thing the rest of this file exists to stop.
+  it("says what is true about a page nobody can reach yet, instead of an address", () => {
+    const [staff, mine] = pageNote(["desk"], ["mine"], undefined);
+    expect(staff).toContain("Staff pages published: desk.");
+    expect(mine).toContain("Participant pages published: mine.");
+    for (const line of [staff, mine]) {
+      expect(line).toContain("No address reaches them yet");
+      expect(line).not.toContain("{slug}");
+      expect(line).not.toContain("mulmoserver.web.app");
+    }
+  });
+
+  it("gives the whole address once a URL name exists", () => {
+    const [staff, mine] = pageNote(["desk"], ["mine"], "sakura-hair");
+    expect(staff).toContain("Staff pages live at https://mulmoserver.web.app/m/sakura-hair: desk.");
+    expect(mine).toContain("Participant pages live at https://mulmoserver.web.app/p/sakura-hair: mine.");
   });
 });
