@@ -41,7 +41,15 @@ import { planAppViewTiers, type TierPlan } from "./appViews.js";
 import { publicFormOf, type PublicForm } from "./publicForm.js";
 import { declaredView, readAppViewFile } from "./publicView.js";
 import { isRecord } from "../../../common/isRecord.js";
-import { previewPageKey, type PreviewDataset, type PreviewDatasets, type PreviewPage, type SharedAppPreview } from "../../../common/sharedAppPreview.js";
+import { writableFields } from "@receptron/sharedapp/view";
+import {
+  previewPageKey,
+  type PreviewDataset,
+  type PreviewDatasets,
+  type PreviewForm,
+  type PreviewPage,
+  type SharedAppPreview,
+} from "../../../common/sharedAppPreview.js";
 
 /** The wire shape is in `common/` — both ends decide it. What is added here is the projection the
  *  headless runner (P5) and the publish gates read and the browser has no use for. */
@@ -173,6 +181,33 @@ function submitDeclarations(config: PublishedConfigDoc): Record<string, { create
   );
 }
 
+/** The generated form as the PANE will draw it.
+ *
+ *  The reduction is `writableFields` — the same function `previewWrite` and the published site's
+ *  submit path call — so the boxes on screen are the boxes a visitor gets, rather than a second
+ *  opinion about which of `createFields` a person answers. What is added on top is the schema's
+ *  `type` and an `enum`'s choices, which come from the form publish writes to `config/public`:
+ *  they are the only way either page learns them, because a visitor may not read the schema. */
+function formInputsOf(config: PublishedConfigDoc, form: PublicForm): PreviewForm {
+  return Object.fromEntries(
+    Object.entries(form).flatMap(([cid, collection]) => {
+      const spec = config.submit?.[cid];
+      if (!isRecord(spec)) return [];
+      const createFields = Array.isArray(spec.createFields) ? spec.createFields.filter((field): field is string => typeof field === "string") : [];
+      const emailField = typeof spec.emailField === "string" ? spec.emailField : undefined;
+      const fields = writableFields({ fields: collection.fields, statusField: collection.statusField }, createFields, emailField).map((field) => {
+        const drawn = collection.fields[field.name];
+        return {
+          ...field,
+          type: drawn?.type ?? "string",
+          ...(drawn?.values === undefined ? {} : { values: [...drawn.values] }),
+        };
+      });
+      return fields.length === 0 ? [] : [[cid, fields] as const];
+    }),
+  );
+}
+
 /** The public page has no view id of its own — it is the app's one anonymous face, and the
  *  projection names it nowhere. */
 const PUBLIC_PAGE_ID = "public";
@@ -234,6 +269,7 @@ export async function previewSharedApp(root: string, opts: SharedAppOptions = {}
     publicOpen: face.public !== undefined,
     fromLiveApp: existingApp !== null,
     generatedForm: publicHtml === null && Object.keys(form).length > 0,
+    formInputs: formInputsOf(face.config, form),
     datasets,
     unreadable,
     warnings: [...(page !== null && page.ok ? page.view.warnings : []), ...tiers.warnings],

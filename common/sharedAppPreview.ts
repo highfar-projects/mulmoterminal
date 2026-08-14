@@ -34,6 +34,28 @@ export type PreviewDatasets = Record<string, Record<string, PreviewDataset>>;
  *  tier and not across them. */
 export const previewPageKey = (audience: PreviewAudience, id: string): string => `${audience}:${id}`;
 
+/** One input of a GENERATED public form — an app that declares `public.submit` and publishes no
+ *  page of its own.
+ *
+ *  Already reduced to what a visitor may fill in: `createFields` minus the address (compared to
+ *  their token) and minus the status (pinned to `initialStatus`), in the order the declaration
+ *  lists them. The reduction happens on the SERVER, through the same `writableFields` the published
+ *  site's submit path uses, so the pane draws boxes rather than deciding which boxes exist. */
+export interface PreviewFormField {
+  name: string;
+  label: string;
+  required: boolean;
+  /** The schema's type, so a `enum` draws a select and a `text` draws a textarea. A pane that drew
+   *  every field as a text box would let the author submit values the real form could not produce. */
+  type: string;
+  /** An `enum`'s choices, which travel with it for the same reason they travel to the public page:
+   *  a visitor cannot read the schema. */
+  values?: string[];
+}
+
+/** The generated form, per collection. Empty for an app that publishes a page of its own. */
+export type PreviewForm = Record<string, PreviewFormField[]>;
+
 export interface SharedAppPreview {
   aid: string;
   /** What a public create may carry, per collection, exactly as the published config declares it.
@@ -60,6 +82,10 @@ export interface SharedAppPreview {
    *  the same empty frame on screen and mean opposite things — "there is nothing to draw" against
    *  "there is something to draw and this pane cannot draw it yet". */
   generatedForm: boolean;
+  /** The inputs of that generated form. Carried rather than left to the pane to derive: the pane
+   *  cannot read the schema either, and a form it built from field NAMES alone would ask for
+   *  different things than the published site does — a preview of nothing real. */
+  formInputs: PreviewForm;
   datasets: PreviewDatasets;
   /** Collections a page names but whose records could not be read. Reported rather than silently
    *  empty: "no bookings yet" and "the read was refused" put identical pixels on the screen. */

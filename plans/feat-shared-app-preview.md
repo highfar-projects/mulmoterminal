@@ -443,11 +443,27 @@ staff / owner も同じで、`/m/{slug}` は差し出すだけである（オー
 | P1 | publish のペイロードを**書かずに**計算する経路（`projectPublish` の dry run）＋ reader/writer のホスト実装 | MulmoTerminal |
 | P2 | コレクションペインのプレビュー（`app.json` を持つプロジェクトにだけ出る）。ビュー選択・見る人の切り替え | MulmoTerminal |
 | P3 | 実 Firestore への印付きの書き込み（＋まとめて消す）と、フレーム外の診断帯 | MulmoTerminal（[ペインの診断](./feat-collection-pane-diagnostics.md) P7 と同一実装） |
+| P3b | **生成フォームのアプリ**（`public.submit` を宣言し、自前のページを publish しないもの）をプレビューで動かす | MulmoTerminal |
 | P4 | 動詞を 1 つにする（`publish` が working tree から。`deploy` は落とす） | MulmoTerminal ＋ スキルの文言 |
 | P4b | `/staging/{aid}` の撤去（3 ルートと 3 コンポーネント）。MulmoTerminal 側は文言と `slug` の必須化 | mulmoserver ＋ MulmoTerminal |
 | P4c | `/a/{slug}` のサインイン後の遷移（起点で分ける）と、`/p/` `/m/` の差し出し | mulmoserver |
 | P5 | ヘッドレスの `action: "preview"`（実ブラウザ 1 本の契約テストを含む） | MulmoTerminal |
 | P6 | 任意: ルールエミュレータ段 | sharedapp（ルール同梱）＋ MulmoTerminal |
+
+### 生成フォームは「ページが無いアプリ」ではない
+
+アンケート・申し込み・「参加します」の 1 ボタン — `public.submit` だけを宣言してビューを持たない
+アプリは、公開サイトでは**宣言から組み立てたフォーム**が出る。ページが無いのではなく、
+著者が書いていないだけで、他人はそれに出会う。
+
+プレビューが描くのは**その射影**であって、フィールド名から組み直したものではない。どの欄が
+あるか・並び・ラベル・必須・型・そして書かれるレコードは、すべて `config/public` と、公開側の
+送信経路が呼ぶのと同じ `writableFields` が決める。ペイン自身のものは**マークアップだけ**で、
+だから公開サイトの見た目とは違う。サンドボックスにも入れない — ここには囲うべき著者のコードが
+無い（フォームは導出であって、書かれたものではない）。
+
+宛先の欄は出さない。ルールは `request.auth.token.email` と比べるので、入力欄は間違える方法しか
+提供しない。ステータスも同じ理由で `initialStatus` に固定される。
 
 **P4 は P2 と P5 の後**にしか置けない。プレビューが無いうちに「publish は working tree から」に
 すると、誰も見ていない版が世界に出る経路を作るだけになる。**P4b は P4 の後** — 動詞が 1 つになる前に

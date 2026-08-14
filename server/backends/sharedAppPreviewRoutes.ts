@@ -79,6 +79,7 @@ async function respondPreview(req: Request, res: Response): Promise<void> {
     publicOpen: result.publicOpen,
     fromLiveApp: result.fromLiveApp,
     generatedForm: result.generatedForm,
+    formInputs: result.formInputs,
     datasets: result.datasets,
     unreadable: result.unreadable,
     warnings: result.warnings,

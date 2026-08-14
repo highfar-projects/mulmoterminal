@@ -249,6 +249,48 @@ describe("shared app preview", () => {
     expect(result.ok && result.submit).toEqual({ bookings: { createFields: ["note"] } });
   });
 
+  it("reduces the generated form to the boxes a visitor actually fills in", async () => {
+    mkdirSync(path.join(root, ".claude", "skills", "signups"), { recursive: true });
+    writeFileSync(
+      path.join(root, ".claude", "skills", "signups", "schema.json"),
+      JSON.stringify({
+        title: "signups",
+        icon: "star",
+        primaryKey: "id",
+        storage: { type: "firestore" },
+        fields: {
+          id: { type: "string", label: "ID", primary: true, required: true },
+          name: { type: "string", label: "お名前", required: true },
+          plan: { type: "enum", label: "Plan", values: ["A", "B"] },
+          email: { type: "email", label: "Email" },
+        },
+      }),
+    );
+    writeApp(
+      root,
+      declaration({
+        collections: { signups: { submitOnly: true } },
+        public: { submit: { signups: { auth: "verifiedEmail", createFields: ["name", "plan", "email"], emailField: "email" } } },
+      }),
+    );
+
+    const result = await previewSharedApp(root, stamp);
+    expect(result.ok === false ? result.problems : []).toEqual([]);
+
+    // The ADDRESS is not one of them. The rules compare it to `request.auth.token.email`, so a box
+    // for it can only be filled in wrongly — and the pane must not offer what the site does not.
+    // The order is the declaration's, and an `enum`'s choices travel with it because neither page
+    // may read the schema.
+    expect(result.ok && result.formInputs).toEqual({
+      signups: [
+        { name: "name", label: "お名前", required: true, type: "string" },
+        { name: "plan", label: "Plan", required: false, type: "enum", values: ["A", "B"] },
+      ],
+    });
+    expect(result.ok && result.generatedForm).toBe(true);
+    expect(docs.writes).toEqual([]);
+  });
+
   it("names the declaration a refused write fell foul of, rather than relaying a bare denial", async () => {
     const { writePreviewSubmission } = await import("../../../server/backends/sharedApp/previewWrite.js");
     const closed = 1_600_000_000_000;

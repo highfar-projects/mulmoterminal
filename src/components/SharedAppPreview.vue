@@ -27,6 +27,8 @@ import {
   previewPageKey,
   type PreviewAudience,
   type PreviewDataset,
+  type PreviewForm,
+  type PreviewFormField,
   type PreviewPage,
   type PreviewUncertainWrite,
   type PreviewWrittenRecord,
@@ -47,6 +49,7 @@ function asPayload(value: unknown): SharedAppPreview | null {
     publicOpen: value.publicOpen === true,
     fromLiveApp: value.fromLiveApp === true,
     generatedForm: value.generatedForm === true,
+    formInputs: asFormInputs(value.formInputs),
     datasets: isRecord(value.datasets) ? Object.fromEntries(Object.entries(value.datasets).map(([key, rows]) => [key, asDatasets(rows)])) : {},
     unreadable: strings(value.unreadable),
     warnings: strings(value.warnings),
@@ -59,6 +62,33 @@ function asPayload(value: unknown): SharedAppPreview | null {
 const asSubmit = (value: unknown): Record<string, { createFields: string[] }> => {
   if (!isRecord(value)) return {};
   return Object.fromEntries(Object.entries(value).map(([cid, spec]) => [cid, { createFields: isRecord(spec) ? strings(spec.createFields) : [] }]));
+};
+
+/** The generated form's inputs. A collection whose inputs cannot be read is DROPPED rather than
+ *  drawn empty: an empty form is a Send button that submits nothing, and the author would read the
+ *  refusal that follows as a fault in their declaration. */
+const asFormInputs = (value: unknown): PreviewForm => {
+  if (!isRecord(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([cid, fields]) => {
+      const drawn = Array.isArray(fields) ? fields.flatMap(asFormField) : [];
+      return drawn.length === 0 ? [] : [[cid, drawn] as const];
+    }),
+  );
+};
+
+const asFormField = (value: unknown): PreviewFormField[] => {
+  if (!isRecord(value) || typeof value.name !== "string" || value.name === "") return [];
+  const values = strings(value.values);
+  return [
+    {
+      name: value.name,
+      label: typeof value.label === "string" && value.label !== "" ? value.label : value.name,
+      required: value.required === true,
+      type: typeof value.type === "string" ? value.type : "string",
+      ...(values.length === 0 ? {} : { values }),
+    },
+  ];
 };
 
 const strings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : []);
@@ -122,7 +152,7 @@ const bridge = viewBridge(
     // A submission only reaches this after the parent has judged it against the declaration below
     // and a person has pressed a button: `unknown-collection`, `not-a-submission` and
     // `undeclared-field` are answered before it, which is what a preview is FOR.
-    submit: (pending) => send(pending),
+    submit: (pending) => send(pending.cid, pending.values),
     state: () => datasets.value,
   },
   // The REAL declaration, never an empty map.
@@ -219,11 +249,11 @@ const writeUrl = (path: string): string => {
 };
 
 /** Perform one accepted submission and remember what it made. */
-async function send(pending: PendingSubmit): Promise<{ ok: boolean; error?: string }> {
+async function send(cid: string, values: Record<string, string>): Promise<{ ok: boolean; error?: string }> {
   try {
     const res = await fetchWithTimeout(
       writeUrl("submit"),
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cid: pending.cid, values: pending.values }) },
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cid, values }) },
       SLOW_COMMAND_TIMEOUT_MS,
     );
     const body: unknown = await res.json();
@@ -247,7 +277,7 @@ async function send(pending: PendingSubmit): Promise<{ ok: boolean; error?: stri
     // cannot know whether the record was written — and if it was, dropping it here would leave a
     // real row in the app that nothing on this screen can name. The author cannot remove what they
     // cannot see, so the collection is remembered and said out loud.
-    written.value = [{ cid: pending.cid, uncertain: true }, ...written.value];
+    written.value = [{ cid, uncertain: true }, ...written.value];
     void refresh();
     return { ok: false, error: "write-failed" };
   }
@@ -282,6 +312,72 @@ async function clearWritten(): Promise<void> {
   } finally {
     clearing.value = false;
     await load();
+  }
+}
+
+// THE GENERATED FORM. An app that declares `public.submit` and publishes no page of its own is
+// still a shared app a stranger meets — a survey, a signup, "count me in" — and until this existed
+// the pane told its author the app "publishes a generated form ... drawing that form here is not
+// wired up yet", which is a whole supported class of app that could not be previewed at all.
+//
+// WHAT IS FAITHFUL AND WHAT IS NOT, said plainly because the pane's first rule is that it must
+// never look kinder than production. Every DECISION is the published projection's: which fields
+// exist, their order, their labels, which are required, what type each is drawn as, and the record
+// the submission becomes — all of it from `config/public`, reduced by the same `writableFields` the
+// site calls. What is this pane's own is the MARKUP. The published site draws these inputs with its
+// own styling, so this is not the pixels a visitor sees, and it is not sandboxed because there is
+// no authored code here to sandbox — the form is derived, not written.
+const formValues = ref<Record<string, Record<string, string>>>({});
+const formSending = ref<string | null>(null);
+const formError = ref<Record<string, string>>({});
+
+const formInputs = computed<PreviewForm>(() => payload.value?.formInputs ?? {});
+
+const valueOf = (cid: string, field: string): string => formValues.value[cid]?.[field] ?? "";
+
+/** The typed value, narrowed HERE rather than asserted in the template — three element types
+ *  reach this and none of them may be assumed. */
+const onInput = (cid: string, field: string, event: Event): void => {
+  const target = event.target;
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
+    setValue(cid, field, target.value);
+  }
+};
+
+const setValue = (cid: string, field: string, value: string): void => {
+  formValues.value = { ...formValues.value, [cid]: { ...(formValues.value[cid] ?? {}), [field]: value } };
+};
+
+/** What the box is, from the schema's type. The default is a plain text box rather than nothing:
+ *  an unrecognised type is still a field the rules will accept a string in. */
+const inputType = (type: string): string => {
+  if (type === "number") return "number";
+  if (type === "date") return "date";
+  if (type === "datetime") return "datetime-local";
+  if (type === "email") return "email";
+  if (type === "boolean") return "checkbox";
+  return "text";
+};
+
+async function sendForm(cid: string): Promise<void> {
+  if (formSending.value !== null) return;
+  formSending.value = cid;
+  formError.value = { ...formError.value, [cid]: "" };
+  try {
+    // Straight to `send` with no confirmation panel. That panel exists because a SANDBOXED page
+    // asked to write on somebody's behalf and the author had to see what it was asking for; here
+    // the author typed the values themselves, and asking them to confirm their own typing would be
+    // a second button in front of the one thing this screen is for.
+    const result = await send(cid, formValues.value[cid] ?? {});
+    if (!result.ok) {
+      formError.value = { ...formError.value, [cid]: result.error ?? "write-failed" };
+      return;
+    }
+    // Cleared only on success. A refusal leaves the boxes filled so the author can fix the one
+    // field it named instead of typing the whole form again.
+    formValues.value = { ...formValues.value, [cid]: {} };
+  } finally {
+    formSending.value = null;
   }
 }
 
@@ -373,9 +469,57 @@ watch(() => props.cwd, load, { immediate: true });
     <!-- Two states that put the same empty frame on screen and mean opposite things. Saying only
          "no pages" over an app that publishes a generated form tells the author their survey cannot
          be previewed BECAUSE there is nothing there, which is untrue and unactionable. -->
-    <div v-else-if="pages.length === 0 && payload?.generatedForm" class="p-3 text-[12px] text-dim">
-      This app publishes a generated form rather than a page of its own. Drawing that form here is not wired up yet — the published site builds it from what
-      <code>public.submit</code> declares.
+    <div v-else-if="pages.length === 0 && payload?.generatedForm" class="min-h-0 flex-1 overflow-auto p-3 font-sans">
+      <p class="mb-2.5 text-[11px] leading-[1.4] text-dim">
+        This app publishes a generated form rather than a page of its own. The fields, their order and what each one accepts come from
+        <code>public.submit</code>, exactly as the published site reads them — the styling is this pane's.
+      </p>
+      <div v-for="(fields, cid) in formInputs" :key="cid" class="mb-3 rounded-[6px] border border-border p-2.5">
+        <p class="mb-2 text-[11px] text-fg">
+          <code>{{ cid }}</code>
+        </p>
+        <div v-for="field in fields" :key="field.name" class="mb-2 flex flex-col gap-1">
+          <label class="text-[11px] text-dim" :for="`mt-form-${cid}-${field.name}`">
+            {{ field.label }}<span v-if="field.required" class="text-err-text"> *</span>
+          </label>
+          <select
+            v-if="field.values"
+            :id="`mt-form-${cid}-${field.name}`"
+            class="rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg"
+            :value="valueOf(cid, field.name)"
+            @change="onInput(cid, field.name, $event)"
+          >
+            <option value="">—</option>
+            <option v-for="choice in field.values" :key="choice" :value="choice">{{ choice }}</option>
+          </select>
+          <textarea
+            v-else-if="field.type === 'text' || field.type === 'markdown'"
+            :id="`mt-form-${cid}-${field.name}`"
+            rows="3"
+            class="rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg"
+            :value="valueOf(cid, field.name)"
+            @input="onInput(cid, field.name, $event)"
+          ></textarea>
+          <input
+            v-else
+            :id="`mt-form-${cid}-${field.name}`"
+            :type="inputType(field.type)"
+            class="rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg"
+            :value="valueOf(cid, field.name)"
+            @input="onInput(cid, field.name, $event)"
+          />
+        </div>
+        <button
+          type="button"
+          class="cursor-pointer rounded-[5px] border border-border bg-btn px-2 py-[3px] text-[11px] text-fg disabled:cursor-default disabled:opacity-60"
+          :disabled="formSending !== null"
+          @click="sendForm(cid)"
+        >
+          {{ formSending === cid ? "Sending…" : "Send it" }}
+        </button>
+        <!-- The server's words, not a rephrasing. It is the side that met the rules. -->
+        <p v-if="formError[cid]" class="mt-1.5 text-[11px] leading-[1.4] text-err-text">{{ formError[cid] }}</p>
+      </div>
     </div>
     <div v-else-if="pages.length === 0" class="p-3 text-[12px] text-dim">This app publishes no pages — only its schemas. There is nothing to draw.</div>
 
@@ -426,35 +570,6 @@ watch(() => props.cwd, load, { immediate: true });
         </ul>
       </div>
 
-      <!-- WHAT THIS SESSION WROTE, and the way to take it back.
-           Kept by the pane rather than marked on the records: a public create is read with
-           `hasOnly(createFields)`, so an extra key does not annotate the document — it refuses the
-           whole write. In the database these are ordinary records, which is why forgetting them is
-           the same as leaving them, and why the offer to remove them is here rather than later. -->
-      <div v-if="written.length" class="flex-none border-t border-border px-2.5 py-1.5 font-sans">
-        <div class="flex items-center gap-2">
-          <span class="text-[11px] text-amber">{{ written.length }} record{{ written.length === 1 ? "" : "s" }} written from this preview</span>
-          <button
-            type="button"
-            class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg hover:border-accent disabled:cursor-default disabled:opacity-60"
-            :disabled="clearing"
-            title="Remove them, restoring anything they were holding"
-            @click="clearWritten"
-          >
-            {{ clearing ? "Removing…" : "Remove them" }}
-          </button>
-        </div>
-        <ul class="mt-1 flex list-none flex-col gap-0.5 p-0">
-          <li v-for="(record, index) in written" :key="index" class="text-[11px] leading-[1.4]" :class="isNamed(record) ? 'text-dim' : 'text-amber'">
-            <template v-if="isNamed(record)">{{ record.cid }} / {{ record.id }}</template>
-            <template v-else>{{ record.cid }} — the request failed after it was sent. A record may be there; this pane cannot name it.</template>
-          </li>
-        </ul>
-        <!-- Said out loud because it is the failure mode: this list is the pane's, not the
-             database's, so closing the pane loses the only record of which rows were tests. -->
-        <p class="mt-1 text-[11px] text-dim">This list is not stored. Close the pane and these become ordinary records.</p>
-      </div>
-
       <!-- THE CONFIRMATION, drawn by the parent, outside the frame.
            `event.source` proves which window sent the message; it does not prove a person asked
            for it, and the author's HTML can call submit the moment it loads. So the values are
@@ -497,5 +612,34 @@ watch(() => props.cwd, load, { immediate: true });
         </div>
       </div>
     </template>
+
+    <!-- WHAT THIS SESSION WROTE, and the way to take it back.
+           Kept by the pane rather than marked on the records: a public create is read with
+           `hasOnly(createFields)`, so an extra key does not annotate the document — it refuses the
+           whole write. In the database these are ordinary records, which is why forgetting them is
+           the same as leaving them, and why the offer to remove them is here rather than later. -->
+    <div v-if="written.length" class="flex-none border-t border-border px-2.5 py-1.5 font-sans">
+      <div class="flex items-center gap-2">
+        <span class="text-[11px] text-amber">{{ written.length }} record{{ written.length === 1 ? "" : "s" }} written from this preview</span>
+        <button
+          type="button"
+          class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg hover:border-accent disabled:cursor-default disabled:opacity-60"
+          :disabled="clearing"
+          title="Remove them, restoring anything they were holding"
+          @click="clearWritten"
+        >
+          {{ clearing ? "Removing…" : "Remove them" }}
+        </button>
+      </div>
+      <ul class="mt-1 flex list-none flex-col gap-0.5 p-0">
+        <li v-for="(record, index) in written" :key="index" class="text-[11px] leading-[1.4]" :class="isNamed(record) ? 'text-dim' : 'text-amber'">
+          <template v-if="isNamed(record)">{{ record.cid }} / {{ record.id }}</template>
+          <template v-else>{{ record.cid }} — the request failed after it was sent. A record may be there; this pane cannot name it.</template>
+        </li>
+      </ul>
+      <!-- Said out loud because it is the failure mode: this list is the pane's, not the
+             database's, so closing the pane loses the only record of which rows were tests. -->
+      <p class="mt-1 text-[11px] text-dim">This list is not stored. Close the pane and these become ordinary records.</p>
+    </div>
   </div>
 </template>

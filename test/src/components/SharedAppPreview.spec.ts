@@ -19,6 +19,8 @@ import { isRecord } from "../../../common/isRecord.js";
 
 const PAGE = "<h1>Book</h1>";
 
+const FORM_FIELD = { name: "name", label: "お名前", required: true, type: "string" };
+
 const payload = (over: Record<string, unknown> = {}) => ({
   declared: true,
   ok: true,
@@ -188,6 +190,88 @@ describe("SharedAppPreview", () => {
     // perfectly well sends the author looking for a bug that is not there.
     expect(wrapper.text()).toContain("generated form");
     expect(wrapper.text()).not.toContain("publishes no pages");
+  });
+
+  it("draws the generated form from the published inputs, and sends what was typed", async () => {
+    const { fetcher, posted } = answeringWrites(
+      { ok: true, written: { cid: "signups", id: "uid-1" } },
+      payload({
+        pages: [],
+        generatedForm: true,
+        submit: { signups: { createFields: ["name", "plan"] } },
+        formInputs: {
+          signups: [
+            { name: "name", label: "お名前", required: true, type: "string" },
+            { name: "plan", label: "Plan", required: false, type: "enum", values: ["A", "B"] },
+          ],
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+
+    const wrapper = await mountPreview();
+
+    // The LABELS the projection published, not the field names — a visitor is asked "お名前", and an
+    // author checking their declaration has to see the same thing.
+    expect(wrapper.text()).toContain("お名前");
+    // An `enum` is a select with its choices, because that is what the published site draws. A text
+    // box here would let the author submit a value the real form cannot produce.
+    const choices = wrapper.findAll("select option").map((option) => option.text());
+    expect(choices).toEqual(["—", "A", "B"]);
+
+    await wrapper.find("input").setValue("中島");
+    await wrapper.find("select").setValue("B");
+    await wrapper
+      .findAll("button")
+      .filter((button) => button.text() === "Send it")[0]
+      ?.trigger("click");
+    await settle();
+
+    expect(posted[0]?.url).toContain("/preview/submit");
+    expect(posted[0]?.body).toEqual({ cid: "signups", values: { name: "中島", plan: "B" } });
+  });
+
+  it("offers to take back what a generated form wrote", async () => {
+    // The records strip used to live inside the pages branch, so an app with only a form could
+    // write real rows and have nowhere to take them back from — the list is the ONLY place they
+    // are known to be tests.
+    const { fetcher } = answeringWrites(
+      { ok: true, written: { cid: "signups", id: "uid-1" } },
+      payload({ pages: [], generatedForm: true, submit: { signups: { createFields: ["name"] } }, formInputs: { signups: [FORM_FIELD] } }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+
+    const wrapper = await mountPreview();
+    await wrapper.find("input").setValue("中島");
+    await wrapper
+      .findAll("button")
+      .filter((button) => button.text() === "Send it")[0]
+      ?.trigger("click");
+    await settle();
+
+    expect(wrapper.text()).toContain("1 record written from this preview");
+    expect(wrapper.text()).toContain("signups / uid-1");
+  });
+
+  it("keeps the typed values when the server refuses, and says why", async () => {
+    const { fetcher } = answeringWrites(
+      { ok: false, error: "missing: お名前" },
+      payload({ pages: [], generatedForm: true, submit: { signups: { createFields: ["name"] } }, formInputs: { signups: [FORM_FIELD] } }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+
+    const wrapper = await mountPreview();
+    await wrapper.find("input").setValue("中島");
+    await wrapper
+      .findAll("button")
+      .filter((button) => button.text() === "Send it")[0]
+      ?.trigger("click");
+    await settle();
+
+    // The server's words. And the box still holds what was typed: a refusal names one field, and
+    // clearing the form would make the author retype the rest to find out.
+    expect(wrapper.text()).toContain("missing: お名前");
+    expect(wrapper.find("input").element.value).toBe("中島");
   });
 
   it("offers every tier's pages, not only the public one", async () => {
