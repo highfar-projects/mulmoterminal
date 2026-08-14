@@ -234,6 +234,11 @@ interface Step {
  *  reading it as a comment throws away the rest of the line — the call included. */
 const BEFORE_REGEX = new Set(["", "(", ",", "=", ":", "[", "!", "&", "|", "?", "{", "}", ";", "+", "-", "*", "%", "~", "^", "<", ">", "\n"]);
 
+/** After one of these, a `(…)` is a control statement's HEAD — and what follows the `)` starts a
+ *  statement, where a `/` opens a regex: `if (enabled) /[//]/.test(value);`. After anything else a
+ *  `)` closes a call or a grouping, and a `/` after it is division. */
+const CONTROL_HEAD = new Set(["if", "for", "while", "switch", "catch", "with"]);
+
 const WHITESPACE = new Set([" ", "\t", "\n", "\r"]);
 const WORD = /[\w$]/;
 
@@ -241,6 +246,18 @@ const WORD = /[\w$]/;
  *  character before the slash is `n` — the end of a keyword — so the punctuation set above reads it
  *  as division and the `//` in the class opens a comment that eats the rest of the line. */
 const KEYWORD_BEFORE_REGEX = new Set(["return", "typeof", "instanceof", "in", "of", "new", "delete", "void", "throw", "case", "do", "else", "yield", "await"]);
+
+/** What the last significant character becomes once a code character has been emitted, and the
+ *  bookkeeping that goes with it.
+ *
+ *  A `)` that closed a control statement's HEAD leaves the walker at the start of a STATEMENT,
+ *  which is where a `/` means a regex — the same position as `;` or the start of the script. So it
+ *  reports itself as that, rather than as the `)` it is. */
+const afterCode = (ch: string, out: string, heads: boolean[], prev: string, emit: string): string => {
+  if (ch === "(") heads.push(CONTROL_HEAD.has(trailingWord(out.slice(0, -1))));
+  if (ch === ")" && heads.pop() === true) return "";
+  return emit.trim() === "" ? prev : emit;
+};
 
 /** The identifier a piece of code ends with, if any. Walked from the end rather than matched: the
  *  pattern that says this (`\w+\s*$`) is the shape a linter reads as exponential backtracking, and
@@ -326,6 +343,8 @@ const bare = (source: string): string => {
   let inClass = false;
   /** The last significant character of CODE, which is what says whether a `/` starts a regex. */
   let prev = "";
+  /** One entry per open `(`: was it a control statement's head? */
+  const heads: boolean[] = [];
   while (index < source.length) {
     const ch = source[index] ?? "";
     const next = source[index + 1] ?? "";
@@ -348,7 +367,7 @@ const bare = (source: string): string => {
     const step: Walked = mode === "code" ? { ...inCode(ch, next, prev, trailingWord(out)), inClass } : { ...inside(mode, ch, next, inClass), emit: " " };
     inClass = step.inClass;
     out += step.emit;
-    if (mode === "code" && step.emit.trim() !== "") prev = step.emit;
+    if (mode === "code") prev = afterCode(ch, out, heads, prev, step.emit);
     mode = step.mode;
     index += step.skip ? 2 : 1;
   }
@@ -392,7 +411,24 @@ const CALL = /(?<![\w.$])(alert|confirm|prompt) ?\(/g;
  *  parser; what this trades away is a page that shadows the name in one function and calls the
  *  global in another, or one that shadows it and then reaches the global through `window.` — both
  *  rarer than the case above, and both on the side of missing rather than of refusing. */
-const DECLARED = /\b(?:const|let|var|function|class)\s+(alert|confirm|prompt)\b/g;
+const DECLARED = /[{}]|\b(?:const|let|var|function|class)\s+(alert|confirm|prompt)\b/g;
+
+/** The names bound at the SCRIPT'S TOP LEVEL, which are the ones that stand for the whole script.
+ *
+ *  A binding inside a function or a block does not: `function format() { const prompt = () => ""; }`
+ *  says nothing about a `prompt(…)` written outside it, and exempting the name everywhere let that
+ *  call through. Depth is counted over the code with strings and comments already removed, so a
+ *  brace in a string cannot move it. */
+const boundAtTopLevel = (code: string): Set<string> => {
+  const own = new Set<string>();
+  let depth = 0;
+  for (const hit of code.matchAll(DECLARED)) {
+    if (hit[0] === "{") depth += 1;
+    else if (hit[0] === "}") depth = Math.max(0, depth - 1);
+    else if (depth === 0 && hit[1] !== undefined) own.add(hit[1]);
+  }
+  return own;
+};
 
 /** The name of the first modal call in this page's code, or null. */
 export const modalCallIn = (html: string): string | null => {
@@ -401,7 +437,7 @@ export const modalCallIn = (html: string): string | null => {
     const qualified = QUALIFIED_CALL.exec(code);
     if (qualified !== null) return qualified[1] ?? null;
     const bareCode = code.replace(GLOBAL_RECEIVER, "");
-    const own = new Set([...bareCode.matchAll(DECLARED)].map((hit) => hit[1]));
+    const own = boundAtTopLevel(bareCode);
     const call = [...bareCode.matchAll(CALL)].find((hit) => !own.has(hit[1]));
     if (call !== undefined) return call[1] ?? null;
   }

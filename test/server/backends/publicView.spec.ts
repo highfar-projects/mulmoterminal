@@ -101,6 +101,11 @@ describe("the file a published view names", () => {
       '<script>function m(v) { return /[//]/.test(v); } prompt("name")</script>',
       // `frames` is the window, so this is the same disabled global under another name.
       '<script>frames.prompt("x")</script>',
+      // A regex as an unbraced control-statement body: the `)` before it ends a HEAD, so what
+      // follows starts a statement.
+      '<script>if (enabled) /[//]/.test(value); prompt("name")</script>',
+      // A binding inside a function says nothing about a call outside it.
+      '<script>function format() { const prompt = () => ""; } prompt("name")</script>',
       "<script>const confirm = (v) => v; frames.confirm('x');</script>",
       '<a href="javascript:prompt&lpar;&rpar;">go</a>',
       "<button ONCLICK=\"prompt('x')\">go</button>",
@@ -149,6 +154,8 @@ describe("the file a published view names", () => {
       "<script>const confirm = (value) => value; confirm(true);</script>",
       "<script>const alert = (m) => { say.textContent = m; }; alert('done');</script>",
       "<script>function prompt() {} prompt();</script>",
+      // Division after an ordinary grouping is still division.
+      "<script>const parts = (a + b) / c; ui.alert('x')</script>",
       // Division, then a real comment — the other half of the same ambiguity.
       '<script>const half = total / count; // prompt("x")\n</script>',
       // A regex that MATCHES the call is not the call.
