@@ -129,14 +129,18 @@ export const entrance = (url: string | null, tier: string, pages: readonly strin
 
 export function pageNote(memberPages: readonly string[], participantPages: readonly string[], slug: string | undefined): string[] {
   const lines: string[] = [];
+  // Hoisted rather than inlined: the address has to appear here, spelled out, for the spec beside
+  // this file to be able to see it (it reads the source — no type reaches the router).
+  const staff = slug === undefined ? null : `${MULMOSERVER_ORIGIN}/m/${slug}`;
+  const own = slug === undefined ? null : `${MULMOSERVER_ORIGIN}/p/${slug}`;
   if (memberPages.length > 0) {
     lines.push(
-      `Staff pages ${entrance(slug === undefined ? null : `${MULMOSERVER_ORIGIN}/m/${slug}`, "m", memberPages)} These are handed the app's REAL records — a page you publish here can show, and can carry off, whatever the person opening it may read. Only people holding a role in this app can open them.`,
+      `Staff pages ${entrance(staff, "m", memberPages)} These are handed the app's REAL records — a page you publish here can show, and can carry off, whatever the person opening it may read. Only people holding a role in this app can open them.`,
     );
   }
   if (participantPages.length > 0) {
     lines.push(
-      `Participant pages ${entrance(slug === undefined ? null : `${MULMOSERVER_ORIGIN}/p/${slug}`, "p", participantPages)} Each person sees only their own row, which is the rules' answer rather than the page's.`,
+      `Participant pages ${entrance(own, "p", participantPages)} Each person sees only their own row, which is the rules' answer rather than the page's.`,
     );
   }
   return lines;
