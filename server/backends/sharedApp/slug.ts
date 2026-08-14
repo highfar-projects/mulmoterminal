@@ -1,6 +1,6 @@
 // The URL name — reserving it at deploy, and flipping it public at publish.
 //
-// An app is handed out as `https://<host>/{slug}`, and `appSlugs/{slug}` is what resolves that
+// An app is handed out as `https://<host>/a/{slug}`, and `appSlugs/{slug}` is what resolves that
 // name to an aid. Two things about that document shape the whole of this file:
 //
 //   - it is a TOP-LEVEL collection, because the public page has to resolve a slug BEFORE it can

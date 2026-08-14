@@ -159,4 +159,20 @@ describe("manageSharedApp, the tool", () => {
       expect(message).toContain("signed-in Firestore session");
     }
   });
+
+  // The addresses this file prints are the ones the author hands to a visitor, and the router
+  // that serves them is in ../mulmoserver (`src/router/index.ts`): `a/:slug` is the public face,
+  // with `m/:slug`, `p/:slug` and `staging/:aid` beside it. There is NO bare `/:slug` route — it
+  // falls through to NotFound — so dropping the prefix is not a message that reads badly, it is
+  // an address that opens nothing. It shipped that way: a published app was announced as "OPEN to
+  // anonymous visitors at /meeting-rooms" while the booking page was at /a/meeting-rooms, and the
+  // author went looking for the form at the URL the tool gave them.
+  it("prints every entrance under the prefix the router actually serves", () => {
+    const source = readFileSync(new URL("../../../server/infra/shared-app-tool.ts", import.meta.url), "utf8");
+    const urls = [...source.matchAll(/(.{0,2})\/\$\{(?:result\.)?(?:slug|name)\}/g)];
+    // Not zero: a spec that passes because the strings were renamed out from under it is not a
+    // guard. Every one of them, and each under a/, m/ or p/.
+    expect(urls.length).toBeGreaterThan(3);
+    expect(urls.filter((url) => !/\/[amp]$/.test(url[1])).map((url) => url[0])).toEqual([]);
+  });
 });

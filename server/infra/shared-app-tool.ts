@@ -88,12 +88,17 @@ function provenance(commit: string | undefined, dirty: boolean): string {
   return dirty ? `Recorded commit ${commit}, but the working tree was MODIFIED — the commit does not describe what was written.` : `Recorded commit ${commit}.`;
 }
 
-/** " at /sakura-hair", or nothing. Two of these rather than an inline conditional inside a
+/** " at /a/sakura-hair", or nothing. Two of these rather than an inline conditional inside a
  *  template, because a sentence that reads well with and without the clause is the only thing
- *  worth optimising here. */
-const at = (slug: string | undefined): string => (slug === undefined ? "" : ` at /${slug}`);
+ *  worth optimising here.
+ *
+ *  The `/a/` is not decoration: the public face of an app is served at `a/:slug` and there is no
+ *  bare `/:slug` route at all — it falls through to the not-found page. An address printed here
+ *  is the one the author hands to a visitor, so a missing prefix is not a typo in a message, it
+ *  is a link that does not open the app. */
+const at = (slug: string | undefined): string => (slug === undefined ? "" : ` at /a/${slug}`);
 
-const noLonger = (slug: string | undefined): string => (slug === undefined ? "" : `, /${slug} no longer resolves`);
+const noLonger = (slug: string | undefined): string => (slug === undefined ? "" : `, /a/${slug} no longer resolves`);
 
 function recordNote(issues: number, capped: boolean): string[] {
   if (issues === 0) return [];
@@ -109,16 +114,17 @@ function recordNote(issues: number, capped: boolean): string[] {
  *  who is coming at three. The platform does not stop an owner's own page from
  *  moving an owner's own data anywhere, and does not pretend to, so the person
  *  publishing one should know that is what they are doing. */
-function pageNote(memberPages: readonly string[], participantPages: readonly string[]): string[] {
+function pageNote(memberPages: readonly string[], participantPages: readonly string[], slug: string | undefined): string[] {
   const lines: string[] = [];
+  const name = slug ?? "{slug}";
   if (memberPages.length > 0) {
     lines.push(
-      `Staff pages live at /m/{slug}: ${memberPages.join(", ")}. These are handed the app's REAL records — a page you publish here can show, and can carry off, whatever the person opening it may read. Only people holding a role in this app can open them.`,
+      `Staff pages live at /m/${name}: ${memberPages.join(", ")}. These are handed the app's REAL records — a page you publish here can show, and can carry off, whatever the person opening it may read. Only people holding a role in this app can open them.`,
     );
   }
   if (participantPages.length > 0) {
     lines.push(
-      `Participant pages published: ${participantPages.join(", ")}. Each person sees only their own row, which is the rules' answer rather than the page's.`,
+      `Participant pages live at /p/${name}: ${participantPages.join(", ")}. Each person sees only their own row, which is the rules' answer rather than the page's.`,
     );
   }
   return lines;
@@ -134,7 +140,7 @@ async function narrateDeploy(root: string, confirm: boolean): Promise<string> {
     ...(result.slug === undefined
       ? []
       : [
-          `URL name held: '${result.slug}'. It starts resolving at /${result.slug} when you publish — until then nobody can look it up, which is what keeps /staging/{aid} unguessable.`,
+          `URL name held: '${result.slug}'. It starts resolving at /a/${result.slug} when you publish — until then nobody can look it up, which is what keeps /staging/{aid} unguessable.`,
         ]),
     ...(result.pages.length > 0
       ? [
@@ -156,7 +162,7 @@ async function narratePublish(root: string, confirm: boolean): Promise<string> {
     result.publicOpen
       ? `The app is now OPEN to anonymous visitors${at(result.slug)}.`
       : "The app is NOT open to anonymous visitors — app.json declares no `public` block, so the promoted schemas are readable only by the roster.",
-    ...pageNote(result.memberPages, result.participantPages),
+    ...pageNote(result.memberPages, result.participantPages, result.slug),
     ...recordNote(result.recordIssues, result.recordIssuesCapped),
     provenance(result.commit, result.dirty),
   ].join("\n");
