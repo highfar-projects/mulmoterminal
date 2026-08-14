@@ -2990,7 +2990,7 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
    `createFields`/`selfUpdate`/`selfTransitions`、`transitions`、`idFrom` の enum、`gateOn`、
    `immutable`、`peerVisibility`、`revealGated`（親を `get()` する形）、`mail` キュー
 3. **store を `(aid, cid)` で書き直す** — PR #2209 の中身がここに入る。
-   **引き継ぎ用の切り出し: [`feat-shareable-collections-step3-store.md`](./feat-shareable-collections-step3-store.md)**
+   **引き継ぎ用の切り出し: [`feat-shareable-collections-step3-store.md`](./done/feat-shareable-collections-step3-store.md)**
    （作業は `../mulmoclaude`。#2209 の再利用できる部分とプランと衝突する部分の地図つき）
 4. ~~**discovery の 2 ソース化 + skill materialize**~~ — **落とした**（mulmoclaude #2867 を
    クローズ済み）。**使う人は Web から使い、自分の MulmoTerminal では扱わない**ので、
@@ -3000,10 +3000,10 @@ firebase firestore:delete "apps/<aid>" --recursive --project <project>
 5. ~~**publish**（git → Firestore、記名 + 事前検証 + 前版保持）~~ — **完了**
    （mulmoclaude #2860 + mulmoserver #156、`@mulmoclaude/core` 3.7.0）。
    起動は `manageCollection` の `publishApp`。**何が入り、この計画のどこが間違っていたかは
-   [`feat-shareable-collections-step5-publish.md`](./feat-shareable-collections-step5-publish.md)
+   [`feat-shareable-collections-step5-publish.md`](./done/feat-shareable-collections-step5-publish.md)
    の「着手した結果」**。残った穴は mulmoclaude #2866（同時 publish の版混在）。以下は当初の記述:
    **publish**（git → Firestore、記名 + 事前検証 + 前版保持）。
-   **引き継ぎ用の切り出し: [`feat-shareable-collections-step5-publish.md`](./feat-shareable-collections-step5-publish.md)**
+   **引き継ぎ用の切り出し: [`feat-shareable-collections-step5-publish.md`](./done/feat-shareable-collections-step5-publish.md)**
    （ルールが実際に読むフィールドの正解表、authored → published 変換表、publish が拒否する不変条件つき）。**`submitOnly` の不変条件を
    ここで拒否する**（「`audience` は投稿経路しか縛らない」参照）— リンターは作者の手元でしか
    走らないので、保証はこちらに置く

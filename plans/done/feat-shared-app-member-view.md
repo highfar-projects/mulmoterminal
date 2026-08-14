@@ -6,10 +6,10 @@
 
 | | PR | 状態 |
 |---|---|---|
-| 1 ルール（`member` / `roster`） | mulmoserver#168 | レビュー中。マージ後に**手で deploy** |
-| 2 宣言（`views[]`、core 3.14.0） | mulmoclaude#2877 | レビュー中。npm 公開は 4 より先 |
-| 3 ランタイム（`/m/{slug}`） | mulmoserver#169 | レビュー中 |
-| 4 publish（階層への書き出し） | mulmoterminal#1667 | core 3.14.0 待ちで draft |
+| 1 ルール（`member` / `roster`） | mulmoserver#168 | **マージ済み**（2026-08-13）。deploy 済み（同日 12:25 のリリース） |
+| 2 宣言（`views[]`、core 3.14.0） | mulmoclaude#2877 | **マージ済み・npm 公開済み** |
+| 3 ランタイム（`/m/{slug}`） | mulmoserver#169 | **マージ済み・deploy 済み** |
+| 4 publish（階層への書き出し） | mulmoterminal#1667 | **マージ済み** |
 
 **書き込みはこの計画には無い。** メンバーの書き込みは投稿ではなく既存レコードの更新
 （承認・担当の付け替え）で、`public.submit` ではなくロールに対して判定される。
