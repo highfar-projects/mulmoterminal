@@ -120,19 +120,16 @@ describe("QuestionPane", () => {
 
   // A click after `partial` is refused by the host by design, and a refusal closes the pane without
   // a word — so the buttons must not come back offering one.
-  it("offers no buttons for a failure that cannot be retried", () => {
-    (["partial", "unwritable"] as const).forEach((failure) => {
+  // Every failure, not only the unretryable ones. A live button after a refusal offers a click that
+  // is refused in turn — and taking it unmounts the pane, discarding both the explanation and the
+  // sentence the user had typed. The next question clears the failure and brings the controls back.
+  it("offers no controls after any failure", () => {
+    (["closed", "bad-picks", "partial", "unwritable"] as const).forEach((failure) => {
       const w = mount(QuestionPane, { props: { event: event([question("Color", ["Red", "Blue"])]), failure } });
-      expect(w.find('[data-testid="question-failure"]').exists()).toBe(true);
       expect(options(w)).toHaveLength(0);
-      expect(w.find('[data-testid="question-send-btn"]').exists()).toBe(false);
+      expect(w.find('[data-testid="question-other"]').exists()).toBe(false);
+      expect(w.find('[data-testid="question-failure"]').exists()).toBe(true);
     });
-  });
-
-  // `bad-picks` is retryable: the dialog may have moved on to a different question.
-  it("keeps the buttons for a failure that can be retried", () => {
-    const w = mount(QuestionPane, { props: { event: event([question("Color", ["Red", "Blue"])]), failure: "bad-picks" as const } });
-    expect(options(w)).toHaveLength(2);
   });
 
   it("says nothing when the last answer went out", () => {

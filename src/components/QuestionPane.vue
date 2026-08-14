@@ -33,11 +33,14 @@ const emit = defineEmits<{ answer: [picks: number[][]]; say: [text: string]; clo
 
 const questions = computed(() => props.event?.questions ?? []);
 
-// Two failures cannot be retried from here, and offering the buttons anyway guarantees a click that
-// is refused and a pane that closes saying nothing: `partial` left the dialog in a state only the
-// keyboard can resolve, and `unwritable` has no PTY to type into at all. The message stays; the
-// controls do not.
-const answerable = computed(() => props.failure !== "partial" && props.failure !== "unwritable");
+// A failure — any of them — turns the pane into an explanation. None can be retried from here:
+// `partial` left the dialog in a state only the keyboard can resolve, `unwritable` has no PTY to
+// type into, and `closed` means the dialog on screen is no longer this one. Leaving the controls
+// live would offer a click that is refused, and taking that click unmounts the pane — discarding
+// the sentence the user had typed along with the explanation of why it did not go.
+//
+// The controls come back with the next question, which clears the failure.
+const answerable = computed(() => props.failure == null);
 
 // Offered on the one shape it was measured on: a lone SINGLE-select question, where the text row's
 // Enter is the whole answer. A wizard moves on to its next question instead of finishing, and a
