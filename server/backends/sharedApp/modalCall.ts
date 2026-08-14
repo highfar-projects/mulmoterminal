@@ -27,13 +27,15 @@
  *  identically — an `onclick` and a `javascript:` href are as executable as a `<script>`, and a
  *  gate that reads only the third would pass the other two straight through. */
 const SCRIPT_BODY = /<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi;
-const INLINE_HANDLER = /\son[a-z]+\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
-const JAVASCRIPT_URL = /=\s*(?:"\s*javascript:([^"]*)"|'\s*javascript:([^']*)')/gi;
+// An attribute value may be quoted either way OR bare — `<button onclick=prompt()>` is valid HTML
+// and runs, so an extractor that insists on quotes reads a working call as no code at all.
+const INLINE_HANDLER = /\son[a-z]+\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
+const JAVASCRIPT_URL = /=\s*(?:"\s*javascript:([^"]*)"|'\s*javascript:([^']*)'|javascript:([^\s"'>]+))/gi;
 
 const scriptsOf = (html: string): string[] => [
   ...[...html.matchAll(SCRIPT_BODY)].map((hit) => hit[1] ?? ""),
-  ...[...html.matchAll(INLINE_HANDLER)].map((hit) => hit[1] ?? hit[2] ?? ""),
-  ...[...html.matchAll(JAVASCRIPT_URL)].map((hit) => hit[1] ?? hit[2] ?? ""),
+  ...[...html.matchAll(INLINE_HANDLER)].map((hit) => hit[1] ?? hit[2] ?? hit[3] ?? ""),
+  ...[...html.matchAll(JAVASCRIPT_URL)].map((hit) => hit[1] ?? hit[2] ?? hit[3] ?? ""),
 ];
 
 /** What the walker is in the middle of. `code` is the only state that reaches the match. */
@@ -93,10 +95,18 @@ const bare = (source: string): string => {
   return out;
 };
 
-/** `self["confirm"]` and `window?.prompt` reach the same globals, so they are written as the plain
- *  member access before anything else happens. Done on the RAW script because the bracket form
- *  carries the name in a string, which the walker above is about to remove. */
-const asMemberAccess = (source: string): string => source.replace(/\[\s*(["'])(alert|confirm|prompt)\1\s*\]/g, ".$2").replace(/\?\s*\./g, ".");
+/** `self["confirm"]`, `window?.prompt` and `prompt?.(…)` reach the same globals, so they are written as the plain
+ *  member access — and the plain call — before anything else happens. Done on the RAW script
+ *  because the bracket form carries the name in a string, which the walker above is about to
+ *  remove.
+ *
+ *  The optional CALL is its own replacement and must come first: `prompt?.(` left to the property
+ *  rule becomes `prompt.(`, which matches nothing and so reads as no call at all. */
+const asMemberAccess = (source: string): string =>
+  source
+    .replace(/\[\s*(["'])(alert|confirm|prompt)\1\s*\]/g, ".$2")
+    .replace(/\?\s*\.\s*\(/g, "(")
+    .replace(/\?\s*\./g, ".");
 
 /** The receivers that ARE the global. Dropped so the one pattern below sees a bare call, while a
  *  receiver of the author's own (`ui.alert`, `this.confirm`) keeps its dot and is left alone. */

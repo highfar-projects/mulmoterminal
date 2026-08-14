@@ -70,6 +70,11 @@ describe("the file a published view names", () => {
       '<script>const cdn = "//cdn.example/x"; prompt("name");</script>',
       "<button onclick=\"prompt('name')\">go</button>",
       "<a href=\"javascript:confirm('sure')\">go</a>",
+      // An attribute value does not have to be quoted, and an optional call is still a call.
+      "<button onclick=prompt()>go</button>",
+      "<a href=javascript:confirm()>go</a>",
+      '<script>prompt?.("name")</script>',
+      '<script>window.prompt?.("name")</script>',
     ]) {
       const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
       expect(result.ok).toBe(false);
