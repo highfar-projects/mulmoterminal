@@ -39,9 +39,64 @@ const TAG_NAME = /<[a-z][a-z0-9-]*/gi;
 // and runs, so an extractor that insists on quotes reads a working call as no code at all.
 const ATTRIBUTE = /\s([a-z][a-z0-9-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
 
-/** A named reference worth the table: the ones a page actually contains. Anything else is left as
- *  written — an unknown name decodes to itself, which can only cost a miss, never a false alarm. */
-const NAMED_REFERENCE: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", Tab: "\t", NewLine: "\n" };
+/** Every named character reference that stands for an ASCII character, which is the closed set
+ *  that matters here.
+ *
+ *  A name can only help spell a call if what it produces is ASCII: `prompt` and `javascript` are
+ *  letters, and no named reference produces a plain ASCII letter — the ones that exist are accented
+ *  or Greek. So the punctuation and spaces below are the whole of what an encoded attribute can
+ *  contribute, and `javascript&colon;confirm&lpar;&rpar;` is covered by naming them.
+ *
+ *  Legacy uppercase spellings (`&AMP;`) are here because browsers still take them; the rest are
+ *  case-SENSITIVE on purpose — `&Colon;` is U+2237, a different character entirely. */
+const NAMED_REFERENCE: Record<string, string> = {
+  Tab: "\t",
+  NewLine: "\n",
+  excl: "!",
+  quot: '"',
+  QUOT: '"',
+  num: "#",
+  dollar: "$",
+  percnt: "%",
+  amp: "&",
+  AMP: "&",
+  apos: "'",
+  lpar: "(",
+  rpar: ")",
+  ast: "*",
+  midast: "*",
+  plus: "+",
+  comma: ",",
+  period: ".",
+  sol: "/",
+  colon: ":",
+  semi: ";",
+  lt: "<",
+  LT: "<",
+  equals: "=",
+  gt: ">",
+  GT: ">",
+  quest: "?",
+  commat: "@",
+  lsqb: "[",
+  lbrack: "[",
+  bsol: "\\",
+  rsqb: "]",
+  rbrack: "]",
+  Hat: "^",
+  lowbar: "_",
+  grave: "`",
+  DiacriticalGrave: "`",
+  lcub: "{",
+  lbrace: "{",
+  verbar: "|",
+  vert: "|",
+  VerticalLine: "|",
+  rcub: "}",
+  rbrace: "}",
+  nbsp: " ",
+  NonBreakingSpace: " ",
+};
 
 /** An attribute value as the BROWSER sees it.
  *
@@ -64,7 +119,8 @@ const decoded = (value: string): string =>
  *  Decided AFTER decoding, since the scheme itself can be written `java&#x73;cript:`. */
 const attributeCode = (name: string, raw: string): string | null => {
   const value = decoded(raw);
-  if (name.startsWith("on")) return value;
+  // `ONCLICK` runs exactly like `onclick`: an attribute name is case-insensitive.
+  if (name.toLowerCase().startsWith("on")) return value;
   const url = value.trimStart();
   return /^javascript:/i.test(url) ? url.slice(url.indexOf(":") + 1) : null;
 };
