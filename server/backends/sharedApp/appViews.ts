@@ -62,7 +62,7 @@ export interface TierPlan {
   config: Record<string, unknown> | null;
 }
 
-export type TierPlanResult = { ok: true; plans: TierPlan[] } | { ok: false; problems: string[] };
+export type TierPlanResult = { ok: true; plans: TierPlan[]; warnings: string[] } | { ok: false; problems: string[] };
 
 /** A participant page naming a collection the rules will not open for them.
  *
@@ -107,6 +107,7 @@ function unreachableProblems(
 export async function planAppViewTiers(root: string, authored: AuthoredApp, stamp: PublishStamp): Promise<TierPlanResult> {
   const tiers: AppViewTier[] = projectAppViews(authored, stamp);
   const problems: string[] = [];
+  const warnings: string[] = [];
   const plans: TierPlan[] = [];
   const participantRead = authored.participantRead ?? [];
   for (const tier of tiers) {
@@ -114,12 +115,14 @@ export async function planAppViewTiers(root: string, authored: AuthoredApp, stam
     for (const view of tier.views) {
       problems.push(...unreachableProblems(authored, view, tier.audience, participantRead));
       const read = await readAppViewFile(root, view, stamp.publishedAt, view.where);
-      if (read.ok) pages.push({ id: view.id, html: read.view.html });
-      else problems.push(...read.problems);
+      if (read.ok) {
+        pages.push({ id: view.id, html: read.view.html });
+        warnings.push(...read.view.warnings);
+      } else problems.push(...read.problems);
     }
     plans.push({ tier: tier.tier, pages, config: tier.views.length > 0 ? tier.config : null });
   }
-  return problems.length > 0 ? { ok: false, problems } : { ok: true, plans };
+  return problems.length > 0 ? { ok: false, problems } : { ok: true, plans, warnings };
 }
 
 /** Document ids in a tier that this operation is about to write, at one stage. */
@@ -267,7 +270,7 @@ export async function planTierWrites(
   handle: SharedAppHandle,
   aid: string,
   request: { root: string; authored: AuthoredApp; stamp: PublishStamp },
-): Promise<{ ok: true; tiers: PlannedTier[]; deployId: string } | SharedAppFailure> {
+): Promise<{ ok: true; tiers: PlannedTier[]; deployId: string; warnings: string[] } | SharedAppFailure> {
   const planned = await planAppViewTiers(request.root, request.authored, request.stamp);
   if (!planned.ok) return { ok: false, partial: false, problems: planned.problems };
   const tiers: PlannedTier[] = [];
@@ -276,7 +279,7 @@ export async function planTierWrites(
     if (!stale.ok) return stale;
     tiers.push({ plan, stale: stale.ids });
   }
-  return { ok: true, tiers, deployId: randomUUID() };
+  return { ok: true, tiers, deployId: randomUUID(), warnings: planned.warnings };
 }
 
 /** The writes for every tier, in one list. */

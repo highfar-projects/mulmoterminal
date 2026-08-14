@@ -360,7 +360,9 @@ entry per page, each naming **who it is for**:
   the values in a dialog of its own and writes only when the visitor accepts — so between the
   click and the answer, nothing has been sent and the promise is simply waiting for a person. A
   page that says 送信中… there is describing a step that has not happened, and reads as stuck.
-- **`alert`, `confirm` and `prompt` DO NOTHING.** Every view — public, staff, participant — is
+- **`alert`, `confirm` and `prompt` DO NOTHING.** (`deploy` and `publish` warn when a page looks
+  like it calls one, and go through anyway — the check reads the page without parsing it, so it
+  is a hint, not a verdict. A page it stays quiet about can still be wrong.) Every view — public, staff, participant — is
   rendered in `sandbox="allow-scripts"`, and without `allow-modals` the browser ignores the call
   and logs *"Ignored call to 'prompt()'. The document is sandboxed, and the 'allow-modals'
   keyword is not set."* Nothing throws, so a page that asks for a name with `prompt` submits an

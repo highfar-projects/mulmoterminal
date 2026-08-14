@@ -63,6 +63,8 @@ export const viewDocumentBytes = (doc: PublicViewDoc): number => Buffer.byteLeng
 export interface ViewFile {
   html: string;
   bytes: number;
+  /** What is wrong with this page but does not stop it going out. See `viewWarnings`. */
+  warnings: string[];
 }
 
 export type ViewFileResult = { ok: true; view: ViewFile } | { ok: false; problems: string[] };
@@ -90,7 +92,12 @@ export async function readAppViewFile(root: string, view: { path: string }, publ
   const opened = await openContained(inside.full, view.path, where);
   if (!opened.ok) return opened;
   const bytes = viewDocumentBytes({ html: opened.html, publishedAt });
-  return contentProblems(opened.html, bytes, view.path, where) ?? { ok: true, view: { html: opened.html, bytes } };
+  return (
+    contentProblems(opened.html, bytes, view.path, where) ?? {
+      ok: true,
+      view: { html: opened.html, bytes, warnings: viewWarnings(opened.html, view.path, where) },
+    }
+  );
 }
 
 /** Read the file, through a handle that cannot be talked into reading another
@@ -208,6 +215,30 @@ async function containedPath(root: string, declared: string, where: string): Pro
   };
 }
 
+/** What this page will probably get wrong, said WITHOUT stopping it.
+ *
+ *  A modal call is a real defect — the frame runs sandboxed with no `allow-modals`, so `alert`,
+ *  `confirm` and `prompt` are ignored, nothing throws, and `confirm` answers `false` — but reading
+ *  a page for one means reading HTML and JavaScript with something that is not a parser for either.
+ *  Over one review of this check that produced 12 misses and 9 FALSE ALARMS, and the false alarms
+ *  were the expensive half: each refused a page that works, and several refused the very shape the
+ *  skill tells authors to write (`const alert = (m) => …`, an `alert()` mentioned in prose, a
+ *  `type="text/plain"` sample). A refusal has to be right; a warning only has to be useful.
+ *
+ *  So this reports and publish goes on. What the author cannot be told at all is the far worse
+ *  case, and that belongs to the runtime instead — see `plans/feat-shared-app-view-diagnostics.md`. */
+export function viewWarnings(html: string, declared: string, where: string): string[] {
+  const modal = modalCallIn(html);
+  if (modal === null) return [];
+  return [
+    `${where}.path names '${declared}', which appears to call \`${modal}()\`. Views run sandboxed with no \`allow-modals\`, so the browser ignores all three of ` +
+      "`alert`, `confirm` and `prompt` — nothing appears, nothing throws, and `confirm` answers `false`. " +
+      "A page built on one asks nobody for the value it then sends, or draws a button that silently does nothing. " +
+      "Ask with an `<input>` in the page, answer in an element of its own, and make a confirmation a second press rather than a modal. " +
+      "(Published anyway: this is read without parsing the page, so it can be wrong.)",
+  ];
+}
+
 function contentProblems(html: string, bytes: number, declared: string, where: string): { ok: false; problems: string[] } | null {
   if (bytes > MAX_VIEW_BYTES) {
     return {
@@ -216,18 +247,6 @@ function contentProblems(html: string, bytes: number, declared: string, where: s
         `${where}.path names '${declared}', which comes to ${bytes.toLocaleString()} bytes as a Firestore document — over the ${MAX_VIEW_BYTES.toLocaleString()} this publishes. ` +
           "The hard limit is 1 MiB per document and it counts field names and string lengths, not the file on disk, so the margin is not spare room. " +
           "Move what is big out of the page: the datasets arrive from the app, not from the HTML.",
-      ],
-    };
-  }
-  const modal = modalCallIn(html);
-  if (modal !== null) {
-    return {
-      ok: false,
-      problems: [
-        `${where}.path names '${declared}', which calls \`${modal}()\`. Views run sandboxed with no \`allow-modals\`, so the browser ignores all three of ` +
-          "`alert`, `confirm` and `prompt` — nothing appears, nothing throws, and `confirm` answers `false`. " +
-          "Published as it stands, this page would ask nobody for the value it then sends, or draw a button that silently does nothing. " +
-          "Ask with an `<input>` in the page, answer in an element of its own, and make a confirmation a second press rather than a modal.",
       ],
     };
   }

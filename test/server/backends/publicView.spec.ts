@@ -43,12 +43,16 @@ describe("the file a published view names", () => {
     expect(result.ok && result.view.html).toContain("<div id='grid'></div>");
   });
 
-  it("refuses a page that asks through a modal the sandbox eats", async () => {
+  it("WARNS about a page that asks through a modal the sandbox eats", async () => {
     // `sandbox="allow-scripts"` with no `allow-modals`: the browser ignores all three, nothing
     // throws, and `confirm` answers `false`. So a page built on `prompt` submits the value it
     // never asked for, and a withdrawal behind `confirm` is a dead button — with one console line
     // as the only sign. Every shipped template used to be written this way, and the author who
     // hit it reported the app as broken.
+    //
+    // Warned rather than refused: reading a page for this means reading HTML and JavaScript with
+    // something that is not a parser for either, and the false alarms it produced were the
+    // expensive half — each one refused a page that works. See `viewWarnings`.
     // Including through the receivers that ARE the global: `window.prompt(…)` is `prompt(…)`, and
     // the sandbox eats it identically — exempting it with everything else that carries a dot let
     // the silent failure straight back in.
@@ -125,8 +129,8 @@ describe("the file a published view names", () => {
       "<script>const n = `${ `${alert('deep')}` }`;</script>",
     ]) {
       const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
-      expect(result.ok).toBe(false);
-      expect(result.ok === false && result.problems.join(" ")).toContain("allow-modals");
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.view.warnings.join(" ")).toContain("allow-modals");
     }
   });
 
@@ -182,7 +186,9 @@ describe("the file a published view names", () => {
       "<script>const re = /prompt\\(/g;</script>",
     ].join("\n");
     const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
-    expect(result.ok).toBe(true);
+    // Not merely published — SILENT. Now that a modal only warns, `ok` alone would pass on a page
+    // this still misread, and the warning is the thing that would be wrong.
+    expect(result.ok && result.view.warnings).toEqual([]);
   });
 
   it("leaves a method of the page's own — and a comment about the rule — alone", async () => {
@@ -191,7 +197,7 @@ describe("the file a published view names", () => {
     // refusal an author cannot act on would be worse than the bug it is about.
     const html = "<script>// confirm() は使えない\nui.alert('hi'); row.confirm(1); /* prompt() も */</script>";
     const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
-    expect(result.ok).toBe(true);
+    expect(result.ok && result.view.warnings).toEqual([]);
   });
 
   it("refuses a path that names nothing", async () => {

@@ -103,6 +103,10 @@ const at = (slug: string | undefined): string => (slug === undefined ? "" : ` at
 
 const noLonger = (slug: string | undefined): string => (slug === undefined ? "" : `, ${MULMOSERVER_ORIGIN}/a/${slug} no longer resolves`);
 
+/** What was said about a page without stopping it. Prefixed so it cannot be read as a refusal —
+ *  the operation went through, and the author is being told something to look at. */
+const warningNote = (warnings: readonly string[]): string[] => warnings.map((warning) => `Warning: ${warning}`);
+
 function recordNote(issues: number, capped: boolean): string[] {
   if (issues === 0) return [];
   const count = capped ? `at least ${issues}` : String(issues);
@@ -164,6 +168,7 @@ async function narrateDeploy(root: string, confirm: boolean): Promise<string> {
         ]
       : []),
     ...(result.withdrawn.length > 0 ? [`Withdrawn from staging (no longer in this repository): ${result.withdrawn.join(", ")}.`] : []),
+    ...warningNote(result.warnings),
     ...recordNote(result.recordIssues, result.recordIssuesCapped),
     provenance(result.commit, result.dirty),
   ].join("\n");
@@ -179,6 +184,7 @@ async function narratePublish(root: string, confirm: boolean): Promise<string> {
       ? `The app is now OPEN to anonymous visitors${at(result.slug)}.`
       : "The app is NOT open to anonymous visitors — app.json declares no `public` block, so the promoted schemas are readable only by the roster.",
     ...pageNote(result.memberPages, result.participantPages, result.slug),
+    ...warningNote(result.warnings),
     ...recordNote(result.recordIssues, result.recordIssuesCapped),
     provenance(result.commit, result.dirty),
   ].join("\n");
