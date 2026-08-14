@@ -178,3 +178,20 @@ describe("saying something else", () => {
     expect(w.find('[data-testid="question-other"]').exists()).toBe(false);
   });
 });
+
+// The question is already declined by the time this can happen, so there is nothing to re-offer the
+// words through — handing them back is all that is left, and losing them silently is not an option.
+describe("words the terminal would not take", () => {
+  it("hands them back, even with no question left", () => {
+    const w = mount(QuestionPane, { props: { event: null, unsentText: "use green instead" } });
+
+    const note = w.find('[data-testid="question-unsent"]');
+    expect(note.exists()).toBe(true);
+    expect(note.text()).toContain("use green instead");
+  });
+
+  it("says nothing when there is nothing unsent", () => {
+    const w = mount(QuestionPane, { props: { event: null } });
+    expect(w.find('[data-testid="question-unsent"]').exists()).toBe(false);
+  });
+});

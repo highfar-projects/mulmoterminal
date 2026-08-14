@@ -485,6 +485,10 @@ const questionBox = createQuestionBox(fetchOpenQuestion);
 // zoom moves, so it can only ever describe the buttons currently on screen.
 const answerFailure = ref<AnswerFailure | null>(null);
 
+// Words the user meant to say instead of choosing, that the terminal would not take (#1693). Kept
+// so they are returned rather than dropped — the question they replaced is already declined.
+const unsentText = ref<string | null>(null);
+
 const expandedQuestion = computed(() => (expandedSessionId.value ? (questionBox.questions.value.get(expandedSessionId.value) ?? null) : null));
 
 // Answered — in the terminal, in the pane, or cancelled with Esc. The pane goes with the question
@@ -499,6 +503,7 @@ const unsubscribeQuestion = subscribeSession(ASK_QUESTION_CHANNEL, (data) => {
   if (isAskQuestionEvent(data)) {
     questionBox.offer(data);
     answerFailure.value = null;
+    unsentText.value = null;
     // Opened for the user, not merely made available: a question nobody sees is a session that
     // sits blocked. Only for the cell already on screen — enlarging some other cell to reveal a
     // pane would take the user off whatever they were reading.
@@ -529,6 +534,7 @@ watch(
   expandedSessionId,
   async (sessionId) => {
     answerFailure.value = null;
+    unsentText.value = null;
     if (sessionId) await revealQuestion(sessionId);
   },
   { immediate: true },
@@ -556,6 +562,13 @@ function dismissQuestionPane(): void {
 async function sayInsteadOfChoosing(text: string): Promise<void> {
   const event = expandedQuestion.value;
   if (!event || props.expandedUid === null) return;
+  const slot = `cell-${props.expandedUid}`;
+  // Asked BEFORE declining, because declining cannot be taken back: it ends the question, and the
+  // words that were meant to replace it would have nowhere to go.
+  if (!conn.canSend(slot)) {
+    answerFailure.value = "unwritable";
+    return;
+  }
   dropQuestion(event.sessionId);
   const failure = await postDecline(event.sessionId, event.toolUseId);
   if (failure) {
@@ -563,7 +576,9 @@ async function sayInsteadOfChoosing(text: string): Promise<void> {
     await revealQuestion(event.sessionId);
     return;
   }
-  conn.submitText(`cell-${props.expandedUid}`, text);
+  // The question is gone now. If the socket went with it in between, the words must not go quietly:
+  // hand them back rather than leave the user believing they were sent.
+  if (!conn.submitText(slot, text)) unsentText.value = text;
 }
 
 // Answering the enlarged cell's dialog. The picks go to the host, which turns them into the
@@ -1328,6 +1343,7 @@ watch(
           v-else-if="rightPane === 'question'"
           :event="expandedQuestion"
           :failure="answerFailure"
+          :unsent-text="unsentText"
           :expanded="paneFull"
           :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
           @answer="answerQuestion"

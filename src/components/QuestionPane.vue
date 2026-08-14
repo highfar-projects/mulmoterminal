@@ -18,6 +18,9 @@ const props = defineProps<{
   // way, and coming back with no explanation is the failure mode this exists to avoid — pressing
   // them again would fail the same way, silently.
   failure?: AnswerFailure | null;
+  // Words the terminal would not take after the question was already declined. Shown so they are
+  // handed back rather than lost — there is no question left to re-offer them through.
+  unsentText?: string | null;
   expanded?: boolean;
 }>();
 
@@ -124,6 +127,11 @@ function choose(qi: number, oi: number): void {
     </div>
 
     <div class="flex-1 overflow-y-auto px-4 py-3 font-sans text-[13px] text-fg">
+      <div v-if="unsentText" data-testid="question-unsent" class="mb-3 rounded border border-border bg-panel px-3 py-2 text-[12px]" role="alert">
+        <p class="mb-1">The question was declined, but this message could not be sent — the terminal was not connected. Copy it before closing.</p>
+        <p class="font-mono break-words whitespace-pre-wrap">{{ unsentText }}</p>
+      </div>
+
       <p v-if="!event" class="text-dim">Nothing is being asked right now. The pane opens by itself when this session asks something.</p>
 
       <template v-else>
