@@ -39,10 +39,7 @@
     "bookings": {
       "submitOnly": true,
       "statusField": "status",
-      "transitions": {
-        "initial": ["booked"],
-        "booked": ["cancelled"]
-      }
+      "transitions": { "initial": ["booked"] }
     },
     "slots": { "mirrorOf": "bookings" }
   },
@@ -69,7 +66,6 @@
           "untilField": { "ref": "slot", "collection": "slots", "field": "closesAt" }
         },
         "selfUpdate": { "booked": ["purpose", "attendees"] },
-        "selfTransitions": { "booked": ["cancelled"] },
         "selfDelete": ["booked"]
       }
     }
@@ -104,7 +100,7 @@
     "slot": { "type": "string", "label": "枠", "required": true },
     "purpose": { "type": "string", "label": "用件" },
     "attendees": { "type": "number", "label": "人数" },
-    "status": { "type": "enum", "label": "状態", "values": ["booked", "cancelled"] }
+    "status": { "type": "enum", "label": "状態", "values": ["booked"] }
   }
 }
 ```
@@ -190,9 +186,9 @@
 
 ## views/mine.html — 自分の予約と、取り下げ
 
-`audience: "participant"`、入口は `/p/{slug}`。ここに**取り下げのボタンを描かないと
-`selfDelete` は使われません** — 状態を `cancelled` にするだけの取り消しでは枠が空かないので、
-テンプレートの売りがそのまま消えます。
+`audience: "participant"`、入口は `/p/{slug}`。**ここに取り下げのボタンを描かないと、
+本人には取り消す手段が何もありません** — このテンプレートは本人の状態遷移を持たないので
+（下の「取り消しには 2 通りある」）、`withdraw` がその唯一の出口です。
 
 `viewer.can.<cid>.withdrawFrom` は**取り下げてよい状態の一覧**で、真偽値ではありません。
 その状態にある行にだけボタンを出します。
@@ -248,30 +244,36 @@ publish されます。総務の Mac が閉じたままでも、受付が自分�
 
 ---
 
-## 取り消しには 2 つある — どちらを出すか決めること
+## 取り消しには 2 通りある — **混ぜないこと**
 
 排他は「枠の id = 予約の id」で成立しているので、**状態を `cancelled` にしただけでは枠は
 空きません**。ドキュメントが残り、id を握ったままだからです。
 
-そこで、この宣言には**取り消しが 2 通り**あります。
-
-| 宣言 | 何が起きるか | 枠 | 記録 | 通知 |
+| やり方 | 何が起きるか | 枠 | 記録 | 通知 |
 |---|---|---|---|---|
-| `selfTransitions` の `booked → cancelled` | 状態が変わるだけ | **空かない**（受付が消すまで） | 残る | 出せる |
-| `selfDelete: ["booked"]` | **行が消える** | **その場で開く** | 残らない | 出せない |
+| **状態遷移**（`selfTransitions` で `cancelled` へ） | 状態が変わるだけ | **空かない**（受付が消すまで） | 残る | 出せる |
+| **取り下げ**（`selfDelete`） | **行が消える** | **その場で開く** | 残らない | 出せない |
 
-上のテンプレートは `selfDelete` を入れてあります。会議室では「押したら空く」が欲しいものだから
-です。**メールが出せないのは仕組み上の限界**で、メールの規則は書き込み後の文書を読んで
-「その遷移が本当に起きた」を確かめるため、消える行には束ねようがありません。
+**両方を本人に渡してはいけません。** このテンプレートが `selfTransitions` を持たないのは
+そのためです。両方あると、本人が先に「取り消し」を押した時点で行は `cancelled` になり、
+`selfDelete: ["booked"]` はもうその行に効きません — **本人の操作で、受付にしか片づけられない
+枠ができてしまう**。しかも `withdraw` を描いていないページや、宣言より古い publish 済みの
+ページからでも、`transition` は文書化された呼び出しとして通ります。
+どちらか一方だけを宣言してください。
+
+- **押したら空いてほしい**（会議室、席、機材）→ このテンプレートのまま。`transitions` は
+  `initial` だけ、状態は `booked` の 1 つ、本人の出口は `withdraw` だけ
+- **記録を残したい**（有料の貸出、社外向け、無断キャンセルの常習を見たい）→ `selfDelete` を
+  書かず、`selfTransitions` で `cancelled` に落とす形（美容室の
+  [salon.md](./salon.md) がそれ）。枠を空けるのは受付の操作になるので、**「取り消しは即時、
+  枠が再び開くのは受付が処理してから」と最初に言うこと**
 
 `selfDelete` を入れると、本人の取り下げは**削除と枠の再オープンが 1 つのバッチ**になります。
 片方だけの書き込みはルールが拒否するので、「予約は消えたのに枠は埋まったまま」も
 「枠は開いたのに予約が残っている」も作れません。
 
-**記録を残したい場合は `selfDelete` を書かないこと。** その場合、取り消しは状態遷移だけになり、
-枠を空けるのは受付（`editor` 以上）の操作になります。「取り消しは即時、枠が再び開くのは受付が
-処理してから」と最初に言っておかないと、問い合わせになります。無断キャンセルの常習を見たい
-運用（有料の貸出、社外向け）はこちら。
+**メールが出せないのは仕組み上の限界**です。メールの規則は書き込み後の文書を読んで
+「その遷移が本当に起きた」を確かめるので、消える行には束ねようがありません。
 
 設計と経緯は MulmoTerminal の `plans/feat-shared-app-self-delete.md`。
 

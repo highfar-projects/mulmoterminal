@@ -283,6 +283,12 @@ an update, which the public submission path never allows. Firestore decides that
   (the queue rule reads the document after the write, and there is none). An app that wants the
   record kept names no status and sends its people to the desk. Say which one the user is
   choosing — it is not a detail they discover later.
+  **Do not give a participant both.** `selfTransitions` to `cancelled` alongside
+  `selfDelete: ["booked"]` reads as two ways to cancel and is a one-way trap: the transition
+  lands the row in a status `selfDelete` no longer names, so the person has, with a documented
+  bridge call, turned a slot nobody can free into staff cleanup. Declare one of them per
+  collection — and remember an old published page still reaches whatever the declaration allows,
+  so removing the button is not removing the move.
 - **These five keys freeze once records exist.** `confirm` does not override that, because what
   breaks is not a visible schema mismatch — it is the exclusivity itself, silently, in an app that
   goes on working. Say so before an author starts renaming things.
