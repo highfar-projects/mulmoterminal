@@ -141,6 +141,9 @@ export interface AppConfig {
   // asked for: answering from the pane types into the live terminal dialog, so a user who has
   // not asked for it should not have a pane driving their keyboard. The terminal dialog is
   // unaffected either way — the pane is a second way to answer it, never a replacement.
+  //
+  // The PANE only. The phone answers the same questions whatever this says (mulmoserver#182):
+  // there, nobody is at the keyboard the pane would be competing with.
   questionPaneEnabled: boolean;
   // Pick up a project's own favicon when its `.mulmoterminal.json` names no `icon` (#1428).
   // ON unless turned off, unlike the opt-in flags above: it shows a picture the repository

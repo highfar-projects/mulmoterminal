@@ -149,6 +149,9 @@ unless written.
   not something to switch on for someone who did not ask for it.
 - **Claude sessions only.** The choices arrive on Claude Code's own tool hooks; a codex or shell
   cell has nothing to publish, so the pane never opens there.
+- **This is the pane, not the phone.** MulmoTerminal on a phone answers the same questions whether
+  this is on or off — the switch exists because a pane types into the terminal you are sitting at,
+  and on the phone nobody is at that keyboard.
 - The pane opens **by itself** on the enlarged cell when that session asks something, and drops its
   buttons as soon as the question is answered — in the terminal, in the pane, or with Esc.
 - **Settings → Terminal keys has a checkbox for it**, applied immediately. Point at that when the

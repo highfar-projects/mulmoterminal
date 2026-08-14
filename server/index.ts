@@ -794,6 +794,10 @@ initRemoteHostBackend({
   writeToSession,
   // The same two functions the browser's pane reaches through /api/question (#1685): one place
   // decides whether a dialog is still open, and one place decides which bytes reach the PTY.
+  // DELIBERATELY not gated on `questionPaneEnabled`, unlike the browser's /api/question. That
+  // setting is about the PANE — a panel that types into the terminal you are sitting at, next to
+  // the dialog it is answering. The phone is the case where nobody is at that keyboard, which is
+  // the whole reason it exists, so it stays available. Do not "fix" the asymmetry.
   openQuestion: async (id) => openQuestionOf(await toolStores.toolCallsStore.get(id), id),
   answerQuestion: (id, toolUseId, picks, text) => answerQuestionOnHost(id, toolUseId, picks, (sid) => toolStores.toolCallsStore.get(sid), text),
   canClearBox: remoteHostCanClearBox,
