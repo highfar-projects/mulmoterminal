@@ -34,6 +34,7 @@ function asPayload(value: unknown): SharedAppPreview | null {
   if (!isRecord(value)) return null;
   return {
     aid: typeof value.aid === "string" ? value.aid : "",
+    submit: asSubmit(value.submit),
     pages: Array.isArray(value.pages) ? value.pages.flatMap(asPage) : [],
     publicOpen: value.publicOpen === true,
     fromLiveApp: value.fromLiveApp === true,
@@ -43,6 +44,14 @@ function asPayload(value: unknown): SharedAppPreview | null {
     warnings: strings(value.warnings),
   };
 }
+
+/** What a public create may carry, per collection. Narrowed with a floor of `[]` rather than
+ *  dropped: an unreadable declaration must make the parent refuse a FIELD, not refuse the whole
+ *  collection — the two refusals name different repositories to whoever reads them. */
+const asSubmit = (value: unknown): Record<string, { createFields: string[] }> => {
+  if (!isRecord(value)) return {};
+  return Object.fromEntries(Object.entries(value).map(([cid, spec]) => [cid, { createFields: isRecord(spec) ? strings(spec.createFields) : [] }]));
+};
 
 const strings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : []);
 
@@ -105,10 +114,20 @@ const bridge = viewBridge(
     // exists to catch, and it would be a poor joke to ship it here first. Writing goes to the real
     // Firestore, with a mark and a way to clear it (the plan's section 5); until that lands the
     // view is told why.
+    //
+    // A submission only reaches this after the parent has judged it against the declaration below,
+    // which is the point: `unknown-collection`, `not-a-submission` and `undeclared-field` are the
+    // three findings a preview is FOR, and this line is what a correct submission is told.
     submit: () => Promise.resolve({ ok: false, error: "preview-cannot-write-yet" }),
     state: () => datasets.value,
   },
-  () => (payload.value === null ? null : { submit: {} }),
+  // The REAL declaration, never an empty map.
+  //
+  // An empty one does not switch the check off — it makes the parent refuse every submission with
+  // `unknown-collection`, which reads as "the cid your page submits to is not declared" about a
+  // declaration that is correct. That shipped, and it sent an author debugging the wrong
+  // repository: the page was fine, the app was fine, and the preview was the only thing wrong.
+  () => (payload.value === null ? null : { submit: payload.value.submit }),
   () => nonce.value,
   cells,
 );

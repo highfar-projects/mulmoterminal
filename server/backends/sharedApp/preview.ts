@@ -158,6 +158,21 @@ const asRequested = (value: unknown): RequestedCollection[] => {
   ];
 };
 
+/** What a public create may carry, per collection, lifted out of the projection.
+ *
+ *  The projection types `submit` loosely (`Record<string, Record<string, unknown>>`) because the
+ *  rules read those keys by the author's own names. Only `createFields` is read on this side, and
+ *  it is narrowed here rather than at the frame, so a declaration missing it becomes "this
+ *  collection accepts no fields" instead of a crash in the parent. */
+function submitDeclarations(config: PublishedConfigDoc): Record<string, { createFields: string[] }> {
+  return Object.fromEntries(
+    Object.entries(config.submit ?? {}).map(([cid, spec]) => [
+      cid,
+      { createFields: Array.isArray(spec.createFields) ? spec.createFields.filter((field): field is string => typeof field === "string") : [] },
+    ]),
+  );
+}
+
 /** The public page has no view id of its own — it is the app's one anonymous face, and the
  *  projection names it nowhere. */
 const PUBLIC_PAGE_ID = "public";
@@ -212,6 +227,7 @@ export async function previewSharedApp(root: string, opts: SharedAppOptions = {}
   return {
     ok: true,
     aid,
+    submit: submitDeclarations(face.config),
     config: face.config,
     form,
     pages,

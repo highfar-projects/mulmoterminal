@@ -233,6 +233,18 @@ describe("shared app preview", () => {
     expect(docs.writes).toEqual([]);
   });
 
+  it("carries what a public create may contain, so the parent can judge a submission", async () => {
+    writeApp(root, declaration({ public: { read: ["bookings"], submit: { bookings: { auth: "verifiedEmail", createFields: ["note"] } } } }));
+
+    const result = await previewSharedApp(root, stamp);
+    expect(result.ok === false ? result.problems : []).toEqual([]);
+
+    // Without this the parent in the browser has nothing to check against, and it does not fall
+    // open — it refuses EVERY submission as `unknown-collection`, which reads as "your declaration
+    // is wrong" about a declaration that is right.
+    expect(result.ok && result.submit).toEqual({ bookings: { createFields: ["note"] } });
+  });
+
   it("carries the live app's keys forward when there is one to read", async () => {
     docs.store.set(
       "apps",

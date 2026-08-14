@@ -36,6 +36,15 @@ export const previewPageKey = (audience: PreviewAudience, id: string): string =>
 
 export interface SharedAppPreview {
   aid: string;
+  /** What a public create may carry, per collection, exactly as the published config declares it.
+   *
+   *  Carried to the browser because the PARENT judges a submission against it — an unknown cid, a
+   *  value that is not a string, a field outside `createFields` — and those three judgements are
+   *  most of what a preview is for. Handing the parent an empty map instead does not disable the
+   *  check; it makes the check REFUSE EVERYTHING, and it refuses with `unknown-collection`, which
+   *  reads as "your declaration is wrong" about a declaration that is fine. That shipped once
+   *  (2026-08-14) and cost an author a debugging session pointed at the wrong repository. */
+  submit: Record<string, { createFields: string[] }>;
   /** Every page this publish would put live, public first. */
   pages: PreviewPage[];
   /** Whether this publish would leave the app open to anonymous visitors. False is normal: an app

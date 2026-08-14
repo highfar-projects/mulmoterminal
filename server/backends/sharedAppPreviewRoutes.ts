@@ -71,6 +71,7 @@ async function respondPreview(req: Request, res: Response): Promise<void> {
   // which would go to the browser for nobody to read.
   const preview: SharedAppPreview = {
     aid: result.aid,
+    submit: result.submit,
     pages: result.pages,
     publicOpen: result.publicOpen,
     fromLiveApp: result.fromLiveApp,

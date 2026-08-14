@@ -13,7 +13,7 @@
 // Imported at module scope, not inside a test: the component's module graph is billed to whichever
 // test first reaches it, and that has made a file's first test look 100x slower than its siblings.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mount, flushPromises } from "@vue/test-utils";
+import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import SharedAppPreview from "../../../src/components/SharedAppPreview.vue";
 
 const PAGE = "<h1>Book</h1>";
@@ -23,6 +23,7 @@ const payload = (over: Record<string, unknown> = {}) => ({
   ok: true,
   preview: {
     aid: "aid-1",
+    submit: { bookings: { createFields: ["slot", "requesterName"] } },
     pages: [{ id: "public", html: PAGE, audience: "public" }],
     publicOpen: true,
     fromLiveApp: false,
@@ -169,6 +170,85 @@ describe("SharedAppPreview", () => {
     // A blank picker over a page that is right there reads as "nothing selected", and the first
     // thing the author does is click the thing that was already showing.
     expect((wrapper.find("select").element as HTMLSelectElement).value).toBe("public:public");
+  });
+
+  // The parent judges a submission against the app's declaration BEFORE the write path is reached.
+  // Getting the declaration wrong here does not weaken the check — it refuses EVERYTHING, and it
+  // refuses with a code that names the author's own repository. That shipped once (2026-08-14) and
+  // an author spent a session debugging a page and an app that were both correct.
+  //
+  // Driven through the real doors: `ready` on the window, everything after it on the port the
+  // parent hands back. No shortcut into the bridge — a preview-only path is the thing this whole
+  // feature exists to refuse.
+  describe("what the frame is told when it submits", () => {
+    /** Do the handshake and return the far end of the private channel. */
+    const connect = async (wrapper: VueWrapper) => {
+      const frame = wrapper.find("iframe").element as HTMLIFrameElement;
+      const srcdoc = frame.getAttribute("srcdoc") ?? "";
+      const nonce = /const nonce = "([^"]+)"/.exec(srcdoc)?.[1] ?? "";
+
+      let far: MessagePort | null = null;
+      const contentWindow = {
+        postMessage: (_message: unknown, _origin: string, ports?: MessagePort[]) => {
+          far = ports?.[0] ?? null;
+        },
+      };
+      vi.spyOn(frame, "contentWindow", "get").mockReturnValue(contentWindow as unknown as Window);
+
+      const ready = new MessageEvent("message", { data: { type: "mc-public-view:ready", nonce } });
+      Object.defineProperty(ready, "source", { value: contentWindow });
+      window.dispatchEvent(ready);
+      await flushPromises();
+
+      const port = far as MessagePort | null;
+      if (port === null) throw new Error("the parent never handed over a channel");
+      const answers: Record<string, unknown>[] = [];
+      port.onmessage = (event: MessageEvent) => answers.push(event.data as Record<string, unknown>);
+      port.start();
+      // The name only the injected document knows, echoed on the port it was handed.
+      port.postMessage({ nonce });
+      await flushPromises();
+      return { port, answers };
+    };
+
+    const settle = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await flushPromises();
+    };
+
+    it("accepts a submission the declaration allows, and says why it cannot write it", async () => {
+      const wrapper = await mountPreview();
+      const { port, answers } = await connect(wrapper);
+
+      port.postMessage({ type: "mc-public-view:submit", requestId: "r-1", cid: "bookings", values: { slot: "roomA-1000", requesterName: "客" } });
+      await settle();
+
+      // It got PAST the declaration check — which an empty `submit` map makes impossible — and the
+      // parent is now holding it for the author to confirm.
+      expect(answers.filter((answer) => answer.type === "mc-public-view:submitResult")).toEqual([]);
+      expect(wrapper.text()).toContain("asked to write a record");
+    });
+
+    it("still refuses a cid the declaration does not name", async () => {
+      const wrapper = await mountPreview();
+      const { port, answers } = await connect(wrapper);
+
+      port.postMessage({ type: "mc-public-view:submit", requestId: "r-2", cid: "nowhere", values: { slot: "x" } });
+      await settle();
+
+      // The check is real, not switched off — this cid genuinely is not declared.
+      expect(answers).toContainEqual(expect.objectContaining({ requestId: "r-2", ok: false, error: "unknown-collection" }));
+    });
+
+    it("refuses a field outside createFields — the finding a preview exists to catch", async () => {
+      const wrapper = await mountPreview();
+      const { port, answers } = await connect(wrapper);
+
+      port.postMessage({ type: "mc-public-view:submit", requestId: "r-3", cid: "bookings", values: { slot: "roomA-1000", nickname: "x" } });
+      await settle();
+
+      expect(answers).toContainEqual(expect.objectContaining({ requestId: "r-3", ok: false, error: "undeclared-field" }));
+    });
   });
 
   it("hands a page only ITS OWN records", async () => {

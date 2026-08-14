@@ -104,6 +104,7 @@ describe("shared app preview routes", () => {
     writeFileSync(path.join(root, "app.json"), JSON.stringify({ aid: "a", name: "n" }));
     const wire = {
       aid: "a",
+      submit: { bookings: { createFields: ["slot"] } },
       pages: [],
       publicOpen: true,
       fromLiveApp: false,
@@ -114,6 +115,8 @@ describe("shared app preview routes", () => {
     };
     // The backend also carries the full published projection and the generated form's inputs.
     preview.mockResolvedValue({ ok: true, config: { read: ["bookings"], enabled: true }, form: { bookings: {} }, ...wire });
+    // `submit` is NOT one of the fields held back. The parent in the browser judges every
+    // submission against it, and an empty map there refuses everything as `unknown-collection`.
 
     const result = await get(`/api/shared-app/preview?cwd=${encodeURIComponent(root)}`);
 
