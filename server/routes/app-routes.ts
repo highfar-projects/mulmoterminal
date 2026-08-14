@@ -39,6 +39,8 @@ import { mountCostRoute } from "../session/cost.js";
 import { mountCollectionRoutes } from "../backends/collections.js";
 // "Would this collection survive a clone?" — mounts itself beside the collection routes.
 import { mountSelfContainmentRoutes } from "../backends/collectionSelfContainment.js";
+// "What would publishing this app put on screen?" — computed, never written.
+import { mountSharedAppPreviewRoutes } from "../backends/sharedAppPreviewRoutes.js";
 import { syncCollectionWatcherRoots } from "../backends/collectionWatchers.js";
 import { mountGoogleRoutes } from "../backends/google.js";
 import { mountWikiRoutes } from "../backends/wiki.js";
@@ -185,6 +187,7 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // once CLAUDE_CWD is the confirmed workspace.
   mountCollectionRoutes(app);
   mountSelfContainmentRoutes(app);
+  mountSharedAppPreviewRoutes(app);
 
   // Read-only wiki routes (GET /api/wiki[?slug=] + /graph + /lint) over the shared
   // workspace, thin consumers of @mulmoclaude/core/wiki/server. Claude authors the wiki

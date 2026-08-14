@@ -27,11 +27,20 @@
 // What this does NOT prove is in the plan and belongs in whatever reports it: the rules do not run
 // here, other people's devices do not exist here, nothing is concurrent here, and — the one that
 // hides best — whether the rules a new declaration needs are deployed at all.
-import { projectDeploy, projectPublish, type AuthoredApp, type PublishStamp, type PublishedConfigDoc, type StagedSchemaDoc } from "@receptron/sharedapp";
-import { readCurrentApp, schemasOf, sharedAppContext, stampFor, type SharedAppFailure, type SharedAppOptions } from "./context.js";
+import {
+  appSchemasPath,
+  projectDeploy,
+  projectPublish,
+  type AuthoredApp,
+  type PublishStamp,
+  type PublishedConfigDoc,
+  type StagedSchemaDoc,
+} from "@receptron/sharedapp";
+import { readCurrentApp, schemasOf, sharedAppContext, stampFor, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
 import { planAppViewTiers, type TierPlan } from "./appViews.js";
 import { publicFormOf, type PublicForm } from "./publicForm.js";
 import { declaredView, readAppViewFile } from "./publicView.js";
+import { isRecord } from "../../../common/isRecord.js";
 
 /** One page as the preview will render it: the id a host names it by, and the author's HTML. */
 export interface PreviewPage {
@@ -61,6 +70,19 @@ export interface PreviewSuccess {
    *  forward from the live document, so a preview computed without one is the projection of a
    *  FIRST publish, not of the next one. */
   fromLiveApp: boolean;
+  /** The app's REAL records, per collection, for the collections the projection opens.
+   *
+   *  Real rather than generated from the declaration, and this is a decision rather than
+   *  convenience: an app's records live in Firebase and nowhere else, so a second source on this
+   *  machine would be one more thing that can agree with the author's screen and disagree with a
+   *  visitor's. The author reads them with their own credentials, as the owner they already are,
+   *  and nothing is written. An empty collection draws an empty page — which is a state worth
+   *  seeing rather than a gap to fill with samples. */
+  datasets: Record<string, Record<string, unknown>[]>;
+  /** Collections the projection opens but whose records could not be read. Reported rather than
+   *  silently empty: "no bookings yet" and "the read was refused" put identical pixels on the
+   *  screen and mean opposite things to the author. */
+  unreadable: string[];
   /** Pages that will go out but are worth looking at first — see `viewWarnings`. */
   warnings: string[];
 }
@@ -76,6 +98,32 @@ function stagedFromWorkingTree(
   existing: Record<string, unknown> | null,
 ): { cid: string; doc: StagedSchemaDoc }[] {
   return projectDeploy(authored, schemasOf(collections), stamp, existing).staging;
+}
+
+/** The app's records for one set of collections, read with the author's own credentials.
+ *
+ *  A refusal is carried back rather than thrown. The most common one is the ordinary state of an
+ *  app that has never been deployed — `apps/{aid}` does not exist, so the rules cannot resolve an
+ *  owner for anything beneath it — and refusing to preview at all because there are no records yet
+ *  would make the feature useless exactly when it is most wanted. */
+async function readDatasets(
+  handle: SharedAppHandle,
+  aid: string,
+  cids: readonly string[],
+): Promise<{ datasets: Record<string, Record<string, unknown>[]>; unreadable: string[] }> {
+  const datasets: Record<string, Record<string, unknown>[]> = {};
+  const unreadable: string[] = [];
+  for (const cid of cids) {
+    try {
+      const docs = await handle.docs.list(`${appSchemasPath(aid)}/${cid}/items`);
+      // The id is put ON the record. The rules use the document id as the record's identity
+      // (a booking's id IS its slot), and a page that renders a list needs it as a field.
+      datasets[cid] = docs.map((doc) => ({ ...(isRecord(doc.data) ? doc.data : {}), id: doc.id }));
+    } catch {
+      unreadable.push(cid);
+    }
+  }
+  return { datasets, unreadable };
 }
 
 export async function previewSharedApp(root: string, opts: SharedAppOptions = {}): Promise<PreviewResult> {
@@ -102,6 +150,11 @@ export async function previewSharedApp(root: string, opts: SharedAppOptions = {}
   const tiers = await planAppViewTiers(root, authored, stamp);
   if (!tiers.ok) return { ok: false, partial: false, problems: tiers.problems };
 
+  // WHICH collections, asked of the PROJECTION rather than of the declaration. `public.read` is
+  // what a visitor may see; a preview that read everything on disk would draw a page the author
+  // cannot ship, and the gap would show up for the first time in somebody else's browser.
+  const { datasets, unreadable } = await readDatasets(handle, aid, face.config.view?.collections ?? face.config.read);
+
   return {
     ok: true,
     aid,
@@ -111,6 +164,8 @@ export async function previewSharedApp(root: string, opts: SharedAppOptions = {}
     tiers: tiers.plans,
     publicOpen: face.public !== undefined,
     fromLiveApp: existingApp !== null,
+    datasets,
+    unreadable,
     warnings: [...(page !== null && page.ok ? page.view.warnings : []), ...tiers.warnings],
   };
 }

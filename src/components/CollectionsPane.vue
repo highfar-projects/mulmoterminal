@@ -17,6 +17,8 @@ import { projectIdForCwd } from "../composables/collectionProject";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { asSelfContainmentReport, type SelfContainmentReport, type SelfContainmentSeverity } from "../../common/collectionPortability";
 import type { ShortcutKind } from "../../common/shortcuts";
+import SharedAppPreview from "./SharedAppPreview.vue";
+import { isRecord } from "../../common/isRecord";
 
 const props = defineProps<{ cwd: string | null }>();
 
@@ -78,6 +80,8 @@ watch(
     // The project half of the report's identity just changed, so anything in flight is about a
     // pair that is no longer on screen — including a check for a slug that exists in BOTH.
     invalidateCheck();
+    // The app is the DIRECTORY's, so a cwd change is a different app or none.
+    void probeForApp(cwd ?? null);
     // Reset the view: a slug open in one directory need not exist in the next.
     nav.gotoIndex("collection");
   },
@@ -85,6 +89,33 @@ watch(
 );
 
 const unknownDirectory = computed(() => !resolving.value && projectId.value === null);
+
+// ── "what would publishing this app show?" ──
+//
+// A shared app is declared by an `app.json` in the cell's directory, so the control appears only
+// where there is one — most directories are not shared apps, and a button that answers "there is
+// no app here" on every one of them is a button nobody reads.
+//
+// The probe is a separate, cheap route (one `stat`). Asking the preview route would compute a
+// whole publish projection, and open a Firestore session, to decide whether to draw a button.
+const declaresApp = ref(false);
+const previewing = ref(false);
+
+let probeGeneration = 0;
+async function probeForApp(cwd: string | null): Promise<void> {
+  const mine = ++probeGeneration;
+  declaresApp.value = false;
+  previewing.value = false;
+  if (cwd === null) return;
+  try {
+    const res = await fetchWithTimeout(`/api/shared-app/declared?cwd=${encodeURIComponent(cwd)}`);
+    const body: unknown = await res.json();
+    if (mine === probeGeneration) declaresApp.value = isRecord(body) && body.declared === true;
+  } catch {
+    // A directory whose app-ness could not be established simply shows no preview control. There
+    // is nothing to tell the user here: they did not ask a question.
+  }
+}
 
 // ── "would this collection survive a clone?" ──
 //
@@ -178,6 +209,20 @@ useCollectionTeleportTarget(probe);
     <div v-else-if="unknownDirectory" class="p-3 font-sans text-[12px] text-dim">
       This directory has no collections yet. Collections live in <code>.claude/skills</code> under the folder the cell is open in.
     </div>
+    <template v-else-if="previewing">
+      <div class="min-h-0 flex-1">
+        <SharedAppPreview :cwd="cwd" />
+      </div>
+      <div class="flex-none border-t border-border px-2.5 py-1.5 font-sans">
+        <button
+          type="button"
+          class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg hover:border-accent"
+          @click="previewing = false"
+        >
+          Back to collections
+        </button>
+      </div>
+    </template>
     <template v-else>
       <div class="min-h-0 flex-1">
         <PluginFrame :css="collectionShadowCss" height="100%">
@@ -191,6 +236,19 @@ useCollectionTeleportTarget(probe);
       <!-- The portability check, on a strip of its own below the plugin's own surface: it is the
            HOST's question about the collection (does it survive a clone), not part of the
            collection's data, and it must not be inside the shadow root the package styles. -->
+      <!-- The shared app this directory declares, if it declares one. Its own control rather than
+           part of the collection strip below: the question is about the APP — every collection it
+           publishes, and the pages built over them — not about the one collection on screen. -->
+      <div v-if="declaresApp" class="flex-none border-t border-border px-2.5 py-1.5 font-sans">
+        <button
+          type="button"
+          class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg hover:border-accent"
+          title="Draw the pages publishing this app would put on screen. Nothing is written."
+          @click="previewing = true"
+        >
+          Preview the shared app
+        </button>
+      </div>
       <div v-if="openSlug" class="flex-none border-t border-border px-2.5 py-1.5 font-sans">
         <div class="flex items-center gap-2">
           <button
