@@ -19,7 +19,7 @@ import { undoPreviewSubmission, writePreviewSubmission } from "./sharedApp/previ
 import { requestBody } from "../routes/requestBody.js";
 import { isRecord } from "../../common/isRecord.js";
 import { workspaceForRoute } from "../routes/routeParams.js";
-import type { PreviewSubmission, PreviewWrittenRecord, SharedAppPreview, SharedAppPreviewResponse } from "../../common/sharedAppPreview.js";
+import type { PreviewSubmission, SharedAppPreview, SharedAppPreviewResponse } from "../../common/sharedAppPreview.js";
 
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
@@ -98,14 +98,16 @@ function submissionOf(body: unknown): PreviewSubmission | null {
   return { cid: body.cid, values: Object.fromEntries(entries) };
 }
 
-/** One write this preview made, as the pane hands it back to be taken away. */
-function writtenOf(body: unknown): PreviewWrittenRecord | null {
-  if (!isRecord(body) || !isRecord(body.written)) return null;
-  const written = body.written;
-  if (typeof written.cid !== "string" || typeof written.id !== "string") return null;
-  const raw = written.mirror;
-  const mirror = isRecord(raw) && typeof raw.cid === "string" && typeof raw.id === "string" ? { cid: raw.cid, id: raw.id } : null;
-  return { cid: written.cid, id: written.id, ...(mirror === null ? {} : { mirror }) };
+/** The token naming one write this preview made — and NOT the record itself.
+ *
+ *  A cid and an id off the request would be a cid and an id of the caller's choosing, and undo
+ *  deletes through the author's own handle: it is authorized to remove any record in the app, so a
+ *  forged pair would take out a stranger's real submission and put the slot it held back to `open`.
+ *  The record is looked up server-side from a token minted when the write was made. */
+function undoTokenOf(body: unknown): string | null {
+  if (!isRecord(body)) return null;
+  const named = isRecord(body.written) ? body.written.token : body.token;
+  return typeof named === "string" && named.length > 0 ? named : null;
 }
 
 export function mountSharedAppPreviewRoutes(app: Express): void {
@@ -135,14 +137,15 @@ export function mountSharedAppPreviewRoutes(app: Express): void {
   app.post("/api/shared-app/preview/undo", (req, res) => {
     void (async () => {
       try {
-        const cwd = workspaceForRoute(req.query.cwd, res);
-        if (cwd === null) return;
-        const written = writtenOf(requestBody(req.body));
-        if (written === null) {
+        // The directory is still resolved, because a request naming none is a bug in the caller —
+        // but it is NOT passed on. Which app the record belongs to is part of what the token knows.
+        if (workspaceForRoute(req.query.cwd, res) === null) return;
+        const named = undoTokenOf(requestBody(req.body));
+        if (named === null) {
           res.json({ ok: false, error: "not-a-record" });
           return;
         }
-        res.json(await undoPreviewSubmission(cwd, written));
+        res.json(await undoPreviewSubmission(named));
       } catch (err) {
         fail(res, err);
       }

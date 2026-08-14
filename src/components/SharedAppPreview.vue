@@ -261,10 +261,15 @@ async function send(cid: string, values: Record<string, string>): Promise<{ ok: 
       return { ok: false, error: isRecord(body) && typeof body.error === "string" ? body.error : "write-failed" };
     }
     const made = isRecord(body.written) ? body.written : null;
-    if (made !== null && typeof made.cid === "string" && typeof made.id === "string") {
+    // The TOKEN is required, not optional. Without it there is nothing undo would accept, and a row
+    // in this list with no way to remove it is worse than no row: it says the pane can take the
+    // record back. Falling through to the uncertain branch says the true thing instead.
+    if (made !== null && typeof made.cid === "string" && typeof made.id === "string" && typeof made.token === "string" && made.token !== "") {
       const raw = made.mirror;
       const mirror = isRecord(raw) && typeof raw.cid === "string" && typeof raw.id === "string" ? { cid: raw.cid, id: raw.id } : undefined;
-      written.value = [{ cid: made.cid, id: made.id, ...(mirror === undefined ? {} : { mirror }) }, ...written.value];
+      written.value = [{ cid: made.cid, id: made.id, token: made.token, ...(mirror === undefined ? {} : { mirror }) }, ...written.value];
+    } else {
+      written.value = [{ cid, uncertain: true }, ...written.value];
     }
     // NOT awaited, and NOT `load()`. The bridge answers the page immediately after this resolves,
     // and `load()` blanks the payload on its way — which empties `pages`, changes the page being
@@ -298,7 +303,7 @@ async function clearWritten(): Promise<void> {
       try {
         const res = await fetchWithTimeout(
           writeUrl("undo"),
-          { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ written: record }) },
+          { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: record.token }) },
           SLOW_COMMAND_TIMEOUT_MS,
         );
         const body: unknown = await res.json();

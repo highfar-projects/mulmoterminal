@@ -147,6 +147,22 @@ async function commit(handle: SharedAppHandle, aid: string, plan: PlannedWrite):
   }
 }
 
+/** WHAT THIS PROCESS WROTE, and nothing else.
+ *
+ *  Undo performs a delete through the AUTHOR's handle, which is authorized to delete anything in
+ *  their own app. So the record it acts on must not be chooseable by whoever calls the route — a
+ *  caller naming a cid and an id would be naming a stranger's real booking, and the write would
+ *  succeed. The route therefore accepts a token this module minted at the moment it made the write,
+ *  and looks the record up here.
+ *
+ *  The ROOT is part of the entry rather than trusted from the request, for the same reason: a token
+ *  minted while previewing one app must not be usable to delete out of another.
+ *
+ *  A plain `Map`, deliberately. Its lifetime is the process's, which is the lifetime of the list on
+ *  the author's screen — neither is stored, and a preview's writes become ordinary records once the
+ *  session ends. Entries are removed when the undo succeeds, so a token is good for one delete. */
+const undoable = new Map<string, { root: string; written: PreviewWrittenRecord }>();
+
 /** Write one submission the author accepted in the preview.
  *
  *  `values` has already been judged by the parent in the browser against `createFields`; it is
@@ -182,7 +198,14 @@ export async function writePreviewSubmission(root: string, cid: string, values: 
     const why = isRecord(raw) ? await explainRefusal(handle, preview.aid, raw, record) : null;
     return { ok: false, error: why === null ? failed : `${why} (${failed})` };
   }
-  return { ok: true, written: { cid: plan.cid, id: plan.id, ...(plan.mirror === undefined ? {} : { mirror: { cid: plan.mirror.cid, id: plan.mirror.id } }) } };
+  const written: PreviewWrittenRecord = {
+    cid: plan.cid,
+    id: plan.id,
+    ...(plan.mirror === undefined ? {} : { mirror: { cid: plan.mirror.cid, id: plan.mirror.id } }),
+    token: randomUUID(),
+  };
+  undoable.set(written.token, { root, written });
+  return { ok: true, written };
 }
 
 /** Take one of those writes back.
@@ -191,7 +214,13 @@ export async function writePreviewSubmission(root: string, cid: string, values: 
  *  record goes and the slot it was holding returns to `open`, in one write, exactly as a
  *  participant's `selfDelete` does. A delete on its own would leave the mirror saying `taken` about
  *  a booking that no longer exists — the orphan this whole pairing exists to prevent. */
-export async function undoPreviewSubmission(root: string, written: PreviewWrittenRecord): Promise<PreviewWriteResult> {
+export async function undoPreviewSubmission(token: string): Promise<PreviewWriteResult> {
+  // The token names the record AND the app it was written in. Nothing from the request reaches the
+  // delete — that is the whole of the protection, and it is why this lookup comes first.
+  const entry = undoable.get(token);
+  if (entry === undefined) return { ok: false, error: "not-this-session" };
+  const { root, written } = entry;
+
   const context = await sharedAppContext(root);
   if (!context.ok) return { ok: false, error: context.problems.join(" ") };
   const { handle, authored } = context;
@@ -207,7 +236,12 @@ export async function undoPreviewSubmission(root: string, written: PreviewWritte
       await batch.commit();
     }
   } catch (err) {
+    // KEPT on failure. The record is still there, so the author must still be able to try again —
+    // and the list on screen is the only place it is known to be a test.
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
+  // Spent. One token, one delete: a second use could only name a record this preview no longer
+  // wrote, which is the thing the token exists to make impossible.
+  undoable.delete(token);
   return { ok: true, written };
 }

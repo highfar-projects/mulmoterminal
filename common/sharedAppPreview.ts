@@ -118,6 +118,18 @@ export interface PreviewWrittenRecord {
   cid: string;
   id: string;
   mirror?: { cid: string; id: string } | undefined;
+  /** The ONLY thing undo accepts, and the reason it is here rather than the record above.
+   *
+   *  Undo runs through the author's own Firestore handle, so a route that took a cid and an id
+   *  would take ANY cid and id in the app: a caller reaching this server could delete a stranger's
+   *  real booking and put the slot it was holding back to `open`, and every write would be
+   *  perfectly authorized. The cid and the id are still carried, because the author has to be able
+   *  to read what this preview wrote — but they are for the SCREEN. What the server acts on is a
+   *  token it minted itself when it made the write, held in memory and mapped to that exact record.
+   *
+   *  In memory, for the lifetime of the process, which is the same lifetime as the list on screen:
+   *  neither survives a restart, and a preview's writes become ordinary records when it ends. */
+  token: string;
 }
 
 /** A write whose outcome is unknown: the request threw after the server may already have written.

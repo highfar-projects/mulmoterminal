@@ -194,7 +194,7 @@ describe("SharedAppPreview", () => {
 
   it("draws the generated form from the published inputs, and sends what was typed", async () => {
     const { fetcher, posted } = answeringWrites(
-      { ok: true, written: { cid: "signups", id: "uid-1" } },
+      { ok: true, written: { cid: "signups", id: "uid-1", token: "t-signup" } },
       payload({
         pages: [],
         generatedForm: true,
@@ -236,7 +236,7 @@ describe("SharedAppPreview", () => {
     // write real rows and have nowhere to take them back from — the list is the ONLY place they
     // are known to be tests.
     const { fetcher } = answeringWrites(
-      { ok: true, written: { cid: "signups", id: "uid-1" } },
+      { ok: true, written: { cid: "signups", id: "uid-1", token: "t-signup" } },
       payload({ pages: [], generatedForm: true, submit: { signups: { createFields: ["name"] } }, formInputs: { signups: [FORM_FIELD] } }),
     );
     vi.stubGlobal("fetch", fetcher);
@@ -330,7 +330,7 @@ describe("SharedAppPreview", () => {
     });
 
     it("writes the record when the author sends it, and answers the page", async () => {
-      const { fetcher, posted } = answeringWrites({ ok: true, written: { cid: "bookings", id: "roomA-1000" } });
+      const { fetcher, posted } = answeringWrites({ ok: true, written: { cid: "bookings", id: "roomA-1000", token: "t-1" } });
       vi.stubGlobal("fetch", fetcher);
       const wrapper = await mountPreview();
       const { port, answers } = await connect(wrapper);
@@ -370,7 +370,7 @@ describe("SharedAppPreview", () => {
     it("remembers what it wrote, and offers to take it back with its mirror", async () => {
       const { fetcher, posted } = answeringWrites({
         ok: true,
-        written: { cid: "bookings", id: "roomA-1000", mirror: { cid: "slots", id: "roomA-1000" } },
+        written: { cid: "bookings", id: "roomA-1000", mirror: { cid: "slots", id: "roomA-1000" }, token: "t-1" },
       });
       vi.stubGlobal("fetch", fetcher);
       const wrapper = await mountPreview();
@@ -398,7 +398,9 @@ describe("SharedAppPreview", () => {
       // The MIRROR travels with it: a bare delete would leave the slot saying `taken` about a
       // booking that no longer exists.
       const undo = posted.find((entry) => entry.url.includes("/preview/undo"));
-      expect(undo?.body).toEqual({ written: { cid: "bookings", id: "roomA-1000", mirror: { cid: "slots", id: "roomA-1000" } } });
+      // The TOKEN, and nothing the caller chose. Undo deletes through the author's own handle, so a
+      // cid and an id off the wire would be a cid and an id of anybody's choosing.
+      expect(undo?.body).toEqual({ token: "t-1" });
     });
 
     it("keeps taking records back after one undo request fails outright", async () => {
@@ -412,12 +414,12 @@ describe("SharedAppPreview", () => {
           const body: unknown = init?.body === undefined ? null : JSON.parse(init.body);
           if (url.includes("/preview/submit")) {
             const slot = isRecord(body) && isRecord(body.values) ? String(body.values.slot) : "";
-            return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, written: { cid: "bookings", id: slot } }) });
+            return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, written: { cid: "bookings", id: slot, token: `t-${slot}` } }) });
           }
           if (url.includes("/preview/undo")) {
             posted.push({ url, body });
-            const id = isRecord(body) && isRecord(body.written) ? body.written.id : "";
-            if (id === "roomA-1100") return Promise.reject(new Error("timed out"));
+            const sent = isRecord(body) && typeof body.token === "string" ? body.token : "";
+            if (sent === "t-roomA-1100") return Promise.reject(new Error("timed out"));
             return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) });
           }
           return Promise.resolve({ ok: true, json: () => Promise.resolve(payload()) });
@@ -445,10 +447,7 @@ describe("SharedAppPreview", () => {
 
       // BOTH were attempted, and the one that could not be removed is still named on screen — the
       // author cannot delete by hand what this pane has forgotten.
-      expect(posted.map((entry) => (isRecord(entry.body) && isRecord(entry.body.written) ? entry.body.written.id : null))).toEqual([
-        "roomA-1100",
-        "roomA-1000",
-      ]);
+      expect(posted.map((entry) => (isRecord(entry.body) ? entry.body.token : null))).toEqual(["t-roomA-1100", "t-roomA-1000"]);
       expect(wrapper.text()).toContain("bookings / roomA-1100");
       expect(wrapper.text()).not.toContain("bookings / roomA-1000");
     });

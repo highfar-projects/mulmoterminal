@@ -198,7 +198,7 @@ describe("shared app preview writes", () => {
       `update apps/${AID}/collections/slots/items/roomA-1000`,
     ]);
     expect(batched[1]).toContain('"state":"taken"');
-    expect(result.ok && result.written).toEqual({ cid: "bookings", id: "roomA-1000", mirror: { cid: "slots", id: "roomA-1000" } });
+    expect(result.ok && result.written).toEqual({ cid: "bookings", id: "roomA-1000", mirror: { cid: "slots", id: "roomA-1000" }, token: expect.any(String) });
   });
 
   it("refuses an id somebody already holds rather than replacing their record", async () => {
@@ -221,6 +221,31 @@ describe("shared app preview writes", () => {
     expect(result.ok === false && result.error).toContain("insufficient permissions");
   });
 
+  it("refuses to delete a record this session did not write", async () => {
+    // The attack the token exists for. Undo runs through the AUTHOR's handle, which may delete
+    // anything in their own app — so a caller naming a collection and an id would be naming a
+    // stranger's real booking, and every write would be perfectly authorized.
+    const forged = await undoPreviewSubmission("bookings/roomA-1000");
+
+    expect(forged.ok).toBe(false);
+    expect(forged.ok === false && forged.error).toBe("not-this-session");
+    expect(batched).toEqual([]);
+  });
+
+  it("spends the token, so one write cannot be taken back twice", async () => {
+    const made = await writePreviewSubmission(root, "bookings", { requesterName: "客", slot: "roomA-1000" });
+    const token = made.ok ? made.written.token : "";
+    expect(await undoPreviewSubmission(token)).toEqual(expect.objectContaining({ ok: true }));
+    batched.length = 0;
+
+    // A second use could only name a record this preview no longer wrote — which, by then, is
+    // whatever somebody else has put in its place.
+    const again = await undoPreviewSubmission(token);
+
+    expect(again.ok).toBe(false);
+    expect(batched).toEqual([]);
+  });
+
   it("names the missing answer instead of writing a record the rules would refuse", async () => {
     const result = await writePreviewSubmission(root, "bookings", { slot: "roomA-1000" });
 
@@ -236,7 +261,7 @@ describe("shared app preview writes", () => {
     expect(made.ok).toBe(true);
     batched.length = 0;
 
-    const undone = await undoPreviewSubmission(root, { cid: "bookings", id: "roomA-1000", mirror: { cid: "slots", id: "roomA-1000" } });
+    const undone = await undoPreviewSubmission(made.ok ? made.written.token : "");
 
     expect(undone.ok).toBe(true);
     // The record goes and the slot reopens IN ONE WRITE, exactly as a participant's `selfDelete`
@@ -278,6 +303,6 @@ describe("shared app preview writes", () => {
     // replaced. The id is the submitter's uid, which is what "one answer per person" means.
     expect(batched).toEqual([]);
     expect(docs.writes.some((write) => write.startsWith(`create apps/${AID}/collections/bookings/items/${OWNER.uid} `))).toBe(true);
-    expect(result.ok && result.written).toEqual({ cid: "bookings", id: OWNER.uid });
+    expect(result.ok && result.written).toEqual({ cid: "bookings", id: OWNER.uid, token: expect.any(String) });
   });
 });
