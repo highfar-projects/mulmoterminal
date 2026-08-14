@@ -348,7 +348,7 @@ is DELETED at both ends rather than left behind.
 
 ### What a page may WRITE
 
-**`transition` and `assign` need the runtime deployed, and they do not fail softly.** `submit` has
+**`transition`, `assign` and `withdraw` need the runtime deployed, and they do not fail softly.** `submit` has
 been on the bridge since public forms; these two and the `/p/{slug}` entrance arrived with the
 shared-app runtime, and on anything older they are simply ABSENT — a page calling one throws
 `__MC_APP_VIEW.transition is not a function`, which in an iframe looks like a page that does
@@ -361,13 +361,19 @@ capability comes back empty and the page draws a read-only view of itself. It st
 the app is published again — a projection without those lists cannot tell a receptionist from an
 observer, and refuses rather than assuming.
 
-Three calls, and a page cannot name a field in any of them:
+Four calls, and a page cannot name a field in any of them:
 
 ```js
 await window.__MC_APP_VIEW.submit(cid, values);          // a new record
 await window.__MC_APP_VIEW.transition(cid, itemId, to);  // approve, reject, cancel
 await window.__MC_APP_VIEW.assign(cid, itemId, address); // hand a row to a colleague
+await window.__MC_APP_VIEW.withdraw(cid, itemId);        // take the reader's OWN row away
 ```
+
+`withdraw` names no destination because nothing moves — the row is deleted, and where the
+collection has a `mirror` the parent reopens it in the same batch. It works only where
+`selfDelete` names the row's current status, only on a participant's page, and (like the two
+above) only on a runtime that has it.
 
 Each returns `{ ok, error }`. The page is told **who the reader is and what they may actually do**
 in the second argument to `onState`:
@@ -377,6 +383,7 @@ window.__MC_APP_VIEW.onState((data, viewer) => {
   const can = viewer.can.bookings ?? {};
   // can.transitionAny  — may approve any row  (owner / editor)
   // can.transitionOwn  — may approve the rows assigned to them  (assignee)
+  // can.withdrawFrom   — the statuses this reader may take their OWN row away from
   // can.assigneeField  — the field a row carries its owner's address in
   // can.assign         — may hand a row to somebody else
   // can.assignees      — who may be named
@@ -392,7 +399,7 @@ where nobody reviews them. The write applies the same comparison, so a page that
 refused rather than obeyed.
 
 `submit` is the visitor's path and **the page confirms with the reader before writing** — the HTML
-is not trusted to have been asked. The other two are the
+is not trusted to have been asked. The other three are the
 roster's, and they do NOT confirm: the person pressing them is on the app's own roster doing
 their own work, and a modal in front of a button used forty times a day is abandoned rather than
 read. The page prints what happened above the frame instead, from what was written.

@@ -143,13 +143,22 @@
 <div id="grid"></div>
 <script>
   const view = window.__MC_APP_VIEW;
+  const grid = document.getElementById("grid");
   view.onState(({ stylists = [], slots = [] }) => {
-    const open = slots.filter((slot) => slot.state === "open");
-    document.getElementById("grid").innerHTML = open
-      .map((slot) => `<button data-slot="${slot.id}">${slot.startAt} ${slot.stylist ?? ""}</button>`)
-      .join("");
+    // textContent と dataset で組み立てること。レコードの値（担当者名、メニュー名）は
+    // 人が入力するもので、文字列連結で innerHTML に入れると公開ページでそれが動きます。
+    grid.replaceChildren(
+      ...slots
+        .filter((slot) => slot.state === "open")
+        .map((slot) => {
+          const button = document.createElement("button");
+          button.dataset.slot = slot.id;
+          button.textContent = `${slot.startAt} ${slot.stylist ?? ""}`;
+          return button;
+        }),
+    );
   });
-  document.addEventListener("click", async (event) => {
+  grid.addEventListener("click", async (event) => {
     const slot = event.target.dataset?.slot;
     if (!slot) return;
     const result = await view.submit("bookings", { slot, customerName: prompt("お名前") ?? "", status: "pending" });
@@ -185,10 +194,15 @@
 <ul id="today"></ul>
 <script>
   const view = window.__MC_APP_VIEW;
+  const today = document.getElementById("today");
   view.onState(({ bookings = [] }) => {
-    document.getElementById("today").innerHTML = bookings
-      .map((booking) => `<li>${booking.startAt ?? booking.slot} ${booking.customerName} — ${booking.status}</li>`)
-      .join("");
+    today.replaceChildren(
+      ...bookings.map((booking) => {
+        const row = document.createElement("li");
+        row.textContent = `${booking.startAt ?? booking.slot} ${booking.customerName} — ${booking.status}`;
+        return row;
+      }),
+    );
   });
   view.ready();
 </script>

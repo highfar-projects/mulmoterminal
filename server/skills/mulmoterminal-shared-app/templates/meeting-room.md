@@ -8,8 +8,13 @@
 
 **枠を実在させ、予約の id を枠の id にする。** 二重予約は「フィールドの検査」ではなく
 **ドキュメント id の衝突**で防ぎます。2 人目の書き込みは既に在るドキュメントへの書き込みに
-なり、公開の申込み経路は create しか許していないので拒否される。連続 2 コマは 2 件の申込みに
-なりますが、**1 つの `writeBatch` にまとめれば原子的**です（片方が埋まっていれば両方落ちる）。
+なり、公開の申込み経路は create しか許していないので拒否される。
+
+**連続 2 コマは 2 件の申込みで、まとめて取ることはできません。** ビューが呼べるのは 1 件ずつの
+`submit()` だけで、複数を 1 つの書き込みにする API はありません。1 コマ目が通って 2 コマ目が
+取られている、という中途半端な結果は起こりえます。刻み幅を会議の実態に合わせる（60 分会議が
+多いなら 60 分枠にする）か、2 コマ目が取れなかったら 1 コマ目を取り下げるようページに書く
+（下の `withdraw`）か、どちらかを最初に決めてください。
 
 **承認しない。** `initialStatus` を確定の状態にして、遷移は「取り消し」だけ。受付は必要な
 ときだけ介入します。
@@ -136,17 +141,30 @@
 <div id="grid"></div>
 <script>
   const view = window.__MC_APP_VIEW;
+  const grid = document.getElementById("grid");
   view.onState(({ rooms = [], slots = [] }) => {
     const name = Object.fromEntries(rooms.map((room) => [room.id, room.title ?? room.id]));
-    document.getElementById("grid").innerHTML = slots
-      .filter((slot) => slot.state === "open")
-      .map((slot) => `<button data-slot="${slot.id}">${slot.startAt} ${name[slot.room] ?? ""}</button>`)
-      .join("");
+    grid.replaceChildren(
+      ...slots
+        .filter((slot) => slot.state === "open")
+        .map((slot) => {
+          // textContent と dataset。レコードの値を文字列連結で innerHTML に
+          // 入れないこと — 部屋名は人が入力するもので、そこに <script> と
+          // 書かれたら公開ページで動きます。
+          const button = document.createElement("button");
+          button.dataset.slot = slot.id;
+          button.textContent = `${slot.startAt} ${name[slot.room] ?? ""}`;
+          return button;
+        }),
+    );
   });
-  document.addEventListener("click", async (event) => {
+  grid.addEventListener("click", async (event) => {
     const slot = event.target.dataset?.slot;
     if (!slot) return;
-    const result = await view.submit("bookings", { slot, purpose: prompt("用件") ?? "", status: "booked" });
+    // requesterName は createFields に入っていて、スキーマで required。
+    // 送らない申込みは拒否されます。
+    const values = { slot, requesterName: prompt("お名前") ?? "", purpose: prompt("用件") ?? "", status: "booked" };
+    const result = await view.submit("bookings", values);
     if (!result.ok) alert("その枠は取られました");
   });
   view.ready();
@@ -163,23 +181,54 @@
 押してから書きます。ビューの HTML は信頼されていないためで、読み込んだ瞬間に `submit()` を
 呼ぶページがあっても勝手に予約は入りません。
 
-## views/mine.html — 自分の予約
+## views/mine.html — 自分の予約と、取り下げ
 
-`audience: "participant"`、入口は `/p/{slug}`。`selfTransitions` に書いた遷移だけがボタンに
-なります。ここでは `booked → cancelled` の 1 本。
+`audience: "participant"`、入口は `/p/{slug}`。ここに**取り下げのボタンを描かないと
+`selfDelete` は使われません** — 状態を `cancelled` にするだけの取り消しでは枠が空かないので、
+テンプレートの売りがそのまま消えます。
+
+`viewer.can.<cid>.withdrawFrom` は**取り下げてよい状態の一覧**で、真偽値ではありません。
+その状態にある行にだけボタンを出します。
 
 ```html
 <ul id="mine"></ul>
 <script>
   const view = window.__MC_APP_VIEW;
-  view.onState(({ bookings = [] }) => {
-    document.getElementById("mine").innerHTML = bookings
-      .map((booking) => `<li>${booking.slot} ${booking.purpose ?? ""} — ${booking.status}</li>`)
-      .join("");
+  const list = document.getElementById("mine");
+  let can = {};
+  view.onState(({ bookings = [] }, viewer = {}) => {
+    can = viewer.can?.bookings ?? {};
+    const withdrawable = can.withdrawFrom ?? [];
+    list.replaceChildren(
+      ...bookings.map((booking) => {
+        const row = document.createElement("li");
+        row.textContent = `${booking.slot} ${booking.purpose ?? ""} — ${booking.status}`;
+        if (withdrawable.includes(booking.status)) {
+          const button = document.createElement("button");
+          button.dataset.id = booking.id;
+          button.textContent = "取り下げる";
+          row.append(button);
+        }
+        return row;
+      }),
+    );
+  });
+  list.addEventListener("click", async (event) => {
+    const id = event.target.dataset?.id;
+    if (!id) return;
+    if (!confirm("取り下げます。枠はすぐ他の人が取れるようになります。")) return;
+    const result = await view.withdraw("bookings", id);
+    if (!result.ok) alert("取り下げられませんでした");
   });
   view.ready();
 </script>
 ```
+
+- **`withdraw` は行き先を持ちません。** 行が消えるので、動く先がない
+- **戻せません。** 取り下げた瞬間に枠は他の人のものになりうるので、確認は**ページが**出す
+  こと（参加者の操作に親は確認を挟みません）
+- **`can.withdrawFrom` が空なら宣言していないということ。** `selfDelete` を書いていないか、
+  ルールがまだ deploy されていないか、アプリを publish し直していないかのいずれかです
 
 ## views/desk.html — 受付の画面
 
