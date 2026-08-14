@@ -7,6 +7,7 @@ import path from "node:path";
 import { createRemoteHostHandlers } from "./handlers/index.js";
 import type { SessionScreen } from "./terminalScreen.js";
 import { initCollectionsBackend } from "../collections.js";
+import type { AnswerFailure, AnswerResult } from "../../../common/askQuestion.js";
 
 const unusedTerminalDeps = {
   spawnIssueSeed: () => "unused-session",
@@ -17,6 +18,8 @@ const unusedTerminalDeps = {
   submitSequence: () => "\r",
   sessionAgent: () => "claude" as const,
   launchTerminal: () => ({ ok: true }) as const,
+  openQuestion: async () => null,
+  answerQuestion: async (): Promise<AnswerResult> => ({ ok: true }),
 };
 
 describe("createRemoteHostHandlers", () => {
@@ -256,5 +259,61 @@ describe("getTerminalScreen", () => {
 
   it("rejects a request with no session id", async () => {
     await expect(handlersFor({ screen: "", suggestion: "", quickCommands: [] }).getTerminalScreen({})).rejects.toThrow(/sessionId is required/);
+  });
+});
+
+// The phone's half of #1685. What matters here is the SEAM: the phone sends option indexes and a
+// dialog id, the host answers, and a refusal becomes a sentence the phone can show. The keystrokes
+// themselves are session/answerQuestion.ts's business and are pinned there.
+describe("question commands", () => {
+  const OPEN = {
+    sessionId: "a",
+    toolUseId: "t1",
+    questions: [{ question: "Red or blue?", header: "Color", options: [{ label: "Red" }, { label: "Blue" }], multiSelect: false }],
+  };
+
+  const handlersWith = (over: Partial<Parameters<typeof createRemoteHostHandlers>[0]>) =>
+    createRemoteHostHandlers({
+      workspace: "/ws",
+      spawnChat: () => ({ chatId: "x" }),
+      ingest: async () => ({ attachments: [], cleanupStaging: async () => {} }),
+      ...unusedTerminalDeps,
+      ...over,
+    });
+
+  it("forwards the open question, and null when there is none", async () => {
+    expect(await handlersWith({ openQuestion: async () => OPEN }).getOpenQuestion({ sessionId: "a" })).toEqual({ question: OPEN });
+    expect(await handlersWith({ openQuestion: async () => null }).getOpenQuestion({ sessionId: "a" })).toEqual({ question: null });
+  });
+
+  it("hands the picks through untouched — the host decides what they mean", async () => {
+    const seen: unknown[] = [];
+    const handlers = handlersWith({
+      answerQuestion: async (sessionId: string, toolUseId: string, picks: unknown): Promise<AnswerResult> => {
+        seen.push({ sessionId, toolUseId, picks });
+        return { ok: true };
+      },
+    });
+
+    expect(await handlers.answerQuestion({ sessionId: "a", toolUseId: "t1", picks: [[1]] })).toEqual({ ok: true });
+    expect(seen).toEqual([{ sessionId: "a", toolUseId: "t1", picks: [[1]] }]);
+  });
+
+  // Thrown rather than returned: the command layer turns a rejection into the message the phone
+  // shows, and each of these is something the person holding it can act on.
+  it("turns each refusal into a sentence the phone can show", async () => {
+    const refusing = (reason: AnswerFailure) => handlersWith({ answerQuestion: async () => ({ ok: false, reason }) });
+
+    await expect(refusing("closed").answerQuestion({ sessionId: "a", toolUseId: "t1", picks: [] })).rejects.toThrow(/already answered/);
+    await expect(refusing("bad-picks").answerQuestion({ sessionId: "a", toolUseId: "t1", picks: [] })).rejects.toThrow(/do not match/);
+    await expect(refusing("unwritable").answerQuestion({ sessionId: "a", toolUseId: "t1", picks: [] })).rejects.toThrow(/outlived a server restart/);
+    await expect(refusing("partial").answerQuestion({ sessionId: "a", toolUseId: "t1", picks: [] })).rejects.toThrow(/Finish it in the terminal/);
+  });
+
+  it("rejects a request missing either id", async () => {
+    const handlers = handlersWith({});
+    await expect(handlers.getOpenQuestion({})).rejects.toThrow(/sessionId is required/);
+    await expect(handlers.answerQuestion({ sessionId: "a" })).rejects.toThrow(/sessionId and toolUseId are required/);
+    await expect(handlers.answerQuestion({ toolUseId: "t1" })).rejects.toThrow(/sessionId and toolUseId are required/);
   });
 });

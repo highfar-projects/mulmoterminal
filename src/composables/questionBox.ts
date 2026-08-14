@@ -38,6 +38,21 @@ export function createQuestionBox(fetchOpen: (sessionId: string) => Promise<AskQ
 
   const offer = (event: AskQuestionEvent): void => write(event.sessionId, event);
 
+  // Dialogs the user closed the pane on, per session. Per session because a question arriving in
+  // one cell says nothing about a pane the user dismissed in another, and by dialog because the
+  // NEXT question in the same cell is a new thing to offer.
+  const dismissed = new Map<string, string>();
+
+  const dismiss = (sessionId: string): void => {
+    const held = get(sessionId);
+    if (held) dismissed.set(sessionId, held.toolUseId);
+  };
+
+  const isDismissed = (sessionId: string): boolean => {
+    const held = get(sessionId);
+    return held !== null && dismissed.get(sessionId) === held.toolUseId;
+  };
+
   /** Answers whether this close dropped a dialog the box was holding. */
   const close = (event: AskQuestionDone): boolean => {
     closed.set(event.sessionId, [...(closed.get(event.sessionId) ?? []), event.toolUseId].slice(-CLOSED_MEMORY));
@@ -47,7 +62,10 @@ export function createQuestionBox(fetchOpen: (sessionId: string) => Promise<AskQ
   };
 
   /** Forget a session's dialog without waiting for its close — the pane has just answered it. */
-  const drop = (sessionId: string): void => write(sessionId, null);
+  const drop = (sessionId: string): void => {
+    dismissed.delete(sessionId);
+    write(sessionId, null);
+  };
 
   /** Has this exact dialog closed? The question a hydration must answer before trusting its find. */
   const isClosed = (sessionId: string, toolUseId: string): boolean => (closed.get(sessionId) ?? []).includes(toolUseId);
@@ -58,5 +76,5 @@ export function createQuestionBox(fetchOpen: (sessionId: string) => Promise<AskQ
     if (open && !has(sessionId) && !isClosed(sessionId, open.toolUseId)) write(sessionId, open);
   };
 
-  return { questions, has, get, offer, close, drop, hydrate, isClosed };
+  return { questions, has, get, offer, close, drop, hydrate, isClosed, dismiss, isDismissed };
 }

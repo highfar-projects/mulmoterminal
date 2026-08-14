@@ -6,6 +6,7 @@ import type { Express, Request, Response } from "express";
 import { SESSION_ID_RE } from "../config/env.js";
 import { isRecord } from "../../common/isRecord.js";
 import { ASK_QUESTION_TOOL, parseAskQuestions, type AskQuestionDone, type AskQuestionEvent } from "../../common/askQuestion.js";
+import { watchOtherWrites } from "../session/write-to-session.js";
 import { dirConfigWriteTarget } from "../config/dir-config.js";
 import { writtenFilePath } from "../files/tool-writes.js";
 import { activityHookEffects, pushKindFor, resolveHookCwd, resolveHookSessionId } from "../session/activity-hook.js";
@@ -78,7 +79,11 @@ const toolPayload = (body: Record<string, unknown>): ToolHookPayload => ({
 function offerQuestion(deps: HookDeps, sessionId: string, call: ToolCallStart): void {
   if (call.toolName !== ASK_QUESTION_TOOL || !call.toolUseId) return;
   const questions = parseAskQuestions(call.toolInput);
-  if (questions) deps.publishQuestion({ sessionId, toolUseId: call.toolUseId, questions });
+  if (!questions) return;
+  // From here, count what anyone else types into this session: it is what tells an answer that the
+  // dialog is no longer the one it was computed for (#1685).
+  watchOtherWrites(sessionId);
+  deps.publishQuestion({ sessionId, toolUseId: call.toolUseId, questions });
 }
 
 // The other half, and not optional: PostToolUse is how the pane learns the dialog CLOSED, whether

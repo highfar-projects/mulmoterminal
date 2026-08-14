@@ -47,6 +47,10 @@ export function handlePtyExit(sessionId: string, reap: (id: string) => void): Pt
     // reads as "there is a live pty here", and a dead one left in the table would be reused instead
     // of reattached.
     ptys.delete(sessionId);
+    // NOT forgetAnsweredQuestion here: this is the branch where the SESSION survives (tmux is still
+    // running, a reattach makes a new pty for it), so the dialog on screen is the same one and the
+    // claim that stops a duplicate answer must outlive the client that died. The reap path — which
+    // is where the session itself ends — drops it.
     console.log(`[pty] ${sessionId} lost its client, but its tmux session is still running — keeping it (reattaches on the next connect)`);
   } else if (disposition === "reap") {
     reap(sessionId);

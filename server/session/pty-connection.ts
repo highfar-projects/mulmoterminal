@@ -12,6 +12,7 @@ import { isResizeFrame } from "./ws-frames.js";
 import { isRecord } from "../../common/isRecord.js";
 import { boundedTail, stripTerminalQueries, terminalModePrefix } from "./terminal-replay.js";
 import type { PtyEntry } from "./types.js";
+import { noteOtherWrite } from "./write-to-session.js";
 
 /** A frame as it arrives off the socket. Only `toString()` is used — ws hands us a
  *  Buffer, and narrowing to this lets a test pass one without a live connection. */
@@ -145,6 +146,10 @@ export function createConnectionHandlers(deps: ConnectionDeps) {
       } else if (msg.type === "view" && typeof msg.active === "boolean") {
         applyViewFrame(entry, sessionId, msg.active, deps);
       } else if (msg.type === "input" && typeof msg.data === "string") {
+        // Announced before it is written: this is what tells an in-flight answer that the person at
+        // the keyboard has typed, so it stops rather than finishing its keystrokes into whatever the
+        // screen became (#1685). The write itself stays on the entry we already hold.
+        noteOtherWrite(sessionId);
         entry.term.write(msg.data);
       } else if (isResizeFrame(msg)) {
         entry.term.resize(msg.cols, msg.rows);

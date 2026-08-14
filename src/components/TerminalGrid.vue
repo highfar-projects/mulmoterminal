@@ -45,8 +45,9 @@ import { isDrawnResult } from "../utils/drawnResult";
 import { hasCanvasGroup, hasCollectionsGroup } from "../../common/toolGroups";
 import type { RightPane } from "./gridCell";
 import QuestionPane from "./QuestionPane.vue";
-import { ASK_QUESTION_CHANNEL, isAskQuestionDone, isAskQuestionEvent, keysForAnswers } from "../../common/askQuestion";
-import { fetchOpenQuestion } from "../composables/openQuestion";
+import { ASK_QUESTION_CHANNEL, isAskQuestionDone, isAskQuestionEvent } from "../../common/askQuestion";
+import { fetchOpenQuestion, postAnswer } from "../composables/openQuestion";
+import type { AnswerFailure } from "../../common/askQuestion";
 import { createQuestionBox } from "../composables/questionBox";
 import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
 import { isRecord } from "../../common/isRecord";
@@ -292,7 +293,6 @@ const PANE_CHROME_PX = SEPARATOR_PX + 1;
 
 // Between the keystrokes that answer a question dialog. The dialog rebuilds itself between
 // questions and after a toggle, so the keys are paced rather than written as one block.
-const QUESTION_KEY_GAP_MS = 30;
 const rowWidth = () => Math.max(0, (zoomRow.value?.clientWidth ?? 0) - (rightPane.value ? PANE_CHROME_PX : 0));
 // Mirrored into a ref so the separator can announce its range (a plain function call would not
 // re-render when the row resizes). The pane's floor gives way to the terminal's on a narrow row,
@@ -481,6 +481,10 @@ onBeforeUnmount(() => unsubscribeDrawn?.());
 // dialogs have closed, which is what stops a late hydration from resurrecting one — is in
 // composables/questionBox.ts; what stays here is the PANE, which is the grid's own business.
 const questionBox = createQuestionBox(fetchOpenQuestion);
+// Why the enlarged cell's last answer did not send. Dropped whenever a question arrives or the
+// zoom moves, so it can only ever describe the buttons currently on screen.
+const answerFailure = ref<AnswerFailure | null>(null);
+
 const expandedQuestion = computed(() => (expandedSessionId.value ? (questionBox.questions.value.get(expandedSessionId.value) ?? null) : null));
 
 // Answered — in the terminal, in the pane, or cancelled with Esc. The pane goes with the question
@@ -494,6 +498,7 @@ const dropQuestion = (sessionId: string): void => {
 const unsubscribeQuestion = subscribeSession(ASK_QUESTION_CHANNEL, (data) => {
   if (isAskQuestionEvent(data)) {
     questionBox.offer(data);
+    answerFailure.value = null;
     // Opened for the user, not merely made available: a question nobody sees is a session that
     // sits blocked. Only for the cell already on screen — enlarging some other cell to reveal a
     // pane would take the user off whatever they were reading.
@@ -510,7 +515,10 @@ onBeforeUnmount(() => unsubscribeQuestion());
 // answered from the browser at all. Not revealed if the zoom moved while the ask was in flight.
 async function revealQuestion(sessionId: string): Promise<void> {
   await questionBox.hydrate(sessionId);
-  if (questionBox.has(sessionId) && expandedSessionId.value === sessionId) setRightPane("question", props.expandedUid);
+  // Not re-opened if the user closed this very dialog: they are telling us they will answer in the
+  // terminal. The next question in this cell opens as usual (questionBox tracks it per dialog).
+  if (!questionBox.has(sessionId) || questionBox.isDismissed(sessionId)) return;
+  if (expandedSessionId.value === sessionId) setRightPane("question", props.expandedUid);
 }
 
 // A question that arrived while its cell was tiled — or on another page of the grid — still has a
@@ -520,6 +528,7 @@ async function revealQuestion(sessionId: string): Promise<void> {
 watch(
   expandedSessionId,
   async (sessionId) => {
+    answerFailure.value = null;
     if (sessionId) await revealQuestion(sessionId);
   },
   { immediate: true },
@@ -532,30 +541,32 @@ const unsubscribeQuestionReconnect = onPubSubReconnect(() => {
 });
 onBeforeUnmount(() => unsubscribeQuestionReconnect());
 
-// Answering the enlarged cell's dialog: the picks become the keystrokes that drive the REAL
-// dialog, still on screen in the terminal underneath (common/askQuestion.ts holds the sequences,
-// all of them measured). Sent one at a time with a gap — the dialog re-renders between questions,
-// and a burst written in one go risks arriving while it is rebuilding.
+// Closed by hand, rather than because the question went away: remember WHICH dialog, so returning
+// to this cell does not put it back. Answering in the terminal is always available, and a question
+// that arrives after this opens normally.
+function dismissQuestionPane(): void {
+  if (expandedSessionId.value) questionBox.dismiss(expandedSessionId.value);
+  setRightPane(null, paneUid.value);
+}
+
+// Answering the enlarged cell's dialog. The picks go to the host, which turns them into the
+// keystrokes that drive the REAL dialog still on screen in the terminal underneath.
 async function answerQuestion(picks: number[][]): Promise<void> {
   const event = expandedQuestion.value;
-  if (!event || props.expandedUid === null) return;
-  const keys = keysForAnswers(event.questions, picks);
-  if (!keys) return;
+  if (!event) return;
   // Dropped BEFORE the keys go out: the pane must not be able to send a second sequence into a
   // dialog that is already closing, and this is the same drop the `done` event would do anyway.
   dropQuestion(event.sessionId);
-  // Confirm the dialog is STILL the one on screen before typing into it. The user may have
-  // answered it in the terminal a moment ago, with its close still travelling — dropping the pane
-  // stops a second click, not this first one, and keys aimed at a dialog that has closed reach the
-  // prompt underneath, where an arrow walks the input history and Enter submits what it found. The
-  // server knows from the hooks, so ask rather than trust what the pane was holding.
-  const live = await fetchOpenQuestion(event.sessionId);
-  if (live?.toolUseId !== event.toolUseId) return;
-  const sent = await conn.sendKeySequence(`cell-${props.expandedUid}`, keys, QUESTION_KEY_GAP_MS);
-  // A sequence abandoned partway (the socket reconnected or the cell was retargeted) may have
-  // moved the dialog's highlight without committing it, and the buttons are already gone. The
-  // server knows whether that dialog is still open, so ask it rather than assume either way.
-  if (!sent) await revealQuestion(event.sessionId);
+  // The HOST checks that this dialog is still open and does the typing (#1685). It is the side
+  // that knows — the user may have answered in the terminal a moment ago, with the close still
+  // travelling — and doing both there makes them one step rather than two with a gap between.
+  const failure = await postAnswer(event.sessionId, event.toolUseId, picks);
+  // `closed` is the ordinary outcome of answering twice and needs nothing said. Anything else left
+  // the dialog up, so put the buttons back — WITH the reason, since coming back unexplained means
+  // pressing them again and failing the same way.
+  if (!failure || failure === "closed") return;
+  answerFailure.value = failure;
+  await revealQuestion(event.sessionId);
 }
 
 // GUI -> LLM for the enlarged cell (a submitted form's answer). App.vue routes this through the
@@ -1299,11 +1310,12 @@ watch(
         <QuestionPane
           v-else-if="rightPane === 'question'"
           :event="expandedQuestion"
+          :failure="answerFailure"
           :expanded="paneFull"
           :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
           @answer="answerQuestion"
           @toggle-expand="togglePaneExpanded"
-          @close="setRightPane(null, paneUid)"
+          @close="dismissQuestionPane"
         />
         <GithubPane
           v-else-if="rightPane === 'github'"

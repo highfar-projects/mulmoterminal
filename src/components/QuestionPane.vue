@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import type { AskQuestionEvent } from "../../common/askQuestion";
+import type { AnswerFailure, AskQuestionEvent } from "../../common/askQuestion";
 
 // The choices of a live AskUserQuestion dialog, as buttons (#1679).
 //
@@ -14,12 +14,30 @@ const props = defineProps<{
   // Null when the session has no question up: the pane shows its empty state rather than unmounting,
   // so a question answered in the terminal leaves an explanation behind instead of a vanished pane.
   event: AskQuestionEvent | null;
+  // Why the last answer did not reach the dialog, when it did not. The buttons come back either
+  // way, and coming back with no explanation is the failure mode this exists to avoid — pressing
+  // them again would fail the same way, silently.
+  failure?: AnswerFailure | null;
   expanded?: boolean;
 }>();
+
+// `closed` never reaches here: the pane simply goes, because the question is genuinely answered.
+const FAILURE_TEXT: Record<AnswerFailure, string> = {
+  closed: "That question was already answered.",
+  "bad-picks": "Those choices did not fit the question. It may have changed — try again.",
+  unwritable: "This terminal cannot be typed into from here. It outlived a server restart, so answer in the terminal itself.",
+  partial: "Part of the answer reached the dialog before it was interrupted, so where it stands is no longer known from here. Finish it in the terminal.",
+};
 
 const emit = defineEmits<{ answer: [picks: number[][]]; close: []; toggleExpand: [] }>();
 
 const questions = computed(() => props.event?.questions ?? []);
+
+// Two failures cannot be retried from here, and offering the buttons anyway guarantees a click that
+// is refused and a pane that closes saying nothing: `partial` left the dialog in a state only the
+// keyboard can resolve, and `unwritable` has no PTY to type into at all. The message stays; the
+// controls do not.
+const answerable = computed(() => props.failure !== "partial" && props.failure !== "unwritable");
 
 // One entry per question, holding the chosen option indexes. Kept ASCENDING: the keystrokes that
 // answer the dialog only ever walk DOWN the list, so an out-of-order pick would toggle the wrong
@@ -98,7 +116,11 @@ function choose(qi: number, oi: number): void {
       <p v-if="!event" class="text-dim">Nothing is being asked right now. The pane opens by itself when this session asks something.</p>
 
       <template v-else>
-        <div v-for="(question, qi) in questions" :key="`${event.toolUseId}-${qi}`" class="mb-4">
+        <p v-if="failure" data-testid="question-failure" class="mb-3 rounded border border-border bg-panel px-3 py-2 text-[12px]" role="alert">
+          {{ FAILURE_TEXT[failure] }}
+        </p>
+
+        <div v-for="(question, qi) in answerable ? questions : []" :key="`${event.toolUseId}-${qi}`" class="mb-4">
           <div v-if="question.header" class="mb-1 text-[11px] font-semibold tracking-wide text-dim uppercase">{{ question.header }}</div>
           <div class="mb-2 leading-snug">{{ question.question }}</div>
           <div class="flex flex-col gap-1">
@@ -119,7 +141,7 @@ function choose(qi: number, oi: number): void {
         </div>
 
         <button
-          v-if="!immediate"
+          v-if="!immediate && answerable"
           type="button"
           data-testid="question-send-btn"
           class="w-full cursor-pointer rounded border border-border bg-panel px-3 py-2 font-medium text-fg disabled:cursor-not-allowed disabled:text-dim"
@@ -131,7 +153,7 @@ function choose(qi: number, oi: number): void {
 
         <!-- Said plainly because it is the one thing about this pane that surprises people: the
              terminal dialog never went away, and answering it there is still the faster path. -->
-        <p class="mt-3 text-[12px] text-dim">Answering here presses the keys in the terminal. You can still answer the dialog directly.</p>
+        <p v-if="answerable" class="mt-3 text-[12px] text-dim">Answering here presses the keys in the terminal. You can still answer the dialog directly.</p>
       </template>
     </div>
   </section>

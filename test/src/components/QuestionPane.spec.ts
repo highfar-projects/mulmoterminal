@@ -106,4 +106,37 @@ describe("QuestionPane", () => {
 
     expect(w.emitted("answer")).toEqual([[[[]]]]);
   });
+
+  // A pane that comes back with no explanation invites the same failing click again. `unwritable` is
+  // the one that cannot be retried at all — the session outlived a server restart — so it has to say
+  // where the answer CAN be given.
+  it("says why the last answer did not send", async () => {
+    const w = mount(QuestionPane, { props: { event: event([question("Color", ["Red", "Blue"])]), failure: "unwritable" as const } });
+
+    const note = w.find('[data-testid="question-failure"]');
+    expect(note.exists()).toBe(true);
+    expect(note.text()).toContain("answer in the terminal itself");
+  });
+
+  // A click after `partial` is refused by the host by design, and a refusal closes the pane without
+  // a word — so the buttons must not come back offering one.
+  it("offers no buttons for a failure that cannot be retried", () => {
+    (["partial", "unwritable"] as const).forEach((failure) => {
+      const w = mount(QuestionPane, { props: { event: event([question("Color", ["Red", "Blue"])]), failure } });
+      expect(w.find('[data-testid="question-failure"]').exists()).toBe(true);
+      expect(options(w)).toHaveLength(0);
+      expect(w.find('[data-testid="question-send-btn"]').exists()).toBe(false);
+    });
+  });
+
+  // `bad-picks` is retryable: the dialog may have moved on to a different question.
+  it("keeps the buttons for a failure that can be retried", () => {
+    const w = mount(QuestionPane, { props: { event: event([question("Color", ["Red", "Blue"])]), failure: "bad-picks" as const } });
+    expect(options(w)).toHaveLength(2);
+  });
+
+  it("says nothing when the last answer went out", () => {
+    const w = mountPane([question("Color", ["Red", "Blue"])]);
+    expect(w.find('[data-testid="question-failure"]').exists()).toBe(false);
+  });
 });

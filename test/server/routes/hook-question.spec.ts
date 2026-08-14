@@ -9,6 +9,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import express from "express";
 import request from "supertest";
 import { mountHookRoute } from "../../../server/routes/hook-routes";
+import { noteOtherWrite, otherWriteCount } from "../../../server/session/write-to-session";
 
 vi.mock("../../../server/session/session-reads.js", () => ({ latestUserPrompt: vi.fn(async () => null) }));
 
@@ -69,6 +70,18 @@ describe("AskUserQuestion hooks", () => {
     await postHook({ hook_event_name: "PostToolUseFailure", tool_name: "AskUserQuestion", tool_use_id: "toolu_1", tool_input: { questions: QUESTIONS } });
 
     expect(deps.publishQuestion).toHaveBeenCalledWith({ sessionId: ID, toolUseId: "toolu_1", done: true });
+  });
+
+  // The count that tells an answer "this dialog has been typed into" starts HERE, when the dialog
+  // appears — not when an answer request arrives, which could never see a keystroke that preceded it.
+  it("starts counting other input from the moment the dialog appears", async () => {
+    noteOtherWrite(ID); // typed before this dialog existed
+    await postHook({ hook_event_name: "PreToolUse", tool_name: "AskUserQuestion", tool_use_id: "toolu_1", tool_input: { questions: QUESTIONS } });
+
+    expect(otherWriteCount(ID)).toBe(0); // the earlier keystroke is not this dialog's business
+
+    noteOtherWrite(ID); // and this one is
+    expect(otherWriteCount(ID)).toBe(1);
   });
 
   it("ignores every other tool", async () => {

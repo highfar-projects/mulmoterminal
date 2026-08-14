@@ -178,10 +178,19 @@ describe("openQuestionOf", () => {
     expect(openQuestionOf([], "s1")).toBeNull();
   });
 
-  // Two dialogs cannot be open at once, but a history holding an unfinished older entry (a hook
-  // that never reported its end) must not win over the one that is actually on screen.
   it("takes the most recent open question", () => {
     expect(openQuestionOf([running, { ...running, toolUseId: "t2" }], "s1")?.toolUseId).toBe("t2");
+  });
+
+  // A session blocked on a question runs nothing else until it is answered, so a later call proves
+  // the question is over — even if its own close never arrived (an interrupted turn, a `/clear`, a
+  // hook that did not land). Offering it anyway would put buttons over a terminal that moved on.
+  it("treats a question the agent has moved past as gone, close or no close", () => {
+    const movedOn = [running, { toolUseId: "b", toolName: "Bash", toolInput: { command: "ls" }, status: "running" }];
+    expect(openQuestionOf(movedOn, "s1")).toBeNull();
+
+    const andFinished = [running, { toolUseId: "b", toolName: "Bash", toolInput: { command: "ls" }, status: "completed" }];
+    expect(openQuestionOf(andFinished, "s1")).toBeNull();
   });
 
   it("ignores every other running tool", () => {

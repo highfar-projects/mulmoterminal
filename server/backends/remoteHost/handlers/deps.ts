@@ -9,6 +9,8 @@ import type { SessionAgent } from "../../../../common/sessionAgent.js";
 import type { TerminalSessionListing } from "../dirIcons.js";
 import type { IngestResult } from "../ingestAttachments.js";
 import type { SessionScreen } from "../terminalScreen.js";
+import type { AskQuestionEvent } from "../../../../common/askQuestion.js";
+import type { AnswerResult } from "../../../../common/askQuestion.js";
 
 export interface RemoteHostHandlerDeps {
   workspace: string;
@@ -27,6 +29,10 @@ export interface RemoteHostHandlerDeps {
   // in this process — a tmux session that outlived a restart stays viewable but not
   // writable from here.
   writeToSession: (sessionId: string, chunk: string) => boolean;
+  /** The AskUserQuestion dialog this session is blocked on, or null (#1685). */
+  openQuestion: (sessionId: string) => Promise<AskQuestionEvent | null>;
+  /** Answer it by option index. The host owns every byte that reaches the PTY. */
+  answerQuestion: (sessionId: string, toolUseId: string, picks: unknown) => Promise<AnswerResult>;
   // Whether typing may empty the session's input box first, so only the phone's text
   // is submitted (#572). Answered in server/index.ts, where the agent kind and the
   // turn state live.

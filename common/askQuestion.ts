@@ -89,11 +89,38 @@ export interface RecordedCall {
 // channel is event-only and replays nothing on reconnect, so a browser that reloads between the
 // question and its answer would otherwise never learn about a session that is waiting — and with
 // no button to open the pane, that question becomes unanswerable from the browser entirely.
+//
+// The LAST call, not the last one that happens to still say `running`. A session blocked on a
+// question runs nothing else until it is answered, so a later call is proof the question is over —
+// however it ended. Scanning back instead would keep offering a dialog whose close never arrived
+// (an interrupted turn, a `/clear`, a hook that did not land) long after the agent moved on, and
+// the buttons would type into whatever the screen became.
 export const openQuestionOf = (calls: readonly RecordedCall[], sessionId: string): AskQuestionEvent | null => {
-  const open = [...calls].reverse().find((call) => call.toolName === ASK_QUESTION_TOOL && call.status === "running" && call.toolUseId);
-  const questions = open ? parseAskQuestions(open.toolInput) : null;
-  return questions && open?.toolUseId ? { sessionId, toolUseId: open.toolUseId, questions } : null;
+  const last = calls[calls.length - 1];
+  if (last?.toolName !== ASK_QUESTION_TOOL || last.status !== "running" || !last.toolUseId) return null;
+  const questions = parseAskQuestions(last.toolInput);
+  return questions ? { sessionId, toolUseId: last.toolUseId, questions } : null;
 };
+
+/** Why an answer did not reach the dialog. Serialized by the host, rendered by every client, so
+ *  the values live here rather than once per layer — a drift between them is a client showing the
+ *  wrong explanation, or none. */
+export type AnswerFailure =
+  /** The dialog was answered (in the terminal, or by another client) before this arrived. */
+  | "closed"
+  /** picks do not fit the questions — wrong count, out of range, or not ascending. */
+  | "bad-picks"
+  /** No PTY in this process to type into: the session outlived a server restart. */
+  | "unwritable"
+  /** Some keys reached the dialog before the rest were abandoned. Its cursor has moved and its
+   *  boxes may be ticked, so where it stands is no longer knowable from here — a fresh sequence
+   *  would be computed from a state the dialog left behind and could commit a different answer. */
+  | "partial";
+
+export type AnswerResult = { ok: true } | { ok: false; reason: AnswerFailure };
+
+export const isAnswerFailure = (value: unknown): value is AnswerFailure =>
+  value === "closed" || value === "bad-picks" || value === "unwritable" || value === "partial";
 
 const KEY_DOWN = "\x1b[B";
 const KEY_ENTER = "\r";

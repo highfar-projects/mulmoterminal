@@ -102,6 +102,8 @@ export function initRemoteHostBackend(deps: RemoteHostBackendDeps): void {
       submitSequence: deps.submitSequence,
       sessionAgent: deps.sessionAgent,
       launchTerminal: deps.launchTerminal,
+      openQuestion: deps.openQuestion,
+      answerQuestion: deps.answerQuestion,
     }),
     log: { ...log, debug: () => undefined },
   });
