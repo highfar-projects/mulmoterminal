@@ -97,6 +97,11 @@ describe("the file a published view names", () => {
       "<script>const re = /a\\/\\/b/; alert('x')</script>",
       // Naming the global outright is never exempted by the page's own binding.
       "<script>const confirm = (v) => v; window.confirm('x');</script>",
+      // A regex may follow a KEYWORD, where the character before the slash is a letter.
+      '<script>function m(v) { return /[//]/.test(v); } prompt("name")</script>',
+      // `frames` is the window, so this is the same disabled global under another name.
+      '<script>frames.prompt("x")</script>',
+      "<script>const confirm = (v) => v; frames.confirm('x');</script>",
       '<a href="javascript:prompt&lpar;&rpar;">go</a>',
       "<button ONCLICK=\"prompt('x')\">go</button>",
       "<button OnClick=prompt()>go</button>",

@@ -234,12 +234,31 @@ interface Step {
  *  reading it as a comment throws away the rest of the line — the call included. */
 const BEFORE_REGEX = new Set(["", "(", ",", "=", ":", "[", "!", "&", "|", "?", "{", "}", ";", "+", "-", "*", "%", "~", "^", "<", ">", "\n"]);
 
-const inCode = (ch: string, next: string, prev: string): Step => {
+const WHITESPACE = new Set([" ", "\t", "\n", "\r"]);
+const WORD = /[\w$]/;
+
+/** …and after these WORDS, for the same reason. `return /[//]/.test(value)` is a regex, but the
+ *  character before the slash is `n` — the end of a keyword — so the punctuation set above reads it
+ *  as division and the `//` in the class opens a comment that eats the rest of the line. */
+const KEYWORD_BEFORE_REGEX = new Set(["return", "typeof", "instanceof", "in", "of", "new", "delete", "void", "throw", "case", "do", "else", "yield", "await"]);
+
+/** The identifier a piece of code ends with, if any. Walked from the end rather than matched: the
+ *  pattern that says this (`\w+\s*$`) is the shape a linter reads as exponential backtracking, and
+ *  it would run against a growing string on every `/`. */
+const trailingWord = (code: string): string => {
+  let end = code.length;
+  while (end > 0 && WHITESPACE.has(code[end - 1] ?? "")) end -= 1;
+  let start = end;
+  while (start > 0 && WORD.test(code[start - 1] ?? "")) start -= 1;
+  return code.slice(start, end);
+};
+
+const inCode = (ch: string, next: string, prev: string, word: string): Step => {
   // The comment markers come FIRST, and are not ambiguous: an empty regex literal does not exist,
   // so `//` is always a comment, and `/*` is too.
   if (ch === "/" && next === "/") return { mode: "line", emit: " ", skip: true };
   if (ch === "/" && next === "*") return { mode: "block", emit: " ", skip: true };
-  if (ch === "/" && BEFORE_REGEX.has(prev)) return { mode: "re", emit: " ", skip: false };
+  if (ch === "/" && (BEFORE_REGEX.has(prev) || KEYWORD_BEFORE_REGEX.has(word))) return { mode: "re", emit: " ", skip: false };
   const opened = OPENS[ch];
   // A string's CONTENT is dropped and its quotes are not: `"confirm("` must not become a call,
   // and `foo("x")` must keep its parentheses balanced for a reader.
@@ -326,7 +345,7 @@ const bare = (source: string): string => {
       index += 1;
       continue;
     }
-    const step: Walked = mode === "code" ? { ...inCode(ch, next, prev), inClass } : { ...inside(mode, ch, next, inClass), emit: " " };
+    const step: Walked = mode === "code" ? { ...inCode(ch, next, prev, trailingWord(out)), inClass } : { ...inside(mode, ch, next, inClass), emit: " " };
     inClass = step.inClass;
     out += step.emit;
     if (mode === "code" && step.emit.trim() !== "") prev = step.emit;
@@ -350,13 +369,15 @@ const asMemberAccess = (source: string): string =>
     .replace(/\?\s*\./g, ".");
 
 /** The receivers that ARE the global. Dropped so the one pattern below sees a bare call, while a
- *  receiver of the author's own (`ui.alert`, `this.confirm`) keeps its dot and is left alone. */
-const GLOBAL_RECEIVER = /\b(?:window|self|globalThis|top) ?\. ?/g;
+ *  receiver of the author's own (`ui.alert`, `this.confirm`) keeps its dot and is left alone.
+ *  `frames` is here because it IS the window — a page calling `frames.prompt(…)` calls the same
+ *  disabled global as one calling `window.prompt(…)`. */
+const GLOBAL_RECEIVER = /\b(?:window|self|globalThis|top|frames) ?\. ?/g;
 
 /** The same call with its receiver still on it. Looked for FIRST and never exempted by a binding
  *  below: `window.prompt(…)` names the global outright, so a page's own `const prompt` says
  *  nothing about it. */
-const QUALIFIED_CALL = /\b(?:window|self|globalThis|top) ?\. ?(alert|confirm|prompt) ?\(/;
+const QUALIFIED_CALL = /\b(?:window|self|globalThis|top|frames) ?\. ?(alert|confirm|prompt) ?\(/;
 
 const CALL = /(?<![\w.$])(alert|confirm|prompt) ?\(/g;
 
