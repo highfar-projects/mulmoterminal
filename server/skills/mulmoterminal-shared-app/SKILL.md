@@ -26,7 +26,7 @@ the user turns this down.
 
 ## Start from a template when one fits
 
-Two shapes are written out in full — declaration, schemas, and the reasoning behind each key:
+Three shapes are written out in full — declaration, schemas, and the reasoning behind each key:
 
 - **[templates/salon.md](./templates/salon.md)** — a request that a NAMED PERSON approves, and only
   their own (a salon's bookings, interviews, repairs, review assignments). This is what `assignee`
@@ -35,10 +35,14 @@ Two shapes are written out in full — declaration, schemas, and the reasoning b
   a per-class opening time (a gym class, a workshop, a slot booking). This is what `stampField` and
   `window.fromField` are for, and it explains why the capacity lives in the VIEW and not in the
   rules.
+- **[templates/meeting-room.md](./templates/meeting-room.md)** — a bookable unit you can LIST IN
+  ADVANCE, taken on the spot with no approval (a meeting room, a desk, equipment on loan, a parking
+  space). This is what `idFrom: "field"` and `mirror` are for, and it is the one that spells out who
+  refills the slots, and what a cancellation does NOT do.
 
-Read the matching one before writing `app.json` by hand. Both are checked against the real deploy
-gate by this repository's tests, so what they show is what deploys — and both spend most of their
-length on the traps, which is the part you cannot recover by guessing.
+Read the matching one before writing `app.json` by hand. All three are checked against the real
+deploy gate by this repository's tests, so what they show is what deploys — and they spend most of
+their length on the traps, which is the part you cannot recover by guessing.
 
 ## The path
 
@@ -270,6 +274,21 @@ an update, which the public submission path never allows. Firestore decides that
   the public page must never read bookings — it reads the slot rows, whose `state` is a copy of
   "does a booking with this id exist". The rules accept the two writes only as one batch, in both
   directions. **Declare both halves or neither**; publish refuses one on its own.
+- **`selfDelete`** (on the submission) names the statuses the person who booked may take their
+  OWN row away from — the only thing that gives a slot back without the desk. Cancelling does
+  not: the record's id IS the exclusivity, so a booking that is merely `cancelled` goes on
+  holding the slot. Declaring this deletes the row instead, and the rules reopen the mirror in
+  the same write, so a half-freed slot cannot exist.
+  **What it spends is the record**: no history of who withdrew, and no `mail` can be bound to it
+  (the queue rule reads the document after the write, and there is none). An app that wants the
+  record kept names no status and sends its people to the desk. Say which one the user is
+  choosing — it is not a detail they discover later.
+  **Do not give a participant both.** `selfTransitions` to `cancelled` alongside
+  `selfDelete: ["booked"]` reads as two ways to cancel and is a one-way trap: the transition
+  lands the row in a status `selfDelete` no longer names, so the person has, with a documented
+  bridge call, turned a slot nobody can free into staff cleanup. Declare one of them per
+  collection — and remember an old published page still reaches whatever the declaration allows,
+  so removing the button is not removing the move.
 - **These five keys freeze once records exist.** `confirm` does not override that, because what
   breaks is not a visible schema mismatch — it is the exclusivity itself, silently, in an app that
   goes on working. Say so before an author starts renaming things.
@@ -335,7 +354,7 @@ is DELETED at both ends rather than left behind.
 
 ### What a page may WRITE
 
-**`transition` and `assign` need the runtime deployed, and they do not fail softly.** `submit` has
+**`transition`, `assign` and `withdraw` need the runtime deployed, and they do not fail softly.** `submit` has
 been on the bridge since public forms; these two and the `/p/{slug}` entrance arrived with the
 shared-app runtime, and on anything older they are simply ABSENT — a page calling one throws
 `__MC_APP_VIEW.transition is not a function`, which in an iframe looks like a page that does
@@ -348,13 +367,19 @@ capability comes back empty and the page draws a read-only view of itself. It st
 the app is published again — a projection without those lists cannot tell a receptionist from an
 observer, and refuses rather than assuming.
 
-Three calls, and a page cannot name a field in any of them:
+Four calls, and a page cannot name a field in any of them:
 
 ```js
 await window.__MC_APP_VIEW.submit(cid, values);          // a new record
 await window.__MC_APP_VIEW.transition(cid, itemId, to);  // approve, reject, cancel
 await window.__MC_APP_VIEW.assign(cid, itemId, address); // hand a row to a colleague
+await window.__MC_APP_VIEW.withdraw(cid, itemId);        // take the reader's OWN row away
 ```
+
+`withdraw` names no destination because nothing moves — the row is deleted, and where the
+collection has a `mirror` the parent reopens it in the same batch. It works only where
+`selfDelete` names the row's current status, only on a participant's page, and (like the two
+above) only on a runtime that has it.
 
 Each returns `{ ok, error }`. The page is told **who the reader is and what they may actually do**
 in the second argument to `onState`:
@@ -364,6 +389,7 @@ window.__MC_APP_VIEW.onState((data, viewer) => {
   const can = viewer.can.bookings ?? {};
   // can.transitionAny  — may approve any row  (owner / editor)
   // can.transitionOwn  — may approve the rows assigned to them  (assignee)
+  // can.withdrawFrom   — the statuses this reader may take their OWN row away from
   // can.assigneeField  — the field a row carries its owner's address in
   // can.assign         — may hand a row to somebody else
   // can.assignees      — who may be named
@@ -379,15 +405,26 @@ where nobody reviews them. The write applies the same comparison, so a page that
 refused rather than obeyed.
 
 `submit` is the visitor's path and **the page confirms with the reader before writing** — the HTML
-is not trusted to have been asked. The other two are the
+is not trusted to have been asked. `transition` and `assign` are the
 roster's, and they do NOT confirm: the person pressing them is on the app's own roster doing
 their own work, and a modal in front of a button used forty times a day is abandoned rather than
 read. The page prints what happened above the frame instead, from what was written.
+
+**`withdraw` is the exception, and the page is what has to ask.** The parent does not confirm it
+either — but it deletes a record and, where there is a `mirror`, hands the slot to whoever clicks
+next, so there is nothing to undo and nothing left to read afterwards. That is not the same kind
+of button as approving a booking for the fortieth time today. Put the confirmation in the page,
+and say what it costs: 取り下げると枠はすぐ他の人が取れるようになります。
 
 - **`transition` moves ONE field** — `collections.<cid>.statusField` — and only along
   `transitions` (for a member) or `public.submit.<cid>.selfTransitions` (for a participant). Those
   are different tables, so a staff page and a participant page draw different buttons for the same
   collection. Ask for a move the record cannot make and the answer names it.
+- **`withdraw` takes the reader's own row away** and names no destination, because nothing moves.
+  It exists only where `selfDelete` declares the statuses, it is offered on a participant's page
+  and never on a staff one (owner and editor delete by role), and where the collection has a
+  `mirror` the parent reopens it in the same batch. `viewer.can.<cid>.withdrawFrom` is the list of
+  statuses, not a boolean: draw the control on the rows that are actually in one of them.
 - **`assign` moves `assigneeField`**, and only to an address holding `owner`, `editor` or
   `assignee` on that collection (`assignees` in the capability above). Anything else would write a
   row NOBODY could touch afterwards. An `assignee` cannot hand a row on at all, their own
