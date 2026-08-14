@@ -2,6 +2,7 @@ import { answerQuestion } from "./answerQuestion.js";
 import type { AnswerResult } from "../../common/askQuestion.js";
 import { otherWriteCount, writeAnswerKey } from "./write-to-session.js";
 import { isUnknownArray } from "../../common/isUnknownArray.js";
+import { isRecord } from "../../common/isRecord.js";
 import { sanitizeTerminalInput } from "../backends/remoteHost/terminalInput.js";
 
 // Between the keystrokes that answer a dialog: it rebuilds itself between questions, so a burst
@@ -10,13 +11,25 @@ const QUESTION_KEY_GAP_MS = 30;
 
 const pause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+// One question's chosen indexes. Two shapes reach here because two transports do, and one of them
+// cannot carry the other's: the pane POSTs JSON and sends the row as `number[]`, while the phone's
+// command is a Firestore document, and Firestore cannot store an array inside an array — a
+// `number[][]` is rejected outright by addDoc, so the phone wraps each row one map deep.
+// Same meaning, and both are read into the same `number[]`.
+const readRow = (row: unknown): number[] | null => {
+  if (isRecord(row)) return readRow(row.options);
+  if (!isUnknownArray(row)) return null;
+  if (!row.every((idx) => typeof idx === "number")) return null;
+  return row.filter((idx): idx is number => typeof idx === "number");
+};
+
 // The picks as they arrive from a client, read rather than trusted. Only the SHAPE is decided
 // here — whether the indexes fit the dialog is keysForAnswers' call, made against the questions
 // the host itself recorded. A body that is not this shape is refused as bad-picks rather than
 // coerced, because a coerced pick is a keystroke aimed at a row nobody chose.
 const readPicks = (picks: unknown): number[][] | null => {
   if (!isUnknownArray(picks)) return null;
-  const rows = picks.map((row) => (isUnknownArray(row) && row.every((idx) => typeof idx === "number") ? row.filter((idx) => typeof idx === "number") : null));
+  const rows = picks.map(readRow);
   return rows.some((row) => row === null) ? null : rows.filter((row) => row !== null);
 };
 
