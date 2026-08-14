@@ -206,11 +206,18 @@ const runsAsScript = (attributes: string): boolean => {
  *  with the body, so nothing ever read it. */
 const withoutScriptBodies = (html: string): string => html.replace(SCRIPT_ELEMENT, "$1 ");
 
+/** Markup an HTML COMMENT holds is not markup: `<!-- <button onclick="prompt()"> -->` draws no
+ *  button and runs nothing, and reading it as a live attribute refuses a page that works —
+ *  commenting a widget out while it is being written is an ordinary thing to do. Applied after the
+ *  script bodies are gone, so a `<!--` inside a script (where it is not a comment at all) cannot
+ *  swallow the markup that follows it. */
+const withoutHtmlComments = (markup: string): string => markup.replace(/<!--[\s\S]*?-->/g, " ");
+
 const scriptsOf = (html: string): string[] => [
   ...[...html.matchAll(SCRIPT_BODY)].filter((hit) => runsAsScript(hit[1] ?? "")).map((hit) => hit[2] ?? ""),
   // Attributes are read from EVERY start tag, executable body or not: a data block's own `onerror`
   // still fires.
-  ...attributesOf(withoutScriptBodies(html)),
+  ...attributesOf(withoutHtmlComments(withoutScriptBodies(html))),
 ];
 
 /** What the walker is in the middle of. `code` is the only state that reaches the match. */

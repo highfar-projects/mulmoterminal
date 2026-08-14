@@ -72,6 +72,8 @@ describe("the file a published view names", () => {
       "<a href=\"javascript:confirm('sure')\">go</a>",
       // An attribute value does not have to be quoted, and an optional call is still a call.
       "<button onclick=prompt()>go</button>",
+      // …and a comment does not swallow the live markup after it.
+      "<!-- 昔の版 --><button onclick=\"prompt('name')\">go</button>",
       "<a href=javascript:confirm()>go</a>",
       // An attribute is DECODED before it is compiled as a handler or followed as a URL, so the
       // call — and the scheme itself — can be written as character references and still run.
@@ -144,6 +146,9 @@ describe("the file a published view names", () => {
       '<script>const sample = "<button onclick=alert()>";</script>',
       "<p>onclick=alert() と書いても動きません</p>",
       "<p>&colon; と書いただけ</p>",
+      // Markup inside an HTML COMMENT draws nothing and runs nothing. Commenting a widget out
+      // while it is being written is ordinary; refusing the page for it is not.
+      "<!-- <button onclick=\"prompt('name')\">go</button> -->",
       '<a href="https://example.com/prompt(">ok</a>',
       // A data block is not JavaScript: it is often exactly where a page keeps a sample that says
       // `prompt(` on purpose, and running the scanner over it refuses a page that works.
