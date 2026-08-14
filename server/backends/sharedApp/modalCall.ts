@@ -40,7 +40,6 @@ const SCRIPT_ELEMENT = /(<script\b[^>]*>)[\s\S]*?<\/script\s*>/gi;
 // text refuses that page; so does prose that happens to say `onclick=alert()`. A refusal an author
 // cannot act on is the more expensive way for this gate to be wrong.
 //
-const TAG_NAME = /<[a-z][a-z0-9-]*/gi;
 // An attribute value may be quoted either way OR bare — `<button onclick=prompt()>` is valid HTML
 // and runs, so an extractor that insists on quotes reads a working call as no code at all.
 const ATTRIBUTE = /\s([a-z][a-z0-9-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
@@ -153,13 +152,43 @@ const attributeRegion = (markup: string, from: number): string => {
   return markup.slice(from);
 };
 
-/** Every attribute of every start tag in the markup — the scripts already removed. */
-const attributesOf = (markup: string): string[] =>
-  [...markup.matchAll(TAG_NAME)]
-    .map((tag) => attributeRegion(markup, tag.index + tag[0].length))
-    .flatMap((region) => [...region.matchAll(ATTRIBUTE)])
-    .map((hit) => attributeCode(hit[1] ?? "", hit[2] ?? hit[3] ?? hit[4] ?? ""))
-    .filter((code): code is string => code !== null);
+/** Where a start tag's name ends, or 0 when this `<` opens no tag. */
+const TAG_START = /^<[a-z][a-z0-9-]*/i;
+
+/** Every attribute of every START TAG in the markup — the scripts already gone.
+ *
+ *  Walked rather than pattern-matched over the whole string, because the two things it has to tell
+ *  apart are positional. A `<!--` OUTSIDE a tag opens a comment, and markup inside one draws
+ *  nothing: commenting a widget out while writing it is ordinary, and refusing the page for it is
+ *  not. The same four characters INSIDE a quoted attribute value (`title="<!--"`) open nothing —
+ *  stripping comments first read that as one, and swallowed the live handler that came after. */
+const attributesOf = (markup: string): string[] => {
+  const found: string[] = [];
+  let index = 0;
+  while (index < markup.length) {
+    const open = markup.indexOf("<", index);
+    if (open === -1) break;
+    if (markup.startsWith("<!--", open)) {
+      const closed = markup.indexOf("-->", open + 4);
+      // An unterminated comment runs to the end of the document, as it does in a browser.
+      index = closed === -1 ? markup.length : closed + 3;
+      continue;
+    }
+    const name = TAG_START.exec(markup.slice(open, open + 64))?.[0];
+    if (name === undefined) {
+      index = open + 1;
+      continue;
+    }
+    const region = attributeRegion(markup, open + name.length);
+    found.push(
+      ...[...region.matchAll(ATTRIBUTE)]
+        .map((hit) => attributeCode(hit[1] ?? "", hit[2] ?? hit[3] ?? hit[4] ?? ""))
+        .filter((code): code is string => code !== null),
+    );
+    index = open + name.length + region.length + 1;
+  }
+  return found;
+};
 
 /** The `type` a `<script>` declares, lower-cased and without its parameters. */
 const TYPE_ATTRIBUTE = /\stype\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/i;
@@ -206,18 +235,11 @@ const runsAsScript = (attributes: string): boolean => {
  *  with the body, so nothing ever read it. */
 const withoutScriptBodies = (html: string): string => html.replace(SCRIPT_ELEMENT, "$1 ");
 
-/** Markup an HTML COMMENT holds is not markup: `<!-- <button onclick="prompt()"> -->` draws no
- *  button and runs nothing, and reading it as a live attribute refuses a page that works —
- *  commenting a widget out while it is being written is an ordinary thing to do. Applied after the
- *  script bodies are gone, so a `<!--` inside a script (where it is not a comment at all) cannot
- *  swallow the markup that follows it. */
-const withoutHtmlComments = (markup: string): string => markup.replace(/<!--[\s\S]*?-->/g, " ");
-
 const scriptsOf = (html: string): string[] => [
   ...[...html.matchAll(SCRIPT_BODY)].filter((hit) => runsAsScript(hit[1] ?? "")).map((hit) => hit[2] ?? ""),
   // Attributes are read from EVERY start tag, executable body or not: a data block's own `onerror`
   // still fires.
-  ...attributesOf(withoutHtmlComments(withoutScriptBodies(html))),
+  ...attributesOf(withoutScriptBodies(html)),
 ];
 
 /** What the walker is in the middle of. `code` is the only state that reaches the match. */
