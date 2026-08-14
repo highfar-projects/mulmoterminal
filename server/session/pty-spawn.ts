@@ -5,7 +5,7 @@
 import pty from "node-pty";
 import type { IPty } from "node-pty";
 import path from "node:path";
-import { sanitizePtyEnv } from "../infra/pty-env.js";
+import { sanitizePtyEnv, withFallbackLocale } from "../infra/pty-env.js";
 import { resolvePtyLaunchForEnv } from "../infra/resolve-bin.js";
 import { binaryProblemMessage, diagnoseBinary, type BinaryDiagnosis } from "../infra/has-binary.js";
 import { cwdProblemMessage, diagnoseSpawnCwd, type CwdDiagnosis } from "../infra/spawn-cwd.js";
@@ -27,8 +27,11 @@ const PTY_ROWS = 30;
 // the settings `env` block, which can set a variable but not remove one.
 // `extra` is set on the spawned process ON TOP of the sanitized inherited environment —
 // per-session values the child needs and our own process cannot carry (a session id).
+// On macOS a UTF-8 LANG is supplied when the environment names no locale at all (#1634) —
+// inside `withoutUnset`, so a caller asking for LANG to be gone still gets it gone.
 export function ptyEnv(unset: readonly string[] = [], extra: Readonly<Record<string, string>> = {}): NodeJS.ProcessEnv {
-  return { ...withoutUnset(sanitizePtyEnv(process.env, path.delimiter), unset), ...extra };
+  const inherited = withFallbackLocale(sanitizePtyEnv(process.env, path.delimiter), process.platform);
+  return { ...withoutUnset(inherited, unset), ...extra };
 }
 
 /** What a terminal opened in `cwd` is given on top of the inherited environment: the per-tree

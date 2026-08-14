@@ -73,6 +73,43 @@ export function sanitizePathEntries(pathValue: string, delimiter: string): strin
     .join(delimiter);
 }
 
+// Read in this order by every locale-aware program; the first non-empty one wins.
+const LOCALE_NAMES = ["LC_ALL", "LC_CTYPE", "LANG"];
+
+// Shipped with every macOS, which is what makes naming it safe — a locale that is not
+// installed leaves setlocale failing, and the programs that report that (perl loudest)
+// would be noisier than the empty environment they started from.
+const FALLBACK_LOCALE = "en_US.UTF-8";
+
+// `env` with a UTF-8 LANG added when it names no locale at all (#1634).
+//
+// A process launched from a macOS GUI inherits launchd's environment, which carries no
+// locale variable, and nothing between there and here supplies one. Everything that decides
+// its output encoding from the locale — a TUI over ncurses, python's stdout — then runs as
+// if the terminal were ASCII.
+//
+// The underscores that #1634 reported are NOT this: those come from the tmux client, which
+// tmux.ts fixes with `-u` on every platform. This is the same environment seen by everything
+// else in the session.
+//
+// macOS only, deliberately. The empty-locale environment is launchd's doing, and macOS is
+// where the fallback name is certain to resolve; a Linux box that names no locale often has
+// no en_US.UTF-8 either, and there we would be trading a silent C locale for a failing one.
+// Windows has neither the convention nor tmux, and git-bash reads LANG.
+//
+// Only when there is NO name: LC_ALL and LC_CTYPE outrank LANG, so writing LANG could not
+// change a machine that has one, and a user's own `LANG=ja_JP.UTF-8` has to survive. An
+// empty value does not count as a name — a login shell can export a bare `LANG=` beside a
+// real LC_ALL.
+//
+// Names matched exactly, not the case-insensitive way envValue does it: Windows is already
+// out, and everywhere else `lang` is simply a different variable from `LANG`.
+export function withFallbackLocale(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): NodeJS.ProcessEnv {
+  if (platform !== "darwin") return env;
+  if (LOCALE_NAMES.some((name) => (env[name] ?? "") !== "")) return env;
+  return { ...env, LANG: FALLBACK_LOCALE };
+}
+
 // A copy of `env` safe to hand to a spawned PTY: launcher vars dropped, PATH
 // (any casing — Windows uses "Path") cleaned. Never mutates the input.
 export function sanitizePtyEnv(env: NodeJS.ProcessEnv, delimiter: string): NodeJS.ProcessEnv {

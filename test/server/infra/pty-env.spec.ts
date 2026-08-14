@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { isLauncherEnvVar, isPathVar, pathFromEnv, sanitizePathEntries, sanitizePtyEnv } from "../../../server/infra/pty-env";
+import { isLauncherEnvVar, isPathVar, pathFromEnv, sanitizePathEntries, sanitizePtyEnv, withFallbackLocale } from "../../../server/infra/pty-env";
 
 describe("isLauncherEnvVar", () => {
   it("flags the vars package-manager launchers inject", () => {
@@ -136,5 +136,47 @@ describe("pathFromEnv", () => {
 
   it("survives an empty value rather than reporting it as absent", () => {
     expect(pathFromEnv({ Path: "" })).toBe("");
+  });
+});
+
+describe("withFallbackLocale", () => {
+  // A macOS GUI launch inherits launchd's environment, which names no locale, so everything
+  // that reads one — an ncurses TUI, python's stdout — runs as if the terminal were ASCII (#1634).
+  it("supplies a UTF-8 LANG when the environment names no locale", () => {
+    expect(withFallbackLocale({ HOME: "/Users/u", PATH: "/usr/bin" }, "darwin").LANG).toBe("en_US.UTF-8");
+    expect(withFallbackLocale({}, "darwin").LANG).toBe("en_US.UTF-8");
+  });
+
+  // A Linux box with no locale named usually has no en_US.UTF-8 installed either, and naming
+  // one that does not resolve trades a silent C locale for a failing one.
+  it("adds nothing on Linux, where the name is not certain to resolve", () => {
+    expect(withFallbackLocale({}, "linux").LANG).toBeUndefined();
+    expect(withFallbackLocale({ HOME: "/home/u" }, "linux")).toEqual({ HOME: "/home/u" });
+  });
+
+  it("leaves the user's own locale alone, whichever variable carries it", () => {
+    expect(withFallbackLocale({ LANG: "ja_JP.UTF-8" }, "darwin").LANG).toBe("ja_JP.UTF-8");
+    expect(withFallbackLocale({ LANG: "C" }, "darwin").LANG).toBe("C");
+    // LC_ALL and LC_CTYPE outrank LANG, so writing LANG could not change these anyway.
+    expect(withFallbackLocale({ LC_ALL: "en_GB.UTF-8" }, "darwin").LANG).toBeUndefined();
+    expect(withFallbackLocale({ LC_CTYPE: "en_GB.UTF-8" }, "darwin").LANG).toBeUndefined();
+  });
+
+  // A login shell can export a bare `LANG=` beside a real LC_ALL.
+  it("does not count an empty value as naming a locale", () => {
+    expect(withFallbackLocale({ LANG: "" }, "darwin").LANG).toBe("en_US.UTF-8");
+    expect(withFallbackLocale({ LANG: "", LC_ALL: "ja_JP.UTF-8" }, "darwin").LANG).toBe("");
+  });
+
+  // Windows has neither the convention nor tmux, and git-bash reads LANG: introducing a
+  // variable that was never there is a different bug waiting to happen.
+  it("adds nothing on Windows", () => {
+    expect(withFallbackLocale({ Path: "C:\\Windows" }, "win32").LANG).toBeUndefined();
+  });
+
+  it("never mutates the environment it was given", () => {
+    const env = { HOME: "/Users/u" };
+    withFallbackLocale(env, "darwin");
+    expect(env).toEqual({ HOME: "/Users/u" });
   });
 });

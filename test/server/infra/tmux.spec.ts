@@ -41,6 +41,14 @@ describe("tmuxNewSessionArgs", () => {
     expect(args.slice(dashdash + 1)).toEqual(["/bin/zsh", "-lc", "exec codex"]);
   });
 
+  // Without -u a client that finds no UTF-8 locale name writes one `_` per cell for anything
+  // DEC ACS cannot express — Japanese arrives as pairs of underscores (#1634). It is a tmux
+  // GLOBAL flag, so it only counts before the command.
+  it("forces UTF-8 output with -u, before `new-session`", () => {
+    expect(args.indexOf("-u")).toBeGreaterThan(-1);
+    expect(args.indexOf("-u")).toBeLessThan(args.indexOf("new-session"));
+  });
+
   it("passes no -e when there is no per-session environment", () => {
     expect(args).not.toContain("-e");
   });

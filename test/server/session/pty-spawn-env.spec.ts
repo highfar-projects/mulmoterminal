@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // node-pty is a native module and spawning is the whole point of the file under test, so
 // the pty itself is mocked: what matters here is the ENVIRONMENT handed to it.
@@ -72,6 +72,47 @@ describe("spawnPty — the environment it hands the pty", () => {
   it("leaves the environment alone when nothing is named", () => {
     spawnPty("claude", [], EXISTING_CWD);
     expect(envOf().ANTHROPIC_API_KEY).toBe("sk-ant-leftover");
+  });
+});
+
+// A server launched from a macOS GUI has none of these, and a tmux client that finds no
+// UTF-8 name among them renders anything DEC ACS cannot express as one `_` per cell (#1634).
+// Asserted here and not only on withFallbackLocale because the wiring is the part that was
+// missing: the helper existing and ptyEnv not calling it looks identical from the unit test.
+describe("spawnPty — the locale it hands the pty", () => {
+  // undefined REMOVES the variable, which is the state under test: a GUI launch has none of them.
+  beforeEach(() => {
+    vi.stubEnv("LC_ALL", undefined);
+    vi.stubEnv("LC_CTYPE", undefined);
+    vi.stubEnv("LANG", undefined);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("supplies a UTF-8 LANG when our own environment names no locale", () => {
+    spawnPty("claude", [], EXISTING_CWD);
+    // macOS only — see withFallbackLocale for why the name is not safe to assume elsewhere.
+    expect(envOf().LANG).toBe(process.platform === "darwin" ? "en_US.UTF-8" : undefined);
+  });
+
+  it("keeps the user's own locale", () => {
+    vi.stubEnv("LANG", "ja_JP.UTF-8");
+    spawnPty("claude", [], EXISTING_CWD);
+    expect(envOf().LANG).toBe("ja_JP.UTF-8");
+  });
+
+  // LC_ALL outranks LANG, so a LANG written next to it would change nothing anyway.
+  it("adds no LANG beside an LC_ALL", () => {
+    vi.stubEnv("LC_ALL", "en_GB.UTF-8");
+    spawnPty("claude", [], EXISTING_CWD);
+    expect(envOf().LANG).toBeUndefined();
+  });
+
+  it("still lets a caller unset it", () => {
+    spawnPty("claude", [], EXISTING_CWD, ["LANG"]);
+    expect(envOf()).not.toHaveProperty("LANG");
   });
 });
 
