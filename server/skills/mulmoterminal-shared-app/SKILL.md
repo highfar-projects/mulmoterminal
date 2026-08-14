@@ -26,7 +26,7 @@ the user turns this down.
 
 ## Start from a template when one fits
 
-Two shapes are written out in full — declaration, schemas, and the reasoning behind each key:
+Three shapes are written out in full — declaration, schemas, and the reasoning behind each key:
 
 - **[templates/salon.md](./templates/salon.md)** — a request that a NAMED PERSON approves, and only
   their own (a salon's bookings, interviews, repairs, review assignments). This is what `assignee`
@@ -35,10 +35,14 @@ Two shapes are written out in full — declaration, schemas, and the reasoning b
   a per-class opening time (a gym class, a workshop, a slot booking). This is what `stampField` and
   `window.fromField` are for, and it explains why the capacity lives in the VIEW and not in the
   rules.
+- **[templates/meeting-room.md](./templates/meeting-room.md)** — a bookable unit you can LIST IN
+  ADVANCE, taken on the spot with no approval (a meeting room, a desk, equipment on loan, a parking
+  space). This is what `idFrom: "field"` and `mirror` are for, and it is the one that spells out who
+  refills the slots, and what a cancellation does NOT do.
 
-Read the matching one before writing `app.json` by hand. Both are checked against the real deploy
-gate by this repository's tests, so what they show is what deploys — and both spend most of their
-length on the traps, which is the part you cannot recover by guessing.
+Read the matching one before writing `app.json` by hand. All three are checked against the real
+deploy gate by this repository's tests, so what they show is what deploys — and they spend most of
+their length on the traps, which is the part you cannot recover by guessing.
 
 ## The path
 
@@ -270,6 +274,15 @@ an update, which the public submission path never allows. Firestore decides that
   the public page must never read bookings — it reads the slot rows, whose `state` is a copy of
   "does a booking with this id exist". The rules accept the two writes only as one batch, in both
   directions. **Declare both halves or neither**; publish refuses one on its own.
+- **`selfDelete`** (on the submission) names the statuses the person who booked may take their
+  OWN row away from — the only thing that gives a slot back without the desk. Cancelling does
+  not: the record's id IS the exclusivity, so a booking that is merely `cancelled` goes on
+  holding the slot. Declaring this deletes the row instead, and the rules reopen the mirror in
+  the same write, so a half-freed slot cannot exist.
+  **What it spends is the record**: no history of who withdrew, and no `mail` can be bound to it
+  (the queue rule reads the document after the write, and there is none). An app that wants the
+  record kept names no status and sends its people to the desk. Say which one the user is
+  choosing — it is not a detail they discover later.
 - **These five keys freeze once records exist.** `confirm` does not override that, because what
   breaks is not a visible schema mismatch — it is the exclusivity itself, silently, in an app that
   goes on working. Say so before an author starts renaming things.
@@ -388,6 +401,11 @@ read. The page prints what happened above the frame instead, from what was writt
   `transitions` (for a member) or `public.submit.<cid>.selfTransitions` (for a participant). Those
   are different tables, so a staff page and a participant page draw different buttons for the same
   collection. Ask for a move the record cannot make and the answer names it.
+- **`withdraw` takes the reader's own row away** and names no destination, because nothing moves.
+  It exists only where `selfDelete` declares the statuses, it is offered on a participant's page
+  and never on a staff one (owner and editor delete by role), and where the collection has a
+  `mirror` the parent reopens it in the same batch. `viewer.can.<cid>.withdrawFrom` is the list of
+  statuses, not a boolean: draw the control on the rows that are actually in one of them.
 - **`assign` moves `assigneeField`**, and only to an address holding `owner`, `editor` or
   `assignee` on that collection (`assignees` in the capability above). Anything else would write a
   row NOBODY could touch afterwards. An `assignee` cannot hand a row on at all, their own

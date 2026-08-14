@@ -1,6 +1,6 @@
 // @vitest-environment node
 //
-// The two app templates the skill hands an LLM, run through the REAL gate.
+// The app templates the skill hands an LLM, run through the REAL gate.
 //
 // A template is copied verbatim by an agent that cannot check it, into a
 // repository where the first feedback is a deploy. Every failure mode this
@@ -70,10 +70,17 @@ describe("the shared-app templates", () => {
     expect(problemsFor("gym.md", "owner@gym.jp", [])).toEqual([]);
   });
 
+  it("meeting-room.md deploys as written", () => {
+    expect(problemsFor("meeting-room.md", "facility@example.co.jp", ["rooms"])).toEqual([]);
+  });
+
   it("each template shows every collection whose shape carries a decision", () => {
     // A guard on the guard: if a template stopped showing its schemas the
     // checks above would still pass, against nothing.
     expect([...blocksOf("salon.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/bookings/schema.json", ".claude/skills/slots/schema.json"]));
     expect([...blocksOf("gym.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/classes/schema.json", ".claude/skills/bookings/schema.json"]));
+    expect([...blocksOf("meeting-room.md").keys()]).toEqual(
+      expect.arrayContaining([".claude/skills/bookings/schema.json", ".claude/skills/slots/schema.json"]),
+    );
   });
 });
