@@ -22,8 +22,8 @@
 （決定 4 は保留）。同じ 3 ファイルを両リポジトリに置き、それぞれのテストが生成側 /
 消費側から突く形にした。複製の同期の仕方は **#1673** で決める。
 [`feat-shared-app-member-write.md`](./feat-shared-app-member-write.md) を出した直後の
-振り返りから出た。前提は [`docs/shared-app-principles.md`](../docs/shared-app-principles.md)、
-決定は [`feat-shareable-collections.md`](./feat-shareable-collections.md) の D1–D10。
+振り返りから出た。前提は [`docs/shared-app-principles.md`](../../docs/shared-app-principles.md)、
+決定は [`feat-shareable-collections.md`](../feat-shareable-collections.md) の D1–D10。
 
 ---
 

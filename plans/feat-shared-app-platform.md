@@ -47,7 +47,7 @@
 
 ## 0. 決定済み・未実装（先にこれ）
 
-[`plans/feat-shared-app-public-view.md`](./feat-shared-app-public-view.md)（#1658、マージ済み）の
+[`plans/done/feat-shared-app-public-view.md`](./done/feat-shared-app-public-view.md)（#1658、マージ済み）の
 3 つ。レビューを 20 件通した設計で、**この計画はそれを前提にする**。要点だけ:
 
 1. **`idFrom: "field"` + `idIn` + `window.untilField`** — 枠 id を予約の id にして、
@@ -144,6 +144,9 @@ publish 時に**クエリ計画の検査**ができるようになるのが本�
 
 ## 6. その先（順序だけ決めておく）
 
+- ~~**`selfDelete`**~~ — **実装済み**（2026-08-13、[`feat-shared-app-self-delete.md`](./feat-shared-app-self-delete.md)）。
+  本人が自分のレコードを消し、枠がその場で開く。ルールは `deleteWith` の 1 枝で熱いパスに
+  乗らず、上の 1–4 と独立に出せた。残るは mulmoserver のルールの手動 deploy
 - **添付（Storage）** — 親レコードに紐づく権限。**Storage ルールから `firestore.get()` が
   使えるかは実機未確認**。確認が先で、確認できるまで計画に数えない
 - **push 通知** — メールと同じ形（遷移に束縛された固定の効果）でしか足さない

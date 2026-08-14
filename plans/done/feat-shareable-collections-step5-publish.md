@@ -4,7 +4,7 @@
 `@mulmoclaude/core` 3.7.0 として公開済み）。以下は着手前に書かれた引き継ぎで、
 **実際に何が入り、この文書のどこが間違っていたかは末尾「着手した結果」を読むこと。**
 **日付**: 2026-08-11
-**親プラン**: [`plans/feat-shareable-collections.md`](./feat-shareable-collections.md) — **先に読むこと。**
+**親プラン**: [`plans/feat-shareable-collections.md`](../feat-shareable-collections.md) — **先に読むこと。**
 **前のステップ**: [`feat-shareable-collections-step3-store.md`](./feat-shareable-collections-step3-store.md)（完了、mulmoclaude #2856）
 
 **作業リポジトリ**: `../mulmoclaude`（`@mulmoclaude/core`）。**MulmoTerminal のコードは 1 行も変わらない。**

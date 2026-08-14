@@ -1,8 +1,8 @@
 # 共有アプリ: 名簿の人が「書く」— 承認・担当の付け替えと、参加者の入口
 
-**状態**: 実装中（2026-08-13）。core mulmoclaude#2891 はマージ済み・**3.15.0 は npm 公開済み**
-（この PR が pin する）/ ランタイム mulmoserver#171・#172 はマージ済み・**deploy 未実施** /
-スキルとテンプレートはこの PR。**ルールの変更は無い**。
+**状態**: **完了**（2026-08-13）。core mulmoclaude#2891（3.15.0 は npm 公開済み）/
+ランタイム mulmoserver#171・#172 / スキルとテンプレート mulmoterminal#1671 —
+すべてマージ済み。**ルールの変更は無い**。
 残る前提は 2 つだけ: **mulmoserver の deploy** と、**アプリを publish し直すこと**。
 それまでスタッフ用ページは読み取り専用のまま（射影が `writers` を運ばないので
 member 階層は fail closed）。
@@ -11,8 +11,8 @@ member 階層は fail closed）。
 どちらも同じところに着地するので分けない: 「書く」の中身は participant にもあり
 （自分の予約を取り消す）、入口を決めないとその書き込みの置き場所が決まらない。
 
-前提: [`docs/shared-app-principles.md`](../docs/shared-app-principles.md)（不変条件）、
-[`feat-shareable-collections.md`](./feat-shareable-collections.md)（D1–D10）、
+前提: [`docs/shared-app-principles.md`](../../docs/shared-app-principles.md)（不変条件）、
+[`feat-shareable-collections.md`](../feat-shareable-collections.md)（D1–D10）、
 [`feat-shared-app-member-view.md`](./feat-shared-app-member-view.md)（`/m/{slug}`、実装済み）。
 
 ---

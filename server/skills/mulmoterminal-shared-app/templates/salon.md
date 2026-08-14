@@ -143,17 +143,29 @@
 <div id="grid"></div>
 <script>
   const view = window.__MC_APP_VIEW;
+  const grid = document.getElementById("grid");
   view.onState(({ stylists = [], slots = [] }) => {
-    const open = slots.filter((slot) => slot.state === "open");
-    document.getElementById("grid").innerHTML = open
-      .map((slot) => `<button data-slot="${slot.id}">${slot.startAt} ${slot.stylist ?? ""}</button>`)
-      .join("");
+    // textContent と dataset で組み立てること。レコードの値（担当者名、メニュー名）は
+    // 人が入力するもので、文字列連結で innerHTML に入れると公開ページでそれが動きます。
+    grid.replaceChildren(
+      ...slots
+        .filter((slot) => slot.state === "open")
+        .map((slot) => {
+          const button = document.createElement("button");
+          button.dataset.slot = slot.id;
+          button.textContent = `${slot.startAt} ${slot.stylist ?? ""}`;
+          return button;
+        }),
+    );
   });
-  document.addEventListener("click", async (event) => {
+  grid.addEventListener("click", async (event) => {
     const slot = event.target.dataset?.slot;
     if (!slot) return;
-    const result = await view.submit("bookings", { slot, customerName: prompt("お名前") ?? "", status: "pending" });
-    if (!result.ok) alert("その枠は取られました");
+    const customerName = (prompt("お名前") ?? "").trim();
+    if (customerName === "") return;
+    const result = await view.submit("bookings", { slot, customerName, status: "pending" });
+    // 失敗の理由は二重予約とは限りません（締切、サインイン、必須項目）。
+    if (!result.ok) alert(result.error ? `予約できませんでした: ${result.error}` : "その枠は取られました");
   });
   view.ready();
 </script>
@@ -185,10 +197,15 @@
 <ul id="today"></ul>
 <script>
   const view = window.__MC_APP_VIEW;
+  const today = document.getElementById("today");
   view.onState(({ bookings = [] }) => {
-    document.getElementById("today").innerHTML = bookings
-      .map((booking) => `<li>${booking.startAt ?? booking.slot} ${booking.customerName} — ${booking.status}</li>`)
-      .join("");
+    today.replaceChildren(
+      ...bookings.map((booking) => {
+        const row = document.createElement("li");
+        row.textContent = `${booking.startAt ?? booking.slot} ${booking.customerName} — ${booking.status}`;
+        return row;
+      }),
+    );
   });
   view.ready();
 </script>
@@ -344,11 +361,16 @@ await view.transition("bookings", booking.id, "cancelled");
 | 顧客 | `selfTransitions` で `status: "cancelled"` | **空かない**（ドキュメントが残り id を占有し続ける） |
 | 受付・担当 | 予約を delete（`slots` を `open` に戻す書き込みと対で） | 空く |
 
-顧客に delete はできません（`itemDelete` は writer と自分の担当行を持つ `assignee` だけ）。
-**これは制約であると同時に、たぶん正しい運用でもあります** — 枠が客の操作で即座に他人に
-開く必要はなく、受付が確認してから戻す方が店の実態に合う。ただし**そう決めたことを
-利用者に言ってください**。「キャンセルしたのに枠が空かない」は、書いていなければバグに
-見えます。
+このテンプレートでは顧客に delete を許していません。**これは制約であると同時に、たぶん
+正しい運用でもあります** — 枠が客の操作で即座に他人に開く必要はなく、受付が確認してから
+戻す方が店の実態に合う。承認メール（`booking-approved`）を出せるのも、行が残るからです。
+ただし**そう決めたことを利用者に言ってください**。「キャンセルしたのに枠が空かない」は、
+書いていなければバグに見えます。
+
+**押したその場で枠を開けたい店は** `public.submit.bookings.selfDelete` に状態を挙げます
+（会議室のテンプレート [meeting-room.md](./meeting-room.md) がその形）。代償は行が消える
+ことで、履歴も残らず、その取り消しにメールも束ねられません。美容室で勧めないのはそのため
+です。
 
 ---
 

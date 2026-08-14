@@ -1,13 +1,15 @@
 # 共有アプリ: 公開後のアプリに「名簿の人の顔」を作る
 
-**状態**: 実装中（2026-08-13 着手）。設計は 2026-08-13 の指摘から。
+**状態**: **完了**（2026-08-13）。下の 4 本はすべてマージ済みで、ルールは手で deploy 済み。
+のちに mulmoserver#170（拒否と「聞けなかった」の分離）と mulmoserver#179
+（`/m/{slug}/records/{cid}` のレコード表）が続いた。設計は 2026-08-13 の指摘から。
 
 | | PR | 状態 |
 |---|---|---|
-| 1 ルール（`member` / `roster`） | mulmoserver#168 | レビュー中。マージ後に**手で deploy** |
-| 2 宣言（`views[]`、core 3.14.0） | mulmoclaude#2877 | レビュー中。npm 公開は 4 より先 |
-| 3 ランタイム（`/m/{slug}`） | mulmoserver#169 | レビュー中 |
-| 4 publish（階層への書き出し） | mulmoterminal#1667 | core 3.14.0 待ちで draft |
+| 1 ルール（`member` / `roster`） | mulmoserver#168 | **マージ済み**（2026-08-13）。deploy 済み（同日 12:25 のリリース） |
+| 2 宣言（`views[]`、core 3.14.0） | mulmoclaude#2877 | **マージ済み・npm 公開済み** |
+| 3 ランタイム（`/m/{slug}`） | mulmoserver#169 | **マージ済み・deploy 済み** |
+| 4 publish（階層への書き出し） | mulmoterminal#1667 | **マージ済み** |
 
 **書き込みはこの計画には無い。** メンバーの書き込みは投稿ではなく既存レコードの更新
 （承認・担当の付け替え）で、`public.submit` ではなくロールに対して判定される。
@@ -15,8 +17,8 @@
 続きは [`feat-shared-app-member-write.md`](./feat-shared-app-member-write.md) —
 participant の入口（`/p/{slug}`）もそちらで決めた。
 
-前提: [`docs/shared-app-principles.md`](../docs/shared-app-principles.md)（不変条件）、
-[`feat-shareable-collections.md`](./feat-shareable-collections.md)（D1–D10）、
+前提: [`docs/shared-app-principles.md`](../../docs/shared-app-principles.md)（不変条件）、
+[`feat-shareable-collections.md`](../feat-shareable-collections.md)（D1–D10）、
 [`feat-shared-app-public-view.md`](./feat-shared-app-public-view.md)（公開ビュー、実装済み）。
 
 ---

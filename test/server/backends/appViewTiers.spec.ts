@@ -15,7 +15,7 @@
 // somebody presses it. Declaration and enforcement disagreeing is exactly what
 // the write projection exists to prevent.
 //
-// Design: plans/feat-shared-app-member-write.md
+// Design: plans/done/feat-shared-app-member-write.md
 import { describe, it, expect, beforeEach } from "vitest";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
