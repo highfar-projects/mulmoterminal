@@ -33,7 +33,8 @@ const answering = new Set<string>();
 // without holding a lock for an unbounded time (nothing guarantees the close ever arrives).
 //
 // Held until the record moves on — which the next request for that session observes — and dropped
-// with the session itself (forgetAnsweredQuestion, called from the reap paths).
+// with the session itself (forgetAnsweredQuestion, called from reap — and ONLY from there: a client
+// that disconnects while tmux keeps running leaves the same dialog on the same screen).
 //
 // Neither a count nor a clock bounds it, and both were tried: a cap evicts whichever claim is
 // OLDEST, which is exactly the one still waiting for its close, and a TTL releases a claim while
