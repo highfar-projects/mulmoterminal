@@ -20,9 +20,14 @@
 //
 // So the page is narrowed to its script text, and the script text is walked with strings and
 // comments removed — a template literal's `${…}` kept, because that is code — before anything is
-// matched. It is a scanner rather than a parser: what it cannot see is a call built out of pieces
-// (`window["pro" + "mpt"]`), which is not the mistake this is about — the gate is a help to an
-// author, not a boundary against one.
+// matched. It is a scanner rather than a parser, and the line it draws is between a MISTAKE and a
+// DISGUISE: a page that writes `prompt(…)` in any of the ways a person writes it is caught, and one
+// that assembles the name at runtime (`window["pro" + "mpt"]`, `Function("prompt()")()`,
+// `setTimeout("prompt()")`) is not. That is deliberate. Nothing here defends the app against its
+// own author — they publish the page — and every rule added for a disguise costs the false alarms
+// that refuse a page which works. What DOES belong here is any spelling a browser reads as the
+// plain call: attribute case, character references, URL whitespace, optional calls, template
+// substitutions. Those are how a page is honestly written, and each one arrived as a bug.
 
 /** Where code lives in a page. All three RUN, and the sandbox eats a modal in each of them
  *  identically — an `onclick` and a `javascript:` href are as executable as a `<script>`, and a
@@ -121,7 +126,10 @@ const attributeCode = (name: string, raw: string): string | null => {
   const value = decoded(raw);
   // `ONCLICK` runs exactly like `onclick`: an attribute name is case-insensitive.
   if (name.toLowerCase().startsWith("on")) return value;
-  const url = value.trimStart();
+  // The URL parser DROPS ASCII tab, LF and CR from a URL — anywhere in it, the scheme included —
+  // so `java&#x0A;script:confirm()` is followed as `javascript:confirm()`. Reading the decoded text
+  // as written finds no scheme at all.
+  const url = value.replace(/[\t\n\r]/g, "").trimStart();
   return /^javascript:/i.test(url) ? url.slice(url.indexOf(":") + 1) : null;
 };
 

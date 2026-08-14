@@ -82,6 +82,9 @@ describe("the file a published view names", () => {
       "<button onclick=\"if (a > b) prompt('x')\">go</button>",
       // Named references, and an attribute name in any case — both are how a browser reads it.
       '<a href="javascript&colon;confirm()">go</a>',
+      // The URL parser drops ASCII tab/LF/CR anywhere in a URL, the scheme included.
+      '<a href="java&#x0A;script:confirm()">go</a>',
+      '<a href="java&#9;script:prompt()">go</a>',
       '<a href="javascript:prompt&lpar;&rpar;">go</a>',
       "<button ONCLICK=\"prompt('x')\">go</button>",
       "<button OnClick=prompt()>go</button>",
@@ -119,6 +122,7 @@ describe("the file a published view names", () => {
       '<script>const sample = "<button onclick=alert()>";</script>',
       "<p>onclick=alert() と書いても動きません</p>",
       "<p>&colon; と書いただけ</p>",
+      '<a href="https://example.com/prompt(">ok</a>',
     ].join("\n");
     const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
     expect(result.ok).toBe(true);
