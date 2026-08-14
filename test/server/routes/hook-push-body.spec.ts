@@ -28,11 +28,13 @@ vi.mock("../../../server/config/config-routes.js", async (importOriginal) => ({
   getPushKinds: () => ["finished", "waiting"],
 }));
 
-// No transcript on disk — which is the case the hook payload now answers on its own, and the case
-// that used to fall through to the prompt.
+// The transcript read that a payload without `last_assistant_message` still falls back to. Null is
+// the default because "no reply anywhere" is the case that used to fall through to the prompt; the
+// tests that are ABOUT the fallback set it.
+const transcript = vi.hoisted(() => ({ reply: null as string | null }));
 vi.mock("../../../server/session/session-reads.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../server/session/session-reads")>()),
-  claudeCurrentTurnReply: async () => null,
+  claudeCurrentTurnReply: async () => transcript.reply,
   latestUserPrompt: async () => null,
 }));
 
@@ -71,6 +73,7 @@ const nextPush = async (): Promise<{ title: string; body: string }> => {
 
 beforeEach(() => {
   pushes.length = 0;
+  transcript.reply = null;
   lastPrompts.set(ID, PROMPT);
   aiTitles.delete(ID);
   lastResponses.delete(ID);
@@ -113,6 +116,41 @@ describe("a finished turn", () => {
     await postHook({ hook_event_name: "Stop", last_assistant_message: "clear のあとの返事です" });
 
     expect((await nextPush()).body).toBe("clear のあとの返事です");
+  });
+});
+
+// A Claude Code that predates `last_assistant_message`, and every non-claude agent, reach the push
+// with nothing but the event — so the transcript read stays, and stays gated. This is the half the
+// change must not regress, and moving the gates into finishedReply is exactly where it could.
+describe("a finished turn with no reply in the payload", () => {
+  it("falls back to the transcript", async () => {
+    transcript.reply = "前のターンで読み取った結論";
+
+    await postHook({ hook_event_name: "Stop" });
+
+    expect((await nextPush()).body).toBe("前のターンで読み取った結論");
+    expect(lastResponses.get(ID)).toBe("前のターンで読み取った結論");
+  });
+
+  it("prefers the payload over the transcript when both have something to say", async () => {
+    transcript.reply = "ディスクから読んだ古いほう";
+
+    await postHook({ hook_event_name: "Stop", last_assistant_message: "イベントが持っていたほう" });
+
+    expect((await nextPush()).body).toBe("イベントが持っていたほう");
+  });
+
+  // The gate the payload is exempt from, still holding for the read it was written for: after a
+  // `/clear` that file is the conversation the user ENDED, so its reply belongs to no turn (#1085).
+  it("does not read a transcript a /clear froze", async () => {
+    transcript.reply = "clear する前の、もう終わった会話の返事";
+    clearedTranscripts.add(ID);
+
+    await postHook({ hook_event_name: "Stop" });
+
+    const { body } = await nextPush();
+    expect(body).not.toContain("clear する前");
+    expect(body).toBe("タスクが完了しました");
   });
 });
 
