@@ -161,11 +161,15 @@
   grid.addEventListener("click", async (event) => {
     const slot = event.target.dataset?.slot;
     if (!slot) return;
-    // requesterName は createFields に入っていて、スキーマで required。
-    // 送らない申込みは拒否されます。
-    const values = { slot, requesterName: prompt("お名前") ?? "", purpose: prompt("用件") ?? "", status: "booked" };
-    const result = await view.submit("bookings", values);
-    if (!result.ok) alert("その枠は取られました");
+    // requesterName は createFields にあり、スキーマで required。空文字は
+    // 拒否されるので、送る前に見ます（prompt を取り消したら何もしない）。
+    const requesterName = (prompt("お名前") ?? "").trim();
+    if (requesterName === "") return;
+    const result = await view.submit("bookings", { slot, requesterName, purpose: (prompt("用件") ?? "").trim(), status: "booked" });
+    if (result.ok) return;
+    // 失敗を全部「取られました」と言わないこと。締切、サインイン、必須項目の
+    // どれでもここに来ます。理由は result.error にあります。
+    alert(result.error ? `予約できませんでした: ${result.error}` : "その枠は取られました");
   });
   view.ready();
 </script>
@@ -174,7 +178,10 @@
 3 つだけ守れば形は自由です。
 
 - **`ready()` を最後に呼ぶ。** 呼ばないとデータは永久に来ません
-- **`submit()` の結果を見る。** 「その枠は取られました」を出せるのはここだけ
+- **`submit()` の結果を見て、失敗を 1 つの文言にまとめない。** 二重予約だけでなく、
+  受付の締切（`window`）、サインインしていない、必須項目が空、のどれでも `ok: false` で
+  返ります。全部を「その枠は取られました」と言うと、直せる失敗が直せなくなる — 理由は
+  `result.error` にあります
 - **`requesterEmail` は送らない。** サインインした訪問者のアドレスを親が入れます
 
 **押した瞬間には書き込まれません。** 親が値を iframe の外に描いて確認を取り、訪問者が

@@ -161,8 +161,11 @@
   grid.addEventListener("click", async (event) => {
     const slot = event.target.dataset?.slot;
     if (!slot) return;
-    const result = await view.submit("bookings", { slot, customerName: prompt("お名前") ?? "", status: "pending" });
-    if (!result.ok) alert("その枠は取られました");
+    const customerName = (prompt("お名前") ?? "").trim();
+    if (customerName === "") return;
+    const result = await view.submit("bookings", { slot, customerName, status: "pending" });
+    // 失敗の理由は二重予約とは限りません（締切、サインイン、必須項目）。
+    if (!result.ok) alert(result.error ? `予約できませんでした: ${result.error}` : "その枠は取られました");
   });
   view.ready();
 </script>
