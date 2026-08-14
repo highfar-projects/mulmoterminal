@@ -341,6 +341,16 @@ entry per page, each naming **who it is for**:
   draws an empty page, which is the one failure nothing reports. Publish refuses a `public` page
   fed a collection outside `public.read`, and a `participant` page fed one a participant cannot
   reach at all (neither in `participantRead` nor their own row through `public.submit`).
+- **`submit` carries STRINGS and nothing else.** A number, a boolean or a nested object in
+  `values` is not read as a partial submission — the whole message stops being one, and the view
+  is answered `not-a-submission`, which names no field. `attendees: 3` breaks a booking; `"3"`
+  writes it. The reason is not fussiness: the generated form path sends strings, and the rules
+  compare stored values without coercing, so a number would write a record that differs BY TYPE
+  from the identical-looking one a form wrote.
+- **A submission is CONFIRMED outside the frame, so do not narrate it as sent.** The parent draws
+  the values in a dialog of its own and writes only when the visitor accepts — so between the
+  click and the answer, nothing has been sent and the promise is simply waiting for a person. A
+  page that says 送信中… there is describing a step that has not happened, and reads as stuck.
 - **`alert`, `confirm` and `prompt` DO NOTHING.** Every view — public, staff, participant — is
   rendered in `sandbox="allow-scripts"`, and without `allow-modals` the browser ignores the call
   and logs *"Ignored call to 'prompt()'. The document is sandboxed, and the 'allow-modals'
