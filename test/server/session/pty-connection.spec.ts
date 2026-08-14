@@ -121,9 +121,9 @@ describe("handleClientFrame", () => {
 
     watchOtherWrites(SESSION);
     try {
-      handleClientFrame(entry, s.ws as never, frame({ type: "input", data: "\x1b[?1;2c" }), SESSION);
+      handleClientFrame(entry, s.ws as never, frame({ type: "input", data: "\u001b[?1;2c" }), SESSION);
       expect(otherWriteCount(SESSION)).toBe(0);
-      expect(t.writes).toContain("\x1b[?1;2c"); // still delivered to the terminal
+      expect(t.writes).toContain("\u001b[?1;2c"); // still delivered to the terminal
 
       handleClientFrame(entry, s.ws as never, frame({ type: "input", data: "x" }), SESSION);
       expect(otherWriteCount(SESSION)).toBe(1);

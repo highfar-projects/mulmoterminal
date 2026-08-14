@@ -3,46 +3,69 @@
 // exactly like typing. Counting them as typing refused every answer from the question pane after
 // any attach, resize or theme read (#1693). The samples below were CAPTURED from a real cell.
 import { describe, it, expect } from "vitest";
-import { isTerminalReplyOnly } from "../../common/terminalReplies";
+import { scanForUserInput } from "../../common/terminalReplies";
 
 const ESC = "\u001b";
+const scan = (data: string, pending = "") => scanForUserInput(pending, data);
 
-describe("isTerminalReplyOnly", () => {
-  it("recognises the replies a real cell sent before a single button press", () => {
-    expect(isTerminalReplyOnly(`${ESC}[?1;2c`)).toBe(true); // primary device attributes
-    expect(isTerminalReplyOnly(`${ESC}[>0;276;0c`)).toBe(true); // secondary device attributes
-    expect(isTerminalReplyOnly(`${ESC}]10;rgb:1b1b/2424/3030${ESC}\\`)).toBe(true); // foreground colour
-    expect(isTerminalReplyOnly(`${ESC}]11;rgb:f4f4/f6f6/fbfb${ESC}\\`)).toBe(true); // background colour
+describe("scanForUserInput", () => {
+  it("does not read the replies a real cell sent before a single button press as typing", () => {
+    expect(scan(`${ESC}[?1;2c`).fromUser).toBe(false); // primary device attributes
+    expect(scan(`${ESC}[>0;276;0c`).fromUser).toBe(false); // secondary device attributes
+    expect(scan(`${ESC}]10;rgb:1b1b/2424/3030${ESC}\\`).fromUser).toBe(false); // foreground colour
+    expect(scan(`${ESC}]11;rgb:f4f4/f6f6/fbfb${ESC}\\`).fromUser).toBe(false); // background colour
   });
 
-  it("recognises focus and cursor-position reports", () => {
-    expect(isTerminalReplyOnly(`${ESC}[I`)).toBe(true);
-    expect(isTerminalReplyOnly(`${ESC}[O`)).toBe(true);
-    expect(isTerminalReplyOnly(`${ESC}[24;80R`)).toBe(true);
-  });
-
-  // A mouse report looks the same on the wire but is the USER: a click can select an option, so an
-  // answer already being typed has to yield to it exactly as it yields to a keystroke.
-  it("does not excuse mouse reports", () => {
-    expect(isTerminalReplyOnly(`${ESC}[<0;12;34M`)).toBe(false);
-    expect(isTerminalReplyOnly(`${ESC}[M\u0020\u0021\u0022`)).toBe(false);
+  it("does not read focus or cursor-position reports as typing", () => {
+    expect(scan(`${ESC}[I`).fromUser).toBe(false);
+    expect(scan(`${ESC}[O`).fromUser).toBe(false);
+    expect(scan(`${ESC}[24;80R`).fromUser).toBe(false);
   });
 
   // The other half, and the one that must not slip: these ARE the user answering.
-  it("does not excuse anything a person could have typed", () => {
-    expect(isTerminalReplyOnly("a")).toBe(false);
-    expect(isTerminalReplyOnly("\r")).toBe(false);
-    expect(isTerminalReplyOnly("おした")).toBe(false);
-    expect(isTerminalReplyOnly(`${ESC}[B`)).toBe(false); // Down, normal cursor mode
-    expect(isTerminalReplyOnly(`${ESC}OB`)).toBe(false); // Down, application cursor mode — captured
-    expect(isTerminalReplyOnly(ESC)).toBe(false);
+  it("reads anything a person could have typed as typing", () => {
+    expect(scan("a").fromUser).toBe(true);
+    expect(scan("\r").fromUser).toBe(true);
+    expect(scan("おした").fromUser).toBe(true);
+    expect(scan(`${ESC}[B`).fromUser).toBe(true); // Down, normal cursor mode
+    expect(scan(`${ESC}OB`).fromUser).toBe(true); // Down, application cursor mode — captured
   });
 
-  it("does not excuse a chunk that also carries a keystroke", () => {
-    expect(isTerminalReplyOnly(`${ESC}[?1;2cx`)).toBe(false);
+  // A click can select an option, so it is the user answering — however much it looks like a report.
+  it("reads mouse reports as the user", () => {
+    expect(scan(`${ESC}[<0;12;34M`).fromUser).toBe(true);
+    expect(scan(`${ESC}[M\u0020\u0021\u0022`).fromUser).toBe(true);
   });
 
-  it("has nothing to excuse in an empty chunk", () => {
-    expect(isTerminalReplyOnly("")).toBe(false);
+  it("reads a chunk that carries both a reply and a keystroke as typing", () => {
+    expect(scan(`${ESC}[?1;2cx`).fromUser).toBe(true);
+  });
+
+  // THE SPLIT. The socket breaks where it likes, and half a reply matches nothing — which is how
+  // this same false alarm comes back through the back door.
+  it("holds an unfinished reply instead of calling it typing", () => {
+    const first = scan(`${ESC}[?1`);
+    expect(first).toEqual({ fromUser: false, pending: `${ESC}[?1` });
+
+    expect(scan(";2c", first.pending)).toEqual({ fromUser: false, pending: "" });
+  });
+
+  it("holds an unfinished colour reply across three chunks", () => {
+    const a = scan(`${ESC}]11;rgb:f4f4`);
+    expect(a.fromUser).toBe(false);
+    const b = scan("/f6f6/fbfb", a.pending);
+    expect(b.fromUser).toBe(false);
+    expect(scan(`${ESC}\\`, b.pending)).toEqual({ fromUser: false, pending: "" });
+  });
+
+  // Held only while it could still BECOME a reply: a key that already carries its final letter is
+  // finished, and waiting for more would let a real answer slip past unnoticed.
+  it("does not hold a keystroke that merely starts like one", () => {
+    expect(scan(`${ESC}[B`).pending).toBe("");
+    expect(scan("x", `${ESC}[?1`).fromUser).toBe(true); // the tail turned out not to be a reply
+  });
+
+  it("has nothing to report for an empty chunk", () => {
+    expect(scan("")).toEqual({ fromUser: false, pending: "" });
   });
 });

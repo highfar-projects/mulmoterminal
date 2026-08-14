@@ -1,4 +1,5 @@
 import { ptys } from "./registry.js";
+import { scanForUserInput } from "../../common/terminalReplies.js";
 
 // Write a chunk to a session's live PTY: the phone's typing (#445), and question answers (#1685).
 // Only sessions attached in THIS process are writable: a tmux session that outlived a restart is
@@ -46,6 +47,7 @@ export const watchOtherWrites = (sessionId: string): void => {
 /** Stop counting, and forget the session. */
 export const stopWatchingOtherWrites = (sessionId: string): void => {
   watched.delete(sessionId);
+  partialReply.delete(sessionId);
 };
 
 export const otherWriteCount = (sessionId: string): number => watched.get(sessionId) ?? 0;
@@ -57,6 +59,19 @@ export const otherWriteCount = (sessionId: string): number => watched.get(sessio
 export const noteOtherWrite = (sessionId: string): void => {
   const seen = watched.get(sessionId);
   if (seen !== undefined) watched.set(sessionId, seen + 1);
+};
+
+// The tail of a reply that arrived split across frames, per session. The socket breaks where it
+// likes, and half of `ESC[?1;2c` matches nothing — judged on its own, each half would read as the
+// user typing, which is the false alarm this whole path exists to avoid (#1693).
+const partialReply = new Map<string, string>();
+
+/** Classify one chunk of terminal input and count it if the user produced it. */
+export const noteInput = (sessionId: string, data: string): void => {
+  const { fromUser, pending } = scanForUserInput(partialReply.get(sessionId) ?? "", data);
+  if (pending) partialReply.set(sessionId, pending);
+  else partialReply.delete(sessionId);
+  if (fromUser) noteOtherWrite(sessionId);
 };
 
 /** Write on behalf of anything but an answer: the phone's typing, and anything added later. */
