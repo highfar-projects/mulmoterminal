@@ -39,10 +39,11 @@ const questions = computed(() => props.event?.questions ?? []);
 // controls do not.
 const answerable = computed(() => props.failure !== "partial" && props.failure !== "unwritable");
 
-// Words go into the text row of the question ON SCREEN, and committing them moves a wizard to its
-// NEXT question rather than finishing it — while the host, quite rightly, treats that dialog as
-// answered. So this is offered for a lone question only; a wizard is answered with its buttons.
-const canUseWords = computed(() => answerable.value && questions.value.length === 1);
+// Offered on the one shape it was measured on: a lone SINGLE-select question, where the text row's
+// Enter is the whole answer. A wizard moves on to its next question instead of finishing, and a
+// multi-select dialog stops at its review screen — both would leave the terminal waiting for
+// something this pane cannot send. Those are answered with their buttons.
+const canUseWords = computed(() => answerable.value && questions.value.length === 1 && questions.value[0]?.multiSelect !== true);
 
 // One entry per question, holding the chosen option indexes. Kept ASCENDING: the keystrokes that
 // answer the dialog only ever walk DOWN the list, so an out-of-order pick would toggle the wrong

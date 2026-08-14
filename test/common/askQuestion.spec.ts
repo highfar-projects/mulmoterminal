@@ -205,13 +205,17 @@ describe("openQuestionOf", () => {
 describe("keysToAnswerInWords", () => {
   it("walks past the options to the text row, types, and commits", () => {
     expect(keysToAnswerInWords([single(["Red", "Blue"])], "green please")).toEqual([DOWN, DOWN, "green please", ENTER]);
-    expect(keysToAnswerInWords([multi(["Nuts", "Cream", "Honey"])], "olives")).toEqual([DOWN, DOWN, DOWN, "olives", ENTER]);
   });
 
-  // Committing words moves a wizard to its NEXT question rather than finishing it, and the dialog
-  // would be claimed as answered with pages still unanswered. A wizard is answered with its buttons.
+  // Every shape but the measured one ends somewhere this sequence does not reach: a wizard moves on
+  // to its next question, a multi-select dialog stops at its review screen. Claiming the dialog
+  // there would leave the terminal waiting for something the pane cannot send.
   it("refuses a dialog that holds more than one question", () => {
     expect(keysToAnswerInWords([single(["Small", "Large"]), single(["Hot", "Cold"])], "medium")).toBeNull();
+  });
+
+  it("refuses a multi-select question, review screen and all", () => {
+    expect(keysToAnswerInWords([multi(["Nuts", "Cream", "Honey"])], "olives")).toBeNull();
   });
 
   // Empty text would land on the row and press Enter, which DECLINES the whole question — the one

@@ -171,9 +171,11 @@ const needsReview = (questions: readonly AskQuestion[]): boolean => questions.le
 // It sits directly after that question's options.
 export const keysToAnswerInWords = (questions: readonly AskQuestion[], text: string): string[] | null => {
   const only = questions.length === 1 ? questions[0] : undefined;
-  // A lone question only. Committing words moves a WIZARD on to its next question instead of
-  // finishing it, and the dialog would then be claimed as answered with pages still unanswered.
-  if (!only || !text) return null;
+  // The one shape this was measured on: a lone SINGLE-select question, where the text row's Enter
+  // is the whole answer. The others each end somewhere this sequence does not reach — a wizard
+  // moves on to its next question, and a multi-select dialog stops at its review screen — and the
+  // host would claim the dialog while the terminal still waits for something the pane cannot send.
+  if (!only || only.multiSelect || !text) return null;
   return [...moveDown(0, only.options.length), text, KEY_ENTER];
 };
 
