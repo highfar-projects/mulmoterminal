@@ -111,9 +111,9 @@ describe("handleClientFrame", () => {
     expect(otherWriteCount(SESSION)).toBe(0); // and forgotten again
   });
 
-  // The dialog turns mouse tracking on, so a click or a wheel nudge arrives here as input. Counting
-  // those made every answer from the pane refuse once the mouse had been touched (#1693).
-  it("does not count a mouse report as the user typing", () => {
+  // The emulator answers the application's queries on this channel — device attributes, colours,
+  // mouse, focus. Counting those as typing refused every answer from the question pane (#1693).
+  it("does not count a terminal reply as the user typing", () => {
     const { handleClientFrame } = setup();
     const t = fakeTerm();
     const s = fakeSocket();
@@ -121,9 +121,9 @@ describe("handleClientFrame", () => {
 
     watchOtherWrites(SESSION);
     try {
-      handleClientFrame(entry, s.ws as never, frame({ type: "input", data: "\x1b[<0;12;34M" }), SESSION);
+      handleClientFrame(entry, s.ws as never, frame({ type: "input", data: "\x1b[?1;2c" }), SESSION);
       expect(otherWriteCount(SESSION)).toBe(0);
-      expect(t.writes).toContain("\x1b[<0;12;34M"); // still delivered to the terminal
+      expect(t.writes).toContain("\x1b[?1;2c"); // still delivered to the terminal
 
       handleClientFrame(entry, s.ws as never, frame({ type: "input", data: "x" }), SESSION);
       expect(otherWriteCount(SESSION)).toBe(1);
