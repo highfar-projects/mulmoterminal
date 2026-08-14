@@ -214,7 +214,7 @@ const scriptsOf = (html: string): string[] => [
 ];
 
 /** What the walker is in the middle of. `code` is the only state that reaches the match. */
-type Mode = "code" | "line" | "block" | "'" | '"' | "`";
+type Mode = "code" | "line" | "block" | "'" | '"' | "`" | "re";
 
 const OPENS: Record<string, Mode> = { "'": "'", '"': '"', "`": "`" };
 
@@ -228,9 +228,18 @@ interface Step {
 }
 
 /** One character of ordinary code: what it emits, and what it puts the walker into. */
-const inCode = (ch: string, next: string): Step => {
+/** After these, a `/` opens a REGEX LITERAL; after anything else (a name, a number, a `)`) it is
+ *  division. The distinction is the one thing a JavaScript tokenizer cannot skip, and getting it
+ *  wrong here is not cosmetic: `const slash = /[//]/; prompt("x")` has a `//` INSIDE a regex, and
+ *  reading it as a comment throws away the rest of the line — the call included. */
+const BEFORE_REGEX = new Set(["", "(", ",", "=", ":", "[", "!", "&", "|", "?", "{", "}", ";", "+", "-", "*", "%", "~", "^", "<", ">", "\n"]);
+
+const inCode = (ch: string, next: string, prev: string): Step => {
+  // The comment markers come FIRST, and are not ambiguous: an empty regex literal does not exist,
+  // so `//` is always a comment, and `/*` is too.
   if (ch === "/" && next === "/") return { mode: "line", emit: " ", skip: true };
   if (ch === "/" && next === "*") return { mode: "block", emit: " ", skip: true };
+  if (ch === "/" && BEFORE_REGEX.has(prev)) return { mode: "re", emit: " ", skip: false };
   const opened = OPENS[ch];
   // A string's CONTENT is dropped and its quotes are not: `"confirm("` must not become a call,
   // and `foo("x")` must keep its parentheses balanced for a reader.
@@ -238,17 +247,36 @@ const inCode = (ch: string, next: string): Step => {
   return { mode: "code", emit: ch, skip: false };
 };
 
-/** One character inside a comment or a string: only its END matters. */
-const inside = (mode: Mode, ch: string, next: string): { mode: Mode; skip: boolean } => {
-  if (mode === "line") return { mode: ch === "\n" ? "code" : "line", skip: false };
-  if (mode === "block") return ch === "*" && next === "/" ? { mode: "code", skip: true } : { mode: "block", skip: false };
-  return { mode: ch === mode ? "code" : mode, skip: false };
+/** One character inside a comment, a string or a regex literal: only its END matters.
+ *
+ *  `inClass` is the regex's own bracket: `/[/]/` is a complete literal, and a `/` between `[` and
+ *  `]` does not end it. */
+const inside = (mode: Mode, ch: string, next: string, inClass: boolean): { mode: Mode; skip: boolean; inClass: boolean } => {
+  if (mode === "line") return { mode: ch === "\n" ? "code" : "line", skip: false, inClass };
+  if (mode === "block") return ch === "*" && next === "/" ? { mode: "code", skip: true, inClass } : { mode: "block", skip: false, inClass };
+  if (mode !== "re") return { mode: ch === mode ? "code" : mode, skip: false, inClass };
+  if (ch === "[") return { mode, skip: false, inClass: true };
+  if (ch === "]") return { mode, skip: false, inClass: false };
+  return ch === "/" && !inClass ? { mode: "code", skip: false, inClass: false } : { mode, skip: false, inClass };
 };
 
 /** A `${…}` inside a template literal: it is CODE, not text, and the walker has to come back out
  *  of it into the template afterwards. `subs` holds one brace depth per substitution we are inside
  *  of, innermost last — a template inside a substitution inside a template is ordinary enough in a
  *  page that builds markup, and one counter could not tell those levels apart. */
+/** A walked character: a `Step`, plus whether the regex literal is inside its `[…]`. */
+interface Walked extends Step {
+  inClass: boolean;
+}
+
+/** The two moves that are not about one character's own kind: an escape inside a string or a regex,
+ *  which hides whatever follows it, and the `${` that turns a template back into code. */
+const jump = (mode: Mode, ch: string, next: string, subs: number[]): { mode: Mode; subs: number[] } | null => {
+  if (mode !== "code" && mode !== "line" && mode !== "block" && ch === "\\") return { mode, subs };
+  if (mode === "`" && ch === "$" && next === "{") return { mode: "code", subs: [...subs, 0] };
+  return null;
+};
+
 interface Exit {
   /** Where the substitution ended, or null while it continues. */
   mode: Mode | null;
@@ -276,18 +304,17 @@ const bare = (source: string): string => {
   let mode: Mode = "code";
   let subs: number[] = [];
   let index = 0;
+  let inClass = false;
+  /** The last significant character of CODE, which is what says whether a `/` starts a regex. */
+  let prev = "";
   while (index < source.length) {
     const ch = source[index] ?? "";
     const next = source[index + 1] ?? "";
-    // An escape inside a string hides whatever follows it, quote included.
-    if (mode !== "code" && mode !== "line" && mode !== "block" && ch === "\\") {
-      index += 2;
-      continue;
-    }
-    if (mode === "`" && ch === "$" && next === "{") {
+    const jumped = jump(mode, ch, next, subs);
+    if (jumped !== null) {
       out += " ";
-      mode = "code";
-      subs = [...subs, 0];
+      mode = jumped.mode;
+      subs = jumped.subs;
       index += 2;
       continue;
     }
@@ -299,8 +326,10 @@ const bare = (source: string): string => {
       index += 1;
       continue;
     }
-    const step: Step = mode === "code" ? inCode(ch, next) : { ...inside(mode, ch, next), emit: " " };
+    const step: Walked = mode === "code" ? { ...inCode(ch, next, prev), inClass } : { ...inside(mode, ch, next, inClass), emit: " " };
+    inClass = step.inClass;
     out += step.emit;
+    if (mode === "code" && step.emit.trim() !== "") prev = step.emit;
     mode = step.mode;
     index += step.skip ? 2 : 1;
   }
@@ -324,6 +353,11 @@ const asMemberAccess = (source: string): string =>
  *  receiver of the author's own (`ui.alert`, `this.confirm`) keeps its dot and is left alone. */
 const GLOBAL_RECEIVER = /\b(?:window|self|globalThis|top) ?\. ?/g;
 
+/** The same call with its receiver still on it. Looked for FIRST and never exempted by a binding
+ *  below: `window.prompt(…)` names the global outright, so a page's own `const prompt` says
+ *  nothing about it. */
+const QUALIFIED_CALL = /\b(?:window|self|globalThis|top) ?\. ?(alert|confirm|prompt) ?\(/;
+
 const CALL = /(?<![\w.$])(alert|confirm|prompt) ?\(/g;
 
 /** A name the page BINDS is the page's own, whatever it is called.
@@ -342,9 +376,12 @@ const DECLARED = /\b(?:const|let|var|function|class)\s+(alert|confirm|prompt)\b/
 /** The name of the first modal call in this page's code, or null. */
 export const modalCallIn = (html: string): string | null => {
   for (const script of scriptsOf(html)) {
-    const code = bare(asMemberAccess(script)).replace(/\s+/g, " ").replace(GLOBAL_RECEIVER, "");
-    const own = new Set([...code.matchAll(DECLARED)].map((hit) => hit[1]));
-    const call = [...code.matchAll(CALL)].find((hit) => !own.has(hit[1]));
+    const code = bare(asMemberAccess(script)).replace(/\s+/g, " ");
+    const qualified = QUALIFIED_CALL.exec(code);
+    if (qualified !== null) return qualified[1] ?? null;
+    const bareCode = code.replace(GLOBAL_RECEIVER, "");
+    const own = new Set([...bareCode.matchAll(DECLARED)].map((hit) => hit[1]));
+    const call = [...bareCode.matchAll(CALL)].find((hit) => !own.has(hit[1]));
     if (call !== undefined) return call[1] ?? null;
   }
   return null;

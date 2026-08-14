@@ -92,6 +92,11 @@ describe("the file a published view names", () => {
       "<script>window\t.\tconfirm()</script>",
       // Binding ONE of the three does not exempt the others.
       "<script>const confirm = (v) => v; prompt('name');</script>",
+      // A `//` inside a REGEX is not a comment, and the rest of that line is still code.
+      '<script>const slash = /[//]/; prompt("name")</script>',
+      "<script>const re = /a\\/\\/b/; alert('x')</script>",
+      // Naming the global outright is never exempted by the page's own binding.
+      "<script>const confirm = (v) => v; window.confirm('x');</script>",
       '<a href="javascript:prompt&lpar;&rpar;">go</a>',
       "<button ONCLICK=\"prompt('x')\">go</button>",
       "<button OnClick=prompt()>go</button>",
@@ -139,6 +144,10 @@ describe("the file a published view names", () => {
       "<script>const confirm = (value) => value; confirm(true);</script>",
       "<script>const alert = (m) => { say.textContent = m; }; alert('done');</script>",
       "<script>function prompt() {} prompt();</script>",
+      // Division, then a real comment — the other half of the same ambiguity.
+      '<script>const half = total / count; // prompt("x")\n</script>',
+      // A regex that MATCHES the call is not the call.
+      "<script>const re = /prompt\\(/g;</script>",
     ].join("\n");
     const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
     expect(result.ok).toBe(true);
