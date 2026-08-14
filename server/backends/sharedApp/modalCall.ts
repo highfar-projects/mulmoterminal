@@ -19,9 +19,10 @@
 //   a pattern that reads the document rather than the code.
 //
 // So the page is narrowed to its script text, and the script text is walked with strings and
-// comments removed, before anything is matched. It is a scanner rather than a parser: what it
-// cannot see is a call built out of pieces (`window["pro" + "mpt"]`), which is not the mistake
-// this is about — the gate is a help to an author, not a boundary against one.
+// comments removed — a template literal's `${…}` kept, because that is code — before anything is
+// matched. It is a scanner rather than a parser: what it cannot see is a call built out of pieces
+// (`window["pro" + "mpt"]`), which is not the mistake this is about — the gate is a help to an
+// author, not a boundary against one.
 
 /** Where code lives in a page. All three RUN, and the sandbox eats a modal in each of them
  *  identically — an `onclick` and a `javascript:` href are as executable as a `<script>`, and a
@@ -70,14 +71,36 @@ const inside = (mode: Mode, ch: string, next: string): { mode: Mode; skip: boole
   return { mode: ch === mode ? "code" : mode, skip: false };
 };
 
+/** A `${…}` inside a template literal: it is CODE, not text, and the walker has to come back out
+ *  of it into the template afterwards. `subs` holds one brace depth per substitution we are inside
+ *  of, innermost last — a template inside a substitution inside a template is ordinary enough in a
+ *  page that builds markup, and one counter could not tell those levels apart. */
+interface Exit {
+  /** Where the substitution ended, or null while it continues. */
+  mode: Mode | null;
+  subs: number[];
+}
+
+const inSubstitution = (ch: string, subs: number[]): Exit => {
+  if (subs.length === 0) return { mode: null, subs };
+  const depth = subs[subs.length - 1] ?? 0;
+  if (ch === "{") return { mode: null, subs: [...subs.slice(0, -1), depth + 1] };
+  if (ch !== "}") return { mode: null, subs };
+  // The `}` that closes the substitution itself, rather than an object literal inside it.
+  if (depth === 0) return { mode: "`", subs: subs.slice(0, -1) };
+  return { mode: null, subs: [...subs.slice(0, -1), depth - 1] };
+};
+
 /** The script with comments and string contents taken out, so what is left is code.
  *
- *  A template literal is treated as one string, `${…}` included: a modal call inside a
- *  substitution is missed. Said rather than fixed — an author writing `${prompt("x")}` is not the
- *  case this gate was built for, and a full expression parser here would be its own bug surface. */
+ *  A template literal's TEXT goes the way of any other string, but its `${…}` does not: building
+ *  markup out of a substitution is ordinary, and `` `${prompt("name")}` `` calls the same
+ *  sandbox-disabled global as a bare `prompt(…)`. Dropping the whole literal would read that as no
+ *  code at all. */
 const bare = (source: string): string => {
   let out = "";
   let mode: Mode = "code";
+  let subs: number[] = [];
   let index = 0;
   while (index < source.length) {
     const ch = source[index] ?? "";
@@ -85,6 +108,21 @@ const bare = (source: string): string => {
     // An escape inside a string hides whatever follows it, quote included.
     if (mode !== "code" && mode !== "line" && mode !== "block" && ch === "\\") {
       index += 2;
+      continue;
+    }
+    if (mode === "`" && ch === "$" && next === "{") {
+      out += " ";
+      mode = "code";
+      subs = [...subs, 0];
+      index += 2;
+      continue;
+    }
+    const closed: Exit = mode === "code" ? inSubstitution(ch, subs) : { mode: null, subs };
+    subs = closed.subs;
+    if (closed.mode !== null) {
+      out += " ";
+      mode = closed.mode;
+      index += 1;
       continue;
     }
     const step: Step = mode === "code" ? inCode(ch, next) : { ...inside(mode, ch, next), emit: " " };

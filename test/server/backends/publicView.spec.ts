@@ -75,6 +75,11 @@ describe("the file a published view names", () => {
       "<a href=javascript:confirm()>go</a>",
       '<script>prompt?.("name")</script>',
       '<script>window.prompt?.("name")</script>',
+      // A template literal's TEXT is a string, but its `${…}` is code — and building markup out of
+      // a substitution is ordinary, so dropping the whole literal read a real call as no code.
+      '<script>const name = `${prompt("Name?")}`;</script>',
+      "<script>el.innerHTML = `<b>${confirm('x')}</b>`;</script>",
+      "<script>const n = `${ `${alert('deep')}` }`;</script>",
     ]) {
       const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
       expect(result.ok).toBe(false);
@@ -90,6 +95,9 @@ describe("the file a published view names", () => {
       "<p>Browser alert() is unsupported here.</p>",
       "<pre>if (!confirm('sure')) return;</pre>",
       "<script>const label = \"confirm(\"; const url = '//x/prompt(';</script>",
+      // A template that interpolates a NAME, and an object literal inside a substitution: the
+      // braces have to be counted, or the walker leaves the substitution at the wrong `}`.
+      "<script>const t = `hello ${name} there`; const o = `${ {a:1} } ok`;</script>",
     ].join("\n");
     const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
     expect(result.ok).toBe(true);
