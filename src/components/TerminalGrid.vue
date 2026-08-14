@@ -485,12 +485,6 @@ const questionBox = createQuestionBox(fetchOpenQuestion);
 // zoom moves, so it can only ever describe the buttons currently on screen.
 const answerFailure = ref<AnswerFailure | null>(null);
 
-// The dialog the user closed the pane on, so that closing STICKS. Without it, a question left
-// unanswered re-opens its pane on every return to that cell — the session is blocked, which is why
-// the pane offers itself in the first place, but someone who has just dismissed it is telling us
-// they intend to answer in the terminal. Keyed by dialog: the next question opens as usual.
-const dismissedQuestion = ref<string | null>(null);
-
 const expandedQuestion = computed(() => (expandedSessionId.value ? (questionBox.questions.value.get(expandedSessionId.value) ?? null) : null));
 
 // Answered — in the terminal, in the pane, or cancelled with Esc. The pane goes with the question
@@ -505,7 +499,6 @@ const unsubscribeQuestion = subscribeSession(ASK_QUESTION_CHANNEL, (data) => {
   if (isAskQuestionEvent(data)) {
     questionBox.offer(data);
     answerFailure.value = null;
-    dismissedQuestion.value = null;
     // Opened for the user, not merely made available: a question nobody sees is a session that
     // sits blocked. Only for the cell already on screen — enlarging some other cell to reveal a
     // pane would take the user off whatever they were reading.
@@ -522,8 +515,9 @@ onBeforeUnmount(() => unsubscribeQuestion());
 // answered from the browser at all. Not revealed if the zoom moved while the ask was in flight.
 async function revealQuestion(sessionId: string): Promise<void> {
   await questionBox.hydrate(sessionId);
-  const question = questionBox.get(sessionId);
-  if (!question || question.toolUseId === dismissedQuestion.value) return;
+  // Not re-opened if the user closed this very dialog: they are telling us they will answer in the
+  // terminal. The next question in this cell opens as usual (questionBox tracks it per dialog).
+  if (!questionBox.has(sessionId) || questionBox.isDismissed(sessionId)) return;
   if (expandedSessionId.value === sessionId) setRightPane("question", props.expandedUid);
 }
 
@@ -551,7 +545,7 @@ onBeforeUnmount(() => unsubscribeQuestionReconnect());
 // to this cell does not put it back. Answering in the terminal is always available, and a question
 // that arrives after this opens normally.
 function dismissQuestionPane(): void {
-  dismissedQuestion.value = expandedQuestion.value?.toolUseId ?? null;
+  if (expandedSessionId.value) questionBox.dismiss(expandedSessionId.value);
   setRightPane(null, paneUid.value);
 }
 

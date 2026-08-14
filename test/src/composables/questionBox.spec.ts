@@ -124,3 +124,45 @@ describe("createQuestionBox", () => {
     expect(box.has("s1")).toBe(false);
   });
 });
+
+describe("dismissal", () => {
+  it("remembers the dialog the user closed the pane on", () => {
+    const box = createQuestionBox(async () => null);
+    box.offer(event("s1", "t1"));
+    expect(box.isDismissed("s1")).toBe(false);
+
+    box.dismiss("s1");
+    expect(box.isDismissed("s1")).toBe(true);
+  });
+
+  // Per session: a question arriving in one cell says nothing about a pane dismissed in another.
+  it("keeps one session's dismissal out of another's", () => {
+    const box = createQuestionBox(async () => null);
+    box.offer(event("s1", "t1"));
+    box.offer(event("s2", "t2"));
+    box.dismiss("s1");
+
+    expect(box.isDismissed("s1")).toBe(true);
+    expect(box.isDismissed("s2")).toBe(false);
+  });
+
+  // And by dialog: the NEXT question in the same cell is a new thing to offer.
+  it("does not shadow the next question of a session", () => {
+    const box = createQuestionBox(async () => null);
+    box.offer(event("s1", "t1"));
+    box.dismiss("s1");
+
+    box.offer(event("s1", "t2"));
+    expect(box.isDismissed("s1")).toBe(false);
+  });
+
+  it("forgets a dismissal when the question goes", () => {
+    const box = createQuestionBox(async () => null);
+    box.offer(event("s1", "t1"));
+    box.dismiss("s1");
+
+    box.drop("s1");
+    box.offer(event("s1", "t1"));
+    expect(box.isDismissed("s1")).toBe(false);
+  });
+});
