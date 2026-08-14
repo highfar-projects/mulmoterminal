@@ -78,6 +78,8 @@ describe("the file a published view names", () => {
       "<button onclick=\"prom&#112;t('name')\">go</button>",
       "<a href=\"java&#x73;cript:confirm('sure')\">go</a>",
       "<a href=\"javascript:&#97;lert('x')\">go</a>",
+      // A quoted value may carry a `>`, so the tag cannot be read to the first one.
+      "<button onclick=\"if (a > b) prompt('x')\">go</button>",
       '<script>prompt?.("name")</script>',
       '<script>window.prompt?.("name")</script>',
       // A template literal's TEXT is a string, but its `${…}` is code — and building markup out of
@@ -107,6 +109,10 @@ describe("the file a published view names", () => {
       // does this — and an ordinary `&amp;` in a URL must not be read as anything at all.
       "<script>const s = '&#112;rompt(';</script>",
       '<a href="/a/hq-rooms?x=1&amp;y=2">ok</a>',
+      // Attribute-SHAPED text that is not an attribute: a sample inside a script string, and the
+      // same words as prose. Neither draws anything or calls anything.
+      '<script>const sample = "<button onclick=alert()>";</script>',
+      "<p>onclick=alert() と書いても動きません</p>",
     ].join("\n");
     const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
     expect(result.ok).toBe(true);

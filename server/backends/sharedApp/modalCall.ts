@@ -28,6 +28,13 @@
  *  identically — an `onclick` and a `javascript:` href are as executable as a `<script>`, and a
  *  gate that reads only the third would pass the other two straight through. */
 const SCRIPT_BODY = /<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi;
+// Attributes are read out of START TAGS, and out of a document the scripts have been taken out of
+// — not off the raw page. `<script>const sample = "<button onclick=alert()>";</script>` is a
+// STRING that draws nothing and calls nothing, and reading the whole document for attribute-shaped
+// text refuses that page; so does prose that happens to say `onclick=alert()`. A refusal an author
+// cannot act on is the more expensive way for this gate to be wrong.
+//
+const TAG_NAME = /<[a-z][a-z0-9-]*/gi;
 // An attribute value may be quoted either way OR bare — `<button onclick=prompt()>` is valid HTML
 // and runs, so an extractor that insists on quotes reads a working call as no code at all.
 const ATTRIBUTE = /\s([a-z][a-z0-9-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
@@ -62,10 +69,34 @@ const attributeCode = (name: string, raw: string): string | null => {
   return /^javascript:/i.test(url) ? url.slice(url.indexOf(":") + 1) : null;
 };
 
-const scriptsOf = (html: string): string[] => [
-  ...[...html.matchAll(SCRIPT_BODY)].map((hit) => hit[1] ?? ""),
-  ...[...html.matchAll(ATTRIBUTE)].map((hit) => attributeCode(hit[1] ?? "", hit[2] ?? hit[3] ?? hit[4] ?? "")).filter((code): code is string => code !== null),
-];
+/** A tag's attributes, from just after its name to the `>` that ends it.
+ *
+ *  Walked rather than matched: a quoted value may carry a `>` (`onclick="if (a > b) prompt()"`),
+ *  and the regex that says so — quoted-or-not, repeated — is the shape a linter reads as
+ *  exponential backtracking. Reading to the first `>` regardless would cut that handler in half
+ *  and lose the call after it. */
+const attributeRegion = (markup: string, from: number): string => {
+  let quote = "";
+  let index = from;
+  while (index < markup.length) {
+    const ch = markup[index] ?? "";
+    if (quote !== "") quote = ch === quote ? "" : quote;
+    else if (ch === '"' || ch === "'") quote = ch;
+    else if (ch === ">") return markup.slice(from, index);
+    index += 1;
+  }
+  return markup.slice(from);
+};
+
+/** Every attribute of every start tag in the markup — the scripts already removed. */
+const attributesOf = (markup: string): string[] =>
+  [...markup.matchAll(TAG_NAME)]
+    .map((tag) => attributeRegion(markup, tag.index + tag[0].length))
+    .flatMap((region) => [...region.matchAll(ATTRIBUTE)])
+    .map((hit) => attributeCode(hit[1] ?? "", hit[2] ?? hit[3] ?? hit[4] ?? ""))
+    .filter((code): code is string => code !== null);
+
+const scriptsOf = (html: string): string[] => [...[...html.matchAll(SCRIPT_BODY)].map((hit) => hit[1] ?? ""), ...attributesOf(html.replace(SCRIPT_BODY, " "))];
 
 /** What the walker is in the middle of. `code` is the only state that reaches the match. */
 type Mode = "code" | "line" | "block" | "'" | '"' | "`";
