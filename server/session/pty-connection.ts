@@ -13,6 +13,7 @@ import { isRecord } from "../../common/isRecord.js";
 import { boundedTail, stripTerminalQueries, terminalModePrefix } from "./terminal-replay.js";
 import type { PtyEntry } from "./types.js";
 import { noteOtherWrite } from "./write-to-session.js";
+import { isMouseReportOnly } from "../../common/terminalMouse.js";
 
 /** A frame as it arrives off the socket. Only `toString()` is used — ws hands us a
  *  Buffer, and narrowing to this lets a test pass one without a live connection. */
@@ -149,7 +150,11 @@ export function createConnectionHandlers(deps: ConnectionDeps) {
         // Announced before it is written: this is what tells an in-flight answer that the person at
         // the keyboard has typed, so it stops rather than finishing its keystrokes into whatever the
         // screen became (#1685). The write itself stays on the entry we already hold.
-        noteOtherWrite(sessionId);
+        //
+        // Mouse reports do not count. The dialog turns mouse tracking on, so a click or a wheel
+        // nudge anywhere in the terminal arrives here as input — and counting those meant that
+        // reaching for the mouse before answering from the pane refused every answer (#1693).
+        if (!isMouseReportOnly(msg.data)) noteOtherWrite(sessionId);
         entry.term.write(msg.data);
       } else if (isResizeFrame(msg)) {
         entry.term.resize(msg.cols, msg.rows);

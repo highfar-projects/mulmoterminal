@@ -111,6 +111,27 @@ describe("handleClientFrame", () => {
     expect(otherWriteCount(SESSION)).toBe(0); // and forgotten again
   });
 
+  // The dialog turns mouse tracking on, so a click or a wheel nudge arrives here as input. Counting
+  // those made every answer from the pane refuse once the mouse had been touched (#1693).
+  it("does not count a mouse report as the user typing", () => {
+    const { handleClientFrame } = setup();
+    const t = fakeTerm();
+    const s = fakeSocket();
+    const entry = entryWith({ term: t.term as never, ws: s.ws as never });
+
+    watchOtherWrites(SESSION);
+    try {
+      handleClientFrame(entry, s.ws as never, frame({ type: "input", data: "\x1b[<0;12;34M" }), SESSION);
+      expect(otherWriteCount(SESSION)).toBe(0);
+      expect(t.writes).toContain("\x1b[<0;12;34M"); // still delivered to the terminal
+
+      handleClientFrame(entry, s.ws as never, frame({ type: "input", data: "x" }), SESSION);
+      expect(otherWriteCount(SESSION)).toBe(1);
+    } finally {
+      stopWatchingOtherWrites(SESSION);
+    }
+  });
+
   it("resizes on a valid resize frame", () => {
     const { handleClientFrame } = setup();
     const t = fakeTerm();

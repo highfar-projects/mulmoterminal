@@ -557,7 +557,9 @@ async function sayInsteadOfChoosing(text: string): Promise<void> {
   if (!event) return;
   dropQuestion(event.sessionId);
   const failure = await postWords(event.sessionId, event.toolUseId, text);
-  if (failure && failure !== "closed") {
+  // Unlike a button press, `closed` is NOT passed over in silence here: the user wrote a sentence,
+  // and a pane that simply vanishes tells them nothing about where it went.
+  if (failure) {
     answerFailure.value = failure;
     await revealQuestion(event.sessionId);
   }
