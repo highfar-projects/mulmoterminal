@@ -23,7 +23,15 @@ import { computed, onBeforeUnmount, ref, shallowRef, toRaw, watch } from "vue";
 import { portChannel, publicViewSrcdoc, viewBridge, viewNonce, type PendingSubmit } from "@receptron/sharedapp/view";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 import { isRecord } from "../../common/isRecord";
-import { previewPageKey, type PreviewAudience, type PreviewDataset, type PreviewPage, type SharedAppPreview } from "../../common/sharedAppPreview";
+import {
+  previewPageKey,
+  type PreviewAudience,
+  type PreviewDataset,
+  type PreviewPage,
+  type PreviewUncertainWrite,
+  type PreviewWrittenRecord,
+  type SharedAppPreview,
+} from "../../common/sharedAppPreview";
 
 const props = defineProps<{ cwd: string | null }>();
 
@@ -172,7 +180,11 @@ onBeforeUnmount(() => {
 // would change what is being watched and trigger this again — an infinite loop rather than a
 // preview. The document's identity is the page; the nonce is a consequence of it.
 watch(
-  () => page.value?.html,
+  // The PAGE, not its HTML. Two pages can hold byte-identical HTML — a member page and a roster
+  // page built from the same template — and watching the text would then keep the old document, its
+  // nonce and its channel while handing it the other page's datasets. The key is audience-qualified
+  // for the same reason the datasets are.
+  () => (page.value === null ? null : keyOf(page.value)),
   () => {
     bridge.restart();
     nonce.value = viewNonce();
@@ -189,7 +201,10 @@ watch(datasets, () => bridge.sendState(), { deep: true });
  *  from a preview is therefore indistinguishable in the database from what a visitor wrote, and
  *  this list is the only place it can be remembered. It dies with the pane, which is why the button
  *  below says so. */
-const written = ref<{ cid: string; id: string; mirror?: { cid: string; id: string } }[]>([]);
+const written = ref<(PreviewWrittenRecord | PreviewUncertainWrite)[]>([]);
+
+/** A record this pane can name, as against one it only knows the collection of. */
+const isNamed = (entry: PreviewWrittenRecord | PreviewUncertainWrite): entry is PreviewWrittenRecord => !("uncertain" in entry);
 const clearing = ref(false);
 
 /** The projection route, scoped to the cell's directory. */
@@ -228,8 +243,12 @@ async function send(pending: PendingSubmit): Promise<{ ok: boolean; error?: stri
     void refresh();
     return { ok: true };
   } catch {
-    // A throw here is the dangerous case: the write may have landed and the read after it may be
-    // what failed. Reported as a failure, and the list below is what the author checks.
+    // THE DANGEROUS CASE, and it is recorded rather than swallowed. The request threw, so this
+    // cannot know whether the record was written — and if it was, dropping it here would leave a
+    // real row in the app that nothing on this screen can name. The author cannot remove what they
+    // cannot see, so the collection is remembered and said out loud.
+    written.value = [{ cid: pending.cid, uncertain: true }, ...written.value];
+    void refresh();
     return { ok: false, error: "write-failed" };
   }
 }
@@ -239,7 +258,9 @@ async function clearWritten(): Promise<void> {
   if (clearing.value) return;
   clearing.value = true;
   try {
-    for (const record of [...written.value]) {
+    // Only the ones with an id. An uncertain write has nothing to send, and guessing at one would
+    // be a delete aimed at a document this pane never learned the name of.
+    for (const record of written.value.filter(isNamed)) {
       const res = await fetchWithTimeout(
         writeUrl("undo"),
         { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ written: record }) },
@@ -256,7 +277,15 @@ async function clearWritten(): Promise<void> {
   }
 }
 
+// TWO counters, not one.
+//
+// They shared one, and a refresh could then cancel a load: a submission resolving after the cell's
+// directory changed called `refresh()`, which bumped the counter, so the `load()` already in flight
+// failed its own guard — including the guard on `finally` — and the pane sat on "Computing what
+// publishing would show…" until the directory changed again. A refresh is a background top-up and
+// must never be able to abandon the read that decides what the pane IS.
 let generation = 0;
+let refreshGeneration = 0;
 
 /** The same read as `load`, without the reset.
  *
@@ -264,11 +293,14 @@ let generation = 0;
  *  tearing it down to say so would throw away the conversation it is having. Only the payload is
  *  swapped; the page, its nonce and its channel all stay. */
 async function refresh(): Promise<void> {
-  const mine = ++generation;
+  const mine = ++refreshGeneration;
+  const load = generation;
   try {
     const res = await fetchWithTimeout(previewUrl());
     const body: unknown = await res.json();
-    if (mine !== generation || !isRecord(body) || body.ok !== true) return;
+    // Superseded by a newer refresh, or by a LOAD that started meanwhile — the second is the one
+    // that matters: this answer is about a directory the pane may have left.
+    if (mine !== refreshGeneration || load !== generation || !isRecord(body) || body.ok !== true) return;
     const next = asPayload(body.preview);
     if (next !== null) payload.value = next;
   } catch {
@@ -362,7 +394,7 @@ watch(() => props.cwd, load, { immediate: true });
              needs them is a page that is already broken in production. -->
         <iframe
           ref="frame"
-          :key="srcdoc"
+          :key="nonce"
           :srcdoc="srcdoc"
           title="Shared app preview"
           sandbox="allow-scripts"
@@ -405,7 +437,10 @@ watch(() => props.cwd, load, { immediate: true });
           </button>
         </div>
         <ul class="mt-1 flex list-none flex-col gap-0.5 p-0">
-          <li v-for="record in written" :key="`${record.cid}/${record.id}`" class="text-[11px] leading-[1.4] text-dim">{{ record.cid }} / {{ record.id }}</li>
+          <li v-for="(record, index) in written" :key="index" class="text-[11px] leading-[1.4]" :class="isNamed(record) ? 'text-dim' : 'text-amber'">
+            <template v-if="isNamed(record)">{{ record.cid }} / {{ record.id }}</template>
+            <template v-else>{{ record.cid }} — the request failed after it was sent. A record may be there; this pane cannot name it.</template>
+          </li>
         </ul>
         <!-- Said out loud because it is the failure mode: this list is the pane's, not the
              database's, so closing the pane loses the only record of which rows were tests. -->

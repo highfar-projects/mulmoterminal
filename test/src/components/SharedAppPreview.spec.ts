@@ -60,6 +60,41 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** Do the handshake and return the far end of the private channel. */
+const connect = async (wrapper: VueWrapper) => {
+  const frame = wrapper.find("iframe").element as HTMLIFrameElement;
+  const srcdoc = frame.getAttribute("srcdoc") ?? "";
+  const nonce = /const nonce = "([^"]+)"/.exec(srcdoc)?.[1] ?? "";
+
+  let far: MessagePort | null = null;
+  const contentWindow = {
+    postMessage: (_message: unknown, _origin: string, ports?: MessagePort[]) => {
+      far = ports?.[0] ?? null;
+    },
+  };
+  vi.spyOn(frame, "contentWindow", "get").mockReturnValue(contentWindow as unknown as Window);
+
+  const ready = new MessageEvent("message", { data: { type: "mc-public-view:ready", nonce } });
+  Object.defineProperty(ready, "source", { value: contentWindow });
+  window.dispatchEvent(ready);
+  await flushPromises();
+
+  const port = far as MessagePort | null;
+  if (port === null) throw new Error("the parent never handed over a channel");
+  const answers: Record<string, unknown>[] = [];
+  port.onmessage = (event: MessageEvent) => answers.push(event.data as Record<string, unknown>);
+  port.start();
+  // The name only the injected document knows, echoed on the port it was handed.
+  port.postMessage({ nonce });
+  await flushPromises();
+  return { port, answers };
+};
+
+const settle = async () => {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await flushPromises();
+};
+
 const mountPreview = async () => {
   const wrapper = mount(SharedAppPreview, { props: { cwd: "/repo" } });
   await flushPromises();
@@ -195,41 +230,6 @@ describe("SharedAppPreview", () => {
   // parent hands back. No shortcut into the bridge — a preview-only path is the thing this whole
   // feature exists to refuse.
   describe("what the frame is told when it submits", () => {
-    /** Do the handshake and return the far end of the private channel. */
-    const connect = async (wrapper: VueWrapper) => {
-      const frame = wrapper.find("iframe").element as HTMLIFrameElement;
-      const srcdoc = frame.getAttribute("srcdoc") ?? "";
-      const nonce = /const nonce = "([^"]+)"/.exec(srcdoc)?.[1] ?? "";
-
-      let far: MessagePort | null = null;
-      const contentWindow = {
-        postMessage: (_message: unknown, _origin: string, ports?: MessagePort[]) => {
-          far = ports?.[0] ?? null;
-        },
-      };
-      vi.spyOn(frame, "contentWindow", "get").mockReturnValue(contentWindow as unknown as Window);
-
-      const ready = new MessageEvent("message", { data: { type: "mc-public-view:ready", nonce } });
-      Object.defineProperty(ready, "source", { value: contentWindow });
-      window.dispatchEvent(ready);
-      await flushPromises();
-
-      const port = far as MessagePort | null;
-      if (port === null) throw new Error("the parent never handed over a channel");
-      const answers: Record<string, unknown>[] = [];
-      port.onmessage = (event: MessageEvent) => answers.push(event.data as Record<string, unknown>);
-      port.start();
-      // The name only the injected document knows, echoed on the port it was handed.
-      port.postMessage({ nonce });
-      await flushPromises();
-      return { port, answers };
-    };
-
-    const settle = async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      await flushPromises();
-    };
-
     it("accepts a submission the declaration allows, and says why it cannot write it", async () => {
       const wrapper = await mountPreview();
       const { port, answers } = await connect(wrapper);
@@ -354,6 +354,29 @@ describe("SharedAppPreview", () => {
     });
   });
 
+  it("starts a new document when the page changes, even if the HTML is identical", async () => {
+    vi.stubGlobal(
+      "fetch",
+      answering(
+        payload({
+          pages: [
+            { id: "desk", html: PAGE, audience: "member" },
+            { id: "mine", html: PAGE, audience: "roster" },
+          ],
+        }),
+      ),
+    );
+
+    const wrapper = await mountPreview();
+    const first = wrapper.find("iframe").attributes("srcdoc") ?? "";
+    await wrapper.find("select").setValue("roster:mine");
+    await flushPromises();
+
+    // Two pages can hold byte-identical HTML. Keeping the old document would hand the roster page's
+    // records to a member page's still-running script, on a channel that was never restarted.
+    expect(wrapper.find("iframe").attributes("srcdoc")).not.toBe(first);
+  });
+
   it("hands a page only ITS OWN records", async () => {
     vi.stubGlobal(
       "fetch",
@@ -372,9 +395,14 @@ describe("SharedAppPreview", () => {
     await wrapper.find("select").setValue("member:desk");
     await flushPromises();
 
-    // The frame is per document and the records are per page. One map for the app would hand the
-    // member page's rows to the public page's frame — the preview showing MORE than production,
-    // the one direction it must never fail in.
     expect(wrapper.find("iframe").attributes("srcdoc")).toContain("desk");
+
+    // And the DATA that reaches it is that page's alone. One map for the app would hand the member
+    // page's rows to the public page's frame — the preview showing MORE than production, the one
+    // direction it must never fail in. Asserted on what crosses the channel: the srcdoc only proves
+    // which HTML was chosen, so a test that stopped there would pass on every dataset map there is.
+    const { answers } = await connect(wrapper);
+    const state = answers.find((answer) => answer.type === "mc-public-view:state");
+    expect(state?.collections).toEqual({ notes: [{ id: "1" }] });
   });
 });

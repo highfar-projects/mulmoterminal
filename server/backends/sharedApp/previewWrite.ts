@@ -38,6 +38,7 @@ import {
   type SubmitSpec,
 } from "@receptron/sharedapp/view";
 import { isRecord } from "../../../common/isRecord.js";
+import type { PreviewWrittenRecord } from "../../../common/sharedAppPreview.js";
 import { currentFirestore } from "../remoteHost/session.js";
 import { previewSharedApp } from "./preview.js";
 import { sharedAppContext, type SharedAppHandle } from "./context.js";
@@ -47,13 +48,8 @@ const itemsPath = (aid: string, cid: string): string => `${appSchemasPath(aid)}/
 
 export interface PreviewWriteSuccess {
   ok: true;
-  /** What was written, so the pane can mark it and offer to take it back.
-   *
-   *  The mark is HERE and not on the record. The rules read a public create with
-   *  `hasOnly(createFields)`, so an extra key does not annotate the document — it refuses the whole
-   *  write. Whatever the author writes from a preview is therefore indistinguishable, in the
-   *  database, from what a visitor writes; the only place it can be remembered is this host. */
-  written: { cid: string; id: string; mirror?: { cid: string; id: string } | undefined };
+  /** What was written, so the pane can remember it and offer to take it back. */
+  written: PreviewWrittenRecord;
 }
 
 export interface PreviewWriteFailure {
@@ -88,14 +84,26 @@ function specFor(config: PublishedConfigDoc, form: Record<string, DrawnForm>, ci
 }
 
 /** The write itself. Single through the ordinary seam; paired through a batch, for the reason at
- *  the top of this file. */
+ *  the top of this file.
+ *
+ *  CREATE, NEVER OVERWRITE. A public submission is create-only, and for `idFrom: "field"` the id IS
+ *  the thing being claimed — so an id that already exists means somebody has it. `set` would be an
+ *  UPDATE, and the rules permit an owner to update an item (`allow update` on `items`): the author
+ *  previewing their own app would silently replace a real visitor's booking with their test one. */
 async function commit(handle: SharedAppHandle, aid: string, plan: PlannedWrite): Promise<string | null> {
   try {
     if (plan.mirror === undefined) {
-      await handle.docs.set(itemsPath(aid, plan.cid), plan.id, plan.record);
-      return null;
+      const made = await handle.docs.create(itemsPath(aid, plan.cid), plan.id, plan.record);
+      return made ? null : "already-taken";
     }
+    // The paired path cannot ask for create-only: the web SDK's `WriteBatch` has `set`, `update`
+    // and `delete`, and no create. So the id is CHECKED first — a check, not a guarantee, and the
+    // difference is a real race with anybody submitting at the same moment. What closes it is the
+    // batch's own `update` on the mirror: a slot somebody else has just taken no longer satisfies
+    // what the rules require of it, and the commit is refused rather than overwriting.
     const db = currentFirestore();
+    const taken = await handle.docs.get(itemsPath(aid, plan.cid), plan.id);
+    if (taken !== null) return "already-taken";
     const batch = writeBatch(db);
     batch.set(doc(collection(db, itemsPath(aid, plan.cid)), plan.id), plan.record);
     batch.update(doc(collection(db, itemsPath(aid, plan.mirror.cid)), plan.mirror.id), { state: plan.mirror.state });
@@ -146,10 +154,7 @@ export async function writePreviewSubmission(root: string, cid: string, values: 
  *  record goes and the slot it was holding returns to `open`, in one write, exactly as a
  *  participant's `selfDelete` does. A delete on its own would leave the mirror saying `taken` about
  *  a booking that no longer exists — the orphan this whole pairing exists to prevent. */
-export async function undoPreviewSubmission(
-  root: string,
-  written: { cid: string; id: string; mirror?: { cid: string; id: string } | undefined },
-): Promise<PreviewWriteResult> {
+export async function undoPreviewSubmission(root: string, written: PreviewWrittenRecord): Promise<PreviewWriteResult> {
   const context = await sharedAppContext(root);
   if (!context.ok) return { ok: false, error: context.problems.join(" ") };
   const { handle, authored } = context;

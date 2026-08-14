@@ -75,5 +75,33 @@ export interface SharedAppPreview {
  *  - declared and refused — the author's work in progress, and the reason the pane exists. These
  *    lines are the answer to the question asked; a status code could not carry them.
  *  - declared and computed. */
+/** What the author accepted in the confirmation, on its way to the server. */
+export interface PreviewSubmission {
+  cid: string;
+  /** Strings only. The rules compare stored values without coercing, so a number here would write a
+   *  record that differs BY TYPE from the identical-looking one the published page writes. */
+  values: Record<string, string>;
+}
+
+/** One record a preview wrote, and the mirror that travelled with it.
+ *
+ *  Both ends hold this: the server returns it, the pane remembers it, and the pane hands it back to
+ *  have it removed. It is the ONLY place a preview's writes are known — the rules read a public
+ *  create with `hasOnly(createFields)`, so nothing can mark the document itself. */
+export interface PreviewWrittenRecord {
+  cid: string;
+  id: string;
+  mirror?: { cid: string; id: string } | undefined;
+}
+
+/** A write whose outcome is unknown: the request threw after the server may already have written.
+ *
+ *  Kept because the alternative is worse. Dropping it leaves a real record in the app that nothing
+ *  on this screen can name, so the author cannot remove what they cannot see. */
+export interface PreviewUncertainWrite {
+  cid: string;
+  uncertain: true;
+}
+
 export type SharedAppPreviewResponse =
   { declared: false } | { declared: true; ok: false; problems: string[] } | { declared: true; ok: true; preview: SharedAppPreview };

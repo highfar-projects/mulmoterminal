@@ -19,7 +19,7 @@ import { undoPreviewSubmission, writePreviewSubmission } from "./sharedApp/previ
 import { requestBody } from "../routes/requestBody.js";
 import { isRecord } from "../../common/isRecord.js";
 import { workspaceForRoute } from "../routes/routeParams.js";
-import type { SharedAppPreview, SharedAppPreviewResponse } from "../../common/sharedAppPreview.js";
+import type { PreviewSubmission, PreviewWrittenRecord, SharedAppPreview, SharedAppPreviewResponse } from "../../common/sharedAppPreview.js";
 
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
@@ -87,7 +87,7 @@ async function respondPreview(req: Request, res: Response): Promise<void> {
 }
 
 /** The submission a preview accepted, narrowed off the request. */
-function submissionOf(body: unknown): { cid: string; values: Record<string, string> } | null {
+function submissionOf(body: unknown): PreviewSubmission | null {
   if (!isRecord(body) || typeof body.cid !== "string" || !isRecord(body.values)) return null;
   const entries = Object.entries(body.values).filter((entry): entry is [string, string] => typeof entry[1] === "string");
   // STRINGS ONLY, and the whole submission is refused rather than trimmed: the rules compare stored
@@ -98,7 +98,7 @@ function submissionOf(body: unknown): { cid: string; values: Record<string, stri
 }
 
 /** One write this preview made, as the pane hands it back to be taken away. */
-function writtenOf(body: unknown): { cid: string; id: string; mirror?: { cid: string; id: string } } | null {
+function writtenOf(body: unknown): PreviewWrittenRecord | null {
   if (!isRecord(body) || !isRecord(body.written)) return null;
   const written = body.written;
   if (typeof written.cid !== "string" || typeof written.id !== "string") return null;
