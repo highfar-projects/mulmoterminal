@@ -485,6 +485,12 @@ const questionBox = createQuestionBox(fetchOpenQuestion);
 // zoom moves, so it can only ever describe the buttons currently on screen.
 const answerFailure = ref<AnswerFailure | null>(null);
 
+// The dialog the user closed the pane on, so that closing STICKS. Without it, a question left
+// unanswered re-opens its pane on every return to that cell — the session is blocked, which is why
+// the pane offers itself in the first place, but someone who has just dismissed it is telling us
+// they intend to answer in the terminal. Keyed by dialog: the next question opens as usual.
+const dismissedQuestion = ref<string | null>(null);
+
 const expandedQuestion = computed(() => (expandedSessionId.value ? (questionBox.questions.value.get(expandedSessionId.value) ?? null) : null));
 
 // Answered — in the terminal, in the pane, or cancelled with Esc. The pane goes with the question
@@ -499,6 +505,7 @@ const unsubscribeQuestion = subscribeSession(ASK_QUESTION_CHANNEL, (data) => {
   if (isAskQuestionEvent(data)) {
     questionBox.offer(data);
     answerFailure.value = null;
+    dismissedQuestion.value = null;
     // Opened for the user, not merely made available: a question nobody sees is a session that
     // sits blocked. Only for the cell already on screen — enlarging some other cell to reveal a
     // pane would take the user off whatever they were reading.
@@ -515,7 +522,9 @@ onBeforeUnmount(() => unsubscribeQuestion());
 // answered from the browser at all. Not revealed if the zoom moved while the ask was in flight.
 async function revealQuestion(sessionId: string): Promise<void> {
   await questionBox.hydrate(sessionId);
-  if (questionBox.has(sessionId) && expandedSessionId.value === sessionId) setRightPane("question", props.expandedUid);
+  const question = questionBox.get(sessionId);
+  if (!question || question.toolUseId === dismissedQuestion.value) return;
+  if (expandedSessionId.value === sessionId) setRightPane("question", props.expandedUid);
 }
 
 // A question that arrived while its cell was tiled — or on another page of the grid — still has a
@@ -537,6 +546,14 @@ const unsubscribeQuestionReconnect = onPubSubReconnect(() => {
   if (expandedSessionId.value) void revealQuestion(expandedSessionId.value);
 });
 onBeforeUnmount(() => unsubscribeQuestionReconnect());
+
+// Closed by hand, rather than because the question went away: remember WHICH dialog, so returning
+// to this cell does not put it back. Answering in the terminal is always available, and a question
+// that arrives after this opens normally.
+function dismissQuestionPane(): void {
+  dismissedQuestion.value = expandedQuestion.value?.toolUseId ?? null;
+  setRightPane(null, paneUid.value);
+}
 
 // Answering the enlarged cell's dialog. The picks go to the host, which turns them into the
 // keystrokes that drive the REAL dialog still on screen in the terminal underneath.
@@ -1304,7 +1321,7 @@ watch(
           :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
           @answer="answerQuestion"
           @toggle-expand="togglePaneExpanded"
-          @close="setRightPane(null, paneUid)"
+          @close="dismissQuestionPane"
         />
         <GithubPane
           v-else-if="rightPane === 'github'"

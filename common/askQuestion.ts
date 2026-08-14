@@ -89,10 +89,17 @@ export interface RecordedCall {
 // channel is event-only and replays nothing on reconnect, so a browser that reloads between the
 // question and its answer would otherwise never learn about a session that is waiting — and with
 // no button to open the pane, that question becomes unanswerable from the browser entirely.
+//
+// The LAST call, not the last one that happens to still say `running`. A session blocked on a
+// question runs nothing else until it is answered, so a later call is proof the question is over —
+// however it ended. Scanning back instead would keep offering a dialog whose close never arrived
+// (an interrupted turn, a `/clear`, a hook that did not land) long after the agent moved on, and
+// the buttons would type into whatever the screen became.
 export const openQuestionOf = (calls: readonly RecordedCall[], sessionId: string): AskQuestionEvent | null => {
-  const open = [...calls].reverse().find((call) => call.toolName === ASK_QUESTION_TOOL && call.status === "running" && call.toolUseId);
-  const questions = open ? parseAskQuestions(open.toolInput) : null;
-  return questions && open?.toolUseId ? { sessionId, toolUseId: open.toolUseId, questions } : null;
+  const last = calls[calls.length - 1];
+  if (last?.toolName !== ASK_QUESTION_TOOL || last.status !== "running" || !last.toolUseId) return null;
+  const questions = parseAskQuestions(last.toolInput);
+  return questions ? { sessionId, toolUseId: last.toolUseId, questions } : null;
 };
 
 /** Why an answer did not reach the dialog. Serialized by the host, rendered by every client, so
