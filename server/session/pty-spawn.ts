@@ -27,8 +27,8 @@ const PTY_ROWS = 30;
 // the settings `env` block, which can set a variable but not remove one.
 // `extra` is set on the spawned process ON TOP of the sanitized inherited environment —
 // per-session values the child needs and our own process cannot carry (a session id).
-// A UTF-8 LANG is supplied when the environment names no locale at all (#1634) — inside
-// `withoutUnset`, so a caller asking for LANG to be gone still gets it gone.
+// On macOS a UTF-8 LANG is supplied when the environment names no locale at all (#1634) —
+// inside `withoutUnset`, so a caller asking for LANG to be gone still gets it gone.
 export function ptyEnv(unset: readonly string[] = [], extra: Readonly<Record<string, string>> = {}): NodeJS.ProcessEnv {
   const inherited = withFallbackLocale(sanitizePtyEnv(process.env, path.delimiter), process.platform);
   return { ...withoutUnset(inherited, unset), ...extra };

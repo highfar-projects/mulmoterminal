@@ -93,8 +93,8 @@ describe("spawnPty — the locale it hands the pty", () => {
 
   it("supplies a UTF-8 LANG when our own environment names no locale", () => {
     spawnPty("claude", [], EXISTING_CWD);
-    // Windows is deliberately out of scope — see withFallbackLocale.
-    expect(envOf().LANG).toBe(process.platform === "win32" ? undefined : "en_US.UTF-8");
+    // macOS only — see withFallbackLocale for why the name is not safe to assume elsewhere.
+    expect(envOf().LANG).toBe(process.platform === "darwin" ? "en_US.UTF-8" : undefined);
   });
 
   it("keeps the user's own locale", () => {

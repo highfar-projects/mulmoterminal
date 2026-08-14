@@ -51,10 +51,24 @@ MulmoTerminal は pty の中で `tmux new-session -A` を実行している (`pt
 
 2 つ入れる。片方だけでは残る穴がある。
 
-### 1. ロケール名が一つも無いときだけ `LANG=en_US.UTF-8` を補う
+### 1. tmux クライアントに `-u` を渡す — これが #1634 を直す
+
+`tmuxNewSessionArgs` に追加。`LANG=C` のように**非 UTF-8 の名前が明示されている**場合も
+含めて、実測で `client_utf8=1` になる。
+
+ここで無条件に強制してよいのは、このクライアントの出力の読み手が xterm.js であり、
+xterm.js は常に UTF-8 だから。ユーザの端末が何であるかの推測ではなく、こちらが端末を
+所有している。
+
+**`_` 化は tmux クライアント固有**であることに注意。tmux が無い環境の直接 pty では
+`tty_check_codeset` を通らないので、そもそもこの症状は起きない。つまり報告された
+バグはこの 1 つで閉じる。
+
+### 2. macOS でロケール名が一つも無いときだけ `LANG=en_US.UTF-8` を補う
 
 `server/infra/pty-env.ts` に `withFallbackLocale(env, platform)`、`ptyEnv()` に配線。
-ここが全ての pty (tmux クライアント / 直接 pty) が通るチョークポイント。
+1 の上積みで、**tmux 以外**に効く: ロケールを見て出力エンコーディングを決めるもの
+(ncurses の TUI、Python の stdout) は、空のロケールでは端末を ASCII とみなして動く。
 
 - **一つも無いときだけ**。`LC_ALL` と `LC_CTYPE` は `LANG` より優先されるので、既に
   それらがある環境に `LANG` を書いても何も変えられない。`LANG=ja_JP.UTF-8` を設定した
@@ -62,23 +76,11 @@ MulmoTerminal は pty の中で `tmux new-session -A` を実行している (`pt
 - 空文字は名前として数えない (ログインシェルが実際の `LC_ALL` と一緒に空の `LANG=` を
   export することがある)
 - `withoutUnset` の内側に置く → 明示的な unset が優先される
-- **Windows は対象外**。同種の慣習も tmux も無く、git-bash が `LANG` を読むため、
-  元々無かった変数を持ち込むのは別の不具合の種になる
-- 値が `en_US.UTF-8` なのは tmux 自身が最初に試す名前だから。仮にその名前のロケールが
-  実在しない環境でも、クライアントの判定は名前の文字列しか見ていない (上表) ので
-  描画の修正は効く
-
-これは tmux 以外にも効く。ロケールを見て出力エンコーディングを決めるもの (Python の
-stdout、ncurses の TUI) は同じ影響を受けている。
-
-### 2. tmux クライアントに `-u` を渡す
-
-`tmuxNewSessionArgs` に追加。1 が意図的に直さない穴 —— `LANG=C` のように**非 UTF-8 の
-名前が明示されている**場合 —— を埋める。実測で `LANG=C` でも `client_utf8=1` になる。
-
-ここで無条件に強制してよいのは、このクライアントの出力の読み手が xterm.js であり、
-xterm.js は常に UTF-8 だから。ユーザの端末が何であるかの推測ではなく、こちらが端末を
-所有している。
+- **macOS 限定**。ロケールが空になるのは launchd の挙動であり、`en_US.UTF-8` が必ず
+  実在するのも macOS。ロケール名が無い Linux は `en_US.UTF-8` も入っていないことが多く、
+  そこで名前だけ書くと「静かな C ロケール」を「失敗する setlocale」に置き換えてしまう
+  (perl が特に大きく警告する)。Windows は同種の慣習も tmux も無く、git-bash が `LANG`
+  を読む
 
 ## 残る限界
 

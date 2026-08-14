@@ -140,11 +140,18 @@ describe("pathFromEnv", () => {
 });
 
 describe("withFallbackLocale", () => {
-  // A macOS GUI launch inherits launchd's environment, which names no locale, and a tmux
-  // client that finds none writes `_` per cell instead of anything it cannot map to ACS (#1634).
+  // A macOS GUI launch inherits launchd's environment, which names no locale, so everything
+  // that reads one — an ncurses TUI, python's stdout — runs as if the terminal were ASCII (#1634).
   it("supplies a UTF-8 LANG when the environment names no locale", () => {
     expect(withFallbackLocale({ HOME: "/Users/u", PATH: "/usr/bin" }, "darwin").LANG).toBe("en_US.UTF-8");
-    expect(withFallbackLocale({}, "linux").LANG).toBe("en_US.UTF-8");
+    expect(withFallbackLocale({}, "darwin").LANG).toBe("en_US.UTF-8");
+  });
+
+  // A Linux box with no locale named usually has no en_US.UTF-8 installed either, and naming
+  // one that does not resolve trades a silent C locale for a failing one.
+  it("adds nothing on Linux, where the name is not certain to resolve", () => {
+    expect(withFallbackLocale({}, "linux").LANG).toBeUndefined();
+    expect(withFallbackLocale({ HOME: "/home/u" }, "linux")).toEqual({ HOME: "/home/u" });
   });
 
   it("leaves the user's own locale alone, whichever variable carries it", () => {
