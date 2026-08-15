@@ -125,7 +125,9 @@ const speakFromFrame = async (wrapper: VueWrapper, data: Record<string, unknown>
 const nonceOf = (wrapper: VueWrapper): string => /const nonce = "([^"]+)"/.exec(wrapper.find("iframe").attributes("srcdoc") ?? "")?.[1] ?? "";
 
 const copyBlock = async (wrapper: VueWrapper): Promise<string> => {
-  const button = wrapper.findAll("button").find((candidate) => candidate.text().includes("Copy what happened"));
+  // Found by its title rather than its label: the label becomes "Copied" for a moment after a
+  // press, and a helper that looked for the label would quietly stop finding it on the second call.
+  const button = wrapper.findAll("button").find((candidate) => (candidate.attributes("title") ?? "").startsWith("Everything the parent saw"));
   if (button === undefined) throw new Error("the pane offers no way to copy what happened");
   await button.trigger("click");
   await flushPromises();
@@ -207,6 +209,31 @@ describe("SharedAppPreview", () => {
 
     await speakFromFrame(wrapper, { type: "mc-public-view:notice", nonce: nonceOf(wrapper), code: "modal-ignored", detail: "confirm" });
     expect(wrapper.text()).toContain("1 problem");
+  });
+
+  it("does not report one app's events under another app's name", async () => {
+    // The block names ONE app and ONE directory. Entries carried across a directory change would be
+    // reported as this app's — an author debugging app B handed a block that says B and describes
+    // A — and since the block is built to be pasted elsewhere, that is also one app's diagnostics
+    // leaving inside another's.
+    const wrapper = await mountPreview();
+    await speakFromFrame(wrapper, { type: "mc-public-view:notice", nonce: nonceOf(wrapper), code: "error", detail: "from the first app" });
+    expect(await copyBlock(wrapper)).toContain("from the first app");
+
+    vi.stubGlobal("fetch", answering(payload({ aid: "aid-2" })));
+    await wrapper.setProps({ cwd: "/another-repo" });
+    await settle();
+    expect(await copyBlock(wrapper)).not.toContain("from the first app");
+  });
+
+  it("keeps what was recorded when the same app is merely re-read", async () => {
+    // Every accepted write re-reads the projection, and so does Remove them. Emptying the log there
+    // would lose it at the exact moment an author had finished reproducing something.
+    const wrapper = await mountPreview();
+    await speakFromFrame(wrapper, { type: "mc-public-view:notice", nonce: nonceOf(wrapper), code: "error", detail: "still worth reading" });
+    await wrapper.setProps({ cwd: "/repo" });
+    await settle();
+    expect(await copyBlock(wrapper)).toContain("still worth reading");
   });
 
   it("renders the page in a frame no looser than the published one", async () => {

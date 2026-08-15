@@ -83,12 +83,18 @@ export const createPreviewLog = (options?: { now?: () => number; limit?: number 
     add: (event) => {
       const at = now();
       if (started === null) started = at;
-      entries.push({ ...event, at: at - started });
-      if (isProblem(entries[entries.length - 1] ?? { kind: "handshake", at: 0 })) problems += 1;
-      if (entries.length > limit) {
-        entries = entries.slice(entries.length - limit);
-        dropped += 1;
-      }
+      const entry: PreviewLogEntry = { ...event, at: at - started };
+      entries.push(entry);
+      if (isProblem(entry)) problems += 1;
+      if (entries.length <= limit) return;
+      // The count describes what is HELD, so an evicted problem stops being counted. Left as a
+      // running total it would disagree with the list under it — "3 problems" over one — and the
+      // pane's amber would stay lit about events nothing can show any more. What was lost is said
+      // by `dropped`, which is the honest way to say it.
+      const evicted = entries[0];
+      entries = entries.slice(entries.length - limit);
+      dropped += 1;
+      if (evicted !== undefined && isProblem(evicted)) problems -= 1;
     },
     entries: () => [...entries],
     size: () => entries.length,

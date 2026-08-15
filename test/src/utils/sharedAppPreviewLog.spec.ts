@@ -117,6 +117,34 @@ describe("the pane's log", () => {
     expect(renderPreviewLog(header, log)).toContain("3 earlier events were dropped");
   });
 
+  it("counts the problems it can still show, not the ones it has forgotten", () => {
+    // The count sits above the list, so a running total disagrees with what is under it — "3
+    // problems" printed over one — and the pane's amber stays lit about events nothing can produce
+    // any more. What was lost is said by the dropped line instead.
+    const log = createPreviewLog({ now: ticking(), limit: 2 });
+    log.add({ kind: "refused", reason: "busy", audience: "public" });
+    log.add({ kind: "refused", reason: "busy", audience: "public" });
+    expect(log.problems()).toBe(2);
+    log.add({ kind: "handshake" });
+    log.add({ kind: "handshake" });
+    expect(log.problems()).toBe(0);
+    expect(log.dropped()).toBe(2);
+    expect(renderPreviewLog(header, log)).toContain("2 events, 0 problems");
+  });
+
+  it("empties on demand, because the buffer belongs to one app", () => {
+    const log = createPreviewLog({ now: ticking() });
+    log.add({ kind: "refused", reason: "busy", audience: "public" });
+    log.clear();
+    expect(log.size()).toBe(0);
+    expect(log.problems()).toBe(0);
+    expect(log.dropped()).toBe(0);
+    // And the clock starts again, so the next app's first event is at +0.000 rather than at
+    // however long the author spent on the previous one.
+    log.add({ kind: "handshake" });
+    expect(renderPreviewLog(header, log)).toContain("   +0.000  the page answered the handshake");
+  });
+
   it("folds a home directory away, on every platform's spelling of one", () => {
     // The same hole CLAUDE.md names about screenshots, open in a block built to be pasted.
     expect(foldHome("/Users/someone/git/rooms")).toBe("~/git/rooms");

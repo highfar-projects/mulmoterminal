@@ -168,6 +168,33 @@ function remember(event: PreviewLogEvent): void {
   logProblems.value = log.problems();
 }
 
+/** WHICH APP the entries belong to. The buffer is scoped to it and emptied when it changes.
+ *
+ *  Not a tidiness: the header names one app and one directory, so entries carried over from the
+ *  previous one would be REPORTED as this one's — an author debugging app B handed a block that
+ *  says app B and describes app A. And the block is built to be pasted elsewhere, so that is also
+ *  one app's diagnostics leaving inside another's. */
+let logScope: string | null = null;
+
+function resetLog(scope: string | null): void {
+  log.clear();
+  logSize.value = 0;
+  logProblems.value = 0;
+  logScope = scope;
+}
+
+/** Adopt the app a payload belongs to, emptying the log if it is a different one.
+ *
+ *  Called where a payload LANDS rather than where one is asked for, so re-reading the same app —
+ *  which happens after every write and after Remove them — keeps what was recorded. Losing the log
+ *  to a refresh would lose it at exactly the moment an author had finished reproducing something. */
+function scopeLog(aid: string): void {
+  const scope = `${props.cwd ?? ""}::${aid}`;
+  if (logScope === scope) return;
+  if (logScope !== null) resetLog(scope);
+  logScope = scope;
+}
+
 /** The audience of the page being drawn, for the refusals whose meaning depends on it. */
 const audienceNow = (): PreviewAudience => page.value?.audience ?? "public";
 
@@ -503,7 +530,9 @@ async function refresh(): Promise<void> {
     // that matters: this answer is about a directory the pane may have left.
     if (mine !== refreshGeneration || load !== generation || !isRecord(body) || body.ok !== true) return;
     const next = asPayload(body.preview);
-    if (next !== null) payload.value = next;
+    if (next === null) return;
+    payload.value = next;
+    scopeLog(next.aid);
   } catch {
     // The records on screen are now older than the truth, and saying so would take the pane away
     // from an author in the middle of something. The next render says it.
@@ -534,6 +563,7 @@ async function load(): Promise<void> {
       return;
     }
     payload.value = asPayload(body.preview);
+    if (payload.value !== null) scopeLog(payload.value.aid);
     // The picker starts ON the page being drawn. Left null it renders blank while the frame below
     // it shows the first page, which reads as "no page selected" over a page that is right there.
     const first = payload.value?.pages[0];
@@ -585,7 +615,17 @@ async function copyLog(): Promise<void> {
 
 onBeforeUnmount(() => window.clearTimeout(copiedTimer));
 
-watch(() => props.cwd, load, { immediate: true });
+// The DIRECTORY is the other half of the app's identity, and it changes without a payload landing
+// — a cell moved to a repository whose server cannot be reached keeps the old entries under the new
+// directory's name, and the failure to reach it is the one line worth reading.
+watch(
+  () => props.cwd,
+  () => {
+    resetLog(null);
+    void load();
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
