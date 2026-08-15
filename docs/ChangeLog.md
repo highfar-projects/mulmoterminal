@@ -10,9 +10,13 @@ Entries here are folded into the next release's heading when it ships.
 
 ## mulmoterminal@4.8.5 — 2026-08-15
 
-Windows, tmux 3.7 and the remote host's Google sign-in. The dated setup guide for this release is
-still to be written (#1733); the living [guide](https://receptron.github.io/mulmoterminal/) is
-current in the meantime.
+> **Setup guide:** [Windows shells, tmux 3.7, and Google sign-in](https://receptron.github.io/mulmoterminal/guide/en/v4.8.5.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.8.5.html))
+
+Windows, tmux 3.7 and the remote host's Google sign-in. **If the tmux one hit you, updating is not
+enough on its own** — the setup guide has the single command that recovers it.
+
+The two shared-app changes below are not in that guide yet; they are user-facing enough to want
+screenshots, so they get their own page (#1733).
 
 ### Windows: a Shell cell died the instant it launched (#1717, #1718, #1720, #1724)
 

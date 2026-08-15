@@ -8,6 +8,11 @@ description: A browser-terminal cockpit for running several AI coding agents (Cl
 
 # MulmoTerminal Guide (English)
 
+> 🆕 **4.8.5 is out.** Shell cells on Windows, sessions dying after a worktree is deleted on
+> tmux 3.7, and the remote host's Google sign-in — [what changed and how to tell you have
+> it](v4.8.5.html). The tmux one needs one command from you if it already hit you.
+
+
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching
 is one page**, written so someone who doesn't write code for a living still ends up with a
