@@ -144,6 +144,24 @@ sandbox fails the same way: nothing is drawn, nothing throws, and the HTML reads
 cannot find these by looking at your own code, because the code is not wrong — the frame it runs
 in is stricter than the one you pictured. The only thing that finds them is pressing the button.
 
+**You can press it yourself: `manageSharedApp` with `action: "preview"`.** It loads every page the
+declaration names in a real headless browser — the same parent, the same
+`sandbox="allow-scripts"`, the same CSP, the same private-port handshake — hands it the app's real
+records, and presses each control on a freshly loaded copy of the page. It runs to a budget and
+**says what it left out** — pages it did not run, controls it did not press — so read those counts
+rather than reading "ran 6 pages" as "ran the app". What comes back is what
+you would otherwise have to be told by somebody looking at a screen: a page still on its loading
+state (quoted, in the author's own words), a `<form>` in the live document, a button that reached
+nothing, a submission the declaration refused. **Run it after writing or editing any view, and
+again before you deploy one.** A page that has never been through it is a page nobody has run.
+
+It **writes nothing** — every confirmation is declined — and that is exactly where it stops. It
+proves the page draws and that a press REACHES the parent as a submission the declaration accepts.
+It cannot tell you whether the deployed rules would accept the write, and it says nothing about
+other people's devices, two people submitting at once, or whether the rules are deployed at all.
+If no browser can be started it says so, and then the pane below is the whole answer rather than
+the second half of it.
+
 **That is what the Collections pane's preview is FOR.** It is not a convenience and it is not a
 rough approximation. Before it existed, an LLM wrote the page and it went to a public URL without
 anybody ever having loaded it once — which is exactly how a sign-up form was published twice with
@@ -153,7 +171,8 @@ a Submit button that did nothing at all. So the preview runs **the same parent a
 dialog. **It is deliberately not looser than production**: a preview kinder than the real page
 would be a machine for producing "it worked on my machine".
 
-**You cannot open it yourself — ask the user to, and say what to press.** In the cell open on this
+**Ask the user to open it once the headless run is clean** — it is the half you cannot do, because
+it puts a person in front of the page and it can WRITE. In the cell open on this
 repository: the **Collections pane** → the **"Preview the shared app"** button at the top → the
 page appears, drawn from the working tree. Opening it reads only: nothing is written and no URL
 name is taken.
@@ -172,7 +191,8 @@ Ask them to confirm, in these terms:
 - the **error paths** say something: an empty required field, an unchosen option.
 
 Do this **before deploy** and again after any change to a page. If the user cannot look right now,
-say plainly that the page is untested rather than reporting it as ready.
+say plainly what was and was not checked: a clean headless run means the page draws and the button
+reaches the parent, and it does not mean the write goes through.
 
 **Read the tool's `warnings` back to the user too.** `check`, `deploy` and `publish` all read the
 pages the declaration names and report what one will probably get wrong — a modal call, a
@@ -227,6 +247,10 @@ collections it names — and writes nothing. It needs no connection.
 Use it after any hand edit, and before telling the user something is ready. The alternative is
 finding out at deploy, and a deploy that refuses in the middle is where an agent starts editing
 files to recover.
+
+`check` READS the pages the declaration names — it refuses a `path` that names nothing and warns
+about what one usually gets wrong. It does not run them. `action: "preview"` does (step 3b), and
+neither replaces the other: a page `check` is silent about can still be a page that draws nothing.
 
 ### 5. Publish, when the user asks to open it
 
