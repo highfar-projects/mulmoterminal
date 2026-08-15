@@ -4,6 +4,7 @@
 // without carrying any of index.ts's session state along.
 import pty from "node-pty";
 import type { IPty } from "node-pty";
+import os from "node:os";
 import path from "node:path";
 import { sanitizePtyEnv, withFallbackLocale } from "../infra/pty-env.js";
 import { resolvePtyLaunchForEnv } from "../infra/resolve-bin.js";
@@ -16,6 +17,10 @@ import { tmuxAvailable, tmuxHasSession, tmuxNewSessionArgs, tmuxScrubEnvNames } 
 
 const PTY_COLS = 120;
 const PTY_ROWS = 30;
+
+/** Where the tmux CLIENT process itself is started from. The home directory because it is the one
+ *  place this app never deletes; see the tmux branch of `ptySpawn` for why that matters. */
+export const TMUX_CLIENT_CWD = os.homedir();
 
 // The environment a PTY will run with. Its own function because "can this binary be launched"
 // has to be answered against exactly this and not process.env — the PATH they disagree on is the
@@ -186,7 +191,20 @@ export function ptySpawn(
     // enough — the server may already carry the name from an earlier session. For the same
     // reason `env` goes to `new-session -e` rather than onto the tmux CLIENT we spawn here.
     if (unset.length > 0) tmuxScrubEnvNames(unset);
-    return { term: spawnPty("tmux", tmuxNewSessionArgs(sessionId, file, args, cwd, env), cwd, unset), tmux: true, reattached };
+    // The tmux CLIENT runs from a directory that cannot be deleted — deliberately NOT the cell's.
+    //
+    // tmux 3.7 moves the SERVER's cwd to the client's on every `new-session` and never restores
+    // it (measured), and `spawn_pane()` guards its chdir on `getcwd()`. So a client started inside
+    // a worktree leaves the server sitting there; when THIS APP then removes that worktree, the
+    // server's `getcwd()` fails and the guard skips the chdir entirely — every later pane ignores
+    // `-c` and starts in the deleted directory. A program that calls `getcwd()` as it starts (the
+    // claude binary does) dies immediately, so every new session on the host is broken until the
+    // tmux server is killed, while existing ones carry on (#1725, tmux/tmux#5473).
+    //
+    // The pane is unaffected: `new-session -c <cwd>` is what places it, and that is still the
+    // cell's directory. Starting the server from a safe place is NOT a substitute — the first
+    // `new-session` moves it again. tmux 3.6 and earlier do not have this behaviour.
+    return { term: spawnPty("tmux", tmuxNewSessionArgs(sessionId, file, args, cwd, env), TMUX_CLIENT_CWD, unset), tmux: true, reattached };
   }
   return { term: spawnPty(file, args, cwd, unset, env), tmux: false, reattached };
 }
