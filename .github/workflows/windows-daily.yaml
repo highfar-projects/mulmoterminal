@@ -3,9 +3,15 @@
 # second tsc pass), and lint/typecheck/build answer the same on every platform — ci.yml already
 # runs them on ubuntu and macOS.
 #
-# The pre-merge half is windows-pr.yaml, which runs `yarn test` only, on one Node version, on
-# every pull request. That split is deliberate: tests are the only part that behaves differently
-# on Windows, so they are the only part worth paying for per PR (#1721).
+# The pre-merge half is windows-pr.yaml. It is TRIGGERED on every pull request — so it always
+# reports, which is what lets it be a required check — but it only executes `yarn test`, on one
+# Node version, and only when the PR touches something other than docs, plans and markdown. That
+# split is deliberate: tests are the only part that behaves differently on Windows, so they are
+# the only part worth paying for per PR (#1721).
+#
+# This file is also the only one of the two that may disable Defender (below). It runs on `main`,
+# a schedule and manual dispatch, so the code it executes is trusted; the PR gate executes code the
+# pull request supplied and therefore keeps the runner's protection on.
 #
 # What it actually guards: server/infra/pty-env.ts branches on PATH casing ("Path"),
 # the ";" delimiter and "\" separators; server/infra/resolve-bin.ts resolves a bare

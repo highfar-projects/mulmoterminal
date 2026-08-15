@@ -68,6 +68,21 @@ failure mode が「沈黙」**になる。`BUNDLED_SKILL_NAMES` と同じ罠。
 いちばん重要**で、ここを外すと server を触った PR で Windows テストが黙って飛ぶ — この workflow が
 防ごうとしている失敗そのものになる。
 
+### Defender は切らない（Codex レビューでの指摘）
+
+`windows-daily.yaml` は `Set-MpPreference -DisableRealtimeMonitoring $true` を実行している。
+realtime スキャンが yarn の atomic rename を EPERM で落とすため。**この workflow では実行しない。**
+
+`pull_request` は **PR が持ち込んだコードを実行する**（install の lifecycle script と、テスト
+ファイルそのもの）。public リポジトリなので誰でも PR を開ける。**ランナーの保護を先に切ってから
+そのコードを走らせるのは、install が時々コケることと引き換えにするには大きすぎる。**
+
+daily の方は `main` / schedule / 手動 dispatch でしか走らず、実行するコードは既に信頼されている
+ので、回避策はそちらに残す。**差は trust boundary であって、書き忘れではない。**
+
+EPERM でフレークするようなら、答えはリトライか狭い除外パスであって、untrusted なコードの前で
+Defender を切ることではない。
+
 ### キャッシュ
 
 `node_modules` のキーは `windows-daily.yaml` のものと**同一文字列**（`win-node-modules-22.x-<lockfile hash>`）。

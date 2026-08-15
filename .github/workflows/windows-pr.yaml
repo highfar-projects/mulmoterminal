@@ -68,11 +68,18 @@ jobs:
         with:
           node-version: 22.x
 
-      # Realtime scanning makes yarn's atomic renames fail with EPERM mid-install.
-      - name: Disable Defender realtime monitoring
-        if: steps.scope.outputs.run == 'true'
-        shell: powershell
-        run: Set-MpPreference -DisableRealtimeMonitoring $true
+      # NOTE: windows-daily.yaml disables Defender realtime monitoring here, because its realtime
+      # scanning makes yarn's atomic renames fail with EPERM mid-install. This workflow does NOT,
+      # and the difference is the trust boundary rather than an oversight.
+      #
+      # `pull_request` runs code the pull request supplies — install lifecycle scripts and the test
+      # files themselves — and on a public repository anyone can open one. Turning the runner's
+      # protection off first, and only then executing that code, is a bigger concession than a
+      # flaky install is worth. The daily job runs on `main`, a schedule and manual dispatch, so
+      # the code it executes is already trusted; the workaround stays there.
+      #
+      # If this does turn out to be EPERM-flaky, the answer is a retry or a narrower exclusion —
+      # not disabling Defender ahead of untrusted code.
 
       # The key is windows-daily.yaml's key verbatim, so a pull request restores the tree main
       # already built rather than resolving its own. The restore-keys prefix keeps a changed
