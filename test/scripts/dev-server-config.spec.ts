@@ -1,5 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
+import { spawn } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
@@ -135,4 +138,56 @@ describe("isListeningMessage", () => {
       expect(isListeningMessage(other)).toBe(false);
     }
   });
+});
+
+// The readiness send must not be able to kill the backend it is reporting from.
+//
+// After the parent disconnects, `process.send` STAYS a function and `process.connected` goes
+// false. Calling it then raises ERR_IPC_CHANNEL_CLOSED **asynchronously** — it arrives as an
+// uncaughtException, so neither `?.` nor a try/catch around the call stops the process dying.
+// Reachable in practice: Ctrl+C on the supervisor while the backend is still in its ~3s of setup,
+// which is exactly when this message is sent. CodeRabbit raised it on #1736; this pins the shape
+// server/index.ts uses rather than the file itself, which cannot be booted in a unit test.
+describe("the readiness notification's guard", () => {
+  const runChild = (body: string): Promise<{ code: number | null; messages: unknown[] }> => {
+    const dir = mkdtempSync(path.join(tmpdir(), "mt-ipc-"));
+    const file = path.join(dir, "child.mjs");
+    writeFileSync(file, body);
+    return new Promise((resolve) => {
+      const child = spawn(process.execPath, [file], { stdio: ["ignore", "ignore", "ignore", "ipc"] });
+      const messages: unknown[] = [];
+      child.on("message", (m) => messages.push(m));
+      // Disconnect while the child is still "starting up", the way Ctrl+C would.
+      setTimeout(() => child.disconnect(), 100);
+      child.on("exit", (code) => {
+        rmSync(dir, { recursive: true, force: true });
+        resolve({ code, messages });
+      });
+    });
+  };
+
+  // The guard server/index.ts actually uses.
+  const GUARDED = `
+    setTimeout(() => {
+      if (process.connected) process.send?.({ type: "listening", port: 1 }, undefined, undefined, () => {});
+      setTimeout(() => process.exit(0), 150);
+    }, 300);
+  `;
+
+  it("survives a parent that disconnected before the port was bound", async () => {
+    const { code } = await runChild(GUARDED);
+    expect(code).toBe(0);
+  }, 10000);
+
+  // The negative control: without the guard the same child dies, which is what makes the test
+  // above mean something.
+  it("would die without it — the reason the guard is there", async () => {
+    const { code } = await runChild(`
+      setTimeout(() => {
+        process.send?.({ type: "listening", port: 1 });
+        setTimeout(() => process.exit(0), 150);
+      }, 300);
+    `);
+    expect(code).not.toBe(0);
+  }, 10000);
 });

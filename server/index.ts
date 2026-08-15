@@ -941,9 +941,16 @@ server.listen(Number(PORT), BIND_HOST, () => {
   // The dev supervisor (scripts/dev-server.mjs) resets its crash count on THIS, not on how long
   // the process lived. Everything above runs before the bind and can take any amount of time, so
   // elapsed time never proved the port was reached — which is how a slow crash loop stayed
-  // invisible (#1735). `process.send` exists only when a parent opened an IPC channel, so this
-  // is a no-op under `npx mulmoterminal`.
-  process.send?.({ type: "listening", port: Number(PORT) });
+  // invisible (#1735).
+  //
+  // Three guards, and none is decoration. `process.send` is undefined unless a parent opened an
+  // IPC channel, so this is a no-op under `npx mulmoterminal`. `process.connected` is the one
+  // that matters: after the parent disconnects, `send` STAYS a function, and calling it raises
+  // ERR_IPC_CHANNEL_CLOSED **asynchronously** — measured, it lands as an uncaughtException and
+  // kills the process, so neither `?.` nor a try/catch stops it. That is reachable: Ctrl+C on the
+  // supervisor while this server is still in its ~3s of setup. The callback catches the same
+  // error for a channel that closes between the check and the write.
+  if (process.connected) process.send?.({ type: "listening", port: Number(PORT) }, undefined, undefined, () => {});
   if (!isLoopbackBinding(server.address())) {
     console.warn(bindSecurityWarning(BIND_HOST, PORT, browserHostnames));
   }
