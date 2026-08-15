@@ -340,7 +340,18 @@ async function openDriver(browser: Browser, origin: string): Promise<Driver> {
  *  Freshly mounted rather than pressed in sequence, so what is reported about the third control is
  *  not a consequence of the first two — and the inputs are filled first, so a page that validates
  *  its own form does not refuse for a reason that has nothing to do with what is being asked. */
-async function pressOne(driver: Driver, input: HeadlessPageInput, index: number): Promise<HeadlessPress | null> {
+/** One press, and HOW MANY controls the page turned out to have once its inputs were filled.
+ *
+ *  The count comes back with the press because it is only knowable here. The survey is taken
+ *  before the filling, and filling can ADD controls — so a page whose survey found one control can
+ *  have two by the time anything is pressed, and a loop bounded by the survey would press the new
+ *  one and never press the original while reporting that nothing was left out. */
+interface PressResult {
+  press: HeadlessPress;
+  controls: number;
+}
+
+async function pressOne(driver: Driver, input: HeadlessPageInput, index: number): Promise<PressResult | null> {
   await driver.mount(input);
   const frame = driver.frame();
   if (frame === null) return null;
@@ -352,7 +363,10 @@ async function pressOne(driver: Driver, input: HeadlessPageInput, index: number)
   // what is actually about to be clicked, or say the control is gone.
   const labels = asStrings(await driver.evaluate(LABELS, frame));
   const label = labels[index];
-  if (label === undefined) return { label: `control ${index + 1}`, notClickable: true, submitted: null, refused: [], blockedFormSubmission: false, errors: [] };
+  if (label === undefined) {
+    const gone: HeadlessPress = { label: `control ${index + 1}`, notClickable: true, submitted: null, refused: [], blockedFormSubmission: false, errors: [] };
+    return { press: gone, controls: labels.length };
+  }
 
   // Located BEFORE the snapshot below. Each of these is a round trip to the browser, and anything
   // the page does during one of them would otherwise land in the window being attributed to the
@@ -384,7 +398,7 @@ async function pressOne(driver: Driver, input: HeadlessPageInput, index: number)
   // runs and nothing is left waiting on a promise that never settles.
   await driver.decline();
   const noise = driver.noise().slice(noiseBefore);
-  return {
+  const press: HeadlessPress = {
     label,
     notClickable: notClickable !== false,
     submitted: after.submitted[before.submitted.length] ?? null,
@@ -392,6 +406,7 @@ async function pressOne(driver: Driver, input: HeadlessPageInput, index: number)
     blockedFormSubmission: noise.some((line) => line.includes(BLOCKED_FORM)),
     errors: [...new Set(noise.filter((line) => !line.includes(BLOCKED_FORM)))],
   };
+  return { press, controls: labels.length };
 }
 
 async function reportPage(driver: Driver, input: HeadlessPageInput): Promise<HeadlessPageReport> {
@@ -406,11 +421,17 @@ async function reportPage(driver: Driver, input: HeadlessPageInput): Promise<Hea
   const text =
     frame === null ? "" : asString(await driver.evaluate(`(document.body.innerText || "").replace(/\\s+/g, " ").trim().slice(0, ${LIMITS.textChars})`, frame));
 
-  // The survey decides HOW MANY presses; each press names its own control (see `pressOne`).
+  // The survey is only a STARTING estimate of how many controls there are: filling the inputs can
+  // add some (see `pressOne`), and a loop bounded by the survey would then press the newcomer,
+  // never press the original, and report that nothing was left out. Each press says what it found,
+  // and the bound grows to it.
   const presses: HeadlessPress[] = [];
-  for (let index = 0; index < Math.min(labels.length, LIMITS.presses); index += 1) {
-    const press = await pressOne(driver, input, index);
-    if (press !== null) presses.push(press);
+  let controls = labels.length;
+  for (let index = 0; index < Math.min(controls, LIMITS.presses); index += 1) {
+    const result = await pressOne(driver, input, index);
+    if (result === null) break;
+    presses.push(result.press);
+    controls = Math.max(controls, result.controls);
   }
   return {
     id: input.id,
@@ -421,7 +442,7 @@ async function reportPage(driver: Driver, input: HeadlessPageInput): Promise<Hea
     liveForms,
     text,
     presses,
-    pressesOmitted: Math.max(0, labels.length - LIMITS.presses),
+    pressesOmitted: Math.max(0, controls - presses.length),
     errors,
   };
 }

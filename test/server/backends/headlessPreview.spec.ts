@@ -199,6 +199,11 @@ describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
     const reorders = pages[4];
     expect(reorders?.presses[0]?.label).toBe("Clear");
     expect(reorders?.presses[0]?.submitted).toBeNull();
+    // And the ORIGINAL control is still pressed. Bounded by the survey — one control — the run
+    // would have pressed the newcomer, never pressed "Order", and reported nothing left out.
+    expect(reorders?.presses[1]?.label).toBe("Order");
+    expect(reorders?.presses[1]?.submitted).toEqual({ cid: "orders", fields: ["name"] });
+    expect(reorders?.pressesOmitted).toBe(0);
   });
 
   it("presses where a person would, so a control no cursor reaches submits nothing", () => {
