@@ -26,6 +26,7 @@ import path from "node:path";
 import { normalizeViews, type AuthoredApp } from "@receptron/sharedapp";
 import { hasErrnoCode } from "../../errors.js";
 import { modalCallIn } from "./modalCall.js";
+import { formElementIn, readyNeverCalled } from "./viewDefects.js";
 
 /** The document the public page reads the HTML from. Beside core's
  *  `PUBLIC_CONFIG_DOC` ("public") under `apps/{aid}/config`. */
@@ -271,9 +272,10 @@ async function containedPath(root: string, declared: string, where: string): Pro
 
 /** What this page will probably get wrong, said WITHOUT stopping it.
  *
- *  A modal call is a real defect — the frame runs sandboxed with no `allow-modals`, so `alert`,
- *  `confirm` and `prompt` are ignored, nothing throws, and `confirm` answers `false` — but reading
- *  a page for one means reading HTML and JavaScript with something that is not a parser for either.
+ *  Each of these is a real defect — the sandbox eats a modal, blocks a `<form>` submission, and
+ *  sends a view nothing until it says `ready()`; in every case nothing throws and nothing is drawn,
+ *  so the page looks finished — but reading a page for one means reading HTML and JavaScript with
+ *  something that is not a parser for either.
  *  Over one review of this check that produced 12 misses and 9 FALSE ALARMS, and the false alarms
  *  were the expensive half: each refused a page that works, and several refused the very shape the
  *  skill tells authors to write (`const alert = (m) => …`, an `alert()` mentioned in prose, a
@@ -282,15 +284,38 @@ async function containedPath(root: string, declared: string, where: string): Pro
  *  So this reports and publish goes on. What the author cannot be told at all is the far worse
  *  case, and that belongs to the runtime instead — see `plans/feat-shared-app-view-diagnostics.md`. */
 export function viewWarnings(html: string, declared: string, where: string): string[] {
+  const names = `${where}.path names '${declared}'`;
+  const caveat = "(Published anyway: this is read without parsing the page, so it can be wrong.)";
+  const warnings: string[] = [];
   const modal = modalCallIn(html);
-  if (modal === null) return [];
-  return [
-    `${where}.path names '${declared}', which appears to call \`${modal}()\`. Views run sandboxed with no \`allow-modals\`, so the browser ignores all three of ` +
-      "`alert`, `confirm` and `prompt` — nothing appears, nothing throws, and `confirm` answers `false`. " +
-      "A page built on one asks nobody for the value it then sends, or draws a button that silently does nothing. " +
-      "Ask with an `<input>` in the page, answer in an element of its own, and make a confirmation a second press rather than a modal. " +
-      "(Published anyway: this is read without parsing the page, so it can be wrong.)",
-  ];
+  if (modal !== null) {
+    warnings.push(
+      `${names}, which appears to call \`${modal}()\`. Views run sandboxed with no \`allow-modals\`, so the browser ignores all three of ` +
+        "`alert`, `confirm` and `prompt` — nothing appears, nothing throws, and `confirm` answers `false`. " +
+        "A page built on one asks nobody for the value it then sends, or draws a button that silently does nothing. " +
+        "Ask with an `<input>` in the page, answer in an element of its own, and make a confirmation a second press rather than a modal. " +
+        caveat,
+    );
+  }
+  if (formElementIn(html)) {
+    warnings.push(
+      `${names}, which contains a \`<form>\`. Views run sandboxed with no \`allow-forms\`, so the browser blocks the submission ` +
+        "BEFORE it fires the `submit` event — an `onsubmit` handler never runs, `e.preventDefault()` included, and the console says " +
+        "\"Blocked form submission to ''\". The Submit button does nothing, and so does Enter in a text field; `required` stops working " +
+        "with them, since constraint validation is part of submitting. " +
+        'Use a `<div>` and a `<button type="button">` whose CLICK sends through the bridge, and check the values yourself. ' +
+        caveat,
+    );
+  }
+  if (readyNeverCalled(html)) {
+    warnings.push(
+      `${names}, which registers \`onState\` but never calls \`ready()\`. The parent sends NOTHING until the view answers that handshake, ` +
+        "so `onState` never fires: the page draws its loading state and stays there forever, with no error anywhere. " +
+        "Call `ready()` once, after the listener is registered. " +
+        caveat,
+    );
+  }
+  return warnings;
 }
 
 function contentProblems(html: string, bytes: number, declared: string, where: string): { ok: false; problems: string[] } | null {
@@ -316,6 +341,33 @@ function contentProblems(html: string, bytes: number, declared: string, where: s
     };
   }
   return null;
+}
+
+/** Every page the declaration names, read the way deploy will read it — for `check`, which writes
+ *  nothing and needs no connection.
+ *
+ *  `check` answers "would a deploy be refused?", and until this existed it answered that from the
+ *  declaration alone: a `path` naming a file that is not there, a page over the document limit, or
+ *  a page written against the host's bridge all passed `check` and were refused by the deploy
+ *  afterwards — which is exactly the point in the flow this action exists to move earlier. The
+ *  warnings come with it for the same reason: they are what the author still has time to act on.
+ *
+ *  A declaration that cannot be normalized returns nothing; the gate that reports THAT runs
+ *  alongside this one and would otherwise say it twice. */
+export async function viewFilesReport(root: string, authored: AuthoredApp): Promise<{ problems: string[]; warnings: string[] }> {
+  const normalized = normalizeViews(authored);
+  if (!normalized.ok) return { problems: [], warnings: [] };
+  const problems: string[] = [];
+  const warnings: string[] = [];
+  // The stamp only sizes the document this page would become. `check` has none — it is not
+  // publishing — and the clock is close enough for a limit with a 100 KB margin under it.
+  const publishedAt = Date.now();
+  for (const view of normalized.views) {
+    const read = await readAppViewFile(root, view, publishedAt, view.where);
+    if (read.ok) warnings.push(...read.view.warnings);
+    else problems.push(...read.problems);
+  }
+  return { problems, warnings };
 }
 
 /** The PUBLIC page the declaration asks to publish, if any. Null for an app

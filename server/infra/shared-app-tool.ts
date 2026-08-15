@@ -249,9 +249,15 @@ async function narrateCheck(root: string): Promise<string> {
       ? `Checked as the declared owner (${report.declaredOwner ?? "none named"}) — not signed in, so it could not be checked against your address.`
       : `Checked as ${report.checkedAs}.`;
   if (report.problems.length === 0) {
-    return [`The declaration is deployable. ${found}.`, as, "Nothing was written or deployed — this only reads."].join("\n");
+    return [`The declaration is deployable. ${found}.`, ...warningNote(report.warnings), as, "Nothing was written or deployed — this only reads."].join("\n");
   }
-  return [`The declaration would be refused (${found}):`, ...report.problems.map((problem) => `  - ${problem}`), as, "Nothing was written."].join("\n");
+  return [
+    `The declaration would be refused (${found}):`,
+    ...report.problems.map((problem) => `  - ${problem}`),
+    ...warningNote(report.warnings),
+    as,
+    "Nothing was written.",
+  ].join("\n");
 }
 
 async function narrateInvite(root: string, body: Record<string, unknown>): Promise<string> {
