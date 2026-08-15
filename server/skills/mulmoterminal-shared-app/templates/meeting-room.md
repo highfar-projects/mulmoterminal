@@ -288,6 +288,55 @@ publish されます。総務の Mac が閉じたままでも、受付が自分�
 契約は公開ビューと同じ（`window.__MC_APP_VIEW` / `onState` / `ready`）。渡されるものだけが
 違い、`collections` に書いたものが**その人の資格情報で**読まれます。
 
+このアプリの受付は**読む画面**です。予約の状態は `booked` 一つで、`transitions` は `initial`
+だけ — つまり受付が押すボタンはありません（枠を空けるのは本人の取り下げ、下記）。
+
+```html
+<label>日付 <input id="day" type="date" /></label>
+<p id="count" role="status"></p>
+<div id="rows"></div>
+<script>
+  const view = window.__MC_APP_VIEW;
+  const rows = document.getElementById("rows");
+  const count = document.getElementById("count");
+  const day = document.getElementById("day");
+  let latest = { bookings: [], slots: [] };
+
+  const draw = () => {
+    const when = day.value;
+    const slot = Object.fromEntries(latest.slots.map((row) => [row.id, row]));
+    const shown = latest.bookings
+      .filter((booking) => when === "" || String(slot[booking.slot]?.startAt ?? "").startsWith(when))
+      .sort((a, b) => String(slot[a.slot]?.startAt ?? "").localeCompare(String(slot[b.slot]?.startAt ?? "")));
+
+    count.textContent = `${shown.length} 件`;
+    rows.replaceChildren(
+      ...shown.map((booking) => {
+        // textContent。用件も名前も人が入力するもので、文字列連結で innerHTML に
+        // 入れると受付の画面でそれが動きます。
+        const row = document.createElement("div");
+        const time = document.createElement("span");
+        time.textContent = slot[booking.slot]?.startAt ?? booking.slot;
+        const who = document.createElement("span");
+        who.textContent = `${booking.requesterName ?? ""}（${booking.requesterEmail ?? ""}）`;
+        const why = document.createElement("span");
+        why.textContent = booking.purpose ?? "";
+        row.append(time, who, why);
+        return row;
+      }),
+    );
+  };
+
+  view.onState(({ bookings = [], slots = [] }) => {
+    latest = { bookings, slots };
+    draw();
+  });
+  // 絞り込みは手元だけの操作。onState を待つ必要はなく、待つと最初の描画が出ません。
+  day.addEventListener("change", draw);
+  view.ready();
+</script>
+```
+
 ---
 
 ## 取り消しには 2 通りある — **混ぜないこと**

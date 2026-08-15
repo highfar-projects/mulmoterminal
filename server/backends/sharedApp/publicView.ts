@@ -343,6 +343,33 @@ function contentProblems(html: string, bytes: number, declared: string, where: s
   return null;
 }
 
+/** Every page the declaration names, read the way deploy will read it — for `check`, which writes
+ *  nothing and needs no connection.
+ *
+ *  `check` answers "would a deploy be refused?", and until this existed it answered that from the
+ *  declaration alone: a `path` naming a file that is not there, a page over the document limit, or
+ *  a page written against the host's bridge all passed `check` and were refused by the deploy
+ *  afterwards — which is exactly the point in the flow this action exists to move earlier. The
+ *  warnings come with it for the same reason: they are what the author still has time to act on.
+ *
+ *  A declaration that cannot be normalized returns nothing; the gate that reports THAT runs
+ *  alongside this one and would otherwise say it twice. */
+export async function viewFilesReport(root: string, authored: AuthoredApp): Promise<{ problems: string[]; warnings: string[] }> {
+  const normalized = normalizeViews(authored);
+  if (!normalized.ok) return { problems: [], warnings: [] };
+  const problems: string[] = [];
+  const warnings: string[] = [];
+  // The stamp only sizes the document this page would become. `check` has none — it is not
+  // publishing — and the clock is close enough for a limit with a 100 KB margin under it.
+  const publishedAt = Date.now();
+  for (const view of normalized.views) {
+    const read = await readAppViewFile(root, view, publishedAt, view.where);
+    if (read.ok) warnings.push(...read.view.warnings);
+    else problems.push(...read.problems);
+  }
+  return { problems, warnings };
+}
+
 /** The PUBLIC page the declaration asks to publish, if any. Null for an app
  *  with none — which is most of them, and is not a problem.
  *

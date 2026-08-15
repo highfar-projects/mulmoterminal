@@ -18,6 +18,7 @@ import { APPS_COLLECTION, parseAuthoredApp } from "@receptron/sharedapp";
 import { isRecord } from "../../../common/isRecord.js";
 import { declarationProblems, sharedCollections, type SharedAppFailure } from "./context.js";
 import { createManifest, newAid, updateManifest } from "./manifestWrite.js";
+import { viewFilesReport } from "./publicView.js";
 
 /** The roster key that means "every collection". A member's roles map is keyed by cid, with this
  *  as the fallback the rules drop to (`role()` reads `cid` first, then this). */
@@ -362,6 +363,9 @@ export interface CheckReport {
   /** The address the declaration names as app-wide owner, when it names one. */
   declaredOwner: string | undefined;
   problems: string[];
+  /** What the pages it names will probably get wrong, without stopping a deploy. See
+   *  `viewWarnings`. */
+  warnings: string[];
 }
 
 /** Everything wrong with the declaration and this repository's collections, WITHOUT writing
@@ -375,7 +379,7 @@ export async function checkSharedApp(root: string): Promise<CheckReport | Shared
   const raw = await readManifest(root);
   if (!raw.ok) return raw;
   const parsed = parseAuthoredApp(raw.text);
-  if (!parsed.ok) return { ok: true, aid: undefined, collections: [], checkedAs: null, declaredOwner: undefined, problems: parsed.problems };
+  if (!parsed.ok) return { ok: true, aid: undefined, collections: [], checkedAs: null, declaredOwner: undefined, problems: parsed.problems, warnings: [] };
 
   const collections = await sharedCollections(root);
   const handle = firestoreHandle();
@@ -384,13 +388,18 @@ export async function checkSharedApp(root: string): Promise<CheckReport | Shared
   // used to miss the `owner` uid mismatch and call a declaration deployable that deploy then
   // refused.
   const problems = declarationProblems(parsed.app, collections, handle);
+  // The PAGES too, read from disk. A `path` naming nothing, a page too large, a page written
+  // against the host's bridge: each of those refuses a deploy, and answering "deployable" without
+  // having opened them is the answer this action exists not to give.
+  const pages = await viewFilesReport(root, parsed.app);
   return {
     ok: true,
     aid: parsed.app.aid,
     collections: collections.map((collection) => collection.slug),
     checkedAs: handle?.email ?? null,
     declaredOwner: ownerFromRoster(parsed.app),
-    problems,
+    problems: [...problems, ...pages.problems],
+    warnings: pages.warnings,
   };
 }
 

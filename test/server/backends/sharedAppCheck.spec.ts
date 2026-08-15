@@ -1,0 +1,82 @@
+// @vitest-environment node
+//
+// `check` opens the PAGES, not only the declaration.
+//
+// It exists to answer "would a deploy be refused?" before anything is written, and a `path` naming
+// a file that is not there is one of the ways a deploy IS refused. Answering that question from
+// `app.json` alone called such an app deployable and left the refusal for the deploy — the exact
+// point in the flow this action exists to move earlier. The warnings ride along for the same
+// reason: they are what an author still has time to act on.
+import { describe, it, expect, beforeAll, beforeEach } from "vitest";
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { setSharedCollectionsSupport } from "@mulmoclaude/core/collection/server";
+import { initCollectionsBackend } from "../../../server/backends/collections.js";
+import { checkSharedApp } from "../../../server/backends/sharedApp/declare.js";
+import { makeTempDir } from "../../support/tempDir";
+
+const AID = "11111111-2222-3333-4444-555555555555";
+
+/** An app that declares one public page, and whatever HTML the test wants behind it. */
+const withApp = (root: string, html: string | null): void => {
+  writeFileSync(
+    path.join(root, "app.json"),
+    JSON.stringify({
+      aid: AID,
+      name: "Sign-ups",
+      slug: "sign-ups",
+      members: { "owner@example.com": { "*": "owner" } },
+      collections: { signups: { submitOnly: true, statusField: "status" } },
+      public: {
+        enabled: true,
+        read: ["menu"],
+        submit: { signups: { auth: "verifiedEmail", emailField: "email", createFields: ["name", "email", "status"], initialStatus: "submitted" } },
+      },
+      views: [{ id: "public", audience: "public", path: "views/signup.html", collections: ["menu"] }],
+    }),
+  );
+  if (html === null) return;
+  mkdirSync(path.join(root, "views"), { recursive: true });
+  writeFileSync(path.join(root, "views", "signup.html"), html);
+};
+
+describe("check", () => {
+  let root: string;
+
+  beforeAll(() => {
+    // `check` discovers this repository's collections on the way, and discovery needs the host
+    // binding. ONE per file — a second call with a different host is refused.
+    initCollectionsBackend({ workspace: makeTempDir("mt-shared-app-check-ws-") });
+    setSharedCollectionsSupport(true);
+  });
+
+  beforeEach(() => {
+    root = makeTempDir("mt-shared-app-check-");
+  });
+
+  it("refuses a view whose file is not there", async () => {
+    // The template that declared two pages and shipped neither passed `check` and failed at
+    // deploy, which is the one thing this action promises not to let happen.
+    withApp(root, null);
+    const report = await checkSharedApp(root);
+    expect(report.ok).toBe(true);
+    expect(report.ok && report.problems.join(" ")).toContain("could not be opened as a plain file");
+  });
+
+  it("carries the page's warnings, without making them refusals", async () => {
+    // A `<form>` cannot submit in the sandbox and an `onState` with no reachable `ready()` is never
+    // sent anything — both silent, both survivable, so they are said and the deploy goes on.
+    withApp(root, '<form id="f"><button type="submit">go</button></form><script>view.onState((d) => { draw(d); view.ready(); });</script>');
+    const report = await checkSharedApp(root);
+    expect(report.ok).toBe(true);
+    expect(report.ok && report.warnings.join(" ")).toContain("allow-forms");
+    expect(report.ok && report.warnings.join(" ")).toContain("ready()");
+    expect(report.ok && report.problems.join(" ")).not.toContain("allow-forms");
+  });
+
+  it("says nothing about a page that is fine", async () => {
+    withApp(root, '<div id="grid"></div><script>view.onState((d) => draw(d)); view.ready();</script>');
+    const report = await checkSharedApp(root);
+    expect(report.ok && report.warnings).toEqual([]);
+  });
+});

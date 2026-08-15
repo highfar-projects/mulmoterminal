@@ -36,18 +36,62 @@ const COMMENT = /<!--[\s\S]*?(?:-->|$)/g;
 
 export const formElementIn = (html: string): boolean => FORM_START_TAG.test(withoutScriptBodies(html).replace(COMMENT, " "));
 
-/** Asking for state — `onState(…)` — with the handshake it depends on nowhere in the page.
+/** Asking for state — `onState(…)` — with no `ready()` the page can actually REACH.
  *
- *  Only ever reported TOGETHER: a page with neither is a static view that wants no data, and
- *  warning at it would be warning at something that works. A page calling `ready` without
- *  `onState` is odd but harmless, so it is left alone too.
+ *  Not merely "the word is absent". `ready()` written INSIDE the `onState` callback deadlocks in
+ *  exactly the same way and is the likelier mistake, because it is what "call `ready` after
+ *  registering the listener" sounds like:
+ *
+ *      view.onState((data) => { draw(data); view.ready(); });   // ← never runs
+ *
+ *  The parent sends no state until `ready` arrives, so the callback never fires, so `ready` is
+ *  never sent. A check that only asked whether the name appears called that page clean.
+ *
+ *  So the `onState` ARGUMENTS are cut out of the code first, and what is looked at is the call
+ *  that survives. Only ever reported together with an `onState`: a page with neither is a static
+ *  view that wants no data, and warning at it would be warning at something that works.
  *
  *  Read off the page's code with strings and comments removed, so the word appearing in prose or
  *  in a message the page shows is not mistaken for the call. */
-const ON_STATE = /\.\s*onState\s*\(/;
+const ON_STATE = /\.\s*onState\s*\(/g;
 const READY = /\.\s*ready\s*\(/;
+
+/** Where the argument list opened at `from` (the index OF its `(`) ends, or the end of the code
+ *  for an unbalanced one — which is what a browser would run to as well. Strings and comments are
+ *  already gone, so a parenthesis here is a parenthesis. */
+const closingParen = (code: string, from: number): number => {
+  let depth = 0;
+  for (let i = from; i < code.length; i += 1) {
+    if (code[i] === "(") depth += 1;
+    else if (code[i] === ")") {
+      depth -= 1;
+      if (depth === 0) return i + 1;
+    }
+  }
+  return code.length;
+};
+
+/** The page's code with every `onState(…)` argument list removed — so a `ready()` that is only
+ *  reachable from inside the listener is not there to find.
+ *
+ *  The matches are passed IN rather than found here: `ON_STATE` is global, and a `test()` on a
+ *  global regex leaves `lastIndex` past the match — which a later `matchAll` inherits, so the
+ *  scan found nothing and every page looked as if it called `ready` outside. Scanning once and
+ *  sharing the result is the fix and also the only reading of it that cannot drift. */
+const outsideOnState = (code: string, listeners: readonly RegExpMatchArray[]): string => {
+  let out = "";
+  let cursor = 0;
+  for (const hit of listeners) {
+    const open = (hit.index ?? 0) + hit[0].length - 1;
+    if (open < cursor) continue;
+    out += code.slice(cursor, open);
+    cursor = closingParen(code, open);
+  }
+  return out + code.slice(cursor);
+};
 
 export const readyNeverCalled = (html: string): boolean => {
   const code = viewScriptCode(html);
-  return ON_STATE.test(code) && !READY.test(code);
+  const listeners = [...code.matchAll(ON_STATE)];
+  return listeners.length > 0 && !READY.test(outsideOnState(code, listeners));
 };

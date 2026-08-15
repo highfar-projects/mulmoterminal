@@ -155,7 +155,14 @@ would be a machine for producing "it worked on my machine".
 
 **You cannot open it yourself — ask the user to, and say what to press.** In the cell open on this
 repository: the **Collections pane** → the **"Preview the shared app"** button at the top → the
-page appears, drawn from the working tree. Nothing is written and no URL name is taken.
+page appears, drawn from the working tree. Opening it reads only: nothing is written and no URL
+name is taken.
+
+**Accepting a submission there DOES write a real record**, as the signed-in author, into the live
+app — the pane says so at the button and lists what it made with an Undo beside it. So it is a
+real answer in the app's data, not a rehearsal: tell the user that before they press *Send it*,
+and offer to remove it afterwards. Reaching the CONFIRMATION is what proves the page works;
+accepting is only needed when you want to see the record land.
 
 Ask them to confirm, in these terms:
 
@@ -167,14 +174,17 @@ Ask them to confirm, in these terms:
 Do this **before deploy** and again after any change to a page. If the user cannot look right now,
 say plainly that the page is untested rather than reporting it as ready.
 
-**Read the tool's `warnings` back to the user too.** `check`, `deploy` and `publish` report what
-the page will probably get wrong — a modal call, a `<form>`, an `onState` with no `ready()`. They
-are hints and they do not stop a publish: a page they are silent about can still be broken, which
-is why they are not a substitute for the paragraph above.
+**Read the tool's `warnings` back to the user too.** `check`, `deploy` and `publish` all read the
+pages the declaration names and report what one will probably get wrong — a modal call, a
+`<form>`, an `onState` with no reachable `ready()` — as well as refusing a `path` that names
+nothing. They are hints and they do not stop a publish: a page they are silent about can still be
+broken, which is why they are not a substitute for the paragraph above.
 
-**What the preview does NOT prove**, so do not claim it: the Firestore rules do not run there, so
-what a role may WRITE is untested; nobody else exists, so nothing is concurrent; and it cannot tell
-whether the rules a new declaration needs have been deployed at all.
+**What the preview does NOT prove**, so do not claim it: the write it performs is made **as the
+author**, who may write anything in their own app — so a visitor's or a participant's permission
+is untested, and a page that works here can still be refused for the person it was built for.
+Nobody else exists, so nothing is concurrent. And it cannot tell whether the rules a new
+declaration needs have been deployed at all.
 
 ### 4. Invite
 

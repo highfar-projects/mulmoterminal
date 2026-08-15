@@ -172,10 +172,20 @@ describe("the file a published view names", () => {
     // The other half of the same app's day. The parent holds the data until the view answers the
     // handshake, so this page renders its loading line and stays on it — no error, no empty state,
     // nothing to tell the author which end is at fault.
-    const html = "<script>window.__MC_APP_VIEW.onState(function (data) { draw(data); });</script>";
-    const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
-    expect(result.ok).toBe(true);
-    expect(result.ok && result.view.warnings.join(" ")).toContain("ready()");
+    for (const html of [
+      "<script>window.__MC_APP_VIEW.onState(function (data) { draw(data); });</script>",
+      // The likelier mistake, and the one a presence check called clean: `ready()` IS written, but
+      // inside the listener that only runs once `ready()` has been sent. Same deadlock, and it is
+      // what "call ready after registering onState" sounds like.
+      "<script>view.onState((data) => { draw(data); view.ready(); });</script>",
+      // …including when the callback nests calls of its own, so the argument list cannot be cut at
+      // the first `)`.
+      "<script>view.onState((d) => { draw(rows(d, top(1))); view.ready(); });</script>",
+    ]) {
+      const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.view.warnings.join(" ")).toContain("ready()");
+    }
   });
 
   it("says nothing when the page either completes the handshake or wants no data", async () => {
@@ -183,6 +193,9 @@ describe("the file a published view names", () => {
     // state is not missing a handshake — it has nothing to be handed.
     for (const html of [
       "<script>const b = window.__MC_APP_VIEW; b.onState(draw); b.ready();</script>",
+      // Calling it inside the listener TOO is fine — the one outside is what starts the
+      // conversation, and this is the shape a page that re-announces itself takes.
+      "<script>view.onState((d) => { draw(d); view.ready(); }); view.ready();</script>",
       "<script>document.getElementById('go').addEventListener('click', send);</script>",
       "<p>ready() の話をしているだけ</p>",
     ]) {

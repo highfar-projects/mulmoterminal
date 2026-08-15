@@ -136,6 +136,14 @@
 ただし**入力欄としては描かれません** — 公開フォームの射影がこの名前を
 `stampField` として別に伝えるので、ページはサーバ時刻のセンチネルを入れます。
 
+**確認されている制約（2026-08-14）**: そのセンチネルを実際に入れる側が、まだどのホストにも
+ありません。公開ページも手元のプレビューも `@receptron/sharedapp/view` の `recordOf` で
+レコードを組み立てますが、そこは `stampField` を読んでおらず、書き込みにこのキーが入りません。
+ルール（`firestore.rules`、create の `data[stampField] == request.time`）はキーがあることを
+要求するので、**この形の公開申込みは今のところ拒否されます**。ページ側で回避しようとしないで
+ください — ビューが送れるのは文字列だけで、文字列の日時は `== request.time` を満たしません。
+先着枠のアプリを作る前に、`recordOf` にサーバ時刻を入れる修正が入っているかを確かめること。
+
 キャンセルしても時刻は動きません（更新側は「値が動いていないこと」を見ます）。
 動かす仕様にすると、離脱する列の最後尾に飛ばされてしまいます。
 
@@ -173,7 +181,7 @@ opensAt = (クラスの開始日の 3 日前の 08:00 現地時間).getTime()
 
 ---
 
-## views/signup.html と views/mine.html
+## ページは 2 枚書きます
 
 **`signup.html`（公開）** は `classes` を並べて、申込みを 1 件 `submit()` するだけです。
 順位はここには出せません（読めないので）。
@@ -184,8 +192,7 @@ opensAt = (クラスの開始日の 3 日前の 08:00 現地時間).getTime()
 2. 先頭 `capacity` 件を「確定」、次の `waitlist` 件を「待機 N 番」、それ以降も待機として続ける
 3. 自分の行を強調して「あなたは待機 1 番です」と出す
 
-**書き方の契約は [salon.md](./salon.md) の `views/booking.html` と同じです。** 動くコードは
-そちらを見てください。守る点はこの 3 つで、どれも破っても**例外が出ず、画面も変わりません**:
+守る点はこの 3 つで、どれを破っても**例外が出ず、画面も変わりません**:
 
 - **`<form>` は使えない。** `sandbox="allow-scripts"` に `allow-forms` が無いので、ブラウザは
   `submit` イベントを**発火する前に**送信を止めます。`onsubmit` の中の `e.preventDefault()` すら
@@ -195,6 +202,130 @@ opensAt = (クラスの開始日の 3 日前の 08:00 現地時間).getTime()
   `<input>`、報せるのはページの中の要素です。
 - **`onState` を張ったら最後に `ready()` を呼ぶ。** 呼ばないとデータは永久に来ず、ページは
   「読み込み中」のまま止まります。
+
+### views/signup.html
+
+読めるのは `classes` だけ。`memberEmail` と `status` は親が入れるので送りません。
+
+```html
+<label>お名前 <input id="who" maxlength="40" /></label>
+<p id="say" role="status"></p>
+<div id="list"></div>
+<script>
+  const view = window.__MC_APP_VIEW;
+  const list = document.getElementById("list");
+  const who = document.getElementById("who");
+  const say = document.getElementById("say");
+
+  view.onState(({ classes = [] }) => {
+    const rows = classes.slice().sort((a, b) => String(a.startsAt ?? "").localeCompare(String(b.startsAt ?? "")));
+    list.replaceChildren(
+      ...rows.map((klass) => {
+        // textContent と dataset で組み立てること。クラス名は人が入力するもので、
+        // 文字列連結で innerHTML に入れると公開ページでそれが動きます。
+        const row = document.createElement("div");
+        const name = document.createElement("span");
+        name.textContent = `${klass.startsAt ?? ""} ${klass.title ?? klass.id}`;
+        const go = document.createElement("button");
+        // type を書くこと。省略した <button> は submit ボタンで、サンドボックスが
+        // 送信を止める側の形です。
+        go.type = "button";
+        go.dataset.klass = klass.id;
+        go.textContent = "申し込む";
+        row.append(name, go);
+        return row;
+      }),
+    );
+  });
+
+  list.addEventListener("click", async (event) => {
+    const classId = event.target.dataset?.klass;
+    if (!classId) return;
+    const memberName = who.value.trim();
+    if (memberName === "") {
+      say.textContent = "お名前を入れてください。";
+      who.focus();
+      return;
+    }
+    // 送るのは文字列だけ。数値や真偽値が 1 つでも混ざると、そのキーが落ちるのではなく
+    // メッセージ全体が申込みでなくなり、not-a-submission として拒否されます。
+    const result = await view.submit("bookings", { classId, memberName });
+    // 失敗は「満席」ではありません — このアプリに満席という状態はない。解禁前
+    // （window）、サインインしていない、二重申込み（idFrom）のどれかです。
+    say.textContent = result.ok ? "受け付けました。順位は「自分の申込み」で見られます。" : `申し込めませんでした: ${result.error ?? "unknown"}`;
+  });
+
+  view.ready();
+</script>
+```
+
+### views/mine.html
+
+`audience: "participant"`、入口は `/p/{slug}`。順位はここでしか出せません。
+
+```html
+<div id="mine"></div>
+<p id="say" role="status"></p>
+<script>
+  const view = window.__MC_APP_VIEW;
+  const mine = document.getElementById("mine");
+  const say = document.getElementById("say");
+
+  // 順位は「読めた行から数えるもの」。cancelled を除いて createdAt の昇順に並べ、
+  // 何番目かを見るだけで、どこにも保存しません。
+  const ranked = (bookings, classId) =>
+    bookings
+      .filter((row) => row.classId === classId && row.status !== "cancelled")
+      .sort((a, b) => String(a.createdAt ?? "").localeCompare(String(b.createdAt ?? "")));
+
+  const standing = (rank, klass) => {
+    const capacity = Number(klass.capacity ?? 0);
+    if (rank < capacity) return "確定";
+    return `待機 ${rank - capacity + 1} 番`;
+  };
+
+  view.onState(({ classes = [], bookings = [] }, viewer = {}) => {
+    const rows = classes.flatMap((klass) => {
+      const queue = ranked(bookings, klass.id);
+      const rank = queue.findIndex((row) => row.memberEmail === viewer.me);
+      return rank === -1 ? [] : [{ klass, row: queue[rank], text: standing(rank, klass) }];
+    });
+
+    mine.replaceChildren(
+      ...rows.map(({ klass, row, text }) => {
+        const box = document.createElement("div");
+        const name = document.createElement("span");
+        name.textContent = `${klass.startsAt ?? ""} ${klass.title ?? klass.id} — ${text}`;
+        const off = document.createElement("button");
+        off.type = "button";
+        off.dataset.booking = row.id;
+        // 確認はページの中で。confirm() はサンドボックスに無視され、false が
+        // 返るので「押しても何も起きないボタン」になります。
+        off.textContent = off.dataset.armed === "yes" ? "取り消す？" : "キャンセル";
+        box.append(name, off);
+        return box;
+      }),
+    );
+    if (rows.length === 0) mine.textContent = "申込みはありません。";
+  });
+
+  mine.addEventListener("click", async (event) => {
+    const button = event.target;
+    const id = button.dataset?.booking;
+    if (!id) return;
+    if (button.dataset.armed !== "yes") {
+      button.dataset.armed = "yes";
+      button.textContent = "取り消す？";
+      return;
+    }
+    // selfTransitions で本人に許されているのは requested → cancelled だけ。
+    const result = await view.transition("bookings", id, "cancelled");
+    say.textContent = result.ok ? "取り消しました。" : `取り消せませんでした: ${result.error ?? "unknown"}`;
+  });
+
+  view.ready();
+</script>
+```
 
 **そして deploy の前に、プレビューで実際に押してもらってください**（[SKILL.md](../SKILL.md) の
 「3b. RUN THE PAGE」）。このページの不具合は読んでも見つかりません。とくにこの形は、申込み

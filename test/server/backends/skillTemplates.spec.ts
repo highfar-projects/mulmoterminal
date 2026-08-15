@@ -94,6 +94,34 @@ describe("the shared-app templates", () => {
     }
   });
 
+  it("ships an HTML block for every page its app.json declares", () => {
+    // A declared `path` is READ at deploy: `planAppViewTiers` opens each one and refuses the whole
+    // operation when a file is missing. So a template that names two pages and shows neither does
+    // not merely teach less — it teaches a declaration whose first deploy fails, and the author is
+    // then editing files to recover. (Which is what the gym template did: it described a view in
+    // prose, declared nothing, and its ranking was unbuildable from what it showed.)
+    for (const file of readdirSync(TEMPLATES).filter((name) => name.endsWith(".md"))) {
+      const text = readFileSync(path.join(TEMPLATES, file), "utf8");
+      const manifest = blocksOf(file).get("app.json") as { views?: { path?: string }[] } | undefined;
+      const declared = (manifest?.views ?? []).map((view) => view.path).filter((value): value is string => typeof value === "string");
+      const lines = text.split("\n");
+      const isHeading = (line: string): boolean => /^#{2,3} /.test(line);
+      for (const declaredPath of declared) {
+        // The section that introduces the page — a heading STARTING with the path, because that
+        // heading is the template's own instruction about which file the author writes — and the
+        // fenced html block that must be inside it, before the next heading.
+        const start = lines.findIndex((line) => isHeading(line) && line.replace(/^#{2,3} /, "").startsWith(declaredPath));
+        const rest = start === -1 ? [] : lines.slice(start + 1);
+        const end = rest.findIndex(isHeading);
+        const body = (end === -1 ? rest : rest.slice(0, end)).join("\n");
+        const heading = start === -1 ? "has no section" : "has a section";
+        expect(`${file}: ${declaredPath} ${heading}`).toBe(`${file}: ${declaredPath} has a section`);
+        const shown = body.includes("```html") ? "shows HTML" : "shows no HTML";
+        expect(`${file}: ${declaredPath} ${shown}`).toBe(`${file}: ${declaredPath} shows HTML`);
+      }
+    }
+  });
+
   it("each template shows every collection whose shape carries a decision", () => {
     // A guard on the guard: if a template stopped showing its schemas the
     // checks above would still pass, against nothing.
