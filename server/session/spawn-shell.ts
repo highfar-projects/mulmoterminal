@@ -6,7 +6,7 @@ import type { IPty } from "node-pty";
 import type { WebSocket } from "ws";
 import { handlePtyExit } from "./pty-exit.js";
 import { getLaunchers } from "../config/config-routes.js";
-import { launcherAt, shellInvocation } from "./shell-command.js";
+import { launcherAt, launchInvocation, launchTargetLabel, shellInvocation, type LaunchTarget } from "./shell-command.js";
 import { ptys } from "./registry.js";
 import { ptySpawn, spawnPty } from "./pty-spawn.js";
 import { ptyExitLine, ptyStartLine } from "./pty-exit-log.js";
@@ -42,19 +42,21 @@ export function createShellSpawners(deps: SpawnDeps) {
     return launcherAt(getLaunchers(), index);
   }
 
-  // Spawn a configured launcher command as a PERSISTENT, reattachable PTY that shares
-  // the Claude session lifecycle (ptys map, reattach, reap grace) but has NO hooks,
-  // transcript, or resume. The command is run via the login shell with `exec` so it
-  // becomes the single foreground process ($SHELL, codex, etc.) — env vars in the
-  // command (e.g. $SHELL) expand, and the process stays interactive in the PTY.
-  function spawnLauncherPty(sessionId: string, ws: WebSocket, command: string, cwd: string): PtyEntry {
-    // Persistent: reattaches a surviving tmux session (command ignored) or creates one.
-    const { shell, args } = shellInvocation(command, true, process.platform, process.env.SHELL);
+  // Spawn a configured launcher as a PERSISTENT, reattachable PTY that shares the Claude session
+  // lifecycle (ptys map, reattach, reap grace) but has NO hooks, transcript, or resume.
+  //
+  // A launcher CHIP is a command line the user wrote, so it runs via the login shell with `exec`:
+  // it becomes the single foreground process, its env vars expand, and it stays interactive. The
+  // Shell cell's default is not that — it is a file this app picked, and on Windows it is handed
+  // to the PTY directly with no shell in between (see LaunchTarget).
+  function spawnLauncherPty(sessionId: string, ws: WebSocket, target: LaunchTarget, cwd: string): PtyEntry {
+    // Persistent: reattaches a surviving tmux session (target ignored) or creates one.
+    const { shell, args } = launchInvocation(target, process.platform, process.env.SHELL);
     const { term, tmux, reattached } = ptySpawn(sessionId, shell, args, cwd, true);
     const spawnedAtMs = Date.now();
     // The command is only what a FRESH session runs — an attach picked up whatever was already
     // there — so naming it on that line would describe a program nobody started.
-    console.log(ptyStartLine({ agent: "launcher", pid: term.pid, cwd, tmux, reattached, sessionId, note: reattached ? null : command }));
+    console.log(ptyStartLine({ agent: "launcher", pid: term.pid, cwd, tmux, reattached, sessionId, note: reattached ? null : launchTargetLabel(target) }));
 
     // Always "shell", whatever the command line names. A launcher is a command the user wrote and
     // this app does not read it: it once recorded `codex` for a command that started with the word
