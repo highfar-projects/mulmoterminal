@@ -11,22 +11,13 @@
 # already runs them on ubuntu and macOS. Only `yarn test` behaves differently here, so only
 # `yarn test` runs here — that is what keeps this cheap enough to put on every pull request.
 #
-# Why paths-ignore rather than a list of Windows-sensitive paths: the specs that branch on the
-# platform sit in nine different directories, `test/src/components` among them (#1719 lived there).
-# Any allowlist would have to be maintained by whoever adds the next one, and the failure mode of
-# forgetting is silence. The only files that provably cannot affect a Windows test run are docs,
-# plans and markdown — the same set windows-daily.yaml already skips.
-#
 # One node version, not the daily's 22/24 matrix: this runs on every PR, the daily still covers
 # both, and an ABI difference that only shows on one of them is not the class this gate is for.
 name: Windows (PR)
 
+# NO `paths-ignore` here, deliberately — see the scope step below.
 on:
   pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "plans/**"
-      - "**/*.md"
 
 permissions:
   contents: read
@@ -40,20 +31,46 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
+      # fetch-depth: 0 so the scope step can diff against the base commit.
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          fetch-depth: 0
+
+      # Docs, plans and markdown cannot change what a Windows test run does, so they skip the
+      # expensive steps below. The filter lives HERE rather than in `on:` because a workflow that
+      # `paths-ignore` skipped produces NO CHECK AT ALL — so the moment this becomes a required
+      # gate, every documentation-only pull request would sit on "Expected — waiting for status"
+      # and could never merge. A job that always runs and decides for itself always reports.
+      #
+      # Not a second job with an `if:` either: a skipped job is reported as successful to branch
+      # protection, but that is a rule about the platform rather than something this repo can see,
+      # and one job that genuinely succeeds needs no such rule to be true.
+      - name: Decide whether anything Windows-visible changed
+        id: scope
+        shell: bash
+        run: |
+          changed="$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}")"
+          echo "$changed"
+          if printf '%s\n' "$changed" | grep -qvE '^(docs/|plans/)|\.md$'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Only docs, plans and markdown changed — nothing a Windows test run can see."
+          fi
 
       # Deliberately no `cache: yarn`: restoring the yarn cache tar onto NTFS is slower than a
       # fresh install. node_modules is cached directly instead (below). Same reasoning as
       # windows-daily.yaml.
       - uses: actions/setup-node@v6
+        if: steps.scope.outputs.run == 'true'
         id: setup-node
         with:
           node-version: 22.x
 
       # Realtime scanning makes yarn's atomic renames fail with EPERM mid-install.
       - name: Disable Defender realtime monitoring
+        if: steps.scope.outputs.run == 'true'
         shell: powershell
         run: Set-MpPreference -DisableRealtimeMonitoring $true
 
@@ -61,6 +78,7 @@ jobs:
       # already built rather than resolving its own. The restore-keys prefix keeps a changed
       # lockfile starting from the previous tree instead of from nothing.
       - uses: actions/cache@v5
+        if: steps.scope.outputs.run == 'true'
         with:
           path: node_modules
           key: win-node-modules-22.x-${{ hashFiles('yarn.lock') }}
@@ -69,12 +87,16 @@ jobs:
 
       # Restored BEFORE install so puppeteer's postinstall skips its ~120 MB download.
       - uses: actions/cache@v5
+        if: steps.scope.outputs.run == 'true'
         with:
           path: ~/.cache/puppeteer
           key: puppeteer-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
 
       # Also exercises the postinstall (server/fix-pty-perms.js) on Windows.
-      - run: yarn install --frozen-lockfile --network-timeout 120000
+      - name: Install
+        if: steps.scope.outputs.run == 'true'
+        run: yarn install --frozen-lockfile --network-timeout 120000
 
       - name: Test
+        if: steps.scope.outputs.run == 'true'
         run: yarn test
