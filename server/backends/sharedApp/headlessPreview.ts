@@ -23,7 +23,7 @@
 // absent from, and a `MessagePort` handed to a document that no longer exists is not a thing it
 // models. A run with no browser installed says so and reports nothing, which is the honest answer.
 import { createServer, type Server } from "node:http";
-import type { Browser, Frame } from "puppeteer";
+import type { Browser, Frame, Page } from "puppeteer";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -353,12 +353,43 @@ async function withDeadline<T>(work: Promise<T>, ms: number): Promise<T | undefi
   }
 }
 
+/** Get the harness page loaded, and do not accept a first refusal.
+ *
+ *  `page.goto` has come back `net::ERR_ABORTED` against this server on a Windows runner while the
+ *  same code worked everywhere else — a browser this process started, fetching a loopback port
+ *  this process is listening on. Chrome aborts a main-resource load for reasons that have nothing
+ *  to do with the resource (a sandboxed network service that cannot reach loopback, a proxy
+ *  configuration applied to localhost), and most of them do not survive a second attempt.
+ *
+ *  `domcontentloaded` rather than `load`, and then the harness is waited for BY NAME: what this
+ *  needs is the module having run, and `load` is neither necessary nor sufficient for that. A
+ *  failure here names what was missing instead of arriving later as "render is not a function". */
+async function openHarness(page: Page, origin: string): Promise<void> {
+  let last: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await page.goto(origin, { waitUntil: "domcontentloaded" });
+      await page.waitForFunction("window.__preview !== undefined", { timeout: LIMITS.evaluateMs });
+      return;
+    } catch (err) {
+      last = err;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+  // Whether NODE can reach it, said in the same sentence. It separates "the server never came up"
+  // from "the browser would not fetch it", which are different faults with the same message.
+  const reachable = await fetch(origin)
+    .then((response) => `node fetched it: ${response.status}`)
+    .catch((err: unknown) => `node could not fetch it either: ${messageOf(err)}`);
+  throw new Error(`the harness page at ${origin} would not load (${messageOf(last)}; ${reachable})`);
+}
+
 async function openDriver(browser: Browser, origin: string): Promise<Driver> {
   const page = await browser.newPage();
   let noise: string[] = [];
   page.on("console", (message) => noise.push(message.text()));
   page.on("pageerror", (err) => noise.push(messageOf(err)));
-  await page.goto(origin, { waitUntil: "load" });
+  await openHarness(page, origin);
   /** Every script is sent as a STRING rather than as a closure: the server's TypeScript project
    *  declares no DOM (`types: ["node"]`), so a closure mentioning `window` would not compile. */
   let stalled = false;
