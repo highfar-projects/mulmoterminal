@@ -18,7 +18,7 @@ import { resolveButtonCommand } from "../config/header-resolve.js";
 import { resolveScript } from "../files/scripts.js";
 import { shellQuoteFor } from "../infra/shell-quote.js";
 import { tmuxHasSession } from "../infra/tmux.js";
-import { defaultShellCommand } from "../session/shell-command.js";
+import { defaultShellTarget, type LaunchTarget } from "../session/shell-command.js";
 import { launchChoiceFromParams } from "../session/launch-choice.js";
 import { codexSessionsRoot } from "../agents/codex-session.js";
 import { antigravityBrainRoot, antigravityConversationExists } from "../agents/antigravity-session.js";
@@ -107,7 +107,7 @@ export interface WsRouteDeps {
 // runs, since it carries no launcher index. On a tmux reattach it's ignored (tmux new-session -A
 // attaches the running program), so a surviving session with no resolvable launcher index still
 // reattaches via this harmless fallback.
-const DEFAULT_LAUNCH_CMD = defaultShellCommand(process.platform, process.env);
+const DEFAULT_LAUNCH_TARGET = defaultShellTarget(process.platform, process.env);
 
 function resolveClaudeSession(requested: string | null, cwd: string): SessionResolution {
   const hasLivePty = !!requested && ptys.has(requested);
@@ -417,9 +417,9 @@ function resolveResumableSession(
 // Reattach a same-process live PTY, else spawn a launcher (which itself reattaches a
 // surviving tmux session or creates one). `command` is the resolved launcher command,
 // or the fallback for a tmux reattach with no launcher index.
-function startLaunchEntry(deps: WsRouteDeps, sessionId: string, ws: WebSocket, live: PtyEntry | undefined, command: string, cwd: string): PtyEntry {
+function startLaunchEntry(deps: WsRouteDeps, sessionId: string, ws: WebSocket, live: PtyEntry | undefined, target: LaunchTarget, cwd: string): PtyEntry {
   if (live) return deps.reattachPty(live, ws, sessionId);
-  return deps.spawnLauncherPty(sessionId, ws, command, cwd);
+  return deps.spawnLauncherPty(sessionId, ws, target, cwd);
 }
 
 // Resolve a launcher ws request to a session: reattach a live pty / surviving tmux
@@ -431,14 +431,14 @@ function resolveLaunchSession(
   requested: string | null,
   index: number,
   shell: boolean,
-): { sessionId: string; live: PtyEntry | undefined; command: string } | null {
+): { sessionId: string; live: PtyEntry | undefined; target: LaunchTarget } | null {
   const { hasLivePty, live, tmuxAlive } = liveSessionFacts(requested);
   // A live PTY / surviving tmux session reattaches regardless of the index; only a fresh
   // spawn needs the launcher resolved (the pty already IS the chosen program on reattach).
   const launcher = live || tmuxAlive ? null : deps.resolveLauncher(index);
   if (!canStartLauncher({ hasLivePty, tmuxAlive, hasLauncher: !!launcher, isShell: shell })) return null;
   const { sessionId } = resolveReattachableId(requested, { hasLivePty, tmuxAlive, canResume: false }, randomUUID);
-  return { sessionId, live, command: launcher?.command ?? DEFAULT_LAUNCH_CMD };
+  return { sessionId, live, target: launcher ? { kind: "command", command: launcher.command } : DEFAULT_LAUNCH_TARGET };
 }
 
 // codex is a first-class agent like claude, but it mints its own session id (no --session-id),
@@ -710,7 +710,7 @@ async function handleLaunchConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
 
   const resolved = resolveLaunchSession(deps, requested, index, shell);
   if (!resolved) return closeWithError(ws, "Launcher not found — check Settings → Launch commands.");
-  const { sessionId, live: resolvedLive, command } = resolved;
+  const { sessionId, live: resolvedLive, target } = resolved;
   // Never worktree-limited. The rule is one AGENT SESSION per worktree, and a launcher is not one:
   // it is a command line this app does not read. It used to read it — a command starting with the
   // word `codex` was held to the limit (#1207, #1208) — but that is a guess about someone else's
@@ -751,7 +751,7 @@ async function handleLaunchConnection(deps: WsRouteDeps, ws: WebSocket, req: WsU
     const settled = settledEntry(ws, "launch", sessionId, !!live, early);
     if (!settled) return;
     startAndWire(deps, ws, { id: sessionId, tag: "launch", early, startFailureMessage, size }, () =>
-      startLaunchEntry(deps, sessionId, ws, settled.entry, command, cwd),
+      startLaunchEntry(deps, sessionId, ws, settled.entry, target, cwd),
     );
   });
 }
