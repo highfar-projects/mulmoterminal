@@ -87,6 +87,11 @@ export interface HeadlessPageReport {
    *  stuck on its loading state says so here in the author's own words. */
   text: string;
   presses: HeadlessPress[];
+  /** Controls this run did NOT press. Counted rather than inferred from `presses.length`: a page
+   *  with exactly the budget's worth of controls and a page whose eleventh control was dropped
+   *  produce the same length, so the report would either claim a truncation that did not happen or
+   *  hide one that did. */
+  pressesOmitted: number;
   errors: string[];
 }
 
@@ -361,7 +366,17 @@ async function reportPage(driver: Driver, input: HeadlessPageInput): Promise<Hea
     const press = await pressOne(driver, input, index, label);
     if (press !== null) presses.push(press);
   }
-  return { id: input.id, audience: input.audience, readied: observed.readied, stateDelivered: observed.stateDelivered, liveForms, text, presses, errors };
+  return {
+    id: input.id,
+    audience: input.audience,
+    readied: observed.readied,
+    stateDelivered: observed.stateDelivered,
+    liveForms,
+    text,
+    presses,
+    pressesOmitted: Math.max(0, labels.length - LIMITS.presses),
+    errors,
+  };
 }
 
 /** Run the pages. Separated from the Firestore half below so a test can drive it with a page it
@@ -370,8 +385,14 @@ export async function runPagesHeadless(pages: readonly HeadlessPageInput[]): Pro
   const started = await browserOrProblem();
   if (!started.ok) return started;
   const { browser } = started;
-  const harness = await serveHarness();
+  // Started INSIDE the try, because it can throw on a reachable path — `import.meta.resolve` on a
+  // layout that does not have the package where it looks, or a `dist/view` that is not there — and
+  // a throw before the try leaves the launched browser running with nobody holding it. The failure
+  // has to come back as an answer for the same reason everything else here does: the caller is a
+  // tool call whose contract is prose, not an exception.
+  let harness: { origin: string; close: () => Promise<void> } | null = null;
   try {
+    harness = await serveHarness();
     const driver = await openDriver(browser, harness.origin);
     const reports: HeadlessPageReport[] = [];
     for (const input of pages.slice(0, LIMITS.pages)) {
@@ -381,7 +402,7 @@ export async function runPagesHeadless(pages: readonly HeadlessPageInput[]): Pro
   } catch (err) {
     return { ok: false, problems: [`The headless preview could not be run: ${messageOf(err)}`] };
   } finally {
-    await harness.close();
+    await harness?.close();
     await browser.close();
   }
 }

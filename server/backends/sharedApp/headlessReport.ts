@@ -12,7 +12,7 @@
 // once, and whether the rules are deployed at all), which is why the closing lines are fixed text
 // rather than something a good run can omit.
 import type { PreviewAudience } from "../../../common/sharedAppPreview.js";
-import { LIMITS, type HeadlessPageReport, type HeadlessPress, type HeadlessRun } from "./headlessPreview.js";
+import type { HeadlessPageReport, HeadlessPress, HeadlessRun } from "./headlessPreview.js";
 
 /** What the parent's own refusals mean. These never reach a browser's screen: they are answered on
  *  the port, into a promise the page usually does not await, so this is the only place an author
@@ -47,7 +47,12 @@ const MEMBER_PAGE_LIMIT =
   "is the public one, so it carries no `viewer` capabilities and it does not answer `transition`, `assign` or `withdraw`. Controls that depend on those are untested, " +
   "here and in the Collections pane alike.";
 
-const quoted = (text: string): string => `"${text}"`;
+/** Page-controlled text, put into the report so it cannot be mistaken for the report's own words.
+ *
+ *  `JSON.stringify` rather than a pair of quotes: a label reading `Save "draft"` or a screen with a
+ *  newline in it would otherwise end a quotation early, and the agent reading this cannot tell a
+ *  quotation mark the page wrote from one this module did. */
+const quoted = (text: string): string => JSON.stringify(text);
 
 /** The handshake, which decides whether anything below it is about a page that has its data. */
 function handshakeLine(page: HeadlessPageReport): string {
@@ -115,8 +120,10 @@ function pressLine(press: HeadlessPress, audience: PreviewAudience): string[] {
 }
 
 function pageLines(page: HeadlessPageReport): string[] {
-  // A cap that is not said out loud reads as "everything was covered".
-  const capped = page.presses.length === LIMITS.presses ? [`  (only the first ${LIMITS.presses} controls were pressed)`] : [];
+  // A cap that is not said out loud reads as "everything was covered" — and it is COUNTED rather
+  // than inferred from the length, which is the same for a page that had exactly this many
+  // controls and a page whose eleventh was dropped.
+  const capped = page.pressesOmitted === 0 ? [] : [`  ${page.pressesOmitted} further control${page.pressesOmitted === 1 ? " was" : "s were"} NOT pressed.`];
   return [
     "",
     `${page.audience} page '${page.id}'`,

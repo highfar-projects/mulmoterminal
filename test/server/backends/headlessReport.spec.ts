@@ -28,6 +28,7 @@ const page = (over: Partial<HeadlessPageReport> = {}): HeadlessPageReport => ({
   liveForms: 0,
   text: "Curry, Ramen",
   presses: [],
+  pressesOmitted: 0,
   errors: [],
   ...over,
 });
@@ -111,6 +112,20 @@ describe("narrateHeadlessRun", () => {
     expect(said).not.toContain("most often a value that is not a string");
     // And a PUBLIC page still gets the ordinary translation.
     expect(narrate({ presses: [press({ refused: ["not-a-submission"] })] })).toContain("most often a value that is not a string");
+  });
+
+  it("says how many controls it did not press, counted rather than guessed", () => {
+    // The length alone cannot tell a page that had exactly this many controls from a page whose
+    // eleventh was dropped, so a report built from it either invents a truncation or hides one.
+    expect(narrate({ pressesOmitted: 4 })).toContain("4 further controls were NOT pressed");
+    expect(narrate({ pressesOmitted: 1 })).toContain("1 further control was NOT pressed");
+    expect(narrate({ presses: [press(), press()] })).not.toContain("NOT pressed");
+  });
+
+  it("quotes what the page wrote so it cannot be read as the report's own words", () => {
+    // A label carrying a quotation mark ended the quotation early, and nothing downstream could
+    // tell which half was the page's.
+    expect(narrate({ presses: [press({ label: 'Save "draft"' })] })).toContain('Pressed "Save \\"draft\\""');
   });
 
   it("says how many pages it did not run at all", () => {

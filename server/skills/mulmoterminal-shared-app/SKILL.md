@@ -147,7 +147,9 @@ in is stricter than the one you pictured. The only thing that finds them is pres
 **You can press it yourself: `manageSharedApp` with `action: "preview"`.** It loads every page the
 declaration names in a real headless browser — the same parent, the same
 `sandbox="allow-scripts"`, the same CSP, the same private-port handshake — hands it the app's real
-records, and presses each control on a freshly loaded copy of the page. What comes back is what
+records, and presses each control on a freshly loaded copy of the page. It runs to a budget and
+**says what it left out** — pages it did not run, controls it did not press — so read those counts
+rather than reading "ran 6 pages" as "ran the app". What comes back is what
 you would otherwise have to be told by somebody looking at a screen: a page still on its loading
 state (quoted, in the author's own words), a `<form>` in the live document, a button that reached
 nothing, a submission the declaration refused. **Run it after writing or editing any view, and
