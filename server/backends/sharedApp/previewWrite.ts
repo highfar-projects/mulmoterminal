@@ -23,7 +23,7 @@
 // that seam exists so CORE's store code can be host-agnostic, and MulmoClaude declares no support
 // for shared collections at all (it unbound its accessor — see `sharedCollections.ts`). There is no
 // second host to serve, and a shared app's operations are this host's by design (D5).
-import { doc, collection, writeBatch } from "firebase/firestore";
+import { doc, collection, serverTimestamp, writeBatch } from "firebase/firestore";
 import { randomUUID } from "node:crypto";
 import { appSchemasPath, type PublishedConfigDoc } from "@receptron/sharedapp";
 import {
@@ -78,6 +78,10 @@ function specFor(config: PublishedConfigDoc, form: Record<string, DrawnForm>, ci
       idFrom: text("idFrom"),
       idField: text("idField"),
       mirror: text("mirror"),
+      // Read back off the PUBLISHED declaration, which is where the rules read it from too. The
+      // form beside it carries the same name, and this is deliberately not that one: `stampOk`
+      // tests `"stampField" in s` against the submit block, so the submit block is the authority.
+      stampField: text("stampField"),
     },
     drawn,
   };
@@ -191,7 +195,11 @@ export async function writePreviewSubmission(root: string, cid: string, values: 
   const missing = missingRequired(fields, values);
   if (missing.length > 0) return { ok: false, error: `missing: ${missing.join(" / ")}` };
 
-  const record = recordOf(fields, spec.drawn, spec.submit, values, { uid: handle.uid, email: handle.email });
+  // `serverTimestamp` is what this host can offer where the rules require GOOGLE's clock. The
+  // shared decision holds no Firestore, so the sentinel comes from the SDK this host resolved —
+  // and it is handed over whether or not the app declares a `stampField`, because that is the
+  // declaration's answer rather than this module's.
+  const record = recordOf(fields, spec.drawn, spec.submit, values, { uid: handle.uid, email: handle.email }, serverTimestamp);
   const id = recordId(spec.submit, handle.uid, record, randomUUID());
   if (id === "") return { ok: false, error: "no-id" };
 
