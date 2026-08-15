@@ -79,6 +79,16 @@ describe("defaultShellCommand", () => {
       expect(defaultShellCommand("win32", {})).toBe(`& 'powershell.exe'`);
     });
 
+    // Set-but-empty, not absent: `envValue` answers "" for that, and "" as a shell path would
+    // spawn nothing. The sibling shellInvocation spec pins the same case, so this one does too.
+    it("treats an empty SHELL as unset and moves on to ComSpec", () => {
+      expect(defaultShellCommand("win32", { SHELL: "", ComSpec: "C:\\Windows\\system32\\cmd.exe" })).toBe(`& 'C:\\Windows\\system32\\cmd.exe'`);
+    });
+
+    it("treats an empty ComSpec as unset too", () => {
+      expect(defaultShellCommand("win32", { SHELL: "", ComSpec: "" })).toBe(`& 'powershell.exe'`);
+    });
+
     it("reads the environment case-insensitively, the way Windows spells it", () => {
       expect(defaultShellCommand("win32", { COMSPEC: "C:\\Windows\\system32\\cmd.exe" })).toBe(`& 'C:\\Windows\\system32\\cmd.exe'`);
     });
@@ -100,6 +110,10 @@ describe("defaultShellCommand", () => {
 
     it("falls back to /bin/sh", () => {
       expect(defaultShellCommand("linux", {})).toBe("'/bin/sh'");
+    });
+
+    it("treats an empty SHELL as unset", () => {
+      expect(defaultShellCommand("linux", { SHELL: "" })).toBe("'/bin/sh'");
     });
   });
 
