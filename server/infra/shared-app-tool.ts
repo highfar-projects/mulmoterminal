@@ -13,6 +13,8 @@
 // simply work here, and it wrote `public` without ever passing through staging.
 import type { ToolDefinition } from "gui-chat-protocol";
 import { deploySharedApp } from "../backends/sharedApp/deploy.js";
+import { headlessPreview } from "../backends/sharedApp/headlessPreview.js";
+import { narrateHeadlessRun } from "../backends/sharedApp/headlessReport.js";
 import { publishSharedApp } from "../backends/sharedApp/publish.js";
 import { unpublishSharedApp } from "../backends/sharedApp/unpublish.js";
 import { APP_ROLE_NAMES, checkSharedApp, forkSharedApp, initSharedApp, inviteToSharedApp, type AppRoleName } from "../backends/sharedApp/declare.js";
@@ -21,14 +23,15 @@ import { MULMOSERVER_ORIGIN } from "../../common/firebaseConfig.js";
 import { manifestKey } from "../backends/sharedApp/manifestWrite.js";
 import { serializeBy } from "../backends/sharedApp/serialize.js";
 
-export const SHARED_APP_ACTIONS = ["init", "fork", "check", "invite", "deploy", "publish", "unpublish"] as const;
+export const SHARED_APP_ACTIONS = ["init", "fork", "check", "preview", "invite", "deploy", "publish", "unpublish"] as const;
 export type SharedAppAction = (typeof SHARED_APP_ACTIONS)[number];
 
 export const MANAGE_SHARED_APP: ToolDefinition = {
   type: "function",
   name: "manageSharedApp",
   description:
-    "Start, check, invite to, deploy, publish or unpublish this repository's shared app (the one declared by its app.json). " +
+    "Start, check, run, invite to, deploy, publish or unpublish this repository's shared app (the one declared by its app.json). " +
+    "preview loads the app's pages in a real browser, in the same sandbox a visitor gets, and reports what happened. " +
     "deploy stages the declaration and the collection schemas where only the app's roster can see them; publish promotes what was staged and opens the app to the public; unpublish closes it again.",
   prompt:
     "A request for something OTHER PEOPLE fill in or read — a survey, a sign-up sheet, a booking form, a form behind a link — is a shared app, and the `mulmoterminal-shared-app` skill is the path from that sentence to this tool. Read it before offering a printable page or a third-party form.\n" +
@@ -36,6 +39,7 @@ export const MANAGE_SHARED_APP: ToolDefinition = {
     "**init** writes `app.json` for a repository that has none, with the SIGNED-IN address as its owner — use it instead of composing the file yourself, because the owner has to be the address this machine is signed in with and you cannot read that.\n" +
     "**fork** turns a CLONE of somebody else's shared app into the user's own — a new `aid`, a roster of one, the same collections. It is the answer to \"this repository is a clone, make it mine\", and the ONLY one: `init` refuses a repository that already declares an app, so composing the file by hand or deleting `app.json` first are both worse versions of this. It carries `collections` and `public` over unchanged, never touches `.claude/skills/`, and refuses outright when the signed-in address already owns the app.\n" +
     "**check** reports everything wrong with the declaration and this repository's shared collections WITHOUT writing or deploying anything. Run it after any edit to `app.json`; it is the only way to find out whether a declaration is deployable before it is deployed.\n" +
+    "**preview** RUNS the pages. It loads each one in a real headless browser, inside the same sandbox and CSP a visitor gets, hands it the app's real records, and presses every button on a freshly loaded copy of the page. It reports what a person would otherwise have to notice by eye: a page that never finished loading, a button that does nothing, a form the sandbox blocked, a submission the declaration refused. It writes NOTHING — every confirmation is declined — so it cannot tell you whether the deployed rules would accept the write; only the Collections pane, with the user in front of it, answers that. Run it after writing or editing any view, and before deploying one. If it cannot start a browser it says so; then ask the user to press Preview in the Collections pane.\n" +
     "**invite** adds, changes or removes ONE address on the roster (`email`, `role`, optional `cid`; omit `role` to remove). It takes effect at the next deploy.\n" +
     "**deploy** is the safe one and is meant to be run often. It writes the roster and internal settings to `apps/{aid}` and each collection's schema to `apps/{aid}/staging/{cid}`, which only people on the roster can read. " +
     "An invitation added to `members` takes effect at deploy, so the roster can try the real app at `/staging/{aid}` before anybody outside sees it. Deploy never opens the app to the public, and never changes what a published app's visitors are looking at.\n" +
@@ -49,7 +53,7 @@ export const MANAGE_SHARED_APP: ToolDefinition = {
         type: "string",
         enum: [...SHARED_APP_ACTIONS],
         description:
-          "init = write app.json for a new app; fork = take over a clone of somebody else's app; check = report what is wrong without writing; invite = one roster entry; deploy = stage for the roster; publish = promote the staged version and open it; unpublish = close it again.",
+          "init = write app.json for a new app; fork = take over a clone of somebody else's app; check = report what is wrong without writing; preview = run the pages in a real browser and report what happened; invite = one roster entry; deploy = stage for the roster; publish = promote the staged version and open it; unpublish = close it again.",
       },
       name: { type: "string", description: "init / fork: the app's human name. fork carries the cloned app's name over when this is omitted." },
       slug: {
@@ -238,6 +242,12 @@ function urlName(slug: string | undefined, previous: string | undefined): string
   ];
 }
 
+/** Run the pages and say what happened. No `confirm`, and no write of any kind — see
+ *  `headlessHarness.ts` for why a run started by a tool call must never accept a confirmation. */
+async function narratePreview(root: string): Promise<string> {
+  return narrateHeadlessRun(await headlessPreview(root));
+}
+
 async function narrateCheck(root: string): Promise<string> {
   const report = await checkSharedApp(root);
   if (!report.ok) return report.problems.join("\n");
@@ -301,6 +311,7 @@ export async function manageSharedApp(root: string, args: unknown): Promise<stri
   if (action === "init") return serializeBy(key, () => narrateInit(root, body));
   if (action === "fork") return serializeBy(key, () => narrateFork(root, body));
   if (action === "check") return serializeBy(key, () => narrateCheck(root));
+  if (action === "preview") return serializeBy(key, () => narratePreview(root));
   if (action === "invite") return serializeBy(key, () => narrateInvite(root, body));
   if (action === "deploy") return serializeBy(key, () => narrateDeploy(root, confirm));
   if (action === "publish") return serializeBy(key, () => narratePublish(root, confirm));

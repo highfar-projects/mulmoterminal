@@ -450,6 +450,14 @@ staff / owner も同じで、`/m/{slug}` は差し出すだけである（オー
 | P5 | ヘッドレスの `action: "preview"`（実ブラウザ 1 本の契約テストを含む） | MulmoTerminal |
 | P6 | 任意: ルールエミュレータ段 | sharedapp（ルール同梱）＋ MulmoTerminal |
 
+**P5 は実装済み**: `manageSharedApp` の `action: "preview"`。実装は
+`server/backends/sharedApp/headlessPreview.ts`（実ブラウザで走らせる）と
+`headlessHarness.ts`（親は `@receptron/sharedapp/view` そのもの。ホストが持つのは chrome だけで、
+ここでの chrome は記録係）と `headlessReport.ts`（言葉にする側）。実ブラウザ 1 本の契約テストは
+`test/server/backends/headlessPreview.spec.ts` で、ブラウザが無い環境では skip する。
+**書き込みは一切しない** — 確認ダイアログは必ず decline する。エージェントの tool 呼び出しは
+「人が押した」ではないので、著者として本物のレコードを書く経路には乗せない。
+
 ### 取り下げは、クライアントにレコードを選ばせない
 
 undo は**著者の Firestore ハンドル**で走る。著者は自分のアプリの何でも消せるので、
