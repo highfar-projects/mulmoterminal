@@ -11,6 +11,7 @@
 // publish. Four kinds of failure survive this (the rules, other people's devices, two people at
 // once, and whether the rules are deployed at all), which is why the closing lines are fixed text
 // rather than something a good run can omit.
+import type { PreviewAudience } from "../../../common/sharedAppPreview.js";
 import { LIMITS, type HeadlessPageReport, type HeadlessPress, type HeadlessRun } from "./headlessPreview.js";
 
 /** What the parent's own refusals mean. These never reach a browser's screen: they are answered on
@@ -23,6 +24,28 @@ const REFUSALS: Record<string, string> = {
     "the message was not a submission at all — most often a value that is not a string (the rules compare stored values without coercing, so only strings may be sent)",
   busy: "a confirmation was already open (the page submitted twice)",
 };
+
+/** The same refusal, read on a page whose actions are not submissions.
+ *
+ *  `transition`, `assign` and `withdraw` are what a member or participant page sends, and the
+ *  parent available here judges submissions only — so it answers them `not-a-submission`, and the
+ *  ordinary translation above would blame the page for something it did correctly. */
+const NOT_A_SUBMISSION_ON_A_MEMBER_PAGE =
+  "the message was not a submission. On this page that is expected for `transition`, `assign` and `withdraw`: the parent that answers those is not the one running here " +
+  "(see the note above). It is a real fault only if the page called `submit`.";
+
+/** What this run does NOT do to a page written for the roster.
+ *
+ *  Said on every such page, because the omission is invisible: the page loads, draws and looks
+ *  exercised. The parent carrying `viewer` capabilities and answering the three intents lives in
+ *  mulmoserver (`AppViewFrame.vue`) and is NOT shared code yet — `@receptron/sharedapp/view`'s
+ *  bridge is the public one. Until that is lifted, the limit belongs to the Collections pane too,
+ *  which is why it is STATED rather than worked around: a second parent written here would make
+ *  the preview disagree with production, which is the one thing it must never do. */
+const MEMBER_PAGE_LIMIT =
+  "This page is written for the roster, and only PART of it is exercised here. It loads, it answers the handshake and it gets its records — but the parent running it " +
+  "is the public one, so it carries no `viewer` capabilities and it does not answer `transition`, `assign` or `withdraw`. Controls that depend on those are untested, " +
+  "here and in the Collections pane alike.";
 
 const quoted = (text: string): string => `"${text}"`;
 
@@ -47,9 +70,28 @@ function formLine(page: HeadlessPageReport): string[] {
   ];
 }
 
-function pressLine(press: HeadlessPress): string[] {
+/** Every refusal the parent answered, whether or not something else on the same press succeeded.
+ *
+ *  Not folded into the branches below: a press that submits AND then asks for something invalid
+ *  reports both, and the second is the half nobody can see — it is answered on the port, into a
+ *  promise the page usually does not await, so losing it here loses it everywhere. */
+function refusalLine(press: HeadlessPress, audience: PreviewAudience): string[] {
+  if (press.refused.length === 0) return [];
+  const translate = (reason: string): string =>
+    reason === "not-a-submission" && audience !== "public" ? NOT_A_SUBMISSION_ON_A_MEMBER_PAGE : (REFUSALS[reason] ?? reason);
+  const many = press.refused.length === 1 ? "a request" : `${press.refused.length} requests`;
+  return [`    The parent also REFUSED ${many} — ${press.refused.map(translate).join("; ")}.`];
+}
+
+function pressLine(press: HeadlessPress, audience: PreviewAudience): string[] {
   const head = `Pressed ${quoted(press.label)}: `;
-  const extra = press.errors.length === 0 ? [] : [`    It also raised: ${press.errors.join(" / ")}`];
+  const extra = [...refusalLine(press, audience), ...(press.errors.length === 0 ? [] : [`    It also raised: ${press.errors.join(" / ")}`])];
+  if (press.notClickable) {
+    return [
+      `  ${head}the control HAD NOWHERE TO BE CLICKED — \`display:none\`, zero-sized, or off the document. No cursor can reach it, so this is not a report about its handler.`,
+      ...extra,
+    ];
+  }
   if (press.submitted !== null) {
     const fields = press.submitted.fields.length === 0 ? "no fields" : press.submitted.fields.join(", ");
     return [
@@ -58,8 +100,7 @@ function pressLine(press: HeadlessPress): string[] {
     ];
   }
   if (press.refused.length > 0) {
-    const why = press.refused.map((reason) => REFUSALS[reason] ?? reason).join("; ");
-    return [`  ${head}the parent REFUSED it — ${why}. The page cannot see this: the refusal is answered on the port, not on the screen.`, ...extra];
+    return [`  ${head}nothing became a confirmation. The page cannot see why: a refusal is answered on the port, not on the screen.`, ...extra];
   }
   if (press.blockedFormSubmission) {
     return [
@@ -79,10 +120,13 @@ function pageLines(page: HeadlessPageReport): string[] {
   return [
     "",
     `${page.audience} page '${page.id}'`,
+    ...(page.audience === "public" ? [] : [`  ${MEMBER_PAGE_LIMIT}`]),
     `  ${handshakeLine(page)}`,
     ...formLine(page).map((line) => `  ${line}`),
     page.text === "" ? "  Nothing was drawn: the page put no text on the screen at all." : `  On screen: ${quoted(page.text)}`,
-    ...(page.presses.length === 0 ? ["  No button or clickable control was found on this page."] : page.presses.flatMap(pressLine)),
+    ...(page.presses.length === 0
+      ? ["  No button or clickable control was found on this page."]
+      : page.presses.flatMap((press) => pressLine(press, page.audience))),
     ...capped,
     ...(page.errors.length === 0 ? [] : [`  The browser reported: ${page.errors.join(" / ")}`]),
   ];
@@ -101,8 +145,11 @@ const CLOSING = [
 export function narrateHeadlessRun(run: HeadlessRun): string {
   if (!run.ok) return run.problems.join("\n");
   const count = run.pages.length;
+  // Said in the FIRST line, where "ran N pages" would otherwise be read as "ran the app".
+  const more = run.omittedPages === 1 ? "1 more page was" : `${run.omittedPages} more pages were`;
+  const omitted = run.omittedPages === 0 ? "" : ` ${more} NOT run — this run stops at ${count}.`;
   return [
-    `Ran ${count} page${count === 1 ? "" : "s"} in a real browser, in the same sandbox and CSP a visitor gets.`,
+    `Ran ${count} page${count === 1 ? "" : "s"} in a real browser, in the same sandbox and CSP a visitor gets.${omitted}`,
     ...run.pages.flatMap(pageLines),
     ...CLOSING,
   ].join("\n");

@@ -9,16 +9,17 @@
 // this against jsdom would pass while both bugs shipped — which is what happened, in a real app,
 // twice in ten minutes.
 //
-// So this one test drives Chrome, and it drives it with the two pages from that incident:
+// So this one test drives Chrome, and it drives it with the pages from that incident:
 //
 //   the page that WORKS  — `ready()` outside `onState`, a `<div>` and a `type="button"` button.
 //   the page that SHIPPED — a `<form>`, and `ready()` inside the `onState` callback.
+//   plus one whose controls no cursor can reach, because a press has to be a real press.
 //
 // It is skipped, loudly, when no browser is installed. Skipping is right and failing is not: a
 // browser is an optional dependency of this server (see `browserOrProblem`), and a machine without
 // one gets a headless preview that says so rather than a suite that goes red.
-import { describe, expect, it } from "vitest";
-import { runPagesHeadless, type HeadlessPageInput } from "../../../server/backends/sharedApp/headlessPreview.js";
+import { beforeAll, describe, expect, it } from "vitest";
+import { runPagesHeadless, type HeadlessPageInput, type HeadlessPageReport } from "../../../server/backends/sharedApp/headlessPreview.js";
 
 /** Whether Chrome is on this machine, asked by STARTING one and closing it again.
  *
@@ -76,28 +77,58 @@ const SHIPPED = `
   });
 </script>`;
 
+/** Two controls a visitor's cursor can never arrive at, and they fail differently.
+ *
+ *  `element.click()` in the page's own realm would fire BOTH handlers and report the page as
+ *  submitting twice. A press through the browser, at real coordinates, gets what a person gets:
+ *  the overlay swallows the first, and the second has no box to aim at. */
+const UNREACHABLE = `
+<div style="position:relative">
+  <button type="button" id="go">Order</button>
+  <div style="position:absolute;inset:0;background:#fff"></div>
+</div>
+<button type="button" id="hidden" style="display:none">Hidden</button>
+<script>
+  const view = window.__MC_APP_VIEW;
+  const send = () => view.submit("orders", { name: "x" });
+  document.getElementById("go").addEventListener("click", send);
+  document.getElementById("hidden").addEventListener("click", send);
+  view.onState(() => {});
+  view.ready();
+</script>`;
+
 const page = (id: string, html: string): HeadlessPageInput => ({ id, audience: "public", html, datasets, submit });
 
 describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
-  it("separates the page that works from the page that shipped", async () => {
-    const run = await runPagesHeadless([page("works", WORKS), page("shipped", SHIPPED)]);
-    expect(run.ok).toBe(true);
-    if (!run.ok) return;
-    const [works, shipped] = run.pages;
+  // ONE run for the three assertions below. Chrome is started once and the three pages are driven
+  // once, because the cost is the browser rather than the checking — and split across three `it`s
+  // a failure says which of the three things broke.
+  let pages: HeadlessPageReport[] = [];
 
-    // The handshake completed, the records arrived, and the page DREW them — the text on screen
-    // is the assertion, because "it rendered" and "it is still on its loading state" are the two
+  beforeAll(async () => {
+    const run = await runPagesHeadless([page("works", WORKS), page("shipped", SHIPPED), page("unreachable", UNREACHABLE)]);
+    if (!run.ok) throw new Error(run.problems.join(" "));
+    pages = run.pages;
+  }, 120_000);
+
+  it("draws the page that works, and carries its press to the parent", () => {
+    // The handshake completed, the records arrived, and the page DREW them — the text on screen is
+    // the assertion, because "it rendered" and "it is still on its loading state" are the two
     // states a preview exists to tell apart.
+    const works = pages[0];
     expect(works?.readied).toBe(true);
     expect(works?.stateDelivered).toBe(true);
     expect(works?.text).toContain("Curry, Ramen");
     expect(works?.liveForms).toBe(0);
-    // The press reached the parent as a submission for the declared collection — and was
-    // declined, so nothing was written.
+    // The press reached the parent as a submission for the declared collection — and was declined,
+    // so nothing was written.
     expect(works?.presses[0]?.submitted).toEqual({ cid: "orders", fields: ["name"] });
+  });
 
-    // `ready()` inside `onState` is a deadlock: the parent sends no state until `ready` arrives,
-    // so the callback never runs, so `ready` is never sent. The page sits on "loading…".
+  it("catches both halves of the page that shipped", () => {
+    // `ready()` inside `onState` is a deadlock: the parent sends no state until `ready` arrives, so
+    // the callback never runs, so `ready` is never sent. The page sits on "loading…".
+    const shipped = pages[1];
     expect(shipped?.readied).toBe(false);
     expect(shipped?.stateDelivered).toBe(false);
     expect(shipped?.text).toContain("loading");
@@ -106,7 +137,16 @@ describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
     expect(shipped?.liveForms).toBe(1);
     expect(shipped?.presses[0]?.submitted).toBeNull();
     expect(shipped?.presses[0]?.blockedFormSubmission).toBe(true);
-  }, 120_000);
+  });
+
+  it("presses where a person would, so a control no cursor reaches submits nothing", () => {
+    // `element.click()` in the page's own realm would have fired both handlers and reported two
+    // submissions for buttons nobody can press.
+    const unreachable = pages[2];
+    expect(unreachable?.presses[0]?.submitted).toBeNull(); // covered — the overlay took the click
+    expect(unreachable?.presses[1]?.notClickable).toBe(true); // display:none — no box to aim at
+    expect(unreachable?.presses[1]?.submitted).toBeNull();
+  });
 });
 
 describe.skipIf(chromeReady)("without a browser", () => {

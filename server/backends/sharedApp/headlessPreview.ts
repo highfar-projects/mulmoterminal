@@ -51,6 +51,18 @@ export interface HeadlessPageInput {
 /** What one press produced. */
 export interface HeadlessPress {
   label: string;
+  /** The control had nowhere to be clicked — `display:none`, zero-sized, or off the document.
+   *
+   *  Its own answer rather than a press that reached nothing, because the two want opposite things
+   *  done about them: one is a handler that is not wired up, the other is a control no cursor can
+   *  arrive at.
+   *
+   *  What tells them apart is that the press is a REAL press — dispatched at the control's
+   *  coordinates, through the browser. `element.click()` in the page's own realm invokes the
+   *  handler whatever is on top of the button, so a control under an overlay would be reported as
+   *  submitting. It is not reported as unclickable either: the click happens, the overlay receives
+   *  it, and nothing reaches the parent — which is exactly what the visitor gets. */
+  notClickable: boolean;
   /** The submission that reached the parent, if one did. `null` is the dead button. */
   submitted: { cid: string; fields: string[] } | null;
   /** What the parent refused before drawing a confirmation. Invisible in a browser: it is answered
@@ -78,7 +90,16 @@ export interface HeadlessPageReport {
   errors: string[];
 }
 
-export type HeadlessRun = { ok: true; pages: HeadlessPageReport[] } | { ok: false; problems: string[] };
+export type HeadlessRun =
+  | {
+      ok: true;
+      pages: HeadlessPageReport[];
+      /** Pages the budget dropped. Carried rather than left to be inferred from a count, because
+       *  "ran 6 pages" reads as "ran the app" — and the seventh is then published having never
+       *  been loaded, which is the exact failure this whole action exists to end. */
+      omittedPages: number;
+    }
+  | { ok: false; problems: string[] };
 
 /** How much of one run is enough. Every one of these is a budget rather than a rule about pages:
  *  a run is started by an agent waiting on a tool call, and an app with forty buttons is not worth
@@ -118,6 +139,13 @@ async function serveHarness(): Promise<{ origin: string; close: () => Promise<vo
       if (pathname === "/") {
         res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
         res.end(HARNESS_HTML);
+        return;
+      }
+      // Answered rather than left to 404, because the browser asks for it unprompted and the miss
+      // lands in the page's own console — where this run collects it and reports it to the author
+      // as something their page did.
+      if (pathname === "/favicon.ico") {
+        res.writeHead(204).end();
         return;
       }
       const name = pathname.startsWith(`${VIEW_MOUNT}/`) ? pathname.slice(VIEW_MOUNT.length + 1) : "";
@@ -291,7 +319,15 @@ async function pressOne(driver: Driver, input: HeadlessPageInput, index: number,
   const frame = driver.frame();
   if (frame === null) return null;
   await driver.evaluate(FILL_INPUTS, frame);
-  await driver.evaluate(`[...document.querySelectorAll(${JSON.stringify(CLICKABLE)})][${index}]?.click()`, frame);
+  // THROUGH THE BROWSER, at the control's coordinates, so the event lands where a person's would.
+  // `element.click()` in the page's own realm invokes the handler regardless of what covers the
+  // button — and this action would then report a submission reaching the parent for a control
+  // nobody can press, which is the opposite of what it promises.
+  const controls = await frame.$$(CLICKABLE);
+  const notClickable = await controls[index]
+    ?.click()
+    .then(() => false)
+    .catch(() => true);
   await new Promise((resolve) => setTimeout(resolve, LIMITS.settleMs));
   const after = await driver.observe();
   // Answered the way somebody who changed their mind would, so the page's own "cancelled" path
@@ -300,6 +336,7 @@ async function pressOne(driver: Driver, input: HeadlessPageInput, index: number,
   const noise = driver.noise();
   return {
     label,
+    notClickable: notClickable !== false,
     submitted: after.submitted[0] ?? null,
     refused: after.refused,
     blockedFormSubmission: noise.some((line) => line.includes(BLOCKED_FORM)),
@@ -340,7 +377,7 @@ export async function runPagesHeadless(pages: readonly HeadlessPageInput[]): Pro
     for (const input of pages.slice(0, LIMITS.pages)) {
       reports.push(await reportPage(driver, input));
     }
-    return { ok: true, pages: reports };
+    return { ok: true, pages: reports, omittedPages: Math.max(0, pages.length - LIMITS.pages) };
   } catch (err) {
     return { ok: false, problems: [`The headless preview could not be run: ${messageOf(err)}`] };
   } finally {

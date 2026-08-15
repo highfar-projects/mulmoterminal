@@ -12,6 +12,7 @@ import type { HeadlessPageReport, HeadlessPress } from "../../../server/backends
 
 const press = (over: Partial<HeadlessPress> = {}): HeadlessPress => ({
   label: "Order",
+  notClickable: false,
   submitted: null,
   refused: [],
   blockedFormSubmission: false,
@@ -31,7 +32,7 @@ const page = (over: Partial<HeadlessPageReport> = {}): HeadlessPageReport => ({
   ...over,
 });
 
-const narrate = (over: Partial<HeadlessPageReport> = {}): string => narrateHeadlessRun({ ok: true, pages: [page(over)] });
+const narrate = (over: Partial<HeadlessPageReport> = {}, omittedPages = 0): string => narrateHeadlessRun({ ok: true, pages: [page(over)], omittedPages });
 
 describe("narrateHeadlessRun", () => {
   it("names the fix for a page that never answered the handshake", () => {
@@ -79,6 +80,45 @@ describe("narrateHeadlessRun", () => {
     expect(clean).toContain("Nothing was written");
     expect(clean).toContain("does NOT prove the app is ready to publish");
     expect(clean).toContain("Collections pane");
+  });
+
+  it("says a control could not be clicked, rather than calling it a dead button", () => {
+    // The two want opposite things done about them: a handler that is not wired up, against a
+    // control a visitor's cursor can never arrive at.
+    const said = narrate({ presses: [press({ notClickable: true })] });
+    expect(said).toContain("HAD NOWHERE TO BE CLICKED");
+    expect(said).not.toContain("dead button");
+  });
+
+  it("keeps a refusal that happened alongside a successful submission", () => {
+    // The half nobody can see. Reported only in the branch that had no submission, the second
+    // request's diagnostic would be lost everywhere at once.
+    const said = narrate({ presses: [press({ submitted: { cid: "orders", fields: ["name"] }, refused: ["busy"] })] });
+    expect(said).toContain("a submission reached the parent");
+    expect(said).toContain("also REFUSED");
+    expect(said).toContain("confirmation was already open");
+  });
+
+  it("says what a member page's run did NOT cover, and does not blame the page for an intent", () => {
+    // `transition` / `assign` / `withdraw` are answered by a parent that is not shared code yet
+    // (mulmoserver's `AppViewFrame.vue`), so the public parent judging them `not-a-submission` is
+    // expected — reading it back as "you sent a value that is not a string" would send an author
+    // to rewrite a page that is correct.
+    const said = narrate({ audience: "member", presses: [press({ refused: ["not-a-submission"] })] });
+    expect(said).toContain("only PART of it is exercised here");
+    expect(said).toContain("no `viewer` capabilities");
+    expect(said).toContain("expected for `transition`");
+    expect(said).not.toContain("most often a value that is not a string");
+    // And a PUBLIC page still gets the ordinary translation.
+    expect(narrate({ presses: [press({ refused: ["not-a-submission"] })] })).toContain("most often a value that is not a string");
+  });
+
+  it("says how many pages it did not run at all", () => {
+    // "Ran 6 pages" reads as "ran the app", and the seventh is then published having never been
+    // loaded — the exact failure the action exists to end.
+    expect(narrate({}, 3)).toContain("3 more pages were NOT run");
+    expect(narrate({}, 1)).toContain("1 more page was NOT run");
+    expect(narrate({})).not.toContain("NOT run");
   });
 
   it("passes a failed run through as its problems", () => {
