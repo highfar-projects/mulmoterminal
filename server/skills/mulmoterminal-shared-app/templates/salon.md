@@ -143,6 +143,12 @@
 `allow-modals` が無い呼び出しは無視されます（コンソールに `Ignored call to 'prompt()'.` と
 出るだけ）。訊くのはページの中の `<input>`、報せるのはページの中の要素です。
 
+**`<form>` も使えません。** `allow-forms` が無いので、ブラウザは `submit` イベントを**発火する
+前に**送信ごと止めます — `onsubmit` の中の `e.preventDefault()` すら走らないので、「押しても
+何も起きないボタン」になります（コンソールに `Blocked form submission to ''` と出るだけ）。
+テキスト入力での Enter も、`required` の検証も同じ理由で効きません。`<form>` は使わず、`<div>` と
+`type="button"` のボタンにして、**click** で送信し、入力チェックは自分で書きます。
+
 ```html
 <label>お名前 <input id="who" maxlength="40" /></label>
 <p id="say" role="status"></p>
@@ -160,6 +166,9 @@
         .filter((slot) => slot.state === "open")
         .map((slot) => {
           const button = document.createElement("button");
+          // type を書くこと。省略した <button> は submit ボタンで、サンドボックスが
+          // 送信を止める側の形です。
+          button.type = "button";
           button.dataset.slot = slot.id;
           button.textContent = `${slot.startAt} ${slot.stylist ?? ""}`;
           return button;
@@ -193,6 +202,11 @@
   ではなく**メッセージ全体が申込みでなくなり**、`not-a-submission` として拒否されます
 - **`customerEmail` は送らない。** サインインした訪問者のアドレスを親が入れます
   （ルールがトークンと突き合わせるので、入力欄にすると間違えられるだけの欄になります）
+
+**deploy の前に、プレビューで実際に押してもらってください** — Collections ペインの
+「Preview the shared app」で、`/a/{slug}` と**同じ親・同じサンドボックス**のままこのページが
+動きます（[SKILL.md](../SKILL.md) の「3b. RUN THE PAGE」）。ここの不具合は読んでも見つからず、
+押すと確認ダイアログが出るところまで見て初めて分かります。
 
 **押した瞬間には書き込まれません。** 親が送られてきた値を iframe の外に描いて確認を
 取り、訪問者が押してから書きます。これはビューの HTML が信頼されていないためで、

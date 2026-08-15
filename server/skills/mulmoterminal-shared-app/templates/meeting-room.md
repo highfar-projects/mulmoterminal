@@ -138,6 +138,12 @@
 出るだけで、例外にはなりません）。名前は**ページの中の `<input>`** で訊き、結果は**ページの中の
 要素**に書きます。
 
+**`<form>` も使えません。** `allow-forms` が無いので、ブラウザは `submit` イベントを**発火する
+前に**送信ごと止めます — `onsubmit` の中の `e.preventDefault()` すら走らないので、「押しても
+何も起きないボタン」になります（コンソールに `Blocked form submission to ''` と出るだけ）。
+テキスト入力での Enter も、`required` の検証も同じ理由で効きません。`<form>` は使わず、`<div>` と
+`type="button"` のボタンにして、**click** で送信し、入力チェックは自分で書きます。
+
 ```html
 <label>お名前 <input id="who" maxlength="40" /></label>
 <label>用件 <input id="why" maxlength="60" /></label>
@@ -159,6 +165,9 @@
           // 入れないこと — 部屋名は人が入力するもので、そこに <script> と
           // 書かれたら公開ページで動きます。
           const button = document.createElement("button");
+          // type を書くこと。省略した <button> は submit ボタンで、サンドボックスが
+          // 送信を止める側の形です。
+          button.type = "button";
           button.dataset.slot = slot.id;
           button.textContent = `${slot.startAt} ${name[slot.room] ?? ""}`;
           return button;
@@ -202,6 +211,11 @@
   返ります。全部を「その枠は取られました」と言うと、直せる失敗が直せなくなる — 理由は
   `result.error` にあります
 - **`requesterEmail` は送らない。** サインインした訪問者のアドレスを親が入れます
+
+**deploy の前に、プレビューで実際に押してもらってください** — Collections ペインの
+「Preview the shared app」で、`/a/{slug}` と**同じ親・同じサンドボックス**のままこのページが
+動きます（[SKILL.md](../SKILL.md) の「3b. RUN THE PAGE」）。ここの不具合は読んでも見つからず、
+押すと確認ダイアログが出るところまで見て初めて分かります。
 
 **押した瞬間には書き込まれません。** 親が値を iframe の外に描いて確認を取り、訪問者が
 押してから書きます。ビューの HTML は信頼されていないためで、読み込んだ瞬間に `submit()` を

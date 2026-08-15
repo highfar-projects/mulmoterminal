@@ -44,6 +44,7 @@
     "bookings": {
       "submitOnly": true,
       "statusField": "status",
+      "peerVisibility": "public",
       "transitions": { "initial": ["requested"], "requested": ["cancelled"] }
     }
   },
@@ -63,9 +64,23 @@
         "window": { "fromField": { "ref": "classId", "collection": "classes", "field": "opensAt" } }
       }
     }
-  }
+  },
+  "views": [
+    { "id": "public", "audience": "public", "path": "views/signup.html", "collections": ["classes"] },
+    { "id": "mine", "audience": "participant", "path": "views/mine.html", "collections": ["classes", "bookings"] }
+  ]
 }
 ```
+
+**`views` は省けません。順位は生成フォームには出せません** — フォームは 1 件書くだけで、
+何番目かを知らないからです。そして**順位のページは公開ページではありません**:
+
+- **公開の `views/signup.html`** が読めるのは `public.read` にあるものだけ、つまり `classes` です。
+  `bookings` をここの `collections` に書くと publish が拒否します（訪問者の権限で読むので、
+  ルールが拒否して**空のページが描かれる** — 一番たちの悪い壊れ方だからです）。
+- **順位は `audience: "participant"` の `views/mine.html`**、入口は `/p/{slug}`。ここで初めて
+  他の人の申込みが読め、`peerVisibility: "public"` がそれを許しています。**名簿に載っている
+  人どうしで名前が見える**ということなので、作る前に利用者へ確認してください（下の表）。
 
 ## .claude/skills/classes/schema.json
 
@@ -158,13 +173,33 @@ opensAt = (クラスの開始日の 3 日前の 08:00 現地時間).getTime()
 
 ---
 
-## view が描くもの
+## views/signup.html と views/mine.html
 
-カスタムビュー（`views/*.html`）が、読めた行から:
+**`signup.html`（公開）** は `classes` を並べて、申込みを 1 件 `submit()` するだけです。
+順位はここには出せません（読めないので）。
+
+**`mine.html`（participant）** が、読めた行から:
 
 1. `status != "cancelled"` を `createdAt` 昇順に並べる
 2. 先頭 `capacity` 件を「確定」、次の `waitlist` 件を「待機 N 番」、それ以降も待機として続ける
 3. 自分の行を強調して「あなたは待機 1 番です」と出す
+
+**書き方の契約は [salon.md](./salon.md) の `views/booking.html` と同じです。** 動くコードは
+そちらを見てください。守る点はこの 3 つで、どれも破っても**例外が出ず、画面も変わりません**:
+
+- **`<form>` は使えない。** `sandbox="allow-scripts"` に `allow-forms` が無いので、ブラウザは
+  `submit` イベントを**発火する前に**送信を止めます。`onsubmit` の中の `e.preventDefault()` すら
+  走らず、「押しても何も起きないボタン」になります。`<div>` と `type="button"` のボタンにして、
+  **click** で `submit()` を呼びます。テキスト入力での Enter と `required` も同じ理由で効きません。
+- **`prompt` / `alert` / `confirm` は無視される**（`allow-modals` が無い）。訊くのはページの中の
+  `<input>`、報せるのはページの中の要素です。
+- **`onState` を張ったら最後に `ready()` を呼ぶ。** 呼ばないとデータは永久に来ず、ページは
+  「読み込み中」のまま止まります。
+
+**そして deploy の前に、プレビューで実際に押してもらってください**（[SKILL.md](../SKILL.md) の
+「3b. RUN THE PAGE」）。このページの不具合は読んでも見つかりません。とくにこの形は、申込み
+ボタンを 1 回押して**確認ダイアログが出るところまで**見てもらう価値があります — 出なければ、
+メッセージは iframe から出ていません。
 
 定員（8 と 2）は**クラスのレコード**に持たせてあります。クラスごとに変えられ、
 ルールは読みません。**これは表示上の定員です** — 9 番目の人が現場に来ることは

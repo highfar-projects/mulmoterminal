@@ -134,6 +134,63 @@ describe("the file a published view names", () => {
     }
   });
 
+  it("WARNS about a `<form>`, which a sandboxed frame may not submit", async () => {
+    // The one that shipped. `sandbox="allow-scripts"` carries no `allow-forms`, and the browser
+    // blocks the submission BEFORE firing the `submit` event — so a handler whose first line is
+    // `e.preventDefault()` never runs, and the Submit button does nothing at all. The console line
+    // is the only sign, and the author was not looking at a console: the page was deployed and
+    // published twice before anybody pressed it.
+    for (const html of [
+      '<form id="f"><button type="submit">go</button></form>',
+      // The element is what carries implicit submission, so a form used "only for layout" is the
+      // same trap one Enter keypress later.
+      "<form>\n<input />\n</form>",
+      "<FORM><input /></FORM>",
+      "<form/>",
+    ]) {
+      const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.view.warnings.join(" ")).toContain("allow-forms");
+    }
+  });
+
+  it("says nothing about a `<form>` that is text rather than markup", async () => {
+    // The expensive direction again: a page explaining the rule, or showing the shape it replaced,
+    // draws no form and must not be warned at.
+    const html = [
+      "<p>Do not use a &lt;form&gt; here.</p>",
+      "<textarea><form><button type=submit>go</button></form></textarea>",
+      "<!-- <form id=old><input /></form> -->",
+      '<script>const sample = "<form>";</script>',
+      '<div id="form"><button type="button" id="go">go</button></div>',
+    ].join("\n");
+    const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
+    expect(result.ok && result.view.warnings).toEqual([]);
+  });
+
+  it("WARNS about a view that listens for state and never says it is ready", async () => {
+    // The other half of the same app's day. The parent holds the data until the view answers the
+    // handshake, so this page renders its loading line and stays on it — no error, no empty state,
+    // nothing to tell the author which end is at fault.
+    const html = "<script>window.__MC_APP_VIEW.onState(function (data) { draw(data); });</script>";
+    const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.view.warnings.join(" ")).toContain("ready()");
+  });
+
+  it("says nothing when the page either completes the handshake or wants no data", async () => {
+    // Both directions: a view that calls `ready` is correct, and a STATIC page that never asks for
+    // state is not missing a handshake — it has nothing to be handed.
+    for (const html of [
+      "<script>const b = window.__MC_APP_VIEW; b.onState(draw); b.ready();</script>",
+      "<script>document.getElementById('go').addEventListener('click', send);</script>",
+      "<p>ready() の話をしているだけ</p>",
+    ]) {
+      const result = await readAppViewFile(root, { path: withView(root, html) }, STAMP);
+      expect(result.ok && result.view.warnings).toEqual([]);
+    }
+  });
+
   it("does not read a page's PROSE as code", async () => {
     // The other direction, and the more expensive one: a refusal the author cannot act on. The
     // words are allowed to appear — in markup that explains the rule, and in a string that is
