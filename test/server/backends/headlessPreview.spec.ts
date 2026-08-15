@@ -154,6 +154,25 @@ const REVEALS = `
   });
 </script>`;
 
+/** A page that breaks the QUESTIONS this run puts to it, rather than breaking itself.
+ *
+ *  A getter of the page's own that throws is the reachable version of it; a frame that navigates
+ *  itself out from under the handle is the other, and neither can be arranged deterministically
+ *  except this way. Both make `evaluate` REJECT, and a rejection that is swallowed leaves a page
+ *  with a button in it reported as a page with no text and no controls — as calmly as an empty
+ *  page. */
+const POISONED = `
+<button type="button" id="go">Order</button>
+<script>
+  Object.defineProperty(HTMLElement.prototype, "innerText", {
+    get() {
+      throw new Error("innerText is poisoned");
+    },
+  });
+  window.__MC_APP_VIEW.onState(() => {});
+  window.__MC_APP_VIEW.ready();
+</script>`;
+
 const page = (id: string, html: string): HeadlessPageInput => ({ id, audience: "public", html, datasets, submit });
 
 describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
@@ -182,6 +201,11 @@ describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
     const works = pages[0];
     expect(works?.readied).toBe(true);
     expect(works?.stateDelivered).toBe(true);
+    // AND it was not called unresponsive. The flag is what the report leads with, and it says
+    // nothing below it describes the page — so a flag stuck on true does not add a wrong line, it
+    // disowns every right one. It was stuck on true: the deadline answered `undefined`, which is
+    // also what a healthy `FILL_INPUTS` and a healthy `decline()` return, on every page.
+    expect(works?.unresponsive).toBe(false);
     expect(works?.text).toContain("Curry, Ramen");
     expect(works?.liveForms).toBe(0);
     // The press reached the parent as a submission for the declared collection — and was declined,
@@ -195,6 +219,9 @@ describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
     const shipped = pages[1];
     expect(shipped?.readied).toBe(false);
     expect(shipped?.stateDelivered).toBe(false);
+    // Deadlocked is not unresponsive. This page answers everything put to it; what it never does
+    // is send `ready`, and the report has a different sentence for that.
+    expect(shipped?.unresponsive).toBe(false);
     expect(shipped?.text).toContain("loading");
     // And the Submit button does nothing at all: the browser blocks the submission BEFORE the
     // `submit` event fires, so the handler that would have called `view.submit` never runs.
@@ -240,6 +267,26 @@ describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
     expect(unreachable?.presses[1]?.notClickable).toBe(true); // display:none — no box to aim at
     expect(unreachable?.presses[1]?.submitted).toBeNull();
   });
+});
+
+describe.skipIf(!chromeReady)("a document that breaks the questions put to it", () => {
+  // Its own run rather than a seventh page in the shared one: `LIMITS.pages` is 6, and a seventh
+  // is dropped — reported, but dropped, so the assertions below would have read `undefined`.
+  it("says a question could not be put, rather than reporting an empty page", async () => {
+    const run = await runPagesHeadless([page("poisoned", POISONED)]);
+    expect(run.ok).toBe(true);
+    if (!run.ok) return;
+    const poisoned = run.pages[0];
+    // The page is fine — it drew, and it answered the handshake. What it broke is our question,
+    // and `evaluate` rejects: the survey then finds no control and the screen reads as empty.
+    // Every one of those is an ordinary, calm-looking value, which is why the rejection has to be
+    // said out loud instead.
+    expect(poisoned?.readied).toBe(true);
+    expect(poisoned?.errors.some((line) => line.includes("could not put a question"))).toBe(true);
+    // And it is not called unresponsive: the page answered everything it could, and the flag above
+    // it says something else.
+    expect(poisoned?.unresponsive).toBe(false);
+  }, 240_000);
 });
 
 describe.skipIf(!chromeReady)("a document that stops answering", () => {
