@@ -13,6 +13,7 @@ import express, { type Express } from "express";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { makeTempDir } from "../../support/tempDir";
+import { appRequest } from "../../helpers/appRequest.js";
 
 const preview = vi.hoisted(() => vi.fn());
 
@@ -35,20 +36,20 @@ vi.mock("../../../server/routes/routeParams.js", () => ({
 let app: Express;
 let root = "";
 
-/** The route under test, called the way the pane calls it. */
+/** The route under test, called the way the pane calls it — through the real handler chain, but
+ *  over an in-memory socket rather than a listening one.
+ *
+ *  This file used to open a real `listen(0)` per call and `fetch` it, which is the exact pattern
+ *  `appRequest` exists to replace (see its header, and #1314). It is flaky, not merely slow:
+ *  measured at 3 failures in 2000 round trips of this shape, arriving as `other side closed`, as
+ *  a non-HTTP response, and once as another server's HTML — a wrong ANSWER, not a timeout (#1729).
+ *  Nothing here needs a port: the subject is what the handler writes. */
 async function get(url: string): Promise<{ status: number; body: unknown }> {
   const { mountSharedAppPreviewRoutes } = await import("../../../server/backends/sharedAppPreviewRoutes.js");
   const server = express();
   mountSharedAppPreviewRoutes(server);
-  const listener = server.listen(0);
-  const address = listener.address();
-  const port = typeof address === "object" && address !== null ? address.port : 0;
-  try {
-    const res = await fetch(`http://127.0.0.1:${port}${url}`);
-    return { status: res.status, body: await res.json() };
-  } finally {
-    listener.close();
-  }
+  const res = await appRequest(server)(url);
+  return { status: res.status, body: await res.json() };
 }
 
 describe("shared app preview routes", () => {
