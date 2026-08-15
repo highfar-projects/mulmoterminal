@@ -11,28 +11,9 @@
 // publish. Four kinds of failure survive this (the rules, other people's devices, two people at
 // once, and whether the rules are deployed at all), which is why the closing lines are fixed text
 // rather than something a good run can omit.
+import { explainRefusal, FORM_BLOCKED, quoteForReport, READY_DEADLOCK } from "../../../common/sharedAppViewVocabulary.js";
 import type { PreviewAudience } from "../../../common/sharedAppPreview.js";
 import type { HeadlessPageReport, HeadlessPress, HeadlessRun } from "./headlessPreview.js";
-
-/** What the parent's own refusals mean. These never reach a browser's screen: they are answered on
- *  the port, into a promise the page usually does not await, so this is the only place an author
- *  can learn the page asked for something the declaration does not allow. */
-const REFUSALS: Record<string, string> = {
-  "unknown-collection": "the page submitted to a collection this app's `public.submit` does not declare",
-  "undeclared-field": "the page sent a field that is not in that collection's `createFields`",
-  "not-a-submission":
-    "the message was not a submission at all — most often a value that is not a string (the rules compare stored values without coercing, so only strings may be sent)",
-  busy: "a confirmation was already open (the page submitted twice)",
-};
-
-/** The same refusal, read on a page whose actions are not submissions.
- *
- *  `transition`, `assign` and `withdraw` are what a member or participant page sends, and the
- *  parent available here judges submissions only — so it answers them `not-a-submission`, and the
- *  ordinary translation above would blame the page for something it did correctly. */
-const NOT_A_SUBMISSION_ON_A_MEMBER_PAGE =
-  "the message was not a submission. On this page that is expected for `transition`, `assign` and `withdraw`: the parent that answers those is not the one running here " +
-  "(see the note above). It is a real fault only if the page called `submit`.";
 
 /** What this run does NOT do to a page written for the roster.
  *
@@ -47,12 +28,7 @@ const MEMBER_PAGE_LIMIT =
   "is the public one, so it carries no `viewer` capabilities and it does not answer `transition`, `assign` or `withdraw`. Controls that depend on those are untested, " +
   "here and in the Collections pane alike.";
 
-/** Page-controlled text, put into the report so it cannot be mistaken for the report's own words.
- *
- *  `JSON.stringify` rather than a pair of quotes: a label reading `Save "draft"` or a screen with a
- *  newline in it would otherwise end a quotation early, and the agent reading this cannot tell a
- *  quotation mark the page wrote from one this module did. */
-const quoted = (text: string): string => JSON.stringify(text);
+const quoted = quoteForReport;
 
 /** The handshake, which decides whether anything below it is about a page that has its data. */
 function handshakeLine(page: HeadlessPageReport): string {
@@ -63,10 +39,7 @@ function handshakeLine(page: HeadlessPageReport): string {
     );
   }
   if (!page.readied) {
-    return (
-      "It NEVER answered the handshake, so the parent sent it no records at all — this is the page that sits on its loading state forever. " +
-      "`ready()` has to be called OUTSIDE the `onState` callback: inside it, it can never run, because the parent sends no state until `ready` arrives."
-    );
+    return READY_DEADLOCK;
   }
   if (!page.stateDelivered) return "It answered the handshake, but no records were sent — this app declares no datasets for this page.";
   return "It answered the handshake and was sent its records.";
@@ -88,11 +61,7 @@ function onLoadLine(page: HeadlessPageReport): string[] {
 
 function formLine(page: HeadlessPageReport): string[] {
   if (page.liveForms === 0) return [];
-  return [
-    `The live document has ${page.liveForms} <form> element${page.liveForms === 1 ? "" : "s"}. A form cannot submit here: the frame is sandboxed without \`allow-forms\`, ` +
-      "and the browser blocks the submission BEFORE firing the `submit` event — so an `onsubmit` handler with `e.preventDefault()` as its first line never runs. " +
-      'Use a `<div>` with a `type="button"` button and a click handler.',
-  ];
+  return [`The live document has ${page.liveForms} <form> element${page.liveForms === 1 ? "" : "s"}. ${FORM_BLOCKED}`];
 }
 
 /** Every refusal the parent answered, whether or not something else on the same press succeeded.
@@ -102,8 +71,7 @@ function formLine(page: HeadlessPageReport): string[] {
  *  promise the page usually does not await, so losing it here loses it everywhere. */
 function refusalLine(press: HeadlessPress, audience: PreviewAudience): string[] {
   if (press.refused.length === 0) return [];
-  const translate = (reason: string): string =>
-    reason === "not-a-submission" && audience !== "public" ? NOT_A_SUBMISSION_ON_A_MEMBER_PAGE : (REFUSALS[reason] ?? reason);
+  const translate = (reason: string): string => explainRefusal(reason, audience);
   const many = press.refused.length === 1 ? "a request" : `${press.refused.length} requests`;
   return [`    The parent also REFUSED ${many} — ${press.refused.map(translate).join("; ")}.`];
 }

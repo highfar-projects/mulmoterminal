@@ -56,6 +56,16 @@ const answeringWrites = (write: unknown, preview: unknown = payload()) => {
 
 beforeEach(() => {
   vi.stubGlobal("fetch", answering(payload()));
+  clipboard = "";
+  Object.defineProperty(window.navigator, "clipboard", {
+    value: {
+      writeText: (text: string) => {
+        clipboard = text;
+        return Promise.resolve();
+      },
+    },
+    configurable: true,
+  });
 });
 
 afterEach(() => {
@@ -90,7 +100,36 @@ const connect = async (wrapper: VueWrapper) => {
   // The name only the injected document knows, echoed on the port it was handed.
   port.postMessage({ nonce });
   await flushPromises();
-  return { port, answers };
+  // The nonce and the window are handed back for the diagnostics tests: a NOTICE travels on the
+  // window rather than the port, and proving it is heard means being able to speak as the document
+  // the parent injected.
+  return { port, answers, nonce, contentWindow };
+};
+
+/** The clipboard, as this pane writes to it. */
+let clipboard = "";
+
+/** Say something as the document in the frame, on the WINDOW.
+ *
+ *  A notice goes this way rather than on the private channel because the ones that matter most
+ *  happen before the handshake — a page whose script throws while it is being parsed never calls
+ *  `ready()` — so this helper deliberately does not require a connection. */
+const speakFromFrame = async (wrapper: VueWrapper, data: Record<string, unknown>, source?: unknown): Promise<void> => {
+  const frame = wrapper.find("iframe").element as HTMLIFrameElement;
+  const event = new MessageEvent("message", { data });
+  Object.defineProperty(event, "source", { value: source ?? frame.contentWindow });
+  window.dispatchEvent(event);
+  await flushPromises();
+};
+
+const nonceOf = (wrapper: VueWrapper): string => /const nonce = "([^"]+)"/.exec(wrapper.find("iframe").attributes("srcdoc") ?? "")?.[1] ?? "";
+
+const copyBlock = async (wrapper: VueWrapper): Promise<string> => {
+  const button = wrapper.findAll("button").find((candidate) => candidate.text().includes("Copy what happened"));
+  if (button === undefined) throw new Error("the pane offers no way to copy what happened");
+  await button.trigger("click");
+  await flushPromises();
+  return clipboard;
 };
 
 const settle = async () => {
@@ -105,6 +144,71 @@ const mountPreview = async () => {
 };
 
 describe("SharedAppPreview", () => {
+  // WHAT HAPPENED, carried out of the pane in one press.
+  //
+  // Every fact below already passed through this component and was then thrown away, and each was
+  // invisible in its own way: a refusal is answered on a port nobody watches, an error inside the
+  // frame dies at the frame boundary, and the deployed rules' refusal is overwritten by the next
+  // attempt. What the author could carry back to the LLM that wrote the page was "it seems stuck".
+  it("keeps the refusal the page cannot see, and hands it over on one press", async () => {
+    const wrapper = await mountPreview();
+    const { port } = await connect(wrapper);
+    // A field the declaration does not carry. The rules would refuse the whole write with a
+    // permission error naming nothing; the parent refuses it here and names it — to the page's
+    // promise, which the page usually does not await, and to nowhere else.
+    port.postMessage({ type: "mc-public-view:submit", requestId: "r1", cid: "bookings", values: { nope: "x" } });
+    await settle();
+
+    const block = await copyBlock(wrapper);
+    expect(block).toContain("REFUSED by the parent");
+    expect(block).toContain("`createFields`");
+  });
+
+  it("hears the frame report itself BEFORE the handshake, which is the page nobody can diagnose", async () => {
+    const wrapper = await mountPreview();
+    // No `ready` and there never will be: this is the page whose script threw while the document
+    // was being parsed. It sits on its loading state with the reason locked inside the frame.
+    await speakFromFrame(wrapper, { type: "mc-public-view:notice", nonce: nonceOf(wrapper), code: "error", detail: "slot is not defined (line 12)" });
+
+    const block = await copyBlock(wrapper);
+    expect(block).toContain("the frame reported 'error'");
+    expect(block).toContain("slot is not defined (line 12)");
+    // And it is marked as the page's words. The reader is often a model being asked what went
+    // wrong, and a string the page chose must not arrive as something this host is saying.
+    expect(block).toContain("page text:");
+  });
+
+  it("will not take a report from a window that cannot name the document we injected", async () => {
+    const wrapper = await mountPreview();
+    await speakFromFrame(wrapper, { type: "mc-public-view:notice", nonce: "guessed", code: "error", detail: "a lie" });
+    expect(await copyBlock(wrapper)).not.toContain("a lie");
+  });
+
+  it("records what was submitted by NAME, and never what was typed into it", async () => {
+    // The block is built to be pasted somewhere else, and a shared app's records hold other
+    // people's answers. Field names and collection ids are the diagnosis; the values are not.
+    const wrapper = await mountPreview();
+    const { port } = await connect(wrapper);
+    port.postMessage({ type: "mc-public-view:submit", requestId: "r1", cid: "bookings", values: { slot: "SECRET-VALUE" } });
+    await settle();
+
+    const block = await copyBlock(wrapper);
+    expect(block).toContain("the page submitted to 'bookings' carrying slot");
+    expect(block).not.toContain("SECRET-VALUE");
+  });
+
+  it("counts a problem where there is one, and stays quiet where there is not", async () => {
+    const wrapper = await mountPreview();
+    await connect(wrapper);
+    // A handshake and a state delivery are not problems, and a pane that called them problems
+    // would train its author to ignore the count.
+    expect(wrapper.text()).toContain("recorded");
+    expect(wrapper.text()).not.toContain("problem");
+
+    await speakFromFrame(wrapper, { type: "mc-public-view:notice", nonce: nonceOf(wrapper), code: "modal-ignored", detail: "confirm" });
+    expect(wrapper.text()).toContain("1 problem");
+  });
+
   it("renders the page in a frame no looser than the published one", async () => {
     const wrapper = await mountPreview();
     const frame = wrapper.find("iframe");

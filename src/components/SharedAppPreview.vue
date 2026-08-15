@@ -20,9 +20,11 @@
 // a role may WRITE is not tested; nobody else exists, so nothing here is concurrent; and it cannot
 // tell whether the Firestore rules a new declaration needs have been deployed at all.
 import { computed, onBeforeUnmount, ref, shallowRef, toRaw, watch } from "vue";
-import { portChannel, publicViewSrcdoc, viewBridge, viewNonce, type PendingSubmit } from "@receptron/sharedapp/view";
+import { portChannel, publicViewSrcdoc, viewBridge, viewNonce, VIEW_MESSAGE, type PendingSubmit } from "@receptron/sharedapp/view";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 import { isRecord } from "../../common/isRecord";
+import { createPreviewLog, renderPreviewLog, type PreviewLogEvent } from "../utils/sharedAppPreviewLog";
+import { useUpdateStatus } from "../composables/useUpdateStatus";
 import {
   previewPageKey,
   type PreviewAudience,
@@ -144,9 +146,73 @@ const frame = ref<HTMLIFrameElement | null>(null);
 // of Vue cannot end up on a page — see its own note — so the cells are this host's `ref`s.
 const cells = { pending: ref<PendingSubmit | null>(null), sending: ref(false), readied: ref(false) };
 
+// WHAT HAPPENED, kept so it can be handed to whoever is fixing the page.
+//
+// Everything below already passes through this component and is then thrown away: a refusal is
+// answered on the port and never drawn, an error inside the frame dies at the frame boundary, and
+// the deployed rules' refusal lives in `formError[cid]` until the next attempt overwrites it. The
+// author is left with "it seems stuck", which is the only thing they can carry back to the LLM
+// that wrote the page — and that LLM is the one participant that never runs it.
+//
+// Always on. "Turn on recording and reproduce it" costs a round trip and misses the first time,
+// which is the one that was surprising (`plans/feat-collection-pane-diagnostics.md`).
+const log = createPreviewLog();
+/** The array is NOT reactive — a page in an error loop would otherwise redraw the pane on every
+ *  throw — so these two are what the UI binds to. */
+const logSize = ref(0);
+const logProblems = ref(0);
+
+function remember(event: PreviewLogEvent): void {
+  log.add(event);
+  logSize.value = log.size();
+  logProblems.value = log.problems();
+}
+
+/** The audience of the page being drawn, for the refusals whose meaning depends on it. */
+const audienceNow = (): PreviewAudience => page.value?.audience ?? "public";
+
+/** Every message the parent sends, on its way out.
+ *
+ *  This is the only place a refusal can be seen. The bridge answers it on the port, into a promise
+ *  the page usually does not await, so on screen it is a button that did nothing — the exact
+ *  symptom this pane exists to explain. */
+function noteOutbound(message: Record<string, unknown>): void {
+  if (message.type === VIEW_MESSAGE.state && isRecord(message.collections)) {
+    const datasets = Object.entries(message.collections).map(([cid, rows]) => ({ cid, rows: Array.isArray(rows) ? rows.length : 0 }));
+    remember({ kind: "state", datasets });
+    return;
+  }
+  if (message.type !== VIEW_MESSAGE.result || message.ok !== false) return;
+  const reason = typeof message.error === "string" ? message.error : "unknown";
+  // Declining is not a fault and is not reported as one — the author pressed Cancel.
+  if (reason === "cancelled") {
+    remember({ kind: "declined", cid: cells.pending.value?.cid ?? "" });
+    return;
+  }
+  remember({ kind: "refused", reason, audience: audienceNow() });
+}
+
 const bridge = viewBridge(
   {
-    channel: () => portChannel(frame.value, (message) => structuredCloneable(message)),
+    channel: () => {
+      // Wrapped rather than replaced: what may travel and when is the package's, and this only
+      // watches it go past.
+      const channel = portChannel(frame.value, (message) => structuredCloneable(message));
+      return {
+        post: (message) => {
+          noteOutbound(message);
+          channel.post(message);
+        },
+        onMessage: channel.onMessage,
+        close: channel.close,
+      };
+    },
+    // WHAT THE FRAME SAYS ABOUT ITSELF: an uncaught error, a rejected promise nobody handled, a
+    // modal the sandbox ignored. None of the three reaches this side without it, and the third does
+    // not even fail — `confirm` answers false and the page carries on as though the visitor had
+    // said no. Taken HERE and not on the published page: the reader is the author, on their own
+    // machine, which is what makes it safe to keep a string the page wrote.
+    notice: (report) => remember({ kind: "notice", code: report.code, detail: report.detail }),
     // The REAL write, to the real database, performed by the server as the author.
     //
     // A submission only reaches this after the parent has judged it against the declaration below
@@ -209,6 +275,16 @@ onBeforeUnmount(() => {
 // Watched on the HTML, never on `srcdoc`. `srcdoc` is computed FROM the nonce, so minting one here
 // would change what is being watched and trigger this again — an infinite loop rather than a
 // preview. The document's identity is the page; the nonce is a consequence of it.
+// The handshake and the confirmation, as facts with a time on them. Watched rather than recorded at
+// the call sites: the cells are what the bridge actually writes, so nothing can move without this
+// seeing it.
+watch(cells.readied, (readied) => {
+  if (readied) remember({ kind: "handshake" });
+});
+watch(cells.pending, (pending) => {
+  if (pending !== null) remember({ kind: "submitted", cid: pending.cid, fields: Object.keys(pending.values) });
+});
+
 watch(
   // The PAGE, not its HTML. Two pages can hold byte-identical HTML — a member page and a roster
   // page built from the same template — and watching the text would then keep the old document, its
@@ -218,6 +294,10 @@ watch(
   () => {
     bridge.restart();
     nonce.value = viewNonce();
+    // NOT a reset of the log. Switching pages is part of what the author was doing, and the page
+    // they came from is often where the fault is — a member page that never readied looks identical
+    // to one nobody opened.
+    if (page.value !== null) remember({ kind: "page", id: page.value.id, audience: page.value.audience });
   },
 );
 
@@ -258,8 +338,15 @@ async function send(cid: string, values: Record<string, string>): Promise<{ ok: 
     );
     const body: unknown = await res.json();
     if (!isRecord(body) || body.ok !== true) {
-      return { ok: false, error: isRecord(body) && typeof body.error === "string" ? body.error : "write-failed" };
+      const error = isRecord(body) && typeof body.error === "string" ? body.error : "write-failed";
+      // THE ONE THE PANE ALONE CAN REPORT. This write met the DEPLOYED rules, and their refusal
+      // names nothing — "Missing or insufficient permissions" is the whole of it. Kept here because
+      // the screen keeps it only until the next attempt, and it is the single most expensive line
+      // an author can fail to carry back.
+      remember({ kind: "write", cid, error });
+      return { ok: false, error };
     }
+    remember({ kind: "write", cid, error: null });
     const made = isRecord(body.written) ? body.written : null;
     // The TOKEN is required, not optional. Without it there is nothing undo would accept, and a row
     // in this list with no way to remove it is worse than no row: it says the pane can take the
@@ -278,6 +365,7 @@ async function send(cid: string, values: Record<string, string>): Promise<{ ok: 
     void refresh();
     return { ok: true };
   } catch {
+    remember({ kind: "write", cid, error: "the request failed after it was sent — a record may or may not be there" });
     // THE DANGEROUS CASE, and it is recorded rather than swallowed. The request threw, so this
     // cannot know whether the record was written — and if it was, dropping it here would leave a
     // real row in the app that nothing on this screen can name. The author cannot remove what they
@@ -434,6 +522,7 @@ async function load(): Promise<void> {
     if (mine !== generation) return;
     if (!isRecord(body)) {
       problems.value = ["The server answered with something this pane cannot read."];
+      remember({ kind: "host", note: "the server answered with something this pane cannot read" });
       return;
     }
     declared.value = body.declared === true;
@@ -441,6 +530,7 @@ async function load(): Promise<void> {
     if (body.ok !== true) {
       const listed = Array.isArray(body.problems) ? body.problems.filter((line): line is string => typeof line === "string") : [];
       problems.value = listed.length > 0 ? listed : ["The preview could not be computed."];
+      remember({ kind: "host", note: `publishing this would be refused: ${problems.value.join(" ")}` });
       return;
     }
     payload.value = asPayload(body.preview);
@@ -449,11 +539,51 @@ async function load(): Promise<void> {
     const first = payload.value?.pages[0];
     selectedId.value = first === undefined ? null : keyOf(first);
   } catch {
-    if (mine === generation) problems.value = ["Could not reach the server."];
+    if (mine !== generation) return;
+    problems.value = ["Could not reach the server."];
+    remember({ kind: "host", note: "the pane could not reach this host's own server" });
   } finally {
     if (mine === generation) loading.value = false;
   }
 }
+
+// THE BUTTON. One press, one block, and the reader is whoever is fixing the page — most often the
+// LLM in the cell beside this one, which wrote it and has never run it.
+//
+// Written in the same words the headless run uses (`common/sharedAppViewVocabulary.ts`), so an
+// author's paste and the agent's own `manageSharedApp` preview do not arrive as two accounts of one
+// failure.
+const { status: updateStatus } = useUpdateStatus();
+const copied = ref(false);
+let copiedTimer: ReturnType<typeof window.setTimeout> | undefined;
+
+async function copyLog(): Promise<void> {
+  const block = renderPreviewLog(
+    {
+      version: updateStatus.value?.version ?? "unknown",
+      aid: payload.value?.aid ?? "unknown",
+      cwd: props.cwd,
+      page: page.value?.id ?? null,
+      audience: page.value?.audience ?? null,
+      publicOpen: payload.value?.publicOpen === true,
+      fromLiveApp: payload.value?.fromLiveApp === true,
+    },
+    log,
+  );
+  try {
+    await window.navigator.clipboard.writeText(block);
+    copied.value = true;
+    window.clearTimeout(copiedTimer);
+    copiedTimer = window.setTimeout(() => {
+      copied.value = false;
+    }, 1500);
+  } catch {
+    // A clipboard a browser refused is not something this pane can talk its way out of, and the
+    // author has bigger problems on screen than a button that did not flash.
+  }
+}
+
+onBeforeUnmount(() => window.clearTimeout(copiedTimer));
 
 watch(() => props.cwd, load, { immediate: true });
 </script>
@@ -655,6 +785,29 @@ watch(() => props.cwd, load, { immediate: true });
       <!-- Said out loud because it is the failure mode: this list is the pane's, not the
              database's, so closing the pane loses the only record of which rows were tests. -->
       <p class="mt-1 text-[11px] text-dim">This list is not stored. Close the pane and these become ordinary records.</p>
+    </div>
+
+    <!-- WHAT HAPPENED, and the one press that carries it out.
+         OUTSIDE every branch above on purpose: the moment an author most needs this is the one
+         where the pane is showing a refusal instead of a page, and a button that appears only when
+         things went well is a button for the case nobody needs it.
+         Quiet at rest. The count is the ordinary state and says nothing alarming; a problem turns
+         the same line amber, which is the whole of the alerting this does. -->
+    <div v-if="declared" class="flex flex-none flex-wrap items-center gap-2 border-t border-border px-2.5 py-1.5 font-sans">
+      <span class="text-[11px]" :class="logProblems > 0 ? 'text-amber' : 'text-dim'">
+        {{ logSize }} recorded<template v-if="logProblems > 0"> · {{ logProblems }} problem{{ logProblems === 1 ? "" : "s" }}</template>
+      </span>
+      <button
+        type="button"
+        class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg hover:border-accent"
+        title="Everything the parent saw: the handshake, what the page submitted, what was refused and why, and what the frame reported about itself"
+        @click="copyLog"
+      >
+        {{ copied ? "Copied" : "Copy what happened" }}
+      </button>
+      <!-- The refusals and the frame's own errors are the point, and neither is anywhere else: one
+           is answered on a port nobody watches, the other dies at the frame boundary. -->
+      <span class="text-[11px] text-dim">Paste it to whoever wrote the page. Values are not recorded, and nothing is stored.</span>
     </div>
   </div>
 </template>
