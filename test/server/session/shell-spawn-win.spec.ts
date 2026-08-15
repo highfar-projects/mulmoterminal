@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { IPty } from "node-pty";
 import { spawnPty } from "../../../server/session/pty-spawn";
-import { shellInvocation, defaultShellCommand } from "../../../server/session/shell-command";
+import { shellInvocation, defaultShellTarget, launchInvocation, type LaunchTarget, type ShellInvocation } from "../../../server/session/shell-command";
 
 const isWindows = process.platform === "win32";
 
@@ -26,8 +26,7 @@ const plainText = (data: string): string =>
     .replace(/\u001b\[[0-9;?]*[a-zA-Z]/g, "")
     .replace(/[\r\n]/g, "");
 
-function runShell(command: string, cwd: string, replaceShell = false): Promise<{ output: string; exitCode: number }> {
-  const { shell, args } = shellInvocation(command, replaceShell, "win32", undefined);
+function run({ shell, args }: ShellInvocation, cwd: string): Promise<{ output: string; exitCode: number }> {
   const term: IPty = spawnPty(shell, args, cwd);
   let output = "";
   term.onData((data) => {
@@ -35,6 +34,11 @@ function runShell(command: string, cwd: string, replaceShell = false): Promise<{
   });
   return new Promise((resolve) => term.onExit(({ exitCode }) => resolve({ output: plainText(output), exitCode })));
 }
+
+const runShell = (command: string, cwd: string, replaceShell = false) => run(shellInvocation(command, replaceShell, "win32", undefined), cwd);
+
+/** The path a Shell cell actually takes: a LaunchTarget, resolved the way spawnLauncherPty does. */
+const runTarget = (target: LaunchTarget, cwd: string) => run(launchInvocation(target, "win32", undefined), cwd);
 
 describe.skipIf(!isWindows)("a shell terminal on Windows", () => {
   let dir = "";
@@ -124,10 +128,10 @@ describe.skipIf(!isWindows)("a shell terminal on Windows", () => {
   });
 });
 
-// #1717: a Shell cell with no launcher runs `$SHELL`, and Git for Windows sets that to
-// `C:\Program Files\Git\usr\bin\bash.exe`. PowerShell split it at the first space and reported an
-// unknown command `C:\Program`, so the cell died on launch while Claude and Codex cells beside it
-// were fine.
+// #1717 / #1720: a Shell cell with no launcher runs `$SHELL`, and Git for Windows sets that to
+// `C:\Program Files\Git\usr\bin\bash.exe`. It used to go through `powershell -Command`, which
+// split it at the first space and reported an unknown command `C:\Program`. Now nothing parses it
+// at all — the file is handed to the PTY.
 //
 // The shell under test is one we WRITE, not one the runner image happens to ship: a `.cmd` inside
 // a directory whose name contains a space. That makes the repro deterministic, and it exits on its
@@ -146,41 +150,34 @@ describe.skipIf(!isWindows)("a shell path containing a space", () => {
   });
   afterAll(() => rmSync(root, { recursive: true, force: true }));
 
-  // The bug itself, pinned. Without this the passing case below proves only that SOMETHING works —
-  // not that what was broken was the missing quoting.
+  // The original bug, kept: this is what the Shell cell used to do. Without it the passing case
+  // below proves only that SOMETHING works, not that what was broken was the parser in the middle.
   it("does not run when the bare path is handed to PowerShell", async () => {
     const { output } = await runShell(shellPath, root);
     expect(output).not.toContain(TOKEN);
   });
 
-  // Quoting alone is the trap: PowerShell evaluates `'C:\…\x.cmd'` as a string expression, echoes
-  // it, and starts nothing. That failure is silent, so it is worth its own case.
+  // And quoting alone would not have fixed it: PowerShell evaluates `'C:\…\x.cmd'` as a string
+  // expression, echoes it, and starts nothing. A silent failure is worse than the loud one, which
+  // is why the answer was to remove the parser rather than to satisfy it.
   it("only echoes the path when it is quoted without the call operator", async () => {
     const { output } = await runShell(`'${shellPath}'`, root);
     expect(output).not.toContain(TOKEN);
     expect(output).toContain("fake-shell.cmd");
   });
 
-  it("runs when defaultShellCommand builds the command", async () => {
-    const { output, exitCode } = await runShell(defaultShellCommand("win32", { SHELL: shellPath }), root);
+  // What ships: no shell in between at all.
+  it("runs when the launch target is spawned as a program", async () => {
+    const { output, exitCode } = await runTarget(defaultShellTarget("win32", { SHELL: shellPath }), root);
     expect(output).toContain(TOKEN);
     expect(exitCode).toBe(0);
   });
 
-  // The launcher path is the persistent variant and reaches the same place (#1717 was reported
-  // against the Shell cell, which spawns through it).
-  it("runs the same way on the launcher path", async () => {
-    const { output, exitCode } = await runShell(defaultShellCommand("win32", { SHELL: shellPath }), root, true);
-    expect(output).toContain(TOKEN);
-    expect(exitCode).toBe(0);
-  });
-
-  // ComSpec is the fallback when nothing sets SHELL, and it is the one path a Windows box always
-  // has. `/c exit 0` keeps it non-interactive so the pty ends.
-  it("invokes the ComSpec fallback rather than a posix path", async () => {
-    const command = defaultShellCommand("win32", {});
-    expect(command).not.toContain("/bin/sh");
-    const { exitCode } = await runShell(`${defaultShellCommand("win32", { ComSpec: process.env.ComSpec ?? "cmd.exe" })} /c exit 0`, root);
-    expect(exitCode).toBe(0);
+  // A `.cmd` still reaches cmd.exe — but through resolve-bin/cmd-escape, on argv this app controls,
+  // rather than through a command string a user's PATH could have put a space in.
+  it("carries the spaced path through the batch-shim layer", async () => {
+    const { shell, args } = launchInvocation(defaultShellTarget("win32", { SHELL: shellPath }), "win32", undefined);
+    expect(shell).toBe(shellPath);
+    expect(args).toEqual([]);
   });
 });

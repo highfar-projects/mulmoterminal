@@ -28,22 +28,51 @@ const POSIX_FALLBACK_SHELL = "/bin/sh";
 // processor; powershell.exe is the last resort because it is what runs the command anyway.
 const WINDOWS_FALLBACK_SHELL = "powershell.exe";
 
-/** What a Shell cell runs when no launcher is configured.
+/** What a launch starts. The two arms differ in WHO wrote the thing being started, which is what
+ *  decides whether a shell may parse it:
  *
- *  `$SHELL` is an executable PATH, and the value it feeds is parsed AGAIN by the shell that runs
- *  it — so it has to arrive as one quoted, invoked thing. Git for Windows sets it to
- *  `C:\Program Files\Git\usr\bin\bash.exe`, which PowerShell split at the first space and reported
- *  as an unknown command `C:\Program` (#1717). POSIX only escaped that by the accident of `$SHELL`
- *  having no space in it.
- *
- *  The shell itself is unchanged — a configured `$SHELL` is still honoured on both platforms.
- *  `env` and `platform` are parameters so both arms are checkable from any host, and the lookup is
- *  case-insensitive because Windows spells these names however it likes. */
-export function defaultShellCommand(platform: NodeJS.Platform, env: NodeJS.ProcessEnv): string {
+ *  - `command` is the user's own launcher line. It has to reach a shell as text, because that is
+ *    what it is — a pipeline, a `&&`, a `$VAR` the user expects to expand. Run verbatim.
+ *  - `program` is a file WE chose. Nothing about it needs parsing, so it is spawned directly and
+ *    no shell sees it. A path with a space cannot be mis-split if nothing splits it. */
+export type LaunchTarget = { kind: "command"; command: string } | { kind: "program"; file: string; args: string[] };
+
+/** Which executable a Shell cell starts when no launcher is configured. Case-insensitive because
+ *  Windows spells these names however it likes. */
+export function defaultShellPath(platform: NodeJS.Platform, env: NodeJS.ProcessEnv): string {
   const configured = envValue(env, "SHELL");
-  if (platform !== "win32") return runExecutableCommand(configured || POSIX_FALLBACK_SHELL, platform);
-  return runExecutableCommand(configured || envValue(env, "ComSpec") || WINDOWS_FALLBACK_SHELL, platform);
+  if (configured) return configured;
+  return platform === "win32" ? envValue(env, "ComSpec") || WINDOWS_FALLBACK_SHELL : POSIX_FALLBACK_SHELL;
 }
+
+/** What a Shell cell runs when no launcher is configured — and the reason the two platforms differ
+ *  is not symmetry, it is what the wrapper is FOR.
+ *
+ *  On Windows the wrapper bought nothing. `powershell -Command "& '<path>'"` starts PowerShell only
+ *  to have it start the real shell, and the string in between is a parser that split
+ *  `C:\Program Files\Git\usr\bin\bash.exe` at the first space (#1717). Spawning the file removes
+ *  the parser rather than satisfying it, and costs one process less.
+ *
+ *  On POSIX the wrapper is LOAD-BEARING and stays. `shellInvocation` runs the command under
+ *  `$SHELL -lc`, and the `-l` is a login shell: it sources `.zprofile` / `.bash_profile`, whose
+ *  PATH edits the interactive shell then inherits across the `exec`. Spawning `/bin/zsh` directly
+ *  would source only `.zshrc`, so a user's login PATH would quietly go missing — a regression no
+ *  test here would catch, because it depends on the developer's own dotfiles. */
+export function defaultShellTarget(platform: NodeJS.Platform, env: NodeJS.ProcessEnv): LaunchTarget {
+  const path = defaultShellPath(platform, env);
+  if (platform === "win32") return { kind: "program", file: path, args: [] };
+  return { kind: "command", command: runExecutableCommand(path, platform) };
+}
+
+/** How to start a `LaunchTarget`. A program is handed to the PTY as file + argv; a command goes
+ *  through the platform's shell under `exec`, the way a launcher chip always has. */
+export function launchInvocation(target: LaunchTarget, platform: string, shellPath: string | undefined): ShellInvocation {
+  if (target.kind === "program") return { shell: target.file, args: target.args };
+  return shellInvocation(target.command, true, platform, shellPath);
+}
+
+/** What the start/exit log line names. A launcher's own text, or the file we picked for it. */
+export const launchTargetLabel = (target: LaunchTarget): string => (target.kind === "program" ? target.file : target.command);
 
 /** The entry at `index`, or null when the index is not a real position in the list. The
  *  browser sends only an index — the configured list is the allowlist — so a fractional,
