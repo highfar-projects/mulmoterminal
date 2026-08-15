@@ -579,6 +579,10 @@ describe("SharedAppPreview", () => {
     // direction it must never fail in. Asserted on what crosses the channel: the srcdoc only proves
     // which HTML was chosen, so a test that stopped there would pass on every dataset map there is.
     const { answers } = await connect(wrapper);
+    // `connect` ends on flushPromises, which is one `setImmediate` — the check phase only. A port
+    // message is not a microtask, so reading `answers` here catches it or misses it depending on
+    // which phase it landed in and how loaded the runner is. Green on ubuntu/macOS, red on Windows.
+    await settle();
     const state = answers.find((answer) => answer.type === "mc-public-view:state");
     expect(state?.collections).toEqual({ notes: [{ id: "1" }] });
   });
