@@ -15,6 +15,7 @@ import type { CollectionSchema } from "@mulmoclaude/core/collection";
 import { declarationProblems } from "../../../server/backends/sharedApp/context.js";
 import { parseAuthoredApp } from "@receptron/sharedapp";
 import { modalCallIn } from "../../../server/backends/sharedApp/modalCall.js";
+import { formElementIn, readyNeverCalled } from "../../../server/backends/sharedApp/viewDefects.js";
 import { readdirSync } from "node:fs";
 
 const TEMPLATES = path.join(process.cwd(), "server", "skills", "mulmoterminal-shared-app", "templates");
@@ -77,13 +78,46 @@ describe("the shared-app templates", () => {
   });
 
   it("shows no page the sandbox would silently break", () => {
-    // Publish refuses `alert` / `confirm` / `prompt` in a view, because the frame has no
-    // `allow-modals` and eats all three. A template is copied verbatim, so a sample using one
-    // teaches a page that publish rejects — and before that refusal existed, it taught the page
-    // an author shipped and reported as broken: "Ignored call to 'prompt()'".
+    // The frame has no `allow-modals` and no `allow-forms`, and the parent sends nothing until the
+    // view says `ready()`. All three fail the same way — nothing drawn, nothing thrown — and a
+    // template is copied VERBATIM, so a sample carrying one teaches the exact page an author then
+    // ships and reports as broken. That is not hypothetical for any of them: `prompt()` was in
+    // these samples once, and a `<form>` written from scratch (because no sample showed the
+    // alternative) went to a public URL with a Submit button that did nothing.
     for (const file of readdirSync(TEMPLATES).filter((name) => name.endsWith(".md"))) {
-      for (const [, html] of readFileSync(path.join(TEMPLATES, file), "utf8").matchAll(/^```html\n([\s\S]*?)\n```/gm)) {
-        expect(`${file}: ${modalCallIn(html ?? "") ?? ""}`).toBe(`${file}: `);
+      for (const [, block] of readFileSync(path.join(TEMPLATES, file), "utf8").matchAll(/^```html\n([\s\S]*?)\n```/gm)) {
+        const html = block ?? "";
+        expect(`${file}: ${modalCallIn(html) ?? ""}`).toBe(`${file}: `);
+        expect(`${file}: form=${formElementIn(html)}`).toBe(`${file}: form=false`);
+        expect(`${file}: readyMissing=${readyNeverCalled(html)}`).toBe(`${file}: readyMissing=false`);
+      }
+    }
+  });
+
+  it("ships an HTML block for every page its app.json declares", () => {
+    // A declared `path` is READ at deploy: `planAppViewTiers` opens each one and refuses the whole
+    // operation when a file is missing. So a template that names two pages and shows neither does
+    // not merely teach less — it teaches a declaration whose first deploy fails, and the author is
+    // then editing files to recover. (Which is what the gym template did: it described a view in
+    // prose, declared nothing, and its ranking was unbuildable from what it showed.)
+    for (const file of readdirSync(TEMPLATES).filter((name) => name.endsWith(".md"))) {
+      const text = readFileSync(path.join(TEMPLATES, file), "utf8");
+      const manifest = blocksOf(file).get("app.json") as { views?: { path?: string }[] } | undefined;
+      const declared = (manifest?.views ?? []).map((view) => view.path).filter((value): value is string => typeof value === "string");
+      const lines = text.split("\n");
+      const isHeading = (line: string): boolean => /^#{2,3} /.test(line);
+      for (const declaredPath of declared) {
+        // The section that introduces the page — a heading STARTING with the path, because that
+        // heading is the template's own instruction about which file the author writes — and the
+        // fenced html block that must be inside it, before the next heading.
+        const start = lines.findIndex((line) => isHeading(line) && line.replace(/^#{2,3} /, "").startsWith(declaredPath));
+        const rest = start === -1 ? [] : lines.slice(start + 1);
+        const end = rest.findIndex(isHeading);
+        const body = (end === -1 ? rest : rest.slice(0, end)).join("\n");
+        const heading = start === -1 ? "has no section" : "has a section";
+        expect(`${file}: ${declaredPath} ${heading}`).toBe(`${file}: ${declaredPath} has a section`);
+        const shown = body.includes("```html") ? "shows HTML" : "shows no HTML";
+        expect(`${file}: ${declaredPath} ${shown}`).toBe(`${file}: ${declaredPath} shows HTML`);
       }
     }
   });

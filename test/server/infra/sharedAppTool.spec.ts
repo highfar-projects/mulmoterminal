@@ -42,13 +42,15 @@ describe("manageSharedApp, the tool", () => {
   });
 
   it("names the three operations in the schema the agent is given", () => {
-    expect(SHARED_APP_ACTIONS).toEqual(["init", "fork", "check", "invite", "deploy", "publish", "unpublish"]);
+    expect(SHARED_APP_ACTIONS).toEqual(["init", "fork", "check", "preview", "invite", "deploy", "publish", "unpublish"]);
     expect(MANAGE_SHARED_APP.parameters?.properties?.action).toMatchObject({ enum: [...SHARED_APP_ACTIONS] });
   });
 
   it("answers an unknown action with the ones that exist", async () => {
-    expect(await manageSharedApp(makeTempDir("mt-shared-tool-"), { action: "ship" })).toContain("init, fork, check, invite, deploy, publish, unpublish");
-    expect(await manageSharedApp(makeTempDir("mt-shared-tool-"), {})).toContain("init, fork, check, invite, deploy, publish, unpublish");
+    expect(await manageSharedApp(makeTempDir("mt-shared-tool-"), { action: "ship" })).toContain(
+      "init, fork, check, preview, invite, deploy, publish, unpublish",
+    );
+    expect(await manageSharedApp(makeTempDir("mt-shared-tool-"), {})).toContain("init, fork, check, preview, invite, deploy, publish, unpublish");
   });
 
   it("refuses to start an app in a repository that already declares one", async () => {

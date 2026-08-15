@@ -143,6 +143,12 @@
 `allow-modals` が無い呼び出しは無視されます（コンソールに `Ignored call to 'prompt()'.` と
 出るだけ）。訊くのはページの中の `<input>`、報せるのはページの中の要素です。
 
+**`<form>` も使えません。** `allow-forms` が無いので、ブラウザは `submit` イベントを**発火する
+前に**送信ごと止めます — `onsubmit` の中の `e.preventDefault()` すら走らないので、「押しても
+何も起きないボタン」になります（コンソールに `Blocked form submission to ''` と出るだけ）。
+テキスト入力での Enter も、`required` の検証も同じ理由で効きません。`<form>` は使わず、`<div>` と
+`type="button"` のボタンにして、**click** で送信し、入力チェックは自分で書きます。
+
 ```html
 <label>お名前 <input id="who" maxlength="40" /></label>
 <p id="say" role="status"></p>
@@ -160,6 +166,9 @@
         .filter((slot) => slot.state === "open")
         .map((slot) => {
           const button = document.createElement("button");
+          // type を書くこと。省略した <button> は submit ボタンで、サンドボックスが
+          // 送信を止める側の形です。
+          button.type = "button";
           button.dataset.slot = slot.id;
           button.textContent = `${slot.startAt} ${slot.stylist ?? ""}`;
           return button;
@@ -193,6 +202,11 @@
   ではなく**メッセージ全体が申込みでなくなり**、`not-a-submission` として拒否されます
 - **`customerEmail` は送らない。** サインインした訪問者のアドレスを親が入れます
   （ルールがトークンと突き合わせるので、入力欄にすると間違えられるだけの欄になります）
+
+**deploy の前に、プレビューで実際に押してもらってください** — Collections ペインの
+「Preview the shared app」で、`/a/{slug}` と**同じ親・同じサンドボックス**のままこのページが
+動きます（[SKILL.md](../SKILL.md) の「3b. RUN THE PAGE」）。ここの不具合は読んでも見つからず、
+押すと確認ダイアログが出るところまで見て初めて分かります。
 
 **押した瞬間には書き込まれません。** 親が送られてきた値を iframe の外に描いて確認を
 取り、訪問者が押してから書きます。これはビューの HTML が信頼されていないためで、
@@ -290,10 +304,61 @@ view.onState((data, viewer) => {
 `audience: "participant"`。入口は **`/p/{slug}`** で、公開ページの下にリンクがあります。
 自分の行しか読めないので `collections` に書けるのは `bookings` だけ、渡るのも自分の予約だけです。
 
-キャンセルは同じ `transition` で、**表が違うだけ**です:
+キャンセルは同じ `transition` で、**表が違うだけ**です（本人に許されている遷移は
+`public.submit.bookings.selfTransitions`、スタッフのそれは `collections.bookings.transitions`）。
 
-```js
-await view.transition("bookings", booking.id, "cancelled");
+```html
+<div id="rows"></div>
+<p id="say" role="status"></p>
+<script>
+  const view = window.__MC_APP_VIEW;
+  const rows = document.getElementById("rows");
+  const say = document.getElementById("say");
+
+  view.onState(({ bookings = [] }) => {
+    const mine = bookings.slice().sort((a, b) => String(a.slot ?? "").localeCompare(String(b.slot ?? "")));
+    rows.replaceChildren(
+      ...mine.map((booking) => {
+        const row = document.createElement("div");
+        const what = document.createElement("span");
+        // textContent。担当者名もメニュー名も人が入力するものです。
+        what.textContent = `${booking.slot ?? ""} ${booking.service ?? ""} — ${booking.status ?? ""}`;
+        row.appendChild(what);
+        // `selfTransitions` は pending からの cancelled だけ。approved を取り消せるのは
+        // 受付（`collections.bookings.transitions`）なので、ここに出すと必ず断られる
+        // ボタンになります。宣言に無い遷移は描かないこと。
+        if (booking.status === "pending") {
+          const off = document.createElement("button");
+          // type を書くこと。省略した <button> は submit ボタンで、サンドボックスが
+          // 送信を止める側の形です。
+          off.type = "button";
+          off.dataset.booking = booking.id;
+          off.textContent = "キャンセル";
+          row.appendChild(off);
+        }
+        return row;
+      }),
+    );
+    if (mine.length === 0) rows.textContent = "予約はありません。";
+  });
+
+  rows.addEventListener("click", async (event) => {
+    const button = event.target;
+    const id = button.dataset?.booking;
+    if (!id) return;
+    // 確認はページの中で 2 度押しにします。confirm() はサンドボックスに無視され、
+    // false が返るので「押しても何も起きないボタン」になります。
+    if (button.dataset.armed !== "yes") {
+      button.dataset.armed = "yes";
+      button.textContent = "取り消す？";
+      return;
+    }
+    const result = await view.transition("bookings", id, "cancelled");
+    say.textContent = result.ok ? "取り消しました。" : `取り消せませんでした: ${result.error ?? "unknown"}`;
+  });
+
+  view.ready();
+</script>
 ```
 
 ---

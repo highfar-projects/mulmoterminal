@@ -256,7 +256,7 @@ const runsAsScript = (attributes: string): boolean => {
  *  Raw-text elements go the same way for the opposite reason: `<textarea><button
  *  onclick="prompt()"></textarea>` draws no button — the parser reads that as the textarea's TEXT —
  *  and reading it as live markup refuses a page whose only crime is showing an example. */
-const withoutScriptBodies = (html: string): string => html.replace(RAW_TEXT_ELEMENT, "$1 ");
+export const withoutScriptBodies = (html: string): string => html.replace(RAW_TEXT_ELEMENT, "$1 ");
 
 const scriptsOf = (html: string): string[] => [
   ...[...html.matchAll(SCRIPT_BODY)].filter((hit) => runsAsScript(hit[1] ?? "") && !hasSource(hit[1] ?? "")).map((hit) => hit[2] ?? ""),
@@ -481,6 +481,18 @@ const boundAtTopLevel = (code: string): Set<string> => {
   }
   return own;
 };
+
+/** The page's CODE as one string: every script and handler, with comments and string contents
+ *  removed, so a name that only appears inside a string or a comment is not read as a call.
+ *
+ *  For questions that are answered by a name being PRESENT or ABSENT anywhere in the page —
+ *  `viewDefects` asks two of them. `modalCallIn` does not use it, because its answer depends on
+ *  what each script binds at ITS OWN top level, and joining them would let one script's `const
+ *  prompt` exempt another script's call. */
+export const viewScriptCode = (html: string): string =>
+  scriptsOf(html)
+    .map((script) => bare(asMemberAccess(script)))
+    .join("\n;\n");
 
 /** The name of the first modal call in this page's code, or null. */
 export const modalCallIn = (html: string): string | null => {

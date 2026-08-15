@@ -137,6 +137,75 @@ never open the app to the public.
 
 Tell the user they can look at it now, and give them the address the tool reports.
 
+### 3b. RUN THE PAGE. Not reading it — running it.
+
+**A page you have not seen work does not work.** Everything a view does that is broken by the
+sandbox fails the same way: nothing is drawn, nothing throws, and the HTML reads perfectly. You
+cannot find these by looking at your own code, because the code is not wrong — the frame it runs
+in is stricter than the one you pictured. The only thing that finds them is pressing the button.
+
+**You can press it yourself: `manageSharedApp` with `action: "preview"`.** It loads every page the
+declaration names in a real headless browser — the same parent, the same
+`sandbox="allow-scripts"`, the same CSP, the same private-port handshake — hands it the app's real
+records, and presses each control on a freshly loaded copy of the page. It runs to a budget and
+**says what it left out** — pages it did not run, controls it did not press — so read those counts
+rather than reading "ran 6 pages" as "ran the app". What comes back is what
+you would otherwise have to be told by somebody looking at a screen: a page still on its loading
+state (quoted, in the author's own words), a `<form>` in the live document, a button that reached
+nothing, a submission the declaration refused. **Run it after writing or editing any view, and
+again before you deploy one.** A page that has never been through it is a page nobody has run.
+
+It **writes nothing** — every confirmation is declined — and that is exactly where it stops. It
+proves the page draws and that a press REACHES the parent as a submission the declaration accepts.
+It cannot tell you whether the deployed rules would accept the write, and it says nothing about
+other people's devices, two people submitting at once, or whether the rules are deployed at all.
+If no browser can be started it says so, and then the pane below is the whole answer rather than
+the second half of it.
+
+**That is what the Collections pane's preview is FOR.** It is not a convenience and it is not a
+rough approximation. Before it existed, an LLM wrote the page and it went to a public URL without
+anybody ever having loaded it once — which is exactly how a sign-up form was published twice with
+a Submit button that did nothing at all. So the preview runs **the same parent as
+`/a/{slug}`** (`@receptron/sharedapp/view`, the code mulmoserver itself runs), with the same
+`sandbox="allow-scripts"`, the same CSP, the same private-port handshake and the same confirmation
+dialog. **It is deliberately not looser than production**: a preview kinder than the real page
+would be a machine for producing "it worked on my machine".
+
+**Ask the user to open it once the headless run is clean** — it is the half you cannot do, because
+it puts a person in front of the page and it can WRITE. In the cell open on this
+repository: the **Collections pane** → the **"Preview the shared app"** button at the top → the
+page appears, drawn from the working tree. Opening it reads only: nothing is written and no URL
+name is taken.
+
+**Accepting a submission there DOES write a real record**, as the signed-in author, into the live
+app — the pane says so at the button and lists what it made with an Undo beside it. So it is a
+real answer in the app's data, not a rehearsal: tell the user that before they press *Send it*,
+and offer to remove it afterwards. Reaching the CONFIRMATION is what proves the page works;
+accepting is only needed when you want to see the record land.
+
+Ask them to confirm, in these terms:
+
+- the page **draws its data** (a grid that stays on "loading…" means `ready()` was never called);
+- pressing the **submit button raises the confirmation dialog**, with the right values in it (no
+  dialog = the message never left the frame — a `<form>`, or a handler that never ran);
+- the **error paths** say something: an empty required field, an unchosen option.
+
+Do this **before deploy** and again after any change to a page. If the user cannot look right now,
+say plainly what was and was not checked: a clean headless run means the page draws and the button
+reaches the parent, and it does not mean the write goes through.
+
+**Read the tool's `warnings` back to the user too.** `check`, `deploy` and `publish` all read the
+pages the declaration names and report what one will probably get wrong — a modal call, a
+`<form>`, an `onState` with no reachable `ready()` — as well as refusing a `path` that names
+nothing. They are hints and they do not stop a publish: a page they are silent about can still be
+broken, which is why they are not a substitute for the paragraph above.
+
+**What the preview does NOT prove**, so do not claim it: the write it performs is made **as the
+author**, who may write anything in their own app — so a visitor's or a participant's permission
+is untested, and a page that works here can still be refused for the person it was built for.
+Nobody else exists, so nothing is concurrent. And it cannot tell whether the rules a new
+declaration needs have been deployed at all.
+
 ### 4. Invite
 
 `manageSharedApp` with `action: "invite"`, `email`, and `role` (omit `role` to remove them). It
@@ -179,10 +248,18 @@ Use it after any hand edit, and before telling the user something is ready. The 
 finding out at deploy, and a deploy that refuses in the middle is where an agent starts editing
 files to recover.
 
+`check` READS the pages the declaration names — it refuses a `path` that names nothing and warns
+about what one usually gets wrong. It does not run them. `action: "preview"` does (step 3b), and
+neither replaces the other: a page `check` is silent about can still be a page that draws nothing.
+
 ### 5. Publish, when the user asks to open it
 
 Publishing is the one dangerous step: it changes what everybody outside sees, immediately. Do it
 when the user asks for it in those terms, not as the last step of building.
+
+**Do not publish a page nobody has run** (step 3b). Publishing is immediate and anonymous: a
+broken page is broken for everybody holding the link, and it stays that way until somebody
+happens to press the button and tell you.
 
 What being public MEANS is declared in `app.json`, and it is worth reading back to the user before
 you publish. This is a survey anyone may answer once they sign in:
@@ -295,6 +372,10 @@ an update, which the public submission path never allows. Firestore decides that
 
 ### If a form is not enough to choose from
 
+**Every page you write here goes through step 3b before it is published.** A view is code running
+in a frame stricter than the one you are picturing, and its failures are silent — read the two
+rules below, then have the user press the button in the preview.
+
 A form ANSWERS something. Choosing from what is available — a stylist-by-hour grid — is not the
 far end of a table, so an app may publish HTML pages instead. They are declared in `views`, one
 entry per page, each naming **who it is for**:
@@ -368,6 +449,16 @@ entry per page, each naming **who it is for**:
   keyword is not set."* Nothing throws, so a page that asks for a name with `prompt` submits an
   empty one, or looks like a button that does nothing. Ask with an `<input>` in the page and
   answer in an element of its own; that is the only thing that works here.
+- **A `<form>` CANNOT SUBMIT — draw a `<div>` and a `<button type="button">` instead.** (`deploy`
+  and `publish` warn about a `<form>` for the same reason they warn about a modal, and go through
+  anyway.) The frame is `sandbox="allow-scripts"` with no `allow-forms`, and the browser blocks the
+  submission **before** it fires the `submit` event — so an `onsubmit` handler never runs at all,
+  `e.preventDefault()` on its first line included, and the only sign is *"Blocked form submission
+  to '' because the form's frame is sandboxed and the 'allow-forms' permission is not set"* in a
+  console nobody is reading. What the author sees is a Submit button that does nothing. The same
+  block takes Enter-in-a-text-field with it, and `required` stops working — constraint validation
+  is part of submitting a form. So: no `<form>` element at all, a `type="button"` whose **click**
+  calls `submit(...)`, and every check the page needs written out in that handler.
 - The view asks for writes through `window.__MC_APP_VIEW` — see the next section.
   (`window.__MC_PUBLIC_VIEW` is the same object under its former name, kept for one release.)
 - **`public.view` is the older spelling** of the first row above. It still works and normalizes to
@@ -412,6 +503,17 @@ await window.__MC_APP_VIEW.withdraw(cid, itemId);        // take the reader's OW
 collection has a `mirror` the parent reopens it in the same batch. It works only where
 `selfDelete` names the row's current status, only on a participant's page, and (like the two
 above) only on a runtime that has it.
+
+**Call `ready()` once, after registering `onState` — nothing arrives until you do.** The parent
+holds the app's data until the view answers the handshake, so a page that listens and never says
+`ready()` waits on a send that was never made: it draws its loading line and stays on it forever,
+with no error at either end. (`deploy` and `publish` warn when a page registers `onState` and
+calls no `ready`.)
+
+```js
+window.__MC_APP_VIEW.onState((data, viewer) => { draw(data); });
+window.__MC_APP_VIEW.ready();   // ← without this, the callback above never fires
+```
 
 Each returns `{ ok, error }`. The page is told **who the reader is and what they may actually do**
 in the second argument to `onState`:
