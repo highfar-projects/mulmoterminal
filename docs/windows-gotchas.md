@@ -4,9 +4,11 @@ Traps this codebase has actually hit on Windows, each with where the fix lives. 
 debugging a Windows-only failure, and before writing a path comparison, a spawn, or an
 `fs.watch` that will run there.
 
-Two jobs execute any of this. `windows-pr.yaml` runs `yarn test` on every pull request that
-touches something other than docs, plans and markdown — so a portability regression is caught
-before it reaches `main`. `windows-daily.yaml` is the fuller one: lint, typecheck, build and test
+Two jobs execute any of this. `windows-pr.yaml` runs on every pull request and executes `yarn test`
+whenever the PR touches something other than docs, plans and markdown — so a portability regression
+is caught before it reaches `main`. (It always runs and always reports: a workflow filtered out at
+the trigger produces no check at all, which would leave a docs-only PR waiting forever on a
+required gate.) `windows-daily.yaml` is the fuller one: lint, typecheck, build and test
 across Node 22 and 24, daily and on pushes to `main`. Dispatch that one on a branch with
 `gh workflow run windows-daily.yaml --ref <branch>` when a change needs the wider check before
 merging.

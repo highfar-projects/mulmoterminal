@@ -61,7 +61,12 @@ test/server/routes/  test/server/session/  test/src/components/
 failure mode が「沈黙」**になる。`BUNDLED_SKILL_NAMES` と同じ罠。
 
 **Windows のテスト結果に影響し得ないと証明できるのは docs / plans / markdown だけ**なので、
-`windows-daily.yaml` が既に使っている `paths-ignore` をそのまま使う。
+その 3 つを除外する。除外の書き方は上のとおりトリガーではなくジョブ内の判定
+（`^(docs/|plans/)|\.md$` に全ファイルが当てはまるときだけ以降のステップを飛ばす）。
+
+判定は 8 パターンで実挙動を確認した。**混在（`docs/a.md` + `server/x.ts`）が run=true になることが
+いちばん重要**で、ここを外すと server を触った PR で Windows テストが黙って飛ぶ — この workflow が
+防ごうとしている失敗そのものになる。
 
 ### キャッシュ
 
@@ -87,7 +92,8 @@ default branch にある必要が無いため（`workflow_dispatch` はある �
 
 1. `Windows (PR)` が PR に現れて緑になる
 2. **実行時間**。これが「全 PR に載せてよいか」の判断材料で、issue の時点では未測定だった
-3. docs だけの PR では走らないこと（`paths-ignore`）
+3. docs だけの PR でも**チェックは現れて緑になる**こと（テストは走らず、ジョブは成功する）。
+   走らないのはステップであって workflow ではない — required gate にできるのはこの形だけ
 
 所要時間が許容できなければ、ホワイトリストではなく **`yarn test` の対象を絞る**方向で再検討する
 （ホワイトリストが腐る理由は上記のとおり変わらない）。
