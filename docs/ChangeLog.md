@@ -8,6 +8,95 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.8.5 — 2026-08-15
+
+Windows, tmux 3.7 and the remote host's Google sign-in. The dated setup guide for this release is
+still to be written (#1733); the living [guide](https://receptron.github.io/mulmoterminal/) is
+current in the meantime.
+
+### Windows: a Shell cell died the instant it launched (#1717, #1718, #1720, #1724)
+
+A Shell cell failed immediately on Windows while Claude and Codex cells in the same window were
+fine. `$SHELL` is an executable **path**, and Git for Windows sets it to
+`C:\Program Files\Git\usr\bin\bash.exe` — that reached PowerShell as a command string and was
+split at the first space, so `C:\Program` was reported as an unknown command.
+
+**Quoting alone would not have fixed it.** In PowerShell a quoted path is a string *expression*:
+the path is echoed and no shell starts, which is a terminal that opens onto nothing — worse than
+an error, because nothing reports it. The call operator `&` is what executes it.
+
+The follow-up removes the parser rather than satisfying it. A shell **this app chose** is now
+handed to the PTY as a program with no shell in between; a launcher chip — a command line the
+**user** wrote, with pipes and `$VAR` to expand — still goes through one. The asymmetry is
+deliberate and by trust of origin, not by platform: on POSIX the `$SHELL -lc` wrapper is
+load-bearing, because `-l` is what sources `.zprofile`, and dropping it would quietly lose the
+user's login PATH.
+
+### tmux 3.7: every new session died after a worktree was deleted (#1725)
+
+Reported by @michiof. On tmux 3.7, deleting a git worktree could leave the tmux server holding
+that directory, after which **every new session on the host died at startup** while existing ones
+carried on. Restarting MulmoTerminal did not help: the broken thing was the tmux server, which
+outlives the node process.
+
+tmux 3.7 moves the server's working directory to the client's on every `new-session` and never
+restores it, and `spawn_pane()` guards its `chdir` on `getcwd()`. Once that directory is gone the
+guard skips the chdir entirely, so a later pane ignores `-c` and starts in the deleted path —
+where a program that calls `getcwd()` as it starts (the claude binary does) dies on the spot. The
+tmux client is now started from a directory this app never deletes; the pane still opens where the
+cell asked, verified on tmux 3.2a, 3.4, 3.6a and 3.7b.
+
+Reported upstream as [tmux/tmux#5473](https://github.com/tmux/tmux/issues/5473). **tmux 3.6 and
+earlier were never affected**, which is why this arrived with the Homebrew upgrade to 3.7.
+
+### Remote host: Google sign-in lost the credential (#1731)
+
+`firebase` is pinned to `12.16.0`. `@firebase/auth` 1.13.4 added a `visibilitychange` listener
+that treats `visibilityState === 'hidden'` as page teardown, so signing in through a popup — which
+backgrounds the opener — throws while persisting the credential to IndexedDB. The network call
+succeeds and nothing is saved. Reads swallow the same condition and return `[]`; only writes throw.
+
+The upstream fix ([firebase-js-sdk#10300](https://github.com/firebase/firebase-js-sdk/pull/10300))
+is merged but not on npm, so pinning is the only route today. The pin carries no caret on purpose:
+`^12.16.0` floats to 12.17.x and back onto 1.13.4. Already pinned in the reference host
+(mulmoclaude #2912); this release closes that gap.
+
+### Shared apps: see the participants' screen before publishing (#1707, #1726)
+
+A shared app's view is written by an LLM, and until now authors published it without ever running
+it. There is now a preview that runs it on the author's own machine, in a frame no looser than the
+published one. Slot refill in the meeting-room template moves onto `putItems`'s `itemsFile`, with
+`@mulmoclaude/core` at 4.1.1.
+
+### Skills turned off stay off (#1698, #1714)
+
+A skill set to `"off"` in `skillOverrides` still appeared in the Skill menu and in
+`GET /api/skills`.
+
+### Issue templates (#1715, #1716)
+
+`.github/ISSUE_TEMPLATE/` now carries a bug report and a "problem or use case" form. The second
+asks what you were trying to do and what got in the way rather than for a feature: a proposal
+narrows the answer to the one already thought of, and when a proposal is turned down the problem
+it came from is thrown away with it.
+
+### Windows CI runs before merge (#1721, #1723)
+
+`yarn test` on Windows now runs on every pull request that touches anything other than docs, plans
+and markdown. Fifteen issues had been found only after landing on `main`. Only the tests run —
+lint, typecheck and build answer the same on every platform and already run on ubuntu and macOS.
+
+### Two flaky specs (#1719, #1722, #1729, #1730)
+
+`SharedAppPreview` was missing a settle phase and failed only on the slower Windows runner: a
+`MessagePort` delivery is not a microtask, and the one call site out of nine that omitted
+`await settle()` read its answers before the queue had turned.
+
+`sharedAppPreviewRoutes` opened a real TCP listener per request and failed 2 runs in 6 under
+full-suite load — measured at 0 in 20 when run alone. The failures were not timeouts: one returned
+**another server's HTML**. It now uses the in-memory `appRequest` helper the repo already has for
+exactly this.
+
 ## mulmoterminal@4.8.4 — 2026-08-15
 
 > **Setup guide:** [The notification body, and Japanese in the terminal](https://receptron.github.io/mulmoterminal/guide/en/v4.8.4.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.8.4.html))
