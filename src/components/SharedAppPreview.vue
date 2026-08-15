@@ -195,6 +195,13 @@ function scopeLog(aid: string): void {
   logScope = scope;
 }
 
+/** The collection of the confirmation most recently raised.
+ *
+ *  Kept because a cancellation is answered AFTER the confirmation has been settled: the bridge
+ *  clears the cell and then posts, so the only moment `pending` names the collection is before the
+ *  answer this component is watching for. */
+let lastPending = "";
+
 /** The audience of the page being drawn, for the refusals whose meaning depends on it. */
 const audienceNow = (): PreviewAudience => page.value?.audience ?? "public";
 
@@ -213,7 +220,10 @@ function noteOutbound(message: Record<string, unknown>): void {
   const reason = typeof message.error === "string" ? message.error : "unknown";
   // Declining is not a fault and is not reported as one — the author pressed Cancel.
   if (reason === "cancelled") {
-    remember({ kind: "declined", cid: cells.pending.value?.cid ?? "" });
+    // The LAST one asked for, not the one still open: `decline()` settles the confirmation before
+    // it posts this answer, so by the time this runs `pending` is already null and reading it named
+    // an empty collection on every cancellation.
+    remember({ kind: "declined", cid: lastPending });
     return;
   }
   remember({ kind: "refused", reason, audience: audienceNow() });
@@ -309,7 +319,9 @@ watch(cells.readied, (readied) => {
   if (readied) remember({ kind: "handshake" });
 });
 watch(cells.pending, (pending) => {
-  if (pending !== null) remember({ kind: "submitted", cid: pending.cid, fields: Object.keys(pending.values) });
+  if (pending === null) return;
+  lastPending = pending.cid;
+  remember({ kind: "submitted", cid: pending.cid, fields: Object.keys(pending.values) });
 });
 
 watch(
@@ -833,7 +845,7 @@ watch(
          things went well is a button for the case nobody needs it.
          Quiet at rest. The count is the ordinary state and says nothing alarming; a problem turns
          the same line amber, which is the whole of the alerting this does. -->
-    <div v-if="declared" class="flex flex-none flex-wrap items-center gap-2 border-t border-border px-2.5 py-1.5 font-sans">
+    <div v-if="declared || logSize > 0" class="flex flex-none flex-wrap items-center gap-2 border-t border-border px-2.5 py-1.5 font-sans">
       <span class="text-[11px]" :class="logProblems > 0 ? 'text-amber' : 'text-dim'">
         {{ logSize }} recorded<template v-if="logProblems > 0"> · {{ logProblems }} problem{{ logProblems === 1 ? "" : "s" }}</template>
       </span>
@@ -847,7 +859,14 @@ watch(
       </button>
       <!-- The refusals and the frame's own errors are the point, and neither is anywhere else: one
            is answered on a port nobody watches, the other dies at the frame boundary. -->
-      <span class="text-[11px] text-dim">Paste it to whoever wrote the page. Values are not recorded, and nothing is stored.</span>
+      <!-- PRECISE, because the page's own text is in there. This host records field names and
+           never values — but an error the page raised is kept as the page wrote it, and a page is
+           handed whole records, so `throw new Error(row.email)` puts that address in the block.
+           Keeping it is the choice (it is the most actionable line the frame produces, and the
+           reader is the author), so the promise has to be the narrow one that is true. -->
+      <span class="text-[11px] text-dim">
+        Paste it to whoever wrote the page. Nothing is stored. This records field names and never values — but text the PAGE wrote is kept as it wrote it.
+      </span>
     </div>
   </div>
 </template>

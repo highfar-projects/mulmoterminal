@@ -236,6 +236,31 @@ describe("SharedAppPreview", () => {
     expect(await copyBlock(wrapper)).toContain("still worth reading");
   });
 
+  it("names the collection a cancelled confirmation was for", async () => {
+    // `decline()` settles the confirmation and THEN answers, so the cell is already null by the
+    // time the answer goes past — read there, every cancellation named an empty collection.
+    const wrapper = await mountPreview();
+    const { port } = await connect(wrapper);
+    port.postMessage({ type: "mc-public-view:submit", requestId: "r1", cid: "bookings", values: { slot: "a" } });
+    await settle();
+    const cancel = wrapper.findAll("button").find((candidate) => candidate.text() === "Cancel");
+    await cancel?.trigger("click");
+    await settle();
+
+    expect(await copyBlock(wrapper)).toContain("the confirmation for 'bookings' was declined");
+  });
+
+  it("can still be copied when the pane never got a declaration to show", async () => {
+    // The unreachable server and the unreadable answer are exactly the cases the host events were
+    // added for, and both leave `declared` false — a control hidden behind it is hidden precisely
+    // when the diagnostic exists.
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("no server")));
+    const wrapper = await mountPreview();
+    await settle();
+
+    expect(await copyBlock(wrapper)).toContain("could not reach this host's own server");
+  });
+
   it("renders the page in a frame no looser than the published one", async () => {
     const wrapper = await mountPreview();
     const frame = wrapper.find("iframe");

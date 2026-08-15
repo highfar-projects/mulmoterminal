@@ -163,6 +163,17 @@ describe("the pane's log", () => {
     expect(block).toContain("nothing was concurrent");
   });
 
+  it("does not promise more than it keeps about the page's own words", () => {
+    // The one place a value can reach the block: a page is handed whole records and can throw one.
+    // Keeping the text is the choice — it is the most actionable line the frame produces — so what
+    // must not drift is the promise. A block that said "values are not recorded" full stop would be
+    // making a claim its own `page text:` line breaks.
+    const block = render((log) => log.add({ kind: "notice", code: "error", detail: "someone@example.com is not a slot" }));
+    expect(block).toContain("someone@example.com");
+    expect(block).toContain("marked `page text:`");
+    expect(block).toContain("may contain");
+  });
+
   it("is honest about a page that has done nothing at all", () => {
     // Distinct from a page that was never mounted only by what the header says, so the body must
     // not read as an absence of problems.

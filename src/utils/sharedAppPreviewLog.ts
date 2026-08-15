@@ -13,8 +13,18 @@
 //
 // WHAT IS DELIBERATELY NOT IN HERE:
 //
-//   - Values. Field NAMES and collection ids, never what was typed into them. A record in a shared
-//     app holds other people's answers, and this block is built to be pasted somewhere else.
+//   - Values, as far as this host chooses them. Field NAMES and collection ids, never what was typed
+//     into them: a record in a shared app holds other people's answers, and this block is built to
+//     be pasted somewhere else.
+//
+//     WITH ONE EXCEPTION, and it is stated rather than quietly true. A notice carries text the PAGE
+//     wrote, and a page is handed whole records — `throw new Error(row.email)` puts that address in
+//     here. It is kept anyway: it is the most actionable thing the frame produces ("slot is not
+//     defined (line 12)" is the difference between a fix and a guess), the reader is the author on
+//     their own machine, and dropping it would leave the notice saying only that something happened
+//     somewhere. What follows from that choice is that the promise must be the narrow one — the
+//     button says so, and so does the closing below. A regex that redacted addresses would be worse
+//     than either: it would catch one shape of personal data and imply it had caught them all.
 //   - The signed-in address. Whether there IS a session changes what the rules do; who it belongs
 //     to does not.
 //   - Anything on disk. The buffer is in memory and dies with the pane, which is said out loud on
@@ -190,7 +200,9 @@ const CLOSING = [
   "",
   "What this does not say. Records here were read AS YOU — an owner — so a page that draws is not a page a stranger may see. A write you accepted was judged by the",
   "deployed rules as you, and says nothing about what a visitor would be allowed to write. Nobody else exists here, so nothing was concurrent, and no other device was",
-  "involved. Values are not recorded: field names and collection ids only.",
+  "involved.",
+  "What is in it. Field names and collection ids, never the values in a record — except in a line marked `page text:`, which is what the PAGE wrote and may contain",
+  "anything the page put there, including a value out of a record.",
 ];
 
 export const renderPreviewLog = (header: PreviewLogHeader, log: PreviewLog): string => {
