@@ -113,8 +113,13 @@ export type HeadlessRun =
 /** How much of one run is enough. Every one of these is a budget rather than a rule about pages:
  *  a run is started by an agent waiting on a tool call, and an app with forty buttons is not worth
  *  forty renders to say the same thing. What is dropped is REPORTED (see `narrate`), because a
- *  silent cap reads as "everything was covered". */
-export const LIMITS = { pages: 6, presses: 6, readyMs: 4000, settleMs: 600, textChars: 400 } as const;
+ *  silent cap reads as "everything was covered".
+ *
+ *  `readyMs` is the one that costs. It is only ever WAITED OUT by a page that will never answer,
+ *  and a page that will answer does so in a few milliseconds — the handshake is two messages
+ *  between a frame and its own parent. So it is short: it is paid once per mount by exactly the
+ *  pages that are broken, and every mount of them. */
+export const LIMITS = { pages: 6, presses: 6, readyMs: 2000, settleMs: 600, textChars: 400 } as const;
 
 /** The clickable things, in document order. `input[type=submit]` is in the list although the
  *  sandbox will never let one submit — that IS the finding, and a scan that skipped them would
@@ -218,7 +223,14 @@ const FILL_INPUTS = `(() => {
         continue;
       }
       if (el.type === "checkbox" || el.type === "radio") {
-        if (!el.checked) { el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true })); }
+        // BOTH events, as a real click gives. A page that reveals its Submit button from an
+        // \`input\` handler on a checkbox was surveyed with the box ticked and the button still
+        // absent — and reported as a page with no control to press.
+        if (!el.checked) {
+          el.checked = true;
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+        }
         continue;
       }
       if (el.value !== "") continue;
@@ -416,10 +428,17 @@ async function reportPage(driver: Driver, input: HeadlessPageInput): Promise<Hea
   // report is what the document said when it was left alone.
   const errors = [...new Set(driver.noise())];
   const frame = driver.frame();
-  const labels = frame === null ? [] : asStrings(await driver.evaluate(LABELS, frame));
   const liveForms = frame === null ? 0 : asNumber(await driver.evaluate(`document.querySelectorAll("form").length`, frame));
   const text =
     frame === null ? "" : asString(await driver.evaluate(`(document.body.innerText || "").replace(/\\s+/g, " ").trim().slice(0, ${LIMITS.textChars})`, frame));
+  // SURVEYED WITH THE INPUTS FILLED, and after the screen above has been read.
+  //
+  // A page can have no control at all until something is filled in — a Submit revealed by ticking
+  // a box is ordinary — and a survey taken before the filling finds none, so nothing is pressed and
+  // the report says the page has no controls. AFTER the text, because that belongs to the page as a
+  // visitor first meets it.
+  if (frame !== null) await driver.evaluate(FILL_INPUTS, frame);
+  const labels = frame === null ? [] : asStrings(await driver.evaluate(LABELS, frame));
 
   // The survey is only a STARTING estimate of how many controls there are: filling the inputs can
   // add some (see `pressOne`), and a loop bounded by the survey would then press the newcomer,

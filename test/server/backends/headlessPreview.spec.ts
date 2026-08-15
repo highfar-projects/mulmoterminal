@@ -137,6 +137,23 @@ const REORDERS = `
   document.getElementById("go").addEventListener("click", () => view.submit("orders", { name: "x" }));
 </script>`;
 
+/** A page with NO control until a box is ticked, revealed from an `input` handler.
+ *
+ *  Ordinary consent-then-submit. Surveyed before anything is filled in, it has nothing to press
+ *  and would be reported as a page with no controls at all. */
+const REVEALS = `
+<input type="checkbox" id="agree">
+<div id="slot"></div>
+<script>
+  const view = window.__MC_APP_VIEW;
+  view.onState(() => {});
+  view.ready();
+  document.getElementById("agree").addEventListener("input", () => {
+    document.getElementById("slot").innerHTML = '<button type="button" id="go">Order</button>';
+    document.getElementById("go").addEventListener("click", () => view.submit("orders", { name: "x" }));
+  });
+</script>`;
+
 const page = (id: string, html: string): HeadlessPageInput => ({ id, audience: "public", html, datasets, submit });
 
 describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
@@ -152,10 +169,11 @@ describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
       page("unreachable", UNREACHABLE),
       page("onload", SUBMITS_ON_LOAD),
       page("reorders", REORDERS),
+      page("reveals", REVEALS),
     ]);
     if (!run.ok) throw new Error(run.problems.join(" "));
     pages = run.pages;
-  }, 120_000);
+  }, 240_000);
 
   it("draws the page that works, and carries its press to the parent", () => {
     // The handshake completed, the records arrived, and the page DREW them — the text on screen is
@@ -204,6 +222,14 @@ describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
     expect(reorders?.presses[1]?.label).toBe("Order");
     expect(reorders?.presses[1]?.submitted).toEqual({ cid: "orders", fields: ["name"] });
     expect(reorders?.pressesOmitted).toBe(0);
+  });
+
+  it("finds a control that only exists once a box is ticked", () => {
+    // A real click on a checkbox fires `input` as well as `change`, and this page listens for the
+    // first. Dispatching only `change`, the run surveyed a page with nothing to press.
+    const reveals = pages[5];
+    expect(reveals?.presses[0]?.label).toBe("Order");
+    expect(reveals?.presses[0]?.submitted).toEqual({ cid: "orders", fields: ["name"] });
   });
 
   it("presses where a person would, so a control no cursor reaches submits nothing", () => {
