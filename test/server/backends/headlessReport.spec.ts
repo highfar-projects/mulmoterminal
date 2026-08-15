@@ -25,6 +25,7 @@ const page = (over: Partial<HeadlessPageReport> = {}): HeadlessPageReport => ({
   audience: "public",
   readied: true,
   stateDelivered: true,
+  submittedOnLoad: 0,
   liveForms: 0,
   text: "Curry, Ramen",
   presses: [],
@@ -61,7 +62,7 @@ describe("narrateHeadlessRun", () => {
   it("translates the parent's own refusals, which never reach a screen", () => {
     const said = narrate({ presses: [press({ refused: ["undeclared-field"] })] });
     expect(said).toContain("not in that collection's `createFields`");
-    expect(said).toContain("not on the screen");
+    expect(said).toContain("answered on the port");
   });
 
   it("calls a dead button dead, without calling a display-only button broken", () => {
@@ -126,6 +127,24 @@ describe("narrateHeadlessRun", () => {
     // A label carrying a quotation mark ended the quotation early, and nothing downstream could
     // tell which half was the page's.
     expect(narrate({ presses: [press({ label: 'Save "draft"' })] })).toContain('Pressed "Save \\"draft\\""');
+  });
+
+  it("names a page that submitted before anybody pressed anything", () => {
+    // Two findings in one: a visitor is shown a confirmation they never asked for, and every press
+    // below would have inherited that submission and looked correctly wired.
+    const said = narrate({ submittedOnLoad: 2, presses: [press()] });
+    expect(said).toContain("SUBMITTED 2 times before anything was pressed");
+    expect(said).toContain("inside `onState`");
+    expect(narrate({ submittedOnLoad: 1 })).toContain("SUBMITTED once");
+    expect(narrate({})).not.toContain("before anything was pressed");
+  });
+
+  it("keeps a blocked form and a refusal on the same press", () => {
+    // Independent facts. A chain of branches reported whichever it reached first and lost the
+    // other, and the blocked form is the one nothing else can report.
+    const said = narrate({ presses: [press({ refused: ["unknown-collection"], blockedFormSubmission: true })] });
+    expect(said).toContain("BLOCKED a form submission");
+    expect(said).toContain("does not declare");
   });
 
   it("says how many pages it did not run at all", () => {

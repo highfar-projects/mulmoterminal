@@ -97,6 +97,19 @@ const UNREACHABLE = `
   view.ready();
 </script>`;
 
+/** A page that submits the moment it loads, with a button that does nothing.
+ *
+ *  Measured from the mount rather than from the press, the automatic submission is attributed to
+ *  whichever control is under test — so every button on a page like this looks correctly wired. */
+const SUBMITS_ON_LOAD = `
+<button type="button" id="go">Order</button>
+<script>
+  const view = window.__MC_APP_VIEW;
+  view.onState(() => {});
+  view.ready();
+  view.submit("orders", { name: "nobody asked" });
+</script>`;
+
 const page = (id: string, html: string): HeadlessPageInput => ({ id, audience: "public", html, datasets, submit });
 
 describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
@@ -106,7 +119,7 @@ describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
   let pages: HeadlessPageReport[] = [];
 
   beforeAll(async () => {
-    const run = await runPagesHeadless([page("works", WORKS), page("shipped", SHIPPED), page("unreachable", UNREACHABLE)]);
+    const run = await runPagesHeadless([page("works", WORKS), page("shipped", SHIPPED), page("unreachable", UNREACHABLE), page("onload", SUBMITS_ON_LOAD)]);
     if (!run.ok) throw new Error(run.problems.join(" "));
     pages = run.pages;
   }, 120_000);
@@ -137,6 +150,14 @@ describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
     expect(shipped?.liveForms).toBe(1);
     expect(shipped?.presses[0]?.submitted).toBeNull();
     expect(shipped?.presses[0]?.blockedFormSubmission).toBe(true);
+  });
+
+  it("does not credit a control with a submission the page made on its own", () => {
+    // The false green: one automatic submission, measured from the mount, makes every button on
+    // the page look correctly wired.
+    const onload = pages[3];
+    expect(onload?.submittedOnLoad).toBeGreaterThan(0);
+    expect(onload?.presses[0]?.submitted).toBeNull();
   });
 
   it("presses where a person would, so a control no cursor reaches submits nothing", () => {

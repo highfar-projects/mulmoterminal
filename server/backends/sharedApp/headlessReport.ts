@@ -66,6 +66,20 @@ function handshakeLine(page: HeadlessPageReport): string {
   return "It answered the handshake and was sent its records.";
 }
 
+/** A page that submitted with nobody having pressed anything.
+ *
+ *  Two things at once, and both are worth a line: a visitor opening this page is shown a
+ *  confirmation they never asked for, and every press reported below had to be measured from AFTER
+ *  this — without that, one automatic submission makes every button on the page look wired. */
+function onLoadLine(page: HeadlessPageReport): string[] {
+  if (page.submittedOnLoad === 0) return [];
+  const times = page.submittedOnLoad === 1 ? "once" : `${page.submittedOnLoad} times`;
+  return [
+    `The page SUBMITTED ${times} before anything was pressed. A visitor opening it is asked to confirm a write they did not ask for — check for a \`submit\` call that runs at load ` +
+      "or inside `onState` rather than from a handler. (The presses below are measured from after it, so they are still their own.)",
+  ];
+}
+
 function formLine(page: HeadlessPageReport): string[] {
   if (page.liveForms === 0) return [];
   return [
@@ -88,34 +102,47 @@ function refusalLine(press: HeadlessPress, audience: PreviewAudience): string[] 
   return [`    The parent also REFUSED ${many} — ${press.refused.map(translate).join("; ")}.`];
 }
 
+/** The BLOCKED form, the refusals and the page's own errors — everything that is true about a
+ *  press whatever else it did.
+ *
+ *  Notes rather than branches, because these are independent facts and a chain of `if`s loses
+ *  whichever one it does not reach first: a press that both submitted and was refused, or one that
+ *  was refused AND had a form submission blocked, each lost half of itself. */
+function pressNotes(press: HeadlessPress, audience: PreviewAudience): string[] {
+  return [
+    ...(press.blockedFormSubmission
+      ? ["    The browser BLOCKED a form submission on this press — the `submit` event never fired, so no handler of the page's ran."]
+      : []),
+    ...refusalLine(press, audience),
+    ...(press.errors.length === 0 ? [] : [`    It also raised: ${press.errors.join(" / ")}`]),
+  ];
+}
+
 function pressLine(press: HeadlessPress, audience: PreviewAudience): string[] {
   const head = `Pressed ${quoted(press.label)}: `;
-  const extra = [...refusalLine(press, audience), ...(press.errors.length === 0 ? [] : [`    It also raised: ${press.errors.join(" / ")}`])];
+  const notes = pressNotes(press, audience);
   if (press.notClickable) {
     return [
       `  ${head}the control HAD NOWHERE TO BE CLICKED — \`display:none\`, zero-sized, or off the document. No cursor can reach it, so this is not a report about its handler.`,
-      ...extra,
+      ...notes,
     ];
   }
   if (press.submitted !== null) {
     const fields = press.submitted.fields.length === 0 ? "no fields" : press.submitted.fields.join(", ");
     return [
       `  ${head}a submission reached the parent for '${press.submitted.cid}' carrying ${fields}. It was DECLINED — a headless run never writes.`,
-      ...extra,
+      ...notes,
     ];
   }
-  if (press.refused.length > 0) {
-    return [`  ${head}nothing became a confirmation. The page cannot see why: a refusal is answered on the port, not on the screen.`, ...extra];
-  }
-  if (press.blockedFormSubmission) {
+  if (press.refused.length > 0 || press.blockedFormSubmission) {
     return [
-      `  ${head}nothing reached the parent, and the browser BLOCKED a form submission. This is the button that looks finished and does nothing.`,
-      ...extra,
+      `  ${head}nothing became a confirmation. The page cannot see why: a refusal is answered on the port, and a blocked form raises nothing at all.`,
+      ...notes,
     ];
   }
   return [
     `  ${head}nothing reached the parent. If it was meant to submit, it is a dead button; if it only changes what is on screen, that is fine and this line is expected.`,
-    ...extra,
+    ...notes,
   ];
 }
 
@@ -129,6 +156,7 @@ function pageLines(page: HeadlessPageReport): string[] {
     `${page.audience} page '${page.id}'`,
     ...(page.audience === "public" ? [] : [`  ${MEMBER_PAGE_LIMIT}`]),
     `  ${handshakeLine(page)}`,
+    ...onLoadLine(page).map((line) => `  ${line}`),
     ...formLine(page).map((line) => `  ${line}`),
     page.text === "" ? "  Nothing was drawn: the page put no text on the screen at all." : `  On screen: ${quoted(page.text)}`,
     ...(page.presses.length === 0

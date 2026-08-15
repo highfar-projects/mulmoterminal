@@ -80,6 +80,10 @@ export interface HeadlessPageReport {
   audience: PreviewAudience;
   readied: boolean;
   stateDelivered: boolean;
+  /** Submissions the page made BEFORE anything was pressed — on load, from `onState`, from a
+   *  timer. Its own number because it is two findings at once: a visitor is shown a confirmation
+   *  they never asked for, and every press below would otherwise inherit it. */
+  submittedOnLoad: number;
   /** Forms in the LIVE document, which is a different question from the one `viewDefects.ts` asks
    *  of the source: a page that builds its form in JavaScript has none in its HTML. */
   liveForms: number;
@@ -324,6 +328,15 @@ async function pressOne(driver: Driver, input: HeadlessPageInput, index: number,
   const frame = driver.frame();
   if (frame === null) return null;
   await driver.evaluate(FILL_INPUTS, frame);
+  // WHAT WAS ALREADY THERE, taken immediately before the press.
+  //
+  // The recorder is cleared per MOUNT, not per press, and a page can submit on load — from its
+  // opening script, from `onState`, from a timer inside the settle window. Read without this,
+  // `submitted[0]` is that automatic submission, reported as the work of whichever control
+  // happened to be under test — so EVERY button on such a page looks correctly wired even when
+  // none of them is. Only what appears after this line belongs to the press.
+  const before = await driver.observe();
+  const noiseBefore = driver.noise().length;
   // THROUGH THE BROWSER, at the control's coordinates, so the event lands where a person's would.
   // `element.click()` in the page's own realm invokes the handler regardless of what covers the
   // button — and this action would then report a submission reaching the parent for a control
@@ -338,12 +351,12 @@ async function pressOne(driver: Driver, input: HeadlessPageInput, index: number,
   // Answered the way somebody who changed their mind would, so the page's own "cancelled" path
   // runs and nothing is left waiting on a promise that never settles.
   await driver.decline();
-  const noise = driver.noise();
+  const noise = driver.noise().slice(noiseBefore);
   return {
     label,
     notClickable: notClickable !== false,
-    submitted: after.submitted[0] ?? null,
-    refused: after.refused,
+    submitted: after.submitted[before.submitted.length] ?? null,
+    refused: after.refused.slice(before.refused.length),
     blockedFormSubmission: noise.some((line) => line.includes(BLOCKED_FORM)),
     errors: [...new Set(noise.filter((line) => !line.includes(BLOCKED_FORM)))],
   };
@@ -371,6 +384,7 @@ async function reportPage(driver: Driver, input: HeadlessPageInput): Promise<Hea
     audience: input.audience,
     readied: observed.readied,
     stateDelivered: observed.stateDelivered,
+    submittedOnLoad: observed.submitted.length,
     liveForms,
     text,
     presses,
