@@ -57,7 +57,7 @@ spawnPty("tmux", tmuxNewSessionArgs(sessionId, file, args, cwd, env), cwd, unset
    | | pane |
    | --- | --- |
    | 修正前（クライアントをセルの cwd から） | (empty) — セッション即死 |
-   | 修正後（`TMUX_CLIENT_CWD`） | `/Users/isamu` / `2.1.233 (Claude Code)` / `EXIT=0` |
+   | 修正後（`TMUX_CLIENT_CWD`） | `$HOME` / `2.1.233 (Claude Code)` / `EXIT=0` |
 
 3. **単体テスト** — `pty-spawn-env.spec.ts` に 3 件。tmux クライアントが `TMUX_CLIENT_CWD` から
    起動すること、pane には**セルの**ディレクトリが渡ること、非 tmux は今までどおりセルで走ること

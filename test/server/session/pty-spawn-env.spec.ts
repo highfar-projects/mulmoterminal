@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { tmpdir } from "node:os";
 
 // node-pty is a native module and spawning is the whole point of the file under test, so
 // the pty itself is mocked: what matters here is the ENVIRONMENT handed to it.
@@ -166,27 +167,32 @@ describe("ptySpawn — carries the removal down both paths", () => {
 // and starts in the deleted directory — where a program that calls `getcwd()` at startup dies on
 // the spot (#1725, tmux/tmux#5473). The pane still goes where it was asked to: `-c` places it.
 describe("ptySpawn — the directory the process itself is started from", () => {
+  // A cell directory that is never the home directory, so the inequality below means something
+  // wherever the suite runs from. `EXISTING_CWD` is `process.cwd()`, which IS the home directory
+  // for anyone who runs the tests from theirs — the assertion would then fail against a correct
+  // implementation, which is the machine-dependent-expectation trap this repo keeps hitting.
+  const CELL_CWD = tmpdir();
+
   it("starts the tmux client somewhere that cannot be deleted, not in the cell", () => {
     tmuxOn = true;
-    ptySpawn(S1, "claude", [], EXISTING_CWD, true);
+    ptySpawn(S1, "claude", [], CELL_CWD, true);
     expect(cwdOf()).toBe(TMUX_CLIENT_CWD);
-    expect(cwdOf()).not.toBe(EXISTING_CWD);
+    expect(cwdOf()).not.toBe(CELL_CWD);
   });
 
   // The pane's directory is a separate decision and must keep following the cell.
   it("still asks tmux for the cell's directory", () => {
     tmuxOn = true;
-    ptySpawn(S1, "claude", [], EXISTING_CWD, true);
-    // The fake tmuxNewSessionArgs above drops `_cwd`, so the real one is what carries `-c`;
-    // what this pins is that the CELL directory is what ptySpawn passed it.
-    expect(newSessionCwd).toBe(EXISTING_CWD);
+    ptySpawn(S1, "claude", [], CELL_CWD, true);
+    // The fake tmuxNewSessionArgs above records `cwd`; the real one turns it into `-c`.
+    expect(newSessionCwd).toBe(CELL_CWD);
   });
 
   // Without tmux there is no client in between, so the process itself must run in the cell.
   it("runs a direct spawn in the cell's directory", () => {
     tmuxOn = false;
-    ptySpawn(S1, "claude", [], EXISTING_CWD, true);
-    expect(cwdOf()).toBe(EXISTING_CWD);
+    ptySpawn(S1, "claude", [], CELL_CWD, true);
+    expect(cwdOf()).toBe(CELL_CWD);
   });
 });
 
