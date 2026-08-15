@@ -242,6 +242,23 @@ describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
   });
 });
 
+describe.skipIf(!chromeReady)("a document that stops answering", () => {
+  it("is given up on, rather than waited for", async () => {
+    // A script that does not return keeps the frame's own thread, so `load` never fires and every
+    // question put to it queues behind it. Unbounded, this is not a slow preview — it is a tool
+    // call that never comes back, holding the per-repository lock behind it.
+    //
+    // The spin is FINITE so this test leaves nothing wedged. What is being proved is that the run
+    // stops waiting before the page stops spinning, and answers.
+    const close = "</scr" + "ipt>";
+    const spin = `<div id="x">loading…</div><script>const end = Date.now() + 6000; while (Date.now() < end) {}${close}`;
+    const run = await runPagesHeadless([page("spins", spin)]);
+    expect(run.ok).toBe(true);
+    if (!run.ok) return;
+    expect(run.pages[0]?.unresponsive).toBe(true);
+  }, 240_000);
+});
+
 describe.skipIf(chromeReady)("without a browser", () => {
   it("says so, and says what to do instead, rather than pretending to have run", async () => {
     const run = await runPagesHeadless([page("works", WORKS)]);

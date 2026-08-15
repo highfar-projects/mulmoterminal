@@ -56,6 +56,12 @@ const quoted = (text: string): string => JSON.stringify(text);
 
 /** The handshake, which decides whether anything below it is about a page that has its data. */
 function handshakeLine(page: HeadlessPageReport): string {
+  if (page.unresponsive) {
+    return (
+      "It STOPPED ANSWERING — it never finished loading, or a question put to it ran out of time. A script that does not return does this: the frame keeps its own " +
+      "thread, so nothing else on the page ever runs. Nothing below is a report about the page's behaviour; it is a report about a page that never got going."
+    );
+  }
   if (!page.readied) {
     return (
       "It NEVER answered the handshake, so the parent sent it no records at all — this is the page that sits on its loading state forever. " +

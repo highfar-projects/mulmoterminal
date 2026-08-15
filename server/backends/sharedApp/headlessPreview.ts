@@ -80,6 +80,11 @@ export interface HeadlessPageReport {
   audience: PreviewAudience;
   readied: boolean;
   stateDelivered: boolean;
+  /** The document stopped answering: it never finished loading, or a question to it ran out of
+   *  time. A script that never returns does this — and without a deadline it does it to the CALLER
+   *  too, which is a tool call that never comes back and, because shared-app operations are
+   *  serialised per repository, everything queued behind it. */
+  unresponsive: boolean;
   /** Submissions the page made BEFORE anything was pressed — on load, from `onState`, from a
    *  timer. Its own number because it is two findings at once: a visitor is shown a confirmation
    *  they never asked for, and every press below would otherwise inherit it. */
@@ -119,7 +124,7 @@ export type HeadlessRun =
  *  and a page that will answer does so in a few milliseconds — the handshake is two messages
  *  between a frame and its own parent. So it is short: it is paid once per mount by exactly the
  *  pages that are broken, and every mount of them. */
-export const LIMITS = { pages: 6, presses: 6, readyMs: 2000, settleMs: 600, textChars: 400 } as const;
+export const LIMITS = { pages: 6, presses: 6, evaluateMs: 5000, readyMs: 2000, settleMs: 600, textChars: 400 } as const;
 
 /** The clickable things, in document order. `input[type=submit]` is in the list although the
  *  sandbox will never let one submit — that IS the finding, and a scan that skipped them would
@@ -262,7 +267,13 @@ const LABELS = `[...document.querySelectorAll(${JSON.stringify(CLICKABLE)})].map
 async function browserOrProblem(): Promise<{ ok: true; browser: Browser } | { ok: false; problems: string[] }> {
   try {
     const puppeteer = (await import("puppeteer")).default;
-    return { ok: true, browser: await puppeteer.launch({ headless: true }) };
+    // NO PROXY, and this is not a preference. Puppeteer's default arguments include
+    // `--proxy-bypass-list=<-loopback>`, which turns OFF Chrome's usual "never proxy localhost" —
+    // so on a machine with a system proxy configured (a Windows CI runner is one) the harness's
+    // own 127.0.0.1 server is fetched through it and the navigation is aborted:
+    // `net::ERR_ABORTED at http://127.0.0.1:<port>`. The whole conversation here is between this
+    // process and a browser it started, over loopback, so there is nothing a proxy could be for.
+    return { ok: true, browser: await puppeteer.launch({ headless: true, args: ["--proxy-server=direct://", "--proxy-bypass-list=*"] }) };
   } catch (err) {
     return {
       ok: false,
@@ -319,6 +330,27 @@ interface Driver {
   noise: () => string[];
   evaluate: (script: string, target?: Frame) => Promise<unknown>;
   decline: () => Promise<void>;
+  /** Something this document was asked ran out of time. Cleared by `mount`. */
+  stalled: () => boolean;
+}
+
+/** Wait for `work`, but not for ever.
+ *
+ *  Everything crossing into the browser is a question put to code the author wrote, and an author's
+ *  script is allowed to never return: an inline loop keeps the frame's own thread, so `load` never
+ *  fires and an `evaluate` on it never settles. Unbounded, that is not a slow preview — it is a
+ *  tool call that never answers, holding the per-repository lock behind it. On the deadline the
+ *  answer is `undefined`, which every reader here already treats as "nothing observed". */
+async function withDeadline<T>(work: Promise<T>, ms: number): Promise<T | undefined> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<undefined>((resolve) => {
+    timer = setTimeout(() => resolve(undefined), ms);
+  });
+  try {
+    return await Promise.race([work, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function openDriver(browser: Browser, origin: string): Promise<Driver> {
@@ -329,9 +361,18 @@ async function openDriver(browser: Browser, origin: string): Promise<Driver> {
   await page.goto(origin, { waitUntil: "load" });
   /** Every script is sent as a STRING rather than as a closure: the server's TypeScript project
    *  declares no DOM (`types: ["node"]`), so a closure mentioning `window` would not compile. */
-  const evaluate = (script: string, target?: Frame): Promise<unknown> => (target ?? page).evaluate(script);
+  let stalled = false;
+  const evaluate = async (script: string, target?: Frame): Promise<unknown> => {
+    const answered = await withDeadline(
+      (target ?? page).evaluate(script).catch(() => undefined),
+      LIMITS.evaluateMs,
+    );
+    if (answered === undefined) stalled = true;
+    return answered;
+  };
   return {
     evaluate,
+    stalled: () => stalled,
     frame: () => page.frames().find((candidate) => candidate.url() === "about:srcdoc") ?? null,
     noise: () => noise,
     observe: async () => asObservation(await evaluate("window.__preview.observe()")),
@@ -340,6 +381,9 @@ async function openDriver(browser: Browser, origin: string): Promise<Driver> {
     },
     mount: async (input) => {
       noise = [];
+      stalled = false;
+      // The render is awaited on ITS OWN deadline (`evaluate`'s), because what it waits for is the
+      // frame's `load` — which a script that never returns never reaches.
       await evaluate(`window.__preview.render(${JSON.stringify({ html: input.html, datasets: input.datasets, submit: input.submit })})`);
       await page.waitForFunction("window.__preview.observe().readied", { timeout: LIMITS.readyMs }).catch(() => undefined);
       await new Promise((resolve) => setTimeout(resolve, LIMITS.settleMs));
@@ -424,9 +468,6 @@ async function pressOne(driver: Driver, input: HeadlessPageInput, index: number)
 async function reportPage(driver: Driver, input: HeadlessPageInput): Promise<HeadlessPageReport> {
   await driver.mount(input);
   const observed = await driver.observe();
-  // Taken NOW: every press below mounts again, which clears it, and what belongs in the page's own
-  // report is what the document said when it was left alone.
-  const errors = [...new Set(driver.noise())];
   const frame = driver.frame();
   const liveForms = frame === null ? 0 : asNumber(await driver.evaluate(`document.querySelectorAll("form").length`, frame));
   const text =
@@ -439,6 +480,11 @@ async function reportPage(driver: Driver, input: HeadlessPageInput): Promise<Hea
   // visitor first meets it.
   if (frame !== null) await driver.evaluate(FILL_INPUTS, frame);
   const labels = frame === null ? [] : asStrings(await driver.evaluate(LABELS, frame));
+  // AFTER the filling, and before any press mounts again (which clears it). A handler of the
+  // author's that throws while an input is being filled is the page's own fault and is often the
+  // reason no control ever appears — captured before this line, it was reported nowhere.
+  // `FILL_INPUTS`'s own failures are swallowed inside it, so nothing here is the harness's.
+  const errors = [...new Set(driver.noise())];
 
   // The survey is only a STARTING estimate of how many controls there are: filling the inputs can
   // add some (see `pressOne`), and a loop bounded by the survey would then press the newcomer,
@@ -457,6 +503,7 @@ async function reportPage(driver: Driver, input: HeadlessPageInput): Promise<Hea
     audience: input.audience,
     readied: observed.readied,
     stateDelivered: observed.stateDelivered,
+    unresponsive: driver.stalled(),
     submittedOnLoad: observed.submitted.length,
     liveForms,
     text,

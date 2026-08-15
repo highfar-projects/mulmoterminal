@@ -25,6 +25,7 @@ const page = (over: Partial<HeadlessPageReport> = {}): HeadlessPageReport => ({
   audience: "public",
   readied: true,
   stateDelivered: true,
+  unresponsive: false,
   submittedOnLoad: 0,
   liveForms: 0,
   text: "Curry, Ramen",
@@ -127,6 +128,15 @@ describe("narrateHeadlessRun", () => {
     // A label carrying a quotation mark ended the quotation early, and nothing downstream could
     // tell which half was the page's.
     expect(narrate({ presses: [press({ label: 'Save "draft"' })] })).toContain('Pressed "Save \\"draft\\""');
+  });
+
+  it("says a page stopped answering, rather than blaming its handshake", () => {
+    // A script that never returns keeps the frame's thread, so `ready()` could not have run
+    // either — reporting the handshake would send an author to move a line that is not the
+    // problem.
+    const said = narrate({ unresponsive: true, readied: false });
+    expect(said).toContain("STOPPED ANSWERING");
+    expect(said).not.toContain("OUTSIDE the `onState` callback");
   });
 
   it("names a page that submitted before anybody pressed anything", () => {
