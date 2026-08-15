@@ -9,3 +9,4 @@ export declare function restartPlan(exit: {
   minDelayMs: number;
   maxDelayMs: number;
 }): { retry: boolean; delayMs: number; reason: string };
+export declare function isListeningMessage(msg: unknown): boolean;

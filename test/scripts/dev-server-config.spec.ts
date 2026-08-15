@@ -2,7 +2,14 @@
 import { describe, it, expect } from "vitest";
 import path from "node:path";
 
-import { resolveWatchDirs, shouldSchedule, isReloadableChange, restartPlan, PORT_IN_USE_EXIT_CODE } from "../../scripts/dev-server-config.js";
+import {
+  resolveWatchDirs,
+  shouldSchedule,
+  isReloadableChange,
+  restartPlan,
+  isListeningMessage,
+  PORT_IN_USE_EXIT_CODE,
+} from "../../scripts/dev-server-config.js";
 
 describe("resolveWatchDirs", () => {
   const root = "/repo";
@@ -107,5 +114,25 @@ describe("restartPlan", () => {
         expect(delayMs).toBeLessThanOrEqual(4000);
       }
     });
+  });
+});
+
+// What resets the crash count. An earlier draft of this fix used "the process stayed up 5
+// seconds", and Codex caught that it re-created the very defect being fixed: the backend does its
+// whole setup BEFORE it binds, so a machine slow enough — or a pre-bind failure late enough — puts
+// every crash above the threshold, resets the count, and loops at the floor forever. Only the
+// backend saying it bound the port means it bound the port.
+describe("isListeningMessage", () => {
+  it("accepts the message server/index.ts sends from inside listen()", () => {
+    expect(isListeningMessage({ type: "listening", port: 34567 })).toBe(true);
+    expect(isListeningMessage({ type: "listening" })).toBe(true);
+  });
+
+  // A reset on the wrong message is a crash loop that never backs off, so this is not pedantry:
+  // anything that is not that message must not count.
+  it("rejects every other shape", () => {
+    for (const other of [{ type: "other" }, {}, [], null, undefined, "listening", 42, true]) {
+      expect(isListeningMessage(other)).toBe(false);
+    }
   });
 });

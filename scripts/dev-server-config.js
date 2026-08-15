@@ -77,3 +77,19 @@ export function restartPlan({ code, signal, consecutiveFailures, minDelayMs, max
   const loop = consecutiveFailures > 1 ? ` (${consecutiveFailures} in a row — crash loop? check the stack above)` : "";
   return { retry: true, delayMs, reason: `backend exited (${how}) — restarting in ${delayMs}ms${loop}` };
 }
+
+/**
+ * Whether a child's IPC message is the backend saying it bound the port.
+ *
+ * This is what resets the crash count — deliberately NOT elapsed time. The backend does its whole
+ * setup before it binds, so "it stayed up N seconds" says nothing about whether the port was ever
+ * reached: on a slow machine, or with a pre-bind failure that takes longer than N, every crash
+ * would look healthy and the loop would run at the floor forever (#1735).
+ *
+ * A message from anywhere else must not count, hence the shape check rather than truthiness.
+ * @param {unknown} msg
+ * @returns {boolean}
+ */
+export function isListeningMessage(msg) {
+  return typeof msg === "object" && msg !== null && /** @type {{ type?: unknown }} */ (msg).type === "listening";
+}

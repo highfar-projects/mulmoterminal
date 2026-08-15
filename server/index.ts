@@ -938,6 +938,12 @@ server.on("error", (err) => {
 // takes a number — the (port, cb) form we used before accepted either.
 server.listen(Number(PORT), BIND_HOST, () => {
   console.log(`mulmoterminal running at http://localhost:${PORT}`);
+  // The dev supervisor (scripts/dev-server.mjs) resets its crash count on THIS, not on how long
+  // the process lived. Everything above runs before the bind and can take any amount of time, so
+  // elapsed time never proved the port was reached — which is how a slow crash loop stayed
+  // invisible (#1735). `process.send` exists only when a parent opened an IPC channel, so this
+  // is a no-op under `npx mulmoterminal`.
+  process.send?.({ type: "listening", port: Number(PORT) });
   if (!isLoopbackBinding(server.address())) {
     console.warn(bindSecurityWarning(BIND_HOST, PORT, browserHostnames));
   }

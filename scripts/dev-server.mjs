@@ -19,7 +19,7 @@ import { spawn } from "node:child_process";
 import { watch } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveWatchDirs, shouldSchedule, isReloadableChange, restartPlan } from "./dev-server-config.js";
+import { resolveWatchDirs, shouldSchedule, isReloadableChange, restartPlan, isListeningMessage } from "./dev-server-config.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // Which dirs a source change reloads on (server/ + the common/ and bin/ the backend imports),
@@ -39,16 +39,20 @@ const NODE_ARGS = STUB ? [ENTRY] : ["--import", "tsx", "--env-file-if-exists=.en
 // dev-server-config.js so it can be tested without spawning a backend.
 const MIN_DELAY_MS = 250;
 const MAX_DELAY_MS = 4000;
-// Reset when a backend stays up past this, which is the point it must have bound the port —
-// this is the ONLY thing elapsed time is still used for.
-const HEALTHY_MS = 5000;
+// No time-based threshold anywhere. The count resets when the backend SAYS it is listening
+// (server/index.ts posts `{ type: "listening" }` from inside the listen callback), because that
+// is the only thing that actually means the port was reached. An earlier draft of this fix used
+// "stayed up 5 seconds" and Codex caught it: the backend does its whole setup before binding, so
+// on a slower machine — or with a later pre-bind failure — every crash would reset the count and
+// loop at the floor forever. That is the same defect this PR exists to remove, moved above a
+// bigger number.
 
 let child = null;
 let restartTimer = null; // non-null => a fresh backend is already scheduled; the single guard
 let killedForRestart = false; // this child was killed by us (file change), not a crash
 let shuttingDown = false;
 let consecutiveFailures = 0;
-let startedAt = 0;
+let reachedListen = false;
 
 function log(msg) {
   console.log(`[dev-server] ${msg}`);
@@ -61,8 +65,15 @@ function log(msg) {
 function bringUp() {
   restartTimer = null;
   if (shuttingDown || child) return;
-  startedAt = Date.now();
-  child = spawn(process.execPath, NODE_ARGS, { cwd: ROOT, stdio: "inherit" });
+  reachedListen = false;
+  // "ipc" alongside the inherited streams: the child keeps writing straight to this terminal, and
+  // gets a channel to report readiness on. A backend started any other way has no parent channel,
+  // so its `process.send?.()` is a no-op.
+  child = spawn(process.execPath, NODE_ARGS, { cwd: ROOT, stdio: ["inherit", "inherit", "inherit", "ipc"] });
+
+  child.on("message", (msg) => {
+    if (isListeningMessage(msg)) reachedListen = true;
+  });
 
   child.on("exit", (code, signal) => {
     child = null;
@@ -73,9 +84,8 @@ function bringUp() {
       scheduleBringUp(MIN_DELAY_MS);
       return;
     }
-    // A backend that stayed up this long got past listen(), so whatever went wrong afterwards is
-    // not the same failure as the one before it.
-    if (Date.now() - startedAt >= HEALTHY_MS) consecutiveFailures = 0;
+    // It reached the port, so whatever went wrong afterwards is not the failure that came before.
+    if (reachedListen) consecutiveFailures = 0;
     consecutiveFailures += 1;
     const plan = restartPlan({ code, signal, consecutiveFailures, minDelayMs: MIN_DELAY_MS, maxDelayMs: MAX_DELAY_MS });
     log(plan.reason);
