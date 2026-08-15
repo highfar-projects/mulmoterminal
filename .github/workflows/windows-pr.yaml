@@ -1,0 +1,80 @@
+# The Windows gate that runs BEFORE merge, alongside windows-daily.yaml which runs after.
+#
+# Why it exists: every Windows portability mistake in this repo has been found by the daily job,
+# which means it was already on main. Fifteen issues say so — #478 #802 #816 #858 #934 #1079 #1212
+# #1267 #1396 #1459 #1481 #1484 #1539 #1653 #1709 — and #1653 sat red long enough to collect five
+# failing specs on top of the first one. Nearly all of them were test-side portability bugs (POSIX
+# path literals, chmod, HOME vs USERPROFILE, fs.watch, timeouts), which is exactly the class a
+# pre-merge run catches.
+#
+# What it does NOT do: lint, typecheck, build. Those answer the same on every platform and ci.yml
+# already runs them on ubuntu and macOS. Only `yarn test` behaves differently here, so only
+# `yarn test` runs here — that is what keeps this cheap enough to put on every pull request.
+#
+# Why paths-ignore rather than a list of Windows-sensitive paths: the specs that branch on the
+# platform sit in nine different directories, `test/src/components` among them (#1719 lived there).
+# Any allowlist would have to be maintained by whoever adds the next one, and the failure mode of
+# forgetting is silence. The only files that provably cannot affect a Windows test run are docs,
+# plans and markdown — the same set windows-daily.yaml already skips.
+#
+# One node version, not the daily's 22/24 matrix: this runs on every PR, the daily still covers
+# both, and an ABI difference that only shows on one of them is not the class this gate is for.
+name: Windows (PR)
+
+on:
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "plans/**"
+      - "**/*.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test_windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # Deliberately no `cache: yarn`: restoring the yarn cache tar onto NTFS is slower than a
+      # fresh install. node_modules is cached directly instead (below). Same reasoning as
+      # windows-daily.yaml.
+      - uses: actions/setup-node@v6
+        id: setup-node
+        with:
+          node-version: 22.x
+
+      # Realtime scanning makes yarn's atomic renames fail with EPERM mid-install.
+      - name: Disable Defender realtime monitoring
+        shell: powershell
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
+
+      # The key is windows-daily.yaml's key verbatim, so a pull request restores the tree main
+      # already built rather than resolving its own. The restore-keys prefix keeps a changed
+      # lockfile starting from the previous tree instead of from nothing.
+      - uses: actions/cache@v5
+        with:
+          path: node_modules
+          key: win-node-modules-22.x-${{ hashFiles('yarn.lock') }}
+          restore-keys: |
+            win-node-modules-22.x-
+
+      # Restored BEFORE install so puppeteer's postinstall skips its ~120 MB download.
+      - uses: actions/cache@v5
+        with:
+          path: ~/.cache/puppeteer
+          key: puppeteer-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+
+      # Also exercises the postinstall (server/fix-pty-perms.js) on Windows.
+      - run: yarn install --frozen-lockfile --network-timeout 120000
+
+      - name: Test
+        run: yarn test

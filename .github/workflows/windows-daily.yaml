@@ -1,7 +1,11 @@
-# The Windows half of the CI gates. Kept OUT of pull_request on purpose: the Windows
-# runner is slow (NTFS tar extraction, Defender, a second tsc pass) and every PR paying
-# that cost buys little — the Windows-specific surface here is narrow. It runs daily and
-# on main instead, which is early enough to catch a regression before a release.
+# The WIDE Windows gate: lint, typecheck, build and test, across Node 22 and 24. It stays out
+# of pull_request because that breadth is what makes it slow (NTFS tar extraction, Defender, a
+# second tsc pass), and lint/typecheck/build answer the same on every platform — ci.yml already
+# runs them on ubuntu and macOS.
+#
+# The pre-merge half is windows-pr.yaml, which runs `yarn test` only, on one Node version, on
+# every pull request. That split is deliberate: tests are the only part that behaves differently
+# on Windows, so they are the only part worth paying for per PR (#1721).
 #
 # What it actually guards: server/infra/pty-env.ts branches on PATH casing ("Path"),
 # the ";" delimiter and "\" separators; server/infra/resolve-bin.ts resolves a bare
