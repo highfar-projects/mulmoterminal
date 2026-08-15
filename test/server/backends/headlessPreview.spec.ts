@@ -114,6 +114,29 @@ const SUBMITS_ON_LOAD = `
   view.submit("orders", { name: "nobody asked" });
 </script>`;
 
+/** A page that rearranges its own controls when an input is filled.
+ *
+ *  Ordinary reactive behaviour, and it moves the ground under a survey taken before the filling:
+ *  the control at index 0 was "Order" and is now "Clear". Named from the stale survey, this run
+ *  would report "Order" as a dead button while having pressed something else entirely. */
+const REORDERS = `
+<input id="name">
+<button type="button" id="go">Order</button>
+<script>
+  const view = window.__MC_APP_VIEW;
+  view.onState(() => {});
+  view.ready();
+  document.getElementById("name").addEventListener("input", () => {
+    if (document.getElementById("clear") !== null) return;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.id = "clear";
+    button.textContent = "Clear";
+    document.body.insertBefore(button, document.body.firstChild);
+  });
+  document.getElementById("go").addEventListener("click", () => view.submit("orders", { name: "x" }));
+</script>`;
+
 const page = (id: string, html: string): HeadlessPageInput => ({ id, audience: "public", html, datasets, submit });
 
 describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
@@ -123,7 +146,13 @@ describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
   let pages: HeadlessPageReport[] = [];
 
   beforeAll(async () => {
-    const run = await runPagesHeadless([page("works", WORKS), page("shipped", SHIPPED), page("unreachable", UNREACHABLE), page("onload", SUBMITS_ON_LOAD)]);
+    const run = await runPagesHeadless([
+      page("works", WORKS),
+      page("shipped", SHIPPED),
+      page("unreachable", UNREACHABLE),
+      page("onload", SUBMITS_ON_LOAD),
+      page("reorders", REORDERS),
+    ]);
     if (!run.ok) throw new Error(run.problems.join(" "));
     pages = run.pages;
   }, 120_000);
@@ -162,6 +191,14 @@ describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
     const onload = pages[3];
     expect(onload?.submittedOnLoad).toBeGreaterThan(0);
     expect(onload?.presses[0]?.submitted).toBeNull();
+  });
+
+  it("names the control it actually pressed, not the one the survey saw", () => {
+    // Filling the inputs fires `input` and `change`, and this page inserts a control in response.
+    // The press has to be reported under the name of what is now at that index.
+    const reorders = pages[4];
+    expect(reorders?.presses[0]?.label).toBe("Clear");
+    expect(reorders?.presses[0]?.submitted).toBeNull();
   });
 
   it("presses where a person would, so a control no cursor reaches submits nothing", () => {

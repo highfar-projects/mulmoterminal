@@ -340,26 +340,41 @@ async function openDriver(browser: Browser, origin: string): Promise<Driver> {
  *  Freshly mounted rather than pressed in sequence, so what is reported about the third control is
  *  not a consequence of the first two — and the inputs are filled first, so a page that validates
  *  its own form does not refuse for a reason that has nothing to do with what is being asked. */
-async function pressOne(driver: Driver, input: HeadlessPageInput, index: number, label: string): Promise<HeadlessPress | null> {
+async function pressOne(driver: Driver, input: HeadlessPageInput, index: number): Promise<HeadlessPress | null> {
   await driver.mount(input);
   const frame = driver.frame();
   if (frame === null) return null;
   await driver.evaluate(FILL_INPUTS, frame);
-  // WHAT WAS ALREADY THERE, taken immediately before the press.
+
+  // THE NAME IS TAKEN FROM THE PAGE AS IT IS NOW, not from the survey before the inputs were
+  // filled. Filling fires `input` and `change`, and a page that reacts to those can add, remove or
+  // reorder its controls — so the control at this index may not be the one the survey saw. Report
+  // what is actually about to be clicked, or say the control is gone.
+  const labels = asStrings(await driver.evaluate(LABELS, frame));
+  const label = labels[index];
+  if (label === undefined) return { label: `control ${index + 1}`, notClickable: true, submitted: null, refused: [], blockedFormSubmission: false, errors: [] };
+
+  // Located BEFORE the snapshot below. Each of these is a round trip to the browser, and anything
+  // the page does during one of them would otherwise land in the window being attributed to the
+  // press.
+  const controls = await frame.$$(CLICKABLE);
+  const control = controls[index];
+
+  // WHAT WAS ALREADY THERE, read as late as it can be — with the control in hand and nothing left
+  // to do but click it.
   //
-  // The recorder is cleared per MOUNT, not per press, and a page can submit on load — from its
-  // opening script, from `onState`, from a timer inside the settle window. Read without this,
-  // `submitted[0]` is that automatic submission, reported as the work of whichever control
-  // happened to be under test — so EVERY button on such a page looks correctly wired even when
-  // none of them is. Only what appears after this line belongs to the press.
+  // The recorder is cleared per MOUNT, not per press, and a page can submit on its own: from its
+  // opening script, from `onState`, from a timer. Read without this, that submission is reported
+  // as the work of whichever control happened to be under test — and since every press gets a
+  // fresh mount, EVERY button on such a page looks correctly wired when none of them is.
   const before = await driver.observe();
   const noiseBefore = driver.noise().length;
+
   // THROUGH THE BROWSER, at the control's coordinates, so the event lands where a person's would.
   // `element.click()` in the page's own realm invokes the handler regardless of what covers the
   // button — and this action would then report a submission reaching the parent for a control
   // nobody can press, which is the opposite of what it promises.
-  const controls = await frame.$$(CLICKABLE);
-  const notClickable = await controls[index]
+  const notClickable = await control
     ?.click()
     .then(() => false)
     .catch(() => true);
@@ -391,9 +406,10 @@ async function reportPage(driver: Driver, input: HeadlessPageInput): Promise<Hea
   const text =
     frame === null ? "" : asString(await driver.evaluate(`(document.body.innerText || "").replace(/\\s+/g, " ").trim().slice(0, ${LIMITS.textChars})`, frame));
 
+  // The survey decides HOW MANY presses; each press names its own control (see `pressOne`).
   const presses: HeadlessPress[] = [];
-  for (const [index, label] of labels.slice(0, LIMITS.presses).entries()) {
-    const press = await pressOne(driver, input, index, label);
+  for (let index = 0; index < Math.min(labels.length, LIMITS.presses); index += 1) {
+    const press = await pressOne(driver, input, index);
     if (press !== null) presses.push(press);
   }
   return {
