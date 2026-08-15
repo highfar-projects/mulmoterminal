@@ -1,6 +1,8 @@
 // @vitest-environment node
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll, afterEach, afterAll } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
+import path from "node:path";
 
 // node-pty is a native module and spawning is the whole point of the file under test, so
 // the pty itself is mocked: what matters here is the ENVIRONMENT handed to it.
@@ -167,11 +169,18 @@ describe("ptySpawn — carries the removal down both paths", () => {
 // and starts in the deleted directory — where a program that calls `getcwd()` at startup dies on
 // the spot (#1725, tmux/tmux#5473). The pane still goes where it was asked to: `-c` places it.
 describe("ptySpawn — the directory the process itself is started from", () => {
-  // A cell directory that is never the home directory, so the inequality below means something
-  // wherever the suite runs from. `EXISTING_CWD` is `process.cwd()`, which IS the home directory
-  // for anyone who runs the tests from theirs — the assertion would then fail against a correct
-  // implementation, which is the machine-dependent-expectation trap this repo keeps hitting.
-  const CELL_CWD = tmpdir();
+  // A cell directory MADE for the test, so it cannot coincide with the home directory whatever
+  // the environment says. Two earlier shapes of this constant were both machine-dependent, which
+  // is the trap this repo keeps hitting: `process.cwd()` IS the home directory for anyone running
+  // the suite from theirs, and a bare `tmpdir()` is too when `TMPDIR` points at it (CodeRabbit
+  // caught the second). A directory created UNDER tmpdir can never equal its own parent, so the
+  // inequality below means the same thing on every machine — and it exists, which ptySpawn's cwd
+  // check requires.
+  let CELL_CWD = "";
+  beforeAll(() => {
+    CELL_CWD = mkdtempSync(path.join(tmpdir(), "mt-cell-"));
+  });
+  afterAll(() => rmSync(CELL_CWD, { recursive: true, force: true }));
 
   it("starts the tmux client somewhere that cannot be deleted, not in the cell", () => {
     tmuxOn = true;
