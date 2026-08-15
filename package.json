@@ -100,7 +100,7 @@
     "dompurify": "^3.4.13",
     "echarts": "^6.0.0",
     "express": "^5.2.1",
-    "firebase": "^12.17.1",
+    "firebase": "12.16.0",
     "graphai": "^2.0.18",
     "gui-chat-protocol": "^2.0.0",
     "marked": "^18.0.9",
