@@ -38,6 +38,10 @@ let batchFails = false;
 
 vi.mock("firebase/firestore", () => ({
   collection: (_db: unknown, collectionPath: string) => ({ collectionPath }),
+  // The sentinel, standing in for the one the real SDK makes. It has to be RECOGNISABLE and it must
+  // not be a value this host could have computed: what the rules compare is `request.time`, and a
+  // clock read here would be the author's.
+  serverTimestamp: () => ({ __serverTimestamp: true }),
   doc: (parent: { collectionPath: string }, docId: string) => ({ path: `${parent.collectionPath}/${docId}` }),
   writeBatch: () => {
     const ops: string[] = [];
@@ -184,6 +188,46 @@ describe("shared app preview writes", () => {
     // one could only get it wrong — and the status from `initialStatus`, in the field the
     // collection names.
     expect(record).toEqual({ requesterName: "客", slot: "roomA-1000", requesterEmail: OWNER.email, status: "booked" });
+  });
+
+  it("carries the server-stamped field, so a first-come app's create is not refused", async () => {
+    // The one that was written by nobody. `stampField` parsed, passed publish's checks and reached
+    // `config/public` — and no host put the key in the record, so `stampOk` refused every create a
+    // first-come app took and answered "Missing or insufficient permissions" about no field at all.
+    //
+    // The VALUE cannot be asserted and must not be: it is the SDK's sentinel, and the whole point
+    // is that this machine does not decide what it becomes. What is asserted is that the key is
+    // there, because presence is what the rule tests.
+    writeCollection("bookings", {
+      requesterName: { type: "string", label: "Name", required: true },
+      requesterEmail: { type: "email", label: "Email", required: true },
+      slot: { type: "string", label: "Slot", required: true },
+      status: { type: "enum", label: "Status", values: ["booked"] },
+      createdAt: { type: "datetime", label: "Queued at" },
+    });
+    writeApp(
+      bookingApp({
+        submit: {
+          createFields: ["requesterName", "requesterEmail", "slot", "status", "createdAt"],
+          stampField: "createdAt",
+        },
+      }),
+    );
+
+    const result = await writePreviewSubmission(root, "bookings", { requesterName: "客", slot: "roomA-1000" });
+
+    expect(result.ok === false ? result.error : "").toBe("");
+    const written = batched.find((op) => op.startsWith("set apps/"));
+    const record = JSON.parse(written?.slice(written.indexOf("{")) ?? "{}") as Record<string, unknown>;
+    expect(record.createdAt).toEqual({ __serverTimestamp: true });
+    // And it is not offered as a box to fill in: the visitor never chooses it.
+    expect(record).toEqual({
+      requesterName: "客",
+      slot: "roomA-1000",
+      requesterEmail: OWNER.email,
+      status: "booked",
+      createdAt: { __serverTimestamp: true },
+    });
   });
 
   it("makes the id the thing being claimed, and pairs the mirror in ONE batch", async () => {
