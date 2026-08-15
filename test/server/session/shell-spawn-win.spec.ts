@@ -40,7 +40,23 @@ const runShell = (command: string, cwd: string, replaceShell = false) => run(she
 /** The path a Shell cell actually takes: a LaunchTarget, resolved the way spawnLauncherPty does. */
 const runTarget = (target: LaunchTarget, cwd: string) => run(launchInvocation(target, "win32", undefined), cwd);
 
-describe.skipIf(!isWindows)("a shell terminal on Windows", () => {
+// Every test here starts a REAL PowerShell through a real PTY, which is not what the default
+// 15s `testTimeout` was sized for — that number is for unit tests. The first spawn in the process
+// is the expensive one (PowerShell loading .NET), and on the PR gate it is slower still because
+// that workflow deliberately does NOT disable Defender: `pull_request` runs code the PR supplied,
+// so turning the runner's protection off ahead of it is a trade this repo refused (#1723).
+//
+// Measured on the same spec, same command, same runner image:
+//
+//   Windows (daily), Defender off   2956ms
+//   Windows (PR),    Defender on    4272 / 4773 / 4896ms  — then 15007ms and a failure
+//
+// So the PR gate ran at 1.5-1.7x with less than half the headroom, and load finished the job
+// (#1740). The timeout is raised HERE rather than globally: 15s is right for the other 700 spec
+// files, and raising it for all of them would hide a real slowdown in any of them.
+const PTY_TIMEOUT_MS = 60_000;
+
+describe.skipIf(!isWindows)("a shell terminal on Windows", { timeout: PTY_TIMEOUT_MS }, () => {
   let dir = "";
   beforeAll(() => {
     dir = mkdtempSync(path.join(tmpdir(), "mt-shell-"));
@@ -136,7 +152,7 @@ describe.skipIf(!isWindows)("a shell terminal on Windows", () => {
 // The shell under test is one we WRITE, not one the runner image happens to ship: a `.cmd` inside
 // a directory whose name contains a space. That makes the repro deterministic, and it exits on its
 // own — pointing this at a real interactive shell would just hang the pty.
-describe.skipIf(!isWindows)("a shell path containing a space", () => {
+describe.skipIf(!isWindows)("a shell path containing a space", { timeout: PTY_TIMEOUT_MS }, () => {
   const TOKEN = "MTOK-spaced-shell";
   let root = "";
   let shellPath = "";
