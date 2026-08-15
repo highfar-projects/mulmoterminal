@@ -214,7 +214,11 @@ describe("shared app preview writes", () => {
       }),
     );
 
-    const result = await writePreviewSubmission(root, "bookings", { requesterName: "客", slot: "roomA-1000" });
+    // A VALUE IS SENT FOR IT, and it must not survive. Publish keeps the stamped field out of the
+    // drawn form, so nothing should be able to offer one — but the only value the rules accept is
+    // the one they set themselves, so the host has to be the thing that guarantees it rather than
+    // the projection two layers up.
+    const result = await writePreviewSubmission(root, "bookings", { requesterName: "客", slot: "roomA-1000", createdAt: "1999-01-01T00:00:00.000Z" });
 
     expect(result.ok === false ? result.error : "").toBe("");
     const written = batched.find((op) => op.startsWith("set apps/"));
