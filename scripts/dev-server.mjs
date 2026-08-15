@@ -19,7 +19,7 @@ import { spawn } from "node:child_process";
 import { watch } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveWatchDirs, shouldSchedule, isReloadableChange } from "./dev-server-config.js";
+import { resolveWatchDirs, shouldSchedule, isReloadableChange, restartPlan } from "./dev-server-config.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // Which dirs a source change reloads on (server/ + the common/ and bin/ the backend imports),
@@ -31,18 +31,23 @@ const STUB = process.env.DEV_SERVER_ENTRY;
 const ENTRY = STUB ? path.resolve(STUB) : path.join(ROOT, "server", "index.ts");
 const NODE_ARGS = STUB ? [ENTRY] : ["--import", "tsx", "--env-file-if-exists=.env", ENTRY];
 
-// A crash that recurs within this window is treated as a crash-LOOP: back off (so we don't
-// spin at 100% CPU re-crashing) but keep retrying, since a source edit — which triggers its
-// own restart below — is usually how the dev fixes it.
-const FAST_CRASH_MS = 2000;
+// A crash loop backs off (so we don't spin at 100% CPU re-crashing) but keeps retrying, since a
+// source edit — which triggers its own restart below — is usually how the dev fixes it. What
+// counts as a loop is CONSECUTIVE FAILURES, not how fast the process died: the backend does its
+// whole setup before it binds the port, so a busy port took ~3s to fail and the old elapsed-time
+// test read every one of those as a one-off (#1735). The decision itself is in
+// dev-server-config.js so it can be tested without spawning a backend.
 const MIN_DELAY_MS = 250;
 const MAX_DELAY_MS = 4000;
+// Reset when a backend stays up past this, which is the point it must have bound the port —
+// this is the ONLY thing elapsed time is still used for.
+const HEALTHY_MS = 5000;
 
 let child = null;
 let restartTimer = null; // non-null => a fresh backend is already scheduled; the single guard
 let killedForRestart = false; // this child was killed by us (file change), not a crash
 let shuttingDown = false;
-let delay = MIN_DELAY_MS;
+let consecutiveFailures = 0;
 let startedAt = 0;
 
 function log(msg) {
@@ -64,20 +69,19 @@ function bringUp() {
     if (shuttingDown) return;
     if (killedForRestart) {
       killedForRestart = false;
-      delay = MIN_DELAY_MS; // a deliberate restart, not a crash — come back briskly
-      scheduleBringUp(delay);
+      consecutiveFailures = 0; // a deliberate restart, not a crash — come back briskly
+      scheduleBringUp(MIN_DELAY_MS);
       return;
     }
-    const ranFor = Date.now() - startedAt;
-    const how = signal ? `signal ${signal}` : `code ${code}`;
-    if (ranFor < FAST_CRASH_MS) {
-      delay = Math.min(delay * 2, MAX_DELAY_MS); // crash-loop: ease off but keep trying
-      log(`backend exited (${how}) after ${ranFor}ms — restarting in ${delay}ms (crash loop? check the stack above)`);
-    } else {
-      delay = MIN_DELAY_MS; // it ran a while, so this is a one-off — restart briskly
-      log(`backend exited (${how}) — restarting in ${delay}ms`);
-    }
-    scheduleBringUp(delay);
+    // A backend that stayed up this long got past listen(), so whatever went wrong afterwards is
+    // not the same failure as the one before it.
+    if (Date.now() - startedAt >= HEALTHY_MS) consecutiveFailures = 0;
+    consecutiveFailures += 1;
+    const plan = restartPlan({ code, signal, consecutiveFailures, minDelayMs: MIN_DELAY_MS, maxDelayMs: MAX_DELAY_MS });
+    log(plan.reason);
+    // Not retried: a port that is taken stays taken, and each attempt re-runs the backend's
+    // setup, which writes into the user's home. A file change still re-arms the loop below.
+    if (plan.retry) scheduleBringUp(plan.delayMs);
   });
 }
 
@@ -98,7 +102,9 @@ function onChange(filename) {
   clearTimeout(debounce);
   debounce = setTimeout(() => {
     if (shuttingDown) return;
-    delay = MIN_DELAY_MS;
+    // An edit is the dev's answer to whatever was failing, so the failure count starts over —
+    // including after a port conflict, where this is the only way back.
+    consecutiveFailures = 0;
     if (child) {
       log(`change detected (${filename}) — restarting backend`);
       killedForRestart = true;
