@@ -42,10 +42,14 @@ const chromeReady: boolean = await (async () => {
 const datasets = { menu: [{ title: "Curry" }, { title: "Ramen" }] };
 const submit = { orders: { createFields: ["name"] } };
 
-/** What a working page looks like, and every line of it is load-bearing. */
+/** What a working page looks like, and every line of it is load-bearing.
+ *
+ *  The file input is here deliberately: a browser refuses a non-empty value on one, and the throw
+ *  used to take the whole run with it — an app with an upload control reported nothing at all. */
 const WORKS = `
 <div id="menu">loading…</div>
 <input id="name">
+<input type="file" id="receipt">
 <button type="button" id="go">Order</button>
 <script>
   const view = window.__MC_APP_VIEW;

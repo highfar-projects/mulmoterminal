@@ -191,32 +191,49 @@ async function serveHarness(): Promise<{ origin: string; close: () => Promise<vo
  *
  *  Runs INSIDE the frame, as a string, because the frame's origin is opaque — the harness cannot
  *  reach into it, and only the browser automation can. */
+/** The types this must not touch, and each is its own kind of damage.
+ *
+ *  `file` is the one that stopped a run: assigning a non-empty value to it throws, and the throw
+ *  took the whole action down — an app with an upload control reported nothing at all rather than
+ *  reporting its handshake and its buttons. `submit`, `button`, `reset` and `image` carry the
+ *  control's LABEL in `value`, so filling them renames the button this run is about to press and
+ *  then reports it under a name the page never had. `hidden` is the page's own bookkeeping. */
+const UNFILLABLE = new Set(["file", "submit", "button", "reset", "image", "hidden"]);
+
 const FILL_INPUTS = `(() => {
+  const skip = ${JSON.stringify([...UNFILLABLE])};
   const fill = (el, value) => {
     el.value = value;
     el.dispatchEvent(new Event("input", { bubbles: true }));
     el.dispatchEvent(new Event("change", { bubbles: true }));
   };
   for (const el of document.querySelectorAll("input, textarea, select")) {
-    if (el.disabled) continue;
-    if (el.tagName === "SELECT") {
-      const option = [...el.options].find((o) => o.value !== "");
-      if (option !== undefined && el.value === "") fill(el, option.value);
-      continue;
+    // Per element. One control this browser refuses to be written to must not take the run with
+    // it: what is being measured is the page, and a page is still worth a report without it.
+    try {
+      if (el.disabled || skip.includes(el.type)) continue;
+      if (el.tagName === "SELECT") {
+        const option = [...el.options].find((o) => o.value !== "");
+        if (option !== undefined && el.value === "") fill(el, option.value);
+        continue;
+      }
+      if (el.type === "checkbox" || el.type === "radio") {
+        if (!el.checked) { el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true })); }
+        continue;
+      }
+      if (el.value !== "") continue;
+      if (el.type === "email") fill(el, "preview@example.com");
+      else if (el.type === "number" || el.type === "range") fill(el, "1");
+      else if (el.type === "date") fill(el, "2026-01-01");
+      else if (el.type === "datetime-local") fill(el, "2026-01-01T10:00");
+      else if (el.type === "time") fill(el, "10:00");
+      else if (el.type === "tel") fill(el, "09000000000");
+      else if (el.type === "url") fill(el, "https://example.com");
+      else fill(el, "preview");
+    } catch (err) {
+      // Swallowed on purpose, and nothing is reported: this is the harness preparing the page, not
+      // the page misbehaving. Blaming the author for it would be blaming them for our own step.
     }
-    if (el.type === "checkbox" || el.type === "radio") {
-      if (!el.checked) { el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true })); }
-      continue;
-    }
-    if (el.value !== "") continue;
-    if (el.type === "email") fill(el, "preview@example.com");
-    else if (el.type === "number" || el.type === "range") fill(el, "1");
-    else if (el.type === "date") fill(el, "2026-01-01");
-    else if (el.type === "datetime-local") fill(el, "2026-01-01T10:00");
-    else if (el.type === "time") fill(el, "10:00");
-    else if (el.type === "tel") fill(el, "09000000000");
-    else if (el.type === "url") fill(el, "https://example.com");
-    else fill(el, "preview");
   }
 })()`;
 
