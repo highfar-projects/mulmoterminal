@@ -175,6 +175,27 @@ CLAUDE.md の規則（**MulmoClaude はリファレンスのホストである**
 | P6 | **B のフレーム内**の捕捉（bootstrap 側で `onerror` と `fetch`） | core / MulmoClaude と共有 |
 | P7 | **C のプレビュー**の記録 = プレビュー計画 P3 と同一実装 | MulmoTerminal |
 
+**P7 を先にやった（2026-08-15）。** 順番を変えた理由は 3 つで、A と B の順番（P0 から）は
+変えていない:
+
+- **C だけが「LLM が書いて、一度も動かしていない」コード**である。A と B は人間かプラグインが
+  書いた。壊れているデバッグの往復は C のもの。
+- **C はサーバ側の仕事が要らない。** `connect-src 'none'` で API を呼ばないので、P0 の輪バッファは
+  C には何も足さない。全部 `SharedAppPreview.vue` の中にある。
+- **記録器も語り手も既にあった。** headless preview（プレビュー計画 P5）が `channel.post` を包んで
+  親の答えを記録し、観測を散文にする 16 本のテスト付きの語り手を持っている。
+
+やったこと: 輪バッファ（`src/utils/sharedAppPreviewLog.ts`、非リアクティブ・件数だけ ref）、
+**語彙を `common/sharedAppViewVocabulary.ts` に出して headless と共有**（＝ペインのコピーと
+agent 自身の `action: "preview"` が同じ文を出す）、ペイン下端の件数表示と「Copy what happened」。
+フレームの中の例外・無視されたモーダルは `@receptron/sharedapp` 0.6.0 の notice で届く
+（[公開ビューの診断](./feat-shared-app-view-diagnostics.md) の 2 の実装でもあり、mulmoserver 側にも
+そのまま効く）。
+
+**マスクは値を入れないことで済ませた。** フィールド名とコレクション id だけを記録するので、
+「本文を既定で出さない」の判断が輪バッファの型そのものになっている。ホームパスは畳む。
+サインインしているアドレスは入れない（セッションの有無は、拒否された書き込みとして時系列に出る）。
+
 P0〜P4 だけで、A と B の「何が起きたか」は運べるようになる。P6 が足すのは
 「**呼ぶ前に落ちた**」の 1 種類だけで、そのために 3 リポジトリを動かす順番が要る。
 
