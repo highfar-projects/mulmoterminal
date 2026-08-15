@@ -1,0 +1,114 @@
+# ci: Windows のゲートを PR 前にも置く (#1721)
+
+## 問題
+
+`windows-daily.yaml` は `pull_request` で走らない。結果として **Windows の移植性ミスは必ず
+main に着地してから見つかる**。issue 一覧に 15 件残っている:
+
+#478 #802 #816 #858 #934 #1079 #1212 #1267 #1396 #1459 #1481 #1484 #1539 #1653 #1709
+
+#1653 は赤が続いた間に**別の失敗が 5 件積み上がった**。直近の #1719 もこの形。
+
+大半は**テスト側の移植性バグ**（POSIX パスリテラル、`chmod`、`HOME` と `USERPROFILE`、
+`fs.watch`、タイムアウト）で、**PR 時点で走れば確実に捕まる種類**。
+
+## 設計
+
+`.github/workflows/windows-pr.yaml` を新設。`windows-daily.yaml` は残す。
+
+| | windows-pr | windows-daily |
+| --- | --- | --- |
+| 契機 | `pull_request` | schedule / push:main / dispatch |
+| 実行 | **`yarn test` のみ** | lint + typecheck + build + test |
+| Node | 22.x のみ | 22.x と 24.x |
+| 目的 | マージ前に移植性回帰を止める | 広く見る |
+
+### なぜ lint / typecheck / build を回さないか
+
+**プラットフォームによって答えが変わらないから。** `ci.yml` が ubuntu と macOS で既に回している。
+Windows で挙動が変わるのは `yarn test` だけなので、PR ごとに払う価値があるのもそこだけ。
+これが「全 PR に載せられる安さ」の理由そのもの。
+
+### `paths-ignore` はトリガーに置いてはいけない（Codex レビューでの指摘）
+
+**最初は `on: pull_request:` に `paths-ignore` を置いていたが、それでは required gate にできない。**
+
+`paths-ignore` でスキップされた workflow は **チェックを 1 つも作らない**。`Windows (PR)` を
+required に設定した瞬間、docs だけの PR は「Expected — waiting for status」のまま**永久に
+マージできなくなる**。
+
+なので**トリガーは無条件にし、ジョブの中で判定する**。ジョブは必ず走って必ず報告し、
+docs だけの PR では以降のステップを飛ばして緑で終わる。
+
+**2 ジョブに分けて `if:` でスキップする形も取らなかった。** スキップされたジョブは branch
+protection に対して成功として報告される — が、それは**プラットフォーム側の規則**であって、
+このリポジトリから確かめられるものではない。実際に成功する 1 ジョブなら、その規則が真である
+必要が無い。
+
+### 何を「Windows に見えない変更」とみなすか
+
+**当初 issue では「`server/infra/**` `server/session/**` `test/server/**` を触る PR だけ」を
+提案したが、調べたら成り立たない。** プラットフォームで分岐する spec は 9 ディレクトリに散っていて、
+`test/src/components/` もその 1 つ（#1719 がそこ）。
+
+```
+test/scripts/  test/server/agents/  test/server/backends/  test/server/backends/remoteHost/
+test/server/config/  test/server/files/  test/server/infra/  test/server/rooms/
+test/server/routes/  test/server/session/  test/src/components/
+```
+
+ホワイトリストは**次に Windows 依存の spec を足す人が更新しなければならず、忘れた場合の
+failure mode が「沈黙」**になる。`BUNDLED_SKILL_NAMES` と同じ罠。
+
+**Windows のテスト結果に影響し得ないと証明できるのは docs / plans / markdown だけ**なので、
+その 3 つを除外する。除外の書き方は上のとおりトリガーではなくジョブ内の判定
+（`^(docs/|plans/)|\.md$` に全ファイルが当てはまるときだけ以降のステップを飛ばす）。
+
+判定は 8 パターンで実挙動を確認した。**混在（`docs/a.md` + `server/x.ts`）が run=true になることが
+いちばん重要**で、ここを外すと server を触った PR で Windows テストが黙って飛ぶ — この workflow が
+防ごうとしている失敗そのものになる。
+
+### Defender は切らない（Codex レビューでの指摘）
+
+`windows-daily.yaml` は `Set-MpPreference -DisableRealtimeMonitoring $true` を実行している。
+realtime スキャンが yarn の atomic rename を EPERM で落とすため。**この workflow では実行しない。**
+
+`pull_request` は **PR が持ち込んだコードを実行する**（install の lifecycle script と、テスト
+ファイルそのもの）。public リポジトリなので誰でも PR を開ける。**ランナーの保護を先に切ってから
+そのコードを走らせるのは、install が時々コケることと引き換えにするには大きすぎる。**
+
+daily の方は `main` / schedule / 手動 dispatch でしか走らず、実行するコードは既に信頼されている
+ので、回避策はそちらに残す。**差は trust boundary であって、書き忘れではない。**
+
+EPERM でフレークするようなら、答えはリトライか狭い除外パスであって、untrusted なコードの前で
+Defender を切ることではない。
+
+### キャッシュ
+
+`node_modules` のキーは `windows-daily.yaml` のものと**同一文字列**（`win-node-modules-22.x-<lockfile hash>`）。
+PR ブランチは default branch のキャッシュを読めるので、main が作った tree をそのまま復元できる。
+
+## 併せて直したもの（#1721 の範囲外）
+
+`.github/workflows/` の 8 本のうち **`ci.yml` だけ `permissions:` が無かった**（他 7 本はある）。
+CodeQL の "Workflow does not contain permissions" 対象。両ジョブは checkout / install / lint /
+typecheck / build / test / pack-install-boot だけで、リポジトリにも API にも書かないので
+`contents: read` で足りる。`persist-credentials: false` も checkout 2 箇所に足した。
+
+**8 本目を permissions 付きで足しながら、既存の 1 本の抜けを残すのは筋が通らない**ので同じ PR に
+入れた。分けたければ切り出せる。
+
+## 検証
+
+**この workflow は自分自身の PR で走る。** `pull_request` 契機は `workflow_dispatch` と違って
+default branch にある必要が無いため（`workflow_dispatch` はある — #1721 とは別の制約）。
+
+見るべきもの:
+
+1. `Windows (PR)` が PR に現れて緑になる
+2. **実行時間**。これが「全 PR に載せてよいか」の判断材料で、issue の時点では未測定だった
+3. docs だけの PR でも**チェックは現れて緑になる**こと（テストは走らず、ジョブは成功する）。
+   走らないのはステップであって workflow ではない — required gate にできるのはこの形だけ
+
+所要時間が許容できなければ、ホワイトリストではなく **`yarn test` の対象を絞る**方向で再検討する
+（ホワイトリストが腐る理由は上記のとおり変わらない）。
