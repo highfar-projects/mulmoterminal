@@ -1,5 +1,8 @@
 // @vitest-environment node
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll, afterEach, afterAll } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 // node-pty is a native module and spawning is the whole point of the file under test, so
 // the pty itself is mocked: what matters here is the ENVIRONMENT handed to it.
@@ -11,13 +14,10 @@ vi.mock("../../../server/infra/tmux.js", () => ({
   tmuxHasSession: (id: string) => liveTmuxSessions.has(id),
   // The real one turns `env` into `-e KEY=VALUE` pairs, which is the only way a variable
   // reaches a tmux PANE — so the fake has to carry it or the #1367 assertions below prove nothing.
-  tmuxNewSessionArgs: (id: string, file: string, args: string[], _cwd: string, env: Record<string, string> = {}) => [
-    "new-session",
-    id,
-    ...Object.entries(env).flatMap(([key, value]) => ["-e", `${key}=${value}`]),
-    file,
-    ...args,
-  ],
+  tmuxNewSessionArgs: (id: string, file: string, args: string[], cwd: string, env: Record<string, string> = {}) => {
+    newSessionCwd = cwd;
+    return ["new-session", id, ...Object.entries(env).flatMap(([key, value]) => ["-e", `${key}=${value}`]), file, ...args];
+  },
   tmuxScrubEnvNames: (names: readonly string[]) => scrub(names),
 }));
 
@@ -26,6 +26,8 @@ vi.mock("../../../server/infra/tmux.js", () => ({
 vi.mock("../../../server/config/worktree-env.js", () => ({ reservedWorktreeEnv: () => reserved }));
 
 let tmuxOn = false;
+// What ptySpawn handed tmuxNewSessionArgs as the PANE's directory (the `-c` the real one builds).
+let newSessionCwd = "";
 let reserved: Record<string, string> = {};
 const liveTmuxSessions = new Set<string>();
 
@@ -40,9 +42,10 @@ const EXISTING_CWD = process.cwd();
 const S1 = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1";
 const S2 = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2";
 
-const { spawnPty, ptySpawn, ptyWouldReattach } = await import("../../../server/session/pty-spawn.js");
+const { spawnPty, ptySpawn, ptyWouldReattach, TMUX_CLIENT_CWD } = await import("../../../server/session/pty-spawn.js");
 
 const envOf = (call: number = 0): NodeJS.ProcessEnv => (spawn.mock.calls[call] as unknown as [string, string[], { env: NodeJS.ProcessEnv }])[2].env;
+const cwdOf = (call: number = 0): string => (spawn.mock.calls[call] as unknown as [string, string[], { cwd: string }])[2].cwd;
 
 beforeEach(() => {
   spawn.mockClear();
@@ -155,6 +158,50 @@ describe("ptySpawn — carries the removal down both paths", () => {
     const result = ptySpawn(S1, "claude", [], EXISTING_CWD, true, { unset: ["ANTHROPIC_API_KEY"] });
     expect(result.tmux).toBe(true);
     expect(envOf()).not.toHaveProperty("ANTHROPIC_API_KEY");
+  });
+});
+
+// Which directory the SPAWNED PROCESS runs in, which for the tmux path is not the cell's.
+//
+// tmux 3.7 moves the server's cwd to the client's on every `new-session` and never restores it,
+// and `spawn_pane()` guards its chdir on `getcwd()`. A client started inside a worktree therefore
+// leaves the server there, and once this app removes that worktree every later pane ignores `-c`
+// and starts in the deleted directory — where a program that calls `getcwd()` at startup dies on
+// the spot (#1725, tmux/tmux#5473). The pane still goes where it was asked to: `-c` places it.
+describe("ptySpawn — the directory the process itself is started from", () => {
+  // A cell directory MADE for the test, so it cannot coincide with the home directory whatever
+  // the environment says. Two earlier shapes of this constant were both machine-dependent, which
+  // is the trap this repo keeps hitting: `process.cwd()` IS the home directory for anyone running
+  // the suite from theirs, and a bare `tmpdir()` is too when `TMPDIR` points at it (CodeRabbit
+  // caught the second). A directory created UNDER tmpdir can never equal its own parent, so the
+  // inequality below means the same thing on every machine — and it exists, which ptySpawn's cwd
+  // check requires.
+  let CELL_CWD = "";
+  beforeAll(() => {
+    CELL_CWD = mkdtempSync(path.join(tmpdir(), "mt-cell-"));
+  });
+  afterAll(() => rmSync(CELL_CWD, { recursive: true, force: true }));
+
+  it("starts the tmux client somewhere that cannot be deleted, not in the cell", () => {
+    tmuxOn = true;
+    ptySpawn(S1, "claude", [], CELL_CWD, true);
+    expect(cwdOf()).toBe(TMUX_CLIENT_CWD);
+    expect(cwdOf()).not.toBe(CELL_CWD);
+  });
+
+  // The pane's directory is a separate decision and must keep following the cell.
+  it("still asks tmux for the cell's directory", () => {
+    tmuxOn = true;
+    ptySpawn(S1, "claude", [], CELL_CWD, true);
+    // The fake tmuxNewSessionArgs above records `cwd`; the real one turns it into `-c`.
+    expect(newSessionCwd).toBe(CELL_CWD);
+  });
+
+  // Without tmux there is no client in between, so the process itself must run in the cell.
+  it("runs a direct spawn in the cell's directory", () => {
+    tmuxOn = false;
+    ptySpawn(S1, "claude", [], CELL_CWD, true);
+    expect(cwdOf()).toBe(CELL_CWD);
   });
 });
 
