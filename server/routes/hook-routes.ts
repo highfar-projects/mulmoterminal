@@ -13,7 +13,7 @@ import { activityHookEffects, claudeOwnSessionId, pushKindFor, resolveHookCwd, r
 import { runCompletionHook } from "../session/completion-hooks.js";
 import { messageOf } from "../errors.js";
 import { headerHookEffect } from "../session/header-hook.js";
-import { claudeSessionIds, lastPrompts, lastResponses, ptys } from "../session/registry.js";
+import { claudeSessionIds, clearedAtMs, lastPrompts, lastResponses, ptys } from "../session/registry.js";
 import { clearedTranscripts, markTranscriptCleared } from "../session/cleared-transcripts.js";
 import { latestUserPrompt } from "../session/session-reads.js";
 import { notifyTaskFinished } from "../session/task-push.js";
@@ -168,7 +168,9 @@ async function clearHeaderPrompt(deps: HookDeps, sessionId: string, cwd: string 
   lastPrompts.set(sessionId, "");
   lastResponses.set(sessionId, "");
   // Not claudeSessionIds: the next hook overwrites it with whatever claude now calls itself, and
-  // emptying it here would leave a window where the pane can read nothing at all.
+  // emptying it here would leave a window where the pane can read nothing at all. The TIME is what
+  // separates the two conversations in claude's prompt history, which has no seam of its own.
+  clearedAtMs.set(sessionId, Date.now());
   await markTranscriptCleared(sessionId, cwd);
   deps.forgetTitle(sessionId);
   deps.publishActivity(sessionId);

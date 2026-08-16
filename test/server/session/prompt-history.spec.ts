@@ -113,6 +113,33 @@ describe("claudePromptsFor", () => {
 
 // Codex, #1749: claude reissues its own session id on `/clear` AND `/compact` while still
 // reporting to us under ours, so a pane keyed on our id alone freezes at that moment.
+// Codex, #1749: after a `/clear` the rest of the app blanks the header, the title and the last
+// reply, so the pane may not be the one surface still showing the ended conversation. The floor is
+// a TIME because claude's prompt history is one file per user, with no seam at a clear.
+describe("claudePromptsFor under a clear floor", () => {
+  const at = (ms: number, display: string) => historyLine({ timestamp: ms, display });
+
+  it("keeps only what was typed at or after the clear", () => {
+    const records = [at(10, "before"), at(20, "at the clear"), at(30, "after")];
+    expect(claudePromptsFor(records, ["s1"], PROMPT_HISTORY_MAX, 20).map((p) => p.text)).toEqual(["at the clear", "after"]);
+  });
+
+  it("keeps everything when no clear is recorded", () => {
+    const records = [at(10, "before"), at(30, "after")];
+    expect(claudePromptsFor(records, ["s1"], PROMPT_HISTORY_MAX, undefined).map((p) => p.text)).toEqual(["before", "after"]);
+  });
+
+  it("drops a prompt with no readable time UNDER a floor, and keeps it without one", () => {
+    const undated = historyLine({ timestamp: "nonsense", display: "when?" });
+    expect(claudePromptsFor([undated], ["s1"], PROMPT_HISTORY_MAX, 20)).toEqual([]);
+    expect(claudePromptsFor([undated], ["s1"]).map((p) => p.text)).toEqual(["when?"]);
+  });
+
+  it("answers empty when everything predates the clear, rather than falling back to it", () => {
+    expect(claudePromptsFor([at(1, "old"), at(2, "older")], ["s1"], PROMPT_HISTORY_MAX, 100)).toEqual([]);
+  });
+});
+
 // The second id exists for `/clear`, which re-mints claude's own id (cleared-transcripts.ts).
 // `/compact` is NOT one of these: measured over the 95 compacted transcripts on this machine, the
 // 61 with prompts afterwards all kept the same id, so the chain built for it was removed (#1749).

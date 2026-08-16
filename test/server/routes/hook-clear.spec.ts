@@ -9,7 +9,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import express from "express";
 import request from "supertest";
 import { mountHookRoute } from "../../../server/routes/hook-routes";
-import { lastPrompts, lastResponses } from "../../../server/session/registry";
+import { clearedAtMs, lastPrompts, lastResponses } from "../../../server/session/registry";
 import { clearedTranscripts } from "../../../server/session/cleared-transcripts";
 
 // The prompt seed reads the transcript for a session this process has no prompt for; the tests
@@ -58,6 +58,7 @@ const postHook = (body: Record<string, unknown>) => request(app).post("/api/hook
 beforeEach(() => {
   lastPrompts.delete(ID);
   lastResponses.delete(ID);
+  clearedAtMs.delete(ID);
   clearedTranscripts.delete(ID);
   markCalls.length = 0;
   vi.clearAllMocks();
@@ -76,6 +77,21 @@ describe("SessionStart source=clear", () => {
     expect(clearedTranscripts.has(ID)).toBe(true);
     expect(deps.forgetTitle).toHaveBeenCalledWith(ID);
     expect(deps.publishActivity).toHaveBeenCalledWith(ID);
+  });
+
+  // The prompts pane reads claude's own history file, which has no seam at a clear — the TIME is
+  // what separates the ended conversation from the new one (#1749).
+  it("records WHEN the clear happened, so the prompts pane can draw the line", async () => {
+    const before = Date.now();
+    await postHook({ hook_event_name: "SessionStart", source: "clear" });
+    const at = clearedAtMs.get(ID);
+    expect(at).toBeGreaterThanOrEqual(before);
+    expect(at).toBeLessThanOrEqual(Date.now());
+  });
+
+  it("records no such time for any other SessionStart", async () => {
+    await postHook({ hook_event_name: "SessionStart", source: "compact" });
+    expect(clearedAtMs.has(ID)).toBe(false);
   });
 
   // `/compact` arrives as SessionStart too, mid-conversation. Marking its transcript cleared

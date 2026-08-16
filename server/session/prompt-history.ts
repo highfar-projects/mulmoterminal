@@ -90,17 +90,37 @@ export const historyIdsFor = (ourId: string, claudeId: string | undefined): stri
  *
  *  A Set rather than `includes`: a much-compacted session carries a whole chain of ids, and this
  *  runs per record over a file with tens of thousands of them. */
-export function claudePromptsFor(records: Record<string, unknown>[], sessionIds: readonly string[], limit: number = PROMPT_HISTORY_MAX): PromptEntry[] {
+export function claudePromptsFor(
+  records: Record<string, unknown>[],
+  sessionIds: readonly string[],
+  limit: number = PROMPT_HISTORY_MAX,
+  since?: number | undefined,
+): PromptEntry[] {
   const wanted = new Set(sessionIds);
   return collect(
     records,
     (record) => {
       const read = claudeHistoryPrompt(record);
-      return read && wanted.has(read.sessionId) ? read.prompt : null;
+      return read && wanted.has(read.sessionId) && afterFloor(read.prompt, since) ? read.prompt : null;
     },
     limit,
   );
 }
+
+/** Whether a prompt belongs to the conversation running NOW. `since` is set only for a session
+ *  that was `/clear`ed: everything before that moment belongs to the conversation the user ended,
+ *  and the rest of the app already refuses to show it (#1085) — the header, the title and the last
+ *  reply are all blanked there, so the pane may not be the one surface that keeps it (Codex,
+ *  #1749).
+ *
+ *  A TIME floor rather than dropping our own session id, because whether `/clear` re-mints claude's
+ *  id is not something this repo has measured — and the id-based version fails closed if it does
+ *  not, leaving the pane permanently empty. A floor is right either way.
+ *
+ *  A prompt whose own time could not be read is dropped under a floor: it cannot be SHOWN to be
+ *  after the clear, and the boundary is a promise rather than a preference. Without a floor it is
+ *  kept, since there is then nothing it could be on the wrong side of. */
+const afterFloor = (prompt: PromptEntry, since: number | undefined): boolean => since === undefined || (prompt.at !== null && prompt.at >= since);
 
 /** codex has no history file and no hooks, so its rollout is the only record of a prompt. The
  *  `user_message` events are the ones a person sent: measured over 40 real rollouts, none of them

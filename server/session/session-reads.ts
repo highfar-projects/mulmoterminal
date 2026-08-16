@@ -30,6 +30,7 @@ import {
   activity,
   aiTitles,
   claudeSessionIds,
+  clearedAtMs,
   codexRollouts,
   codexRolloutsHydrated,
   isBackgroundSession,
@@ -318,7 +319,7 @@ function claudeTranscriptPrompts(cwd: string, id: string): SessionPrompts {
 function claudePrompts(cwd: string, id: string): SessionPrompts {
   const ids = historyIdsFor(id, claudeSessionIds.get(id));
   try {
-    const found = claudePromptsFor(readTailRecords(claudeHistoryFile()), ids, PROMPT_SCAN_LIMIT);
+    const found = claudePromptsFor(readTailRecords(claudeHistoryFile()), ids, PROMPT_SCAN_LIMIT, clearedAtMs.get(id));
     if (found.length > 0) return promptWindow(found);
   } catch {
     // No history file, or one this could not read — the transcript still knows something.
