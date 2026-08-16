@@ -82,6 +82,27 @@ keys: ['signature', 'thinking', 'type']
 （実測 6,737 文字）なので、決定 2 の 6 行キャップで冒頭は出る。別ファイルにあるのは**過程**だけ。
 `meta.json` の `toolUseId` が本体の `Task` tool_use の `id` と一致するので、後から掘る道は閉じない。
 
+## 計測は「観測」であって契約ではない
+
+上の数字と形式の主張はすべて **2026-08-16 に、Claude Code
+`2.1.226` / `2.1.228` / `2.1.231` / `2.1.233`（transcript の `version` フィールド実測）** に対して
+取ったもの。claude の on-disk 形式は非公開で、`thinking` の本文が常に空であることも、
+`tool_result` が 6 行で足りることも、sub agent の最終報告が必ず本体に入ることも、
+**upstream が保証したものではない**。
+
+`server/session/project-dir.ts` が既に「claude の on-disk 規約は upstream を写してテストで固定する」
+方針を取っているので、同じ扱いにする:
+
+- **バージョンを記録する。** 上の 4 つを spec のフィクスチャのコメントに残す
+- **形式が変わったときに黙って壊れない側へ倒す。** `thinking` の本文が空でなくなったら、
+  捨てるのではなく `text` と同じ扱いで出す（決定 4 は「本文が無いから出さない」であって
+  「出したくない」ではない）。`tool_result` の `content` が未知の形なら
+  `JSON.stringify` して同じ 6 行キャップに掛ける
+- **未知の content ブロック種別は無視ではなく 1 行で出す**（`[unknown block: <type>]`）。
+  無視すると**新しい形式が来たときにビューが静かに痩せる**ので、気づけるようにしておく
+
+これは Codex round 1 の P2 への対応（PR #1755）。
+
 ## 変更
 
 ### サーバ
@@ -97,21 +118,55 @@ keys: ['signature', 'thinking', 'type']
 - `sessionTimeline` の `foldTimeline`（`session-reads.ts:195`）と同じ形。窓が行数でターン単位という
   点だけが違う
 
-ターン境界は **`type:"user"` かつ非 sidechain かつ content に `text` を持つレコード**。
+ターン境界は **`type:"user"` かつ非 sidechain かつ `userPromptText(record.message.content)` が
+non-null なレコード**。
+
+述語を自分で書き直さないこと。`userPromptText`（`server/session/transcript.ts:29`）は
+**`content` が素の文字列の場合と配列の場合の両方**を扱う（`Array.isArray ? map(...).join(" ") : content`）。
+「content に `text` ブロックを持つもの」と読める書き方をすると**素の文字列のプロンプトが
+境界にならず**、複数のやり取りが 1 ターンに融合して 250 行の追い出しが効かなくなる（Codex, round 1）。
+実際 claude の通常のユーザレコードは素の文字列で来る（`test/server/session/transcript.spec.ts` の
+フィクスチャがそう組んでいる）。
+
 `promptId` は使わない — 実測で 114 レコードが `promptId` 無しの `NONE` に落ちた。
+
+なお `userPromptText` は `isInjectedPrompt` を通すが、**skill が注入した本文はこれに掛からない**
+（#1748 の実測）。下の「既知の欠落」はそれを承知のうえで受け入れている。
 
 **`server/session/transcript-view-read.ts`（新規）** に `sessionTranscriptView(cwd, id)`。
 
 `session-reads.ts` には**置かない**。`sessionTimeline` / `sessionLastTurn` の隣が素直に見えるが、
-PR #1749 が同じファイルに +80 行を入れて open のままで、CLAUDE.md の「One file per agent —
-NEVER two agents in one file, whatever the line distance between them」に当たる。
 このファイルが要るのは `projectSessionsDir(cwd)` とファイル読みだけで、どちらも
-`session-reads.ts` に依存しないので、分けるのに設計上の代償が無い。
+`session-reads.ts` に依存しない。分けるのに設計上の代償が無く、`session-reads.ts` は
+#1749 で `sessionPrompts` が入って既に育っている。
+
+（当初この分離は PR #1749 が open で同じファイルを触っていたこと（CLAUDE.md の
+「One file per agent」）を理由にしていた。#1749 は 2026-08-16 にマージ済みなので
+その理由は消えたが、上の理由だけで分離は成立する。）
 
 読みは `forEachJsonlRecordIn(file, { from: Math.max(0, size - 4MB) })`。
 `readTailRecords` は同期（`readSync`）で 4MB に 24ms かかり、WebSocket でターミナルを流している
 同じプロセスを止めるので使わない。`transcript-fold` も使わない — 初回のコールドリードが全長で、
 実測 107MB の live セッションが実在する。
+
+#### 窓より大きい 1 レコードで「最新 1 ターン」が消える（要対処）
+
+`forEachJsonlRecordIn` は `from > 0` かつ `atLineStart` 未指定なら**先頭の欠けた行を捨てる**
+（`server/infra/jsonl-file.ts:104`）。半分の行は JSON ではないので正しい既定だが、
+**単一レコードが窓より大きいと窓はその内側から始まり、そのレコードごと落ちる**。
+最新レコードがそれなら、決定 1 の「最新 1 ターンは超過しても必ず出す」が破れて**ビューが空になる**。
+
+仮定ではない。#1692 が同じ機械の transcript で **1 行 4,761,619 文字**（4.5MB、3 行）を報告している。
+巨大な `tool_result` がそうなる。
+
+対処 — **窓が 0 レコードなら後ろへ広げる**:
+
+- `from` を倍にして読み直す（4MB → 8MB → 16MB …）。1 レコードでも解析できたら止める
+- **上限を決めて、そこで諦める**。上限に達しても 0 レコードなら、空ではなく
+  「この transcript は大きすぎて表示できない」と答える。空と区別がつかない失敗にしない
+- 決定 2 の 6 行キャップは**描画**の話なので、ここでは効かない。JSON を解析するには行が丸ごと要る
+
+広げるのは 0 レコードのときだけなので、通常の読みは 4MB のまま（実測で必要量は max 1457KB）。
 
 **`server/backends/remoteHost/handlers/terminalSession.ts`** に `getTerminalTranscript`。
 `getTerminalScreen` と同じ検証。MulmoClaude に対応物は無い（`terminalSession.ts` の冒頭が
@@ -138,8 +193,19 @@ NEVER two agents in one file, whatever the line distance between them」に当�
 だと、ビューは有効になり**終わった会話を出す**。#1749 iter-1 が同じ罠を踏んでいる。
 
 - 読む前に `clearedTranscripts.has(id)` を見る。マークがあれば transcript は「無い」と答える
-- マークは**サイズで自然に失効する**（`--resume` が追記してファイルがマーク時のサイズを超えたら、
-  マークはもう何も説明していない）。その判定はモジュールが持っているので自前で書かない
+- **素の `.has()` で見ること。読むたびに `stat` して `markStillHolds` を自前で呼ばない。**
+  既存の読み手は全員素の `.has()` を使っている（`session-routes.ts:129` / `session-title.ts:71` /
+  `lifecycle.ts:210` / `task-push.ts:69`）。ここだけ per-read の判定を入れると、
+  **transcript ビューだけが「clear されたか」について cockpit・サマリ・push と食い違う**
+- `markStillHolds` が hydration 経路（`cleared-transcripts.ts:105`）にしかないのは漏れではなく設計。
+  モジュール冒頭が理由を書いている — 「a server killed before reap would leave a mark that silences
+  a resumed session's summary for good」。**起動時のバックストップ**であって毎読み込みの判定ではない
+- マークは reap で捨てられる（`lifecycle.ts:161-163`、`--resume` は `term.onExit` 経由で reap を通る）。
+  `/clear` してセッションが生き続ける場合は claude が**新しい id で別ファイルに書く**ので、
+  `<ourId>.jsonl` は凍結されたままで正しい
+
+（Codex round 1 が「同一プロセスで `/clear` → `--resume` すると隠れ続ける」と P1 を出したが、
+`lifecycle.ts:161-163` によりその経路は存在しない。却下の記録は PR #1755 のコメントに残した。）
 
 **`/compact` は id を振り直さない。** #1749 iter-4〜5 がこの開発機の全 transcript で実測し、
 compact したもの 95 本 / compact 後に命令があるもの 61 本の**すべてで session id は同一**だった。
@@ -174,6 +240,23 @@ compact したもの 95 本 / compact 後に命令があるもの 61 本の**す
 - sidechain レコードが混ざっても無視される
 - 壊れた JSON 行 / `message` が無い / `content` が文字列 / 空配列
 - `promptId` を持たないレコードでもターンが切れる
+- **`content` が素の文字列のユーザレコードが境界になる**（`{type:"text"}` 配列だけでなく）
+
+Codex round 1 が挙げた端ケースも入れる。「境界がファイル先頭に無い」と
+「窓の中に境界が 1 つも無い」は別物で、前者だけでは下 2 つが素通りする:
+
+- **空ファイル / 4MB より小さいファイル**（`from` が 0 になり `dropLeading` が効かない経路）
+- **選んだ窓の中にターン境界が 1 つも無い**
+- **単一レコードが窓より大きい** → 窓を広げる経路と、上限に達したときの
+  「大きすぎて表示できない」応答（空と区別できること）
+- **読んでいる最中の追記** — 末尾が途中まで書かれた JSON 行で終わる場合
+
+ハンドラの spec（`test/server/backends/remoteHost/`）:
+
+- `clearedTranscripts` にマークがあるとき「transcript は無い」と答える —
+  ここが抜けると #1085 の違反が黙って通る
+- **`clearedTranscripts` を素の `.has()` で見ていること**。per-read の `stat` を足す変更が入ったら
+  他の読み手との食い違いとして落ちるようにする
 
 `test/server/backends/remoteHost/` にハンドラの spec。`clearedTranscripts` にマークがあるとき
 「transcript は無い」と答えることを固定する — ここが抜けると #1085 の違反が黙って通る。
@@ -188,9 +271,9 @@ compact したもの 95 本 / compact 後に命令があるもの 61 本の**す
 
 ## 先行作業との衝突
 
-**PR #1749（`origin/feat/1748-prompt-history-pane`、open）が
-`server/session/session-reads.ts` に +80 行入れている。**
-この計画は `session-reads.ts` を**一切触らない**ことでこれを回避する（上記）。
+**PR #1749 は 2026-08-16 にマージ済み**（`2ff3b626`）。`server/session/prompt-history.ts` と
+`src/components/PromptsPane.vue` が main に入っているので、下記「既知の欠落」が言及している
+PromptsPane は**もう存在する**。この計画は `session-reads.ts` を触らないので衝突は無い。
 
 着手前に `gh pr list --state open` と
 `git log origin/main --oneline -20 -- <触るファイル>` の両方で確認する
