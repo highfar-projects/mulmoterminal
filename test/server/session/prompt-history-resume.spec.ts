@@ -10,7 +10,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { sessionPrompts } from "../../../server/session/session-reads.js";
+import { forgetHistoryMemo, sessionPrompts } from "../../../server/session/session-reads.js";
 import { claudePromptScan, foldClaudePrompt, promptWindow, PROMPT_SCAN_LIMIT } from "../../../server/session/prompt-history.js";
 import { forEachJsonlRecord } from "../../../server/infra/jsonl-file.js";
 import type { PromptEntry } from "../../../common/promptHistory.js";
@@ -45,6 +45,11 @@ beforeEach(async () => {
   process.env.HOME = home;
   vi.spyOn(os, "homedir").mockReturnValue(home);
   await fs.mkdir(path.join(home, ".claude"), { recursive: true });
+  // The memo map is module state that outlives one test. CI caught this the hard way: on Linux two
+  // temp files created in succession got the SAME inode, so a memo from the previous case was
+  // accepted for the next one's file. The production guard now also compares birth time, but a test
+  // must not lean on that — it starts from no memo at all.
+  [SESSION, OTHER].forEach(forgetHistoryMemo);
 });
 
 afterEach(async () => {
@@ -109,5 +114,52 @@ describe("a resumed prompt-history read equals a full scan", () => {
     expect(await resumedScan(SESSION)).toEqual([]);
     await fs.writeFile(historyFile(), line(SESSION, "written later"));
     expect((await resumedScan(SESSION)).map((p) => p.text)).toEqual(["written later"]);
+  });
+});
+
+// Codex, #1750: the memo is shared, so two overlapping reads used to fold into ONE array — every
+// appended prompt counted twice and the sliding window evicted good rows. The reader copies the
+// carried scan instead.
+describe("overlapping reads of one session", () => {
+  it("agree with a full scan, and with each other", async () => {
+    await fs.writeFile(historyFile(), Array.from({ length: 5 }, (_, i) => line(SESSION, `p${i}`, 1_700_000_000_000 + i)).join(""));
+    await resumedScan(SESSION); // take the memo
+
+    await fs.appendFile(historyFile(), line(SESSION, "appended", 1_700_000_000_100));
+    // Started together, so both resume from the same memo before either finishes.
+    const [a, b] = await Promise.all([resumedScan(SESSION), resumedScan(SESSION)]);
+    const full = await fullScan(SESSION);
+    expect(a).toEqual(full);
+    expect(b).toEqual(full);
+    expect(a.filter((p) => p.text === "appended")).toHaveLength(1); // not folded twice
+  });
+
+  it("survives a burst of them without duplicating anything", async () => {
+    await fs.writeFile(historyFile(), line(SESSION, "base"));
+    await resumedScan(SESSION);
+    await fs.appendFile(historyFile(), line(SESSION, "more"));
+
+    const results = await Promise.all(Array.from({ length: 8 }, () => resumedScan(SESSION)));
+    const full = await fullScan(SESSION);
+    results.forEach((r) => expect(r).toEqual(full));
+    expect(full.map((p) => p.text)).toEqual(["base", "more"]);
+  });
+});
+
+// Codex, #1750: the memo used to record the size stat'd BEFORE the scan. Claude can append while a
+// scan runs, so the stream can pass that size; a truncation to a length between the two then looked
+// like growth. The guard is the offset the scan actually reached.
+describe("a file truncated in place after growing mid-scan", () => {
+  it("starts over rather than resuming past the end", async () => {
+    await fs.writeFile(historyFile(), Array.from({ length: 20 }, (_, i) => line(SESSION, `long${i}`)).join(""));
+    await resumedScan(SESSION);
+
+    // Truncate to a prefix: shorter than where the scan stopped, longer than nothing.
+    const kept = Array.from({ length: 3 }, (_, i) => line(SESSION, `long${i}`)).join("");
+    await fs.writeFile(historyFile(), kept);
+
+    const resumed = await resumedScan(SESSION);
+    expect(resumed).toEqual(await fullScan(SESSION));
+    expect(resumed.map((p) => p.text)).toEqual(["long0", "long1", "long2"]);
   });
 });

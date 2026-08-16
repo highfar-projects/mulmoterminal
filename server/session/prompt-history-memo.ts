@@ -23,14 +23,15 @@ import type { ClaudePromptScan } from "./prompt-history.js";
 export interface HistoryMemo {
   /** What question this memo answers — see memoKeyFor. */
   key: string;
-  /** The file's inode, so a REPLACED file is not resumed as a longer one. Size alone cannot tell
-   *  those apart: delete the history and let it grow back past the recorded size, and a byte offset
-   *  from the old file points into the middle of the new one. 0 where the platform does not report
-   *  it (some Windows filesystems), which degrades to the size check below rather than failing. */
-  ino: number;
-  /** The file's size when the scan that produced it finished. */
-  size: number;
-  /** The line-aligned byte offset that scan stopped at. */
+  /** Which FILE it answers about — see fileIdentity. */
+  identity: string;
+  /** The line-aligned byte offset the scan stopped at. Doubles as the shrink guard: the file must
+   *  still hold the bytes that scan consumed, or the offset points somewhere it never did.
+   *
+   *  The offset rather than the size stat'd before the scan, because those differ. Claude can append
+   *  DURING a scan, so the stream can run past the size that was sampled first; recording that size
+   *  would let an in-place truncation to a length between the two pass the guard and resume from an
+   *  offset the file no longer reaches (Codex, #1750). */
   offset: number;
   /** The sliding window as it stood there. */
   scan: ClaudePromptScan;
@@ -39,6 +40,7 @@ export interface HistoryMemo {
 /** What the caller learned from `stat`, so resumePlan stays free of fs. */
 export interface HistoryStat {
   ino: number;
+  birthtimeMs: number;
   size: number;
 }
 
@@ -49,6 +51,20 @@ export interface HistoryStat {
  *  A memo that survived such a change would answer the old question with the old rows, which is
  *  exactly the failure a cache is expected to have and the one nobody notices. */
 export const memoKeyFor = (ids: readonly string[], since: number | undefined): string => `${ids.join(",")}|${since ?? ""}`;
+
+/** Which file a memo answers about: inode AND creation time.
+ *
+ *  The inode alone is not enough, and CI proved it rather than theory — two temp files created in
+ *  succession on Linux got the same inode number, and a memo taken against the first was accepted
+ *  for the second. Inode numbers are recycled, so a history file deleted and immediately recreated
+ *  can land on the same one; adding the birth time makes that collision need two coincidences.
+ *
+ *  Either component reads as 0 where the platform does not report it, and that is fine: both sides
+ *  are stamped the same way, so the comparison degrades to whatever IS reported. `UNKNOWN_FILE` is
+ *  the case where nothing is — there the size guard below is the only evidence available. */
+export const fileIdentity = (stat: { ino: number; birthtimeMs: number }): string => `${stat.ino}:${Math.floor(stat.birthtimeMs)}`;
+
+const UNKNOWN_FILE = "0:0";
 
 /** Where the next scan should start, and whether it may keep what the last one found.
  *
@@ -61,19 +77,18 @@ export interface ResumePlan {
 
 const RESTART: ResumePlan = { from: 0, reuse: null };
 
-/** A memo may be resumed only when it answers THIS question, about THIS file, which has only grown.
+/** A memo may be resumed only when it answers THIS question, about THIS file, which still holds
+ *  every byte the last scan consumed.
  *
- *  A file SMALLER than the recorded size was rotated or truncated, so the recorded offset no longer
- *  points where it did — the same reasoning `nextReadRange` applies to a codex rollout. A different
- *  INODE is the case size cannot catch: a history file deleted and grown back past its old size
- *  would otherwise be resumed from an offset belonging to a file that no longer exists, folding the
- *  wrong bytes into a window built from the wrong ones. A file the same size has nothing new, which
- *  is a resume of length zero rather than a special case. */
+ *  A file shorter than the recorded offset was rotated or truncated, so that offset no longer points
+ *  where it did — the same reasoning `nextReadRange` applies to a codex rollout. A file the same
+ *  length has nothing new, which is a resume of length zero rather than a special case. */
 export function resumePlan(memo: HistoryMemo | undefined, key: string, stat: HistoryStat): ResumePlan {
   if (!memo || memo.key !== key) return RESTART;
-  // Only when BOTH sides reported one: a platform that answers 0 gives no evidence either way, and
-  // treating "no evidence" as "different file" would disable the resume outright there.
-  if (memo.ino !== 0 && stat.ino !== 0 && memo.ino !== stat.ino) return RESTART;
-  if (stat.size < memo.size) return RESTART;
+  const identity = fileIdentity(stat);
+  // Only when both sides identify the file at all: "no evidence" must not read as "different file",
+  // or the resume would be disabled outright on a platform that reports neither field.
+  if (memo.identity !== UNKNOWN_FILE && identity !== UNKNOWN_FILE && memo.identity !== identity) return RESTART;
+  if (stat.size < memo.offset) return RESTART;
   return { from: memo.offset, reuse: memo.scan };
 }

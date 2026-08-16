@@ -3,16 +3,16 @@
 // When a resumed prompt-history scan may be believed (#1750).
 //
 // The read is a cache now, so its failure mode is the one caches have: answering the new question
-// with the old rows, silently and plausibly. What can change under one session id is the set of
-// claude ids being read (a hook learns a re-minted one) and the `/clear` floor — both change what
-// the window should hold, and neither changes the FILE, so nothing else would notice.
+// with the old rows, silently and plausibly. Three things can invalidate a memo and each is a
+// different kind of stale — the question changed, the file changed, or the file lost bytes the last
+// scan had already consumed.
 import { describe, it, expect } from "vitest";
-import { memoKeyFor, resumePlan, type HistoryMemo } from "../../../server/session/prompt-history-memo";
+import { fileIdentity, memoKeyFor, resumePlan, type HistoryMemo, type HistoryStat } from "../../../server/session/prompt-history-memo";
 import { claudePromptScan } from "../../../server/session/prompt-history";
 
 const scan = () => claudePromptScan(["s1"], 100, undefined);
-const memo = (over: Partial<HistoryMemo> = {}): HistoryMemo => ({ key: "s1|", ino: 42, size: 1000, offset: 1000, scan: scan(), ...over });
-const at = (size: number, ino = 42) => ({ ino, size });
+const memo = (over: Partial<HistoryMemo> = {}): HistoryMemo => ({ key: "s1|", identity: "42:1000", offset: 1000, scan: scan(), ...over });
+const at = (size: number, ino = 42, birthtimeMs = 1000): HistoryStat => ({ ino, birthtimeMs, size });
 
 describe("memoKeyFor", () => {
   it("separates a different set of ids", () => {
@@ -26,6 +26,22 @@ describe("memoKeyFor", () => {
 
   it("is stable for the same question", () => {
     expect(memoKeyFor(["s1", "s2"], 7)).toBe(memoKeyFor(["s1", "s2"], 7));
+  });
+});
+
+describe("fileIdentity", () => {
+  // CI proved this rather than theory: two temp files created in succession on Linux got the SAME
+  // inode, and a memo taken against the first was accepted for the second.
+  it("separates two files that recycled one inode number", () => {
+    expect(fileIdentity({ ino: 42, birthtimeMs: 1000 })).not.toBe(fileIdentity({ ino: 42, birthtimeMs: 2000 }));
+  });
+
+  it("is stable across appends, which change neither field", () => {
+    expect(fileIdentity({ ino: 42, birthtimeMs: 1000 })).toBe(fileIdentity({ ino: 42, birthtimeMs: 1000 }));
+  });
+
+  it("reads as unknown where the platform reports neither field", () => {
+    expect(fileIdentity({ ino: 0, birthtimeMs: 0 })).toBe("0:0");
   });
 });
 
@@ -44,30 +60,29 @@ describe("resumePlan", () => {
     expect(resumePlan(m, "s1|", at(1000))).toEqual({ from: 1000, reuse: m.scan });
   });
 
-  // The cache failure that matters: the question changed while the file did not.
+  // The cache failure that matters most: the question changed while the file did not.
   it("starts over when the ids or the floor changed", () => {
     expect(resumePlan(memo(), "s1,s2|", at(4000))).toEqual({ from: 0, reuse: null });
     expect(resumePlan(memo(), "s1|1234", at(4000))).toEqual({ from: 0, reuse: null });
   });
 
-  // The case size CANNOT catch: the file was replaced and grew back past its old size, so the
-  // recorded offset points into the middle of a file that never had it.
-  it("starts over when the inode changed, even though the file is bigger", () => {
+  it("starts over when the file is a different one, even though it is bigger", () => {
     expect(resumePlan(memo(), "s1|", at(9000, 43))).toEqual({ from: 0, reuse: null });
+    expect(resumePlan(memo(), "s1|", at(9000, 42, 2000))).toEqual({ from: 0, reuse: null }); // recycled inode
   });
 
-  // A platform that reports no inode gives no evidence either way; treating that as "different
-  // file" would disable the resume outright there.
-  it("falls back to the size check where the platform reports no inode", () => {
-    const m = memo();
-    expect(resumePlan(m, "s1|", at(4000, 0))).toEqual({ from: 1000, reuse: m.scan });
-    expect(resumePlan(memo({ ino: 0 }), "s1|", at(4000, 43))).toEqual({ from: 1000, reuse: memo({ ino: 0 }).scan });
+  // "No evidence" must not read as "different file", or the resume would be off entirely there.
+  it("falls back to the length guard where the platform identifies nothing", () => {
+    const m = memo({ identity: "0:0" });
+    expect(resumePlan(m, "s1|", at(4000, 0, 0))).toEqual({ from: 1000, reuse: m.scan });
+    expect(resumePlan(m, "s1|", at(999, 0, 0))).toEqual({ from: 0, reuse: null });
   });
 
-  // A file smaller than the recorded size was rotated or truncated, so the offset no longer points
-  // where it did — the same reasoning nextReadRange applies to a codex rollout.
-  it("starts over when the file shrank", () => {
-    expect(resumePlan(memo(), "s1|", at(999))).toEqual({ from: 0, reuse: null });
-    expect(resumePlan(memo(), "s1|", at(0))).toEqual({ from: 0, reuse: null });
+  // The guard is the OFFSET, not a size sampled before the scan: claude can append mid-scan, so the
+  // stream can run past that size, and a truncation to a length between the two would slip through.
+  it("starts over when the file no longer holds the bytes the last scan consumed", () => {
+    expect(resumePlan(memo({ offset: 1000 }), "s1|", at(999))).toEqual({ from: 0, reuse: null });
+    expect(resumePlan(memo({ offset: 1500 }), "s1|", at(1200))).toEqual({ from: 0, reuse: null });
+    expect(resumePlan(memo({ offset: 0 }), "s1|", at(0))).toEqual({ from: 0, reuse: memo({ offset: 0 }).scan });
   });
 });

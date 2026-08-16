@@ -41,6 +41,7 @@ import { claudeHistoryFile, projectSessionsDir } from "./project-dir.js";
 import {
   claudePromptScan,
   codexPromptScan,
+  copyClaudePromptScan,
   foldClaudePrompt,
   foldCodexPrompt,
   historyIdsFor,
@@ -49,7 +50,7 @@ import {
   PROMPT_SCAN_LIMIT,
 } from "./prompt-history.js";
 import type { PromptWindow } from "../../common/promptHistory.js";
-import { memoKeyFor, resumePlan, type HistoryMemo } from "./prompt-history-memo.js";
+import { fileIdentity, memoKeyFor, resumePlan, type HistoryMemo } from "./prompt-history-memo.js";
 import { clearedAtOf, clearedClaudeIdOf, clearedTranscripts } from "./cleared-transcripts.js";
 import { currentTurnReplyFromClaudeParsed, lastTurnFromClaudeParsed, lastTurnFromCodexRolloutDocs, EMPTY_TURN, type LastTurn } from "./last-turn.js";
 import { forEachJsonlRecord, forEachJsonlRecordIn, readTailRecords } from "../infra/jsonl-file.js";
@@ -355,13 +356,16 @@ async function claudePrompts(cwd: string, id: string): Promise<SessionPrompts> {
   const key = memoKeyFor(ids, since);
   const file = claudeHistoryFile();
   try {
-    const { ino, size } = await fs.stat(file);
-    const plan = resumePlan(historyMemos.get(id), key, { ino, size });
-    const scan = plan.reuse ?? claudePromptScan(ids, PROMPT_SCAN_LIMIT, since);
+    const { ino, birthtimeMs, size } = await fs.stat(file);
+    const plan = resumePlan(historyMemos.get(id), key, { ino, birthtimeMs, size });
+    // COPIED, never folded into in place: the memo is shared, so two overlapping reads of this
+    // session would otherwise interleave into one array and count every appended prompt twice
+    // (Codex, #1750).
+    const scan = plan.reuse ? copyClaudePromptScan(plan.reuse) : claudePromptScan(ids, PROMPT_SCAN_LIMIT, since);
     // `atLineStart` is what makes a resume safe: the offset came from a previous scan of this same
     // file, so it IS a line boundary and its record must be folded rather than dropped as a partial.
     const offset = await forEachJsonlRecordIn(file, { from: plan.from, atLineStart: true }, (record) => foldClaudePrompt(scan, record));
-    historyMemos.set(id, { key, ino, size, offset, scan });
+    historyMemos.set(id, { key, identity: fileIdentity({ ino, birthtimeMs }), offset, scan });
     if (scan.found.length > 0) return promptWindow(scan.found);
   } catch {
     // No history file, or one this could not read — the transcript still knows something.
