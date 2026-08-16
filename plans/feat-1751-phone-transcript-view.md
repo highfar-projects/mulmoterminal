@@ -27,14 +27,16 @@ zsh      alt=0 hist=0  w=133 h=32   ← shell cell
 
 | # | 項目 | 決定 |
 |---|---|---|
-| 1 | 読み込み量 | **論理行 250**（`\n` 区切り）で切る。**ターン境界で切り、途中では切らない**。**最新 1 ターンは超過しても必ず出す** |
+| 1 | 読み込み量 | **論理行 250**（`\n` 区切り）で切る。**ターン境界で切り、途中では切らない**。**最新 1 ターンは超過しても必ず出す**（例外は `too-large` だけ） |
 | 2 | 切り詰め | `tool_result` は 6 行。`text` は切らない。`tool_use` はツール名 1 行 |
-| 3 | 読み方 | `forEachJsonlRecordIn(file, { from: size - 4MB })`。前方に流しながら 250 行超で古いターンから破棄 |
+| 3 | 読み方 | `forEachJsonlRecordIn(handle, { from: size - 4MB })`。**`FileHandle` を渡し、`try`/`finally` で必ず閉じる**。前方に流しながら 250 行超で古いターンから破棄 |
 | 4 | thinking | **落とす**（本文がディスクに無い） |
 | 5 | sub agent | 本体 `<id>.jsonl` だけ。`Task` は 1 行＋結果 6 行。ドリルダウンは作らない |
-| 6 | 出し分け | transcript が**読めるか**を返り値の 1 フィールドで（`clearedTranscripts` を先に見る、下記） |
-| 7 | 既定と記憶 | 既定は画面。localStorage **1 キー**。transcript が無いセッションでは画面にフォールバック |
+| 6 | 出し分け | `TranscriptView` を **`ok` / `none` / `cleared` / `too-large` の判別可能ユニオン**で返す（`clearedTranscripts` を先に見る、下記） |
+| 7 | 既定と記憶 | 既定は画面。localStorage **1 キー**。`ok` 以外のとき画面にフォールバック |
 | 8 | 更新 | 既存の `REFRESH_INTERVAL_MS = 5000` を共有。新しい定数を作らない |
+
+この表と本文が食い違うと**読者が最初に読むほうが古い**。本文を変えたら必ずここも直す。
 
 ## なぜその数字なのか（すべて実測）
 
@@ -101,8 +103,6 @@ keys: ['signature', 'thinking', 'type']
 - **未知の content ブロック種別は無視ではなく 1 行で出す**（`[unknown block: <type>]`）。
   無視すると**新しい形式が来たときにビューが静かに痩せる**ので、気づけるようにしておく
 
-これは Codex round 1 の P2 への対応（PR #1755）。
-
 ## 変更
 
 ### サーバ
@@ -115,19 +115,19 @@ keys: ['signature', 'thinking', 'type']
   `tool_result` は 6 行で切って `truncated` を立てる、`thinking` は捨てる
 - **`kind: "unknown"` が下の「形式変更時のフォールバック」の受け皿**。未知の content ブロックは
   そこへ入れて `[unknown block: <type>]` を `text` にする。union に無いと**フォールバックが
-  型で表せず、結局は無視することになる**（Codex round 2）。UI 側はこの kind を薄く描いて、
+  型で表せず、結局は無視することになる**。UI 側はこの kind を薄く描いて、
   出たと分かるようにする
 - **バジェットは行を数える。`TranscriptRow` の**個数**ではない。** `text` は素通しなので
   改行を含む — 1 行として数えると**巨大な assistant 本文 1 ブロックがバジェットを素通りする**。
   数えるのは `row.text.split("\n").length`（`tool_result` はキャップ後の行数、`tool_use` は 1）。
-  決定 1 が「論理行 250」と言っているのはこの意味（Codex round 4）
+  決定 1 が「論理行 250」と言っているのはこの意味
 - `foldTranscriptView(scan, record)` — ターン境界で区切り、論理行 250 を超えたら**古いターンごと**
   捨てる。ただし**残り 1 ターンなら捨てない**
 - **最初の境界より前に来たレコードは捨てる。** 窓は必ずターンの途中から始まるので、先頭には
   必ず「前のターンの尻尾」が付く。これを合成ターンに入れると**話者の分からない断片**が頭に出るし、
   250 行バジェットに数えると**捨てられない断片が最新ターンを押し出す**。捨てるのが唯一
   一貫する選択で、決定 1 の単位が「ターン」である以上、ターンでないものは単位に乗らない
-  （Codex round 3。どれを選ぶかで出力が変わるので、明示して spec で固定する）
+  （どれを選ぶかで出力が変わるので、明示して spec で固定する）
 - `sessionTimeline` の `foldTimeline`（`session-reads.ts:195`）と同じ形。窓が行数でターン単位という
   点だけが違う
 
@@ -137,7 +137,7 @@ non-null なレコード**。
 述語を自分で書き直さないこと。`userPromptText`（`server/session/transcript.ts:29`）は
 **`content` が素の文字列の場合と配列の場合の両方**を扱う（`Array.isArray ? map(...).join(" ") : content`）。
 「content に `text` ブロックを持つもの」と読める書き方をすると**素の文字列のプロンプトが
-境界にならず**、複数のやり取りが 1 ターンに融合して 250 行の追い出しが効かなくなる（Codex, round 1）。
+境界にならず**、複数のやり取りが 1 ターンに融合して 250 行の追い出しが効かなくなる。
 実際 claude の通常のユーザレコードは素の文字列で来る（`test/server/session/transcript.spec.ts` の
 フィクスチャがそう組んでいる）。
 
@@ -152,10 +152,6 @@ non-null なレコード**。
 このファイルが要るのは `projectSessionsDir(cwd)` とファイル読みだけで、どちらも
 `session-reads.ts` に依存しない。分けるのに設計上の代償が無く、`session-reads.ts` は
 #1749 で `sessionPrompts` が入って既に育っている。
-
-（当初この分離は PR #1749 が open で同じファイルを触っていたこと（CLAUDE.md の
-「One file per agent」）を理由にしていた。#1749 は 2026-08-16 にマージ済みなので
-その理由は消えたが、上の理由だけで分離は成立する。）
 
 読みは `forEachJsonlRecordIn(handle, { from: Math.max(0, size - 4MB) })`。
 `readTailRecords` は同期（`readSync`）で 4MB に 24ms かかり、WebSocket でターミナルを流している
@@ -179,8 +175,7 @@ non-null なレコード**。
 このビューは 5 秒ゲートでポーリングされるので、閉じ忘れは 1 回の漏れでは終わらず
 **fd を溜め続けて最後に `EMFILE` でサーバごと落ちる**。開く側が閉じる側であること、
 どの経路（`too-large` で諦めた場合、`cleared` で早期に返る場合、例外）でも閉じることを
-spec で固定する（Codex round 4 — これは round 3 で私が handle を持ち込んだときに
-一緒に決めるべきだった）。
+spec で固定する。
 
 #### 窓より大きい 1 レコードで「最新 1 ターン」が消える（要対処）
 
@@ -200,12 +195,12 @@ spec で固定する（Codex round 4 — これは round 3 で私が handle を�
   「この transcript は大きすぎて表示できない」と答える。空と区別がつかない失敗にしない
 - **これが決定 1 の「最新 1 ターンは必ず出す」の唯一の例外**、と言い切る。上限が有限である以上
   保証は無条件ではあり得ないので、無条件だと書いたまま `too-large` を返すのは矛盾になる
-  （Codex round 4）。**例外はこの 1 つだけ**で、それ以外の経路で最新ターンが欠けたら defect
+  。**例外はこの 1 つだけ**で、それ以外の経路で最新ターンが欠けたら defect
 - 決定 2 の 6 行キャップは**描画**の話なので、ここでは効かない。JSON を解析するには行が丸ごと要る
 
 **条件は「0 レコード」ではなく「境界が 0 個」。** 0 レコードで判定すると、
 `[窓より大きい tool_result][小さい assistant レコード]` の並びで**レコードは 1 つ取れてしまうので
-広げず、最新ターンが欠けたまま出る**（Codex round 2）。守りたいのは決定 1 の
+広げず、最新ターンが欠けたまま出る**。守りたいのは決定 1 の
 「最新 1 ターンは必ず出す」なので、条件はその保証をそのまま述べる形にする —
 悪い形を数え上げるのではなく、**満たすべきものを条件にする**。
 
@@ -221,7 +216,7 @@ spec で固定する（Codex round 4 — これは round 3 で私が handle を�
 `server/index.ts` 側の実装が `ptys.get(id)?.cwd ?? sessionCwd(id) ?? ""`（`server/index.ts:682`）で
 やっている。**同じ形にする** — dep を `captureTerminalTranscript: (sessionId: string) =>
 Promise<TranscriptView>` にして、cwd はその実装が同じ 1 行で解決する。ホストの作業ディレクトリを
-使うと**別プロジェクトのセッションで違う transcript を読む**（Codex round 3）。
+使うと**別プロジェクトのセッションで違う transcript を読む**。
 
 ### wire の形（これを決めずに phone は書けない）
 
@@ -246,7 +241,6 @@ type TranscriptView =
   「every command the host answers, the shapes it …」を**契約**だと宣言していて、
   `getTerminalScreen` は `:38` の表に行を持っている。ここに載らないコマンドは、
   ホストと phone のどちらが古いときに何が起きるかがどこにも書かれていないことになる
-  （Codex round 4）
 
 ### スマホ（mulmoserver）
 
@@ -287,13 +281,10 @@ type TranscriptView =
 **tmux が生きたまま pty だけ死んだ場合は reap されない**（`ptyExitDisposition` が `"keep"` を返し、
 `ptys.delete` だけして reap を呼ばない）。この repo のセルは全部 tmux backed なので、これが既定の経路。
 
-（Codex round 1 の P1 を「`--resume` は `term.onExit` 経由で必ず reap を通る」として却下したが、
-**その理由は誤りだった** — round 2 の REOPEN が `pty-exit.ts` を指して正しく反証した。結論は変えない:
 `--resume` が `<ourId>.jsonl` に追記するにはそのセッションが一度居なくなる必要があり、
 それは reap を意味する。**その順序を破る経路は探して見つからなかったが、無いことを証明はしていない。**
-仮にあったとしても、素の `.has()` は既存の 4 つの読み手と同じ挙動なので、
-transcript ビューだけがズレることは無い。これは repo 全体の性質であって、この計画が持ち込む欠陥ではない。
-下の「別件」に記録した。）
+仮にあっても素の `.has()` は既存 4 読み手と同じ挙動なので、transcript ビューだけがズレることは無い。
+これは repo 全体の性質で、#1751 に別件として記録した。
 
 **`/compact` は id を振り直さない。** #1749 iter-4〜5 がこの開発機の全 transcript で実測し、
 compact したもの 95 本 / compact 後に命令があるもの 61 本の**すべてで session id は同一**だった。
@@ -330,8 +321,8 @@ compact したもの 95 本 / compact 後に命令があるもの 61 本の**す
 - `promptId` を持たないレコードでもターンが切れる
 - **`content` が素の文字列のユーザレコードが境界になる**（`{type:"text"}` 配列だけでなく）
 
-Codex round 1 が挙げた端ケースも入れる。「境界がファイル先頭に無い」と
-「窓の中に境界が 1 つも無い」は別物で、前者だけでは下 2 つが素通りする:
+「境界がファイル先頭に無い」と「窓の中に境界が 1 つも無い」は別物で、
+前者だけでは下 2 つが素通りする:
 
 - **空ファイル / 4MB より小さいファイル**（`from` が 0 になり `dropLeading` が効かない経路）
 - **選んだ窓の中にターン境界が 1 つも無い**
@@ -351,7 +342,6 @@ Codex round 1 が挙げた端ケースも入れる。「境界がファイル先
   — 窓に境界が 1 つでもあれば最後の境界も窓に入り、その後ろは全部窓の中にある。逆に最後の境界が
   窓の外なら境界は 0 個になり広げる。**この関係はテストで固定する**（古い境界＋途中から始まる
   最新ターン、という並びで確かめる）。停止条件と保証がずれていないことは読んで分かる話ではない
-  （Codex round 3）
 
 ハンドラの spec（`test/server/backends/remoteHost/`）:
 
@@ -390,27 +380,15 @@ phone 側の spec（mulmoserver、`test/<area>/test_*.ts`。コンポーネン�
 `src/components/PromptsPane.vue` が main に入っているので、下記「既知の欠落」が言及している
 PromptsPane は**もう存在する**。この計画は `session-reads.ts` を触らないので衝突は無い。
 
-着手前に `gh pr list --state open` と
-`git log origin/main --oneline -20 -- <触るファイル>` の両方で確認する
-（1 時間前にマージされた PR は open 一覧にも作業ツリーにも現れない）。
+着手前の衝突確認と負荷確認は CLAUDE.md の規則どおり。
 
-**着手前に `uptime` を見ること。** この計画を書いた時点でこの機械は 20 コアに対して
-load average 33〜43（1.7〜2.1 倍）だった。CLAUDE.md の「The machine is loaded」は
-新しい作業を止める条件であって、遅らせる条件ではない。
+## ついでに見つかった別件（この計画では直さない）
 
-## ついでに見つかった別件（この issue では直さない）
+3 件とも #1751 に詳細を書いた。ここでは計画に効くものだけ:
 
-- `server/backends/remoteHost/terminalScreen.ts:65` の「A tmux-only session is always null」が
-  `server/index.ts:646` の実装と合っていない。`agentOfSession` は
-  `ptys.get(id)?.agent ?? agentFromPaneCommand(tmuxPaneCommand(id))` で、tmux にセッションがあれば
-  null にならない。しかも `pane_current_command` は claude の場合**バージョン文字列**（`2.1.233`）
-  なので表に無く `?? "shell"` に落ちる。つまり**再起動を跨いだ claude セッションは
-  `agent: "shell"` と報告される**。決定 6 で agent 種別を使わない理由がこれ
+- **`pane_current_command` は claude の場合バージョン文字列**（`2.1.233`）なので
+  `agentFromPaneCommand` の表に無く `?? "shell"` に落ちる。つまり再起動を跨いだ claude
+  セッションは `agent: "shell"` と報告される。**決定 6 で agent 種別を使わない理由がこれ**
 - `SCREEN_HISTORY_ROWS = 300`（mulmoserver#139）が claude セルに効いていない
-- **`clearedTranscripts` のマークは、tmux が生きたまま pty だけ死んだ場合に捨てられない**
-  （`pty-exit.ts:26` が `"keep"` を返し reap を呼ばない）。`markStillHolds` によるサイズ失効は
-  hydration 経路にしかないので、その組み合わせではプロセスが生きているあいだマークが残り続ける。
-  `<id>.jsonl` に追記が起きる経路は探して見つからなかったので実害は確認できていないが、
-  **`lifecycle.ts:161` のコメント「`--resume` … which reaches reap through term.onExit」は
-  tmux backed なセッションでは成り立たない**。これは repo 全体の話で、この計画の 4 つの
-  既存読み手（cockpit / サマリ / push / タイトル）が同じ性質を共有している
+- `clearedTranscripts` のマークは tmux が生きたまま pty だけ死んだ場合に捨てられない
+  （`pty-exit.ts:26`）。repo 全体の性質で、既存 4 読み手が同じ性質を共有している
