@@ -164,14 +164,14 @@ function rememberClaudeSessionId(sessionId: string, bodyValue: unknown): void {
 //
 // Publish LAST, and after the mark is durable: the publish itself re-reads the reply for a session
 // that is `waiting`, which is the very read the mark exists to stop.
-async function clearHeaderPrompt(deps: HookDeps, sessionId: string, cwd: string | undefined): Promise<void> {
+async function clearHeaderPrompt(deps: HookDeps, sessionId: string, claudeId: string | null, cwd: string | undefined): Promise<void> {
   lastPrompts.set(sessionId, "");
   lastResponses.set(sessionId, "");
-  // Not claudeSessionIds: the next hook overwrites it with whatever claude now calls itself, and
-  // emptying it here would leave a window where the pane can read nothing at all. The moment of the
-  // clear — which is what separates the two conversations in claude's seamless prompt history — is
-  // recorded by markTranscriptCleared below, beside the durable mark it already writes.
-  await markTranscriptCleared(sessionId, cwd);
+  // The mark carries claude's NEW id as well as the moment, because the prompts pane needs both to
+  // find the new conversation in claude's seamless prompt history — and a restart that remembers
+  // only the boundary leaves that pane empty until the next hook (#1749). This hook is where the id
+  // is announced, so it is passed rather than read back from the live mapping.
+  await markTranscriptCleared(sessionId, cwd, claudeId ?? undefined);
   deps.forgetTitle(sessionId);
   deps.publishActivity(sessionId);
 }
@@ -189,7 +189,13 @@ async function applyHeaderHooks(deps: HookDeps, sessionId: string, event: string
     deps.noteTitleTurn(sessionId, effect.text);
     return;
   }
-  if (effect.kind === "clear") return clearHeaderPrompt(deps, sessionId, cwd);
+  if (effect.kind === "clear")
+    return clearHeaderPrompt(
+      deps,
+      sessionId,
+      claudeOwnSessionId(body.session_id, (id) => SESSION_ID_RE.test(id)),
+      cwd,
+    );
   void deps.maybeGenerateTitle(sessionId, cwd);
 }
 

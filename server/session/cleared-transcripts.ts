@@ -31,20 +31,32 @@ const CLEARED_DIR = path.join(MULMOTERMINAL_HOME, "cleared-transcripts");
 // hydrated into it at import — before the server listens, which is what closes the window.
 export const clearedTranscripts = new Set<string>(); // id
 
-// WHEN each of them was cleared. The set above answers "is this frozen", which is all its original
-// readers need; the prompts pane needs the moment, because claude's own prompt history is one file
-// per USER and has no seam at a clear — the time is the only thing that separates the ended
-// conversation from the new one (#1749).
+// What the prompts pane needs on top of "is this frozen": WHEN the clear happened, and WHICH id
+// claude took for the conversation it started there (#1749). The set above is enough for its own
+// readers, which all ask about the transcript FILE; claude's prompt history is one file per USER,
+// with no seam at a clear, so separating the two conversations in it takes both facts.
 //
 // Here rather than in the registry, and written by markTranscriptCleared rather than by the route,
-// so the two facts cannot disagree: whatever marks a session cleared records when. It rides the
-// same durable mark, so the boundary survives the restart that the memory-only version lost it to
-// (Codex).
-const clearedAt = new Map<string, number>(); // id -> epoch ms
+// so they cannot disagree: whatever marks a session cleared records when it happened and what
+// claude became. They ride the same durable mark, so both survive the restart that the memory-only
+// version lost them to — the second one because a pane that knows only the boundary shows NOTHING
+// after a restart, having forgotten the id the new conversation's prompts are filed under (Codex).
+const clearedState = new Map<string, ClearedState>(); // id -> { at, claudeId }
+
+interface ClearedState {
+  /** Epoch ms of the clear. */
+  at: number;
+  /** The id claude reported for itself in the very hook that announced the clear. */
+  claudeId?: string | undefined;
+}
 
 /** When this session was cleared, or undefined for one that was not (or a mark written before the
  *  time was recorded — an older mark on disk, which reads as no boundary rather than a wrong one). */
-export const clearedAtOf = (id: string): number | undefined => clearedAt.get(id);
+export const clearedAtOf = (id: string): number | undefined => clearedState.get(id)?.at;
+
+/** The id claude took at that clear, for a reader that has no fresher one (the live mapping is
+ *  re-learned from any hook and wins where it exists). */
+export const clearedClaudeIdOf = (id: string): string | undefined => clearedState.get(id)?.claudeId;
 
 export interface ClearedMark {
   /** Where the frozen transcript lives, so hydration can stat it without the session's pty. */
@@ -52,17 +64,24 @@ export interface ClearedMark {
   size: number;
   /** Epoch ms of the clear. Optional: marks written before #1749 have none. */
   at?: number;
+  /** Claude's own session id from that moment. Optional for the same reason. */
+  claudeId?: string;
 }
 
-/** A mark read back off disk, or null for anything that isn't one (corrupt / hand-edited file). */
+/** A mark read back off disk, or null for anything that isn't one (corrupt / hand-edited file).
+ *
+ *  The two optional fields drop to absent rather than rejecting the mark: its job is to freeze the
+ *  transcript, and losing that over a malformed extra would resurrect a whole conversation. */
 export function parseClearedMark(raw: unknown): ClearedMark | null {
   if (!isRecord(raw)) return null;
-  const { cwd, size, at } = raw;
+  const { cwd, size, at, claudeId } = raw;
   if (typeof cwd !== "string" || !cwd || typeof size !== "number" || !Number.isFinite(size) || size < 0) return null;
-  // An unusable `at` drops to absent rather than rejecting the mark: the mark's job is to freeze
-  // the transcript, and losing that over a bad timestamp would resurrect a whole conversation.
-  const usableAt = typeof at === "number" && Number.isFinite(at) && at >= 0;
-  return usableAt ? { cwd, size, at } : { cwd, size };
+  const mark: ClearedMark = { cwd, size };
+  if (typeof at === "number" && Number.isFinite(at) && at >= 0) mark.at = at;
+  // Same shape check every other id crosses, because this one is read back from a file on disk and
+  // then used to select rows out of claude's history.
+  if (typeof claudeId === "string" && SESSION_ID_RE.test(claudeId)) mark.claudeId = claudeId;
+  return mark;
 }
 
 /** Whether the transcript is still the frozen one. Anything appended since means claude picked
@@ -82,17 +101,20 @@ async function transcriptSize(cwd: string, id: string): Promise<number> {
 }
 
 /** Mark a session's transcript frozen. Best-effort on disk: failing to persist must not stop the
- *  clear itself, which is the part the user is watching. */
-export async function markTranscriptCleared(id: string, cwd: string | undefined, dir: string = CLEARED_DIR): Promise<void> {
+ *  clear itself, which is the part the user is watching.
+ *
+ *  `claudeId` is what claude called ITSELF in the hook that announced this clear — the id the new
+ *  conversation's prompts are filed under in its history. Undefined where the hook named none. */
+export async function markTranscriptCleared(id: string, cwd: string | undefined, claudeId?: string, dir: string = CLEARED_DIR): Promise<void> {
   clearedTranscripts.add(id);
   // Before the early return: a session with no cwd is still cleared AT a moment, and the prompts
   // pane draws its line from that whether or not there is a file to freeze.
   const at = Date.now();
-  clearedAt.set(id, at);
+  clearedState.set(id, { at, claudeId });
   // No cwd (a hook that reported none, for a session with no live pty) means no file to size, and
   // a mark with nothing to compare against could never expire — so that one stays in memory only.
   if (!cwd || !SESSION_ID_RE.test(id)) return;
-  const mark: ClearedMark = { cwd, size: await transcriptSize(cwd, id), at };
+  const mark: ClearedMark = { cwd, size: await transcriptSize(cwd, id), at, ...(claudeId ? { claudeId } : {}) };
   try {
     await fs.mkdir(dir, { recursive: true });
     await fs.writeFile(markerFile(dir, id), JSON.stringify(mark));
@@ -108,7 +130,7 @@ const removeMarker = (dir: string, id: string): Promise<void> =>
  *  synchronous; a file that outlives the process is caught by hydration either way. */
 export function forgetClearedTranscript(id: string, dir: string = CLEARED_DIR): void {
   clearedTranscripts.delete(id);
-  clearedAt.delete(id);
+  clearedState.delete(id);
   void removeMarker(dir, id);
 }
 
@@ -129,7 +151,9 @@ async function restoreMark(dir: string, file: string): Promise<void> {
   const mark = parseClearedMark(await readMark(dir, id));
   if (!mark || !markStillHolds(mark, await transcriptSize(mark.cwd, id))) return removeMarker(dir, id);
   clearedTranscripts.add(id);
-  if (mark.at !== undefined) clearedAt.set(id, mark.at);
+  // Only when the mark carried a time: an older one freezes the transcript and draws no line, which
+  // is what it meant when it was written.
+  if (mark.at !== undefined) clearedState.set(id, { at: mark.at, claudeId: mark.claudeId });
 }
 
 /** Read the marks back at boot. Absent directory (first run) => nothing frozen.

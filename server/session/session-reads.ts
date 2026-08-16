@@ -40,7 +40,7 @@ import {
 import { claudeHistoryFile, projectSessionsDir } from "./project-dir.js";
 import { claudePromptsFor, codexPrompts, historyIdsFor, promptWindow, transcriptPrompts, PROMPT_SCAN_LIMIT } from "./prompt-history.js";
 import type { PromptWindow } from "../../common/promptHistory.js";
-import { clearedAtOf, clearedTranscripts } from "./cleared-transcripts.js";
+import { clearedAtOf, clearedClaudeIdOf, clearedTranscripts } from "./cleared-transcripts.js";
 import { currentTurnReplyFromClaudeParsed, lastTurnFromClaudeParsed, lastTurnFromCodexRolloutDocs, EMPTY_TURN, type LastTurn } from "./last-turn.js";
 import { forEachJsonlRecordIn, readTailRecords } from "../infra/jsonl-file.js";
 import { copySummaryState, emptySummaryState, foldSummary, summaryPartsOf, type SummaryState } from "./summary-scan.js";
@@ -316,7 +316,10 @@ function claudeTranscriptPrompts(cwd: string, id: string): SessionPrompts {
 // Under whichever id claude currently calls itself as well as ours — history.jsonl keys on
 // claude's, and a `/clear` re-mints it (historyIdsFor).
 function claudePrompts(cwd: string, id: string): SessionPrompts {
-  const ids = historyIdsFor(id, claudeSessionIds.get(id));
+  // The live mapping first — any hook re-learns it, so it is the fresher of the two. The durable
+  // one is what a RESTART leaves standing: without it the pane would know where the boundary is and
+  // not which id the conversation past it is filed under, which shows nothing at all (#1749).
+  const ids = historyIdsFor(id, claudeSessionIds.get(id) ?? clearedClaudeIdOf(id));
   try {
     const found = claudePromptsFor(readTailRecords(claudeHistoryFile()), ids, PROMPT_SCAN_LIMIT, clearedAtOf(id));
     if (found.length > 0) return promptWindow(found);

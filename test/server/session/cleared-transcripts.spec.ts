@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   clearedAtOf,
+  clearedClaudeIdOf,
   clearedTranscripts,
   forgetClearedTranscript,
   hydrateClearedTranscripts,
@@ -20,6 +21,8 @@ import {
 import { projectSessionsDir } from "../../../server/session/project-dir.js";
 
 const SESSION = "11111111-2222-4333-8444-555555555555";
+// What claude re-mints itself as at a `/clear` (#1749).
+const CLAUDE_ID = "99999999-8888-4777-8666-555555555555";
 
 // The marks live in their own directory (injected), the transcripts under a temp HOME — the same
 // arrangement session-title.spec.ts uses, since both read claude's real on-disk layout.
@@ -63,7 +66,7 @@ afterEach(async () => {
 describe("markTranscriptCleared", () => {
   it("marks the session and records the transcript's size at the clear", async () => {
     await writeTranscript("a".repeat(120));
-    await markTranscriptCleared(SESSION, cwd, marksDir);
+    await markTranscriptCleared(SESSION, cwd, undefined, marksDir);
     expect(clearedTranscripts.has(SESSION)).toBe(true);
     // objectContaining, because the mark also carries WHEN the clear happened (#1749); the size is
     // what this test is about and what the expiry rule reads.
@@ -73,12 +76,12 @@ describe("markTranscriptCleared", () => {
   // A session cleared before its first turn was written has no file to size; 0 is the honest
   // answer and still expires the moment claude writes anything to that id.
   it("records size 0 when there is no transcript yet", async () => {
-    await markTranscriptCleared(SESSION, cwd, marksDir);
+    await markTranscriptCleared(SESSION, cwd, undefined, marksDir);
     expect(JSON.parse(await fs.readFile(markerFile(), "utf8")).size).toBe(0);
   });
 
   it("stays in memory only when the hook reported no cwd", async () => {
-    await markTranscriptCleared(SESSION, undefined, marksDir);
+    await markTranscriptCleared(SESSION, undefined, undefined, marksDir);
     expect(clearedTranscripts.has(SESSION)).toBe(true);
     expect(await exists(markerFile())).toBe(false);
   });
@@ -87,7 +90,7 @@ describe("markTranscriptCleared", () => {
 describe("hydrateClearedTranscripts", () => {
   it("brings the mark back after a restart", async () => {
     await writeTranscript("a".repeat(120));
-    await markTranscriptCleared(SESSION, cwd, marksDir);
+    await markTranscriptCleared(SESSION, cwd, undefined, marksDir);
     clearedTranscripts.clear(); // the restart
 
     await hydrateClearedTranscripts(marksDir);
@@ -99,7 +102,7 @@ describe("hydrateClearedTranscripts", () => {
   // summary for good.
   it("drops a mark whose transcript has grown since the clear", async () => {
     await writeTranscript("a".repeat(120));
-    await markTranscriptCleared(SESSION, cwd, marksDir);
+    await markTranscriptCleared(SESSION, cwd, undefined, marksDir);
     clearedTranscripts.clear();
     await writeTranscript("a".repeat(200)); // resumed, and writing to that file again
 
@@ -136,7 +139,7 @@ describe("hydrateClearedTranscripts", () => {
 describe("forgetClearedTranscript", () => {
   it("drops the mark from memory and from disk", async () => {
     await writeTranscript("a".repeat(10));
-    await markTranscriptCleared(SESSION, cwd, marksDir);
+    await markTranscriptCleared(SESSION, cwd, undefined, marksDir);
 
     forgetClearedTranscript(SESSION, marksDir);
     expect(clearedTranscripts.has(SESSION)).toBe(false);
@@ -180,7 +183,7 @@ describe("when the clear happened", () => {
   it("is remembered, and written into the mark", async () => {
     await writeTranscript("{}\n");
     const before = Date.now();
-    await markTranscriptCleared(SESSION, cwd, marksDir);
+    await markTranscriptCleared(SESSION, cwd, undefined, marksDir);
     const at = clearedAtOf(SESSION);
     expect(at).toBeGreaterThanOrEqual(before);
     expect(at).toBeLessThanOrEqual(Date.now());
@@ -188,7 +191,7 @@ describe("when the clear happened", () => {
   });
 
   it("is remembered even when there is no cwd to freeze a file for", async () => {
-    await markTranscriptCleared(SESSION, undefined, marksDir);
+    await markTranscriptCleared(SESSION, undefined, undefined, marksDir);
     expect(clearedAtOf(SESSION)).toBeGreaterThan(0);
     expect(await exists(markerFile())).toBe(false); // memory only, as before
   });
@@ -202,8 +205,43 @@ describe("when the clear happened", () => {
     expect(clearedAtOf(SESSION)).toBe(1234567890);
   });
 
+  // Codex, #1749: the boundary alone is not enough after a restart. Claude's new id is where the
+  // POST-clear prompts are filed, so a pane that remembers only when the clear happened shows
+  // nothing until the next hook re-teaches it.
+  it("writes the id claude took at the clear into the mark", async () => {
+    await writeTranscript("{}\n");
+    await markTranscriptCleared(SESSION, cwd, CLAUDE_ID, marksDir);
+    expect(clearedClaudeIdOf(SESSION)).toBe(CLAUDE_ID);
+    expect(JSON.parse(await fs.readFile(markerFile(), "utf8")).claudeId).toBe(CLAUDE_ID);
+  });
+
+  it("brings that id back on hydration, which is the restart the mark exists for", async () => {
+    await writeTranscript("{}\n");
+    await fs.mkdir(marksDir, { recursive: true });
+    await fs.writeFile(markerFile(), JSON.stringify({ cwd, size: 3, at: 5, claudeId: CLAUDE_ID }));
+
+    await hydrateClearedTranscripts(marksDir);
+    expect(clearedAtOf(SESSION)).toBe(5);
+    expect(clearedClaudeIdOf(SESSION)).toBe(CLAUDE_ID);
+  });
+
+  it("keeps no id when the clear hook named none", async () => {
+    await writeTranscript("{}\n");
+    await markTranscriptCleared(SESSION, cwd, undefined, marksDir);
+    expect(clearedClaudeIdOf(SESSION)).toBeUndefined();
+    expect(JSON.parse(await fs.readFile(markerFile(), "utf8")).claudeId).toBeUndefined();
+  });
+
+  // It is read back off a file and then used to select rows out of claude's history, so it crosses
+  // the same shape check every other id does.
+  it("ignores a claudeId that is not a session id, keeping the freeze", () => {
+    expect(parseClearedMark({ cwd: "/x", size: 5, at: 1, claudeId: "../etc/passwd" })).toEqual({ cwd: "/x", size: 5, at: 1 });
+    expect(parseClearedMark({ cwd: "/x", size: 5, at: 1, claudeId: 42 })).toEqual({ cwd: "/x", size: 5, at: 1 });
+    expect(parseClearedMark({ cwd: "/x", size: 5, at: 1, claudeId: CLAUDE_ID })).toEqual({ cwd: "/x", size: 5, at: 1, claudeId: CLAUDE_ID });
+  });
+
   it("is dropped with the mark", async () => {
-    await markTranscriptCleared(SESSION, cwd, marksDir);
+    await markTranscriptCleared(SESSION, cwd, undefined, marksDir);
     forgetClearedTranscript(SESSION, marksDir);
     expect(clearedAtOf(SESSION)).toBeUndefined();
   });
