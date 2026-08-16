@@ -46,12 +46,23 @@ const sizeOf = (file: string) => async (): Promise<number | null> => {
   }
 };
 
-function applyBoundary(sessionId: string, boundary: CodexTurnBoundary, deps: CodexActivityTrackDeps): void {
+/** What one turn boundary does. Exported for its spec: the tail loop around it needs a real file
+ *  and a poll interval, and what has actually broken twice is this — which side effects fire on
+ *  which boundary — not the tailing. */
+export function applyBoundary(sessionId: string, boundary: CodexTurnBoundary, deps: CodexActivityTrackDeps): void {
   const event = HOOK_EVENT_FOR[boundary];
-  // Before the effects, and not derived from them: a `setWorking` that does not move the flag
-  // publishes nothing, so reading the pane's signal off the activity row loses the prompt that
+  // BOTH boundaries, and not derived from the effects below: a `setWorking` that does not move the
+  // flag publishes nothing, so reading the pane's signal off the activity row loses the prompt that
   // starts a turn while one is already open (#1749).
-  if (boundary === "started") deps.publishPromptSubmitted(sessionId);
+  //
+  // Both, because when codex flushes the `user_message` its rollout carries is not something this
+  // repo has measured — last-turn.ts says it writes "lazily" and skips an in-flight turn on that
+  // basis. If that is right, only `completed` finds the prompt and the start publish is a wasted
+  // reload; if it is wrong, `started` shows it immediately and `completed` refreshes a list that is
+  // already correct. One of them is redundant and neither is harmful, which is the shape to pick
+  // when the premise cannot be checked cheaply — the pane is debounced, so a turn costs one extra
+  // read of a file it was going to read anyway (Codex).
+  deps.publishPromptSubmitted(sessionId);
   const { effects, push } = boundaryOutcome(boundary, deps.isActive());
   for (const eff of effects) {
     if (eff.kind === "working") deps.setWorking(sessionId, eff.value, event);
