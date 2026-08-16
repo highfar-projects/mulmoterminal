@@ -1,0 +1,16 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+const d = fs.mkdtempSync(path.join(os.tmpdir(), "ino-"));
+const f = path.join(d, "h.jsonl");
+const show = (tag, s) => console.log(`  ${tag}  ino=${s.ino} birthtimeMs=${s.birthtimeMs} size=${s.size} mtimeMs=${s.mtimeMs}`);
+fs.writeFileSync(f, "a".repeat(100));
+const s1 = fs.statSync(f); show("before", s1);
+fs.rmSync(f);
+fs.writeFileSync(f, "b".repeat(4000));
+const s2 = fs.statSync(f); show("after ", s2);
+console.log(`  ino same:       ${s1.ino === s2.ino}`);
+console.log(`  birthtime same: ${s1.birthtimeMs === s2.birthtimeMs}`);
+console.log(`  identity same:  ${`${s1.ino}:${Math.floor(s1.birthtimeMs)}` === `${s2.ino}:${Math.floor(s2.birthtimeMs)}`}   <-- これが true なら guard を素通りする`);
+console.log(`  size grew:      ${s2.size > s1.size}   <-- true なら size guard も素通り`);
+fs.rmSync(d, { recursive: true });
