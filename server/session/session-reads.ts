@@ -403,9 +403,15 @@ async function scanHistoryOnce(id: string, ids: readonly string[], since: number
     // `atLineStart` is what makes a resume safe: the offset came from a previous scan of this same
     // file, so it IS a line boundary and its record must be folded rather than dropped as a partial.
     const offset = await forEachJsonlRecordIn(handle, { from: plan.from, atLineStart: true }, (record) => foldClaudePrompt(scan, record));
-    if (startedOn === null || (await anchorAt(handle, checkpoint)) !== startedOn) return null;
     const anchor = await anchorAt(handle, offset);
     if (anchor === null) return null; // the file lost bytes this very scan consumed
+    // EVERYTHING the memo will hold has now been read, and only then is the checkpoint re-read. That
+    // order is the rule, not a detail: a validation placed before the last of those reads leaves the
+    // gap it was meant to close — the rewrite simply lands after the check and before the anchor,
+    // and the memo pairs a window from before it with an anchor from after (CodeRabbit, #1750). A
+    // rewrite after this line is not a poisoned memo but a stale one, self-consistent about a state
+    // the file has left, which the next read's own check discards.
+    if (startedOn === null || (await anchorAt(handle, checkpoint)) !== startedOn) return null;
     // The full scan underneath is THIS one when nothing was carried, and otherwise the one the
     // carried window was built by — a resume extends a chain, it does not restart its clock.
     const fullScanAt = plan.reuse && memo ? memo.fullScanAt : now;

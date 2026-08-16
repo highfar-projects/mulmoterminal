@@ -215,23 +215,32 @@ const raceOn = (swap: () => Promise<void>, opts: { before?: boolean } = {}) => {
 //
 // Hooked on the fold's last read rather than on `open`, because that is the moment: the fold reaches
 // EOF exactly once — the only read that comes back empty — and everything after it is the checking.
-const raceAtEndOfFold = (swap: () => Promise<void>) => {
+// `afterReads` walks the swap through the checks that follow the fold, each of which is a positional
+// read of its own: 0 is the moment the fold ends, and 2 is once the anchor destined for the memo has
+// been read but before the checkpoint is confirmed — the gap a validation placed too early leaves
+// open.
+const raceAtEndOfFold = (swap: () => Promise<void>, opts: { afterReads?: number } = {}) => {
   const realOpen = fs.open.bind(fs);
+  const due = opts.afterReads ?? 0;
   let swapped = false;
   return vi.spyOn(fs, "open").mockImplementation(async (...args: Parameters<typeof fs.open>) => {
     const handle = await realOpen(...args);
     const read = handle.read.bind(handle);
+    let sinceEof = -1;
     // Defined rather than assigned: `read` is overloaded, and defineProperty takes the one shape
     // this file actually calls without weakening the handle's type to do it.
-    const atEndOfFold = async (buffer: Buffer, offset: number, length: number, position: number) => {
+    const counted = async (buffer: Buffer, offset: number, length: number, position: number) => {
       const result = await read(buffer, offset, length, position);
-      if (!swapped && result.bytesRead === 0) {
+      if (sinceEof < 0 && result.bytesRead === 0)
+        sinceEof = 0; // the fold reached EOF
+      else if (sinceEof >= 0) sinceEof += 1;
+      if (!swapped && sinceEof === due) {
         swapped = true;
         await swap();
       }
       return result;
     };
-    Object.defineProperty(handle, "read", { value: atEndOfFold, configurable: true });
+    Object.defineProperty(handle, "read", { value: counted, configurable: true });
     return handle;
   });
 };
@@ -336,15 +345,21 @@ describe("the file changed under a scan in progress", () => {
   // between the fold reaching EOF and the anchor being read for the memo. A FRESH scan is where it
   // bites, because it carries no memo whose anchor could be re-checked — so the scan has to take its
   // own before-and-after reading of the boundary it folded up to (CodeRabbit, #1750).
-  it("does not memoise a fresh scan whose file was rewritten in place under the fold", async () => {
-    await fs.writeFile(historyFile(), OLD);
+  // Each number is a moment among the reads that follow the fold, and the memo must survive none of
+  // them carrying two different states of the file: 0 ends the fold, 2 is after the anchor that will
+  // be stored has been read. The second is what says the checkpoint is confirmed AFTER everything the
+  // memo holds rather than before it (CodeRabbit, #1750).
+  [0, 1, 2, 3].forEach((afterReads) => {
+    it(`does not memoise a fresh scan rewritten in place ${afterReads} reads after the fold`, async () => {
+      await fs.writeFile(historyFile(), OLD);
 
-    const spy = raceAtEndOfFold(() => fs.writeFile(historyFile(), NEW)); // same inode, new content
-    await resumedScan(SESSION); // no memo yet, so this one scans from zero
-    spy.mockRestore();
+      const spy = raceAtEndOfFold(() => fs.writeFile(historyFile(), NEW), { afterReads }); // same inode
+      await resumedScan(SESSION); // no memo yet, so this one scans from zero
+      spy.mockRestore();
 
-    const after = (await resumedScan(SESSION)).map((p) => p.text);
-    expect(after).toEqual((await fullScan(SESSION)).map((p) => p.text));
-    expect(after.some((t) => t.startsWith("old"))).toBe(false);
+      const after = (await resumedScan(SESSION)).map((p) => p.text);
+      expect(after).toEqual((await fullScan(SESSION)).map((p) => p.text));
+      expect(after.some((t) => t.startsWith("old"))).toBe(false);
+    });
   });
 });
