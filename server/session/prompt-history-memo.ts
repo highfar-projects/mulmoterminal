@@ -23,8 +23,9 @@ import type { ClaudePromptScan } from "./prompt-history.js";
 export interface HistoryMemo {
   /** What question this memo answers — see memoKeyFor. */
   key: string;
-  /** Which FILE it answers about — see fileIdentity. */
-  identity: string;
+  /** Which FILE it answers about — see fileIdentity. Null where the platform could not say, which
+   *  is a memo that will never be resumed rather than one resumed on weaker evidence. */
+  identity: string | null;
   /** The line-aligned byte offset the scan stopped at. Doubles as the shrink guard: the file must
    *  still hold the bytes that scan consumed, or the offset points somewhere it never did.
    *
@@ -59,9 +60,12 @@ export const memoKeyFor = (ids: readonly string[], since: number | undefined): s
  *  for the second. Inode numbers are recycled, so a history file deleted and immediately recreated
  *  can land on the same one; adding the birth time makes that collision need two coincidences.
  *
- *  Either component reads as 0 where the platform does not report it, and that is fine: both sides
- *  are stamped the same way, so the comparison degrades to whatever IS reported. `UNKNOWN_FILE` is
- *  the case where nothing is — there the size guard below is the only evidence available.
+ *  A file with no birth time cannot be stamped at all, and that is `null` rather than a weaker
+ *  stamp. The measurement below is why: without it the comparison is the inode alone, which on Linux
+ *  matches a replacement EVERY time — a guard that looks like one and is not. Not every filesystem
+ *  reports a birth time (statx has to be supported all the way down; NFS and FUSE mounts are the
+ *  ones to expect), and there `null` costs only the optimization — the read falls back to the full
+ *  scan #1749 shipped, rather than to a length check this PR already rejected as insufficient.
  *
  *  The birth time is used at FULL precision. Rounding it to the millisecond was what let CI fail:
  *  on Linux the replacement file gets the same inode EVERY time, so the millisecond was the only
@@ -76,9 +80,8 @@ export const memoKeyFor = (ids: readonly string[], since: number | undefined): s
  *  macOS gives a fresh inode each time and so never reaches this, which is why it only ever showed
  *  up in CI. Size is deliberately NOT part of the identity: it changes on every append, and a memo
  *  that treats an append as a different file resumes nothing. */
-export const fileIdentity = (stat: { ino: number; birthtimeMs: number }): string => `${stat.ino}:${stat.birthtimeMs}`;
-
-const UNKNOWN_FILE = "0:0";
+export const fileIdentity = (stat: { ino: number; birthtimeMs: number }): string | null =>
+  Number.isFinite(stat.birthtimeMs) && stat.birthtimeMs > 0 ? `${stat.ino}:${stat.birthtimeMs}` : null;
 
 /** Where the next scan should start, and whether it may keep what the last one found.
  *
@@ -100,9 +103,9 @@ const RESTART: ResumePlan = { from: 0, reuse: null };
 export function resumePlan(memo: HistoryMemo | undefined, key: string, stat: HistoryStat): ResumePlan {
   if (!memo || memo.key !== key) return RESTART;
   const identity = fileIdentity(stat);
-  // Only when both sides identify the file at all: "no evidence" must not read as "different file",
-  // or the resume would be disabled outright on a platform that reports neither field.
-  if (memo.identity !== UNKNOWN_FILE && identity !== UNKNOWN_FILE && memo.identity !== identity) return RESTART;
+  // Unidentifiable is "start over", never "carry on": the length guard alone cannot tell an append
+  // from a replacement that grew past the old offset, which is the design this PR rejected first.
+  if (identity === null || memo.identity !== identity) return RESTART;
   if (stat.size < memo.offset) return RESTART;
   return { from: memo.offset, reuse: memo.scan };
 }

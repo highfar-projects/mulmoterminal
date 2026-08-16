@@ -40,8 +40,11 @@ describe("fileIdentity", () => {
     expect(fileIdentity({ ino: 42, birthtimeMs: 1000 })).toBe(fileIdentity({ ino: 42, birthtimeMs: 1000 }));
   });
 
-  it("reads as unknown where the platform reports neither field", () => {
-    expect(fileIdentity({ ino: 0, birthtimeMs: 0 })).toBe("0:0");
+  // The inode alone is not a weaker stamp, it is no stamp: the measurement below has it matching a
+  // replacement 200/200 on Linux. So a file with no birth time gets none.
+  it("refuses to stamp a file whose birth time the platform does not report", () => {
+    expect(fileIdentity({ ino: 4242, birthtimeMs: 0 })).toBeNull();
+    expect(fileIdentity({ ino: 0, birthtimeMs: 0 })).toBeNull();
   });
 });
 
@@ -71,11 +74,16 @@ describe("resumePlan", () => {
     expect(resumePlan(memo(), "s1|", at(9000, 42, 2000))).toEqual({ from: 0, reuse: null }); // recycled inode
   });
 
-  // "No evidence" must not read as "different file", or the resume would be off entirely there.
-  it("falls back to the length guard where the platform identifies nothing", () => {
-    const m = memo({ identity: "0:0" });
-    expect(resumePlan(m, "s1|", at(4000, 0, 0))).toEqual({ from: 1000, reuse: m.scan });
-    expect(resumePlan(m, "s1|", at(999, 0, 0))).toEqual({ from: 0, reuse: null });
+  // Where the file cannot be identified, the resume is OFF — every refresh scans the whole file, as
+  // it did before this PR. The alternative is resuming on the length alone, and the same recycled
+  // inode that failed CI walks straight through that: a replacement bigger than the old offset reads
+  // as an append, and the pane answers with the old file's prompts spliced onto the new one's tail.
+  it("starts over where the platform reports no birth time, however the length compares", () => {
+    const m = memo({ identity: null });
+    expect(resumePlan(m, "s1|", at(4000, 42, 0))).toEqual({ from: 0, reuse: null });
+    expect(resumePlan(m, "s1|", at(999, 42, 0))).toEqual({ from: 0, reuse: null });
+    // And a memo that HAS a stamp is not resumed against a file that lost one.
+    expect(resumePlan(memo(), "s1|", at(4000, 42, 0))).toEqual({ from: 0, reuse: null });
   });
 
   // The guard is the OFFSET, not a size sampled before the scan: claude can append mid-scan, so the
@@ -115,8 +123,12 @@ describe("fileIdentity keeps sub-millisecond precision", () => {
     expect(resumePlan(memo, "k", { ...stat, size: 4000 })).toEqual({ from: 100, reuse: memo.scan });
   });
 
-  // A platform reporting neither field still degrades to the size guard rather than to "different".
-  it("reads as UNKNOWN when the platform reports nothing", () => {
-    expect(fileIdentity({ ino: 0, birthtimeMs: 0 })).toBe("0:0");
+  // The same 200/200 collision, reached the other way: a platform that reports no birth time leaves
+  // the inode as the only stamp, so it gets no stamp at all and the resume stays off there.
+  it("stamps nothing when the birth time is missing, rather than falling back to the inode", () => {
+    expect(fileIdentity({ ino: 2362397, birthtimeMs: 0 })).toBeNull();
+    const stat = { ino: 2362397, birthtimeMs: 0, size: 100 };
+    const memo = { key: "k", identity: fileIdentity(stat), offset: 100, scan: {} as never };
+    expect(resumePlan(memo, "k", { ino: 2362397, birthtimeMs: 0, size: 4000 })).toEqual({ from: 0, reuse: null });
   });
 });
