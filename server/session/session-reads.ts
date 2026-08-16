@@ -313,10 +313,10 @@ function claudeTranscriptPrompts(cwd: string, id: string): SessionPrompts {
   }
 }
 
-// Under whichever id claude currently calls itself as well as ours: `/clear` and `/compact` both
-// reissue it, and history.jsonl keys on claude's (historyIdsFor decides which apply).
+// Under whichever id claude currently calls itself as well as ours — history.jsonl keys on
+// claude's, and a `/clear` re-mints it (historyIdsFor).
 function claudePrompts(cwd: string, id: string): SessionPrompts {
-  const ids = historyIdsFor(id, claudeSessionIds.get(id), clearedTranscripts.has(id));
+  const ids = historyIdsFor(id, claudeSessionIds.get(id));
   try {
     const found = claudePromptsFor(readTailRecords(claudeHistoryFile()), ids, PROMPT_SCAN_LIMIT);
     if (found.length > 0) return promptWindow(found);

@@ -127,8 +127,13 @@ export function buildPushText(kind: PushKind, where: string, detail: string, mes
 
 // Which session a hook belongs to, or null when neither source names one usably.
 //
-// The `x-mt-session` header wins: Claude reissues its own session_id on /clear and
-// /compact, while the mulmoterminal id is the one hooks must stay attributed to.
+// The `x-mt-session` header wins: Claude reissues its own session_id on /clear, while the
+// mulmoterminal id is the one hooks must stay attributed to.
+//
+// This used to say "/clear and /compact". The compact half is not true of the claude here, and a
+// feature was built on it before anyone checked: across the 95 compacted transcripts on this
+// machine, the 61 that had prompts after the compaction ALL kept the same session id — auto-
+// compact and manual `/compact` alike (#1749). Measure before relying on the pair again.
 //
 // BOTH sources are validated against the same UUID shape. The id does not stay inside
 // this process — it becomes a Firestore document id (backends/remoteHost/sessionActivity)

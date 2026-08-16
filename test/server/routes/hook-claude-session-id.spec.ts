@@ -2,10 +2,10 @@
 // That the hook route REMEMBERS claude's own session id, pinned at the route.
 //
 // The rule and its consequences have their own specs (claudeOwnSessionId, historyIdsFor), and this
-// is the seam between them: claude reissues its id on `/clear` and `/compact` while still reporting
-// to us under ours, so anything keyed by CLAUDE's id — its prompt-history file — reads the wrong
-// session from that moment unless the route captures the new one (Codex, #1749). Nothing else
-// observes the mapping, so a missing `claudeSessionIds.set` would be invisible in every other spec.
+// is the seam between them: a `/clear` re-mints claude's id while its hooks keep reporting to us
+// under ours, so anything keyed by CLAUDE's id — its prompt-history file — reads the wrong session
+// from that moment unless the route captures the new one (#1749). Nothing else observes the
+// mapping, so a missing `claudeSessionIds.set` would be invisible in every other spec.
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import express from "express";
 import request from "supertest";
@@ -49,40 +49,32 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("the hook route remembers claude's own session ids", () => {
+describe("the hook route remembers claude's own session id", () => {
   it("records the id claude reports for itself, under ours", async () => {
     await postHook({ hook_event_name: "UserPromptSubmit", session_id: REISSUED, prompt: "go" });
-    expect(claudeSessionIds.get(OURS)).toEqual([REISSUED]);
+    expect(claudeSessionIds.get(OURS)).toBe(REISSUED);
   });
 
-  // Any hook, not just a prompt: the chain is in memory, so after a restart the first tool call of
-  // an already-running session is the earliest chance to re-learn it.
+  // Any hook, not just a prompt: the mapping is in memory, so after a restart the first tool call
+  // of an already-running session is the earliest chance to re-learn it.
   it("records it from a tool hook too", async () => {
     await postHook({ hook_event_name: "PreToolUse", session_id: REISSUED, tool_name: "Bash", tool_input: { command: "ls" } });
-    expect(claudeSessionIds.get(OURS)).toEqual([REISSUED]);
+    expect(claudeSessionIds.get(OURS)).toBe(REISSUED);
   });
 
-  // Codex, #1749: a long session auto-compacts more than once, and the prompts of each stretch are
-  // filed under the id it ran as. Keeping only the newest loses everything before the last compact.
-  it("KEEPS the chain when claude reissues again, rather than replacing it", async () => {
+  it("follows a re-mint rather than sticking to the first id it saw", async () => {
     await postHook({ hook_event_name: "Stop", session_id: OURS });
-    await postHook({ hook_event_name: "Stop", session_id: REISSUED });
+    expect(claudeSessionIds.get(OURS)).toBe(OURS);
     await postHook({ hook_event_name: "Stop", session_id: THIRD });
-    expect(claudeSessionIds.get(OURS)).toEqual([OURS, REISSUED, THIRD]);
+    expect(claudeSessionIds.get(OURS)).toBe(THIRD);
   });
 
-  it("does not repeat an id — every hook of a turn carries the same one", async () => {
-    await postHook({ hook_event_name: "Stop", session_id: REISSUED });
-    await postHook({ hook_event_name: "PreToolUse", session_id: REISSUED, tool_name: "Read" });
-    expect(claudeSessionIds.get(OURS)).toEqual([REISSUED]);
-  });
-
-  // The chain belongs to the conversation. `/clear` ends it, and the id this very hook carries is
-  // the NEW conversation's — so the reset has to happen before the id is recorded, not after.
-  it("empties the chain on /clear and starts it again from the new id", async () => {
+  // A `/clear` must not leave the pane with no id at all. The same hook carries claude's new one,
+  // and it is recorded AFTER the header hooks so nothing in the clear path can wipe it.
+  it("keeps an id across a /clear — the one that hook carries", async () => {
     await postHook({ hook_event_name: "Stop", session_id: OURS });
     await postHook({ hook_event_name: "SessionStart", source: "clear", session_id: REISSUED });
-    expect(claudeSessionIds.get(OURS)).toEqual([REISSUED]);
+    expect(claudeSessionIds.get(OURS)).toBe(REISSUED);
   });
 
   it("records nothing for a body that names no usable id", async () => {

@@ -69,30 +69,20 @@ export function claudeHistoryPrompt(record: Record<string, unknown>): { sessionI
 const collect = (records: Record<string, unknown>[], read: (record: Record<string, unknown>) => PromptEntry | null, limit: number): PromptEntry[] =>
   records.flatMap((record) => read(record) ?? []).slice(-limit);
 
-/** Every claude id seen for a session so far, with `id` added if it is new. Oldest first.
- *
- *  A LIST, not the latest: claude reissues its id on each `/compact`, and a long session compacts
- *  repeatedly (auto-compact), so keeping only the newest loses every prompt from before the
- *  previous compaction — the older half of exactly the history this pane exists to show
- *  (Codex, #1749). */
-export const withClaudeId = (seen: readonly string[], id: string): string[] => (seen.includes(id) ? [...seen] : [...seen, id]);
-
 /** Which ids the history file has to be read under, for a session this app calls `ourId`.
  *
- *  Claude reissues its OWN session id on `/clear` and `/compact` and goes on reporting to us under
- *  ours (activity-hook.ts) — so history.jsonl, which keys on claude's, stops matching. Without
- *  this, a compacted session's pane freezes at the compaction and a cleared one never moves again.
+ *  Ours, plus the id claude reports for ITSELF when that differs. `/clear` is why the second one
+ *  exists: cleared-transcripts.ts records (from #1085) that claude mints a new id there while its
+ *  hooks keep reporting under ours, so history.jsonl — which keys on claude's — would stop
+ *  matching. One extra id, not a chain.
  *
- *  `/compact` continues the SAME conversation, so ours and every id since are all its prompts.
- *  `/clear` ends one, and the repo's rule is that the ended conversation does not come back
- *  (#1085): the caller empties the list at the clear, so what remains is the new conversation's
- *  alone — and until its first hook there is nothing to show, which is the honest answer rather
- *  than the ended conversation's prompts. */
-export function historyIdsFor(ourId: string, claudeIds: readonly string[] | undefined, cleared: boolean): string[] {
-  const seen = claudeIds ?? [];
-  if (cleared) return seen.filter((id) => id !== ourId);
-  return seen.includes(ourId) ? [...seen] : [ourId, ...seen];
-}
+ *  `/compact` does NOT belong on that list, though the comment above resolveHookSessionId says it
+ *  does. Measured over every compacted transcript on this machine: 95 compacted, 61 of them had
+ *  prompts afterwards, and in **all 61 the session id was unchanged** — auto and manual alike. A
+ *  chain of ids was built for that case and removed again; do not add it back without measuring
+ *  first, and if a future claude does reissue on compact, the fix is here rather than in a
+ *  persisted log (#1749). */
+export const historyIdsFor = (ourId: string, claudeId: string | undefined): string[] => (!claudeId || claudeId === ourId ? [ourId] : [ourId, claudeId]);
 
 /** These ids' prompts, oldest first, capped to the newest `limit`. Several ids are ONE session
  *  whose id was reissued mid-conversation, so the rows interleave in file order — which is time

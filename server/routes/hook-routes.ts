@@ -10,7 +10,6 @@ import { watchOtherWrites } from "../session/write-to-session.js";
 import { dirConfigWriteTarget } from "../config/dir-config.js";
 import { writtenFilePath } from "../files/tool-writes.js";
 import { activityHookEffects, claudeOwnSessionId, pushKindFor, resolveHookCwd, resolveHookSessionId } from "../session/activity-hook.js";
-import { withClaudeId } from "../session/prompt-history.js";
 import { runCompletionHook } from "../session/completion-hooks.js";
 import { messageOf } from "../errors.js";
 import { headerHookEffect } from "../session/header-hook.js";
@@ -145,12 +144,11 @@ async function trackPromptForHeader(sessionId: string, prompt: string, cwd: stri
   lastPrompts.set(sessionId, preferredHeaderPrompt(lastPrompts.get(sessionId) ?? null, prompt));
 }
 
-/** Add the id claude reports for ITSELF to this session's chain, when the body names a usable one.
- *  The chain is what lets the prompts pane read a session that has compacted several times — see
- *  registry.ts and historyIdsFor. */
+/** Remember the id claude reports for ITSELF, when the body names a usable one. It is what lets
+ *  the prompts pane keep reading a session whose id claude has re-minted — see registry.ts. */
 function rememberClaudeSessionId(sessionId: string, bodyValue: unknown): void {
   const claudeId = claudeOwnSessionId(bodyValue, (id) => SESSION_ID_RE.test(id));
-  if (claudeId) claudeSessionIds.set(sessionId, withClaudeId(claudeSessionIds.get(sessionId) ?? [], claudeId));
+  if (claudeId) claudeSessionIds.set(sessionId, claudeId);
 }
 
 // `/clear` restarts the conversation, so the header must stop showing the pre-clear prompt. Blank it
@@ -169,9 +167,8 @@ function rememberClaudeSessionId(sessionId: string, bodyValue: unknown): void {
 async function clearHeaderPrompt(deps: HookDeps, sessionId: string, cwd: string | undefined): Promise<void> {
   lastPrompts.set(sessionId, "");
   lastResponses.set(sessionId, "");
-  // The chain of claude ids belongs to the conversation that just ended, and the prompts pane
-  // reads it: left in place, the new conversation would open showing the old one's instructions.
-  claudeSessionIds.set(sessionId, []);
+  // Not claudeSessionIds: the next hook overwrites it with whatever claude now calls itself, and
+  // emptying it here would leave a window where the pane can read nothing at all.
   await markTranscriptCleared(sessionId, cwd);
   deps.forgetTitle(sessionId);
   deps.publishActivity(sessionId);

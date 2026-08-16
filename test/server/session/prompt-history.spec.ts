@@ -4,7 +4,6 @@ import {
   claudeHistoryPrompt,
   claudePromptsFor,
   historyIdsFor,
-  withClaudeId,
   codexPrompts,
   promptWindow,
   transcriptPrompts,
@@ -114,49 +113,17 @@ describe("claudePromptsFor", () => {
 
 // Codex, #1749: claude reissues its own session id on `/clear` AND `/compact` while still
 // reporting to us under ours, so a pane keyed on our id alone freezes at that moment.
-describe("withClaudeId", () => {
-  it("appends a new id and leaves the order alone", () => {
-    expect(withClaudeId([], "a")).toEqual(["a"]);
-    expect(withClaudeId(["a"], "b")).toEqual(["a", "b"]);
-  });
-
-  it("does not repeat one already in the chain — every hook of a turn carries the same id", () => {
-    expect(withClaudeId(["a", "b"], "a")).toEqual(["a", "b"]);
-    expect(withClaudeId(["a", "b"], "b")).toEqual(["a", "b"]);
-  });
-
-  it("answers a new array rather than mutating the stored one", () => {
-    const seen = ["a"];
-    expect(withClaudeId(seen, "b")).not.toBe(seen);
-    expect(seen).toEqual(["a"]);
-  });
-});
-
+// The second id exists for `/clear`, which re-mints claude's own id (cleared-transcripts.ts).
+// `/compact` is NOT one of these: measured over the 95 compacted transcripts on this machine, the
+// 61 with prompts afterwards all kept the same id, so the chain built for it was removed (#1749).
 describe("historyIdsFor", () => {
   it("reads under ours alone when no claude id is known, or it is still ours", () => {
-    expect(historyIdsFor("ours", undefined, false)).toEqual(["ours"]);
-    expect(historyIdsFor("ours", [], false)).toEqual(["ours"]);
-    expect(historyIdsFor("ours", ["ours"], false)).toEqual(["ours"]);
+    expect(historyIdsFor("ours", undefined)).toEqual(["ours"]);
+    expect(historyIdsFor("ours", "ours")).toEqual(["ours"]);
   });
 
-  it("reads under ALL of them after a compact — same conversation, several ids", () => {
-    expect(historyIdsFor("ours", ["ours", "second"], false)).toEqual(["ours", "second"]);
-  });
-
-  // Codex, #1749: a long session auto-compacts repeatedly, and every id in the chain holds the
-  // prompts of the stretch it covered.
-  it("keeps every id of a session that compacted several times", () => {
-    expect(historyIdsFor("ours", ["ours", "second", "third", "fourth"], false)).toEqual(["ours", "second", "third", "fourth"]);
-  });
-
-  it("reads under the ids since the CLEAR — the ended conversation stays ended", () => {
-    expect(historyIdsFor("ours", ["after-clear", "after-compact"], true)).toEqual(["after-clear", "after-compact"]);
-  });
-
-  it("shows nothing right after a clear, rather than the conversation that just ended", () => {
-    expect(historyIdsFor("ours", [], true)).toEqual([]);
-    expect(historyIdsFor("ours", undefined, true)).toEqual([]);
-    expect(historyIdsFor("ours", ["ours"], true)).toEqual([]);
+  it("adds claude's own id once it differs, ours first", () => {
+    expect(historyIdsFor("ours", "re-minted")).toEqual(["ours", "re-minted"]);
   });
 });
 
