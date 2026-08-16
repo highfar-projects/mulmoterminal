@@ -115,6 +115,46 @@ transcript は ①**作業中に横から出した指示**を丸ごと落とし�
   壊れたレコード
 - `test/src/components/` の chrome 配線 spec は型で固定されているので、union を足せば追随する
 
+## レビューで変わったところ（PR #1749 iter-1）
+
+計画の時点では気づいていなかった 2 つが設計側の変更になった。
+
+- **窓の切り方**: 純関数側で `PROMPT_HISTORY_MAX` ちょうどに切ると、「100 件ちょうど」と
+  「1000 件あって 900 件落とした」が区別できず、完全なリストに「古い命令は表示されません」と
+  出てしまう。読み手は **`PROMPT_SCAN_LIMIT`（＝窓＋1）** まで集め、`promptWindow` が切り方と
+  `truncated` を同時に決める（Codex）。
+- **`RightPane` は列挙ではなくリストから導出**: `TerminalGrid` がリロード時に localStorage の
+  ペインを `isRightPane` で検証しており、それが**手書きの別リスト**だった。`prompts` を union に
+  足しても、配線を全部通しても、**リロード後に復帰しないまま何も落ちない**。
+  `RIGHT_PANES` を source にして型とガードを導出した（`common/sessionAgent.ts` と同じ形）ので、
+  次のペインは自動的にガードに届く（CodeRabbit）。
+
+加えて、bot 指摘外で自分で見つけた 1 件: `/clear` されたセッションの**凍結 transcript** を
+フォールバックで読んでいた（#1085 が「そのファイルを読む者はまず `clearedTranscripts` を見る」と
+定めた不変条件の違反）。
+
+## レビューで変わったところ（PR #1749 iter-2）
+
+**計画の前提が 1 つ間違っていた。** 計画では「history.jsonl の `sessionId` は、このリポジトリが
+セルに持っている id と同じ」としていたが、`server/session/activity-hook.ts` が自分で書いている
+とおり **claude は `/clear` と `/compact` で自分の session id を振り直す**。フックは
+`x-mt-session` ヘッダ（＝こちらの id）で届き続けるので、**history.jsonl だけが突合できなくなる**。
+
+つまり計画のままだと、**compact したセッションのペインはその時点で止まる**。compact は日常的に
+起きるので、これは辺縁ケースではない（Codex）。
+
+対処:
+
+- フック本体の `session_id`（＝claude が今名乗っている id）を毎フック記録する
+  （`claudeSessionIds`、registry のメモリ内）。永続化しない — 再起動をまたいだ古い対応表は
+  「別の会話の命令をこのセルのものとして出す」ので、次のフックで学び直すほうが安全
+- どの id で読むかは純関数 `historyIdsFor(ourId, claudeId, cleared)`:
+  - **compact = 同じ会話**なので **両方の id** で読む（前半の命令が消えない）
+  - **clear = 終わった会話**なので **新しい id だけ**（#1085 の方針に合わせる）
+  - claude の id が未知／同一なら、こちらの id 1 つ
+- 配線（route が実際に記録しているか）は `test/server/routes/hook-claude-session-id.spec.ts` で固定。
+  この対応表は他の誰も見ないので、`set` を書き忘れても他のテストは緑のままになる
+
 ## やらないこと
 
 - グローバル横断の一覧（今回のスコープ外。#1748 に選択肢として残してある）

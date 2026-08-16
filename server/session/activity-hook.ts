@@ -141,6 +141,13 @@ export function resolveHookSessionId(header: unknown, bodyValue: unknown, isVali
   return usable(header) ?? usable(bodyValue);
 }
 
+/** The id CLAUDE currently calls itself, off the same body — the other half of the sentence above.
+ *  It is the key into anything claude wrote under its own id (its prompt history, #1749), and it
+ *  stops matching ours the moment a `/clear` or `/compact` reissues it. Same UUID precondition,
+ *  for the same reason: an id that fails it is not one to remember under. */
+export const claudeOwnSessionId = (bodyValue: unknown, isValidId: (id: string) => boolean): string | null =>
+  typeof bodyValue === "string" && isValidId(bodyValue) ? bodyValue : null;
+
 // Which directory a hook's relative paths resolve against. The CLI reports its live cwd in
 // the payload, but the PTY table only holds the dir the session was SPAWNED in — that value
 // goes stale the moment the session `cd`s. So the payload cwd wins, falling back to the spawn

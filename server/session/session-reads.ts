@@ -26,9 +26,19 @@ import {
 import { createTranscriptFold, type FoldedAt } from "./transcript-fold.js";
 import { classifyWorkPhase, type WorkPhase } from "./workPhase.js";
 import { sessionListTitle } from "./sessionListTitle.js";
-import { activity, aiTitles, codexRollouts, codexRolloutsHydrated, isBackgroundSession, isFailedWorker, knownSessions, sessionMemos } from "./registry.js";
+import {
+  activity,
+  aiTitles,
+  claudeSessionIds,
+  codexRollouts,
+  codexRolloutsHydrated,
+  isBackgroundSession,
+  isFailedWorker,
+  knownSessions,
+  sessionMemos,
+} from "./registry.js";
 import { claudeHistoryFile, projectSessionsDir } from "./project-dir.js";
-import { claudePromptsFor, codexPrompts, promptWindow, transcriptPrompts, PROMPT_SCAN_LIMIT } from "./prompt-history.js";
+import { claudePromptsFor, codexPrompts, historyIdsFor, promptWindow, transcriptPrompts, PROMPT_SCAN_LIMIT } from "./prompt-history.js";
 import type { PromptWindow } from "../../common/promptHistory.js";
 import { clearedTranscripts } from "./cleared-transcripts.js";
 import { currentTurnReplyFromClaudeParsed, lastTurnFromClaudeParsed, lastTurnFromCodexRolloutDocs, EMPTY_TURN, type LastTurn } from "./last-turn.js";
@@ -303,14 +313,12 @@ function claudeTranscriptPrompts(cwd: string, id: string): SessionPrompts {
   }
 }
 
-// Known limit, after `/clear`: claude mints a NEW session id for the conversation it starts, and
-// history.jsonl keys on ITS id while this cell keeps ours (cleared-transcripts.ts). So a cleared
-// session goes on showing the prompts from before the clear and gains no new ones. They are still
-// prompts the user typed AT THIS TERMINAL, which is why they are not hidden — but picking the new
-// ones up needs the re-minted id, which nothing records yet.
+// Under whichever id claude currently calls itself as well as ours: `/clear` and `/compact` both
+// reissue it, and history.jsonl keys on claude's (historyIdsFor decides which apply).
 function claudePrompts(cwd: string, id: string): SessionPrompts {
+  const ids = historyIdsFor(id, claudeSessionIds.get(id), clearedTranscripts.has(id));
   try {
-    const found = claudePromptsFor(readTailRecords(claudeHistoryFile()), id, PROMPT_SCAN_LIMIT);
+    const found = claudePromptsFor(readTailRecords(claudeHistoryFile()), ids, PROMPT_SCAN_LIMIT);
     if (found.length > 0) return promptWindow(found);
   } catch {
     // No history file, or one this could not read — the transcript still knows something.

@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   claudeHistoryPrompt,
   claudePromptsFor,
+  historyIdsFor,
   codexPrompts,
   promptWindow,
   transcriptPrompts,
@@ -69,15 +70,24 @@ describe("claudePromptsFor", () => {
       historyLine({ display: "elsewhere", sessionId: "s2", timestamp: 2 }),
       historyLine({ display: "two", timestamp: 3 }),
     ];
-    expect(claudePromptsFor(records, "s1")).toEqual([
+    expect(claudePromptsFor(records, ["s1"])).toEqual([
       { at: 1, text: "one" },
       { at: 3, text: "two" },
     ]);
   });
 
+  it("interleaves several ids in file order — one conversation whose id was reissued", () => {
+    const records = [
+      historyLine({ display: "before", timestamp: 1 }),
+      historyLine({ display: "elsewhere", sessionId: "other", timestamp: 2 }),
+      historyLine({ display: "after compact", sessionId: "s1-new", timestamp: 3 }),
+    ];
+    expect(claudePromptsFor(records, ["s1", "s1-new"]).map((p) => p.text)).toEqual(["before", "after compact"]);
+  });
+
   it("keeps the NEWEST when there are more than the limit", () => {
     const records = Array.from({ length: 5 }, (_, i) => historyLine({ display: `p${i}`, timestamp: i }));
-    expect(claudePromptsFor(records, "s1", 2)).toEqual([
+    expect(claudePromptsFor(records, ["s1"], 2)).toEqual([
       { at: 3, text: "p3" },
       { at: 4, text: "p4" },
     ]);
@@ -85,18 +95,40 @@ describe("claudePromptsFor", () => {
 
   it("keeps trivial acks — 'merge' and 'ok' are instructions here, not noise", () => {
     const records = [historyLine({ display: "ok", timestamp: 1 }), historyLine({ display: "merge", timestamp: 2 })];
-    expect(claudePromptsFor(records, "s1").map((p) => p.text)).toEqual(["ok", "merge"]);
+    expect(claudePromptsFor(records, ["s1"]).map((p) => p.text)).toEqual(["ok", "merge"]);
   });
 
-  it("answers empty for no records, no match, and records of the wrong shape", () => {
-    expect(claudePromptsFor([], "s1")).toEqual([]);
-    expect(claudePromptsFor([historyLine()], "other")).toEqual([]);
-    expect(claudePromptsFor([{}, { display: "x" }, { sessionId: "s1" }], "s1")).toEqual([]);
+  it("answers empty for no records, no ids, no match, and records of the wrong shape", () => {
+    expect(claudePromptsFor([], ["s1"])).toEqual([]);
+    expect(claudePromptsFor([historyLine()], [])).toEqual([]);
+    expect(claudePromptsFor([historyLine()], ["other"])).toEqual([]);
+    expect(claudePromptsFor([{}, { display: "x" }, { sessionId: "s1" }], ["s1"])).toEqual([]);
   });
 
   it("defaults to PROMPT_HISTORY_MAX rather than serving an unbounded list", () => {
     const records = Array.from({ length: PROMPT_HISTORY_MAX + 10 }, (_, i) => historyLine({ display: `p${i}`, timestamp: i }));
-    expect(claudePromptsFor(records, "s1")).toHaveLength(PROMPT_HISTORY_MAX);
+    expect(claudePromptsFor(records, ["s1"])).toHaveLength(PROMPT_HISTORY_MAX);
+  });
+});
+
+// Codex, #1749: claude reissues its own session id on `/clear` AND `/compact` while still
+// reporting to us under ours, so a pane keyed on our id alone freezes at that moment.
+describe("historyIdsFor", () => {
+  it("reads under ours alone when claude's id is unknown or unchanged", () => {
+    expect(historyIdsFor("ours", undefined, false)).toEqual(["ours"]);
+    expect(historyIdsFor("ours", "ours", false)).toEqual(["ours"]);
+  });
+
+  it("reads under BOTH after a compact — same conversation, two ids", () => {
+    expect(historyIdsFor("ours", "reissued", false)).toEqual(["ours", "reissued"]);
+  });
+
+  it("reads under the NEW id alone after a clear — the ended conversation stays ended", () => {
+    expect(historyIdsFor("ours", "reissued", true)).toEqual(["reissued"]);
+  });
+
+  it("falls back to ours when a clear happened but claude's new id is not known yet", () => {
+    expect(historyIdsFor("ours", undefined, true)).toEqual(["ours"]);
   });
 });
 

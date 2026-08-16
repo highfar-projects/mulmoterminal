@@ -69,13 +69,30 @@ export function claudeHistoryPrompt(record: Record<string, unknown>): { sessionI
 const collect = (records: Record<string, unknown>[], read: (record: Record<string, unknown>) => PromptEntry | null, limit: number): PromptEntry[] =>
   records.flatMap((record) => read(record) ?? []).slice(-limit);
 
-/** This session's prompts, oldest first, capped to the newest `limit`. */
-export const claudePromptsFor = (records: Record<string, unknown>[], sessionId: string, limit: number = PROMPT_HISTORY_MAX): PromptEntry[] =>
+/** Which ids the history file has to be read under, for a session this app calls `ourId`.
+ *
+ *  Claude reissues its OWN session id on `/clear` and `/compact` and goes on reporting to us under
+ *  ours (activity-hook.ts) — so history.jsonl, which keys on claude's, stops matching. Without
+ *  this, a compacted session's pane freezes at the compaction and a cleared one never moves again
+ *  (Codex, #1749).
+ *
+ *  `/compact` continues the SAME conversation, so both ids are its prompts. `/clear` ends one, and
+ *  the repo's rule is that the ended conversation does not come back (#1085) — so only the new id
+ *  counts there. Unknown or unchanged, there is one id and it is ours. */
+export function historyIdsFor(ourId: string, claudeId: string | undefined, cleared: boolean): string[] {
+  if (!claudeId || claudeId === ourId) return [ourId];
+  return cleared ? [claudeId] : [ourId, claudeId];
+}
+
+/** These ids' prompts, oldest first, capped to the newest `limit`. Several ids are ONE session
+ *  whose id was reissued mid-conversation, so the rows interleave in file order — which is time
+ *  order, since the file is only ever appended to. */
+export const claudePromptsFor = (records: Record<string, unknown>[], sessionIds: readonly string[], limit: number = PROMPT_HISTORY_MAX): PromptEntry[] =>
   collect(
     records,
     (record) => {
       const read = claudeHistoryPrompt(record);
-      return read && read.sessionId === sessionId ? read.prompt : null;
+      return read && sessionIds.includes(read.sessionId) ? read.prompt : null;
     },
     limit,
   );

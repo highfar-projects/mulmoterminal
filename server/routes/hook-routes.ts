@@ -9,11 +9,11 @@ import { ASK_QUESTION_TOOL, parseAskQuestions, type AskQuestionDone, type AskQue
 import { watchOtherWrites } from "../session/write-to-session.js";
 import { dirConfigWriteTarget } from "../config/dir-config.js";
 import { writtenFilePath } from "../files/tool-writes.js";
-import { activityHookEffects, pushKindFor, resolveHookCwd, resolveHookSessionId } from "../session/activity-hook.js";
+import { activityHookEffects, claudeOwnSessionId, pushKindFor, resolveHookCwd, resolveHookSessionId } from "../session/activity-hook.js";
 import { runCompletionHook } from "../session/completion-hooks.js";
 import { messageOf } from "../errors.js";
 import { headerHookEffect } from "../session/header-hook.js";
-import { lastPrompts, lastResponses, ptys } from "../session/registry.js";
+import { claudeSessionIds, lastPrompts, lastResponses, ptys } from "../session/registry.js";
 import { clearedTranscripts, markTranscriptCleared } from "../session/cleared-transcripts.js";
 import { latestUserPrompt } from "../session/session-reads.js";
 import { notifyTaskFinished } from "../session/task-push.js";
@@ -217,6 +217,10 @@ async function handleHookRequest(deps: HookDeps, req: Request, res: Response) {
     console.warn(`[hook] ignoring ${event} — session id is not a canonical uuid`);
   }
   if (sessionId) {
+    // Off EVERY hook, not just a prompt: the mapping lives in memory, so the sooner after a
+    // restart it is re-learned the shorter the window in which a reissued id reads as ours (#1749).
+    const claudeId = claudeOwnSessionId(body.session_id, (id) => SESSION_ID_RE.test(id));
+    if (claudeId) claudeSessionIds.set(sessionId, claudeId);
     const entry = ptys.get(sessionId);
     const active = !!(entry && entry.active);
     const cwd = resolveHookCwd(body.cwd, entry?.cwd);
