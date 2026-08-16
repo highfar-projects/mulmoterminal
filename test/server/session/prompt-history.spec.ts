@@ -4,10 +4,13 @@ import {
   claudeHistoryPrompt,
   claudePromptsFor,
   codexPrompts,
+  promptWindow,
   transcriptPrompts,
   PROMPT_TEXT_CAP,
   PROMPT_HISTORY_MAX,
+  PROMPT_SCAN_LIMIT,
 } from "../../../server/session/prompt-history";
+import type { PromptEntry } from "../../../common/promptHistory";
 
 // A ~/.claude/history.jsonl line, as claude writes it (verified against the real file, #1748).
 const historyLine = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
@@ -94,6 +97,34 @@ describe("claudePromptsFor", () => {
   it("defaults to PROMPT_HISTORY_MAX rather than serving an unbounded list", () => {
     const records = Array.from({ length: PROMPT_HISTORY_MAX + 10 }, (_, i) => historyLine({ display: `p${i}`, timestamp: i }));
     expect(claudePromptsFor(records, "s1")).toHaveLength(PROMPT_HISTORY_MAX);
+  });
+});
+
+// Codex, #1749: capping AT the window makes "exactly 100 prompts" indistinguishable from "1000
+// prompts, 900 dropped", and the pane then tells a complete list that its older entries are gone.
+describe("promptWindow", () => {
+  const found = (n: number): PromptEntry[] => Array.from({ length: n }, (_, i) => ({ at: i, text: `p${i}` }));
+
+  it("does not claim older prompts exist when the count lands exactly on the window", () => {
+    const window = promptWindow(found(PROMPT_HISTORY_MAX));
+    expect(window.prompts).toHaveLength(PROMPT_HISTORY_MAX);
+    expect(window.truncated).toBe(false);
+  });
+
+  it("claims them at one over, and serves the newest window", () => {
+    const window = promptWindow(found(PROMPT_SCAN_LIMIT));
+    expect(window.truncated).toBe(true);
+    expect(window.prompts).toHaveLength(PROMPT_HISTORY_MAX);
+    expect(window.prompts[0]?.text).toBe("p1"); // the oldest is the one dropped
+  });
+
+  it("is quiet about truncation for an empty or short list", () => {
+    expect(promptWindow([])).toEqual({ prompts: [], truncated: false });
+    expect(promptWindow(found(3)).truncated).toBe(false);
+  });
+
+  it("PROMPT_SCAN_LIMIT is the one-over a reader must ask for", () => {
+    expect(PROMPT_SCAN_LIMIT).toBe(PROMPT_HISTORY_MAX + 1);
   });
 });
 

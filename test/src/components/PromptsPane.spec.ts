@@ -25,6 +25,7 @@ const mountPane = (props: Record<string, unknown> = {}) => mount(PromptsPane, { 
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals(); // restoreAllMocks does not undo stubGlobal (CodeRabbit, #1749)
   handlers.clear();
 });
 
@@ -106,6 +107,51 @@ describe("PromptsPane", () => {
     await flushPromises();
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain("session=s2");
+  });
+
+  // Codex, #1749: the `req` counter stops a slow response from LANDING on the wrong cell, and did
+  // nothing about the rows already on screen — so walking the zoom showed the previous terminal's
+  // prompts under the new one's header until the request came back.
+  it("clears the previous session's rows while the new one is still loading", async () => {
+    let release: ((body: unknown) => void) | undefined;
+    const slow = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ prompts, truncated: false }) })
+      .mockReturnValueOnce(new Promise((resolve) => (release = () => resolve({ ok: true, json: () => Promise.resolve({ prompts: [], truncated: false }) }))));
+    vi.stubGlobal("fetch", slow);
+    const w = mountPane({ sessionId: "s1" });
+    await flushPromises();
+    expect(w.findAll('[data-testid="prompt-row"]')).toHaveLength(2);
+
+    await w.setProps({ sessionId: "s2" });
+    await flushPromises();
+    expect(w.findAll('[data-testid="prompt-row"]')).toHaveLength(0); // NOT s1's two, while s2 loads
+    release?.(null);
+    await flushPromises();
+    expect(w.get('[data-testid="prompts-empty"]').text()).toContain("Nothing sent");
+  });
+
+  // The early return bumps `req`, so the in-flight load never reaches its own `finally`.
+  it("does not sit on 'Loading…' when the zoom moves to a cell with no session", async () => {
+    const never = vi.fn().mockReturnValue(new Promise(() => {}));
+    vi.stubGlobal("fetch", never);
+    const w = mountPane({ sessionId: "s1" });
+    await flushPromises();
+    await w.setProps({ sessionId: null });
+    await flushPromises();
+    expect(w.get('[data-testid="prompts-empty"]').text()).toContain("hasn't started a session");
+  });
+
+  it("does not blank the list when the SAME session simply gets a new prompt", async () => {
+    vi.useFakeTimers();
+    const fetchMock = mockFetch({ prompts, truncated: false });
+    vi.stubGlobal("fetch", fetchMock);
+    const w = mountPane({ sessionId: "s1" });
+    await flushPromises();
+    handlers.get("sessions")?.({ id: "s1", event: "UserPromptSubmit" });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(w.findAll('[data-testid="prompt-row"]')).toHaveLength(2);
+    vi.useRealTimers();
   });
 
   it("drops a row with no text and keeps one whose time is unreadable", async () => {

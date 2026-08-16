@@ -12,16 +12,9 @@
 // Pure: the reading and the agent branch live in session-reads.ts.
 import { isRecord } from "../../common/isRecord.js";
 import { readString } from "../../common/readString.js";
+import type { PromptEntry, PromptWindow } from "../../common/promptHistory.js";
 import { codexEventPayload } from "../agents/codex-events.js";
 import { userPromptText } from "./transcript.js";
-
-/** One prompt, as the pane renders it. `at` is epoch ms, or null when the record carried no
- *  readable time — a prompt with an unreadable clock is still a prompt, so the TIME is what goes
- *  missing rather than the line. */
-export interface PromptEntry {
-  at: number | null;
-  text: string;
-}
 
 /** Enough to recognise a prompt again, which is what this is for. Deliberately far above
  *  LAST_PROMPT_CAP (200): that one keeps a header to one line, this one is read back. */
@@ -29,6 +22,18 @@ export const PROMPT_TEXT_CAP = 1000;
 
 /** How many the pane is served. The ask was "10, maybe 20"; the rest is scrollback. */
 export const PROMPT_HISTORY_MAX = 100;
+
+/** What a READER should ask for: one over the window, so overflow is a fact rather than an
+ *  inference. Cap at exactly PROMPT_HISTORY_MAX and a session with precisely that many prompts is
+ *  indistinguishable from one that had a thousand — and the pane would tell a complete list that
+ *  its older prompts are missing (Codex, #1749). */
+export const PROMPT_SCAN_LIMIT = PROMPT_HISTORY_MAX + 1;
+
+/** The served window, from what a reader collected at PROMPT_SCAN_LIMIT. */
+export const promptWindow = (found: PromptEntry[]): PromptWindow => ({
+  prompts: found.slice(-PROMPT_HISTORY_MAX),
+  truncated: found.length > PROMPT_HISTORY_MAX,
+});
 
 const cap = (text: string): string => (text.length > PROMPT_TEXT_CAP ? `${text.slice(0, PROMPT_TEXT_CAP)}…` : text);
 

@@ -12,12 +12,7 @@ import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import type { TerminalAgent } from "../../common/sessionAgent";
-
-interface Prompt {
-  /** Epoch ms, or null when the record carried no readable time — the prompt still counts. */
-  at: number | null;
-  text: string;
-}
+import type { PromptEntry } from "../../common/promptHistory";
 
 const props = defineProps<{
   sessionId: string | null;
@@ -29,28 +24,41 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ close: []; toggleExpand: [] }>();
 
-const prompts = ref<Prompt[]>([]);
+const prompts = ref<PromptEntry[]>([]);
 const truncated = ref(false);
 const loading = ref(false);
 const failed = ref(false);
 
 // `text` is the row; without it there is nothing to draw. A missing or unreadable `at` is an
 // ordinary case the row renders as a blank time, so it is normalised rather than rejected.
-const readPrompt = (value: unknown): Prompt | null => {
+const readPrompt = (value: unknown): PromptEntry | null => {
   if (!isRecord(value) || typeof value.text !== "string" || !value.text) return null;
   return { at: typeof value.at === "number" ? value.at : null, text: value.text };
+};
+
+// `loading` too: the early return below bumps `req`, so a request already in flight fails its
+// own `my === req` check and never reaches the `finally` that would clear it. Left set, the pane
+// says "Loading…" over a cell that has nothing to load (CodeRabbit, #1749).
+const clear = (): void => {
+  prompts.value = [];
+  truncated.value = false;
+  failed.value = false;
+  loading.value = false;
 };
 
 // Bumped per load, so a slow fetch for the cell you just walked away from cannot overwrite the
 // prompts of the one now enlarged.
 let req = 0;
-async function load(): Promise<void> {
+/** `reset` is for a load that changed WHICH session is being shown: the rows on screen belong to
+ *  the cell you just left, and a slow request would leave them under the new cell's header as if
+ *  they were its own (Codex, #1749). A refresh of the SAME session must not do it — the pane would
+ *  blink empty every time a prompt is submitted. */
+async function load(reset: boolean): Promise<void> {
   const sessionId = props.sessionId;
   const my = ++req;
+  if (reset) clear();
   if (!sessionId) {
-    prompts.value = [];
-    truncated.value = false;
-    failed.value = false;
+    clear();
     return;
   }
   loading.value = true;
@@ -92,7 +100,7 @@ const RELOAD_DELAY_MS = 400;
 let reloadTimer: ReturnType<typeof window.setTimeout> | undefined;
 function scheduleReload(): void {
   window.clearTimeout(reloadTimer);
-  reloadTimer = window.setTimeout(() => void load(), RELOAD_DELAY_MS);
+  reloadTimer = window.setTimeout(() => void load(false), RELOAD_DELAY_MS);
 }
 
 const { subscribe } = usePubSub();
@@ -102,7 +110,7 @@ const unsubscribe = subscribe("sessions", (data: unknown) => {
 
 // One watch over the identity: the pane stays mounted while the grid walks the zoom from cell to
 // cell, so a changed session/agent has to reload rather than keep another terminal's prompts.
-watch([() => props.sessionId, () => props.agent, () => props.cwd], () => void load(), { immediate: true });
+watch([() => props.sessionId, () => props.agent, () => props.cwd], () => void load(true), { immediate: true });
 
 onUnmounted(() => {
   window.clearTimeout(reloadTimer);

@@ -44,7 +44,7 @@ import { onToolGroupsAnnounced } from "../composables/useToolGroupsAnnounce";
 import { usePubSub } from "../composables/usePubSub";
 import { isDrawnResult } from "../utils/drawnResult";
 import { hasCanvasGroup, hasCollectionsGroup } from "../../common/toolGroups";
-import type { RightPane } from "./gridCell";
+import { isRightPane, type RightPane } from "./gridCell";
 import QuestionPane from "./QuestionPane.vue";
 import { ASK_QUESTION_CHANNEL, isAskQuestionDone, isAskQuestionEvent } from "../../common/askQuestion";
 import { fetchOpenQuestion, postAnswer, postWords } from "../composables/openQuestion";
@@ -197,11 +197,14 @@ const remember = (key: string, value: string): void => {
   }
 };
 // Which pane holds the one slot beside the enlarged terminal (see gridCell.ts):
-//   files  — the file tree/editor (the original occupant).
-//   canvas — what the agent DREW: the GUI plugin views for this cell's session.
-//   tools  — which GUI tools this session actually has, read-only.
-const isRightPane = (value: unknown): value is RightPane =>
-  value === "files" || value === "canvas" || value === "tools" || value === "collections" || value === "github" || value === "question";
+//   files   — the file tree/editor (the original occupant).
+//   canvas  — what the agent DREW: the GUI plugin views for this cell's session.
+//   tools   — which GUI tools this session actually has, read-only.
+//   prompts — what you ASKED this session for, read-only.
+//
+// The guard comes from gridCell.ts's own list rather than being re-spelled here: this one is what
+// a persisted pane is read back through, and a member missing from it is a pane that silently
+// never reopens.
 
 // Which cell the pane is on — the identity everything else hangs off. The UID rather than the
 // directory: two terminals in the same repository is the ordinary case here, and keying on the

@@ -28,7 +28,9 @@ import { classifyWorkPhase, type WorkPhase } from "./workPhase.js";
 import { sessionListTitle } from "./sessionListTitle.js";
 import { activity, aiTitles, codexRollouts, codexRolloutsHydrated, isBackgroundSession, isFailedWorker, knownSessions, sessionMemos } from "./registry.js";
 import { claudeHistoryFile, projectSessionsDir } from "./project-dir.js";
-import { claudePromptsFor, codexPrompts, transcriptPrompts, PROMPT_HISTORY_MAX, type PromptEntry } from "./prompt-history.js";
+import { claudePromptsFor, codexPrompts, promptWindow, transcriptPrompts, PROMPT_SCAN_LIMIT } from "./prompt-history.js";
+import type { PromptWindow } from "../../common/promptHistory.js";
+import { clearedTranscripts } from "./cleared-transcripts.js";
 import { currentTurnReplyFromClaudeParsed, lastTurnFromClaudeParsed, lastTurnFromCodexRolloutDocs, EMPTY_TURN, type LastTurn } from "./last-turn.js";
 import { forEachJsonlRecordIn, readTailRecords } from "../infra/jsonl-file.js";
 import { copySummaryState, emptySummaryState, foldSummary, summaryPartsOf, type SummaryState } from "./summary-scan.js";
@@ -279,32 +281,37 @@ export async function sessionLastTurn(cwd: string, id: string, agent: TerminalAg
 // history file is 8 MB on this machine and only ever appended to, so the default 4 MB window
 // reaches ~15,000 recent submissions whatever it grows to.
 //
-// `truncated` says the window was full, not that the file was: a session with more than
-// PROMPT_HISTORY_MAX prompts has older ones this did not serve.
-export interface SessionPrompts {
-  prompts: PromptEntry[];
-  truncated: boolean;
-}
+// Each reader collects at PROMPT_SCAN_LIMIT and hands the result to promptWindow, which is where
+// the cap and the "there are older ones" answer are decided together.
+export type SessionPrompts = PromptWindow;
 
 const NO_PROMPTS: SessionPrompts = { prompts: [], truncated: false };
-
-const served = (prompts: PromptEntry[]): SessionPrompts => ({ prompts, truncated: prompts.length >= PROMPT_HISTORY_MAX });
 
 // The transcript is the fallback rather than the source: it drops a prompt sent mid-turn and keeps
 // text a skill injected (#1748), so it answers only when the history file had nothing to say —
 // upstream changed the format, or the session predates it.
+//
+// Not for a CLEARED session. `${id}.jsonl` then holds the conversation the user ended, and every
+// reader of that file asks this set first (#1085) — a fallback is not a reason to be the one that
+// puts the ended conversation back on screen.
 function claudeTranscriptPrompts(cwd: string, id: string): SessionPrompts {
+  if (clearedTranscripts.has(id)) return NO_PROMPTS;
   try {
-    return served(transcriptPrompts(readTailRecords(path.join(projectSessionsDir(cwd), `${id}.jsonl`))));
+    return promptWindow(transcriptPrompts(readTailRecords(path.join(projectSessionsDir(cwd), `${id}.jsonl`)), PROMPT_SCAN_LIMIT));
   } catch {
     return NO_PROMPTS;
   }
 }
 
+// Known limit, after `/clear`: claude mints a NEW session id for the conversation it starts, and
+// history.jsonl keys on ITS id while this cell keeps ours (cleared-transcripts.ts). So a cleared
+// session goes on showing the prompts from before the clear and gains no new ones. They are still
+// prompts the user typed AT THIS TERMINAL, which is why they are not hidden — but picking the new
+// ones up needs the re-minted id, which nothing records yet.
 function claudePrompts(cwd: string, id: string): SessionPrompts {
   try {
-    const prompts = claudePromptsFor(readTailRecords(claudeHistoryFile()), id);
-    if (prompts.length > 0) return served(prompts);
+    const found = claudePromptsFor(readTailRecords(claudeHistoryFile()), id, PROMPT_SCAN_LIMIT);
+    if (found.length > 0) return promptWindow(found);
   } catch {
     // No history file, or one this could not read — the transcript still knows something.
   }
@@ -319,7 +326,7 @@ async function codexSessionPrompts(sessionKey: string): Promise<SessionPrompts> 
   const file = codexRolloutPath(codexSessionsRoot(), rolloutId);
   if (!file) return NO_PROMPTS;
   try {
-    return served(codexPrompts(readTailRecords(file)));
+    return promptWindow(codexPrompts(readTailRecords(file), PROMPT_SCAN_LIMIT));
   } catch {
     return NO_PROMPTS;
   }
