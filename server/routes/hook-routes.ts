@@ -30,6 +30,9 @@ export interface HookDeps extends SessionActivityDeps {
   /** Tell clients watching that directory to re-read its .mulmoterminal.json. */
   publishDirConfig: (cwd: string) => void;
   publishFileWrite: (file: string) => void;
+  /** Tell an open prompts pane that this session's list just grew. Its own channel because the
+   *  activity row cannot carry it — see common/promptChannel.ts. */
+  publishPromptSubmitted: (sessionId: string) => void;
   /** Offer a live AskUserQuestion dialog's choices to the pane. No-op while the switch is off. */
   publishQuestion: (event: AskQuestionEvent | AskQuestionDone) => void;
   /** Which port this host's UI answers on, so a receiver can open it instead of guessing. */
@@ -187,6 +190,11 @@ async function applyHeaderHooks(deps: HookDeps, sessionId: string, event: string
   if (effect.kind === "prompt") {
     await trackPromptForHeader(sessionId, effect.text, cwd);
     deps.noteTitleTurn(sessionId, effect.text);
+    // Here rather than off the activity publish below: that one is suppressed when the working
+    // flag does not MOVE, so a prompt sent into a turn that is already running announces nothing —
+    // and interrupting a running turn is the case the prompts pane exists for (#1748). This is the
+    // one place that knows a REAL prompt arrived, injected text having been filtered out already.
+    deps.publishPromptSubmitted(sessionId);
     return;
   }
   if (effect.kind === "clear")

@@ -13,6 +13,7 @@ import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import type { TerminalAgent } from "../../common/sessionAgent";
 import type { PromptEntry } from "../../common/promptHistory";
+import { PROMPT_SUBMITTED_CHANNEL, isPromptSubmittedEvent } from "../../common/promptChannel";
 
 const props = defineProps<{
   sessionId: string | null;
@@ -88,14 +89,15 @@ async function load(reset: boolean): Promise<void> {
 // almost always a recent one.
 const newestFirst = computed(() => [...prompts.value].reverse());
 
-// A pane left open should keep up by itself. `UserPromptSubmit` is the one activity event that
-// means a new prompt — codex reports its turn starts under the same name (HOOK_EVENT_FOR), so
-// both agents arrive here — and reloading on the others would re-read an 8 MB file on every tool
-// call for nothing.
+// A pane left open should keep up by itself, off a channel of its own rather than the `sessions`
+// activity row. The row was the obvious source and is the wrong one: an activity publish is
+// suppressed when the flag does not MOVE, so a prompt typed into a turn that is already running
+// announces nothing — and that prompt, the interruption, is the case this pane exists for
+// (#1748, found by Codex on #1749). See common/promptChannel.ts.
 //
-// Delayed, because the push comes from the HOOK and the line is written by claude: on the instant,
-// the read can land just before the file grows. 400ms is invisible to a reader and folds a burst
-// into one read.
+// Delayed, because the signal comes from the HOOK and the line is written by claude: on the
+// instant, the read can land just before the file grows. 400ms is invisible to a reader and folds
+// a burst into one read.
 const RELOAD_DELAY_MS = 400;
 let reloadTimer: ReturnType<typeof window.setTimeout> | undefined;
 function scheduleReload(): void {
@@ -104,8 +106,8 @@ function scheduleReload(): void {
 }
 
 const { subscribe } = usePubSub();
-const unsubscribe = subscribe("sessions", (data: unknown) => {
-  if (isRecord(data) && data.id === props.sessionId && data.event === "UserPromptSubmit") scheduleReload();
+const unsubscribe = subscribe(PROMPT_SUBMITTED_CHANNEL, (data: unknown) => {
+  if (isPromptSubmittedEvent(data) && data.sessionId === props.sessionId) scheduleReload();
 });
 
 // One watch over the identity: the pane stays mounted while the grid walks the zoom from cell to

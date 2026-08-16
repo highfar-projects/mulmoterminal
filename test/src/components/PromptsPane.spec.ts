@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import PromptsPane from "../../../src/components/PromptsPane.vue";
+import { PROMPT_SUBMITTED_CHANNEL } from "../../../common/promptChannel";
 
-// The pane subscribes to the live "sessions" channel; the handler is captured so a test can push
-// an activity event at it without a socket.
+// The pane subscribes to its own prompt channel; the handler is captured so a test can push an
+// event at it without a socket.
 const handlers = new Map<string, (data: unknown) => void>();
 vi.mock("../../../src/composables/usePubSub", () => ({
   usePubSub: () => ({
@@ -78,7 +79,7 @@ describe("PromptsPane", () => {
     expect(w.get('[data-testid="prompts-empty"]').text()).toContain("Couldn't read");
   });
 
-  it("reloads on a UserPromptSubmit for this session, and on nothing else", async () => {
+  it("reloads when this session gets a prompt, and on nothing else", async () => {
     vi.useFakeTimers();
     const fetchMock = mockFetch({ prompts, truncated: false });
     vi.stubGlobal("fetch", fetchMock);
@@ -86,15 +87,34 @@ describe("PromptsPane", () => {
     await flushPromises();
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    const push = handlers.get("sessions");
-    push?.({ id: "s1", event: "PreToolUse" }); // the agent working is not a new prompt
-    push?.({ id: "other", event: "UserPromptSubmit" }); // another cell's prompt
+    const push = handlers.get(PROMPT_SUBMITTED_CHANNEL);
+    push?.({ sessionId: "other" }); // another cell's prompt
+    push?.({ nope: true }); // a frame of the wrong shape
     await vi.advanceTimersByTimeAsync(2000);
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    push?.({ id: "s1", event: "UserPromptSubmit" });
+    push?.({ sessionId: "s1" });
     await vi.advanceTimersByTimeAsync(2000);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
+  // Codex, #1749: the pane used to read the `sessions` activity row, which publishes nothing when
+  // the working flag does not move — so a second prompt inside one running turn never refreshed it.
+  // That prompt is the reason this pane exists, hence a signal that does not depend on a flag.
+  it("reloads for EVERY prompt, including ones sent inside a turn already running", async () => {
+    vi.useFakeTimers();
+    const fetchMock = mockFetch({ prompts, truncated: false });
+    vi.stubGlobal("fetch", fetchMock);
+    mountPane({ sessionId: "s1" });
+    await flushPromises();
+
+    const push = handlers.get(PROMPT_SUBMITTED_CHANNEL);
+    push?.({ sessionId: "s1" });
+    await vi.advanceTimersByTimeAsync(2000);
+    push?.({ sessionId: "s1" });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(fetchMock).toHaveBeenCalledTimes(3); // the mount, then one per prompt
     vi.useRealTimers();
   });
 
@@ -148,7 +168,9 @@ describe("PromptsPane", () => {
     vi.stubGlobal("fetch", fetchMock);
     const w = mountPane({ sessionId: "s1" });
     await flushPromises();
-    handlers.get("sessions")?.({ id: "s1", event: "UserPromptSubmit" });
+    const push = handlers.get(PROMPT_SUBMITTED_CHANNEL);
+    expect(push).toBeDefined(); // or the assertion below would pass without the pane doing anything
+    push?.({ sessionId: "s1" });
     await vi.advanceTimersByTimeAsync(500);
     expect(w.findAll('[data-testid="prompt-row"]')).toHaveLength(2);
     vi.useRealTimers();

@@ -34,6 +34,7 @@ const deps = {
   recordToolCallEnd: vi.fn(async () => {}),
   publishDirConfig: vi.fn(),
   publishFileWrite: vi.fn(),
+  publishPromptSubmitted: vi.fn(),
   publishQuestion: vi.fn(),
   uiPort: "34567",
 };
@@ -84,5 +85,36 @@ describe("the hook route remembers claude's own session id", () => {
     expect(claudeSessionIds.has(OURS)).toBe(false);
     await postHook({ hook_event_name: "Stop", session_id: 42 });
     expect(claudeSessionIds.has(OURS)).toBe(false);
+  });
+});
+
+// Codex, #1749: the pane first listened to the `sessions` activity row, which is suppressed when
+// the working flag does not MOVE (nextActivity returns null by design, so an unchanged row cannot
+// flood the socket). A prompt typed into a turn that is already running leaves `working` true, so
+// it announced nothing — and that prompt, the interruption, is the whole reason this pane exists.
+// Its own signal, from the one place that knows a REAL prompt arrived.
+describe("the prompts pane's own signal", () => {
+  it("fires on a submitted prompt", async () => {
+    await postHook({ hook_event_name: "UserPromptSubmit", session_id: OURS, prompt: "go" });
+    expect(deps.publishPromptSubmitted).toHaveBeenCalledWith(OURS);
+  });
+
+  // The case the feature is for: the agent is mid-turn, so no activity flag moves.
+  it("fires again for a SECOND prompt during the same turn", async () => {
+    await postHook({ hook_event_name: "UserPromptSubmit", session_id: OURS, prompt: "first" });
+    await postHook({ hook_event_name: "UserPromptSubmit", session_id: OURS, prompt: "and also this" });
+    expect(deps.publishPromptSubmitted).toHaveBeenCalledTimes(2);
+  });
+
+  it("stays quiet for text the harness injected, which nobody typed", async () => {
+    await postHook({ hook_event_name: "UserPromptSubmit", session_id: OURS, prompt: "<task-notification>done</task-notification>" });
+    await postHook({ hook_event_name: "UserPromptSubmit", session_id: OURS, prompt: "   " });
+    expect(deps.publishPromptSubmitted).not.toHaveBeenCalled();
+  });
+
+  it("stays quiet for a hook that is not a prompt at all", async () => {
+    await postHook({ hook_event_name: "Stop", session_id: OURS });
+    await postHook({ hook_event_name: "PreToolUse", session_id: OURS, tool_name: "Bash" });
+    expect(deps.publishPromptSubmitted).not.toHaveBeenCalled();
   });
 });

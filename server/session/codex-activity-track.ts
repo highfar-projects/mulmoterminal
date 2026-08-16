@@ -13,6 +13,10 @@ export interface CodexActivityTrackDeps {
   setWaiting: (id: string, waiting: boolean, event?: string) => void;
   /** Is this session the user's actively-viewed pane? Suppresses the attention flag. */
   isActive: () => boolean;
+  /** Tell an open prompts pane that this session's list just grew. Codex reaches it from a turn
+   *  START, which is the closest thing its rollout reports to "the user typed something"
+   *  (common/promptChannel.ts). */
+  publishPromptSubmitted: (sessionId: string) => void;
   /** Which port this host's UI answers on, so a notification can open it. */
   uiPort: string;
   /** False once THIS pty is gone. Must identify the pty, not just its session id: a
@@ -44,6 +48,10 @@ const sizeOf = (file: string) => async (): Promise<number | null> => {
 
 function applyBoundary(sessionId: string, boundary: CodexTurnBoundary, deps: CodexActivityTrackDeps): void {
   const event = HOOK_EVENT_FOR[boundary];
+  // Before the effects, and not derived from them: a `setWorking` that does not move the flag
+  // publishes nothing, so reading the pane's signal off the activity row loses the prompt that
+  // starts a turn while one is already open (#1749).
+  if (boundary === "started") deps.publishPromptSubmitted(sessionId);
   const { effects, push } = boundaryOutcome(boundary, deps.isActive());
   for (const eff of effects) {
     if (eff.kind === "working") deps.setWorking(sessionId, eff.value, event);
