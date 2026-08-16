@@ -38,7 +38,16 @@ import {
   sessionMemos,
 } from "./registry.js";
 import { claudeHistoryFile, projectSessionsDir } from "./project-dir.js";
-import { claudePromptScan, codexPrompts, foldClaudePrompt, historyIdsFor, promptWindow, transcriptPrompts, PROMPT_SCAN_LIMIT } from "./prompt-history.js";
+import {
+  claudePromptScan,
+  codexPromptScan,
+  foldClaudePrompt,
+  foldCodexPrompt,
+  historyIdsFor,
+  promptWindow,
+  transcriptPrompts,
+  PROMPT_SCAN_LIMIT,
+} from "./prompt-history.js";
 import type { PromptWindow } from "../../common/promptHistory.js";
 import { clearedAtOf, clearedClaudeIdOf, clearedTranscripts } from "./cleared-transcripts.js";
 import { currentTurnReplyFromClaudeParsed, lastTurnFromClaudeParsed, lastTurnFromCodexRolloutDocs, EMPTY_TURN, type LastTurn } from "./last-turn.js";
@@ -348,8 +357,13 @@ async function codexSessionPrompts(sessionKey: string): Promise<SessionPrompts> 
   const rolloutId = codexRollouts.get(sessionKey)?.conversationId ?? sessionKey;
   const file = codexRolloutPath(codexSessionsRoot(), rolloutId);
   if (!file) return NO_PROMPTS;
+  // Streamed for the same reason claude's history is: a rollout is one file per conversation, so a
+  // tail read at least stays inside the right session — but a long one still loses its early
+  // prompts, and three rollouts on this machine are already past the window (#1749).
+  const scan = codexPromptScan(PROMPT_SCAN_LIMIT);
   try {
-    return promptWindow(codexPrompts(readTailRecords(file), PROMPT_SCAN_LIMIT));
+    await forEachJsonlRecord(file, (record) => foldCodexPrompt(scan, record));
+    return promptWindow(scan.found);
   } catch {
     return NO_PROMPTS;
   }

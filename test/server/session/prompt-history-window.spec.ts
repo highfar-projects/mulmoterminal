@@ -18,6 +18,8 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { sessionPrompts } from "../../../server/session/session-reads.js";
+import { codexPromptScan, foldCodexPrompt, PROMPT_SCAN_LIMIT } from "../../../server/session/prompt-history.js";
+import { forEachJsonlRecord } from "../../../server/infra/jsonl-file.js";
 
 const SESSION = "11111111-2222-4333-8444-555555555555";
 const OTHER = "99999999-8888-4777-8666-555555555555";
@@ -78,5 +80,31 @@ describe("sessionPrompts reads the whole prompt history, not its tail", () => {
     await writeHistoryWithOursAtTheFront();
     const { prompts } = await sessionPrompts("/ws", "22222222-3333-4444-8555-666666666666", "claude");
     expect(prompts).toEqual([]);
+  });
+});
+
+// The same window trap on the codex side. A rollout is one file per conversation, so a tail read at
+// least stays inside the right session — but a long one still drops its early prompts. Three of the
+// 2,586 rollouts on the owner's machine are past 4 MB; the largest holds 9 prompts, of which a tail
+// read would find 5 (#1749).
+describe("a codex rollout is streamed too", () => {
+  it("finds a prompt written before the last tail-window of the rollout", async () => {
+    const rollout = path.join(home, "rollout.jsonl");
+    const userMessage = (message: string) =>
+      `${JSON.stringify({ type: "event_msg", timestamp: "2026-08-16T02:31:02.318Z", payload: { type: "user_message", message } })}\n`;
+    // A reasoning row is what actually bulks a rollout out; the shape does not matter, the bytes do.
+    const filler = `${JSON.stringify({ type: "event_msg", payload: { type: "reasoning", text: "y".repeat(400) } })}\n`;
+    const parts = [userMessage("the codex prompt at the very start")];
+    let bytes = 0;
+    while (bytes < PADDING_BYTES) {
+      parts.push(filler);
+      bytes += filler.length;
+    }
+    parts.push(userMessage("and one at the end"));
+    await fs.writeFile(rollout, parts.join(""));
+
+    const scan = codexPromptScan(PROMPT_SCAN_LIMIT);
+    await forEachJsonlRecord(rollout, (record) => foldCodexPrompt(scan, record));
+    expect(scan.found.map((p) => p.text)).toEqual(["the codex prompt at the very start", "and one at the end"]);
   });
 });

@@ -64,10 +64,30 @@ export function claudeHistoryPrompt(record: Record<string, unknown>): { sessionI
   return prompt ? { sessionId, prompt } : null;
 }
 
-// The three readers below differ only in which records they recognise; keeping the WINDOW in one
-// place is what makes "oldest first, newest `limit` kept" the same answer for every log.
-const collect = (records: Record<string, unknown>[], read: (record: Record<string, unknown>) => PromptEntry | null, limit: number): PromptEntry[] =>
-  records.flatMap((record) => read(record) ?? []).slice(-limit);
+/** What a reader carries while it walks a log: the newest `limit` matches so far.
+ *
+ *  A sliding window, so the cost is the log's LENGTH and never its content — a session with
+ *  thousands of prompts holds `limit` of them. That is what lets these logs be STREAMED rather than
+ *  tail-read, which is the difference between showing a long-running session's prompts and showing
+ *  nothing (#1749). */
+export interface PromptScan {
+  limit: number;
+  found: PromptEntry[];
+}
+
+const keepNewest = (scan: PromptScan, prompt: PromptEntry | null): void => {
+  if (!prompt) return;
+  scan.found.push(prompt);
+  if (scan.found.length > scan.limit) scan.found.shift();
+};
+
+// The readers below differ only in which records they recognise; keeping the WINDOW in one place is
+// what makes "oldest first, newest `limit` kept" the same answer for every log.
+const collect = (records: Record<string, unknown>[], read: (record: Record<string, unknown>) => PromptEntry | null, limit: number): PromptEntry[] => {
+  const scan: PromptScan = { limit, found: [] };
+  records.forEach((record) => keepNewest(scan, read(record)));
+  return scan.found;
+};
 
 /** Which ids the history file has to be read under, for a session this app calls `ourId`.
  *
@@ -84,15 +104,10 @@ const collect = (records: Record<string, unknown>[], read: (record: Record<strin
  *  persisted log (#1749). */
 export const historyIdsFor = (ourId: string, claudeId: string | undefined): string[] => (!claudeId || claudeId === ourId ? [ourId] : [ourId, claudeId]);
 
-/** What a streaming reader carries while it walks the file: the newest `limit` matches so far.
- *
- *  A sliding window, so the cost is the file's LENGTH and never its content — a session with
- *  thousands of prompts holds `limit` of them, not thousands. */
-export interface ClaudePromptScan {
+/** A claude scan also carries WHICH session it is looking for and where the `/clear` boundary is. */
+export interface ClaudePromptScan extends PromptScan {
   wanted: Set<string>;
   since: number | undefined;
-  limit: number;
-  found: PromptEntry[];
 }
 
 export const claudePromptScan = (sessionIds: readonly string[], limit: number = PROMPT_HISTORY_MAX, since?: number | undefined): ClaudePromptScan => ({
@@ -102,13 +117,21 @@ export const claudePromptScan = (sessionIds: readonly string[], limit: number = 
   found: [],
 });
 
-/** Fold one history record into the scan. The rule lives here, and both readers below go through
- *  it, so a streamed read and an array read cannot answer differently. */
+/** Fold one history record into the scan. The rule lives here and the array reader below goes
+ *  through the same one, so a streamed read and an array read cannot answer differently. */
 export function foldClaudePrompt(scan: ClaudePromptScan, record: Record<string, unknown>): void {
   const read = claudeHistoryPrompt(record);
-  if (!read || !scan.wanted.has(read.sessionId) || !afterFloor(read.prompt, scan.since)) return;
-  scan.found.push(read.prompt);
-  if (scan.found.length > scan.limit) scan.found.shift();
+  keepNewest(scan, read && scan.wanted.has(read.sessionId) && afterFloor(read.prompt, scan.since) ? read.prompt : null);
+}
+
+/** The codex equivalent. A rollout is one file per conversation, so it needs no session filter —
+ *  but it still has to be STREAMED: three of the 2,586 rollouts on this machine are past the 4 MB
+ *  tail window, and the largest would have shown 5 of its 9 prompts (#1749). */
+export const codexPromptScan = (limit: number = PROMPT_HISTORY_MAX): PromptScan => ({ limit, found: [] });
+
+export function foldCodexPrompt(scan: PromptScan, record: Record<string, unknown>): void {
+  const payload = codexEventPayload(record, "user_message");
+  keepNewest(scan, payload ? entry(epochMs(record.timestamp), payload.message) : null);
 }
 
 /** These ids' prompts, oldest first, capped to the newest `limit`. Several ids are ONE session
@@ -146,16 +169,14 @@ const afterFloor = (prompt: PromptEntry, since: number | undefined): boolean => 
 
 /** codex has no history file and no hooks, so its rollout is the only record of a prompt. The
  *  `user_message` events are the ones a person sent: measured over 40 real rollouts, none of them
- *  carried injected text (codex files its environment context under other payload types). */
-export const codexPrompts = (records: Record<string, unknown>[], limit: number = PROMPT_HISTORY_MAX): PromptEntry[] =>
-  collect(
-    records,
-    (record) => {
-      const payload = codexEventPayload(record, "user_message");
-      return payload ? entry(epochMs(record.timestamp), payload.message) : null;
-    },
-    limit,
-  );
+ *  carried injected text (codex files its environment context under other payload types).
+ *
+ *  Through the same fold the server streams, so what a test drives is what production runs. */
+export function codexPrompts(records: Record<string, unknown>[], limit: number = PROMPT_HISTORY_MAX): PromptEntry[] {
+  const scan = codexPromptScan(limit);
+  records.forEach((record) => foldCodexPrompt(scan, record));
+  return scan.found;
+}
 
 /** The transcript fallback, so a history.jsonl this cannot read — a format change upstream, or a
  *  session claude wrote before that file existed — leaves the pane with SOMETHING rather than
