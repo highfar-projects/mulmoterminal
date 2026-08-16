@@ -110,9 +110,13 @@ keys: ['signature', 'thinking', 'type']
 **`server/session/transcript-view.ts`（新規・純関数）**
 
 - `TranscriptTurn { at: string | null; rows: TranscriptRow[] }`、
-  `TranscriptRow` は `{ kind: "user" | "assistant" | "tool"; text: string; truncated?: boolean }`
+  `TranscriptRow` は `{ kind: "user" | "assistant" | "tool" | "unknown"; text: string; truncated?: boolean }`
 - `renderRecord(record)` — 1 レコード → 行。`text` は素通し、`tool_use` はツール名 1 行、
   `tool_result` は 6 行で切って `truncated` を立てる、`thinking` は捨てる
+- **`kind: "unknown"` が下の「形式変更時のフォールバック」の受け皿**。未知の content ブロックは
+  そこへ入れて `[unknown block: <type>]` を `text` にする。union に無いと**フォールバックが
+  型で表せず、結局は無視することになる**（Codex round 2）。UI 側はこの kind を薄く描いて、
+  出たと分かるようにする
 - `foldTranscriptView(scan, record)` — ターン境界で区切り、論理行 250 を超えたら**古いターンごと**
   捨てる。ただし**残り 1 ターンなら捨てない**
 - `sessionTimeline` の `foldTimeline`（`session-reads.ts:195`）と同じ形。窓が行数でターン単位という
@@ -159,14 +163,21 @@ non-null なレコード**。
 仮定ではない。#1692 が同じ機械の transcript で **1 行 4,761,619 文字**（4.5MB、3 行）を報告している。
 巨大な `tool_result` がそうなる。
 
-対処 — **窓が 0 レコードなら後ろへ広げる**:
+対処 — **窓に「ターン境界が 1 つ以上」入るまで後ろへ広げる**:
 
-- `from` を倍にして読み直す（4MB → 8MB → 16MB …）。1 レコードでも解析できたら止める
-- **上限を決めて、そこで諦める**。上限に達しても 0 レコードなら、空ではなく
+- `from` を倍にして読み直す（4MB → 8MB → 16MB …）。**ターン境界（`userPromptText` が non-null な
+  `type:"user"` レコード）が 1 つでも入ったら止める**
+- **上限を決めて、そこで諦める**。上限に達しても境界が無ければ、空ではなく
   「この transcript は大きすぎて表示できない」と答える。空と区別がつかない失敗にしない
 - 決定 2 の 6 行キャップは**描画**の話なので、ここでは効かない。JSON を解析するには行が丸ごと要る
 
-広げるのは 0 レコードのときだけなので、通常の読みは 4MB のまま（実測で必要量は max 1457KB）。
+**条件は「0 レコード」ではなく「境界が 0 個」。** 0 レコードで判定すると、
+`[窓より大きい tool_result][小さい assistant レコード]` の並びで**レコードは 1 つ取れてしまうので
+広げず、最新ターンが欠けたまま出る**（Codex round 2）。守りたいのは決定 1 の
+「最新 1 ターンは必ず出す」なので、条件はその保証をそのまま述べる形にする —
+悪い形を数え上げるのではなく、**満たすべきものを条件にする**。
+
+広げるのは境界が 0 個のときだけなので、通常の読みは 4MB のまま（実測で必要量は max 1457KB）。
 
 **`server/backends/remoteHost/handlers/terminalSession.ts`** に `getTerminalTranscript`。
 `getTerminalScreen` と同じ検証。MulmoClaude に対応物は無い（`terminalSession.ts` の冒頭が
@@ -200,12 +211,24 @@ non-null なレコード**。
 - `markStillHolds` が hydration 経路（`cleared-transcripts.ts:105`）にしかないのは漏れではなく設計。
   モジュール冒頭が理由を書いている — 「a server killed before reap would leave a mark that silences
   a resumed session's summary for good」。**起動時のバックストップ**であって毎読み込みの判定ではない
-- マークは reap で捨てられる（`lifecycle.ts:161-163`、`--resume` は `term.onExit` 経由で reap を通る）。
-  `/clear` してセッションが生き続ける場合は claude が**新しい id で別ファイルに書く**ので、
-  `<ourId>.jsonl` は凍結されたままで正しい
+- **マークはセッションが生きているあいだ残る。それが正しい** — その間ずっと `<ourId>.jsonl` は
+  終わった会話を持っているから。`/clear` 後も claude は走り続けるが、**新しい id で別ファイルに書く**
 
-（Codex round 1 が「同一プロセスで `/clear` → `--resume` すると隠れ続ける」と P1 を出したが、
-`lifecycle.ts:161-163` によりその経路は存在しない。却下の記録は PR #1755 のコメントに残した。）
+マークが捨てられるのは reap（`lifecycle.ts:161-163`）で、reap に届く経路は 2 つ:
+
+- grace window を過ぎた detached セッション（`lifecycle.ts:115`）
+- pty が死に、**かつ** tmux セッションも無い場合（`pty-exit.ts:26`）
+
+**tmux が生きたまま pty だけ死んだ場合は reap されない**（`ptyExitDisposition` が `"keep"` を返し、
+`ptys.delete` だけして reap を呼ばない）。この repo のセルは全部 tmux backed なので、これが既定の経路。
+
+（Codex round 1 の P1 を「`--resume` は `term.onExit` 経由で必ず reap を通る」として却下したが、
+**その理由は誤りだった** — round 2 の REOPEN が `pty-exit.ts` を指して正しく反証した。結論は変えない:
+`--resume` が `<ourId>.jsonl` に追記するにはそのセッションが一度居なくなる必要があり、
+それは reap を意味する。**その順序を破る経路は探して見つからなかったが、無いことを証明はしていない。**
+仮にあったとしても、素の `.has()` は既存の 4 つの読み手と同じ挙動なので、
+transcript ビューだけがズレることは無い。これは repo 全体の性質であって、この計画が持ち込む欠陥ではない。
+下の「別件」に記録した。）
 
 **`/compact` は id を振り直さない。** #1749 iter-4〜5 がこの開発機の全 transcript で実測し、
 compact したもの 95 本 / compact 後に命令があるもの 61 本の**すべてで session id は同一**だった。
@@ -249,6 +272,9 @@ Codex round 1 が挙げた端ケースも入れる。「境界がファイル先
 - **選んだ窓の中にターン境界が 1 つも無い**
 - **単一レコードが窓より大きい** → 窓を広げる経路と、上限に達したときの
   「大きすぎて表示できない」応答（空と区別できること）
+- **`[窓より大きい tool_result][小さい assistant レコード]`** — レコードは取れるが境界が無いので
+  広げること。「0 レコードなら広げる」に退化していたら落ちるケース
+- **未知の content ブロック**が `kind: "unknown"` の行として出る（無視されない）
 - **読んでいる最中の追記** — 末尾が途中まで書かれた JSON 行で終わる場合
 
 ハンドラの spec（`test/server/backends/remoteHost/`）:
@@ -292,3 +318,10 @@ load average 33〜43（1.7〜2.1 倍）だった。CLAUDE.md の「The machine i
   なので表に無く `?? "shell"` に落ちる。つまり**再起動を跨いだ claude セッションは
   `agent: "shell"` と報告される**。決定 6 で agent 種別を使わない理由がこれ
 - `SCREEN_HISTORY_ROWS = 300`（mulmoserver#139）が claude セルに効いていない
+- **`clearedTranscripts` のマークは、tmux が生きたまま pty だけ死んだ場合に捨てられない**
+  （`pty-exit.ts:26` が `"keep"` を返し reap を呼ばない）。`markStillHolds` によるサイズ失効は
+  hydration 経路にしかないので、その組み合わせではプロセスが生きているあいだマークが残り続ける。
+  `<id>.jsonl` に追記が起きる経路は探して見つからなかったので実害は確認できていないが、
+  **`lifecycle.ts:161` のコメント「`--resume` … which reaches reap through term.onExit」は
+  tmux backed なセッションでは成り立たない**。これは repo 全体の話で、この計画の 4 つの
+  既存読み手（cockpit / サマリ / push / タイトル）が同じ性質を共有している
