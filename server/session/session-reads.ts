@@ -38,11 +38,11 @@ import {
   sessionMemos,
 } from "./registry.js";
 import { claudeHistoryFile, projectSessionsDir } from "./project-dir.js";
-import { claudePromptsFor, codexPrompts, historyIdsFor, promptWindow, transcriptPrompts, PROMPT_SCAN_LIMIT } from "./prompt-history.js";
+import { claudePromptScan, codexPrompts, foldClaudePrompt, historyIdsFor, promptWindow, transcriptPrompts, PROMPT_SCAN_LIMIT } from "./prompt-history.js";
 import type { PromptWindow } from "../../common/promptHistory.js";
 import { clearedAtOf, clearedClaudeIdOf, clearedTranscripts } from "./cleared-transcripts.js";
 import { currentTurnReplyFromClaudeParsed, lastTurnFromClaudeParsed, lastTurnFromCodexRolloutDocs, EMPTY_TURN, type LastTurn } from "./last-turn.js";
-import { forEachJsonlRecordIn, readTailRecords } from "../infra/jsonl-file.js";
+import { forEachJsonlRecord, forEachJsonlRecordIn, readTailRecords } from "../infra/jsonl-file.js";
 import { copySummaryState, emptySummaryState, foldSummary, summaryPartsOf, type SummaryState } from "./summary-scan.js";
 import { partitionPending } from "./partitionPending.js";
 import { codexSessionsRoot } from "../agents/codex-session.js";
@@ -315,14 +315,26 @@ function claudeTranscriptPrompts(cwd: string, id: string): SessionPrompts {
 
 // Under whichever id claude currently calls itself as well as ours — history.jsonl keys on
 // claude's, and a `/clear` re-mints it (historyIdsFor).
-function claudePrompts(cwd: string, id: string): SessionPrompts {
+//
+// STREAMED, not a tail read, and the difference is the whole feature. The tail is right for a
+// transcript, which is one file per session — its last 4 MB really are that session's recent turns.
+// This file is one per USER: its last 4 MB are EVERYONE's recent prompts, so a session whose
+// activity is a few days old falls outside the window entirely and reads as empty. Measured on this
+// machine before the fix: 254 sessions had prompts on disk that the pane showed as 0, the worst of
+// them 848 prompts (reported by the owner, who opened the pane and saw nothing).
+//
+// The cost is the file's LENGTH, not its content: forEachJsonlRecord never materialises it and the
+// scan keeps a sliding window of PROMPT_SCAN_LIMIT entries. 7.8 MB here, read only while a pane is
+// open and at most once per 400ms debounce.
+async function claudePrompts(cwd: string, id: string): Promise<SessionPrompts> {
   // The live mapping first — any hook re-learns it, so it is the fresher of the two. The durable
   // one is what a RESTART leaves standing: without it the pane would know where the boundary is and
   // not which id the conversation past it is filed under, which shows nothing at all (#1749).
   const ids = historyIdsFor(id, claudeSessionIds.get(id) ?? clearedClaudeIdOf(id));
+  const scan = claudePromptScan(ids, PROMPT_SCAN_LIMIT, clearedAtOf(id));
   try {
-    const found = claudePromptsFor(readTailRecords(claudeHistoryFile()), ids, PROMPT_SCAN_LIMIT, clearedAtOf(id));
-    if (found.length > 0) return promptWindow(found);
+    await forEachJsonlRecord(claudeHistoryFile(), (record) => foldClaudePrompt(scan, record));
+    if (scan.found.length > 0) return promptWindow(scan.found);
   } catch {
     // No history file, or one this could not read — the transcript still knows something.
   }

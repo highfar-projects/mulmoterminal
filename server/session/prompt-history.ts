@@ -84,27 +84,49 @@ const collect = (records: Record<string, unknown>[], read: (record: Record<strin
  *  persisted log (#1749). */
 export const historyIdsFor = (ourId: string, claudeId: string | undefined): string[] => (!claudeId || claudeId === ourId ? [ourId] : [ourId, claudeId]);
 
+/** What a streaming reader carries while it walks the file: the newest `limit` matches so far.
+ *
+ *  A sliding window, so the cost is the file's LENGTH and never its content — a session with
+ *  thousands of prompts holds `limit` of them, not thousands. */
+export interface ClaudePromptScan {
+  wanted: Set<string>;
+  since: number | undefined;
+  limit: number;
+  found: PromptEntry[];
+}
+
+export const claudePromptScan = (sessionIds: readonly string[], limit: number = PROMPT_HISTORY_MAX, since?: number | undefined): ClaudePromptScan => ({
+  wanted: new Set(sessionIds),
+  since,
+  limit,
+  found: [],
+});
+
+/** Fold one history record into the scan. The rule lives here, and both readers below go through
+ *  it, so a streamed read and an array read cannot answer differently. */
+export function foldClaudePrompt(scan: ClaudePromptScan, record: Record<string, unknown>): void {
+  const read = claudeHistoryPrompt(record);
+  if (!read || !scan.wanted.has(read.sessionId) || !afterFloor(read.prompt, scan.since)) return;
+  scan.found.push(read.prompt);
+  if (scan.found.length > scan.limit) scan.found.shift();
+}
+
 /** These ids' prompts, oldest first, capped to the newest `limit`. Several ids are ONE session
  *  whose id was reissued mid-conversation, so the rows interleave in file order — which is time
  *  order, since the file is only ever appended to.
  *
- *  A Set rather than `includes`: a much-compacted session carries a whole chain of ids, and this
- *  runs per record over a file with tens of thousands of them. */
+ *  Takes an ARRAY, so it is the shape a test can drive; the server streams instead (see
+ *  session-reads.ts) because this file is shared by every session and a tail read of it silently
+ *  loses whole conversations. */
 export function claudePromptsFor(
   records: Record<string, unknown>[],
   sessionIds: readonly string[],
   limit: number = PROMPT_HISTORY_MAX,
   since?: number | undefined,
 ): PromptEntry[] {
-  const wanted = new Set(sessionIds);
-  return collect(
-    records,
-    (record) => {
-      const read = claudeHistoryPrompt(record);
-      return read && wanted.has(read.sessionId) && afterFloor(read.prompt, since) ? read.prompt : null;
-    },
-    limit,
-  );
+  const scan = claudePromptScan(sessionIds, limit, since);
+  records.forEach((record) => foldClaudePrompt(scan, record));
+  return scan.found;
 }
 
 /** Whether a prompt belongs to the conversation running NOW. `since` is set only for a session
