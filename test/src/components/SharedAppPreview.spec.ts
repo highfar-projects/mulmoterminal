@@ -21,6 +21,18 @@ const PAGE = "<h1>Book</h1>";
 
 const FORM_FIELD = { name: "name", label: "お名前", required: true, type: "string" };
 
+/** One collection's capability, as the server resolves it for the author. Written out rather than
+ *  built, so the SHAPE a page reads is pinned here too: `can` is keyed by collection, and a page
+ *  reaching for `viewer.can.transitionAny` gets undefined for every app that has ever existed. */
+const MEMBER_CAPABILITY = { cid: "bookings", transitionAny: true, transitionOwn: false, assign: false, assignees: [], withdrawFrom: [] };
+
+/** An app whose only page is written for the front desk, so it is the one selected on mount. */
+const memberPayload = () =>
+  payload({
+    pages: [{ id: "desk", html: PAGE, audience: "member", viewer: { me: "owner@gym.jp", can: { bookings: MEMBER_CAPABILITY } } }],
+    datasets: { "member:desk": { bookings: [] } },
+  });
+
 const payload = (over: Record<string, unknown> = {}) => ({
   declared: true,
   ok: true,
@@ -259,6 +271,103 @@ describe("SharedAppPreview", () => {
     await settle();
 
     expect(await copyBlock(wrapper)).toContain("could not reach this host's own server");
+  });
+
+  // WHO the author is to a member page, and what they may change.
+  //
+  // The pane had one parent — the PUBLIC one — whose state message has no `viewer` key at all. The
+  // injected runtime reads `data.viewer || {}`, so every roster page ever previewed here was handed
+  // an empty object and drew none of its buttons. That is indistinguishable from an author who got
+  // the capability names wrong, and it was diagnosed as exactly that before this was fixed.
+  it("hands a member page the capabilities the live page would get", async () => {
+    vi.stubGlobal("fetch", answering(memberPayload()));
+    const wrapper = await mountPreview();
+    const { answers } = await connect(wrapper);
+    // A port's delivery is a MACROTASK, so `flushPromises` alone does not guarantee it has
+    // arrived. It happened to on Linux and macOS and did not on Windows — a test that passes by
+    // being fast enough is a test that reports a working feature as broken on somebody else's
+    // machine.
+    await settle();
+    const state = answers.find((message) => message.type === "mc-public-view:state");
+    expect(state).toBeDefined();
+    expect(state?.viewer).toEqual({ me: "owner@gym.jp", can: { bookings: MEMBER_CAPABILITY } });
+    wrapper.unmount();
+  });
+
+  // A public page must NOT get one. It has no reader and no roles, and a `viewer` there would be an
+  // answer to a question that page never asks — the pane sending one anyway is how a public page
+  // starts branching on something only a member has.
+  it("sends no viewer to a public page", async () => {
+    const wrapper = await mountPreview();
+    const { answers } = await connect(wrapper);
+    // A port's delivery is a MACROTASK, so `flushPromises` alone does not guarantee it has
+    // arrived. It happened to on Linux and macOS and did not on Windows — a test that passes by
+    // being fast enough is a test that reports a working feature as broken on somebody else's
+    // machine.
+    await settle();
+    const state = answers.find((message) => message.type === "mc-public-view:state");
+    expect(state).toBeDefined();
+    expect(state).not.toHaveProperty("viewer");
+    wrapper.unmount();
+  });
+
+  // The member parent performs nothing — the pane has no route for a member's write — so an intent
+  // is answered BY NAME rather than dropped. A view left on a promise is, to the person holding the
+  // phone, a button that does nothing, which is the symptom this whole pane exists to explain.
+  it("answers a member page's intent instead of leaving it waiting", async () => {
+    vi.stubGlobal("fetch", answering(memberPayload()));
+    const wrapper = await mountPreview();
+    const { port, answers } = await connect(wrapper);
+    port.postMessage({ type: "mc-public-view:intent", requestId: "r1", kind: "transition", cid: "bookings", itemId: "b1", to: "approved" });
+    await settle();
+    // `submitResult`, not `result`: one name answers a submission and an intent alike, because the
+    // view awaits one promise either way.
+    const result = answers.find((message) => message.type === "mc-public-view:submitResult" && message.requestId === "r1");
+    expect(result).toBeDefined();
+    expect(result?.ok).toBe(false);
+    expect(result?.error).toBe("read-only");
+    wrapper.unmount();
+  });
+
+  // A member page that throws while its script is being parsed never reaches `ready()`. It sits on
+  // its loading state with the reason sealed inside the frame, and it is the page an author cannot
+  // otherwise diagnose — so the pane must hear it through the member parent too, not only the
+  // public one.
+  it("hears a member page report itself before the handshake", async () => {
+    vi.stubGlobal("fetch", answering(memberPayload()));
+    const wrapper = await mountPreview();
+    await speakFromFrame(wrapper, { type: "mc-public-view:notice", nonce: nonceOf(wrapper), code: "error", detail: "boom" });
+    expect(await copyBlock(wrapper)).toContain("the page raised an error nothing caught");
+    wrapper.unmount();
+  });
+
+  // A member page that arrives WITHOUT capabilities. The pane must not hand it an invented empty
+  // viewer — that is the no-controls page this whole change removes — and it must not fall back to
+  // the public parent quietly either, which puts the author in front of the same blank page with
+  // nothing to read. The cause is not in their page: it is a host too old to resolve them, or an
+  // answer in a shape this pane could not narrow.
+  it("says so when a member page arrives with no capabilities, rather than drawing a blank one", async () => {
+    vi.stubGlobal("fetch", answering(payload({ pages: [{ id: "desk", html: PAGE, audience: "member" }], datasets: { "member:desk": { bookings: [] } } })));
+    const wrapper = await mountPreview();
+    const block = await copyBlock(wrapper);
+    expect(block).toContain("arrived with no capabilities");
+    expect(block).toContain("The page is not at fault");
+    // And it is COUNTED, so the pane's own indicator lights: a line nobody is pointed at is a line
+    // nobody reads.
+    expect(block).toContain("1 problem");
+    wrapper.unmount();
+  });
+
+  // Whichever parent answered it. The handshake is the line above which nothing else can be
+  // trusted, and the pane watches ONE cell for it — wired to the public parent alone, a member page
+  // that readied perfectly showed no handshake at all.
+  it("logs the handshake for a member page too", async () => {
+    vi.stubGlobal("fetch", answering(memberPayload()));
+    const wrapper = await mountPreview();
+    await connect(wrapper);
+    await settle();
+    expect(await copyBlock(wrapper)).toContain("the page answered the handshake");
+    wrapper.unmount();
   });
 
   it("renders the page in a frame no looser than the published one", async () => {
