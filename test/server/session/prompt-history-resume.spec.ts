@@ -181,3 +181,37 @@ describe("a file truncated in place after growing mid-scan", () => {
     expect(resumed.map((p) => p.text)).toEqual(["long0", "long1", "long2"]);
   });
 });
+
+// Codex, #1750: `stat` inspects a PATH and the stream opens that path afterwards. A file replaced
+// in between is planned for as the old one and read as the new one, splicing the retained window of
+// A onto the tail of B — wrong for exactly one response, which is the kind of wrong that gets
+// blamed on the user misreading the screen.
+//
+// Driven through the stat itself rather than by timing: the replacement happens INSIDE the first
+// stat call, which is precisely the window, and does so deterministically.
+describe("the file replaced between the stat and the read", () => {
+  it("does not splice the old window onto the new file", async () => {
+    await fs.writeFile(historyFile(), Array.from({ length: 5 }, (_, i) => line(SESSION, `old${i}`)).join(""));
+    await resumedScan(SESSION); // memo taken against the original file
+
+    // Bigger than the memo's offset, so the length guard cannot be what saves this.
+    const replacement = Array.from({ length: 40 }, (_, i) => line(SESSION, `new${i}`)).join("");
+    const realStat = fs.stat.bind(fs);
+    let swapped = false;
+    const spy = vi.spyOn(fs, "stat").mockImplementation(async (...args: Parameters<typeof fs.stat>) => {
+      const result = await realStat(...args);
+      if (!swapped) {
+        swapped = true; // exactly once, in the window between the plan's stat and the stream
+        await fs.rm(historyFile());
+        await fs.writeFile(historyFile(), replacement);
+      }
+      return result;
+    });
+
+    const resumed = await resumedScan(SESSION);
+    spy.mockRestore();
+
+    expect(resumed.map((p) => p.text).every((t) => t.startsWith("new"))).toBe(true);
+    expect(resumed).toEqual(await fullScan(SESSION));
+  });
+});

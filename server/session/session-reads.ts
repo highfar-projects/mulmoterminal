@@ -347,6 +347,31 @@ export function forgetHistoryMemo(id: string): void {
   historyMemos.delete(id);
 }
 
+/** One attempt: plan from the memo, fold the range, and confirm the file did not change underneath.
+ *
+ *  Null means it DID. `stat` inspects a PATH and `forEachJsonlRecordIn` opens that path afterwards,
+ *  so a file replaced in between is planned for as the old one and read as the new one — the answer
+ *  would splice the retained window of A onto the tail of B, and only the NEXT request would notice
+ *  (Codex, #1750). Re-stating afterwards is what turns that into a discard instead of a wrong
+ *  answer; a replacement that lands after the read finishes fails the same check and merely costs a
+ *  retry, which is the safe direction to be wrong in. */
+async function scanHistoryOnce(id: string, ids: readonly string[], since: number | undefined, key: string, memo: HistoryMemo | undefined) {
+  const file = claudeHistoryFile();
+  const before = await fs.stat(file);
+  const plan = resumePlan(memo, key, { ino: before.ino, birthtimeMs: before.birthtimeMs, size: before.size });
+  // COPIED, never folded into in place: the memo is shared, so two overlapping reads of this
+  // session would otherwise interleave into one array and count every appended prompt twice.
+  const scan = plan.reuse ? copyClaudePromptScan(plan.reuse) : claudePromptScan(ids, PROMPT_SCAN_LIMIT, since);
+  // `atLineStart` is what makes a resume safe: the offset came from a previous scan of this same
+  // file, so it IS a line boundary and its record must be folded rather than dropped as a partial.
+  const offset = await forEachJsonlRecordIn(file, { from: plan.from, atLineStart: true }, (record) => foldClaudePrompt(scan, record));
+  const after = await fs.stat(file);
+  const identity = fileIdentity(before);
+  if (identity !== fileIdentity(after)) return null;
+  historyMemos.set(id, { key, identity, offset, scan });
+  return scan;
+}
+
 async function claudePrompts(cwd: string, id: string): Promise<SessionPrompts> {
   // The live mapping first — any hook re-learns it, so it is the fresher of the two. The durable
   // one is what a RESTART leaves standing: without it the pane would know where the boundary is and
@@ -354,19 +379,13 @@ async function claudePrompts(cwd: string, id: string): Promise<SessionPrompts> {
   const ids = historyIdsFor(id, claudeSessionIds.get(id) ?? clearedClaudeIdOf(id));
   const since = clearedAtOf(id);
   const key = memoKeyFor(ids, since);
-  const file = claudeHistoryFile();
   try {
-    const { ino, birthtimeMs, size } = await fs.stat(file);
-    const plan = resumePlan(historyMemos.get(id), key, { ino, birthtimeMs, size });
-    // COPIED, never folded into in place: the memo is shared, so two overlapping reads of this
-    // session would otherwise interleave into one array and count every appended prompt twice
-    // (Codex, #1750).
-    const scan = plan.reuse ? copyClaudePromptScan(plan.reuse) : claudePromptScan(ids, PROMPT_SCAN_LIMIT, since);
-    // `atLineStart` is what makes a resume safe: the offset came from a previous scan of this same
-    // file, so it IS a line boundary and its record must be folded rather than dropped as a partial.
-    const offset = await forEachJsonlRecordIn(file, { from: plan.from, atLineStart: true }, (record) => foldClaudePrompt(scan, record));
-    historyMemos.set(id, { key, identity: fileIdentity({ ino, birthtimeMs }), offset, scan });
-    if (scan.found.length > 0) return promptWindow(scan.found);
+    // Twice at most. The retry carries NO memo, so it is a full scan of whatever is there now —
+    // the file that replaced the first attempt's. A second replacement inside that window would
+    // discard again, and rather than loop we answer from the transcript: a bounded wrong-free path
+    // beats an unbounded right one on a read that runs behind an open pane.
+    const scan = (await scanHistoryOnce(id, ids, since, key, historyMemos.get(id))) ?? (await scanHistoryOnce(id, ids, since, key, undefined));
+    if (scan && scan.found.length > 0) return promptWindow(scan.found);
   } catch {
     // No history file, or one this could not read — the transcript still knows something.
   }
