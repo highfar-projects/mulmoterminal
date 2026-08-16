@@ -181,36 +181,27 @@ describe("a file truncated in place after growing mid-scan", () => {
   });
 });
 
-// Codex, #1750: `stat` inspects a PATH and the stream opens that path afterwards. A file replaced
-// in between is planned for as the old one and read as the new one, splicing the retained window of
-// A onto the tail of B — wrong for exactly one response, which is the kind of wrong that gets
-// blamed on the user misreading the screen.
+// The file moving under a read in progress (#1750). It went wrong three ways before the reader held
+// the file open across the whole scan: `stat` inspected a PATH and the stream opened that path after
+// it; then the anchor was read from the path after the fold; then the head was re-read from the path
+// at the end. Each of those pairs could see two different files, and the memo they built out of the
+// pair — one file's window beside another file's anchor — passed its own check on every later read.
 //
-// Driven through `open` rather than by timing: the swap happens INSIDE the first open call, which
-// is the window between the plan's anchor read and the fold opening the path, and does so
-// deterministically.
-//
-// Both halves below matter, and only the second one is beyond what a `stat` stamp can see. A file
-// REPLACED gets a new inode; a file REWRITTEN IN PLACE keeps it, and keeps its birth time too.
-// Swap the file open BY open, so a test can choose where in the read the race lands. The fold uses
-// `createReadStream` and is not one of these, so what the counted opens step through is the fold's
-// surroundings: the head taken first, the anchor read after the fold, and the head re-read last.
-const raceOn = (swap: () => Promise<void>, opts: { before?: number } = {}) => {
+// Now one `open` covers the plan, the fold and the stored anchor, so there is no gap to place a swap
+// INSIDE. What is left are the two orderings around that open, and the tests below take both:
+// `{ before: true }` swaps first, so the scan opens the replacement; the default swaps immediately
+// after, so the scan reads the file it opened while the PATH already points elsewhere.
+const raceOn = (swap: () => Promise<void>, opts: { before?: boolean } = {}) => {
   const realOpen = fs.open.bind(fs);
-  let opens = 0;
   let swapped = false;
-  const at = opts.before;
   return vi.spyOn(fs, "open").mockImplementation(async (...args: Parameters<typeof fs.open>) => {
-    // BEFORE the open, the read that follows sees the replacement; AFTER it, that read still holds
-    // the file it opened and only a LATER open can notice. Both are real orderings.
-    const due = at === undefined ? opens === 0 : opens === at;
-    opens += 1;
-    if (!swapped && due && at !== undefined) {
+    if (!swapped && opts.before) {
       swapped = true;
       await swap();
+      return realOpen(...args);
     }
     const handle = await realOpen(...args);
-    if (!swapped && due) {
+    if (!swapped) {
       swapped = true;
       await swap();
     }
@@ -218,10 +209,14 @@ const raceOn = (swap: () => Promise<void>, opts: { before?: number } = {}) => {
   });
 };
 
-describe("the file changed between the anchor check and the read", () => {
+describe("the file changed under a scan in progress", () => {
   const OLD = Array.from({ length: 5 }, (_, i) => line(SESSION, `old${i}`)).join("");
   // Bigger than the memo's offset, so a length check cannot be what saves either case.
   const NEW = Array.from({ length: 40 }, (_, i) => line(SESSION, `new${i}`)).join("");
+  // A replacement that KEEPS the file's opening bytes and changes what follows. A fingerprint of the
+  // head cannot see this one, so it is what says whether the reader compares against the same file
+  // it folded rather than merely a file that starts the same way (CodeRabbit, #1750).
+  const KEEPS_HEAD = OLD.split("\n").slice(0, 3).join("\n") + "\n" + Array.from({ length: 40 }, (_, i) => line(SESSION, `new${i}`)).join("");
 
   it("does not splice the old window onto the new file", async () => {
     await fs.writeFile(historyFile(), OLD);
@@ -234,8 +229,12 @@ describe("the file changed between the anchor check and the read", () => {
     const resumed = await resumedScan(SESSION);
     spy.mockRestore();
 
-    expect(resumed.map((p) => p.text).every((t) => t.startsWith("new"))).toBe(true);
-    expect(resumed).toEqual(await fullScan(SESSION));
+    // Answering from the file it opened is legitimate — the handle IS that file. What it must never
+    // do is MIX the two, and it must not leave a memo that makes the next read mix them either.
+    const texts = resumed.map((p) => p.text);
+    const oneFile = texts.every((t) => t.startsWith("old")) || texts.every((t) => t.startsWith("new"));
+    expect(oneFile).toBe(true);
+    expect(await resumedScan(SESSION)).toEqual(await fullScan(SESSION));
   });
 
   // The same race WITHOUT unlinking: `writeFile` over an existing path truncates in place, so the
@@ -257,16 +256,11 @@ describe("the file changed between the anchor check and the read", () => {
   });
 
   // A scan that starts from ZERO carries no memo, so there is nothing it was planned against to
-  // re-check afterwards — and the anchor stored beside its window is read from the path AFTER the
-  // fold, by a separate open. Swap the file in that gap and the memo pairs the OLD file's window
-  // with the NEW file's anchor, which every later read then resumes from: a poisoned cache rather
-  // than one wrong response (Codex, #1750).
-  //
-  // Every gap between the reads that surround the fold, including the one that matters most: after
-  // the fold and BEFORE the anchor. A swap before the fold is harmless by comparison — the fold then
-  // reads the new file from the start and agrees with itself.
-  [0, 1, 2].forEach((before) => {
-    it(`does not memoise a fresh scan against a file swapped in before read ${before}`, async () => {
+  // re-check afterwards. Both orderings of the swap around its single open have to leave the reader
+  // either right or empty-handed — never with a memo that pairs one file's window with another's
+  // anchor, which is a poisoned cache rather than one wrong response (Codex, #1750).
+  [true, false].forEach((before) => {
+    it(`does not memoise a fresh scan raced by a replacement ${before ? "before" : "after"} it opens the file`, async () => {
       await fs.writeFile(historyFile(), Array.from({ length: 5 }, (_, i) => line(SESSION, `first${i}`)).join(""));
 
       const spy = raceOn(
@@ -284,5 +278,30 @@ describe("the file changed between the anchor check and the read", () => {
       expect(await resumedScan(SESSION)).toEqual(await fullScan(SESSION));
       expect((await resumedScan(SESSION)).map((p) => p.text).every((t) => t.startsWith("new"))).toBe(true);
     });
+  });
+
+  // The same race, with the replacement built to defeat a fingerprint of the HEAD: its first lines
+  // are the old file's, byte for byte, and only what follows differs. A check that re-reads the path
+  // cannot tell it from the file the fold actually consumed — only reading BOTH through one handle
+  // can, which is why the scan holds the file open across all of it (CodeRabbit, #1750).
+  it("does not memoise a fresh scan against a replacement that keeps the opening bytes", async () => {
+    await fs.writeFile(historyFile(), OLD);
+
+    // Immediately after the open, which is where a re-read of the path would have picked up the
+    // replacement while the fold kept consuming the original.
+    const spy = raceOn(async () => {
+      await fs.rm(historyFile());
+      await fs.writeFile(historyFile(), KEEPS_HEAD);
+    });
+    await resumedScan(SESSION);
+    spy.mockRestore();
+
+    // `old0`–`old2` are still there legitimately — the replacement kept them, which is the whole
+    // point of it. What only the OLD file had is `old3` and `old4`, so those are the poisoning
+    // signal: they can only appear from a window built before the swap.
+    const after = (await resumedScan(SESSION)).map((p) => p.text);
+    expect(after).toEqual((await fullScan(SESSION)).map((p) => p.text));
+    expect(after).not.toContain("old3");
+    expect(after).not.toContain("old4");
   });
 });

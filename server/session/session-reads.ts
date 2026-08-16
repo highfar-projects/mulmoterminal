@@ -9,6 +9,7 @@
 // drops a session from knownSessions once disk has it — so "reads" describes the direction
 // of the data, not a guarantee of purity.
 import fsSync, { existsSync, readdirSync } from "node:fs";
+import type { FileHandle } from "node:fs/promises";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -352,82 +353,62 @@ export function forgetHistoryMemo(id: string): void {
  *  Null is the answer for a file shorter than the offset — truncated, rotated, or replaced by a
  *  smaller one — and for one that cannot be read at all. `offset === 0` has no bytes before it and
  *  needs no proof. */
-/** The file's first bytes, fingerprinted. Taken BEFORE a scan and again after it: a scan that
- *  started from zero has no memo anchor to re-check, so without this nothing at all would notice the
- *  file being replaced while the fold ran — and the anchor stored afterwards would describe the NEW
- *  file while the window in the memo came from the old one, poisoning every later read rather than
- *  one response (Codex, #1750). Fewer bytes than asked for is not a failure here: a file shorter than
- *  the window still has a head, and it is the same head both times or it is a different file. */
-async function headPrint(file: string): Promise<string> {
-  const handle = await fsSync.promises.open(file, "r");
-  try {
-    const buf = Buffer.alloc(ANCHOR_BYTES);
-    const { bytesRead } = await handle.read(buf, 0, ANCHOR_BYTES, 0);
-    return anchorOf(buf.subarray(0, bytesRead), NO_BYTES);
-  } finally {
-    await handle.close();
-  }
-}
-
-const NO_BYTES = Buffer.alloc(0);
-
-async function anchorAt(file: string, offset: number): Promise<string | null> {
+/** The anchor at a byte offset of an OPEN file — see anchorOf for what the two windows are.
+ *
+ *  Takes the handle rather than the path, and every read of one scan goes through the same one. A
+ *  path is re-resolved per read, so the fold and the anchor stored beside its window could describe
+ *  two different files: the window from the one that was there for the fold, the anchor from
+ *  whatever the path pointed at a millisecond later. That memo then passes its own check on every
+ *  later read, so it is a poisoned cache rather than one wrong answer, and no amount of re-reading
+ *  the path can tell — a replacement built to keep the first bytes intact is identical to the
+ *  original from the outside (CodeRabbit, #1750). A handle IS the file it opened. */
+async function anchorAt(handle: FileHandle, offset: number): Promise<string | null> {
   if (offset === 0) return EMPTY_ANCHOR;
-  const handle = await fsSync.promises.open(file, "r");
-  try {
-    const readAt = async (from: number, want: number): Promise<Buffer | null> => {
-      const buf = Buffer.alloc(want);
-      const { bytesRead } = await handle.read(buf, 0, want, from);
-      return bytesRead === want ? buf : null;
-    };
-    // The head is capped by the offset itself: a resume point inside the first ANCHOR_BYTES makes
-    // the two windows overlap, which costs nothing and stays correct.
-    const head = await readAt(0, Math.min(ANCHOR_BYTES, offset));
-    const tailFrom = Math.max(0, offset - ANCHOR_BYTES);
-    const tail = await readAt(tailFrom, offset - tailFrom);
-    return head && tail ? anchorOf(head, tail) : null;
-  } finally {
-    await handle.close();
-  }
+  const readAt = async (from: number, want: number): Promise<Buffer | null> => {
+    const buf = Buffer.alloc(want);
+    const { bytesRead } = await handle.read(buf, 0, want, from);
+    return bytesRead === want ? buf : null;
+  };
+  // The head is capped by the offset itself: a resume point inside the first ANCHOR_BYTES makes
+  // the two windows overlap, which costs nothing and stays correct.
+  const head = await readAt(0, Math.min(ANCHOR_BYTES, offset));
+  const tailFrom = Math.max(0, offset - ANCHOR_BYTES);
+  const tail = await readAt(tailFrom, offset - tailFrom);
+  return head && tail ? anchorOf(head, tail) : null;
 }
 
 /** One attempt: plan from the memo, fold the range, and confirm the file did not change underneath.
  *
- *  Null means it DID. The anchor is checked twice for a reason: `anchorAt` inspects a PATH and
- *  `forEachJsonlRecordIn` opens that path afterwards, so a file replaced in between would be planned
- *  for as the old one and read as the new one — splicing the retained window of A onto the tail of B,
- *  wrong for exactly one response and self-correcting afterwards, which is the kind of wrong that
- *  gets blamed on the reader (Codex, #1750). Checking again after the fold turns that into a discard.
- *  A replacement landing after the read merely costs a retry, which is the safe way to be wrong. */
+ *  Null means it DID, and the caller retries once from scratch. What "the file" means here is the
+ *  handle opened on the first line: the plan, the fold and the stored anchor all read through it, so
+ *  they cannot disagree about which file they saw however the PATH moves while they run. What is
+ *  left is a file mutated in place under that handle — the fold's bytes and the anchor's would then
+ *  differ, which the re-check below turns into a discard rather than a memo. */
 async function scanHistoryOnce(id: string, ids: readonly string[], since: number | undefined, key: string, memo: HistoryMemo | undefined) {
-  const file = claudeHistoryFile();
-  const now = Date.now();
-  const plan = resumePlan(memo, key, memo ? await anchorAt(file, memo.offset) : null, now);
-  const startedOn = await headPrint(file);
-  // COPIED, never folded into in place: the memo is shared, so two overlapping reads of this
-  // session would otherwise interleave into one array and count every appended prompt twice.
-  const scan = plan.reuse ? copyClaudePromptScan(plan.reuse) : claudePromptScan(ids, PROMPT_SCAN_LIMIT, since);
-  // `atLineStart` is what makes a resume safe: the offset came from a previous scan of this same
-  // file, so it IS a line boundary and its record must be folded rather than dropped as a partial.
-  const offset = await forEachJsonlRecordIn(file, { from: plan.from, atLineStart: true }, (record) => foldClaudePrompt(scan, record));
-  // The same bytes the plan was made on must still be there, or the fold above read a file other
-  // than the one it was planned for. Null where nothing was resumed — a scan from zero inherited no
-  // window, so there is no earlier read for a replacement to splice onto.
-  const resumedOn: string | null = plan.reuse && memo ? memo.anchor : null;
-  if (resumedOn !== null && (await anchorAt(file, plan.from)) !== resumedOn) return null;
-  const anchor = await anchorAt(file, offset);
-  if (anchor === null) return null; // the file lost bytes this very scan consumed
-  // LAST, and that placement is the whole point: every read above opens the path separately, so the
-  // file can be swapped between any two of them — including between the fold and the anchor that is
-  // about to be stored beside it. Re-reading the head here is what says they all described ONE file.
-  // A swap after this line leaves a memo that is self-consistent about a file that is gone, and the
-  // next read's own check is what discards it.
-  if ((await headPrint(file)) !== startedOn) return null;
-  // The full scan underneath is THIS one when nothing was carried, and otherwise the one the carried
-  // window was originally built by — a resume extends a chain, it does not restart its clock.
-  const fullScanAt = plan.reuse && memo ? memo.fullScanAt : now;
-  historyMemos.set(id, { key, offset, anchor, scan, fullScanAt });
-  return scan;
+  const handle = await fsSync.promises.open(claudeHistoryFile(), "r");
+  try {
+    const now = Date.now();
+    const plan = resumePlan(memo, key, memo ? await anchorAt(handle, memo.offset) : null, now);
+    // COPIED, never folded into in place: the memo is shared, so two overlapping reads of this
+    // session would otherwise interleave into one array and count every appended prompt twice.
+    const scan = plan.reuse ? copyClaudePromptScan(plan.reuse) : claudePromptScan(ids, PROMPT_SCAN_LIMIT, since);
+    // `atLineStart` is what makes a resume safe: the offset came from a previous scan of this same
+    // file, so it IS a line boundary and its record must be folded rather than dropped as a partial.
+    const offset = await forEachJsonlRecordIn(handle, { from: plan.from, atLineStart: true }, (record) => foldClaudePrompt(scan, record));
+    // The bytes the plan was made on must still be there — a file rewritten IN PLACE changes them
+    // under the handle, and the fold above then read something other than what it was planned for.
+    const resumedOn: string | null = plan.reuse && memo ? memo.anchor : null;
+    if (resumedOn !== null && (await anchorAt(handle, plan.from)) !== resumedOn) return null;
+    const anchor = await anchorAt(handle, offset);
+    if (anchor === null) return null; // the file lost bytes this very scan consumed
+    // The full scan underneath is THIS one when nothing was carried, and otherwise the one the
+    // carried window was built by — a resume extends a chain, it does not restart its clock.
+    const fullScanAt = plan.reuse && memo ? memo.fullScanAt : now;
+    historyMemos.set(id, { key, offset, anchor, scan, fullScanAt });
+    return scan;
+  } finally {
+    await handle.close();
+  }
 }
 
 async function claudePrompts(cwd: string, id: string): Promise<SessionPrompts> {
