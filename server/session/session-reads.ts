@@ -352,6 +352,25 @@ export function forgetHistoryMemo(id: string): void {
  *  Null is the answer for a file shorter than the offset — truncated, rotated, or replaced by a
  *  smaller one — and for one that cannot be read at all. `offset === 0` has no bytes before it and
  *  needs no proof. */
+/** The file's first bytes, fingerprinted. Taken BEFORE a scan and again after it: a scan that
+ *  started from zero has no memo anchor to re-check, so without this nothing at all would notice the
+ *  file being replaced while the fold ran — and the anchor stored afterwards would describe the NEW
+ *  file while the window in the memo came from the old one, poisoning every later read rather than
+ *  one response (Codex, #1750). Fewer bytes than asked for is not a failure here: a file shorter than
+ *  the window still has a head, and it is the same head both times or it is a different file. */
+async function headPrint(file: string): Promise<string> {
+  const handle = await fsSync.promises.open(file, "r");
+  try {
+    const buf = Buffer.alloc(ANCHOR_BYTES);
+    const { bytesRead } = await handle.read(buf, 0, ANCHOR_BYTES, 0);
+    return anchorOf(buf.subarray(0, bytesRead), NO_BYTES);
+  } finally {
+    await handle.close();
+  }
+}
+
+const NO_BYTES = Buffer.alloc(0);
+
 async function anchorAt(file: string, offset: number): Promise<string | null> {
   if (offset === 0) return EMPTY_ANCHOR;
   const handle = await fsSync.promises.open(file, "r");
@@ -382,7 +401,9 @@ async function anchorAt(file: string, offset: number): Promise<string | null> {
  *  A replacement landing after the read merely costs a retry, which is the safe way to be wrong. */
 async function scanHistoryOnce(id: string, ids: readonly string[], since: number | undefined, key: string, memo: HistoryMemo | undefined) {
   const file = claudeHistoryFile();
-  const plan = resumePlan(memo, key, memo ? await anchorAt(file, memo.offset) : null);
+  const now = Date.now();
+  const plan = resumePlan(memo, key, memo ? await anchorAt(file, memo.offset) : null, now);
+  const startedOn = await headPrint(file);
   // COPIED, never folded into in place: the memo is shared, so two overlapping reads of this
   // session would otherwise interleave into one array and count every appended prompt twice.
   const scan = plan.reuse ? copyClaudePromptScan(plan.reuse) : claudePromptScan(ids, PROMPT_SCAN_LIMIT, since);
@@ -396,7 +417,16 @@ async function scanHistoryOnce(id: string, ids: readonly string[], since: number
   if (resumedOn !== null && (await anchorAt(file, plan.from)) !== resumedOn) return null;
   const anchor = await anchorAt(file, offset);
   if (anchor === null) return null; // the file lost bytes this very scan consumed
-  historyMemos.set(id, { key, offset, anchor, scan });
+  // LAST, and that placement is the whole point: every read above opens the path separately, so the
+  // file can be swapped between any two of them — including between the fold and the anchor that is
+  // about to be stored beside it. Re-reading the head here is what says they all described ONE file.
+  // A swap after this line leaves a memo that is self-consistent about a file that is gone, and the
+  // next read's own check is what discards it.
+  if ((await headPrint(file)) !== startedOn) return null;
+  // The full scan underneath is THIS one when nothing was carried, and otherwise the one the carried
+  // window was originally built by — a resume extends a chain, it does not restart its clock.
+  const fullScanAt = plan.reuse && memo ? memo.fullScanAt : now;
+  historyMemos.set(id, { key, offset, anchor, scan, fullScanAt });
   return scan;
 }
 

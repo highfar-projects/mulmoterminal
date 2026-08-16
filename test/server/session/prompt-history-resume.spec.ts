@@ -192,12 +192,25 @@ describe("a file truncated in place after growing mid-scan", () => {
 //
 // Both halves below matter, and only the second one is beyond what a `stat` stamp can see. A file
 // REPLACED gets a new inode; a file REWRITTEN IN PLACE keeps it, and keeps its birth time too.
-const raceOn = (swap: () => Promise<void>) => {
+// Swap the file open BY open, so a test can choose where in the read the race lands. The fold uses
+// `createReadStream` and is not one of these, so what the counted opens step through is the fold's
+// surroundings: the head taken first, the anchor read after the fold, and the head re-read last.
+const raceOn = (swap: () => Promise<void>, opts: { before?: number } = {}) => {
   const realOpen = fs.open.bind(fs);
+  let opens = 0;
   let swapped = false;
+  const at = opts.before;
   return vi.spyOn(fs, "open").mockImplementation(async (...args: Parameters<typeof fs.open>) => {
+    // BEFORE the open, the read that follows sees the replacement; AFTER it, that read still holds
+    // the file it opened and only a LATER open can notice. Both are real orderings.
+    const due = at === undefined ? opens === 0 : opens === at;
+    opens += 1;
+    if (!swapped && due && at !== undefined) {
+      swapped = true;
+      await swap();
+    }
     const handle = await realOpen(...args);
-    if (!swapped) {
+    if (!swapped && due) {
       swapped = true;
       await swap();
     }
@@ -238,9 +251,38 @@ describe("the file changed between the anchor check and the read", () => {
     const resumed = await resumedScan(SESSION);
     spy.mockRestore();
 
-    console.log("RESUMED:", JSON.stringify(resumed.map((p) => p.text)));
     expect(resumed.map((p) => p.text).every((t) => t.startsWith("new"))).toBe(true);
     // And the corruption must not outlive the raced call: the NEXT read has to agree too.
     expect(await resumedScan(SESSION)).toEqual(await fullScan(SESSION));
+  });
+
+  // A scan that starts from ZERO carries no memo, so there is nothing it was planned against to
+  // re-check afterwards — and the anchor stored beside its window is read from the path AFTER the
+  // fold, by a separate open. Swap the file in that gap and the memo pairs the OLD file's window
+  // with the NEW file's anchor, which every later read then resumes from: a poisoned cache rather
+  // than one wrong response (Codex, #1750).
+  //
+  // Every gap between the reads that surround the fold, including the one that matters most: after
+  // the fold and BEFORE the anchor. A swap before the fold is harmless by comparison — the fold then
+  // reads the new file from the start and agrees with itself.
+  [0, 1, 2].forEach((before) => {
+    it(`does not memoise a fresh scan against a file swapped in before read ${before}`, async () => {
+      await fs.writeFile(historyFile(), Array.from({ length: 5 }, (_, i) => line(SESSION, `first${i}`)).join(""));
+
+      const spy = raceOn(
+        async () => {
+          await fs.rm(historyFile());
+          await fs.writeFile(historyFile(), NEW);
+        },
+        { before },
+      );
+      await resumedScan(SESSION); // no memo yet, so this one scans from zero
+      spy.mockRestore();
+
+      // Whatever that raced call answered, what must not survive is a memo built from the first
+      // file. These reads are unraced, so they can only disagree with a full scan if one was stored.
+      expect(await resumedScan(SESSION)).toEqual(await fullScan(SESSION));
+      expect((await resumedScan(SESSION)).map((p) => p.text).every((t) => t.startsWith("new"))).toBe(true);
+    });
   });
 });

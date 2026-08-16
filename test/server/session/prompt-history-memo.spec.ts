@@ -14,12 +14,13 @@
 // file truncated and REWRITTEN IN PLACE keeps both fields. The guard is the CONTENT at the resume
 // point now, which no filesystem bookkeeping can fake.
 import { describe, it, expect } from "vitest";
-import { anchorOf, memoKeyFor, resumePlan, ANCHOR_BYTES, EMPTY_ANCHOR, type HistoryMemo } from "../../../server/session/prompt-history-memo";
+import { anchorOf, memoKeyFor, resumePlan, ANCHOR_BYTES, EMPTY_ANCHOR, MEMO_MAX_AGE_MS, type HistoryMemo } from "../../../server/session/prompt-history-memo";
 import { claudePromptScan } from "../../../server/session/prompt-history";
 
 const scan = () => claudePromptScan(["s1"], 100, undefined);
 const ANCHOR = anchorOf(Buffer.from('{"display":"the first prompt"…'), Buffer.from("…the last line of the previous scan\n"));
-const memo = (over: Partial<HistoryMemo> = {}): HistoryMemo => ({ key: "s1|", offset: 1000, anchor: ANCHOR, scan: scan(), ...over });
+const NOW = 1_800_000_000_000;
+const memo = (over: Partial<HistoryMemo> = {}): HistoryMemo => ({ key: "s1|", offset: 1000, anchor: ANCHOR, scan: scan(), fullScanAt: NOW, ...over });
 
 describe("memoKeyFor", () => {
   it("separates a different set of ids", () => {
@@ -70,33 +71,53 @@ describe("anchorOf", () => {
 
 describe("resumePlan", () => {
   it("starts from the beginning when there is no memo", () => {
-    expect(resumePlan(undefined, "s1|", ANCHOR)).toEqual({ from: 0, reuse: null });
+    expect(resumePlan(undefined, "s1|", ANCHOR, NOW)).toEqual({ from: 0, reuse: null });
   });
 
   it("resumes when the file still carries what the last scan read", () => {
     const m = memo();
-    expect(resumePlan(m, "s1|", ANCHOR)).toEqual({ from: 1000, reuse: m.scan });
+    expect(resumePlan(m, "s1|", ANCHOR, NOW)).toEqual({ from: 1000, reuse: m.scan });
   });
 
   // The cache failure that matters most: the question changed while the file did not.
   it("starts over when the ids or the floor changed", () => {
-    expect(resumePlan(memo(), "s1,s2|", ANCHOR)).toEqual({ from: 0, reuse: null });
-    expect(resumePlan(memo(), "s1|1234", ANCHOR)).toEqual({ from: 0, reuse: null });
+    expect(resumePlan(memo(), "s1,s2|", ANCHOR, NOW)).toEqual({ from: 0, reuse: null });
+    expect(resumePlan(memo(), "s1|1234", ANCHOR, NOW)).toEqual({ from: 0, reuse: null });
   });
 
   // What the inode check could not do: a REPLACEMENT that is bigger than the old offset carries
   // different bytes there, whatever the filesystem says about the file's identity.
   it("starts over when the bytes at the resume point are not the ones it read", () => {
-    expect(resumePlan(memo(), "s1|", anchorOf(Buffer.from("a different file"), Buffer.from("entirely\n")))).toEqual({ from: 0, reuse: null });
+    expect(resumePlan(memo(), "s1|", anchorOf(Buffer.from("a different file"), Buffer.from("entirely\n")), NOW)).toEqual({ from: 0, reuse: null });
   });
 
   // Null is "the file cannot supply those bytes at all" — shorter than the offset, or unreadable.
   it("starts over when the file cannot reach the resume point", () => {
-    expect(resumePlan(memo(), "s1|", null)).toEqual({ from: 0, reuse: null });
+    expect(resumePlan(memo(), "s1|", null, NOW)).toEqual({ from: 0, reuse: null });
   });
 
   it("resumes a memo taken at byte zero, which has nothing before it to prove", () => {
     const m = memo({ offset: 0, anchor: EMPTY_ANCHOR });
-    expect(resumePlan(m, "s1|", EMPTY_ANCHOR)).toEqual({ from: 0, reuse: m.scan });
+    expect(resumePlan(m, "s1|", EMPTY_ANCHOR, NOW)).toEqual({ from: 0, reuse: m.scan });
+  });
+
+  // The anchor cannot see a rewrite that leaves both fingerprinted windows alone, so the chain it
+  // stands on is aged out instead: wrong for at most this long rather than wrong forever (Codex).
+  describe("the age of the full scan underneath", () => {
+    it("resumes while the chain is younger than the ceiling", () => {
+      const m = memo({ fullScanAt: NOW - MEMO_MAX_AGE_MS + 1 });
+      expect(resumePlan(m, "s1|", ANCHOR, NOW)).toEqual({ from: 1000, reuse: m.scan });
+    });
+
+    it("starts over once it is older, even though the file itself checks out", () => {
+      expect(resumePlan(memo({ fullScanAt: NOW - MEMO_MAX_AGE_MS }), "s1|", ANCHOR, NOW)).toEqual({ from: 0, reuse: null });
+    });
+
+    // It is the CHAIN that ages, not the memo: a resume carries `fullScanAt` forward rather than
+    // restamping it, or a pane read every 400ms would never re-derive anything.
+    it("is measured from the full scan, not from the last resume", () => {
+      const old = memo({ fullScanAt: NOW - MEMO_MAX_AGE_MS - 60_000 });
+      expect(resumePlan(old, "s1|", ANCHOR, NOW)).toEqual({ from: 0, reuse: null });
+    });
   });
 });

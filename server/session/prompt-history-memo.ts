@@ -30,6 +30,9 @@ export interface HistoryMemo {
   anchor: string;
   /** The sliding window as it stood there. */
   scan: ClaudePromptScan;
+  /** When the FULL scan this window ultimately rests on was taken — carried across every resume,
+   *  not restamped by them. See MEMO_MAX_AGE_MS. */
+  fullScanAt: number;
 }
 
 /** Which question a memo answers: the ids being read under, and the `/clear` floor.
@@ -89,14 +92,29 @@ export interface ResumePlan {
 
 const RESTART: ResumePlan = { from: 0, reuse: null };
 
-/** A memo may be resumed only when it answers THIS question and the file still carries, at the byte
- *  it stopped on, exactly what it read there.
+/** How long a chain of resumes may stand on one full scan before the next read pays for a fresh one.
+ *
+ *  The anchor is evidence, not proof (see anchorOf), so there is a shape of rewrite it cannot see —
+ *  one that leaves both fingerprinted windows byte-identical and changes what is between them. That
+ *  is not a state an append-only log reaches on its own, but "cannot see it" and "carries it forever"
+ *  are different sizes of wrong, and only the second one is unbounded (Codex, #1750). A ceiling on
+ *  the chain's age turns it into the first: at worst the pane is stale for this long, then a full
+ *  scan re-derives the window from the file.
+ *
+ *  Cheap because it bounds the CHAIN rather than the memo: `fullScanAt` is carried across resumes
+ *  instead of being restamped by them, so a continuously-read pane still pays one 50 ms scan per
+ *  interval — amortised over refreshes that arrive every 400 ms, well under a hundredth of a ms. */
+export const MEMO_MAX_AGE_MS = 10 * 60 * 1000;
+
+/** A memo may be resumed only when it answers THIS question, the file still carries at the byte it
+ *  stopped on exactly what it read there, and the full scan underneath it is not too old.
  *
  *  `anchorNow` is what the caller found at `memo.offset` in the file as it is now, or null where it
  *  could not read that far — a file shorter than the offset was truncated or replaced, and either
  *  way the offset points somewhere it never did. */
-export function resumePlan(memo: HistoryMemo | undefined, key: string, anchorNow: string | null): ResumePlan {
+export function resumePlan(memo: HistoryMemo | undefined, key: string, anchorNow: string | null, now: number): ResumePlan {
   if (!memo || memo.key !== key) return RESTART;
   if (anchorNow === null || anchorNow !== memo.anchor) return RESTART;
+  if (now - memo.fullScanAt >= MEMO_MAX_AGE_MS) return RESTART;
   return { from: memo.offset, reuse: memo.scan };
 }
