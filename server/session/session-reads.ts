@@ -49,6 +49,7 @@ import {
   PROMPT_SCAN_LIMIT,
 } from "./prompt-history.js";
 import type { PromptWindow } from "../../common/promptHistory.js";
+import { memoKeyFor, resumePlan, type HistoryMemo } from "./prompt-history-memo.js";
 import { clearedAtOf, clearedClaudeIdOf, clearedTranscripts } from "./cleared-transcripts.js";
 import { currentTurnReplyFromClaudeParsed, lastTurnFromClaudeParsed, lastTurnFromCodexRolloutDocs, EMPTY_TURN, type LastTurn } from "./last-turn.js";
 import { forEachJsonlRecord, forEachJsonlRecordIn, readTailRecords } from "../infra/jsonl-file.js";
@@ -332,17 +333,35 @@ function claudeTranscriptPrompts(cwd: string, id: string): SessionPrompts {
 // machine before the fix: 254 sessions had prompts on disk that the pane showed as 0, the worst of
 // them 848 prompts (reported by the owner, who opened the pane and saw nothing).
 //
-// The cost is the file's LENGTH, not its content: forEachJsonlRecord never materialises it and the
-// scan keeps a sliding window of PROMPT_SCAN_LIMIT entries. 7.8 MB here, read only while a pane is
-// open and at most once per 400ms debounce.
+// The cost is the file's LENGTH, not its content: the reader never materialises it and the scan
+// keeps a sliding window of PROMPT_SCAN_LIMIT entries.
+//
+// RESUMED across reads, because the file is append-only (#1750): the first read of a session walks
+// the whole 7.8 MB, and every read after it folds only the bytes written since. An open pane
+// refreshes on every prompt submitted, so that steady state is what the user actually pays.
+// prompt-history-memo.ts decides when a memo may be believed; here it is only stored and used.
+const historyMemos = new Map<string, HistoryMemo>(); // our session id -> its last scan
+
+export function forgetHistoryMemo(id: string): void {
+  historyMemos.delete(id);
+}
+
 async function claudePrompts(cwd: string, id: string): Promise<SessionPrompts> {
   // The live mapping first — any hook re-learns it, so it is the fresher of the two. The durable
   // one is what a RESTART leaves standing: without it the pane would know where the boundary is and
   // not which id the conversation past it is filed under, which shows nothing at all (#1749).
   const ids = historyIdsFor(id, claudeSessionIds.get(id) ?? clearedClaudeIdOf(id));
-  const scan = claudePromptScan(ids, PROMPT_SCAN_LIMIT, clearedAtOf(id));
+  const since = clearedAtOf(id);
+  const key = memoKeyFor(ids, since);
+  const file = claudeHistoryFile();
   try {
-    await forEachJsonlRecord(claudeHistoryFile(), (record) => foldClaudePrompt(scan, record));
+    const { ino, size } = await fs.stat(file);
+    const plan = resumePlan(historyMemos.get(id), key, { ino, size });
+    const scan = plan.reuse ?? claudePromptScan(ids, PROMPT_SCAN_LIMIT, since);
+    // `atLineStart` is what makes a resume safe: the offset came from a previous scan of this same
+    // file, so it IS a line boundary and its record must be folded rather than dropped as a partial.
+    const offset = await forEachJsonlRecordIn(file, { from: plan.from, atLineStart: true }, (record) => foldClaudePrompt(scan, record));
+    historyMemos.set(id, { key, ino, size, offset, scan });
     if (scan.found.length > 0) return promptWindow(scan.found);
   } catch {
     // No history file, or one this could not read — the transcript still knows something.
