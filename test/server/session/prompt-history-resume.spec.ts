@@ -47,8 +47,8 @@ beforeEach(async () => {
   await fs.mkdir(path.join(home, ".claude"), { recursive: true });
   // The memo map is module state that outlives one test. CI caught this the hard way: on Linux two
   // temp files created in succession got the SAME inode, so a memo from the previous case was
-  // accepted for the next one's file. The production guard now also compares birth time, but a test
-  // must not lean on that — it starts from no memo at all.
+  // accepted for the next one's file. The production guard reads content rather than `stat` now, but
+  // a test must not lean on that — it starts from no memo at all.
   [SESSION, OTHER].forEach(forgetHistoryMemo);
 });
 
@@ -100,10 +100,9 @@ describe("a resumed prompt-history read equals a full scan", () => {
     expect(resumed.map((p) => p.text)).toEqual(["rotated"]);
   });
 
-  // A genuinely NEW file, LARGER than the old offset (CodeRabbit): `writeFile` truncates in place
-  // and so only ever exercises the length guard above. Unlinking first is what makes this the
-  // identity guard's case — and on Linux the replacement can be handed the SAME inode, which is how
-  // CI found the guard was too weak in the first place.
+  // A genuinely NEW file, LARGER than the old offset (CodeRabbit): a replacement that grew past the
+  // resume point is the one a length check cannot see. On Linux it is also handed the SAME inode,
+  // which is how CI found the `stat`-based guard was too weak in the first place.
   it("agrees when the file is REPLACED by a larger one", async () => {
     await fs.writeFile(historyFile(), Array.from({ length: 5 }, (_, i) => line(SESSION, `old${i}`)).join(""));
     await resumedScan(SESSION);
@@ -187,31 +186,61 @@ describe("a file truncated in place after growing mid-scan", () => {
 // A onto the tail of B — wrong for exactly one response, which is the kind of wrong that gets
 // blamed on the user misreading the screen.
 //
-// Driven through the stat itself rather than by timing: the replacement happens INSIDE the first
-// stat call, which is precisely the window, and does so deterministically.
-describe("the file replaced between the stat and the read", () => {
+// Driven through `open` rather than by timing: the swap happens INSIDE the first open call, which
+// is the window between the plan's anchor read and the fold opening the path, and does so
+// deterministically.
+//
+// Both halves below matter, and only the second one is beyond what a `stat` stamp can see. A file
+// REPLACED gets a new inode; a file REWRITTEN IN PLACE keeps it, and keeps its birth time too.
+const raceOn = (swap: () => Promise<void>) => {
+  const realOpen = fs.open.bind(fs);
+  let swapped = false;
+  return vi.spyOn(fs, "open").mockImplementation(async (...args: Parameters<typeof fs.open>) => {
+    const handle = await realOpen(...args);
+    if (!swapped) {
+      swapped = true;
+      await swap();
+    }
+    return handle;
+  });
+};
+
+describe("the file changed between the anchor check and the read", () => {
+  const OLD = Array.from({ length: 5 }, (_, i) => line(SESSION, `old${i}`)).join("");
+  // Bigger than the memo's offset, so a length check cannot be what saves either case.
+  const NEW = Array.from({ length: 40 }, (_, i) => line(SESSION, `new${i}`)).join("");
+
   it("does not splice the old window onto the new file", async () => {
-    await fs.writeFile(historyFile(), Array.from({ length: 5 }, (_, i) => line(SESSION, `old${i}`)).join(""));
+    await fs.writeFile(historyFile(), OLD);
     await resumedScan(SESSION); // memo taken against the original file
 
-    // Bigger than the memo's offset, so the length guard cannot be what saves this.
-    const replacement = Array.from({ length: 40 }, (_, i) => line(SESSION, `new${i}`)).join("");
-    const realStat = fs.stat.bind(fs);
-    let swapped = false;
-    const spy = vi.spyOn(fs, "stat").mockImplementation(async (...args: Parameters<typeof fs.stat>) => {
-      const result = await realStat(...args);
-      if (!swapped) {
-        swapped = true; // exactly once, in the window between the plan's stat and the stream
-        await fs.rm(historyFile());
-        await fs.writeFile(historyFile(), replacement);
-      }
-      return result;
+    const spy = raceOn(async () => {
+      await fs.rm(historyFile());
+      await fs.writeFile(historyFile(), NEW);
     });
-
     const resumed = await resumedScan(SESSION);
     spy.mockRestore();
 
     expect(resumed.map((p) => p.text).every((t) => t.startsWith("new"))).toBe(true);
     expect(resumed).toEqual(await fullScan(SESSION));
+  });
+
+  // The same race WITHOUT unlinking: `writeFile` over an existing path truncates in place, so the
+  // inode and the birth time both survive it and no stamp made from them can tell the two contents
+  // apart. If the rewrite regrows past the memo's offset a length check passes too — and the memo
+  // that gets stored then carries the OLD window plus the new file's suffix, which every later read
+  // resumes from. This is the case that retired the `stat`-based identity (Codex, #1750).
+  it("does not splice the old window onto a file rewritten in place", async () => {
+    await fs.writeFile(historyFile(), OLD);
+    await resumedScan(SESSION);
+
+    const spy = raceOn(() => fs.writeFile(historyFile(), NEW)); // same inode, same birth time
+    const resumed = await resumedScan(SESSION);
+    spy.mockRestore();
+
+    console.log("RESUMED:", JSON.stringify(resumed.map((p) => p.text)));
+    expect(resumed.map((p) => p.text).every((t) => t.startsWith("new"))).toBe(true);
+    // And the corruption must not outlive the raced call: the NEXT read has to agree too.
+    expect(await resumedScan(SESSION)).toEqual(await fullScan(SESSION));
   });
 });

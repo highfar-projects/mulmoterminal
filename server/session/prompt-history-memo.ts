@@ -18,31 +18,18 @@
 //
 // Pure: the file reading and the map live in session-reads.ts. What is here is when a memo may be
 // believed, which is the part that goes wrong silently.
+import { createHash } from "node:crypto";
 import type { ClaudePromptScan } from "./prompt-history.js";
 
 export interface HistoryMemo {
   /** What question this memo answers — see memoKeyFor. */
   key: string;
-  /** Which FILE it answers about — see fileIdentity. Null where the platform could not say, which
-   *  is a memo that will never be resumed rather than one resumed on weaker evidence. */
-  identity: string | null;
-  /** The line-aligned byte offset the scan stopped at. Doubles as the shrink guard: the file must
-   *  still hold the bytes that scan consumed, or the offset points somewhere it never did.
-   *
-   *  The offset rather than the size stat'd before the scan, because those differ. Claude can append
-   *  DURING a scan, so the stream can run past the size that was sampled first; recording that size
-   *  would let an in-place truncation to a length between the two pass the guard and resume from an
-   *  offset the file no longer reaches (Codex, #1750). */
+  /** The line-aligned byte offset the scan stopped at. */
   offset: number;
+  /** Proof that the file still holds what the last scan read up to `offset` — see anchorOf. */
+  anchor: string;
   /** The sliding window as it stood there. */
   scan: ClaudePromptScan;
-}
-
-/** What the caller learned from `stat`, so resumePlan stays free of fs. */
-export interface HistoryStat {
-  ino: number;
-  birthtimeMs: number;
-  size: number;
 }
 
 /** Which question a memo answers: the ids being read under, and the `/clear` floor.
@@ -53,35 +40,43 @@ export interface HistoryStat {
  *  exactly the failure a cache is expected to have and the one nobody notices. */
 export const memoKeyFor = (ids: readonly string[], since: number | undefined): string => `${ids.join(",")}|${since ?? ""}`;
 
-/** Which file a memo answers about: inode AND creation time.
+/** How many bytes are fingerprinted at each end. Small enough that reading them is free, wide
+ *  enough to reach the part of a line that actually varies (see below). */
+export const ANCHOR_BYTES = 256;
+
+/** A fingerprint of the file at the resume point: its HEAD, and the bytes ending at the offset.
  *
- *  The inode alone is not enough, and CI proved it rather than theory — two temp files created in
- *  succession on Linux got the same inode number, and a memo taken against the first was accepted
- *  for the second. Inode numbers are recycled, so a history file deleted and immediately recreated
- *  can land on the same one; adding the birth time makes that collision need two coincidences.
+ *  This replaced a stamp made from `stat`'s inode and birth time, which was wrong three times and
+ *  each time in a way that looked right. Metadata says which file this IS; what a resume needs to
+ *  know is what the file CONTAINS, and the gap between those two shows up as (#1750):
  *
- *  A file with no birth time cannot be stamped at all, and that is `null` rather than a weaker
- *  stamp. The measurement below is why: without it the comparison is the inode alone, which on Linux
- *  matches a replacement EVERY time — a guard that looks like one and is not. Not every filesystem
- *  reports a birth time (statx has to be supported all the way down; NFS and FUSE mounts are the
- *  ones to expect), and there `null` costs only the optimization — the read falls back to the full
- *  scan #1749 shipped, rather than to a length check this PR already rejected as insufficient.
+ *  - inode numbers are RECYCLED. On an ubuntu runner, 200 rounds of write/remove/write handed back
+ *    the same inode 200/200 times, so the inode alone separates nothing.
+ *  - the birth time separates them only at FULL precision. Rounded to the millisecond it collided
+ *    173/200 in that same run — a delete-and-recreate inside one millisecond is the common case.
+ *    macOS mints a fresh inode every time and so never reaches this, which is why it only ever
+ *    failed in CI.
+ *  - and neither survives the case that retired the approach: a file TRUNCATED AND REWRITTEN IN
+ *    PLACE keeps its inode AND its birth time. If the rewrite regrows past the resume point, no
+ *    stamp made from `stat` can tell it from an append.
  *
- *  The birth time is used at FULL precision. Rounding it to the millisecond was what let CI fail:
- *  on Linux the replacement file gets the same inode EVERY time, so the millisecond was the only
- *  thing left to tell the two apart — and a delete-and-recreate inside one millisecond is the
- *  common case, not a rare one. Measured on an ubuntu runner over 200 rounds of
- *  write/remove/write with no delay:
+ *  BOTH ends, because the tail alone is not distinctive in THIS file: every line ends
+ *  `…"project":"<dir>","sessionId":"<uuid>"}`, which for one session is byte-for-byte identical
+ *  across lines. A window that lands inside that suffix fingerprints the format rather than the
+ *  content, and matches a completely different file — which is exactly what the replacement test
+ *  caught before this was widened. What varies is `display`, at the START of a line; the head of the
+ *  file is likewise the first thing a replacement changes.
  *
- *    ino identical                     200/200
- *    `ino:floor(birthtimeMs)` collides 173/200   <- the guard opened
- *    `ino:birthtimeMs`         collides   0/200
- *
- *  macOS gives a fresh inode each time and so never reaches this, which is why it only ever showed
- *  up in CI. Size is deliberately NOT part of the identity: it changes on every append, and a memo
- *  that treats an append as a different file resumes nothing. */
-export const fileIdentity = (stat: { ino: number; birthtimeMs: number }): string | null =>
-  Number.isFinite(stat.birthtimeMs) && stat.birthtimeMs > 0 ? `${stat.ino}:${stat.birthtimeMs}` : null;
+ *  It is evidence, not proof: proving the first `offset` bytes are unchanged means reading them,
+ *  which is the cost the resume exists to avoid. What it rules out is every replacement that differs
+ *  at either end — and a file that matches at both ends yet differs in the middle is not something
+ *  an append-only log does to itself. Hashed rather than kept, because these bytes are the user's own
+ *  prompt text and a memo has no business holding more of it than the window it serves. */
+export const anchorOf = (head: Buffer, tail: Buffer): string =>
+  `${createHash("sha256").update(head).digest("hex").slice(0, 16)}:${createHash("sha256").update(tail).digest("hex").slice(0, 16)}`;
+
+/** The anchor of a resume point that has no bytes before it — a scan starting from zero. */
+export const EMPTY_ANCHOR = "";
 
 /** Where the next scan should start, and whether it may keep what the last one found.
  *
@@ -94,18 +89,14 @@ export interface ResumePlan {
 
 const RESTART: ResumePlan = { from: 0, reuse: null };
 
-/** A memo may be resumed only when it answers THIS question, about THIS file, which still holds
- *  every byte the last scan consumed.
+/** A memo may be resumed only when it answers THIS question and the file still carries, at the byte
+ *  it stopped on, exactly what it read there.
  *
- *  A file shorter than the recorded offset was rotated or truncated, so that offset no longer points
- *  where it did — the same reasoning `nextReadRange` applies to a codex rollout. A file the same
- *  length has nothing new, which is a resume of length zero rather than a special case. */
-export function resumePlan(memo: HistoryMemo | undefined, key: string, stat: HistoryStat): ResumePlan {
+ *  `anchorNow` is what the caller found at `memo.offset` in the file as it is now, or null where it
+ *  could not read that far — a file shorter than the offset was truncated or replaced, and either
+ *  way the offset points somewhere it never did. */
+export function resumePlan(memo: HistoryMemo | undefined, key: string, anchorNow: string | null): ResumePlan {
   if (!memo || memo.key !== key) return RESTART;
-  const identity = fileIdentity(stat);
-  // Unidentifiable is "start over", never "carry on": the length guard alone cannot tell an append
-  // from a replacement that grew past the old offset, which is the design this PR rejected first.
-  if (identity === null || memo.identity !== identity) return RESTART;
-  if (stat.size < memo.offset) return RESTART;
+  if (anchorNow === null || anchorNow !== memo.anchor) return RESTART;
   return { from: memo.offset, reuse: memo.scan };
 }
