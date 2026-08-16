@@ -23,14 +23,13 @@ issue #1750 では「末尾から逆走査し、必要な件数が揃った時�
 | | |
 |---|---|
 | 5 本（命令の多いセッション） | **122 KB 〜 798 KB** — 逆走査が大きく効く |
-| **9 本** | **ファイル全体** — そもそも 101 件持っていない（14 件 / 50 件 / 1 件 …）ので、
-先頭まで読まないと「もう無い」と確定できない |
+| **9 本** | **ファイル全体** — そもそも 101 件持っていない（14 件 / 50 件 / 1 件 …）ので、先頭まで読まないと「もう無い」と確定できない |
 
 つまり逆走査は**命令の多いセッションの初回読みしか救わない**。若いセッション・作ったばかりの
 セルでは全走査のままで、そこは一番よく開かれる。加えて、後方チャンク読みという新しい
 インフラを 1 つ抱えることになる。
 
-## 採る案: (size, offset) メモ ＋ レジューム
+## 採る案: (identity, offset) メモ ＋ レジューム
 
 このファイルは **append-only** なので、前回止まった offset から続きだけ畳めばよい。
 
@@ -46,14 +45,14 @@ issue #1750 では「末尾から逆走査し、必要な件数が揃った時�
 
 ```ts
 interface HistoryMemo {
-  /** 前回走査時のファイルサイズ。縮んでいたら作り直す。 */
-  size: number;
-  /** 前回の走査が止まった行頭 offset。ここから再開する。 */
+  /** このメモがどの問いに対する答えか。変わったら作り直す。 */
+  key: string;
+  /** どのファイルについての答えか（inode ＋ birthtime）。変わったら作り直す。 */
+  identity: string;
+  /** 前回の走査が止まった行頭 offset。ここから再開し、同時に長さガードも兼ねる。 */
   offset: number;
   /** スライディング窓の状態そのもの（既存の ClaudePromptScan）。 */
   scan: ClaudePromptScan;
-  /** このメモがどの問いに対する答えか。変わったら作り直す。 */
-  key: string;
 }
 ```
 
@@ -65,14 +64,24 @@ interface HistoryMemo {
 どちらもスライディング窓の中身を変えるので、`historyIdsFor(...)` と `since` から作った文字列を
 key にして、変わったら offset 0 から作り直す。**古い答えを新しい問いに使い回さない。**
 
+**`identity` が要る理由**（レビューで判明。当初の計画には無かった）: 履歴ファイルが削除され、
+元より大きく育つと、size だけでは「増えた」と区別できず、古い offset が新しいファイルの途中を
+指す。inode だけでも足りない — **CI（ubuntu）が実演したとおり inode 番号は再利用される**ので、
+birthtime と組にする。どちらも報告しないプラットフォームでは `0:0` になり、長さガードに退避する。
+
+**長さガードが `offset` である理由**（レビューで判明）: 当初は「走査前に stat した size」を
+持つ設計だった。しかし走査中に claude が追記すると stream はその size を超えて進むので、
+両者の間の長さへ in-place truncate されると増加に見えてしまう。**走査が実際に到達した offset**
+なら「そのバイトを今もファイルが保持しているか」を直接問えるので、size フィールドは不要になった。
+
 ### 無効化
 
-- **ファイルが縮んだ**（`size < memo.size`）→ ローテートか truncate。offset 0 からやり直し
 - **key が変わった** → 上記
+- **identity が変わった** → ファイルが差し替わった
+- **`stat.size < memo.offset`** → 前回の走査が読んだバイトをもう保持していない（truncate / ローテート）
 - **セッションが teardown された** → `lifecycle.ts` の reap で削除（`claudeSessionIds` と同じ扱い）
 
-`mtime` は見ない。判定に使うのは size と offset で、append-only の前提はそれで十分
-（`forEachJsonlRecordIn` の契約がまさにそれ）。
+`mtime` は見ない（追記のたびに変わるので、同一性の判定に使えない）。
 
 ## codex の rollout はどうするか
 
@@ -82,32 +91,40 @@ key にして、変わったら offset 0 から作り直す。**古い答えを�
 - 読む頻度が claude より低い（codex セルは相対的に少ない）
 - ファイルが小さいので 1 回の走査が安い
 
-ので、**効果と変更量が釣り合わない**。必要になったら同じ形で足せるよう、`promptScanMemo` は
-codex 側からも使える形にしておく。この判断は issue に書く。
+ので、**効果と変更量が釣り合わない**。必要になったら同じ形で足せる（`resumePlan` はセッション
+固有のものを何も持たない）。この判断は PR 本文に書く。
 
 ## 変更
 
 **`server/session/prompt-history-memo.ts`（新規・純関数寄り）**
 
 - `memoKeyFor(ids, since)` — 問いの同一性
-- `resumePlan(memo, key, size)` — `{ from: number; reuse: ClaudePromptScan | null }` を返す純関数。
+- `resumePlan(memo, key, {ino, birthtimeMs, size})` — `{ from, reuse }` を返す純関数。
   「作り直す／続きから」の判断だけを持ち、fs には触らない。**ここがテストの主戦場**
+- `fileIdentity({ino, birthtimeMs})` — どのファイルについての答えか
 
 **`server/session/session-reads.ts`**
 
 - `claudePrompts` が memo を引き、`forEachJsonlRecordIn(file, { from, atLineStart: true }, …)` で
   差分だけ畳む。初回は `from: 0`
 - 走査後に memo を更新（offset は `forEachJsonlRecordIn` の戻り値）
+- **resume した scan はコピーしてから畳む**（`copyClaudePromptScan`）。メモは共有物で、
+  同一セッションの読みが重なると同じ配列に二重に畳み込まれるため
 
 **`server/session/lifecycle.ts`** — teardown で memo を落とす
 
 ## テスト
 
-- `resumePlan` の純関数テスト: 初回 / 続き / ファイルが縮んだ / key が変わった / offset==size（新規なし）
+- `resumePlan` の純関数テスト: 初回 / 続き / offset==size（新規なし）/ key が変わった /
+  identity が変わった（inode 違い・inode 再利用）/ identity 不明時の退避 / 長さガード
 - 実ファイルを使う結合テスト: 履歴を書く → 読む → **追記** → 読む で、
   ① 2 回目が追記分だけを読むこと（offset が進む）② 結果が全走査と一致すること
 - **全走査との等価性**: 同じ入力に対し「メモあり」と「メモなし」で答えが一致することを、
   追記を挟みながら確認する（`/refactor-safely` の等価検証にあたる）
+- **並行読み**（レビューで追加）: 同一セッションの読みを 2 本／8 本同時に走らせ、全走査と一致し、
+  追記分が二重に入らないこと。メモは共有物なので、コピーせず畳むとここが壊れる
+- **本物の差し替え**（レビューで追加）: `writeFile` は in-place truncate なので長さガードしか
+  通らない。`unlink` してから**より大きい**ファイルを作り、identity ガードのパスを通す
 
 ## 測る
 

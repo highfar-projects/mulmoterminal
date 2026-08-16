@@ -89,14 +89,32 @@ describe("a resumed prompt-history read equals a full scan", () => {
     expect(resumed).toHaveLength(100); // PROMPT_HISTORY_MAX, the served window
   });
 
-  it("agrees when the file is replaced by a shorter one", async () => {
+  // Truncated in place: same file, fewer bytes than the last scan consumed. The LENGTH guard.
+  it("agrees when the file is truncated to something shorter", async () => {
     await fs.writeFile(historyFile(), Array.from({ length: 10 }, (_, i) => line(SESSION, `old${i}`)).join(""));
-    await resumedScan(SESSION); // memo now points past the end of the file that replaces it
+    await resumedScan(SESSION); // memo now points past the end of what replaces it
 
     await fs.writeFile(historyFile(), line(SESSION, "rotated"));
     const resumed = await resumedScan(SESSION);
     expect(resumed).toEqual(await fullScan(SESSION));
     expect(resumed.map((p) => p.text)).toEqual(["rotated"]);
+  });
+
+  // A genuinely NEW file, LARGER than the old offset (CodeRabbit): `writeFile` truncates in place
+  // and so only ever exercises the length guard above. Unlinking first is what makes this the
+  // identity guard's case — and on Linux the replacement can be handed the SAME inode, which is how
+  // CI found the guard was too weak in the first place.
+  it("agrees when the file is REPLACED by a larger one", async () => {
+    await fs.writeFile(historyFile(), Array.from({ length: 5 }, (_, i) => line(SESSION, `old${i}`)).join(""));
+    await resumedScan(SESSION);
+
+    await fs.rm(historyFile());
+    await fs.writeFile(historyFile(), Array.from({ length: 40 }, (_, i) => line(SESSION, `new${i}`)).join(""));
+
+    const resumed = await resumedScan(SESSION);
+    expect(resumed).toEqual(await fullScan(SESSION));
+    expect(resumed.map((p) => p.text).every((t) => t.startsWith("new"))).toBe(true);
+    expect(resumed).toHaveLength(40);
   });
 
   it("does not serve one session's memo to another", async () => {
