@@ -9,6 +9,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
+  clearedAtOf,
   clearedTranscripts,
   forgetClearedTranscript,
   hydrateClearedTranscripts,
@@ -64,7 +65,9 @@ describe("markTranscriptCleared", () => {
     await writeTranscript("a".repeat(120));
     await markTranscriptCleared(SESSION, cwd, marksDir);
     expect(clearedTranscripts.has(SESSION)).toBe(true);
-    expect(JSON.parse(await fs.readFile(markerFile(), "utf8"))).toEqual({ cwd, size: 120 });
+    // objectContaining, because the mark also carries WHEN the clear happened (#1749); the size is
+    // what this test is about and what the expiry rule reads.
+    expect(JSON.parse(await fs.readFile(markerFile(), "utf8"))).toEqual(expect.objectContaining({ cwd, size: 120 }));
   });
 
   // A session cleared before its first turn was written has no file to size; 0 is the honest
@@ -166,5 +169,51 @@ describe("markStillHolds", () => {
 
   it("stops holding once anything has been appended", () => {
     expect(markStillHolds({ cwd: "/ws", size: 100 }, 101)).toBe(false);
+  });
+});
+
+// The prompts pane draws its line at the MOMENT of the clear: claude's own prompt history is one
+// file per user, so a cleared conversation leaves no seam in it and only the time separates the two
+// (#1749). It rides this mark rather than living in memory, because the boundary has to survive the
+// restart the mark itself exists for (Codex).
+describe("when the clear happened", () => {
+  it("is remembered, and written into the mark", async () => {
+    await writeTranscript("{}\n");
+    const before = Date.now();
+    await markTranscriptCleared(SESSION, cwd, marksDir);
+    const at = clearedAtOf(SESSION);
+    expect(at).toBeGreaterThanOrEqual(before);
+    expect(at).toBeLessThanOrEqual(Date.now());
+    expect(JSON.parse(await fs.readFile(markerFile(), "utf8")).at).toBe(at);
+  });
+
+  it("is remembered even when there is no cwd to freeze a file for", async () => {
+    await markTranscriptCleared(SESSION, undefined, marksDir);
+    expect(clearedAtOf(SESSION)).toBeGreaterThan(0);
+    expect(await exists(markerFile())).toBe(false); // memory only, as before
+  });
+
+  it("comes back from disk on hydration", async () => {
+    await writeTranscript("{}\n");
+    await fs.mkdir(marksDir, { recursive: true });
+    await fs.writeFile(markerFile(), JSON.stringify({ cwd, size: 3, at: 1234567890 }));
+    await hydrateClearedTranscripts(marksDir);
+    expect(clearedTranscripts.has(SESSION)).toBe(true);
+    expect(clearedAtOf(SESSION)).toBe(1234567890);
+  });
+
+  it("is dropped with the mark", async () => {
+    await markTranscriptCleared(SESSION, cwd, marksDir);
+    forgetClearedTranscript(SESSION, marksDir);
+    expect(clearedAtOf(SESSION)).toBeUndefined();
+  });
+
+  // An older mark has no time. It must still freeze the transcript — losing that over a missing
+  // field would resurrect a whole conversation — and simply draws no line.
+  it("reads a mark written before the time existed as frozen, with no boundary", async () => {
+    expect(parseClearedMark({ cwd: "/x", size: 5 })).toEqual({ cwd: "/x", size: 5 });
+    expect(parseClearedMark({ cwd: "/x", size: 5, at: "yesterday" })).toEqual({ cwd: "/x", size: 5 });
+    expect(parseClearedMark({ cwd: "/x", size: 5, at: -1 })).toEqual({ cwd: "/x", size: 5 });
+    expect(parseClearedMark({ cwd: "/x", size: 5, at: 7 })).toEqual({ cwd: "/x", size: 5, at: 7 });
   });
 });

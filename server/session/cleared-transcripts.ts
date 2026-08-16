@@ -31,18 +31,38 @@ const CLEARED_DIR = path.join(MULMOTERMINAL_HOME, "cleared-transcripts");
 // hydrated into it at import — before the server listens, which is what closes the window.
 export const clearedTranscripts = new Set<string>(); // id
 
+// WHEN each of them was cleared. The set above answers "is this frozen", which is all its original
+// readers need; the prompts pane needs the moment, because claude's own prompt history is one file
+// per USER and has no seam at a clear — the time is the only thing that separates the ended
+// conversation from the new one (#1749).
+//
+// Here rather than in the registry, and written by markTranscriptCleared rather than by the route,
+// so the two facts cannot disagree: whatever marks a session cleared records when. It rides the
+// same durable mark, so the boundary survives the restart that the memory-only version lost it to
+// (Codex).
+const clearedAt = new Map<string, number>(); // id -> epoch ms
+
+/** When this session was cleared, or undefined for one that was not (or a mark written before the
+ *  time was recorded — an older mark on disk, which reads as no boundary rather than a wrong one). */
+export const clearedAtOf = (id: string): number | undefined => clearedAt.get(id);
+
 export interface ClearedMark {
   /** Where the frozen transcript lives, so hydration can stat it without the session's pty. */
   cwd: string;
   size: number;
+  /** Epoch ms of the clear. Optional: marks written before #1749 have none. */
+  at?: number;
 }
 
 /** A mark read back off disk, or null for anything that isn't one (corrupt / hand-edited file). */
 export function parseClearedMark(raw: unknown): ClearedMark | null {
   if (!isRecord(raw)) return null;
-  const { cwd, size } = raw;
+  const { cwd, size, at } = raw;
   if (typeof cwd !== "string" || !cwd || typeof size !== "number" || !Number.isFinite(size) || size < 0) return null;
-  return { cwd, size };
+  // An unusable `at` drops to absent rather than rejecting the mark: the mark's job is to freeze
+  // the transcript, and losing that over a bad timestamp would resurrect a whole conversation.
+  const usableAt = typeof at === "number" && Number.isFinite(at) && at >= 0;
+  return usableAt ? { cwd, size, at } : { cwd, size };
 }
 
 /** Whether the transcript is still the frozen one. Anything appended since means claude picked
@@ -65,10 +85,14 @@ async function transcriptSize(cwd: string, id: string): Promise<number> {
  *  clear itself, which is the part the user is watching. */
 export async function markTranscriptCleared(id: string, cwd: string | undefined, dir: string = CLEARED_DIR): Promise<void> {
   clearedTranscripts.add(id);
+  // Before the early return: a session with no cwd is still cleared AT a moment, and the prompts
+  // pane draws its line from that whether or not there is a file to freeze.
+  const at = Date.now();
+  clearedAt.set(id, at);
   // No cwd (a hook that reported none, for a session with no live pty) means no file to size, and
   // a mark with nothing to compare against could never expire — so that one stays in memory only.
   if (!cwd || !SESSION_ID_RE.test(id)) return;
-  const mark: ClearedMark = { cwd, size: await transcriptSize(cwd, id) };
+  const mark: ClearedMark = { cwd, size: await transcriptSize(cwd, id), at };
   try {
     await fs.mkdir(dir, { recursive: true });
     await fs.writeFile(markerFile(dir, id), JSON.stringify(mark));
@@ -84,6 +108,7 @@ const removeMarker = (dir: string, id: string): Promise<void> =>
  *  synchronous; a file that outlives the process is caught by hydration either way. */
 export function forgetClearedTranscript(id: string, dir: string = CLEARED_DIR): void {
   clearedTranscripts.delete(id);
+  clearedAt.delete(id);
   void removeMarker(dir, id);
 }
 
@@ -104,6 +129,7 @@ async function restoreMark(dir: string, file: string): Promise<void> {
   const mark = parseClearedMark(await readMark(dir, id));
   if (!mark || !markStillHolds(mark, await transcriptSize(mark.cwd, id))) return removeMarker(dir, id);
   clearedTranscripts.add(id);
+  if (mark.at !== undefined) clearedAt.set(id, mark.at);
 }
 
 /** Read the marks back at boot. Absent directory (first run) => nothing frozen.

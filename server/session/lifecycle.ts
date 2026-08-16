@@ -18,7 +18,6 @@ import {
   activity,
   aiTitles,
   claudeSessionIds,
-  clearedAtMs,
   hiddenSessions,
   knownSessions,
   lastPrompts,
@@ -164,7 +163,6 @@ function reap(deps: SessionLifecycleDeps, id: string) {
   // process that reissues it, and a kept mapping would read the NEXT conversation's prompts under
   // the last one's id.
   claudeSessionIds.delete(id);
-  clearedAtMs.delete(id);
   // The transcript stops being frozen here: the next claude on this id (`--resume`, or a restart
   // after `/exit` — which reaches reap through term.onExit) appends to that file again.
   forgetClearedTranscript(id);
