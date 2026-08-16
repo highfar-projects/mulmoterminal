@@ -79,16 +79,21 @@ export const hiddenSessions = new Set<string>(); // id
 // follow-up can't hide the task.
 export const lastPrompts = new Map<string, string>(); // id -> prompt text
 
-// Claude's OWN session id for a session this app knows by ITS id. The two are the same from the
-// spawn (`--session-id`) until `/clear` or `/compact`, at which point claude reissues its id and
-// keeps reporting to us under ours (resolveHookSessionId). Anything keyed by CLAUDE's id needs
-// this — its prompt-history file is the one (#1749); everything of ours stays on our id.
+// Every session id CLAUDE has called itself for a session this app knows by ITS id, oldest first.
+// The two start equal (the spawn passes `--session-id`) and diverge at `/clear` or `/compact`,
+// where claude reissues its id and keeps reporting to us under ours (resolveHookSessionId).
+// Anything keyed by CLAUDE's id needs this — its prompt-history file is the one (#1749);
+// everything of ours stays on our id.
 //
-// In memory, and re-learned from the next hook of any kind. A mapping persisted across a restart
+// A LIST because a long session compacts REPEATEDLY, each time under a new id: keeping only the
+// latest loses every prompt from before the previous compaction. Emptied at a `/clear`, which
+// starts a new conversation whose prompts are the only ones that count from then on.
+//
+// In memory, and re-learned from the next hook of any kind. A chain persisted across a restart
 // would outlive the process that could tell whether it is still true, and a stale one silently
 // attributes another conversation's prompts to this cell — worse than the one turn it costs to
 // learn again.
-export const claudeSessionIds = new Map<string, string>(); // our id -> claude's current session id
+export const claudeSessionIds = new Map<string, string[]>(); // our id -> claude's ids, oldest first
 
 // AI header title per session (issue #316): a short summary of the recent turns that
 // stays meaningful when the session turns into a back-and-forth, where the raw last

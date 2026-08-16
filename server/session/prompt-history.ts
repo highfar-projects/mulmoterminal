@@ -69,33 +69,48 @@ export function claudeHistoryPrompt(record: Record<string, unknown>): { sessionI
 const collect = (records: Record<string, unknown>[], read: (record: Record<string, unknown>) => PromptEntry | null, limit: number): PromptEntry[] =>
   records.flatMap((record) => read(record) ?? []).slice(-limit);
 
+/** Every claude id seen for a session so far, with `id` added if it is new. Oldest first.
+ *
+ *  A LIST, not the latest: claude reissues its id on each `/compact`, and a long session compacts
+ *  repeatedly (auto-compact), so keeping only the newest loses every prompt from before the
+ *  previous compaction — the older half of exactly the history this pane exists to show
+ *  (Codex, #1749). */
+export const withClaudeId = (seen: readonly string[], id: string): string[] => (seen.includes(id) ? [...seen] : [...seen, id]);
+
 /** Which ids the history file has to be read under, for a session this app calls `ourId`.
  *
  *  Claude reissues its OWN session id on `/clear` and `/compact` and goes on reporting to us under
  *  ours (activity-hook.ts) — so history.jsonl, which keys on claude's, stops matching. Without
- *  this, a compacted session's pane freezes at the compaction and a cleared one never moves again
- *  (Codex, #1749).
+ *  this, a compacted session's pane freezes at the compaction and a cleared one never moves again.
  *
- *  `/compact` continues the SAME conversation, so both ids are its prompts. `/clear` ends one, and
- *  the repo's rule is that the ended conversation does not come back (#1085) — so only the new id
- *  counts there. Unknown or unchanged, there is one id and it is ours. */
-export function historyIdsFor(ourId: string, claudeId: string | undefined, cleared: boolean): string[] {
-  if (!claudeId || claudeId === ourId) return [ourId];
-  return cleared ? [claudeId] : [ourId, claudeId];
+ *  `/compact` continues the SAME conversation, so ours and every id since are all its prompts.
+ *  `/clear` ends one, and the repo's rule is that the ended conversation does not come back
+ *  (#1085): the caller empties the list at the clear, so what remains is the new conversation's
+ *  alone — and until its first hook there is nothing to show, which is the honest answer rather
+ *  than the ended conversation's prompts. */
+export function historyIdsFor(ourId: string, claudeIds: readonly string[] | undefined, cleared: boolean): string[] {
+  const seen = claudeIds ?? [];
+  if (cleared) return seen.filter((id) => id !== ourId);
+  return seen.includes(ourId) ? [...seen] : [ourId, ...seen];
 }
 
 /** These ids' prompts, oldest first, capped to the newest `limit`. Several ids are ONE session
  *  whose id was reissued mid-conversation, so the rows interleave in file order — which is time
- *  order, since the file is only ever appended to. */
-export const claudePromptsFor = (records: Record<string, unknown>[], sessionIds: readonly string[], limit: number = PROMPT_HISTORY_MAX): PromptEntry[] =>
-  collect(
+ *  order, since the file is only ever appended to.
+ *
+ *  A Set rather than `includes`: a much-compacted session carries a whole chain of ids, and this
+ *  runs per record over a file with tens of thousands of them. */
+export function claudePromptsFor(records: Record<string, unknown>[], sessionIds: readonly string[], limit: number = PROMPT_HISTORY_MAX): PromptEntry[] {
+  const wanted = new Set(sessionIds);
+  return collect(
     records,
     (record) => {
       const read = claudeHistoryPrompt(record);
-      return read && sessionIds.includes(read.sessionId) ? read.prompt : null;
+      return read && wanted.has(read.sessionId) ? read.prompt : null;
     },
     limit,
   );
+}
 
 /** codex has no history file and no hooks, so its rollout is the only record of a prompt. The
  *  `user_message` events are the ones a person sent: measured over 40 real rollouts, none of them
