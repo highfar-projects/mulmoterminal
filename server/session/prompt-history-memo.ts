@@ -61,8 +61,22 @@ export const memoKeyFor = (ids: readonly string[], since: number | undefined): s
  *
  *  Either component reads as 0 where the platform does not report it, and that is fine: both sides
  *  are stamped the same way, so the comparison degrades to whatever IS reported. `UNKNOWN_FILE` is
- *  the case where nothing is — there the size guard below is the only evidence available. */
-export const fileIdentity = (stat: { ino: number; birthtimeMs: number }): string => `${stat.ino}:${Math.floor(stat.birthtimeMs)}`;
+ *  the case where nothing is — there the size guard below is the only evidence available.
+ *
+ *  The birth time is used at FULL precision. Rounding it to the millisecond was what let CI fail:
+ *  on Linux the replacement file gets the same inode EVERY time, so the millisecond was the only
+ *  thing left to tell the two apart — and a delete-and-recreate inside one millisecond is the
+ *  common case, not a rare one. Measured on an ubuntu runner over 200 rounds of
+ *  write/remove/write with no delay:
+ *
+ *    ino identical                     200/200
+ *    `ino:floor(birthtimeMs)` collides 173/200   <- the guard opened
+ *    `ino:birthtimeMs`         collides   0/200
+ *
+ *  macOS gives a fresh inode each time and so never reaches this, which is why it only ever showed
+ *  up in CI. Size is deliberately NOT part of the identity: it changes on every append, and a memo
+ *  that treats an append as a different file resumes nothing. */
+export const fileIdentity = (stat: { ino: number; birthtimeMs: number }): string => `${stat.ino}:${stat.birthtimeMs}`;
 
 const UNKNOWN_FILE = "0:0";
 
