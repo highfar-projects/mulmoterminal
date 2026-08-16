@@ -153,10 +153,23 @@ non-null なレコード**。
 「One file per agent」）を理由にしていた。#1749 は 2026-08-16 にマージ済みなので
 その理由は消えたが、上の理由だけで分離は成立する。）
 
-読みは `forEachJsonlRecordIn(file, { from: Math.max(0, size - 4MB) })`。
+読みは `forEachJsonlRecordIn(handle, { from: Math.max(0, size - 4MB) })`。
 `readTailRecords` は同期（`readSync`）で 4MB に 24ms かかり、WebSocket でターミナルを流している
 同じプロセスを止めるので使わない。`transcript-fold` も使わない — 初回のコールドリードが全長で、
 実測 107MB の live セッションが実在する。
+
+**パスではなく `FileHandle` を渡すこと。** `forEachJsonlRecordIn` は #1750 で
+`JsonlSource = string | FileHandle` を取るようになり、その理由がここに直撃する
+（`server/infra/jsonl-file.ts` のコメント）:
+
+> A path is re-resolved on every read, so two reads of one path can land on two different files —
+> and a reader that folds a range and then checks something else about "the file" has no way to
+> say the two saw the same one. **A handle IS the file.**
+
+この読みは `stat` でサイズを取り、範囲を読み、境界が 0 個なら広げて**もう一度読む**ので、
+同じパスを 2〜3 回開き直す。その間に `/clear` が新しいファイルを作ったり `--resume` が
+差し替えたりすると、**サイズは A のもの・レコードは B のもの**という混ざった結果になる。
+1 つの handle を開いて全部そこから読み、`fstat` でサイズを取れば、読んだもの全部が同じ実体を指す。
 
 #### 窓より大きい 1 レコードで「最新 1 ターン」が消える（要対処）
 
