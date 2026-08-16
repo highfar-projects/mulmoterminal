@@ -389,16 +389,21 @@ async function scanHistoryOnce(id: string, ids: readonly string[], since: number
   try {
     const now = Date.now();
     const plan = resumePlan(memo, key, memo ? await anchorAt(handle, memo.offset) : null, now);
+    // What the fold is about to consume, pinned at a byte it will pass: the resume point when there
+    // is one, and otherwise the end as it stands right now. Re-read after the fold, it is what says
+    // the file was not rewritten UNDER the handle while the fold ran — the one thing holding it open
+    // cannot answer by itself. A fresh scan needs its own, since it has no memo anchor to re-check
+    // and would otherwise store a window from before the rewrite beside an anchor from after it
+    // (CodeRabbit, #1750).
+    const checkpoint = plan.reuse ? plan.from : (await handle.stat()).size;
+    const startedOn = plan.reuse && memo ? memo.anchor : await anchorAt(handle, checkpoint);
     // COPIED, never folded into in place: the memo is shared, so two overlapping reads of this
     // session would otherwise interleave into one array and count every appended prompt twice.
     const scan = plan.reuse ? copyClaudePromptScan(plan.reuse) : claudePromptScan(ids, PROMPT_SCAN_LIMIT, since);
     // `atLineStart` is what makes a resume safe: the offset came from a previous scan of this same
     // file, so it IS a line boundary and its record must be folded rather than dropped as a partial.
     const offset = await forEachJsonlRecordIn(handle, { from: plan.from, atLineStart: true }, (record) => foldClaudePrompt(scan, record));
-    // The bytes the plan was made on must still be there — a file rewritten IN PLACE changes them
-    // under the handle, and the fold above then read something other than what it was planned for.
-    const resumedOn: string | null = plan.reuse && memo ? memo.anchor : null;
-    if (resumedOn !== null && (await anchorAt(handle, plan.from)) !== resumedOn) return null;
+    if (startedOn === null || (await anchorAt(handle, checkpoint)) !== startedOn) return null;
     const anchor = await anchorAt(handle, offset);
     if (anchor === null) return null; // the file lost bytes this very scan consumed
     // The full scan underneath is THIS one when nothing was carried, and otherwise the one the

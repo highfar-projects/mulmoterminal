@@ -209,6 +209,33 @@ const raceOn = (swap: () => Promise<void>, opts: { before?: boolean } = {}) => {
   });
 };
 
+// Holding the file open answers a replaced PATH and nothing else: the bytes of the file itself can
+// still be rewritten UNDER the handle, and then the fold and the anchor stored beside it are reading
+// one inode at two different moments (CodeRabbit, #1750).
+//
+// Hooked on the fold's last read rather than on `open`, because that is the moment: the fold reaches
+// EOF exactly once — the only read that comes back empty — and everything after it is the checking.
+const raceAtEndOfFold = (swap: () => Promise<void>) => {
+  const realOpen = fs.open.bind(fs);
+  let swapped = false;
+  return vi.spyOn(fs, "open").mockImplementation(async (...args: Parameters<typeof fs.open>) => {
+    const handle = await realOpen(...args);
+    const read = handle.read.bind(handle);
+    // Defined rather than assigned: `read` is overloaded, and defineProperty takes the one shape
+    // this file actually calls without weakening the handle's type to do it.
+    const atEndOfFold = async (buffer: Buffer, offset: number, length: number, position: number) => {
+      const result = await read(buffer, offset, length, position);
+      if (!swapped && result.bytesRead === 0) {
+        swapped = true;
+        await swap();
+      }
+      return result;
+    };
+    Object.defineProperty(handle, "read", { value: atEndOfFold, configurable: true });
+    return handle;
+  });
+};
+
 describe("the file changed under a scan in progress", () => {
   const OLD = Array.from({ length: 5 }, (_, i) => line(SESSION, `old${i}`)).join("");
   // Bigger than the memo's offset, so a length check cannot be what saves either case.
@@ -303,5 +330,21 @@ describe("the file changed under a scan in progress", () => {
     expect(after).toEqual((await fullScan(SESSION)).map((p) => p.text));
     expect(after).not.toContain("old3");
     expect(after).not.toContain("old4");
+  });
+
+  // The case the handle cannot answer on its own: the same inode, rewritten in place, in the gap
+  // between the fold reaching EOF and the anchor being read for the memo. A FRESH scan is where it
+  // bites, because it carries no memo whose anchor could be re-checked — so the scan has to take its
+  // own before-and-after reading of the boundary it folded up to (CodeRabbit, #1750).
+  it("does not memoise a fresh scan whose file was rewritten in place under the fold", async () => {
+    await fs.writeFile(historyFile(), OLD);
+
+    const spy = raceAtEndOfFold(() => fs.writeFile(historyFile(), NEW)); // same inode, new content
+    await resumedScan(SESSION); // no memo yet, so this one scans from zero
+    spy.mockRestore();
+
+    const after = (await resumedScan(SESSION)).map((p) => p.text);
+    expect(after).toEqual((await fullScan(SESSION)).map((p) => p.text));
+    expect(after.some((t) => t.startsWith("old"))).toBe(false);
   });
 });
