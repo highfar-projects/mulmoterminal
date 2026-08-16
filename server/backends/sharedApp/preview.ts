@@ -41,7 +41,9 @@ import { planAppViewTiers, type TierPlan } from "./appViews.js";
 import { publicFormOf, type PublicForm } from "./publicForm.js";
 import { declaredView, readAppViewFile } from "./publicView.js";
 import { isRecord } from "../../../common/isRecord.js";
-import { writableFields } from "@receptron/sharedapp/view";
+// Both from `/view`, which is where the PARENT's vocabulary lives — and where the read-back has to
+// be: the root entry reaches the compiler, and the compiler imports core's server half at runtime.
+import { projectedWritesOf, viewerFor, writableFields } from "@receptron/sharedapp/view";
 import {
   previewPageKey,
   type PreviewDataset,
@@ -243,9 +245,17 @@ export async function previewSharedApp(root: string, opts: SharedAppOptions = {}
 
   const publicHtml = page !== null && page.ok ? page.view.html : null;
   const publicPages: PreviewPage[] = publicHtml === null ? [] : [{ id: PUBLIC_PAGE_ID, html: publicHtml, audience: "public" }];
-  const tierPages: PreviewPage[] = tiers.plans.flatMap((plan) =>
-    plan.pages.map((tierPage): PreviewPage => ({ id: tierPage.id, html: tierPage.html, audience: plan.tier })),
-  );
+  const tierPages: PreviewPage[] = tiers.plans.flatMap((plan) => {
+    // The author, as this tier's projection resolves them. `viewerFor` is the
+    // package's, and mulmoserver calls the same one with the same projection —
+    // which is the whole point: while the pane had only the PUBLIC bridge, every
+    // roster page previewed here was handed `{}` and drew no buttons at all.
+    // Read back through the PACKAGE's reader, which is the one mulmoserver uses on the document it
+    // gets off Firestore. A looser read here would let the preview draw a control production drops
+    // — the preview being looser than production, the one thing it must never be.
+    const viewer = viewerFor(projectedWritesOf(plan.config), handle.email, plan.tier);
+    return plan.pages.map((tierPage): PreviewPage => ({ id: tierPage.id, html: tierPage.html, audience: plan.tier, viewer }));
+  });
   const pages = [...publicPages, ...tierPages];
 
   // WHICH collections, asked of each page's own PROJECTION rather than of the declaration —
