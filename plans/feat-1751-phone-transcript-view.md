@@ -119,6 +119,11 @@ keys: ['signature', 'thinking', 'type']
   出たと分かるようにする
 - `foldTranscriptView(scan, record)` — ターン境界で区切り、論理行 250 を超えたら**古いターンごと**
   捨てる。ただし**残り 1 ターンなら捨てない**
+- **最初の境界より前に来たレコードは捨てる。** 窓は必ずターンの途中から始まるので、先頭には
+  必ず「前のターンの尻尾」が付く。これを合成ターンに入れると**話者の分からない断片**が頭に出るし、
+  250 行バジェットに数えると**捨てられない断片が最新ターンを押し出す**。捨てるのが唯一
+  一貫する選択で、決定 1 の単位が「ターン」である以上、ターンでないものは単位に乗らない
+  （Codex round 3。どれを選ぶかで出力が変わるので、明示して spec で固定する）
 - `sessionTimeline` の `foldTimeline`（`session-reads.ts:195`）と同じ形。窓が行数でターン単位という
   点だけが違う
 
@@ -182,6 +187,34 @@ non-null なレコード**。
 **`server/backends/remoteHost/handlers/terminalSession.ts`** に `getTerminalTranscript`。
 `getTerminalScreen` と同じ検証。MulmoClaude に対応物は無い（`terminalSession.ts` の冒頭が
 「that host has no PTY table to look at」と書いているとおり）ので、命名はこちらの自由。
+
+**cwd はハンドラで解決しない。** `sessionTranscriptView(cwd, id)` は cwd を要るが、ハンドラが
+受け取るのは `sessionId` だけ。既存の `captureTerminalScreen` が同じ形で、dep の型は
+`(sessionId: string) => Promise<SessionScreen>`（`handlers/deps.ts:27`）、cwd の解決は
+`server/index.ts` 側の実装が `ptys.get(id)?.cwd ?? sessionCwd(id) ?? ""`（`server/index.ts:682`）で
+やっている。**同じ形にする** — dep を `captureTerminalTranscript: (sessionId: string) =>
+Promise<TranscriptView>` にして、cwd はその実装が同じ 1 行で解決する。ホストの作業ディレクトリを
+使うと**別プロジェクトのセッションで違う transcript を読む**（Codex round 3）。
+
+### wire の形（これを決めずに phone は書けない）
+
+`TranscriptView` は**判別可能なユニオン**にする。「読めるか」を真偽値 1 つにすると、
+「まだ無い」「`/clear` で終わった」「大きすぎる」が phone から区別できず、3 つとも同じ
+空表示になる。
+
+```ts
+type TranscriptView =
+  | { status: "ok"; turns: TranscriptTurn[]; truncated: boolean }
+  | { status: "none" }      // transcript がまだ無い（新しいセッション、claude 以外）
+  | { status: "cleared" }   // /clear で終わった会話。凍結されている
+  | { status: "too-large" }; // 上限まで広げても境界が見つからなかった
+```
+
+- `truncated` は 250 行バジェットで古いターンを捨てたかどうか。phone は「これより前は出せない」と
+  1 行出す。無いと**完全な履歴と切られた履歴が見分けられない**（#1749 が `PROMPT_SCAN_LIMIT` で
+  同じ問題を踏んでいる — 窓ちょうどの件数と、それを超えて切った件数が区別できなかった）
+- `status` を持たない旧ホストは phone 側で `"none"` として扱う（mulmoserver の後方互換の慣習）
+- **mulmoserver 側のコマンド定義もこの PR の範囲**。`getTerminalScreen` の隣に足す
 
 ### スマホ（mulmoserver）
 
@@ -277,12 +310,33 @@ Codex round 1 が挙げた端ケースも入れる。「境界がファイル先
 - **未知の content ブロック**が `kind: "unknown"` の行として出る（無視されない）
 - **読んでいる最中の追記** — 末尾が途中まで書かれた JSON 行で終わる場合
 
+- **最初の境界より前のレコードが捨てられ、250 行バジェットに数えられない**
+- **窓に境界が入っているとき、最新ターンが「完全に」返る。** 停止条件は「境界が 1 つ以上」だが、
+  保証は「最新 1 ターンが必ず出る」。この 2 つが等しいのは、**最後の境界より後ろには境界が無い**から
+  — 窓に境界が 1 つでもあれば最後の境界も窓に入り、その後ろは全部窓の中にある。逆に最後の境界が
+  窓の外なら境界は 0 個になり広げる。**この関係はテストで固定する**（古い境界＋途中から始まる
+  最新ターン、という並びで確かめる）。停止条件と保証がずれていないことは読んで分かる話ではない
+  （Codex round 3）
+
 ハンドラの spec（`test/server/backends/remoteHost/`）:
 
-- `clearedTranscripts` にマークがあるとき「transcript は無い」と答える —
+- `clearedTranscripts` にマークがあるとき **`status: "cleared"`** を返す —
   ここが抜けると #1085 の違反が黙って通る
 - **`clearedTranscripts` を素の `.has()` で見ていること**。per-read の `stat` を足す変更が入ったら
   他の読み手との食い違いとして落ちるようにする
+- **4 つの `status` が区別されること** — `ok` / `none` / `cleared` / `too-large`。
+  真偽値 1 つに退化していたら落ちる
+- **cwd の解決がホストの作業ディレクトリではなくセッションのものであること**
+
+phone 側の spec（mulmoserver、`test/<area>/test_*.ts`。コンポーネントは
+`test/components/` の「ソースを読んで regex で固定する」形に合わせる）:
+
+- 既定が画面で、localStorage が空でも transcript にならない
+- localStorage の**キーが 1 つ**で、セッション id を含まない
+- `status` が `ok` 以外のとき画面へフォールバックする（4 つとも）
+- 更新が既存の `REFRESH_INTERVAL_MS` を共有している（独自の定数を持たない）
+- `kind: "unknown"` の行が**描画される**（無視されない）
+- `truncated` のとき「これより前は出せない」を出す
 
 `test/server/backends/remoteHost/` にハンドラの spec。`clearedTranscripts` にマークがあるとき
 「transcript は無い」と答えることを固定する — ここが抜けると #1085 の違反が黙って通る。
