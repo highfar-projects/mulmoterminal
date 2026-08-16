@@ -25,6 +25,7 @@ import GuiPanel from "./GuiPanel.vue";
 import CollectionsPane from "./CollectionsPane.vue";
 import GithubPane from "./GithubPane.vue";
 import ToolsPane from "./ToolsPane.vue";
+import PromptsPane from "./PromptsPane.vue";
 import {
   clampPaneWidth,
   clampSecondary,
@@ -51,7 +52,7 @@ import type { AnswerFailure } from "../../common/askQuestion";
 import { createQuestionBox } from "../composables/questionBox";
 import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
 import { isRecord } from "../../common/isRecord";
-import type { SessionAgent, TerminalAgent } from "../../common/sessionAgent";
+import { asTerminalAgent, type SessionAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { buildCanvasCard, seedCanvasCard, hasStoredCard, absoluteUnder } from "../composables/canvasOpenFile";
 import { jsonBody } from "../jsonBody";
 import { isUnknownArray } from "../../common/isUnknownArray";
@@ -438,6 +439,11 @@ const expandedCwd = computed(() => props.cells.find((c) => c.uid === props.expan
 // yet (a launcher, a command cell), which both panes already render as empty.
 const expandedSessionId = computed(() => props.cells.find((c) => c.uid === props.expandedUid)?.session ?? null);
 
+// Which log the Prompts pane reads: claude keeps what a person typed in its own history file,
+// codex only in its rollout, and the server needs to be told which (#1748). Absent means Claude —
+// the same default `Cell.agent` encodes by omission.
+const expandedAgent = computed(() => asTerminalAgent(props.cells.find((c) => c.uid === props.expandedUid)?.agent));
+
 // A drawing that lands on the cell you are already looking at opens the Canvas by itself. The
 // agent calling presentDocument IS its answer to what was asked; with the pane closed that answer
 // left no trace but a count on a chip, which reads as a notification rather than as the reply, and
@@ -711,6 +717,7 @@ const gridCellEvents = (cell: Cell) => ({
   "toggle-canvas": () => toggleRightPane("canvas", cell.uid),
   "open-canvas": () => openCanvasFor(cell.uid),
   "toggle-tools": () => toggleRightPane("tools", cell.uid),
+  "toggle-prompts": () => toggleRightPane("prompts", cell.uid),
   "toggle-collections": () => toggleRightPane("collections", cell.uid),
   "toggle-github": () => toggleRightPane("github", cell.uid),
   close: () => emit("close", cell.uid),
@@ -1305,6 +1312,21 @@ watch(
         <ToolsPane
           v-else-if="rightPane === 'tools'"
           :session-id="expandedSessionId"
+          :expanded="paneFull"
+          :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
+          class="border-l border-border"
+          @toggle-expand="togglePaneExpanded"
+          @close="setRightPane(null, paneUid)"
+        />
+        <!-- What this session was ASKED for, against the tools pane's what it then ran. Follows
+             the enlarged cell's session like those two, and needs its AGENT as well: the prompts
+             live in claude's own history file or in codex's rollout, and only the cell knows
+             which (#1748). -->
+        <PromptsPane
+          v-else-if="rightPane === 'prompts'"
+          :session-id="expandedSessionId"
+          :cwd="expandedCwd"
+          :agent="expandedAgent"
           :expanded="paneFull"
           :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
           class="border-l border-border"

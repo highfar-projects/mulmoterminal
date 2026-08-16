@@ -1,0 +1,105 @@
+// The prompts the USER typed at a session, newest last — the other half of the activity
+// timeline, which records what the agent ran rather than what it was asked for.
+//
+// Read from the log that holds what a person actually typed, which for claude is NOT its
+// transcript. Measured on a real session (#1748): a prompt sent WHILE a turn was running is
+// written to ~/.claude/history.jsonl within milliseconds but never appears in the transcript as a
+// `type:"user"` record — it arrives as `queue-operation` / `attachment` — while the text a skill
+// injects DOES appear there as a user record, and is not matched by isInjectedPrompt. So the
+// transcript drops the interruptions (the very prompts a user forgets giving) and adds text nobody
+// typed. history.jsonl carries one line per submission, and nothing else.
+//
+// Pure: the reading and the agent branch live in session-reads.ts.
+import { isRecord } from "../../common/isRecord.js";
+import { readString } from "../../common/readString.js";
+import { codexEventPayload } from "../agents/codex-events.js";
+import { userPromptText } from "./transcript.js";
+
+/** One prompt, as the pane renders it. `at` is epoch ms, or null when the record carried no
+ *  readable time — a prompt with an unreadable clock is still a prompt, so the TIME is what goes
+ *  missing rather than the line. */
+export interface PromptEntry {
+  at: number | null;
+  text: string;
+}
+
+/** Enough to recognise a prompt again, which is what this is for. Deliberately far above
+ *  LAST_PROMPT_CAP (200): that one keeps a header to one line, this one is read back. */
+export const PROMPT_TEXT_CAP = 1000;
+
+/** How many the pane is served. The ask was "10, maybe 20"; the rest is scrollback. */
+export const PROMPT_HISTORY_MAX = 100;
+
+const cap = (text: string): string => (text.length > PROMPT_TEXT_CAP ? `${text.slice(0, PROMPT_TEXT_CAP)}…` : text);
+
+// Trivial acks ("ok", "はい") are kept. isTrivialPrompt also calls "merge" / "続けて" trivial —
+// correct for a header, which wants the task, and wrong here, where those ARE the instruction.
+const entry = (at: number | null, text: unknown): PromptEntry | null => {
+  const body = readString(text).trim();
+  return body ? { at, text: cap(body) } : null;
+};
+
+/** Epoch ms from either shape the two logs use: claude's number, codex's ISO string. */
+function epochMs(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return null;
+}
+
+/** One ~/.claude/history.jsonl line: `{display, timestamp, project, sessionId}`. The session id is
+ *  required — it is what scopes the file to one cell — and a record without it is dropped rather
+ *  than shown under whichever session happens to be asking. */
+export function claudeHistoryPrompt(record: Record<string, unknown>): { sessionId: string; prompt: PromptEntry } | null {
+  const sessionId = readString(record.sessionId);
+  if (!sessionId) return null;
+  const prompt = entry(epochMs(record.timestamp), record.display);
+  return prompt ? { sessionId, prompt } : null;
+}
+
+// The three readers below differ only in which records they recognise; keeping the WINDOW in one
+// place is what makes "oldest first, newest `limit` kept" the same answer for every log.
+const collect = (records: Record<string, unknown>[], read: (record: Record<string, unknown>) => PromptEntry | null, limit: number): PromptEntry[] =>
+  records.flatMap((record) => read(record) ?? []).slice(-limit);
+
+/** This session's prompts, oldest first, capped to the newest `limit`. */
+export const claudePromptsFor = (records: Record<string, unknown>[], sessionId: string, limit: number = PROMPT_HISTORY_MAX): PromptEntry[] =>
+  collect(
+    records,
+    (record) => {
+      const read = claudeHistoryPrompt(record);
+      return read && read.sessionId === sessionId ? read.prompt : null;
+    },
+    limit,
+  );
+
+/** codex has no history file and no hooks, so its rollout is the only record of a prompt. The
+ *  `user_message` events are the ones a person sent: measured over 40 real rollouts, none of them
+ *  carried injected text (codex files its environment context under other payload types). */
+export const codexPrompts = (records: Record<string, unknown>[], limit: number = PROMPT_HISTORY_MAX): PromptEntry[] =>
+  collect(
+    records,
+    (record) => {
+      const payload = codexEventPayload(record, "user_message");
+      return payload ? entry(epochMs(record.timestamp), payload.message) : null;
+    },
+    limit,
+  );
+
+/** The transcript fallback, so a history.jsonl this cannot read — a format change upstream, or a
+ *  session claude wrote before that file existed — leaves the pane with SOMETHING rather than
+ *  silently empty. Worse than the real thing by construction (it is missing the interruptions and
+ *  carries injected text that `userPromptText` does not recognise), which is why it is the
+ *  fallback and not the source. */
+export const transcriptPrompts = (records: Record<string, unknown>[], limit: number = PROMPT_HISTORY_MAX): PromptEntry[] =>
+  collect(
+    records,
+    (record) => {
+      if (record.type !== "user" || !isRecord(record.message)) return null;
+      const text = userPromptText(record.message.content);
+      return text === null ? null : entry(epochMs(record.timestamp), text);
+    },
+    limit,
+  );
