@@ -47,8 +47,9 @@ issue #1750 では「末尾から逆走査し、必要な件数が揃った時�
 interface HistoryMemo {
   /** このメモがどの問いに対する答えか。変わったら作り直す。 */
   key: string;
-  /** どのファイルについての答えか（inode ＋ birthtime）。変わったら作り直す。 */
-  identity: string;
+  /** どのファイルについての答えか（inode ＋ birthtime）。変わったら作り直す。
+   *  birthtime を報告しない環境では null＝名乗れないので、レジュームしない。 */
+  identity: string | null;
   /** 前回の走査が止まった行頭 offset。ここから再開し、同時に長さガードも兼ねる。 */
   offset: number;
   /** スライディング窓の状態そのもの（既存の ClaudePromptScan）。 */
@@ -107,8 +108,10 @@ inode だけの比較は「ガードに見えて、ガードではない」— �
 
 - `memoKeyFor(ids, since)` — 問いの同一性
 - `resumePlan(memo, key, {ino, birthtimeMs, size})` — `{ from, reuse }` を返す純関数。
-  「作り直す／続きから」の判断だけを持ち、fs には触らない。**ここがテストの主戦場**
-- `fileIdentity({ino, birthtimeMs})` — どのファイルについての答えか
+  「作り直す／続きから」の判断だけを持ち、fs には触らない。**ここがテストの主戦場**。
+  名乗れないファイル（identity が `null`）には `{ from: 0, reuse: null }` を返す
+- `fileIdentity({ino, birthtimeMs})` — どのファイルについての答えか。`string | null` を返し、
+  birthtime を報告しない環境では `null`（＝ inode だけの比較には退避しない）
 
 **`server/session/session-reads.ts`**
 
@@ -123,7 +126,8 @@ inode だけの比較は「ガードに見えて、ガードではない」— �
 ## テスト
 
 - `resumePlan` の純関数テスト: 初回 / 続き / offset==size（新規なし）/ key が変わった /
-  identity が変わった（inode 違い・inode 再利用）/ identity 不明時の退避 / 長さガード
+  identity が変わった（inode 違い・inode 再利用・同一ミリ秒内の再作成）/ 名乗れないとき（birthtime
+  なし）はレジュームしない / 長さガード
 - 実ファイルを使う結合テスト: 履歴を書く → 読む → **追記** → 読む で、
   ① 2 回目が追記分だけを読むこと（offset が進む）② 結果が全走査と一致すること
 - **全走査との等価性**: 同じ入力に対し「メモあり」と「メモなし」で答えが一致することを、
