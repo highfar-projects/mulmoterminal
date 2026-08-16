@@ -29,6 +29,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isRecord } from "../../../common/isRecord.js";
 import type { PreviewAudience, PreviewDataset } from "../../../common/sharedAppPreview.js";
+import type { Viewer } from "@receptron/sharedapp/view";
 import { previewPageKey } from "../../../common/sharedAppPreview.js";
 import { previewSharedApp } from "./preview.js";
 import { VIEW_MOUNT, HARNESS_HTML, type HarnessObservation } from "./headlessHarness.js";
@@ -46,6 +47,13 @@ export interface HeadlessPageInput {
    *  which does not switch the parent's check off but makes it refuse everything with
    *  `unknown-collection`, blaming a declaration that is correct. */
   submit: Record<string, { createFields: string[] }> | null;
+  /** WHO the author is to this page and what they may change, for a member or participant page.
+   *
+   *  `undefined` for a public one, and that is what SELECTS the parent in the harness — the same
+   *  decision the address makes in production. A member page run without it gets the public parent,
+   *  which sends no `viewer` at all: the page draws none of its buttons and the report says its
+   *  controls were not there, which is a false account of a page that is fine. */
+  viewer?: Viewer | undefined;
 }
 
 /** What one press produced. */
@@ -328,9 +336,15 @@ interface Driver {
    *  A blocked form submission arrives this way and by no other: the browser refuses, so there is
    *  no exception, no rejected promise, and nothing for the page to catch. */
   noise: () => string[];
+  /** Questions of OURS this document broke, since the last `mount`. Kept apart from `noise`
+   *  because the two are read on different clocks: page noise is sliced from the moment before a
+   *  press, so anything that failed while the inputs were being filled falls outside the slice —
+   *  and on the path where the control is gone there is no slice at all. Cleared by `mount`. */
+  askFailures: () => string[];
   evaluate: (script: string, target?: Frame) => Promise<unknown>;
   decline: () => Promise<void>;
-  /** Something this document was asked ran out of time. Cleared by `mount`. */
+  /** Something this document was asked ran out of time. Cleared by `mount` — so a caller that
+   *  mounts more than once (`reportPage` does, once per press) has to accumulate it. */
   stalled: () => boolean;
 }
 
@@ -399,6 +413,7 @@ async function openHarness(page: Page, origin: string): Promise<void> {
 async function openDriver(browser: Browser, origin: string): Promise<Driver> {
   const page = await browser.newPage();
   let noise: string[] = [];
+  let askFailures: string[] = [];
   page.on("console", (message) => noise.push(message.text()));
   page.on("pageerror", (err) => noise.push(messageOf(err)));
   await openHarness(page, origin);
@@ -415,8 +430,20 @@ async function openDriver(browser: Browser, origin: string): Promise<Driver> {
     // So it goes where the browser's own complaints already go, and travels the path they travel:
     // per mount into `errors`, per press into that press's `errors`. Said as OUR question failing,
     // because the reader of that list is the author and the list is otherwise their page's words.
+    //
+    // WHICH mount it is said to is decided HERE, when the question is put, not when the answer
+    // comes back. A question that ran out of time is abandoned by `withDeadline` but not by the
+    // browser: it is still outstanding, and Puppeteer rejects it later — when the frame it was
+    // asked of is replaced by the NEXT mount. Reaching for the current arrays at that moment
+    // files page A's failure under page B, or under a press that had nothing to do with it. The
+    // arrays this mount is reading are captured instead, so a late rejection lands in one nobody
+    // holds any more and is discarded, which is what a report about page B should say about it.
+    const pageSink = noise;
+    const askSink = askFailures;
     const asked = (target ?? page).evaluate(script).catch((err: unknown) => {
-      noise.push(`the preview could not put a question to this page: ${messageOf(err)}`);
+      const line = `the preview could not put a question to this page: ${messageOf(err)}`;
+      pageSink.push(line);
+      askSink.push(line);
       return undefined;
     });
     // Only the deadline moves this flag.
@@ -429,6 +456,7 @@ async function openDriver(browser: Browser, origin: string): Promise<Driver> {
   };
   return {
     evaluate,
+    askFailures: () => askFailures,
     stalled: () => stalled,
     frame: () => page.frames().find((candidate) => candidate.url() === "about:srcdoc") ?? null,
     noise: () => noise,
@@ -438,10 +466,13 @@ async function openDriver(browser: Browser, origin: string): Promise<Driver> {
     },
     mount: async (input) => {
       noise = [];
+      askFailures = [];
       stalled = false;
       // The render is awaited on ITS OWN deadline (`evaluate`'s), because what it waits for is the
       // frame's `load` — which a script that never returns never reaches.
-      await evaluate(`window.__preview.render(${JSON.stringify({ html: input.html, datasets: input.datasets, submit: input.submit })})`);
+      await evaluate(
+        `window.__preview.render(${JSON.stringify({ html: input.html, datasets: input.datasets, submit: input.submit, viewer: input.viewer ?? null })})`,
+      );
       await page.waitForFunction("window.__preview.observe().readied", { timeout: LIMITS.readyMs }).catch(() => undefined);
       await new Promise((resolve) => setTimeout(resolve, LIMITS.settleMs));
     },
@@ -477,7 +508,19 @@ async function pressOne(driver: Driver, input: HeadlessPageInput, index: number)
   const labels = asStrings(await driver.evaluate(LABELS, frame));
   const label = labels[index];
   if (label === undefined) {
-    const gone: HeadlessPress = { label: `control ${index + 1}`, notClickable: true, submitted: null, refused: [], blockedFormSubmission: false, errors: [] };
+    // WITH the failures of the two questions above. This path is reached when `LABELS` came back
+    // empty — and `LABELS` REJECTING comes back empty too, so a page that breaks the survey and a
+    // page with nothing to press arrive here identically. Reported with an empty `errors` list,
+    // the first one reads as the second: a control that is simply not there, with no sign that the
+    // run never got to look.
+    const gone: HeadlessPress = {
+      label: `control ${index + 1}`,
+      notClickable: true,
+      submitted: null,
+      refused: [],
+      blockedFormSubmission: false,
+      errors: [...new Set(driver.askFailures())],
+    };
     return { press: gone, controls: labels.length };
   }
 
@@ -517,7 +560,11 @@ async function pressOne(driver: Driver, input: HeadlessPageInput, index: number)
     submitted: after.submitted[before.submitted.length] ?? null,
     refused: after.refused.slice(before.refused.length),
     blockedFormSubmission: noise.some((line) => line.includes(BLOCKED_FORM)),
-    errors: [...new Set(noise.filter((line) => !line.includes(BLOCKED_FORM)))],
+    // The page's own words from the press window, PLUS every question of ours this mount broke —
+    // `FILL_INPUTS` and `LABELS` are put before the window opens, so their failures are not in the
+    // slice, and losing them here is how a page that answered nothing is reported as a page that
+    // did nothing. Deduplicated, so a failure inside the window is not said twice.
+    errors: [...new Set([...noise.filter((line) => !line.includes(BLOCKED_FORM)), ...driver.askFailures()])],
   };
   return { press, controls: labels.length };
 }
@@ -542,6 +589,11 @@ async function reportPage(driver: Driver, input: HeadlessPageInput): Promise<Hea
   // reason no control ever appears — captured before this line, it was reported nowhere.
   // `FILL_INPUTS`'s own failures are swallowed inside it, so nothing here is the harness's.
   const errors = [...new Set(driver.noise())];
+  // READ NOW, and kept. `mount` clears the flag, and every press below mounts again — so asking
+  // the driver at the end of this function answers for the last press alone. A page whose
+  // `innerText` getter never returns but whose buttons answer normally stalls HERE and nowhere
+  // after, and would be reported as responsive with an empty screen and no reason given.
+  let unresponsive = driver.stalled();
 
   // The survey is only a STARTING estimate of how many controls there are: filling the inputs can
   // add some (see `pressOne`), and a loop bounded by the survey would then press the newcomer,
@@ -551,6 +603,7 @@ async function reportPage(driver: Driver, input: HeadlessPageInput): Promise<Hea
   let controls = labels.length;
   for (let index = 0; index < Math.min(controls, LIMITS.presses); index += 1) {
     const result = await pressOne(driver, input, index);
+    unresponsive = unresponsive || driver.stalled();
     if (result === null) break;
     presses.push(result.press);
     controls = Math.max(controls, result.controls);
@@ -560,7 +613,7 @@ async function reportPage(driver: Driver, input: HeadlessPageInput): Promise<Hea
     audience: input.audience,
     readied: observed.readied,
     stateDelivered: observed.stateDelivered,
-    unresponsive: driver.stalled(),
+    unresponsive,
     submittedOnLoad: observed.submitted.length,
     liveForms,
     text,
@@ -620,6 +673,7 @@ export async function headlessPreview(root: string): Promise<HeadlessRun> {
     audience: page.audience,
     html: page.html,
     datasets: preview.datasets[previewPageKey(page.audience, page.id)] ?? {},
+    ...(page.viewer === undefined ? {} : { viewer: page.viewer }),
     submit: Object.keys(preview.submit).length > 0 ? preview.submit : null,
   }));
   return runPagesHeadless(inputs);

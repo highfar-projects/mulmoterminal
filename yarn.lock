@@ -1884,10 +1884,10 @@
   dependencies:
     "@mulmoclaude/core" "^3.0.0"
 
-"@mulmoclaude/collection-plugin@^3.1.0":
-  version "3.1.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/collection-plugin/-/collection-plugin-3.1.0.tgz#a4394ed06ed103e476b346615bd0701c7021a2f9"
-  integrity sha512-3kk8WB9DBKtTcHXv/q+JR44YiVOFcAGvFtHMAn40uL0n9VCS0brftBET8jcYt+N2semTrziNJlV+sA4Zk+Ti6Q==
+"@mulmoclaude/collection-plugin@^4.2.0":
+  version "4.2.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/collection-plugin/-/collection-plugin-4.2.0.tgz#b7e2136cadbd95caaeb46819696777aafb9e815e"
+  integrity sha512-Wj9KA84xQPQYzOc60Ows+w8ckILf15I5Dj+0iG/Ti4VKHmCMfjOo5+l/xKCZeB7ipnV05pQF1BVL962F6G6VSQ==
   dependencies:
     vuedraggable "^4.1.0"
     zod "^4.4.3"
@@ -1897,10 +1897,10 @@
   resolved "https://registry.yarnpkg.com/@mulmoclaude/common/-/common-1.2.0.tgz#ad2d696a6a06ea47c078e45d8d7f6f41b53d4aeb"
   integrity sha512-Y459jz/3fGY+QPSOtRUpq+JA1v839qlhaKmuz6LohoJp0nneP9Eot+gsn7Yl8RKhEGqxhfmJaCDa28bWK7RhCA==
 
-"@mulmoclaude/core@4.1.1":
-  version "4.1.1"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/core/-/core-4.1.1.tgz#3523d2d24a7cd8686b65b6d283b7c5cc01020a70"
-  integrity sha512-kmhTCp2rPi2MrTmplyTBF1aHtyesJneB3Va2iR1Es6fLqqCSqcyx7sLqFKfnIuSDZFXMOtY7FD8F581+4m0PhQ==
+"@mulmoclaude/core@4.2.0":
+  version "4.2.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/core/-/core-4.2.0.tgz#3c131dd183b60fb335f8ec44a548ed3cec229f26"
+  integrity sha512-+At8gvGE+Y7AytUOKGUTTXdBZ+dzq5CiuFVNt/u2SZLkFyGu10NOdkPFzv/+PxQhm85Jl1cy8hiqThtqtA0Jyg==
   dependencies:
     "@duckdb/node-api" "^1.5.5-r.2"
     "@mulmoclaude/common" "^1.2.0"
@@ -2302,10 +2302,10 @@
     modern-tar "^0.8.0"
     yargs "^18.0.0"
 
-"@receptron/sharedapp@^0.6.0":
-  version "0.6.0"
-  resolved "https://registry.yarnpkg.com/@receptron/sharedapp/-/sharedapp-0.6.0.tgz#dcb9f1013448307616b347635abe7535bd8ec705"
-  integrity sha512-PYoMrXBjYI5OhkNEDYOaMYprafyRz95lfYNTthY/qjJmBKG2C2Qm5EosMPxbvsMXzcyS0rL9/fGHrXWJc4oAwQ==
+"@receptron/sharedapp@^0.7.2":
+  version "0.7.2"
+  resolved "https://registry.yarnpkg.com/@receptron/sharedapp/-/sharedapp-0.7.2.tgz#6a0fef957f70a4a2b905120852c7dde5f5861334"
+  integrity sha512-b5ss3WVXwRgpIKQ1OhQKiGLtTUiFCYaYGMHQoFdZXItJOE/ggCofQpov0jx0i06+zcp136aIdRW7YrcXk96XWQ==
   dependencies:
     zod "^4.1.13"
 
