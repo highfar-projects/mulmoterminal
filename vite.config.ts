@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import tailwindcss from "@tailwindcss/vite";
+import { HTML_FILE_MOUNT } from "@mulmoclaude/html-plugin";
 
 // Dev ports. The backend (Express) listens on PORT (default 34567, see
 // server/index.ts); Vite's own dev server uses CLIENT_PORT — a SEPARATE port, since
@@ -60,6 +61,16 @@ export default defineConfig({
       // presentHtml page serving (the View's iframe src). Without this, the dev
       // Vite catch-all returns index.html instead of the HTML artifact.
       "/artifacts": {
+        target: `http://localhost:${BACKEND_PORT}`,
+        changeOrigin: true,
+      },
+      // The other half of the same iframe src: presentHtml can be POINTED at a page
+      // outside `artifacts/`, and `htmlFileUrl()` sends those here instead
+      // (server/backends/html.ts mountHtmlFileRoute). The constant rather than a
+      // literal, because this mount arrived long after the entry above and nothing
+      // brought it here: the failure is silent — index.html answers 200 and the iframe
+      // renders blank (#1758).
+      [HTML_FILE_MOUNT]: {
         target: `http://localhost:${BACKEND_PORT}`,
         changeOrigin: true,
       },
