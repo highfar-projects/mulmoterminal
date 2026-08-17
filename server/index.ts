@@ -77,6 +77,7 @@ import {
   unplacedSessionsHydrated,
 } from "./session/registry.js";
 import { hydrateClearedTranscripts } from "./session/cleared-transcripts.js";
+import { sessionTranscriptView } from "./session/transcript-view-read.js";
 import { runWithHiddenMarker } from "./session/hiddenMarker.js";
 import { registerCompletionHook } from "./session/completion-hooks.js";
 import { spawnScheduledWorker } from "./session/scheduled-chat.js";
@@ -675,11 +676,14 @@ const workByCwd = async (cwds: readonly string[]): Promise<Map<string, SessionWo
 // favicon — so the two clients never disagree about which image a project has.
 const dirIconSources: DirIconSources = { iconOf: dirIconFor, readIcon: readIconFile };
 
+// Where a session runs, for everything the phone is told about it. A live PTY knows where claude
+// actually runs, so it wins; a session that outlived this process has none, which is what the
+// remembered cwd is for (#1021). ONE definition, because the picker's row and the transcript must
+// name the same project — two copies would drift and the phone would read another cell's
+// conversation under this row's title (CodeRabbit, PR #1776).
+const cwdOfSession = (id: string): string => ptys.get(id)?.cwd ?? sessionCwd(id) ?? "";
+
 const remoteHostListTerminalSessions = async () => {
-  // A live PTY knows where claude actually runs, so it wins. A session that outlived this process
-  // has none — that is what the remembered cwd is for (#1021), and without it the phone shows the
-  // row with no directory and no work item.
-  const cwdOfSession = (id: string) => ptys.get(id)?.cwd ?? sessionCwd(id) ?? "";
   const work = await workByCwd([...new Set([...ptys.keys(), ...tmuxListSessionIds()])].map(cwdOfSession));
   await sessionMemosHydrated; // the memo IS the phone's row title when there is one
   // Both unplaced logs, because a session waiting for a cell is one the phone may list — and the
@@ -793,6 +797,9 @@ initRemoteHostBackend({
   launchTerminal: remoteHostLaunchTerminal,
   listTerminalSessions: remoteHostListTerminalSessions,
   captureTerminalScreen: remoteHostCaptureTerminalScreen,
+  // The phone's transcript view (#1751), through the picker's own cwd lookup — the transcript is
+  // per PROJECT, so the host's workspace would answer with another cell's session.
+  captureTerminalTranscript: (sessionId) => sessionTranscriptView(cwdOfSession(sessionId), sessionId),
   writeToSession,
   // The same two functions the browser's pane reaches through /api/question (#1685): one place
   // decides whether a dialog is still open, and one place decides which bytes reach the PTY.
