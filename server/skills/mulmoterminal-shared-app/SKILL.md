@@ -239,16 +239,66 @@ state (quoted, in the author's own words), a `<form>` in the live document, a bu
 nothing, a submission the declaration refused. **Run it after writing or editing any view, and
 again before you publish.** A page that has never been through it is a page nobody has run.
 
-**It writes NOTHING**, and that is a decision rather than an omission. Accepting a submission would
-put a real record in a real app, and that needs proof that the CLICK caused it — a page can submit
-from a timer, from `onState`, or from a promise settling, and no amount of measuring before and
-after a press tells those apart. The proof has to come from the runtime injected into the page,
-which is in the same realm as the event; it does not mark submissions yet, so nothing is written.
-The machinery is in place and turns on when it does.
+**By default it writes nothing — and that is the mode to use after every edit.** It still loads every
+page, presses every control and reports everything; submissions are simply reported and left
+unwritten. Reach for this one freely.
 
-So the report proves the page draws, the handshake completes, the records arrive, and **a press
-reaches the parent as a submission the declaration accepts**. It does NOT tell you what the deployed
-rules would say about that submission.
+**`confirm: true` lets it write, and you must ASK THE USER FIRST.** When a press produces a
+submission, the run then makes a real record in the real app and removes it in the same breath — so the report can tell you what the
+**deployed rules** say, which is the one answer an author most wants before publishing and the one
+no amount of reading the declaration produces. Each line says whether the record went in, why it
+was refused if it was, and **whether the removal succeeded** — a booking left standing occupies a
+real slot, so never skip that part when reading the report back.
+
+**Only a submission the runtime marked as caused by the click is written.** A page can submit from a
+timer, from `onState`, or from a promise settling, and no amount of measuring before and after a
+press tells those apart — so the proof comes from the runtime injected into the page, which is in
+the same realm as the event and knows whether `submit()` was called while a real click was being
+dispatched. Everything else is reported as **withheld** and nothing is written for it.
+
+**An `async` click handler that awaits real work is withheld, and this is the one that will confuse
+an author.** These two are identical in shape and land on opposite sides:
+
+```js
+button.onclick = async () => { await Promise.resolve(); view.submit(...) }  // written
+button.onclick = async () => { await validate(); view.submit(...) }         // WITHHELD, if validate yields
+```
+
+The second resumes in a later task, and a later task is not the click however fast it was. So a save
+that checks something first writes nothing in a headless preview. **Say that is the reason** — an
+author told only "nothing was written" will go looking for a bug in a button that works.
+
+An app pinned to `@receptron/sharedapp` older than **0.9.0** lands in `withheld` for every
+submission — that runtime marks nothing, so the run writes nothing at all. It is not a fault in the
+page.
+
+**A control that saves from its own `change` handler — a checkbox, a select — is worse than
+withheld: it is never exercised, and the report will not say so.** Two separate things:
+
+- the run presses button-like controls only (`button`, `[role=button]`, `input[type=submit|button]`),
+  so a page whose only save control is a toggle produces **no press at all** — and with no press
+  there is no `withheld` line to read;
+- while preparing the page the run ticks checkboxes and dispatches `change` itself, BEFORE the press
+  window. A page that saves from that handler therefore submits outside any press, and the runtime
+  would not mark it in any case (activation behaviour runs after the click's dispatch has ended).
+
+So for such a page the report can look completely clean while the save path has never run. **Say
+that plainly to the user rather than reading the silence as success**, and ask them to exercise the
+toggle in the Collections pane.
+
+There is also a **budget** on writes. Over it, a confirmation is declined rather than accepted, and
+the run says how many — read that count before concluding every control was exercised.
+
+**Why the ask, when the record is removed a moment later:** the removal is not the safety boundary.
+While the record exists it is real — a rule, a function or an integration may act on it, a
+notification may already have gone out — and the removal itself can fail (the report has a line for
+exactly that, and in a first-come app a record left standing occupies a real slot). So say what it
+will do and get a yes, the same as for `publish`. Run the default read-only preview as often as you
+like; ask before the writing one.
+
+So the report proves the page draws, the handshake completes, the records arrive, **a press reaches
+the parent as a submission the declaration accepts**, and — for the presses that were written —
+**what the deployed rules said**.
 
 It also **tries to photograph each page**, and gives you the path for every one it managed. Open it
 when the words leave the layout in doubt; that is the one thing prose cannot carry. A page with no
@@ -268,8 +318,12 @@ dialog. **It is deliberately not looser than production**: a preview kinder than
 would be a machine for producing "it worked on my machine".
 
 **Ask the user to open it once the headless run is clean** — it is the half you cannot do, because
-it puts a person in front of the page, and **a person is the proof a write needs**: they saw the
-control, they pressed it, they accepted. That is exactly what `action: "preview"` cannot supply. In
+it puts a person in front of the page and lets them judge how it LOOKS, and because it exercises the
+controls the headless run never presses (see the toggle case above). What it does NOT add is another
+identity: the pane posts to `/api/shared-app/preview/submit`, which calls the same
+`writePreviewSubmission` as the headless run, so **both write as the author**. Neither preview can
+tell you what the rules would say to a visitor or a participant — only a real session as that person
+does. In
 the cell open on this repository: the **Collections pane** → the **"Preview the shared app"** button at the top → the
 page appears, drawn from the working tree. Opening it reads only: nothing is written and no URL
 name is taken.
