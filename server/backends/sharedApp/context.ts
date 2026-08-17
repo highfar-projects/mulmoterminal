@@ -15,7 +15,7 @@ import { APPS_COLLECTION, parseAuthoredApp, publishProblems, type AuthoredApp } 
 import type { PublishStamp } from "@receptron/sharedapp";
 import type { CollectionSchema } from "@mulmoclaude/core/collection";
 import { isRecord } from "../../../common/isRecord.js";
-import { publicInputProblems, schemasOfCollections } from "./publicForm.js";
+import { publicInputProblems } from "./publicForm.js";
 import { scopedFieldProblems } from "./scopedFields.js";
 
 const execFileAsync = promisify(execFile);
@@ -33,9 +33,9 @@ export interface GitStamp {
 }
 
 export interface SharedAppOptions {
-  /** Proceed although live records fail the schema being written. Never a default, and never
-   *  inherited: deploy's confirm says "let me stage this anyway", which is not the same sentence
-   *  as "let the public have it" (design D10). */
+  /** Proceed although live records fail the schema being written. Never a default: it says "let
+   *  everybody the app is for have this anyway", which is a sentence the user has to have said
+   *  (design D10). */
   confirm?: boolean | undefined;
   /** Wall clock, injectable so a test can assert an exact document. */
   now?: (() => number) | undefined;
@@ -73,7 +73,7 @@ export async function gitStamp(root: string): Promise<GitStamp> {
  *
  *  `userSkillsDir: null` is a boundary, not a test convenience. A globally installed skill under
  *  `~/.claude/skills` carrying `storage.type: "firestore"` would otherwise pick up whichever
- *  repository's `aid` it happened to be discovered from — and, because a view is HTML, deploying
+ *  repository's `aid` it happened to be discovered from — and, because a view is HTML, publishing
  *  one is the machine's own skills reaching every member's browser. An app is a REPOSITORY (D1):
  *  its collections are the ones committed beside its `app.json`.
  *
@@ -114,10 +114,10 @@ function ownerFromRoster(app: AuthoredApp): string | undefined {
 
 /** Everything wrong with the declaration itself, publisher included.
  *
- *  Shared by the gate that runs before a deploy and by `check`, which exists to answer "would a
- *  deploy be refused?" — two implementations of that question is two answers, and the one `check`
- *  gave was the optimistic one (it missed the `owner` uid mismatch, and said deployable about a
- *  declaration the next deploy refused). */
+ *  Shared by the gate that runs before a publish and by `check`, which exists to answer "would a
+ *  publish be refused?" — two implementations of that question is two answers, and the one `check`
+ *  gave was the optimistic one (it missed the `owner` uid mismatch, and said publishable about a
+ *  declaration the next publish refused). */
 export function declarationProblems(app: AuthoredApp, collections: readonly LoadedCollection[], handle: { email: string; uid: string } | null): string[] {
   const problems = publishProblems(
     app,
@@ -127,8 +127,9 @@ export function declarationProblems(app: AuthoredApp, collections: readonly Load
     // app-wide owner, so it would report a missing owner for every sound declaration.
     handle?.email ?? ownerFromRoster(app) ?? "",
   );
-  problems.push(...publicInputProblems(app, schemasOfCollections(collections)));
-  problems.push(...scopedFieldProblems(app, schemasOfCollections(collections)));
+  const schemas = schemasOf(collections);
+  problems.push(...publicInputProblems(app, schemas));
+  problems.push(...scopedFieldProblems(app, schemas));
   problems.push(...rosterCaseProblems(app, handle?.email));
   if (handle !== null && app.owner !== undefined && app.owner !== handle.uid) {
     // Not fatal on its own — the rules pin `owner` to the EXISTING document on update — but a
@@ -136,7 +137,7 @@ export function declarationProblems(app: AuthoredApp, collections: readonly Load
     // misunderstanding of what the key is.
     problems.push(
       `app.json declares owner "${app.owner}", which is not your uid (${handle.uid}). ` +
-        "`owner` is stamped by deploy and carried forward unchanged afterwards — remove it from app.json rather than maintaining it by hand.",
+        "`owner` is stamped by the operation that creates the app and carried forward unchanged afterwards — remove it from app.json rather than maintaining it by hand.",
     );
   }
   return problems;
@@ -146,7 +147,7 @@ export function declarationProblems(app: AuthoredApp, collections: readonly Load
  *
  *  `email() in a.members` is an exact string comparison and rules have no `lower()`. Firebase puts
  *  a lower-cased address in the token, so `Foo@Example.com` on the roster grants nothing — and the
- *  deploy succeeds, the file reads correctly to a human, and the person invited is refused
+ *  publish succeeds, the file reads correctly to a human, and the person invited is refused
  *  everything with no error anywhere that names them. Said here rather than repaired, because the
  *  roster is a committed file people edit by hand and rewriting somebody's key is not ours to do.
  *
@@ -170,7 +171,7 @@ export interface SharedAppContext {
 }
 
 /** Load and vet everything the three operations share, in one place so they cannot disagree about
- *  what a valid declaration is — the gate that runs before deploy has to be the same one that runs
+ *  what a valid declaration is — the gate that runs before publish has to be the same one that runs
  *  before publish, or `confirm` on the cheap operation becomes a way past the expensive one. */
 export async function sharedAppContext(root: string): Promise<SharedAppContext | SharedAppFailure> {
   const handle = firestoreHandle();
@@ -193,7 +194,7 @@ export async function sharedAppContext(root: string): Promise<SharedAppContext |
   return { ok: true, authored: authored.app, collections, handle };
 }
 
-/** The app document as it stands, or the refusal — shared by deploy and publish, which read it
+/** The app document as it stands, or the refusal — shared by every operation that reads it
  *  for the same two reasons and must report a failed read the same way.
  *
  *  The read decides what the rules care about: whether `owner` is stamped or carried forward, and
@@ -243,7 +244,7 @@ export async function readCurrentApp(
  *  missing index, a stale transaction, a client the backend wants restarted. Reading it as a
  *  refusal is dangerous in both places this predicate is used, and in the same direction:
  *
- *  - the app document would look ABSENT, so a deploy would rebuild it from the declaration alone
+ *  - the app document would look ABSENT, so a publish would rebuild it from the declaration alone
  *    and drop the `public` block and the held slug — silently unpublishing a live app and
  *    stranding its URL name;
  *  - a slug would look like SOMEBODY ELSE'S, so a numbered alternative would be taken while the
@@ -261,7 +262,7 @@ export function isRefusal(err: unknown): boolean {
  *  Sharing the builder is what keeps the two from drifting into stamping different clocks, or
  *  dropping `dirty` on one side: a commit that does not describe what was written is worse than
  *  no commit, because it looks auditable. (The KEY is `publishedAt` whichever operation stamps
- *  it; the deploy projection re-reads it as `deployedAt`.) */
+ *  it; the publish projection re-reads it as `publishedAt`.) */
 export async function stampFor(handle: SharedAppHandle, root: string, opts: SharedAppOptions): Promise<{ stamp: PublishStamp; dirty: boolean }> {
   const source = await (opts.resolveCommit ?? gitStamp)(root);
   return {

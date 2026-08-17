@@ -5,10 +5,12 @@
 // operator can override, because a breaking change is sometimes exactly what is intended; the
 // point is that it is a decision rather than a discovery.
 //
-// It runs at BOTH boundaries (design D10). Deploy's `confirm` lets a draft into staging on
-// purpose — mid-migration, that is the useful thing — so publish re-runs the scan against the
-// version it is about to promote rather than trusting that deploy was clean. A confirm spent on
-// staging must not buy the public.
+// It runs at ONE boundary now. It used to run at two (design D10): deploy's `confirm` let a draft
+// into staging on purpose — mid-migration, that is the useful thing — so publish re-ran the scan
+// against the version it was about to promote rather than trusting that deploy had been clean.
+// There is no staged version to disagree with the working tree any more
+// (`plans/feat-shared-app-no-staging.md`), so the scan and the `confirm` that overrides it both
+// belong to publish, and a confirm buys exactly the publish it was spent on.
 import { MAX_RECORD_ISSUES, STORE_UNREADABLE, validateCollectionRecords, type LoadedCollection } from "@mulmoclaude/core/collection/server";
 
 /** How many broken records to name before summarising. A write that would break a thousand rows
@@ -58,13 +60,16 @@ export async function scanRecords(collections: readonly LoadedCollection[], work
 
 /** The scan as a refusal, or null when the operation may proceed.
  *
- *  `what` names the boundary in both messages, because the two differ in what confirming COSTS:
- *  a confirmed deploy is visible to the roster, a confirmed publish to everyone. */
-export function recordRefusal(scan: RecordScan, what: "deploy" | "publish", confirm: boolean | undefined): string[] | null {
+ *  Every message names publish, and does so literally rather than through a
+ *  boundary argument. It used to take one, because there were two boundaries
+ *  and they differed in what confirming COST: a confirmed deploy was visible
+ *  to the roster, a confirmed publish to everyone. There is one boundary now,
+ *  so there is one cost to state — everyone. */
+export function recordRefusal(scan: RecordScan, confirm: boolean | undefined): string[] | null {
   if (scan.unreadable.length > 0) {
     return [
       ...scan.unreadable,
-      `${what} stopped: the live records could not be read, so nothing checked whether the schemas about to be written still fit them. ` +
+      "publish stopped: the live records could not be read, so nothing checked whether the schemas about to be written still fit them. " +
         "This is not something `confirm` overrides — confirming means accepting a known breakage, and here there is no reading at all. " +
         "Fix the access (or the connection) and try again.",
     ];
@@ -72,9 +77,7 @@ export function recordRefusal(scan: RecordScan, what: "deploy" | "publish", conf
   if (scan.records === 0 || confirm === true) return null;
   return [
     ...scan.lines,
-    what === "deploy"
-      ? "deploy stopped: these records are live and the roster is reading them. Migrate them first, or re-run with confirm to stage the schema anyway and repair the records afterwards."
-      : "publish stopped: this is the version about to become public, and these records do not fit it. " +
-        "A confirm given to deploy is deliberately not inherited here — re-run publish with confirm to accept the breakage for everyone, or migrate the records first.",
+    "publish stopped: this is the version about to become public, and these records do not fit it. " +
+      "Migrate the records first, or re-run publish with confirm to accept the breakage for everyone.",
   ];
 }

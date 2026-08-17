@@ -5,11 +5,14 @@
 // projection behind it, which is a tidiness problem; the other order would leave it open with the
 // projection gone, which is the failure this ordering exists to make impossible.
 //
-// The promoted schemas under `collections/{cid}` are deliberately LEFT: nobody can read them
-// while the app is closed, so they cost nothing, and re-publishing is then a promotion rather
-// than a rebuild.
+// The schemas under `collections/{cid}` are deliberately LEFT. `schemaRead` is
+// `readerOf || publicRead || partRead`, so closing the app takes the middle clause away and a
+// STRANGER can no longer reach them — while the roster still can, which is right: the members'
+// and participants' pages stay standing (below), and a page that could not read its own schema
+// would draw nothing. Publishing again then rewrites them where they stand rather than rebuilding
+// the collection from nothing.
 //
-// It deliberately does NOT run the declaration gate that deploy and publish share, and it does
+// It deliberately does NOT run the declaration gate that `check` and publish share, and it does
 // not mint an `aid` the way they do. Those steps decide whether something may go OUT; taking it
 // down has to work when the declaration is broken, which is one of the times an operator most
 // wants it. And a take-down must not AUTHOR: minting an aid here would write a fresh id into
@@ -19,7 +22,6 @@ import { isRecord } from "../../../common/isRecord.js";
 import { appManifestReason, firestoreHandle, loadAppManifest } from "@mulmoclaude/core/collection/server";
 import { APPS_COLLECTION, PUBLIC_CONFIG_DOC, appConfigPath } from "@receptron/sharedapp";
 import { PUBLIC_VIEW_DOC } from "./publicView.js";
-import { liveTierDocs, tierDelete } from "./appViews.js";
 import type { SharedAppFailure } from "./context.js";
 import { runWrites } from "./writes.js";
 import { setSlugPublished } from "./slug.js";
@@ -74,13 +76,6 @@ export async function unpublishSharedApp(root: string): Promise<UnpublishResult>
   // first is what grants.
   const slug = typeof existing.slug === "string" ? existing.slug : undefined;
 
-  // What is live in each tier, listed before anything is written: these are the
-  // only documents whose ids this operation does not already know (the author's
-  // `views[]` is not read here — a take-down must work when the declaration is
-  // broken, which is one of the times an operator most wants it).
-  const members = await liveTierDocs(handle, aid);
-  if (!members.ok) return members;
-
   const failure = await runWrites(
     [
       { what: `the public block on apps/${aid} — the authorization itself`, run: () => handle.docs.set(APPS_COLLECTION, aid, closed) },
@@ -102,13 +97,16 @@ export async function unpublishSharedApp(root: string): Promise<UnpublishResult>
           await handle.docs.delete(appConfigPath(aid), PUBLIC_VIEW_DOC);
         },
       },
-      // The members' and participants' pages come down too — `live:` only.
+      // THE MEMBERS' AND PARTICIPANTS' PAGES STAY, and that is a change of meaning rather than an
+      // omission. They used to come down here, because `live:` meant "published" and a take-down
+      // took the published things away — the roster went on working from the `staged:` copy at
+      // `/staging/{aid}`.
       //
-      // `staged:` is deliberately LEFT. Unpublish closes the doors; it does not
-      // undo a deploy, and the roster's `/staging/{aid}` is where the app is
-      // worked on between publishes. Taking those down as well would mean the
-      // owner cannot look at their own app until they publish it again.
-      ...members.tiers.flatMap((tier) => tier.ids.map((id) => tierDelete(handle, aid, tier.tier, id))),
+      // There is no such copy any more (`plans/feat-shared-app-no-staging.md`). These documents are
+      // the roster's app, read at `/m/{slug}` and `/p/{slug}`, and the rules gate them by
+      // `staffOf` / `listedIn` — never by anything unpublish touches. Deleting them would take the
+      // front desk's page away from the front desk because the owner closed the app to STRANGERS,
+      // and leave no way back but a publish.
     ],
     "unpublish",
   );
