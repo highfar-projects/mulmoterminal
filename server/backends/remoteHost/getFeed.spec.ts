@@ -65,6 +65,7 @@ describe("createRemoteHostHandlers · getFeed", () => {
       spawnIssueSeed: () => "unused-session",
       listTerminalSessions: async () => ({ sessions: [], icons: {} }),
       captureTerminalScreen: async () => ({ screen: "", suggestion: "", quickCommands: [] }),
+      captureTerminalTranscript: async () => ({ status: "none" as const }),
       writeToSession: () => false,
       canClearBox: () => false,
       submitSequence: () => "\r",

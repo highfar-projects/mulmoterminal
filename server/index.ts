@@ -77,6 +77,7 @@ import {
   unplacedSessionsHydrated,
 } from "./session/registry.js";
 import { hydrateClearedTranscripts } from "./session/cleared-transcripts.js";
+import { sessionTranscriptView } from "./session/transcript-view-read.js";
 import { runWithHiddenMarker } from "./session/hiddenMarker.js";
 import { registerCompletionHook } from "./session/completion-hooks.js";
 import { spawnScheduledWorker } from "./session/scheduled-chat.js";
@@ -793,6 +794,9 @@ initRemoteHostBackend({
   launchTerminal: remoteHostLaunchTerminal,
   listTerminalSessions: remoteHostListTerminalSessions,
   captureTerminalScreen: remoteHostCaptureTerminalScreen,
+  // The phone's transcript view (#1751). The SAME cwd lookup as the picker's rows, because the
+  // transcript is per PROJECT: the host's own workspace would answer with another cell's session.
+  captureTerminalTranscript: (sessionId) => sessionTranscriptView(ptys.get(sessionId)?.cwd ?? sessionCwd(sessionId) ?? "", sessionId),
   writeToSession,
   // The same two functions the browser's pane reaches through /api/question (#1685): one place
   // decides whether a dialog is still open, and one place decides which bytes reach the PTY.

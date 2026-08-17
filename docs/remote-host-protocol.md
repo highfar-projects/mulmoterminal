@@ -36,6 +36,7 @@ grouped in `handlers/terminalSession.ts`.
 |---|---|---|
 | `listTerminalSessions` | — | `{ sessions: TerminalSessionSummary[], icons: Record<string, string> }` |
 | `getTerminalScreen` | `sessionId` | `SessionScreen` |
+| `getTerminalTranscript` | `sessionId` | `TranscriptView` |
 | `sendTerminalInput` | `sessionId`, `text` | `{ sent: true }` |
 | `launchTerminal` | `agent`, `sessionId` | `{ ok: true }` |
 | `startChat` | `message`, `attachments?` | `{ started: true, chatId }` |
@@ -229,6 +230,61 @@ picker's `title` carries the memo *instead of* the AI title because a row there 
 and the user's words win — but a header has room for both, so here they arrive as their own fields
 and the memo is drawn above. Putting a handwritten note into a row labelled as the AI's summary
 would mislabel it.
+
+### `TranscriptView`
+
+What `getTerminalTranscript` answers (#1751). The screen above is **one pane**, and a Claude cell
+runs on the alternate screen with no scrollback — `capture-pane -S -300` clamps to what exists, so
+it returns the pane's 30-41 rows and nothing older. This reads Claude's own transcript instead,
+which is the conversation the model saw.
+
+```ts
+type TranscriptView =
+  | { status: "ok"; turns: TranscriptTurn[]; truncated: boolean }
+  | { status: "none" }        // no transcript yet, or an agent whose log this does not read
+  | { status: "cleared" }     // the conversation was ended with /clear; the file is frozen
+  | { status: "too-large" };  // widened to 32 MB without finding a turn boundary
+
+interface TranscriptTurn {
+  at: string | null;          // the prompt record's own timestamp, null when it is not a string
+  rows: TranscriptRow[];
+}
+
+interface TranscriptRow {
+  kind: "user" | "assistant" | "tool" | "unknown";
+  text: string;               // may contain newlines: wrapping is the phone's, not the host's
+  clipped?: boolean;          // THIS row's text was cut
+}
+```
+
+**A union rather than `readable: boolean`.** "Nothing written yet", "you ended this conversation"
+and "too big to read" are three different things to tell a person, and one boolean makes all three
+the same blank view. A host too old to know the command answers nothing at all, which the phone
+reads as `none`; the fallback for every status but `ok` is the screen.
+
+**`truncated` and `clipped` are different facts, and mixing them up draws the wrong mark.**
+`truncated` sits on the VIEW and means turns are missing — evicted by the 250-logical-line budget,
+evicted by the 256 KB byte cap, or simply older than the tail that was read. The phone shows it once,
+at the top: *there is more before this*. `clipped` sits on a ROW and means that row's own text was
+cut — a tool result past its first 6 lines, or the byte cap biting inside the newest turn. The phone
+shows it at the end of that row.
+
+**What the rows are made of.** One row per content block, in the content's own order, never merged.
+An assistant answer is passed through whole; a `tool_use` is its **name only** (arguments are what
+make a call long); a `tool_result` is its **first 6 lines** (tool output needs its head — the start
+of a file, the first match of a grep). `thinking` renders nothing today because its text measured 0
+characters on disk in every transcript sampled. A block type the host does not know becomes
+`{ kind: "unknown", text: "[unknown block: <type>]" }` — **draw it**, faintly if you like, because
+that row is how a format change becomes visible instead of a view that quietly thins out.
+
+**Known gaps, accepted deliberately.** A transcript's `type:"user"` records are not the set of
+things a person typed: an instruction sent WHILE a turn was running does not appear there at all,
+and text a skill injected does. This view shows the conversation the model saw, which is what it is
+for; "what did I ask for" is a different question (`PromptsPane`, desktop only).
+
+**Sub-agents are not expanded.** They live in `<sessionId>/subagents/agent-*.jsonl`, one file each,
+and range from 284 to 20,614 lines — far past any budget. The `Task` tool's own `tool_result` in the
+main file IS the sub-agent's final report, so its opening lines appear in the flow anyway.
 
 ## The rules that keep coming up
 

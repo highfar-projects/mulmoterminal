@@ -97,6 +97,7 @@ export function initRemoteHostBackend(deps: RemoteHostBackendDeps): void {
       ingest,
       listTerminalSessions: deps.listTerminalSessions,
       captureTerminalScreen: deps.captureTerminalScreen,
+      captureTerminalTranscript: deps.captureTerminalTranscript,
       writeToSession: deps.writeToSession,
       canClearBox: deps.canClearBox,
       submitSequence: deps.submitSequence,

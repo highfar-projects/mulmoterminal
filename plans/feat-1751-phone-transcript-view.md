@@ -524,3 +524,54 @@ PromptsPane は**もう存在する**。この計画は `session-reads.ts` を�
   **パスやコマンドに使うハンドラが 1 つ増えるたびに穴になる**。#1751 に記録した
 - `clearedTranscripts` のマークは tmux が生きたまま pty だけ死んだ場合に捨てられない
   （`pty-exit.ts:26`）。repo 全体の性質で、既存 4 読み手が同じ性質を共有している
+
+---
+
+## 実装（ホスト側）で決めたこと — 2026-08-18
+
+計画が「実装 PR がテストで決める」と残していた点と、実測で計画を修正した点。
+**この節より上は計画時点の記録で、書き換えていない。**
+
+### 1. `truncated` は「見せられるものが落ちたとき」だけ立てる（計画の修正）
+
+計画は「最初の境界より前のレコードは捨てる」に対して無条件で `truncated` を立てる読みだった。
+実測で壊れた: この開発機の transcript は**多くが `queue-operation` / `attachment` で始まる**
+（`be72414f` ほか 6 本で確認）。どちらも行を 1 つも作らないので、
+無条件だと**完全に揃っている会話に「これより前がある」と出る**。
+
+だから条件は `renderRecord(record).length > 0`。同じレコードが会話の途中にあれば何も起きないのに、
+先頭にあるときだけ印が付くのは、**欠落ではなくレコードの位置に対する印**になってしまう。
+
+副作用として、compaction の `summary` レコードだけが窓の先頭にある場合は `truncated` が立たない。
+実害は小さい — compact 済みのファイルは 4MB の窓に収まらないので `from > 0` 側で立つ。
+
+### 2. バイトキャップの当て方（計画が実装 PR に委ねた点）
+
+- 数えるのは **`text` の UTF-8 バイト + JSON の器**。器は行 64B / ターン 64B（+ `at` の実バイト）/
+  ビュー全体 64B。**JSON のエスケープは数えない** — 引用符だらけの本文は 2 倍になるが、
+  実際の上限は Firestore の 1MiB で、256KB はその 1/4。画面パス（`SCREEN_MAX_BYTES` + 改行 1B）と
+  同じ考え方
+- **最新 1 ターンだけで超える場合**は、そのターンの行を**先頭から**予算内で詰め、
+  予算が尽きた行を切って `clipped` を立て、**そこで止める**。ターンはプロンプトで始まり、
+  それが無いと後ろが読めないので先頭を残す（`tool_result` の 6 行と同じ理屈）。
+  止めた後ろの行は落ちるが、`truncated` が立つので「全部ではない」ことは伝わる
+- 実測: 21.2MB の実 transcript で応答 14.6KB / 9 ターン / 180 行 / 34ms
+
+### 3. 窓は注入可能にした（`TranscriptWindow`）
+
+`sessionTranscriptView(cwd, id, window = DEFAULT_TRANSCRIPT_WINDOW)`。
+既定は 4MB → 32MB のまま。spec が 32MB のフィクスチャを書かずに
+**広げる経路と上限の `too-large`** を突けるようにするため — `markTranscriptCleared(…, dir)` や
+`readTailLines(file, tailBytes)` と同じ、既定値つきの注入。
+
+### 4. 検証（外部の ground truth）
+
+- 実 transcript 9 本（21.2MB 〜 0.1MB）に対して読み、**Python で書いた独立のパーサ**と突き合わせた。
+  `985e6ca0`（21.2MB / 実プロンプト 82 本）で **9 ターン・最新ターン 36 行・kind の並びまで一致**
+- `toJsonObject` を通した実データに `undefinedPaths` を掛けて空を確認（#1042）。spec にも固定した
+- サーバを隔離 HOME / 別ポートで起動し、`/api/config` と `/api/remote-host/status` が 200 を返すことを確認
+  （`initRemoteHostBackend` に dep が 1 本増えるので、起動そのものが blast radius）
+
+### 5. やっていないこと
+
+- **mulmoserver（スマホ側）は別 PR**。この PR はホストの `getTerminalTranscript` と wire の確定まで
