@@ -111,6 +111,10 @@ export async function sessionTranscriptView(cwd: string, id: string, window: Tra
   } finally {
     // Polled every 5 seconds per open session, so one leaked descriptor is not one leak — it is a
     // slow climb to EMFILE. Closed on every path: the widened giveaway, the early return, the throw.
-    await handle?.close();
+    //
+    // Its own rejection is swallowed: an awaited throw in `finally` REPLACES what the `try` already
+    // produced, so a failing close would turn a conversation that read perfectly well into an error
+    // on the phone. The descriptor is gone either way (CodeRabbit, PR #1776).
+    await handle?.close().catch((e: unknown) => console.error(`[transcript-view] close ${file}: ${messageOf(e)}`));
   }
 }

@@ -180,9 +180,28 @@ export function renderRecord(record: Record<string, unknown>): TranscriptRow[] {
  *  and claude's ordinary prompts are the plain-string one. A predicate written as "has a text block"
  *  would miss them, fusing every exchange into one turn that the line budget can never evict.
  *
- *  `promptId` is not used: measured, 114 records carried none. */
-export const isTurnBoundary = (record: Record<string, unknown>): boolean =>
-  record.type === "user" && record.isSidechain !== true && userPromptText(isRecord(record.message) ? record.message.content : undefined) !== null;
+ *  `promptId` is not used: measured, 114 records carried none.
+ *
+ *  Returns the PROMPT rather than a boolean, because the fold needs the text as well: a record can
+ *  satisfy this predicate and render no rows (`userPromptText` reads `.text` off any block, while the
+ *  render rules read it only off a `text` one), and a turn that opens empty is a blank block on the
+ *  phone that no budget can evict. One function answering both keeps the two from disagreeing. */
+export function turnBoundaryPrompt(record: Record<string, unknown>): string | null {
+  if (record.type !== "user" || record.isSidechain === true) return null;
+  return userPromptText(isRecord(record.message) ? record.message.content : undefined);
+}
+
+export const isTurnBoundary = (record: Record<string, unknown>): boolean => turnBoundaryPrompt(record) !== null;
+
+/** How much of `timestamp` is carried as a turn's `at`. An ISO-8601 instant is 24 characters, 29
+ *  with an offset; past 64 bytes it is not a timestamp, and this field is read by a machine — so an
+ *  over-long one becomes null ("unknown") rather than being cut, which would silently name a
+ *  DIFFERENT time. Bounded at all because `at` is passed through from disk and would otherwise be an
+ *  unbounded string inside a capped reply (Codex, PR #1776). */
+const TURN_AT_MAX_BYTES = 64;
+
+const turnStartedAt = (record: Record<string, unknown>): string | null =>
+  typeof record.timestamp === "string" && encodedBytes(record.timestamp) <= TURN_AT_MAX_BYTES ? record.timestamp : null;
 
 /** The fold's state: the turns kept so far, oldest first. */
 export interface TranscriptScan {
@@ -206,8 +225,9 @@ export function foldTranscriptView(scan: TranscriptScan, record: Record<string, 
   // the boundary predicate alone would still let its assistant records land as rows of whichever
   // turn happened to be open, attributing a sub-agent's work to the main conversation.
   if (record.isSidechain === true) return;
-  if (isTurnBoundary(record)) {
-    scan.turns.push({ at: typeof record.timestamp === "string" ? record.timestamp : null, rows: [] });
+  const prompt = turnBoundaryPrompt(record);
+  if (prompt !== null) {
+    scan.turns.push({ at: turnStartedAt(record), rows: [] });
   } else if (scan.turns.length === 0) {
     // The window opens mid-turn, so it starts with the tail of one whose prompt is outside it.
     // Dropped rather than shown as a synthetic turn: a fragment with no speaker leads the view, and
@@ -223,7 +243,12 @@ export function foldTranscriptView(scan: TranscriptScan, record: Record<string, 
   }
   const turn = scan.turns[scan.turns.length - 1];
   if (!turn) return;
-  const rows = renderRecord(record);
+  // A boundary is a boundary BECAUSE it carries a prompt, so the turn it opens is never empty: where
+  // the block rules render nothing from it, the text the predicate found IS the row. Without this a
+  // turn can arrive with no rows — invisible on the phone, and costing 0 lines, so the budget that
+  // evicts by lines can never reclaim it.
+  const rendered = renderRecord(record);
+  const rows = rendered.length > 0 || prompt === null ? rendered : [{ kind: "user" as const, text: prompt }];
   turn.rows.push(...rows);
   scan.lines += countedLines(rows);
   evictOldestTurns(scan);

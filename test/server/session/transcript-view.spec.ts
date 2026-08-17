@@ -226,6 +226,28 @@ describe("foldTranscriptView", () => {
     expect(view.turns[0]?.rows).toHaveLength(1);
   });
 
+  it("drops an over-long timestamp to null rather than cutting it — a cut one names a DIFFERENT time", () => {
+    // And it is passed through from disk, so unbounded it would sit inside a capped reply.
+    const view = okView(viewOf([userRecord("go", { timestamp: `2026-08-18T00:00:00.000Z${" ".repeat(500)}` })]));
+    expect(view.turns[0]?.at).toBeNull();
+    expect(view.turns[0]?.rows).toHaveLength(1);
+  });
+
+  it("opens no EMPTY turn: a boundary whose blocks render nothing still shows its prompt", () => {
+    // `userPromptText` reads `.text` off any block; the render rules read it only off a `text` one.
+    // The two can therefore disagree — and an empty turn is a blank block the phone draws and the
+    // line budget can never reclaim, since it counts zero.
+    const oddBlock = {
+      type: "user",
+      timestamp: "2026-08-18T00:00:00.000Z",
+      message: { content: [{ type: "thinking", thinking: "", text: "ちゃんと出して" }] },
+    };
+    expect(isTurnBoundary(oddBlock)).toBe(true);
+    expect(renderRecord(oddBlock)).toEqual([]);
+    const view = okView(viewOf([oddBlock]));
+    expect(view.turns[0]?.rows).toEqual([{ kind: "user", text: "ちゃんと出して" }]);
+  });
+
   it("drops the fragment before the first boundary and says the view is truncated", () => {
     const view = okView(
       viewOf([

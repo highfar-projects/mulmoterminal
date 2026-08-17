@@ -203,5 +203,18 @@ describe("sessionTranscriptView", () => {
       await sessionTranscriptView(cwd, SESSION);
       expect(vi.mocked(fs.open)).not.toHaveBeenCalled();
     });
+
+    it("still answers the conversation when CLOSING the handle fails", async () => {
+      // An awaited throw inside `finally` replaces whatever the `try` produced, so a failing close
+      // would turn a read that worked into an error on the phone (CodeRabbit, PR #1776).
+      await writeTranscript(userLine("hello"), assistantLine("hi"));
+      const failing = await fs.open(path.join(projectSessionsDir(cwd), `${SESSION}.jsonl`), "r");
+      vi.spyOn(failing, "close").mockRejectedValue(new Error("EIO"));
+      vi.mocked(fs.open).mockResolvedValueOnce(failing);
+      const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+      const view = await sessionTranscriptView(cwd, SESSION);
+      expect(view.status).toBe("ok");
+      expect(warn).toHaveBeenCalled(); // the failure is reported, not silent
+    });
   });
 });
