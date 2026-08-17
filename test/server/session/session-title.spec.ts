@@ -15,6 +15,7 @@ import {
   titleTurnCounts,
 } from "../../../server/session/registry.js";
 import { clearedTranscripts } from "../../../server/session/cleared-transcripts.js";
+import { VIEW_TITLE_REGEN_TURNS } from "../../../server/config/header-title.js";
 
 const SESSION = "11111111-2222-3333-4444-555555555555";
 
@@ -291,6 +292,53 @@ describe("maybeGenerateTitle", () => {
 });
 
 describe("freshenRosterTitle", () => {
+  // Codex on #1772: "no title" became an ORDINARY answer once the default source reads what
+  // Claude Code wrote — a session it has not titled yet returns null. Leaving the mark unset then
+  // kept shouldFreshenViewedTitle true forever, so a watched session rescanned its whole
+  // transcript every 30 seconds, over a file that reaches 585 MB (#998).
+  it("does not rescan forever when the transcript simply has no title", async () => {
+    let clock = 1_000_000;
+    const { freshenRosterTitle, diskTitles } = setup(
+      () => clock,
+      async () => null,
+    );
+    await writeTranscript([userTurn("add a retry to the uploader"), userTurn("and a test")]);
+    freshenRosterTitle(SESSION, cwd, 2);
+    await vi.waitFor(() => expect(diskTitles).toHaveLength(1));
+    await vi.waitFor(() => expect(titleInFlight.has(SESSION)).toBe(false));
+    // The check completed and found nothing — that is an answer, and it is remembered.
+    expect(lastTitledUserTurns.get(SESSION)).toBe(2);
+    // Past the retry floor, the roster polling again must NOT re-read the file: the conversation
+    // has not moved, so there is nothing new to find.
+    clock += 60_000;
+    freshenRosterTitle(SESSION, cwd, 2);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(diskTitles).toHaveLength(1);
+  });
+
+  it("checks again once the conversation has moved on", async () => {
+    let clock = 1_000_000;
+    const { freshenRosterTitle, diskTitles } = setup(
+      () => clock,
+      async () => null,
+    );
+    await writeTranscript([userTurn("add a retry to the uploader")]);
+    freshenRosterTitle(SESSION, cwd, 1);
+    await vi.waitFor(() => expect(diskTitles).toHaveLength(1));
+    await vi.waitFor(() => expect(titleInFlight.has(SESSION)).toBe(false));
+    clock += 60_000;
+    freshenRosterTitle(SESSION, cwd, 1 + VIEW_TITLE_REGEN_TURNS);
+    await vi.waitFor(() => expect(diskTitles).toHaveLength(2));
+  });
+
+  // A file that could not be read establishes nothing, so it must not advance the mark.
+  it("does not remember a check it could not make", async () => {
+    const { freshenRosterTitle } = setup(undefined, async () => null);
+    freshenRosterTitle(SESSION, cwd, 3); // no transcript written at all
+    await vi.waitFor(() => expect(titleInFlight.has(SESSION)).toBe(false));
+    expect(lastTitledUserTurns.has(SESSION)).toBe(false);
+  });
+
   it("re-summarizes a session that has moved well past its titled turn", async () => {
     const { freshenRosterTitle, published } = setup();
     await writeTranscript([userTurn("add a retry to the uploader")]);

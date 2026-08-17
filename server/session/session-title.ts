@@ -121,13 +121,25 @@ export function createTitleManager(deps: TitleDeps) {
     const epoch = titleEpoch.get(sessionId) ?? 0;
     try {
       const { turns, userTurns, anyTurn, diskAiTitle, read } = await readTitleInputs(sessionId, cwd);
-      const title = read && anyTurn ? await deps.resolveTitle({ turns, diskAiTitle }) : null;
-      if (title && (titleEpoch.get(sessionId) ?? 0) === epoch) {
+      const checked = read && anyTurn;
+      const title = checked ? await deps.resolveTitle({ turns, diskAiTitle }) : null;
+      if ((titleEpoch.get(sessionId) ?? 0) !== epoch) return;
+      if (title) {
         aiTitles.set(sessionId, title);
         titleTurnCounts.set(sessionId, 0);
-        lastTitledUserTurns.set(sessionId, userTurns);
         deps.publishActivity(sessionId);
       }
+      // Advanced on any COMPLETED check, not only a successful one (Codex on #1772). "No title"
+      // is an ordinary answer now that the default source reads what Claude Code wrote: a session
+      // it has not titled yet answers null, and leaving the mark unset meant `shouldFreshenViewedTitle`
+      // stayed true forever — a full transcript scan every 30s for as long as the roster watched it,
+      // over a file that reaches 585 MB (#998). Advancing ties the next check to the CONVERSATION
+      // moving on instead of to the clock.
+      //
+      // This also applies to the `headless` source, where null means the CLI failed: that retry now
+      // waits for a few more user turns rather than 30 seconds, which is the same waste in the other
+      // direction. A file we could not read at all does not advance — nothing was established.
+      if (checked) lastTitledUserTurns.set(sessionId, userTurns);
     } finally {
       titleInFlight.delete(sessionId);
     }
