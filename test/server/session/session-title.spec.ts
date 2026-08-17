@@ -32,6 +32,8 @@ async function writeTranscript(lines: string[]) {
 }
 
 const userTurn = (text: string) => JSON.stringify({ type: "user", message: { role: "user", content: text } });
+// Claude Code's own record — the shape read back in server/session/transcript.ts.
+const aiTitleRecord = (title: string) => JSON.stringify({ type: "ai-title", aiTitle: title, sessionId: SESSION });
 
 beforeEach(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "mt-title-"));
@@ -60,15 +62,18 @@ function setup(now = () => 1_000_000, generateTitle: (turns: ConversationTurn[])
   // Turns, not a raw transcript — the manager streams the file now (#998), so what the generator
   // receives is what came out of that stream.
   const summarized: ConversationTurn[][] = [];
+  // What the manager folded out of that same stream for the default (transcript) source.
+  const diskTitles: (string | null)[] = [];
   const mgr = createTitleManager({
     publishActivity: (id) => published.push(id),
     now,
-    generateTitle: (turns) => {
+    resolveTitle: ({ turns, diskAiTitle }) => {
       summarized.push(turns);
+      diskTitles.push(diskAiTitle);
       return generateTitle(turns);
     },
   });
-  return { ...mgr, published, summarized };
+  return { ...mgr, published, summarized, diskTitles };
 }
 
 describe("noteTitleTurn", () => {
@@ -121,6 +126,26 @@ describe("forgetTitle", () => {
     forgetTitle(SESSION);
     forgetTitle(SESSION);
     expect(titleEpoch.get(SESSION)).toBe(2);
+  });
+});
+
+// The default source reads a title Claude Code already wrote rather than spawning anything
+// (#1769), so the manager has to hand that record to the resolver out of the SAME streamed pass.
+describe("the ai-title the transcript carries", () => {
+  it("reaches the resolver, the last one winning", async () => {
+    const { maybeGenerateTitle, diskTitles } = setup();
+    await writeTranscript([aiTitleRecord("An earlier title"), userTurn("add a retry to the uploader"), aiTitleRecord("Uploader retry handling")]);
+    titlePending.add(SESSION);
+    await maybeGenerateTitle(SESSION, cwd);
+    expect(diskTitles).toEqual(["Uploader retry handling"]);
+  });
+
+  it("is null for a transcript that has none, so the caller can fall back", async () => {
+    const { maybeGenerateTitle, diskTitles } = setup();
+    await writeTranscript([userTurn("add a retry to the uploader")]);
+    titlePending.add(SESSION);
+    await maybeGenerateTitle(SESSION, cwd);
+    expect(diskTitles).toEqual([null]);
   });
 });
 

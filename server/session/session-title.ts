@@ -9,7 +9,7 @@
 // view do not both summarize, and a retry floor so a viewed-but-failing session is not
 // re-summarized on every poll.
 import path from "node:path";
-import { conversationTurnsFromParsed, isTrivialPrompt, type ConversationTurn } from "./transcript.js";
+import { aiTitleFromParsed, conversationTurnsFromParsed, isTrivialPrompt, type ConversationTurn } from "./transcript.js";
 import { forEachJsonlRecord } from "../infra/jsonl-file.js";
 import { shouldFreshenViewedTitle, shouldRegenerateTitle, TITLE_REGEN_EVERY_TURNS, VIEW_TITLE_REGEN_TURNS } from "../config/header-title.js";
 import { aiTitles, lastTitleAttemptMs, lastTitledUserTurns, titleEpoch, titleInFlight, titlePending, titleTurnCounts } from "./registry.js";
@@ -25,11 +25,30 @@ export interface TitleDeps {
   publishActivity: (id: string) => void;
   /** Injected so the retry floor can be tested without waiting out 30 seconds. */
   now: () => number;
-  /** Summarize a transcript into a title. Injected because the real one shells out to
-   *  the claude CLI, which a unit test must never do. */
+  /** The session's title, from whichever source `header-title.ts` selects: the `ai-title` Claude
+   *  Code wrote into its own transcript (the default — no process at all), or a summary of the
+   *  turns. Injected because the second one shells out to the claude CLI, which a unit test must
+   *  never do. */
   // Turns, not the raw transcript: the file reaches 585 MB here and cannot be held as a string
   // at all (#998). The title only reads the last few turns anyway.
-  generateTitle: (turns: ConversationTurn[]) => Promise<string | null>;
+  resolveTitle: (input: { turns: ConversationTurn[]; diskAiTitle: string | null }) => Promise<string | null>;
+}
+
+/** One streamed pass over the transcript, yielding everything the title needs: the turns (for the
+ *  `headless` source and for the user-turn bookkeeping) and the `ai-title` Claude Code wrote (for
+ *  the default one). Streamed, not read: the file reaches 585 MB and cannot be held as a string
+ *  (#998). `read` is false when the file could not be opened at all, which is different from a
+ *  transcript that simply has nothing to title. */
+async function readTitleInputs(sessionId: string, cwd: string): Promise<{ turns: ConversationTurn[]; diskAiTitle: string | null; read: boolean }> {
+  const turns: ConversationTurn[] = [];
+  let diskAiTitle: string | null = null;
+  let read = true;
+  await forEachJsonlRecord(path.join(projectSessionsDir(cwd), `${sessionId}.jsonl`), (record) => {
+    turns.push(...conversationTurnsFromParsed([record]));
+    // The LAST one wins, the same rule session-reads.ts folds by.
+    diskAiTitle = aiTitleFromParsed([record]) ?? diskAiTitle;
+  }).catch(() => (read = false));
+  return { turns, diskAiTitle, read };
 }
 
 export function createTitleManager(deps: TitleDeps) {
@@ -72,14 +91,8 @@ export function createTitleManager(deps: TitleDeps) {
     titleInFlight.add(sessionId);
     const epoch = titleEpoch.get(sessionId) ?? 0;
     try {
-      // One streamed pass yields both what the title needs (the turns) and what the bookkeeping
-      // needs (how many user turns there were), so the transcript is never held as a string.
-      const turns: ConversationTurn[] = [];
-      let read = true;
-      await forEachJsonlRecord(path.join(projectSessionsDir(cwd), `${sessionId}.jsonl`), (record) => {
-        turns.push(...conversationTurnsFromParsed([record]));
-      }).catch(() => (read = false));
-      const title = read && turns.length ? await deps.generateTitle(turns) : null;
+      const { turns, diskAiTitle, read } = await readTitleInputs(sessionId, cwd);
+      const title = read && turns.length ? await deps.resolveTitle({ turns, diskAiTitle }) : null;
       if (title && (titleEpoch.get(sessionId) ?? 0) === epoch) {
         aiTitles.set(sessionId, title);
         titleTurnCounts.set(sessionId, 0);

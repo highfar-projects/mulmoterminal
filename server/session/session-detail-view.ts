@@ -69,7 +69,10 @@ export function sessionDetailView(
     event: activity.event ?? null,
     lastPrompt: live.lastPrompt ?? fallback.lastPrompt,
     lastResponse: live.lastResponse ?? fallback.lastResponse,
-    // Ours only — never the external on-disk ai-title.
+    // This process's title only, never a fresh read of the on-disk one. Since #1769 the value
+    // ORIGINATES on disk (the title manager copies Claude's own ai-title in), but going through
+    // the manager is what keeps the /clear contract: a cleared session has no live title, and
+    // reading disk here would put the pre-clear one back on screen (#1085).
     aiTitle: live.aiTitle ?? null,
     memo: live.memo ?? null,
   };

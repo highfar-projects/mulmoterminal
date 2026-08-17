@@ -539,7 +539,8 @@ the `claude` / `codex` sessions themselves.
 | `CLAUDE_BIN` | `claude`       | The Claude Code binary to spawn. On Windows a bare name is resolved on `PATH` before it reaches the PTY layer (which matches file names exactly): to the `.exe` when there is one, otherwise to the `.cmd` shim an npm-global install leaves, run through `cmd.exe`. |
 | `CLAUDE_CWD` | current dir    | Working directory each `claude` PTY runs in; determines which project's sessions are listed. Via `npx mulmoterminal@latest` it defaults to the directory you ran the command from (override with `--cwd <dir>`, relative allowed); when the server is run directly it falls back to `~/mulmoclaude`. A value read from `.env` must be an absolute path (`~` is not expanded). |
 | `CLAUDE_PERMISSION_MODE` | `auto` | Permission mode passed to each `claude` spawn. |
-| `MT_TITLE_MODEL` | `haiku` | Model used for the cell header's AI title (a cheap/fast model summarizing the recent turns). Accepts a `--model` alias or a full model id. |
+| `MT_TITLE_SOURCE` | `transcript` | Where the cell header's AI title comes from. `transcript` reads the title Claude Code writes into its own transcript — no extra process. `headless` restores the old behaviour of summarizing the recent turns with `claude -p`, which costs a model call but follows a session whose topic drifts (Claude's own title is written once and never revised). |
+| `MT_TITLE_MODEL` | `haiku` | Model used for the cell header's AI title. Only read when `MT_TITLE_SOURCE=headless`. Accepts a `--model` alias or a full model id. |
 | `CODEX_BIN`  | `codex`        | The Codex CLI binary to spawn. |
 | `CODEX_MODEL`| codex default  | Model passed to Codex as `--model` (unset = Codex's own default). |
 | `CODEX_HOME` | `~/.codex`     | Codex home — where its session rollouts and MulmoTerminal-mirrored skills live. |
@@ -1515,6 +1516,14 @@ The browser sends the cell's xterm buffer as `log`; the server truncates it to t
 last **32 KB** (the tail, where errors + the exit line live), runs the CLI with the
 log piped on stdin (argv — no shell), and returns its answer. Same-origin guarded.
 
+The summarizer gets **no tools** (#1769): the spawn carries a `--settings` deny of `*`,
+a `--disallowedTools` list, no MCP servers, and a working directory outside any
+repository. A deny rule outranks the ambient allow rules — including the user-level
+`~/.claude/settings.json`, which a neutral working directory does not escape — and it
+covers tools that do not exist yet, which a list of names cannot. The log being
+summarized is not content we control, so this is the guarantee rather than the prompt's
+wording (the prompt says it too).
+
 **Request `application/json`**:
 
 ```jsonc
@@ -1912,15 +1921,24 @@ appears, at which point the on-disk title takes over.
 The raw last prompt is a poor cell-header label once a session becomes a
 back-and-forth: a follow-up is either a trivial ack (`ok`, `はい` — skipped, so the
 header keeps showing the now-stale opening task) or context-dependent (`2番目にして`
-— meaningless on its own). So the server summarizes the **recent turns** with a cheap
-model (`MT_TITLE_MODEL`, default `haiku`) into a short title and shows it in the cell
-header (falling back to the last prompt when there's no title yet).
+— meaningless on its own). So the header shows a short **AI title** instead, falling back
+to the last prompt when there is none yet.
 
-Generation is kept low-cost — it runs at a turn's `Stop` (when the reply is on disk)
-only when a title is **due**: none yet, the newest prompt was a trivial/context-dependent
-ack (so the raw last prompt would be stale), or every few turns to keep a long session's
-title current. The title lives in memory (never written into Claude's own transcript); a
-resumed session falls back to any on-disk `ai-title`.
+By default that title is **read, not generated**: Claude Code writes an `ai-title` record
+into its own transcript, and the server picks it up from the pass it already makes over
+that file. Nothing is spawned, so nothing has to be given tools — the previous behaviour
+launched a full `claude -p` session per title, and one of those ran `git push origin main`
+in a working repository (#1769). The cost is freshness: Claude's own title is written once
+per session and never revised, so it describes what the session STARTED as. Set
+`MT_TITLE_SOURCE=headless` to go back to summarizing the recent turns with a cheap model
+(`MT_TITLE_MODEL`, default `haiku`), which does follow a drifting topic.
+
+Either way the title is refreshed on the same schedule — at a turn's `Stop` (when the reply
+is on disk) and only when one is **due**: none yet, the newest prompt was a
+trivial/context-dependent ack (so the raw last prompt would be stale), or every few turns.
+The cadence matters much less now that the default source costs nothing to read. The title
+this server is showing lives in memory (this repo never writes `ai-title` lines into Claude's
+own transcript); a resumed session falls back to the on-disk `ai-title` directly.
 
 ### Session note
 
