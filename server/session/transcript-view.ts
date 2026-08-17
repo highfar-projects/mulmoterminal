@@ -73,11 +73,17 @@ export const TRANSCRIPT_MAX_BYTES = 256 * 1024;
 const VIEW_OVERHEAD_BYTES = 64; //  {"status":"ok","turns":[],"truncated":true}
 const TURN_OVERHEAD_BYTES = 64; //  {"at":"…","rows":[]},          — `at` is measured separately
 const ROW_OVERHEAD_BYTES = 64; //   {"kind":"assistant","text":"","clipped":true},
-//
-// What is NOT counted is JSON string ESCAPING: a text full of quotes serializes to twice its bytes.
-// That is deliberate and it is what the headroom pays for — the real ceiling is Firestore's 1 MiB,
-// and this cap sits a quarter of the way to it, exactly as the screen path's does.
 const CONTENT_BYTE_CAP = TRANSCRIPT_MAX_BYTES - VIEW_OVERHEAD_BYTES;
+
+/** A string's size ON THE WIRE: its JSON encoding, quotes and escapes included.
+ *
+ *  Not `Buffer.byteLength(text)`, and the difference is not cosmetic. JSON escapes a C0 control byte
+ *  to SIX bytes (an ESC becomes the six characters backslash-u-0-0-1-b), and a tool result is
+ *  terminal output — the transcripts on this machine are
+ *  full of ANSI. Measuring raw bytes let a view sized at 256 KB serialize to 1.5 MB and fail against
+ *  Firestore's 1 MiB document limit on every poll, which is the exact failure this cap exists to
+ *  prevent (Codex, PR #1776). */
+const encodedBytes = (text: string): number => Buffer.byteLength(JSON.stringify(text), "utf8");
 
 // A `text` block belongs to whoever wrote the record. Anything that is neither speaker renders as
 // `unknown` rather than being guessed at or dropped — see the note at the top about staying visible.
@@ -234,25 +240,42 @@ function evictOldestTurns(scan: TranscriptScan): void {
   }
 }
 
-const rowBytes = (row: TranscriptRow): number => Buffer.byteLength(row.text, "utf8") + ROW_OVERHEAD_BYTES;
+const rowBytes = (row: TranscriptRow): number => encodedBytes(row.text) + ROW_OVERHEAD_BYTES;
 
 // `at` is measured rather than folded into the constant: it is claude's `timestamp` field passed
 // through, so a corrupt transcript can put an arbitrarily long string there.
-const turnBytes = (turn: TranscriptTurn): number =>
-  turn.rows.reduce((n, row) => n + rowBytes(row), TURN_OVERHEAD_BYTES + Buffer.byteLength(turn.at ?? "", "utf8"));
+const turnBytes = (turn: TranscriptTurn): number => turn.rows.reduce((n, row) => n + rowBytes(row), TURN_OVERHEAD_BYTES + encodedBytes(turn.at ?? ""));
 
-/** `text` cut to at most `maxBytes` UTF-8 bytes, never inside a character.
+// The start of the character containing byte `at` — a continuation byte is 0b10xxxxxx, so walking
+// back off them lands on a character boundary and the cut never splits a sequence.
+function charStart(buf: Buffer, at: number): number {
+  let start = at;
+  while (start > 0 && ((buf[start] ?? 0) & 0xc0) === 0x80) start--;
+  return start;
+}
+
+/** The longest prefix of `text` whose JSON ENCODING fits in `maxBytes`.
  *
- *  Bytes, not characters: the cap exists because of what Firestore stores, and one Japanese
- *  character is three bytes there and one `length` here. Cutting a buffer at an arbitrary offset
- *  would leave a broken sequence, so the cut walks back off any continuation byte (0b10xxxxxx). */
-export function clipToBytes(text: string, maxBytes: number): string {
+ *  Encoded, not raw — see encodedBytes for why the two differ by up to six times. There is no cheap
+ *  arithmetic from one to the other, so this searches: encoded length grows monotonically with the
+ *  prefix, which is exactly what a binary search needs. Every candidate is cut on a character
+ *  boundary, so the answer is valid UTF-8 whichever one wins.
+ *
+ *  It runs only when a single turn is over the cap on its own, which is the pathological case the
+ *  4.5 MB record of #1692 makes real. */
+export function clipToEncodedBytes(text: string, maxBytes: number): string {
   if (maxBytes <= 0) return "";
+  if (encodedBytes(text) <= maxBytes) return text;
   const buf = Buffer.from(text, "utf8");
-  if (buf.length <= maxBytes) return text;
-  let end = maxBytes;
-  while (end > 0 && ((buf[end] ?? 0) & 0xc0) === 0x80) end--;
-  return buf.subarray(0, end).toString("utf8");
+  let fits = 0; // a prefix length that is known to fit
+  let over = buf.length; // and one that is known not to
+  while (over - fits > 1) {
+    const mid = charStart(buf, (fits + over) >> 1);
+    if (mid <= fits) break; // no character boundary strictly between the two — `fits` is the answer
+    if (encodedBytes(buf.subarray(0, mid).toString("utf8")) <= maxBytes) fits = mid;
+    else over = mid;
+  }
+  return buf.subarray(0, fits).toString("utf8");
 }
 
 // The newest turn does not fit even alone. It is the one turn that must survive (decision 1), so its
@@ -261,7 +284,7 @@ export function clipToBytes(text: string, maxBytes: number): string {
 // than removed, so the view shows where it stops.
 function clipTurn(turn: TranscriptTurn): TranscriptTurn {
   const rows: TranscriptRow[] = [];
-  let remaining = CONTENT_BYTE_CAP - TURN_OVERHEAD_BYTES - Buffer.byteLength(turn.at ?? "", "utf8");
+  let remaining = CONTENT_BYTE_CAP - TURN_OVERHEAD_BYTES - encodedBytes(turn.at ?? "");
   turn.rows.forEach((row) => {
     if (remaining <= 0) return;
     const size = rowBytes(row);
@@ -270,7 +293,7 @@ function clipTurn(turn: TranscriptTurn): TranscriptTurn {
       remaining -= size;
       return;
     }
-    rows.push({ ...row, text: clipToBytes(row.text, remaining - ROW_OVERHEAD_BYTES), clipped: true });
+    rows.push({ ...row, text: clipToEncodedBytes(row.text, remaining - ROW_OVERHEAD_BYTES), clipped: true });
     remaining = 0;
   });
   return { ...turn, rows };

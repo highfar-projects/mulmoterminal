@@ -14,7 +14,7 @@ import {
   TOOL_RESULT_MAX_LINES,
   TRANSCRIPT_LINE_BUDGET,
   TRANSCRIPT_MAX_BYTES,
-  clipToBytes,
+  clipToEncodedBytes,
   emptyTranscriptScan,
   foldTranscriptView,
   isTurnBoundary,
@@ -358,23 +358,51 @@ describe("transcriptViewOf", () => {
       expect(clipped).not.toContain("�"); // U+FFFD is what a split sequence decodes to
       expect(Buffer.from(clipped, "utf8").toString("utf8")).toBe(clipped);
     });
+
+    // The cap has to bound the SERIALIZED reply, not the text inside it. JSON turns one ESC byte
+    // into six, and a tool result is terminal output — so a view measured in raw bytes was six times
+    // its nominal size on the wire and blew Firestore's 1 MiB document limit (Codex, PR #1776).
+    it("stays under the cap for ANSI-heavy tool output, where JSON escaping is 6x", () => {
+      const ansi = "\u001b[31m".repeat(TRANSCRIPT_MAX_BYTES / 2);
+      const view = okView(viewOf([userRecord("colourful"), toolResultRecord(ansi)]));
+      expect(Buffer.byteLength(ansi, "utf8")).toBeGreaterThan(TRANSCRIPT_MAX_BYTES); // the raw text alone is over
+      expect(viewBytes(view)).toBeLessThan(TRANSCRIPT_MAX_BYTES);
+      expect(view.turns[0]?.rows[1]?.clipped).toBe(true);
+    });
+
+    it("stays under the cap when many turns are ANSI-heavy, not just the newest", () => {
+      const noisyTurn = (label: string) => [userRecord(label), toolResultRecord("\u001b[0m".repeat(20 * 1024))];
+      const view = okView(viewOf(["a", "b", "c", "d", "e", "f", "g", "h"].flatMap(noisyTurn)));
+      expect(viewBytes(view)).toBeLessThan(TRANSCRIPT_MAX_BYTES);
+      expect(view.truncated).toBe(true);
+    });
   });
 });
 
-describe("clipToBytes", () => {
-  it("measures BYTES, not characters", () => {
-    expect(clipToBytes("あいう", 6)).toBe("あい"); // 3 bytes each
+describe("clipToEncodedBytes", () => {
+  const encoded = (text: string): number => Buffer.byteLength(JSON.stringify(text), "utf8");
+
+  it("measures BYTES, not characters — and counts the quotes JSON puts around them", () => {
+    expect(clipToEncodedBytes("あいう", 8)).toBe("あい"); // 3 bytes each, plus 2 for the quotes
   });
 
   it("never splits a character", () => {
-    expect(clipToBytes("あいう", 7)).toBe("あい");
-    expect(clipToBytes("あいう", 8)).toBe("あい");
-    expect(clipToBytes("あいう", 9)).toBe("あいう");
+    expect(clipToEncodedBytes("あいう", 9)).toBe("あい");
+    expect(clipToEncodedBytes("あいう", 10)).toBe("あい");
+    expect(clipToEncodedBytes("あいう", 11)).toBe("あいう");
+  });
+
+  it("counts what ESCAPING costs — an ESC is one byte here and six on the wire", () => {
+    const ansi = "\u001b[31m";
+    expect(Buffer.byteLength(ansi, "utf8")).toBe(5);
+    expect(encoded(ansi)).toBe(12); // 6 for the ESC, 4 for the rest, 2 for the quotes
+    // A raw-byte budget of 10 would have kept the whole thing; the encoding does not fit in it.
+    expect(encoded(clipToEncodedBytes(ansi, 10))).toBeLessThanOrEqual(10);
   });
 
   it("returns the text untouched when it already fits, and nothing at a non-positive budget", () => {
-    expect(clipToBytes("hello", 99)).toBe("hello");
-    expect(clipToBytes("hello", 0)).toBe("");
-    expect(clipToBytes("hello", -5)).toBe("");
+    expect(clipToEncodedBytes("hello", 99)).toBe("hello");
+    expect(clipToEncodedBytes("hello", 0)).toBe("");
+    expect(clipToEncodedBytes("hello", -5)).toBe("");
   });
 });
