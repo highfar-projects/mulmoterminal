@@ -29,9 +29,13 @@ Canvas で開くと必ずこの経路に乗る。
 3. `tsconfig.test-server.json` の include に `test/config/**`。`vite.config.ts` を DOM な program
    （`tsconfig.test.json`）へ import すると `@types/node` の global が混ざり、無関係な 3 コンポーネントで
    `window.setTimeout` が `Timeout` に解決されて typecheck が落ちるため、node 側の project に置く。
-4. README。proxy するパスを 2 箇所で列挙していて、どちらも `/htmlfile` が抜けていた
-   （片方は `/artifacts` も）。今回直したのと同じ「一覧への足し忘れ」型なので、
+4. README。proxy するパスを **3 箇所** で列挙していて、いずれも `/htmlfile` が抜けていた
+   （1 箇所は `/artifacts` も）。今回直したのと同じ「一覧への足し忘れ」型なので、
    抜けたときに何が起きるか（SPA catch-all が index.html を返し iframe が真っ白）も併記する。
+   3 箇所目（dev アーキテクチャ節、L366）は CodeRabbit の指摘で見つかった。最初の grep が
+   `"Dev proxy"` と引用符付きの `"/artifacts"` を探していて、地の文の「and `/artifacts` to the
+   backend」に当たらなかったため。**列挙の抜けを探すときは、引用や語順に依存しないパターン
+   （`grep -n '/artifacts'` と `grep -ni 'prox'`）で全件を出す。**
 
 ## 他の mount の点検
 

@@ -364,9 +364,10 @@ The launcher detects it and prints the exact, OS-appropriate removal command; ru
   see [Agents: Claude & Codex](#agents-claude--codex) and [Scripts (Run menu)](#scripts-run-menu).
 - In dev (`yarn dev`) the Vite dev server runs on its own port (`CLIENT_PORT`,
   default `6856`) and proxies `/ws` (a prefix covering `/ws/codex`, `/ws/launch`, and
-  `/ws/run`), `/ws/pubsub`, `/api`, and `/artifacts` to the backend (`PORT`, default
-  `34567`) — so you open the Vite port (e.g. `http://localhost:6856`). In production the
-  backend serves the built client from `dist/` on `PORT`, and you open that.
+  `/ws/run`), `/ws/pubsub`, `/api`, `/artifacts`, and `/htmlfile` to the backend
+  (`PORT`, default `34567`) — so you open the Vite port (e.g. `http://localhost:6856`).
+  In production the backend serves the built client from `dist/` on `PORT`, and you open
+  that.
 
 ---
 
