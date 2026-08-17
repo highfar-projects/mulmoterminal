@@ -77,6 +77,22 @@ function setup(now = () => 1_000_000, generateTitle: (turns: ConversationTurn[])
   return { ...mgr, published, summarized, diskTitles };
 }
 
+// Since #1772 the two title sources take DIFFERENT paths, so a spec has to say which it drives.
+// The default reads the `ai-title` Claude Code wrote (through session-reads' cached fold, so the
+// injected resolver is never called); `headless` summarizes the turns and is the only path that
+// streams the transcript. `beforeEach` in a `headless` block, restored in `afterEach`.
+function useHeadlessSource() {
+  let previous: string | undefined;
+  beforeEach(() => {
+    previous = process.env.MT_TITLE_SOURCE;
+    process.env.MT_TITLE_SOURCE = "headless";
+  });
+  afterEach(() => {
+    if (previous === undefined) delete process.env.MT_TITLE_SOURCE;
+    else process.env.MT_TITLE_SOURCE = previous;
+  });
+}
+
 describe("noteTitleTurn", () => {
   it("flags a session that has no title yet", () => {
     const { noteTitleTurn } = setup();
@@ -130,27 +146,74 @@ describe("forgetTitle", () => {
   });
 });
 
-// The default source reads a title Claude Code already wrote rather than spawning anything
-// (#1769), so the manager has to hand that record to the resolver out of the SAME streamed pass.
-describe("the ai-title the transcript carries", () => {
-  it("reaches the resolver, the last one winning", async () => {
-    const { maybeGenerateTitle, diskTitles } = setup();
+// The default source reads the title Claude Code already wrote. It never calls the summarizer,
+// and since #1772 it never streams the transcript either — session-reads folds `ai-title` out of
+// the file incrementally and caches it, so the manager stores what the route already read.
+describe("the ai-title the transcript carries (default source)", () => {
+  it("stores and publishes the title from disk, without summarizing", async () => {
+    const { maybeGenerateTitle, published, summarized } = setup();
     await writeTranscript([aiTitleRecord("An earlier title"), userTurn("add a retry to the uploader"), aiTitleRecord("Uploader retry handling")]);
     titlePending.add(SESSION);
     await maybeGenerateTitle(SESSION, cwd);
-    expect(diskTitles).toEqual(["Uploader retry handling"]);
+    expect(aiTitles.get(SESSION)).toBe("Uploader retry handling"); // the LAST record wins
+    expect(published).toEqual([SESSION]);
+    expect(summarized).toEqual([]); // nothing was summarized — no process, no turns read
   });
 
-  it("is null for a transcript that has none, so the caller can fall back", async () => {
-    const { maybeGenerateTitle, diskTitles } = setup();
+  it("leaves the header to its fallback when the transcript has no title yet", async () => {
+    const { maybeGenerateTitle, published, summarized } = setup();
     await writeTranscript([userTurn("add a retry to the uploader")]);
     titlePending.add(SESSION);
     await maybeGenerateTitle(SESSION, cwd);
-    expect(diskTitles).toEqual([null]);
+    expect(aiTitles.has(SESSION)).toBe(false);
+    expect(published).toEqual([]);
+    expect(summarized).toEqual([]);
+  });
+
+  // The case both reviewers asked for on #1772: Claude Code appends its `ai-title` WITHOUT a new
+  // user turn, so any rule keyed on turn count refused to look again — the sidebar showed the
+  // title (it reads disk directly) while the cell header sat on the prompt fallback.
+  it("promotes a title that appears with no new user turn", async () => {
+    const { freshenRosterTitle, published } = setup();
+    await writeTranscript([userTurn("add a retry to the uploader")]);
+    freshenRosterTitle(SESSION, cwd, 1, null); // nothing to show yet
+    expect(aiTitles.has(SESSION)).toBe(false);
+    // …claude writes its title moments later, at the same user-turn count.
+    freshenRosterTitle(SESSION, cwd, 1, "Uploader retry handling");
+    expect(aiTitles.get(SESSION)).toBe("Uploader retry handling");
+    expect(published).toEqual([SESSION]);
+  });
+
+  it("does not republish a title that has not changed", async () => {
+    const { freshenRosterTitle, published } = setup();
+    freshenRosterTitle(SESSION, cwd, 1, "Uploader retry handling");
+    freshenRosterTitle(SESSION, cwd, 1, "Uploader retry handling");
+    freshenRosterTitle(SESSION, cwd, 2, "Uploader retry handling");
+    expect(published).toEqual([SESSION]); // once, not three times
+  });
+
+  it("does not restore the pre-clear title of a cleared session", async () => {
+    // The /clear contract (#1085): our own transcript is frozen on the conversation the user just
+    // ended, so its title must not come back through the cheap path either.
+    const { freshenRosterTitle, published } = setup();
+    clearedTranscripts.add(SESSION);
+    freshenRosterTitle(SESSION, cwd, 3, "Pre-clear title");
+    expect(aiTitles.has(SESSION)).toBe(false);
+    expect(published).toEqual([]);
+  });
+
+  it("never reads the transcript on this path", async () => {
+    // There is no file at all — the default source must still work, because the value it needs
+    // arrived from the caller.
+    const { freshenRosterTitle } = setup();
+    freshenRosterTitle(SESSION, cwd, 1, "Uploader retry handling");
+    expect(aiTitles.get(SESSION)).toBe("Uploader retry handling");
   });
 });
 
-describe("maybeGenerateTitle", () => {
+describe("maybeGenerateTitle (headless source)", () => {
+  useHeadlessSource();
+
   it("stores and publishes a title for a flagged session", async () => {
     const { maybeGenerateTitle, published } = setup();
     await writeTranscript([userTurn("add a retry to the uploader")]);
@@ -291,7 +354,9 @@ describe("maybeGenerateTitle", () => {
   });
 });
 
-describe("freshenRosterTitle", () => {
+describe("freshenRosterTitle (headless source)", () => {
+  useHeadlessSource();
+
   // Codex on #1772: "no title" became an ORDINARY answer once the default source reads what
   // Claude Code wrote — a session it has not titled yet returns null. Leaving the mark unset then
   // kept shouldFreshenViewedTitle true forever, so a watched session rescanned its whole

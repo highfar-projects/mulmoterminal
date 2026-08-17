@@ -28,6 +28,13 @@ export type TitleSource = "transcript" | "headless";
 export const HEADLESS_TITLE_SOURCE: TitleSource = "headless";
 export const titleSource = (): TitleSource => (process.env.MT_TITLE_SOURCE === HEADLESS_TITLE_SOURCE ? "headless" : "transcript");
 
+/** Whether producing a title requires reading the conversation. Only `headless` does — and that
+ *  is the whole difference in what the caller must do: summarizing means streaming the transcript
+ *  for its turns, where the default source needs one field that `readSessionSummary` already
+ *  keeps folded and cached. Asked rather than assumed, so the two paths cannot both pay for the
+ *  expensive one (Codex + CodeRabbit on #1772). */
+export const titleNeedsTurns = (): boolean => titleSource() === "headless";
+
 // Regenerate at most every N user turns so a long session's title stays current without
 // a model call on every single turn.
 export const TITLE_REGEN_EVERY_TURNS = 5;
