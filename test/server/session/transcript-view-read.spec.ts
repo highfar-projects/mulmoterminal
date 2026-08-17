@@ -8,6 +8,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { promises as fs } from "node:fs";
 import type { FileHandle } from "node:fs/promises";
+import type { Stats } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { clearedTranscripts } from "../../../server/session/cleared-transcripts.js";
@@ -230,6 +231,24 @@ describe("sessionTranscriptView", () => {
       clearedTranscripts.add(SESSION);
       await sessionTranscriptView(cwd, SESSION);
       expect(vi.mocked(fs.open)).not.toHaveBeenCalled();
+    });
+
+    it("stops at the size it stat'd, so what is appended DURING the read cannot extend the window", async () => {
+      // The file is written while it is read — a live session appends every 2-17 seconds, in records
+      // that reach megabytes — so a read that runs to EOF follows the writer instead of covering the
+      // window it announced. The stat is the snapshot; here it reports the file as it was two lines
+      // ago, and the third must not appear (Codex, PR #1776).
+      const lines = [userLine("first"), assistantLine("body"), userLine("appended after the stat")];
+      await writeTranscript(...lines);
+      const handle = await fs.open(path.join(projectSessionsDir(cwd), `${SESSION}.jsonl`), "r");
+      const real = await handle.stat();
+      const snapshot = Buffer.byteLength(lines.slice(0, 2).join(""), "utf8");
+      vi.spyOn(handle, "stat").mockResolvedValue(Object.assign(Object.create(Object.getPrototypeOf(real)) as Stats, real, { size: snapshot }));
+      vi.mocked(fs.open).mockResolvedValueOnce(handle);
+      const view = await sessionTranscriptView(cwd, SESSION);
+      expect(view.status).toBe("ok");
+      if (view.status !== "ok") return;
+      expect(view.turns.map(rowTexts)).toEqual([["first", "body"]]);
     });
 
     it("still answers the conversation when CLOSING the handle fails", async () => {

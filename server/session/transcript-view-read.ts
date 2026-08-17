@@ -79,7 +79,12 @@ async function readWindow(handle: FileHandle, size: number, tail: number, window
   const from = Math.max(0, size - tail);
   const scan = emptyTranscriptScan();
   const atLineStart = await startsAtLine(handle, from);
-  await forEachJsonlRecordIn(handle, { from, atLineStart }, (record) => foldTranscriptView(scan, record));
+  // `to: size` — the window ENDS at the size that was stat'd. Without it the fold reads until EOF,
+  // and this file is being appended to WHILE it is read: a live session writes every 2-17 seconds,
+  // in records that reach megabytes, so a read nominally bounded at 4 MB follows the writer for as
+  // long as the writer keeps going. Bounding it at the snapshot also makes a widened re-read fold
+  // the same bytes the first one did, rather than a file that moved underneath (Codex, PR #1776).
+  await forEachJsonlRecordIn(handle, { from, to: size, atLineStart }, (record) => foldTranscriptView(scan, record));
   if (scan.turns.length > 0) return transcriptViewOf(scan, from > 0);
   if (from === 0) return { status: "none" };
   if (tail >= window.maxTailBytes) return { status: "too-large" };
