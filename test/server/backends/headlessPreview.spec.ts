@@ -19,6 +19,8 @@
 // browser is an optional dependency of this server (see `browserOrProblem`), and a machine without
 // one gets a headless preview that says so rather than a suite that goes red.
 import { beforeAll, describe, expect, it } from "vitest";
+import { stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { LIMITS, runPagesHeadless, type HeadlessPageInput, type HeadlessPageReport } from "../../../server/backends/sharedApp/headlessPreview.js";
 
 /** Whether Chrome is on this machine, asked by STARTING one and closing it again.
@@ -112,6 +114,38 @@ const SUBMITS_ON_LOAD = `
   view.onState(() => {});
   view.ready();
   view.submit("orders", { name: "nobody asked" });
+</script>`;
+
+/** A page that submits on load AND submits again the moment its confirmation is answered.
+ *
+ *  "That didn't work, try once more" — a handler that costs nothing to write. It is the page that
+ *  breaks a run which clears the pending confirmation and then measures the press from what it saw
+ *  BEFORE clearing: the resubmission lands in between, so the inert button below is credited with
+ *  it and a real record is written for a control nobody pressed. */
+const RESUBMITS_ON_DECLINE = `
+<button type="button" id="go">Order</button>
+<script>
+  const view = window.__MC_APP_VIEW;
+  view.onState(() => {});
+  view.ready();
+  const again = () => { view.submit("orders", { name: "again" }); };
+  // Both branches, because what a declined confirmation does to the promise is the parent's
+  // business and this page is written by somebody who does not know or care which it is.
+  view.submit("orders", { name: "nobody asked" }).then(again, again);
+</script>`;
+
+/** A page whose button does nothing and which submits from a TIMER, long after it loaded.
+ *
+ *  Nothing is pending when the press happens and nothing was pending at the mount, so every
+ *  counting-based defence sees a submission appear "because of" the click. It did not. This is the
+ *  page that decides whether the run writes on a guess. */
+const SUBMITS_ON_A_TIMER = `
+<button type="button" id="go">Order</button>
+<script>
+  const view = window.__MC_APP_VIEW;
+  view.onState(() => {});
+  view.ready();
+  setTimeout(() => { view.submit("orders", { name: "a timer did this" }); }, 800);
 </script>`;
 
 /** A page that rearranges its own controls when an input is filled.
@@ -285,6 +319,88 @@ describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
     expect(unreachable?.presses[1]?.notClickable).toBe(true); // display:none — no box to aim at
     expect(unreachable?.presses[1]?.submitted).toBeNull();
   });
+
+  it("WRITES NOTHING against a real page, because no runtime marks a submission yet", async () => {
+    // THE GATE, against four pages that each break a different guess somebody might make about
+    // cause: the ordinary one, the one that submits on load, the one that resubmits the moment its
+    // confirmation is answered, and the one whose timer fires later. None of their submissions
+    // carries the runtime's mark (`GESTURE_MARK`), so none is written — and that is the whole of
+    // the rule, with no window and no counting anywhere near it.
+    //
+    // This is the test that will change when `@receptron/sharedapp` starts marking: the first page
+    // will write, and the other three still must not.
+    const wrote: string[] = [];
+    const run = await runPagesHeadless(
+      [page("works", WORKS), page("onload", SUBMITS_ON_LOAD), page("resubmits", RESUBMITS_ON_DECLINE), page("timer", SUBMITS_ON_A_TIMER)],
+      {
+        write: async (_cid, values) => {
+          wrote.push(values.name ?? "");
+          return { ok: true, token: `t${wrote.length}` };
+        },
+        undo: async () => ({ ok: true }),
+      },
+    );
+    if (!run.ok) throw new Error(run.problems.join(" "));
+    expect(wrote).toEqual([]);
+    // The submission REACHED the parent on the ordinary page — that half is proven, and it is what
+    // the run is for. What was not established is that the press caused it.
+    expect(run.pages[0]?.presses[0]?.submitted).toEqual({ cid: "orders", fields: ["name"] });
+    expect(run.pages[0]?.presses[0]?.writeWithheld).toBe(true);
+    expect(run.pages[0]?.presses[0]?.write).toBeNull();
+  }, 240_000);
+
+  it("writes nothing when it is given no writer, which is every run a test drives", async () => {
+    // The invariant that keeps every other test in this file honest: the default has to be the
+    // behaviour this action had before it could write at all.
+    const run = await runPagesHeadless([page("works", WORKS)]);
+    if (!run.ok) throw new Error(run.problems.join(" "));
+    expect(run.wrote).toBe(false);
+    expect(run.pages[0]?.presses[0]?.submitted).toEqual({ cid: "orders", fields: ["name"] });
+    expect(run.pages[0]?.presses[0]?.write).toBeNull();
+    expect(run.pages[0]?.presses[0]?.writeSkipped).toBe(false);
+  }, 120_000);
+
+  it("gives the authored page no way to reach the writer", async () => {
+    // THE HOLE `exposeFunction` OPENED. Puppeteer installs a binding in every document of the page,
+    // the sandboxed `srcdoc` included — so the one document here that nobody trusts could have
+    // called the writer directly, once per line of script, past the budget, the ledger and the undo.
+    // The verdict is passed IN now, and this is what pins that.
+    //
+    // The page REPORTS WHAT IT FOUND onto its own screen rather than the test inferring it from a
+    // write that did not happen: with the click mark not yet set by any runtime, nothing is written
+    // either way, so "no record appeared" would prove nothing at all.
+    const run = await runPagesHeadless([
+      page(
+        "greedy",
+        `
+<div id="menu">loading…</div>
+<button type="button" id="go">Order</button>
+<script>
+  const view = window.__MC_APP_VIEW;
+  view.onState(() => {
+    document.getElementById("menu").textContent = typeof window.__previewWrite === "function" ? "WRITER REACHABLE" : "no writer here";
+  });
+  view.ready();
+</script>`,
+      ),
+    ]);
+    if (!run.ok) throw new Error(run.problems.join(" "));
+    expect(run.pages[0]?.text).toContain("no writer here");
+    expect(run.pages[0]?.text).not.toContain("WRITER REACHABLE");
+  }, 120_000);
+
+  it("photographs each page, and names where the picture went", async () => {
+    // The pane's last advantage handed over: a person looking at the screen. The file has to
+    // EXIST — a path in a report that opens nothing is worse than no path.
+    const run = await runPagesHeadless([page("works", WORKS)]);
+    if (!run.ok) throw new Error(run.problems.join(" "));
+    const shot = run.pages[0]?.screenshot;
+    expect(shot).not.toBeNull();
+    expect(run.pages[0]?.screenshotError).toBe("");
+    expect((await stat(shot ?? "")).size).toBeGreaterThan(0);
+    // Outside the repository, because a preview must leave nothing for a commit to pick up.
+    expect(shot?.startsWith(tmpdir())).toBe(true);
+  }, 120_000);
 });
 
 describe.skipIf(!chromeReady)("a document that breaks the questions put to it", () => {

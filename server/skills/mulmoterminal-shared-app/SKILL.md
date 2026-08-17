@@ -224,15 +224,27 @@ state (quoted, in the author's own words), a `<form>` in the live document, a bu
 nothing, a submission the declaration refused. **Run it after writing or editing any view, and
 again before you publish.** A page that has never been through it is a page nobody has run.
 
-It **writes nothing** — every confirmation is declined — and that is exactly where it stops. It
-proves the page draws and that a press REACHES the parent as a submission the declaration accepts.
-It cannot tell you whether the deployed rules would accept the write, and it says nothing about
-other people's devices, two people submitting at once, or whether the rules are deployed at all.
-If no browser can be started it says so, and then the pane below is the whole answer rather than
-the second half of it.
+**It writes NOTHING**, and that is a decision rather than an omission. Accepting a submission would
+put a real record in a real app, and that needs proof that the CLICK caused it — a page can submit
+from a timer, from `onState`, or from a promise settling, and no amount of measuring before and
+after a press tells those apart. The proof has to come from the runtime injected into the page,
+which is in the same realm as the event; it does not mark submissions yet, so nothing is written.
+The machinery is in place and turns on when it does.
 
-**That is what the Collections pane's preview is FOR.** It is not a convenience and it is not a
-rough approximation. Before it existed, an LLM wrote the page and it went to a public URL without
+So the report proves the page draws, the handshake completes, the records arrive, and **a press
+reaches the parent as a submission the declaration accepts**. It does NOT tell you what the deployed
+rules would say about that submission.
+
+It also **tries to photograph each page**, and gives you the path for every one it managed. Open it
+when the words leave the layout in doubt; that is the one thing prose cannot carry. A page with no
+picture says why in its own line — the capture failed, or there was nowhere to write it — and that
+is a fact about the run rather than about the page.
+
+If no browser can be started it says so, and then the pane below is the whole answer rather than the
+second half of it.
+
+**The Collections pane's preview is the same thing with a person in front of it.** It is not a
+convenience and it is not a rough approximation. Before it existed, an LLM wrote the page and it went to a public URL without
 anybody ever having loaded it once — which is exactly how a sign-up form was published twice with
 a Submit button that did nothing at all. So the preview runs **the same parent as
 `/a/{slug}`** (`@receptron/sharedapp/view`, the code mulmoserver itself runs), with the same
@@ -241,8 +253,9 @@ dialog. **It is deliberately not looser than production**: a preview kinder than
 would be a machine for producing "it worked on my machine".
 
 **Ask the user to open it once the headless run is clean** — it is the half you cannot do, because
-it puts a person in front of the page and it can WRITE. In the cell open on this
-repository: the **Collections pane** → the **"Preview the shared app"** button at the top → the
+it puts a person in front of the page, and **a person is the proof a write needs**: they saw the
+control, they pressed it, they accepted. That is exactly what `action: "preview"` cannot supply. In
+the cell open on this repository: the **Collections pane** → the **"Preview the shared app"** button at the top → the
 page appears, drawn from the working tree. Opening it reads only: nothing is written and no URL
 name is taken.
 
@@ -284,10 +297,9 @@ pages the declaration names and report what one will probably get wrong — a mo
 nothing. They are hints and they do not stop a publish: a page they are silent about can still be
 broken, which is why they are not a substitute for the paragraph above.
 
-**What the preview does NOT prove**, so do not claim it: the write it performs is made **as the
-author**, who may write anything in their own app — so a visitor's or a participant's permission
-is untested, and a page that works here can still be refused for the person it was built for.
-Nobody else exists, so nothing is concurrent. And it cannot tell whether the rules a new
+**What the pane's preview does NOT prove**, so do not claim it: the write is made **as the author**, who may write anything in their own app, so a visitor's or a participant's
+permission is untested and a page that works here can still be refused for the person it was built
+for. Nobody else exists, so nothing is concurrent. And it cannot tell whether the rules a new
 declaration needs have been deployed at all.
 
 ### 4. Invite

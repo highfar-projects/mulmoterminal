@@ -14,17 +14,48 @@
 // alternative — a bundler step, or hand-copying the functions into this string — would make what
 // runs here a copy that can drift silently.
 //
-// NOTHING IS EVER ACCEPTED. `submit` refuses, and every confirmation the bridge raises is
-// DECLINED. A headless run is started by an agent rather than by a person, and the pane's own
-// accept path writes a real record to the live database as the author — which is fine when
-// somebody pressed the button and is not fine when a tool call did. What this proves is that the
-// submission REACHED the parent, correctly formed and correctly addressed; whether the rules would
-// accept it is the pane's question, and it is asked by a person.
+// WHETHER IT ACCEPTS IS THE HOST'S TO DECIDE, and the DECIDING HAPPENS IN NODE. This page never
+// reaches the database and holds nothing that could: `accept(answer)` is called with the verdict
+// already in hand, and `submit` hands that verdict back to the parent. A run driven by a test, with
+// no app and no database behind it, accepts nothing and behaves exactly as this harness always did.
+//
+// THE WRITER IS NOT A BINDING ON `window`, and that is a correction rather than a preference.
+// Puppeteer's `exposeFunction` installs its binding in EVERY document of the page — including the
+// sandboxed `srcdoc` this harness mounts, which is the one document here that nobody trusts. A page
+// could then call the writer directly, once per line of script, bypassing the run's budget, its
+// ledger and its undo: real records in a real app that nothing reports and nothing removes. Passing
+// the ANSWER in is what closes that. The page can only ever receive a value Node chose to give it.
+//
+// It used to refuse unconditionally, and the reason was real while it lasted: before staging was
+// removed an app had no `apps/{aid}` until it was deployed, so a confirmation accepted here was
+// refused by the rules anyway. Since #1760 an app can be written to from the moment it is
+// declared, and the only thing left in the way was a policy whose cost was that the run could
+// never bring back the one answer an author most wants before publishing — what the DEPLOYED
+// rules say. See `plans/feat-headless-preview-parity.md`.
 //
 // Design: `plans/feat-shared-app-preview.md` section 7 (P5).
 
 /** Where the runtime's modules are mounted, relative to the harness page. */
 export const VIEW_MOUNT = "/view";
+
+/** The field on a submit message that says the page made it while handling a real click.
+ *
+ *  Set by the injected bootstrap in `@receptron/sharedapp`, which is the only code in the same
+ *  realm as the event. The contract it has to satisfy, and which nothing here can check:
+ *
+ *    true  — `submit()` was called during the dispatch of a TRUSTED click in this document, or in
+ *            a microtask of that dispatch. A separate task (a `setTimeout`, a promise settled in an
+ *            earlier turn) is NOT that dispatch and must not be marked.
+ *    absent or false — everything else.
+ *
+ *  It is deliberately a fact about the event loop rather than about elapsed time: a slow handler is
+ *  still the handler, and a fast timer is still a timer. That is the whole reason it lives there
+ *  and not here — four attempts to decide it from this side by counting and by waiting were each
+ *  defeated by a page that simply waited longer (`plans/feat-headless-preview-parity.md`, D-2c).
+ *
+ *  Until the published runtime sets it, every submission reads as unmarked and this run writes
+ *  nothing. Fail-closed by construction rather than by a version check that could be got wrong. */
+export const GESTURE_MARK = "gesture";
 
 /** What one rendered document produced, as the browser side collects it. Mirrored on the Node side
  *  by `HeadlessObservation` — the two are one shape crossing `page.evaluate`, so a field added
@@ -41,6 +72,19 @@ export interface HarnessObservation {
    *  `not-a-submission`, `busy`. These are the answers an author cannot see in the browser,
    *  because the page gets them as a rejected promise it usually does not await. */
   refused: string[];
+  /** What the PAGE said about itself, through the runtime's `notice` port: an uncaught error, a
+   *  promise it rejected and never handled, a modal the sandbox ignored. The pane has always taken
+   *  these and this harness dropped them, which is the parity gap that made a page reporting its
+   *  own crash look like a page that simply drew nothing. `detail` is PAGE-AUTHORED — see
+   *  `ViewNotice` — so it is carried as the page's words and reported as such. */
+  notices: { code: string; detail: string }[];
+  /** The confirmation waiting to be answered, with the VALUES the page submitted.
+   *
+   *  The values and not only their field names, because Node is what writes now: the record the
+   *  rules judge is built from these, and a host that could see only the keys would have to invent
+   *  the rest. They never leave this process — the harness reads them out of the cell the parent
+   *  already holds, and `runPagesHeadless` hands them to the writer. */
+  pending: { cid: string; values: Record<string, string>; clickCaused: boolean } | null;
 }
 
 /** The harness document. A constant rather than a file on disk: it is served from memory to a
@@ -65,6 +109,16 @@ let viewer = null;
 let nonce = viewNonce();
 let outbound = [];
 let submitted = [];
+let notices = [];
+// requestId -> did the runtime mark this submission as click-caused. Read off the RAW inbound
+// message: the parent's \`PendingSubmit\` carries what a confirmation panel needs in order to draw,
+// and this is not that — it is provenance, and it travels beside the request rather than inside it.
+// Reading it here is what keeps the change to \`@receptron/sharedapp\` down to the one place that
+// can know the answer: the bootstrap inside the document.
+let gestures = new Map();
+// The verdict Node handed in for the confirmation currently being answered. Null means nothing was
+// accepted, which is what \`submit\` refuses on.
+let answer = null;
 
 // The cells the bridge writes into. Plain objects with a \`value\`, which is all \`Signal<T>\` asks
 // for — the package holds no framework precisely so a host can supply its own, and a recorder's
@@ -91,19 +145,33 @@ const recording = (make) => () => {
       outbound.push(message);
       channel.post(message);
     },
-    onMessage: channel.onMessage,
+    // INBOUND IS READ TOO, and only for provenance — the bridge still receives every message
+    // untouched. This notes the mark beside the request and gets out of the way.
+    onMessage: (handler) =>
+      channel.onMessage((data) => {
+        if (data !== null && typeof data === "object" && data.type === VIEW_MESSAGE.submit && typeof data.requestId === "string") {
+          gestures.set(data.requestId, data[${JSON.stringify(GESTURE_MARK)}] === true);
+        }
+        handler(data);
+      }),
     close: channel.close,
   };
 };
 
-/** The member's parent, for a roster or participant page. It performs nothing — a headless run
- *  never writes — so every intent is refused BY NAME on the channel, which the report reads back
- *  out of \`outbound\`. */
+/** The member's parent, for a roster or participant page. It performs nothing — a transition, an
+ *  assignment or a withdrawal is a real write against the live rules and neither this harness nor
+ *  the PANE has a route for one — so every intent is refused BY NAME on the channel, which the
+ *  report reads back out of \`outbound\`. That refusal is parity, not a shortfall: the pane refuses
+ *  them too, for the same reason and in the same words. */
 const member = memberBridge(
   {
     channel: recording(() => portChannel(frame)),
     state: () => datasets,
     viewer: () => viewer ?? { me: null, can: {} },
+    // The page's own account of itself, which the pane has always taken and this harness dropped.
+    // A page that crashes reports it HERE and nowhere else the run can see — dropped, it read as a
+    // page that simply drew nothing.
+    notice: (report) => notices.push({ code: String(report.code), detail: String(report.detail) }),
     // THE SAME CELL the public parent writes, because \`observe()\` reads one and the report puts
     // "It NEVER answered the handshake" at the top of a page whose value is false — over a
     // paragraph saying nothing below describes the page's behaviour. Wired to the public bridge
@@ -119,10 +187,15 @@ const bridge = viewBridge(
     // they are answered on the port and never drawn, which is exactly why an author watching the
     // screen cannot see them.
     channel: recording(() => portChannel(frame)),
-    // Never reached: every confirmation is declined. Here so that a change which starts accepting
-    // has to delete this sentence first.
-    submit: async () => ({ ok: false, error: "a headless preview never writes" }),
+    // THE ANSWER NODE ALREADY DECIDED, or a refusal when it decided nothing.
+    //
+    // Node writes the record (through \`writePreviewSubmission\` — the same function the pane's own
+    // accept path reaches through its HTTP route), and only then calls \`accept\` below with what
+    // the database said. So the page runs its real post-submit path against a real verdict, and
+    // this document never held anything that could reach a database.
+    submit: async () => answer ?? { ok: false, error: "a headless preview never writes" },
     state: () => datasets,
+    notice: (report) => notices.push({ code: String(report.code), detail: String(report.detail) }),
   },
   () => config,
   () => nonce,
@@ -150,6 +223,9 @@ window.__preview = {
     member.forget();
     outbound = [];
     submitted = [];
+    notices = [];
+    gestures = new Map();
+    answer = null;
     datasets = page.datasets;
     viewer = page.viewer ?? null;
     config = page.submit === null ? null : { submit: page.submit };
@@ -169,12 +245,31 @@ window.__preview = {
     return loaded;
   },
   observe() {
-    return { readied: cells.readied.value, stateDelivered: outbound.some((message) => message.type === VIEW_MESSAGE.state), submitted, refused: refusals() };
+    return {
+      readied: cells.readied.value,
+      stateDelivered: outbound.some((message) => message.type === VIEW_MESSAGE.state),
+      submitted,
+      refused: refusals(),
+      notices,
+      pending:
+        pendingValue === null
+          ? null
+          : { cid: pendingValue.cid, values: pendingValue.values, clickCaused: gestures.get(pendingValue.requestId) === true },
+    };
   },
-  /** Answer the confirmation the way a visitor who changed their mind would. Never accept —
-   *  see the note at the top of this module. */
+  /** Answer the confirmation the way a visitor who changed their mind would. */
   decline() {
     bridge.decline();
+  },
+  /** Answer it the way somebody who meant it would, with the verdict Node already has.
+   *
+   *  \`given\` is what the parent's \`submit\` will return — \`{ ok: true }\`, or \`{ ok: false, error }\`
+   *  carrying what the database said. The page's own success or failure path then runs against the
+   *  real answer, which is the whole reason to accept rather than to decline. */
+  async accept(given) {
+    answer = given;
+    await bridge.accept();
+    answer = null;
   },
 };
 </script>
