@@ -29,6 +29,9 @@ Canvas で開くと必ずこの経路に乗る。
 3. `tsconfig.test-server.json` の include に `test/config/**`。`vite.config.ts` を DOM な program
    （`tsconfig.test.json`）へ import すると `@types/node` の global が混ざり、無関係な 3 コンポーネントで
    `window.setTimeout` が `Timeout` に解決されて typecheck が落ちるため、node 側の project に置く。
+4. README。proxy するパスを 2 箇所で列挙していて、どちらも `/htmlfile` が抜けていた
+   （片方は `/artifacts` も）。今回直したのと同じ「一覧への足し忘れ」型なので、
+   抜けたときに何が起きるか（SPA catch-all が index.html を返し iframe が真っ白）も併記する。
 
 ## 他の mount の点検
 
@@ -41,6 +44,12 @@ Canvas で開くと必ずこの経路に乗る。
 - Playwright で `sandbox="allow-scripts"` の iframe に読み込ませ、**修正前は本文が空 +
   `/@vite/client` / `/src/main.ts` の CORS エラー**（issue の再現）、**修正後は本文が描画されエラー無し**。
 - SPA fallback (`/terminals`) は従来どおり index.html、`/htmlfile` の非 html は 404 のまま。
+- fix が依存する条件を振って追試（proxy はパスの再エンコードで直結と挙動が変わりうるため）。
+  backend と dev を比較して全てバイト一致:
+  - `.htm` 拡張子（route は `.html?` を受けるので、片方だけ通ると気付きにくい）
+  - 空白 + 非 ASCII を含むパス（`dir with space/日本語 ページ.html`）
+  - `ws` スコープ（workspace-relative）と `abs` スコープの両方
+  - `/artifacts` 経路（14KB の実 artifact）も従来どおり一致
 - 新 spec は修正を外すと 3 件中 2 件 fail することを確認。
 - format / lint / typecheck / build / test（728 files, 10468 tests）green。
 
