@@ -137,6 +137,34 @@ describe("sessionTranscriptView", () => {
       expect(view.turns.map(rowTexts)).toEqual([["the prompt", "y".repeat(4000), "small"]]);
     });
 
+    // The range fold drops its first line unless told the range starts at one, because a window
+    // picked by arithmetic almost always opens mid-line. When it opens exactly ON a line, the
+    // dropped line is a whole record — and these two are what that costs (Codex, PR #1776).
+    describe("when the window starts exactly at a line boundary", () => {
+      it("keeps the prompt whose line it starts on, rather than losing that whole exchange", async () => {
+        // The window opens exactly on `old`'s line and already holds a later boundary, so nothing
+        // widens: dropping that line simply loses the turn, silently.
+        const lines = [assistantLine("preamble"), userLine("old"), assistantLine("old body"), userLine("new"), assistantLine("answer")];
+        await writeTranscript(...lines);
+        const view = await sessionTranscriptView(cwd, SESSION, windowFrom(lines, 4, 0));
+        expect(view.status).toBe("ok");
+        if (view.status !== "ok") return;
+        expect(view.turns.map(rowTexts)).toEqual([
+          ["old", "old body"],
+          ["new", "answer"],
+        ]);
+      });
+
+      it("does not report a readable session as too-large when that line was the only boundary", async () => {
+        const lines = [assistantLine("before"), userLine("the only prompt"), assistantLine("answer")];
+        await writeTranscript(...lines);
+        const view = await sessionTranscriptView(cwd, SESSION, { ...windowFrom(lines, 2, 0), maxTailBytes: 128 });
+        expect(view.status).toBe("ok");
+        if (view.status !== "ok") return;
+        expect(view.turns.map(rowTexts)).toEqual([["the only prompt", "answer"]]);
+      });
+    });
+
     it("returns the newest turn COMPLETE once a boundary is in the window", async () => {
       // The stopping condition is "a boundary is in the window"; the guarantee is "the newest turn
       // is whole". They agree because nothing follows the LAST boundary except that turn's own

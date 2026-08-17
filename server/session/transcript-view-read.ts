@@ -45,6 +45,25 @@ const isInside = (dir: string, file: string): boolean => {
 
 const isMissingFile = (e: unknown): boolean => hasErrnoCode(e) && e.code === "ENOENT";
 
+const NEWLINE = 0x0a;
+
+/** Whether `from` is genuinely the first byte of a line.
+ *
+ *  `forEachJsonlRecordIn` drops the leading line of a range it was not told starts at one, and that
+ *  is the right default: a window picked by arithmetic almost always opens INSIDE a line, and half a
+ *  line is not JSON. "Almost always" is not always. When `size - tail` happens to land exactly on a
+ *  boundary the dropped line is a WHOLE record — and if it was a user prompt, its exchange is folded
+ *  into the previous turn, or the window loses its only boundary and a perfectly readable session is
+ *  reported as `too-large` (Codex, PR #1776).
+ *
+ *  One byte answers it, which is why the check is cheaper than the bug. */
+async function startsAtLine(handle: FileHandle, from: number): Promise<boolean> {
+  if (from === 0) return true;
+  const byte = Buffer.alloc(1);
+  const { bytesRead } = await handle.read(byte, 0, 1, from - 1);
+  return bytesRead === 1 && byte[0] === NEWLINE;
+}
+
 // A window with no turn boundary in it is not a view: the whole point is turns, and the newest one
 // must be complete. It happens when a SINGLE record is bigger than the window — the range fold drops
 // the partial line it starts inside, taking that record with it — so the answer is to widen.
@@ -59,7 +78,8 @@ const isMissingFile = (e: unknown): boolean => hasErrnoCode(e) && e.code === "EN
 async function readWindow(handle: FileHandle, size: number, tail: number, window: TranscriptWindow): Promise<TranscriptView> {
   const from = Math.max(0, size - tail);
   const scan = emptyTranscriptScan();
-  await forEachJsonlRecordIn(handle, { from }, (record) => foldTranscriptView(scan, record));
+  const atLineStart = await startsAtLine(handle, from);
+  await forEachJsonlRecordIn(handle, { from, atLineStart }, (record) => foldTranscriptView(scan, record));
   if (scan.turns.length > 0) return transcriptViewOf(scan, from > 0);
   if (from === 0) return { status: "none" };
   if (tail >= window.maxTailBytes) return { status: "too-large" };
