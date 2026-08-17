@@ -364,9 +364,10 @@ The launcher detects it and prints the exact, OS-appropriate removal command; ru
   see [Agents: Claude & Codex](#agents-claude--codex) and [Scripts (Run menu)](#scripts-run-menu).
 - In dev (`yarn dev`) the Vite dev server runs on its own port (`CLIENT_PORT`,
   default `6856`) and proxies `/ws` (a prefix covering `/ws/codex`, `/ws/launch`, and
-  `/ws/run`), `/ws/pubsub`, `/api`, and `/artifacts` to the backend (`PORT`, default
-  `34567`) — so you open the Vite port (e.g. `http://localhost:6856`). In production the
-  backend serves the built client from `dist/` on `PORT`, and you open that.
+  `/ws/run`), `/ws/pubsub`, `/api`, `/artifacts`, and `/htmlfile` to the backend
+  (`PORT`, default `34567`) — so you open the Vite port (e.g. `http://localhost:6856`).
+  In production the backend serves the built client from `dist/` on `PORT`, and you open
+  that.
 
 ---
 
@@ -855,7 +856,10 @@ them. They exist as separate projects because each has its own compiler options
 `noUncheckedIndexedAccess` off).
 
 In dev, open the Vite URL; its proxy forwards `/ws`, `/ws/pubsub`, and `/api` to
-`:34567`. In production, run `yarn build` then `yarn server` and open
+`:34567`, plus the two mounts that serve a presentHtml page to the Canvas iframe,
+`/artifacts` and `/htmlfile` — a page path missing from that list is answered by
+Vite's SPA catch-all with `index.html`, which renders as a blank iframe rather
+than an error. In production, run `yarn build` then `yarn server` and open
 `http://localhost:34567`.
 
 ---
@@ -1998,7 +2002,8 @@ common/           Shared by server/ and src/ — both tsconfigs include it, so a
                   wire type either side decides from belongs HERE, never mirrored in both:
                   dirChrome.ts, ghItems.ts, gitStatus.ts, launchOptions.ts, shortcuts.ts,
                   sourceExtensions.ts, modelPresets.ts, modelIds.ts, theme*.ts, …
-vite.config.ts    Dev proxy for /ws (+ /ws/codex, /ws/launch, /ws/run), /ws/pubsub, /api, /artifacts
+vite.config.ts    Dev proxy for /ws (+ /ws/codex, /ws/launch, /ws/run), /ws/pubsub, /api,
+                  /artifacts, /htmlfile
 vitest.config.ts  jsdom test environment
 ```
 

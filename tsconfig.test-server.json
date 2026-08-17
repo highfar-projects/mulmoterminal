@@ -14,6 +14,18 @@
      `xtermDouble.ts` is the browser half of the same directory — it names HTMLElement and document,
      which do not exist under `types: ["node"]`. It is reached through the `test/src` specs that
      import it, so tsconfig.test.json checks it with the DOM lib it needs. */
-  "include": ["test/server/**/*.ts", "test/bin/**/*.ts", "test/scripts/**/*.ts", "test/support/**/*.ts", "test/helpers/**/*.ts", "server/**/*.spec.ts"],
+  /* `test/config/**` — specs over the root config files. They belong to the node-typed project
+     rather than tsconfig.test.json because importing `vite.config.ts` into a DOM program pulls
+     `@types/node`'s globals in beside the DOM ones, and `window.setTimeout` then resolves to
+     Node's (a `Timeout`, not a `number`) in three unrelated components. */
+  "include": [
+    "test/server/**/*.ts",
+    "test/bin/**/*.ts",
+    "test/scripts/**/*.ts",
+    "test/config/**/*.ts",
+    "test/support/**/*.ts",
+    "test/helpers/**/*.ts",
+    "server/**/*.spec.ts"
+  ],
   "exclude": ["test/helpers/xtermDouble.ts"]
 }
