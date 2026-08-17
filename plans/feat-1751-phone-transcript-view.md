@@ -163,15 +163,8 @@ keys: ['signature', 'thinking', 'type']
   （`withinByteCap` と同形）。
   **最新 1 ターンだけで 256KB を超える場合**は、そのターンを落とさず**行の `text` を切って
   `clipped` を立てる**。決定 1 の「最新 1 ターンは必ず出す」が優先で、`too-large` にはしない
-  （読めているのだから、大きさを理由に何も出さないのは間違い）。切り方は決定的にする:
-
-  - 測るのは **UTF-8 バイト**（`Buffer.byteLength`）。JSON の区切りやキー名のぶんとして
-    **1 行あたり 64 バイトを足して数える**。文字数で測ると日本語で 3 倍ずれて上限を超える
-  - **後ろの行から切る。** ターンの頭（ユーザのプロンプトと最初の応答）が残る側になる
-  - **多バイト文字の途中で切らない。** バイト境界で切ると不正な UTF-8 が出るので、
-    切ったあとに `Buffer` → `string` の往復で壊れない位置まで戻す
-  - 1 行を切ったら、その行に `clipped` を立てる。**行ごと消さない** — 空の行より
-    「切れた頭」のほうが読める
+  （読めているのだから、大きさを理由に何も出さないのは間違い）。測るのは**文字数ではなく UTF-8 バイト** — 日本語で 3 倍ずれる。
+  正確な切り方（どの行から、多バイト境界、JSON のオーバーヘッド）は**実装 PR でテストが決める**。
 - **バジェットは行を数える。`TranscriptRow` の**個数**ではない。** `text` は素通しなので
   改行を含む — 1 行として数えると**巨大な assistant 本文 1 ブロックがバジェットを素通りする**。
   数えるのは `row.text.split("\n").length`（`tool_result` はキャップ後の行数、`tool_use` は 1）。
@@ -211,10 +204,7 @@ sidechain の判定は**レコードの `isSidechain` フィールドそのも�
 
 **`server/session/transcript-view-read.ts`（新規）** に `sessionTranscriptView(cwd, id)`。
 
-`session-reads.ts` には**置かない**。`sessionTimeline` / `sessionLastTurn` の隣が素直に見えるが、
-このファイルが要るのは `projectSessionsDir(cwd)` とファイル読みだけで、どちらも
-`session-reads.ts` に依存しない。分けるのに設計上の代償が無く、`session-reads.ts` は
-#1749 で `sessionPrompts` が入って既に育っている。
+`session-reads.ts` には置かない。必要なのは `projectSessionsDir(cwd)` とファイル読みだけで、分けるのに設計上の代償が無い。
 
 読みは `forEachJsonlRecordIn(handle, { from: Math.max(0, size - 4MB) })`。
 `readTailRecords` は同期（`readSync`）で 4MB に 24ms かかり、WebSocket でターミナルを流している
@@ -447,8 +437,7 @@ compact したもの 95 本 / compact 後に命令があるもの 61 本の**す
 - **`at` が境界レコードの `timestamp`** で、文字列でなければ `null`
 - **`tool_result` の 6 行が先頭 6 行**で、7 行目以降を捨てたときだけ `clipped` が立つ。
   末尾の改行が作る空要素も 1 行として数える
-- **壊れたフィールドのフォールバック**（`part.name` 欠落 → `unknown`、`part.text` 欠落 → 行を作らない、
-  `JSON.stringify` が `undefined` → その要素を飛ばす、継いだ結果が空 → 行を作らない）
+- **壊れたフィールドのフォールバック** — 表のとおり全経路で `text: string` を満たすこと
 - **`message` / `content` の無いレコード**が行も作らずターンも切らない
 - **256KB のバイトキャップ**で古いターンが落ち、`truncated` が立つ
 - **最新 1 ターンだけで 256KB を超える**とき、そのターンは落ちず行の `text` が切られて
@@ -459,6 +448,9 @@ compact したもの 95 本 / compact 後に命令があるもの 61 本の**す
   さらに解決後のパスが `projectSessionsDir(cwd)` の下にあること
 - **`isSidechain: true` の assistant レコードが、直前のターンの行として紛れ込まない**
 - **バイトキャップで切った行が UTF-8 として壊れていない**（日本語を含む行で確かめる）
+
+**この一覧は実装 PR で増える。** 上は計画が主張した規則に 1 対 1 で対応する分で、
+壊れた入力の網羅はフィクスチャと型の仕事にする — 散文で数え上げても、実装で増えた分岐は拾えない。
 - **読んでいる最中の追記** — 末尾が途中まで書かれた JSON 行で終わる場合
 
 - **最初の境界より前のレコードが捨てられ、250 行バジェットに数えられない**
@@ -472,8 +464,8 @@ compact したもの 95 本 / compact 後に命令があるもの 61 本の**す
 
 - `clearedTranscripts` にマークがあるとき **`status: "cleared"`** を返す —
   ここが抜けると #1085 の違反が黙って通る
-- **`clearedTranscripts` を素の `.has()` で見ていること**。per-read の `stat` を足す変更が入ったら
-  他の読み手との食い違いとして落ちるようにする
+- **`/clear` されたセッションが `cleared` を返し、他の読み手（cockpit / サマリ / push）と
+  同じ判断になること** — 実装の形ではなく観測できる挙動を固定する
 - **4 つの `status` が区別されること** — `ok` / `none` / `cleared` / `too-large`。
   真偽値 1 つに退化していたら落ちる
 - **cwd の解決がホストの作業ディレクトリではなくセッションのものであること**
