@@ -10,7 +10,9 @@ Entries here are folded into the next release's heading when it ships.
 
 ## mulmoterminal@4.9.0 — 2026-08-17
 
-> **Setup guide:** [The prompts pane, and shared apps lose their staging step](https://receptron.github.io/mulmoterminal/guide/en/v4.9.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.9.0.html))
+> **Setup guide:** [The prompts pane](https://receptron.github.io/mulmoterminal/guide/en/v4.9.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.9.0.html))
+>
+> The shared-app changes below are **not** in that guide; they get their own page.
 
 One new panel and one concept removed. The panel answers "what did I ask *this* cell?"; the removal
 takes shared apps from three states down to two.
