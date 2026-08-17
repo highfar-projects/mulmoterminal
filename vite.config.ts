@@ -64,12 +64,12 @@ export default defineConfig({
         target: `http://localhost:${BACKEND_PORT}`,
         changeOrigin: true,
       },
-      // The second half of the same iframe src: a page the tool was POINTED at rather
-      // than wrote lives outside `artifacts/`, so `htmlFileUrl()` builds this mount
-      // instead (server/backends/html.ts mountHtmlFileRoute). It is the constant rather
-      // than a literal because the literal above sat here alone for the whole life of
-      // this mount — the failure is silent (index.html renders as a blank iframe), so a
-      // shared symbol is what makes the next mount arrive here too (#1758).
+      // The other half of the same iframe src: presentHtml can be POINTED at a page
+      // outside `artifacts/`, and `htmlFileUrl()` sends those here instead
+      // (server/backends/html.ts mountHtmlFileRoute). The constant rather than a
+      // literal, because this mount arrived long after the entry above and nothing
+      // brought it here: the failure is silent — index.html answers 200 and the iframe
+      // renders blank (#1758).
       [HTML_FILE_MOUNT]: {
         target: `http://localhost:${BACKEND_PORT}`,
         changeOrigin: true,
