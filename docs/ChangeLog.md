@@ -8,6 +8,104 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.9.0 — 2026-08-17
+
+> **Setup guide:** [The prompts pane, and shared apps lose their staging step](https://receptron.github.io/mulmoterminal/guide/en/v4.9.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.9.0.html))
+
+One new panel and one concept removed. The panel answers "what did I ask *this* cell?"; the removal
+takes shared apps from three states down to two.
+
+### A pane for the prompts you sent (#1748, #1749)
+
+With several cells running it stops being obvious which one you told what. The three existing
+clues each answer with exactly one item — the cell header shows the latest prompt, the Activity
+timeline shows what the **agent** ran, and the roster row shows what the agent **said**. None of
+them is a list of what **you** asked for.
+
+The new pane is that list. Open it with the **`forum`** button on an enlarged cell ("Show the
+prompts you sent this session"); it draws newest-first, is read-only, expands a long prompt in
+place when clicked, and keeps up by itself if you leave it open. Claude and Codex.
+
+**It reads what you TYPED, and that is not the agent's transcript.** Measured on a live session: a
+prompt sent *while a turn is running* is written to `~/.claude/history.jsonl` within milliseconds
+but never appears in the transcript as a `type:"user"` record — it arrives as `queue-operation` /
+`attachment` — while text a **skill** injects *does* appear there as a user record. So the
+transcript drops the interruptions (the very prompts you forget giving) and adds text nobody
+typed. `history.jsonl` carries one line per submission and nothing else, which is why it is the
+source.
+
+Three things the review changed after the plan was written, each measured rather than reasoned:
+
+- **`/compact` does not reissue the session id.** A comment in `activity-hook.ts` said it did, and
+  a chain of id-mapping had been built on that comment. Measured across every transcript on the
+  development machine — 95 compacted, 61 with prompts after the compaction — the session id was
+  identical in all of them. The chain was deleted and the comment corrected.
+- **After `/clear`, prompts from before the clear are not shown.** The header, the AI title and
+  the latest reply all go blank on a clear; this pane alone was still showing the finished
+  conversation. The boundary is drawn on **time**, not on the id, because whether `/clear` reissues
+  the id could not be measured and an id-based implementation fails toward a permanently empty pane.
+- **That boundary is now persisted.** Both the time and claude's id at the moment of the clear were
+  in memory and lost on a restart — losing the time resurrects the erased conversation, losing the
+  id empties the pane. Both moved onto the `~/.mulmoterminal/cleared-transcripts/` mark that
+  already records the clear.
+
+### The pane resumes instead of re-reading (#1750, #1753)
+
+`~/.claude/history.jsonl` is 8 MB on the development machine and was scanned end to end on every
+poll. The scan now resumes from where it stopped, reading only what was appended, and everything a
+scan reads comes from **one file handle** rather than a path re-resolved per read — a path can
+land on two different files across two reads, and a reader that folds a range and then checks
+something else about "the file" has no way to say the two saw the same one.
+
+### Shared apps: staging is gone (#1760, #1761)
+
+An app was in one of three states — draft, staged, published — and the middle one earned its
+keep only while there was no way to see a page before publishing it. There is now (see below), so
+the state is a step with nothing behind it. An app is either **present** or **published**.
+
+### Shared apps: run the page before publishing it (#1738, #1742, #1728, #1743, #1745)
+
+The preview runs the page from the terminal, so what breaks, breaks on your machine instead of on
+a reader's. Two failures the sandbox used to swallow are now warnings rather than silence, and
+whatever the preview reported can be carried out in a single copy.
+
+`#1743` is the one worth reading if you used the preview and did not trust it: headless preview
+reported **every** page as unresponsive, so a working app looked broken.
+
+### Shared apps: the server-time field (#1739, #1744, #1746, #1747, #1752)
+
+A field that records when the server wrote a row was specified but never actually written. It is
+written now, its shape is stated in the template and the skill, and a regression test pins the
+field order so the next schema edit cannot quietly reorder it.
+
+### Fixes
+
+- **The dev server restarted forever on a port collision (#1735, #1736).** A port already in use
+  made it exit, which made it restart, which made it exit. It now reports the collision and stops.
+- **A shared-app pane did not pass `viewer` to roster-facing pages (#1756).**
+- **`collection-plugin` is on 4.2.0 (#1754)**, and a recorded timestamp is no longer editable from
+  the pane — it is the server's record, not a field.
+- **The Windows PTY specs get a 60-second timeout (#1740, #1741).** They drive a real PTY, and the
+  Windows runner is slow enough that the default was the thing failing, not the code.
+
+### Plans and docs
+
+`#1755` records the design for reading a Claude transcript on the phone — the terminal screen
+cannot answer it, because claude runs in the alternate screen where tmux keeps no scrollback
+(measured: `alt=1 hist=0` on 11 of 12 live sessions). `#1759` is the design for connecting the
+three shared-app entry points through the toolbar. `#1734` is 4.8.5's setup guide.
+
+### Docs housekeeping
+
+Release pages in the guide are renumbered so `nav_order` **descends as the version rises**: the
+oldest page is `10000000` and each newer one is one less. Adding a release used to renumber all
+fifty pages in both languages — it is now one new file per language, taking the next number down,
+and nothing else moves. The large starting point is deliberate: counting down from a small number
+would eventually reach the reference guide's own `nav_order`s, and this repo has already been bitten
+once by exactly that collision (just-the-docs breaks a tie by title, so the sidebar reordered itself
+with nothing erroring).
+
+
 ## mulmoterminal@4.8.5 — 2026-08-15
 
 > **Setup guide:** [Windows shells, tmux 3.7, and Google sign-in](https://receptron.github.io/mulmoterminal/guide/en/v4.8.5.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.8.5.html))
