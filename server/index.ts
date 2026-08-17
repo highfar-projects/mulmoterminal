@@ -55,7 +55,7 @@ import { createCodexSpawner } from "./session/spawn-codex.js";
 import { createShellSpawners } from "./session/spawn-shell.js";
 import { createTranslationWorker } from "./session/translation-worker.js";
 import { createTitleManager } from "./session/session-title.js";
-import { generateTitleFromTurns } from "./config/header-title.js";
+import { resolveSessionTitle } from "./config/header-title.js";
 import { mountTerminalWebSockets } from "./routes/ws-routes.js";
 import { createConnectionHandlers } from "./session/pty-connection.js";
 import { boundedTail } from "./session/terminal-replay.js";
@@ -310,7 +310,7 @@ const { cancelReap, reap, armReapForDetached, publishActivity, setWorking, setWa
 const { forgetTitle, noteTitleTurn, maybeGenerateTitle, freshenRosterTitle } = createTitleManager({
   publishActivity: (id) => publishActivity(id),
   now: () => Date.now(),
-  generateTitle: (turns) => generateTitleFromTurns(turns),
+  resolveTitle: (input) => resolveSessionTitle(input),
 });
 
 // The PTY spawners (session/spawn-*.ts). They take what index.ts still owns — the session

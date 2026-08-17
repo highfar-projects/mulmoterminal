@@ -77,7 +77,7 @@ const ACTIVITY_IDS_LIMIT = 200;
 
 export interface SessionRouteDeps {
   /** Kick off a re-title for a session the roster just showed, when it has moved on enough. */
-  freshenRosterTitle: (sessionId: string, cwd: string, currentUserTurns: number) => void;
+  freshenRosterTitle: (sessionId: string, cwd: string, currentUserTurns: number, diskAiTitle: string | null) => void;
   /** Fan a session's row out on the "sessions" channel, so every OTHER open cell, tab and
    *  phone sees an edited memo without asking. */
   publishActivity: (sessionId: string) => void;
@@ -98,7 +98,15 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   // defaults to Claude, so a client that does not send it (an older build, the single view) gets
   // exactly what it got before.
   const agent = normalizeAgent(req.query.agent);
-  const { lastPrompt: transcriptPrompt, lastResponse: transcriptResponse, userTurns, usage, context, workPhase } = await readSessionSummary(cwd, id);
+  const {
+    lastPrompt: transcriptPrompt,
+    lastResponse: transcriptResponse,
+    aiTitle: diskAiTitle,
+    userTurns,
+    usage,
+    context,
+    workPhase,
+  } = await readSessionSummary(cwd, id);
   let badges = agent === "claude" ? { usage, context } : await agentBadges(cwd, id, agent);
   // A cell that is actually running Muse but whose persisted `agent` is still "claude" (created
   // before the Muse feature, or reconnecting from an older client) would otherwise show no badge:
@@ -120,8 +128,10 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
       if (museFallback && museFallback.context.model !== null) badges = museFallback;
     }
   }
-  // If we haven't titled it yet, kick off a summary; sessionDetailView falls back meanwhile.
-  freshenRosterTitle(id, cwd, userTurns);
+  // The title Claude Code wrote came back with the read above, so the default source needs no
+  // second look at the file — hand it over rather than making the manager go find it (#1772).
+  // On the `headless` source this still kicks off a summary; sessionDetailView falls back meanwhile.
+  freshenRosterTitle(id, cwd, userTurns, diskAiTitle);
   await sessionMemosHydrated; // a cell seeding on boot must not be told its memo is gone
   const view = sessionDetailView(
     { lastPrompt: lastPrompts.get(id), lastResponse: lastResponses.get(id), aiTitle: aiTitles.get(id), memo: sessionMemos.get(id) },
