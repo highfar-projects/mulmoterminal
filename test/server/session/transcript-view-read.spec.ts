@@ -237,12 +237,17 @@ describe("sessionTranscriptView", () => {
       // would turn a read that worked into an error on the phone (CodeRabbit, PR #1776).
       await writeTranscript(userLine("hello"), assistantLine("hi"));
       const failing = await fs.open(path.join(projectSessionsDir(cwd), `${SESSION}.jsonl`), "r");
-      vi.spyOn(failing, "close").mockRejectedValue(new Error("EIO"));
+      const close = vi.spyOn(failing, "close").mockRejectedValue(new Error("EIO"));
       vi.mocked(fs.open).mockResolvedValueOnce(failing);
       const warn = vi.spyOn(console, "error").mockImplementation(() => {});
       const view = await sessionTranscriptView(cwd, SESSION);
       expect(view.status).toBe("ok");
       expect(warn).toHaveBeenCalled(); // the failure is reported, not silent
+      // The mocked close never closed anything, so this test owns the descriptor: `afterEach` rm's
+      // this directory, and on Windows an unlink of a file still held open fails whatever `force`
+      // says (CodeRabbit, PR #1776).
+      close.mockRestore();
+      await failing.close();
     });
   });
 });

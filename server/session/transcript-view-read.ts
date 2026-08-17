@@ -83,7 +83,9 @@ async function readWindow(handle: FileHandle, size: number, tail: number, window
   if (scan.turns.length > 0) return transcriptViewOf(scan, from > 0);
   if (from === 0) return { status: "none" };
   if (tail >= window.maxTailBytes) return { status: "too-large" };
-  return readWindow(handle, size, tail * 2, window);
+  // Clamped, so the ceiling is the ceiling: doubling past it would read more than this says it will
+  // whenever the two are not a power of two apart (CodeRabbit, PR #1776).
+  return readWindow(handle, size, Math.min(tail * 2, window.maxTailBytes), window);
 }
 
 /** The phone's view of `id`'s conversation, read from claude's transcript under `cwd`'s project.
