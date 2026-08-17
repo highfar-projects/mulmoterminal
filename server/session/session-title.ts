@@ -9,12 +9,22 @@
 // view do not both summarize, and a retry floor so a viewed-but-failing session is not
 // re-summarized on every poll.
 import path from "node:path";
-import { conversationTurnsFromParsed, isTrivialPrompt, type ConversationTurn } from "./transcript.js";
+import { aiTitleFromParsed, conversationTurnsFromParsed, isTrivialPrompt, type ConversationTurn } from "./transcript.js";
 import { forEachJsonlRecord } from "../infra/jsonl-file.js";
-import { shouldFreshenViewedTitle, shouldRegenerateTitle, TITLE_REGEN_EVERY_TURNS, VIEW_TITLE_REGEN_TURNS } from "../config/header-title.js";
+import {
+  emptyTitleWindow,
+  foldTitleWindow,
+  shouldFreshenViewedTitle,
+  shouldRegenerateTitle,
+  titleNeedsTurns,
+  titleWindowOf,
+  TITLE_REGEN_EVERY_TURNS,
+  VIEW_TITLE_REGEN_TURNS,
+} from "../config/header-title.js";
 import { aiTitles, lastTitleAttemptMs, lastTitledUserTurns, titleEpoch, titleInFlight, titlePending, titleTurnCounts } from "./registry.js";
 import { clearedTranscripts } from "./cleared-transcripts.js";
 import { projectSessionsDir } from "./project-dir.js";
+import { readSessionSummary } from "./session-reads.js";
 
 // How long a viewed session that failed to summarize waits before being tried again, so a
 // roster poll cannot spawn a summarizer per request.
@@ -25,11 +35,87 @@ export interface TitleDeps {
   publishActivity: (id: string) => void;
   /** Injected so the retry floor can be tested without waiting out 30 seconds. */
   now: () => number;
-  /** Summarize a transcript into a title. Injected because the real one shells out to
-   *  the claude CLI, which a unit test must never do. */
+  /** The session's title, from whichever source `header-title.ts` selects: the `ai-title` Claude
+   *  Code wrote into its own transcript (the default — no process at all), or a summary of the
+   *  turns. Injected because the second one shells out to the claude CLI, which a unit test must
+   *  never do. */
   // Turns, not the raw transcript: the file reaches 585 MB here and cannot be held as a string
   // at all (#998). The title only reads the last few turns anyway.
-  generateTitle: (turns: ConversationTurn[]) => Promise<string | null>;
+  resolveTitle: (input: { turns: ConversationTurn[]; diskAiTitle: string | null }) => Promise<string | null>;
+}
+
+interface TitleInputs {
+  /** Already narrowed to what a summary can use — see `foldTitleWindow`. */
+  turns: ConversationTurn[];
+  /** Counted, never derived from `turns`: that array holds at most the last few, and the roster's
+   *  re-title cadence compares this against the transcript's CURRENT count (CodeRabbit on #1772).
+   *  Deriving it would pin it at the window size and re-title on every poll forever. */
+  userTurns: number;
+  /** Whether the transcript held any turn at all — the gate the resolve is skipped on. */
+  anyTurn: boolean;
+  diskAiTitle: string | null;
+  /** False when the file could not be opened at all, which is different from a transcript that
+   *  simply has nothing to title. */
+  read: boolean;
+}
+
+/** One streamed pass over the transcript, yielding everything the title needs: the window of turns
+ *  (for the `headless` source), how many user turns there were (for the bookkeeping), and the
+ *  `ai-title` Claude Code wrote (for the default source). Nothing here grows with the file: it is
+ *  streamed because a transcript reaches 585 MB (#998), and retaining every parsed turn to pick six
+ *  of them would have given that back. */
+async function readTitleInputs(sessionId: string, cwd: string): Promise<TitleInputs> {
+  const window = emptyTitleWindow();
+  let userTurns = 0;
+  let anyTurn = false;
+  let diskAiTitle: string | null = null;
+  let read = true;
+  await forEachJsonlRecord(path.join(projectSessionsDir(cwd), `${sessionId}.jsonl`), (record) => {
+    conversationTurnsFromParsed([record]).forEach((turn) => {
+      anyTurn = true;
+      if (turn.role === "user") userTurns++;
+      foldTitleWindow(window, turn);
+    });
+    // The LAST one wins, the same rule session-reads.ts folds by.
+    diskAiTitle = aiTitleFromParsed([record]) ?? diskAiTitle;
+  }).catch(() => (read = false));
+  return { turns: titleWindowOf(window), userTurns, anyTurn, diskAiTitle, read };
+}
+
+/** Store a title the caller already holds — the default source's whole job. `readSessionSummary`
+ *  folds `ai-title` out of the transcript incrementally and caches it beside the file
+ *  (#1377/#1386), so the roster route has the answer in hand on every poll and there is nothing to
+ *  scan for. A cleared session is skipped for the same reason as everywhere else (#1085), and an
+ *  unchanged title does not publish — the roster would otherwise redraw on every poll. */
+function storeKnownTitle(sessionId: string, title: string | null, deps: TitleDeps): void {
+  if (!title || clearedTranscripts.has(sessionId) || aiTitles.get(sessionId) === title) return;
+  aiTitles.set(sessionId, title);
+  titleTurnCounts.set(sessionId, 0);
+  deps.publishActivity(sessionId);
+}
+
+/** The `headless` source: stream the transcript, summarize its recent turns, store + publish.
+ *  Epoch-guarded, so a /clear or teardown mid-generation drops the now-stale result; in-flight
+ *  guarded, so a Stop hook and a roster view do not both summarize. Never throws — a failed or
+ *  timed-out CLI just leaves the prior title. */
+async function summarizeAndStoreTitle(sessionId: string, cwd: string, deps: TitleDeps): Promise<void> {
+  titleInFlight.add(sessionId);
+  const epoch = titleEpoch.get(sessionId) ?? 0;
+  try {
+    const { turns, userTurns, anyTurn, diskAiTitle, read } = await readTitleInputs(sessionId, cwd);
+    const checked = read && anyTurn;
+    const title = checked ? await deps.resolveTitle({ turns, diskAiTitle }) : null;
+    if ((titleEpoch.get(sessionId) ?? 0) !== epoch) return;
+    storeKnownTitle(sessionId, title, deps);
+    // Advanced on any COMPLETED check, not only a successful one (Codex on #1772): null here means
+    // the CLI failed, and leaving the mark unset made `shouldFreshenViewedTitle` stay true forever
+    // — a full transcript scan every 30s for as long as the roster watched the session, over a file
+    // that reaches 585 MB (#998). Advancing ties the retry to the CONVERSATION moving on instead of
+    // to the clock. A file we could not read at all does not advance: nothing was established.
+    if (checked) lastTitledUserTurns.set(sessionId, userTurns);
+  } finally {
+    titleInFlight.delete(sessionId);
+  }
 }
 
 export function createTitleManager(deps: TitleDeps) {
@@ -57,38 +143,23 @@ export function createTitleManager(deps: TitleDeps) {
     if (due) titlePending.add(sessionId);
   }
 
-  // Read the transcript, summarize its recent turns into a title, and store + publish it.
-  // Epoch-guarded: a /clear or teardown mid-generation bumps the epoch, so the now-stale
-  // result is dropped. In-flight-guarded so overlapping triggers (a Stop hook and a roster
-  // view) don't both summarize. Never throws — a failed/timed-out CLI just leaves the prior title.
+  // Title the session, by whichever route its source needs. A cleared session is titled by
+  // neither: claude moved to a new transcript and ours is frozen on the conversation the user
+  // just ended, so this is where the pre-clear title kept coming back — forgetTitle makes the
+  // next turn think a title is DUE, and the only turns on disk are the ended ones (#1085). No
+  // title beats the wrong one; the header falls back to the live prompt.
   async function generateAndStoreTitle(sessionId: string, cwd: string): Promise<void> {
-    if (titleInFlight.has(sessionId)) return;
-    // A cleared session has no transcript to title from: claude moved to a new one and ours is
-    // frozen on the conversation the user just ended, so this is where the pre-clear title kept
-    // coming back — forgetTitle makes the next turn think a title is DUE, and the only turns on
-    // disk are the ended ones (#1085). No title beats the wrong one; the header falls back to the
-    // live prompt.
-    if (clearedTranscripts.has(sessionId)) return;
-    titleInFlight.add(sessionId);
-    const epoch = titleEpoch.get(sessionId) ?? 0;
-    try {
-      // One streamed pass yields both what the title needs (the turns) and what the bookkeeping
-      // needs (how many user turns there were), so the transcript is never held as a string.
-      const turns: ConversationTurn[] = [];
-      let read = true;
-      await forEachJsonlRecord(path.join(projectSessionsDir(cwd), `${sessionId}.jsonl`), (record) => {
-        turns.push(...conversationTurnsFromParsed([record]));
-      }).catch(() => (read = false));
-      const title = read && turns.length ? await deps.generateTitle(turns) : null;
-      if (title && (titleEpoch.get(sessionId) ?? 0) === epoch) {
-        aiTitles.set(sessionId, title);
-        titleTurnCounts.set(sessionId, 0);
-        lastTitledUserTurns.set(sessionId, turns.filter((t) => t.role === "user").length);
-        deps.publishActivity(sessionId);
-      }
-    } finally {
-      titleInFlight.delete(sessionId);
+    if (titleInFlight.has(sessionId) || clearedTranscripts.has(sessionId)) return;
+    // The default source needs one folded field, not the conversation — and session-reads keeps
+    // that fold cached and incremental, so this costs the bytes that arrived since the last read
+    // rather than the file. Before this branch existed, an untitled session streamed its whole
+    // transcript once per turn to find a string that was already in memory.
+    if (!titleNeedsTurns()) {
+      const { aiTitle } = await readSessionSummary(cwd, sessionId);
+      storeKnownTitle(sessionId, aiTitle, deps);
+      return;
     }
+    await summarizeAndStoreTitle(sessionId, cwd, deps);
   }
 
   // At Stop (the assistant's reply is now on disk), regenerate a pending title from the
@@ -99,10 +170,21 @@ export function createTitleManager(deps: TitleDeps) {
     await generateAndStoreTitle(sessionId, cwd);
   }
 
-  // The grid roster summarizes on our side even for sessions the hook path never runs on
-  // (unmanaged / resumed / post-restart), so it never shows a stale externally-written title.
-  // Fire-and-forget from the view; the freshened title lands on the next roster poll.
-  function freshenRosterTitle(sessionId: string, cwd: string, currentUserTurns: number): void {
+  // The grid roster titles on our side even for sessions the hook path never runs on (unmanaged /
+  // resumed / post-restart), so it never shows a stale externally-written title. Fire-and-forget
+  // from the view; the freshened title lands on the next roster poll.
+  //
+  // `diskAiTitle` is the field the route ALREADY read on this request. Taking it is what closes
+  // the divergence both reviewers landed on (#1772): Claude Code appends its `ai-title` without a
+  // new user turn, so a turn-based staleness rule refused to look again — the sidebar showed that
+  // title (it reads disk directly through `sessionListTitle`) while the cell header sat on the
+  // prompt fallback. There is no scan on this path and therefore nothing to ration: no staleness
+  // gate, no retry floor. Both still guard the `headless` source, which has to read the turns.
+  function freshenRosterTitle(sessionId: string, cwd: string, currentUserTurns: number, diskAiTitle: string | null = null): void {
+    if (!titleNeedsTurns()) {
+      storeKnownTitle(sessionId, diskAiTitle, deps);
+      return;
+    }
     if (titleInFlight.has(sessionId)) return;
     const stale = shouldFreshenViewedTitle({
       lastTitledUserTurns: lastTitledUserTurns.get(sessionId) ?? null,

@@ -95,8 +95,11 @@ export function latestUserPromptFromParsed(records: Record<string, unknown>[]): 
 }
 export const latestUserPromptFromJsonl = (raw: string): string | null => latestUserPromptFromParsed(parseJsonl(raw));
 
-// The externally-generated (MulmoClaude) session title record, if the transcript carries
-// one. Only READ here — this repo never writes "ai-title" lines into Claude's own file.
+// The session title record, if the transcript carries one. Only READ here — this repo never
+// writes "ai-title" lines into Claude's own file. **Claude Code writes it itself**, once per
+// interactive session (measured: present in 92 of 93 sessions that have `mode` records, and
+// never revised — 72 of 72 carried exactly one distinct title). That is what makes it usable
+// as the header title without spawning anything (#1769).
 export function aiTitleFromParsed(records: Record<string, unknown>[]): string | null {
   let title: string | null = null;
   for (const o of records) {
