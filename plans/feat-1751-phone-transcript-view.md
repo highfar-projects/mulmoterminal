@@ -109,7 +109,10 @@ keys: ['signature', 'thinking', 'type']
 
 **`server/session/transcript-view.ts`（新規・純関数）**
 
-- `TranscriptTurn { at: string | null; rows: TranscriptRow[] }`、
+- `TranscriptTurn { at: string | null; rows: TranscriptRow[] }` — `at` は**境界レコードの
+  `timestamp`**（ISO 文字列をそのまま）。文字列でなければ `null`。ターンの中の他のレコードの
+  時刻は使わない（境界がそのターンの始まりだから）。`null` を許すのは、時刻が読めない 1 件で
+  ターンごと落とすほうが害が大きいため — #1748 が `PromptEntry.at` で同じ判断をしている
   `TranscriptRow` は `{ kind: "user" | "assistant" | "tool" | "unknown"; text: string; clipped?: boolean }`
   — **`clipped`**（この行の `tool_result` を切った）は `TranscriptView.truncated`（古いターンを捨てた）
   とは別物。同じ語にすると phone がどちらの印を出すか決められない
@@ -120,7 +123,7 @@ keys: ['signature', 'thinking', 'type']
   |---|---|---|---|
   | `text` | レコードが `user` なら `"user"`、`assistant` なら `"assistant"` | `part.text` を素通し（改行込み） | |
   | `tool_use` | `"tool"` | `part.name` | 引数は出さない |
-  | `tool_result` | `"tool"` | 下記で 1 つの文字列にしてから 6 行キャップ | 切ったら `clipped` |
+  | `tool_result` | `"tool"` | 下記で 1 つの文字列にしてから**先頭 6 行** | 7 行目以降を捨てたら `clipped` |
   | `thinking` | — | — | 行を作らない |
   | それ以外 | `"unknown"` | `[unknown block: <part.type>]` | |
 
@@ -130,6 +133,21 @@ keys: ['signature', 'thinking', 'type']
   `tool_result.content` は文字列とは限らない。**文字列ならそのまま、配列なら `text` を持つ要素の
   `text` を `\n` で継ぎ、それ以外は `JSON.stringify`。** そのうえで 6 行に切る。
   ここを決めないと**同じ transcript から違う wire が出る**
+
+  **6 行の数え方**: `split("\n")` の先頭 6 要素。末尾の改行が作る空要素も 1 行として数える
+  （数えないと「6 行に見えて 7 行ある」が起きる）。空文字列は 1 行（`clipped` は立たない）。
+  **先頭**を残すのは、ツール出力は頭が要る側だから（ファイル読みの冒頭、grep の最初の一致）。
+
+  **フィールドが壊れているときのフォールバック** — `TranscriptRow.text` は必ず `string` なので、
+  どの経路でも文字列を返す:
+
+  | 状況 | 結果 |
+  |---|---|
+  | `tool_use` の `part.name` が無い / 文字列でない | `kind: "unknown"`、`[unknown block: tool_use]` |
+  | `text` の `part.text` が無い / 文字列でない | 行を作らない（空の行は情報が無い） |
+  | `tool_result.content` の要素で `JSON.stringify` が `undefined` を返す | その要素を飛ばす |
+  | 継いだ結果が空文字列 | 行を作らない |
+  | レコードに `message` や `content` が無い | **行を作らず、ターンも切らない**。境界の判定は `userPromptText` が non-null であることなので、`content` の無いレコードは境界にならない
 - **`kind: "unknown"` が下の「形式変更時のフォールバック」の受け皿**。未知の content ブロックは
   そこへ入れて `[unknown block: <type>]` を `text` にする。union に無いと**フォールバックが
   型で表せず、結局は無視することになる**。UI 側はこの kind を薄く描いて、
@@ -214,8 +232,11 @@ spec で固定する。
 
 - `from` を倍にして読み直す（4MB → 8MB → 16MB …）。**ターン境界（`userPromptText` が non-null な
   `type:"user"` レコード）が 1 つでも入ったら止める**
-- **上限を決めて、そこで諦める**。上限に達しても境界が無ければ、空ではなく
-  「この transcript は大きすぎて表示できない」と答える。空と区別がつかない失敗にしない
+- **上限は 32MB**。`4 → 8 → 16 → 32MB` と倍にして、32MB を読んでも境界が無ければ
+  そこで止め、空ではなく `too-large` を返す。空と区別がつかない失敗にしない。
+  **32MB の根拠**: 実測された最大の単一レコードは 4,761,619 文字（#1692、約 4.5MB）で、
+  32MB はその 7 倍。読みのコストは実測 24ms/4MB から外挿して約 190ms だが、
+  これが起きるのは境界が 1 つも無い病的な場合だけ
 - **これが決定 1 の「最新 1 ターンは必ず出す」の唯一の例外**、と言い切る。上限が有限である以上
   保証は無条件ではあり得ないので、無条件だと書いたまま `too-large` を返すのは矛盾になる
   。**例外はこの 1 つだけ**で、それ以外の経路で最新ターンが欠けたら defect
@@ -258,6 +279,23 @@ type TranscriptView =
 - `truncated` は 250 行バジェットで古いターンを捨てたかどうか。phone は「これより前は出せない」と
   1 行出す。無いと**完全な履歴と切られた履歴が見分けられない**（#1749 が `PROMPT_SCAN_LIMIT` で
   同じ問題を踏んでいる — 窓ちょうどの件数と、それを超えて切った件数が区別できなかった）
+**どの状況がどの `status` になるか**（決めないと、同じ「見えない」が 3 通りの原因で起きる）:
+
+| 状況 | status |
+|---|---|
+| `clearedTranscripts` にマークがある | `cleared` |
+| ファイルが無い（`ENOENT`） | `none` |
+| ファイルはあるが 0 バイト | `none` |
+| レコードはあるが**ターン境界が 1 つも無く**、32MB まで広げても見つからない | `too-large` |
+| ファイル全体が 32MB 未満で、読み切っても境界が無い | `none`（大きさの問題ではないので `too-large` にしない） |
+| 壊れた行しか無い | `none`（`forEachJsonlRecordIn` が壊れた行を飛ばすので、レコード 0 件に等しい） |
+| 読めない（`EACCES` など `ENOENT` 以外の I/O エラー） | `none`。**理由をサーバログに出す** — phone には出し分ける手立てが無く、黙って消えるのが一番困る |
+| 境界があり、行が 1 つ以上できた | `ok` |
+
+`none` に寄せているのは、phone の答えが**どれも「画面へフォールバック」で同じ**だから。
+分けるのは `cleared`（終わった会話だと言える）と `too-large`（大きさが理由だと言える）だけで、
+それ以外を細かくしても phone にできることは増えない。
+
 - `status` を持たない旧ホストは phone 側で `"none"` として扱う（mulmoserver の後方互換の慣習）
 - **mulmoserver 側のコマンド定義もこの PR の範囲**。`getTerminalScreen` の隣に足す
 - **`docs/remote-host-protocol.md` を同じ変更で更新する。** あの文書は冒頭（`:8`）で
@@ -360,6 +398,14 @@ compact したもの 95 本 / compact 後に命令があるもの 61 本の**す
 - **改行を含む 1 つの `text` がバジェットに正しく数えられる** — 行数であって行オブジェクト数
   ではないこと。巨大な本文 1 ブロックが 250 行を素通りしたら落ちる
 - **`too-large` の経路で handle が閉じられる**。`cleared` の早期 return と例外の経路も同じ
+- **`status` の対応表が全行そのとおりであること** — 特に「32MB 未満で境界なし」が `none`、
+  「32MB まで広げても境界なし」が `too-large` に分かれること
+- **`at` が境界レコードの `timestamp`** で、文字列でなければ `null`
+- **`tool_result` の 6 行が先頭 6 行**で、7 行目以降を捨てたときだけ `clipped` が立つ。
+  末尾の改行が作る空要素も 1 行として数える
+- **壊れたフィールドのフォールバック**（`part.name` 欠落 → `unknown`、`part.text` 欠落 → 行を作らない、
+  `JSON.stringify` が `undefined` → その要素を飛ばす、継いだ結果が空 → 行を作らない）
+- **`message` / `content` の無いレコード**が行も作らずターンも切らない
 - **読んでいる最中の追記** — 末尾が途中まで書かれた JSON 行で終わる場合
 
 - **最初の境界より前のレコードが捨てられ、250 行バジェットに数えられない**
