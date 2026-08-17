@@ -110,9 +110,26 @@ keys: ['signature', 'thinking', 'type']
 **`server/session/transcript-view.ts`（新規・純関数）**
 
 - `TranscriptTurn { at: string | null; rows: TranscriptRow[] }`、
-  `TranscriptRow` は `{ kind: "user" | "assistant" | "tool" | "unknown"; text: string; truncated?: boolean }`
-- `renderRecord(record)` — 1 レコード → 行。`text` は素通し、`tool_use` はツール名 1 行、
-  `tool_result` は 6 行で切って `truncated` を立てる、`thinking` は捨てる
+  `TranscriptRow` は `{ kind: "user" | "assistant" | "tool" | "unknown"; text: string; clipped?: boolean }`
+  — **`clipped`**（この行の `tool_result` を切った）は `TranscriptView.truncated`（古いターンを捨てた）
+  とは別物。同じ語にすると phone がどちらの印を出すか決められない
+- `renderRecord(record)` — 1 レコード → 行の配列。**content の並び順どおりに 1 ブロック 1 行**
+  （まとめない・並べ替えない）。ブロック種別ごとの規則:
+
+  | block | kind | text | 備考 |
+  |---|---|---|---|
+  | `text` | レコードが `user` なら `"user"`、`assistant` なら `"assistant"` | `part.text` を素通し（改行込み） | |
+  | `tool_use` | `"tool"` | `part.name` | 引数は出さない |
+  | `tool_result` | `"tool"` | 下記で 1 つの文字列にしてから 6 行キャップ | 切ったら `clipped` |
+  | `thinking` | — | — | 行を作らない |
+  | それ以外 | `"unknown"` | `[unknown block: <part.type>]` | |
+
+  `content` が**配列ではなく素の文字列**なら、`text` ブロック 1 つとして扱う（claude の通常の
+  ユーザレコードはこの形）。
+
+  `tool_result.content` は文字列とは限らない。**文字列ならそのまま、配列なら `text` を持つ要素の
+  `text` を `\n` で継ぎ、それ以外は `JSON.stringify`。** そのうえで 6 行に切る。
+  ここを決めないと**同じ transcript から違う wire が出る**
 - **`kind: "unknown"` が下の「形式変更時のフォールバック」の受け皿**。未知の content ブロックは
   そこへ入れて `[unknown block: <type>]` を `text` にする。union に無いと**フォールバックが
   型で表せず、結局は無視することになる**。UI 側はこの kind を薄く描いて、
@@ -131,8 +148,14 @@ keys: ['signature', 'thinking', 'type']
 - `sessionTimeline` の `foldTimeline`（`session-reads.ts:195`）と同じ形。窓が行数でターン単位という
   点だけが違う
 
-ターン境界は **`type:"user"` かつ非 sidechain かつ `userPromptText(record.message.content)` が
-non-null なレコード**。
+ターン境界は **`type:"user"` かつ `record.isSidechain !== true` かつ
+`userPromptText(record.message.content)` が non-null なレコード**。
+
+sidechain の判定は**レコードの `isSidechain` フィールドそのもの**（真偽値）。他の手掛かりで
+推測しない。実測では本体 `<id>.jsonl` に `isSidechain: true` のレコードは 1 件も無く
+（直近 120 本 / 最大 150 本を走査）、sub agent は `<sessionId>/subagents/agent-*.jsonl` に
+分かれている。つまりこの判定は**現状ほぼ発火しない**が、上流が本体に混ぜ始めたときの
+防波堤として要る — だから spec で `isSidechain: true` のレコードが落ちることを固定する。
 
 述語を自分で書き直さないこと。`userPromptText`（`server/session/transcript.ts:29`）は
 **`content` が素の文字列の場合と配列の場合の両方**を扱う（`Array.isArray ? map(...).join(" ") : content`）。
@@ -314,9 +337,9 @@ compact したもの 95 本 / compact 後に命令があるもの 61 本の**す
 
 - 正常な 1 ターン / 複数ターン / ターン境界がファイル先頭に無い場合
 - 250 行超で古いターンが落ちる / **1 ターンしか無ければ落とさない**
-- `tool_result` の 6 行切り詰めと `truncated`
+- `tool_result` の 6 行切り詰めと `clipped`（`TranscriptView.truncated` と混同していないこと）
 - `thinking` が落ちる / `signature` だけのレコード
-- sidechain レコードが混ざっても無視される
+- **`isSidechain: true` のレコードが落ちる** — 境界としても行としても現れないこと
 - 壊れた JSON 行 / `message` が無い / `content` が文字列 / 空配列
 - `promptId` を持たないレコードでもターンが切れる
 - **`content` が素の文字列のユーザレコードが境界になる**（`{type:"text"}` 配列だけでなく）
@@ -331,6 +354,9 @@ compact したもの 95 本 / compact 後に命令があるもの 61 本の**す
 - **`[窓より大きい tool_result][小さい assistant レコード]`** — レコードは取れるが境界が無いので
   広げること。「0 レコードなら広げる」に退化していたら落ちるケース
 - **未知の content ブロック**が `kind: "unknown"` の行として出る（無視されない）
+- **content が素の文字列のレコードが `text` ブロック 1 つとして描かれる**
+- **`tool_result.content` が配列のとき** `text` を `\n` で継ぎ、それ以外は `JSON.stringify` される
+- **混在した `text` / `tool_use` ブロック**が content の並び順どおりに別々の行になる
 - **改行を含む 1 つの `text` がバジェットに正しく数えられる** — 行数であって行オブジェクト数
   ではないこと。巨大な本文 1 ブロックが 250 行を素通りしたら落ちる
 - **`too-large` の経路で handle が閉じられる**。`cleared` の早期 return と例外の経路も同じ
@@ -361,7 +387,9 @@ phone 側の spec（mulmoserver、`test/<area>/test_*.ts`。コンポーネン�
 - `status` が `ok` 以外のとき画面へフォールバックする（4 つとも）
 - 更新が既存の `REFRESH_INTERVAL_MS` を共有している（独自の定数を持たない）
 - `kind: "unknown"` の行が**描画される**（無視されない）
-- `truncated` のとき「これより前は出せない」を出す
+- **`TranscriptView.truncated`** のとき「これより前は出せない」を出す（履歴の頭）
+- **`TranscriptRow.clipped`** のとき、その行の末尾に「切り詰めた」印を出す（行ごと）
+- この 2 つが**取り違えられていない**こと
 
 `test/server/backends/remoteHost/` にハンドラの spec。`clearedTranscripts` にマークがあるとき
 「transcript は無い」と答えることを固定する — ここが抜けると #1085 の違反が黙って通る。
