@@ -1,7 +1,7 @@
 // The app's own pages, written to the tier each audience may read.
 //
-// The public page keeps `config/*` — world-readable, one view, already
-// deployed. What is new here is the other two audiences, and the reason they
+// The public page keeps `config/*` — world-readable, one view, already in
+// place. What is new here is the other two audiences, and the reason they
 // cannot share that document is the rules: `config/{docId}` is
 // `allow read: if true`, so a page written for the front desk would publish the
 // app's internal vocabulary — status names, review-note headings, how work is
@@ -21,13 +21,12 @@
 //
 //   A WITHDRAWN PAGE IS DELETED, not merely stopped being written. The tier is
 //   readable by everyone it admits, forever: drop a view from `views[]` and the
-//   old page stays fetchable until something removes it. Deploy withdraws its
-//   `staged:`, publish withdraws its `live:`.
+//   old page stays fetchable until something removes it, so publish withdraws
+//   the `live:` documents its own declaration no longer names.
 //
-//   DEPLOY AND PUBLISH WRITE THE SAME SHAPE at two prefixes. That is what makes
-//   "try the staff page before the customers see it" possible at all, and it is
-//   the same road the schemas already travel (`staging/{cid}` then
-//   `collections/{cid}`).
+//   `live:` IS A PREFIX WITH NOTHING TO CONTRAST WITH, and it is kept anyway —
+//   it is how that sweep tells a page THIS code wrote from any other document in
+//   the tier. See `staleViewDocs` below.
 import {
   appViewTierPath,
   participantScope,
@@ -92,8 +91,8 @@ function unreachableProblems(
  *  The same reader the public page uses, and the same refusals: a path to
  *  nothing, a page over the document limit, a page written against the host's
  *  bridge. It runs BEFORE anything is written, because a page that cannot be
- *  read must stop the operation rather than land after the schemas have been
- *  promoted.
+ *  read must stop the operation rather than land after the schemas have gone
+ *  out.
  *
  *  The `participantRead` in force is the manifest's, because that is what publish writes beside
  *  these pages. Getting it wrong publishes `scope: "all"` for a collection the rules then deny. */
@@ -124,11 +123,12 @@ const wantedDocIds = (plan: TierPlan): Set<string> => {
   return new Set([viewConfigDocId(), ...plan.pages.map((page) => viewDocId(page.id))]);
 };
 
-/** Documents at this stage that the declaration no longer names.
+/** Documents in this tier that the declaration no longer names.
  *
- *  Listed rather than inferred, for the reason `staleStaged` gives about the
- *  schemas: a page withdrawn from `views[]` leaves a document nothing would
- *  otherwise touch, the entrance goes on offering it.
+ *  Listed rather than inferred, for the reason the schemas' own sweep had: the
+ *  declaration says what SHOULD be there and nothing says what is, so a page
+ *  withdrawn from `views[]` leaves a document nothing would otherwise touch —
+ *  and the entrance goes on offering it.
  *
  *  `live:` is the only prefix there is. There was a `staged:` set beside it, written by a deploy
  *  for the roster to try; both are gone (`plans/feat-shared-app-no-staging.md`). */
@@ -168,10 +168,10 @@ export function tierWrites(handle: SharedAppHandle, aid: string, plan: TierPlan,
     // The PAGES first, then the settings that name them.
     //
     // `runWrites` can stop after any successful write, so the order decides
-    // what a half-finished deploy leaves. Settings-first leaves a document
+    // what a half-finished publish leaves. Settings-first leaves a document
     // naming a page that is not there — the entrance offers it and it cannot be
     // drawn. Pages-first leaves a page nobody has been told about, which is
-    // invisible and harmless, and the next deploy completes it.
+    // invisible and harmless, and the next publish completes it.
     ...plan.pages.map((page) => ({
       what: `the ${plan.tier} page '${page.id}' (${at}/${viewDocId(page.id)})`,
       run: () => handle.docs.set(at, viewDocId(page.id), { html: page.html, publishedAt: stamp.publishedAt }),
@@ -203,13 +203,12 @@ export interface PlannedTier {
   stale: string[];
 }
 
-/** Everything both operations need before they write a single document: the
- *  pages read off disk, and the documents at this stage the declaration no
- *  longer names.
+/** Everything publish needs before it writes a single document: the pages read
+ *  off disk, and the documents in this tier the declaration no longer names.
  *
- *  Read off disk BEFORE either operation writes anything: a page that is
- *  missing, oversized, or written against the host's bridge has to stop the run
- *  rather than land after the schemas have been promoted.
+ *  Read off disk BEFORE anything is written: a page that is missing, oversized,
+ *  or written against the host's bridge has to stop the run rather than land
+ *  after the schemas have gone out.
  *
  *  ONE function, and it used to be shared by deploy and publish so the two could not disagree
  *  about what a tier contains. Publish is the only writer now. */
