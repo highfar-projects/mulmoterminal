@@ -855,7 +855,10 @@ them. They exist as separate projects because each has its own compiler options
 `noUncheckedIndexedAccess` off).
 
 In dev, open the Vite URL; its proxy forwards `/ws`, `/ws/pubsub`, and `/api` to
-`:34567`. In production, run `yarn build` then `yarn server` and open
+`:34567`, plus the two mounts that serve a presentHtml page to the Canvas iframe,
+`/artifacts` and `/htmlfile` — a page path missing from that list is answered by
+Vite's SPA catch-all with `index.html`, which renders as a blank iframe rather
+than an error. In production, run `yarn build` then `yarn server` and open
 `http://localhost:34567`.
 
 ---
@@ -1998,7 +2001,8 @@ common/           Shared by server/ and src/ — both tsconfigs include it, so a
                   wire type either side decides from belongs HERE, never mirrored in both:
                   dirChrome.ts, ghItems.ts, gitStatus.ts, launchOptions.ts, shortcuts.ts,
                   sourceExtensions.ts, modelPresets.ts, modelIds.ts, theme*.ts, …
-vite.config.ts    Dev proxy for /ws (+ /ws/codex, /ws/launch, /ws/run), /ws/pubsub, /api, /artifacts
+vite.config.ts    Dev proxy for /ws (+ /ws/codex, /ws/launch, /ws/run), /ws/pubsub, /api,
+                  /artifacts, /htmlfile
 vitest.config.ts  jsdom test environment
 ```
 
