@@ -5,7 +5,7 @@
 // retry rather than report. So every path out of here is a string.
 import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
-import { MANAGE_SHARED_APP, SHARED_APP_ACTIONS, manageSharedApp, pageNote } from "../../../server/infra/shared-app-tool.js";
+import { MANAGE_SHARED_APP, SHARED_APP_ACTIONS, checkRecordNote, manageSharedApp, pageNote, recordsHeadline } from "../../../server/infra/shared-app-tool.js";
 import { HOST_TOOL_DEFINITIONS } from "../../../server/infra/host-tools.js";
 import { groupOfTool } from "../../../common/toolGroups.js";
 import { setFirestoreAccessor, setSharedCollectionsSupport } from "@mulmoclaude/core/collection/server";
@@ -71,6 +71,70 @@ describe("manageSharedApp, the tool", () => {
     const message = await manageSharedApp(root, { action: "check" });
     expect(message).toContain("publishable");
     expect(message).toContain("o@e.com");
+  });
+
+  it("says out loud that the records were not scanned, signed out", async () => {
+    // Silence about the records reads as "the records are fine", and that is what carried 720
+    // seeded rows with a `Z` in their `datetime` to a publish that refused every one (#1763).
+    const root = makeTempDir("mt-shared-tool-");
+    writeFileSync(path.join(root, "app.json"), JSON.stringify({ aid: "a1", name: "Survey", members: { "o@e.com": { "*": "owner" } } }));
+
+    const message = await manageSharedApp(root, { action: "check" });
+    expect(message).toContain("NOT scanned");
+    expect(message).toContain("Publish checks them too");
+  });
+
+  it("reports the rows it DID find beside the collection it could not read", () => {
+    // `scanRecords` skips an unreadable collection and carries on, so the two outcomes coexist —
+    // and answering only "could not be read" would hide rows the next publish is about to name.
+    const note = checkRecordNote({
+      scanned: true,
+      scan: {
+        lines: [
+          "slots: 3 existing records would not satisfy the schema about to be written",
+          "  - court-a-0800: 'startAt' = '…Z' is not a YYYY-MM-DDTHH:MM datetime",
+        ],
+        records: 3,
+        capped: false,
+        unreadable: ["rooms: permission denied"],
+      },
+    }).join("\n");
+    expect(note).toContain("rooms: permission denied");
+    expect(note).toContain("court-a-0800");
+    // And it must NOT offer `confirm` here: `recordRefusal` returns on `unreadable` before it
+    // weighs one, so a publish with both states refuses however it is confirmed.
+    expect(note).not.toContain("only `confirm` gets past it");
+    expect(note).toContain("that is the first repair");
+  });
+
+  it("does not call unread records invalid ones", () => {
+    // Access and migration are opposite repairs. A collection nobody could read says nothing about
+    // the rows behind it, and "the records are not publishable" reads as invalid data — sending the
+    // author to migrate records they have not seen.
+    const unread = recordsHeadline(
+      { scanned: true, scan: { lines: [], records: 0, capped: false, unreadable: ["rooms: permission denied"] } },
+      "shared collections: rooms",
+    );
+    expect(unread).toContain("UNKNOWN");
+    expect(unread).not.toContain("are not");
+
+    const broken = recordsHeadline({ scanned: true, scan: { lines: ["slots: 3 …"], records: 3, capped: false, unreadable: [] } }, "shared collections: slots");
+    expect(broken).toContain("the records already in the app are not");
+
+    expect(recordsHeadline({ scanned: true, scan: { lines: [], records: 0, capped: false, unreadable: [] } }, "shared collections: slots")).toBeNull();
+    expect(recordsHeadline({ scanned: false, why: "no-session" }, "shared collections: slots")).toBeNull();
+  });
+
+  it("blames the declaration, not the session, when app.json does not parse", async () => {
+    // Two ways of not scanning, two different repairs. Told "no session" here, an author
+    // reconnects and gets the same report back.
+    const root = makeTempDir("mt-shared-tool-");
+    writeFileSync(path.join(root, "app.json"), "{ not json");
+
+    const message = await manageSharedApp(root, { action: "check" });
+    expect(message).toContain("NOT scanned");
+    expect(message).toContain("until `app.json` parses");
+    expect(message).not.toContain("session open");
   });
 
   it("checks the declaration without a session, and without writing", async () => {

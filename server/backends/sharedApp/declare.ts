@@ -20,6 +20,7 @@ import { isRecord } from "../../../common/isRecord.js";
 import { declarationProblems, sharedCollections, type SharedAppFailure } from "./context.js";
 import { createManifest, newAid, updateManifest } from "./manifestWrite.js";
 import { viewFilesReport } from "./publicView.js";
+import { scanRecords, type RecordScan } from "./records.js";
 
 /** The roster key that means "every collection". A member's roles map is keyed by cid, with this
  *  as the fallback the rules drop to (`role()` reads `cid` first, then this). */
@@ -392,7 +393,21 @@ export interface CheckReport {
   /** What the pages it names will probably get wrong, without stopping a publish. See
    *  `viewWarnings`. */
   warnings: string[];
+  /** What publish's record scan found in the LIVE records — or, when it did not run, WHY.
+   *
+   *  A result rather than a nullable scan, because `check` answers in states where the records
+   *  cannot be read at all and "the records fit" is not one of them: silence there is read as
+   *  "the records are fine", which is exactly the belief this exists to break. And the two ways of
+   *  not running want opposite things from the author — one is "connect", the other is "fix
+   *  `app.json`" — so a single null would send half of them to the wrong repair. */
+  records: RecordScanResult;
 }
+
+/** Either the scan, or the reason there is none.
+ *
+ *  `unparsed-declaration` is not a degenerate `no-session`: a session may well be open, and what is
+ *  missing is the file that says which app and which collections to read. */
+export type RecordScanResult = { scanned: true; scan: RecordScan } | { scanned: false; why: "no-session" | "unparsed-declaration" };
 
 /** Everything wrong with the declaration and this repository's collections, WITHOUT writing
  *  anything or touching the app.
@@ -405,7 +420,21 @@ export async function checkSharedApp(root: string): Promise<CheckReport | Shared
   const raw = await readManifest(root);
   if (!raw.ok) return raw;
   const parsed = parseAuthoredApp(raw.text);
-  if (!parsed.ok) return { ok: true, aid: undefined, collections: [], checkedAs: null, declaredOwner: undefined, problems: parsed.problems, warnings: [] };
+  // Nothing else can be asked of a file that does not parse: it is the file that names the app and
+  // the collections, so there is nothing to discover and nothing to read. Said as its own reason
+  // rather than folded into the signed-out one — the repair here is the manifest, not the session,
+  // and `checkedAs` is the live address so the report does not also claim nobody is signed in.
+  if (!parsed.ok)
+    return {
+      ok: true,
+      aid: undefined,
+      collections: [],
+      checkedAs: firestoreHandle()?.email ?? null,
+      declaredOwner: undefined,
+      problems: parsed.problems,
+      warnings: [],
+      records: { scanned: false, why: "unparsed-declaration" },
+    };
 
   const collections = await sharedCollections(root);
   const handle = firestoreHandle();
@@ -418,6 +447,16 @@ export async function checkSharedApp(root: string): Promise<CheckReport | Shared
   // against the host's bridge: each of those refuses a publish, and answering "publishable" without
   // having opened them is the answer this action exists not to give.
   const pages = await viewFilesReport(root, parsed.app);
+  // The RECORDS too, when there is a session to read them with. A declaration can be flawless and
+  // publish still refuse — the rows already in the app are the other half of its gate, and they are
+  // the half an agent cannot see: `putItems` accepts a row whose typed values are the wrong SHAPE
+  // (a `datetime` carrying a timezone suffix, a `number` stored as text), and only a read checks
+  // that. Seeded in the hundreds, they were found at publish, one regeneration per batch (#1763).
+  //
+  // Publish's own scan, for the reason `declarationProblems` above is publish's own gate: two
+  // implementations of "would this be refused?" answer it differently, and the answer that matters
+  // is the one publish gives.
+  const records: RecordScanResult = handle === null ? { scanned: false, why: "no-session" } : { scanned: true, scan: await scanRecords(collections, root) };
   return {
     ok: true,
     aid: parsed.app.aid,
@@ -426,6 +465,7 @@ export async function checkSharedApp(root: string): Promise<CheckReport | Shared
     declaredOwner: ownerFromRoster(parsed.app),
     problems: [...problems, ...pages.problems],
     warnings: pages.warnings,
+    records,
   };
 }
 

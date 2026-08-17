@@ -114,6 +114,10 @@ and `icon` are required, and the key for a field's human name is `label`. A sche
 you would design does not parse, and a collection whose schema fails validation is **skipped
 silently**: nothing errors, it simply never appears.
 
+That topic covers the STORAGE key and not the field types, and the two are asked for separately:
+`topic: "Field types"` is where a `datetime`'s exact format lives, and it is the one a seeded
+collection gets wrong (step 2b).
+
 The one thing that differs from an ordinary collection:
 
 ```json
@@ -131,6 +135,71 @@ collection missing and no error anywhere.
 
 **Everything in the folder is shared or nothing is.** Do not mix a shared collection and a local
 one in an app's repository.
+
+### 2b. Load the inventory, if the app needs rows before anybody arrives
+
+Some apps have nothing to show until rows exist: bookable slots, a timetable, a menu of services.
+Nothing generates them — the platform runs no code of its own — so they are written with
+`manageCollection` `putItems` before the app opens, and topped up later (the meeting room's
+[枠の補充](./templates/meeting-room.md) covers the weekly refill task).
+
+**Prove ONE batch before you generate thousands.** Write a single day, read it back with
+`getItems`, then run `check` (step 4b). `putItems` and `getItems` do not check the same things:
+`putItems` refuses a row missing a required field or carrying an unknown `enum` value (and, under
+`mode: "create"`, an id that already exists) — but of what a row SAYS, that is all it looks at. The
+SHAPE of a typed value (a real date, a numeric `number`, a `datetime`'s exact format) is checked
+when a record is READ, and **refused at publish**. So 720 accepted rows are not 720 valid
+rows, and a publish that names them all is one regeneration per batch; one day first is one round
+trip.
+
+**That proof needs a session.** `check` answers offline, and offline it does NOT read the records —
+it says so in as many words ("the live records were NOT scanned"). A `check` that has not scanned
+them proves nothing about the batch you just wrote, so connect first, and read what it says about the
+records. Exactly one answer is a proof: the scan RAN, over every shared collection in this
+repository, and found nothing.
+Everything else is repaired first, and the rest are not degrees of that one — they are different
+repairs, and more than one can be reported at once (a collection that could not be read does not
+stop the others being scanned):
+
+- **rows that do not fit** — named, and a MIGRATION. `confirm` at publish is the decision to break
+  them for everybody, not a way past this.
+- **UNKNOWN** — a collection could not be READ, so nothing at all is known about the rows behind it.
+  That is access, not data.
+- **not scanned** — the line says which: no session, or an `app.json` that does not parse.
+
+**`datetime` is a wall clock, not an instant.** `YYYY-MM-DDTHH:MM`, seconds optional, **no timezone
+suffix**. `new Date(...).toISOString()` is the reflex and it is wrong twice: the `Z` is refused at
+publish, and the time SHIFTS into whatever timezone this machine is in — a Tokyo court's 08:00
+becomes `15:00Z` when the script runs in Seattle, and `16:00Z` for the same 08:00 in winter, because
+the offset moves too. Had the format been accepted, the app would have published with every row
+seven hours out — eight, on the dates the other side of the change. Build the string from its parts
+(`` `${dateKey}T${hh}:00` ``). A `stampField`'s `…Z` (step "limited number of places") is the one
+`datetime` shaped that way, and the rules write it — no script does.
+
+**Generate with a deterministic script, and do not write the rows out yourself.** Dates, month ends
+and daylight saving are what an LLM gets wrong, and a few hundred inline rows are tens of KB emitted
+a token at a time. Have the script write a bare array of records to a JSON file under the workspace
+and pass its absolute path as `putItems`' `itemsFile` — 1000 rows and 8 MiB per call, and an
+over-limit call writes nothing at all.
+
+**Pass `mode: "create"`.** The default REPLACES a whole record, so a re-run — a retry, a refill that
+overlaps what is already there — silently overwrites fields nothing regenerated, and reading the ids
+first does not save you: another run or a hand edit can create the same id in the gap between the
+read and the write. `create` has the host refuse a colliding row instead.
+
+**And then read `rejected`.** It is not a count and not only about collisions: `putItems` returns
+`{ written, rejected }` with one `{ id, problem }` per refused row, and the `problem` is as likely
+to be a missing required field or an unknown `enum` value as an id that already existed. So go
+through them: every `problem` that is not "already exists" is a row that was NOT written, and it
+needs fixing and re-sending — just that row. A refusal of the whole CALL (over the row or byte
+limit) is a different thing and does not arrive as `rejected` at all: no `{ written, rejected }`
+comes back, nothing was written, and the fix is to split the file rather than to re-send rows.
+
+And "already exists" says exactly that much: the id was there when the write ran. It does not say
+who put it there — an earlier attempt of this same refill, another run, a hand edit — and it does
+not say the stored row is the row you just generated. `create` cannot correct it either. If that
+matters — a regeneration that changes what a slot should say — read those ids back with `getItems`
+and compare before calling them done.
 
 ### 3. RUN THE PAGE. Not reading it — running it.
 
@@ -342,6 +411,8 @@ Two more keys, and one thing the rules cannot do. Read
   compare and do not put it through `new Date()`** — that keeps only milliseconds, and two
   submissions in the same millisecond then tie and fall back to the order they were read in. Ties
   at full precision break by document id, which every host reads in.
+  It is also the ONE `datetime` shaped like that: a value you write yourself is a wall clock with
+  no timezone suffix (step 2b), and `toISOString()` is refused at publish.
 - **`window.fromField`** is an opening time that lives on ANOTHER record:
   `{ "ref": "classId", "collection": "classes", "field": "opensAt" }`. `opensAt` is a **number**,
   epoch millis, computed by whoever schedules the class — "three days before, at 08:00" is business

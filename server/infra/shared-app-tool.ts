@@ -16,7 +16,15 @@ import { headlessPreview } from "../backends/sharedApp/headlessPreview.js";
 import { narrateHeadlessRun } from "../backends/sharedApp/headlessReport.js";
 import { publishSharedApp } from "../backends/sharedApp/publish.js";
 import { unpublishSharedApp } from "../backends/sharedApp/unpublish.js";
-import { APP_ROLE_NAMES, checkSharedApp, forkSharedApp, initSharedApp, inviteToSharedApp, type AppRoleName } from "../backends/sharedApp/declare.js";
+import {
+  APP_ROLE_NAMES,
+  checkSharedApp,
+  forkSharedApp,
+  initSharedApp,
+  inviteToSharedApp,
+  type AppRoleName,
+  type RecordScanResult,
+} from "../backends/sharedApp/declare.js";
 import { isRecord } from "../../common/isRecord.js";
 import { MULMOSERVER_ORIGIN } from "../../common/firebaseConfig.js";
 import { manifestKey } from "../backends/sharedApp/manifestWrite.js";
@@ -226,10 +234,75 @@ async function narratePreview(root: string): Promise<string> {
   return narrateHeadlessRun(await headlessPreview(root));
 }
 
+/** What the LIVE records look like under the schemas this repository holds, in `check`'s voice.
+ *
+ *  The scan is publish's, word for word (`scanRecords`), so the two boundaries cannot describe the
+ *  same broken row differently. What differs is the sentence around it: publish STOPS there and
+ *  `confirm` is how you get past it, while `check` writes nothing either way.
+ *
+ *  A scan that did not run is said out loud rather than left as silence. `check` answers offline,
+ *  an agent reads a report with no record line as "the records are fine", and that is the belief
+ *  that carries a few hundred bad rows to a publish — and the two reasons it did not run send the
+ *  author to different repairs, so each names its own. */
+export function checkRecordNote(records: RecordScanResult): string[] {
+  if (!records.scanned)
+    return records.why === "no-session"
+      ? [
+          "The live records were NOT scanned — `check` can only read them with a session open. Publish checks them too, " +
+            "against these same schemas, and refuses the rows that do not fit.",
+        ]
+      : [
+          "The live records were NOT scanned — nothing knows which app or which collections to read until `app.json` parses. " +
+            "Fix the declaration above and run check again.",
+        ];
+  const { scan } = records;
+  const notes: string[] = [];
+  // BOTH, when both happened. `scanRecords` skips a collection it cannot read and goes on to the
+  // next, so an unreadable one does not mean the rest went unexamined — and dropping their findings
+  // here would hide rows publish is about to name. (Publish's own `recordRefusal` returns early on
+  // `unreadable` for a different reason: there it decides ONE thing, whether `confirm` may be spent,
+  // and it may not be. `check` decides nothing and is only reporting.)
+  if (scan.unreadable.length > 0)
+    notes.push(
+      ...scan.unreadable,
+      "Those collections' records could not be read, so nothing checked whether these schemas still fit them. Publish stops there too, and `confirm` does not override it.",
+    );
+  if (scan.records > 0)
+    notes.push(
+      ...scan.lines,
+      // What `confirm` buys depends on the OTHER half of the scan. `recordRefusal` returns on
+      // `unreadable` before it ever weighs `confirm`, so offering it while a collection cannot be
+      // read promises a publish that refuses anyway — and points at the wrong repair, which is the
+      // whole reason these two are kept apart.
+      scan.unreadable.length > 0
+        ? "publish refuses these rows — and it does not get as far as weighing `confirm` while a collection above cannot be read, so that is the first repair."
+        : "publish refuses these rows, and only `confirm` gets past it — which accepts the breakage for everyone.",
+    );
+  return notes;
+}
+
+/** The headline when the records alone would stop a publish, or null when they would not. A
+ *  declaration can be perfect and a publish still refuse, which is why this is not decided by
+ *  `problems` on its own.
+ *
+ *  Two states, kept apart because they send the author to opposite repairs. Rows that do not fit
+ *  are a MIGRATION — they are known, they are named, and `confirm` is the decision to break them.
+ *  A collection that could not be read is ACCESS, and nothing at all is known about the rows behind
+ *  it; calling those "not publishable" reads as invalid data and starts a migration of records
+ *  nobody has seen. */
+export function recordsHeadline(records: RecordScanResult, found: string): string | null {
+  if (!records.scanned) return null;
+  const { scan } = records;
+  if (scan.records > 0) return `The declaration is publishable, but the records already in the app are not (${found}):`;
+  if (scan.unreadable.length > 0) return `The declaration is publishable; whether the records fit it is UNKNOWN, and publish stops there (${found}):`;
+  return null;
+}
+
 async function narrateCheck(root: string): Promise<string> {
   const report = await checkSharedApp(root);
   if (!report.ok) return report.problems.join("\n");
   const found = report.collections.length === 0 ? "no shared collections in this repository yet" : `shared collections: ${report.collections.join(", ")}`;
+  const records = checkRecordNote(report.records);
   // WHOSE publish was checked, always said out loud: signed in it is you, signed out it is the
   // owner the declaration names, and "it would publish for somebody else" is not the same answer.
   const as =
@@ -237,11 +310,13 @@ async function narrateCheck(root: string): Promise<string> {
       ? `Checked as the declared owner (${report.declaredOwner ?? "none named"}) — not signed in, so it could not be checked against your address.`
       : `Checked as ${report.checkedAs}.`;
   if (report.problems.length === 0) {
-    return [`The declaration is publishable. ${found}.`, ...warningNote(report.warnings), as, "Nothing was written — this only reads."].join("\n");
+    const headline = recordsHeadline(report.records, found) ?? `The declaration is publishable. ${found}.`;
+    return [headline, ...records, ...warningNote(report.warnings), as, "Nothing was written — this only reads."].join("\n");
   }
   return [
     `The declaration would be refused (${found}):`,
     ...report.problems.map((problem) => `  - ${problem}`),
+    ...records,
     ...warningNote(report.warnings),
     as,
     "Nothing was written.",
