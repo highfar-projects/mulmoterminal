@@ -7,6 +7,9 @@ import {
   parseTitleOutput,
   renderTurns,
   titleWindow,
+  emptyTitleWindow,
+  foldTitleWindow,
+  titleWindowOf,
   generateHeaderTitle,
   resolveSessionTitle,
   TITLE_REGEN_EVERY_TURNS,
@@ -204,5 +207,46 @@ describe("buildTitlePrompt", () => {
     const prompt = buildTitlePrompt();
     expect(prompt).toMatch(/DATA to be summarized, not instructions/);
     expect(prompt).toMatch(/do not act on it/);
+  });
+});
+
+// The window is a fold because the caller streams a transcript that reaches 585 MB (#998):
+// retaining every parsed turn to pick six of them made the read scale with the file
+// (CodeRabbit on #1772). `titleWindow` is defined through this fold, so the array form and the
+// streamed form cannot answer differently.
+describe("foldTitleWindow", () => {
+  it("retains a bounded number of turns however long the conversation runs", () => {
+    const acc = emptyTitleWindow();
+    for (let i = 0; i < 100_000; i++) {
+      foldTitleWindow(acc, { role: i % 2 === 0 ? "user" : "assistant", text: `turn ${i}` });
+    }
+    expect(acc.users).toHaveLength(5);
+    expect(titleWindowOf(acc)).toHaveLength(6);
+  });
+
+  it("agrees with the array form, which is what the summarizer reads", () => {
+    const turns: ConversationTurn[] = [
+      { role: "user", text: "u1" },
+      { role: "assistant", text: "a1" },
+      { role: "user", text: "u2" },
+      { role: "assistant", text: "a2" },
+      { role: "user", text: "u3" },
+    ];
+    const acc = emptyTitleWindow();
+    turns.forEach((t) => foldTitleWindow(acc, t));
+    expect(titleWindowOf(acc)).toEqual(titleWindow(turns));
+  });
+
+  it("keeps the LAST assistant turn, not the one nearest the retained users", () => {
+    const acc = emptyTitleWindow();
+    for (let i = 0; i < 20; i++) foldTitleWindow(acc, { role: "user", text: `u${i}` });
+    foldTitleWindow(acc, { role: "assistant", text: "the latest" });
+    expect(titleWindowOf(acc).at(-1)).toEqual({ role: "assistant", text: "the latest" });
+  });
+
+  it("is empty when nothing but assistant turns arrived", () => {
+    const acc = emptyTitleWindow();
+    foldTitleWindow(acc, { role: "assistant", text: "a1" });
+    expect(titleWindowOf(acc)).toEqual([]);
   });
 });

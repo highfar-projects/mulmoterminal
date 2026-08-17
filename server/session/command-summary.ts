@@ -105,7 +105,11 @@ export type RunClaude = (params: { bin: string; prompt: string; input: string; t
 const DENY_ALL_TOOLS = JSON.stringify({ permissions: { deny: ["*"] } });
 // No MCP servers: `--strict-mcp-config` makes this the whole set rather than an addition.
 const NO_MCP_SERVERS = JSON.stringify({ mcpServers: {} });
-const DISALLOWED_TOOLS = ["Bash", "Edit", "Write", "NotebookEdit", "Read", "Glob", "Grep", "WebFetch", "WebSearch", "Task", "Skill", "SlashCommand"];
+// Every name here must be one the CLI actually knows: an unknown one makes it warn
+// "matches no known tool — check for typos" on stderr, which is the channel `summarizeLog`
+// reports a FAILED summary through. Checked against claude 2.1.233; `SlashCommand` was in an
+// earlier draft of this list and is not a tool.
+const DISALLOWED_TOOLS = ["Bash", "Edit", "Write", "NotebookEdit", "Read", "Glob", "Grep", "WebFetch", "WebSearch", "Task", "Skill"];
 
 /** Argv for a headless run that can read its stdin and answer, and do nothing else. Exported so
  *  a spec can pin it: every flag here is one argument away from being quietly dropped, and the

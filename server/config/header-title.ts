@@ -70,11 +70,35 @@ export function shouldFreshenViewedTitle(p: { lastTitledUserTurns: number | null
 // The summarizer window: the last few USER turns (they define the task) plus the most
 // recent assistant turn for context. Anchoring on user turns keeps intent in view even
 // after a long assistant-only tool stretch. Empty when there is no user turn to title.
+//
+// Expressed as a FOLD because the caller streams the transcript: a title reads six turns, and
+// holding the other 500,000 to find them made the read scale with a file that reaches 585 MB
+// (#998) — and on the default title source the turns are not read at all. `titleWindow` below is
+// the array form, defined through the same fold so the two cannot drift apart.
+export interface TitleWindowFold {
+  users: ConversationTurn[];
+  lastAssistant: ConversationTurn | null;
+}
+export const emptyTitleWindow = (): TitleWindowFold => ({ users: [], lastAssistant: null });
+
+export function foldTitleWindow(acc: TitleWindowFold, turn: ConversationTurn): void {
+  if (turn.role !== "user") {
+    acc.lastAssistant = turn;
+    return;
+  }
+  acc.users.push(turn);
+  if (acc.users.length > USER_TURNS_IN_WINDOW) acc.users.shift();
+}
+
+export function titleWindowOf(acc: TitleWindowFold): ConversationTurn[] {
+  if (acc.users.length === 0) return [];
+  return acc.lastAssistant ? [...acc.users, acc.lastAssistant] : [...acc.users];
+}
+
 export function titleWindow(turns: ConversationTurn[]): ConversationTurn[] {
-  const users = turns.filter((t) => t.role === "user").slice(-USER_TURNS_IN_WINDOW);
-  if (users.length === 0) return [];
-  const lastAssistant = [...turns].reverse().find((t) => t.role === "assistant");
-  return lastAssistant ? [...users, lastAssistant] : users;
+  const acc = emptyTitleWindow();
+  turns.forEach((turn) => foldTitleWindow(acc, turn));
+  return titleWindowOf(acc);
 }
 
 // A labelled transcript the model reads on stdin, assistant turns clipped shorter.

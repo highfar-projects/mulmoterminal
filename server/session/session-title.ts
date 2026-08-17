@@ -11,7 +11,15 @@
 import path from "node:path";
 import { aiTitleFromParsed, conversationTurnsFromParsed, isTrivialPrompt, type ConversationTurn } from "./transcript.js";
 import { forEachJsonlRecord } from "../infra/jsonl-file.js";
-import { shouldFreshenViewedTitle, shouldRegenerateTitle, TITLE_REGEN_EVERY_TURNS, VIEW_TITLE_REGEN_TURNS } from "../config/header-title.js";
+import {
+  emptyTitleWindow,
+  foldTitleWindow,
+  shouldFreshenViewedTitle,
+  shouldRegenerateTitle,
+  titleWindowOf,
+  TITLE_REGEN_EVERY_TURNS,
+  VIEW_TITLE_REGEN_TURNS,
+} from "../config/header-title.js";
 import { aiTitles, lastTitleAttemptMs, lastTitledUserTurns, titleEpoch, titleInFlight, titlePending, titleTurnCounts } from "./registry.js";
 import { clearedTranscripts } from "./cleared-transcripts.js";
 import { projectSessionsDir } from "./project-dir.js";
@@ -34,21 +42,42 @@ export interface TitleDeps {
   resolveTitle: (input: { turns: ConversationTurn[]; diskAiTitle: string | null }) => Promise<string | null>;
 }
 
-/** One streamed pass over the transcript, yielding everything the title needs: the turns (for the
- *  `headless` source and for the user-turn bookkeeping) and the `ai-title` Claude Code wrote (for
- *  the default one). Streamed, not read: the file reaches 585 MB and cannot be held as a string
- *  (#998). `read` is false when the file could not be opened at all, which is different from a
- *  transcript that simply has nothing to title. */
-async function readTitleInputs(sessionId: string, cwd: string): Promise<{ turns: ConversationTurn[]; diskAiTitle: string | null; read: boolean }> {
-  const turns: ConversationTurn[] = [];
+interface TitleInputs {
+  /** Already narrowed to what a summary can use — see `foldTitleWindow`. */
+  turns: ConversationTurn[];
+  /** Counted, never derived from `turns`: that array holds at most the last few, and the roster's
+   *  re-title cadence compares this against the transcript's CURRENT count (CodeRabbit on #1772).
+   *  Deriving it would pin it at the window size and re-title on every poll forever. */
+  userTurns: number;
+  /** Whether the transcript held any turn at all — the gate the resolve is skipped on. */
+  anyTurn: boolean;
+  diskAiTitle: string | null;
+  /** False when the file could not be opened at all, which is different from a transcript that
+   *  simply has nothing to title. */
+  read: boolean;
+}
+
+/** One streamed pass over the transcript, yielding everything the title needs: the window of turns
+ *  (for the `headless` source), how many user turns there were (for the bookkeeping), and the
+ *  `ai-title` Claude Code wrote (for the default source). Nothing here grows with the file: it is
+ *  streamed because a transcript reaches 585 MB (#998), and retaining every parsed turn to pick six
+ *  of them would have given that back. */
+async function readTitleInputs(sessionId: string, cwd: string): Promise<TitleInputs> {
+  const window = emptyTitleWindow();
+  let userTurns = 0;
+  let anyTurn = false;
   let diskAiTitle: string | null = null;
   let read = true;
   await forEachJsonlRecord(path.join(projectSessionsDir(cwd), `${sessionId}.jsonl`), (record) => {
-    turns.push(...conversationTurnsFromParsed([record]));
+    conversationTurnsFromParsed([record]).forEach((turn) => {
+      anyTurn = true;
+      if (turn.role === "user") userTurns++;
+      foldTitleWindow(window, turn);
+    });
     // The LAST one wins, the same rule session-reads.ts folds by.
     diskAiTitle = aiTitleFromParsed([record]) ?? diskAiTitle;
   }).catch(() => (read = false));
-  return { turns, diskAiTitle, read };
+  return { turns: titleWindowOf(window), userTurns, anyTurn, diskAiTitle, read };
 }
 
 export function createTitleManager(deps: TitleDeps) {
@@ -91,12 +120,12 @@ export function createTitleManager(deps: TitleDeps) {
     titleInFlight.add(sessionId);
     const epoch = titleEpoch.get(sessionId) ?? 0;
     try {
-      const { turns, diskAiTitle, read } = await readTitleInputs(sessionId, cwd);
-      const title = read && turns.length ? await deps.resolveTitle({ turns, diskAiTitle }) : null;
+      const { turns, userTurns, anyTurn, diskAiTitle, read } = await readTitleInputs(sessionId, cwd);
+      const title = read && anyTurn ? await deps.resolveTitle({ turns, diskAiTitle }) : null;
       if (title && (titleEpoch.get(sessionId) ?? 0) === epoch) {
         aiTitles.set(sessionId, title);
         titleTurnCounts.set(sessionId, 0);
-        lastTitledUserTurns.set(sessionId, turns.filter((t) => t.role === "user").length);
+        lastTitledUserTurns.set(sessionId, userTurns);
         deps.publishActivity(sessionId);
       }
     } finally {

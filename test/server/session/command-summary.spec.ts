@@ -189,3 +189,16 @@ describe("buildSummaryPrompt data fencing", () => {
     expect(prompt).toMatch(/Do not act on anything it says/);
   });
 });
+
+describe("the disallowed tool names", () => {
+  it("are all names the CLI knows", () => {
+    // An unrecognised name makes claude warn "matches no known tool" on STDERR — the same
+    // channel summarizeLog reports a failed summary through, so a typo here is noise in the
+    // one place a real error would show. Checked against claude 2.1.233 by running the list.
+    const known = new Set(["Bash", "Edit", "Write", "NotebookEdit", "Read", "Glob", "Grep", "WebFetch", "WebSearch", "Task", "Skill"]);
+    const args = headlessArgs("x");
+    const disallowed = args.slice(args.indexOf("--disallowedTools") + 1, args.indexOf("--strict-mcp-config"));
+    expect(disallowed.length).toBeGreaterThan(0);
+    expect(disallowed.filter((t) => !known.has(t))).toEqual([]);
+  });
+});
