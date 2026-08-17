@@ -408,6 +408,17 @@ describe("clipToEncodedBytes", () => {
     expect(clipToEncodedBytes("あいう", 8)).toBe("あい"); // 3 bytes each, plus 2 for the quotes
   });
 
+  it("keeps a four-byte character that fits, rather than giving up at it", () => {
+    // The emoji is four bytes, so with five bytes of text left the midpoint lands INSIDE it. Snapping
+    // only backwards put the search back where it started and it returned nothing — discarding a
+    // prefix that was within the budget all along (Codex, PR #1776).
+    const emoji = "\u{1F600}";
+    expect(Buffer.byteLength(emoji, "utf8")).toBe(4);
+    expect(encoded(emoji)).toBe(6);
+    expect(encoded(`${emoji}a`)).toBe(7);
+    expect(clipToEncodedBytes(`${emoji}a`, 6)).toBe(emoji);
+  });
+
   it("never splits a character", () => {
     expect(clipToEncodedBytes("あいう", 9)).toBe("あい");
     expect(clipToEncodedBytes("あいう", 10)).toBe("あい");

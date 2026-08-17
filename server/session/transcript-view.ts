@@ -279,6 +279,14 @@ function charStart(buf: Buffer, at: number): number {
   return start;
 }
 
+// The start of the character AFTER the one containing `at` — the end of the buffer when there is
+// none. Always strictly greater than `at`, which is what keeps the search below moving.
+function nextCharStart(buf: Buffer, at: number): number {
+  let next = at + 1;
+  while (next < buf.length && ((buf[next] ?? 0) & 0xc0) === 0x80) next++;
+  return next;
+}
+
 /** The longest prefix of `text` whose JSON ENCODING fits in `maxBytes`.
  *
  *  Encoded, not raw — see encodedBytes for why the two differ by up to six times. There is no cheap
@@ -294,9 +302,14 @@ export function clipToEncodedBytes(text: string, maxBytes: number): string {
   const buf = Buffer.from(text, "utf8");
   let fits = 0; // a prefix length that is known to fit
   let over = buf.length; // and one that is known not to
-  while (over - fits > 1) {
-    const mid = charStart(buf, (fits + over) >> 1);
-    if (mid <= fits) break; // no character boundary strictly between the two — `fits` is the answer
+  while (fits < over) {
+    // The midpoint, snapped FORWARD past the character `fits` is inside of. Snapping only backwards
+    // collapses onto `fits` whenever the remaining span is shorter than the character sitting at it
+    // — with a four-byte character and five bytes left, the midpoint is byte 2, walks back to 0, and
+    // the search gives up on a prefix that fits (Codex, PR #1776). Forward, every step is a real
+    // boundary strictly past `fits`, so the interval always shrinks.
+    const mid = Math.max(charStart(buf, (fits + over) >> 1), nextCharStart(buf, fits));
+    if (mid >= over) break; // no boundary strictly between the two — `fits` is the longest that fits
     if (encodedBytes(buf.subarray(0, mid).toString("utf8")) <= maxBytes) fits = mid;
     else over = mid;
   }

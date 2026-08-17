@@ -82,6 +82,26 @@ describe("sessionTranscriptView", () => {
     expect(view.truncated).toBe(true);
   });
 
+  it("reads a final record whose newline has not landed yet", async () => {
+    // Bounding the scan at the stat'd size is what stops it following the writer — but a range with
+    // an explicit end never yields its last line, because at an arbitrary cut half a record and a
+    // finished one look alike. At the SIZE they do not: JSON says which. Without that, a one-turn
+    // session whose last write is still missing its newline shows nothing (Codex, PR #1776).
+    await writeTranscript(userLine("hello"), assistantLine("hi").trimEnd());
+    const view = await sessionTranscriptView(cwd, SESSION);
+    expect(view.status).toBe("ok");
+    if (view.status !== "ok") return;
+    expect(view.turns.map(rowTexts)).toEqual([["hello", "hi"]]);
+  });
+
+  it("ignores a final record the writer is still in the middle of", async () => {
+    await writeTranscript(userLine("hello"), assistantLine("hi"), '{"type":"assistant","mess');
+    const view = await sessionTranscriptView(cwd, SESSION);
+    expect(view.status).toBe("ok");
+    if (view.status !== "ok") return;
+    expect(view.turns.map(rowTexts)).toEqual([["hello", "hi"]]);
+  });
+
   describe("the four answers", () => {
     it("none when there is no transcript at all", async () => {
       expect(await sessionTranscriptView(cwd, SESSION)).toEqual({ status: "none" });

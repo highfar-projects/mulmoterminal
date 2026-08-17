@@ -11,6 +11,7 @@ import { promises as fs } from "node:fs";
 import type { FileHandle } from "node:fs/promises";
 import path from "node:path";
 import { SESSION_ID_RE } from "../config/env.js";
+import { isRecord } from "../../common/isRecord.js";
 import { hasErrnoCode, messageOf } from "../errors.js";
 import { forEachJsonlRecordIn } from "../infra/jsonl-file.js";
 import { clearedTranscripts } from "./cleared-transcripts.js";
@@ -64,6 +65,30 @@ async function startsAtLine(handle: FileHandle, from: number): Promise<boolean> 
   return bytesRead === 1 && byte[0] === NEWLINE;
 }
 
+/** The bytes after the last newline, folded when they are a whole record.
+ *
+ *  A `to`-bounded fold never yields the last line of its range, and that is right at an arbitrary
+ *  cut: half a record and a finished one look the same there. Here the cut is the SIZE, so the only
+ *  thing past the last newline is one line — and JSON says which of the two it is, exactly as the
+ *  fold decides at EOF. Without this, bounding the scan at the snapshot silently dropped a complete
+ *  final record whose newline had not landed yet, which for a one-turn session is the whole view
+ *  (Codex, PR #1776).
+ *
+ *  Bounded by the snapshot like everything else: what lies between is at most one record. */
+async function foldFinalLine(handle: FileHandle, from: number, to: number, onRecord: (record: Record<string, unknown>) => void): Promise<void> {
+  if (to <= from) return;
+  const buf = Buffer.alloc(to - from);
+  const { bytesRead } = await handle.read(buf, 0, buf.length, from);
+  const line = buf.subarray(0, bytesRead).toString("utf8").trim();
+  if (!line) return;
+  try {
+    const parsed: unknown = JSON.parse(line);
+    if (isRecord(parsed)) onRecord(parsed);
+  } catch {
+    // Half a record — the writer is mid-line. The next poll picks it up whole.
+  }
+}
+
 // A window with no turn boundary in it is not a view: the whole point is turns, and the newest one
 // must be complete. It happens when a SINGLE record is bigger than the window — the range fold drops
 // the partial line it starts inside, taking that record with it — so the answer is to widen.
@@ -84,7 +109,8 @@ async function readWindow(handle: FileHandle, size: number, tail: number, window
   // in records that reach megabytes, so a read nominally bounded at 4 MB follows the writer for as
   // long as the writer keeps going. Bounding it at the snapshot also makes a widened re-read fold
   // the same bytes the first one did, rather than a file that moved underneath (Codex, PR #1776).
-  await forEachJsonlRecordIn(handle, { from, to: size, atLineStart }, (record) => foldTranscriptView(scan, record));
+  const end = await forEachJsonlRecordIn(handle, { from, to: size, atLineStart }, (record) => foldTranscriptView(scan, record));
+  await foldFinalLine(handle, end, size, (record) => foldTranscriptView(scan, record));
   if (scan.turns.length > 0) return transcriptViewOf(scan, from > 0);
   if (from === 0) return { status: "none" };
   if (tail >= window.maxTailBytes) return { status: "too-large" };
