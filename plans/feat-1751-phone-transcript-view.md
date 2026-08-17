@@ -114,8 +114,10 @@ keys: ['signature', 'thinking', 'type']
   時刻は使わない（境界がそのターンの始まりだから）。`null` を許すのは、時刻が読めない 1 件で
   ターンごと落とすほうが害が大きいため — #1748 が `PromptEntry.at` で同じ判断をしている
   `TranscriptRow` は `{ kind: "user" | "assistant" | "tool" | "unknown"; text: string; clipped?: boolean }`
-  — **`clipped`**（この行の `tool_result` を切った）は `TranscriptView.truncated`（古いターンを捨てた）
-  とは別物。同じ語にすると phone がどちらの印を出すか決められない
+  — **`clipped`** は**この行の `text` を切った**（`tool_result` の 6 行キャップでも、
+  バイトキャップでも立つ）。`TranscriptView.truncated`（**ターンを**捨てた）とは別物で、
+  同じ語にすると phone がどちらの印を出すか決められない。
+  **行が切れた**か**ターンが落ちた**かの区別であって、どの規則が切ったかの区別ではない
 - `renderRecord(record)` — 1 レコード → 行の配列。**content の並び順どおりに 1 ブロック 1 行**
   （まとめない・並べ替えない）。ブロック種別ごとの規則:
 
@@ -161,13 +163,23 @@ keys: ['signature', 'thinking', 'type']
   （`withinByteCap` と同形）。
   **最新 1 ターンだけで 256KB を超える場合**は、そのターンを落とさず**行の `text` を切って
   `clipped` を立てる**。決定 1 の「最新 1 ターンは必ず出す」が優先で、`too-large` にはしない
-  （読めているのだから、大きさを理由に何も出さないのは間違い）
+  （読めているのだから、大きさを理由に何も出さないのは間違い）。切り方は決定的にする:
+
+  - 測るのは **UTF-8 バイト**（`Buffer.byteLength`）。JSON の区切りやキー名のぶんとして
+    **1 行あたり 64 バイトを足して数える**。文字数で測ると日本語で 3 倍ずれて上限を超える
+  - **後ろの行から切る。** ターンの頭（ユーザのプロンプトと最初の応答）が残る側になる
+  - **多バイト文字の途中で切らない。** バイト境界で切ると不正な UTF-8 が出るので、
+    切ったあとに `Buffer` → `string` の往復で壊れない位置まで戻す
+  - 1 行を切ったら、その行に `clipped` を立てる。**行ごと消さない** — 空の行より
+    「切れた頭」のほうが読める
 - **バジェットは行を数える。`TranscriptRow` の**個数**ではない。** `text` は素通しなので
   改行を含む — 1 行として数えると**巨大な assistant 本文 1 ブロックがバジェットを素通りする**。
   数えるのは `row.text.split("\n").length`（`tool_result` はキャップ後の行数、`tool_use` は 1）。
   決定 1 が「論理行 250」と言っているのはこの意味
-- `foldTranscriptView(scan, record)` — ターン境界で区切り、論理行 250 を超えたら**古いターンごと**
-  捨てる。ただし**残り 1 ターンなら捨てない**
+- `foldTranscriptView(scan, record)` — **`record.isSidechain === true` のレコードは
+  行も作らず、ターンも切らず、そこで捨てる**（境界の述語だけで弾くと、sidechain の
+  assistant レコードが直前のターンの行として紛れ込む）。残りをターン境界で区切り、
+  論理行 250 を超えたら**古いターンごと**捨てる。ただし**残り 1 ターンなら捨てない**
 - **最初の境界より前に来たレコードは捨てる。** 窓は必ずターンの途中から始まるので、先頭には
   必ず「前のターンの尻尾」が付く。これを合成ターンに入れると**話者の分からない断片**が頭に出るし、
   250 行バジェットに数えると**捨てられない断片が最新ターンを押し出す**。捨てるのが唯一
@@ -261,7 +273,19 @@ spec で固定する。
 広げるのは境界が 0 個のときだけなので、通常の読みは 4MB のまま（実測で必要量は max 1457KB）。
 
 **`server/backends/remoteHost/handlers/terminalSession.ts`** に `getTerminalTranscript`。
-`getTerminalScreen` と同じ検証。MulmoClaude に対応物は無い（`terminalSession.ts` の冒頭が
+
+**`getTerminalScreen` と同じ検証では足りない。** あのファイルのハンドラは `sessionId` を
+**「空でない文字列」しか見ていない**（`terminalSession.ts:57-58`）。`getTerminalScreen` が
+それで無事なのは id を `tmuxSessionName(id)` に渡すだけで**パスにしない**からで、
+このハンドラは**あのファイルで初めて id をファイルパスにする**。素通しだと
+`../../` を含む id で `projectSessionsDir(cwd)` の外に出られる（リモートから読める
+ホストのファイルを読み出す経路になる）。
+
+- **`SESSION_ID_RE`（`server/config/env.ts:76`）で弾く。** HTTP ルート側は既にこれを使っている
+  （`session-routes.ts`）。UUID の形なので `/` も `.` も通らない
+- **さらにパスの内包も確認する。** `path.resolve` した結果が `projectSessionsDir(cwd)` の下に
+  あることを見る。正規表現だけで十分だが、**後で誰かが正規表現を緩めたときに残るのはこちら**
+MulmoClaude に対応物は無い（`terminalSession.ts` の冒頭が
 「that host has no PTY table to look at」と書いているとおり）ので、命名はこちらの自由。
 
 **cwd はハンドラで解決しない。** `sessionTranscriptView(cwd, id)` は cwd を要るが、ハンドラが
@@ -431,6 +455,10 @@ compact したもの 95 本 / compact 後に命令があるもの 61 本の**す
   `clipped` が立つ（`too-large` にはならない）
 - **窓がファイル先頭から始まっていない**とき、行バジェットが発火していなくても `truncated` が立つ
 - **cwd が `""` のセッション**が `none` を返す。`projectSessionsDir("")` を呼ばないこと
+- **`SESSION_ID_RE` に合わない `sessionId` が弾かれる** — `../` を含むもの、空、UUID でないもの。
+  さらに解決後のパスが `projectSessionsDir(cwd)` の下にあること
+- **`isSidechain: true` の assistant レコードが、直前のターンの行として紛れ込まない**
+- **バイトキャップで切った行が UTF-8 として壊れていない**（日本語を含む行で確かめる）
 - **読んでいる最中の追記** — 末尾が途中まで書かれた JSON 行で終わる場合
 
 - **最初の境界より前のレコードが捨てられ、250 行バジェットに数えられない**
@@ -489,5 +517,9 @@ PromptsPane は**もう存在する**。この計画は `session-reads.ts` を�
   `agentFromPaneCommand` の表に無く `?? "shell"` に落ちる。つまり再起動を跨いだ claude
   セッションは `agent: "shell"` と報告される。**決定 6 で agent 種別を使わない理由がこれ**
 - `SCREEN_HISTORY_ROWS = 300`（mulmoserver#139）が claude セルに効いていない
+- **remote-host のコマンドハンドラは `sessionId` を「空でない文字列」としか見ていない**
+  （`terminalSession.ts:57-58`）。HTTP ルート側は `SESSION_ID_RE` を使っているのに、
+  こちらは使っていない。既存のハンドラは id を tmux に渡すだけなので今は無害だが、
+  **パスやコマンドに使うハンドラが 1 つ増えるたびに穴になる**。#1751 に記録した
 - `clearedTranscripts` のマークは tmux が生きたまま pty だけ死んだ場合に捨てられない
   （`pty-exit.ts:26`）。repo 全体の性質で、既存 4 読み手が同じ性質を共有している
