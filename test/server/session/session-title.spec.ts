@@ -308,11 +308,18 @@ describe("freshenRosterTitle", () => {
     await vi.waitFor(() => expect(titleInFlight.has(SESSION)).toBe(false));
     // The check completed and found nothing — that is an answer, and it is remembered.
     expect(lastTitledUserTurns.get(SESSION)).toBe(2);
+    const attemptedAt = lastTitleAttemptMs.get(SESSION);
     // Past the retry floor, the roster polling again must NOT re-read the file: the conversation
     // has not moved, so there is nothing new to find.
+    //
+    // Asserted on the SYNCHRONOUS refusal rather than by waiting to see nothing happen
+    // (CodeRabbit on #1772): freshenRosterTitle records the attempt before its first await, so a
+    // poll that got through would have moved the timestamp by the time this line runs. Sleeping
+    // for a negative proves nothing and rots — a fixed delay elsewhere in this suite went red on
+    // a loaded CI runner while this PR was open.
     clock += 60_000;
     freshenRosterTitle(SESSION, cwd, 2);
-    await new Promise((r) => setTimeout(r, 50));
+    expect(lastTitleAttemptMs.get(SESSION)).toBe(attemptedAt);
     expect(diskTitles).toHaveLength(1);
   });
 
