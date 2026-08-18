@@ -26,7 +26,7 @@ the user turns this down.
 
 ## Start from a template when one fits
 
-Four shapes are written out in full — declaration, schemas, and the reasoning behind each key:
+Five shapes are written out in full — declaration, schemas, and the reasoning behind each key:
 
 - **[templates/salon.md](./templates/salon.md)** — a request that a NAMED PERSON approves, and only
   their own (a salon's bookings, interviews, repairs, review assignments). This is what `assignee`
@@ -37,15 +37,20 @@ Four shapes are written out in full — declaration, schemas, and the reasoning 
   rules.
 - **[templates/survey.md](./templates/survey.md)** — **collecting answers**, with nothing to run out
   of (a survey, a quiz, an application form, a sign-up with no cap). The shortest declaration of the
-  four, and the shape most often written with a public page and nothing else — so this one is built
+  five, and the shape most often written with a public page and nothing else — so this one is built
   around its `member` page, which is where the answers are read. It also spells out the three-way
   trade above, and what a tally may and may not claim about values a respondent typed.
 - **[templates/meeting-room.md](./templates/meeting-room.md)** — a bookable unit you can LIST IN
   ADVANCE, taken on the spot with no approval (a meeting room, a desk, equipment on loan, a parking
   space). This is what `idFrom: "field"` and `mirror` are for, and it is the one that spells out who
   refills the slots, and what a cancellation does NOT do.
+- **[templates/live-poll.md](./templates/live-poll.md)** — a page that MOVES while people are looking
+  at it (a live stream, a lecture, a stand-up quiz). This is what `views[].live` is for, and the only
+  one whose declaration is decided by FAN-OUT: the audience may watch the questions, only the desk may
+  watch the votes, and the shape that would let both is refused by publish. **In English**, because
+  the strings in its pages are what a stranger reads.
 
-Read the matching one before writing `app.json` by hand. All four are checked against the real
+Read the matching one before writing `app.json` by hand. All five are checked against the real
 publish gate by this repository's tests, so what they show is what publishes — and they spend most
 of their length on the traps, which is the part you cannot recover by guessing.
 
@@ -497,10 +502,18 @@ you publish. This is a survey anyone may answer once they sign in:
 
 Every line of that is load-bearing, and publish refuses the declaration without them:
 
-- **`auth` must be `verifiedEmail`.** `none` and `anonymous` exist in the rules and are REFUSED
-  here — a product decision, not an oversight. So "anyone with the link, no sign-in" is not
-  something you can offer today: a respondent signs in with an email address. Say that to the user
-  rather than promising anonymity and discovering it at publish.
+- **`auth` is `verifiedEmail` or `anonymous`; `none` is REFUSED.** Ask which one the app wants
+  before writing it, because it decides whether people answer at all:
+  - **`verifiedEmail`** — a Google sign-in, address confirmed. Required whenever the app needs an
+    address (`emailField`), sends mail, or admits people from its roster (`audience: "participant"`);
+    publish refuses `anonymous` with any of those, because an anonymous session has no address.
+  - **`anonymous`** — the browser opens a session by itself, no sign-in screen. The uid is real, so
+    `idFrom: "auth.uid"` / `"auth.uid+field"` enforces one row **per anonymous uid — which is a
+    browser profile, not a person**. This is the mode for an audience that must answer in the next
+    ten seconds. Say the limit in those words when you offer it: the same person answers again from
+    their phone, and again in an incognito window, and no address is recorded anywhere.
+  - **`none`** is refused: with no session there is no uid, so `idFrom` can only be `auto` and the
+    same person can submit as often as they can press the button.
 - **`emailField` names the field their address lands in**, and it must be in `createFields`.
 - **`submitOnly: true` is required** whenever the submission binds a record to its submitter. The
   record means "this person said this", and without it an owner or editor could write rows that
@@ -832,8 +845,12 @@ Three things are worth asking and the rest are not:
 
 - **their email address**, if you do not have it — nothing works without it in `members`;
 - **whether people outside the roster should be able to answer** — it decides whether there is a
-  `public` block at all. Ask it in those words: everyone who answers signs in with an email
-  address either way, so "public" here means "anyone who signs in", not "anonymous";
+  `public` block at all. If yes, ask the second half too, because it is the one that decides whether
+  they actually answer: **are they asked to sign in?** `verifiedEmail` means a Google sign-in and a
+  recorded address — the app can write to them, and one row per account. `anonymous` means no screen
+  at all and no address, at the price of one row per browser rather than per person (see the `auth`
+  list above). Put it to the user as what the moment is: a form somebody fills in over a week, or an
+  audience answering in ten seconds;
 - **whether the people who answer need to see their own answer later** (step 2c) — it decides what
   the PUBLIC page may be, which is not a thing to discover after writing one. Answering yes does
   not make the app invite-only: leaving the public page generated serves a respondent who is on no
