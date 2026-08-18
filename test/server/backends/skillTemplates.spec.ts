@@ -81,6 +81,10 @@ describe("the shared-app templates", () => {
     expect(problemsFor("survey.md", "owner@example.jp", [])).toEqual([]);
   });
 
+  it("live-poll.md deploys as written", () => {
+    expect(problemsFor("live-poll.md", "host@example.com", [])).toEqual([]);
+  });
+
   it("shows no page the sandbox would silently break", () => {
     // The frame has no `allow-modals` and no `allow-forms`, and the parent sends nothing until the
     // view says `ready()`. All three fail the same way — nothing drawn, nothing thrown — and a
@@ -126,6 +130,18 @@ describe("the shared-app templates", () => {
     }
   });
 
+  it("each template states the publish contract it is written against", () => {
+    // A template is copied VERBATIM, so the key is either in every one of them or it teaches that
+    // declaring it is optional decoration. It is a FLOOR: an app relying on a newer publisher is
+    // refused instead of published as documents that do not keep the promise. `1.0.0` is what the
+    // apps published before the key existed are, so that is what these say until one of them needs
+    // more.
+    for (const file of readdirSync(TEMPLATES).filter((name) => name.endsWith(".md"))) {
+      const manifest = blocksOf(file).get("app.json") as { protocol?: unknown } | undefined;
+      expect(`${file}: ${String(manifest?.protocol)}`).toBe(`${file}: 1.0.0`);
+    }
+  });
+
   it("each template shows every collection whose shape carries a decision", () => {
     // A guard on the guard: if a template stopped showing its schemas the
     // checks above would still pass, against nothing.
@@ -135,5 +151,6 @@ describe("the shared-app templates", () => {
       expect.arrayContaining([".claude/skills/bookings/schema.json", ".claude/skills/slots/schema.json"]),
     );
     expect([...blocksOf("survey.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/questions/schema.json", ".claude/skills/responses/schema.json"]));
+    expect([...blocksOf("live-poll.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/questions/schema.json", ".claude/skills/votes/schema.json"]));
   });
 });

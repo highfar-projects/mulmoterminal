@@ -31,6 +31,7 @@
   "aid": "(init が書きます。手で触らないこと)",
   "name": "本社 会議室",
   "slug": "hq-rooms",
+  "protocol": "1.0.0",
   "members": {
     "facility@example.co.jp": { "*": "owner" },
     "reception@example.co.jp": { "bookings": "editor", "slots": "editor", "rooms": "viewer" }
@@ -72,6 +73,11 @@
   }
 }
 ```
+
+**`protocol` は publish 契約の版**です。宣言は**下限**で、publish される値ではありません
+（文書が守るのは、それを射影した compiler の版）。宣言より古い publisher は**拒否**されるので、
+新しい書き方に頼ったアプリが、それを実装していない publisher に黙って通ることがありません。
+何も宣言しないアプリは `1.0.0` — このキーが無かった頃に publish されたアプリはそれです。
 
 **申込みの宣言は丸ごと書いてください。** `idFrom` と `idField` だけの短い版は publish が
 拒否します（`idIn` が無ければ、実在しない枠の予約が黙って通る）。
