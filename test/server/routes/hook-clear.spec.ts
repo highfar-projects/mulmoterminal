@@ -7,7 +7,7 @@
 // turn read the pre-clear title and reply back out of a file claude had already abandoned.
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import express from "express";
-import request from "supertest";
+import { routeCall, jsonPost } from "../../helpers/routeCall";
 import { mountHookRoute } from "../../../server/routes/hook-routes";
 import { lastPrompts, lastResponses } from "../../../server/session/registry";
 import { clearedTranscripts } from "../../../server/session/cleared-transcripts";
@@ -53,8 +53,9 @@ const deps = {
 const app = express();
 app.use(express.json());
 mountHookRoute(app, deps);
+const call = routeCall(app);
 
-const postHook = (body: Record<string, unknown>) => request(app).post("/api/hook").set("x-mt-session", ID).send(body);
+const postHook = (body: Record<string, unknown>) => call("/api/hook", jsonPost(body, { "x-mt-session": ID }));
 
 beforeEach(() => {
   lastPrompts.delete(ID);

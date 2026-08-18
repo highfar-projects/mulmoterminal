@@ -8,7 +8,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import express from "express";
-import request from "supertest";
+import { routeCall } from "../../helpers/routeCall";
 import { mountDirRoutes } from "../../../server/routes/dir-routes";
 import { CLAUDE_CWD } from "../../../server/config/env";
 
@@ -25,11 +25,13 @@ const withTempDir = async (run: (dir: string) => Promise<void>) => {
   }
 };
 
+const call = routeCall(app);
+
 describe("a route asked about a directory it cannot use", () => {
   it("answers 404 with the reason instead of the default workspace's scripts", async () => {
     await withTempDir(async (dir) => {
       const gone = path.join(dir, "deleted-project");
-      const res = await request(app).get("/api/scripts").query({ cwd: gone });
+      const res = await call(`/api/scripts?${new URLSearchParams({ cwd: gone })}`);
       expect(res.status).toBe(404);
       expect(res.body.error).toContain(gone);
       expect(res.body.error).toContain("no longer exists");
@@ -39,11 +41,11 @@ describe("a route asked about a directory it cannot use", () => {
   });
 
   it("answers 400 for a request that cannot name a directory at all", async () => {
-    const relative = await request(app).get("/api/scripts").query({ cwd: "relative/path" });
+    const relative = await call(`/api/scripts?${new URLSearchParams({ cwd: "relative/path" })}`);
     expect(relative.status).toBe(400);
     expect(relative.body.error).toContain("not an absolute path");
     // Express hands a repeated param over as an array; it was asked for, so it is refused.
-    const repeated = await request(app).get("/api/scripts?cwd=/tmp&cwd=/etc");
+    const repeated = await call("/api/scripts?cwd=/tmp&cwd=/etc");
     expect(repeated.status).toBe(400);
   });
 
@@ -51,7 +53,7 @@ describe("a route asked about a directory it cannot use", () => {
     await withTempDir(async (dir) => {
       const file = path.join(dir, "not-a-dir");
       writeFileSync(file, "");
-      const res = await request(app).get("/api/scripts").query({ cwd: file });
+      const res = await call(`/api/scripts?${new URLSearchParams({ cwd: file })}`);
       expect(res.status).toBe(404);
       expect(res.body.error).toContain("is a file, not a directory");
     });
@@ -60,14 +62,14 @@ describe("a route asked about a directory it cannot use", () => {
   // The half that must NOT change: no directory was named, so the default workspace is the answer
   // the caller wanted. That is the case the fallback was always right for.
   it("still answers the default workspace when no directory is named", async () => {
-    const res = await request(app).get("/api/scripts");
+    const res = await call("/api/scripts");
     expect(res.status).toBe(200);
     expect(res.body.cwd).toBe(CLAUDE_CWD);
   });
 
   it("still answers about a directory that is there", async () => {
     await withTempDir(async (dir) => {
-      const res = await request(app).get("/api/scripts").query({ cwd: dir });
+      const res = await call(`/api/scripts?${new URLSearchParams({ cwd: dir })}`);
       expect(res.status).toBe(200);
       expect(res.body.cwd).toBe(dir);
     });
@@ -79,7 +81,7 @@ describe("a route asked about a directory it cannot use", () => {
     await withTempDir(async (dir) => {
       const gone = path.join(dir, "deleted-project");
       for (const route of ["/api/dir-config", "/api/git-status", "/api/skills", "/api/header"]) {
-        const res = await request(app).get(route).query({ cwd: gone });
+        const res = await call(`${route}?${new URLSearchParams({ cwd: gone })}`);
         expect(res.status, route).toBe(404);
         expect(res.body.error, route).toContain("no longer exists");
       }

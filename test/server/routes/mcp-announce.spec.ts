@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import express from "express";
-import request from "supertest";
+import { routeCall, jsonPost } from "../../helpers/routeCall";
 import { takeScratchHome } from "../../support/scratchHome.js";
 
 // The group route PERSISTS what it learned, under a MULMOTERMINAL_HOME derived from the home
@@ -42,11 +42,12 @@ mountMcpRoutes(app, {
   publish: (channel, data) => void published.push({ channel, data: data as Record<string, unknown> }),
   guiCallHistory: () => null,
 });
+const request = routeCall(app);
 
 // A tools/list, the cheapest real MCP request: it needs no plugin dispatch, so nothing here
 // depends on a running host.
 const call = (route: string) =>
-  request(app).post(route).set("accept", "application/json, text/event-stream").send({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} });
+  request(route, jsonPost({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }, { accept: "application/json, text/event-stream" }));
 
 const announcementsFor = (id: string) => published.filter((p) => p.channel === TOOL_GROUPS_CHANNEL && p.data.sessionId === id);
 

@@ -6,7 +6,7 @@
 // that changed the rule would change what an error response tells a page about this machine.
 import { describe, it, expect, afterEach, vi } from "vitest";
 import express, { type Express } from "express";
-import request from "supertest";
+import { routeCall } from "../../helpers/routeCall";
 import { hideErrorStacks } from "../../../server/infra/hide-error-stacks.js";
 
 // A path unique enough that finding it in a response body can only mean the stack leaked.
@@ -27,7 +27,7 @@ afterEach(() => {
 
 describe("hideErrorStacks", () => {
   it("keeps the stack out of the response when a route throws", async () => {
-    const res = await request(throwingApp(hideErrorStacks)).get("/boom");
+    const res = await routeCall(throwingApp(hideErrorStacks))("/boom");
     expect(res.status).toBe(500);
     expect(res.text).not.toContain(SECRET);
     expect(res.text).not.toContain("at ");
@@ -37,13 +37,13 @@ describe("hideErrorStacks", () => {
     vi.stubEnv("NODE_ENV", "development");
     const app = throwingApp(hideErrorStacks);
     expect(app.get("env")).toBe("production");
-    expect((await request(app).get("/boom")).text).not.toContain(SECRET);
+    expect((await routeCall(app)("/boom")).text).not.toContain(SECRET);
   });
 
   // The control, and the reason the module exists: express really does put the stack in the
   // body otherwise. If this ever stops being true, the helper is no longer load-bearing.
   it("pins what express does without it", async () => {
-    const res = await request(throwingApp((app) => app.set("env", "development"))).get("/boom");
+    const res = await routeCall(throwingApp((app) => app.set("env", "development")))("/boom");
     expect(res.status).toBe(500);
     expect(res.text).toContain(SECRET);
   });

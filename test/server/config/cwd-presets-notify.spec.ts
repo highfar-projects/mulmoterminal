@@ -9,7 +9,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import express from "express";
-import request from "supertest";
+import { routeCall, jsonPost } from "../../helpers/routeCall";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -52,14 +52,14 @@ const PRESETS = [{ label: "mag2", path: "/srv/mag2" }];
 describe("POST /api/config tells the caller when the saved directories move", () => {
   it("fires when a directory is added", async () => {
     const { app, onChanged } = await mountAgainstTempHome({});
-    const res = await request(app).post("/api/config").send({ cwdPresets: PRESETS });
+    const res = await routeCall(app)("/api/config", jsonPost({ cwdPresets: PRESETS }));
     expect(res.status).toBe(200);
     expect(onChanged).toHaveBeenCalledTimes(1);
   });
 
   it("fires when one is removed", async () => {
     const { app, onChanged } = await mountAgainstTempHome({ cwdPresets: PRESETS });
-    await request(app).post("/api/config").send({ cwdPresets: [] });
+    await routeCall(app)("/api/config", jsonPost({ cwdPresets: [] }));
     expect(onChanged).toHaveBeenCalledTimes(1);
   });
 
@@ -67,8 +67,8 @@ describe("POST /api/config tells the caller when the saved directories move", ()
   // for it would be work with no question behind it.
   it("stays quiet for a write that leaves the list alone", async () => {
     const { app, onChanged } = await mountAgainstTempHome({ cwdPresets: PRESETS });
-    await request(app).post("/api/config").send({ pushEnabled: true });
-    await request(app).post("/api/config").send({ cwdPresets: PRESETS });
+    await routeCall(app)("/api/config", jsonPost({ pushEnabled: true }));
+    await routeCall(app)("/api/config", jsonPost({ cwdPresets: PRESETS }));
     expect(onChanged).not.toHaveBeenCalled();
   });
 
@@ -76,17 +76,13 @@ describe("POST /api/config tells the caller when the saved directories move", ()
   // project ids are keyed by path.
   it("stays quiet when only a label changed", async () => {
     const { app, onChanged } = await mountAgainstTempHome({ cwdPresets: PRESETS });
-    await request(app)
-      .post("/api/config")
-      .send({ cwdPresets: [{ label: "renamed", path: "/srv/mag2" }] });
+    await routeCall(app)("/api/config", jsonPost({ cwdPresets: [{ label: "renamed", path: "/srv/mag2" }] }));
     expect(onChanged).not.toHaveBeenCalled();
   });
 
   it("fires when the same count points somewhere else", async () => {
     const { app, onChanged } = await mountAgainstTempHome({ cwdPresets: PRESETS });
-    await request(app)
-      .post("/api/config")
-      .send({ cwdPresets: [{ label: "mag2", path: "/srv/elsewhere" }] });
+    await routeCall(app)("/api/config", jsonPost({ cwdPresets: [{ label: "mag2", path: "/srv/elsewhere" }] }));
     expect(onChanged).toHaveBeenCalledTimes(1);
   });
 
@@ -99,7 +95,7 @@ describe("POST /api/config tells the caller when the saved directories move", ()
     // A second instance adds a directory behind our back.
     writeFileSync(configFile, JSON.stringify({ cwdPresets: [...PRESETS, { label: "site", path: "/srv/site" }] }, null, 2));
     // …and we save something else entirely.
-    const res = await request(app).post("/api/config").send({ pushEnabled: true });
+    const res = await routeCall(app)("/api/config", jsonPost({ pushEnabled: true }));
     expect(res.status).toBe(200);
     expect(onChanged).toHaveBeenCalledTimes(1);
   });
@@ -122,7 +118,7 @@ describe("POST /api/config tells the caller when the saved directories move", ()
       throw new Error("watchers exploded");
     });
 
-    const res = await request(app).post("/api/config").send({ cwdPresets: PRESETS });
+    const res = await routeCall(app)("/api/config", jsonPost({ cwdPresets: PRESETS }));
     expect(res.status).toBe(200);
     // …and the save is real, not merely reported.
     expect(JSON.parse(readFileSync(APP_CONFIG_FILE, "utf8")).cwdPresets).toHaveLength(1);
@@ -143,7 +139,7 @@ describe("POST /api/config tells the caller when the saved directories move", ()
       await Promise.reject(new Error("sync failed"));
     });
 
-    expect((await request(app).post("/api/config").send({ cwdPresets: PRESETS })).status).toBe(200);
+    expect((await routeCall(app)("/api/config", jsonPost({ cwdPresets: PRESETS }))).status).toBe(200);
   });
 
   // Mounting without one is what every other caller does; the route must not require it.
@@ -157,6 +153,6 @@ describe("POST /api/config tells the caller when the saved directories move", ()
     const app = express();
     app.use(express.json());
     mountConfigRoutes(app, dir);
-    expect((await request(app).post("/api/config").send({ cwdPresets: PRESETS })).status).toBe(200);
+    expect((await routeCall(app)("/api/config", jsonPost({ cwdPresets: PRESETS }))).status).toBe(200);
   });
 });

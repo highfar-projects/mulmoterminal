@@ -8,7 +8,7 @@
 // mapping, so a missing `claudeSessionIds.set` would be invisible in every other spec.
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import express from "express";
-import request from "supertest";
+import { routeCall, jsonPost } from "../../helpers/routeCall";
 import { mountHookRoute } from "../../../server/routes/hook-routes";
 import { claudeSessionIds } from "../../../server/session/registry";
 
@@ -42,8 +42,9 @@ const deps = {
 const app = express();
 app.use(express.json());
 mountHookRoute(app, deps);
+const call = routeCall(app);
 
-const postHook = (body: Record<string, unknown>) => request(app).post("/api/hook").set("x-mt-session", OURS).send(body);
+const postHook = (body: Record<string, unknown>) => call("/api/hook", jsonPost(body, { "x-mt-session": OURS }));
 
 beforeEach(() => {
   claudeSessionIds.delete(OURS);

@@ -7,7 +7,7 @@
 // not always read, and printed the user's own prompt whenever that failed.
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import express from "express";
-import request from "supertest";
+import { routeCall, jsonPost } from "../../helpers/routeCall";
 import { mountHookRoute } from "../../../server/routes/hook-routes";
 import { aiTitles, lastPrompts, lastResponses, ptys } from "../../../server/session/registry";
 import { clearedTranscripts } from "../../../server/session/cleared-transcripts";
@@ -61,8 +61,9 @@ const deps = {
 const app = express();
 app.use(express.json());
 mountHookRoute(app, deps);
+const call = routeCall(app);
 
-const postHook = (body: Record<string, unknown>) => request(app).post("/api/hook").set("x-mt-session", ID).send(body);
+const postHook = (body: Record<string, unknown>) => call("/api/hook", jsonPost(body, { "x-mt-session": ID }));
 
 // The push is fire-and-forget, so the route answers before it is sent.
 const nextPush = async (): Promise<{ title: string; body: string }> => {

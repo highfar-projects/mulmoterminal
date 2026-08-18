@@ -7,7 +7,7 @@
 // re-submits whatever they landed on.
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import express from "express";
-import request from "supertest";
+import { routeCall, jsonPost } from "../../helpers/routeCall";
 import { mountHookRoute } from "../../../server/routes/hook-routes";
 import { noteOtherWrite, otherWriteCount } from "../../../server/session/write-to-session";
 
@@ -35,8 +35,9 @@ const deps = {
 const app = express();
 app.use(express.json());
 mountHookRoute(app, deps);
+const call = routeCall(app);
 
-const postHook = (body: Record<string, unknown>) => request(app).post("/api/hook").set("x-mt-session", ID).send(body);
+const postHook = (body: Record<string, unknown>) => call("/api/hook", jsonPost(body, { "x-mt-session": ID }));
 
 // The shape a real PreToolUse carries, captured from claude 2.1.231.
 const QUESTIONS = [
