@@ -131,7 +131,12 @@ async function rolloutMeta(file: string): Promise<RolloutMeta | null> {
   const cached = metaCache.get(file);
   if (cached !== undefined) return cached;
   const line = await readFirstLine(file, META_PROBE_BYTES, META_MAX_BYTES);
-  const meta = line === null ? null : parseCodexSessionMeta(line);
+  // Only a line we actually READ is cached. A file we could not read yet is the normal state of a
+  // rollout codex is in the middle of creating — and this listing is fetched exactly when sessions
+  // are being started — so caching that "no" would hide a live session until the process restarts.
+  // A line that parses as something other than session_meta IS cached: line 1 never changes.
+  if (line === null) return null;
+  const meta = parseCodexSessionMeta(line);
   metaCache.set(file, meta);
   return meta;
 }

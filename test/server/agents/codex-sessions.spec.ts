@@ -183,6 +183,21 @@ describe("listCodexSessions", () => {
     expect(await listCodexSessions(root, "/work", 10)).toEqual([]);
   });
 
+  // The listing is fetched exactly when sessions are being started, so it routinely sees a rollout
+  // codex has created but not yet written. Memoising that "no" would hide the session until the
+  // process restarts — the same silent-disappearance shape this PR exists to remove.
+  // (Observed during Claude review, not flagged by either bot.)
+  it("picks up a rollout that was still empty when it was first scanned", async () => {
+    const dir = dayDir(root);
+    mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `rollout-2026-07-08T00-00-00-${UUID_A}.jsonl`);
+    writeFileSync(file, "");
+    expect(await listCodexSessions(root, "/work", 10)).toEqual([]);
+
+    writeFileSync(file, [metaLine(UUID_A, "/work"), userMsgLine("written a moment later")].join("\n") + "\n");
+    expect((await listCodexSessions(root, "/work", 10)).map((s) => s.title)).toEqual(["written a moment later"]);
+  });
+
   it.each([
     ["an empty file", ""],
     ["a non-JSON first line", "not json\n"],
