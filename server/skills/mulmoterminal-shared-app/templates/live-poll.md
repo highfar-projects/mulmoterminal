@@ -326,6 +326,9 @@ of them is something a page that reads once never has to think about:
   // the answer lands in `voted`, or nowhere at all when nobody knows.
   const asked = new Set();
   let shownId = null;
+  // The question object itself, not just its id: an answer that arrives later has to be turned into
+  // a LABEL, and the labels live on the question. The click handler runs long after `onState`.
+  let shownQuestion = null;
   let shownSignature = null;
   let sending = false;
 
@@ -430,10 +433,12 @@ of them is something a page that reads once never has to think about:
     const question = openQuestion(Array.isArray(state?.questions) ? state.questions : []);
     if (question === null) {
       shownId = null;
+      shownQuestion = null;
       shownSignature = null;
       show("waiting");
       return;
     }
+    shownQuestion = question;
     askIfAnswered(question);
     if (voted.has(question.id)) {
       if (shownId !== question.id) {
@@ -500,7 +505,7 @@ of them is something a page that reads once never has to think about:
     if (after?.known && after.found) {
       // A row IS there: either they answered before, or this write landed and something after it
       // failed. Either way their vote counts, and this is their answer.
-      const option = optionsOf(question).find((one) => one.key === after.record?.choice);
+      const option = optionsOf(shownQuestion ?? {}).find((one) => one.key === after.record?.choice);
       voted.set(questionId, option?.label ?? after.record?.choice ?? "");
       if (shownId === questionId) {
         drawVoted(questionId);

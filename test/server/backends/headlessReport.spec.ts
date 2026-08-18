@@ -415,3 +415,17 @@ describe("narrateHeadlessRun", () => {
     expect(narrateHeadlessRun({ ok: false, problems: ["no browser", "ask the user"] })).toBe("no browser\nask the user");
   });
 });
+
+describe("what a green run does not say about a read-back", () => {
+  it("says the lookup was never answered, whether or not anything was written", () => {
+    // `view.mine(cid, key)` is answered by the PARENT, and this run is not that parent: it offers no
+    // lookup, so every ask comes back `known: false` and the page takes its unknown branch. That
+    // branch is the safe one by design — which is exactly why a page whose real behaviour lives in
+    // `found: true` looks fine here.
+    for (const wrote of [true, false]) {
+      const said = narrate({}, 0, { wrote });
+      expect(said, `a run with wrote=${wrote} must still say it`).toContain("view.mine(cid, key)");
+      expect(said).toContain("known: false");
+    }
+  });
+});

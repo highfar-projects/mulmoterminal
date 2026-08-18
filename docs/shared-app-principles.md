@@ -71,6 +71,10 @@ MulmoTerminal の検査（`records.ts` の移行ゲート、`scopedFields.ts` �
   **1 回だけ**である。2 回目の state で描き直せるか（行が入れ替わらず増えないか、
   リスナーが state ごとに増えないか）、購読が更新を運んだときに**選択中の入力や打ちかけの文字が
   消えないか**は、どちらの preview でも**未検証**である
+- **`view.mine(cid, key)` の答えは常に「分からない」。** preview は親ではないので lookup を渡さず、
+  すべての問いに `known: false`（誰も見ていない）が返る。ページは必ず**分からない側の枝**を通る —
+  そこは設計上いちばん安全な枝なので、`found: true` のときにだけ現れる振る舞い（回答を出し戻す、
+  もう使った操作を隠す）は**一度も走らないまま緑になる**
 
 一次資料は `server/infra/shared-app-tool.ts` の `manageSharedApp` prompt（ここは要約である）。
 
