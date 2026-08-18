@@ -25,21 +25,28 @@ let lastOk_ms = 0;
 let timer: ReturnType<typeof setInterval> | null = null;
 let watchers = 0;
 
-async function poll(): Promise<void> {
+// Which visit a request belongs to. A poll started before the last header unmounted is still in
+// flight afterwards, and without this it would land on the NEXT visit and put an older reading
+// back over a newer one — the same hazard useRateLimits.ts retires its chains for (Codex on
+// #1791). Bumped on both ends, so neither an unmount nor a remount can be overtaken by the visit
+// before it.
+let generation = 0;
+
+async function poll(chain: number): Promise<void> {
   try {
     const res = await fetchWithTimeout("/api/load", {}, FETCH_TIMEOUT_MS);
-    if (!res.ok) return dropIfStale();
     // A body this client cannot read is a failure like any other — clearing on it would blank a
     // figure that was true a moment ago. `{ load: null }` is not that: it is the host saying it
     // keeps no load average, and holding the previous reading would go on drawing a machine that
     // has stopped reporting.
-    const next = readLoadBody(await res.json());
+    const next = res.ok ? readLoadBody(await res.json()) : null;
+    if (chain !== generation) return;
     if (!next) return dropIfStale();
     load.value = next.load;
     lastOk_ms = Date.now();
   } catch {
     // offline, aborted, or the route is not there
-    dropIfStale();
+    if (chain === generation) dropIfStale();
   }
 }
 
@@ -60,12 +67,17 @@ export function useMachineLoad() {
       // first request lands (Codex on #1791). The stale window is a promise about what is on
       // screen, not about how often we poll.
       dropIfStale();
-      void poll();
-      timer = setInterval(() => void poll(), REFRESH_MS);
+      const chain = ++generation;
+      void poll(chain);
+      timer = setInterval(() => void poll(chain), REFRESH_MS);
     },
     stop(): void {
       watchers = Math.max(0, watchers - 1);
-      if (watchers > 0 || !timer) return;
+      if (watchers > 0) return;
+      // Retired even when there is no timer to clear — that is precisely the window where a poll
+      // is still in flight and would otherwise apply its answer to whoever mounts next.
+      generation++;
+      if (!timer) return;
       clearInterval(timer);
       timer = null;
     },

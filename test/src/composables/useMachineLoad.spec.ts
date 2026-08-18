@@ -123,6 +123,36 @@ describe("useMachineLoad polling lifecycle", () => {
     second.stop();
   });
 
+  // A poll started before the last unmount is still in flight afterwards. Its answer describes a
+  // visit that is already over, so the reading the NEW visit fetched must survive it landing
+  // second (Codex on #1791).
+  it("does not let a request from an earlier visit overwrite a newer reading", async () => {
+    const OLD = { avg1: 1, avg5: 1, avg15: 1, cores: 4 };
+    const NEW = { avg1: 9, avg5: 9, avg15: 9, cores: 4 };
+    let landOld: (() => void) | undefined;
+    fetchMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          landOld = () => resolve({ ok: true, json: () => Promise.resolve({ load: OLD }) });
+        }),
+    );
+
+    const first = useMachineLoad();
+    first.start(); // its request hangs
+    first.stop(); // unmounted while it is in flight — no timer to clear
+
+    fetchMock.mockImplementation(() => ok({ load: NEW }));
+    const second = useMachineLoad();
+    second.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(second.load.value).toEqual(NEW);
+
+    landOld?.();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(second.load.value).toEqual(NEW);
+    second.stop();
+  });
+
   // The one null that IS an answer: this host keeps no load average, so the gauge must go at once
   // rather than hold what it had.
   it("clears at once when the host reports no load average", async () => {
