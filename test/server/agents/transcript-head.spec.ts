@@ -30,6 +30,26 @@ describe("readFirstLine", () => {
     expect(await readFirstLine(write("b.jsonl", `${long}\nnext\n`), 64, 64 * 1024)).toBe(long);
   });
 
+  // Both review bots caught this on #1782: `head.length` counts UTF-16 code units, so a filled
+  // 32KB buffer of Japanese looks like a short complete file. The truncated line parses as nothing
+  // and the caller memoises that null, so the session leaves the listing until the process restarts.
+  it("grows past the probe for a multibyte line, rather than reading a filled buffer as EOF", async () => {
+    const line = "\u3042".repeat(20000); // 60000 bytes, 20000 UTF-16 units
+    expect(Buffer.byteLength(line, "utf8")).toBeGreaterThan(32 * 1024);
+    expect(line.length).toBeLessThan(32 * 1024);
+    expect(await readFirstLine(write("mb.jsonl", `${line}\nnext\n`), 32 * 1024, 1024 * 1024)).toBe(line);
+  });
+
+  it("returns null for a multibyte line that exceeds the ceiling too", async () => {
+    const line = "\u3042".repeat(20000);
+    expect(await readFirstLine(write("mb-over.jsonl", `${line}\n`), 1024, 4096)).toBeNull();
+  });
+
+  it("returns a multibyte whole file that has no trailing newline", async () => {
+    const body = "\u3042".repeat(20000);
+    expect(await readFirstLine(write("mb-eof.jsonl", body), 32 * 1024, 1024 * 1024)).toBe(body);
+  });
+
   it("returns null when the first line exceeds the ceiling too", async () => {
     expect(await readFirstLine(write("c.jsonl", `${"x".repeat(5000)}\n`), 64, 128)).toBeNull();
   });

@@ -26,11 +26,30 @@ export function cleanTitle(raw: string | null, fallback: string): string {
 }
 
 /**
- * The first `headBytes` of a transcript plus its mtime, or null if it cannot be read.
+ * The first `headBytes` of a transcript, its mtime, and how many BYTES were actually read.
  *
- * Both callers want the mtime from the SAME open handle as the head: a file the agent is still
+ * Callers want the mtime from the SAME open handle as the head: a file the agent is still
  * appending to can be renamed or removed between a read and a separate stat.
+ *
+ * `bytesRead` is reported because `head.length` cannot answer "did this fill the buffer?" — it
+ * counts UTF-16 code units, and multibyte UTF-8 decodes to fewer of those than it occupies in
+ * bytes. Deciding EOF from the string is how a long CJK line reads as a short complete one.
  */
+export async function readTranscriptHead(file: string, headBytes: number): Promise<{ head: string; mtime: number; bytesRead: number } | null> {
+  let fh;
+  try {
+    fh = await open(file, "r");
+    const buf = Buffer.alloc(headBytes);
+    const { bytesRead } = await fh.read(buf, 0, headBytes, 0);
+    const { mtimeMs } = await fh.stat();
+    return { head: buf.subarray(0, bytesRead).toString("utf8"), mtime: mtimeMs, bytesRead };
+  } catch {
+    return null;
+  } finally {
+    await fh?.close();
+  }
+}
+
 /**
  * The transcript's FIRST line, or null if it cannot be read.
  *
@@ -42,6 +61,12 @@ export function cleanTitle(raw: string | null, fallback: string): string {
  * `probeBytes` is a guess at the line length, not a limit: when no newline is found the read grows
  * to `maxBytes` before giving up, so a longer-than-expected first line yields a longer line rather
  * than nothing. Returns null only when the file is unreadable or has no newline within `maxBytes`.
+ *
+ * The "did we reach EOF" test is on `bytesRead`, NOT on the decoded length: a 60KB first line of
+ * Japanese decodes to ~20k UTF-16 units, so a length test reads a filled 32KB buffer as a short
+ * complete file and hands back a TRUNCATED line — which parses as nothing and, because the caller
+ * memoises, removes that session from the listing for the life of the process (Codex + CodeRabbit
+ * on #1782).
  */
 export async function readFirstLine(file: string, probeBytes: number, maxBytes: number): Promise<string | null> {
   for (const size of probeBytes < maxBytes ? [probeBytes, maxBytes] : [maxBytes]) {
@@ -49,22 +74,7 @@ export async function readFirstLine(file: string, probeBytes: number, maxBytes: 
     if (!read) return null;
     const end = read.head.indexOf("\n");
     if (end >= 0) return read.head.slice(0, end);
-    if (read.head.length < size) return read.head || null; // whole file, no trailing newline
+    if (read.bytesRead < size) return read.head || null; // whole file, no trailing newline
   }
   return null;
-}
-
-export async function readTranscriptHead(file: string, headBytes: number): Promise<{ head: string; mtime: number } | null> {
-  let fh;
-  try {
-    fh = await open(file, "r");
-    const buf = Buffer.alloc(headBytes);
-    const { bytesRead } = await fh.read(buf, 0, headBytes, 0);
-    const { mtimeMs } = await fh.stat();
-    return { head: buf.subarray(0, bytesRead).toString("utf8"), mtime: mtimeMs };
-  } catch {
-    return null;
-  } finally {
-    await fh?.close();
-  }
 }
