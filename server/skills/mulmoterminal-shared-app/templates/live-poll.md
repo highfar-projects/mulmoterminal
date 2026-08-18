@@ -38,6 +38,7 @@ that side is N→1 by definition however popular the stream gets.
   "aid": "(init writes this)",
   "name": "Live poll",
   "slug": "live-poll",
+  "protocol": "1.0.0",
   "members": {
     "host@example.com": { "*": "owner" }
   },
@@ -86,6 +87,11 @@ that side is N→1 by definition however popular the stream gets.
 ```
 
 ### Why each key is what it is
+
+- **`protocol`** — the version of the publish contract this app is written against. It is a FLOOR:
+  publish refuses if the publisher is older than what the app asks for, rather than writing documents
+  that quietly do not keep the promise. An app declaring nothing is `1.0.0`, which is what every app
+  published before this key existed is.
 
 - **`auth: "verifiedEmail"`** — what publish accepts today, and the cost to be aware of: **a viewer
   has to sign in with Google before they can vote**. In a stream that loses people. See "the sign-in
