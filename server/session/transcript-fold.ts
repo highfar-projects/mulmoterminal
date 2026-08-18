@@ -66,7 +66,10 @@ export function createTranscriptFold<T>(options: TranscriptFoldOptions<T>): Tran
       }
       const folded = resumed ? await resume(options, transcript, resumed) : await first(options, transcript, stamp.size);
       cache.set(transcript, stamp, folded.offset, folded.value);
-      sidecar.write(transcript, stamp, folded.offset, folded.value);
+      // Not awaited, and that is the point: the answer is already in hand, and the sidecar only
+      // has to be there for the NEXT process. `void` says so out loud now that the write hands
+      // back a promise for callers that do need to wait for it (#1796).
+      void sidecar.write(transcript, stamp, folded.offset, folded.value);
       return folded.value;
     },
   };

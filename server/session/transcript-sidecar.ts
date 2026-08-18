@@ -26,8 +26,14 @@ export interface TranscriptSidecar<T> {
   /** What was folded and where to continue, or undefined when the file must be folded from
    *  scratch — including every reason to distrust what is on disk. */
   read(transcript: string, stamp: FileStamp): Promise<AppendScan<T> | undefined>;
-  /** Best effort, and deliberately not awaited by the read path: the answer is already in hand. */
-  write(transcript: string, stamp: FileStamp, from: number, value: T): void;
+  /** Best effort, and deliberately not awaited by the read path: the answer is already in hand.
+   *
+   *  The promise is RETURNED rather than discarded so that a caller who does need the file on disk
+   *  can await the write instead of guessing how long it takes — which is what a spec was doing
+   *  with 250ms of real time, until the slowest runner in the matrix went past it (#1796). It
+   *  never rejects: every failure is swallowed below, because a sidecar that cannot be written
+   *  just means the next process folds the file itself. */
+  write(transcript: string, stamp: FileStamp, from: number, value: T): Promise<void>;
 }
 
 export interface SidecarOptions<T> {
@@ -58,11 +64,11 @@ export function createTranscriptSidecar<T>(options: SidecarOptions<T>): Transcri
       }
     },
     write(transcript, stamp, from, value) {
-      if (stamp.size < minBytes) return;
+      if (stamp.size < minBytes) return Promise.resolve();
       const file = sidecarPath(options.kind, transcript);
       // Per path, so this process cannot race itself. Other processes are handled by the rename:
       // the last writer wins and every version on disk is self-consistent.
-      void serializeWrite(file, async () => {
+      return serializeWrite(file, async () => {
         try {
           await writeAtomic(
             file,
