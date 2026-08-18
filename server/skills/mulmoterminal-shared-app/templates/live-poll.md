@@ -104,8 +104,10 @@ that side is N→1 by definition however popular the stream gets.
   you. See "the sign-in question" below for what `anonymous` is not.
 - **`idFrom: "auth.uid+field"` + `idField: "questionId"`** — the document id becomes
   `uid + "_" + questionId`, so a second vote on the same question is a create where a document
-  already exists. Firestore refuses it. **This is what "one vote per person per question" IS** — not
-  a check in the page, which anybody can skip.
+  already exists. Firestore refuses it. **This is what the once-per-question guarantee IS** — not a
+  check in the page, which anybody can skip. Under `anonymous` the uid belongs to a BROWSER, so what
+  is enforced is once per browser; under `verifiedEmail` the same declaration means once per account.
+  The mechanism does not change with the mode, only what the uid stands for.
 - **`validate.keyFields` on `choice`** — the rules refuse any value outside that list. So a vote
   carries an OPTION KEY (`"a"`…`"e"`), not the text of the option: the text is per question, and a rule
   can compare a field to a fixed set but not to a list living in another document. The question's
