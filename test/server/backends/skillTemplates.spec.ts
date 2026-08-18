@@ -126,6 +126,18 @@ describe("the shared-app templates", () => {
     }
   });
 
+  it("each template states the publish contract it is written against", () => {
+    // A template is copied VERBATIM, so the key is either in every one of them or it teaches that
+    // declaring it is optional decoration. It is a FLOOR: an app relying on a newer publisher is
+    // refused instead of published as documents that do not keep the promise. `1.0.0` is what the
+    // apps published before the key existed are, so that is what these say until one of them needs
+    // more.
+    for (const file of readdirSync(TEMPLATES).filter((name) => name.endsWith(".md"))) {
+      const manifest = blocksOf(file).get("app.json") as { protocol?: unknown } | undefined;
+      expect(`${file}: ${String(manifest?.protocol)}`).toBe(`${file}: 1.0.0`);
+    }
+  });
+
   it("each template shows every collection whose shape carries a decision", () => {
     // A guard on the guard: if a template stopped showing its schemas the
     // checks above would still pass, against nothing.
