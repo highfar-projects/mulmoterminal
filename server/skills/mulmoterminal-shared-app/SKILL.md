@@ -502,10 +502,17 @@ you publish. This is a survey anyone may answer once they sign in:
 
 Every line of that is load-bearing, and publish refuses the declaration without them:
 
-- **`auth` must be `verifiedEmail`.** `none` and `anonymous` exist in the rules and are REFUSED
-  here — a product decision, not an oversight. So "anyone with the link, no sign-in" is not
-  something you can offer today: a respondent signs in with an email address. Say that to the user
-  rather than promising anonymity and discovering it at publish.
+- **`auth` is `verifiedEmail` or `anonymous`; `none` is REFUSED.** Ask which one the app wants
+  before writing it, because it decides whether people answer at all:
+  - **`verifiedEmail`** — a Google sign-in, address confirmed. Required whenever the app needs an
+    address (`emailField`), sends mail, or admits people from its roster (`audience: "participant"`);
+    publish refuses `anonymous` with any of those, because an anonymous session has no address.
+  - **`anonymous`** — the browser opens a session by itself, no sign-in screen. The uid is real, so
+    `idFrom: "auth.uid"` / `"auth.uid+field"` still enforces one row per person. This is the mode for
+    an audience that must answer in the next ten seconds. What it is not is an identity: a phone and
+    a laptop are two people, an incognito window is a third, and nobody's address is recorded.
+  - **`none`** is refused: with no session there is no uid, so `idFrom` can only be `auto` and the
+    same person can submit as often as they can press the button.
 - **`emailField` names the field their address lands in**, and it must be in `createFields`.
 - **`submitOnly: true` is required** whenever the submission binds a record to its submitter. The
   record means "this person said this", and without it an owner or editor could write rows that
