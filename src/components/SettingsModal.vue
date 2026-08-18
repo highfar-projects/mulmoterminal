@@ -22,6 +22,7 @@ import TerminalFontSizeSection from "./settings/TerminalFontSizeSection.vue";
 import TerminalFontFamilySection from "./settings/TerminalFontFamilySection.vue";
 import TerminalScrollSection from "./settings/TerminalScrollSection.vue";
 import WaitingRowsSection from "./settings/WaitingRowsSection.vue";
+import GridHeaderSection from "./settings/GridHeaderSection.vue";
 import DirAppearanceSection from "./settings/DirAppearanceSection.vue";
 import DirSettingsSection from "./settings/DirSettingsSection.vue";
 import NotificationSoundsSection from "./settings/NotificationSoundsSection.vue";
@@ -300,6 +301,9 @@ useModalKeyboard({
           </div>
           <div v-if="visitedTabs.has('waitingRows')" v-show="activeTab === 'waitingRows'" data-testid="settings-pane-waitingRows">
             <WaitingRowsSection />
+          </div>
+          <div v-if="visitedTabs.has('gridHeader')" v-show="activeTab === 'gridHeader'" data-testid="settings-pane-gridHeader">
+            <GridHeaderSection />
           </div>
           <div v-if="visitedTabs.has('dirAppearance')" v-show="activeTab === 'dirAppearance'" data-testid="settings-pane-dirAppearance">
             <DirAppearanceSection @launch-skill="askBeforeLaunch" />

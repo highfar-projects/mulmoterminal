@@ -15,6 +15,7 @@ export type SettingsTabId =
   | "fontSize"
   | "scroll"
   | "waitingRows"
+  | "gridHeader"
   | "dirAppearance"
   | "dirSettings"
   | "launchers"
@@ -43,7 +44,7 @@ export interface SettingsGroup {
 export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
   // Language leads the whole sidebar on purpose: it is the one setting someone who cannot read the
   // rest of the screen has to find first.
-  { key: "appearance", tabs: ["language", "theme", "font", "fontSize", "scroll", "waitingRows"] },
+  { key: "appearance", tabs: ["language", "theme", "font", "fontSize", "scroll", "waitingRows", "gridHeader"] },
   { key: "projects", tabs: ["dirAppearance", "dirSettings"] },
   { key: "launch", tabs: ["launchers", "headerChrome"] },
   { key: "input", tabs: ["terminalKeys", "shortcuts", "voice"] },

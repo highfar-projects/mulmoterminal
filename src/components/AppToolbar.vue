@@ -4,6 +4,8 @@ import { useRoute } from "vue-router";
 import { router } from "../router";
 import NotificationBell from "./NotificationBell.vue";
 import RateLimitGauge from "./RateLimitGauge.vue";
+import MachineLoadGauge from "./MachineLoadGauge.vue";
+import { showLoadAverage } from "../composables/showLoadAverage";
 import RemoteHostControl from "./RemoteHostControl.vue";
 import LauncherButton from "./LauncherButton.vue";
 import { CONTENT_ROUTES } from "../composables/overlayOrigin";
@@ -213,6 +215,7 @@ function showRooms(): void {
         </span>
       </span>
       <RateLimitGauge v-if="onGridRoute" />
+      <MachineLoadGauge v-if="onGridRoute && showLoadAverage" />
     </nav>
     <NotificationBell class="ml-auto" />
     <RemoteHostControl />

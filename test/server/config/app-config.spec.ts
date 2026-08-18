@@ -396,6 +396,7 @@ describe("loadAppConfig / saveAppConfig", () => {
     prWorkdirFooter: true,
     appendSystemPrompt: true,
     autoDirIcon: true,
+    showLoadAverage: true,
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },
     headerStatusColors: {},
     headerStatusTint: DEFAULT_HEADER_STATUS_TINT,
@@ -436,6 +437,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       prWorkdirFooter: false, // the opt-out: it defaults ON, so only `false` proves it persisted
       appendSystemPrompt: false, // same opt-out shape: defaults ON, so only `false` proves it persisted
       autoDirIcon: false, // same again (#1428): defaults ON, so only `false` proves it persisted
+      showLoadAverage: false, // the same opt-out shape (#1786): only `false` proves it persisted
       cockpitLines: { summary: 6, prompt: 2, response: 3 }, // a raised clamp must survive it too
       headerStatusColors: { working: { background: "#6d28d9", text: null } }, // a per-status header colour must round-trip too
       headerStatusTint: "none" as const, // non-default, so only "none" proves it persisted
@@ -506,6 +508,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       prWorkdirFooter: true, // absent from the file — every config predating #872 stays enabled
       appendSystemPrompt: true, // absent from the file — every config predating #1062 stays enabled
       autoDirIcon: true, // same: a config predating #1428 picks up the repo's own favicon
+      showLoadAverage: true, // same: a config predating #1786 gets the load read-out
       fontFamily: null,
     });
     rmSync(dir, { recursive: true, force: true });
@@ -619,6 +622,7 @@ describe("#741 corrupt config is not silently wiped by a partial update", () => 
     prWorkdirFooter: true,
     appendSystemPrompt: true,
     autoDirIcon: true,
+    showLoadAverage: true,
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },
     headerStatusColors: {},
     headerStatusTint: DEFAULT_HEADER_STATUS_TINT,
@@ -691,6 +695,7 @@ describe("mergeConfigUpdate", () => {
     prWorkdirFooter: true,
     appendSystemPrompt: true,
     autoDirIcon: true,
+    showLoadAverage: true,
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },
     headerStatusColors: {},
     headerStatusTint: DEFAULT_HEADER_STATUS_TINT,
