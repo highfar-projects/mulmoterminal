@@ -35,6 +35,7 @@ export const en = {
       fontSize: "Terminal font size",
       scroll: "Terminal scroll speed",
       waitingRows: "Waiting rows",
+      gridHeader: "Grid header read-outs",
       dirAppearance: "Directory appearance",
       dirSettings: "Directory settings",
       launchers: "Launch commands",
@@ -365,6 +366,14 @@ export const en = {
       returnLabel: "Return to the latest output when you send",
       returnHint:
         "pressing Enter (or a send button) takes a scrolled-up terminal back to the bottom, the way an ordinary terminal does. A shell already behaves this way; a full-screen agent like Claude Code keeps its own scroll position and does not, so this unwinds exactly the scrolling you did. Turn it off to stay where you are reading while a turn runs.",
+    },
+
+    gridHeader: {
+      intro: "What the bar above the grid tells you at a glance, beside the Claude and Codex usage windows it already carries.",
+      loadAverage: "Show this machine's load average",
+      loadAverageTitle: "Load average",
+      loadAverageHint:
+        "the load on the machine running your sessions, as a percentage of its cores — 100% means every core has work queued, and starting another agent slows the ones already running. Amber at 100%, red at 200%. A host that keeps no load average (Windows) shows nothing either way.",
     },
 
     waitingRows: {

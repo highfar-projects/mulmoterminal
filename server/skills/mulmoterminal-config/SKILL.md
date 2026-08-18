@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-config
-description: The way into configuring MulmoTerminal, and the way to find out how it is configured now. Use for a broad or unsure request — "configure MulmoTerminal", "set this up", "customize this", "what can I change?", first-run setup — and route to the skill that owns the area. Also answers "how is this set up right now?", "why isn't my setting working?", "did that take effect?" by reading the live config: the global `~/.mulmoterminal/config.json`, each project's `.mulmoterminal.json`, and what the app ACTUALLY parsed from them — including keys it dropped in validation, which is the difference between a setting you never made and one that silently never applied. Owns the global settings that have no skill of their own: work comments on an issue (issueWorkComments), the PR clone footer (prWorkdirFooter), the closing summary (appendSystemPrompt), the decision digest (decisionDigest), the periodic dev-work log (worklogEnabled), roster row length (cockpitLines), a self-hosted GitLab (gitlabHosts), and a project's Skill menu (skills). When the request names another area, go straight to that skill instead: mulmoterminal-dirs (colours, grid order, project names, font size), mulmoterminal-theme (your own colour scheme), mulmoterminal-header (buttons and chips), mulmoterminal-keys (shortcuts, copy-on-select, Enter behaviour), mulmoterminal-model (other models and backends, and your own command for starting Claude Code), mulmoterminal-notify (sounds and push).
+description: The way into configuring MulmoTerminal, and the way to find out how it is configured now. Use for a broad or unsure request — "configure MulmoTerminal", "set this up", "customize this", "what can I change?", first-run setup — and route to the skill that owns the area. Also answers "how is this set up right now?", "why isn't my setting working?", "did that take effect?" by reading the live config: the global `~/.mulmoterminal/config.json`, each project's `.mulmoterminal.json`, and what the app ACTUALLY parsed from them — including keys it dropped in validation, which is the difference between a setting you never made and one that silently never applied. Owns the global settings that have no skill of their own: work comments on an issue (issueWorkComments), the PR clone footer (prWorkdirFooter), the closing summary (appendSystemPrompt), the decision digest (decisionDigest), the periodic dev-work log (worklogEnabled), roster row length (cockpitLines), the grid header's load read-out (showLoadAverage), a self-hosted GitLab (gitlabHosts), and a project's Skill menu (skills). When the request names another area, go straight to that skill instead: mulmoterminal-dirs (colours, grid order, project names, font size), mulmoterminal-theme (your own colour scheme), mulmoterminal-header (buttons and chips), mulmoterminal-keys (shortcuts, copy-on-select, Enter behaviour), mulmoterminal-model (other models and backends, and your own command for starting Claude Code), mulmoterminal-notify (sounds and push).
 ---
 
 # Configuring MulmoTerminal — start here
@@ -13,7 +13,7 @@ sibling skill.
 
 | Place | What | Written by |
 |---|---|---|
-| Settings modal | Theme, terminal font size / family / scroll, roster rows, notification sounds, Push, PR repos, self-hosted GitLab, work comments, PR footer, closing summary, decision digest, dev-work log, copy-on-select, Enter behaviour, launch commands, phone quick commands, MCP servers | the user, in the UI |
+| Settings modal | Theme, terminal font size / family / scroll, roster rows, the grid header's load read-out, notification sounds, Push, PR repos, self-hosted GitLab, work comments, PR footer, closing summary, decision digest, dev-work log, copy-on-select, Enter behaviour, launch commands, phone quick commands, MCP servers | the user, in the UI |
 | `~/.mulmoterminal/config.json` | Everything global — including the five Settings can only SHOW, never edit: `keymap`, `themes`, `providers`, `customAgents`, `buttons` / `chips` | these skills, or by hand |
 | `<project>/.mulmoterminal.json` | Per-project appearance and behaviour. **No UI writes this file** | these skills only |
 
@@ -277,3 +277,18 @@ clamps. Defaults to 2 / 2 / 3.
 - Each is clamped to 1–20, **per field**, so one bad value cannot discard the two set correctly.
 - Raising these trades how many sessions fit on screen for reading a long one in place. It is a
   trade the user makes — do not "fix" a clamped row by raising it unasked.
+
+### `showLoadAverage` — the machine's load in the grid header
+
+Whether the grid header draws this machine's load average beside the 5h / 7d usage windows, as a
+percentage of its cores (`load 334%` = 66.8 on 20 cores). **On unless set to `false`.**
+
+```json
+{ "showLoadAverage": false }
+```
+
+- Amber at 100% (every core has work queued), red at 200%. Hover gives the raw 1 / 5 / 15-minute
+  figures and the core count.
+- **A host that keeps no load average shows nothing whatever this says.** Windows is the case:
+  `os.loadavg()` returns zeros there, and 0% would read as "idle" rather than "not measured".
+- Also in Settings, under **Grid header read-outs**.

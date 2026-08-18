@@ -32,6 +32,7 @@ export const ja: Messages = {
       fontSize: "ターミナルの文字サイズ",
       scroll: "ターミナルのスクロール量",
       waitingRows: "待機中の行",
+      gridHeader: "グリッドのヘッダー表示",
       dirAppearance: "ディレクトリの見た目",
       dirSettings: "ディレクトリ設定",
       launchers: "起動コマンド",
@@ -363,6 +364,14 @@ export const ja: Messages = {
       returnLabel: "送信したら最新の出力に戻る",
       returnHint:
         "Enter（や送信ボタン）を押すと、スクロールして上を見ていたターミナルが普通のターミナルと同じように一番下へ戻ります。シェルは元からこの挙動ですが、Claude Code のような全画面エージェントは自前でスクロール位置を持つため戻りません。この設定はそのスクロールをちょうど巻き戻します。ターンの実行中も読んでいる場所に留まりたいならオフにしてください。",
+    },
+
+    gridHeader: {
+      intro: "グリッドの上のバーが一目で伝えること。Claude / Codex の使用量ウィンドウの隣に並びます。",
+      loadAverage: "このマシンの load average を表示する",
+      loadAverageTitle: "Load average",
+      loadAverageHint:
+        "セッションを動かしているマシンの負荷を、コア数に対する % で表示します。100% は全コアに実行待ちがある状態で、ここからエージェントを足すと今動いているものが遅くなります。100% で琥珀色、200% で赤。load average を持たないホスト（Windows）では、この設定にかかわらず何も出ません。",
     },
 
     waitingRows: {

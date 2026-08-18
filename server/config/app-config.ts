@@ -123,6 +123,11 @@ export interface AppConfig {
   // How many lines each cockpit-roster row shows before clamping (#877). Defaults keep the
   // previous 2/2/3; raising `summary` trades roster length for reading a long one in place.
   cockpitLines: CockpitLines;
+  // Draw this machine's load average beside the 5h / 7d usage gauges in the grid header (#1786).
+  // ON unless explicitly disabled: it answers "may I start another agent right now?", which is a
+  // question the grid screen poses and could not answer. A host that keeps no load average
+  // (Windows) draws nothing whatever this says.
+  showLoadAverage: boolean;
   // Put a mouse selection on the clipboard the moment it settles, with no key pressed (#900).
   // Off unless asked for: it is the one setting that changes the clipboard when the user only
   // meant to highlight, and it is also the only place in the app that writes the clipboard on
@@ -448,6 +453,11 @@ export function sanitizeAutoDirIcon(input: unknown): boolean {
   return input !== false;
 }
 
+// Default-ON too: the read-out is the feature, and a reader who does not want it sets `false`.
+export function sanitizeShowLoadAverage(input: unknown): boolean {
+  return input !== false;
+}
+
 // Fresh object each call — callers hold and mutate the returned config in place, so a
 // shared default constant would be corrupted across loads. Exported so a write path can
 // use it as the base for a MISSING file WITHOUT a second disk read (that re-read could
@@ -484,6 +494,7 @@ export const emptyConfig = (): AppConfig => ({
   prWorkdirFooter: true,
   appendSystemPrompt: true,
   autoDirIcon: true,
+  showLoadAverage: true,
   cockpitLines: { ...DEFAULT_COCKPIT_LINES },
   fontFamily: null,
 });
@@ -572,6 +583,7 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     prWorkdirFooter: sanitizePrWorkdirFooter(o.prWorkdirFooter),
     appendSystemPrompt: sanitizeAppendSystemPrompt(o.appendSystemPrompt),
     autoDirIcon: sanitizeAutoDirIcon(o.autoDirIcon),
+    showLoadAverage: sanitizeShowLoadAverage(o.showLoadAverage),
     cockpitLines: sanitizeCockpitLines(o.cockpitLines),
     fontFamily: normalizeFontFamily(o.fontFamily),
   };
@@ -684,6 +696,7 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     prWorkdirFooter: updated("prWorkdirFooter", sanitizePrWorkdirFooter, base.prWorkdirFooter),
     appendSystemPrompt: updated("appendSystemPrompt", sanitizeAppendSystemPrompt, base.appendSystemPrompt),
     autoDirIcon: updated("autoDirIcon", sanitizeAutoDirIcon, base.autoDirIcon),
+    showLoadAverage: updated("showLoadAverage", sanitizeShowLoadAverage, base.showLoadAverage),
     cockpitLines: updated("cockpitLines", sanitizeCockpitLines, base.cockpitLines),
   };
 }
@@ -724,6 +737,7 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     prWorkdirFooter: config.prWorkdirFooter,
     appendSystemPrompt: config.appendSystemPrompt,
     autoDirIcon: config.autoDirIcon,
+    showLoadAverage: config.showLoadAverage,
     cockpitLines: config.cockpitLines,
     fontFamily: config.fontFamily,
   };

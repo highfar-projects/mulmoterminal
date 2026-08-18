@@ -22,6 +22,7 @@ import { setHeaderStatusDefaults } from "./headerStatusColors";
 import { setCopyOnSelect } from "./copyOnSelect";
 import { setQuestionPaneEnabled } from "./questionPane";
 import { setIssueWorkComments } from "./issueWorkComments";
+import { setShowLoadAverage } from "./showLoadAverage";
 import { setPrWorkdirFooter } from "./prWorkdirFooter";
 import { setAppendSystemPrompt } from "./appendSystemPrompt";
 import { setDecisionDigest } from "./decisionDigest";
@@ -421,6 +422,8 @@ function applyGlobalSettings(c: Record<string, unknown>): void {
   setQuestionPaneEnabled(c.questionPaneEnabled);
   // Whether a cell may comment on the issue it is working on (#979). Off unless opted in.
   setIssueWorkComments(c.issueWorkComments);
+  // Whether the grid header carries this machine's load average (#1786). On unless opted out.
+  setShowLoadAverage(c.showLoadAverage);
   // How far the cockpit roster clamps each line. Absent `cockpitLines` keeps 2/2/3.
   setCockpitLines(c.cockpitLines);
   // What a header shows once a status replaces the directory's colour (#1617). The default for

@@ -121,3 +121,11 @@ back, which is how a spec that already called it still compared `RUNNER~1` again
 **`process.env` is case-insensitive, a copy of it is not.** Windows spells it `Path` and
 `ComSpec`; `Object.entries(process.env)` keeps that casing, so `copy.PATH` is `undefined`.
 → `envValue()` in `server/infra/pty-env.ts`.
+
+## Machine metrics
+
+**`os.loadavg()` always returns `[0, 0, 0]`.** Windows keeps no load average, and Node reports
+that by returning zeros rather than by failing — so a caller that trusts the numbers draws an idle
+machine on a machine it cannot see. Branch on `process.platform`, never on the values: an idle mac
+reports `0.00` too. → `keepsLoadAverage()` in `common/machineLoad.ts`, which is what makes the
+grid header's load read-out absent rather than `0%` there (#1786).

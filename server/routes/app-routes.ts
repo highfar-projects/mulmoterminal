@@ -87,6 +87,7 @@ import { tmuxHasSession, tmuxKillSession } from "../infra/tmux.js";
 import type { SessionActivityDeps } from "../session/session-activity-deps.js";
 import { mountSpaFallback } from "../infra/spa-fallback.js";
 import { mountRateLimitRoutes, type RateLimitRouteDeps } from "../agents/rate-limit-routes.js";
+import { mountLoadRoute } from "./load-routes.js";
 import { workspaceForRoute } from "./routeParams.js";
 
 export interface AppRouteDeps extends SessionActivityDeps {
@@ -392,6 +393,9 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
 
   // The 5h / 7d rate-limit gauge (#387): where the probe reports and where the header reads.
   mountRateLimitRoutes(app, deps.rateLimits);
+
+  // GET /api/load — this machine's load average, drawn beside those gauges (#1786).
+  mountLoadRoute(app);
 
   // GET /api/cost — estimated $ cost (session + today/month roll-up) for a project's
   // sessions, from public per-model pricing. Read-only; shown in the Settings modal (#245).
