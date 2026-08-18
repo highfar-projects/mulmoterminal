@@ -26,7 +26,7 @@ the user turns this down.
 
 ## Start from a template when one fits
 
-Four shapes are written out in full — declaration, schemas, and the reasoning behind each key:
+Five shapes are written out in full — declaration, schemas, and the reasoning behind each key:
 
 - **[templates/salon.md](./templates/salon.md)** — a request that a NAMED PERSON approves, and only
   their own (a salon's bookings, interviews, repairs, review assignments). This is what `assignee`
@@ -44,8 +44,13 @@ Four shapes are written out in full — declaration, schemas, and the reasoning 
   ADVANCE, taken on the spot with no approval (a meeting room, a desk, equipment on loan, a parking
   space). This is what `idFrom: "field"` and `mirror` are for, and it is the one that spells out who
   refills the slots, and what a cancellation does NOT do.
+- **[templates/live-poll.md](./templates/live-poll.md)** — a page that MOVES while people are looking
+  at it (a live stream, a lecture, a stand-up quiz). This is what `views[].live` is for, and the only
+  one whose declaration is decided by FAN-OUT: the audience may watch the questions, only the desk may
+  watch the votes, and the shape that would let both is refused by publish. **In English**, because
+  the strings in its pages are what a stranger reads.
 
-Read the matching one before writing `app.json` by hand. All four are checked against the real
+Read the matching one before writing `app.json` by hand. All five are checked against the real
 publish gate by this repository's tests, so what they show is what publishes — and they spend most
 of their length on the traps, which is the part you cannot recover by guessing.
 

@@ -81,6 +81,10 @@ describe("the shared-app templates", () => {
     expect(problemsFor("survey.md", "owner@example.jp", [])).toEqual([]);
   });
 
+  it("live-poll.md deploys as written", () => {
+    expect(problemsFor("live-poll.md", "host@example.com", [])).toEqual([]);
+  });
+
   it("shows no page the sandbox would silently break", () => {
     // The frame has no `allow-modals` and no `allow-forms`, and the parent sends nothing until the
     // view says `ready()`. All three fail the same way — nothing drawn, nothing thrown — and a
@@ -135,5 +139,6 @@ describe("the shared-app templates", () => {
       expect.arrayContaining([".claude/skills/bookings/schema.json", ".claude/skills/slots/schema.json"]),
     );
     expect([...blocksOf("survey.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/questions/schema.json", ".claude/skills/responses/schema.json"]));
+    expect([...blocksOf("live-poll.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/questions/schema.json", ".claude/skills/votes/schema.json"]));
   });
 });
