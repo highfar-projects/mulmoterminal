@@ -151,6 +151,39 @@ So: fine for a stream, a class, a retro. **Not** for anything whose outcome some
 There, do not publish the state as the gate — publish the RESULT when a question is done (a row in a
 collection the audience can read) and read the votes as records behind the `member` page.
 
+### What a reload costs, and why the page cannot fix it
+
+**A published page cannot remember anything by itself.** The sandbox gives it an opaque origin, so
+`localStorage`, `sessionStorage` and `document.cookie` all raise `SecurityError` — measured, not
+assumed. Reload and the page is new-born.
+
+The only memory it has is the parent's. The public page hands a view `viewer.mine` — the rows this
+visitor has already submitted, projected to the fields the page could have sent (mulmoserver #207) —
+and for `idFrom: "auth.uid"` that answers "have I answered?" exactly.
+
+**For `auth.uid+field` it cannot answer, and the reason is permanent.** The ids are
+`uid + "_" + <field>`, so finding them means asking for a RANGE of document ids — and rules cannot
+authorize a list that way: for a list the `{itemId}` wildcard is never bound, so every branch of
+`ownRow` that names it is false however the query is written. A read-only prefix branch was added to
+the rules and tried against the emulator; it made no difference. An anonymous session has no address
+to query by either. The limit is pinned in mulmoserver's `test/rules/rules_ownReadback.ts`.
+
+So on this shape, after a reload:
+
+1. the page shows the vote again (it has no way to know)
+2. the visitor votes, and the rules refuse it — correctly, because they are what enforces one per
+   question
+3. **the page must turn that refusal into a sentence, and stop asking.** Not a raw permission error,
+   and not a button they can press again to be refused again
+
+`views/poll.html` below does that. The distinction it makes is the one that matters: a visitor who
+CANCELLED the confirmation (`cancelled`), or pressed while one was open (`busy`), has not been
+refused anything — count those as a refusal and somebody who changed their mind can never vote.
+
+Closing the gap for good needs the declaration to say where the field's values come from, so the
+parent can `get` `uid_q1`, `uid_q2`… one at a time — a document get IS granted (the same emulator
+run shows it). That key does not exist yet.
+
 ### The sign-in question, which decides whether an audience actually votes
 
 `firestore.rules` implements three modes, and the difference matters more here than anywhere else:
@@ -238,7 +271,12 @@ of them is something a page that reads once never has to think about:
 2. **When the question changes, drop everything about the previous one** — the selection, the error,
    the "thank you".
 3. **Show that a vote landed even though the page will keep receiving updates.** The visitor's own
-   vote is not in what they can read (`votes` is not public), so the page remembers it.
+   vote is not in what they can read (`votes` is not public), so the page remembers it — in a
+   variable, because there is nowhere else (see rule 4).
+4. **Handle the refusal, because a reload will produce one.** Everything the page remembers is gone
+   on reload, and this shape cannot get it back: see "what a reload costs" below. So the page offers
+   the vote again, the rules refuse it, and what the visitor reads at that moment is the whole
+   difference between a working poll and a broken one.
 
 ```html
 <h1>Live poll</h1>
@@ -264,6 +302,11 @@ of them is something a page that reads once never has to think about:
   // The questions this browser has already answered. NOT what stops a second vote — the rules do
   // that, because the document id is uid + questionId — this only decides what the page shows.
   const voted = new Map();
+  // Questions the rules refused. Not the same as "could not send": a visitor who cancelled the
+  // confirmation has not been refused anything, and counting that here would leave somebody who
+  // changed their mind unable to vote at all.
+  const refused = new Set();
+  const RETRYABLE = new Set(["cancelled", "busy"]);
   let shownId = null;
   let shownSignature = null;
   let sending = false;
@@ -327,7 +370,18 @@ of them is something a page that reads once never has to think about:
 
   const drawVoted = (questionId) => {
     const choice = voted.get(questionId);
+    document.getElementById("votedMark").textContent = "Your vote was recorded.";
     document.getElementById("votedChoice").textContent = choice ? `You answered: ${choice}` : "";
+    show("voted");
+  };
+
+  // The refusal, in the same place as the thank-you: there is nothing else this person can do about
+  // this question, and waiting for the next one is the honest next state. The reason is shown small
+  // — meaningless to a visitor, and the only thread an author has to pull on, since a published page
+  // has no diagnostics of its own.
+  const drawRefused = (why) => {
+    document.getElementById("votedMark").textContent = "That vote was not accepted.";
+    document.getElementById("votedChoice").textContent = `It looks like you have already answered this one.${why ? ` (${why})` : ""}`;
     show("voted");
   };
 
@@ -339,11 +393,15 @@ of them is something a page that reads once never has to think about:
       show("waiting");
       return;
     }
-    if (voted.has(question.id)) {
+    if (voted.has(question.id) || refused.has(question.id)) {
       if (shownId !== question.id) {
         shownId = question.id;
         shownSignature = null;
-        drawVoted(question.id);
+        if (voted.has(question.id)) {
+          drawVoted(question.id);
+        } else {
+          drawRefused("");
+        }
       }
       return;
     }
@@ -386,8 +444,20 @@ of them is something a page that reads once never has to think about:
       }
       return;
     }
-    document.getElementById("send").disabled = false;
-    notice(`Could not vote: ${answer?.error ?? "unknown error"}`);
+    const why = answer?.error ?? "";
+    if (RETRYABLE.has(why)) {
+      // They cancelled, or a confirmation was already open. Nothing was refused; let them press
+      // again.
+      document.getElementById("send").disabled = false;
+      notice(why === "busy" ? "Still sending. Try again in a moment." : "");
+      return;
+    }
+    // Rule 4: the rules said no. Do not offer the same write again — it will be refused the same
+    // way — and say what it most likely means.
+    refused.add(questionId);
+    if (shownId === questionId) {
+      drawRefused(why);
+    }
   });
 
   view.ready();
@@ -527,6 +597,9 @@ counts document — and nothing needs to, because the roster is the only audienc
   by giving up identity: a phone and a laptop are two votes, and an incognito window is a third. For a
   stream that is the right trade; for anything contested, declare `verifiedEmail` and accept that most
   of the room will not sign in.
+- **A reload costs one refused press.** The page cannot remember (no storage in the sandbox) and
+  cannot ask (a composite id has no read-back) — see "what a reload costs". It turns the refusal
+  into a sentence and stops; it cannot avoid it.
 - **Nothing stops a vote on a question that is not open, or a `choice` nobody offered.** See "what
   the rules do and do not enforce" above — the declaration cannot express either, the desk ignores
   unknown choices, and a reopened question counts what arrived while it was shut.
