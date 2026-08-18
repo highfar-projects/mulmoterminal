@@ -9,6 +9,7 @@ import type { SessionAgent } from "../../../../common/sessionAgent.js";
 import type { TerminalSessionListing } from "../dirIcons.js";
 import type { IngestResult } from "../ingestAttachments.js";
 import type { SessionScreen } from "../terminalScreen.js";
+import type { TranscriptView } from "../../../session/transcript-view.js";
 import type { AskQuestionEvent } from "../../../../common/askQuestion.js";
 import type { AnswerResult } from "../../../../common/askQuestion.js";
 
@@ -25,6 +26,10 @@ export interface RemoteHostHandlerDeps {
   // that knows each session's cwd is the one that can read them.
   listTerminalSessions: () => Promise<TerminalSessionListing>;
   captureTerminalScreen: (sessionId: string) => Promise<SessionScreen>;
+  // The same session's CONVERSATION rather than its pane (#1751). Wired in server/index.ts for the
+  // reason above and one more: the transcript lives under the SESSION's directory, so the same
+  // lookup that gives the list its cwd is what points this at the right project.
+  captureTerminalTranscript: (sessionId: string) => Promise<TranscriptView>;
   // Type into one session's live PTY (#445). Returns false when no PTY is attached
   // in this process — a tmux session that outlived a restart stays viewable but not
   // writable from here.

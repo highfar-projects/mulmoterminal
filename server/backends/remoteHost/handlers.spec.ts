@@ -6,6 +6,7 @@ import path from "node:path";
 
 import { createRemoteHostHandlers } from "./handlers/index.js";
 import type { SessionScreen } from "./terminalScreen.js";
+import type { TranscriptView } from "../../session/transcript-view.js";
 import { initCollectionsBackend } from "../collections.js";
 import type { AnswerFailure, AnswerResult } from "../../../common/askQuestion.js";
 
@@ -13,6 +14,7 @@ const unusedTerminalDeps = {
   spawnIssueSeed: () => "unused-session",
   listTerminalSessions: async () => ({ sessions: [], icons: {} }),
   captureTerminalScreen: async () => ({ screen: "", suggestion: "", quickCommands: [] }),
+  captureTerminalTranscript: async () => ({ status: "none" as const }),
   writeToSession: () => false,
   canClearBox: () => false,
   submitSequence: () => "\r",
@@ -259,6 +261,57 @@ describe("getTerminalScreen", () => {
 
   it("rejects a request with no session id", async () => {
     await expect(handlersFor({ screen: "", suggestion: "", quickCommands: [] }).getTerminalScreen({})).rejects.toThrow(/sessionId is required/);
+  });
+});
+
+// The phone's transcript view (#1751). Two things are pinned here rather than in the reader's own
+// spec: that the FOUR statuses survive the wire (a boolean would leave "not written yet", "ended
+// with /clear" and "too big" as the same blank screen), and that this handler — the first in the
+// file to turn a session id into a file path — checks the id's SHAPE.
+describe("getTerminalTranscript", () => {
+  const SESSION = "11111111-2222-4333-8444-555555555555";
+
+  const handlersFor = (transcript: TranscriptView) =>
+    createRemoteHostHandlers({
+      workspace: "/nowhere",
+      spawnChat: () => ({ chatId: "x" }),
+      ingest: async () => ({ attachments: [], cleanupStaging: async () => {} }),
+      ...unusedTerminalDeps,
+      captureTerminalTranscript: async () => transcript,
+    });
+
+  it("forwards the turns and the truncated flag", async () => {
+    const view: TranscriptView = {
+      status: "ok",
+      turns: [
+        {
+          at: "2026-08-18T00:00:00.000Z",
+          rows: [
+            { kind: "user", text: "fix it" },
+            { kind: "tool", text: "Bash", clipped: true },
+          ],
+        },
+      ],
+      truncated: true,
+    };
+    expect(await handlersFor(view).getTerminalTranscript({ sessionId: SESSION })).toEqual(view);
+  });
+
+  it("keeps the four answers apart", async () => {
+    const statuses = ["none", "cleared", "too-large"] as const;
+    const answers = await Promise.all(statuses.map((status) => handlersFor({ status }).getTerminalTranscript({ sessionId: SESSION })));
+    expect(answers).toEqual([{ status: "none" }, { status: "cleared" }, { status: "too-large" }]);
+  });
+
+  it("rejects a request with no session id", async () => {
+    await expect(handlersFor({ status: "none" }).getTerminalTranscript({})).rejects.toThrow(/sessionId is required/);
+  });
+
+  it("rejects an id that is not a session id, which is what keeps it inside the project's directory", async () => {
+    const rejected = ["../../../../etc/passwd", `${SESSION}/../${SESSION}`, `${SESSION}.jsonl`, "not-a-uuid"];
+    await Promise.all(
+      rejected.map((sessionId) => expect(handlersFor({ status: "none" }).getTerminalTranscript({ sessionId })).rejects.toThrow(/not a session id/)),
+    );
   });
 });
 

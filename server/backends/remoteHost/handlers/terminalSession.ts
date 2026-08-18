@@ -5,6 +5,7 @@
 //
 // No MulmoClaude counterpart: that host has no PTY table to look at.
 import { toJsonObject, type CommandHandlers, type JsonObject } from "@mulmoclaude/core/remote-host";
+import { SESSION_ID_RE } from "../../../config/env.js";
 import { createTerminalInputSender } from "../terminalInput.js";
 import type { RemoteHostHandlerDeps } from "./deps.js";
 
@@ -21,6 +22,7 @@ type TerminalSessionDeps = Pick<
   RemoteHostHandlerDeps,
   | "listTerminalSessions"
   | "captureTerminalScreen"
+  | "captureTerminalTranscript"
   | "writeToSession"
   | "canClearBox"
   | "submitSequence"
@@ -33,6 +35,7 @@ type TerminalSessionDeps = Pick<
 export const createTerminalSessionHandlers = ({
   listTerminalSessions,
   captureTerminalScreen,
+  captureTerminalTranscript,
   writeToSession,
   canClearBox,
   submitSequence,
@@ -57,6 +60,21 @@ export const createTerminalSessionHandlers = ({
       const sessionId = typeof params.sessionId === "string" ? params.sessionId : "";
       if (!sessionId) throw new Error("sessionId is required");
       return toJsonObject(await captureTerminalScreen(sessionId));
+    },
+
+    // The same session's CONVERSATION rather than its pane (#1751). A claude cell runs on the
+    // alternate screen with no scrollback, so the screen above is the only thing the phone could
+    // see; this is what claude wrote to disk, folded into turns. `status` says why there is nothing
+    // to show when there is nothing — see TranscriptView.
+    //
+    // The first handler in this file to turn a sessionId into a FILE PATH, and so the first that has
+    // to check its SHAPE. "Non-empty string" is enough for the others because they hand the id to
+    // tmux; unchecked here, a `../`-bearing id reads a file outside the project's session directory.
+    getTerminalTranscript: async (params: JsonObject) => {
+      const sessionId = typeof params.sessionId === "string" ? params.sessionId : "";
+      if (!sessionId) throw new Error("sessionId is required");
+      if (!SESSION_ID_RE.test(sessionId)) throw new Error("sessionId is not a session id");
+      return toJsonObject(await captureTerminalTranscript(sessionId));
     },
 
     // Type a line into the session and press Enter, as if the user were at the
