@@ -132,9 +132,24 @@ function allRolloutPaths(root: string): string[] {
 }
 
 // A rollout's first line is written once, when codex creates the file; every later turn appends.
-// So this answer never goes stale and needs no invalidation — which is what keeps the whole-store
-// scan off the per-request path. Bounded by the files on disk (3000 entries ≈ 300KB here).
+// So a path's answer never goes stale — which is what keeps the whole-store scan off the
+// per-request path.
+//
+// It does go ABSENT, though: codex prunes rollouts and whole day directories, and a pruned path
+// simply stops appearing in the scan. Nothing would then drop its entry, so the map would grow
+// with every rollout this process has EVER seen rather than with the files on disk — unbounded in
+// a server that runs for weeks (CodeRabbit on #1782). `pruneMetaCache` is what keeps the two in
+// step, and it is why the comment above says "a path's answer" rather than "the map".
 const metaCache = new Map<string, RolloutMeta | null>();
+
+/** How many paths are currently remembered. Exported for the spec that pins the pruning. */
+export const metaCacheSize = (): number => metaCache.size;
+
+/** Drop remembered paths the store no longer has, so the map tracks the disk rather than history. */
+function pruneMetaCache(files: readonly string[]): void {
+  const live = new Set(files);
+  for (const key of metaCache.keys()) if (!live.has(key)) metaCache.delete(key);
+}
 
 async function rolloutMeta(file: string): Promise<RolloutMeta | null> {
   const cached = metaCache.get(file);
@@ -201,6 +216,7 @@ interface MatchedRollout {
  */
 async function matchingRollouts(root: string, cwd: string): Promise<MatchedRollout[]> {
   const files = allRolloutPaths(root);
+  pruneMetaCache(files);
   const metas = await mapConcurrent(files, READ_CONCURRENCY, rolloutMeta);
   const matched = files.flatMap((file, i) => {
     const meta = metas[i];

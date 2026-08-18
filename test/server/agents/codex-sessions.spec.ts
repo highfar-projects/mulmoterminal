@@ -9,6 +9,7 @@ import {
   isResumableThread,
   listCodexSessions,
   codexRolloutExists,
+  metaCacheSize,
 } from "../../../server/agents/codex-sessions.js";
 
 const UUID_A = "019f251d-001c-7542-b13e-9a627effce52";
@@ -210,6 +211,20 @@ describe("listCodexSessions", () => {
 
     writeFileSync(file, [full, userMsgLine("finished a moment later")].join("\n") + "\n");
     expect((await listCodexSessions(root, "/work", 10)).map((s) => s.title)).toEqual(["finished a moment later"]);
+  });
+
+  // The cache remembers a path's answer, which never goes stale — but a pruned rollout simply stops
+  // appearing in the scan, so without pruning the map would grow with every rollout this process
+  // has ever seen rather than with the files on disk (CodeRabbit on #1782).
+  it("forgets rollouts the store no longer has", async () => {
+    writeSession(UUID_A, "/work", "kept", new Date(2026, 6, 8, 10));
+    writeSession(UUID_B, "/work", "removed later", new Date(2026, 6, 8, 11));
+    expect((await listCodexSessions(root, "/work", 10)).map((s) => s.title)).toEqual(["removed later", "kept"]);
+    const before = metaCacheSize();
+
+    rmSync(path.join(dayDir(root), `rollout-2026-07-08T00-00-00-${UUID_B}.jsonl`));
+    expect((await listCodexSessions(root, "/work", 10)).map((s) => s.title)).toEqual(["kept"]);
+    expect(metaCacheSize()).toBe(before - 1);
   });
 
   // codex prunes day directories while we walk them, and the scan now enumerates every day rather
