@@ -109,6 +109,35 @@ that side is N→1 by definition however popular the stream gets.
 - **`transitions` on `questions`** — `draft → open → closed`, and `closed → open` because a host
   reopens a question they closed too early. The desk moves it; the rules judge the move.
 
+### What the rules DO and DO NOT enforce about a vote
+
+Say this out loud before using the shape, because the pages above make it look otherwise:
+
+| | enforced by | so |
+|---|---|---|
+| one vote per person per question | the RULES (`idFrom: "auth.uid+field"` — the id is `uid + "_" + questionId`) | a second vote is a create over an existing document, and Firestore refuses it |
+| `votedAt` is the server's clock | the RULES (`stampField`) | a page cannot backdate a vote |
+| only the fields declared | the RULES (`createFields` is their `hasOnly` list) | nothing else can be written |
+| **the question is OPEN** | **nothing** | a vote can be written for a `draft`, `closed` or nonexistent question id |
+| **`choice` is one the question offered** | **nothing** | any string can be written there |
+
+The last two are not oversights and they are not fixable in the declaration: a rule can compare a
+field to the SAME document's other fields and to the app document, and `questions` is neither — the
+state and the choice list live in a row the vote does not point the rules at. There is no per-record
+gate for "the row this one names is in state X".
+
+So what is true is this: **the page is the only thing that decides which question you can answer, and
+a page can be bypassed.** The desk therefore counts only what it recognises — `drawTally` below
+ignores any `choice` the question did not declare — and a question REOPENED after being closed shows
+the votes cast in between, because they were accepted when they arrived. If a poll's outcome has to be
+defensible against a participant who opens the console, this shape is not it; put the answers behind a
+`member` page and read them as records, or close the poll by publishing the result rather than by a
+state nobody enforces.
+
+What the two really cost, in practice: a late vote (the host closes the question while somebody's
+confirmation dialog is open) and a made-up option (somebody calls the bridge by hand). The first is
+ordinary and the tally simply includes it; the second never reaches the screen.
+
 ### The sign-in question, which decides whether an audience actually votes
 
 `firestore.rules` implements three modes, and the difference matters more here than anywhere else:
@@ -370,7 +399,13 @@ counts document — and nothing needs to, because the roster is the only audienc
     }
     const counts = new Map(choicesOf(question).map((choice) => [choice, 0]));
     for (const vote of votes.filter((row) => row.questionId === question.id)) {
-      counts.set(vote.choice, (counts.get(vote.choice) ?? 0) + 1);
+      // Only a choice this question DECLARED is counted. The rules cannot check `choice` against a
+      // list that lives in another document, so anything can be written there — see "what the rules
+      // do and do not enforce" above. Counting `counts.get(...) ?? 0` for an unknown value would put
+      // a made-up option on the screen the stream is showing.
+      if (counts.has(vote.choice)) {
+        counts.set(vote.choice, counts.get(vote.choice) + 1);
+      }
     }
     const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
     host.append(Object.assign(document.createElement("h2"), { textContent: question.text ?? question.id }));
@@ -402,8 +437,17 @@ counts document — and nothing needs to, because the roster is the only audienc
         button.addEventListener("click", async () => {
           button.disabled = true;
           say("Working…");
-          const done = await view.transition("questions", question.id, next);
-          say(done?.ok ? `${question.id} is now ${next}.` : `Not done: ${done?.error ?? "unknown error"}`);
+          try {
+            const done = await view.transition("questions", question.id, next);
+            say(done?.ok ? `${question.id} is now ${next}.` : `Not done: ${done?.error ?? "unknown error"}`);
+          } catch (err) {
+            say(`Not done: ${err instanceof Error ? err.message : String(err)}`);
+          } finally {
+            // ALWAYS. A rejected call produces no state update, so `onState` never redraws this row —
+            // the button would stay disabled until the operator reloaded, mid-stream, on a page whose
+            // whole job is to be usable in the next five seconds.
+            button.disabled = false;
+          }
         });
         row.append(button);
       }
@@ -441,6 +485,9 @@ counts document — and nothing needs to, because the roster is the only audienc
 - **One vote per ACCOUNT per question, while this declares `verifiedEmail`** — and every viewer has
   to sign in first. On `anonymous` (see above) it becomes one vote per browser and no sign-in screen,
   which is a different trade and the one a stream usually wants.
+- **Nothing stops a vote on a question that is not open, or a `choice` nobody offered.** See "what
+  the rules do and do not enforce" above — the declaration cannot express either, the desk ignores
+  unknown choices, and a reopened question counts what arrived while it was shut.
 - **No result after the fact for the audience.** They cannot read `votes` at all. If they should see
   the outcome, publish it as a row in a collection they CAN read — a `results` collection the desk
   writes — rather than opening the votes.
