@@ -151,6 +151,59 @@ So: fine for a stream, a class, a retro. **Not** for anything whose outcome some
 There, do not publish the state as the gate — publish the RESULT when a question is done (a row in a
 collection the audience can read) and read the votes as records behind the `member` page.
 
+### What a reload costs, and the two things that answer it
+
+**A published page cannot remember anything by itself.** The sandbox gives it an opaque origin, so
+`localStorage`, `sessionStorage` and `document.cookie` all raise `SecurityError` — measured, not
+assumed. Reload and the page is new-born. Everything it knows about "have I answered?" comes from the
+parent, and there are two ways to get it.
+
+**`viewer.mine`, with the state.** The rows this visitor has already submitted, projected to the
+fields the page could have sent. It answers for `idFrom: "auth.uid"` exactly — and for
+`auth.uid+field` it cannot, because finding those rows means asking for a RANGE of document ids and
+rules cannot authorize a list that way: for a list the `{itemId}` wildcard is never bound, so every
+branch of `ownRow` that names it is false however the query is written. A read-only prefix branch was
+added to the rules and tried against the emulator; it made no difference. The limit is pinned in
+mulmoserver's `test/rules/rules_ownReadback.ts`.
+
+**`view.mine(cid, key)`, on demand — which is what this shape uses.** A document GET is granted (the
+same emulator run shows it), and the only thing missing was the key: the parent cannot enumerate the
+question ids, and the page is looking at one. So the page asks about the question it is showing, the
+parent builds `uid + "_" + key` and reads that one document.
+
+```js
+const answer = await view.mine("votes", question.id);
+// { known: true, found: true, record: { choice: "b" } }
+```
+
+A record whose `choice` is not one of the options on screen is still a vote — the choices were
+edited after somebody answered, or the row came from something other than this page. The page drops
+the CLAIM about which option it was and keeps the fact: the control goes, because the rules will
+refuse a second one either way, and a bare `d` on screen means nothing to the person reading it.
+
+**Three answers, and only one of them is "no".**
+
+| | means | the page should |
+|---|---|---|
+| `known: false` | nobody looked — an older host, a read that failed | leave the vote on offer |
+| `known: true, found: false` | this visitor really has not answered | leave the vote on offer |
+| `known: true, found: true` | they have | show it back, before they press |
+
+Reading `known: false` as "you have not answered" is the one mistake that matters: it takes the vote
+away from somebody entitled to it. Leaving it on offer costs at most one refused press, and the page
+handles that below.
+
+**A refusal is not proof of a duplicate, so the page asks again rather than concluding.** `{ ok:
+false }` is what the bridge reports for everything: a rules denial, a network failure, a disabled
+Anonymous provider, a validation refusal — and the only field is an untyped string. So when a vote
+comes back refused, the page asks about the same key: a row means their vote is in (show it), no row
+or no answer means it is not (leave the vote on offer and say what happened). Folding the vote away on
+any `{ ok: false }` would leave somebody whose connection blinked unable to vote for the rest of the
+poll.
+
+Two of those failures are not refusals at all and never reach that question: a visitor who CANCELLED
+the confirmation (`cancelled`), or pressed while one was open (`busy`).
+
 ### The sign-in question, which decides whether an audience actually votes
 
 `firestore.rules` implements three modes, and the difference matters more here than anywhere else:
@@ -238,7 +291,13 @@ of them is something a page that reads once never has to think about:
 2. **When the question changes, drop everything about the previous one** — the selection, the error,
    the "thank you".
 3. **Show that a vote landed even though the page will keep receiving updates.** The visitor's own
-   vote is not in what they can read (`votes` is not public), so the page remembers it.
+   vote is not in what they can read (`votes` is not public), so the page remembers it — in a
+   variable, because there is nowhere else (see rule 4).
+4. **Ask rather than assume — before offering the vote, and again if one is refused.**
+   `view.mine("votes", question.id)` is how the page finds out, and its answer has three states
+   rather than two (see "what a reload costs" above). A refused submission is not proof of anything
+   either: the same shape carries a network failure. What the visitor reads at that moment is the
+   whole difference between a working poll and a broken one.
 
 ```html
 <h1>Live poll</h1>
@@ -264,7 +323,17 @@ of them is something a page that reads once never has to think about:
   // The questions this browser has already answered. NOT what stops a second vote — the rules do
   // that, because the document id is uid + questionId — this only decides what the page shows.
   const voted = new Map();
+  // The two failures that are not refusals at all: the visitor cancelled the confirmation, or
+  // pressed while one was open. Counting either as "already answered" leaves somebody who changed
+  // their mind unable to vote.
+  const RETRYABLE = new Set(["cancelled", "busy"]);
+  // Questions already put to the parent. A mark that the ASK happened, not a memory of the answer:
+  // the answer lands in `voted`, or nowhere at all when nobody knows.
+  const asked = new Set();
   let shownId = null;
+  // The question object itself, not just its id: an answer that arrives later has to be turned into
+  // a LABEL, and the labels live on the question. The click handler runs long after `onState`.
+  let shownQuestion = null;
   let shownSignature = null;
   let sending = false;
 
@@ -327,18 +396,59 @@ of them is something a page that reads once never has to think about:
 
   const drawVoted = (questionId) => {
     const choice = voted.get(questionId);
+    document.getElementById("votedMark").textContent = "Your vote was recorded.";
     document.getElementById("votedChoice").textContent = choice ? `You answered: ${choice}` : "";
     show("voted");
+  };
+
+  // Rule 4: ask the parent about THIS question, once. The answer arrives a turn later and switches
+  // the page if it says so; nothing waits for it, because a page that blocks on a read shows an
+  // audience a spinner where the question should be.
+  //
+  // `known` is the field to read first. False means nobody looked — an older host, a read that was
+  // refused — and treating that as "you have not answered" is the one mistake that takes the vote
+  // away from somebody entitled to it.
+  const askIfAnswered = (question) => {
+    if (asked.has(question.id) || voted.has(question.id)) {
+      return;
+    }
+    if (typeof view.mine !== "function") {
+      return; // an older runtime; the refusal path below is what covers it
+    }
+    asked.add(question.id);
+    view
+      .mine("votes", question.id)
+      .then((answer) => {
+        if (!answer?.known || !answer.found) {
+          return;
+        }
+        // The record carries the KEY; the label for it is in the question. A key with no option —
+        // the choices were edited after they voted, or the row was written by something other than
+        // this page — is still a vote, and the control still has to go: the rules will refuse a
+        // second one. What is dropped is the CLAIM about which option it was. Showing the bare key
+        // would put a letter on screen that means nothing to the person reading it.
+        const option = optionsOf(question).find((one) => one.key === answer.record?.choice);
+        voted.set(question.id, option?.label ?? "");
+        if (shownId === question.id) {
+          drawVoted(question.id);
+        }
+      })
+      .catch(() => {
+        // Could not ask. Leave it unknown: the vote stays on offer, and a refusal will say so.
+      });
   };
 
   view.onState((state) => {
     const question = openQuestion(Array.isArray(state?.questions) ? state.questions : []);
     if (question === null) {
       shownId = null;
+      shownQuestion = null;
       shownSignature = null;
       show("waiting");
       return;
     }
+    shownQuestion = question;
+    askIfAnswered(question);
     if (voted.has(question.id)) {
       if (shownId !== question.id) {
         shownId = question.id;
@@ -369,6 +479,10 @@ of them is something a page that reads once never has to think about:
       return;
     }
     const questionId = shownId;
+    // SNAPSHOT, taken before anything is awaited. The host can advance the poll while a write or a
+    // read-back is in flight, and `shownQuestion` is then the NEXT question — mapping a recovered
+    // key against it stores somebody's answer as a label they never saw.
+    const submitted = shownQuestion;
     sending = true;
     document.getElementById("send").disabled = true;
     notice("Sending…");
@@ -386,8 +500,34 @@ of them is something a page that reads once never has to think about:
       }
       return;
     }
+    const why = answer?.error ?? "";
+    if (RETRYABLE.has(why)) {
+      // They cancelled, or a confirmation was already open. Nothing was refused; let them press
+      // again.
+      document.getElementById("send").disabled = false;
+      notice(why === "busy" ? "Still sending. Try again in a moment." : "");
+      return;
+    }
+    // A refusal is NOT proof of a duplicate. `{ ok: false }` is also what a network failure looks
+    // like, and a disabled Anonymous provider, and a validation refusal — the only field here is an
+    // untyped string. Folding the vote away on any of them means somebody whose connection blinked
+    // can never vote again.
+    //
+    // So ask what actually happened. It is the same read as rule 4, for the same key.
+    const after = typeof view.mine === "function" ? await view.mine("votes", questionId).catch(() => null) : null;
+    if (after?.known && after.found) {
+      // A row IS there: either they answered before, or this write landed and something after it
+      // failed. Either way their vote counts, and this is their answer.
+      const option = optionsOf(submitted ?? {}).find((one) => one.key === after.record?.choice);
+      voted.set(questionId, option?.label ?? "");
+      if (shownId === questionId) {
+        drawVoted(questionId);
+      }
+      return;
+    }
+    // Nothing was written, or nobody can say. Leave the vote on offer and show what happened.
     document.getElementById("send").disabled = false;
-    notice(`Could not vote: ${answer?.error ?? "unknown error"}`);
+    notice(`Could not vote: ${why || "unknown error"}`);
   });
 
   view.ready();
@@ -527,6 +667,10 @@ counts document — and nothing needs to, because the roster is the only audienc
   by giving up identity: a phone and a laptop are two votes, and an incognito window is a third. For a
   stream that is the right trade; for anything contested, declare `verifiedEmail` and accept that most
   of the room will not sign in.
+- **A reload is answered by asking, not by remembering.** The page cannot remember anything (no
+  storage in the sandbox), so it asks the parent about the question on screen — see "what a reload
+  costs". On an older host the ask is unavailable: the vote is offered again, refused, and the page
+  says so and lets them try rather than deciding for them.
 - **Nothing stops a vote on a question that is not open, or a `choice` nobody offered.** See "what
   the rules do and do not enforce" above — the declaration cannot express either, the desk ignores
   unknown choices, and a reopened question counts what arrived while it was shut.

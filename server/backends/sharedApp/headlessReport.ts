@@ -327,6 +327,20 @@ const LIVE_UNVERIFIED =
   "delivers state once. Whether such a page redraws correctly on a second state, and whether an update landing mid-edit wipes a selection or a half-typed field, " +
   "is NOT tested here.";
 
+/** The other fixed sentence, and the same kind of blindness from the opposite side.
+ *
+ *  `view.mine(cid, key)` asks the PARENT whether this visitor already has one particular row. This
+ *  run is not that parent: it offers no lookup, so every ask is answered `known: false` — "nobody
+ *  looked" — and a page takes its unknown branch every time. That branch is the safe one by design,
+ *  so a page whose real behaviour lives in `found: true` (drawing an answer back, hiding a control
+ *  somebody has already used) is never exercised, and looks completely fine here.
+ *
+ *  Unconditional for the reason above it: the sentence is about what this run does, and a report
+ *  that goes quiet when the app happens not to ask teaches a reader that silence means covered. */
+const LOOKUP_UNVERIFIED =
+  "`view.mine(cid, key)` — 'have I already got this row?' — is answered `known: false` here, because this run does not read records back. A page that asks is " +
+  "therefore always on its unknown branch: what it draws when the answer is `found: true` (an answer shown back, a control it hides) is NOT tested here.";
+
 function closing(run: { wrote: boolean; writesSkipped: number; screenshotDir: string | null; pages: readonly HeadlessPageReport[] }): string[] {
   const skipped =
     run.writesSkipped === 0
@@ -345,10 +359,11 @@ function closing(run: { wrote: boolean; writesSkipped: number; screenshotDir: st
       "This does NOT prove the app is ready to publish. It says nothing about whether the deployed rules would accept a write, about other people's devices, " +
         "about two people submitting at once, or about whether the rules are deployed at all.",
       LIVE_UNVERIFIED,
+      LOOKUP_UNVERIFIED,
     ];
   }
   const wroteAnything = run.pages.some((page) => page.presses.some((press) => press.write !== null));
-  return ["", ...whatWasWritten(run.pages), ...skipped, ...pictures, stillUnknown(wroteAnything), LIVE_UNVERIFIED];
+  return ["", ...whatWasWritten(run.pages), ...skipped, ...pictures, stillUnknown(wroteAnything), LIVE_UNVERIFIED, LOOKUP_UNVERIFIED];
 }
 
 export function narrateHeadlessRun(run: HeadlessRun): string {
