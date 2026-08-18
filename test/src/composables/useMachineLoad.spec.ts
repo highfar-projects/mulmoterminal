@@ -86,6 +86,19 @@ describe("useMachineLoad polling lifecycle", () => {
     stop();
   });
 
+  // At the window itself, not on whichever poll happens to finish after it — the check used to
+  // ride on a request completing, which put the real bound at 60s + the interval + the request's
+  // own timeout (Codex on #1791).
+  it("drops it at the window's edge rather than on the next poll", async () => {
+    const { load, stop } = await started();
+    fetchMock.mockImplementation(failing);
+    await vi.advanceTimersByTimeAsync(59_000);
+    expect(load.value).toEqual(READING);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(load.value).toBeNull();
+    stop();
+  });
+
   // The same rule for a body that cannot be read: it says nothing about the machine, so it is a
   // failure and not an answer.
   it("treats an unreadable body as a failure rather than as no load", async () => {
@@ -120,6 +133,21 @@ describe("useMachineLoad polling lifecycle", () => {
     const second = useMachineLoad();
     second.start();
     expect(second.load.value).toEqual(READING);
+    second.stop();
+  });
+
+  // ...but looking at it does not renew it. The window is measured from when the reading arrived,
+  // so what a remount gets back is the REMAINDER.
+  it("does not restart the window when a remount picks a reading up", async () => {
+    const first = await started();
+    first.stop();
+    await vi.advanceTimersByTimeAsync(40_000);
+    fetchMock.mockImplementation(failing);
+    const second = useMachineLoad();
+    second.start();
+    expect(second.load.value).toEqual(READING);
+    await vi.advanceTimersByTimeAsync(21_000);
+    expect(second.load.value).toBeNull();
     second.stop();
   });
 

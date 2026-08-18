@@ -15,14 +15,15 @@ const FETCH_TIMEOUT_MS = 4000;
 // at once move the 1-minute average within seconds, and a two-minute-old figure would answer
 // about the machine as it was before they existed.
 const REFRESH_MS = 10_000;
-// How long a reading outlives the failure to replace it. A transient failure should not blank a
-// figure that was true a moment ago, but load is a number about NOW: past this, a held reading
-// stops describing the machine and starts misreporting it.
+// How long a reading outlives the failure to replace it — exactly, from the moment it arrived. A
+// transient failure should not blank a figure that was true a moment ago, but load is a number
+// about NOW: past this, a held reading stops describing the machine and starts misreporting it.
 const STALE_MS = 60_000;
 
 const load = ref<MachineLoad | null>(null);
 let lastOk_ms = 0;
 let timer: ReturnType<typeof setInterval> | null = null;
+let staleTimer: ReturnType<typeof setTimeout> | null = null;
 let watchers = 0;
 
 // Which visit a request belongs to. A poll started before the last header unmounted is still in
@@ -41,17 +42,43 @@ async function poll(chain: number): Promise<void> {
     // has stopped reporting.
     const next = res.ok ? readLoadBody(await res.json()) : null;
     if (chain !== generation) return;
-    if (!next) return dropIfStale();
+    // A failure changes nothing: the reading already carries its own deadline, and this poll had
+    // no better answer to replace it with.
+    if (!next) return;
     load.value = next.load;
     lastOk_ms = Date.now();
+    holdUntilStale();
   } catch {
     // offline, aborted, or the route is not there
-    if (chain === generation) dropIfStale();
   }
 }
 
-function dropIfStale(): void {
-  if (load.value !== null && Date.now() - lastOk_ms > STALE_MS) load.value = null;
+/** Arm the deadline the reading on screen is honest until — measured from when it ARRIVED, not
+ *  from now, so a remount cannot renew a figure by looking at it.
+ *
+ *  A timer rather than a check inside `poll()`: expiry that can only happen when a request
+ *  finishes is bounded by the poll interval and the request's own timeout on top of the window,
+ *  which made a documented 60 seconds up to 74 (Codex on #1791). Nothing to arm when there is no
+ *  figure to outlive — including a host that reports no load average. */
+function holdUntilStale(): void {
+  clearStaleTimer();
+  if (load.value === null) return;
+  const remaining_ms = STALE_MS - (Date.now() - lastOk_ms);
+  // Already spent: nothing ran while no one was watching, and this reading is past its window.
+  if (remaining_ms <= 0) {
+    load.value = null;
+    return;
+  }
+  staleTimer = setTimeout(() => {
+    load.value = null;
+    staleTimer = null;
+  }, remaining_ms);
+}
+
+function clearStaleTimer(): void {
+  if (!staleTimer) return;
+  clearTimeout(staleTimer);
+  staleTimer = null;
 }
 
 /** Reference-counted so two mounted headers do not double the polling, and so the last one
@@ -62,11 +89,11 @@ export function useMachineLoad() {
     start(): void {
       watchers++;
       if (watchers > 1) return;
-      // Nothing ran while there was no watcher, so the held reading has been aging unchecked —
-      // a header remounted an hour later would otherwise draw that hour-old figure until its
-      // first request lands (Codex on #1791). The stale window is a promise about what is on
-      // screen, not about how often we poll.
-      dropIfStale();
+      // Nothing ran while there was no watcher, so the held reading has been aging unchecked — a
+      // header remounted an hour later would otherwise draw that hour-old figure until its first
+      // request lands (Codex on #1791). Re-arming from `lastOk_ms` both drops what is already
+      // spent and gives back only what is left of the window.
+      holdUntilStale();
       const chain = ++generation;
       void poll(chain);
       timer = setInterval(() => void poll(chain), REFRESH_MS);
@@ -77,6 +104,10 @@ export function useMachineLoad() {
       // Retired even when there is no timer to clear — that is precisely the window where a poll
       // is still in flight and would otherwise apply its answer to whoever mounts next.
       generation++;
+      // The deadline goes with the polling: a timer that fires while nothing is watching would
+      // blank a value no one is rendering, and `holdUntilStale()` settles the same question on
+      // the way back in.
+      clearStaleTimer();
       if (!timer) return;
       clearInterval(timer);
       timer = null;
