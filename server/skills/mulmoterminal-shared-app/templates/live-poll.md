@@ -176,6 +176,11 @@ const answer = await view.mine("votes", question.id);
 // { known: true, found: true, record: { choice: "b" } }
 ```
 
+A record whose `choice` is not one of the options on screen is still a vote — the choices were
+edited after somebody answered, or the row came from something other than this page. The page drops
+the CLAIM about which option it was and keeps the fact: the control goes, because the rules will
+refuse a second one either way, and a bare `d` on screen means nothing to the person reading it.
+
 **Three answers, and only one of them is "no".**
 
 | | means | the page should |
@@ -417,9 +422,13 @@ of them is something a page that reads once never has to think about:
         if (!answer?.known || !answer.found) {
           return;
         }
-        // The record carries the KEY. The label for it is in the question on screen.
+        // The record carries the KEY; the label for it is in the question. A key with no option —
+        // the choices were edited after they voted, or the row was written by something other than
+        // this page — is still a vote, and the control still has to go: the rules will refuse a
+        // second one. What is dropped is the CLAIM about which option it was. Showing the bare key
+        // would put a letter on screen that means nothing to the person reading it.
         const option = optionsOf(question).find((one) => one.key === answer.record?.choice);
-        voted.set(question.id, option?.label ?? answer.record?.choice ?? "");
+        voted.set(question.id, option?.label ?? "");
         if (shownId === question.id) {
           drawVoted(question.id);
         }
@@ -510,7 +519,7 @@ of them is something a page that reads once never has to think about:
       // A row IS there: either they answered before, or this write landed and something after it
       // failed. Either way their vote counts, and this is their answer.
       const option = optionsOf(submitted ?? {}).find((one) => one.key === after.record?.choice);
-      voted.set(questionId, option?.label ?? after.record?.choice ?? "");
+      voted.set(questionId, option?.label ?? "");
       if (shownId === questionId) {
         drawVoted(questionId);
       }
