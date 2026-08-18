@@ -96,6 +96,33 @@ describe("useMachineLoad polling lifecycle", () => {
     stop();
   });
 
+  // Nothing polls between an unmount and the next mount, so the held reading ages unchecked. A
+  // header that comes back an hour later must not paint that figure while its first request is
+  // still in flight.
+  it("does not show a reading that went stale while nothing was watching", async () => {
+    const first = await started();
+    first.stop();
+    await vi.advanceTimersByTimeAsync(70_000);
+    fetchMock.mockImplementation(() => new Promise(() => {}));
+    const second = useMachineLoad();
+    second.start();
+    expect(second.load.value).toBeNull();
+    second.stop();
+  });
+
+  // The same remount inside the window keeps what it had — the gauge should not blink off and on
+  // every time a view is switched.
+  it("keeps a reading that is still fresh across a remount", async () => {
+    const first = await started();
+    first.stop();
+    await vi.advanceTimersByTimeAsync(20_000);
+    fetchMock.mockImplementation(() => new Promise(() => {}));
+    const second = useMachineLoad();
+    second.start();
+    expect(second.load.value).toEqual(READING);
+    second.stop();
+  });
+
   // The one null that IS an answer: this host keeps no load average, so the gauge must go at once
   // rather than hold what it had.
   it("clears at once when the host reports no load average", async () => {

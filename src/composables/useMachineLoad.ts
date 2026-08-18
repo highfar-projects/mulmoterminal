@@ -55,6 +55,11 @@ export function useMachineLoad() {
     start(): void {
       watchers++;
       if (watchers > 1) return;
+      // Nothing ran while there was no watcher, so the held reading has been aging unchecked —
+      // a header remounted an hour later would otherwise draw that hour-old figure until its
+      // first request lands (Codex on #1791). The stale window is a promise about what is on
+      // screen, not about how often we poll.
+      dropIfStale();
       void poll();
       timer = setInterval(() => void poll(), REFRESH_MS);
     },
