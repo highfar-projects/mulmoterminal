@@ -59,7 +59,7 @@ that side is N→1 by definition however popular the stream gets.
     "read": ["questions"],
     "submit": {
       "votes": {
-        "auth": "verifiedEmail",
+        "auth": "anonymous",
         "idFrom": "auth.uid+field",
         "idField": "questionId",
         "stampField": "votedAt",
@@ -96,14 +96,18 @@ that side is N→1 by definition however popular the stream gets.
   that quietly do not keep the promise. An app declaring nothing is `1.0.0`, which is what every app
   published before this key existed is.
 
-- **`auth: "verifiedEmail"`** — what publish accepts today, and the cost to be aware of: **a viewer
-  has to sign in with Google before they can vote**. In a stream that loses people. See "the sign-in
-  question" below — the rules already implement the mode that avoids it, and publish does not yet
-  allow it, which is one line in `@receptron/sharedapp`.
+- **`auth: "anonymous"`** — **no sign-in screen.** The visitor's browser opens a session by itself,
+  and the uid it gets is real enough for the rules to build a document id out of, so one-vote-per-
+  question is still ENFORCED. This is the whole reason a stream can use this: a Google sign-in
+  between the question and the answer loses most of the room. It requires **the Anonymous provider
+  enabled in the Firebase console** — once per project, and nothing in the repository can do it for
+  you. See "the sign-in question" below for what `anonymous` is not.
 - **`idFrom: "auth.uid+field"` + `idField: "questionId"`** — the document id becomes
   `uid + "_" + questionId`, so a second vote on the same question is a create where a document
-  already exists. Firestore refuses it. **This is what "one vote per person per question" IS** — not
-  a check in the page, which anybody can skip.
+  already exists. Firestore refuses it. **This is what the once-per-question guarantee IS** — not a
+  check in the page, which anybody can skip. Under `anonymous` the uid belongs to a BROWSER, so what
+  is enforced is once per browser; under `verifiedEmail` the same declaration means once per account.
+  The mechanism does not change with the mode, only what the uid stands for.
 - **`validate.keyFields` on `choice`** — the rules refuse any value outside that list. So a vote
   carries an OPTION KEY (`"a"`…`"e"`), not the text of the option: the text is per question, and a rule
   can compare a field to a fixed set but not to a list living in another document. The question's
@@ -124,7 +128,7 @@ Say this out loud before using the shape, because the pages above make it look o
 
 | | enforced by | so |
 |---|---|---|
-| one vote per person per question | the RULES (`idFrom: "auth.uid+field"` — the id is `uid + "_" + questionId`) | a second vote is a create over an existing document, and Firestore refuses it |
+| one vote per BROWSER per question | the RULES (`idFrom: "auth.uid+field"` — the id is `uid + "_" + questionId`) | a second vote is a create over an existing document, and Firestore refuses it. Per browser, not per person, because this app is `anonymous` — see below |
 | `choice` is one of the five option keys | the RULES (`validate.keyFields`) | a fabricated option is REFUSED, not merely hidden from the tally |
 | `votedAt` is the server's clock | the RULES (`stampField`) | a page cannot backdate a vote |
 | only the fields declared | the RULES (`createFields` is their `hasOnly` list) | nothing else can be written |
@@ -154,19 +158,24 @@ collection the audience can read) and read the votes as records behind the `memb
 | mode | what it asks of a viewer | in a live stream |
 |---|---|---|
 | `verifiedEmail` | Google sign-in, address confirmed | **most viewers stop here** |
-| `none` | nothing | **one vote per person is unenforceable** — press it forty times |
+| `none` | nothing | **refused by publish** — with no uid, one vote per anybody is unenforceable |
 | `anonymous` | that a session exists (the browser makes one silently) | one vote per BROWSER per question, **with no sign-in screen** |
 
-`anonymous` is the mode this shape wants, and the front-end already does its half: it opens the
-session by itself, shows no sign-in screen, and says plainly that such an answer belongs to the
-browser rather than to an account (mulmoserver #202). What is missing is one line in
-`@receptron/sharedapp` — `authProblems` refuses to PUBLISH anything but `verifiedEmail`, deliberately
-and as a product decision, not a rules limitation. Until that is lifted this template declares
-`verifiedEmail`, which publishes; when it is lifted, change the one key and enable the Anonymous
-provider in the Firebase console once.
+`anonymous` is what this template declares, and every part of it is in place: the rules have always
+implemented the mode, the public page opens the session by itself and says plainly that such an answer
+belongs to the browser rather than to an account (mulmoserver #202), and publish accepts it
+(`@receptron/sharedapp` 0.13.0 — before that it refused everything but `verifiedEmail`).
 
-What `anonymous` is not: an identity. One vote per browser means a phone and a laptop vote twice, and
-an incognito window is a new browser.
+**One thing is not in the repository: the Anonymous provider has to be enabled in the Firebase
+console.** Once per project. Without it the sign-in fails at runtime with `auth/operation-not-allowed`
+and the page can only say that voting is unavailable — publish will not warn you, because nothing in
+a declaration can see a console setting.
+
+What `anonymous` is NOT: an identity. One vote per browser means a phone and a laptop vote twice, an
+incognito window is a third, and nobody's address is recorded. If the poll needs to know WHO answered
+— a graded quiz, a vote with a quorum, anything contested — that is a `verifiedEmail` app, and
+publish will make you say so: `anonymous` is refused alongside `emailField`, `audience: "participant"`
+and a `mail` queue, because an anonymous session has no address to put in any of them.
 
 ## .claude/skills/questions/schema.json
 
@@ -502,8 +511,8 @@ counts document — and nothing needs to, because the roster is the only audienc
 
 1. **`init`** — mints the `aid` and reserves the `slug`. **The reservation cannot be taken back**, so
    decide the slug first.
-2. **Tell the audience they will be asked to sign in** (or lift the gate and use `anonymous`, above —
-   in which case enable the Anonymous provider in the Firebase console before the stream, not during).
+2. **Enable the Anonymous provider in the Firebase console** — before the stream, not during. It is
+   the one step no file here can do, and without it every vote fails at sign-in.
 3. **Write the questions** into `questions` with `state: "draft"` — from the collection pane, or with
    `manageCollection`. Give them `order` in the sequence you will ask them.
 4. **`publish`** — the public page and the desk both appear.
@@ -514,9 +523,10 @@ counts document — and nothing needs to, because the roster is the only audienc
 
 - **No tally on the audience's page.** Not a limitation of the pages: it is the N→N fan-out, and
   publish refuses to declare it. Put the desk on the stream.
-- **One vote per ACCOUNT per question, while this declares `verifiedEmail`** — and every viewer has
-  to sign in first. On `anonymous` (see above) it becomes one vote per browser and no sign-in screen,
-  which is a different trade and the one a stream usually wants.
+- **One vote per BROWSER per question, not per person.** `anonymous` buys the missing sign-in screen
+  by giving up identity: a phone and a laptop are two votes, and an incognito window is a third. For a
+  stream that is the right trade; for anything contested, declare `verifiedEmail` and accept that most
+  of the room will not sign in.
 - **Nothing stops a vote on a question that is not open, or a `choice` nobody offered.** See "what
   the rules do and do not enforce" above — the declaration cannot express either, the desk ignores
   unknown choices, and a reopened question counts what arrived while it was shut.
