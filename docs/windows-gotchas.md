@@ -124,8 +124,8 @@ back, which is how a spec that already called it still compared `RUNNER~1` again
 
 ## Machine metrics
 
-**`os.loadavg()` always returns `[0, 0, 0]`.** Windows keeps no load average, and Node reports
-that by returning zeros rather than by failing — so a caller that trusts the numbers draws an idle
-machine on a machine it cannot see. Branch on `process.platform`, never on the values: an idle mac
+**`os.loadavg()` returns `[0, 0, 0]` on Windows** — and only there; macOS and Linux report the
+host's real figures. Windows keeps no load average, and Node says so by returning zeros rather than
+by failing — so a caller that trusts the numbers draws an idle machine on a machine it cannot see. Branch on `process.platform`, never on the values: an idle mac
 reports `0.00` too. → `keepsLoadAverage()` in `common/machineLoad.ts`, which is what makes the
 grid header's load read-out absent rather than `0%` there (#1786).
