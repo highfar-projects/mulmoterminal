@@ -883,5 +883,18 @@ repair made things worse — an `aid` was deleted and a second app was created b
   yet"; it no longer does, and treating it that way publishes an app with the collection missing.)
 - **Anything about permissions on `apps/{aid}`.** The `aid` in `app.json` is the app's identity.
   Removing it does not reset anything: the next `init` mints a NEW one and the old app stays where
-  it is, owned by nobody who can reach it. If a publish is refused, read what it says and fix that;
-  never edit the `aid` by hand.
+  it is, owned by nobody who can reach it. `publish` now refuses outright rather than minting one,
+  and that refusal is the answer — put the original value back (it is a committed file:
+  `git show HEAD:app.json`), do not invent one. If a publish is refused, read what it says and fix
+  that; never edit the `aid` by hand.
+- **And never delete the app document.** `apps/{aid}` is the parent the records, the schemas and
+  both page tiers (`member/*`, `roster/*`) are authorized THROUGH, and Firestore does not cascade.
+  Nothing here can delete it — the rules refuse it and this host is an ordinary rules-bound
+  client — but the Firebase console and `firebase firestore:delete --recursive` can, and while the
+  parent is missing every rules-bound reader is denied on them: the app's pages, the Collections
+  pane, these tools. `config/*` is the exception and it is not a comfort — its read is
+  `if true`, so the public projection carries on being served, while its write resolves through
+  the parent, so it cannot be fixed or withdrawn either. The records are still there, and re-creating the document under
+  the SAME aid (which is what publishing again does) reaches them once more — so the thing that
+  turns a scare into a loss is losing the aid, not the delete. To empty an app, delete its
+  records. To stop serving it, `unpublish`.
