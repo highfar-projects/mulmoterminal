@@ -508,9 +508,10 @@ Every line of that is load-bearing, and publish refuses the declaration without 
     address (`emailField`), sends mail, or admits people from its roster (`audience: "participant"`);
     publish refuses `anonymous` with any of those, because an anonymous session has no address.
   - **`anonymous`** — the browser opens a session by itself, no sign-in screen. The uid is real, so
-    `idFrom: "auth.uid"` / `"auth.uid+field"` still enforces one row per person. This is the mode for
-    an audience that must answer in the next ten seconds. What it is not is an identity: a phone and
-    a laptop are two people, an incognito window is a third, and nobody's address is recorded.
+    `idFrom: "auth.uid"` / `"auth.uid+field"` enforces one row **per anonymous uid — which is a
+    browser profile, not a person**. This is the mode for an audience that must answer in the next
+    ten seconds. Say the limit in those words when you offer it: the same person answers again from
+    their phone, and again in an incognito window, and no address is recorded anywhere.
   - **`none`** is refused: with no session there is no uid, so `idFrom` can only be `auto` and the
     same person can submit as often as they can press the button.
 - **`emailField` names the field their address lands in**, and it must be in `createFields`.
@@ -844,8 +845,12 @@ Three things are worth asking and the rest are not:
 
 - **their email address**, if you do not have it — nothing works without it in `members`;
 - **whether people outside the roster should be able to answer** — it decides whether there is a
-  `public` block at all. Ask it in those words: everyone who answers signs in with an email
-  address either way, so "public" here means "anyone who signs in", not "anonymous";
+  `public` block at all. If yes, ask the second half too, because it is the one that decides whether
+  they actually answer: **are they asked to sign in?** `verifiedEmail` means a Google sign-in and a
+  recorded address — the app can write to them, and one row per account. `anonymous` means no screen
+  at all and no address, at the price of one row per browser rather than per person (see the `auth`
+  list above). Put it to the user as what the moment is: a form somebody fills in over a week, or an
+  audience answering in ten seconds;
 - **whether the people who answer need to see their own answer later** (step 2c) — it decides what
   the PUBLIC page may be, which is not a thing to discover after writing one. Answering yes does
   not make the app invite-only: leaving the public page generated serves a respondent who is on no
