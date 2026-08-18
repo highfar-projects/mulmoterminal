@@ -20,12 +20,39 @@ import type { ShortcutKind } from "../../common/shortcuts";
 import SharedAppPreview from "./SharedAppPreview.vue";
 import { isRecord } from "../../common/isRecord";
 
-const props = defineProps<{ cwd: string | null }>();
+const props = defineProps<{ cwd: string | null; expanded?: boolean }>();
+
+// The pane-slot contract, the same one Tools / Canvas / Prompts / GitHub answer: the grid owns
+// the width and which pane is open, so both controls report rather than act.
+const emit = defineEmits<{ close: []; toggleExpand: [] }>();
 
 // ── this pane's own view state (the router's job, done locally) ──
 type PaneView = { mode: "index"; kind: ShortcutKind } | { mode: "detail"; kind: ShortcutKind; slug: string };
 const view = ref<PaneView>({ mode: "index", kind: "collection" });
 const selectedId = ref<string | null>(null);
+
+// Which of the pane's two faces is up: the app's pages, or the collections under them. Declared
+// with the view state rather than beside its probe below, because `navigated` clears it — a
+// navigation is a request for a COLLECTION, and it must not run before this exists.
+const declaresApp = ref(false);
+const previewing = ref(false);
+
+// Whether anything has NAVIGATED since this directory was opened. The shared-app default below
+// only applies to a pane nobody has steered yet, and "still on the index" is not that test:
+// `gotoIndex("feed")` and a deliberate return to the collections index both leave `mode ===
+// "index"`, so a probe still in flight would land on top of the view the user just chose.
+let viewTouched = false;
+
+/** Every navigation the plugin's views drive. It goes through here so that the two things a
+ *  navigation implies are said once: the pane is no longer showing the app's pages (the request
+ *  is FOR a collection, and leaving the preview up makes the click look like it did nothing),
+ *  and the pane has been steered, so the default must not fire over it. */
+function navigated(next: PaneView, itemId: string | null): void {
+  viewTouched = true;
+  previewing.value = false;
+  selectedId.value = itemId;
+  view.value = next;
+}
 
 const nav: CollectionNavSurface = {
   routeSlug: () => (view.value.mode === "detail" ? view.value.slug : undefined),
@@ -35,18 +62,15 @@ const nav: CollectionNavSurface = {
     selectedId.value = itemId;
   },
   gotoIndex: (kind) => {
-    selectedId.value = null;
-    view.value = { mode: "index", kind };
+    navigated({ mode: "index", kind }, null);
   },
   gotoDetail: (kind, slug) => {
-    selectedId.value = null;
-    view.value = { mode: "detail", kind, slug };
+    navigated({ mode: "detail", kind, slug }, null);
   },
   // A ref hop from one record to another: same pane, the target collection open with that record
   // selected. `recordId` is optional because a hop may target the collection itself.
   navigateToRecord: (targetSlug, recordId) => {
-    view.value = { mode: "detail", kind: "collection", slug: targetSlug };
-    selectedId.value = recordId ?? null;
+    navigated({ mode: "detail", kind: "collection", slug: targetSlug }, recordId ?? null);
   },
 };
 
@@ -82,8 +106,12 @@ watch(
     invalidateCheck();
     // The app is the DIRECTORY's, so a cwd change is a different app or none.
     void probeForApp(cwd ?? null);
-    // Reset the view: a slug open in one directory need not exist in the next.
-    nav.gotoIndex("collection");
+    // Reset the view: a slug open in one directory need not exist in the next. NOT through `nav`:
+    // this is the new directory's starting point, not a navigation within it, and routing it
+    // through there would mark the pane as steered and cancel its own default.
+    selectedId.value = null;
+    view.value = { mode: "index", kind: "collection" };
+    viewTouched = false;
   },
   { immediate: true },
 );
@@ -98,8 +126,6 @@ const unknownDirectory = computed(() => !resolving.value && projectId.value === 
 //
 // The probe is a separate, cheap route (one `stat`). Asking the preview route would compute a
 // whole publish projection, and open a Firestore session, to decide whether to draw a button.
-const declaresApp = ref(false);
-const previewing = ref(false);
 
 let probeGeneration = 0;
 async function probeForApp(cwd: string | null): Promise<void> {
@@ -110,7 +136,18 @@ async function probeForApp(cwd: string | null): Promise<void> {
   try {
     const res = await fetchWithTimeout(`/api/shared-app/declared?cwd=${encodeURIComponent(cwd)}`);
     const body: unknown = await res.json();
-    if (mine === probeGeneration) declaresApp.value = isRecord(body) && body.declared === true;
+    if (mine !== probeGeneration) return;
+    declaresApp.value = isRecord(body) && body.declared === true;
+    // In a directory that IS a shared app, the app is what the pane is for: the pages are the
+    // thing being worked on and the collections underneath them are its storage. So the preview
+    // is the DEFAULT view here, not a control you have to find — the collections stay one click
+    // away on the toolbar.
+    //
+    // Only for a pane nobody has steered yet, though. The probe is async, and a user who has
+    // navigated in the meantime — into a collection, to the feeds index, back to the collections
+    // index — has said what they want to look at; taking the screen off them after the fact is
+    // worse than not defaulting at all.
+    if (declaresApp.value && !viewTouched) previewing.value = true;
   } catch {
     // A directory whose app-ness could not be established simply shows no preview control. There
     // is nothing to tell the user here: they did not ask a question.
@@ -197,48 +234,95 @@ const SEVERITY_CLASS: Record<SelfContainmentSeverity, string> = {
 
 // The probe sits inside the PluginFrame shadow, which is what lets the composable resolve
 // this pane's shadow root as the record modal's teleport target.
+// The toolbar element the preview teleports its page picker into (see the toolbar template).
+const pickerSlot = ref<HTMLElement | null>(null);
+
 const probe = ref<HTMLElement>();
 useCollectionTeleportTarget(probe);
 </script>
 
 <template>
   <div class="flex h-full min-h-0 flex-col bg-panel" role="region" aria-label="Collections">
-    <div v-if="resolving" class="p-3 font-sans text-[12px] text-dim">Loading collections…</div>
+    <!-- The header recipe is the shared one — `bg-panel px-4 py-2 text-[14px]` with a bold title at
+         the left, exactly as Tools, Prompts, Question and Canvas have it. The panes take turns in
+         one slot, so a header of its own height or padding makes the whole pane jump as you switch
+         between them. The `border-b` is this pane's only addition: the others separate header from
+         body by background (bg-panel over bg-deep) and this one's body is bg-panel too.
+
+         The TOOLBAR is ALWAYS here — outside every state below it, because the
+         controls on its right are how the pane is resized and closed and those must not depend on
+         whether a directory resolved, declares an app, or is showing the preview. It used to render
+         only for a directory declaring a shared app, which meant the bar itself came and went as
+         you moved between cells and there was nowhere to put a control that is not about apps.
+
+         The control on the LEFT switches what fills the pane: "Previews" ON is the app's pages,
+         OFF is the collections underneath them. A checkbox rather than a button because it is a
+         state you can see the value of without pressing it. It appears only where an `app.json`
+         declares a shared app — everywhere else there are no pages and nothing to switch — and it
+         sits here rather than in the collection strip at the bottom because it is about the APP,
+         every collection it publishes and the pages built over them, not about the one collection
+         on screen. It starts ON: in a directory that IS a shared app, the pages are the thing
+         being worked on and the collections are their storage. -->
+    <div class="flex-none border-b border-border bg-panel px-4 py-2 font-sans text-[14px] text-fg">
+      <div class="flex items-center justify-between gap-2">
+        <!-- `min-w-0` on the left group and `shrink-0` on the right: the preview teleports a page
+             picker in here, and a select is as wide as its longest option. Without these the pane's
+             own expand and close are pushed off its right edge by a descriptive page id — controls
+             that are meant to be reachable in every state. -->
+        <div class="flex min-w-0 items-center gap-2">
+          <span class="font-semibold">Collections</span>
+          <label
+            v-if="declaresApp"
+            class="flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-dim"
+            title="Draw the pages publishing this app would put on screen. Nothing is written."
+          >
+            <input v-model="previewing" data-testid="collections-preview-toggle" type="checkbox" class="h-3.5 w-3.5 cursor-pointer accent-accent" />
+            Previews
+          </label>
+          <!-- Where the preview's PAGE PICKER lands. It is the preview's control and its state
+               lives there, so it is teleported in rather than lifted — but it belongs on this bar:
+               a second strip of chrome directly beneath this one was two toolbars saying different
+               halves of one thing. Empty, and so invisible, whenever the preview is not up. -->
+          <div ref="pickerSlot" class="flex min-w-0 items-center gap-2"></div>
+        </div>
+        <!-- Expand then close, in that order and with the same icons and classes as the Tools and
+             Canvas headers: the panes share one slot, so the same control must be in the same
+             place in each of them. -->
+        <div class="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            data-testid="collections-expand-btn"
+            class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
+            :title="expanded ? 'Restore the terminal beside the collections' : 'Expand the collections over the terminal'"
+            :aria-label="expanded ? 'Restore collections pane width' : 'Expand collections pane'"
+            :aria-pressed="expanded === true"
+            @click="emit('toggleExpand')"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">{{ expanded ? "close_fullscreen" : "open_in_full" }}</span>
+          </button>
+          <button
+            type="button"
+            data-testid="collections-close-btn"
+            class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
+            title="Close collections pane"
+            aria-label="Close collections pane"
+            @click="emit('close')"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div v-if="resolving" class="px-4 py-3 font-sans text-[12px] text-dim">Loading collections…</div>
     <!-- Not an error, and deliberately not the workspace's collections under this cell's name:
          a directory the server does not know has no collections of its own to show. -->
-    <div v-else-if="unknownDirectory" class="p-3 font-sans text-[12px] text-dim">
+    <div v-else-if="unknownDirectory" class="px-4 py-3 font-sans text-[12px] text-dim">
       This directory has no collections yet. Collections live in <code>.claude/skills</code> under the folder the cell is open in.
     </div>
-    <template v-else-if="previewing">
-      <div class="flex-none border-b border-border px-2.5 py-1.5 font-sans">
-        <button
-          type="button"
-          class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg hover:border-accent"
-          @click="previewing = false"
-        >
-          Back to collections
-        </button>
-      </div>
-      <div class="min-h-0 flex-1">
-        <SharedAppPreview :cwd="cwd" />
-      </div>
-    </template>
+    <div v-else-if="previewing" class="min-h-0 flex-1">
+      <SharedAppPreview :cwd="cwd" :picker-target="pickerSlot" />
+    </div>
     <template v-else>
-      <!-- The shared app this directory declares, if it declares one. ABOVE the collections rather
-           than below them: the pane's own surface fills the height, so a strip under it sat past
-           the fold and was not found at all. Its own control rather than part of the collection
-           strip at the bottom — the question is about the APP, every collection it publishes and
-           the pages built over them, not about the one collection on screen. -->
-      <div v-if="declaresApp" class="flex-none border-b border-border px-2.5 py-1.5 font-sans">
-        <button
-          type="button"
-          class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg hover:border-accent"
-          title="Draw the pages publishing this app would put on screen. Nothing is written."
-          @click="previewing = true"
-        >
-          Preview the shared app
-        </button>
-      </div>
       <div class="min-h-0 flex-1">
         <PluginFrame :css="collectionShadowCss" height="100%">
           <div ref="probe" style="height: 100%">
@@ -251,10 +335,11 @@ useCollectionTeleportTarget(probe);
       <!-- The portability check, on a strip of its own below the plugin's own surface: it is the
            HOST's question about the collection (does it survive a clone), not part of the
            collection's data, and it must not be inside the shadow root the package styles. -->
-      <div v-if="openSlug" class="flex-none border-t border-border px-2.5 py-1.5 font-sans">
+      <div v-if="openSlug" class="flex-none border-t border-border px-4 py-2 font-sans">
         <div class="flex items-center gap-2">
           <button
             type="button"
+            data-testid="collections-portability-btn"
             class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg hover:border-accent disabled:cursor-default disabled:opacity-60"
             :disabled="checking"
             :aria-busy="checking"
