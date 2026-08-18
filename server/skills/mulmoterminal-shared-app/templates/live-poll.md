@@ -63,7 +63,10 @@ that side is N→1 by definition however popular the stream gets.
         "idFrom": "auth.uid+field",
         "idField": "questionId",
         "stampField": "votedAt",
-        "createFields": ["questionId", "choice", "votedAt"]
+        "createFields": ["questionId", "choice", "votedAt"],
+        "validate": {
+          "keyFields": [{ "field": "choice", "values": ["a", "b", "c", "d", "e"] }]
+        }
       }
     }
   },
@@ -101,6 +104,12 @@ that side is N→1 by definition however popular the stream gets.
   `uid + "_" + questionId`, so a second vote on the same question is a create where a document
   already exists. Firestore refuses it. **This is what "one vote per person per question" IS** — not
   a check in the page, which anybody can skip.
+- **`validate.keyFields` on `choice`** — the rules refuse any value outside that list. So a vote
+  carries an OPTION KEY (`"a"`…`"e"`), not the text of the option: the text is per question, and a rule
+  can compare a field to a fixed set but not to a list living in another document. The question's
+  `choices` are the labels for `a`, `b`, `c`… in order, and both pages map between them. **Five options
+  is the cap** — add keys to raise it, and note that the rules allow at most two `keyFields` and unroll
+  them (`keyFieldsOk`).
 - **`stampField: "votedAt"`** — the rules pin it to the SERVER's clock and freeze it. The page must
   not send a value (it will be refused); it sends the two fields it has, and the parent supplies the
   sentinel.
@@ -116,27 +125,27 @@ Say this out loud before using the shape, because the pages above make it look o
 | | enforced by | so |
 |---|---|---|
 | one vote per person per question | the RULES (`idFrom: "auth.uid+field"` — the id is `uid + "_" + questionId`) | a second vote is a create over an existing document, and Firestore refuses it |
+| `choice` is one of the five option keys | the RULES (`validate.keyFields`) | a fabricated option is REFUSED, not merely hidden from the tally |
 | `votedAt` is the server's clock | the RULES (`stampField`) | a page cannot backdate a vote |
 | only the fields declared | the RULES (`createFields` is their `hasOnly` list) | nothing else can be written |
-| **the question is OPEN** | **nothing** | a vote can be written for a `draft`, `closed` or nonexistent question id |
-| **`choice` is one the question offered** | **nothing** | any string can be written there |
+| **the question is the one the host is on** | **nothing, in this declaration** | a vote can be written for a `draft`, `closed` or nonexistent question id |
 
-The last two are not oversights and they are not fixable in the declaration: a rule can compare a
-field to the SAME document's other fields and to the app document, and `questions` is neither — the
-state and the choice list live in a row the vote does not point the rules at. There is no per-record
-gate for "the row this one names is in state X".
+**Decide about the last row before using this for anything contested**, and know exactly where it
+stands: the rules HAVE the mechanism. `gateOn: { phase, match }` requires `apps/{aid}/session/current`
+to be in a named phase AND its `current` to equal the submitted field — literally "the record must be
+for the question the host is currently on", enforced on the server. What is missing is the other half:
+**nothing in MulmoTerminal writes that session document yet.** Declared today, `gateOn` refuses every
+vote (the gate requires the document to exist), so this template does not declare it — a poll that
+accepts nothing is worse than one that accepts a late vote.
 
-So what is true is this: **the page is the only thing that decides which question you can answer, and
-a page can be bypassed.** The desk therefore counts only what it recognises — `drawTally` below
-ignores any `choice` the question did not declare — and a question REOPENED after being closed shows
-the votes cast in between, because they were accepted when they arrived. If a poll's outcome has to be
-defensible against a participant who opens the console, this shape is not it; put the answers behind a
-`member` page and read them as records, or close the poll by publishing the result rather than by a
-state nobody enforces.
+Until it exists, this is true and belongs in front of whoever runs the poll: **the page decides which
+question you can answer, and a page can be bypassed.** A vote sent for a closed question is accepted,
+and appears if that question is reopened. The ordinary version is not an attack at all — the host
+closes a question while somebody's confirmation dialog is open, and that vote lands a second late.
 
-What the two really cost, in practice: a late vote (the host closes the question while somebody's
-confirmation dialog is open) and a made-up option (somebody calls the bridge by hand). The first is
-ordinary and the tally simply includes it; the second never reaches the screen.
+So: fine for a stream, a class, a retro. **Not** for anything whose outcome somebody would contest.
+There, do not publish the state as the gate — publish the RESULT when a question is done (a row in a
+collection the audience can read) and read the votes as records behind the `member` page.
 
 ### The sign-in question, which decides whether an audience actually votes
 
@@ -177,8 +186,11 @@ an incognito window is a new browser.
 }
 ```
 
-`choices` is one text field, one choice per line — not a list, because the collection pane edits it
-as a textarea and a host writes questions minutes before using them.
+`choices` is one text field, one option per line — not a list, because the collection pane edits it as
+a textarea and a host writes questions minutes before using them. **The lines are the labels for the
+option keys `a`…`e`, in order**, and a sixth line is not offered by the pages: a vote for it would be
+refused by the rules (`validate.keyFields`), and drawing an option nobody can choose is worse than not
+drawing it.
 
 `order` decides which question the audience sees when more than one is `open`. "One at a time" is the
 desk's discipline, not something the rules keep.
@@ -194,11 +206,15 @@ desk's discipline, not something the rules keep.
   "fields": {
     "id": { "type": "string", "label": "ID", "primary": true, "required": true },
     "questionId": { "type": "string", "label": "Question ID", "required": true },
-    "choice": { "type": "string", "label": "Choice", "required": true },
+    "choice": { "type": "string", "label": "Option key (a–e)", "required": true },
     "votedAt": { "type": "datetime", "label": "Voted at (server)", "required": true }
   }
 }
 ```
+
+`choice` is the KEY, not the text — the rules accept only `a`…`e` (`validate.keyFields`), and the
+question's lines say what each one meant at the time. Reading the records later therefore means reading
+them beside the question, which is also what keeps a reworded option from rewriting history.
 
 There is no voter field, and that is deliberate: the id carries the uid, and an anonymous uid names
 nobody. A poll that needs to know who answered is a `verifiedEmail` app, and a different template.
@@ -253,11 +269,18 @@ of them is something a page that reads once never has to think about:
     document.getElementById("notice").textContent = message ?? "";
   };
 
-  const choicesOf = (question) =>
+  // The five keys the RULES accept for `choice` (`validate.keyFields`). A vote carries the key; the
+  // question's lines are the labels for them, in order. Anything past the fifth line is not offered,
+  // because a vote for it would be refused — better not to draw it than to draw a dead option.
+  const KEYS = ["a", "b", "c", "d", "e"];
+
+  const optionsOf = (question) =>
     String(question.choices ?? "")
       .split("\n")
       .map((line) => line.trim())
-      .filter((line) => line !== "");
+      .filter((line) => line !== "")
+      .slice(0, KEYS.length)
+      .map((label, index) => ({ key: KEYS[index], label }));
 
   /** The question on screen: the lowest `order` among the open ones. */
   const openQuestion = (rows) =>
@@ -272,17 +295,19 @@ of them is something a page that reads once never has to think about:
     // textContent, never innerHTML: the question and its choices are typed by a person, and this
     // page is public. A choice containing markup would otherwise run in every viewer's browser.
     host.textContent = "";
-    for (const [index, choice] of choicesOf(question).entries()) {
+    for (const option of optionsOf(question)) {
       const line = document.createElement("label");
       const radio = document.createElement("input");
       radio.type = "radio";
       // One name for the whole question, which is what groups radios. No <form> — the sandbox has
       // no `allow-forms`, and a form here would submit nothing.
       radio.name = "choice";
-      radio.value = choice;
-      radio.id = `choice-${index}`;
+      // The KEY is what travels, because it is what the rules accept. The label is what is read.
+      radio.value = option.key;
+      radio.id = `choice-${option.key}`;
+      radio.dataset.label = option.label;
       const caption = document.createElement("span");
-      caption.textContent = choice;
+      caption.textContent = option.label;
       line.append(radio, caption);
       host.append(line);
     }
@@ -344,8 +369,9 @@ of them is something a page that reads once never has to think about:
     sending = false;
     if (answer?.ok) {
       // Rule 3: remember it. The visitor cannot read the votes back — that is the whole point of
-      // `submitOnly` — so nothing in the next snapshot would tell the page this happened.
-      voted.set(questionId, picked.value);
+      // `submitOnly` — so nothing in the next snapshot would tell the page this happened. The LABEL
+      // is remembered, not the key: it is what the visitor chose to read.
+      voted.set(questionId, picked.dataset.label ?? picked.value);
       if (shownId === questionId) {
         drawVoted(questionId);
       }
@@ -376,11 +402,15 @@ counts document — and nothing needs to, because the roster is the only audienc
     document.getElementById("say").textContent = message ?? "";
   };
 
-  const choicesOf = (question) =>
+  const KEYS = ["a", "b", "c", "d", "e"];
+
+  const optionsOf = (question) =>
     String(question.choices ?? "")
       .split("\n")
       .map((line) => line.trim())
-      .filter((line) => line !== "");
+      .filter((line) => line !== "")
+      .slice(0, KEYS.length)
+      .map((label, index) => ({ key: KEYS[index], label }));
 
   const openQuestion = (questions) =>
     questions
@@ -397,12 +427,12 @@ counts document — and nothing needs to, because the roster is the only audienc
       host.append(Object.assign(document.createElement("p"), { textContent: "No question is open." }));
       return;
     }
-    const counts = new Map(choicesOf(question).map((choice) => [choice, 0]));
+    const options = optionsOf(question);
+    const counts = new Map(options.map((option) => [option.key, 0]));
     for (const vote of votes.filter((row) => row.questionId === question.id)) {
-      // Only a choice this question DECLARED is counted. The rules cannot check `choice` against a
-      // list that lives in another document, so anything can be written there — see "what the rules
-      // do and do not enforce" above. Counting `counts.get(...) ?? 0` for an unknown value would put
-      // a made-up option on the screen the stream is showing.
+      // Only a key this question OFFERS is counted. The rules already refuse a `choice` outside
+      // `validate.keyFields`, so this is not the security boundary — it is the case of a question
+      // with three options and a vote for `d`, cast against an earlier version of the question.
       if (counts.has(vote.choice)) {
         counts.set(vote.choice, counts.get(vote.choice) + 1);
       }
@@ -410,10 +440,12 @@ counts document — and nothing needs to, because the roster is the only audienc
     const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
     host.append(Object.assign(document.createElement("h2"), { textContent: question.text ?? question.id }));
     host.append(Object.assign(document.createElement("p"), { textContent: `${total} vote(s)` }));
-    for (const [choice, count] of counts) {
+    for (const option of options) {
+      const count = counts.get(option.key) ?? 0;
       const row = document.createElement("p");
       const share = total === 0 ? 0 : Math.round((count / total) * 100);
-      row.textContent = `${choice} — ${count} (${share}%)`;
+      // The LABEL on the screen that goes on the stream; the key is machinery.
+      row.textContent = `${option.label} — ${count} (${share}%)`;
       host.append(row);
     }
   };
