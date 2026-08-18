@@ -8,8 +8,9 @@ description: A browser-terminal cockpit for running several AI coding agents (Cl
 
 # MulmoTerminal Guide (English)
 
-> 🆕 **4.9.0 is out.** A pane listing the prompts you sent a cell — press `forum` on an
-> enlarged cell. Nothing to configure — [what's new and where to find it](v4.9.0.html).
+> 🆕 **4.10.0 is out.** The grid header now carries this machine's load average beside the usage
+> gauges — amber at 100% of your cores, red at 200%. Nothing to configure —
+> [what's new and where to find it](v4.10.0.html).
 
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and

@@ -8,6 +8,82 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.10.0 — 2026-08-19
+
+> **Setup guide:** [The machine's own load, in the header](https://receptron.github.io/mulmoterminal/guide/en/v4.10.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.10.0.html))
+
+One number added to the grid header, one pane tidied, a Claude session readable from the phone,
+and the shared-app format moved to `sharedapp` 0.13.
+
+### The machine's load, beside the usage gauges (#1786, #1791)
+
+"May I start another agent right now?" is a question about **this machine**, and it was the one
+number the grid header did not carry. It does now: `load 334%` sits beside the 5h / 7d windows, as
+a **percentage of the cores** — 66.8 runnable processes on a 20-core machine. 100% means every core
+has work queued and one more cell slows the ones already running (amber); 200% means everything is
+waiting for a core (red). Hover gives the raw 1 / 5 / 15-minute figures, the core count and the
+multiplier.
+
+It reads `os.loadavg()` on the host running the sessions, polled every 10 seconds through a new
+`GET /api/load`, and the reading it shows is never more than 60 seconds old — a failed poll holds
+the last figure through a blip, and a remount gets back the *remainder* of that window rather than
+a fresh one. **A host that keeps no load average shows nothing rather than `0%`**: Windows returns
+`[0, 0, 0]` there, and an idle machine and an unmeasurable one must not look alike.
+
+Switch it off with `"showLoadAverage": false`, or the checkbox in Settings → **Grid header
+read-outs** — a new pane under Appearance.
+
+### The collections pane has one toolbar (#1784)
+
+The bar used to be drawn only in a directory that declared a shared app, so it appeared and
+disappeared as you moved between cells and there was nowhere to put anything that was not about an
+app. Now the bar is always there and only the individual controls come and go; **expand** and
+**close** live in it, and a preview opens by default.
+
+### A Claude session, read from the phone (#1751, #1776)
+
+The phone's remote terminal could only ever show the **current screen** of a Claude cell — claude
+runs on the alternate screen, so there is no scrollback to fetch and `capture-pane` returns the
+30–41 rows of the pane. The host now answers `getTerminalTranscript`, reading claude's own
+transcript instead of the pane, so the phone client can page back through the conversation.
+
+### Shared apps (#1764, #1770, #1774, #1781, #1790, #1792, #1793, #1794, #1795)
+
+- **The headless preview is the pane's preview.** Both run the same `@receptron/sharedapp/view`
+  modules that `mulmoserver`'s public page runs, so what an LLM is shown headlessly and what a
+  person sees differ only in the chrome the host wraps around them (#1764, #1770).
+- **`sharedapp` 0.11 → 0.13.** Live views are declarable and checked (#1790), a projection now
+  carries the `protocol` — the publish contract's version — so a document says which rules it was
+  written under (#1794), and the deployment/capabilities gate was dropped: the question it asked
+  ("what can this deployment serve?") was the wrong one, and the document itself answers the right
+  one at the moment it is drawn (#1793).
+- **Templates that say who reads the answers.** Some published apps had one public page and no
+  place to read what came back; the form-shaped templates now ship all three views (#1774), and a
+  live-poll template was added (#1792) and made anonymous (#1795).
+- **`aid` cannot be minted twice.** "It is stuck, let me delete the `aid`" is exactly what an agent
+  reaches for, and publishing then silently minted a second app. Publish now refuses instead, and a
+  partial state is handed the steps that recover it (#1781).
+
+### Fixes
+
+- **A cell's title is read, not generated (#1769, #1772).** The `claude -p` session that existed
+  only to write a cell heading ran `git restore` and `git push origin main` in the working
+  repository. The title now comes from the transcript, so nothing is spawned to produce it.
+- **The launcher no longer comes up empty (#1771).** The saved-directory chips, the WORKSPACE chip
+  and a dozen global settings all come from one `GET /api/config` issued once at boot; a backend
+  still restarting answered nothing and the row stayed blank until a reload. The request retries.
+- **Codex "OR RESUME HERE" shows your own conversations (#1777, #1782).** The cwd filter ran after
+  the overall scan limit, so subagent rollouts filled the list and the entries all read
+  `Codex session`.
+- **`yarn dev`: HTML outside `artifacts/` opens in the Canvas again (#1758, #1775).** The Vite dev
+  proxy had no `/htmlfile` entry, so the SPA catch-all answered with the app's own `index.html` and
+  the sandboxed iframe failed on CORS.
+
+### Docs (#1767, #1780)
+
+The 4.9.0 guide no longer describes the shared-app work that did not ship in it, and the primary
+material that had misled four external reviews was corrected.
+
 ## mulmoterminal@4.9.0 — 2026-08-17
 
 > **Setup guide:** [The prompts pane](https://receptron.github.io/mulmoterminal/guide/en/v4.9.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.9.0.html))
