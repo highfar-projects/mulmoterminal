@@ -305,6 +305,28 @@ describe("shared app publish / unpublish", () => {
     expect(result.ok === false && result.partial).toBe(true);
     expect(docs.app()).not.toHaveProperty("public");
     expect(result.ok === false && result.problems.join("\n")).toContain("Written by this publish, and live now");
+    // And the two repairs that cannot be taken back are named, because a half-written app is
+    // exactly the state they are reached for.
+    const said = result.ok === false ? result.problems.join("\n") : "";
+    expect(said).toContain(`Do not delete apps/${AID}`);
+    expect(said).toContain("The records are not gone with it");
+  });
+
+  it("refuses to publish a declaration whose aid was removed, rather than minting a second app", async () => {
+    // The recovery an agent reaches for — "it is stuck, clear the aid and publish again" — used to
+    // work: `ensureAid` minted one, and the app holding everybody's records was left behind with
+    // nothing pointing at it. Publish's question is not "is there an id?" but "is this the app?".
+    const noAid = declaration();
+    delete noAid.aid;
+    writeApp(root, noAid);
+
+    const result = await publishSharedApp(root, stamp);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.partial).toBe(false);
+    expect(result.ok === false && result.problems.join("\n")).toContain("publish will not generate one");
+    // Nothing was written, and app.json was not "helpfully" completed either.
+    expect(docs.writes).toEqual([]);
+    expect(JSON.parse(readFileSync(path.join(root, "app.json"), "utf-8"))).not.toHaveProperty("aid");
   });
 
   it("keeps a live app open when it is published again", async () => {
@@ -491,6 +513,29 @@ describe("shared app publish / unpublish", () => {
     expect(docs.doc("appSlugs", "sakura-hair-2")).toBeUndefined();
   });
 
+  it("does not tell a name-only refusal that its writes are live", async () => {
+    // `partial` from the reservation means "the app is written, this is only its public name" —
+    // and on this path nothing was written at all. The half-published advice (publish again, it
+    // re-does every step) would contradict the line above it, which correctly says to take a
+    // different name, and would claim writes that never happened.
+    writeApp(root, declaration({ slug: "sakura-hair" }));
+    await publishSharedApp(root, stamp);
+    const app = docs.app();
+    if (app) delete app.slug;
+    // Every candidate belongs to somebody else: the app's own reclaim is refused too.
+    for (const name of ["sakura-hair", ...Array.from({ length: 7 }, (_, index) => `sakura-hair-${index + 2}`)]) {
+      docs.store.get("appSlugs")?.set(name, { aid: "somebody-else", published: false });
+    }
+    const before = docs.writes.length;
+
+    const result = await publishSharedApp(root, stamp);
+    expect(result.ok).toBe(false);
+    const said = result.ok === false ? result.problems.join("\n") : "";
+    expect(said).toContain("every candidate for the URL name is taken");
+    expect(said).not.toContain("writes already landed");
+    expect(docs.writes).toHaveLength(before);
+  });
+
   it("never leaves a resolving name the app document does not know about", async () => {
     // The rename that fails between the reservation and the record. The new name is reserved
     // UNPUBLISHED whatever the app's state, so this window is a name that opens nothing — not a
@@ -507,6 +552,10 @@ describe("shared app publish / unpublish", () => {
     expect(failed.ok).toBe(false);
     expect(docs.doc("appSlugs", "sakura-salon")).toEqual({ aid: AID, published: false });
     expect(docs.doc("appSlugs", "sakura-hair")).toEqual({ aid: AID, published: false });
+    // A rename takes an IRREVERSIBLE reservation, and this app already existed — so there is no
+    // `established` to notice the write by. The failure has to say what is standing all the same,
+    // or the run that did the one thing that cannot be undone is the one that says least about it.
+    expect(failed.ok === false && failed.problems.join("\n")).toContain("writes already landed");
 
     // And publishing again repairs it: the reservation is reclaimed, recorded, and flipped.
     docs.failAt = null;
@@ -515,6 +564,25 @@ describe("shared app publish / unpublish", () => {
     expect(repaired.ok === true && repaired.slug).toBe("sakura-salon");
     expect(docs.doc("appSlugs", "sakura-salon")).toEqual({ aid: AID, published: true });
     expect(docs.app()?.slug).toBe("sakura-salon");
+  });
+
+  it("tells a rename that could not retire the old name to keep the new one", async () => {
+    // The new reservation is already taken AND already in app.json; only the old name is
+    // unfinished. So the edit this failure invites — "the name did not work, try another" — is
+    // exactly the one that strands an irreversible reservation.
+    writeApp(root, declaration({ slug: "sakura-hair", public: { enabled: true, read: ["bookings"] } }));
+    await publishSharedApp(root, stamp);
+
+    writeApp(root, declaration({ slug: "sakura-salon", public: { enabled: true, read: ["bookings"] } }));
+    docs.failAt = "appSlugs/sakura-hair";
+    const failed = await publishSharedApp(root, stamp);
+
+    expect(failed.ok).toBe(false);
+    const said = failed.ok === false ? failed.problems.join("\n") : "";
+    expect(said).toContain("could not be retired");
+    expect(said).toContain("Changing `slug` in app.json is the one edit that would strand 'sakura-salon'");
+    expect(said).toContain("writes already landed");
+    expect(docs.doc("appSlugs", "sakura-salon")).toEqual({ aid: AID, published: false });
   });
 
   it("stops the previous name from resolving when the app is renamed", async () => {

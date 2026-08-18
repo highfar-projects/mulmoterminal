@@ -11,6 +11,7 @@
 // document exists is denied rather than mis-authorized.
 import { APPS_COLLECTION } from "@receptron/sharedapp";
 import type { SharedAppFailure, SharedAppHandle } from "./context.js";
+import { heldSlug, neverRemove } from "./recovery.js";
 import { reserveSlug, retireSlug, type SlugResult } from "./slug.js";
 
 /** What a reservation needs to know. */
@@ -53,9 +54,14 @@ export async function reserveHeldSlug({ handle, aid, root, wanted, held, appDoc 
       return {
         ok: false,
         partial: true,
+        claimed: reservation.slug,
         problems: [
           `the URL name '${reservation.slug}' was reserved, but the previous name '${held}' could not be retired: ${err instanceof Error ? err.message : String(err)}`,
           `Run it again — until '${held}' is closed it still resolves to this app, and later unpublishes would not touch it.`,
+          // The NEW name is already taken and already in app.json — only the old one is unfinished
+          // — so the edit this failure invites (change `slug` and try a different name) is the one
+          // that strands it. Same guidance as the record failure below, for the same reason.
+          ...heldSlug(reservation.slug),
         ],
       };
     }
@@ -66,9 +72,14 @@ export async function reserveHeldSlug({ handle, aid, root, wanted, held, appDoc 
     return {
       ok: false,
       partial: true,
+      claimed: reservation.slug,
       problems: [
         `the URL name '${reservation.slug}' was reserved and written to app.json, but recording it on apps/${aid} failed: ${err instanceof Error ? err.message : String(err)}`,
         "Run it again — the reservation is this app's, and the next run recognises that rather than taking a numbered name.",
+        // Said HERE and not at the operation's edge, because here it is known that a name was
+        // actually taken: a failure that reserved nothing (every candidate belonged to somebody
+        // else) ends with the opposite advice, and appending this to both would contradict it.
+        ...heldSlug(reservation.slug),
       ],
     };
   }
@@ -125,7 +136,19 @@ export async function holdNewName(
     return {
       ...held,
       partial: true,
-      problems: [...held.problems, `The app exists (apps/${aid}) and app.json is written. It holds no URL name yet — publish reserves it.`],
+      problems: [
+        ...held.problems,
+        // PUBLISH, and not "run it again". By the time this is reached the app document is live
+        // and `app.json` is written, which is exactly the state both entry points refuse: `init`
+        // will not touch a repository that already declares an app, and `fork` will not fork one
+        // the signed-in address now owns. Publish is the only operation that resumes the
+        // reservation, and telling the author otherwise sends them into a refusal that reads like
+        // a second failure.
+        `The app itself is fine: apps/${aid} exists and app.json is written — this is the URL name and nothing else. \`publish\` retries just this step; re-running \`init\` or \`fork\` will not, because the app they refuse to overwrite is now this one.`,
+        // `neverRemove` and not `strandedApp`: this app document is the repository's own and it is
+        // in use. What carries over is only the pair of repairs that are not repairs.
+        ...neverRemove(aid),
+      ],
     };
   }
   return { ok: true, slug: held.slug };
