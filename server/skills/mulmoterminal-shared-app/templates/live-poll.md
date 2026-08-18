@@ -470,6 +470,10 @@ of them is something a page that reads once never has to think about:
       return;
     }
     const questionId = shownId;
+    // SNAPSHOT, taken before anything is awaited. The host can advance the poll while a write or a
+    // read-back is in flight, and `shownQuestion` is then the NEXT question — mapping a recovered
+    // key against it stores somebody's answer as a label they never saw.
+    const submitted = shownQuestion;
     sending = true;
     document.getElementById("send").disabled = true;
     notice("Sending…");
@@ -505,7 +509,7 @@ of them is something a page that reads once never has to think about:
     if (after?.known && after.found) {
       // A row IS there: either they answered before, or this write landed and something after it
       // failed. Either way their vote counts, and this is their answer.
-      const option = optionsOf(shownQuestion ?? {}).find((one) => one.key === after.record?.choice);
+      const option = optionsOf(submitted ?? {}).find((one) => one.key === after.record?.choice);
       voted.set(questionId, option?.label ?? after.record?.choice ?? "");
       if (shownId === questionId) {
         drawVoted(questionId);
