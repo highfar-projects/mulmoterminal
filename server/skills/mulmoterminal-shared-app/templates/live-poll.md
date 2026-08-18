@@ -151,38 +151,48 @@ So: fine for a stream, a class, a retro. **Not** for anything whose outcome some
 There, do not publish the state as the gate — publish the RESULT when a question is done (a row in a
 collection the audience can read) and read the votes as records behind the `member` page.
 
-### What a reload costs, and why the page cannot fix it
+### What a reload costs, and the two things that answer it
 
 **A published page cannot remember anything by itself.** The sandbox gives it an opaque origin, so
 `localStorage`, `sessionStorage` and `document.cookie` all raise `SecurityError` — measured, not
-assumed. Reload and the page is new-born.
+assumed. Reload and the page is new-born. Everything it knows about "have I answered?" comes from the
+parent, and there are two ways to get it.
 
-The only memory it has is the parent's. The public page hands a view `viewer.mine` — the rows this
-visitor has already submitted, projected to the fields the page could have sent (mulmoserver #207) —
-and for `idFrom: "auth.uid"` that answers "have I answered?" exactly.
+**`viewer.mine`, with the state.** The rows this visitor has already submitted, projected to the
+fields the page could have sent. It answers for `idFrom: "auth.uid"` exactly — and for
+`auth.uid+field` it cannot, because finding those rows means asking for a RANGE of document ids and
+rules cannot authorize a list that way: for a list the `{itemId}` wildcard is never bound, so every
+branch of `ownRow` that names it is false however the query is written. A read-only prefix branch was
+added to the rules and tried against the emulator; it made no difference. The limit is pinned in
+mulmoserver's `test/rules/rules_ownReadback.ts`.
 
-**For `auth.uid+field` it cannot answer, and the reason is permanent.** The ids are
-`uid + "_" + <field>`, so finding them means asking for a RANGE of document ids — and rules cannot
-authorize a list that way: for a list the `{itemId}` wildcard is never bound, so every branch of
-`ownRow` that names it is false however the query is written. A read-only prefix branch was added to
-the rules and tried against the emulator; it made no difference. An anonymous session has no address
-to query by either. The limit is pinned in mulmoserver's `test/rules/rules_ownReadback.ts`.
+**`view.mine(cid, key)`, on demand — which is what this shape uses.** A document GET is granted (the
+same emulator run shows it), and the only thing missing was the key: the parent cannot enumerate the
+question ids, and the page is looking at one. So the page asks about the question it is showing, the
+parent builds `uid + "_" + key` and reads that one document.
 
-So on this shape, after a reload:
+```js
+const answer = await view.mine("votes", question.id);
+// { known: true, found: true, record: { choice: "b" } }
+```
 
-1. the page shows the vote again (it has no way to know)
-2. the visitor votes, and the rules refuse it — correctly, because they are what enforces one per
-   question
-3. **the page must turn that refusal into a sentence, and stop asking.** Not a raw permission error,
-   and not a button they can press again to be refused again
+**Three answers, and only one of them is "no".**
 
-`views/poll.html` below does that. The distinction it makes is the one that matters: a visitor who
-CANCELLED the confirmation (`cancelled`), or pressed while one was open (`busy`), has not been
-refused anything — count those as a refusal and somebody who changed their mind can never vote.
+| | means | the page should |
+|---|---|---|
+| `known: false` | nobody looked — an older host, a read that failed | leave the vote on offer |
+| `known: true, found: false` | this visitor really has not answered | leave the vote on offer |
+| `known: true, found: true` | they have | show it back, before they press |
 
-Closing the gap for good needs the declaration to say where the field's values come from, so the
-parent can `get` `uid_q1`, `uid_q2`… one at a time — a document get IS granted (the same emulator
-run shows it). That key does not exist yet.
+Reading `known: false` as "you have not answered" is the one mistake that matters: it takes the vote
+away from somebody entitled to it. Leaving it on offer costs at most one refused press, and the page
+handles that below.
+
+**Which is why the refusal handling stays.** The ask can be unavailable (an older host), and a vote
+can still be refused for a reason nobody predicted. When that happens the page turns it into a
+sentence and stops asking — and it separates the refusals that are not refusals at all: a visitor who
+CANCELLED the confirmation (`cancelled`), or pressed while one was open (`busy`), has not been refused
+anything. Count those as a refusal and somebody who changed their mind can never vote.
 
 ### The sign-in question, which decides whether an audience actually votes
 
@@ -273,9 +283,10 @@ of them is something a page that reads once never has to think about:
 3. **Show that a vote landed even though the page will keep receiving updates.** The visitor's own
    vote is not in what they can read (`votes` is not public), so the page remembers it — in a
    variable, because there is nowhere else (see rule 4).
-4. **Handle the refusal, because a reload will produce one.** Everything the page remembers is gone
-   on reload, and this shape cannot get it back: see "what a reload costs" below. So the page offers
-   the vote again, the rules refuse it, and what the visitor reads at that moment is the whole
+4. **Ask before offering, because a reload wipes everything the page knows.** `view.mine("votes",
+   question.id)` is how it finds out, and the answer has three states rather than two — see "what a
+   reload costs" above. Handle the refusal as well: the ask can be unavailable, and a vote can be
+   refused for a reason nobody predicted. What the visitor reads at that moment is the whole
    difference between a working poll and a broken one.
 
 ```html
@@ -307,6 +318,9 @@ of them is something a page that reads once never has to think about:
   // changed their mind unable to vote at all.
   const refused = new Set();
   const RETRYABLE = new Set(["cancelled", "busy"]);
+  // Questions already put to the parent. A mark that the ASK happened, not a memory of the answer:
+  // the answer lands in `voted`, or nowhere at all when nobody knows.
+  const asked = new Set();
   let shownId = null;
   let shownSignature = null;
   let sending = false;
@@ -385,6 +399,39 @@ of them is something a page that reads once never has to think about:
     show("voted");
   };
 
+  // Rule 4: ask the parent about THIS question, once. The answer arrives a turn later and switches
+  // the page if it says so; nothing waits for it, because a page that blocks on a read shows an
+  // audience a spinner where the question should be.
+  //
+  // `known` is the field to read first. False means nobody looked — an older host, a read that was
+  // refused — and treating that as "you have not answered" is the one mistake that takes the vote
+  // away from somebody entitled to it.
+  const askIfAnswered = (question) => {
+    if (asked.has(question.id) || voted.has(question.id) || refused.has(question.id)) {
+      return;
+    }
+    if (typeof view.mine !== "function") {
+      return; // an older runtime; the refusal path below is what covers it
+    }
+    asked.add(question.id);
+    view
+      .mine("votes", question.id)
+      .then((answer) => {
+        if (!answer?.known || !answer.found) {
+          return;
+        }
+        // The record carries the KEY. The label for it is in the question on screen.
+        const option = optionsOf(question).find((one) => one.key === answer.record?.choice);
+        voted.set(question.id, option?.label ?? answer.record?.choice ?? "");
+        if (shownId === question.id) {
+          drawVoted(question.id);
+        }
+      })
+      .catch(() => {
+        // Could not ask. Leave it unknown: the vote stays on offer, and a refusal will say so.
+      });
+  };
+
   view.onState((state) => {
     const question = openQuestion(Array.isArray(state?.questions) ? state.questions : []);
     if (question === null) {
@@ -393,6 +440,7 @@ of them is something a page that reads once never has to think about:
       show("waiting");
       return;
     }
+    askIfAnswered(question);
     if (voted.has(question.id) || refused.has(question.id)) {
       if (shownId !== question.id) {
         shownId = question.id;
@@ -597,9 +645,10 @@ counts document — and nothing needs to, because the roster is the only audienc
   by giving up identity: a phone and a laptop are two votes, and an incognito window is a third. For a
   stream that is the right trade; for anything contested, declare `verifiedEmail` and accept that most
   of the room will not sign in.
-- **A reload costs one refused press.** The page cannot remember (no storage in the sandbox) and
-  cannot ask (a composite id has no read-back) — see "what a reload costs". It turns the refusal
-  into a sentence and stops; it cannot avoid it.
+- **A reload is answered by asking, not by remembering.** The page cannot remember anything (no
+  storage in the sandbox), so it asks the parent about the question on screen — see "what a reload
+  costs". On an older host that ask is unavailable and the reload costs one refused press, which the
+  page turns into a sentence rather than a permission error.
 - **Nothing stops a vote on a question that is not open, or a `choice` nobody offered.** See "what
   the rules do and do not enforce" above — the declaration cannot express either, the desk ignores
   unknown choices, and a reopened question counts what arrived while it was shut.
