@@ -30,6 +30,7 @@
 import { type LoadedCollection } from "@mulmoclaude/core/collection/server";
 import { APPS_COLLECTION, PUBLIC_CONFIG_DOC, appConfigPath, appSchemasPath, projectPublish, type AuthoredApp, type PublishStamp } from "@receptron/sharedapp";
 import { requireAid } from "./ensureAid.js";
+import { capabilityNotes, capabilityRefusal, readDeploymentCapabilities, sharedappRuntime } from "./deployment.js";
 import { halfPublishedApp } from "./recovery.js";
 import {
   readCurrentApp,
@@ -209,6 +210,25 @@ async function publishGate(
   return refusal ? { ok: false, partial: false, problems: refusal } : { ok: true, scan };
 }
 
+/** Whether the deployment we are about to write to understands what this publisher writes — asked
+ *  BEFORE anything is written, which is the whole point of it.
+ *
+ *  Its own step, and the FIRST one, rather than the opening clause of `publishGate` where it
+ *  started: `prepare` runs before that gate and can call `claimApp`, so an app whose parent
+ *  document is missing — a failed `init`, a deletion that left records behind — had `apps/{aid}`
+ *  written under rules this very check was about to refuse as too old. The refusal then said
+ *  "Nothing was written" while a document stood, and offered partial-publish recovery for a run
+ *  that was supposed to have made no writes at all.
+ *
+ *  Only a deployment that HAS answered, and answered that it is behind, stops the run; absent and
+ *  unreadable are reported and continue (`deployment.ts` says why). */
+async function deploymentGate(handle: SharedAppHandle): Promise<{ ok: true; notes: string[] } | SharedAppFailure> {
+  const reading = await readDeploymentCapabilities(handle);
+  const behind = capabilityRefusal(reading);
+  if (behind.length > 0) return { ok: false, partial: false, problems: behind };
+  return { ok: true, notes: capabilityNotes(reading, sharedappRuntime()) };
+}
+
 /** The two questions that are asked of the PAGE and of the live records before
  *  anything is written — both of them things a run cannot take back once the
  *  schemas have gone out.
@@ -378,6 +398,12 @@ async function runPublish(root: string, opts: SharedAppOptions, ran: RunState): 
   const { aid } = authored;
   ran.aid = aid;
 
+  // BEFORE `prepare`, which can create the app document: a deployment recorded as too old must not
+  // receive a write of any kind, and nothing this run has done so far is a write.
+  const deployment = await deploymentGate(handle);
+  if (!deployment.ok) return deployment;
+  const deploymentNotes = deployment.notes;
+
   const ready = await prepare(root, aid, context, opts);
   if (!ready.ok) return ready;
   const { existingApp, stamp, dirty, face, appDoc, held, established } = ready;
@@ -447,6 +473,9 @@ async function runPublish(root: string, opts: SharedAppOptions, ran: RunState): 
     dirty,
     recordIssues: scan.records,
     recordIssuesCapped: scan.capped,
-    warnings: [...pages.warnings, ...(page.view?.warnings ?? [])],
+    // The deployment notes ride with the page warnings on purpose: both are things a successful
+    // run has to SAY, and both are about whether what was written will actually be served the way
+    // the author expects. A separate field would be a second list nobody prints.
+    warnings: [...deploymentNotes, ...pages.warnings, ...(page.view?.warnings ?? [])],
   };
 }
