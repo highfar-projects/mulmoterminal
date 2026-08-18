@@ -54,6 +54,23 @@ describe("readFirstLine", () => {
     expect(await readFirstLine(write("c.jsonl", `${"x".repeat(5000)}\n`), 64, 128)).toBeNull();
   });
 
+  // Codex on #1782: a complete unterminated line whose byte size is EXACTLY the ceiling fills the
+  // buffer without a short read, so a `bytesRead < size` test called it absent.
+  it("returns a whole unterminated file whose size is exactly maxBytes", async () => {
+    const body = "y".repeat(128);
+    expect(await readFirstLine(write("exact.jsonl", body), 64, 128)).toEqual({ text: body, terminated: false });
+  });
+
+  it("returns a whole unterminated file whose size is exactly the probe", async () => {
+    const body = "z".repeat(64);
+    expect(await readFirstLine(write("exact-probe.jsonl", body), 64, 4096)).toEqual({ text: body, terminated: false });
+  });
+
+  // One byte past the ceiling is genuinely unreadable, and must stay null rather than truncate.
+  it("returns null for an unterminated file one byte past maxBytes", async () => {
+    expect(await readFirstLine(write("over.jsonl", "y".repeat(129)), 64, 128)).toBeNull();
+  });
+
   it("returns a whole file that has no trailing newline", async () => {
     expect(await readFirstLine(write("d.jsonl", "only"), 1024, 4096)).toEqual({ text: "only", terminated: false });
   });

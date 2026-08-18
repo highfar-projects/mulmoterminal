@@ -31,18 +31,22 @@ export function cleanTitle(raw: string | null, fallback: string): string {
  * Callers want the mtime from the SAME open handle as the head: a file the agent is still
  * appending to can be renamed or removed between a read and a separate stat.
  *
- * `bytesRead` is reported because `head.length` cannot answer "did this fill the buffer?" — it
- * counts UTF-16 code units, and multibyte UTF-8 decodes to fewer of those than it occupies in
- * bytes. Deciding EOF from the string is how a long CJK line reads as a short complete one.
+ * `bytesRead` and `fileSize` are reported because `head.length` cannot answer "have we got all of
+ * it?" — it counts UTF-16 code units, and multibyte UTF-8 decodes to fewer of those than it
+ * occupies in bytes. Deciding EOF from the string is how a long CJK line reads as a short complete
+ * one; deciding it from a short read alone misses a file whose size is exactly the window.
  */
-export async function readTranscriptHead(file: string, headBytes: number): Promise<{ head: string; mtime: number; bytesRead: number } | null> {
+export async function readTranscriptHead(
+  file: string,
+  headBytes: number,
+): Promise<{ head: string; mtime: number; bytesRead: number; fileSize: number } | null> {
   let fh;
   try {
     fh = await open(file, "r");
     const buf = Buffer.alloc(headBytes);
     const { bytesRead } = await fh.read(buf, 0, headBytes, 0);
-    const { mtimeMs } = await fh.stat();
-    return { head: buf.subarray(0, bytesRead).toString("utf8"), mtime: mtimeMs, bytesRead };
+    const { mtimeMs, size: fileSize } = await fh.stat();
+    return { head: buf.subarray(0, bytesRead).toString("utf8"), mtime: mtimeMs, bytesRead, fileSize };
   } catch {
     return null;
   } finally {
@@ -69,11 +73,13 @@ export interface FirstLine {
  * to `maxBytes` before giving up, so a longer-than-expected first line yields a longer line rather
  * than nothing. Returns null only when the file is unreadable or has no newline within `maxBytes`.
  *
- * The "did we reach EOF" test is on `bytesRead`, NOT on the decoded length: a 60KB first line of
- * Japanese decodes to ~20k UTF-16 units, so a length test reads a filled 32KB buffer as a short
- * complete file and hands back a TRUNCATED line — which parses as nothing and, because the caller
- * memoises, removes that session from the listing for the life of the process (Codex + CodeRabbit
- * on #1782).
+ * The "did we reach EOF" test is `bytesRead >= fileSize`, i.e. we hold the whole file — NOT the
+ * decoded length, and not a short read alone. A 60KB first line of Japanese decodes to ~20k UTF-16
+ * units, so a length test reads a filled 32KB buffer as a short complete file and hands back a
+ * TRUNCATED line; and a file whose size is EXACTLY the window fills the buffer without a short
+ * read, so a `bytesRead < size` test calls a complete line absent. Both end the same way: the line
+ * parses as nothing and, because the caller memoises, the session leaves the listing for the life
+ * of the process (Codex + CodeRabbit on #1782).
  *
  * `terminated` exists for that same caller: an unterminated line is one the agent may still be in
  * the middle of writing, so a caller that remembers answers must not remember THAT one.
@@ -84,7 +90,7 @@ export async function readFirstLine(file: string, probeBytes: number, maxBytes: 
     if (!read) return null;
     const end = read.head.indexOf("\n");
     if (end >= 0) return { text: read.head.slice(0, end), terminated: true };
-    if (read.bytesRead < size) return read.head ? { text: read.head, terminated: false } : null;
+    if (read.bytesRead >= read.fileSize) return read.head ? { text: read.head, terminated: false } : null;
   }
   return null;
 }
