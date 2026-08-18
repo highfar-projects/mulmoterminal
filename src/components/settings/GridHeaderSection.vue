@@ -6,8 +6,13 @@ import { showLoadAverage, saveShowLoadAverage } from "../../composables/showLoad
 // (headerChrome) or in the roster beside an enlarged one (waitingRows).
 const { t } = useI18n();
 
-function onLoadAverageToggle(e: Event) {
-  if (e.target instanceof HTMLInputElement) void saveShowLoadAverage(e.target.checked);
+// The browser has already flipped the box by the time this runs, and a refused save leaves the
+// flag where it was — so nothing would move it back, and the screen would show a setting the host
+// never took (CodeRabbit on #1791).
+async function onLoadAverageToggle(e: Event) {
+  if (!(e.target instanceof HTMLInputElement)) return;
+  const input = e.target;
+  if (!(await saveShowLoadAverage(input.checked))) input.checked = showLoadAverage.value;
 }
 </script>
 
@@ -19,7 +24,7 @@ function onLoadAverageToggle(e: Event) {
       class="mt-1 cursor-pointer"
       :checked="showLoadAverage"
       :aria-label="t('settings.gridHeader.loadAverage')"
-      @change="onLoadAverageToggle"
+      @change="(e) => void onLoadAverageToggle(e)"
     />
     <span class="text-[12px]">
       <strong>{{ t("settings.gridHeader.loadAverageTitle") }}</strong> — {{ t("settings.gridHeader.loadAverageHint") }}

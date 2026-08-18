@@ -4,6 +4,9 @@ import { machineLoadFrom, type MachineLoad } from "../../common/machineLoad.js";
 // The only place in the server that reads the machine's load. Everything that DECIDES anything
 // from it is in common/machineLoad.ts, where it can be tested without a busy machine.
 //
-// `os.cpus()` rather than a cached count: a container's CPU allowance can change under the
-// process, and the call is a cheap kernel read on the same 10-second poll the figures come from.
+// `os.cpus().length` rather than `os.availableParallelism()`, deliberately: the load average is
+// the WHOLE machine's run queue (Linux reads it from the host's /proc/loadavg even inside a
+// container), so the count it is divided by has to describe the same machine. Parallelism is an
+// affinity-limited estimate of what this process may use, and dividing a host-wide numerator by
+// it reports a load the host is not under.
 export const readMachineLoad = (): MachineLoad | null => machineLoadFrom(os.loadavg(), os.cpus().length, process.platform);

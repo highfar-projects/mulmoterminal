@@ -50,3 +50,15 @@ export function parseMachineLoad(value: unknown): MachineLoad | null {
   if (typeof avg1 !== "number" || typeof avg5 !== "number" || typeof avg15 !== "number" || typeof cores !== "number") return null;
   return usableLoad(avg1, avg5, avg15, cores);
 }
+
+/** What a `GET /api/load` body means, in the one place both the meaning and the shape are known.
+ *
+ *  `null` is "nothing usable arrived" — a body this client cannot read says nothing about the
+ *  machine, so whatever is on screen stays until it goes stale. `{ load: null }` is the opposite:
+ *  the host answering that it keeps no load average, which the header must act on at once. */
+export function readLoadBody(body: unknown): { load: MachineLoad | null } | null {
+  if (!isRecord(body)) return null;
+  if (body.load === null) return { load: null };
+  const load = parseMachineLoad(body.load);
+  return load ? { load } : null;
+}

@@ -288,7 +288,7 @@ percentage of its cores (`load 334%` = 66.8 on 20 cores). **On unless set to `fa
 ```
 
 - Amber at 100% (every core has work queued), red at 200%. Hover gives the raw 1 / 5 / 15-minute
-  figures and the core count.
+  figures, the core count and the multiplier (`3.3x`).
 - **A host that keeps no load average shows nothing whatever this says.** Windows is the case:
   `os.loadavg()` returns zeros there, and 0% would read as "idle" rather than "not measured".
 - Also in Settings, under **Grid header read-outs**.

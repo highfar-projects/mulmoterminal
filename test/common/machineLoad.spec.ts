@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { machineLoadFrom, parseMachineLoad, keepsLoadAverage } from "../../common/machineLoad";
+import { machineLoadFrom, parseMachineLoad, keepsLoadAverage, readLoadBody } from "../../common/machineLoad";
 
 const MAC = "darwin";
 
@@ -60,5 +60,27 @@ describe("keepsLoadAverage", () => {
   it("is false only for Windows", () => {
     expect(keepsLoadAverage("win32")).toBe(false);
     for (const platform of ["darwin", "linux", "freebsd", "openbsd", "aix", "sunos"]) expect(keepsLoadAverage(platform)).toBe(true);
+  });
+});
+
+describe("readLoadBody", () => {
+  const load = { avg1: 1.5, avg5: 1.2, avg15: 1, cores: 4 };
+
+  it("passes a reading through", () => {
+    expect(readLoadBody({ load })).toEqual({ load });
+  });
+
+  // The host saying it keeps no load average. The header has to act on it at once — holding the
+  // previous figure would go on drawing a machine that has stopped reporting.
+  it("reads an explicit null as an answer", () => {
+    expect(readLoadBody({ load: null })).toEqual({ load: null });
+  });
+
+  // Everything else says nothing about the machine, and must not be mistaken for that answer:
+  // blanking the gauge on a garbled 200 would erase a figure that was true a moment ago.
+  it("reads an unusable body as no answer at all", () => {
+    for (const bad of [null, undefined, 3, "x", [], {}, { load: 5 }, { load: {} }, { load: { avg1: 1, avg5: 1, avg15: 1 } }]) {
+      expect(readLoadBody(bad)).toBeNull();
+    }
   });
 });

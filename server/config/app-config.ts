@@ -5,6 +5,7 @@
 import { existsSync, copyFileSync } from "node:fs";
 import path from "node:path";
 import { isRecord } from "../../common/isRecord.js";
+import { SHOW_LOAD_AVERAGE_DEFAULT, sanitizeShowLoadAverage } from "../../common/showLoadAverage.js";
 import { sanitizePresets } from "./cwd-presets.js";
 import { sanitizeButtons, sanitizeChips } from "./header-config.js";
 import {
@@ -453,11 +454,6 @@ export function sanitizeAutoDirIcon(input: unknown): boolean {
   return input !== false;
 }
 
-// Default-ON too: the read-out is the feature, and a reader who does not want it sets `false`.
-export function sanitizeShowLoadAverage(input: unknown): boolean {
-  return input !== false;
-}
-
 // Fresh object each call — callers hold and mutate the returned config in place, so a
 // shared default constant would be corrupted across loads. Exported so a write path can
 // use it as the base for a MISSING file WITHOUT a second disk read (that re-read could
@@ -494,7 +490,7 @@ export const emptyConfig = (): AppConfig => ({
   prWorkdirFooter: true,
   appendSystemPrompt: true,
   autoDirIcon: true,
-  showLoadAverage: true,
+  showLoadAverage: SHOW_LOAD_AVERAGE_DEFAULT,
   cockpitLines: { ...DEFAULT_COCKPIT_LINES },
   fontFamily: null,
 });

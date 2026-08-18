@@ -7,8 +7,7 @@
 // this reads two numbers the kernel already keeps, so there is nothing to guard and nothing to
 // spend.
 import { ref } from "vue";
-import { parseMachineLoad, type MachineLoad } from "../../common/machineLoad";
-import { isRecord } from "../../common/isRecord";
+import { readLoadBody, type MachineLoad } from "../../common/machineLoad";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 const FETCH_TIMEOUT_MS = 4000;
@@ -30,11 +29,13 @@ async function poll(): Promise<void> {
   try {
     const res = await fetchWithTimeout("/api/load", {}, FETCH_TIMEOUT_MS);
     if (!res.ok) return dropIfStale();
-    const data: unknown = await res.json();
-    if (!isRecord(data)) return dropIfStale();
-    // `null` here is an answer, not a failure: this host keeps no load average, and holding the
-    // previous reading would go on drawing a machine that has stopped reporting.
-    load.value = parseMachineLoad(data.load);
+    // A body this client cannot read is a failure like any other — clearing on it would blank a
+    // figure that was true a moment ago. `{ load: null }` is not that: it is the host saying it
+    // keeps no load average, and holding the previous reading would go on drawing a machine that
+    // has stopped reporting.
+    const next = readLoadBody(await res.json());
+    if (!next) return dropIfStale();
+    load.value = next.load;
     lastOk_ms = Date.now();
   } catch {
     // offline, aborted, or the route is not there

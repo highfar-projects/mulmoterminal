@@ -1,10 +1,11 @@
 // @vitest-environment node
 // The route is three lines; what it has to get right is the difference between "this machine is
 // idle" and "this machine does not report a load", which reach the browser as 0 and null.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import express from "express";
 import request from "supertest";
 import { mountLoadRoute } from "../../../server/routes/load-routes.js";
+import os from "node:os";
 import { readMachineLoad } from "../../../server/infra/machine-load.js";
 
 const appWith = (readLoad: Parameters<typeof mountLoadRoute>[1]) => {
@@ -30,7 +31,23 @@ describe("GET /api/load", () => {
   });
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe("readMachineLoad", () => {
+  // The adapter is one line, and the one thing a line like that gets wrong is which number goes
+  // where — a swap of `cores` and an average keeps every shape assertion below true. Spied rather
+  // than module-mocked because this repo has no `vi.mock("node:os")` anywhere, and specs that need
+  // a platform skip on it instead (CodeRabbit on #1791; the win32 branch is covered exhaustively
+  // in common/machineLoad.spec.ts, which is where the rule itself lives).
+  it.skipIf(process.platform === "win32")("maps loadavg and the core count onto the reading", () => {
+    vi.spyOn(os, "loadavg").mockReturnValue([66.84, 59.88, 55.24]);
+    const cpu: os.CpuInfo = { model: "test", speed: 1, times: { user: 0, nice: 0, sys: 0, idle: 0, irq: 0 } };
+    vi.spyOn(os, "cpus").mockReturnValue(new Array(20).fill(cpu));
+    expect(readMachineLoad()).toEqual({ avg1: 66.84, avg5: 59.88, avg15: 55.24, cores: 20 });
+  });
+
   // Runs against the real machine, so it asserts the SHAPE rather than any figure. On Windows
   // the honest answer is null, and that is the branch under test there.
   it("reports this machine, or nothing at all", () => {

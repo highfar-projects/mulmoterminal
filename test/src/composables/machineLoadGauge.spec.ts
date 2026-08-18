@@ -23,6 +23,18 @@ describe("machineLoadReadout", () => {
     expect(machineLoadReadout(load(3.9, 64))?.tone).toBe("muted");
   });
 
+  // Deliberately the DISPLAYED figure, not the raw one (CodeRabbit on #1791): the screen says
+  // `load 100%` and the docs say amber at 100%, so colouring 99.6% grey under a label reading
+  // 100% would contradict the only threshold a reader can see.
+  it("colours what it shows, so the number and the colour cannot disagree", () => {
+    const almost = machineLoadReadout(load(19.96, 20));
+    expect(almost?.percent).toBe(100);
+    expect(almost?.tone).toBe("amber");
+    const almostSaturated = machineLoadReadout(load(39.96, 20));
+    expect(almostSaturated?.percent).toBe(200);
+    expect(almostSaturated?.tone).toBe("err");
+  });
+
   it("puts the boundaries exactly where the constants say", () => {
     expect(machineLoadReadout(load(BUSY_PERCENT / 100, 1))?.tone).toBe("amber");
     expect(machineLoadReadout(load((BUSY_PERCENT - 1) / 100, 1))?.tone).toBe("muted");
