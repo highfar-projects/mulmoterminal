@@ -20,14 +20,14 @@ describe("readFirstLine", () => {
   });
 
   it("returns the first line without its newline", async () => {
-    expect(await readFirstLine(write("a.jsonl", "one\ntwo\nthree\n"), 1024, 4096)).toBe("one");
+    expect(await readFirstLine(write("a.jsonl", "one\ntwo\nthree\n"), 1024, 4096)).toEqual({ text: "one", terminated: true });
   });
 
   // The reason this helper exists: codex writes ~20KB of session_meta on line 1, and a probe sized
   // for the common case must not answer null for a longer one (#1777).
   it("grows past the probe when the line is longer than it", async () => {
     const long = "x".repeat(5000);
-    expect(await readFirstLine(write("b.jsonl", `${long}\nnext\n`), 64, 64 * 1024)).toBe(long);
+    expect(await readFirstLine(write("b.jsonl", `${long}\nnext\n`), 64, 64 * 1024)).toEqual({ text: long, terminated: true });
   });
 
   // Both review bots caught this on #1782: `head.length` counts UTF-16 code units, so a filled
@@ -37,7 +37,7 @@ describe("readFirstLine", () => {
     const line = "\u3042".repeat(20000); // 60000 bytes, 20000 UTF-16 units
     expect(Buffer.byteLength(line, "utf8")).toBeGreaterThan(32 * 1024);
     expect(line.length).toBeLessThan(32 * 1024);
-    expect(await readFirstLine(write("mb.jsonl", `${line}\nnext\n`), 32 * 1024, 1024 * 1024)).toBe(line);
+    expect(await readFirstLine(write("mb.jsonl", `${line}\nnext\n`), 32 * 1024, 1024 * 1024)).toEqual({ text: line, terminated: true });
   });
 
   it("returns null for a multibyte line that exceeds the ceiling too", async () => {
@@ -47,7 +47,7 @@ describe("readFirstLine", () => {
 
   it("returns a multibyte whole file that has no trailing newline", async () => {
     const body = "\u3042".repeat(20000);
-    expect(await readFirstLine(write("mb-eof.jsonl", body), 32 * 1024, 1024 * 1024)).toBe(body);
+    expect(await readFirstLine(write("mb-eof.jsonl", body), 32 * 1024, 1024 * 1024)).toEqual({ text: body, terminated: false });
   });
 
   it("returns null when the first line exceeds the ceiling too", async () => {
@@ -55,7 +55,13 @@ describe("readFirstLine", () => {
   });
 
   it("returns a whole file that has no trailing newline", async () => {
-    expect(await readFirstLine(write("d.jsonl", "only"), 1024, 4096)).toBe("only");
+    expect(await readFirstLine(write("d.jsonl", "only"), 1024, 4096)).toEqual({ text: "only", terminated: false });
+  });
+
+  // The caller memoises, and must not memoise a line the writer may still be extending.
+  it("reports whether a newline actually ended the line", async () => {
+    expect(await readFirstLine(write("term.jsonl", "done\nrest\n"), 1024, 4096)).toEqual({ text: "done", terminated: true });
+    expect(await readFirstLine(write("open.jsonl", '{"half":'), 1024, 4096)).toEqual({ text: '{"half":', terminated: false });
   });
 
   it("returns null for an empty file", async () => {
@@ -63,7 +69,7 @@ describe("readFirstLine", () => {
   });
 
   it("returns an empty string for a file that starts with a newline", async () => {
-    expect(await readFirstLine(write("f.jsonl", "\nsecond\n"), 1024, 4096)).toBe("");
+    expect(await readFirstLine(write("f.jsonl", "\nsecond\n"), 1024, 4096)).toEqual({ text: "", terminated: true });
   });
 
   it("returns null for a missing file", async () => {
@@ -75,7 +81,7 @@ describe("readFirstLine", () => {
   });
 
   it("still reads when the ceiling is below the probe", async () => {
-    expect(await readFirstLine(write("g.jsonl", "short\nrest\n"), 4096, 16)).toBe("short");
+    expect(await readFirstLine(write("g.jsonl", "short\nrest\n"), 4096, 16)).toEqual({ text: "short", terminated: true });
   });
 });
 

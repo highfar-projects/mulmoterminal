@@ -50,6 +50,13 @@ export async function readTranscriptHead(file: string, headBytes: number): Promi
   }
 }
 
+/** A transcript's first line, and whether a newline actually ended it. */
+export interface FirstLine {
+  text: string;
+  /** False when the read hit EOF without a newline — the writer may still be mid-record. */
+  terminated: boolean;
+}
+
 /**
  * The transcript's FIRST line, or null if it cannot be read.
  *
@@ -67,14 +74,17 @@ export async function readTranscriptHead(file: string, headBytes: number): Promi
  * complete file and hands back a TRUNCATED line — which parses as nothing and, because the caller
  * memoises, removes that session from the listing for the life of the process (Codex + CodeRabbit
  * on #1782).
+ *
+ * `terminated` exists for that same caller: an unterminated line is one the agent may still be in
+ * the middle of writing, so a caller that remembers answers must not remember THAT one.
  */
-export async function readFirstLine(file: string, probeBytes: number, maxBytes: number): Promise<string | null> {
+export async function readFirstLine(file: string, probeBytes: number, maxBytes: number): Promise<FirstLine | null> {
   for (const size of probeBytes < maxBytes ? [probeBytes, maxBytes] : [maxBytes]) {
     const read = await readTranscriptHead(file, size);
     if (!read) return null;
     const end = read.head.indexOf("\n");
-    if (end >= 0) return read.head.slice(0, end);
-    if (read.bytesRead < size) return read.head || null; // whole file, no trailing newline
+    if (end >= 0) return { text: read.head.slice(0, end), terminated: true };
+    if (read.bytesRead < size) return read.head ? { text: read.head, terminated: false } : null;
   }
   return null;
 }

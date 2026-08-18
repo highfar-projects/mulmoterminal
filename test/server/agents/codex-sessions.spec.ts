@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, utimesSync, statSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, utimesSync, statSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -196,6 +196,36 @@ describe("listCodexSessions", () => {
 
     writeFileSync(file, [metaLine(UUID_A, "/work"), userMsgLine("written a moment later")].join("\n") + "\n");
     expect((await listCodexSessions(root, "/work", 10)).map((s) => s.title)).toEqual(["written a moment later"]);
+  });
+
+  // Codex flagged the other half of the same shape on #1782: a first record that is non-empty but
+  // half-written parses as nothing, and remembering THAT hides the session once codex finishes it.
+  it("picks up a rollout whose first record was still being written when it was first scanned", async () => {
+    const dir = dayDir(root);
+    mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `rollout-2026-07-08T00-00-00-${UUID_A}.jsonl`);
+    const full = metaLine(UUID_A, "/work");
+    writeFileSync(file, full.slice(0, 40)); // mid-record: non-empty, unterminated, unparseable
+    expect(await listCodexSessions(root, "/work", 10)).toEqual([]);
+
+    writeFileSync(file, [full, userMsgLine("finished a moment later")].join("\n") + "\n");
+    expect((await listCodexSessions(root, "/work", 10)).map((s) => s.title)).toEqual(["finished a moment later"]);
+  });
+
+  // codex prunes day directories while we walk them, and the scan now enumerates every day rather
+  // than stopping at a fixed 200 files — so it meets more of them per request. An unguarded
+  // readdirSync throws out of the whole scan and the route answers 500: NO sessions, rather than
+  // the ones that were readable. (Observed during Claude review, not flagged by either bot.)
+  it("keeps listing when one day directory cannot be read", async () => {
+    writeSession(UUID_A, "/work", "readable day", new Date(2026, 6, 8, 10));
+    const blocked = path.join(root, "2026", "07", "09");
+    mkdirSync(blocked, { recursive: true });
+    chmodSync(blocked, 0o000);
+    try {
+      expect((await listCodexSessions(root, "/work", 10)).map((s) => s.title)).toEqual(["readable day"]);
+    } finally {
+      chmodSync(blocked, 0o755);
+    }
   });
 
   it.each([

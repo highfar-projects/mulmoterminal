@@ -107,12 +107,21 @@ function dayDirsDesc(root: string): string[] {
   );
 }
 
+// Tolerates a day directory that cannot be read, the same way codexRolloutPath below already does
+// — codex prunes these while we walk them. Without it a single unreadable directory throws out of
+// the whole scan and the listing answers 500, i.e. NO sessions rather than the ones we could read.
+// The scan now enumerates every day rather than stopping at a fixed 200 files, so it meets more of
+// them per request (observed during Claude review, not flagged by either bot).
 function rolloutsInDay(dayDir: string): string[] {
-  return readdirSync(dayDir)
-    .filter((n) => ROLLOUT_RE.test(n))
-    .sort(byCodeUnit)
-    .reverse()
-    .map((f) => path.join(dayDir, f));
+  try {
+    return readdirSync(dayDir)
+      .filter((n) => ROLLOUT_RE.test(n))
+      .sort(byCodeUnit)
+      .reverse()
+      .map((f) => path.join(dayDir, f));
+  } catch {
+    return [];
+  }
 }
 
 // Every rollout path, newest-first (the filename embeds an ISO timestamp). Directory reads only —
@@ -131,13 +140,14 @@ async function rolloutMeta(file: string): Promise<RolloutMeta | null> {
   const cached = metaCache.get(file);
   if (cached !== undefined) return cached;
   const line = await readFirstLine(file, META_PROBE_BYTES, META_MAX_BYTES);
-  // Only a line we actually READ is cached. A file we could not read yet is the normal state of a
-  // rollout codex is in the middle of creating — and this listing is fetched exactly when sessions
-  // are being started — so caching that "no" would hide a live session until the process restarts.
-  // A line that parses as something other than session_meta IS cached: line 1 never changes.
   if (line === null) return null;
-  const meta = parseCodexSessionMeta(line);
-  metaCache.set(file, meta);
+  const meta = parseCodexSessionMeta(line.text);
+  // Remember an answer only once line 1 is FINAL — i.e. a newline ended it, or it parsed. This
+  // listing is fetched exactly when sessions are being started, so it routinely reads a rollout
+  // codex is still writing: unreadable, empty, or a half-written first record. Remembering any of
+  // those as "not a session" hides a live conversation until the process restarts, which is the
+  // silent disappearance this whole change exists to remove (Codex on #1782, twice).
+  if (meta !== null || line.terminated) metaCache.set(file, meta);
   return meta;
 }
 
