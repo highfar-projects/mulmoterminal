@@ -188,11 +188,16 @@ Reading `known: false` as "you have not answered" is the one mistake that matter
 away from somebody entitled to it. Leaving it on offer costs at most one refused press, and the page
 handles that below.
 
-**Which is why the refusal handling stays.** The ask can be unavailable (an older host), and a vote
-can still be refused for a reason nobody predicted. When that happens the page turns it into a
-sentence and stops asking — and it separates the refusals that are not refusals at all: a visitor who
-CANCELLED the confirmation (`cancelled`), or pressed while one was open (`busy`), has not been refused
-anything. Count those as a refusal and somebody who changed their mind can never vote.
+**A refusal is not proof of a duplicate, so the page asks again rather than concluding.** `{ ok:
+false }` is what the bridge reports for everything: a rules denial, a network failure, a disabled
+Anonymous provider, a validation refusal — and the only field is an untyped string. So when a vote
+comes back refused, the page asks about the same key: a row means their vote is in (show it), no row
+or no answer means it is not (leave the vote on offer and say what happened). Folding the vote away on
+any `{ ok: false }` would leave somebody whose connection blinked unable to vote for the rest of the
+poll.
+
+Two of those failures are not refusals at all and never reach that question: a visitor who CANCELLED
+the confirmation (`cancelled`), or pressed while one was open (`busy`).
 
 ### The sign-in question, which decides whether an audience actually votes
 
@@ -283,11 +288,11 @@ of them is something a page that reads once never has to think about:
 3. **Show that a vote landed even though the page will keep receiving updates.** The visitor's own
    vote is not in what they can read (`votes` is not public), so the page remembers it — in a
    variable, because there is nowhere else (see rule 4).
-4. **Ask before offering, because a reload wipes everything the page knows.** `view.mine("votes",
-   question.id)` is how it finds out, and the answer has three states rather than two — see "what a
-   reload costs" above. Handle the refusal as well: the ask can be unavailable, and a vote can be
-   refused for a reason nobody predicted. What the visitor reads at that moment is the whole
-   difference between a working poll and a broken one.
+4. **Ask rather than assume — before offering the vote, and again if one is refused.**
+   `view.mine("votes", question.id)` is how the page finds out, and its answer has three states
+   rather than two (see "what a reload costs" above). A refused submission is not proof of anything
+   either: the same shape carries a network failure. What the visitor reads at that moment is the
+   whole difference between a working poll and a broken one.
 
 ```html
 <h1>Live poll</h1>
@@ -313,10 +318,9 @@ of them is something a page that reads once never has to think about:
   // The questions this browser has already answered. NOT what stops a second vote — the rules do
   // that, because the document id is uid + questionId — this only decides what the page shows.
   const voted = new Map();
-  // Questions the rules refused. Not the same as "could not send": a visitor who cancelled the
-  // confirmation has not been refused anything, and counting that here would leave somebody who
-  // changed their mind unable to vote at all.
-  const refused = new Set();
+  // The two failures that are not refusals at all: the visitor cancelled the confirmation, or
+  // pressed while one was open. Counting either as "already answered" leaves somebody who changed
+  // their mind unable to vote.
   const RETRYABLE = new Set(["cancelled", "busy"]);
   // Questions already put to the parent. A mark that the ASK happened, not a memory of the answer:
   // the answer lands in `voted`, or nowhere at all when nobody knows.
@@ -389,16 +393,6 @@ of them is something a page that reads once never has to think about:
     show("voted");
   };
 
-  // The refusal, in the same place as the thank-you: there is nothing else this person can do about
-  // this question, and waiting for the next one is the honest next state. The reason is shown small
-  // — meaningless to a visitor, and the only thread an author has to pull on, since a published page
-  // has no diagnostics of its own.
-  const drawRefused = (why) => {
-    document.getElementById("votedMark").textContent = "That vote was not accepted.";
-    document.getElementById("votedChoice").textContent = `It looks like you have already answered this one.${why ? ` (${why})` : ""}`;
-    show("voted");
-  };
-
   // Rule 4: ask the parent about THIS question, once. The answer arrives a turn later and switches
   // the page if it says so; nothing waits for it, because a page that blocks on a read shows an
   // audience a spinner where the question should be.
@@ -407,7 +401,7 @@ of them is something a page that reads once never has to think about:
   // refused — and treating that as "you have not answered" is the one mistake that takes the vote
   // away from somebody entitled to it.
   const askIfAnswered = (question) => {
-    if (asked.has(question.id) || voted.has(question.id) || refused.has(question.id)) {
+    if (asked.has(question.id) || voted.has(question.id)) {
       return;
     }
     if (typeof view.mine !== "function") {
@@ -441,15 +435,11 @@ of them is something a page that reads once never has to think about:
       return;
     }
     askIfAnswered(question);
-    if (voted.has(question.id) || refused.has(question.id)) {
+    if (voted.has(question.id)) {
       if (shownId !== question.id) {
         shownId = question.id;
         shownSignature = null;
-        if (voted.has(question.id)) {
-          drawVoted(question.id);
-        } else {
-          drawRefused("");
-        }
+        drawVoted(question.id);
       }
       return;
     }
@@ -500,12 +490,26 @@ of them is something a page that reads once never has to think about:
       notice(why === "busy" ? "Still sending. Try again in a moment." : "");
       return;
     }
-    // Rule 4: the rules said no. Do not offer the same write again — it will be refused the same
-    // way — and say what it most likely means.
-    refused.add(questionId);
-    if (shownId === questionId) {
-      drawRefused(why);
+    // A refusal is NOT proof of a duplicate. `{ ok: false }` is also what a network failure looks
+    // like, and a disabled Anonymous provider, and a validation refusal — the only field here is an
+    // untyped string. Folding the vote away on any of them means somebody whose connection blinked
+    // can never vote again.
+    //
+    // So ask what actually happened. It is the same read as rule 4, for the same key.
+    const after = typeof view.mine === "function" ? await view.mine("votes", questionId).catch(() => null) : null;
+    if (after?.known && after.found) {
+      // A row IS there: either they answered before, or this write landed and something after it
+      // failed. Either way their vote counts, and this is their answer.
+      const option = optionsOf(question).find((one) => one.key === after.record?.choice);
+      voted.set(questionId, option?.label ?? after.record?.choice ?? "");
+      if (shownId === questionId) {
+        drawVoted(questionId);
+      }
+      return;
     }
+    // Nothing was written, or nobody can say. Leave the vote on offer and show what happened.
+    document.getElementById("send").disabled = false;
+    notice(`Could not vote: ${why || "unknown error"}`);
   });
 
   view.ready();
@@ -647,8 +651,8 @@ counts document — and nothing needs to, because the roster is the only audienc
   of the room will not sign in.
 - **A reload is answered by asking, not by remembering.** The page cannot remember anything (no
   storage in the sandbox), so it asks the parent about the question on screen — see "what a reload
-  costs". On an older host that ask is unavailable and the reload costs one refused press, which the
-  page turns into a sentence rather than a permission error.
+  costs". On an older host the ask is unavailable: the vote is offered again, refused, and the page
+  says so and lets them try rather than deciding for them.
 - **Nothing stops a vote on a question that is not open, or a `choice` nobody offered.** See "what
   the rules do and do not enforce" above — the declaration cannot express either, the desk ignores
   unknown choices, and a reopened question counts what arrived while it was shut.
