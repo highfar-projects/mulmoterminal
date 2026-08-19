@@ -16,10 +16,11 @@ import path from "node:path";
 import { APP_MANIFEST_FILE } from "@mulmoclaude/core/collection/server";
 import { previewSharedApp } from "./sharedApp/preview.js";
 import { undoPreviewSubmission, writePreviewSubmission } from "./sharedApp/previewWrite.js";
+import { performPreviewIntent } from "./sharedApp/previewIntent.js";
 import { requestBody } from "../routes/requestBody.js";
 import { isRecord } from "../../common/isRecord.js";
 import { workspaceForRoute } from "../routes/routeParams.js";
-import type { PreviewSubmission, SharedAppPreview, SharedAppPreviewResponse } from "../../common/sharedAppPreview.js";
+import type { PreviewIntent, PreviewSubmission, SharedAppPreview, SharedAppPreviewResponse } from "../../common/sharedAppPreview.js";
 
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
@@ -98,6 +99,27 @@ function submissionOf(body: unknown): PreviewSubmission | null {
   return { cid: body.cid, values: Object.fromEntries(entries) };
 }
 
+/** The intent a member's page asked for, narrowed off the request.
+ *
+ *  SHAPE ONLY. Whether the move is legal, whether this reader may make it and whether the record is
+ *  in a status it can leave are all `performPreviewIntent`'s, judged against the projection — this
+ *  refuses what is not an intent at all, which is the same line the package's own reader draws. */
+function intentOf(body: unknown): PreviewIntent | null {
+  if (!isRecord(body) || !isRecord(body.page)) return null;
+  const { id, audience } = body.page;
+  if (typeof id !== "string" || (audience !== "public" && audience !== "member" && audience !== "roster")) return null;
+  if (body.kind !== "transition" && body.kind !== "assign" && body.kind !== "withdraw") return null;
+  if (typeof body.cid !== "string" || typeof body.itemId !== "string") return null;
+  // A withdrawal names no destination, and one arriving with a `to` is not a withdrawal with
+  // decoration — it is an ask this host cannot describe, so it is not read as one.
+  if (body.kind === "withdraw") {
+    if (body.to !== undefined) return null;
+    return { page: { id, audience }, kind: body.kind, cid: body.cid, itemId: body.itemId };
+  }
+  if (typeof body.to !== "string") return null;
+  return { page: { id, audience }, kind: body.kind, cid: body.cid, itemId: body.itemId, to: body.to };
+}
+
 /** The token naming one write this preview made — and NOT the record itself.
  *
  *  A cid and an id off the request would be a cid and an id of the caller's choosing, and undo
@@ -108,6 +130,20 @@ function undoTokenOf(body: unknown): string | null {
   if (!isRecord(body)) return null;
   const named = isRecord(body.written) ? body.written.token : body.token;
   return typeof named === "string" && named.length > 0 ? named : null;
+}
+
+async function respondIntent(req: Request, res: Response): Promise<void> {
+  const cwd = workspaceForRoute(req.query.cwd, res);
+  if (cwd === null) return;
+  const asked = intentOf(requestBody(req.body));
+  if (asked === null) {
+    // The parent's own name for it, answered on a 200 for the reason the projection's problems are:
+    // the ask being unreadable is an answer to the question, not a failure to answer it — and the
+    // pane puts this word in front of the author, which it cannot do from a status code.
+    res.json({ ok: false, error: "not-an-intent" });
+    return;
+  }
+  res.json(await performPreviewIntent(cwd, asked));
 }
 
 export function mountSharedAppPreviewRoutes(app: Express): void {
@@ -130,6 +166,14 @@ export function mountSharedAppPreviewRoutes(app: Express): void {
         fail(res, err);
       }
     })();
+  });
+
+  // A MEMBER'S move, performed as the author. Its own route rather than a shape on the one above,
+  // because the two are different operations against different rules: a submission CREATES a record
+  // as a visitor would, and this UPDATES one somebody already owns — or removes it. Sharing a route
+  // would mean one narrowing deciding which, over a body a sandboxed page's parent composed.
+  app.post("/api/shared-app/preview/intent", (req, res) => {
+    void respondIntent(req, res).catch((err: unknown) => fail(res, err));
   });
 
   // Taking one back. Its own route rather than a flag on the one above, because the author presses

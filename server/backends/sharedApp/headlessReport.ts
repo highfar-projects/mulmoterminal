@@ -23,15 +23,18 @@ import { LIMITS, type HeadlessPageReport, type HeadlessPress, type HeadlessRun, 
  *  `@receptron/sharedapp/view`, the same one mulmoserver puts in front of `/m/` and `/p/`, and it
  *  carries the capabilities this author resolves to.
  *
- *  What is left is the member's INTENTS, and this is now the one place a headless run does less
- *  than a live page rather than less than the pane — the pane refuses them too, for the same
- *  reason: neither host has a route for a transition, an assignment or a withdrawal. So a button
- *  is proven to exist, to be reachable and to ask for the right thing, and not to succeed. The
- *  refusal is reported like any other, so an untested control says so in its own line. */
+ *  What is left is the member's INTENTS, and this run is now alone in refusing them: the Collections
+ *  pane performs them, as the author, against the deployed rules
+ *  (`server/backends/sharedApp/previewIntent.ts`). This run does not, and that is deliberate rather
+ *  than unfinished — an agent starts it without anybody watching, and a run that moved records
+ *  would change a live app as a side effect of looking at it. So a button is proven here to exist,
+ *  to be reachable and to ask for the right thing, and not to succeed; the refusal is reported like
+ *  any other, so an untested control says so in its own line, and the pane is where it is tested. */
 const MEMBER_PAGE_LIMIT =
   "This page is written for the roster. It gets the same `viewer` capabilities the live page would, from the same parent — but a member's intent is REFUSED rather " +
-  "than performed: `transition`, `assign` and `withdraw` are real writes against the live rules and neither this run nor the Collections pane has a route for one. " +
-  "A control that asks for one is reported below as refused, which says it is wired; whether the rules would accept it is not tested here or there.";
+  "than performed: `transition`, `assign` and `withdraw` are real writes against the live rules, and this run writes nothing at all — it is started without anybody " +
+  "watching, so it must not move records as a side effect of looking at a page. A control that asks for one is reported below as refused, which says it is wired. " +
+  "To see one actually performed, press it in the Collections pane, which does perform them as you.";
 
 /** The page's own account of itself, in the page's own words.
  *

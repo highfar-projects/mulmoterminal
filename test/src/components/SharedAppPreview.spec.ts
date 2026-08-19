@@ -151,6 +151,20 @@ const settle = async () => {
   await flushPromises();
 };
 
+/** Wait until something has actually ARRIVED, rather than for a fixed number of turns.
+ *
+ *  A port's delivery is a macrotask and `settle()` spends exactly one. That is enough for an answer
+ *  the parent composes on the spot, and not for one that crosses the HTTP boundary first — a
+ *  member's intent does it twice, because the records are re-read before the page is told, so the
+ *  outbound delivery lands a turn or two later than the assertion.
+ *
+ *  Counting turns is what makes a test pass on one machine and fail on another: this one passed on
+ *  macOS and Linux and failed on WINDOWS in CI (#1802), which is the same shape as the note above
+ *  about `flushPromises`. Waiting for the condition costs nothing when it is already true. */
+const settleUntil = async (arrived: () => boolean, turns = 20): Promise<void> => {
+  for (let turn = 0; turn < turns && !arrived(); turn += 1) await settle();
+};
+
 const mountPreview = async () => {
   const wrapper = mount(SharedAppPreview, { props: { cwd: "/repo" } });
   await flushPromises();
@@ -334,21 +348,33 @@ describe("SharedAppPreview", () => {
     wrapper.unmount();
   });
 
-  // The member parent performs nothing — the pane has no route for a member's write — so an intent
-  // is answered BY NAME rather than dropped. A view left on a promise is, to the person holding the
-  // phone, a button that does nothing, which is the symptom this whole pane exists to explain.
-  it("answers a member page's intent instead of leaving it waiting", async () => {
-    vi.stubGlobal("fetch", answering(memberPayload()));
+  // The member parent PERFORMS. It answered `read-only` until 2026-08-18, which read as a fault in
+  // the page: a desk drew its buttons and every one of them failed, so an author could see that a
+  // control was wired and never that it worked.
+  //
+  // ONE end-to-end test, because what it proves is the WIRING: the port is connected to the sender
+  // and the sender's answer reaches the page. What a refusal does, and what is not sent at all, are
+  // the sender's own and are pinned in `test/src/utils/sharedAppPreviewIntent.spec.ts` — where they
+  // cost no frame.
+  //
+  // What is pinned is the ask reaching the route AND CARRYING ITS PAGE. The page is what decides
+  // which tier's projection judges the move and which records it may name — without it a
+  // participant's page could reach the front desk's transitions by naming the collection they live
+  // in, and the server would have nothing to notice it with.
+  it("performs a member page's intent, naming the page it was asked from", async () => {
+    const { fetcher, posted } = answeringWrites({ ok: true, mailed: false }, memberPayload());
+    vi.stubGlobal("fetch", fetcher);
     const wrapper = await mountPreview();
     const { port, answers } = await connect(wrapper);
     port.postMessage({ type: "mc-public-view:intent", requestId: "r1", kind: "transition", cid: "bookings", itemId: "b1", to: "approved" });
-    await settle();
+    await settleUntil(() => answers.some((message) => message.type === "mc-public-view:submitResult" && message.requestId === "r1"));
+    const sent = posted.find((call) => call.url.includes("/preview/intent"));
+    expect(sent?.body).toEqual({ page: { id: "desk", audience: "member" }, kind: "transition", cid: "bookings", itemId: "b1", to: "approved" });
     // `submitResult`, not `result`: one name answers a submission and an intent alike, because the
     // view awaits one promise either way.
     const result = answers.find((message) => message.type === "mc-public-view:submitResult" && message.requestId === "r1");
     expect(result).toBeDefined();
-    expect(result?.ok).toBe(false);
-    expect(result?.error).toBe("read-only");
+    expect(result?.ok).toBe(true);
     wrapper.unmount();
   });
 

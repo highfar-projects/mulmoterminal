@@ -72,6 +72,39 @@ describe("the pane's log", () => {
     expect(block).toContain("Missing or insufficient permissions");
   });
 
+  it("names the record a member's move was made on, and says a notice went with it", () => {
+    // The row is NAMED, though the header of that module says values are not carried. A shared
+    // app's ids are what the rules pin, so a line about an unnamed row is one an author cannot
+    // place — and every one of these is about a row somebody pressed a button on.
+    const block = render((log) =>
+      log.add({ kind: "intent", intent: "transition", audience: "member", cid: "bookings", itemId: "b1", to: "approved", error: null, mailed: true }),
+    );
+    expect(block).toContain("PERFORMED the transition of 'bookings/b1' to 'approved'");
+    // The one effect of this path that cannot be taken back. It must never happen silently.
+    expect(block).toContain("a notice was QUEUED with it");
+  });
+
+  it("keeps an assignee's address out of the block, and still says one was named", () => {
+    // The block is built to be pasted somewhere else, and an address is the clearest thing the
+    // promise at the top of that module is about. Dropping the destination entirely would be worse
+    // than either: `unknown-assignee` is a refusal ABOUT the address that was named, and a line
+    // mentioning no destination reads as an assignment to nobody.
+    const block = render((log) => log.add({ kind: "intent", intent: "assign", audience: "member", cid: "bookings", itemId: "b1", error: "unknown-assignee" }));
+    expect(block).toContain("to an address this log does not carry");
+    expect(block).toContain("nobody on the roster holds an assignable role");
+  });
+
+  it("explains an intent's refusal in the INTENT's vocabulary, not the public form's", () => {
+    // The two collide: `unknown-collection` off a public submission is about `public.submit`, and
+    // off an intent it is about the page's own view. Reading one in the other's words sends an
+    // author to a declaration that has nothing to do with what they pressed.
+    const block = render((log) =>
+      log.add({ kind: "intent", intent: "transition", audience: "member", cid: "bookings", itemId: "b1", to: "done", error: "unknown-collection" }),
+    );
+    expect(block).toContain("its own view does not declare");
+    expect(block).not.toContain("public.submit");
+  });
+
   it("marks what the PAGE wrote as the page's, and never lets it end the quotation", () => {
     const block = render((log) => log.add({ kind: "notice", code: "error", detail: 'boom "and" \n more' }));
     // The reader is often a model being asked what went wrong. A string the page chose must not

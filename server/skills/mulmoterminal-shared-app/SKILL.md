@@ -385,11 +385,34 @@ real answer in the app's data, not a rehearsal: tell the user that before they p
 and offer to remove it afterwards. Reaching the CONFIRMATION is what proves the page works;
 accepting is only needed when you want to see the record land.
 
+**A member's page is the one place the pane can prove more than the headless run.** A page written
+for the roster (`/m/`) or for the participant (`/p/`) asks for a `transition`, an `assign` or a
+`withdraw`, and the pane **performs it** — as the author, judged first against that page's own
+projection and then by the deployed rules. The headless run refuses all three (`read-only`), so it
+can only show that a control is wired; whether pressing it actually moves the record is a question
+only the pane answers.
+
+**And it moves a REAL record, with no HOST confirmation and no undo.** A submission raises the
+parent's confirmation dialog and lands in the pane's Undo list; a member's move does neither — the
+live desk raises no dialog either, and a move creates no record to take back. So say what a button
+will do before the user presses it, and remember that reopening a poll question or approving a
+booking in the preview is the same event a member would have caused.
+
+**That is about the HOST, and it does not excuse the page.** `withdraw` still has to ask, in the
+page, for the reason below — it deletes a record and hands the slot to whoever clicks next. What
+the pane not confirming means is that pressing the page's own confirm button writes for real; it
+does not mean the page may stop drawing one.
+
 Ask them to confirm, in these terms:
 
 - the page **draws its data** (a grid that stays on "loading…" means `ready()` was never called);
 - pressing the **submit button raises the confirmation dialog**, with the right values in it (no
   dialog = the message never left the frame — a `<form>`, or a handler that never ran);
+- on a member's page, pressing a **control actually moves the row** — the list redraws with the new
+  status. If it does not, the log below names the refusal: `illegal-transition` is the declared
+  `transitions` table, `not-permitted` is the reader's role, `not-writable` is a missing
+  `statusField` / `assigneeField` / `selfDelete`, and `not-in-view` is the page naming a row it was
+  not handed (the preview writes as the OWNER, so it cannot let the rules decide whose row it is);
 - the **error paths** say something: an empty required field, an unchosen option.
 
 Do this **before publish** and again after any change to a page. If the user cannot look right now,
@@ -419,7 +442,8 @@ broken, which is why they are not a substitute for the paragraph above.
 
 **What the pane's preview does NOT prove**, so do not claim it: the write is made **as the author**, who may write anything in their own app, so a visitor's or a participant's
 permission is untested and a page that works here can still be refused for the person it was built
-for. Nobody else exists, so nothing is concurrent. And it cannot tell whether the rules a new
+for. That holds for a member's move as much as for a submission — the pane refuses one the AUTHOR's
+roles do not carry, which is not the same as testing it for whoever will actually press it. Nobody else exists, so nothing is concurrent. And it cannot tell whether the rules a new
 declaration needs have been deployed at all.
 
 ### 4. Invite
