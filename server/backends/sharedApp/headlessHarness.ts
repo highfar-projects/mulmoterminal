@@ -127,7 +127,7 @@ export const HARNESS_HTML = `<!doctype html>
 <body>
 <div id="host"></div>
 <script type="module">
-import { memberBridge, portChannel, publicViewSrcdoc, viewBridge, viewNonce, VIEW_MESSAGE } from "${VIEW_MOUNT}/index.js";
+import { portChannel, publicViewSrcdoc, viewNonce, viewParent, VIEW_MESSAGE } from "${VIEW_MOUNT}/index.js";
 
 const host = document.getElementById("host");
 let frame = null;
@@ -137,6 +137,9 @@ let config = null;
 // without it is the bug this harness reported for months as an author's mistake: the page is handed
 // \`{}\`, draws none of its buttons, and the report says the controls were not there.
 let viewer = null;
+// What the reader has already submitted, projected as the live page receives it. Null is "nobody
+// looked", which is not the same statement as an empty map.
+let own = null;
 let nonce = viewNonce();
 let outbound = [];
 let submitted = [];
@@ -189,34 +192,23 @@ const recording = (make) => () => {
   };
 };
 
-/** The member's parent, for a roster or participant page. It performs nothing — a transition, an
- *  assignment or a withdrawal is a real write against the live rules and neither this harness nor
- *  the PANE has a route for one — so every intent is refused BY NAME on the channel, which the
- *  report reads back out of \`outbound\`. That refusal is parity, not a shortfall: the pane refuses
- *  them too, for the same reason and in the same words. */
-const member = memberBridge(
+/** ONE PARENT, for whichever page is being run — the same one the pane wires and the same one
+ *  mulmoserver puts in front of the live pages.
+ *
+ *  There were two here, chosen per page, and each answered half the vocabulary the injected
+ *  bootstrap gives every document. A public page's intent was DROPPED (read as "not a submission",
+ *  found to carry no request id) and a member page's \`view.mine()\` was answered "nobody looked"
+ *  whatever the app declared — so a run could report a page as silent when the harness was the
+ *  thing that had not answered.
+ *
+ *  IT STILL PERFORMS NOTHING, and that is deliberate rather than a shortfall: a transition, an
+ *  assignment or a withdrawal is a real write against the live rules, and a headless run writes
+ *  nothing. With no \`perform\` port every intent is refused BY NAME on the channel — \`read-only\`,
+ *  which the report reads back out of \`outbound\` — rather than left unanswered. */
+const parent = viewParent(
   {
-    channel: recording(() => portChannel(frame)),
-    state: () => datasets,
-    viewer: () => viewer ?? { me: null, can: {} },
-    // The page's own account of itself, which the pane has always taken and this harness dropped.
-    // A page that crashes reports it HERE and nowhere else the run can see — dropped, it read as a
-    // page that simply drew nothing.
-    notice: (report) => notices.push({ code: String(report.code), detail: String(report.detail) }),
-    // THE SAME CELL the public parent writes, because \`observe()\` reads one and the report puts
-    // "It NEVER answered the handshake" at the top of a page whose value is false — over a
-    // paragraph saying nothing below describes the page's behaviour. Wired to the public bridge
-    // alone, every healthy member page was reported that way.
-    readied: cells.readied,
-  },
-  () => nonce,
-);
-
-const bridge = viewBridge(
-  {
-    // Recorded on its way out, like the member parent's above. The refusals are only visible here:
-    // they are answered on the port and never drawn, which is exactly why an author watching the
-    // screen cannot see them.
+    // Recorded on its way out. The refusals are only visible here: they are answered on the port
+    // and never drawn, which is exactly why an author watching the screen cannot see them.
     channel: recording(() => portChannel(frame)),
     // THE ANSWER NODE ALREADY DECIDED, or a refusal when it decided nothing.
     //
@@ -226,7 +218,18 @@ const bridge = viewBridge(
     // this document never held anything that could reach a database.
     submit: async () => answer ?? { ok: false, error: "a headless preview never writes" },
     state: () => datasets,
+    // WHO the reader is to this page, on every audience. Undefined rather than \`{ me: null, can: {} }\`
+    // where the payload resolved none: an empty \`can\` is a claim ("you may do nothing"), and the
+    // page must be able to tell it from silence.
+    viewer: () => viewer ?? undefined,
+    // What the reader has already submitted. Same rule: undefined is "nobody looked".
+    mine: () => own ?? undefined,
+    // The page's own account of itself. A page that crashes reports it HERE and nowhere else the
+    // run can see — dropped, it read as a page that simply drew nothing.
     notice: (report) => notices.push({ code: String(report.code), detail: String(report.detail) }),
+    // Nothing here can break in a way the page has not already been told about, and this document
+    // has no console worth writing to. Said rather than forgotten, which is what the port is for.
+    defect: () => {},
   },
   () => config,
   () => nonce,
@@ -236,12 +239,7 @@ const bridge = viewBridge(
 // Only our frame. The sandbox's origin is opaque, so \`event.origin\` cannot draw this line.
 window.addEventListener("message", (event) => {
   if (frame === null || event.source !== frame.contentWindow) return;
-  // The audience decides which parent answers, exactly as the address does in production.
-  if (viewer !== null) {
-    member.receive(event.data);
-    return;
-  }
-  bridge.receive(event.data);
+  parent.receive(event.data);
 });
 
 const refusals = () => outbound.filter((message) => message.type === VIEW_MESSAGE.result && message.ok === false).map((message) => String(message.error));
@@ -250,8 +248,7 @@ window.__preview = {
   /** Mount one document. Called again for every button pressed, so each press is judged against a
    *  page in its starting state rather than against whatever the previous press left behind. */
   render(page) {
-    bridge.restart();
-    member.forget();
+    parent.restart();
     outbound = [];
     submitted = [];
     notices = [];
@@ -259,6 +256,7 @@ window.__preview = {
     answer = null;
     datasets = page.datasets;
     viewer = page.viewer ?? null;
+    own = page.own ?? null;
     config = page.submit === null ? null : { submit: page.submit };
     nonce = viewNonce();
     if (frame !== null) frame.remove();
@@ -290,7 +288,7 @@ window.__preview = {
   },
   /** Answer the confirmation the way a visitor who changed their mind would. */
   decline() {
-    bridge.decline();
+    parent.decline();
   },
   /** Answer it the way somebody who meant it would, with the verdict Node already has.
    *
@@ -299,7 +297,7 @@ window.__preview = {
    *  real answer, which is the whole reason to accept rather than to decline. */
   async accept(given) {
     answer = given;
-    await bridge.accept();
+    await parent.accept();
     answer = null;
   },
 };

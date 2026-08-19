@@ -46,7 +46,16 @@ class RecordingDocs implements FirestoreDocs {
     return created;
   }
 
+  /** Refuse to LIST records, which is the ordinary state of an app nobody has published: the rules
+   *  cannot resolve an owner for anything under a document that does not exist. Separate from
+   *  `denyItemReads` because they are different operations — a lookup `get`s one document by name
+   *  and a dataset `list`s a collection — and a preview has to tell them apart. */
+  denyItemLists = false;
+
   list = (collectionPath: string): Promise<FirestoreDoc[]> => {
+    if (this.denyItemLists && collectionPath.includes("/collections/")) {
+      return Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }));
+    }
     const docs = [...this.read(collectionPath)].sort(([left], [right]) => (left < right ? -1 : 1));
     return Promise.resolve(docs.map(([id, data]) => ({ id, data })));
   };
@@ -206,8 +215,74 @@ describe("shared app preview", () => {
     const result = await previewSharedApp(root, stamp);
 
     expect(result.ok === false ? result.problems : []).toEqual([]);
-    expect(result.ok && result.pages).toEqual([{ id: "public", html, audience: "public" }]);
+    // WITH A VIEWER, which the public page did not use to get. The rules let the person who
+    // submitted a row move it and take it away with no role at all (`ownRow` asks for `authed()`
+    // and nothing else), so a public page handed no capabilities drew no button for a cancellation
+    // the rules were waiting to allow. `can` is empty here because this app declares no
+    // `selfTransitions` and no `selfDelete` — an empty answer, not a missing one.
+    expect(result.ok && result.pages).toEqual([{ id: "public", html, audience: "public", viewer: { me: "owner@example.com", can: {} } }]);
     expect(docs.writes).toEqual([]);
+  });
+
+  it("hands back what the AUTHOR has already submitted, projected as the page will see it", async () => {
+    // The port that did not exist. A collection people submit to is exactly the one `public.read`
+    // cannot open — one visitor would be reading every other visitor's answer — so a page cannot
+    // find its own row for itself, and the pane answered "nobody looked" for ever. A page asking
+    // "have I registered?" then drew its registration form on top of a registration.
+    writeApp(
+      root,
+      declaration({
+        collections: { bookings: { submitOnly: true } },
+        public: {
+          enabled: true,
+          read: ["notes"],
+          submit: { bookings: { auth: "verifiedEmail", emailField: "note", createFields: ["note", "closesAt"] } },
+        },
+      }),
+    );
+    docs.store.set(
+      `apps/${AID}/collections/bookings/items`,
+      new Map([
+        ["mine", { note: OWNER.email, closesAt: 5, status: "approved", staffNote: "難しい客" }],
+        ["theirs", { note: "somebody@example.com", closesAt: 6 }],
+      ]),
+    );
+
+    const result = await previewSharedApp(root, stamp);
+
+    expect(result.ok === false ? result.problems : []).toEqual([]);
+    // THEIRS IS NOT HERE. The read is made as the author (this is their machine) and then filtered
+    // to their own rows by the same selectors the rules identify one by — a preview that showed
+    // more than production is the one direction this must never fail in.
+    //
+    // AND NEITHER IS `status` OR `staffNote`. `ownRow` in the rules hands back the whole document;
+    // what a page in this position could have SENT is narrower, and handing over the rest would
+    // widen what a published page knows about the app in order to tell it something it already
+    // knew. `closesAt` survives because the form draws it; `note` is the address field the host
+    // fills in, so it does not.
+    expect(result.ok && result.own).toEqual({ bookings: [{ id: "mine", closesAt: 5 }] });
+  });
+
+  it("says nothing about a collection whose rows could not be read", async () => {
+    // ABSENT is "nobody looked" and an empty array is "you have submitted nothing". A page told the
+    // second when the first is true stops offering an action to somebody entitled to it, which is
+    // the bug this whole port exists to prevent — arriving from the other direction.
+    writeApp(
+      root,
+      declaration({
+        collections: { bookings: { submitOnly: true } },
+        public: {
+          enabled: true,
+          read: ["notes"],
+          submit: { bookings: { auth: "verifiedEmail", emailField: "note", createFields: ["note", "closesAt"] } },
+        },
+      }),
+    );
+    docs.denyItemLists = true;
+
+    const result = await previewSharedApp(root, stamp);
+
+    expect(result.ok && result.own).toEqual({});
   });
 
   it("refuses a page it cannot read, rather than previewing an app without it", async () => {

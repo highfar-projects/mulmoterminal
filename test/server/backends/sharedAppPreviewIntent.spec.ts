@@ -143,6 +143,9 @@ const bookingApp = () => ({
   views: [
     { id: "desk", audience: "member", path: "views/desk.html", collections: ["bookings"] },
     { id: "mine", audience: "participant", path: "views/desk.html", collections: ["bookings"] },
+    // The page the booking was made on. It draws `slots`, which is all `public.read` opens — the
+    // bookings themselves are the one thing a public page must never list.
+    { id: "public", audience: "public", path: "views/desk.html", collections: ["slots"] },
   ],
   public: {
     enabled: true,
@@ -228,12 +231,19 @@ describe("a member's intent, performed from the preview", () => {
     expect(batched).toEqual([]);
   });
 
-  it("refuses an intent that arrives from a public page", async () => {
-    // A public page has no reader and no roles, so there is nothing to judge the move AS. Answered
-    // by name rather than performed as somebody.
+  it("judges an intent from a PUBLIC page as a participant's, rather than refusing it by kind", async () => {
+    // It used to be refused by name — "a public page has no reader, no roles and no tier". Two of
+    // those are true and the conclusion was not: `ownRow` in the rules asks for `authed()` and
+    // nothing else, and the moves it allows are declared in `public.submit[cid]`. So the visitor who
+    // submitted a row may move it exactly as a participant may, and the refusal was the host's
+    // shape rather than the app's rule.
+    //
+    // This app publishes no public page at all, so the answer is still no — but it is
+    // `no-such-page`, which says which page the ask named, rather than "wrong kind of page", which
+    // named nothing the author could act on. The app below has one, and performs.
     const result = await performPreviewIntent(root, asked({ page: { id: "public", audience: "public" } }));
 
-    expect(result).toEqual({ ok: false, error: "not-a-member-page" });
+    expect(result).toEqual({ ok: false, error: "no-such-page" });
     expect(batched).toEqual([]);
   });
 
@@ -326,6 +336,27 @@ describe("a member's intent, performed from the preview", () => {
       // reopen are both refused, and there is no commit in which the booking is gone and the grid
       // still says taken.
       expect(batched).toEqual([`delete ${bookingsPath}/roomA-1000`, `update apps/${AID}/collections/slots/items/roomA-1000 {"state":"open"}`]);
+    });
+
+    it("cancels the author's OWN booking from the public page, as a participant would", async () => {
+      // THE ONE THIS CHANGE EXISTS FOR. `selfTransitions` is declared inside `public.submit`, which
+      // is the public page's own declaration, and `ownRow` in the rules asks for `authed()` and
+      // nothing else — no role, no membership, an anonymous uid will do. So the visitor who booked
+      // the slot may cancel it, and the page that took the booking is where they would press it.
+      //
+      // It was refused here by kind ("not a member page") because the public parent had no
+      // `perform` port to reach this with, and on the live page the intent was dropped without an
+      // answer at all. Both halves are wired now, and the ask is judged exactly as `/p/`'s is.
+      const result = await performPreviewIntent(root, {
+        page: { id: "public", audience: "public" },
+        kind: "transition",
+        cid: "bookings",
+        itemId: "roomA-1000",
+        to: "cancelled",
+      });
+
+      expect(result).toEqual({ ok: true, mailed: false });
+      expect(batched).toEqual([`update ${bookingsPath}/roomA-1000 {"status":"cancelled"}`]);
     });
 
     it("writes the assignee into the field the declaration names", async () => {

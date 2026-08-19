@@ -37,12 +37,13 @@ import { declaredView, readAppViewFile } from "./publicView.js";
 import { isRecord } from "../../../common/isRecord.js";
 // Both from `/view`, which is where the PARENT's vocabulary lives — and where the read-back has to
 // be: the root entry reaches the compiler, and the compiler imports core's server half at runtime.
-import { projectedWritesOf, viewerFor, writableFields } from "@receptron/sharedapp/view";
+import { ownRowsFor, projectedWritesOf, PUBLIC_WRITE_TIER, viewerFor, writableFields } from "@receptron/sharedapp/view";
 import {
   previewPageKey,
   type PreviewDataset,
   type PreviewDatasets,
   type PreviewForm,
+  type PreviewAudience,
   type PreviewPage,
   type SharedAppPreview,
 } from "../../../common/sharedAppPreview.js";
@@ -61,7 +62,7 @@ export interface PreviewSuccess extends SharedAppPreview {
    *  `viewer` and never the projection it came from. Sending this to the browser would put a second
    *  judge there — one that could disagree with the one that performs the write — which is the
    *  divergence `PreviewPage.viewer` was introduced to remove. */
-  writes: Partial<Record<TierPlan["tier"], ProjectedViewWrite[]>>;
+  writes: Partial<Record<PreviewAudience, ProjectedViewWrite[]>>;
 }
 
 export type PreviewResult = PreviewSuccess | SharedAppFailure;
@@ -217,6 +218,28 @@ function formInputsOf(config: PublishedConfigDoc, form: PublicForm): PreviewForm
   );
 }
 
+/** WHERE THE AUTHOR'S OWN ROWS ARE READ FROM, per collection the app opens for submission.
+ *
+ *  The same three selectors the rules identify an own row by, in the order `readCollection` applies
+ *  them: the document id when it IS the uid, then the uid field, then the verified address. Read as
+ *  the author (this runs on their machine) and then FILTERED to their own rows, because the reader
+ *  a published page has is a visitor and the preview must never show more than production. */
+const ownRequests = (config: PublishedConfigDoc): RequestedCollection[] =>
+  Object.entries(config.submit ?? {}).map(([cid, spec]) => {
+    const text = (key: string): string | undefined => (typeof spec[key] === "string" ? spec[key] : undefined);
+    return {
+      cid,
+      scope: "own" as const,
+      ...(spec.idFrom === "auth.uid" ? { ownDocId: "auth.uid" as const } : {}),
+      ...(text("uidField") === undefined ? {} : { uidField: text("uidField") }),
+      ...(text("emailField") === undefined ? {} : { emailField: text("emailField") }),
+    };
+  });
+
+/** The key the own-rows read is cached under. Never a page's: no page is handed these as datasets —
+ *  they travel as `viewer.mine`, which is a different message with a different meaning. */
+const OWN_KEY = "own:reader";
+
 /** The public page has no view id of its own — it is the app's one anonymous face, and the
  *  projection names it nowhere. */
 const PUBLIC_PAGE_ID = "public";
@@ -251,11 +274,18 @@ export async function previewSharedApp(root: string, opts: SharedAppOptions = {}
   if (!tiers.ok) return { ok: false, partial: false, problems: tiers.problems };
 
   const publicHtml = page !== null && page.ok ? page.view.html : null;
-  const publicPages: PreviewPage[] = publicHtml === null ? [] : [{ id: PUBLIC_PAGE_ID, html: publicHtml, audience: "public" }];
-  // The projection each tier writes, kept BESIDE the viewer it resolves to rather than recomputed
+  // The projection each page writes, kept BESIDE the viewer it resolves to rather than recomputed
   // later: an intent is judged against the same `write` list this `viewer` was built from, so the
   // buttons a page draws and the moves this host will perform cannot come from two readings.
-  const writes: Partial<Record<TierPlan["tier"], ProjectedViewWrite[]>> = {};
+  const writes: Partial<Record<PreviewAudience, ProjectedViewWrite[]>> = {};
+  // THE PUBLIC PAGE HAS ONE TOO. Read off the same document the anonymous page reads, at the
+  // PARTICIPANT's tier — because the rules make those two readers the same one over their own row
+  // (`ownRow` asks for `authed()` and nothing else). It used to have none, so a page offering the
+  // cancellation the rules were waiting to allow drew no button, and the intent behind it reached a
+  // parent that dropped it.
+  writes.public = projectedWritesOf(face.config);
+  const publicViewer = viewerFor(writes.public, handle.email, PUBLIC_WRITE_TIER);
+  const publicPages: PreviewPage[] = publicHtml === null ? [] : [{ id: PUBLIC_PAGE_ID, html: publicHtml, audience: "public", viewer: publicViewer }];
   const tierPages: PreviewPage[] = tiers.plans.flatMap((plan) => {
     // The author, as this tier's projection resolves them. `viewerFor` is the
     // package's, and mulmoserver calls the same one with the same projection —
@@ -280,7 +310,17 @@ export async function previewSharedApp(root: string, opts: SharedAppOptions = {}
     ...tiers.plans.flatMap(tierRequests),
   ]);
 
+  // THE AUTHOR'S OWN ROWS, read separately from the pages and never as a page's datasets: they
+  // travel as `viewer.mine`, which is a different message saying a different thing. A cid that
+  // could not be read is left OUT by `readDatasets`, which is exactly the shape the port wants —
+  // absent means "nobody looked", present-and-empty means "you have submitted nothing".
+  const ownRead = await readDatasets(handle, aid, [{ key: OWN_KEY, collections: ownRequests(face.config) }]);
+
   const form = publicFormOf(authored, schemasOf(collections));
+  // THE ONE LIST OF "what a page could have sent", used for the boxes the pane draws AND for the
+  // projection of the author's own rows. Two computations of it is one more place for the preview
+  // to hand a page a field production would have dropped.
+  const formInputs = formInputsOf(face.config, form);
 
   return {
     ok: true,
@@ -293,8 +333,16 @@ export async function previewSharedApp(root: string, opts: SharedAppOptions = {}
     publicOpen: face.public !== undefined,
     fromLiveApp: existingApp !== null,
     generatedForm: publicHtml === null && Object.keys(form).length > 0,
-    formInputs: formInputsOf(face.config, form),
+    formInputs,
     datasets,
+    // Projected to the fields a page in this position could have SENT — the package's rule, so the
+    // preview hands a page exactly what mulmoserver hands the live one. A page given one more field
+    // here than production gives it is a preview of a page that does not exist.
+    own: ownRowsFor(
+      Object.entries(formInputs).map(([cid, fields]) => ({ cid, fields })),
+      ownRead.datasets[OWN_KEY] ?? {},
+      Object.keys(ownRead.datasets[OWN_KEY] ?? {}),
+    ),
     unreadable,
     warnings: [...(page !== null && page.ok ? page.view.warnings : []), ...tiers.warnings],
   };

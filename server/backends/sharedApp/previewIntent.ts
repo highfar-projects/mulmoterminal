@@ -27,7 +27,7 @@
 import { doc, collection, writeBatch } from "firebase/firestore";
 import { APPS_COLLECTION, appSchemasPath } from "@receptron/sharedapp";
 import { MIRROR_OPEN, readIntentMessage, VIEW_MESSAGE, type JudgedIntent, type WriteTier } from "@receptron/sharedapp/view";
-import { previewPageKey, type PreviewIntent, type PreviewIntentResult } from "../../../common/sharedAppPreview.js";
+import { previewPageKey, type PreviewAudience, type PreviewIntent, type PreviewIntentResult } from "../../../common/sharedAppPreview.js";
 import { currentFirestore } from "../remoteHost/session.js";
 import { previewSharedApp } from "./preview.js";
 import { sharedAppContext } from "./context.js";
@@ -43,15 +43,16 @@ const itemsPath = (aid: string, cid: string): string => `${appSchemasPath(aid)}/
 const mailPath = (aid: string): string => `${APPS_COLLECTION}/${aid}/mail`;
 const mailDocId = (cid: string, itemId: string, template: string): string => `${cid}_${itemId}_${template}`;
 
-/** The audiences that have intents at all.
+/** WHAT REPLACED `NOT_A_MEMBER_PAGE`.
  *
- *  A public page has no reader, no roles and no tier — `readIntentMessage` cannot judge for one,
- *  and there is nothing sensible to judge it AS. Refused by name rather than squeezed into one of
- *  the package's refusals: the package's names are about a declaration, and this one is about the
- *  page having been the wrong kind of page, which no declaration can fix. Unreachable from the pane
- *  (the public parent never routes an intent here) and stated anyway, because the alternative to an
- *  unreachable branch is an unnoticed one. */
-export const NOT_A_MEMBER_PAGE = "not-a-member-page";
+ *  There used to be a refusal here for "the page was the wrong kind of page" — a public page asking
+ *  to move a record. It is gone because it was wrong: the rules let the person who submitted a row
+ *  move it and take it away wherever they are standing, and the constant existed only because the
+ *  public parent had no `perform` port to reach this with. Both halves are now wired, and an ask
+ *  from a public page is judged exactly as a participant's is.
+ *
+ *  Kept as a note rather than as a dead export: nothing compares the string, and a refusal name
+ *  that no longer refuses anything is the kind of thing that gets re-added by pattern-matching. */
 
 /** The preview has no page under that id — the author renamed or removed a view and a document from
  *  the previous render is still on screen asking about it. */
@@ -78,7 +79,23 @@ export const NOT_IN_VIEW = "not-in-view";
 
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
-const isTier = (audience: string): audience is WriteTier => audience === "member" || audience === "roster";
+/** WHICH TIER JUDGES THIS PAGE'S ASK.
+ *
+ *  The public page is judged as a PARTICIPANT, and that is a statement about the rules rather than
+ *  a convenience: `ownRow` in `firestore.rules` asks for `authed()` and nothing else — no role, no
+ *  membership, an anonymous uid will do — and the moves it allows come from `public.submit[cid]`
+ *  (`selfTransitions`, `selfDelete`), which is the public page's own declaration. So a visitor who
+ *  booked a slot and a participant who booked the same slot may do exactly the same things to it.
+ *
+ *  It used to be refused here by name, on the reasoning that "a public page has no reader, no roles
+ *  and no tier". Two of those are true and the conclusion was not: what it has instead is the
+ *  roster tier's answer, which is "there are no roles; the rules answer from the record". */
+const tierOf = (audience: PreviewAudience): WriteTier => {
+  if (audience === "member") {
+    return "member";
+  }
+  return "roster";
+};
 
 /** The batch, and every intent goes through one.
  *
@@ -153,8 +170,8 @@ export async function performPreviewIntent(root: string, asked: PreviewIntent): 
   if (!context.ok) return { ok: false, error: context.problems.join(" ") };
   const { handle } = context;
 
-  if (!isTier(asked.page.audience)) return { ok: false, error: NOT_A_MEMBER_PAGE };
-  const tier = asked.page.audience;
+  const audience = asked.page.audience;
+  const tier = tierOf(audience);
 
   const preview = await previewSharedApp(root);
   if (!preview.ok) return { ok: false, error: preview.problems.join(" ") };
@@ -162,15 +179,26 @@ export async function performPreviewIntent(root: string, asked: PreviewIntent): 
   // The page has to still be there. A document from the previous render can outlive the view that
   // produced it — the author edits `app.json` while the frame is up — and judging its ask against
   // whatever page happens to be first would perform a move on a projection nobody is looking at.
-  const page = preview.pages.find((candidate) => candidate.id === asked.page.id && candidate.audience === tier);
+  const page = preview.pages.find((candidate) => candidate.id === asked.page.id && candidate.audience === audience);
   if (page === undefined) return { ok: false, error: NO_SUCH_PAGE };
 
-  const write = preview.writes[tier] ?? [];
+  const write = preview.writes[audience] ?? [];
   // THE RECORDS THIS PAGE WAS HANDED, and not the collection at large. The judgement asks what
   // status a row is in, and asking it of a row the page may not even read would decide a member's
   // move from data their projection excludes.
-  const held = preview.datasets[previewPageKey(tier, page.id)] ?? {};
-  const record = (cid: string, itemId: string): Record<string, unknown> | null => (held[cid] ?? []).find((row) => row.id === itemId) ?? null;
+  const held = preview.datasets[previewPageKey(audience, page.id)] ?? {};
+  // THE PAGE'S DATASETS **AND** THE READER'S OWN ROWS, because those are the two things a live page
+  // is handed and they are not the same list. A collection people submit to is exactly the one
+  // `public.read` cannot open — one visitor would be reading every other visitor's answer — so the
+  // row a public page moves is never in its datasets. It arrives as `viewer.mine`, which is the
+  // whole reason that message exists, and an intent judged against the datasets alone answered
+  // `not-in-view` about a row the page was legitimately showing.
+  //
+  // It does not widen anything: `own` is filtered to the author's own rows by the same three
+  // selectors the rules identify one by (`readCollection`), so a row somebody else submitted is in
+  // neither list.
+  const record = (cid: string, itemId: string): Record<string, unknown> | null =>
+    (held[cid] ?? []).find((row) => row.id === itemId) ?? (preview.own[cid] ?? []).find((row) => row.id === itemId) ?? null;
 
   // Rebuilt into the message shape the package reads, rather than the package being given a second
   // entry point for a pre-parsed ask: `readIntentMessage` is what mulmoserver judges with, and a

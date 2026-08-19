@@ -22,9 +22,13 @@ export interface PreviewPage {
    *  `{ me, can }` mulmoserver posts to the live `/m/` and `/p/`, computed from
    *  the same projection by the same function.
    *
-   *  Absent on a public page, which has no reader and no roles: `public.submit`
-   *  is judged from the declaration alone, and a `viewer` there would be an
-   *  answer to a question that page never asks.
+   *  ON THE PUBLIC PAGE TOO, and that is a correction rather than an addition.
+   *  It was left off because "a public page has no reader and no roles" — but
+   *  the rules disagree: `ownRow` asks for `authed()` and nothing else, and
+   *  `selfTransitions` / `selfDelete` are declared inside `public.submit[cid]`.
+   *  So the visitor who booked a slot may cancel it, and a page with no
+   *  `viewer` draws no button for that. It is the participant's own answer,
+   *  computed at the same tier (`PUBLIC_WRITE_TIER`).
    *
    *  It comes from the SERVER because the client has neither the projection nor
    *  the author's verified address. Sending the projection instead and letting
@@ -101,6 +105,22 @@ export interface SharedAppPreview {
    *  different things than the published site does — a preview of nothing real. */
   formInputs: PreviewForm;
   datasets: PreviewDatasets;
+  /** WHAT THE AUTHOR HAS ALREADY SUBMITTED to this app, projected to the fields a page could have
+   *  SENT — the `viewer.mine` every published page is handed.
+   *
+   *  Per APP rather than per page, because that is what the question is about: it asks after the
+   *  READER, and the reader is the same person whichever page they are looking at.
+   *
+   *  ABSENCE IS THE ANSWER TO A DIFFERENT QUESTION, at two levels, and both matter. A cid missing
+   *  from the map is "nothing could be read" — the app has never been published, the read was
+   *  refused — which a page must draw as UNKNOWN. A cid present with an empty array is "you have
+   *  not submitted anything here". Getting that backwards tells somebody they have already answered
+   *  when they have not, and takes a one-time action away from them.
+   *
+   *  It exists because the pane had NO ANSWER AT ALL: the public parent here was wired without the
+   *  port, so `view.mine()` was `known: false` for ever and a page asking "have I registered?" drew
+   *  its registration form on top of a registration. The author then debugged the page. */
+  own: Record<string, PreviewDataset>;
   /** Collections a page names but whose records could not be read. Reported rather than silently
    *  empty: "no bookings yet" and "the read was refused" put identical pixels on the screen. */
   unreadable: string[];
@@ -145,6 +165,15 @@ export interface PreviewWrittenRecord {
    *  neither survives a restart, and a preview's writes become ordinary records when it ends. */
   token: string;
 }
+
+/** WHAT THE PANE ANSWERS A `view.mine(cid, key)` WITH.
+ *
+ *  `ok: false` is "nobody looked" — no session, an id strategy with nothing to build from, a read
+ *  that was refused — and the parent turns it into `known: false`. It is NOT "you have not
+ *  answered", which is `{ ok: true, found: false }`: a page told the second stops offering an
+ *  action to somebody entitled to it, and a page told the first keeps offering it and lets the
+ *  refusal explain itself. */
+export type PreviewLookupResult = { ok: false } | { ok: true; found: boolean; record?: Record<string, unknown> };
 
 /** A write whose outcome is unknown: the request threw after the server may already have written.
  *

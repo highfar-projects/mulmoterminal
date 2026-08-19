@@ -390,12 +390,18 @@ real answer in the app's data, not a rehearsal: tell the user that before they p
 and offer to remove it afterwards. Reaching the CONFIRMATION is what proves the page works;
 accepting is only needed when you want to see the record land.
 
-**A member's page is the one place the pane can prove more than the headless run.** A page written
-for the roster (`/m/`) or for the participant (`/p/`) asks for a `transition`, an `assign` or a
-`withdraw`, and the pane **performs it** — as the author, judged first against that page's own
-projection and then by the deployed rules. The headless run refuses all three (`read-only`), so it
-can only show that a control is wired; whether pressing it actually moves the record is a question
-only the pane answers.
+**Moving a record is the one thing the pane can prove and the headless run cannot.** A page asks for
+a `transition`, an `assign` or a `withdraw`, and the pane **performs it** — as the author, judged
+first against that page's own projection and then by the deployed rules. The headless run refuses
+all three (`read-only`), so it can only show that a control is wired; whether pressing it actually
+moves the record is a question only the pane answers.
+
+**On EVERY page, including the public one.** A visitor who submitted a row may move it along
+`selfTransitions` and take it away along `selfDelete` — both declared inside `public.submit[cid]` —
+with no role and no membership: `ownRow` in the rules asks that they are signed in and nothing more,
+and an anonymous session counts. The public page used to be unable to ask for any of it (the ask was
+dropped and the page waited for ever), which is worth knowing when reading an older page that works
+around it.
 
 **And it moves a REAL record, with no HOST confirmation and no undo.** A submission raises the
 parent's confirmation dialog and lands in the pane's Undo list; a member's move does neither — the
@@ -941,6 +947,14 @@ The comparison above is only the first, and it is the one that needs an address:
   `idFrom: "auth.uid+field"` the id is `uid_<field>`, which the host cannot know before the page
   names the key. It answers `{ known, found, record }`, and `known: false` means **nobody looked**.
   Draw the action and let the refusal explain itself; never draw it as "no".
+
+**All three work in the pane's preview, and the last two did not until 2026-08-19.** The pane
+answered `view.mine()` with `known: false` for ever and sent no `viewer.mine` at all, because the
+parent it wired had nowhere to route the read — so a page that correctly refused to guess drew its
+"please register" branch on top of a registration that existed, and the fault looked like the page's.
+If you are reading a page whose author added a "which one are you?" picker or a `?pretendRegistered`
+switch to get past that, **delete it**: the workaround runs in the preview and the real branch never
+does, which is the preview ceasing to preview anything.
 
 So the question to settle before the page is written is not "is the visitor signed in" but **which
 of the three this page will use** — and being unable to READ the collection does not settle it,

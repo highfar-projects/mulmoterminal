@@ -20,7 +20,7 @@
 // a role may WRITE is not tested; nobody else exists, so nothing here is concurrent; and it cannot
 // tell whether the Firestore rules a new declaration needs have been deployed at all.
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
-import { memberBridge, portChannel, publicViewSrcdoc, viewBridge, viewNonce, VIEW_MESSAGE, type PendingSubmit, type Viewer } from "@receptron/sharedapp/view";
+import { portChannel, publicViewSrcdoc, viewNonce, viewParent, VIEW_MESSAGE, type LookupAsk, type PendingSubmit } from "@receptron/sharedapp/view";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 import { isRecord } from "../../common/isRecord";
 import { createPreviewLog, renderPreviewLog, type PreviewLogEvent } from "../utils/sharedAppPreviewLog";
@@ -164,7 +164,54 @@ function noteOutbound(message: Record<string, unknown>): void {
   remember({ kind: "refused", reason, audience: audienceNow() });
 }
 
-const bridge = viewBridge(
+/** Take the stale page off the screen, DEFERRED — which is the whole of what this host adds to that
+ *  port's contract. `load()` blanks the payload on its way, which changes the page being drawn and
+ *  restarts the bridge: run synchronously it would close the channel before the answer to this very
+ *  intent had been posted, and the view would wait for ever on a request that actually succeeded. A
+ *  macrotask puts it after the post, which the bridge makes from the promise the sender returns. */
+const recover = () => window.setTimeout(() => void load(), 0);
+
+/** The member's writes — and the public page's, which is the change. It decides nothing (see its
+ *  header) and is given the four things it needs so that what a refusal does to the log can be
+ *  pinned without a frame. */
+const sendIntent = createIntentSender({ page: () => page.value, url: () => writeUrl("intent"), remember, refresh, recover });
+
+/** "Have I already got this row?", asked of the server for the one key the page names.
+ *
+ *  A REJECTION is the honest failure and `{ found: false }` is not: a refused read, an app that has
+ *  never been published and a collection whose ids cannot be built from a key are all "nobody
+ *  looked", and the parent turns a rejection into exactly that. Answering "no" instead would tell
+ *  the author's page that they have not submitted, and it would stop offering an action they are
+ *  entitled to. */
+async function lookupOwn(ask: LookupAsk): Promise<{ found: boolean; record?: Record<string, unknown> }> {
+  const res = await fetchWithTimeout(
+    writeUrl("lookup"),
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cid: ask.cid, key: ask.key }) },
+    SLOW_COMMAND_TIMEOUT_MS,
+  );
+  const body: unknown = await res.json();
+  if (!isRecord(body) || body.ok !== true) throw new Error("nothing could be looked up");
+  const record = isRecord(body.record) ? body.record : undefined;
+  return { found: body.found === true, ...(record === undefined ? {} : { record }) };
+}
+
+/** ONE PARENT, for whichever page is on screen.
+ *
+ *  There were two — the package's public bridge for `/a/`-style pages and its member bridge for the
+ *  roster and participant ones — and this pane chose between them per page. mulmoserver did the
+ *  same, and BOTH have stopped: the injected bootstrap is one document, so every page can call all
+ *  five asks, and a parent that answers half of them drops the rest. On the public page that meant
+ *  an intent was read as "not a submission", found to carry no request id, and dropped — the page's
+ *  promise never settled. On a member page it meant `view.mine()` was answered "nobody looked"
+ *  whatever the rules would have returned, so a page asking "have I registered?" drew its
+ *  registration form on top of a registration.
+ *
+ *  WHAT DIFFERS IS THE ANSWER, never the vocabulary. Every port below is offered on every page, and
+ *  what a reader may actually do is decided where it can be enforced: the projection the server
+ *  resolved (`viewer`), the judgement in `previewIntent.ts`, and then the deployed rules.
+ *
+ *  Design: `plans/feat-one-view-parent.md`. */
+const parent = viewParent(
   {
     channel: () => {
       // Wrapped rather than replaced: what may travel and when is the package's, and this only
@@ -192,6 +239,32 @@ const bridge = viewBridge(
     // `undeclared-field` are answered before it, which is what a preview is FOR.
     submit: (pending) => send(pending.cid, pending.values),
     state: () => datasets.value,
+    // WHAT THE AUTHOR HAS ALREADY SUBMITTED, as the published page will be told it. `undefined`
+    // until a payload has landed — which is "nobody has looked", not "you have submitted nothing",
+    // and the difference is what stops a page claiming somebody has answered when they have not.
+    mine: () => payload.value?.own,
+    // WHO the author is to THIS page and what they may change, resolved by the server against the
+    // page's own projection. Public pages carry one too now: the rules let the person who submitted
+    // a row move it and take it away with no role at all, so a public page with no `viewer` drew no
+    // button for a cancellation the rules were waiting to allow.
+    viewer: () => page.value?.viewer,
+    // A GETTER, as the port requires: the page on screen changes under this parent, and a handler
+    // captured once would send a later ask under the page that was there before.
+    perform: () => sendIntent,
+    // "Have I already got this row?", for the one key the page names — the half `mine` cannot
+    // cover, because a composite id has no range the rules will list. A REJECTION here is answered
+    // `known: false`, which is the honest "nobody looked".
+    lookup: (ask) => lookupOwn(ask),
+    // A DEFECT OF OURS — a port rejected, or threw before it could answer. The page has already
+    // been told `ok: false` with a fixed code and never sees this; what is left is whether the
+    // author does. It goes in the same log as everything else the pane collects, as a `host` line:
+    // the reader here is the author trying to fix the page, and a failure of the parent looks
+    // identical to a page that hung if nothing records it.
+    defect: (error, requestId) =>
+      remember({
+        kind: "host",
+        note: `the preview could not answer request ${requestId ?? "(none)"}: ${error instanceof Error ? error.message : String(error)}`,
+      }),
   },
   // The REAL declaration, never an empty map.
   //
@@ -204,112 +277,16 @@ const bridge = viewBridge(
   cells,
 );
 
-/** The member's writes, in their own module. It decides nothing — see its header — and is given
- *  the four things it needs so that what a refusal does to the log can be pinned without a frame. */
-/** Take the stale page off the screen, DEFERRED — which is the whole of what this host adds to that
- *  port's contract. `load()` blanks the payload on its way, which changes the page being drawn and
- *  restarts the bridge: run synchronously it would close the channel before the answer to this very
- *  intent had been posted, and the view would wait for ever on a request that actually succeeded. A
- *  macrotask puts it after the post, which the bridge makes from the promise the sender returns. */
-const recover = () => window.setTimeout(() => void load(), 0);
-
-const sendIntent = createIntentSender({ page: () => page.value, url: () => writeUrl("intent"), remember, refresh, recover });
-
-/** The parent a MEMBER's page gets: the roster and participant pages, which is what `/m/` and
- *  `/p/` put in front of the same HTML.
- *
- *  A second bridge rather than a flag, because a member's ask is not a submission — see
- *  `memberBridge` in the package. What matters here is that it is the package's and not this
- *  pane's: while there was only the public one to reach for, a member page previewed here was sent
- *  a state message with no `viewer` key at all, the injected runtime read `data.viewer || {}`, and
- *  the page drew none of its buttons. That is indistinguishable from an author who got the
- *  capability names wrong, and it was diagnosed as exactly that.
- *
- *  AND IT PERFORMS. A transition, an assignment or a withdrawal is a real write against the live
- *  rules, made as the author through `/preview/intent` — the same destination the submissions above
- *  go to, and for the same reason. It used to refuse all three in one word, so a desk drew its
- *  buttons and every one of them failed; why that is not a preview of a desk is in
- *  `server/backends/sharedApp/previewIntent.ts`, which also holds the judgement — none of it is
- *  here. */
-const member = memberBridge(
-  {
-    channel: () => {
-      const channel = portChannel(frame.value, (message) => structuredCloneable(message));
-      return {
-        post: (message) => {
-          noteOutbound(message);
-          channel.post(message);
-        },
-        onMessage: channel.onMessage,
-        close: channel.close,
-      };
-    },
-    state: () => datasets.value,
-    // NO FLOOR. This parent is chosen only for a page that HAS a viewer (see `memberPage`), so
-    // there is nothing to fall back to — and inventing `{ me: null, can: {} }` here is the exact
-    // bug this whole change removes: a page drawing no controls, with nothing anywhere saying why.
-    viewer: () => page.value?.viewer ?? UNRESOLVED_VIEWER,
-    // A GETTER, as the port requires: the page on screen changes under this bridge, and a handler
-    // captured once would send a later ask under the page that was there before.
-    perform: () => sendIntent,
-    // The SAME cell the public parent writes, so the handshake is logged whichever parent answered
-    // it. Watched below rather than recorded here: the cell is what the bridge actually writes, so
-    // nothing can move without the log seeing it.
-    readied: cells.readied,
-    // The same log the public parent writes to. A member page can throw before it ever readies —
-    // the page that sits on its loading state — and without this the pane would report that page
-    // as silent, which is the one thing it exists not to do.
-    notice: (report) => remember({ kind: "notice", code: report.code, detail: report.detail }),
-    // A DEFECT OF OURS — the preview's own `perform` rejected, or threw before it could answer.
-    // The page has already been told `ok: false` with a fixed code and never sees this; what is
-    // left is whether the author does. It goes in the same log as everything else the pane
-    // collects, as a `host` line: the reader here is the author trying to fix the page, and a
-    // failure of the parent looks identical to a page that hung if nothing records it. Required by
-    // `@receptron/sharedapp` 0.10.0 rather than optional, for exactly that reason — a place that
-    // can be forgotten is the same as swallowing it.
-    defect: (error, requestId) =>
-      remember({
-        kind: "host",
-        note: `the preview could not answer intent ${requestId ?? "(none)"}: ${error instanceof Error ? error.message : String(error)}`,
-      }),
-  },
-  () => nonce.value,
-);
-
-/** Answering a `viewer` question for a page that has none. Unreachable — `memberPage` is what
- *  selects this parent and it requires one — and here so that a future change which loses that
- *  guarantee produces an empty-capability page WITH a line in the log above, rather than the silent
- *  no-controls page this whole change removes. */
-const UNRESOLVED_VIEWER: Viewer = { me: null, can: {} };
-
-/** Which parent is talking to the document on screen.
- *
- *  The audience decides WHICH parent a page should have — `/a/` is the public one, `/m/` and `/p/`
- *  are the member's, exactly as the address decides it in production. But the member parent needs
- *  capabilities to be worth choosing, so the test is that the payload actually carried them: a
- *  member page without a `viewer` would otherwise be handed an empty one and draw no controls,
- *  which is the failure being fixed rather than a smaller version of the fix.
- *
- *  That case is REPORTED. Falling back to the public parent quietly would put an author back in
- *  front of the same blank page with nothing to read — and the cause is not in their page at all,
- *  it is a host too old to resolve capabilities, or a payload this pane could not narrow. */
-const memberPage = computed(() => page.value !== null && page.value.audience !== "public" && page.value.viewer !== undefined);
-
 /** Only messages from OUR frame. The sandbox's origin is opaque, so `event.origin` cannot draw
  *  this boundary and `event.source` is what does. */
 const onMessage = (event: MessageEvent) => {
   if (frame.value === null || event.source !== frame.value.contentWindow) return;
-  if (memberPage.value) {
-    member.receive(event.data);
-    return;
-  }
-  bridge.receive(event.data);
+  parent.receive(event.data);
 };
 window.addEventListener("message", onMessage);
 onBeforeUnmount(() => {
   window.removeEventListener("message", onMessage);
-  bridge.restart();
-  member.forget();
+  parent.restart();
 });
 
 // A new document means a new conversation: the old channel belongs to a document we are no longer
@@ -337,10 +314,9 @@ watch(
   // for the same reason the datasets are.
   () => (page.value === null ? null : keyOf(page.value)),
   () => {
-    // BOTH, always. The page that is going may have been the other audience's, and a channel left
-    // open belongs to a document nobody is looking at any more.
-    bridge.restart();
-    member.forget();
+    // A channel left open belongs to a document nobody is looking at any more — and a confirmation
+    // still open refers to a page the author can no longer see.
+    parent.restart();
     nonce.value = viewNonce();
     // NOT a reset of the log. Switching pages is part of what the author was doing, and the page
     // they came from is often where the fault is — a member page that never readied looks identical
@@ -357,16 +333,10 @@ watch(
   },
 );
 
-// New data, same document — the view asked once and cannot ask again. Sent to whichever parent
-// holds the conversation; the other one has no open channel and its call is a no-op.
-watch(
-  datasets,
-  () => {
-    bridge.sendState();
-    member.sendState();
-  },
-  { deep: true },
-);
+// New data, same document — the view asked once and cannot ask again. EVERY half of the state
+// message moves here: the datasets, what the author has submitted of their own (which moves on
+// their own send) and the viewer the server resolved.
+watch([datasets, () => payload.value?.own, () => page.value?.viewer], () => parent.sendState(), { deep: true });
 
 /** Every record this preview session wrote, newest first.
  *
@@ -842,7 +812,7 @@ watch(
             type="button"
             class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg hover:border-accent disabled:cursor-default disabled:opacity-60"
             :disabled="cells.sending.value"
-            @click="bridge.accept()"
+            @click="parent.accept()"
           >
             Send it
           </button>
@@ -850,7 +820,7 @@ watch(
             type="button"
             class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg hover:border-accent disabled:cursor-default disabled:opacity-60"
             :disabled="cells.sending.value"
-            @click="bridge.decline()"
+            @click="parent.decline()"
           >
             Cancel
           </button>

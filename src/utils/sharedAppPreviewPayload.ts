@@ -23,6 +23,10 @@ export function asPayload(value: unknown): SharedAppPreview | null {
     generatedForm: value.generatedForm === true,
     formInputs: asFormInputs(value.formInputs),
     datasets: isRecord(value.datasets) ? Object.fromEntries(Object.entries(value.datasets).map(([key, rows]) => [key, asDatasets(rows)])) : {},
+    // The author's own rows. `{}` is the floor and it is the honest one: a cid ABSENT from this map
+    // is "nobody looked", so an unreadable payload says nothing about any collection rather than
+    // saying "you have submitted nothing" about all of them.
+    own: asDatasets(value.own),
     unreadable: strings(value.unreadable),
     warnings: strings(value.warnings),
   };
