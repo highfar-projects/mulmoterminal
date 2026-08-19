@@ -219,7 +219,7 @@ watch(prompts, () => {
           </button>
           <p
             data-testid="prompt-text"
-            class="m-0 mt-1 w-full select-text whitespace-pre-wrap break-words text-[12px] leading-[1.45]"
+            class="mt-1 w-full select-text whitespace-pre-wrap break-words text-[12px] leading-[1.45]"
             :class="opened.has(index) ? '' : 'line-clamp-3 overflow-hidden'"
             @click="toggleUnlessSelecting(index)"
           >

@@ -206,12 +206,17 @@ describe("PromptsPane", () => {
     expect(w.get('[data-testid="prompt-text"]').element.closest("button")).toBeNull();
   });
 
-  it("does not collapse the row when the click is the end of a drag-selection", async () => {
+  // Whitespace counts: a prompt renders pre-wrap, so its indentation and blank lines are content a
+  // reader can drag across — and reclamping the row would hide what they just selected (Codex, #1806).
+  it.each([
+    ["text", "xxx"],
+    ["whitespace", "   \n  "],
+  ])("does not collapse the row when the click is the end of a drag-selection (%s)", async (_kind, selected) => {
     vi.stubGlobal("fetch", mockFetch({ prompts: [{ at: 1, text: "x".repeat(500) }], truncated: false }));
     const w = mountPane();
     await flushPromises();
     await w.get('[data-testid="prompt-row"] button').trigger("click"); // opened
-    vi.stubGlobal("getSelection", () => ({ isCollapsed: false, toString: () => "xxx" }));
+    vi.stubGlobal("getSelection", () => ({ isCollapsed: false, toString: () => selected }));
     await w.get('[data-testid="prompt-text"]').trigger("click");
     expect(w.get('[data-testid="prompt-text"]').classes()).not.toContain("line-clamp-3"); // still open
   });
