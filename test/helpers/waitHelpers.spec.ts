@@ -23,7 +23,7 @@ describe("until", () => {
   // is not observable from here — so this pins the bracket and the message, not the hop count.
   it("brackets its hops with checks, and says how many turns it spent", async () => {
     const never = vi.fn(() => false);
-    await expect(until(never, "the thing")).rejects.toThrow("over 200 turns of the event loop");
+    await expect(until(never, "the thing")).rejects.toThrow("waited 200 turns of the event loop for the thing");
     expect(never).toHaveBeenCalledTimes(201);
   });
 
@@ -33,8 +33,8 @@ describe("until", () => {
     expect(hops).toBe(3);
   });
 
-  it("names what never happened, rather than leaving an undefined behind", async () => {
-    await expect(until(() => false, "the parent never answered")).rejects.toThrow(/the parent never answered/);
+  it("names what it was waiting for, rather than leaving an undefined behind", async () => {
+    await expect(until(() => false, "an answer from the parent")).rejects.toThrow(/for an answer from the parent, and it never came/);
   });
 
   it("takes an async predicate — the clipboard one is read on every hop", async () => {

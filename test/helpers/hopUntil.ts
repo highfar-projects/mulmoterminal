@@ -26,8 +26,11 @@ const HOPS_MAX = 200;
  * Hop until `done` holds.
  *
  * The happy path costs what a single hop cost: `done` is checked BEFORE the first one, so a test
- * whose answer is already there does not wait at all. The message names what never happened —
- * better for the next reader than `expected undefined to be defined`.
+ * whose answer is already there does not wait at all.
+ *
+ * `what` is a NOUN PHRASE for the thing being waited on — "the page's state", "a Send it button" —
+ * because the sentence around it is written here. A clause that already says "never" reads as a
+ * double negative once this wraps it.
  */
 export const until = async (done: () => boolean | Promise<boolean>, what: string): Promise<void> => {
   // Checked once before any hop, then once after each — so the loop spends EXACTLY `HOPS_MAX`
@@ -38,5 +41,5 @@ export const until = async (done: () => boolean | Promise<boolean>, what: string
     await hop();
     if (await done()) return;
   }
-  throw new Error(`${what} never happened, over ${HOPS_MAX} turns of the event loop`);
+  throw new Error(`waited ${HOPS_MAX} turns of the event loop for ${what}, and it never came`);
 };
