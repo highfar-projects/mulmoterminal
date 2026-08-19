@@ -1,0 +1,79 @@
+# ペインで会員の操作を実行する
+
+2026-08-18。`plans/feat-shared-app-member-parent.md` §4 が「意図的に残した限界」として書いた
+ものを解消する。
+
+## 何が起きていたか
+
+`../apps/spacex.live` の進行卓（`views/desk.html`、`audience: "member"`）を Collections ペインで
+開き、設問を選ぼうとすると `できませんでした： read-only` と出る。公開サイト
+（mulmoserver の `/m/{slug}`）では通る。
+
+原因はページでもアプリでもない。ペインの member 用の親は `@receptron/sharedapp/view` の
+`memberBridge` で、`perform` ポートを渡していなかったので、既定の `refuseEverything` が
+`{ ok: false, error: "read-only" }` を返していた。ペインには会員の書き込み経路が無かった。
+
+**これは「拒否」に見えてページの不具合に見える。** 卓はボタンを描き、そのボタンは全部失敗する。
+著者に分かるのは「配線されている」ことだけで、「動く」ことは一度も確認できない — 進行卓の
+仕事はまさにそれなので、確認できないのは機能が無いのとほぼ同じだった。
+
+## 決めたこと
+
+**D1. ペインは実行する。headless は実行しない。**
+ペインには人が座っていて、押したのはその人。headless (`action: "preview"`) は agent が誰も
+見ていないところで起動するので、**ページを見ただけでレコードが動く**のは意図ではない。だから
+`READ_ONLY_ON_A_MEMBER_PAGE` は消さずに、headless の話として狭めた。
+
+**D2. 判定はサーバでやる。** ブラウザは射影も著者の検証済みアドレスも持たない。ペインは
+メッセージを形だけ絞って送り、`readIntentMessage`（mulmoserver が `/m/` `/p/` で使うのと同じ
+関数）がサーバで判定する。ブラウザに 2 人目の判定者を置くと、書き込む方と食い違える。
+
+**D3. 判定は書き込みの前。** ここが一番落としやすい。著者はアプリの **owner** なので、
+デプロイ済みルールはほぼ何でも通す。先に書いてルールに任せると、**画面に出ているページの
+射影が禁じている操作まで成功する** — プレビューが本番より緩くなる、このペインが絶対に
+やってはいけないこと。`test/server/backends/sharedAppPreviewIntent.spec.ts` の
+「refuses a move this reader's ROLE does not carry, though the rules would allow it」がそれ。
+
+**D4. ask には「どのページから」を載せる。** どの tier の射影で判定するかも、どのレコードを
+名指せるかも、聞いてきたページが決める。cid だけ送ると audience が無意味になり、参加者の
+ページから受付の遷移に手が届く。
+
+**D5. 書き込みは必ずバッチ。** ルールは対の 2 つ目を `getAfter()` で読む — 遷移とそれが積む
+通知、取り下げと開き直すミラー。単発で書くと拒否され、しかも著者に伝わらない。通知が無い
+遷移は 1 本の `update` で足りるが、分岐を作らない: その分岐が「宣言された通知」と「通知
+無しで動いたレコード」の間に立つ唯一のものになってしまう。
+
+**D6. 確認ダイアログも undo も付けない。** 本番の卓にも確認は無い（mulmoserver
+`useAppIntent.ts` の言う通り、1 日 40 回押すボタンの前のモーダルは安全を買わずに機能を
+捨てさせる）。ここで発明すると、プレビューが本番と違うプログラムになる。undo は不可能:
+遷移は取り消せるレコードを作らない。**代わりにペインが文言で言う** —
+「押した瞬間に本物のレコードが動く。確認も取り消しも無い」。
+
+**D7. 通知メールは同じバッチで出す。** 宣言が名指しているなら本番は出す。落とすと
+プレビューだけ「承認したのに通知が飛ばない」になる。ただし**取り消せない唯一の副作用**なので、
+成功行に `a notice was QUEUED with it — real mail, to a real member` と出す。
+
+## 形
+
+```
+desk.html — view.transition(...)
+  → memberBridge の perform（src/utils/sharedAppPreviewIntent.ts、形だけ絞る）
+  → POST /api/shared-app/preview/intent
+  → performPreviewIntent（射影で判定 → writeBatch）
+  → refresh() → datasets 更新 → state 再送 → ページ再描画
+```
+
+`refresh()` は **await する**（公開 submit 側はしない）。会員のページは自分の答えで描き直す
+ので、新しいレコードを送る前に答えると、たった今動かした状態の 1 つ前を描いてしまう。
+
+## 語彙
+
+intent の拒否名は submit の拒否名と**衝突する**。`unknown-collection` は公開の submit だと
+`public.submit` の話、intent だとそのページ自身の view の話。1 つの表にすると、どちらかの
+半分が無関係な宣言に著者を送る。だから `INTENT_REFUSALS` を別に持ち、`explainRefusal` は
+audience で引く表を変える。
+
+## やっていないこと
+
+- **headless で実行する。** D1 の通り、意図的。
+- **intent の undo。** D6 の通り、不可能。

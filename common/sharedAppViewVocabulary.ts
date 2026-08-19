@@ -32,21 +32,49 @@ export const REFUSALS: Record<string, string> = {
 
 /** What a member or participant page is told when it asks for a write.
  *
- *  `transition`, `assign` and `withdraw` reach the member parent, which judges them and would
- *  perform them on the live page — here it has nowhere to write, so it answers `read-only`. That
- *  is a GOOD outcome and has to read like one: the ask arrived, in the right shape, and was
- *  declined for the reason every preview declines a write.
+ *  `transition`, `assign` and `withdraw` reach the member parent, which judges them. The pane
+ *  PERFORMS them (`server/backends/sharedApp/previewIntent.ts`); a headless run has nowhere to
+ *  write and answers `read-only`, which is a GOOD outcome and has to read like one: the ask
+ *  arrived, in the right shape, and was declined for the reason that run declines every write.
  *
- *  It replaced a longer note saying the parent answering intents "is not the one running here",
- *  which was true while the preview had only the public bridge and is not any more. */
+ *  The two hosts said the same thing here until 2026-08-18, and the sentence has been narrowed
+ *  rather than deleted: it is still the honest account of the run that does not write. */
 export const READ_ONLY_ON_A_MEMBER_PAGE =
-  "the preview does not write, so it declined. The ask itself was well formed and reached the parent — this line means the control is wired, not that anything is wrong. " +
-  "Whether the deployed rules would accept the write is a different question and is not answered here.";
+  "the parent that answered performs nothing, so it declined. The ask itself was well formed and reached the parent — this line means the control is wired, not that " +
+  "anything is wrong. It is what a HEADLESS run says: that one loads the page and writes nothing at all. The Collections pane does perform these, as the author, and " +
+  "reports what the deployed rules said.";
+
+/** What a member's or participant's INTENT is told, when the ask was refused before it reached the
+ *  database.
+ *
+ *  Its own map rather than more entries in `REFUSALS`, because the two vocabularies COLLIDE:
+ *  `unknown-collection` off a public submission is about `public.submit`, and off an intent it is
+ *  about the page's own view. One map would have to pick a wording, and either half of the answer
+ *  would then send an author to a declaration that has nothing to do with what they pressed.
+ *
+ *  These names are the package's (`IntentRefusal`) except the last two, which are this host's — a
+ *  preview can be asked about a page the author has since renamed, and the public parent has no
+ *  tier to judge a member's move as. */
+export const INTENT_REFUSALS: Record<string, string> = {
+  "unknown-collection": "the page asked about a collection its own view does not declare — add it to that view's `collections`",
+  "not-writable":
+    "nothing of that kind is writable on this page: no `statusField` and `transitions` for a transition, no `assigneeField` for an assignment, no `selfDelete` for a withdrawal",
+  "illegal-transition": "the declared `transitions` table does not carry that move from the status the record is in",
+  "unknown-assignee": "nobody on the roster holds an assignable role at that address — writing it would produce a row NOBODY may touch afterwards",
+  "not-permitted": "this reader may not make that move. Being handed the page is not permission: the roles are what decide, and yours do not carry this one",
+  "not-an-intent":
+    "the message reached the parent but was not an intent it could read — most often a `withdraw` carrying a `to`, or a missing `cid` / `itemId`",
+  "not-a-member-page": "an intent arrived from a PUBLIC page, which has no reader and no roles for it to be judged against",
+  "no-such-page": "the page that asked is no longer in the projection — `app.json` changed under a document that is still on screen. Reload the pane",
+};
 
 /** One refusal, in the words that fit the page it happened on. */
 export const explainRefusal = (reason: string, audience: PreviewAudience): string => {
-  if (reason === "read-only" && audience !== "public") return READ_ONLY_ON_A_MEMBER_PAGE;
-  return REFUSALS[reason] ?? reason;
+  if (audience === "public") return REFUSALS[reason] ?? reason;
+  // A member's page, where an intent is the thing being refused. `read-only` still happens on it —
+  // the headless run performs nothing — and it is not a fault, so it keeps its own sentence.
+  if (reason === "read-only") return READ_ONLY_ON_A_MEMBER_PAGE;
+  return INTENT_REFUSALS[reason] ?? REFUSALS[reason] ?? reason;
 };
 
 /** What a page that never answered the handshake is doing, and the one thing that causes it. */

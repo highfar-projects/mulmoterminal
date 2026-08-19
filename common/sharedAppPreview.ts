@@ -6,7 +6,7 @@
 // exists to remove. The server's own result type extends this with what only it uses.
 //
 // Design: `plans/feat-shared-app-preview.md`.
-import type { Viewer } from "@receptron/sharedapp/view";
+import type { IntentKind, Viewer } from "@receptron/sharedapp/view";
 
 /** Who a page was written for. Three audiences, three DOCUMENTS with three sets of rules — never
  *  one page shown three ways. Reading them as interchangeable is how a page written for the front
@@ -157,3 +157,30 @@ export interface PreviewUncertainWrite {
 
 export type SharedAppPreviewResponse =
   { declared: false } | { declared: true; ok: false; problems: string[] } | { declared: true; ok: true; preview: SharedAppPreview };
+
+/** One member's ask, on its way from the pane's parent to the server that performs it.
+ *
+ *  The PAGE travels with it, and that is the load-bearing field rather than context. Which tier's
+ *  projection judges the ask and which records it may name are both decided by the page it was
+ *  asked from — so a participant's page cannot reach the front desk's transitions by naming the
+ *  collection they live in. Sending the cid alone would have made the audience irrelevant, which is
+ *  the one thing the tiers exist to prevent.
+ *
+ *  What is NOT here is the judgement. The pane narrows a message to this shape and nothing more:
+ *  what the projection allows, who the author is to it, and whether the move is in the table are
+ *  the server's, which is the only side holding the projection and a verified address. */
+export interface PreviewIntent {
+  page: { id: string; audience: PreviewAudience };
+  kind: IntentKind;
+  cid: string;
+  itemId: string;
+  /** Where it is going. Absent on a withdrawal, which moves nothing — the row is removed. */
+  to?: string;
+}
+
+/** What became of it.
+ *
+ *  `mailed` is claimed only on success and only where the declaration named a notice for that move:
+ *  the pane says so in its log, because a preview that queues a real notice to a real member is the
+ *  one effect of this path that cannot be taken back, and it must never happen silently. */
+export type PreviewIntentResult = { ok: true; mailed: boolean } | { ok: false; error: string };

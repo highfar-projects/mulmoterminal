@@ -19,7 +19,7 @@
 // What this does NOT show is worth knowing before trusting it: the rules do not run here, so what
 // a role may WRITE is not tested; nobody else exists, so nothing here is concurrent; and it cannot
 // tell whether the Firestore rules a new declaration needs have been deployed at all.
-import { computed, onBeforeUnmount, ref, shallowRef, toRaw, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { memberBridge, portChannel, publicViewSrcdoc, viewBridge, viewNonce, VIEW_MESSAGE, type PendingSubmit, type Viewer } from "@receptron/sharedapp/view";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 import { isRecord } from "../../common/isRecord";
@@ -42,6 +42,8 @@ import {
 const props = defineProps<{ cwd: string | null; pickerTarget?: HTMLElement | null }>();
 
 import { asPayload } from "../utils/sharedAppPreviewPayload";
+import { createIntentSender } from "../utils/sharedAppPreviewIntent";
+import { structuredCloneable } from "../utils/structuredCloneable";
 
 const loading = ref(true);
 const declared = ref(false);
@@ -202,31 +204,9 @@ const bridge = viewBridge(
   cells,
 );
 
-/** Vue's reactivity taken off a message before the browser copies it. Structured clone refuses a
- *  Proxy, and these datasets arrive through a ref — the failure is a `DataCloneError` at the send,
- *  which leaves the view on "loading…" with nothing on screen to say why.
- *
- *  Rebuilt entry by entry rather than unwrapped whole, so the shape is preserved by construction
- *  and nothing has to be asserted back into it. */
-function structuredCloneable(message: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(message).map(([key, value]) => [key, unwrap(value)]));
-}
-
-const isPlainObject = (value: unknown): value is Record<string, unknown> => {
-  if (typeof value !== "object" || value === null) return false;
-  const proto: unknown = Object.getPrototypeOf(value);
-  return proto === Object.prototype || proto === null;
-};
-
-/** Recursive because `toRaw` unwraps one level. Anything that is not a plain container is passed
- *  through untouched — structured clone copies a class instance's own fields by itself, and going
- *  through JSON instead would turn `NaN` and `±Infinity` into `null`. */
-const unwrap = (value: unknown): unknown => {
-  const raw: unknown = toRaw(value);
-  if (Array.isArray(raw)) return raw.map(unwrap);
-  if (isPlainObject(raw)) return Object.fromEntries(Object.entries(raw).map(([key, entry]) => [key, unwrap(entry)]));
-  return raw;
-};
+/** The member's writes, in their own module. It decides nothing — see its header — and is given
+ *  the four things it needs so that what a refusal does to the log can be pinned without a frame. */
+const sendIntent = createIntentSender({ page: () => page.value, url: () => writeUrl("intent"), remember, refresh: () => refresh() });
 
 /** The parent a MEMBER's page gets: the roster and participant pages, which is what `/m/` and
  *  `/p/` put in front of the same HTML.
@@ -238,9 +218,12 @@ const unwrap = (value: unknown): unknown => {
  *  the page drew none of its buttons. That is indistinguishable from an author who got the
  *  capability names wrong, and it was diagnosed as exactly that.
  *
- *  It performs NOTHING. A transition, an assignment or a withdrawal is a real write against the
- *  live rules and the pane has no route for one, so every intent is refused — by name, on the
- *  channel, which the strip below reports. That is the honest answer and it is not silence. */
+ *  AND IT PERFORMS. A transition, an assignment or a withdrawal is a real write against the live
+ *  rules, made as the author through `/preview/intent` — the same destination the submissions above
+ *  go to, and for the same reason. It used to refuse all three in one word, so a desk drew its
+ *  buttons and every one of them failed; why that is not a preview of a desk is in
+ *  `server/backends/sharedApp/previewIntent.ts`, which also holds the judgement — none of it is
+ *  here. */
 const member = memberBridge(
   {
     channel: () => {
@@ -259,6 +242,9 @@ const member = memberBridge(
     // there is nothing to fall back to — and inventing `{ me: null, can: {} }` here is the exact
     // bug this whole change removes: a page drawing no controls, with nothing anywhere saying why.
     viewer: () => page.value?.viewer ?? UNRESOLVED_VIEWER,
+    // A GETTER, as the port requires: the page on screen changes under this bridge, and a handler
+    // captured once would send a later ask under the page that was there before.
+    perform: () => sendIntent,
     // The SAME cell the public parent writes, so the handshake is logged whichever parent answered
     // it. Watched below rather than recorded here: the cell is what the bridge actually writes, so
     // nothing can move without the log seeing it.
@@ -802,6 +788,13 @@ watch(
           Records read as you, not as a visitor — this shows what DRAWS, not what a stranger would be allowed to see. Computing it writes nothing.
         </p>
         <p class="mt-1 text-[11px] text-amber">A submission you accept is a real record in the live app, and the rules do run on that.</p>
+        <!-- SAID ON THE MEMBER PAGES ONLY, and said sharply, because this one has neither of the
+             brakes the submission above has: a member's move raises no confirmation — the live desk
+             has none either, and inventing one here would make the preview a different program —
+             and there is nothing to undo it with, since a move creates no record to take back. -->
+        <p v-if="page && page.audience !== 'public'" class="mt-1 text-[11px] text-amber">
+          A control on this page moves a real record the moment you press it, as you. There is no confirmation and no undo.
+        </p>
         <p v-if="payload && !payload.fromLiveApp" class="mt-1 text-[11px] text-dim">This app has never been published, so nothing was carried over.</p>
         <p v-if="payload && payload.unreadable.length" class="mt-1 text-[11px] text-amber">
           Could not read records for: {{ payload.unreadable.join(", ") }} — an empty page below may be a refusal rather than an empty collection.

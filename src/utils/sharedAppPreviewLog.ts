@@ -33,7 +33,7 @@
 //
 // Design: `plans/feat-collection-pane-diagnostics.md` (the block, the masking, the ring buffer)
 // and `plans/feat-shared-app-view-diagnostics.md` (why the facts do not reach the author today).
-import type { ViewNoticeCode } from "@receptron/sharedapp/view";
+import type { IntentKind, ViewNoticeCode } from "@receptron/sharedapp/view";
 import type { PreviewAudience } from "../../common/sharedAppPreview";
 import { explainRefusal, NOTICES, quoteForReport } from "../../common/sharedAppViewVocabulary";
 
@@ -53,6 +53,25 @@ export type PreviewLogEvent =
   | { kind: "refused"; reason: string; audience: PreviewAudience }
   | { kind: "declined"; cid: string }
   | { kind: "write"; cid: string; error: string | null }
+  /** A MEMBER'S move — a transition, an assignment, a withdrawal — and what became of it.
+   *
+   *  Separate from `write`, which is a public submission: the two fail for different reasons and an
+   *  author reading "the write to 'questions' was REFUSED" about a button on their own desk would
+   *  go looking at `public.submit`, which has nothing to do with it. `mailed` is here because it is
+   *  the one effect of this path that cannot be taken back. */
+  | {
+      kind: "intent";
+      intent: IntentKind;
+      /** Which tier's page asked. Carried rather than assumed: a refusal reads the same for both
+       *  today, and a line that hard-codes one would quietly mislabel the other the moment they
+       *  stop reading alike. */
+      audience: Exclude<PreviewAudience, "public">;
+      cid: string;
+      itemId: string;
+      to?: string;
+      error: string | null;
+      mailed?: boolean;
+    }
   | { kind: "notice"; code: ViewNoticeCode; detail: string }
   | { kind: "host"; note: string };
 
@@ -63,7 +82,11 @@ export type PreviewLogEntry = PreviewLogEvent & { at: number };
  *  A notice counts whatever its code: every one of them is a failure the browser swallowed, which
  *  is the entire reason the frame is made to report them. */
 const isProblem = (entry: PreviewLogEntry): boolean =>
-  entry.kind === "refused" || entry.kind === "notice" || entry.kind === "host" || (entry.kind === "write" && entry.error !== null);
+  entry.kind === "refused" ||
+  entry.kind === "notice" ||
+  entry.kind === "host" ||
+  (entry.kind === "write" && entry.error !== null) ||
+  (entry.kind === "intent" && entry.error !== null);
 
 export interface PreviewLog {
   add: (event: PreviewLogEvent) => void;
@@ -169,6 +192,20 @@ const lineFor = (entry: PreviewLogEntry): string[] => {
       return entry.error === null
         ? [`WROTE a real record to '${entry.cid}', as you, judged by the deployed rules`]
         : [`the write to '${entry.cid}' was REFUSED:`, `  ${entry.error}`];
+    case "intent": {
+      // The RECORD is named, and its id is a value out of the app — which the header of this file
+      // says is not carried. It is carried here for the same reason the id is a field on the record
+      // rather than a key inside it: a shared app's ids are what the RULES pin, so a refusal about
+      // an unnamed row is a refusal an author cannot place, and every one of these lines is about a
+      // row somebody pressed a button on.
+      const move = entry.to === undefined ? "" : ` to '${entry.to}'`;
+      const what = `${entry.intent} of '${entry.cid}/${entry.itemId}'${move}`;
+      if (entry.error !== null) return [`the ${what} was REFUSED:`, `  ${explainRefusal(entry.error, entry.audience)}`];
+      return [
+        `PERFORMED the ${what}, as you, judged by the deployed rules`,
+        ...(entry.mailed === true ? ["  a notice was QUEUED with it — real mail, to a real member"] : []),
+      ];
+    }
     case "notice":
       // PAGE-AUTHORED, and marked as such. The reader is often a model, and a sentence the page
       // chose must not arrive looking like something this host is saying.
