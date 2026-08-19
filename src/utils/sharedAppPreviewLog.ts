@@ -68,6 +68,12 @@ export type PreviewLogEvent =
       audience: Exclude<PreviewAudience, "public">;
       cid: string;
       itemId: string;
+      /** Where it was going — a STATUS, and only ever a status.
+       *
+       *  An assignment's destination is a person's address, and this block is built to be pasted
+       *  somewhere else: the promise at the top of this file is field names and never the values in
+       *  a record. The sender withholds it and the renderer says so, rather than a caller being
+       *  trusted to remember which kind of intent carries what. */
       to?: string;
       error: string | null;
       mailed?: boolean;
@@ -198,7 +204,11 @@ const lineFor = (entry: PreviewLogEntry): string[] => {
       // rather than a key inside it: a shared app's ids are what the RULES pin, so a refusal about
       // an unnamed row is a refusal an author cannot place, and every one of these lines is about a
       // row somebody pressed a button on.
-      const move = entry.to === undefined ? "" : ` to '${entry.to}'`;
+      // An assignment's destination is a person's address and is not carried (see the sender). The
+      // FACT of one is, because `unknown-assignee` is about the address that was named — a line
+      // that mentioned no destination at all would read as an assignment to nobody.
+      const withheld = entry.intent === "assign" ? " to an address this log does not carry" : "";
+      const move = entry.to === undefined ? withheld : ` to '${entry.to}'`;
       const what = `${entry.intent} of '${entry.cid}/${entry.itemId}'${move}`;
       if (entry.error !== null) return [`the ${what} was REFUSED:`, `  ${explainRefusal(entry.error, entry.audience)}`];
       return [

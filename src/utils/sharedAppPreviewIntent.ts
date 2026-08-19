@@ -77,13 +77,23 @@ export const createIntentSender = (ports: IntentSenderPorts): PerformIntent => {
     const asked = askedIntent(data, current);
     if (asked === null) return null;
     const { requestId, ...body } = asked;
+    // THE DESTINATION IS CARRIED FOR A TRANSITION AND NOT FOR AN ASSIGNMENT, and the difference is
+    // what the value IS. A transition's `to` is a status out of the declaration — the app's own
+    // vocabulary, which the log is full of. An assignment's is a PERSON'S ADDRESS, and this block is
+    // built to be pasted somewhere else: the promise at the top of `sharedAppPreviewLog.ts` is field
+    // names and never the values in a record, and an address is the clearest thing that promise is
+    // about. The renderer says an address was withheld rather than dropping the fact of it, so
+    // `unknown-assignee` still reads as "the address you named", which is the actionable half.
+    //
+    // `itemId` is carried, and that IS a value — see the note at the renderer. A row id is what the
+    // rules pin, so a refusal that cannot name the row is one the author cannot place.
     const noted = {
       kind: "intent" as const,
       intent: body.kind,
       audience: current.audience,
       cid: body.cid,
       itemId: body.itemId,
-      ...(body.to === undefined ? {} : { to: body.to }),
+      ...(body.kind === "transition" && body.to !== undefined ? { to: body.to } : {}),
     };
     try {
       const res = await fetchWithTimeout(

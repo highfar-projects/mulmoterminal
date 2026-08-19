@@ -57,6 +57,25 @@ export const NOT_A_MEMBER_PAGE = "not-a-member-page";
  *  the previous render is still on screen asking about it. */
 export const NO_SUCH_PAGE = "no-such-page";
 
+/** The named row is not among the records this page was handed.
+ *
+ *  THE PACKAGE DELIBERATELY DOES NOT REFUSE THIS, and that is why this host must. `judgeTransition`
+ *  answers `ok` for a record it is holding none of, and `judgeWithdraw` never asks whose row it is
+ *  at all — both leave ownership to the rules, which compare an address the projection does not
+ *  carry. On a live page that is exactly right: the write goes out as the PARTICIPANT, and `ownRow`
+ *  refuses somebody else's row.
+ *
+ *  Here it goes out as the app's OWNER, who may update or delete anything in their own app. So the
+ *  check the rules would have made is not going to happen, and without this a participant's page
+ *  could name a row it was never shown — one belonging to another participant, kept out of its
+ *  dataset by `scope: "own"` — and move it, or withdraw it and reopen the mirror it was holding.
+ *  That is the preview being LOOSER than production, which is the one thing it must never be.
+ *
+ *  What replaces the rules' question is the dataset itself: the page was handed precisely the rows
+ *  its projection allows it to read, so requiring the row to be in it asks the same thing the rules
+ *  would have asked, in the only terms this host can ask it. */
+export const NOT_IN_VIEW = "not-in-view";
+
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 const isTier = (audience: string): audience is WriteTier => audience === "member" || audience === "roster";
@@ -151,6 +170,11 @@ export async function performPreviewIntent(root: string, asked: PreviewIntent): 
     { address: handle.email, tier },
   );
   if (!read.ok) return { ok: false, error: read.reason };
+
+  // AFTER the package's judgement, not before, so its own refusals keep their names: a cid this
+  // view never declared is `unknown-collection`, which says which declaration to change, and it
+  // would otherwise be reported as a missing row.
+  if (record(read.intent.cid, read.intent.itemId) === null) return { ok: false, error: NOT_IN_VIEW };
 
   const failed = await commit(preview.aid, read.intent);
   if (failed !== null) return { ok: false, error: failed };

@@ -97,6 +97,19 @@ describe("the pane's intent sender", () => {
     ]);
   });
 
+  it("never puts an assignee's address in the log, though it does send it", async () => {
+    // The address has to REACH the server — it is the whole of what an assignment asks for — and it
+    // must not reach the copyable block, which is built to be pasted somewhere else. Both halves
+    // are asserted here, because a fix that dropped it from the request would be the other bug.
+    const { perform, remembered, fetcher } = sender({ ok: true, mailed: false });
+
+    await perform({ ...INTENT, kind: "assign", to: "staff@example.com" });
+
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body)).to).toBe("staff@example.com");
+    expect(remembered[0]).not.toHaveProperty("to");
+    expect(JSON.stringify(remembered)).not.toContain("staff@example.com");
+  });
+
   it("says a notice went out, because that is the part nothing can take back", async () => {
     const { perform, remembered } = sender({ ok: true, mailed: true });
 

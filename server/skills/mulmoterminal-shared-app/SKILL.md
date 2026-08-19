@@ -406,7 +406,8 @@ Ask them to confirm, in these terms:
 - on a member's page, pressing a **control actually moves the row** — the list redraws with the new
   status. If it does not, the log below names the refusal: `illegal-transition` is the declared
   `transitions` table, `not-permitted` is the reader's role, `not-writable` is a missing
-  `statusField` / `assigneeField` / `selfDelete`;
+  `statusField` / `assigneeField` / `selfDelete`, and `not-in-view` is the page naming a row it was
+  not handed (the preview writes as the OWNER, so it cannot let the rules decide whose row it is);
 - the **error paths** say something: an empty required field, an unchosen option.
 
 Do this **before publish** and again after any change to a page. If the user cannot look right now,

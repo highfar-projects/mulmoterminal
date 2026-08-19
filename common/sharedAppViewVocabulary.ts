@@ -64,6 +64,9 @@ export const INTENT_REFUSALS: Record<string, string> = {
   "not-permitted": "this reader may not make that move. Being handed the page is not permission: the roles are what decide, and yours do not carry this one",
   "not-an-intent":
     "the message reached the parent but was not an intent it could read — most often a `withdraw` carrying a `to`, or a missing `cid` / `itemId`",
+  "not-in-view":
+    "the row is not among the records this page was handed. The preview writes as the app's OWNER, so the rules cannot refuse somebody else's row the way they would " +
+    "for the person the page was built for — so the pane requires the page to actually hold the row. If the row does exist, the pane's records are stale: reopen it",
   "not-a-member-page": "an intent arrived from a PUBLIC page, which has no reader and no roles for it to be judged against",
   "no-such-page": "the page that asked is no longer in the projection — `app.json` changed under a document that is still on screen. Reload the pane",
 };

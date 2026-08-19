@@ -84,6 +84,16 @@ describe("the pane's log", () => {
     expect(block).toContain("a notice was QUEUED with it");
   });
 
+  it("keeps an assignee's address out of the block, and still says one was named", () => {
+    // The block is built to be pasted somewhere else, and an address is the clearest thing the
+    // promise at the top of that module is about. Dropping the destination entirely would be worse
+    // than either: `unknown-assignee` is a refusal ABOUT the address that was named, and a line
+    // mentioning no destination reads as an assignment to nobody.
+    const block = render((log) => log.add({ kind: "intent", intent: "assign", audience: "member", cid: "bookings", itemId: "b1", error: "unknown-assignee" }));
+    expect(block).toContain("to an address this log does not carry");
+    expect(block).toContain("nobody on the roster holds an assignable role");
+  });
+
   it("explains an intent's refusal in the INTENT's vocabulary, not the public form's", () => {
     // The two collide: `unknown-collection` off a public submission is about `public.submit`, and
     // off an intent it is about the page's own view. Reading one in the other's words sends an
