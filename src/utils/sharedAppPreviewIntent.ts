@@ -116,11 +116,23 @@ export const createIntentSender = (ports: IntentSenderPorts): PerformIntent => {
       // member gets real mail — so it is said out loud rather than left for the author to infer
       // from a declaration they wrote days ago.
       ports.remember({ ...noted, error: null, mailed: answer.mailed === true });
-      // THE ANSWER IS STILL `ok`, and that is a decision rather than an oversight. The write
-      // HAPPENED — the record moved, and where the declaration named one, a notice went with it.
-      // Telling the page it failed would put the operator in front of a button they would press
-      // again, which is a second transition and a second notice about a move that already
-      // succeeded. What is wrong in this branch is the SCREEN, not the write.
+      // THE ANSWER IS STILL `ok`, and that is a decision rather than an oversight. Two reasons, and
+      // the second is the one that settles it:
+      //
+      //   THE WRITE HAPPENED. The record moved, and where the declaration named one, a notice went
+      //   with it. Telling the page it failed puts the operator in front of a button they will
+      //   press again — a second transition and a second notice about a move that already
+      //   succeeded. What is wrong in this branch is the SCREEN, not the write.
+      //
+      //   AND THE LIVE PAGE ANSWERS THE SAME. mulmoserver's `refresher` (`memberViewRun.ts`) reads
+      //   the datasets with `.catch(() => null)` and leaves them untouched, after which `attempt`
+      //   returns `{ ok: true }` regardless — so a failed re-read is acknowledged there exactly as
+      //   it is here. Answering something else would make this parent a different program from the
+      //   one it previews, and `IntentAnswer.error` is shared wire vocabulary the package documents
+      //   as permanent and published pages compare: a name only this host sends is a branch no page
+      //   can have been written against.
+      //
+      // What this host adds is the LOG, which production has no reader for and this pane does.
       //
       // So the screen is what is reported. Without this the pane could acknowledge a move over
       // records that never changed — the page clears its pending state and goes on drawing the
