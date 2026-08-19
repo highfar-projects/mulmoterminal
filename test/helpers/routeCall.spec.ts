@@ -11,6 +11,7 @@ const app = express();
 app.use(express.json());
 app.get("/json", (_req, res) => void res.json({ ok: true, count: 2 }));
 app.get("/list", (_req, res) => void res.json([1, 2, 3]));
+app.get("/broken-json", (_req, res) => void res.type("application/json").send("{not json"));
 app.get("/text", (_req, res) => void res.type("text/plain").send("plain words"));
 app.get("/bytes", (_req, res) => void res.type("application/octet-stream").send(Buffer.from("raw-bytes")));
 app.get("/empty", (_req, res) => void res.status(204).end());
@@ -43,8 +44,16 @@ describe("routeCall", () => {
     expect((await call("/bytes")).text).toBe("raw-bytes");
   });
 
+  // A body that CLAIMS to be JSON and is not is a broken route, and answering `{}` would let a
+  // spec assert against it and pass. supertest throws here too — measured, not assumed.
+  it("lets a malformed JSON body fail loudly", async () => {
+    await expect(call("/broken-json")).rejects.toThrow(SyntaxError);
+  });
+
   // An array IS valid JSON but is not a record: handing it back as one would let a spec read a
-  // named field off it and get `undefined` with nothing to explain why.
+  // named field off it and get `undefined` with nothing to explain why. This is the one place the
+  // adapter deliberately differs from supertest, which hands the array back — no spec in this repo
+  // reads one off a route, and `text` still carries it.
   it("does not pass an array off as a record", async () => {
     const res = await call("/list");
     expect(res.body).toEqual({});
