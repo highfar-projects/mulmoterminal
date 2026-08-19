@@ -392,11 +392,16 @@ projection and then by the deployed rules. The headless run refuses all three (`
 can only show that a control is wired; whether pressing it actually moves the record is a question
 only the pane answers.
 
-**And it moves a REAL record, with no confirmation and no undo.** A submission raises the page's
-confirmation dialog and lands in the pane's Undo list; a member's move does neither — the live desk
-raises no dialog either, and a move creates no record to take back. So say what a button will do
-before the user presses it, and remember that reopening a poll question or approving a booking in
-the preview is the same event a member would have caused.
+**And it moves a REAL record, with no HOST confirmation and no undo.** A submission raises the
+parent's confirmation dialog and lands in the pane's Undo list; a member's move does neither — the
+live desk raises no dialog either, and a move creates no record to take back. So say what a button
+will do before the user presses it, and remember that reopening a poll question or approving a
+booking in the preview is the same event a member would have caused.
+
+**That is about the HOST, and it does not excuse the page.** `withdraw` still has to ask, in the
+page, for the reason below — it deletes a record and hands the slot to whoever clicks next. What
+the pane not confirming means is that pressing the page's own confirm button writes for real; it
+does not mean the page may stop drawing one.
 
 Ask them to confirm, in these terms:
 

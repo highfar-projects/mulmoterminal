@@ -151,6 +151,20 @@ const settle = async () => {
   await flushPromises();
 };
 
+/** Wait until something has actually ARRIVED, rather than for a fixed number of turns.
+ *
+ *  A port's delivery is a macrotask and `settle()` spends exactly one. That is enough for an answer
+ *  the parent composes on the spot, and not for one that crosses the HTTP boundary first — a
+ *  member's intent does it twice, because the records are re-read before the page is told, so the
+ *  outbound delivery lands a turn or two later than the assertion.
+ *
+ *  Counting turns is what makes a test pass on one machine and fail on another: this one passed on
+ *  macOS and Linux and failed on WINDOWS in CI (#1802), which is the same shape as the note above
+ *  about `flushPromises`. Waiting for the condition costs nothing when it is already true. */
+const settleUntil = async (arrived: () => boolean, turns = 20): Promise<void> => {
+  for (let turn = 0; turn < turns && !arrived(); turn += 1) await settle();
+};
+
 const mountPreview = async () => {
   const wrapper = mount(SharedAppPreview, { props: { cwd: "/repo" } });
   await flushPromises();
@@ -353,7 +367,7 @@ describe("SharedAppPreview", () => {
     const wrapper = await mountPreview();
     const { port, answers } = await connect(wrapper);
     port.postMessage({ type: "mc-public-view:intent", requestId: "r1", kind: "transition", cid: "bookings", itemId: "b1", to: "approved" });
-    await settle();
+    await settleUntil(() => answers.some((message) => message.type === "mc-public-view:submitResult" && message.requestId === "r1"));
     const sent = posted.find((call) => call.url.includes("/preview/intent"));
     expect(sent?.body).toEqual({ page: { id: "desk", audience: "member" }, kind: "transition", cid: "bookings", itemId: "b1", to: "approved" });
     // `submitResult`, not `result`: one name answers a submission and an intent alike, because the

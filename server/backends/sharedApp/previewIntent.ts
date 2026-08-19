@@ -84,7 +84,27 @@ const isTier = (audience: string): audience is WriteTier => audience === "member
  *
  *  A transition with no notice is a single `update` and could have been sent alone; it is not,
  *  because the branch that decides would then be the only thing standing between a declared notice
- *  and a record that moved without it. One shape, judged once. */
+ *  and a record that moved without it. One shape, judged once.
+ *
+ *  THE JUDGEMENT IS OF A SNAPSHOT, AND THIS DOES NOT RE-READ IT. Between the projection above and
+ *  this commit, another writer can move the record — so a transition judged legal from the status
+ *  the page held can land on a record that has since left it. The window is left open, on purpose,
+ *  three times over:
+ *
+ *  - THE LIVE PAGE HAS IT TOO. mulmoserver's `performIntent` issues the same unconditional
+ *    `batch.update` from the same held snapshot, and the package says why: `judgeTransition`
+ *    "decides which button should have been drawn, and the rules decide the race". Closing it here
+ *    alone would make this host's write a different program from the one it previews.
+ *  - `previewWrite.ts` MADE THE SAME CALL for the mirror it checks before claiming — "a check, not
+ *    a guarantee, and the difference is a real race with anybody submitting at the same moment".
+ *  - AND THE PREVIEW SAYS SO. "Nobody else exists here, so nothing was concurrent" is in the pane's
+ *    copied log, in the skill and in this feature's plan — a stated limit rather than a claim this
+ *    quietly breaks.
+ *
+ *  What is NOT excused by any of that: in production the rules close the race, because they compare
+ *  the stored status themselves, and here they do not — the write goes out as the OWNER. So the
+ *  residue is real and it is named (CodeRabbit on #1802, declined with this note). A transaction is
+ *  what would close it, and it belongs to a change that closes it on BOTH hosts. */
 async function commit(aid: string, intent: JudgedIntent): Promise<string | null> {
   try {
     const db = currentFirestore();
