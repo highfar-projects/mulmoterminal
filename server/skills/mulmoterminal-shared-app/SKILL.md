@@ -413,7 +413,13 @@ Ask them to confirm, in these terms:
   `transitions` table, `not-permitted` is the reader's role, `not-writable` is a missing
   `statusField` / `assigneeField` / `selfDelete`, and `not-in-view` is the page naming a row it was
   not handed (the preview writes as the OWNER, so it cannot let the rules decide whose row it is);
-- the **error paths** say something: an empty required field, an unchosen option.
+- the **error paths** say something: an empty required field, an unchosen option;
+- **cancelling the confirmation leaves the page where it was** — a page that shows the thank-you or
+  the results to somebody who pressed やめる read `submit` returning as sent (see "Which screen the
+  page shows"). This is a press the headless run never makes;
+- **reloading after answering shows the answered screen, not the empty form.** Same section, same
+  cause on the other side: it means the page remembered instead of deriving. The headless run loads
+  each page once, so this is the user's to press too.
 
 Do this **before publish** and again after any change to a page. If the user cannot look right now,
 say plainly what was and was not checked: a clean headless run means the page draws and the button
@@ -855,6 +861,70 @@ the cost in the text the reader can see.
   could name a template could mail "your booking is approved" about one it had just rejected.
 - **Nothing here grants anything.** The rules already decide what this member may write; these
   calls only let the page ask, and let the refusal say which assumption in the page was wrong.
+
+### Which screen the page shows
+
+A page that collects something has more than one screen — the form, and what somebody who has
+already answered sees instead. **Which one is drawn is a question about the DATA, not about what
+happened while this tab was open.** A page that answers it from an event is wrong in two ways, and
+both of them reached a published survey before anybody noticed:
+
+- the visitor **cancels** the confirmation and the page shows them the results anyway — it read
+  `await submit(...)` RETURNING as "sent", and never looked at the answer;
+- somebody who has already answered **reloads** and gets the empty form back — "I have answered"
+  was a variable in the page, and a reload throws it away.
+
+**Render only from `onState`. `submit`'s answer decides what to SAY, never what to show.** One rule,
+and it repairs both — because the parent re-sends the state once a confirmation is accepted, so the
+callback that draws the reload is the same callback that draws the moment the record lands. Written
+this way the page contains no line that switches screens at all, which is why neither bug can be
+written.
+
+```js
+let latest = null;
+view.onState((data, viewer) => { latest = { data, viewer }; render(); });   // the ONLY renderer
+view.ready();
+
+const render = () => {
+  const mine = latest.data.responses.find((r) => r.email === latest.viewer.me);
+  show(mine ? "answered" : "form");        // derived every time, remembered never
+};
+
+button.onclick = async () => {
+  const res = await view.submit("responses", values);
+  if (res.ok) return;                       // onState is about to redraw
+  message.textContent = res.error === "cancelled" ? "" : `送信できませんでした: ${res.error}`;
+};
+```
+
+**`cancelled` is a THIRD outcome and it is not an error.** Declining the parent's dialog answers the
+view `{ ok: false, error: "cancelled" }` — the same shape a refusal by the rules arrives in. So a
+page that prints `error` blindly tells somebody who deliberately pressed やめる that their
+submission failed, and a page that ignores `ok` thanks them for a record that does not exist. Read
+`ok` first, then separate `cancelled` from the rest: it is the one outcome with nothing to report,
+because the visitor already knows what they did.
+
+(Escape while a write is IN FLIGHT is not a cancel. The parent refuses to answer "cancelled" over a
+record that may still land — there is no recalling a write — and makes the visitor wait for the real
+outcome. So the page is never told both.)
+
+**Deriving it at all needs the page to be handed the reader's own row, and that is settled before
+the page is written.** A public page is handed only the collections in `public.read`, and an
+`anonymous` visitor has no address to compare against — so "have I answered?" is not a question that
+page can ask, however it is coded. That is the trade in step 2c arriving in a different place: ask
+it while the shape is being chosen, not after writing a screen that cannot know when to appear.
+
+Where it genuinely cannot be derived, remembering is the fallback rather than the mistake — and it
+has to be written as one. [templates/live-poll.md](./templates/live-poll.md) is that case in full: an
+anonymous voter may not read the votes back, so the page keeps what it sent in a `Map`, remembers it
+only on `ok`, treats `cancelled` as "press again" rather than as a refusal, and knows that a reload
+loses the lot. Copy that shape rather than inventing it, and do not reach for it while the row is
+readable.
+
+**`preview` does not catch either of these.** The run presses controls and accepts what it raises,
+and it loads each page once — so a page with both faults comes back clean. Until the harness presses
+cancel and re-loads, this section is the check: read the page back and ask, of each screen, where it
+learns that it is the one to draw.
 
 The simplest correct survey omits status entirely (`submitOnly` + `verifiedEmail` + `emailField`).
 Add a status only when somebody is going to work through the responses.

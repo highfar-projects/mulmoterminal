@@ -191,8 +191,15 @@
       return;
     }
     const result = await view.submit("bookings", { slot, customerName, status: "pending" });
-    // 失敗の理由は二重予約とは限りません（締切、サインイン、必須項目）。
-    say.textContent = result.ok ? "受け付けました。" : result.error ? `予約できませんでした: ${result.error}` : "その枠は取られました。";
+    // 失敗の理由は二重予約とは限りません（締切、サインイン、必須項目）。そして
+    // "cancelled" は失敗ではありません — 確認ダイアログで「やめる」を押しただけです。
+    if (result.ok) {
+      say.textContent = "受け付けました。";
+    } else if (result.error === "cancelled") {
+      say.textContent = "";
+    } else {
+      say.textContent = result.error ? `予約できませんでした: ${result.error}` : "その枠は取られました。";
+    }
   });
   view.ready();
 </script>

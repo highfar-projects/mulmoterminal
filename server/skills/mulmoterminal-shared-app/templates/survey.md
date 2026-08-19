@@ -276,7 +276,13 @@ create** なので、上書きではなく拒否されます。「1 回だけ答
     });
     // 失敗は「壊れた」ではありません。サインインしていないか、この人が既に答えたか
     // （idFrom: "auth.uid"）のどちらかです。
-    say.textContent = result.ok ? "ありがとうございました。" : `送れませんでした: ${result.error ?? "unknown"}`;
+    // そして "cancelled" は失敗ですらありません — 確認ダイアログで「やめる」を押した人に
+    // 「送れませんでした」と出すのは嘘です。ok を先に読み、cancelled を残りと分けます。
+    if (result.ok) {
+      say.textContent = "ありがとうございました。";
+    } else {
+      say.textContent = result.error === "cancelled" ? "" : `送れませんでした: ${result.error ?? "unknown"}`;
+    }
   });
 
   view.ready();

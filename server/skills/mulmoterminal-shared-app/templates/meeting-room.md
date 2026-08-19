@@ -197,7 +197,12 @@
       return;
     }
     // 失敗を全部「取られました」と言わないこと。締切、サインイン、必須項目の
-    // どれでもここに来ます。理由は result.error にあります。
+    // どれでもここに来ます。理由は result.error にあります。そして "cancelled" は
+    // 失敗ですらありません — 確認ダイアログで「やめる」を押した人には何も出しません。
+    if (result.error === "cancelled") {
+      say.textContent = "";
+      return;
+    }
     say.textContent = result.error ? `予約できませんでした: ${result.error}` : "その枠は取られました。";
   });
   view.ready();
