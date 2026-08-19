@@ -8,6 +8,97 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.10.1 — 2026-08-20
+
+> **Setup guide:** [A scrollbar attached to nothing, and prompts you can copy](https://receptron.github.io/mulmoterminal/guide/en/v4.10.1.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.10.1.html))
+
+Two fixes you can see, a shared-app preview whose desk actually moves records, an identity that
+carries no address, and a test suite with no time budgets left in it.
+
+### A zoomed cell grew a scrollbar attached to nothing (#1762, #1807)
+
+Enlarging a cell from the roster could leave it with a scrollbar that scrolled nothing: the thumb
+dragged independently of the terminal, the wheel still reached the agent, and it never went away
+until the next resize.
+
+xterm stops drawing a cell that is off-screen, and a resize arriving while it is paused updates the
+**row count** immediately but defers the renderer's **dimensions**. The viewport builds its scroll
+range from both, so it ends up with the pre-zoom canvas height and the post-zoom content length —
+a scroll range that does not exist. On the alternate screen (a full-screen TUI redraws in place)
+nothing ever calls `_sync()` again, so it stays wrong. The roster hit it every time, because that
+cell was parked at `left: -99999px` until the moment it was enlarged.
+
+Now the fit is **held while the cell is off-screen and run inside the delivery that brings it
+back**, so xterm's own paused resize is flushed in the same batch. The rule is a pure function
+(`src/composables/terminalFitGate.ts`), and the size handed to the PTY was measured as identical
+with and without the fix, in every view state. This is also an upstream xterm.js defect — a paused
+resize is deferred and the viewport is never re-synced.
+
+### The prompts pane could be read but not copied (#1806)
+
+A prompt row in the right panel was one big `<button>`, and a browser makes a button's contents
+unselectable — so dragging across your own prompt started no selection at all. The button is now
+just the header row (time plus the expand chevron, with `aria-expanded` intact), and the prompt
+text sits outside it as selectable text. A click that ends a drag-selection no longer collapses the
+row, which would have thrown the selection away; that rule is a tested pure function
+(`src/components/textSelected.ts`).
+
+### Shared apps (#1797, #1800, #1801, #1802, #1804, #1805, #1808)
+
+- **The pane's desk performs what its buttons say (#1802).** Opening a member or participant page
+  in the Collections pane drew the desk's controls and then failed every one of them with
+  `read-only` — the member parent was never handed a `perform` port. `transition` / `assign` /
+  `withdraw` now run, and the decision is made **on the server, before the write**, by the same
+  `readIntentMessage` mulmoserver uses on `/m/` and `/p/`: the author owns the app, so deferring to
+  the deployed rules would let the preview succeed at operations the page on screen forbids. The
+  ask carries **which page it came from**, writes go out as a batch (rules read the second half of
+  a pair with `getAfter()`), and headless `preview` runs still do not perform anything.
+- **Identity without an address: `uidField` (#1805, #1808).** An app that spends its document id on
+  exclusivity — a shared TODO board where the claim's id *is* the task's id — could only identify a
+  person by `emailField`, which publishes an address next to a name on a world-readable row.
+  `uidField` says the same thing with no address: the host validates the field exists and is a
+  string, keeps it out of the public form (the box is writable and every value written to it is
+  refused), and fills it from the session on write. A sixth template, `todo-board`, ships with it.
+  It was published as `protocol: "2.0.0"` and walked back to no version at all (#1808), after
+  measuring that an old reader already refuses the projection and that nothing reads a minor
+  difference; the invariant that makes that safe is now pinned in `publicForm.spec.ts`.
+- **A submission that cannot form an ID is refused by name (#1800).** `auth.uid+field` with an
+  empty field returned `"<uid>_"` — a *valid* document id — so two different claims by one person
+  collapsed onto one document. `missingIdField()` now asks before `recordId()` and names the empty
+  field. With `sharedapp` 0.16 a whitespace-only answer counts as missing (stored values are still
+  never trimmed), and `submit.stampField` is passed to `writableFields()` so the shared function
+  also knows which fields a visitor never chooses.
+- **The live-poll desk closes the current question before opening the next (#1801).** The audience
+  page shows the lowest-`order` question that is `open`, and the template's desk had only per-row
+  toggles — so opening the next question left the previous one open and the audience did not move,
+  while the transition returned success and the row read "open". The desk now does it in two
+  ordered writes and stops if the close is refused. `SKILL.md` gained the general form:
+  `transitions` can only judge one record, so an invariant across records is executed by the page.
+- **Which screen the page shows is decided from the data (#1804).** Two published-survey bugs — a
+  cancelled submission showing results, and a returning visitor being shown the form again — had one
+  cause: the page decided from what happened in *this tab*. Render from `onState` only; `cancelled`
+  is a third outcome, not a failure (four templates were reporting "could not send" to someone who
+  pressed *cancel*).
+- **The audience page absorbs a refusal it cannot avoid (#1797).** A sandboxed page has no
+  `localStorage`, `sessionStorage` or `cookie` — all three raise `SecurityError` — so after a reload
+  it cannot know it already voted, and `viewer.mine` cannot answer for a composite id. It now states
+  the refusal and stops instead of inviting another press, and does not count a cancel or a
+  double-press as one.
+
+### Tests (#1737, #1796, #1798, #1799)
+
+- **Waits are named conditions, not time budgets (#1796, #1798).** `test_windows` failed on a
+  different spec every run. Counting the hops one spec actually needed showed 1 required against 1
+  provided — zero slack — so one extra `await` anywhere upstream read an array before the answer
+  landed. All 39 waits in the touched specs are now named conditions, the `settle()` helper is gone,
+  and three more specs carrying the same 300ms budget were fixed with them.
+- **The suite opens no sockets (#1737, #1799).** Every `request(app)` was a listener on an ephemeral
+  port — invisible to a `grep listen(` — and under load they failed with `socket hang up`. All 23
+  specs moved to `light-my-request` in-memory injection through an adapter that returns supertest's
+  shape, so not one assertion was rewritten to prove a transport change. The two places where the
+  adapter differs (empty body, top-level array) are pinned by spec, `supertest` is out of the
+  dependencies, and `remoteHost/routes.spec.ts` went from 13 listeners to 1 to 0.
+
 ## mulmoterminal@4.10.0 — 2026-08-19
 
 > **Setup guide:** [The machine's own load, in the header](https://receptron.github.io/mulmoterminal/guide/en/v4.10.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.10.0.html))
