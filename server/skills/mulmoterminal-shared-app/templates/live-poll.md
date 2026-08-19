@@ -120,7 +120,9 @@ that side is N→1 by definition however popular the stream gets.
 - **`votes` is `submitOnly`** — it is not in `public.read`, so nobody can list the votes from the
   public page. The tally exists only where the roster can read it.
 - **`transitions` on `questions`** — `draft → open → closed`, and `closed → open` because a host
-  reopens a question they closed too early. The desk moves it; the rules judge the move.
+  reopens a question they closed too early, and because going BACK to an earlier question is that
+  same move. The desk moves it; the rules judge the move. What the rules cannot judge is how many
+  questions are open at once — see the note under `order` below.
 
 ### What the rules DO and DO NOT enforce about a vote
 
@@ -254,8 +256,22 @@ option keys `a`…`e`, in order**, and a sixth line is not offered by the pages:
 refused by the rules (`validate.keyFields`), and drawing an option nobody can choose is worse than not
 drawing it.
 
-`order` decides which question the audience sees when more than one is `open`. "One at a time" is the
-desk's discipline, not something the rules keep.
+`order` decides which question the audience sees when more than one is `open`, and the desk keeps
+there from being more than one: pressing a question's button closes whichever is open first. That
+ordering is the desk's to perform, not the rules' to keep — `transitions` judges one record's move,
+and "at most one is open" is a statement about the other records, which no declaration here can
+make. `order` is what settles the moment between the two writes.
+
+Asking a question closes EVERY open one, not only the one the audience is on: more than one can be
+open (a second desk, a press that half-happened), and leaving one below the target's `order` is the
+same stall. If a write is refused partway, the desk puts back what it closed — nothing open is the
+one state worse than not moving, because every audience page drops to "waiting" while the host is
+still talking.
+
+**A desk that only opened the next question would look broken.** The previous one stays open, the
+audience is on the lower `order`, and the screen everybody is watching does not move — while the
+button reports success and the row says "open". Whether pressing a button moved the audience would
+depend on which way the `order`s compared rather than on what was pressed.
 
 ## .claude/skills/votes/schema.json
 
@@ -551,6 +567,14 @@ counts document — and nothing needs to, because the roster is the only audienc
     document.getElementById("say").textContent = message ?? "";
   };
 
+  // The last snapshot, KEPT — because this page redraws itself between snapshots. Moving the
+  // audience on takes two writes (see the handler), the buttons are dead while they go out, and
+  // that redraw has to describe the state the page is already holding.
+  let latest = { questions: [], votes: [], can: {} };
+  // One switch at a time. Two overlapping presses would interleave their closes and opens, and the
+  // audience would land on whichever won the race.
+  let busy = false;
+
   const KEYS = ["a", "b", "c", "d", "e"];
 
   const optionsOf = (question) =>
@@ -561,11 +585,12 @@ counts document — and nothing needs to, because the roster is the only audienc
       .slice(0, KEYS.length)
       .map((label, index) => ({ key: KEYS[index], label }));
 
-  const openQuestion = (questions) =>
-    questions
-      .filter((question) => question.state === "open")
-      .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
-      .at(0) ?? null;
+  const byOrder = (questions) => questions.slice().sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
+
+  /** The question the AUDIENCE is on — the lowest `order` among the open ones, which is the rule
+   *  the public page applies too. Both pages have to agree about this or the desk shows a tally for
+   *  a question nobody is being asked. */
+  const openQuestion = (questions) => byOrder(questions).find((question) => question.state === "open") ?? null;
 
   /** The tally of the question on screen. Recomputed from the rows on every snapshot — the numbers
    *  ARE the rows, so there is nothing to keep in step. */
@@ -599,48 +624,130 @@ counts document — and nothing needs to, because the roster is the only audienc
     }
   };
 
-  /** Every question, with the one button its state allows. */
-  const drawList = (questions, votes, viewer) => {
+  /** Every question, with the one button its state allows.
+   *
+   *  The button says what the OPERATOR is doing — putting this question in front of the audience —
+   *  rather than which state it is about to be in. "Open" on a question while another one is open
+   *  reads as "switch to this", and that is what the handler performs. */
+  const drawList = () => {
     const host = document.getElementById("list");
     host.textContent = "";
-    for (const question of questions.slice().sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))) {
+    for (const question of byOrder(latest.questions)) {
       const row = document.createElement("p");
       row.textContent = `${question.order ?? ""} ${question.text ?? question.id} [${question.state}] ${
-        votes.filter((vote) => vote.questionId === question.id).length
+        latest.votes.filter((vote) => vote.questionId === question.id).length
       } vote(s) `;
       // Drawn from what the viewer may actually do. The same answer is applied again to the intent,
       // so this decides what is OFFERED and never what is allowed.
-      const next = question.state === "open" ? "closed" : "open";
-      if (viewer?.can?.questions?.transitionAny) {
+      if (latest.can.transitionAny) {
         const button = document.createElement("button");
         button.type = "button";
-        button.textContent = next === "open" ? "Open" : "Close";
-        button.addEventListener("click", async () => {
-          button.disabled = true;
-          say("Working…");
-          try {
-            const done = await view.transition("questions", question.id, next);
-            say(done?.ok ? `${question.id} is now ${next}.` : `Not done: ${done?.error ?? "unknown error"}`);
-          } catch (err) {
-            say(`Not done: ${err instanceof Error ? err.message : String(err)}`);
-          } finally {
-            // ALWAYS. A rejected call produces no state update, so `onState` never redraws this row —
-            // the button would stay disabled until the operator reloaded, mid-stream, on a page whose
-            // whole job is to be usable in the next five seconds.
-            button.disabled = false;
-          }
-        });
+        button.dataset.qid = question.id;
+        button.dataset.to = question.state === "open" ? "closed" : "open";
+        button.textContent = question.state === "open" ? "Close" : question.state === "closed" ? "Reopen" : "Ask this";
+        // Every button, not the pressed one: while a switch is in flight the whole list is one
+        // operation, and a second press would race the first one's two writes.
+        button.disabled = busy;
         row.append(button);
       }
       host.append(row);
     }
   };
 
+  const render = () => {
+    drawTally(openQuestion(latest.questions), latest.votes);
+    drawList();
+  };
+
+  /** ONE QUESTION AT A TIME, PERFORMED HERE.
+   *
+   *  The audience sees the lowest `order` among the OPEN questions, so a desk that only opened the
+   *  next one would leave the previous one open and the audience on it — the button works, the row
+   *  says "open", and the screen everybody is looking at does not move. Whether it moved would
+   *  depend on which way the `order`s compared rather than on which button was pressed.
+   *
+   *  The rules cannot keep this. `transitions` judges one record's move, and "at most one question
+   *  is open" is a statement about the OTHER records — nothing in the declaration can say it. So
+   *  the desk performs it, and the public page's lowest-`order` rule stays as the tiebreak for the
+   *  moment between the two writes (and for a second desk, which nothing prevents).
+   *
+   *  Two writes, IN ORDER, and not a batch: `view.transition` moves one record, and there is no
+   *  operation here that moves two. So the pair can half-happen, and each half is handled:
+   *
+   *    the CLOSE fails — the open is not attempted. Nothing moved is the audience still answering
+   *    the question they were on, which is the harmless end of this.
+   *
+   *    the OPEN fails after a close landed — NOTHING is open, and that is the state to avoid:
+   *    every audience page drops to "Waiting for a question…" while the host is still talking about
+   *    the one they just closed. So everything closed on the way here is put back, best effort, and
+   *    what happened is said either way. A reopen that is itself refused is named rather than
+   *    hidden — the list is the truth, and the host can see it and press again.
+   *
+   *  Delegated from the container because the rows are redrawn under the pointer — a listener bound
+   *  to a button would go with it. */
+  document.getElementById("list").addEventListener("click", async (event) => {
+    const button = event.target.closest("button");
+    if (button === null || busy) {
+      return;
+    }
+    const { qid, to } = button.dataset;
+    if (!qid || !to) {
+      return;
+    }
+    busy = true;
+    render();
+    say("Working…");
+    const move = (id, state) => view.transition("questions", id, state).catch((err) => ({ ok: false, error: String(err) }));
+    // EVERY open question that is not the target, not just the one the audience is on. More than
+    // one can be open — a second desk, or a press that half-happened — and closing only the lowest
+    // `order` would leave another one below the target, which is the stall this handler exists to
+    // prevent. Held because a failed open has to give them back.
+    const leaving = to === "open" ? byOrder(latest.questions).filter((question) => question.state === "open" && question.id !== qid) : [];
+    const closed = [];
+    let problem = "";
+    for (const question of leaving) {
+      const done = await move(question.id, "closed");
+      if (!done?.ok) {
+        problem = `${question.id}: ${done?.error ?? "unknown error"}`;
+        break;
+      }
+      closed.push(question);
+    }
+    if (problem === "") {
+      const moved = await move(qid, to);
+      if (!moved?.ok) {
+        problem = moved?.error ?? "unknown error";
+      }
+    }
+    // Whatever was closed on the way here goes back, because the alternative is worse than not
+    // moving: with nothing open every audience page drops to "waiting" while the host is still
+    // talking about the question they just closed. Best effort, and a reopen that is refused too is
+    // NAMED rather than swallowed — the list is the truth and the host can press again.
+    if (problem !== "" && closed.length > 0) {
+      const stuck = [];
+      for (const question of closed) {
+        const back = await move(question.id, "open");
+        if (!back?.ok) {
+          stuck.push(`${question.id} (${back?.error ?? "unknown error"})`);
+        }
+      }
+      problem = stuck.length === 0 ? `${problem} — nothing was changed` : `${problem}, and could not be reopened: ${stuck.join(", ")}`;
+    }
+    // ALWAYS, and before the message. A refused call produces no state update, so `onState` never
+    // redraws — the buttons would stay dead until the operator reloaded, mid-stream, on a page whose
+    // whole job is to be usable in the next five seconds.
+    busy = false;
+    render();
+    say(problem === "" ? "" : `Not done: ${problem}`);
+  });
+
   view.onState((state, viewer) => {
-    const questions = Array.isArray(state?.questions) ? state.questions : [];
-    const votes = Array.isArray(state?.votes) ? state.votes : [];
-    drawTally(openQuestion(questions), votes);
-    drawList(questions, votes, viewer);
+    latest = {
+      questions: Array.isArray(state?.questions) ? state.questions : [],
+      votes: Array.isArray(state?.votes) ? state.votes : [],
+      can: viewer?.can?.questions ?? {},
+    };
+    render();
   });
 
   view.ready();
@@ -656,8 +763,11 @@ counts document — and nothing needs to, because the roster is the only audienc
 3. **Write the questions** into `questions` with `state: "draft"` — from the collection pane, or with
    `manageCollection`. Give them `order` in the sequence you will ask them.
 4. **`publish`** — the public page and the desk both appear.
-5. **During the stream** — open one question from the desk, close it, open the next. The audience's
-   page follows without reloading; the tally moves as votes land.
+5. **During the stream** — press a question's button on the desk. It closes whatever is open and
+   asks that one, so moving on is one press and going back to an earlier question is the same press
+   on its row. The audience's page follows without reloading; the tally moves as votes land.
+   Somebody who already answered the question you return to sees their own answer rather than the
+   choices — one vote per person per question is what `idFrom: "auth.uid+field"` means.
 
 ## What this shape does NOT do
 
@@ -677,5 +787,9 @@ counts document — and nothing needs to, because the roster is the only audienc
 - **No result after the fact for the audience.** They cannot read `votes` at all. If they should see
   the outcome, publish it as a row in a collection they CAN read — a `results` collection the desk
   writes — rather than opening the votes.
+- **Nothing STOPS a second desk from opening two questions.** The desk closes the current question
+  before asking the next, and that is a page behaving itself, not a rule. Two hosts pressing at the
+  same moment can leave two open; the audience then follows the lower `order` until somebody closes
+  one. It is self-correcting and it is not enforceable here.
 - **Nothing catches up a viewer who arrives mid-question.** They see the question that is open when
   they arrive, and can vote on it. A question closed before they arrived is simply not there.
