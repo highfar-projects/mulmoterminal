@@ -550,22 +550,29 @@ let refreshGeneration = 0;
  *  A write changes the records, so the frame has to be told — but the DOCUMENT has not changed, and
  *  tearing it down to say so would throw away the conversation it is having. Only the payload is
  *  swapped; the page, its nonce and its channel all stay. */
-async function refresh(): Promise<void> {
+async function refresh(): Promise<boolean> {
   const mine = ++refreshGeneration;
   const load = generation;
   try {
     const res = await fetchWithTimeout(previewUrl());
     const body: unknown = await res.json();
     // Superseded by a newer refresh, or by a LOAD that started meanwhile — the second is the one
-    // that matters: this answer is about a directory the pane may have left.
-    if (mine !== refreshGeneration || load !== generation || !isRecord(body) || body.ok !== true) return;
+    // that matters: this answer is about a directory the pane may have left. TRUE either way: the
+    // caller is asking whether the screen will be current, and somebody else is on their way to
+    // making it so. Reporting a failure here would say the records are stale about a pane that is
+    // mid-reload.
+    if (mine !== refreshGeneration || load !== generation) return true;
+    if (!isRecord(body) || body.ok !== true) return false;
     const next = asPayload(body.preview);
-    if (next === null) return;
+    if (next === null) return false;
     payload.value = next;
     scopeLog(next.aid);
+    return true;
   } catch {
-    // The records on screen are now older than the truth, and saying so would take the pane away
-    // from an author in the middle of something. The next render says it.
+    // The records on screen are now older than the truth. Taking the pane away from an author in
+    // the middle of something is still not the answer — but the CALLER may need to know, and until
+    // this said so a member's move could be acknowledged over a screen that never moved.
+    return false;
   }
 }
 

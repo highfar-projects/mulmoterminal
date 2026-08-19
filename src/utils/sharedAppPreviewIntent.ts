@@ -52,8 +52,10 @@ export interface IntentSenderPorts {
   /** The route, already scoped to the cell's directory. */
   url: () => string;
   remember: (event: PreviewLogEvent) => void;
-  /** Re-read the records. Awaited before the page is answered — see below. */
-  refresh: () => Promise<void>;
+  /** Re-read the records, answering whether the screen is now CURRENT. Awaited before the page is
+   *  answered — see below — and its answer is not decoration: the read can fail, and a move
+   *  acknowledged over records that never moved is a page drawing a control it has already used. */
+  refresh: () => Promise<boolean>;
 }
 
 /** One intent, sent to the route that performs it as the author.
@@ -114,7 +116,21 @@ export const createIntentSender = (ports: IntentSenderPorts): PerformIntent => {
       // member gets real mail — so it is said out loud rather than left for the author to infer
       // from a declaration they wrote days ago.
       ports.remember({ ...noted, error: null, mailed: answer.mailed === true });
-      await ports.refresh();
+      // THE ANSWER IS STILL `ok`, and that is a decision rather than an oversight. The write
+      // HAPPENED — the record moved, and where the declaration named one, a notice went with it.
+      // Telling the page it failed would put the operator in front of a button they would press
+      // again, which is a second transition and a second notice about a move that already
+      // succeeded. What is wrong in this branch is the SCREEN, not the write.
+      //
+      // So the screen is what is reported. Without this the pane could acknowledge a move over
+      // records that never changed — the page clears its pending state and goes on drawing the
+      // control it has just used, which looks exactly like a button that does nothing.
+      if (!(await ports.refresh())) {
+        ports.remember({
+          kind: "host",
+          note: `the ${body.kind} was written, but the records could not be re-read afterwards — what is on screen is older than the app, and a control drawn from it may already have been used. Reopen the preview.`,
+        });
+      }
       return { requestId, ok: true };
     } catch {
       // The request threw, so this does not know whether the record moved. Unlike a submission

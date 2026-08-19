@@ -17,8 +17,13 @@ const DESK: PreviewPage = { id: "desk", html: "<div></div>", audience: "member",
 
 const INTENT = { type: "mc-public-view:intent", requestId: "r1", kind: "transition", cid: "questions", itemId: "q1", to: "open" };
 
-/** The sender, with the four things it is given recorded rather than performed. */
-const sender = (answer: unknown, page: PreviewPage | null = DESK) => {
+/** The sender, with the four things it is given recorded rather than performed.
+ *
+ *  `current` is what `refresh` answers: whether the screen really is up to date afterwards. It is
+ *  false in the one test that needs it and true everywhere else, because a refresh that quietly
+ *  failed is the difference between a move being acknowledged and the page being able to believe
+ *  what it is drawing. */
+const sender = (answer: unknown, page: PreviewPage | null = DESK, current = true) => {
   const remembered: PreviewLogEvent[] = [];
   let refreshed = 0;
   const fetcher = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(answer) });
@@ -29,7 +34,7 @@ const sender = (answer: unknown, page: PreviewPage | null = DESK) => {
     remember: (event) => remembered.push(event),
     refresh: () => {
       refreshed += 1;
-      return Promise.resolve();
+      return Promise.resolve(current);
     },
   });
   return { perform, remembered, fetcher, refreshedCount: () => refreshed };
@@ -125,13 +130,26 @@ describe("the pane's intent sender", () => {
       page: () => DESK,
       url: () => "/api/shared-app/preview/intent",
       remember: (event) => remembered.push(event),
-      refresh: () => Promise.resolve(),
+      refresh: () => Promise.resolve(true),
     });
 
     expect(await perform(INTENT)).toEqual({ requestId: "r1", ok: false, error: "intent-failed" });
     // And it does not claim to know what happened. Unlike a submission there is nothing to remember
     // the move BY — a transition creates no document the pane could later offer to take back.
     expect(remembered[0]).toEqual(expect.objectContaining({ error: expect.stringContaining("may or may not have moved") }));
+  });
+
+  it("says the SCREEN is stale when the re-read failed, and still reports the write as done", async () => {
+    // Both halves matter and they point opposite ways. The write HAPPENED, so answering `ok: false`
+    // would put the operator in front of a button they would press again — a second transition, and
+    // a second notice, about a move that already succeeded. What is wrong is the screen, so the
+    // screen is what is reported: without this the pane acknowledges a move over records that never
+    // changed, and the page goes on drawing the control it has just used.
+    const { perform, remembered } = sender({ ok: true, mailed: false }, DESK, false);
+
+    expect(await perform(INTENT)).toEqual({ requestId: "r1", ok: true });
+    expect(remembered[0]).toEqual(expect.objectContaining({ kind: "intent", error: null }));
+    expect(remembered[1]).toEqual(expect.objectContaining({ kind: "host", note: expect.stringContaining("older than the app") }));
   });
 
   it("sends nothing at all when there is no page, or the page is a public one", async () => {
