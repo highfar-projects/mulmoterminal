@@ -104,10 +104,12 @@ describe("mountCalendarPushRoutes", () => {
       const res = await push(stubDeps({ push: vi.fn(async () => outcome) }));
       expect(res.status).toBe(200);
       expect(res.body.created).toBe(0);
-      // `errors` is a list on a JSON body, so the guard is the assertion: reading `.join` off an
-      // unknown would be claiming a shape this spec has not checked.
+      // The route's contract is a LIST of errors, so anything else is a failure rather than
+      // something to read `toContain` against — a string `errors` would otherwise satisfy this
+      // assertion whenever it happened to contain the text (CodeRabbit on #1799).
       const errors = res.body.errors;
-      expect(Array.isArray(errors) ? errors.join(" ") : errors).toContain(expected);
+      expect(Array.isArray(errors)).toBe(true);
+      expect(Array.isArray(errors) ? errors.join(" ") : "").toContain(expected);
     });
   });
 

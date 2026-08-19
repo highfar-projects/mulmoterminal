@@ -74,5 +74,11 @@ export const jsonPost = (value: unknown, headers: Record<string, string> = {}): 
   // (CodeRabbit on #1799). Refusing here says which call is wrong.
   const body = JSON.stringify(value);
   if (body === undefined) throw new TypeError(`jsonPost cannot send ${typeof value} — JSON has no representation for it`);
-  return { method: "POST", headers: { "content-type": "application/json", ...headers }, body };
+  // The caller's headers cannot take the media type with them. Spreading them last let
+  // `jsonPost(v, { "content-type": "text/plain" })` send JSON bytes under a type the route will not
+  // parse — a spec then failing on an empty body it never chose (CodeRabbit on #1799). Dropped
+  // case-insensitively, because a header name is case-insensitive and `Content-Type` would
+  // otherwise slip past a plain key check.
+  const rest = Object.fromEntries(Object.entries(headers).filter(([name]) => name.toLowerCase() !== "content-type"));
+  return { method: "POST", headers: { ...rest, "content-type": "application/json" }, body };
 };

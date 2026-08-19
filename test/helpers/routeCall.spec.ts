@@ -83,6 +83,13 @@ describe("routeCall", () => {
 
   // `JSON.stringify` answers `undefined` for these, and the request would then go out with no body
   // under a content-type promising JSON — a spec failing for a reason it never wrote.
+  // A caller passing headers must not be able to take the media type with them: the body is JSON
+  // bytes either way, and a route that cannot parse them answers for an empty body instead.
+  it("keeps the JSON media type whatever headers the caller passes", async () => {
+    const res = await call("/echo", jsonPost({ a: 1 }, { "Content-Type": "text/plain", "x-mt-session": "s" }));
+    expect(res.body).toEqual({ body: { a: 1 }, sawHeader: "s" });
+  });
+
   it("refuses a value JSON cannot represent, rather than sending nothing", () => {
     expect(() => jsonPost(undefined)).toThrow(TypeError);
     expect(() => jsonPost(() => 1)).toThrow(/cannot send function/);
