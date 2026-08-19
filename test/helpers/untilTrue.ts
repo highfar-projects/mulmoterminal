@@ -10,10 +10,16 @@
 const POLL_MS = 5;
 const DEFAULT_TIMEOUT_MS = 10_000;
 
-export async function untilTrue(done: () => boolean | Promise<boolean>, what: string, timeout_ms: number = DEFAULT_TIMEOUT_MS): Promise<void> {
+/** The predicate is SYNCHRONOUS on purpose. This helper's contract is a deadline — "waited 10000ms
+ *  and X never happened" — and awaiting a caller's promise inside the loop would let that promise
+ *  outlive the deadline, or never settle at all, turning a clear failure into a hang reported
+ *  against vitest's own timeout (CodeRabbit on #1798). Every condition it exists for is a cheap
+ *  read of something already on disk or in memory. A caller that genuinely needs to await
+ *  something wants `hopUntil`'s `until`, whose bound is hops rather than time. */
+export async function untilTrue(done: () => boolean, what: string, timeout_ms: number = DEFAULT_TIMEOUT_MS): Promise<void> {
   const deadline = Date.now() + timeout_ms;
   for (;;) {
-    if (await done()) return;
+    if (done()) return;
     if (Date.now() >= deadline) throw new Error(`waited ${timeout_ms}ms and ${what} never happened`);
     await new Promise((resolve) => setTimeout(resolve, POLL_MS));
   }

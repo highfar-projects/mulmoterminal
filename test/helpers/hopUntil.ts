@@ -30,9 +30,13 @@ const HOPS_MAX = 200;
  * better for the next reader than `expected undefined to be defined`.
  */
 export const until = async (done: () => boolean | Promise<boolean>, what: string): Promise<void> => {
-  for (let i = 0; i <= HOPS_MAX; i++) {
-    if (await done()) return;
+  // Checked once before any hop, then once after each — so the loop spends EXACTLY `HOPS_MAX`
+  // hops, which is what the message below claims (CodeRabbit on #1798: `i <= HOPS_MAX` spent 201,
+  // one of them after the last check could change nothing).
+  if (await done()) return;
+  for (let hops = 0; hops < HOPS_MAX; hops++) {
     await hop();
+    if (await done()) return;
   }
   throw new Error(`${what} never happened, over ${HOPS_MAX} turns of the event loop`);
 };
