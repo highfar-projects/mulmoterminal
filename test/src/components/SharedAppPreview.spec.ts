@@ -16,6 +16,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import SharedAppPreview from "../../../src/components/SharedAppPreview.vue";
 import { isRecord } from "../../../common/isRecord.js";
+import { until } from "../../helpers/hopUntil";
 
 const PAGE = "<h1>Book</h1>";
 
@@ -136,33 +137,81 @@ const speakFromFrame = async (wrapper: VueWrapper, data: Record<string, unknown>
 
 const nonceOf = (wrapper: VueWrapper): string => /const nonce = "([^"]+)"/.exec(wrapper.find("iframe").attributes("srcdoc") ?? "")?.[1] ?? "";
 
+// Found by its title rather than its label: the label becomes "Copied" for a moment after a press,
+// and a helper that looked for the label would quietly stop finding it on the second call.
+const copyButton = (wrapper: VueWrapper) =>
+  wrapper.findAll("button").find((candidate) => (candidate.attributes("title") ?? "").startsWith("Everything the parent saw"));
+
 const copyBlock = async (wrapper: VueWrapper): Promise<string> => {
-  // Found by its title rather than its label: the label becomes "Copied" for a moment after a
-  // press, and a helper that looked for the label would quietly stop finding it on the second call.
-  const button = wrapper.findAll("button").find((candidate) => (candidate.attributes("title") ?? "").startsWith("Everything the parent saw"));
+  const button = copyButton(wrapper);
   if (button === undefined) throw new Error("the pane offers no way to copy what happened");
   await button.trigger("click");
   await flushPromises();
   return clipboard;
 };
 
-const settle = async () => {
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  await flushPromises();
+/** The pane's own text, once it says what the test is about to assert. */
+const untilText = async (wrapper: VueWrapper, text: string): Promise<void> =>
+  until(() => wrapper.text().includes(text), `the pane to show ${JSON.stringify(text)}`);
+
+/** What the pane put on the clipboard, once it says what the test is about to assert. Re-read on
+ *  each hop: the block is built when the button is pressed, so waiting on one copy of it would
+ *  wait forever.
+ *
+ *  A missing button counts as "not yet" rather than as a failure — it disappears while the pane
+ *  loads a different app, which is precisely a moment a test may be waiting through. The timeout
+ *  still names what never arrived, so nothing is hidden by this. */
+const untilBlock = async (wrapper: VueWrapper, text: string): Promise<string> => {
+  // The button's absence is ASKED about rather than caught: it disappears while the pane loads a
+  // different app, which is a moment a test waits through — but a catch-all here would also
+  // swallow a genuine failure inside `copyBlock` (a broken clipboard stub, say) for 200 hops and
+  // then report it as the wrong thing.
+  // The block that SATISFIED the condition is the one handed back. Copying a second time presses
+  // the control again and awaits another flush, so a re-render between the two could remove the
+  // control or replace the diagnostics — and the caller would be asserting against a block the
+  // wait never approved (CodeRabbit on #1798).
+  let found = "";
+  const says = async (): Promise<boolean> => {
+    if (copyButton(wrapper) === undefined) return false;
+    found = await copyBlock(wrapper);
+    return found.includes(text);
+  };
+  await until(says, `the record to mention ${JSON.stringify(text)}`);
+  return found;
 };
 
-/** Wait until something has actually ARRIVED, rather than for a fixed number of turns.
+// #1802 reached this same conclusion independently and from the other direction: its member-intent
+// answer crosses the HTTP boundary twice before the page is told, so a fixed turn count passed on
+// macOS and Linux and failed on WINDOWS in CI. It added a `settleUntil(arrived, turns = 20)`; this
+// branch's `until` is that with a name for what never came and no turn budget in the caller, so the
+// merge keeps one helper rather than two.
+
+/** Press a button by its label, once it exists.
  *
- *  A port's delivery is a macrotask and `settle()` spends exactly one. That is enough for an answer
- *  the parent composes on the spot, and not for one that crosses the HTTP boundary first — a
- *  member's intent does it twice, because the records are re-read before the page is told, so the
- *  outbound delivery lands a turn or two later than the assertion.
- *
- *  Counting turns is what makes a test pass on one machine and fail on another: this one passed on
- *  macOS and Linux and failed on WINDOWS in CI (#1802), which is the same shape as the note above
- *  about `flushPromises`. Waiting for the condition costs nothing when it is already true. */
-const settleUntil = async (arrived: () => boolean, turns = 20): Promise<void> => {
-  for (let turn = 0; turn < turns && !arrived(); turn += 1) await settle();
+ *  `findAll("button").filter(…)[0]?.trigger("click")` is a SILENT no-op when the control has not
+ *  rendered yet: the test goes on to assert about a click that never happened, and reports
+ *  whatever it finds instead of saying the button was missing (Codex on #1798). Waiting for the
+ *  control — and refusing to continue without it — turns that into a named failure. */
+const press = async (wrapper: VueWrapper, label: string): Promise<void> => {
+  const labelled = () => wrapper.findAll("button").filter((button) => button.text() === label);
+  await until(() => labelled().length > 0, `a ${JSON.stringify(label)} button`);
+  const button = labelled()[0];
+  if (button === undefined) throw new Error(`the ${JSON.stringify(label)} button went away before it could be pressed`);
+  await button.trigger("click");
+};
+
+/** "at least N undo requests have reached the server", as a predicate — named here so the call site
+ *  does not nest another callback inside an already-nested `describe`. */
+const undoRequests = (posted: { url: string }[], count: number) => () => posted.filter((entry) => entry.url.includes("/preview/undo")).length >= count;
+
+/** A predicate the tests share, kept out of the test bodies so the call site does not nest another
+ *  callback inside an already-nested `describe`. */
+const answered = (answers: Record<string, unknown>[], requestId: string) => () => answers.some((answer) => answer.requestId === requestId);
+
+/** The answer a test is about to read, once it has arrived. */
+const answerFor = async (answers: Record<string, unknown>[], match: (answer: Record<string, unknown>) => boolean, what: string) => {
+  await until(() => answers.some(match), what);
+  return answers.find(match);
 };
 
 const mountPreview = async () => {
@@ -208,9 +257,7 @@ describe("SharedAppPreview", () => {
     // permission error naming nothing; the parent refuses it here and names it — to the page's
     // promise, which the page usually does not await, and to nowhere else.
     port.postMessage({ type: "mc-public-view:submit", requestId: "r1", cid: "bookings", values: { nope: "x" } });
-    await settle();
-
-    const block = await copyBlock(wrapper);
+    const block = await untilBlock(wrapper, "REFUSED by the parent");
     expect(block).toContain("REFUSED by the parent");
     expect(block).toContain("`createFields`");
   });
@@ -241,9 +288,7 @@ describe("SharedAppPreview", () => {
     const wrapper = await mountPreview();
     const { port } = await connect(wrapper);
     port.postMessage({ type: "mc-public-view:submit", requestId: "r1", cid: "bookings", values: { slot: "SECRET-VALUE" } });
-    await settle();
-
-    const block = await copyBlock(wrapper);
+    const block = await untilBlock(wrapper, "the page submitted to 'bookings' carrying slot");
     expect(block).toContain("the page submitted to 'bookings' carrying slot");
     expect(block).not.toContain("SECRET-VALUE");
   });
@@ -271,8 +316,11 @@ describe("SharedAppPreview", () => {
 
     vi.stubGlobal("fetch", answering(payload({ aid: "aid-2" })));
     await wrapper.setProps({ cwd: "/another-repo" });
-    await settle();
-    expect(await copyBlock(wrapper)).not.toContain("from the first app");
+    // Waited on the SECOND app arriving, not on a number of turns: "the entry is gone" is also true
+    // before the switch has happened at all, so a budget here can pass for the wrong reason. The
+    // block names the aid it is reporting, which is exactly the anchor this needs.
+    const block = await untilBlock(wrapper, "aid-2");
+    expect(block).not.toContain("from the first app");
   });
 
   it("keeps what was recorded when the same app is merely re-read", async () => {
@@ -281,8 +329,7 @@ describe("SharedAppPreview", () => {
     const wrapper = await mountPreview();
     await speakFromFrame(wrapper, { type: "mc-public-view:notice", nonce: nonceOf(wrapper), code: "error", detail: "still worth reading" });
     await wrapper.setProps({ cwd: "/repo" });
-    await settle();
-    expect(await copyBlock(wrapper)).toContain("still worth reading");
+    expect(await untilBlock(wrapper, "still worth reading")).toContain("still worth reading");
   });
 
   it("names the collection a cancelled confirmation was for", async () => {
@@ -291,12 +338,8 @@ describe("SharedAppPreview", () => {
     const wrapper = await mountPreview();
     const { port } = await connect(wrapper);
     port.postMessage({ type: "mc-public-view:submit", requestId: "r1", cid: "bookings", values: { slot: "a" } });
-    await settle();
-    const cancel = wrapper.findAll("button").find((candidate) => candidate.text() === "Cancel");
-    await cancel?.trigger("click");
-    await settle();
-
-    expect(await copyBlock(wrapper)).toContain("the confirmation for 'bookings' was declined");
+    await press(wrapper, "Cancel");
+    expect(await untilBlock(wrapper, "the confirmation for 'bookings' was declined")).toContain("the confirmation for 'bookings' was declined");
   });
 
   it("can still be copied when the pane never got a declaration to show", async () => {
@@ -305,9 +348,7 @@ describe("SharedAppPreview", () => {
     // when the diagnostic exists.
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("no server")));
     const wrapper = await mountPreview();
-    await settle();
-
-    expect(await copyBlock(wrapper)).toContain("could not reach this host's own server");
+    expect(await untilBlock(wrapper, "could not reach this host's own server")).toContain("could not reach this host's own server");
   });
 
   // WHO the author is to a member page, and what they may change.
@@ -324,9 +365,7 @@ describe("SharedAppPreview", () => {
     // arrived. It happened to on Linux and macOS and did not on Windows — a test that passes by
     // being fast enough is a test that reports a working feature as broken on somebody else's
     // machine.
-    await settle();
-    const state = answers.find((message) => message.type === "mc-public-view:state");
-    expect(state).toBeDefined();
+    const state = await answerFor(answers, (message) => message.type === "mc-public-view:state", "the page's state");
     expect(state?.viewer).toEqual({ me: "owner@gym.jp", can: { bookings: MEMBER_CAPABILITY } });
     wrapper.unmount();
   });
@@ -341,9 +380,7 @@ describe("SharedAppPreview", () => {
     // arrived. It happened to on Linux and macOS and did not on Windows — a test that passes by
     // being fast enough is a test that reports a working feature as broken on somebody else's
     // machine.
-    await settle();
-    const state = answers.find((message) => message.type === "mc-public-view:state");
-    expect(state).toBeDefined();
+    const state = await answerFor(answers, (message) => message.type === "mc-public-view:state", "the page's state");
     expect(state).not.toHaveProperty("viewer");
     wrapper.unmount();
   });
@@ -367,13 +404,16 @@ describe("SharedAppPreview", () => {
     const wrapper = await mountPreview();
     const { port, answers } = await connect(wrapper);
     port.postMessage({ type: "mc-public-view:intent", requestId: "r1", kind: "transition", cid: "bookings", itemId: "b1", to: "approved" });
-    await settleUntil(() => answers.some((message) => message.type === "mc-public-view:submitResult" && message.requestId === "r1"));
+    // main's behaviour (#1802): the member parent PERFORMS the intent now rather than refusing it.
+    // Kept whole; only the wait is this branch's — `answerFor` names what never arrived, where
+    // `settleUntil` reports the absence as whatever the next assertion happens to find.
+    const result = await answerFor(
+      answers,
+      (message) => message.type === "mc-public-view:submitResult" && message.requestId === "r1",
+      "an answer to the member page's intent",
+    );
     const sent = posted.find((call) => call.url.includes("/preview/intent"));
     expect(sent?.body).toEqual({ page: { id: "desk", audience: "member" }, kind: "transition", cid: "bookings", itemId: "b1", to: "approved" });
-    // `submitResult`, not `result`: one name answers a submission and an intent alike, because the
-    // view awaits one promise either way.
-    const result = answers.find((message) => message.type === "mc-public-view:submitResult" && message.requestId === "r1");
-    expect(result).toBeDefined();
     expect(result?.ok).toBe(true);
     wrapper.unmount();
   });
@@ -414,8 +454,7 @@ describe("SharedAppPreview", () => {
     vi.stubGlobal("fetch", answering(memberPayload()));
     const wrapper = await mountPreview();
     await connect(wrapper);
-    await settle();
-    expect(await copyBlock(wrapper)).toContain("the page answered the handshake");
+    expect(await untilBlock(wrapper, "the page answered the handshake")).toContain("the page answered the handshake");
     wrapper.unmount();
   });
 
@@ -538,11 +577,8 @@ describe("SharedAppPreview", () => {
 
     await wrapper.find("input").setValue("中島");
     await wrapper.find("select").setValue("B");
-    await wrapper
-      .findAll("button")
-      .filter((button) => button.text() === "Send it")[0]
-      ?.trigger("click");
-    await settle();
+    await press(wrapper, "Send it");
+    await until(() => posted.length > 0, "the write to reach the server");
 
     expect(posted[0]?.url).toContain("/preview/submit");
     expect(posted[0]?.body).toEqual({ cid: "signups", values: { name: "中島", plan: "B" } });
@@ -598,11 +634,8 @@ describe("SharedAppPreview", () => {
 
     const wrapper = await mountPreview();
     await wrapper.find("input").setValue("中島");
-    await wrapper
-      .findAll("button")
-      .filter((button) => button.text() === "Send it")[0]
-      ?.trigger("click");
-    await settle();
+    await press(wrapper, "Send it");
+    await untilText(wrapper, "1 record written from this preview");
 
     expect(wrapper.text()).toContain("1 record written from this preview");
     expect(wrapper.text()).toContain("signups / uid-1");
@@ -617,11 +650,8 @@ describe("SharedAppPreview", () => {
 
     const wrapper = await mountPreview();
     await wrapper.find("input").setValue("中島");
-    await wrapper
-      .findAll("button")
-      .filter((button) => button.text() === "Send it")[0]
-      ?.trigger("click");
-    await settle();
+    await press(wrapper, "Send it");
+    await untilText(wrapper, "missing: お名前");
 
     // The server's words. And the box still holds what was typed: a refusal names one field, and
     // clearing the form would make the author retype the rest to find out.
@@ -675,12 +705,13 @@ describe("SharedAppPreview", () => {
       const { port, answers } = await connect(wrapper);
 
       port.postMessage({ type: "mc-public-view:submit", requestId: "r-1", cid: "bookings", values: { slot: "roomA-1000", requesterName: "客" } });
-      await settle();
+      // The positive half first: once the confirmation is on screen we know the parent has finished
+      // deciding, which is what makes "and it answered nothing" a fact rather than a race.
+      await untilText(wrapper, "asks to write to");
 
       // It got PAST the declaration check — which an empty `submit` map makes impossible — and the
       // parent is now holding it for the author to confirm, with the values shown OUTSIDE the frame.
       expect(answers.filter((answer) => answer.type === "mc-public-view:submitResult")).toEqual([]);
-      expect(wrapper.text()).toContain("asks to write to");
       expect(wrapper.text()).toContain("roomA-1000");
     });
 
@@ -691,12 +722,8 @@ describe("SharedAppPreview", () => {
       const { port, answers } = await connect(wrapper);
 
       port.postMessage({ type: "mc-public-view:submit", requestId: "r-4", cid: "bookings", values: { slot: "roomA-1000" } });
-      await settle();
-      await wrapper
-        .findAll("button")
-        .filter((button) => button.text() === "Send it")[0]
-        ?.trigger("click");
-      await settle();
+      await press(wrapper, "Send it");
+      await until(answered(answers, "r-4"), "an answer for r-4");
 
       // The submission reaches the server as the author accepted it — and the page is told, because
       // a submit has no timeout and a promise that never settles is a button that does nothing.
@@ -712,12 +739,8 @@ describe("SharedAppPreview", () => {
       const { port, answers } = await connect(wrapper);
 
       port.postMessage({ type: "mc-public-view:submit", requestId: "r-6", cid: "bookings", values: { slot: "roomA-1000" } });
-      await settle();
-      await wrapper
-        .findAll("button")
-        .filter((button) => button.text() === "Send it")[0]
-        ?.trigger("click");
-      await settle();
+      await press(wrapper, "Send it");
+      await until(answered(answers, "r-6"), "an answer for r-6");
 
       expect(answers).toContainEqual(expect.objectContaining({ requestId: "r-6", ok: false, error: "missing: 予約者" }));
     });
@@ -732,23 +755,16 @@ describe("SharedAppPreview", () => {
       const { port } = await connect(wrapper);
 
       port.postMessage({ type: "mc-public-view:submit", requestId: "r-7", cid: "bookings", values: { slot: "roomA-1000" } });
-      await settle();
-      await wrapper
-        .findAll("button")
-        .filter((button) => button.text() === "Send it")[0]
-        ?.trigger("click");
-      await settle();
+      await press(wrapper, "Send it");
+      await untilText(wrapper, "1 record written from this preview");
 
       // The rules read a public create with `hasOnly(createFields)`, so nothing marks these records
       // in the database. This list is the only place they are known to be tests.
       expect(wrapper.text()).toContain("1 record written from this preview");
       expect(wrapper.text()).toContain("bookings / roomA-1000");
 
-      await wrapper
-        .findAll("button")
-        .filter((button) => button.text() === "Remove them")[0]
-        ?.trigger("click");
-      await settle();
+      await press(wrapper, "Remove them");
+      await until(undoRequests(posted, 1), "the undo request to reach the server");
 
       // The MIRROR travels with it: a bare delete would leave the slot saying `taken` about a
       // booking that no longer exists.
@@ -783,22 +799,21 @@ describe("SharedAppPreview", () => {
       const wrapper = await mountPreview();
       const { port } = await connect(wrapper);
 
-      for (const slot of ["roomA-1000", "roomA-1100"]) {
+      for (const [n, slot] of ["roomA-1000", "roomA-1100"].entries()) {
         port.postMessage({ type: "mc-public-view:submit", requestId: `r-${slot}`, cid: "bookings", values: { slot } });
-        await settle();
-        await wrapper
-          .findAll("button")
-          .filter((button) => button.text() === "Send it")[0]
-          ?.trigger("click");
-        await settle();
+        await press(wrapper, "Send it");
+        // Each write has to be ON THE LIST before the next submit, or the second confirmation is
+        // pressed against the first one's dialog. Waited on the pane's own count rather than on
+        // `posted`, which this test fills from the UNDO route only.
+        await untilText(wrapper, `${n + 1} record${n === 0 ? "" : "s"} written from this preview`);
       }
+      await untilText(wrapper, "2 records written from this preview");
       expect(wrapper.text()).toContain("2 records written from this preview");
 
-      await wrapper
-        .findAll("button")
-        .filter((button) => button.text() === "Remove them")[0]
-        ?.trigger("click");
-      await settle();
+      await press(wrapper, "Remove them");
+      // BOTH, not just the first: the assertion below is about the pair, so waiting for one would
+      // read the list mid-flight.
+      await until(undoRequests(posted, 2), "both undo requests to reach the server");
 
       // BOTH were attempted, and the one that could not be removed is still named on screen — the
       // author cannot delete by hand what this pane has forgotten.
@@ -812,12 +827,8 @@ describe("SharedAppPreview", () => {
       const { port, answers } = await connect(wrapper);
 
       port.postMessage({ type: "mc-public-view:submit", requestId: "r-5", cid: "bookings", values: { slot: "roomA-1000" } });
-      await settle();
-      await wrapper
-        .findAll("button")
-        .filter((button) => button.text() === "Cancel")[0]
-        ?.trigger("click");
-      await settle();
+      await press(wrapper, "Cancel");
+      await until(answered(answers, "r-5"), "an answer for r-5");
 
       expect(answers).toContainEqual(expect.objectContaining({ requestId: "r-5", ok: false, error: "cancelled" }));
       expect(wrapper.text()).not.toContain("asks to write to");
@@ -828,7 +839,7 @@ describe("SharedAppPreview", () => {
       const { port, answers } = await connect(wrapper);
 
       port.postMessage({ type: "mc-public-view:submit", requestId: "r-2", cid: "nowhere", values: { slot: "x" } });
-      await settle();
+      await until(answered(answers, "r-2"), "an answer for r-2");
 
       // The check is real, not switched off — this cid genuinely is not declared.
       expect(answers).toContainEqual(expect.objectContaining({ requestId: "r-2", ok: false, error: "unknown-collection" }));
@@ -839,7 +850,7 @@ describe("SharedAppPreview", () => {
       const { port, answers } = await connect(wrapper);
 
       port.postMessage({ type: "mc-public-view:submit", requestId: "r-3", cid: "bookings", values: { slot: "roomA-1000", nickname: "x" } });
-      await settle();
+      await until(answered(answers, "r-3"), "an answer for r-3");
 
       expect(answers).toContainEqual(expect.objectContaining({ requestId: "r-3", ok: false, error: "undeclared-field" }));
     });
@@ -896,8 +907,7 @@ describe("SharedAppPreview", () => {
     // `connect` ends on flushPromises, which is one `setImmediate` — the check phase only. A port
     // message is not a microtask, so reading `answers` here catches it or misses it depending on
     // which phase it landed in and how loaded the runner is. Green on ubuntu/macOS, red on Windows.
-    await settle();
-    const state = answers.find((answer) => answer.type === "mc-public-view:state");
+    const state = await answerFor(answers, (answer) => answer.type === "mc-public-view:state", "the page's state");
     expect(state?.collections).toEqual({ notes: [{ id: "1" }] });
   });
 });

@@ -46,11 +46,6 @@ const stampOf = (file: string) => {
 const sidecarFile = (kind: string, transcript: string) =>
   path.join(home, ".mulmoterminal", "transcript-index", kind, path.basename(path.dirname(transcript)), `${path.basename(transcript, ".jsonl")}.json`);
 
-// The write is fire-and-forget, so a test that reads the file back has to let it land.
-const settled = async () => {
-  for (let i = 0; i < 50; i++) await new Promise((r) => setTimeout(r, 5));
-};
-
 beforeEach(() => {
   scratch = takeScratchHome("mt-sidecar-home-");
   home = scratch.path;
@@ -67,8 +62,7 @@ describe("createTranscriptSidecar", () => {
     const stamp = stampOf(file);
 
     expect(await sidecar.read(file, stamp)).toBeUndefined(); // nothing written yet
-    sidecar.write(file, stamp, 1234, { title: "hello" });
-    await settled();
+    await sidecar.write(file, stamp, 1234, { title: "hello" });
 
     expect(await sidecar.read(file, stamp)).toEqual({ from: 1234, value: { title: "hello" } });
   });
@@ -77,8 +71,7 @@ describe("createTranscriptSidecar", () => {
     const create = await loadSidecar();
     const sidecar = create<Fields>({ kind: "k", version: 1, isValue: isFields });
     const file = writeTranscript("a");
-    sidecar.write(file, stampOf(file), 100, { title: "hello" });
-    await settled();
+    await sidecar.write(file, stampOf(file), 100, { title: "hello" });
 
     appendFileSync(file, "more\n");
     expect(await sidecar.read(file, stampOf(file))).toEqual({ from: 100, value: { title: "hello" } });
@@ -90,8 +83,7 @@ describe("createTranscriptSidecar", () => {
     const sidecar = create<Fields>({ kind: "k", version: 1, isValue: isFields });
     const file = writeTranscript("a");
     const stamp = stampOf(file);
-    sidecar.write(file, stamp, 100, { title: "hello" });
-    await settled();
+    await sidecar.write(file, stamp, 100, { title: "hello" });
     const onDisk = sidecarFile("k", file);
     const parsed: unknown = JSON.parse(readFileSync(onDisk, "utf8"));
     if (!isRecord(parsed)) throw new Error("the sidecar should be an object");
@@ -124,8 +116,7 @@ describe("createTranscriptSidecar", () => {
     const sidecar = create<Fields>({ kind: "k", version: 1, isValue: isFields });
     const file = writeTranscript("a");
     const stamp = stampOf(file);
-    sidecar.write(file, stamp, 100, { title: "hello" });
-    await settled();
+    await sidecar.write(file, stamp, 100, { title: "hello" });
     const onDisk = sidecarFile("k", file);
     const parsed: unknown = JSON.parse(readFileSync(onDisk, "utf8"));
     if (!isRecord(parsed)) throw new Error("the sidecar should be an object");
@@ -147,8 +138,7 @@ describe("createTranscriptSidecar", () => {
     const create = await loadSidecar();
     const sidecar = create<Fields>({ kind: "k", version: 1, isValue: isFields });
     const file = writeTranscript("a");
-    sidecar.write(file, stampOf(file), 100, { title: "hello" });
-    await settled();
+    await sidecar.write(file, stampOf(file), 100, { title: "hello" });
 
     // A different session's transcript, longer than the one the record describes.
     writeFileSync(file, transcriptBody("b", BIG + 500));
@@ -161,8 +151,9 @@ describe("createTranscriptSidecar", () => {
     const sidecar = create<Fields>({ kind: "k", version: 1, isValue: isFields });
     const file = writeTranscript("small", `${JSON.stringify({ type: "session" })}\n`);
     const stamp = stampOf(file);
-    sidecar.write(file, stamp, 10, { title: "hello" });
-    await settled();
+    // Nothing to wait for: under the threshold the write returns before it touches the disk, so
+    // this assertion is now a decision rather than a race that a slow machine could lose.
+    await sidecar.write(file, stamp, 10, { title: "hello" });
 
     expect(existsSync(path.join(home, ".mulmoterminal", "transcript-index"))).toBe(false);
     expect(await sidecar.read(file, stamp)).toBeUndefined();
@@ -176,10 +167,14 @@ describe("createTranscriptSidecar", () => {
     const file = writeTranscript("a");
     const stamp = stampOf(file);
 
-    sidecar.write(file, stamp, 1, { title: "one" });
-    sidecar.write(file, stamp, 2, { title: "two" });
-    sidecar.write(file, stamp, 3, { title: "three" });
-    await settled();
+    // Started together and awaited together, NOT one after another: awaiting each in turn would
+    // hand the serializer a queue that was never contended, which is the one thing this test is
+    // about. `all` settles when the last of the three has, so nothing here waits on a clock.
+    await Promise.all([
+      sidecar.write(file, stamp, 1, { title: "one" }),
+      sidecar.write(file, stamp, 2, { title: "two" }),
+      sidecar.write(file, stamp, 3, { title: "three" }),
+    ]);
 
     expect(await sidecar.read(file, stamp)).toEqual({ from: 3, value: { title: "three" } });
     const dir = path.dirname(sidecarFile("k", file));
@@ -194,9 +189,7 @@ describe("createTranscriptSidecar", () => {
     const file = writeTranscript("a");
     const stamp = stampOf(file);
 
-    titles.write(file, stamp, 1, { title: "a title" });
-    costs.write(file, stamp, 2, { title: "a cost" });
-    await settled();
+    await Promise.all([titles.write(file, stamp, 1, { title: "a title" }), costs.write(file, stamp, 2, { title: "a cost" })]);
 
     expect(await titles.read(file, stamp)).toEqual({ from: 1, value: { title: "a title" } });
     expect(await costs.read(file, stamp)).toEqual({ from: 2, value: { title: "a cost" } });
@@ -211,8 +204,7 @@ describe("createTranscriptSidecar", () => {
     const file = path.join(dir, "s.jsonl");
     writeFileSync(file, transcriptBody("s"));
 
-    sidecar.write(file, stampOf(file), 1, { title: "x" });
-    await settled();
+    await sidecar.write(file, stampOf(file), 1, { title: "x" });
     const written = readdirSync(path.join(home, ".mulmoterminal", "transcript-index"), { recursive: true }).map(String);
     expect(written.some((e) => e.endsWith("s.json"))).toBe(true);
     expect(written.every((e) => !e.includes(".."))).toBe(true);

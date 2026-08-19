@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { untilTrue } from "../../helpers/untilTrue";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { takeScratchHome, type ScratchHome } from "../../support/scratchHome.js";
@@ -45,11 +46,6 @@ const titleFrom = async (file: string) => {
   return (await readSessionMeta(projectDir(), file)).title;
 };
 
-// The write is fire-and-forget, so a test that expects the file has to let it land.
-const settled = async () => {
-  for (let i = 0; i < 60; i++) await new Promise((r) => setTimeout(r, 5));
-};
-
 const sidecarsWritten = (): string[] => {
   const root = path.join(home, ".mulmoterminal", "transcript-index");
   return existsSync(root)
@@ -71,7 +67,7 @@ describe("the session list across processes", () => {
   it("answers a big transcript from the sidecar, without reading it again", async () => {
     const file = writeTranscript(userLine("what I asked") + fillerLine(OVER_THRESHOLD_BYTES) + aiTitleLine("from the fold") + promptLine("last prompt"));
     expect(await titleFrom(file)).toBe("from the fold");
-    await settled();
+    await untilTrue(() => sidecarsWritten().length === 1, "the sidecar was never written");
     expect(sidecarsWritten()).toHaveLength(1);
 
     // Rewrite the TAIL in place — same length, same mtime restored — so the bytes now say something
@@ -99,7 +95,9 @@ describe("the session list across processes", () => {
   it("resumes from the sidecar's offset when the transcript has grown", async () => {
     const file = writeTranscript(userLine("what I asked") + fillerLine(OVER_THRESHOLD_BYTES) + aiTitleLine("first title") + promptLine("last prompt"));
     expect(await titleFrom(file)).toBe("first title");
-    await settled();
+    // The point of the test is what the NEXT process reads, so the file has to be there before the
+    // transcript grows — waited for rather than slept on (#1796).
+    await untilTrue(() => sidecarsWritten().length === 1, "the sidecar was never written");
 
     appendFileSync(path.join(projectDir(), file), aiTitleLine("second title"));
     expect(await titleFrom(file)).toBe("second title");
@@ -108,8 +106,10 @@ describe("the session list across processes", () => {
   // Under the threshold a fold costs less than the file would, so there should be nothing on disk.
   it("writes no sidecar for a small transcript", async () => {
     const file = writeTranscript(userLine("u") + aiTitleLine("small"));
+    // Nothing to wait for, and this is a fact rather than a hope: the fold calls `sidecar.write()`
+    // before it resolves, and under the threshold that call returns before touching the disk. So
+    // by the time the title is in hand the question is already settled (CodeRabbit on #1798).
     expect(await titleFrom(file)).toBe("small");
-    await settled();
     expect(sidecarsWritten()).toEqual([]);
   });
 });

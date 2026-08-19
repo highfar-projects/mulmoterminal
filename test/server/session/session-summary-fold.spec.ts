@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { untilTrue } from "../../helpers/untilTrue";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { takeScratchHome, type ScratchHome } from "../../support/scratchHome.js";
@@ -56,10 +57,6 @@ function writeTranscript(body: string): string {
   writeFileSync(transcriptPath(id), body);
   return id;
 }
-
-const settled = async () => {
-  for (let i = 0; i < 60; i++) await new Promise((r) => setTimeout(r, 5));
-};
 
 const summarySidecars = (): string[] => {
   const root = path.join(home, ".mulmoterminal", "transcript-index", "summary");
@@ -130,7 +127,7 @@ describe("readSessionSummary", () => {
     const readSessionSummary = await freshSummary();
     const id = writeTranscript(user("build the parser") + filler(OVER_THRESHOLD_BYTES) + assistant("first reply"));
     expect((await readSessionSummary(CWD, id)).lastResponse).toBe("first reply");
-    await settled();
+    await untilTrue(() => summarySidecars().length === 1, "the summary sidecar was never written");
     expect(summarySidecars()).toHaveLength(1);
 
     appendFileSync(transcriptPath(id), user("now the tests") + assistant("second reply"));
