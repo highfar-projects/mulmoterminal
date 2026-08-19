@@ -929,21 +929,26 @@ The comparison above is only the first, and it is the one that needs an address:
   names the key. It answers `{ known, found, record }`, and `known: false` means **nobody looked**.
   Draw the action and let the refusal explain itself; never draw it as "no".
 
-So the question to settle before the page is written is not "is the visitor signed in" but **can
-this page learn the answer at all** — and only where all three are shut (`submitOnly` with the
-records outside `public.read`, so a submitter cannot read even their own row back) is the answer no.
-That is the trade in step 2c arriving in a different place.
+So the question to settle before the page is written is not "is the visitor signed in" but **which
+of the three this page will use** — and being unable to READ the collection does not settle it,
+because the last route is not a read of the collection: the rules grant a submitter the document
+they can name, which is why a `submitOnly` app whose records nobody may list can still tell one
+visitor about their own row. That is the trade in step 2c arriving in a different place.
 
-Where it genuinely cannot be derived, remembering is the fallback rather than the mistake — and it
-has to be written as one. [templates/live-poll.md](./templates/live-poll.md) is that case in full: an
-anonymous voter may not read the votes back, so the page keeps what it sent in a `Map`, remembers it
-only on `ok`, and treats `cancelled` as "press again" rather than as a refusal.
+**[templates/live-poll.md](./templates/live-poll.md) is the third route written out, and it is what
+to copy.** Anonymous voters, `idFrom: "auth.uid+field"` — so `viewer.mine` cannot carry the answer
+(the host has no key until the page says which question it is showing) and the page asks
+`view.mine("votes", question.id)` on load instead, treating `known: false` as unknown and offering
+the vote rather than refusing it.
 
-**Copy it WITH its lookup.** That `Map` is a within-visit cache and not the answer to a reload — a
-reload empties it, and the page recovers by asking `view.mine("votes", question.id)` for the
-question it is showing, exactly as the third route above. A page copied without that call has the
-reload bug back, in the one shape where it is hardest to see: everything works until somebody
-refreshes.
+**Its `Map` is not the fallback for that, and copying only the `Map` is how the reload bug comes
+back.** The map is the bridge WITHIN a visit — the answer to "what did I just send for the question
+still on screen", held while the lookup is in flight and for the questions already answered in this
+session. A reload empties it and the LOOKUP is what refills it. Remembering alone is all there is in
+exactly one place, and live-poll marks it: a runtime with no `view.mine` at all
+(`typeof view.mine !== "function"`). Even there the page does not claim the visitor has not
+answered — it offers the control and lets the refusal be the answer, which is the same rule as
+`known: false`.
 
 **`preview` does not catch either of these.** The run presses controls and accepts what it raises,
 and it loads each page once — so a page with both faults comes back clean. Until the harness presses
