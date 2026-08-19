@@ -64,6 +64,21 @@ export interface IntentSenderPorts {
    *  answered — see below — and its answer is not decoration: the read can fail, and a move
    *  acknowledged over records that never moved is a page drawing a control it has already used. */
   refresh: () => Promise<boolean>;
+  /** LAST RESORT: take the stale page off the screen.
+   *
+   *  Called only when the records could not be re-read at all, which leaves a document drawing rows
+   *  that no longer exist and offering a control it has already used. A log line tells the AUTHOR
+   *  about that; it cannot tell the PAGE, and the page is what somebody is looking at.
+   *
+   *  So the pane rebuilds itself instead. Whatever it then shows is true: the new records if the
+   *  read succeeds this time, and "could not reach the server" if it does not — which is the honest
+   *  screen for the condition that got here.
+   *
+   *  It MUST NOT run before the page has been answered. Rebuilding restarts the bridge, and an
+   *  answer posted onto a closed channel leaves the view waiting for ever on a request that
+   *  actually succeeded — the exact failure the submit path's comment warns about. The host defers
+   *  it; this only says when. */
+  recover: () => void;
 }
 
 /** One intent, sent to the route that performs it as the author.
@@ -159,8 +174,10 @@ export const createIntentSender = (ports: IntentSenderPorts): PerformIntent => {
       if (!current) {
         ports.remember({
           kind: "host",
-          note: `the ${body.kind} was written, but the records could not be re-read afterwards — twice. What is on screen is older than the app, and a control drawn from it may already have been used. Reopen the preview.`,
+          note: `the ${body.kind} was written, but the records could not be re-read afterwards — twice. What was on screen was older than the app, so the preview was rebuilt: what it shows now is either the new records or the reason it cannot read them.`,
         });
+        // The page cannot be corrected through this answer — see the port. It is replaced instead.
+        ports.recover();
       }
       return { requestId, ok: true };
     } catch {

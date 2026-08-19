@@ -206,7 +206,14 @@ const bridge = viewBridge(
 
 /** The member's writes, in their own module. It decides nothing — see its header — and is given
  *  the four things it needs so that what a refusal does to the log can be pinned without a frame. */
-const sendIntent = createIntentSender({ page: () => page.value, url: () => writeUrl("intent"), remember, refresh: () => refresh() });
+/** Take the stale page off the screen, DEFERRED — which is the whole of what this host adds to that
+ *  port's contract. `load()` blanks the payload on its way, which changes the page being drawn and
+ *  restarts the bridge: run synchronously it would close the channel before the answer to this very
+ *  intent had been posted, and the view would wait for ever on a request that actually succeeded. A
+ *  macrotask puts it after the post, which the bridge makes from the promise the sender returns. */
+const recover = () => window.setTimeout(() => void load(), 0);
+
+const sendIntent = createIntentSender({ page: () => page.value, url: () => writeUrl("intent"), remember, refresh, recover });
 
 /** The parent a MEMBER's page gets: the roster and participant pages, which is what `/m/` and
  *  `/p/` put in front of the same HTML.

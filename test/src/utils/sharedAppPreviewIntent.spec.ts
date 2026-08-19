@@ -26,6 +26,7 @@ const INTENT = { type: "mc-public-view:intent", requestId: "r1", kind: "transiti
 const sender = (answer: unknown, page: PreviewPage | null = DESK, current = true) => {
   const remembered: PreviewLogEvent[] = [];
   let refreshed = 0;
+  let recovered = 0;
   const fetcher = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(answer) });
   vi.stubGlobal("fetch", fetcher);
   const perform = createIntentSender({
@@ -36,8 +37,11 @@ const sender = (answer: unknown, page: PreviewPage | null = DESK, current = true
       refreshed += 1;
       return Promise.resolve(current);
     },
+    recover: () => {
+      recovered += 1;
+    },
   });
-  return { perform, remembered, fetcher, refreshedCount: () => refreshed };
+  return { perform, remembered, fetcher, refreshedCount: () => refreshed, recoveredCount: () => recovered };
 };
 
 afterEach(() => {
@@ -131,6 +135,7 @@ describe("the pane's intent sender", () => {
       url: () => "/api/shared-app/preview/intent",
       remember: (event) => remembered.push(event),
       refresh: () => Promise.resolve(true),
+      recover: () => {},
     });
 
     expect(await perform(INTENT)).toEqual({ requestId: "r1", ok: false, error: "intent-failed" });
@@ -155,6 +160,9 @@ describe("the pane's intent sender", () => {
         attempts += 1;
         return Promise.resolve(attempts > 1);
       },
+      recover: () => {
+        throw new Error("a screen the second read repaired must not be torn down");
+      },
     });
 
     expect(await perform(INTENT)).toEqual({ requestId: "r1", ok: true });
@@ -169,11 +177,14 @@ describe("the pane's intent sender", () => {
     // a second notice, about a move that already succeeded. What is wrong is the screen, so the
     // screen is what is reported: without this the pane acknowledges a move over records that never
     // changed, and the page goes on drawing the control it has just used.
-    const { perform, remembered } = sender({ ok: true, mailed: false }, DESK, false);
+    const { perform, remembered, recoveredCount } = sender({ ok: true, mailed: false }, DESK, false);
 
     expect(await perform(INTENT)).toEqual({ requestId: "r1", ok: true });
     expect(remembered[0]).toEqual(expect.objectContaining({ kind: "intent", error: null }));
     expect(remembered[1]).toEqual(expect.objectContaining({ kind: "host", note: expect.stringContaining("twice") }));
+    // The log tells the AUTHOR. It cannot tell the PAGE, and the page is what somebody is looking
+    // at — so the stale one is taken off the screen rather than left drawing rows that are gone.
+    expect(recoveredCount()).toBe(1);
   });
 
   it("sends nothing at all when there is no page, or the page is a public one", async () => {
