@@ -908,11 +908,27 @@ because the visitor already knows what they did.
 record that may still land — there is no recalling a write — and makes the visitor wait for the real
 outcome. So the page is never told both.)
 
-**Deriving it at all needs the page to be handed the reader's own row, and that is settled before
-the page is written.** A public page is handed only the collections in `public.read`, and an
-`anonymous` visitor has no address to compare against — so "have I answered?" is not a question that
-page can ask, however it is coded. That is the trade in step 2c arriving in a different place: ask
-it while the shape is being chosen, not after writing a screen that cannot know when to appear.
+**"Have I already answered?" has THREE routes, and an anonymous visitor is not shut out of it.**
+The comparison above is only the first, and it is the one that needs an address:
+
+- **the reader's own row, in the data the page was handed** — `viewer.me` against `emailField`, as
+  above. It needs the collection to be readable by this audience (for a public page, named in
+  `public.read`) and it needs the reader to HAVE an address, so `auth: "anonymous"` cannot use it.
+- **`viewer.mine`, carried with the state.** The rows this visitor has already submitted, projected
+  beside the data — so a page reads it in `onState` with no call of its own. This is what an
+  `anonymous` + `idFrom: "auth.uid"` app derives from: nobody has an address, and the uid is the id.
+  **Absent is UNKNOWN, and unknown is not "no"** — a host that did not look sends nothing, and a page
+  reading that as "not yet" tells somebody who answered to answer again.
+- **`view.mine(cid, key)`, on demand** — a read the host performs with the visitor's own credentials
+  against an id it builds. It is the half that works where `viewer.mine` cannot: under
+  `idFrom: "auth.uid+field"` the id is `uid_<field>`, which the host cannot know before the page
+  names the key. It answers `{ known, found, record }`, and `known: false` means **nobody looked**.
+  Draw the action and let the refusal explain itself; never draw it as "no".
+
+So the question to settle before the page is written is not "is the visitor signed in" but **can
+this page learn the answer at all** — and only where all three are shut (`submitOnly` with the
+records outside `public.read`, so a submitter cannot read even their own row back) is the answer no.
+That is the trade in step 2c arriving in a different place.
 
 Where it genuinely cannot be derived, remembering is the fallback rather than the mistake — and it
 has to be written as one. [templates/live-poll.md](./templates/live-poll.md) is that case in full: an
