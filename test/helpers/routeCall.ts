@@ -60,8 +60,12 @@ export function routeCall(app: Express) {
 /** A JSON POST, which is what nearly every write route in this app takes. Spelled once here so a
  *  spec does not have to remember that `inject` sends the payload as-is and the route needs the
  *  header to parse it. Extra headers merge in — a session id, an `accept` a route branches on. */
-export const jsonPost = (value: unknown, headers: Record<string, string> = {}): AppRequestInit => ({
-  method: "POST",
-  headers: { "content-type": "application/json", ...headers },
-  body: JSON.stringify(value),
-});
+export const jsonPost = (value: unknown, headers: Record<string, string> = {}): AppRequestInit => {
+  // `JSON.stringify` answers `undefined` for `undefined`, a function and a symbol. The request
+  // would then go out with NO body under a `content-type` promising JSON, and the route would
+  // answer whatever it answers for an empty body — a spec failing for a reason it never wrote
+  // (CodeRabbit on #1799). Refusing here says which call is wrong.
+  const body = JSON.stringify(value);
+  if (body === undefined) throw new TypeError(`jsonPost cannot send ${typeof value} — JSON has no representation for it`);
+  return { method: "POST", headers: { "content-type": "application/json", ...headers }, body };
+};

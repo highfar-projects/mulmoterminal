@@ -37,7 +37,13 @@ app.use(express.json());
 mountHookRoute(app, deps);
 const call = routeCall(app);
 
-const postHook = (body: Record<string, unknown>) => call("/api/hook", jsonPost(body, { "x-mt-session": ID }));
+/** Every assertion in this file is about a SIDE EFFECT of the hook, so a route that refused the
+ *  post would read as "nothing happened" rather than "the route said no" (CodeRabbit on #1799). */
+const postHook = async (body: Record<string, unknown>) => {
+  const res = await call("/api/hook", jsonPost(body, { "x-mt-session": ID }));
+  expect(res.status).toBe(200);
+  return res;
+};
 
 // The shape a real PreToolUse carries, captured from claude 2.1.231.
 const QUESTIONS = [

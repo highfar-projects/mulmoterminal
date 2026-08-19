@@ -27,12 +27,17 @@ const dataOf = (body: Record<string, unknown>): Record<string, unknown> => {
   return data;
 };
 
-/** The saved script's path, which the next request sends straight back. */
-const filePathOf = (body: Record<string, unknown>): string => {
-  const filePath = dataOf(body).filePath;
-  if (typeof filePath !== "string") throw new Error(`no filePath in ${JSON.stringify(body)}`);
-  return filePath;
+/** The saved script's path, which the next request sends straight back.
+ *
+ *  Two shapes, deliberately kept apart: the TOOL-CALL route answers `{ data: { filePath } }` while
+ *  the KIND router answers `filePath` at the top level. Reading one through the other's accessor
+ *  throws on a body that is perfectly correct (CodeRabbit suggested exactly that on #1799). */
+const asFilePath = (value: unknown, body: Record<string, unknown>): string => {
+  if (typeof value !== "string") throw new Error(`no filePath in ${JSON.stringify(body)}`);
+  return value;
 };
+
+const filePathOf = (body: Record<string, unknown>): string => asFilePath(dataOf(body).filePath, body);
 
 describe("before init", () => {
   it("503s the dispatch and media routes", async () => {
@@ -90,7 +95,7 @@ describe("mulmoscript backend", () => {
     const saveRes = await routeCall(app)("/api/plugin/presentMulmoScript", jsonPost({ kind: "save", script: VALID_SCRIPT }));
     expect(saveRes.status).toBe(200);
     expect(saveRes.body.ok).toBe(true);
-    const filePath = saveRes.body.filePath as string;
+    const filePath = asFilePath(saveRes.body.filePath, saveRes.body);
 
     const update = await routeCall(app)(
       "/api/plugin/presentMulmoScript",
