@@ -17,13 +17,16 @@ import { isRecord } from "../../common/isRecord.js";
 
 export interface RouteResponse {
   status: number;
-  /** Parsed JSON, or `{}` for a response that carries none — what supertest gives a spec reading
-   *  `res.body` off a 204 or an HTML page, measured rather than assumed (see the note below).
+  /** The parsed JSON object, or `{}` — for an empty body, a non-JSON body, and JSON that is not an
+   *  object (an array, a bare string). Malformed JSON under a JSON content-type does NOT land here:
+   *  it throws, the way supertest does.
    *
-   *  Typed as a record rather than `unknown` because that is what the specs already assert
-   *  against: every `/api/*` route in this app answers a JSON OBJECT, and `unknown` would make
-   *  each of two hundred existing assertions carry a guard to prove something the route's own
-   *  spec proves elsewhere. Fields still come out `unknown`, so nothing here claims a shape. */
+   *  The first two match supertest; the third does not — it hands the array back. That divergence
+   *  is deliberate and is what this type buys: the specs assert against a record, `unknown` would
+   *  make each of two hundred existing assertions carry a guard to prove something the route's own
+   *  spec proves elsewhere, and nothing in this repo reads an array or a bare-string body off a
+   *  route. `text` carries the bytes in every case. Measured behaviours are tabulated at
+   *  `parsedBody` below. Fields still come out `unknown`, so nothing here claims a shape. */
   body: Record<string, unknown>;
   text: string;
   /** Lower-cased names, as Node and supertest both report them. */
