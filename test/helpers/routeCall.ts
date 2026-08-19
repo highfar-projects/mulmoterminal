@@ -17,35 +17,32 @@ import { isRecord } from "../../common/isRecord.js";
 
 export interface RouteResponse {
   status: number;
-  /** The parsed JSON object, or `{}` — for an empty body, a non-JSON body, and JSON that is not an
-   *  object (an array, a bare string). Malformed JSON under a JSON content-type does NOT land here:
-   *  it throws, the way supertest does.
+  /** The parsed JSON object, or `{}`. Against supertest, measured case by case:
    *
-   *  The first two match supertest; the third does not — it hands the array back. That divergence
-   *  is deliberate and is what this type buys: the specs assert against a record, `unknown` would
-   *  make each of two hundred existing assertions carry a guard to prove something the route's own
-   *  spec proves elsewhere, and nothing in this repo reads an array or a bare-string body off a
-   *  route. `text` carries the bytes in every case. Measured behaviours are tabulated at
-   *  `parsedBody` below. Fields still come out `unknown`, so nothing here claims a shape. */
+   *    a JSON object            the object          same
+   *    a non-JSON body (HTML)   `{}`                same
+   *    an EMPTY body            `{}`                supertest gives `""`  — divergence
+   *    an ARRAY body            `{}`                supertest gives the array — divergence
+   *    malformed JSON           throws              same
+   *
+   *  Both divergences are deliberate and are what this type buys: the specs assert against a
+   *  record, `unknown` would make each of two hundred existing assertions carry a guard to prove
+   *  something the route's own spec proves elsewhere, and nothing in this repo reads an array or a
+   *  bare-string body off a route. `text` carries the bytes in every case, so neither divergence
+   *  loses information. Fields still come out `unknown`, so nothing here claims a shape. */
   body: Record<string, unknown>;
   text: string;
   /** Lower-cased names, as Node and supertest both report them. */
   headers: Record<string, string>;
 }
 
-// Measured against supertest 7 rather than reasoned about, because this file's whole job is to
-// answer the way it did (probe: express route -> `request(app).get(…)`):
+// Every case here was measured against supertest 7 (probe: an express route, then
+// `request(app).get(…)`) rather than reasoned about, because this file's whole job is to answer
+// the way it did. The comparison is tabulated on `RouteResponse.body` above.
 //
-//   malformed JSON under a JSON content-type   THROWS
-//   an HTML body                                {}
-//   an empty body                               "" (this returns {}, see below)
-//   an array body                               the array (this returns {}, see below)
-//
-// The first is honoured exactly: a body that CLAIMS to be JSON and is not is a broken route, and
-// swallowing it would let a migrated spec assert `res.body` against `{}` and pass (CodeRabbit on
-// #1799). The last two diverge deliberately, and only where nothing depends on them: `body` is
-// typed as a record here, no spec in this repo reads an array or a bare-string body off a route,
-// and `text` carries the bytes in every case.
+// The one that must not be softened: a body CLAIMING to be JSON and failing to parse is a broken
+// route, and answering `{}` would let a migrated spec assert against it and pass (CodeRabbit on
+// #1799). So `JSON.parse` is left to throw.
 const parsedBody = (text: string, contentType: string): Record<string, unknown> => {
   if (!contentType.includes("json") || text.length === 0) return {};
   const parsed: unknown = JSON.parse(text); // deliberately unguarded — see above

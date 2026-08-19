@@ -15,6 +15,7 @@ app.get("/broken-json", (_req, res) => void res.type("application/json").send("{
 app.get("/text", (_req, res) => void res.type("text/plain").send("plain words"));
 app.get("/bytes", (_req, res) => void res.type("application/octet-stream").send(Buffer.from("raw-bytes")));
 app.get("/empty", (_req, res) => void res.status(204).end());
+app.get("/empty-json", (_req, res) => void res.type("application/json").send(""));
 app.get("/refused", (_req, res) => void res.status(403).json({ error: "no" }));
 app.post("/echo", (req, res) => void res.json({ body: req.body, sawHeader: req.get("x-mt-session") ?? null }));
 
@@ -33,6 +34,17 @@ describe("routeCall", () => {
     const res = await call("/refused");
     expect(res.status).toBe(403);
     expect(res.body).toEqual({ error: "no" });
+  });
+
+  // The two places this adapter deliberately differs from supertest, pinned so the doc comment on
+  // `RouteResponse.body` cannot drift from what the code does — it already did once, saying the
+  // empty-body case matched when supertest actually answers `""` (Codex on #1799).
+  it("answers `{}` where supertest would answer an empty string or an array", async () => {
+    expect((await call("/empty-json")).body).toEqual({}); // supertest: ""
+    expect((await call("/list")).body).toEqual({}); // supertest: [1, 2, 3]
+    // Neither loses anything: the bytes are still on `text`.
+    expect((await call("/empty-json")).text).toBe("");
+    expect((await call("/list")).text).toBe("[1,2,3]");
   });
 
   // supertest's own rule for a body it cannot parse as a JSON object, so specs that read
