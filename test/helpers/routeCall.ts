@@ -44,7 +44,11 @@ export interface RouteResponse {
 // route, and answering `{}` would let a migrated spec assert against it and pass (CodeRabbit on
 // #1799). So `JSON.parse` is left to throw.
 const parsedBody = (text: string, contentType: string): Record<string, unknown> => {
-  if (!contentType.includes("json") || text.length === 0) return {};
+  // Lower-cased first: a media type is case-insensitive, and `Application/JSON` from a route that
+  // sets the header by hand would otherwise be read as "not JSON" and answered with `{}` — the
+  // same case-sensitivity trap as `jsonPost`'s header merge, from the other side (CodeRabbit
+  // on #1799).
+  if (!contentType.toLowerCase().includes("json") || text.length === 0) return {};
   const parsed: unknown = JSON.parse(text); // deliberately unguarded — see above
   return isRecord(parsed) ? parsed : {};
 };

@@ -31,7 +31,20 @@ headers }`）を返し、中身は `appRequest`（light-my-request の in-memory
 
 `body` は `Record<string, unknown>`。`unknown` にすると 200 個の assert 全部にガードが要るが、
 `/api/*` は全部 JSON オブジェクトを返す。フィールドは `unknown` のままなので形は主張していない。
-配列を返す body は `{}` にして `text` に残す（名前で読んで `undefined` になるのを防ぐ）。
+
+**supertest との差は実測した**（scratch dir に supertest 7 を入れて probe）。移行の契約はこれで全部:
+
+| レスポンス | supertest | routeCall |
+|---|---|---|
+| JSON オブジェクト | そのオブジェクト | 同じ |
+| 非 JSON（HTML） | `{}` | 同じ |
+| **空ボディ** | `""` | **`{}`（相違）** |
+| **配列** | 配列 | **`{}`（相違）** |
+| 壊れた JSON | throw | 同じ |
+
+相違 2 件は `Record` 型が買っているもので、**どちらも `text` にバイト列が残る**ので情報は
+失われない。このリポの spec は配列も裸文字列もルートから読んでいない。両方 spec で固定した
+（ドキュメント側だけ一度ドリフトしたため）。
 
 ## 変換の副産物
 

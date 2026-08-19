@@ -10,6 +10,7 @@ import { routeCall, jsonPost } from "./routeCall";
 const app = express();
 app.use(express.json());
 app.get("/json", (_req, res) => void res.json({ ok: true, count: 2 }));
+app.get("/shouty-json", (_req, res) => void res.type("Application/JSON").send(JSON.stringify({ ok: true })));
 app.get("/list", (_req, res) => void res.json([1, 2, 3]));
 app.get("/broken-json", (_req, res) => void res.type("application/json").send("{not json"));
 app.get("/text", (_req, res) => void res.type("text/plain").send("plain words"));
@@ -26,6 +27,12 @@ describe("routeCall", () => {
     const res = await call("/json");
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ ok: true, count: 2 });
+  });
+
+  // A media type is case-insensitive, so a route that sets the header by hand must still be read
+  // as JSON rather than answered with `{}`.
+  it("parses a JSON body whatever case the media type is written in", async () => {
+    expect((await call("/shouty-json")).body).toEqual({ ok: true });
   });
 
   // A non-2xx is an ANSWER, not a throw: `hide-error-stacks.spec.ts` exists to assert on a 500's
