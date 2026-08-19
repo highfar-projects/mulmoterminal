@@ -74,9 +74,14 @@
 
 - `public` audience → `WriteTier` は **`roster`**。同型だからである — `roster` 層の
   意味は「ロールは無い、ルールが**記録から**答える」で、`ownRow` はまさにそれ。
-- `viewer.me` は公開層では **`null`**（匿名 auth に住所は無い）。`roster` 層の
-  `capabilityOf` は `me` を読まないので、これで整合する。**自分の行かどうかは
-  `viewer.mine` と `view.mine()` が答える** — 住所の比較ではなく。
+- `viewer.me` は**他のページと同じ規則** — サインイン済みの住所、無ければ空。匿名セッションには
+  住所が無いので「無い」は普通の答えであり、`roster` 層の `capabilityOf` は `me` を読まないので
+  どちらでも整合する。**自分の行かどうかは `viewer.mine` と `view.mine()` が答える** — 住所の
+  比較ではなく。ルールは記録の上の uid か検証済み住所で自分の行を判定するので、そのどちらも
+  ページが持っているとは限らないからである。
+  （当初は公開層だけ `me: null` に固定する案だったが、専用のヘルパを 1 本増やすことになり、
+  それは「2 つのホストが食い違える場所を 1 つ増やす」ことなので、`viewerFor(writes, address,
+  PUBLIC_WRITE_TIER)` という**全ページ共通の 1 本**に寄せた。）
 - `withdrawFrom` は `selfDelete`、`transitionAny` は `selfTransitions` から。
   どちらも既にある宣言で、**ルールの変更は要らない**。
 
