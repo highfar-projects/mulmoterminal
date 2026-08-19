@@ -220,7 +220,12 @@ describe("shared app preview", () => {
     // and nothing else), so a public page handed no capabilities drew no button for a cancellation
     // the rules were waiting to allow. `can` is empty here because this app declares no
     // `selfTransitions` and no `selfDelete` — an empty answer, not a missing one.
-    expect(result.ok && result.pages).toEqual([{ id: "public", html, audience: "public", viewer: { me: "owner@example.com", can: {} } }]);
+    //
+    // AND `me` IS NULL, exactly as mulmoserver posts it to the live page. Nothing on this tier
+    // reads it, and a published page holding the reader's address could carry it off by navigating
+    // its own context once. Putting the AUTHOR's address here instead would be the preview handing
+    // a page something production never gives it.
+    expect(result.ok && result.pages).toEqual([{ id: "public", html, audience: "public", viewer: { me: null, can: {} } }]);
     expect(docs.writes).toEqual([]);
   });
 

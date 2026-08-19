@@ -284,7 +284,15 @@ export async function previewSharedApp(root: string, opts: SharedAppOptions = {}
   // cancellation the rules were waiting to allow drew no button, and the intent behind it reached a
   // parent that dropped it.
   writes.public = projectedWritesOf(face.config);
-  const publicViewer = viewerFor(writes.public, handle.email, PUBLIC_WRITE_TIER);
+  // `me` IS NULL, and it matches what mulmoserver posts to the live `/a/{slug}` — see
+  // `publicSelfWrites.ts` there for the reasoning, which is worth repeating in one line: nothing on
+  // this tier reads it, and a published page that held the visitor's address could carry it off by
+  // navigating its own context once.
+  //
+  // The author's address is NOT substituted here either, and that is the point of the whole file: a
+  // preview that handed the page one more thing than production hands it is a preview of a page
+  // that does not exist. The author IS a reader here, and this is what a reader gets.
+  const publicViewer = viewerFor(writes.public, null, PUBLIC_WRITE_TIER);
   const publicPages: PreviewPage[] = publicHtml === null ? [] : [{ id: PUBLIC_PAGE_ID, html: publicHtml, audience: "public", viewer: publicViewer }];
   const tierPages: PreviewPage[] = tiers.plans.flatMap((plan) => {
     // The author, as this tier's projection resolves them. `viewerFor` is the
