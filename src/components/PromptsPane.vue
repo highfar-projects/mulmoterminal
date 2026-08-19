@@ -135,6 +135,11 @@ function formatTime(at: number | null): string {
   return at >= startOfToday() ? time : `${d.toLocaleDateString([], { month: "numeric", day: "numeric" })} ${time}`;
 }
 
+// The time is INSIDE the toggle, so a label naming only the action would replace it in the
+// accessible name and cost a screen reader the one thing that places the prompt in time.
+const toggleLabel = (at: number | null, isOpen: boolean): string =>
+  [formatTime(at), isOpen ? "Collapse this prompt" : "Show the whole prompt"].filter(Boolean).join(" ");
+
 // Which rows are showing their full text. A long prompt is clamped so the list stays scannable,
 // and clicking one opens it in place — the pane reads, and this is still reading.
 const opened = ref(new Set<number>());
@@ -210,7 +215,7 @@ watch(prompts, () => {
             type="button"
             class="flex w-full cursor-pointer items-center justify-between gap-2 border-0 bg-transparent p-0 text-left text-inherit"
             :aria-expanded="opened.has(index)"
-            :aria-label="opened.has(index) ? 'Collapse this prompt' : 'Show the whole prompt'"
+            :aria-label="toggleLabel(prompt.at, opened.has(index))"
             :title="opened.has(index) ? 'Collapse' : 'Show the whole prompt'"
             @click="toggle(index)"
           >

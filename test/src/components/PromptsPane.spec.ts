@@ -221,6 +221,28 @@ describe("PromptsPane", () => {
     expect(w.get('[data-testid="prompt-text"]').classes()).not.toContain("line-clamp-3"); // still open
   });
 
+  // An aria-label REPLACES the button's contents in the accessible name, and the time is one of
+  // them — a label naming only the action would take the timestamp away from a screen reader.
+  it("keeps the time in the toggle's accessible name", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch({
+        prompts: [
+          { at: Date.now(), text: "hi" },
+          { at: null, text: "no clock" },
+        ],
+        truncated: false,
+      }),
+    );
+    const w = mountPane();
+    await flushPromises();
+    const labels = w.findAll('[data-testid="prompt-row"] button').map((b) => b.attributes("aria-label") ?? "");
+    expect(labels[0]).toBe("Show the whole prompt"); // the row whose time is unreadable
+    const withTime = labels[1] ?? "";
+    expect(withTime.endsWith(" Show the whole prompt")).toBe(true);
+    expect(withTime.split(" ")[0]).toContain(":"); // the clock still leads the label
+  });
+
   it("emits close and toggleExpand from its header", async () => {
     vi.stubGlobal("fetch", mockFetch({ prompts, truncated: false }));
     const w = mountPane();
