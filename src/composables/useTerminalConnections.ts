@@ -36,6 +36,7 @@ import { getTerminalScrollSpeed } from "./useTerminalScrollSpeed";
 import { scrollsToBottomOnSubmit } from "./useScrollToBottomOnSubmit";
 import { isTypedInput } from "./terminalUserInput";
 import { bufferIsShort, readBufferShape } from "./terminalBufferHealth";
+import { initialFitGate, reportOnScreen, requestFit, type FitGate } from "./terminalFitGate";
 import { CanvasAddon } from "@xterm/addon-canvas";
 import "@xterm/xterm/css/xterm.css";
 import { connWsUrl, type LaunchChoice } from "../components/wsUrl";
@@ -170,6 +171,13 @@ interface Conn {
   // -Infinity rather than 0 so "never notified" outlasts any cooldown: a spec that stubs Date.now
   // to a small number would otherwise lose the FIRST banner and still read as passing.
   lastDroppedInputNoticeMs: number;
+  // Whether the terminal is on screen, and whether a fit is owed because it was not — see
+  // terminalFitGate for what a resize costs when xterm has the renderer paused (#1762).
+  fitGate: FitGate;
+  // What answers that question. Re-pointed whenever `host` is replaced, which is the rebuild
+  // (#846) — an observer left on the dead host would report the state of an element nothing
+  // renders into.
+  onScreenObserver: IntersectionObserver | null;
 }
 
 // The banner is re-armed on a timer rather than shown once per stretch, because a stretch has no
@@ -204,6 +212,13 @@ const conns = new Map<string, Conn>();
 // bottom. The fit() can throw when the host isn't laid out yet — the caller's
 // ResizeObserver fit() then follows — so it's swallowed.
 function fitAndSyncSize(c: Conn): void {
+  const step = requestFit(c.fitGate);
+  c.fitGate = step.gate;
+  // Off screen, xterm has its renderer paused: the new row count would reach the buffer while the
+  // renderer's dimensions stayed behind, and the scroll range built from one of each has nothing
+  // to correct it in the alternate buffer (#1762). watchOnScreen replays this when the cell is
+  // back — which is also when the size it should fit to is the one it will keep.
+  if (!step.fit) return;
   try {
     c.fitAddon.fit();
   } catch {
@@ -211,6 +226,35 @@ function fitAndSyncSize(c: Conn): void {
   }
   if (c.ws?.readyState === WebSocket.OPEN) c.ws.send(JSON.stringify({ type: "resize", cols: c.term.cols, rows: c.term.rows }));
   c.term.scrollToBottom();
+}
+
+// Feed the gate above. `host` rather than xterm's own `.xterm-screen`: it is the element this
+// module owns and it fills the cell, so the two observers answer to the same geometry without
+// this depending on xterm's DOM.
+//
+// Fitting from inside the delivery is what makes the repair work, and it does not depend on which
+// observer runs first: xterm's callback lands in the SAME batch, so `_pausedResizeTask` has
+// flushed by the time the viewport's own sync runs (it is scheduled a frame later, via
+// addRefreshCallback).
+function watchOnScreen(c: Conn): void {
+  c.onScreenObserver?.disconnect();
+  c.onScreenObserver = null;
+  // jsdom and older embedders have no IntersectionObserver; the gate then stays open and every
+  // fit runs exactly as it did before.
+  if (typeof IntersectionObserver === "undefined") return;
+  const observer = new IntersectionObserver(
+    (entries) => {
+      // The last entry is the current state; earlier ones are the transitions it coalesced.
+      const latest = entries.at(-1);
+      if (!latest) return;
+      const step = reportOnScreen(c.fitGate, latest.isIntersecting);
+      c.fitGate = step.gate;
+      if (step.fit) fit(c.key);
+    },
+    { threshold: 0 },
+  );
+  observer.observe(c.host);
+  c.onScreenObserver = observer;
 }
 
 // The reactive projection the view binds to (status pill, RunMenu cwd). Keyed by
@@ -508,10 +552,13 @@ function ensure(key: string, target: ConnTarget, font: TerminalFont): Conn {
     lastRebuildMs: 0,
     warnedDroppedInput: false,
     lastDroppedInputNoticeMs: Number.NEGATIVE_INFINITY,
+    fitGate: initialFitGate,
+    onScreenObserver: null,
   };
   conns.set(key, c);
   connView.set(key, { status: "connecting", serverCwd: target.cwd });
   wireTerminalToConn(term, c);
+  watchOnScreen(c);
   return c;
 }
 
@@ -532,6 +579,7 @@ function rebuildTerminal(c: Conn): void {
   c.wheel = wheel;
   c.lastRebuildMs = Date.now();
   wireTerminalToConn(term, c);
+  watchOnScreen(c);
   c.attachedEl?.appendChild(host);
   deadHost.remove();
   deadTerm.dispose();
@@ -707,8 +755,11 @@ export function attach(key: string, target: ConnTarget, handlers: ConnHandlers, 
   // before it, not after.
   if (!sameFont(c.font, font)) applyFont(c, font);
   // Fit BEFORE connecting, not after: connect() puts the terminal's geometry on the URL so the pty
-  // is spawned at it, and an unfitted terminal would send xterm's 80x24 default there (#1178). For
-  // an already-live slot this is the same sync it always was — the send is a no-op until OPEN.
+  // is spawned at it, and an unfitted terminal would send xterm's 80x24 default there (#1178). A
+  // slot created here has never been observed, so its gate is still open and this runs — what the
+  // gate holds back is the RE-PARENT of a live slot onto a host that is not on screen yet, which
+  // is the one that strands a scrollbar (#1762); the observer replays it. The send is a no-op
+  // until OPEN either way.
   fitAndSyncSize(c);
   if (created || inherited) connect(c);
   c.term.focus();
@@ -762,6 +813,8 @@ export function release(key: string) {
     // already closing
   }
   c.ws = null;
+  c.onScreenObserver?.disconnect();
+  c.onScreenObserver = null;
   try {
     c.host.remove();
   } catch {
