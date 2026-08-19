@@ -21,6 +21,14 @@ import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "./fetchWithTimeout";
 import type { PreviewLogEvent } from "./sharedAppPreviewLog";
 import type { PreviewIntent, PreviewPage } from "../../common/sharedAppPreview";
 
+/** How many times the records are re-read before the screen is called stale.
+ *
+ *  TWO, because the failure being recovered from is a blip — a request that timed out, a server
+ *  restarted between the write and the read — and one more attempt turns most of them into a screen
+ *  that is simply correct. A number rather than a second call written out, so what it is is visible
+ *  and a linter does not have to be told that two identical reads are the point. */
+const REFRESH_ATTEMPTS = 2;
+
 /** What the ask reaches this module as, plus the id the page is waiting on. */
 type AskedHere = PreviewIntent & { requestId: string };
 
@@ -144,7 +152,11 @@ export const createIntentSender = (ports: IntentSenderPorts): PerformIntent => {
       //
       // Sequential rather than concurrent, and awaited before answering, for `refresh`'s own reason:
       // the page redraws from this answer, so state that arrives after it redraws against nothing.
-      if (!(await ports.refresh()) && !(await ports.refresh())) {
+      let current = false;
+      for (let attempt = 0; attempt < REFRESH_ATTEMPTS && !current; attempt += 1) {
+        current = await ports.refresh();
+      }
+      if (!current) {
         ports.remember({
           kind: "host",
           note: `the ${body.kind} was written, but the records could not be re-read afterwards — twice. What is on screen is older than the app, and a control drawn from it may already have been used. Reopen the preview.`,
