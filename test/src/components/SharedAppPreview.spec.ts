@@ -16,7 +16,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import SharedAppPreview from "../../../src/components/SharedAppPreview.vue";
 import { isRecord } from "../../../common/isRecord.js";
-import { hop, until } from "../../helpers/hopUntil";
+import { until } from "../../helpers/hopUntil";
 
 const PAGE = "<h1>Book</h1>";
 
@@ -147,25 +147,25 @@ const copyBlock = async (wrapper: VueWrapper): Promise<string> => {
   return clipboard;
 };
 
-// How many hops `settle()` spends when the test cannot name what it is waiting for — a negative
-// assertion, or a DOM state already settled by the time the trigger returned. Four rather than the
-// ONE measured as necessary, so this file is not sitting exactly on its own boundary again (#1796).
-// Everything that CAN name what it waits for uses `until` instead.
-const SETTLE_HOPS = 4;
-
-const settle = async () => {
-  for (let i = 0; i < SETTLE_HOPS; i++) await hop();
-};
-
 /** The pane's own text, once it says what the test is about to assert. */
 const untilText = async (wrapper: VueWrapper, text: string): Promise<void> =>
   until(() => wrapper.text().includes(text), `the pane to show ${JSON.stringify(text)}`);
 
 /** What the pane put on the clipboard, once it says what the test is about to assert. Re-read on
  *  each hop: the block is built when the button is pressed, so waiting on one copy of it would
- *  wait forever. */
+ *  wait forever.
+ *
+ *  A missing button counts as "not yet" rather than as a failure — it disappears while the pane
+ *  loads a different app, which is precisely a moment a test may be waiting through. The timeout
+ *  still names what never arrived, so nothing is hidden by this. */
 const untilBlock = async (wrapper: VueWrapper, text: string): Promise<string> => {
-  const says = async (): Promise<boolean> => (await copyBlock(wrapper)).includes(text);
+  const says = async (): Promise<boolean> => {
+    try {
+      return (await copyBlock(wrapper)).includes(text);
+    } catch {
+      return false;
+    }
+  };
   await until(says, `the record to mention ${JSON.stringify(text)}`);
   return copyBlock(wrapper);
 };
@@ -183,6 +183,10 @@ const press = async (wrapper: VueWrapper, label: string): Promise<void> => {
   if (button === undefined) throw new Error(`the ${JSON.stringify(label)} button went away before it could be pressed`);
   await button.trigger("click");
 };
+
+/** "at least N undo requests have reached the server", as a predicate — named here so the call site
+ *  does not nest another callback inside an already-nested `describe`. */
+const undoRequests = (posted: { url: string }[], count: number) => () => posted.filter((entry) => entry.url.includes("/preview/undo")).length >= count;
 
 /** A predicate the tests share, kept out of the test bodies so the call site does not nest another
  *  callback inside an already-nested `describe`. */
@@ -296,8 +300,11 @@ describe("SharedAppPreview", () => {
 
     vi.stubGlobal("fetch", answering(payload({ aid: "aid-2" })));
     await wrapper.setProps({ cwd: "/another-repo" });
-    await settle();
-    expect(await copyBlock(wrapper)).not.toContain("from the first app");
+    // Waited on the SECOND app arriving, not on a number of turns: "the entry is gone" is also true
+    // before the switch has happened at all, so a budget here can pass for the wrong reason. The
+    // block names the aid it is reporting, which is exactly the anchor this needs.
+    const block = await untilBlock(wrapper, "aid-2");
+    expect(block).not.toContain("from the first app");
   });
 
   it("keeps what was recorded when the same app is merely re-read", async () => {
@@ -686,7 +693,6 @@ describe("SharedAppPreview", () => {
       const { port, answers } = await connect(wrapper);
 
       port.postMessage({ type: "mc-public-view:submit", requestId: "r-4", cid: "bookings", values: { slot: "roomA-1000" } });
-      await settle();
       await press(wrapper, "Send it");
       await until(answered(answers, "r-4"), "an answer for r-4");
 
@@ -704,7 +710,6 @@ describe("SharedAppPreview", () => {
       const { port, answers } = await connect(wrapper);
 
       port.postMessage({ type: "mc-public-view:submit", requestId: "r-6", cid: "bookings", values: { slot: "roomA-1000" } });
-      await settle();
       await press(wrapper, "Send it");
       await until(answered(answers, "r-6"), "an answer for r-6");
 
@@ -721,7 +726,6 @@ describe("SharedAppPreview", () => {
       const { port } = await connect(wrapper);
 
       port.postMessage({ type: "mc-public-view:submit", requestId: "r-7", cid: "bookings", values: { slot: "roomA-1000" } });
-      await settle();
       await press(wrapper, "Send it");
       await untilText(wrapper, "1 record written from this preview");
 
@@ -731,7 +735,7 @@ describe("SharedAppPreview", () => {
       expect(wrapper.text()).toContain("bookings / roomA-1000");
 
       await press(wrapper, "Remove them");
-      await settle();
+      await until(undoRequests(posted, 1), "the undo request to reach the server");
 
       // The MIRROR travels with it: a bare delete would leave the slot saying `taken` about a
       // booking that no longer exists.
@@ -766,17 +770,21 @@ describe("SharedAppPreview", () => {
       const wrapper = await mountPreview();
       const { port } = await connect(wrapper);
 
-      for (const slot of ["roomA-1000", "roomA-1100"]) {
+      for (const [n, slot] of ["roomA-1000", "roomA-1100"].entries()) {
         port.postMessage({ type: "mc-public-view:submit", requestId: `r-${slot}`, cid: "bookings", values: { slot } });
-        await settle();
         await press(wrapper, "Send it");
-        await settle();
+        // Each write has to be ON THE LIST before the next submit, or the second confirmation is
+        // pressed against the first one's dialog. Waited on the pane's own count rather than on
+        // `posted`, which this test fills from the UNDO route only.
+        await untilText(wrapper, `${n + 1} record${n === 0 ? "" : "s"} written from this preview`);
       }
       await untilText(wrapper, "2 records written from this preview");
       expect(wrapper.text()).toContain("2 records written from this preview");
 
       await press(wrapper, "Remove them");
-      await settle();
+      // BOTH, not just the first: the assertion below is about the pair, so waiting for one would
+      // read the list mid-flight.
+      await until(undoRequests(posted, 2), "both undo requests to reach the server");
 
       // BOTH were attempted, and the one that could not be removed is still named on screen — the
       // author cannot delete by hand what this pane has forgotten.
@@ -790,7 +798,6 @@ describe("SharedAppPreview", () => {
       const { port, answers } = await connect(wrapper);
 
       port.postMessage({ type: "mc-public-view:submit", requestId: "r-5", cid: "bookings", values: { slot: "roomA-1000" } });
-      await settle();
       await press(wrapper, "Cancel");
       await until(answered(answers, "r-5"), "an answer for r-5");
 
