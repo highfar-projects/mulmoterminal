@@ -193,6 +193,27 @@ describe("PromptsPane", () => {
     expect(w.get('[data-testid="prompt-text"]').classes()).toContain("line-clamp-3");
     await w.get('[data-testid="prompt-row"] button').trigger("click");
     expect(w.get('[data-testid="prompt-text"]').classes()).not.toContain("line-clamp-3");
+    await w.get('[data-testid="prompt-text"]').trigger("click"); // the text closes it again
+    expect(w.get('[data-testid="prompt-text"]').classes()).toContain("line-clamp-3");
+  });
+
+  // The row used to be one <button>, and a browser makes a button's own content unselectable —
+  // so the prompts you wrote could be read and not copied.
+  it("keeps the prompt text outside the button, so it can be selected", async () => {
+    vi.stubGlobal("fetch", mockFetch({ prompts, truncated: false }));
+    const w = mountPane();
+    await flushPromises();
+    expect(w.get('[data-testid="prompt-text"]').element.closest("button")).toBeNull();
+  });
+
+  it("does not collapse the row when the click is the end of a drag-selection", async () => {
+    vi.stubGlobal("fetch", mockFetch({ prompts: [{ at: 1, text: "x".repeat(500) }], truncated: false }));
+    const w = mountPane();
+    await flushPromises();
+    await w.get('[data-testid="prompt-row"] button').trigger("click"); // opened
+    vi.stubGlobal("getSelection", () => ({ isCollapsed: false, toString: () => "xxx" }));
+    await w.get('[data-testid="prompt-text"]').trigger("click");
+    expect(w.get('[data-testid="prompt-text"]').classes()).not.toContain("line-clamp-3"); // still open
   });
 
   it("emits close and toggleExpand from its header", async () => {
