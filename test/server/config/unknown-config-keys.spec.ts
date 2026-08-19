@@ -7,7 +7,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import express from "express";
-import request from "supertest";
+import { routeCall, jsonPost } from "../../helpers/routeCall";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -165,7 +165,7 @@ describe("POST /api/config", () => {
       const app = express();
       app.use(express.json());
       mountConfigRoutes(app, dir);
-      const res = await request(app).post("/api/config").send({ pushEnabled: true });
+      const res = await routeCall(app)("/api/config", jsonPost({ pushEnabled: true }));
       expect(res.status).toBe(200);
 
       const onDisk = JSON.parse(readFileSync(APP_CONFIG_FILE, "utf8"));

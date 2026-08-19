@@ -9,7 +9,7 @@ import { describe, it, expect, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
 import express from "express";
-import request from "supertest";
+import { routeCall, jsonPost } from "../../helpers/routeCall";
 import { makeTempDir } from "../../support/tempDir";
 
 // Same reason as mcp-announce.spec.ts: the registry derives MULMOTERMINAL_HOME from the home
@@ -33,9 +33,10 @@ afterAll(async () => {
 const app = express();
 app.use(express.json());
 mountMcpRoutes(app, { publish: () => {}, guiCallHistory: () => null });
+const call = routeCall(app);
 
 const listTools = (route: string) =>
-  request(app).post(route).set("accept", "application/json, text/event-stream").send({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} });
+  call(route, jsonPost({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }, { accept: "application/json, text/event-stream" }));
 
 // The route answers as SSE, so the JSON-RPC body arrives on a `data:` line.
 function toolNamesFrom(text: string): string[] {

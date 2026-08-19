@@ -3,7 +3,7 @@
 // and unlink are stubbed — no browser, no loopback listener, no real token.
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import express from "express";
-import request from "supertest";
+import { routeCall } from "../../helpers/routeCall";
 
 import { mountGoogleRoutes, type GoogleRouteDeps } from "../../../server/backends/google.js";
 
@@ -37,32 +37,32 @@ describe("mountGoogleRoutes", () => {
 
   describe("GET /api/google/status", () => {
     it("reports linked when a refresh token is stored, without leaking it", async () => {
-      const res = await request(appWith(deps)).get("/api/google/status");
+      const res = await routeCall(appWith(deps))("/api/google/status");
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ linked: true, pending: false, clientSecret: "found", brokerAvailable: true, lastError: null });
       expect(JSON.stringify(res.body)).not.toContain("secret-refresh-token");
     });
 
     it("reports not-linked when no token is stored", async () => {
-      const res = await request(appWith(stubDeps({ loadTokens: vi.fn(async () => null) }))).get("/api/google/status");
+      const res = await routeCall(appWith(stubDeps({ loadTokens: vi.fn(async () => null) })))("/api/google/status");
       expect(res.body.linked).toBe(false);
     });
 
     // An access token alone doesn't survive a restart, so it must not read as linked.
     it("reports not-linked when the stored token has no refresh token", async () => {
-      const res = await request(appWith(stubDeps({ loadTokens: vi.fn(async () => ({ access_token: "at" })) }))).get("/api/google/status");
+      const res = await routeCall(appWith(stubDeps({ loadTokens: vi.fn(async () => ({ access_token: "at" })) })))("/api/google/status");
       expect(res.body.linked).toBe(false);
     });
 
     it("surfaces a pending flow and its last error", async () => {
       const authFlow = { start: vi.fn(), cancel: vi.fn(), status: vi.fn(() => ({ pending: true, lastError: "consent timed out" })) };
-      const res = await request(appWith(stubDeps({ authFlow }))).get("/api/google/status");
+      const res = await routeCall(appWith(stubDeps({ authFlow })))("/api/google/status");
       expect(res.body.pending).toBe(true);
       expect(res.body.lastError).toBe("consent timed out");
     });
 
     it("passes a missing client secret through", async () => {
-      const res = await request(appWith(stubDeps({ secretPresence: vi.fn(async () => "missing" as const) }))).get("/api/google/status");
+      const res = await routeCall(appWith(stubDeps({ secretPresence: vi.fn(async () => "missing" as const) })))("/api/google/status");
       expect(res.body.clientSecret).toBe("missing");
     });
 
@@ -72,7 +72,7 @@ describe("mountGoogleRoutes", () => {
           throw new Error("token file unreadable");
         }),
       });
-      const res = await request(appWith(failing)).get("/api/google/status");
+      const res = await routeCall(appWith(failing))("/api/google/status");
       expect(res.status).toBe(500);
       expect(res.body.error).toMatch(/token file unreadable/);
     });
@@ -80,7 +80,7 @@ describe("mountGoogleRoutes", () => {
 
   describe("POST /api/google/authorize", () => {
     it("returns the consent URL", async () => {
-      const res = await request(appWith(deps)).post("/api/google/authorize");
+      const res = await routeCall(appWith(deps))("/api/google/authorize", { method: "POST" });
       expect(res.status).toBe(200);
       expect(res.body.authUrl).toMatch(/^https:\/\/accounts\.google\.com\//);
     });
@@ -93,7 +93,7 @@ describe("mountGoogleRoutes", () => {
         cancel: vi.fn(),
         status: vi.fn(() => ({ pending: false, lastError: null })),
       };
-      const res = await request(appWith(stubDeps({ authFlow }))).post("/api/google/authorize");
+      const res = await routeCall(appWith(stubDeps({ authFlow })))("/api/google/authorize", { method: "POST" });
       expect(res.status).toBe(500);
       expect(res.body.error).toMatch(/client secret missing/);
     });
@@ -101,7 +101,7 @@ describe("mountGoogleRoutes", () => {
 
   describe("POST /api/google/unlink", () => {
     it("unlinks and reports it", async () => {
-      const res = await request(appWith(deps)).post("/api/google/unlink");
+      const res = await routeCall(appWith(deps))("/api/google/unlink", { method: "POST" });
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ linked: false });
       expect(deps.unlink).toHaveBeenCalledTimes(1);
@@ -113,7 +113,7 @@ describe("mountGoogleRoutes", () => {
           throw new Error("revoke failed");
         }),
       });
-      const res = await request(appWith(failing)).post("/api/google/unlink");
+      const res = await routeCall(appWith(failing))("/api/google/unlink", { method: "POST" });
       expect(res.status).toBe(500);
     });
   });
@@ -126,7 +126,7 @@ describe("mountGoogleRoutes", () => {
       ["post", "/api/google/unlink"],
     ])("rejects a foreign origin on %s %s", async (method, url) => {
       const app = appWith(deps, false);
-      const res = method === "get" ? await request(app).get(url) : await request(app).post(url);
+      const res = method === "get" ? await routeCall(app)(url) : await routeCall(app)(url, { method: "POST" });
       expect(res.status).toBe(403);
     });
 
@@ -134,12 +134,12 @@ describe("mountGoogleRoutes", () => {
     // check could only refuse the honest page — the reply carries no CORS headers, so a
     // cross-site read was never possible in the first place.
     it("answers GET /status even when the origin predicate refuses everything", async () => {
-      const res = await request(appWith(deps, false)).get("/api/google/status");
+      const res = await routeCall(appWith(deps, false))("/api/google/status");
       expect(res.status).toBe(200);
     });
 
     it("does not act on a rejected request", async () => {
-      await request(appWith(deps, false)).post("/api/google/unlink");
+      await routeCall(appWith(deps, false))("/api/google/unlink", { method: "POST" });
       expect(deps.unlink).not.toHaveBeenCalled();
       expect(deps.authFlow.start).not.toHaveBeenCalled();
     });

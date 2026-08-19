@@ -4,7 +4,7 @@ import { makeTempDir } from "../../support/tempDir.js";
 import { writeFileSync, mkdirSync, rmSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import path from "node:path";
 import express from "express";
-import request from "supertest";
+import { routeCall, jsonPost } from "../../helpers/routeCall";
 import { currentVersion, listEntries, mdToHtmlDoc, mountFilesBrowseRoutes, MAX_EDIT_BYTES } from "../../../server/files/files-browse";
 import { backupDirFor } from "../../../server/files/backup-store";
 
@@ -75,13 +75,13 @@ describe("conditional write", () => {
   // ship it all to answer a 16-character question.
   it("answers the version alone, matching the one served with the text", async () => {
     await withProject(async (app, dir) => {
-      const { body: read } = await request(app).get(`/api/files/browse/text?${query(dir)}`);
-      const res = await request(app).get(`/api/files/browse/version?${query(dir)}`);
+      const { body: read } = await routeCall(app)(`/api/files/browse/text?${query(dir)}`);
+      const res = await routeCall(app)(`/api/files/browse/version?${query(dir)}`);
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ version: read.version });
 
       writeFileSync(path.join(dir, "a.md"), "the agent's version");
-      const after = await request(app).get(`/api/files/browse/version?${query(dir)}`);
+      const after = await routeCall(app)(`/api/files/browse/version?${query(dir)}`);
       expect(after.body.version).not.toBe(read.version);
     });
   });
@@ -92,14 +92,14 @@ describe("conditional write", () => {
   it("refuses to hash a file past the edit cap", async () => {
     await withProject(async (app, dir) => {
       writeFileSync(path.join(dir, "a.md"), "x".repeat(MAX_EDIT_BYTES + 1));
-      const res = await request(app).get(`/api/files/browse/version?${query(dir)}`);
+      const res = await routeCall(app)(`/api/files/browse/version?${query(dir)}`);
       expect(res.status).toBe(413);
     });
   });
 
   it("reports a missing file as no version, rather than failing", async () => {
     await withProject(async (app, dir) => {
-      const res = await request(app).get(`/api/files/browse/version?${query(dir, "nope.md")}`);
+      const res = await routeCall(app)(`/api/files/browse/version?${query(dir, "nope.md")}`);
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ version: null });
     });
@@ -107,7 +107,7 @@ describe("conditional write", () => {
 
   it("hands the editor a version with the text", async () => {
     await withProject(async (app, dir) => {
-      const res = await request(app).get(`/api/files/browse/text?${query(dir)}`);
+      const res = await routeCall(app)(`/api/files/browse/text?${query(dir)}`);
       expect(res.status).toBe(200);
       expect(res.body.text).toBe("one");
       expect(typeof res.body.version).toBe("string");
@@ -116,34 +116,31 @@ describe("conditional write", () => {
 
   it("writes when the base version still matches, and reports the new one", async () => {
     await withProject(async (app, dir) => {
-      const { body: read } = await request(app).get(`/api/files/browse/text?${query(dir)}`);
-      const res = await request(app)
-        .put(`/api/files/browse/write?${query(dir)}`)
-        .send({ text: "two", baseVersion: read.version });
+      const { body: read } = await routeCall(app)(`/api/files/browse/text?${query(dir)}`);
+      const res = await routeCall(app)(`/api/files/browse/write?${query(dir)}`, { ...jsonPost({ text: "two", baseVersion: read.version }), method: "PUT" });
       expect(res.status).toBe(200);
       expect(readFileSync(path.join(dir, "a.md"), "utf8")).toBe("two");
       // The response's version is the one to save against next, without re-reading.
       expect(res.body.version).not.toBe(read.version);
-      const { body: reread } = await request(app).get(`/api/files/browse/text?${query(dir)}`);
+      const { body: reread } = await routeCall(app)(`/api/files/browse/text?${query(dir)}`);
       expect(reread.version).toBe(res.body.version);
     });
   });
 
   it("refuses with 409 — and writes nothing — when the file moved on", async () => {
     await withProject(async (app, dir) => {
-      const { body: read } = await request(app).get(`/api/files/browse/text?${query(dir)}`);
+      const { body: read } = await routeCall(app)(`/api/files/browse/text?${query(dir)}`);
       writeFileSync(path.join(dir, "a.md"), "the agent's version");
 
-      const res = await request(app)
-        .put(`/api/files/browse/write?${query(dir)}`)
-        .send({ text: "my edit", baseVersion: read.version });
+      const res = await routeCall(app)(`/api/files/browse/write?${query(dir)}`, { ...jsonPost({ text: "my edit", baseVersion: read.version }), method: "PUT" });
       expect(res.status).toBe(409);
       expect(readFileSync(path.join(dir, "a.md"), "utf8")).toBe("the agent's version");
 
       // The 409 carries the version now on disk, so a deliberate overwrite is one retry away.
-      const forced = await request(app)
-        .put(`/api/files/browse/write?${query(dir)}`)
-        .send({ text: "my edit", baseVersion: res.body.version });
+      const forced = await routeCall(app)(`/api/files/browse/write?${query(dir)}`, {
+        ...jsonPost({ text: "my edit", baseVersion: res.body.version }),
+        method: "PUT",
+      });
       expect(forced.status).toBe(200);
       expect(readFileSync(path.join(dir, "a.md"), "utf8")).toBe("my edit");
     });
@@ -151,20 +148,16 @@ describe("conditional write", () => {
 
   it("treats a same-content rewrite as no conflict", async () => {
     await withProject(async (app, dir) => {
-      const { body: read } = await request(app).get(`/api/files/browse/text?${query(dir)}`);
+      const { body: read } = await routeCall(app)(`/api/files/browse/text?${query(dir)}`);
       writeFileSync(path.join(dir, "a.md"), "one"); // changed and changed back
-      const res = await request(app)
-        .put(`/api/files/browse/write?${query(dir)}`)
-        .send({ text: "two", baseVersion: read.version });
+      const res = await routeCall(app)(`/api/files/browse/write?${query(dir)}`, { ...jsonPost({ text: "two", baseVersion: read.version }), method: "PUT" });
       expect(res.status).toBe(200);
     });
   });
 
   it("rejects a write with no baseVersion at all — there is no blind-write escape hatch", async () => {
     await withProject(async (app, dir) => {
-      const res = await request(app)
-        .put(`/api/files/browse/write?${query(dir)}`)
-        .send({ text: "two" });
+      const res = await routeCall(app)(`/api/files/browse/write?${query(dir)}`, { ...jsonPost({ text: "two" }), method: "PUT" });
       expect(res.status).toBe(400);
       expect(readFileSync(path.join(dir, "a.md"), "utf8")).toBe("one");
     });
@@ -172,15 +165,17 @@ describe("conditional write", () => {
 
   it("creates a new file when baseVersion is null, and 409s if something got there first", async () => {
     await withProject(async (app, dir) => {
-      const created = await request(app)
-        .put(`/api/files/browse/write?${query(dir, "new.md")}`)
-        .send({ text: "fresh", baseVersion: null });
+      const created = await routeCall(app)(`/api/files/browse/write?${query(dir, "new.md")}`, {
+        ...jsonPost({ text: "fresh", baseVersion: null }),
+        method: "PUT",
+      });
       expect(created.status).toBe(200);
       expect(readFileSync(path.join(dir, "new.md"), "utf8")).toBe("fresh");
 
-      const again = await request(app)
-        .put(`/api/files/browse/write?${query(dir, "new.md")}`)
-        .send({ text: "clobber", baseVersion: null });
+      const again = await routeCall(app)(`/api/files/browse/write?${query(dir, "new.md")}`, {
+        ...jsonPost({ text: "clobber", baseVersion: null }),
+        method: "PUT",
+      });
       expect(again.status).toBe(409);
       expect(readFileSync(path.join(dir, "new.md"), "utf8")).toBe("fresh");
     });
@@ -236,24 +231,20 @@ describe("browse routes keep backups", () => {
 
   it("banks the file when it is opened", async () => {
     await withStore(async (app, dir, backups) => {
-      await request(app).get(`/api/files/browse/text?${query(dir)}`);
+      await routeCall(app)(`/api/files/browse/text?${query(dir)}`);
       expect(generations(backups, dir)).toEqual(["one"]);
     });
   });
 
   it("banks what a write is about to replace", async () => {
     await withStore(async (app, dir, backups) => {
-      const { body } = await request(app).get(`/api/files/browse/text?${query(dir)}`);
-      await request(app)
-        .put(`/api/files/browse/write?${query(dir)}`)
-        .send({ text: "two", baseVersion: body.version });
+      const { body } = await routeCall(app)(`/api/files/browse/text?${query(dir)}`);
+      await routeCall(app)(`/api/files/browse/write?${query(dir)}`, { ...jsonPost({ text: "two", baseVersion: body.version }), method: "PUT" });
       // "one" was banked once at open; the write finds the same content and doesn't re-bank it.
       expect(generations(backups, dir)).toEqual(["one"]);
 
-      const reread = await request(app).get(`/api/files/browse/text?${query(dir)}`);
-      await request(app)
-        .put(`/api/files/browse/write?${query(dir)}`)
-        .send({ text: "three", baseVersion: reread.body.version });
+      const reread = await routeCall(app)(`/api/files/browse/text?${query(dir)}`);
+      await routeCall(app)(`/api/files/browse/write?${query(dir)}`, { ...jsonPost({ text: "three", baseVersion: reread.body.version }), method: "PUT" });
       expect(generations(backups, dir)).toEqual(["one", "two"]);
     });
   });
@@ -261,10 +252,8 @@ describe("browse routes keep backups", () => {
   it("keeps three generations, oldest first out", async () => {
     await withStore(async (app, dir, backups) => {
       for (const text of ["two", "three", "four", "five"]) {
-        const { body } = await request(app).get(`/api/files/browse/text?${query(dir)}`);
-        await request(app)
-          .put(`/api/files/browse/write?${query(dir)}`)
-          .send({ text, baseVersion: body.version });
+        const { body } = await routeCall(app)(`/api/files/browse/text?${query(dir)}`);
+        await routeCall(app)(`/api/files/browse/write?${query(dir)}`, { ...jsonPost({ text, baseVersion: body.version }), method: "PUT" });
       }
       expect(generations(backups, dir)).toEqual(["two", "three", "four"]);
     });
@@ -273,9 +262,7 @@ describe("browse routes keep backups", () => {
   // The conflict banner's "Reload" drops content that only ever existed in the editor.
   it("banks a buffer the client hands over", async () => {
     await withStore(async (app, dir, backups) => {
-      const res = await request(app)
-        .put(`/api/files/browse/backup?${query(dir)}`)
-        .send({ text: "only in the editor" });
+      const res = await routeCall(app)(`/api/files/browse/backup?${query(dir)}`, { ...jsonPost({ text: "only in the editor" }), method: "PUT" });
       expect(res.status).toBe(200);
       expect(res.body.stored).toBe(true);
       expect(generations(backups, dir)).toContain("only in the editor");
@@ -292,11 +279,12 @@ describe("browse routes keep backups", () => {
     app.use(express.json());
     mountFilesBrowseRoutes(app, { defaultCwd: dir, backupRoot: blocked });
 
-    const read = await request(app).get(`/api/files/browse/text?${query(dir)}`);
+    const read = await routeCall(app)(`/api/files/browse/text?${query(dir)}`);
     expect(read.status).toBe(200);
-    const written = await request(app)
-      .put(`/api/files/browse/write?${query(dir)}`)
-      .send({ text: "two", baseVersion: read.body.version });
+    const written = await routeCall(app)(`/api/files/browse/write?${query(dir)}`, {
+      ...jsonPost({ text: "two", baseVersion: read.body.version }),
+      method: "PUT",
+    });
     expect(written.status).toBe(200);
     expect(readFileSync(path.join(dir, "a.md"), "utf8")).toBe("two");
     rmSync(dir, { recursive: true, force: true });

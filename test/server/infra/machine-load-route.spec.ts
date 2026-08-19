@@ -3,7 +3,7 @@
 // idle" and "this machine does not report a load", which reach the browser as 0 and null.
 import { describe, it, expect, vi, afterEach } from "vitest";
 import express from "express";
-import request from "supertest";
+import { routeCall } from "../../helpers/routeCall";
 import { mountLoadRoute } from "../../../server/routes/load-routes.js";
 import os from "node:os";
 import { readMachineLoad } from "../../../server/infra/machine-load.js";
@@ -17,7 +17,7 @@ const appWith = (readLoad: Parameters<typeof mountLoadRoute>[1]) => {
 describe("GET /api/load", () => {
   it("sends the reading the host gave it", async () => {
     const load = { avg1: 66.84, avg5: 59.88, avg15: 55.24, cores: 20 };
-    const res = await request(appWith(() => load)).get("/api/load");
+    const res = await routeCall(appWith(() => load))("/api/load");
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ load });
   });
@@ -25,7 +25,7 @@ describe("GET /api/load", () => {
   // A field rather than a status: the header has to tell "this host keeps no load average" from
   // "the request failed", and a 204 or a 404 would arrive as the second.
   it("answers 200 with a null reading where there is none", async () => {
-    const res = await request(appWith(() => null)).get("/api/load");
+    const res = await routeCall(appWith(() => null))("/api/load");
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ load: null });
   });

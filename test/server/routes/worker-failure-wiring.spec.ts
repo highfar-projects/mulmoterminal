@@ -7,7 +7,7 @@
 // happens.
 import { describe, it, expect, vi } from "vitest";
 import express from "express";
-import request from "supertest";
+import { routeCall, jsonPost } from "../../helpers/routeCall";
 
 // The registry persists what it records. node:fs is MOCKED rather than pointing HOME at a temp
 // dir (tool-group-reset.spec's pattern): process.env is shared by every file in a vitest worker,
@@ -45,10 +45,11 @@ mountPluginRoutes(app, {
   spawnMusePty: (() => ({})) as never,
   registerBackgroundSession: () => {},
 });
+const call = routeCall(app);
 
 /** Spawn through the real route and hand back the id it minted. */
 async function spawn(hidden: boolean, agent = "claude"): Promise<string> {
-  const res = await request(app).post("/api/plugin/spawnBackgroundChat").send({ message: "do the thing", hidden, agent });
+  const res = await call("/api/plugin/spawnBackgroundChat", jsonPost({ message: "do the thing", hidden, agent }));
   return String((res.body as { jsonData?: { chatId?: string } }).jsonData?.chatId);
 }
 

@@ -9,13 +9,14 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import express from "express";
-import request from "supertest";
+import { routeCall } from "../../helpers/routeCall";
 import { mountDecisionRoutes, NO_DECISIONS } from "../../../server/routes/decision-routes";
 
 const app = express();
 mountDecisionRoutes(app);
 
-const get = (query: Record<string, string>) => request(app).get("/api/decisions").query(query);
+const call = routeCall(app);
+const get = (query: Record<string, string>) => call(`/api/decisions?${new URLSearchParams(query)}`);
 
 describe("GET /api/decisions", () => {
   it("answers empty — never the default workspace's decisions — for a directory that does not exist", async () => {

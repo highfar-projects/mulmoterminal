@@ -8,7 +8,7 @@
 // all). The pure conversion is covered in calendarPushResult.spec.ts.
 import { describe, it, expect, vi } from "vitest";
 import express from "express";
-import request from "supertest";
+import { routeCall, jsonPost } from "../../helpers/routeCall";
 import type { CalendarPushOutcome } from "@mulmoclaude/core/google";
 
 import { mountCalendarPushRoutes, type CalendarPushRouteDeps } from "../../../server/backends/calendarPush.js";
@@ -46,7 +46,7 @@ const appWith = (deps: CalendarPushRouteDeps) => {
   return app;
 };
 
-const push = (deps: CalendarPushRouteDeps, slug = "meetings") => request(appWith(deps)).post(`/api/collections/${slug}/calendar-push`).send({});
+const push = (deps: CalendarPushRouteDeps, slug = "meetings") => routeCall(appWith(deps))(`/api/collections/${slug}/calendar-push`, jsonPost({}));
 
 describe("mountCalendarPushRoutes", () => {
   it("pushes and returns the engine's counts", async () => {
@@ -62,7 +62,7 @@ describe("mountCalendarPushRoutes", () => {
   // cannot obtain surfaces as a 500 here instead of shipping.
   it("serves a request through the live deps without losing the root", async () => {
     initCollectionsBackend({ workspace: makeTempDir("mt-calendar-push-") });
-    const res = await request(appWithLiveDeps()).post("/api/collections/nope/calendar-push").send({});
+    const res = await routeCall(appWithLiveDeps())("/api/collections/nope/calendar-push", jsonPost({}));
     expect(res.status).toBe(404);
     expect(res.body.error).toContain("'nope' not found");
   });
@@ -104,7 +104,12 @@ describe("mountCalendarPushRoutes", () => {
       const res = await push(stubDeps({ push: vi.fn(async () => outcome) }));
       expect(res.status).toBe(200);
       expect(res.body.created).toBe(0);
-      expect(res.body.errors.join(" ")).toContain(expected);
+      // The route's contract is a LIST of errors, so anything else is a failure rather than
+      // something to read `toContain` against — a string `errors` would otherwise satisfy this
+      // assertion whenever it happened to contain the text (CodeRabbit on #1799).
+      const errors = res.body.errors;
+      expect(Array.isArray(errors)).toBe(true);
+      expect(Array.isArray(errors) ? errors.join(" ") : "").toContain(expected);
     });
   });
 

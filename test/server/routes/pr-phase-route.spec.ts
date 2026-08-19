@@ -9,19 +9,20 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import express from "express";
-import request from "supertest";
+import { routeCall, jsonPost } from "../../helpers/routeCall";
 import { mountDirRoutes } from "../../../server/routes/dir-routes";
 import { EMPTY_WORK_ITEM } from "../../../common/prPhase";
 
 const app = express();
 app.use(express.json());
 mountDirRoutes(app);
+const call = routeCall(app);
 
 describe("GET /api/pr-phase", () => {
   it("answers the full WorkItem shape for a directory that is not a git repo", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "mt-prphase-"));
     try {
-      const res = await request(app).get("/api/pr-phase").query({ cwd: dir });
+      const res = await call(`/api/pr-phase?${new URLSearchParams({ cwd: dir })}`);
       expect(res.status).toBe(200);
       expect(res.body).toEqual(EMPTY_WORK_ITEM);
       // Named individually so a future shape change has to face each field, not just a deep-equal.
@@ -57,7 +58,7 @@ describe("POST /api/work-comment", () => {
   });
 
   it("writes nothing while the setting is off, and says why", async () => {
-    const res = await request(app).post("/api/work-comment").send({ cwd: process.cwd(), issue: 979, kind: "start" });
+    const res = await call("/api/work-comment", jsonPost({ cwd: process.cwd(), issue: 979, kind: "start" }));
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ posted: false, reason: "disabled" });
     expect(ensureCalls).toHaveLength(0); // nothing even reached the gh layer
@@ -74,14 +75,14 @@ describe("POST /api/work-comment", () => {
     ["the pr kind with no PR number", { issue: 979, kind: "pr" }],
     ["the pr kind with PR zero", { issue: 979, pr: 0, kind: "pr" }],
   ])("rejects %s with 400", async (_label, body) => {
-    const res = await request(app).post("/api/work-comment").send(body);
+    const res = await call("/api/work-comment", jsonPost(body));
     expect(res.status).toBe(400);
     expect(ensureCalls).toHaveLength(0);
   });
 
   it("passes the PR milestone through with its number, and does not close the issue", async () => {
     enabled = true;
-    await request(app).post("/api/work-comment").send({ cwd: process.cwd(), issue: 979, pr: 987, kind: "pr" });
+    await call("/api/work-comment", jsonPost({ cwd: process.cwd(), issue: 979, pr: 987, kind: "pr" }));
     expect(ensureCalls[0][2]).toBe("pr");
     expect(ensureCalls[0][4]).toBe(987);
     expect(ensureCalls[0][5]).toEqual({ closeIssue: false });
@@ -89,8 +90,8 @@ describe("POST /api/work-comment", () => {
 
   it("asks for the merged comment to close the issue, and the start comment not to", async () => {
     enabled = true;
-    await request(app).post("/api/work-comment").send({ cwd: process.cwd(), issue: 979, pr: 987, kind: "merged" });
-    await request(app).post("/api/work-comment").send({ cwd: process.cwd(), issue: 979, kind: "start" });
+    await call("/api/work-comment", jsonPost({ cwd: process.cwd(), issue: 979, pr: 987, kind: "merged" }));
+    await call("/api/work-comment", jsonPost({ cwd: process.cwd(), issue: 979, kind: "start" }));
     expect(ensureCalls).toHaveLength(2);
     expect(ensureCalls[0][2]).toBe("merged");
     expect(ensureCalls[0][5]).toEqual({ closeIssue: true });
@@ -109,7 +110,7 @@ describe("POST /api/work-comment", () => {
     ["a cwd that is not a string", 42],
   ])("writes nothing for %s", async (_label, cwd) => {
     enabled = true;
-    const res = await request(app).post("/api/work-comment").send({ cwd, issue: 979, kind: "start" });
+    const res = await call("/api/work-comment", jsonPost({ cwd, issue: 979, kind: "start" }));
     expect(res.body).toEqual({ posted: false, reason: "no-cwd" });
     expect(ensureCalls).toHaveLength(0);
   });
@@ -117,7 +118,7 @@ describe("POST /api/work-comment", () => {
   // The directory reaches the comment as a bare folder name, never the path (#979).
   it("passes the directory as its basename", async () => {
     enabled = true;
-    await request(app).post("/api/work-comment").send({ cwd: process.cwd(), issue: 979, kind: "start" });
+    await call("/api/work-comment", jsonPost({ cwd: process.cwd(), issue: 979, kind: "start" }));
     expect(ensureCalls[0][3]).toBe(path.basename(process.cwd()));
   });
 });
