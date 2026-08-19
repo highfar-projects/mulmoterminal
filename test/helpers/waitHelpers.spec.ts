@@ -17,14 +17,21 @@ describe("until", () => {
     expect(done).toHaveBeenCalledTimes(1);
   });
 
-  // The checks BRACKET the hops: one before the first and one after each, so a hop can never be
-  // spent after the last thing that could have ended the loop. The count is the same either side
-  // of the fix CodeRabbit asked for on #1798 — what changed there is the wasted 201st hop, which
-  // is not observable from here — so this pins the bracket and the message, not the hop count.
-  it("brackets its hops with checks, and says how many turns it spent", async () => {
+  // The HOP count, not the check count — the two differ by exactly the bug CodeRabbit found on
+  // #1798, and the check count alone cannot see it: `i <= HOPS_MAX` called `done` 201 times and
+  // hopped 201 times, while the fixed loop calls `done` 201 times and hops 200. `hop()` is one
+  // `setTimeout` and nothing else adds one here (measured: 3 hops => 3 calls), so counting them
+  // counts hops.
+  it("spends exactly the hops its message claims, and no more", async () => {
     const never = vi.fn(() => false);
-    await expect(until(never, "the thing")).rejects.toThrow("waited 200 turns of the event loop for the thing");
-    expect(never).toHaveBeenCalledTimes(201);
+    const hops = vi.spyOn(globalThis, "setTimeout");
+    try {
+      await expect(until(never, "the thing")).rejects.toThrow("waited 200 turns of the event loop for the thing");
+      expect(hops).toHaveBeenCalledTimes(200);
+      expect(never).toHaveBeenCalledTimes(201); // one before the first hop, one after each
+    } finally {
+      hops.mockRestore();
+    }
   });
 
   it("stops as soon as the condition holds", async () => {
