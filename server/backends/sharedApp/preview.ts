@@ -27,7 +27,9 @@
 // What this does NOT prove is in the plan and belongs in whatever reports it: the rules do not run
 // here, other people's devices do not exist here, nothing is concurrent here, and — the one that
 // hides best — whether the rules a new declaration needs are deployed at all.
-import { appSchemasPath, projectPublish, type PublishedConfigDoc } from "@receptron/sharedapp";
+// `ProjectedViewWrite` is the ROOT entry's — `/view` re-exports the readers but not the shape
+// they return. A type-only import, so nothing of the compiler reaches the runtime here.
+import { appSchemasPath, projectPublish, type ProjectedViewWrite, type PublishedConfigDoc } from "@receptron/sharedapp";
 import { readCurrentApp, schemasOf, sharedAppContext, stampFor, type SharedAppFailure, type SharedAppHandle, type SharedAppOptions } from "./context.js";
 import { planAppViewTiers, type TierPlan } from "./appViews.js";
 import { publicFormOf, type PublicForm } from "./publicForm.js";
@@ -53,6 +55,13 @@ export interface PreviewSuccess extends SharedAppPreview {
   config: PublishedConfigDoc;
   /** The generated form's inputs, for an app that publishes a form rather than a page of its own. */
   form: PublicForm;
+  /** What each tier's projection says is WRITABLE, kept for the intent path (`previewIntent.ts`).
+   *
+   *  Server-only, like the two above, and deliberately so: the pane is handed the resolved
+   *  `viewer` and never the projection it came from. Sending this to the browser would put a second
+   *  judge there — one that could disagree with the one that performs the write — which is the
+   *  divergence `PreviewPage.viewer` was introduced to remove. */
+  writes: Partial<Record<TierPlan["tier"], ProjectedViewWrite[]>>;
 }
 
 export type PreviewResult = PreviewSuccess | SharedAppFailure;
@@ -232,6 +241,10 @@ export async function previewSharedApp(root: string, opts: SharedAppOptions = {}
 
   const publicHtml = page !== null && page.ok ? page.view.html : null;
   const publicPages: PreviewPage[] = publicHtml === null ? [] : [{ id: PUBLIC_PAGE_ID, html: publicHtml, audience: "public" }];
+  // The projection each tier writes, kept BESIDE the viewer it resolves to rather than recomputed
+  // later: an intent is judged against the same `write` list this `viewer` was built from, so the
+  // buttons a page draws and the moves this host will perform cannot come from two readings.
+  const writes: Partial<Record<TierPlan["tier"], ProjectedViewWrite[]>> = {};
   const tierPages: PreviewPage[] = tiers.plans.flatMap((plan) => {
     // The author, as this tier's projection resolves them. `viewerFor` is the
     // package's, and mulmoserver calls the same one with the same projection —
@@ -240,7 +253,9 @@ export async function previewSharedApp(root: string, opts: SharedAppOptions = {}
     // Read back through the PACKAGE's reader, which is the one mulmoserver uses on the document it
     // gets off Firestore. A looser read here would let the preview draw a control production drops
     // — the preview being looser than production, the one thing it must never be.
-    const viewer = viewerFor(projectedWritesOf(plan.config), handle.email, plan.tier);
+    const projected = projectedWritesOf(plan.config);
+    writes[plan.tier] = projected;
+    const viewer = viewerFor(projected, handle.email, plan.tier);
     return plan.pages.map((tierPage): PreviewPage => ({ id: tierPage.id, html: tierPage.html, audience: plan.tier, viewer }));
   });
   const pages = [...publicPages, ...tierPages];
@@ -262,6 +277,7 @@ export async function previewSharedApp(root: string, opts: SharedAppOptions = {}
     submit: submitDeclarations(face.config),
     config: face.config,
     form,
+    writes,
     pages,
     publicOpen: face.public !== undefined,
     fromLiveApp: existingApp !== null,

@@ -180,6 +180,12 @@ const untilBlock = async (wrapper: VueWrapper, text: string): Promise<string> =>
   return found;
 };
 
+// #1802 reached this same conclusion independently and from the other direction: its member-intent
+// answer crosses the HTTP boundary twice before the page is told, so a fixed turn count passed on
+// macOS and Linux and failed on WINDOWS in CI. It added a `settleUntil(arrived, turns = 20)`; this
+// branch's `until` is that with a name for what never came and no turn budget in the caller, so the
+// merge keeps one helper rather than two.
+
 /** Press a button by its label, once it exists.
  *
  *  `findAll("button").filter(…)[0]?.trigger("click")` is a SILENT no-op when the control has not
@@ -379,23 +385,36 @@ describe("SharedAppPreview", () => {
     wrapper.unmount();
   });
 
-  // The member parent performs nothing — the pane has no route for a member's write — so an intent
-  // is answered BY NAME rather than dropped. A view left on a promise is, to the person holding the
-  // phone, a button that does nothing, which is the symptom this whole pane exists to explain.
-  it("answers a member page's intent instead of leaving it waiting", async () => {
-    vi.stubGlobal("fetch", answering(memberPayload()));
+  // The member parent PERFORMS. It answered `read-only` until 2026-08-18, which read as a fault in
+  // the page: a desk drew its buttons and every one of them failed, so an author could see that a
+  // control was wired and never that it worked.
+  //
+  // ONE end-to-end test, because what it proves is the WIRING: the port is connected to the sender
+  // and the sender's answer reaches the page. What a refusal does, and what is not sent at all, are
+  // the sender's own and are pinned in `test/src/utils/sharedAppPreviewIntent.spec.ts` — where they
+  // cost no frame.
+  //
+  // What is pinned is the ask reaching the route AND CARRYING ITS PAGE. The page is what decides
+  // which tier's projection judges the move and which records it may name — without it a
+  // participant's page could reach the front desk's transitions by naming the collection they live
+  // in, and the server would have nothing to notice it with.
+  it("performs a member page's intent, naming the page it was asked from", async () => {
+    const { fetcher, posted } = answeringWrites({ ok: true, mailed: false }, memberPayload());
+    vi.stubGlobal("fetch", fetcher);
     const wrapper = await mountPreview();
     const { port, answers } = await connect(wrapper);
     port.postMessage({ type: "mc-public-view:intent", requestId: "r1", kind: "transition", cid: "bookings", itemId: "b1", to: "approved" });
-    // `submitResult`, not `result`: one name answers a submission and an intent alike, because the
-    // view awaits one promise either way.
+    // main's behaviour (#1802): the member parent PERFORMS the intent now rather than refusing it.
+    // Kept whole; only the wait is this branch's — `answerFor` names what never arrived, where
+    // `settleUntil` reports the absence as whatever the next assertion happens to find.
     const result = await answerFor(
       answers,
       (message) => message.type === "mc-public-view:submitResult" && message.requestId === "r1",
       "an answer to the member page's intent",
     );
-    expect(result?.ok).toBe(false);
-    expect(result?.error).toBe("read-only");
+    const sent = posted.find((call) => call.url.includes("/preview/intent"));
+    expect(sent?.body).toEqual({ page: { id: "desk", audience: "member" }, kind: "transition", cid: "bookings", itemId: "b1", to: "approved" });
+    expect(result?.ok).toBe(true);
     wrapper.unmount();
   });
 
