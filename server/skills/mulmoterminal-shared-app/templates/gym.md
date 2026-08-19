@@ -275,8 +275,13 @@ opensAt = (クラスの開始日の 3 日前の 08:00 現地時間).getTime()
     // メッセージ全体が申込みでなくなり、not-a-submission として拒否されます。
     const result = await view.submit("bookings", { classId, memberName });
     // 失敗は「満席」ではありません — このアプリに満席という状態はない。解禁前
-    // （window）、サインインしていない、二重申込み（idFrom）のどれかです。
-    say.textContent = result.ok ? "受け付けました。順位は「自分の申込み」で見られます。" : `申し込めませんでした: ${result.error ?? "unknown"}`;
+    // （window）、サインインしていない、二重申込み（idFrom）のどれかです。そして
+    // "cancelled" はそのどれでもありません — 確認ダイアログで「やめる」を押しただけです。
+    if (result.ok) {
+      say.textContent = "受け付けました。順位は「自分の申込み」で見られます。";
+    } else {
+      say.textContent = result.error === "cancelled" ? "" : `申し込めませんでした: ${result.error ?? "unknown"}`;
+    }
   });
 
   view.ready();
