@@ -139,6 +139,30 @@ describe("the pane's intent sender", () => {
     expect(remembered[0]).toEqual(expect.objectContaining({ error: expect.stringContaining("may or may not have moved") }));
   });
 
+  it("tries the re-read again before calling the screen stale", async () => {
+    // The failure being recovered from is a blip — a request that timed out, a server restarted
+    // between the write and the read. One more attempt turns most of them into a screen that is
+    // simply correct, which is the half of this a host can fix: the wire answer belongs to
+    // production, the screen does not.
+    const remembered: PreviewLogEvent[] = [];
+    let attempts = 0;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ ok: true, mailed: false }) }));
+    const perform = createIntentSender({
+      page: () => DESK,
+      url: () => "/api/shared-app/preview/intent",
+      remember: (event) => remembered.push(event),
+      refresh: () => {
+        attempts += 1;
+        return Promise.resolve(attempts > 1);
+      },
+    });
+
+    expect(await perform(INTENT)).toEqual({ requestId: "r1", ok: true });
+    expect(attempts).toBe(2);
+    // Recovered, so nothing is claimed about a stale screen — the second read installed one.
+    expect(remembered.filter((event) => event.kind === "host")).toEqual([]);
+  });
+
   it("says the SCREEN is stale when the re-read failed, and still reports the write as done", async () => {
     // Both halves matter and they point opposite ways. The write HAPPENED, so answering `ok: false`
     // would put the operator in front of a button they would press again — a second transition, and
@@ -149,7 +173,7 @@ describe("the pane's intent sender", () => {
 
     expect(await perform(INTENT)).toEqual({ requestId: "r1", ok: true });
     expect(remembered[0]).toEqual(expect.objectContaining({ kind: "intent", error: null }));
-    expect(remembered[1]).toEqual(expect.objectContaining({ kind: "host", note: expect.stringContaining("older than the app") }));
+    expect(remembered[1]).toEqual(expect.objectContaining({ kind: "host", note: expect.stringContaining("twice") }));
   });
 
   it("sends nothing at all when there is no page, or the page is a public one", async () => {

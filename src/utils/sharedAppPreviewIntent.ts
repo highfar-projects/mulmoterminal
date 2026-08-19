@@ -137,10 +137,17 @@ export const createIntentSender = (ports: IntentSenderPorts): PerformIntent => {
       // So the screen is what is reported. Without this the pane could acknowledge a move over
       // records that never changed — the page clears its pending state and goes on drawing the
       // control it has just used, which looks exactly like a button that does nothing.
-      if (!(await ports.refresh())) {
+      // TRIED TWICE BEFORE IT IS CALLED STALE. The failure this recovers from is a blip — a request
+      // that timed out, a server restarted between the write and the read — and one more attempt
+      // turns most of them into a screen that is simply correct. It is the half of the answer this
+      // host CAN give: the wire answer belongs to production (above), the screen does not.
+      //
+      // Sequential rather than concurrent, and awaited before answering, for `refresh`'s own reason:
+      // the page redraws from this answer, so state that arrives after it redraws against nothing.
+      if (!(await ports.refresh()) && !(await ports.refresh())) {
         ports.remember({
           kind: "host",
-          note: `the ${body.kind} was written, but the records could not be re-read afterwards — what is on screen is older than the app, and a control drawn from it may already have been used. Reopen the preview.`,
+          note: `the ${body.kind} was written, but the records could not be re-read afterwards — twice. What is on screen is older than the app, and a control drawn from it may already have been used. Reopen the preview.`,
         });
       }
       return { requestId, ok: true };
