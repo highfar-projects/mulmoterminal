@@ -137,10 +137,13 @@ const speakFromFrame = async (wrapper: VueWrapper, data: Record<string, unknown>
 
 const nonceOf = (wrapper: VueWrapper): string => /const nonce = "([^"]+)"/.exec(wrapper.find("iframe").attributes("srcdoc") ?? "")?.[1] ?? "";
 
+// Found by its title rather than its label: the label becomes "Copied" for a moment after a press,
+// and a helper that looked for the label would quietly stop finding it on the second call.
+const copyButton = (wrapper: VueWrapper) =>
+  wrapper.findAll("button").find((candidate) => (candidate.attributes("title") ?? "").startsWith("Everything the parent saw"));
+
 const copyBlock = async (wrapper: VueWrapper): Promise<string> => {
-  // Found by its title rather than its label: the label becomes "Copied" for a moment after a
-  // press, and a helper that looked for the label would quietly stop finding it on the second call.
-  const button = wrapper.findAll("button").find((candidate) => (candidate.attributes("title") ?? "").startsWith("Everything the parent saw"));
+  const button = copyButton(wrapper);
   if (button === undefined) throw new Error("the pane offers no way to copy what happened");
   await button.trigger("click");
   await flushPromises();
@@ -159,13 +162,11 @@ const untilText = async (wrapper: VueWrapper, text: string): Promise<void> =>
  *  loads a different app, which is precisely a moment a test may be waiting through. The timeout
  *  still names what never arrived, so nothing is hidden by this. */
 const untilBlock = async (wrapper: VueWrapper, text: string): Promise<string> => {
-  const says = async (): Promise<boolean> => {
-    try {
-      return (await copyBlock(wrapper)).includes(text);
-    } catch {
-      return false;
-    }
-  };
+  // The button's absence is ASKED about rather than caught: it disappears while the pane loads a
+  // different app, which is a moment a test waits through — but a catch-all here would also
+  // swallow a genuine failure inside `copyBlock` (a broken clipboard stub, say) for 200 hops and
+  // then report it as the wrong thing.
+  const says = async (): Promise<boolean> => copyButton(wrapper) !== undefined && (await copyBlock(wrapper)).includes(text);
   await until(says, `the record to mention ${JSON.stringify(text)}`);
   return copyBlock(wrapper);
 };
