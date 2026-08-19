@@ -886,14 +886,18 @@ view.onState((data, viewer) => { latest = { data, viewer }; render(); });   // t
 view.ready();
 
 const render = () => {
+  // `email` here is whatever THIS app declared as its `emailField`; the gym's is `memberEmail`.
+  // An app with no address to compare — `auth: "anonymous"` — derives it from `mine` instead
+  // (the three routes below).
   const mine = latest.data.responses.find((r) => r.email === latest.viewer.me);
   show(mine ? "answered" : "form");        // derived every time, remembered never
 };
 
 button.onclick = async () => {
   const res = await view.submit("responses", values);
-  if (res.ok) return;                       // onState is about to redraw
-  message.textContent = res.error === "cancelled" ? "" : `送信できませんでした: ${res.error}`;
+  // Clear it on EVERY outcome that is not a refusal. A page that returns early leaves the
+  // previous "送信できませんでした" on screen, and the visitor reads it as this press's answer.
+  message.textContent = res.ok || res.error === "cancelled" ? "" : `送信できませんでした: ${res.error}`;
 };
 ```
 
@@ -933,9 +937,13 @@ That is the trade in step 2c arriving in a different place.
 Where it genuinely cannot be derived, remembering is the fallback rather than the mistake — and it
 has to be written as one. [templates/live-poll.md](./templates/live-poll.md) is that case in full: an
 anonymous voter may not read the votes back, so the page keeps what it sent in a `Map`, remembers it
-only on `ok`, treats `cancelled` as "press again" rather than as a refusal, and knows that a reload
-loses the lot. Copy that shape rather than inventing it, and do not reach for it while the row is
-readable.
+only on `ok`, and treats `cancelled` as "press again" rather than as a refusal.
+
+**Copy it WITH its lookup.** That `Map` is a within-visit cache and not the answer to a reload — a
+reload empties it, and the page recovers by asking `view.mine("votes", question.id)` for the
+question it is showing, exactly as the third route above. A page copied without that call has the
+reload bug back, in the one shape where it is hardest to see: everything works until somebody
+refreshes.
 
 **`preview` does not catch either of these.** The run presses controls and accepts what it raises,
 and it loads each page once — so a page with both faults comes back clean. Until the harness presses
