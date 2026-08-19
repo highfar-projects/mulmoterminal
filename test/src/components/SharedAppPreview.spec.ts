@@ -166,9 +166,18 @@ const untilBlock = async (wrapper: VueWrapper, text: string): Promise<string> =>
   // different app, which is a moment a test waits through — but a catch-all here would also
   // swallow a genuine failure inside `copyBlock` (a broken clipboard stub, say) for 200 hops and
   // then report it as the wrong thing.
-  const says = async (): Promise<boolean> => copyButton(wrapper) !== undefined && (await copyBlock(wrapper)).includes(text);
+  // The block that SATISFIED the condition is the one handed back. Copying a second time presses
+  // the control again and awaits another flush, so a re-render between the two could remove the
+  // control or replace the diagnostics — and the caller would be asserting against a block the
+  // wait never approved (CodeRabbit on #1798).
+  let found = "";
+  const says = async (): Promise<boolean> => {
+    if (copyButton(wrapper) === undefined) return false;
+    found = await copyBlock(wrapper);
+    return found.includes(text);
+  };
   await until(says, `the record to mention ${JSON.stringify(text)}`);
-  return copyBlock(wrapper);
+  return found;
 };
 
 /** Press a button by its label, once it exists.

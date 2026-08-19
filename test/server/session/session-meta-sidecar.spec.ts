@@ -46,14 +46,6 @@ const titleFrom = async (file: string) => {
   return (await readSessionMeta(projectDir(), file)).title;
 };
 
-// Only for the NEGATIVE case below: under the threshold nothing is ever written, so there is no
-// event to wait for and a budget is the only thing available. It is safe in that direction —
-// waiting longer can only make the assertion stronger. Everything that expects a file to APPEAR
-// uses `untilTrue` instead (#1796).
-const settled = async () => {
-  for (let i = 0; i < 60; i++) await new Promise((r) => setTimeout(r, 5));
-};
-
 const sidecarsWritten = (): string[] => {
   const root = path.join(home, ".mulmoterminal", "transcript-index");
   return existsSync(root)
@@ -114,8 +106,10 @@ describe("the session list across processes", () => {
   // Under the threshold a fold costs less than the file would, so there should be nothing on disk.
   it("writes no sidecar for a small transcript", async () => {
     const file = writeTranscript(userLine("u") + aiTitleLine("small"));
+    // Nothing to wait for, and this is a fact rather than a hope: the fold calls `sidecar.write()`
+    // before it resolves, and under the threshold that call returns before touching the disk. So
+    // by the time the title is in hand the question is already settled (CodeRabbit on #1798).
     expect(await titleFrom(file)).toBe("small");
-    await settled();
     expect(sidecarsWritten()).toEqual([]);
   });
 });
