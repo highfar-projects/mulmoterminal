@@ -14,6 +14,7 @@ import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import type { TerminalAgent } from "../../common/sessionAgent";
 import type { PromptEntry } from "../../common/promptHistory";
 import { PROMPT_SUBMITTED_CHANNEL, isPromptSubmittedEvent } from "../../common/promptChannel";
+import { isTextSelected } from "./textSelected";
 
 const props = defineProps<{
   sessionId: string | null;
@@ -134,6 +135,11 @@ function formatTime(at: number | null): string {
   return at >= startOfToday() ? time : `${d.toLocaleDateString([], { month: "numeric", day: "numeric" })} ${time}`;
 }
 
+// The time is INSIDE the toggle, so a label naming only the action would replace it in the
+// accessible name and cost a screen reader the one thing that places the prompt in time.
+const toggleLabel = (at: number | null, isOpen: boolean): string =>
+  [formatTime(at), isOpen ? "Collapse this prompt" : "Show the whole prompt"].filter(Boolean).join(" ");
+
 // Which rows are showing their full text. A long prompt is clamped so the list stays scannable,
 // and clicking one opens it in place — the pane reads, and this is still reading.
 const opened = ref(new Set<number>());
@@ -141,6 +147,13 @@ function toggle(index: number): void {
   const next = new Set(opened.value);
   if (!next.delete(index)) next.add(index);
   opened.value = next;
+}
+// Clicking the text opens it too, EXCEPT when that click is the end of a drag: the row would
+// collapse under the selection the reader just made, which is the whole reason the text is
+// outside the button.
+function toggleUnlessSelecting(index: number): void {
+  if (isTextSelected(window.getSelection())) return;
+  toggle(index);
 }
 // Keyed by index, so a reload that prepends rows must not leave an older row expanded by
 // coincidence.
@@ -188,22 +201,35 @@ watch(prompts, () => {
       <p v-else-if="!sessionId" data-testid="prompts-empty" class="px-4 py-6 text-center text-[12px] text-dim">This cell hasn't started a session yet.</p>
       <p v-else-if="prompts.length === 0" data-testid="prompts-empty" class="px-4 py-6 text-center text-[12px] text-dim">Nothing sent to this session yet.</p>
       <ol v-else class="m-0 list-none p-0">
-        <li v-for="(prompt, index) in newestFirst" :key="index" data-testid="prompt-row" class="border-b border-border last:border-b-0">
+        <!-- The prompt text sits OUTSIDE the button on purpose. A browser makes a button's own
+             content unselectable, so while the whole row was one button a reader could not drag
+             across their own prompt to copy it — only re-type it. Same shape as the tools pane:
+             the control is the header line, the prose is a sibling. -->
+        <li
+          v-for="(prompt, index) in newestFirst"
+          :key="index"
+          data-testid="prompt-row"
+          class="border-b border-border px-3 py-2 last:border-b-0 hover:bg-subtle"
+        >
           <button
             type="button"
-            class="flex w-full cursor-pointer flex-col items-start gap-1 border-0 bg-transparent px-3 py-2 text-left text-inherit hover:bg-subtle"
+            class="flex w-full cursor-pointer items-center justify-between gap-2 border-0 bg-transparent p-0 text-left text-inherit"
             :aria-expanded="opened.has(index)"
+            :aria-label="toggleLabel(prompt.at, opened.has(index))"
             :title="opened.has(index) ? 'Collapse' : 'Show the whole prompt'"
             @click="toggle(index)"
           >
             <span data-testid="prompt-time" class="text-[11px] tabular-nums text-dim">{{ formatTime(prompt.at) }}</span>
-            <span
-              data-testid="prompt-text"
-              class="w-full whitespace-pre-wrap break-words text-[12px] leading-[1.45]"
-              :class="opened.has(index) ? '' : 'line-clamp-3 overflow-hidden'"
-              >{{ prompt.text }}</span
-            >
+            <span class="material-symbols-outlined text-[16px] text-dim" aria-hidden="true">{{ opened.has(index) ? "expand_less" : "expand_more" }}</span>
           </button>
+          <p
+            data-testid="prompt-text"
+            class="mt-1 w-full select-text whitespace-pre-wrap break-words text-[12px] leading-[1.45]"
+            :class="opened.has(index) ? '' : 'line-clamp-3 overflow-hidden'"
+            @click="toggleUnlessSelecting(index)"
+          >
+            {{ prompt.text }}
+          </p>
         </li>
       </ol>
       <!-- Says which end was cut, because the answer is not obvious from a list that is newest

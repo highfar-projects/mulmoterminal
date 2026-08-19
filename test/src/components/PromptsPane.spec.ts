@@ -193,6 +193,54 @@ describe("PromptsPane", () => {
     expect(w.get('[data-testid="prompt-text"]').classes()).toContain("line-clamp-3");
     await w.get('[data-testid="prompt-row"] button').trigger("click");
     expect(w.get('[data-testid="prompt-text"]').classes()).not.toContain("line-clamp-3");
+    await w.get('[data-testid="prompt-text"]').trigger("click"); // the text closes it again
+    expect(w.get('[data-testid="prompt-text"]').classes()).toContain("line-clamp-3");
+  });
+
+  // The row used to be one <button>, and a browser makes a button's own content unselectable —
+  // so the prompts you wrote could be read and not copied.
+  it("keeps the prompt text outside the button, so it can be selected", async () => {
+    vi.stubGlobal("fetch", mockFetch({ prompts, truncated: false }));
+    const w = mountPane();
+    await flushPromises();
+    expect(w.get('[data-testid="prompt-text"]').element.closest("button")).toBeNull();
+  });
+
+  // Whitespace counts: a prompt renders pre-wrap, so its indentation and blank lines are content a
+  // reader can drag across — and reclamping the row would hide what they just selected (Codex, #1806).
+  it.each([
+    ["text", "xxx"],
+    ["whitespace", "   \n  "],
+  ])("does not collapse the row when the click is the end of a drag-selection (%s)", async (_kind, selected) => {
+    vi.stubGlobal("fetch", mockFetch({ prompts: [{ at: 1, text: "x".repeat(500) }], truncated: false }));
+    const w = mountPane();
+    await flushPromises();
+    await w.get('[data-testid="prompt-row"] button').trigger("click"); // opened
+    vi.stubGlobal("getSelection", () => ({ isCollapsed: false, toString: () => selected }));
+    await w.get('[data-testid="prompt-text"]').trigger("click");
+    expect(w.get('[data-testid="prompt-text"]').classes()).not.toContain("line-clamp-3"); // still open
+  });
+
+  // An aria-label REPLACES the button's contents in the accessible name, and the time is one of
+  // them — a label naming only the action would take the timestamp away from a screen reader.
+  it("keeps the time in the toggle's accessible name", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch({
+        prompts: [
+          { at: Date.now(), text: "hi" },
+          { at: null, text: "no clock" },
+        ],
+        truncated: false,
+      }),
+    );
+    const w = mountPane();
+    await flushPromises();
+    const labels = w.findAll('[data-testid="prompt-row"] button').map((b) => b.attributes("aria-label") ?? "");
+    expect(labels[0]).toBe("Show the whole prompt"); // the row whose time is unreadable
+    const withTime = labels[1] ?? "";
+    expect(withTime.endsWith(" Show the whole prompt")).toBe(true);
+    expect(withTime.split(" ")[0]).toContain(":"); // the clock still leads the label
   });
 
   it("emits close and toggleExpand from its header", async () => {
