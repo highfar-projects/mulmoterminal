@@ -102,7 +102,10 @@ describe("the pane's log", () => {
     // button they pressed.
     const move = render((log) => log.add({ kind: "intent", intent: "transition", cid: "bookings", itemId: "b1", to: "done", error: "unknown-collection" }));
     expect(move).toContain("`public.submit`");
-    expect(move).toContain("`collections`");
+    // And the two audiences' moves are declared in DIFFERENT places, which is the half a first
+    // wording got wrong: a public page's moves come off `public.submit`, not off the view.
+    expect(move).toContain("`selfTransitions`");
+    expect(move).toContain("`collections[cid]`");
     // And the same sentence for a submission, because one vocabulary is the point.
     const sent = render((log) => log.add({ kind: "refused", reason: "unknown-collection" }));
     expect(sent).toContain("`public.submit`");

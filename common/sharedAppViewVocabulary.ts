@@ -50,8 +50,10 @@ const READ_ONLY_PARENT =
  *  renamed, and the pane writes as the app's OWNER. */
 export const REFUSALS: Record<string, string> = {
   "unknown-collection":
-    "the page named a collection that is not declared for it — for a submission that is this app's `public.submit`, and for a move it is the `collections` of the " +
-    "page's own view. Add it to whichever of the two the button belongs to",
+    "the page named a collection that is not declared for it. A SUBMISSION goes to this app's `public.submit`. A MOVE is read from wherever that page's moves are " +
+    "declared, which is not the same place for both audiences: `public.submit[cid]`'s `selfTransitions` / `selfDelete` for a public or participant page, and " +
+    "`collections[cid]`'s `transitions` / `assigneeField` / `selfDelete` for a member's. A collection with nothing movable declared there is absent from the " +
+    "projection entirely, which is what this refusal is",
   "undeclared-field": "the page sent a field that is not in that collection's `createFields`",
   "not-a-submission":
     "the message was not a submission at all — most often a value that is not a string (the rules compare stored values without coercing, so only strings may be sent)",
@@ -64,7 +66,7 @@ export const REFUSALS: Record<string, string> = {
   "unknown-assignee": "nobody on the roster holds an assignable role at that address — writing it would produce a row NOBODY may touch afterwards",
   "not-permitted":
     "this reader may not make that move. Being handed the page is not permission: on a member's page the roles decide and yours do not carry this one, and on a " +
-    "public page the move has to be declared in `public.submit`, as a `selfTransitions` entry or a `selfDelete`",
+    "public or participant page the projection that page writes through grants nothing of that kind on its own rows",
   "not-an-intent":
     "the message reached the parent but was not an intent it could read — most often a `withdraw` carrying a `to`, or a missing `cid` / `itemId`",
   "not-in-view":
