@@ -14,7 +14,7 @@ import {
   endsTheTable,
   roomForTable,
 } from "../../../src/composables/roundTableRules";
-import { answersOurSend } from "../../../src/composables/exchangeRules";
+import { answersOurSend } from "../../../common/turnCorrelation";
 import { isRoomId } from "../../../common/roomMessage";
 
 const framing = { speaker: "#1 · claude", members: ["#1 · claude", "#2 · codex", "#3 · claude"], turn: 2, budget: 6 };

@@ -8,7 +8,8 @@
 // blocked on an approval prompt never completes a turn, so it is waited for and then
 // times out rather than being typed into.
 import { pasteAndSubmit, listSlots } from "./useTerminalConnections";
-import { waitVerdict, type ExchangeOutcome, type TurnSnapshot } from "./exchangeRules";
+import { waitVerdict, type TurnSnapshot } from "../../common/turnCorrelation";
+import { type ExchangeOutcome } from "./exchangeRules";
 import { fetchLastTurn, type HandoffSource, type HandoffTarget } from "./useHandoff";
 
 export const ANSWER_TIMEOUT_MS = 10 * 60_000;
