@@ -34,6 +34,7 @@ stateDiagram-v2
     Intake --> Planned: 通過
     Planned --> Claimed: 触る範囲と提供する契約を宣言し lease を取る
     Claimed --> Implementing
+    Claimed --> MergeQueue: ベースが古くなっただけ（再検証へ直行）
     Implementing --> SelfCheck: Done 条件の機械判定
     SelfCheck --> Implementing: 未達
     SelfCheck --> Review: 役割別に並列レビュー
@@ -46,7 +47,7 @@ stateDiagram-v2
     MergeQueue --> Implementing: main 取り込みで壊れた
     MergeQueue --> AwaitingApproval: 人間ゲート（条件は全部緑）
     AwaitingApproval --> Merged: 人間が承認（候補 SHA を指定して）
-    AwaitingApproval --> Claimed: 差し戻し（clone を取り直してから実装へ）
+    AwaitingApproval --> Claimed: 差し戻し / 承認が無効（clone を取り直す）
     MergeQueue --> Merged: 自動マージが選べる配備のときだけ
     Merged --> Learn: マージ結果を照合できた
     Learn --> [*]: 完了レジストリと決定ログへ書き戻す
@@ -93,7 +94,9 @@ stateDiagram-v2
 
 - **承認は「候補 SHA」と「検証したベース」の組に対して与える。** ベースとは、
   条件2の再検証で取り込んだ `origin/main` の SHA である。
-  **どちらかが動いたら承認は無効**になり、`MergeQueue` へ戻って取り込み直し、再検証し、もう一度聞く。
+  **どちらかが動いたら承認は無効**になる。`Claimed` を通って clone を取り直してから
+  取り込み直し、再検証し、もう一度聞く（承認待ちのタスクは clone を持っていないので、
+  `MergeQueue` へ直接は戻れない）。
   候補だけを見ていると、**別のタスクが先に main を進めた瞬間に、承認は「もう存在しないベースに対する承認」になる**。
 - **だから承認はキューの先頭で求める。** 取り込みと再検証の直後に聞き、承認が返ったら即マージする。
   先回りして承認を集めておくと、使う頃には全部 stale になっている（8並列なら main は常に動く）。
