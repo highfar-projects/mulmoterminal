@@ -50,6 +50,21 @@ describe("answersOurSend", () => {
     expect(answersOurSend("please review this", "please review this")).toBe(true);
   });
 
+  // The window is 160 code units, and its exact length is the rule: shorter, and the previous
+  // round's message correlates because the framing it shares is longer than the window; longer,
+  // and it reaches back past the excerpt into text every handoff repeats. Both neighbours of 160
+  // are pinned because a differential harness caught a 160-to-159 change that every other case
+  // here reported as identical.
+  it("correlates on exactly the last 160 characters — not 159, not 161", () => {
+    const run = "t".repeat(159);
+    const sent = "ALPHA" + run;
+
+    // Agrees on the last 159 only: the 160th character back is 'A', and this prompt has 'Z' there.
+    expect(answersOurSend("ZZZ" + run, sent)).toBe(false);
+    // Agrees on the last 160: same 'A', so this is our answer however much earlier text differs.
+    expect(answersOurSend("ZZZ" + "A" + run, sent)).toBe(true);
+  });
+
   it("still distinguishes two long messages that were both truncated", () => {
     // The 160-char window reaches back into the excerpt, past the shared "… (truncated)"
     // and "--- end ---" tail, so distinct content before the mark still separates them.
