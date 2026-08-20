@@ -338,6 +338,81 @@ describe("a member's intent, performed from the preview", () => {
       expect(batched).toEqual([`delete ${bookingsPath}/roomA-1000`, `update apps/${AID}/collections/slots/items/roomA-1000 {"state":"open"}`]);
     });
 
+    it("acts on a row whose identity is in the document NAME and nowhere else", async () => {
+      // `viewer.mine` is built from a LIST, and `idFrom: "auth.uid+field"` has none: the rules grant
+      // a submitter the document they can NAME rather than a range of them. So a page finds that row
+      // through `view.mine(cid, key)` — live-poll's whole shape — and it is in neither the page's
+      // datasets nor `own`. The ask came back `not-in-view` about a row the page had legitimately
+      // been handed, and it was ALLOWED on the live page, where the rules answer ownership.
+      //
+      // The row is read on demand and accepted only if it is the author's own by the same selector
+      // the dataset read filters with — which is the question `ownRow` asks.
+      writeCollection("votes", {
+        questionId: { type: "string", label: "Q" },
+        choice: { type: "string", label: "Choice" },
+        state: { type: "enum", label: "State", values: ["cast", "withdrawn"] },
+      });
+      writeApp({
+        aid: AID,
+        name: "Poll",
+        members: { [OWNER.email]: { "*": "owner" } },
+        collections: { votes: { submitOnly: true, statusField: "state", transitions: { initial: ["cast"] } }, questions: {} },
+        views: [
+          { id: "desk", audience: "member", path: "views/desk.html", collections: ["questions"] },
+          // The public page draws the QUESTIONS, which is all `public.read` opens — the votes
+          // themselves are the one thing it must never list, which is why the row it acts on can
+          // only have come from a lookup.
+          { id: "public", audience: "public", path: "views/desk.html", collections: ["questions"] },
+        ],
+        public: {
+          enabled: true,
+          read: ["questions"],
+          submit: {
+            votes: {
+              // live-poll's shape, exactly: anonymous, and the uid appears NOWHERE in the record —
+              // the document NAME is the only place it lives.
+              auth: "anonymous",
+              createFields: ["questionId", "choice", "state"],
+              initialStatus: "cast",
+              idFrom: "auth.uid+field",
+              idField: "questionId",
+              selfTransitions: { cast: ["withdrawn"] },
+            },
+          },
+        },
+      });
+      docs.store.set(`apps/${AID}/collections/votes/items`, new Map([[`${OWNER.uid}_q1`, { questionId: "q1", choice: "b", state: "cast" }]]));
+
+      const result = await performPreviewIntent(root, {
+        page: { id: "public", audience: "public" },
+        kind: "transition",
+        cid: "votes",
+        itemId: `${OWNER.uid}_q1`,
+        to: "withdrawn",
+      });
+
+      expect(result).toEqual({ ok: true, mailed: false });
+      expect(batched).toEqual([`update apps/${AID}/collections/votes/items/${OWNER.uid}_q1 {"state":"withdrawn"}`]);
+    });
+
+    it("still refuses a row that is NOT the author's, however it was named", async () => {
+      // The other half, and the reason the fallback is a predicate rather than a read: `NOT_IN_VIEW`
+      // stands in for the ownership check the rules would have made, because this write goes out as
+      // the app's OWNER — who may touch anything. A row belonging to somebody else stays refused.
+      docs.store.set(bookingsPath, new Map([["roomA-1000", { requesterEmail: "someone@else.example", slot: "roomA-1000", status: "booked" }]]));
+
+      const result = await performPreviewIntent(root, {
+        page: { id: "public", audience: "public" },
+        kind: "transition",
+        cid: "bookings",
+        itemId: "roomA-1000",
+        to: "cancelled",
+      });
+
+      expect(result).toEqual({ ok: false, error: "not-in-view" });
+      expect(batched).toEqual([]);
+    });
+
     it("cancels the author's OWN booking from the public page, as a participant would", async () => {
       // THE ONE THIS CHANGE EXISTS FOR. `selfTransitions` is declared inside `public.submit`, which
       // is the public page's own declaration, and `ownRow` in the rules asks for `authed()` and

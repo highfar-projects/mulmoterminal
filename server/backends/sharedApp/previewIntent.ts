@@ -200,6 +200,14 @@ export async function performPreviewIntent(root: string, asked: PreviewIntent): 
   const record = (cid: string, itemId: string): Record<string, unknown> | null =>
     (held[cid] ?? []).find((row) => row.id === itemId) ?? (preview.own[cid] ?? []).find((row) => row.id === itemId) ?? null;
 
+  // NOTHING IS READ ON DEMAND HERE, and the reason is worth stating because it looks like a gap.
+  // A row the page found through `view.mine(cid, key)` is in `own` too: that map is built by the
+  // same four selectors the rules identify an own row by, INCLUDING the one whose identity is the
+  // document name (`idFrom: "auth.uid+field"` — see `ownsRow`). It was missing that one, so
+  // live-poll's rows were absent from `viewer.mine` and an intent about one came back
+  // `not-in-view`; the fix belongs there rather than in a second read here, or the two would answer
+  // the same question differently.
+
   // Rebuilt into the message shape the package reads, rather than the package being given a second
   // entry point for a pre-parsed ask: `readIntentMessage` is what mulmoserver judges with, and a
   // shortcut past its own narrowing is a second reading of what an intent IS. The request id is

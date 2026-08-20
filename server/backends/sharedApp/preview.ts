@@ -77,6 +77,16 @@ interface RequestedCollection {
   emailField?: string | undefined;
   uidField?: string | undefined;
   ownDocId?: "auth.uid" | undefined;
+  /** The id is `uid + "_" + <this field>` (`idFrom: "auth.uid+field"`).
+   *
+   *  The FOURTH way a row says whose it is, and the one that was missing. It is not in
+   *  `ProjectedViewCollection` — a tier's read scope never needs it, because a tier lists — and it
+   *  is needed here: for that strategy the identity is in the document NAME, so a collection
+   *  declaring neither `uidField` nor `emailField` (`auth: "anonymous"` + `auth.uid+field`, which is
+   *  live-poll's whole shape) matched nothing at all. The author's own votes were absent from
+   *  `viewer.mine`, and an intent about one came back `not-in-view` about a row the page had
+   *  legitimately been handed. */
+  ownIdField?: string | undefined;
 }
 
 /** One collection's records, read with the author's own credentials.
@@ -96,14 +106,31 @@ async function readCollection(handle: SharedAppHandle, aid: string, want: Reques
   // (a booking's id IS its slot), and a page that renders a list needs it as a field.
   const rows: PreviewDataset = docs.map((doc) => ({ ...(isRecord(doc.data) ? doc.data : {}), id: doc.id }));
   if (want.scope === "all") return rows;
-  if (want.ownDocId === "auth.uid") return rows.filter((row) => row.id === handle.uid);
-  // The uid before the address, matching the reader (`ownLookup` in mulmoserver): a projection
-  // carries exactly one selector, and asking in a fixed order keeps the answer from depending on
-  // which branch happens to be written first.
-  if (want.uidField !== undefined) return rows.filter((row) => row[want.uidField ?? ""] === handle.uid);
+  return rows.filter((row) => ownsRow(want, row, handle));
+}
+
+/** IS THIS ROW THE READER'S OWN? — the question `ownRow` asks in the rules, asked here in the only
+ *  terms this host has.
+ *
+ *  The uid before the address, matching the reader (`ownLookup` in mulmoserver): a projection
+ *  carries exactly one selector, and asking in a fixed order keeps the answer from depending on
+ *  which branch happens to be written first.
+ *
+ *  Its own function because two callers need it and they must not drift: the dataset read above,
+ *  and the intent path, which has to decide about a row that no list ever returned — a composite id
+ *  (`auth.uid+field`) is granted by NAME and cannot be listed at all, so the page finds it through
+ *  `view.mine(cid, key)` and nothing else here has seen it. */
+function ownsRow(want: RequestedCollection, row: Record<string, unknown>, who: { uid: string; email: string }): boolean {
+  if (want.ownDocId === "auth.uid") return row.id === who.uid;
+  // REBUILT FROM THE STORED VALUE, never a prefix match on the id. That is the rules' own shape
+  // (`ownRow`'s `auth.uid+field` branch) and its comment says why: an unconditional prefix match
+  // would let somebody create `<victim uid>_x` in a collection with a different strategy and grow
+  // self-edit rights over it.
+  if (want.ownIdField !== undefined) return typeof row[want.ownIdField] === "string" && row.id === `${who.uid}_${String(row[want.ownIdField])}`;
+  if (want.uidField !== undefined) return row[want.uidField] === who.uid;
   const field = want.emailField;
-  if (field === undefined) return [];
-  return rows.filter((row) => row[field] === handle.email);
+  if (field === undefined) return false;
+  return row[field] === who.email;
 }
 
 /** Every page's records, each page asking only for what its own projection names.
@@ -220,17 +247,20 @@ function formInputsOf(config: PublishedConfigDoc, form: PublicForm): PreviewForm
 
 /** WHERE THE AUTHOR'S OWN ROWS ARE READ FROM, per collection the app opens for submission.
  *
- *  The same three selectors the rules identify an own row by, in the order `readCollection` applies
- *  them: the document id when it IS the uid, then the uid field, then the verified address. Read as
+ *  The same FOUR selectors the rules identify an own row by, in the order `ownsRow` applies them:
+ *  the document id when it IS the uid, the id rebuilt as `uid + "_" + <idField>`, the uid field,
+ *  then the verified address. Read as
  *  the author (this runs on their machine) and then FILTERED to their own rows, because the reader
  *  a published page has is a visitor and the preview must never show more than production. */
 const ownRequests = (config: PublishedConfigDoc): RequestedCollection[] =>
   Object.entries(config.submit ?? {}).map(([cid, spec]) => {
     const text = (key: string): string | undefined => (typeof spec[key] === "string" ? spec[key] : undefined);
+    const composite = spec.idFrom === "auth.uid+field" ? text("idField") : undefined;
     return {
       cid,
       scope: "own" as const,
       ...(spec.idFrom === "auth.uid" ? { ownDocId: "auth.uid" as const } : {}),
+      ...(composite === undefined ? {} : { ownIdField: composite }),
       ...(text("uidField") === undefined ? {} : { uidField: text("uidField") }),
       ...(text("emailField") === undefined ? {} : { emailField: text("emailField") }),
     };

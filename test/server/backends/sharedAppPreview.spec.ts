@@ -268,6 +268,43 @@ describe("shared app preview", () => {
     expect(result.ok && result.own).toEqual({ bookings: [{ id: "mine", closesAt: 5 }] });
   });
 
+  it("finds an own row whose identity is the document NAME, not a field", async () => {
+    // The FOURTH id shape, and the one that was missing: `idFrom: "auth.uid+field"` puts the uid in
+    // the document name, and an `anonymous` app has no address and no uid FIELD to find it by. That
+    // is live-poll's whole shape — so its author's votes were absent from `viewer.mine`, the page
+    // asked `view.mine()` about them and could not act on them.
+    //
+    // Rebuilt from the STORED value rather than matched as a prefix, which is the rules' own shape:
+    // an unconditional prefix match would let somebody create `<victim uid>_x` in a collection with
+    // a different strategy and grow rights over it.
+    writeApp(
+      root,
+      declaration({
+        collections: { bookings: { submitOnly: true } },
+        public: {
+          enabled: true,
+          read: ["notes"],
+          submit: { bookings: { auth: "anonymous", createFields: ["note"], idFrom: "auth.uid+field", idField: "note" } },
+        },
+      }),
+    );
+    docs.store.set(
+      `apps/${AID}/collections/bookings/items`,
+      new Map([
+        [`${OWNER.uid}_q1`, { note: "q1" }],
+        // Somebody else's, under the same strategy: the name does not rebuild from THIS reader's uid.
+        ["uid-someone_q1", { note: "q1" }],
+        // And a name that does not rebuild from its own stored value, which is what the prefix match
+        // this deliberately is not would have accepted.
+        [`${OWNER.uid}_q9`, { note: "q1" }],
+      ]),
+    );
+
+    const result = await previewSharedApp(root, stamp);
+
+    expect(result.ok && result.own).toEqual({ bookings: [{ id: `${OWNER.uid}_q1`, note: "q1" }] });
+  });
+
   it("says nothing about a collection whose rows could not be read", async () => {
     // ABSENT is "nobody looked" and an empty array is "you have submitted nothing". A page told the
     // second when the first is true stops offering an action to somebody entitled to it, which is
