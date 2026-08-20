@@ -1,4 +1,8 @@
-// The pane's side of a member's write: narrow the ask, send it, and SAY WHAT HAPPENED.
+// The pane's side of a WRITE THE PAGE ASKS FOR: narrow the ask, send it, and SAY WHAT HAPPENED.
+//
+// A member's move and a visitor's own — a booking they cancel on the public page — both arrive
+// here, because both are the same message from the same parent and the server judges them the same
+// way.
 //
 // The last of those is the one that is easy to leave out and is not optional. An intent is answered
 // on the port, into a promise the page usually does not await — so a refusal has no pixels of its
@@ -96,9 +100,14 @@ export const createIntentSender = (ports: IntentSenderPorts): PerformIntent => {
   return async (data: unknown): Promise<IntentAnswer | null> => {
     const current = ports.page();
     if (current === null) return null;
-    // Only these two parents route an intent, and the type says so rather than a comment asking for
-    // it — the log line names the tier, and a public page has none.
-    if (current.audience === "public") return null;
+    // EVERY page routes an intent, the public one included, and the refusal that used to be here is
+    // gone rather than moved. It read "a public page has no reader and no roles for a move to be
+    // judged against", which is a statement about MEMBERSHIP and never was what the rules ask: a
+    // `selfTransitions` or `selfDelete` move is granted to whoever submitted the row, on an
+    // anonymous uid, with no role at all. The server half was rewritten to judge a public ask as a
+    // participant's (`tierOf` in `previewIntent.ts`) and this line stayed — so the pane dropped the
+    // ask before the route could take it, and an author pressing their own page's "cancel" button
+    // watched nothing happen while the live page performed it.
     const asked = askedIntent(data, current);
     if (asked === null) return null;
     const { requestId, ...body } = asked;
@@ -115,7 +124,6 @@ export const createIntentSender = (ports: IntentSenderPorts): PerformIntent => {
     const noted = {
       kind: "intent" as const,
       intent: body.kind,
-      audience: current.audience,
       cid: body.cid,
       itemId: body.itemId,
       ...(body.kind === "transition" && body.to !== undefined ? { to: body.to } : {}),

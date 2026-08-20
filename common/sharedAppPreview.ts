@@ -187,7 +187,8 @@ export interface PreviewUncertainWrite {
 export type SharedAppPreviewResponse =
   { declared: false } | { declared: true; ok: false; problems: string[] } | { declared: true; ok: true; preview: SharedAppPreview };
 
-/** One member's ask, on its way from the pane's parent to the server that performs it.
+/** One ask for a WRITE the page requested, on its way from the pane's parent to the server that
+ *  performs it — a member's move, or a visitor's own on the public page.
  *
  *  The PAGE travels with it, and that is the load-bearing field rather than context. Which tier's
  *  projection judges the ask and which records it may name are both decided by the page it was

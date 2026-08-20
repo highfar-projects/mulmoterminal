@@ -27,7 +27,6 @@ import { createPreviewLog, renderPreviewLog, type PreviewLogEvent } from "../uti
 import { useUpdateStatus } from "../composables/useUpdateStatus";
 import {
   previewPageKey,
-  type PreviewAudience,
   type PreviewForm,
   type PreviewPage,
   type PreviewUncertainWrite,
@@ -137,8 +136,12 @@ function scopeLog(aid: string): void {
  *  answer this component is watching for. */
 let lastPending = "";
 
-/** The audience of the page being drawn, for the refusals whose meaning depends on it. */
-const audienceNow = (): PreviewAudience => page.value?.audience ?? "public";
+/** Can this page move a record at all? — which is what decides whether the warning above it is
+ *  about anything. A submission is confirmed and can be taken back; a transition, an assignment and
+ *  a withdrawal are none of those, on any audience. */
+const movesRecords = computed(() =>
+  Object.values(page.value?.viewer?.can ?? {}).some((can) => can.transitionAny || can.transitionOwn || can.assign || can.withdrawFrom.length > 0),
+);
 
 /** Every message the parent sends, on its way out.
  *
@@ -161,7 +164,7 @@ function noteOutbound(message: Record<string, unknown>): void {
     remember({ kind: "declined", cid: lastPending });
     return;
   }
-  remember({ kind: "refused", reason, audience: audienceNow() });
+  remember({ kind: "refused", reason });
 }
 
 /** Take the stale page off the screen, DEFERRED — which is the whole of what this host adds to that
@@ -323,11 +326,13 @@ watch(
     // to one nobody opened.
     if (page.value !== null) remember({ kind: "page", id: page.value.id, audience: page.value.audience });
     // Said once per page, and counted as a problem: everything below it is a report about a page
-    // running under the wrong parent.
-    if (page.value !== null && page.value.audience !== "public" && page.value.viewer === undefined) {
+    // that was handed less than the live one gets. EVERY audience, the public page included — it
+    // carries a `viewer` too now, because the rules let whoever submitted a row move it and take it
+    // away, so a public page missing one draws no cancel button either.
+    if (page.value !== null && page.value.viewer === undefined) {
       remember({
         kind: "host",
-        note: "this page is written for the roster but arrived with no capabilities, so it is being run under the PUBLIC parent — it will be sent no `viewer` and its member controls cannot work. The page is not at fault: either this server could not resolve them, or its answer was in a shape this pane could not read.",
+        note: "this page arrived with no capabilities, so it will be sent no `viewer` and every control it draws from `viewer.can` is missing. The page is not at fault: either this server could not resolve them, or its answer was in a shape this pane could not read.",
       });
     }
   },
@@ -772,11 +777,15 @@ watch(
           Records read as you, not as a visitor — this shows what DRAWS, not what a stranger would be allowed to see. Computing it writes nothing.
         </p>
         <p class="mt-1 text-[11px] text-amber">A submission you accept is a real record in the live app, and the rules do run on that.</p>
-        <!-- SAID ON THE MEMBER PAGES ONLY, and said sharply, because this one has neither of the
-             brakes the submission above has: a member's move raises no confirmation — the live desk
-             has none either, and inventing one here would make the preview a different program —
-             and there is nothing to undo it with, since a move creates no record to take back. -->
-        <p v-if="page && page.audience !== 'public'" class="mt-1 text-[11px] text-amber">
+        <!-- SAID WHEREVER THE PAGE CAN MOVE SOMETHING, and said sharply, because this one has
+             neither of the brakes the submission above has: a move raises no confirmation — the live
+             page has none either, and inventing one here would make the preview a different program
+             — and there is nothing to undo it with, since a move creates no record to take back.
+             It asked for a MEMBER page, which withheld it from exactly the page that had just been
+             given moves: a public page's `selfTransitions` / `selfDelete` write the same way. The
+             capabilities are asked instead of the audience, so a page that can move nothing is not
+             warned about a control it does not have. -->
+        <p v-if="movesRecords" class="mt-1 text-[11px] text-amber">
           A control on this page moves a real record the moment you press it, as you. There is no confirmation and no undo.
         </p>
         <p v-if="payload && !payload.fromLiveApp" class="mt-1 text-[11px] text-dim">This app has never been published, so nothing was carried over.</p>

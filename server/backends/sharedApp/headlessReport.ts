@@ -12,7 +12,6 @@
 // once, and whether the rules are deployed at all), which is why the closing lines are fixed text
 // rather than something a good run can omit.
 import { explainRefusal, FORM_BLOCKED, quoteForReport, READY_DEADLOCK } from "../../../common/sharedAppViewVocabulary.js";
-import type { PreviewAudience } from "../../../common/sharedAppPreview.js";
 import { LIMITS, type HeadlessPageReport, type HeadlessPress, type HeadlessRun, type HeadlessWrite } from "./headlessPreview.js";
 
 /** What this run does NOT do to a page written for the roster.
@@ -141,9 +140,9 @@ function formLine(page: HeadlessPageReport): string[] {
  *  Not folded into the branches below: a press that submits AND then asks for something invalid
  *  reports both, and the second is the half nobody can see — it is answered on the port, into a
  *  promise the page usually does not await, so losing it here loses it everywhere. */
-function refusalLine(press: HeadlessPress, audience: PreviewAudience): string[] {
+function refusalLine(press: HeadlessPress): string[] {
   if (press.refused.length === 0) return [];
-  const translate = (reason: string): string => explainRefusal(reason, audience);
+  const translate = (reason: string): string => explainRefusal(reason);
   const many = press.refused.length === 1 ? "a request" : `${press.refused.length} requests`;
   return [`    The parent also REFUSED ${many} — ${press.refused.map(translate).join("; ")}.`];
 }
@@ -154,12 +153,12 @@ function refusalLine(press: HeadlessPress, audience: PreviewAudience): string[] 
  *  Notes rather than branches, because these are independent facts and a chain of `if`s loses
  *  whichever one it does not reach first: a press that both submitted and was refused, or one that
  *  was refused AND had a form submission blocked, each lost half of itself. */
-function pressNotes(press: HeadlessPress, audience: PreviewAudience): string[] {
+function pressNotes(press: HeadlessPress): string[] {
   return [
     ...(press.blockedFormSubmission
       ? ["    The browser BLOCKED a form submission on this press — the `submit` event never fired, so no handler of the page's ran."]
       : []),
-    ...refusalLine(press, audience),
+    ...refusalLine(press),
     ...noticeLines(press.notices, "    "),
     ...(press.errors.length === 0 ? [] : [`    It also raised: ${press.errors.join(" / ")}`]),
   ];
@@ -177,9 +176,9 @@ function outcomeLines(press: HeadlessPress): string[] {
   return ["    It was DECLINED, so nothing of it reached the database."];
 }
 
-function pressLine(press: HeadlessPress, audience: PreviewAudience): string[] {
+function pressLine(press: HeadlessPress): string[] {
   const head = `Pressed ${quoted(press.label)}: `;
-  const notes = pressNotes(press, audience);
+  const notes = pressNotes(press);
   if (press.notClickable) {
     return [
       `  ${head}the control HAD NOWHERE TO BE CLICKED — \`display:none\`, zero-sized, or off the document. No cursor can reach it, so this is not a report about its handler.`,
@@ -221,9 +220,7 @@ function pageLines(page: HeadlessPageReport): string[] {
       : [`  A picture of it, as a visitor first meets it: ${page.screenshot} — open it if the words above leave anything in doubt.`]),
     ...(page.screenshotError === "" ? [] : [`  No picture was taken: ${page.screenshotError}. That is about this run, not about the page.`]),
     ...noticeLines(page.notices, "  "),
-    ...(page.presses.length === 0
-      ? ["  No button or clickable control was found on this page."]
-      : page.presses.flatMap((press) => pressLine(press, page.audience))),
+    ...(page.presses.length === 0 ? ["  No button or clickable control was found on this page."] : page.presses.flatMap((press) => pressLine(press))),
     ...capped,
     ...(page.errors.length === 0 ? [] : [`  The browser reported: ${page.errors.join(" / ")}`]),
   ];
