@@ -32,9 +32,10 @@ stateDiagram-v2
     [*] --> Intake: 供給アダプタがタスクを生む
     Intake --> Rejected: 妥当性ゲートで落ちた
     Intake --> Planned: 通過
-    Planned --> Claimed: 触る範囲と提供する契約を宣言し lease を取る
+    Planned --> Leased: 空いている clone を lease する（計画にもコードを読む必要がある）
+    Leased --> Claimed: 触る範囲と提供する契約を宣言し、パスの claim を取る
     Claimed --> Implementing
-    Claimed --> MergeQueue: ベースが古くなっただけ（再検証へ直行）
+    Leased --> MergeQueue: ベースが古くなっただけ（claim は保持のまま再検証へ）
     Implementing --> SelfCheck: Done 条件の機械判定
     SelfCheck --> Implementing: 未達
     SelfCheck --> Review: 役割別に並列レビュー
@@ -47,23 +48,25 @@ stateDiagram-v2
     MergeQueue --> Implementing: main 取り込みで壊れた
     MergeQueue --> AwaitingApproval: 人間ゲート（条件は全部緑）
     AwaitingApproval --> Merged: 人間が承認（候補 SHA を指定して）
-    AwaitingApproval --> Claimed: 差し戻し / 承認が無効（clone を取り直す）
+    AwaitingApproval --> Leased: 差し戻し / 承認が無効（clone を取り直す）
     MergeQueue --> Merged: 自動マージが選べる配備のときだけ
     Merged --> Learn: マージ結果を照合できた
     Learn --> [*]: 完了レジストリと決定ログへ書き戻す
     Rejected --> [*]
 
-    Claimed --> Orphaned: セッション消滅 / lease 期限切れ / サーバ再起動
+    Leased --> Orphaned: セッション消滅 / lease 期限切れ / サーバ再起動
+    Claimed --> Orphaned
     Implementing --> Orphaned
     Review --> Orphaned
     Verify --> Orphaned
     MergeQueue --> Orphaned
     Merged --> Orphaned
     Learn --> Orphaned
-    Orphaned --> Claimed: 照合の結果まだ途中だった（clone を取り直す）
+    Orphaned --> Leased: 照合の結果まだ途中だった（clone を取り直す）
     Orphaned --> Learn: 照合の結果すでに入っていた
     Orphaned --> Escalated: 照合できない
     Planned --> Stopped: 停止スイッチ / 予算切れ
+    Leased --> Stopped
     Claimed --> Stopped
     Implementing --> Stopped
     Review --> Stopped
@@ -84,6 +87,7 @@ stateDiagram-v2
 |---|---|---|---|---|
 | `Intake` | — | — | 供給を止める | — |
 | `Planned` | — | — | ○ | — |
+| `Leased` | ○ | — | ○ | ○ |
 | `Claimed` | ○ | ○ | ○ | ○ |
 | `Implementing` | ○ | ○ | ○ | ○ |
 | `SelfCheck` | ○ | ○ | ○ | ○ |
@@ -98,10 +102,16 @@ stateDiagram-v2
 
 読み方と、そこから出てくる規則。
 
-- **clone を持たない状態から持つ状態へ入る辺は、必ず `Claimed` を通る。** `Claimed` が
-  「空いている clone を取る」場所だからで、取れなければそこで待つ。直接 `Implementing` へは入れない。
+- **clone を持たない状態から持つ状態へ入る辺は、必ず `Leased` を通る。** `Leased` が
+  「空いている clone を取る」唯一の場所だからで、取れなければそこで待つ。
+  直接 `Implementing` へも `MergeQueue` へも入れない。
+- **`Leased` と `Claimed` を分けてあるのは、計画にもコードを読む必要があるからである。**
+  触る範囲は計画して初めて分かるので、「宣言してから作業場所を取る」順にはできない。
+  作業場所を取る → 読んで計画する → 宣言してパスを claim する、が実際の順序。
+  差し戻しや孤児からの復帰は `Leased` に入るが、そのときすでにパスの claim は持っているので、
+  `Leased --> Claimed` は取り直しではなく素通りになる。
 - **`Orphaned` の clone は「不定」で、これは正しい。** 落ちる前に持っていたかどうかは照合するまで
-  分からず、持っていても使える保証がない。だから復帰は `Claimed` を通って取り直す。
+  分からず、持っていても使える保証がない。だから復帰は `Leased` を通って取り直す。
 - **`Orphaned` は claim を保持する。** 解決するまで手放さない。手放すと、その孤児が
   実はまだ途中だった場合に、別のタスクが同じパスに入ってくる。
 - **`Orphaned` に停止の辺は無い。** 先に解決させる（`Claimed` / `Learn` / `Escalated`）。
