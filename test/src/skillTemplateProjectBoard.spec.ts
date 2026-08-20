@@ -38,6 +38,46 @@ function pageOf(heading: string): string {
   return html ?? "";
 }
 
+/** Run one page's script, remembering what it attached to the DOCUMENT.
+ *
+ *  BOTH PAGES DELEGATE: a single `click` listener on `document` reads `data-act`, which is what
+ *  lets them rebuild their rows freely. jsdom hands every test in this file the same document, so
+ *  a listener from a page loaded three tests ago is still on it — and it still matches, because
+ *  the labels are the template's own. It would then answer a click through the parent IT captured,
+ *  which is a different recorder from the one the test is reading.
+ *
+ *  Nothing has gone wrong yet, and that is the point: it would go wrong as a cross-test effect
+ *  nobody could place, in the file whose whole subject is which control does what.
+ *
+ *  Recorded rather than reconstructed — the page's handler is anonymous and this is the only
+ *  moment anything can hold a reference to it. */
+const attached: { type: string; listener: EventListenerOrEventListenerObject }[] = [];
+
+/** Every page loaded in this test, off the document again. */
+function detachPages(): void {
+  for (const { type, listener } of attached.splice(0)) {
+    document.removeEventListener(type, listener);
+  }
+}
+
+function runPage(script: string): void {
+  // The page already on this document is GONE — its markup was replaced a line ago in the caller —
+  // so its handler goes with it rather than at the end of the test. That also makes the two loads
+  // inside one test behave the way a browser would.
+  detachPages();
+  const add = document.addEventListener.bind(document);
+  document.addEventListener = (type: string, listener: EventListenerOrEventListenerObject, options?: unknown) => {
+    attached.push({ type, listener });
+    add(type, listener, options as boolean);
+  };
+  try {
+    // eslint-disable-next-line sonarjs/code-eval -- the source is a file in this repository, read at test time
+    new Function(script)();
+  } finally {
+    document.addEventListener = add;
+  }
+}
+
 interface Capability {
   cid: string;
   transitionAny: boolean;
@@ -101,8 +141,7 @@ function loadDesk(): {
   // Run rather than insert: jsdom does not execute <script> elements, and markup assigned through
   // `innerHTML` never runs them anywhere — a spec that only rendered the page would assert about
   // buttons nothing had wired.
-  // eslint-disable-next-line sonarjs/code-eval -- the source is a file in this repository, read at test time
-  new Function(script ?? "")();
+  runPage(script ?? "");
 
   const all = (): HTMLButtonElement[] => [...document.querySelectorAll("button")] as HTMLButtonElement[];
   return {
@@ -162,8 +201,7 @@ function loadBoard(): {
     ready: () => {},
   };
 
-  // eslint-disable-next-line sonarjs/code-eval -- the source is a file in this repository, read at test time
-  new Function(script ?? "")();
+  runPage(script ?? "");
 
   const all = (): HTMLButtonElement[] => [...document.querySelectorAll("button")] as HTMLButtonElement[];
   return {
@@ -188,6 +226,7 @@ const OWNER_CAN = { tasks: may("tasks", { transitionAny: false }), assignments: 
 describe("the project-board owner's desk", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
+    detachPages();
   });
 
   it("adds a task through the owner-only form", async () => {
@@ -288,6 +327,7 @@ describe("the project-board owner's desk", () => {
 describe("the project-board public board", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
+    detachPages();
   });
 
   it("offers the work when NOBODY LOOKED, because that is not 'you have not registered'", async () => {
@@ -333,6 +373,24 @@ describe("the project-board public board", () => {
     board.press("これをやります");
     await settle();
     expect(board.sent).toEqual([{ kind: "submit", cid: "assignments", values: { taskId: "fix-login" } }]);
+  });
+
+  it("does not let a page that has been replaced answer a click", async () => {
+    // The harness's own guard, and it is about the SUBJECT of this file: every case here asserts
+    // which control did what, and a leaked listener answers through the parent it captured. Both
+    // pages delegate one `click` handler on the document, jsdom shares that document across a
+    // file, and the labels are the template's own — so a page loaded earlier matches the same
+    // press. Nothing would throw; the count would simply be one somewhere nobody was looking.
+    const gone = loadBoard();
+    gone.tell({ tasks: TASKS, assignments: [], names: [] });
+    const shown = loadBoard();
+    shown.tell({ tasks: TASKS, assignments: [], names: [] });
+
+    shown.press("これをやります");
+    await settle();
+
+    expect(shown.sent).toHaveLength(1);
+    expect(gone.sent).toEqual([]);
   });
 
   it("shows the owner's instructions to the person who took the work", () => {
