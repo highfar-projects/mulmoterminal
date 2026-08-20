@@ -114,7 +114,7 @@ todo-board の方が軽いです。
 コレクションペイン）。一方ルールの `createWith` は、writer の分岐を公開の分岐と**独立に**
 持っています:
 
-```
+```text
 (isWriter(r) && !flagOn(c, "submitOnly"))     ← オーナー。窓を見ない
   || publicCreate(...)                        ← 誰でも。この中に inWindow がある
 ```
@@ -202,8 +202,8 @@ uid も**書きません**。uid は id として既に在るので、フィー�
 
 | 操作 | 誰が | どう宣言されているか |
 |---|---|---|
-| 名前を登録する | サインインした誰でも | `public.submit.names`（id が uid なので 1 人 1 行） |
-| 作業を取る | 登録の有無に関わらず送れる | `public.submit.assignments`（id 衝突で先着 1 人） |
+| 名前を登録する | **メールを確認済み**のサインイン（`auth: "verifiedEmail"`） | `public.submit.names`（id が uid なので 1 人 1 行） |
+| 作業を取る | 同上。**ルールは登録の有無を見ません** — 板が先に登録欄を出すだけ | `public.submit.assignments`（id 衝突で先着 1 人） |
 | 完了にする / 戻す | 取った本人 | `selfTransitions: { doing: ["done"], done: ["doing"] }` |
 | 担当を降りる | 取った本人・`doing` のときだけ | `selfDelete: ["doing"]` |
 | 他人の担当を外す | owner / editor | `collections.assignments.writerDelete` |
@@ -319,7 +319,9 @@ uid も**書きません**。uid は id として既に在るので、フィー�
 
     const holderName = (uid) => {
       const row = (latest.data.names || []).find((entry) => entry.id === uid);
-      return row && row.name ? String(row.name) : "登録していない人";
+      // 「登録していない人」と断定しないこと。名簿を `public.read` から外した板では
+      // この分岐に全員が落ちるので、全員を未登録に見せることになります。
+      return row && row.name ? String(row.name) : "担当者";
     };
 
     const actions = (task, held, isMine) => {
@@ -358,7 +360,13 @@ uid も**書きません**。uid は id として既に在るので、フィー�
           const claim = held.get(task.id) || null;
           const isMine = mine.has(task.id);
           const row = el("div", null, "task");
-          row.append(el("div", String(task.title || task.id), "title"));
+          const title = el("div", null, "title");
+          title.append(el("b", String(task.title || task.id)));
+          // 期限と内容を並べ替えにしか使わない，では足りません。オーナーが入れた指示が
+          // 参加者に見えない板は、取った人が何をすればいいか分からない板です。
+          const bits = [task.detail, task.due ? "期限 " + task.due : ""].filter((bit) => bit);
+          if (bits.length > 0) title.append(el("span", bits.join(" ・ "), "note"));
+          row.append(title);
           row.append(el("span", claim ? (isMine ? "あなた" : holderName(claim.uid)) + (claim.status === "done" ? " が完了" : " が作業中") : "空き",
             isMine ? "who mine" : "who"));
           row.append(actions(task, claim, isMine));
@@ -474,8 +482,39 @@ uid も**書きません**。uid は id として既に在るので、フィー�
       tell("できませんでした（" + ((res && res.error) || "unknown") + "）", true);
     };
 
-    /** 入力欄は一度だけ組み立てる。onState のたびに作り直すと、他の人の操作が届いた瞬間に
+    /** 押せるものは projection が言うことだけから引く。 */
+    const capOf = (cid) => (latest.viewer.can && latest.viewer.can[cid]) || {};
+    const holderName = (uid) => {
+      const row = (latest.data.names || []).find((entry) => entry.id === uid);
+      return row && row.name ? String(row.name) : "担当者";
+    };
+
+    /** 足せる人にだけ、入力欄を出す。
+     *
+     *  `/m/` は名簿に載っている人を全員通します — viewer も、別のコレクションだけ担当する人も。
+     *  全員にフォームを描くと、押した人の大半がルールに拒否されます（窓は閉じていて、writer の
+     *  分岐は役割が要る）。
+     *
+     *  **「作れるか」を言う capability はありません。** `viewer.can` が答えるのは transition /
+     *  assign / withdraw だけです。このコレクションで owner / editor だけが持つ信号は
+     *  `withdrawAny` なので、それを writer かどうかの代わりに読みます — `writerDelete` を
+     *  宣言していないアプリにはこの信号自体が無いので、その場合は宣言するか、フォームを全員に
+     *  出して拒否に語らせるかのどちらかです。
+     *
+     *  一度組み立てたら作り直さないこと。onState のたびに作り直すと、他の人の操作が届いた瞬間に
      *  打ちかけの文字が消えます。 */
+    let addBuilt = false;
+    const renderAdd = () => {
+      if (capOf("tasks").withdrawAny !== true) {
+        add.replaceChildren(el("p", "作業を足せるのは owner / editor だけです。", "note"));
+        addBuilt = false;
+        return;
+      }
+      if (addBuilt) return;
+      buildAdd();
+      addBuilt = true;
+    };
+
     const buildAdd = () => {
       const title = el("input");
       title.type = "text";
@@ -492,13 +531,6 @@ uid も**書きません**。uid は id として既に在るので、フィー�
       // <form> は使えません。sandbox に allow-forms が無く、送信は submit イベントが出る前に
       // 止められます（onsubmit の preventDefault すら走りません）。
       add.replaceChildren(l1, l2, l3, button("この作業を足す", "add"));
-    };
-
-    /** 押せるものは projection が言うことだけから引く。 */
-    const capOf = (cid) => (latest.viewer.can && latest.viewer.can[cid]) || {};
-    const holderName = (uid) => {
-      const row = (latest.data.names || []).find((entry) => entry.id === uid);
-      return row && row.name ? String(row.name) : "名前を登録していない人";
     };
 
     const taskRow = (task, claim) => {
@@ -535,6 +567,7 @@ uid も**書きません**。uid は id として既に在るので、フィー�
 
     const render = () => {
       if (latest === null) return;
+      renderAdd();
       const tasks = latest.data.tasks || [];
       const held = new Map((latest.data.assignments || []).map((row) => [row.id, row]));
       list.replaceChildren(...(tasks.length === 0
@@ -583,11 +616,22 @@ uid も**書きません**。uid は id として既に在るので、フィー�
       }
     });
 
-    buildAdd();
+    // `buildAdd()` はここでは呼びません。誰に出すかは capability が決め、それが届くのは
+    // `onState` です。
     view.ready();
   })();
 </script>
 ```
+
+**入力欄も操作も、`viewer.can` が言うぶんだけ描くこと。** `/m/` は名簿に載っている人を全員
+通すので、viewer にも別のコレクション担当にも同じページが渡ります。全員にフォームを出すと、
+その人たちには**必ず失敗するボタン**を渡すことになります（窓は閉じていて、writer の分岐は
+役割を要求する）。
+
+ただし**「作れるか」を言う capability はありません** — `viewer.can` が答えるのは transition /
+assign / withdraw の 3 つだけです。上のページは `tasks` の `withdrawAny` を writer かどうかの
+代わりに読んでいます。`writerDelete` を宣言していないアプリには writer の信号が無いので、
+そのときは宣言するか、フォームを全員に出して拒否に語らせるかのどちらかを選んでください。
 
 **`withdrawAny` が false のときは、ボタンを描かないこと。** 出しても押した全員がルールに
 拒否されます。false になるのは、`writerDelete` を宣言していないか、この読み手が owner /
