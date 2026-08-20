@@ -731,6 +731,17 @@ entry per page, each naming **who it is for**:
   the values in a dialog of its own and writes only when the visitor accepts — so between the
   click and the answer, nothing has been sent and the promise is simply waiting for a person. A
   page that says 送信中… there is describing a step that has not happened, and reads as stuck.
+- **Paint the page's own background, or the thing it is embedded in paints it for you.** A view is a
+  document inside somebody else's frame: the public site is light, MulmoTerminal's pane is nearly
+  black, and a page that sets `color` and no background is transparent — so the same HTML read
+  black-on-white in one and black-on-black in the other, unreadable, with nothing wrong in it.
+  The runtime now lays white paper under every view (`html { color-scheme: light; background:
+  #ffffff; color: #1c1c20 }`, `@receptron/sharedapp` 0.21.0), which is a FLOOR and not a style —
+  any plain rule of yours beats it. Two things follow, and every template shows both: **say it on
+  `html`**, because a background on the root is what stops the body's from reaching the canvas (a
+  page that paints only `body` gets its colour on the body box and the runtime's white around it);
+  and if the page is to be dark, **say both halves** — a `background` with no `color` leaves dark
+  text on it.
 - **`alert`, `confirm` and `prompt` DO NOTHING.** (`check` and `publish` warn when a page looks
   like it calls one, and go through anyway — the check reads the page without parsing it, so it
   is a hint, not a verdict. A page it stays quiet about can still be wrong.) Every view — public, staff, participant — is

@@ -232,6 +232,9 @@ opensAt = (クラスの開始日の 3 日前の 08:00 現地時間).getTime()
 読めるのは `classes` だけ。`memberEmail` と `status` は親が入れるので送りません。
 
 ```html
+<style>
+  html { background: #ffffff; color: #1c1c20; color-scheme: light; }
+</style>
 <label>お名前 <input id="who" maxlength="40" /></label>
 <p id="say" role="status"></p>
 <div id="list"></div>
@@ -293,6 +296,9 @@ opensAt = (クラスの開始日の 3 日前の 08:00 現地時間).getTime()
 `audience: "participant"`、入口は `/p/{slug}`。順位はここでしか出せません。
 
 ```html
+<style>
+  html { background: #ffffff; color: #1c1c20; color-scheme: light; }
+</style>
 <div id="mine"></div>
 <p id="say" role="status"></p>
 <script>
@@ -385,6 +391,9 @@ publish されます。オーナーの Mac が閉じていても、受付がス�
 2 枚が違う数え方をすれば、受付とお客さんが違う番号を見ることになります。
 
 ```html
+<style>
+  html { background: #ffffff; color: #1c1c20; color-scheme: light; }
+</style>
 <div id="classes"></div>
 <p id="say" role="status"></p>
 <script>

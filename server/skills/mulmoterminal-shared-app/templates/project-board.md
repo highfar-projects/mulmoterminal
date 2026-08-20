@@ -228,6 +228,7 @@ uid も**書きません**。uid は id として既に在るので、フィー�
 
 ```html
 <style>
+  html { background: #ffffff; color: #1c1c20; color-scheme: light; }
   body { margin: 0; padding: 20px 16px 48px; font: 15px/1.6 system-ui, "Hiragino Sans", sans-serif; }
   section { border: 1px solid #d7d7dc; border-radius: 10px; padding: 14px 16px; margin: 0 0 18px; }
   h2 { font-size: 13px; color: #6b6b74; margin: 0 0 10px; }
@@ -430,6 +431,7 @@ uid も**書きません**。uid は id として既に在るので、フィー�
 
 ```html
 <style>
+  html { background: #ffffff; color: #1c1c20; color-scheme: light; }
   body { margin: 0; padding: 20px 16px 48px; font: 15px/1.6 system-ui, "Hiragino Sans", sans-serif; }
   section { border: 1px solid #d7d7dc; border-radius: 10px; padding: 14px 16px; margin: 0 0 18px; }
   h2 { font-size: 13px; color: #6b6b74; margin: 0 0 10px; }
