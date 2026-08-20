@@ -1,0 +1,251 @@
+# Campaign Mode — grid の1機能としての設計
+
+[`autonomous-delivery-pipeline.md`](autonomous-delivery-pipeline.md) が「何を作るか」の概念設計。
+このメモは **それを MulmoTerminal の grid にどう載せるか**の具体設計。
+
+追跡 issue: receptron/mulmoterminal#1815。隣接する構想は #991（判断キュー）と #1026（1件のループ）。
+
+前提: **UI は大きく変えない。理想は全自動で動くこと。**
+
+---
+
+## 1. 結論から — grid はすでに9割できている
+
+Campaign Mode は新しい画面ではない。**grid に供給されるセッションの出どころが、人間からオーケストレータに変わるだけ**である。
+
+| 要るもの | 既存 | 場所 |
+|---|---|---|
+| N セッションを1画面で監督する | **cockpit roster**（全ページの全セルを一覧、status + PR フェーズ + prompt/reply 行） | `docs/grid-view-modes.md`、`CockpitHeader.vue` |
+| サーバが起こしたセッションを勝手にセルにする | **unplaced sweep**。サーバが「誰のブラウザも頼んでいない」印を付け、grid が拾って adopt する | `GridView.vue:572-609`、`/api/sessions/unplaced` |
+| 作業場所の排他 | **1作業ツリー = 1セッション**の claim（#1207 / #1208） | `server/session/worktree-session-limit.ts` |
+| ターン完了の判定 | **因果相関**（送った文字列が相手の次の prompt に現れたターンだけを答えとする）。実機で枯れている | `src/composables/exchangeRules.ts` / `useCrossTalk.ts` |
+| 次の1ステップを打ち込む | round table の submit と draft injection | `useRoundTable.ts` / `server/session/draft-injection.ts` |
+| PR の状態 | フェーズ + CI 状態をセルごとに表示済み | `server/git/prPhase.ts` / `src/components/rosterPhase.ts` |
+| エージェントが今何をしているか | planning / implementing の分類 | `server/session/workPhase.ts` |
+| 定期的に何かを起こす仕掛け | scheduler の tick | `server/backends/scheduler.ts` |
+| 会話をタブより長生きさせる | rooms（ディスク上の会話ログ） | `server/rooms/rooms.ts` |
+| 進捗の外形的な記録 | issue に1つのコメントを編集し続ける | `server/git/work-comment.ts` |
+
+セル上限は **81**（`gridTabs.ts:76`、9ページ×9）。8並列は余裕。
+
+---
+
+## 2. 設計の背骨 — 4つの決定
+
+### D1. オーケストレータはサーバ側に置く
+
+round table は**意図的にブラウザ側**にある。`useRoundTable.ts` の冒頭にこう書いてある。
+
+> It runs in the browser, like the exchange it generalises: close the tab and the table stops.
+> A conversation that continues where nobody is watching is a different feature with a different safety argument.
+
+**Campaign Mode はまさにその「別の機能」**である。だから、この一文を無視して round table を延長するのではなく、
+**別の安全論拠を立てたうえで**サーバ側に runner を置く（D4）。置き場所は scheduler と同じ層。
+
+### D2. キャンペーンのセッションを `hidden` にしない
+
+`hidden` は背景ワーカーの印で、**セルを取らない**（`GridView.vue:591`「hidden workers and scheduled tasks never take a cell」）。
+見えないワーカーが8本走っている状態は監督不能で、この機能の価値を捨てる。
+**通常のセッションとして spawn し、unplaced sweep に拾わせる。** これで UI 変更ゼロのまま grid に現れる。
+
+### D3. 1 clone = 1 セッション = 1 タスク
+
+worktree の規則をそのまま clone に一般化する。タスクが終わったらセッションを**閉じる**。
+次のタスクは新しいセッションで始める。理由は文脈衛生で、前のタスクの誤解・思い込みを持ち越さないため
+（同じところを直し続ける現象 A の一因でもある）。溜まったセッションは既存の reap に任せる。
+
+### D4. エージェントはキャンペーンを開始できない
+
+round table が守っている不変条件をそのまま守る。
+
+> They call nothing, see no other cell, and cannot start or join anything — the runner reads their
+> turns and types the next one in. That is what makes "an agent starts a conversation on its own"
+> impossible rather than merely discouraged.
+
+キャンペーンの開始・停止は**人間だけ**。エージェントに与える MCP ツールは**報告系のみ**
+（宣言する / 主張する / 結果を返す）で、spawn も merge も持たせない。
+タブを閉じても走るぶんの代償として、次を義務にする。
+
+- **予算**（タスク数・時間・トークン）を宣言しないと start できない
+- **監査ログ**（どのセッションがどの clone で何をしたか）
+- **全体停止スイッチ**
+- **人間ゲートに当たったときだけ既存の通知/push で鳴らす**（見ていなくてよい、が要件なので）
+
+---
+
+## 3. UI の差分 — これだけ
+
+| | 内容 |
+|---|---|
+| **変更なし** | セルへの adoption、roster の status / PR フェーズ / prompt・reply 行、dir の色とアイコン、attention の点滅、タブページ、単一ビュー、launcher |
+| 追加 1 | roster 行に**キャンペーン・フェーズのピル**。既存の PR フェーズピルと同じ形・同じ隣（`rosterPhase.ts` の `PhaseDisplay` にもう1系統） |
+| 追加 2 | `CockpitRowMenu.vue` に「このタスクを止める」を**1項目**追加 |
+| 追加 3 | Settings に Campaign セクション（既存パターン: セクション + `SkillLaunchButton.vue`）。開始・停止・並列数・プロファイル |
+
+**新規コンポーネントは 0、新規ビューも 0。** 追加1は roster 側だけに入れる。
+`docs/grid-view-modes.md` が言うとおり roster 行は `TerminalCell` ではないので、
+セル側にも同じピルを足すと**2箇所で同じ規則が腐る**。監督は cockpit でする、と決めて片側に寄せる。
+
+開始 UI を Settings に置くのは、**新しい入口を作らずに済む**から。
+`mulmoterminal-campaign` スキルを1本ぶら下げれば、設定の読み書きも自然言語で済む（既存スキル群と同じ形）。
+
+### キャンペーン全体の進捗はどこに出るか
+
+roster は**1タスク1行**なので、「1000件のうち今どこか」の居場所が無い。新しいパネルは作らず、
+**`AppToolbar.vue` の既存タリーに寄せる**。あそこには grid 全体の blocked / done / working が
+`font-mono text-[12px]` の点として既に出ており（`gridStatusSummary()`、#1307 の色の経緯つき）、
+`RateLimitGauge` も隣にいる。ここに `12/48` の形で1つ足すのが、CLAUDE.md の
+「compact status 表記は文字のまま」という方針とも合う。
+
+隣に `RateLimitGauge` がいるのは偶然ではなく都合が良い。並列数は設定値ではなく**残枠から**決める
+（8章）ので、「今8本走っている」と「残枠がこれだけ」が同じ場所で読める。
+
+タスク単位より粗い記録（何を決めたか、何を諦めたか）は `rooms` に流す。画面ではなくログで追う。
+
+---
+
+## 4. サーバ側の構造
+
+新規: `server/campaign/`
+
+| ファイル | 役割 | 純粋か |
+|---|---|---|
+| `campaign-state.ts` | タスクの状態機械。遷移だけ | **純関数**（テスト対象の本体） |
+| `campaign-store.ts` | 永続化。`mulmoterminalHome()/campaigns/<id>.jsonl` | I/O |
+| `campaign-runner.ts` | tick。次に何を誰に打つかを決めて実行 | I/O |
+| `clone-pool.ts` | clone の割当・lease・main 同期（`~/mulmoterminal-campaign/<repo>/w1..w8`） | I/O |
+| `claim-registry.ts` | 触るパスと提供/依存する契約の台帳、排他 | 判定は純関数 |
+| `oracle.ts` | 決着条件の宣言と実行（差分 / 仕様 / 参照 / 性質） | 判定は純関数 |
+| `step-prompt.ts` | 各フェーズのプロンプト生成 | **純関数** |
+| `turn-watch.ts` | ターン完了の観測 | I/O（規則は common） |
+
+**`common/` へ移すもの**: 現在 `src/composables/exchangeRules.ts` にある `waitVerdict` / 相関判定の純関数部分。
+サーバ側の runner とブラウザ側の round table が**同じ判断をする**ので、CLAUDE.md の `common/` 規則にそのまま当てはまる。
+移動はふるまい保存の変更なので、`/refactor-safely` の差分テストを付ける（PR0）。
+
+> `RoundTableDeps` / `CrossTalkDeps` の統合は暫定という経緯があるため確認が要る箇所だったが、
+> **2026-08-19 に「触ってよい」と合意済み**（9章 決定3）。ただし暫定であることは変わらないので、
+> PR0 は「純関数を `common/` へ移す」だけに留め、deps の形そのものの整理は別 PR にする。
+
+**再利用するもの**: `issue-work.ts`（タスク → 作業場所 → 種プロンプト付きセッション、の骨格）、
+`worktree-session-limit`（claim）、`prPhase`、`work-comment`、`activity-*` と `completion-hooks`、
+`reap-idle-sessions`、`rate-limit-*`、`scheduler` の tick、`rooms`（キャンペーンの会話ログ）。
+
+---
+
+## 5. 1タスクの流れ（具体）
+
+```mermaid
+sequenceDiagram
+    participant O as campaign-runner (server)
+    participant C as clone-pool
+    participant S as session (grid cell)
+    participant G as forge (gh/glab)
+    O->>C: 空いている clone を lease、origin/main を取り込む
+    O->>S: spawn（initialPrompt = Plan ステップ）
+    S-->>O: ターン完了（turn-watch）＋ 宣言（触るパス / オラクル）
+    O->>O: claim-registry で排他。重なれば直列化して待つ
+    O->>S: Implement ステップを注入
+    S-->>O: ターン完了
+    O->>S: SelfCheck（Done 条件の機械判定）
+    O->>S: Review（役割別に別セッション）
+    O->>S: Verify（差分と決着条件だけを渡した別セッション）
+    O->>G: PR、CI
+    O->>O: マージキュー。main 取り込みで再検証
+    O->>S: close。clone を返す
+    O->>O: 完了レジストリと決定ログへ書き戻す
+```
+
+### エージェントの出力をどう構造化して受け取るか
+
+ここが実装上の分かれ目。3案:
+
+| 案 | 中身 | 評価 |
+|---|---|---|
+| (a) **MCP の報告ツール** | `campaign.declare` / `campaign.report` を GUI MCP に足す | **推奨**。型と検証が付き、既存の mcp-config の仕組みに乗る |
+| (b) マーカー行 | round table の `ROUND-TABLE-DONE` 方式 | 実績はあるが、構造化データには弱い |
+| (c) ファイル | タスクディレクトリに JSON を書かせる | 監査は楽。読み取り遅延と競合の扱いが増える |
+
+(a) を採るとき、ツールは**報告のみ**にする（D4）。spawn / merge / 他タスクの参照は持たせない。
+サーバ id とツール群の設計は `common/toolGroups.ts` の既存規則に従う（新しい単一ビュー系サーバなら
+`LEGACY_GUI_SERVER_ID` の扱いも含めて確認する）。
+
+---
+
+## 6. どこまで全自動にするか（Gate の既定）
+
+| フェーズ | `refactor` | `feature` / `new-app` |
+|---|---|---|
+| Intake（妥当性） | 自動 | 自動 |
+| Spec | — | **人間** |
+| 契約確定 | — | **人間** |
+| Plan / Implement / SelfCheck | 自動 | 自動 |
+| Review / Verify | 自動 | 自動 |
+| Merge | **CI green で自動** | **人間**（当面） |
+
+`refactor` の CI green 自動マージは、`~/ss/llm/CLAUDE.md` の dep 更新ワークフローで既に許可されている運用と同じ形。
+`feature` は Spec と契約で人間が2回入るので、そこで方向は正せる。
+
+---
+
+## 7. PR 分割案
+
+| PR | 中身 | これで何が消えるか |
+|---|---|---|
+| PR0 | 相関ルールを `common/` へ（差分テスト付き） | — |
+| PR1 | `campaign-state.ts` + store。UI なし、テストのみ | — |
+| PR2 | runner: 1 clone・1タスク・1ステップの walking skeleton | 設計の嘘がここで出る |
+| PR3 | turn-watch でステップ連結（1タスクが最後まで自走する） | **現象 D**（勝手に止まる） |
+| PR4 | MCP 報告ツール + claim-registry | **現象 A**（同じところを直す） |
+| PR5 | レビュー収束（役割分離・blocking/follow-up・再掲検出・上限） | **現象 B**（20ループ） |
+| PR6 | オラクル実行 + 独立検証 | **現象 C**（LGTM 後に出る） |
+| PR7 | clone プール 8並列 + マージキュー + レート制限配分 | 規模 |
+| PR8 | roster ピル / 行メニュー / Settings セクション | **UI 差分はここだけ** |
+| PR9 | `refactor` プロファイル（ratchet からの供給） | 放っておくと進む状態 |
+| PR10 | `feature` プロファイル（Spec ゲート・契約先行・受け入れテスト） | 汎用性の検証 |
+
+PR3 まで到達すれば「1タスクが人手なしで PR まで行く」。そこが最初の実用ライン。
+
+---
+
+## 8. 先に潰しておく危険
+
+- **タブを閉じても走る = 事故が見えない。** 予算・監査ログ・通知・停止スイッチを PR2 の時点で入れる（後付けにしない）。
+- **キャンペーン状態を localStorage に置かない。** grid のセル配置はブラウザごとの localStorage
+  （`GridView.vue:92`）。キャンペーンの真実はサーバのファイルに置き、grid は表示だけ。
+- **セッションが溜まる。** タスク完了で close、あとは reap に任せる。81 セル上限に触れさせない。
+- **レート制限。** 並列数は設定値ではなく**残枠から**決める（`rate-limit-store.ts`）。
+- **clone の main 同期。** merge の直後に他の clone へ取り込む。取り込みで壊れたらタスクを Implementing に戻す。
+- **`hidden` にしたくなる誘惑。** 見えないほうが静かだが、それは監督を捨てるということ（D2）。
+- **MulmoClaude との API 整合。** キャンペーンの route を足すときは `../mulmoclaude` に対応物があるか先に見る
+  （CLAUDE.md の規則。#907 の再演を避ける）。
+
+---
+
+## 9. 決定事項と、残っている未決
+
+### 決定済み（2026-08-19）
+
+**決定1. 最初のプロファイルは `refactor`。**
+lint warning という燃料が ratchet から自動で供給されるので、人間が題材を用意しなくても回り続ける。
+「全自動で動く」を検証したいのだから、供給まで自動なほうが題材として正しい。
+`feature` プロファイル（PR10）はその次で、汎用性の検証という位置づけは変えない。
+
+**決定2. clone は `~/mulmoterminal-campaign/<repo>/w1..w8`。**
+専用ディレクトリを掘り、既存の作業 clone の隣には置かない。`cwdPresets` には出さない
+（人間が普段開く場所ではなく、runner が lease して返す使い捨ての作業場所）。
+これは D3（1 clone = 1 セッション = 1 タスク、終わったら閉じる）の置き場所側の裏付けでもある。
+
+**決定3. `RoundTableDeps` / `CrossTalkDeps` に触ってよい。**
+PR0（相関ルールを `common/` へ）の前提が満たされた。ただし上記のとおり PR0 の範囲は純関数の移動に限る。
+
+### まだ決めていない（PR4 以降まで遅らせられる）
+
+- **開始の入口。** Settings セクション + skill で十分か、header chip も要るか。
+  → PR8（UI 差分）まで不要。
+- **報告は MCP ツールでよいか。** よければサーバ id とツール群の置き場所（`common/toolGroups.ts`）を先に決める。
+  → PR4 まで不要。それまでは runner 側の観測（turn-watch）だけで進む。
+- **キャンペーン状態の保存先。** `mulmoterminalHome()/campaigns/` でよいか。
+  → PR1 で要る。既定のまま進め、違うなら PR1 のレビューで直す。
+- **通知の kind。** 人間ゲートに当たったときに何で鳴らすか（既存 `common/notifyKinds.ts`）。
+  → PR2 で要る（危険の項の「事故が見えない」対策の一部）。
