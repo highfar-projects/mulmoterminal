@@ -110,6 +110,51 @@ describe("the shared-app templates", () => {
     }
   });
 
+  it("gives every page a canvas of its own, on the root", () => {
+    // A view is a document inside somebody else's frame, and the frames differ: the public site is
+    // light, MulmoTerminal's pane is nearly black. A page that sets `color` and no background is
+    // transparent, so the SAME HTML was black-on-white in one and black-on-black in the other —
+    // unreadable, with nothing wrong in it. Every template was that page.
+    //
+    // The runtime lays white paper under all of them now (`publicViewSrcdoc`), which is why this
+    // asserts the TEMPLATES rather than trusting it: a template is copied verbatim, so it is the
+    // thing that teaches an author to state their own ground instead of inheriting one. It is also
+    // what lets a page choose to be dark.
+    //
+    // ON THE ROOT, not on `body`: a background on the root element is what stops the first body's
+    // from propagating to the canvas, so a page painting only `body` gets its colour on the body
+    // box and the runtime's white around it.
+    for (const file of readdirSync(TEMPLATES).filter((name) => name.endsWith(".md"))) {
+      for (const [, block] of readFileSync(path.join(TEMPLATES, file), "utf8").matchAll(/^```html\n([\s\S]*?)\n```/gm)) {
+        const sheet = /<style>([\s\S]*?)<\/style>/.exec(block ?? "")?.[1] ?? "";
+        // Line by line rather than by one regex over the sheet: the rule is written on its own
+        // line in every template, and a pattern spanning `{ … }` across newlines is the kind that
+        // backtracks.
+        const rule = sheet.split("\n").find((line) => line.trim().startsWith("html {")) ?? "";
+        // Split into declarations rather than searched as text: `border-color:` ENDS with the
+        // string `color:`, and `background-color:` ends with it too — so a page declaring
+        // `html { background: #111; border-color: #333 }` would have passed the foreground half
+        // below while rendering dark on dark, which is the exact failure both halves are here to
+        // stop.
+        const declared = rule
+          .replace(/^[^{]*\{/, "")
+          .split(";")
+          .map((part) => part.trim().split(":")[0]?.trim() ?? "");
+        const declares = (...properties: string[]): boolean => properties.some((property) => declared.includes(property));
+        // Either spelling of the canvas, because both are the same decision.
+        expect(`${file}: paints its root = ${declares("background", "background-color")}`).toBe(`${file}: paints its root = true`);
+        // And the other half of it, since a canvas with no foreground is only half a decision.
+        expect(`${file}: states its foreground = ${declares("color")}`).toBe(`${file}: states its foreground = true`);
+        // The third, which is the one people leave out: `color-scheme` is what the UA reads for
+        // form controls, scrollbars and its own defaults, so without it a reader whose OS is dark
+        // gets dark widgets on this light paper. DECLARED, not `light` — a template that chooses
+        // dark paper says `dark` here, and a test demanding the value would be the thing standing
+        // in its way.
+        expect(`${file}: states its scheme = ${declares("color-scheme")}`).toBe(`${file}: states its scheme = true`);
+      }
+    }
+  });
+
   it("ships an HTML block for every page its app.json declares", () => {
     // A declared `path` is READ at deploy: `planAppViewTiers` opens each one and refuses the whole
     // operation when a file is missing. So a template that names two pages and shows neither does

@@ -206,6 +206,9 @@ create** なので、上書きではなく拒否されます。「1 回だけ答
 読めるのは `questions` だけ。`email` と `status` と `answeredAt` は親が入れるので送りません。
 
 ```html
+<style>
+  html { background: #ffffff; color: #1c1c20; color-scheme: light; }
+</style>
 <h1>講演アンケート</h1>
 <div id="list"></div>
 <label>お名前 <input id="who" maxlength="40" /></label>
@@ -312,6 +315,9 @@ publish なしでできるので、集計を「いま宣言されているもの
 なった設問は、文言を書き換えるのではなく新しい `id` で足すほうが安全です。**
 
 ```html
+<style>
+  html { background: #ffffff; color: #1c1c20; color-scheme: light; }
+</style>
 <p id="count" role="status"></p>
 <div id="tally"></div>
 <h2>自由記述</h2>

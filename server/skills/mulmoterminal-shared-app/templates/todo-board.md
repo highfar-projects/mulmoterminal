@@ -192,6 +192,9 @@
 `<div>` と `type="button"` にして、訊くのも報せるのもページの中の要素で。
 
 ```html
+<style>
+  html { background: #ffffff; color: #1c1c20; color-scheme: light; }
+</style>
 <label>お名前 <input id="who" maxlength="40" /></label>
 <p id="say" role="status"></p>
 <div id="list"></div>
@@ -268,6 +271,9 @@
 ことになります — 名前は自己申告だと承知しておいてください。
 
 ```html
+<style>
+  html { background: #ffffff; color: #1c1c20; color-scheme: light; }
+</style>
 <p id="note" role="status"></p>
 <div id="rows"></div>
 <script>

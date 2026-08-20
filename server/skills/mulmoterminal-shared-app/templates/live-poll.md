@@ -316,6 +316,9 @@ of them is something a page that reads once never has to think about:
    whole difference between a working poll and a broken one.
 
 ```html
+<style>
+  html { background: #ffffff; color: #1c1c20; color-scheme: light; }
+</style>
 <h1>Live poll</h1>
 <p id="lede">The question changes as the host moves on. No need to reload.</p>
 
@@ -556,6 +559,9 @@ Watches both collections. Counts on the client: there is no server code here, so
 counts document — and nothing needs to, because the roster is the only audience for this page.
 
 ```html
+<style>
+  html { background: #ffffff; color: #1c1c20; color-scheme: light; }
+</style>
 <h1>Poll desk</h1>
 <div id="tally"></div>
 <div id="list"></div>

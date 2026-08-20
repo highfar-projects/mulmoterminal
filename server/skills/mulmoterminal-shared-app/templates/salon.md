@@ -156,6 +156,9 @@
 `type="button"` のボタンにして、**click** で送信し、入力チェックは自分で書きます。
 
 ```html
+<style>
+  html { background: #ffffff; color: #1c1c20; color-scheme: light; }
+</style>
 <label>お名前 <input id="who" maxlength="40" /></label>
 <p id="say" role="status"></p>
 <div id="grid"></div>
@@ -235,6 +238,9 @@
 渡されるものだけで、`collections` に書いたものが**その人の資格情報で**読まれます。
 
 ```html
+<style>
+  html { background: #ffffff; color: #1c1c20; color-scheme: light; }
+</style>
 <ul id="today"></ul>
 <script>
   const view = window.__MC_APP_VIEW;
@@ -321,6 +327,9 @@ view.onState((data, viewer) => {
 `public.submit.bookings.selfTransitions`、スタッフのそれは `collections.bookings.transitions`）。
 
 ```html
+<style>
+  html { background: #ffffff; color: #1c1c20; color-scheme: light; }
+</style>
 <div id="rows"></div>
 <p id="say" role="status"></p>
 <script>

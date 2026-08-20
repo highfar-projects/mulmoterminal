@@ -151,6 +151,9 @@
 `type="button"` のボタンにして、**click** で送信し、入力チェックは自分で書きます。
 
 ```html
+<style>
+  html { background: #ffffff; color: #1c1c20; color-scheme: light; }
+</style>
 <label>お名前 <input id="who" maxlength="40" /></label>
 <label>用件 <input id="why" maxlength="60" /></label>
 <p id="say" role="status"></p>
@@ -242,6 +245,9 @@
 その状態にある行にだけボタンを出します。
 
 ```html
+<style>
+  html { background: #ffffff; color: #1c1c20; color-scheme: light; }
+</style>
 <ul id="mine"></ul>
 <p id="say" role="status"></p>
 <script>
@@ -303,6 +309,9 @@ publish されます。総務の Mac が閉じたままでも、受付が自分�
 だけ — つまり受付が押すボタンはありません（枠を空けるのは本人の取り下げ、下記）。
 
 ```html
+<style>
+  html { background: #ffffff; color: #1c1c20; color-scheme: light; }
+</style>
 <label>日付 <input id="day" type="date" /></label>
 <p id="count" role="status"></p>
 <div id="rows"></div>
