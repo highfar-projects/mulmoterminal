@@ -44,7 +44,7 @@ stateDiagram-v2
     MergeQueue --> Implementing: main 取り込みで壊れた
     MergeQueue --> AwaitingApproval: 人間ゲート（条件は全部緑）
     AwaitingApproval --> Merged: 人間が承認（候補 SHA を指定して）
-    AwaitingApproval --> Implementing: 差し戻し
+    AwaitingApproval --> Claimed: 差し戻し（clone を取り直してから実装へ）
     MergeQueue --> Merged: 自動マージが選べる配備のときだけ
     Merged --> Learn: マージ結果を照合できた
     Learn --> [*]: 完了レジストリと決定ログへ書き戻す
@@ -99,6 +99,10 @@ stateDiagram-v2
   承認済みの差分が古くなる。
 - **停止と予算はここにも効く**（`AwaitingApproval --> Stopped`）。停止されたキャンペーンの
   未承認のものは、承認待ちのまま残さず無効にする。
+- **差し戻しは `Implementing` へ直行しない。** 承認待ちのタスクは clone を持っていないので、
+  まず `Claimed` に戻って**空いている clone を取り直す**（パスの claim は握ったままなので、
+  取り直すのは作業場所だけ）。空きが無ければそこで待つ。
+  `Orphaned` からの復帰も同じで、落ちる前の clone が使えるとは限らない。
 - 待ち時間に上限は置かない。人間が押さないことは異常ではない。ただし
   **待ちの数が並列度を食い潰す**ので、承認待ちが溜まったら新しいタスクの供給を止める。
 
