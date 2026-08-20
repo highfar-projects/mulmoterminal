@@ -397,6 +397,22 @@ describe("SharedAppPreview", () => {
     wrapper.unmount();
   });
 
+  // The pane's own chrome, and the third place the audience was still deciding something it no
+  // longer knows. A move has neither brake a submission has — no confirmation, nothing to undo it
+  // with — so the warning matters most exactly where it was withheld.
+  it("warns that a move cannot be taken back on a PUBLIC page too, and only where there is one to make", async () => {
+    const wrapper = await mountPreview();
+    expect(wrapper.text()).toContain("There is no confirmation and no undo");
+    wrapper.unmount();
+
+    // And it asks the CAPABILITIES rather than the audience: a page that can move nothing is not
+    // warned about a control it does not have.
+    vi.stubGlobal("fetch", answering(payload({ pages: [{ id: "public", html: PAGE, audience: "public", viewer: { me: null, can: {} } }] })));
+    const quiet = await mountPreview();
+    expect(quiet.text()).not.toContain("There is no confirmation and no undo");
+    quiet.unmount();
+  });
+
   // The same account for a PUBLIC page, and it was not given one: the warning asked for a member
   // page, because a public one was assumed to need no capabilities. It needs them for its own
   // rows — so a public page arriving without them draws no cancel button either, and said nothing

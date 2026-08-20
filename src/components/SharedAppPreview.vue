@@ -136,6 +136,13 @@ function scopeLog(aid: string): void {
  *  answer this component is watching for. */
 let lastPending = "";
 
+/** Can this page move a record at all? — which is what decides whether the warning above it is
+ *  about anything. A submission is confirmed and can be taken back; a transition, an assignment and
+ *  a withdrawal are none of those, on any audience. */
+const movesRecords = computed(() =>
+  Object.values(page.value?.viewer?.can ?? {}).some((can) => can.transitionAny || can.transitionOwn || can.assign || can.withdrawFrom.length > 0),
+);
+
 /** Every message the parent sends, on its way out.
  *
  *  This is the only place a refusal can be seen. The bridge answers it on the port, into a promise
@@ -770,11 +777,15 @@ watch(
           Records read as you, not as a visitor — this shows what DRAWS, not what a stranger would be allowed to see. Computing it writes nothing.
         </p>
         <p class="mt-1 text-[11px] text-amber">A submission you accept is a real record in the live app, and the rules do run on that.</p>
-        <!-- SAID ON THE MEMBER PAGES ONLY, and said sharply, because this one has neither of the
-             brakes the submission above has: a member's move raises no confirmation — the live desk
-             has none either, and inventing one here would make the preview a different program —
-             and there is nothing to undo it with, since a move creates no record to take back. -->
-        <p v-if="page && page.audience !== 'public'" class="mt-1 text-[11px] text-amber">
+        <!-- SAID WHEREVER THE PAGE CAN MOVE SOMETHING, and said sharply, because this one has
+             neither of the brakes the submission above has: a move raises no confirmation — the live
+             page has none either, and inventing one here would make the preview a different program
+             — and there is nothing to undo it with, since a move creates no record to take back.
+             It asked for a MEMBER page, which withheld it from exactly the page that had just been
+             given moves: a public page's `selfTransitions` / `selfDelete` write the same way. The
+             capabilities are asked instead of the audience, so a page that can move nothing is not
+             warned about a control it does not have. -->
+        <p v-if="movesRecords" class="mt-1 text-[11px] text-amber">
           A control on this page moves a real record the moment you press it, as you. There is no confirmation and no undo.
         </p>
         <p v-if="payload && !payload.fromLiveApp" class="mt-1 text-[11px] text-dim">This app has never been published, so nothing was carried over.</p>
