@@ -71,7 +71,7 @@ export type PreviewResult = PreviewSuccess | SharedAppFailure;
  *
  *  The narrow shape of `ProjectedViewCollection`, restated rather than imported, because only these
  *  three fields decide what to read and the rest of that type is about how a tier is projected. */
-interface RequestedCollection {
+export interface RequestedCollection {
   cid: string;
   scope: "all" | "own";
   emailField?: string | undefined;
@@ -120,7 +120,7 @@ async function readCollection(handle: SharedAppHandle, aid: string, want: Reques
  *  and the intent path, which has to decide about a row that no list ever returned — a composite id
  *  (`auth.uid+field`) is granted by NAME and cannot be listed at all, so the page finds it through
  *  `view.mine(cid, key)` and nothing else here has seen it. */
-function ownsRow(want: RequestedCollection, row: Record<string, unknown>, who: { uid: string; email: string }): boolean {
+export function ownsRow(want: RequestedCollection, row: Record<string, unknown>, who: { uid: string; email: string }): boolean {
   if (want.ownDocId === "auth.uid") return row.id === who.uid;
   // REBUILT FROM THE STORED VALUE, never a prefix match on the id. That is the rules' own shape
   // (`ownRow`'s `auth.uid+field` branch) and its comment says why: an unconditional prefix match
@@ -131,6 +131,17 @@ function ownsRow(want: RequestedCollection, row: Record<string, unknown>, who: {
   const field = want.emailField;
   if (field === undefined) return false;
   return row[field] === who.email;
+}
+
+/** The selector each collection's own rows are found by, per cid — see {@link ownRequests}.
+ *
+ *  Exported for the INTENT path, which has to decide about a row no list returned: the list can
+ *  fail while the document itself is readable (a refused read on an app that has just been
+ *  published, an offline moment, a transient), and the page will have found that row through
+ *  `view.mine(cid, key)`, which is a `get` and not a list. Both paths then ask the same predicate,
+ *  which is the point of exporting it rather than writing a second one. */
+export function ownSelectors(config: PublishedConfigDoc): Record<string, RequestedCollection> {
+  return Object.fromEntries(ownRequests(config).map((want) => [want.cid, want]));
 }
 
 /** Every page's records, each page asking only for what its own projection names.

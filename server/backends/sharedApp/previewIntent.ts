@@ -27,9 +27,10 @@
 import { doc, collection, writeBatch } from "firebase/firestore";
 import { APPS_COLLECTION, appSchemasPath } from "@receptron/sharedapp";
 import { MIRROR_OPEN, readIntentMessage, VIEW_MESSAGE, type JudgedIntent, type WriteTier } from "@receptron/sharedapp/view";
+import { isRecord } from "../../../common/isRecord.js";
 import { previewPageKey, type PreviewAudience, type PreviewIntent, type PreviewIntentResult } from "../../../common/sharedAppPreview.js";
 import { currentFirestore } from "../remoteHost/session.js";
-import { previewSharedApp } from "./preview.js";
+import { ownSelectors, ownsRow, previewSharedApp } from "./preview.js";
 import { sharedAppContext } from "./context.js";
 
 /** Where a shared collection's records live. Spelled as `previewWrite.ts` spells it. */
@@ -200,13 +201,36 @@ export async function performPreviewIntent(root: string, asked: PreviewIntent): 
   const record = (cid: string, itemId: string): Record<string, unknown> | null =>
     (held[cid] ?? []).find((row) => row.id === itemId) ?? (preview.own[cid] ?? []).find((row) => row.id === itemId) ?? null;
 
-  // NOTHING IS READ ON DEMAND HERE, and the reason is worth stating because it looks like a gap.
-  // A row the page found through `view.mine(cid, key)` is in `own` too: that map is built by the
-  // same four selectors the rules identify an own row by, INCLUDING the one whose identity is the
-  // document name (`idFrom: "auth.uid+field"` — see `ownsRow`). It was missing that one, so
-  // live-poll's rows were absent from `viewer.mine` and an intent about one came back
-  // `not-in-view`; the fix belongs there rather than in a second read here, or the two would answer
-  // the same question differently.
+  /** THE ROW THE PAGE FOUND WHEN NO LIST COULD.
+   *
+   *  `viewer.mine` is built from a LIST, and `view.mine(cid, key)` is a `get` — so the two do not
+   *  fail together. A list refused on an app published a moment ago, an offline blink, any
+   *  transient: `own` loses the collection for that render, the page's keyed lookup still answers,
+   *  and the control it draws would then fail `not-in-view`. Rendered and refused is precisely the
+   *  shape this whole change removes.
+   *
+   *  IT CANNOT BE LOOSER THAN THE LIST, because it asks the SAME question: `ownsRow`, the predicate
+   *  `readCollection` filters with, which is `ownRow` in the rules said in the terms this host has.
+   *  A staff page asking after somebody else's row still gets `not-in-view` — nothing here widens
+   *  what a page may name, it only stops the host refusing a row the reader owns.
+   *
+   *  Not reached for a row already held: the ordinary intent costs no read. */
+  const ownRecord = async (cid: string, itemId: string): Promise<Record<string, unknown> | null> => {
+    const want = ownSelectors(preview.config)[cid];
+    if (want === undefined) return null;
+    const found = await handle.docs.get(itemsPath(preview.aid, cid), itemId).catch(() => null);
+    if (!isRecord(found)) return null;
+    const row = { ...found, id: itemId };
+    return ownsRow(want, row, handle) ? row : null;
+  };
+
+  // RESOLVED BEFORE THE JUDGEMENT, so the package sees the row's real status rather than nothing —
+  // and so that what is judged and what is checked below cannot be two different answers.
+  const asking = record(asked.cid, asked.itemId) ?? (await ownRecord(asked.cid, asked.itemId));
+  const holding = (cid: string, itemId: string): Record<string, unknown> | null => {
+    if (cid === asked.cid && itemId === asked.itemId) return asking;
+    return record(cid, itemId);
+  };
 
   // Rebuilt into the message shape the package reads, rather than the package being given a second
   // entry point for a pre-parsed ask: `readIntentMessage` is what mulmoserver judges with, and a
@@ -222,7 +246,7 @@ export async function performPreviewIntent(root: string, asked: PreviewIntent): 
       ...(asked.to === undefined ? {} : { to: asked.to }),
     },
     write,
-    record,
+    holding,
     { address: handle.email, tier },
   );
   if (!read.ok) return { ok: false, error: read.reason };
@@ -230,7 +254,7 @@ export async function performPreviewIntent(root: string, asked: PreviewIntent): 
   // AFTER the package's judgement, not before, so its own refusals keep their names: a cid this
   // view never declared is `unknown-collection`, which says which declaration to change, and it
   // would otherwise be reported as a missing row.
-  if (record(read.intent.cid, read.intent.itemId) === null) return { ok: false, error: NOT_IN_VIEW };
+  if (holding(read.intent.cid, read.intent.itemId) === null) return { ok: false, error: NOT_IN_VIEW };
 
   const failed = await commit(preview.aid, read.intent);
   if (failed !== null) return { ok: false, error: failed };

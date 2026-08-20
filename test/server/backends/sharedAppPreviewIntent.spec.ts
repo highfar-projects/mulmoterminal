@@ -56,8 +56,17 @@ class Docs implements FirestoreDocs {
     return this.store.get(collectionPath) ?? new Map();
   }
 
-  list = (collectionPath: string): Promise<FirestoreDoc[]> =>
-    Promise.resolve([...this.read(collectionPath)].sort(([l], [r]) => (l < r ? -1 : 1)).map(([id, data]) => ({ id, data })));
+  /** Refuse to LIST records while leaving a `get` working — which is not a contrived pair. A list
+   *  refused on an app published a moment ago, an offline blink, a transient: the page's keyed
+   *  `view.mine(cid, key)` is a `get` and answers anyway. */
+  denyItemLists = false;
+
+  list = (collectionPath: string): Promise<FirestoreDoc[]> => {
+    if (this.denyItemLists && collectionPath.includes("/collections/")) {
+      return Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }));
+    }
+    return Promise.resolve([...this.read(collectionPath)].sort(([l], [r]) => (l < r ? -1 : 1)).map(([id, data]) => ({ id, data })));
+  };
 
   get = (collectionPath: string, docId: string): Promise<unknown | null> => {
     const existing = this.read(collectionPath).get(docId);
@@ -393,6 +402,47 @@ describe("a member's intent, performed from the preview", () => {
 
       expect(result).toEqual({ ok: true, mailed: false });
       expect(batched).toEqual([`update apps/${AID}/collections/votes/items/${OWNER.uid}_q1 {"state":"withdrawn"}`]);
+    });
+
+    it("acts on a row the page could only LOOK UP, when the list was refused", async () => {
+      // `viewer.mine` is built from a LIST and `view.mine(cid, key)` is a `get`, so the two do not
+      // fail together: the collection can be unlistable for a render while the document itself
+      // reads back. The page then draws a control from an answer it really got, and the host
+      // refusing it as `not-in-view` is the rendered-and-refused shape this change exists to
+      // remove — the live page allows the move, because there the rules answer ownership.
+      docs.store.set(bookingsPath, new Map([["roomA-1000", { requesterEmail: OWNER.email, slot: "roomA-1000", status: "booked" }]]));
+      docs.denyItemLists = true;
+
+      const result = await performPreviewIntent(root, {
+        page: { id: "public", audience: "public" },
+        kind: "transition",
+        cid: "bookings",
+        itemId: "roomA-1000",
+        to: "cancelled",
+      });
+
+      expect(result).toEqual({ ok: true, mailed: false });
+      expect(batched).toEqual([`update ${bookingsPath}/roomA-1000 {"status":"cancelled"}`]);
+    });
+
+    it("still refuses a row that is NOT the author's, when only a lookup could reach it", async () => {
+      // The same conditions and the other answer. The read on demand asks `ownsRow` — the predicate
+      // the dataset read filters with, which is `ownRow` in the rules said in this host's terms — so
+      // it cannot be looser than the list it stands in for. It matters here more than anywhere: this
+      // write goes out as the app's OWNER, who may touch anything.
+      docs.store.set(bookingsPath, new Map([["roomA-1000", { requesterEmail: "someone@else.example", slot: "roomA-1000", status: "booked" }]]));
+      docs.denyItemLists = true;
+
+      const result = await performPreviewIntent(root, {
+        page: { id: "public", audience: "public" },
+        kind: "transition",
+        cid: "bookings",
+        itemId: "roomA-1000",
+        to: "cancelled",
+      });
+
+      expect(result).toEqual({ ok: false, error: "not-in-view" });
+      expect(batched).toEqual([]);
     });
 
     it("still refuses a row that is NOT the author's, however it was named", async () => {
