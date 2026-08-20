@@ -268,6 +268,7 @@ sequenceDiagram
     participant C as clone-pool
     participant S as session (grid cell)
     participant G as forge (gh/glab)
+    participant H as 人間（承認）
     O->>C: 空いている clone をタスクへ lease（期限つき CAS）、origin/main を取り込む
     O->>S: spawn（initialPrompt = Plan ステップ）
     S-->>O: ターン完了（turn-watch）＋ 申告（触る予定のパス / オラクル）
@@ -281,9 +282,16 @@ sequenceDiagram
     O->>O: 触ったパスを git diff から導出し、claim と照合
     O->>G: PR、CI
     O->>O: マージキュー。main 取り込みで再検証、全オラクルを再実行
-    O->>C: clone を返す（ここで初めて lease を解放）
-    O->>O: 完了レジストリと決定ログへ書き戻す
+    O->>C: clone を返す（候補はブランチにある。パスの claim は保持）
+    O->>H: 承認待ち（候補 SHA・条件の証跡・差分を添えて通知）
+    H-->>O: 承認（その SHA に対して）／差し戻し
+    O->>G: マージ
+    O->>O: claim を解放。完了レジストリと決定ログへ書き戻す
 ```
+
+**承認は状態である。** 誰がどの候補 SHA に承認したかを記録し、PR の head が動いたら無効にする。
+待っている間 clone は返すが**パスの claim は保持する**（解放すると承認済みの差分が古くなる）。
+停止と予算は承認待ちにも効く。承認待ちが溜まったら新しいタスクの供給を止める（汎用側 2.1）。
 
 **セッションはステップごとに立てて閉じる。clone はタスクの間ずっと同じものを持つ**（D3）。
 Review と Verify が実装と別セッションであることが原則3を成立させ、

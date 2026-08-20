@@ -42,7 +42,10 @@ stateDiagram-v2
     Verify --> Implementing: 独立検証で穴が出た
     Verify --> MergeQueue: オラクルが緑
     MergeQueue --> Implementing: main 取り込みで壊れた
-    MergeQueue --> Merged: forge がマージを受理
+    MergeQueue --> AwaitingApproval: 人間ゲート（条件は全部緑）
+    AwaitingApproval --> Merged: 人間が承認（候補 SHA を指定して）
+    AwaitingApproval --> Implementing: 差し戻し
+    MergeQueue --> Merged: 自動マージが選べる配備のときだけ
     Merged --> Learn: マージ結果を照合できた
     Learn --> [*]: 完了レジストリと決定ログへ書き戻す
     Rejected --> [*]
@@ -61,9 +64,24 @@ stateDiagram-v2
     Review --> Stopped
     Verify --> Stopped
     MergeQueue --> Stopped
+    AwaitingApproval --> Stopped
+    AwaitingApproval --> Orphaned
     Escalated --> [*]
     Stopped --> [*]
 ```
+
+**`AwaitingApproval` は状態であって「待っている気分」ではない。** 人間ゲートを既定にした以上、
+「誰の承認を、どの候補に対して、いつ得たか」が状態として残らなければ、
+機械が確かめた条件と人間が押した事実が結びつかない。
+
+- **承認は候補 SHA に対して与える。** PR の head が動いたら承認は無効になり、`MergeQueue` へ戻る。
+- **待っている間に clone は返す。** 候補はもうブランチにあるので clone は要らない。
+  ただし**パスの claim は保持する** — 解放すると別のタスクが同じ場所を触り、
+  承認済みの差分が古くなる。
+- **停止と予算はここにも効く**（`AwaitingApproval --> Stopped`）。停止されたキャンペーンの
+  未承認のものは、承認待ちのまま残さず無効にする。
+- 待ち時間に上限は置かない。人間が押さないことは異常ではない。ただし
+  **待ちの数が並列度を食い潰す**ので、承認待ちが溜まったら新しいタスクの供給を止める。
 
 **`MergeQueue --> Stopped` があることが重要**である。マージはこのパイプライン唯一の不可逆操作なので、
 停止スイッチと予算はキューに入った後も効かなければならない。停止されたキャンペーンのタスクが
