@@ -13,7 +13,7 @@
 // It runs in the browser, like the exchange it generalises: close the tab and the table stops. A
 // conversation that continues where nobody is watching is a different feature with a different
 // safety argument.
-import { waitVerdict } from "./exchangeRules";
+import { waitVerdict } from "../../common/turnCorrelation";
 import type { HandoffSource, HandoffTarget } from "./useHandoff";
 import { endsTheTable, nextSpeaker, roundTablePrompt, type RoundTableOutcome } from "./roundTableRules";
 import { formatRoom, roomWindow } from "../../common/roomMessage";

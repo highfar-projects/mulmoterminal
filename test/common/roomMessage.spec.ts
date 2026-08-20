@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { MAX_MESSAGE_CHARS, WINDOW_CHARS, WINDOW_MESSAGES, clipMessage, formatRoom, isRoomId, roomWindow, type RoomMessage } from "../../common/roomMessage";
-import { answersOurSend } from "../../src/composables/exchangeRules";
+import { answersOurSend } from "../../common/turnCorrelation";
 
 const said = (from: string, text: string, at = 1): RoomMessage => ({ at, from, text });
 
