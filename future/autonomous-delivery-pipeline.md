@@ -37,6 +37,8 @@ stateDiagram-v2
     Implementing --> SelfCheck: Done 条件の機械判定
     SelfCheck --> Implementing: 未達
     SelfCheck --> Review: 役割別に並列レビュー
+    SelfCheck --> Orphaned
+    SelfCheck --> Stopped
     Review --> Implementing: blocking 指摘 → 失敗するテストに変換
     Review --> Verify: 通過
     Verify --> Implementing: 独立検証で穴が出た
@@ -56,10 +58,12 @@ stateDiagram-v2
     Verify --> Orphaned
     MergeQueue --> Orphaned
     Merged --> Orphaned
-    Orphaned --> Implementing: 照合の結果まだ途中だった
+    Learn --> Orphaned
+    Orphaned --> Claimed: 照合の結果まだ途中だった（clone を取り直す）
     Orphaned --> Learn: 照合の結果すでに入っていた
     Orphaned --> Escalated: 照合できない
-    Claimed --> Stopped: 停止スイッチ / 予算切れ
+    Planned --> Stopped: 停止スイッチ / 予算切れ
+    Claimed --> Stopped
     Implementing --> Stopped
     Review --> Stopped
     Verify --> Stopped
@@ -69,6 +73,19 @@ stateDiagram-v2
     Escalated --> [*]
     Stopped --> [*]
 ```
+
+**辺を足すときに毎回確かめる不変条件を、先に書いておく。** この文書はこれまで、
+規則を1箇所に書いて、それが支配する辺へ運び忘れる誤りを繰り返してきた（clone の寿命だけで4回）。
+規則ではなく**許される形**を列挙しておく。
+
+- **clone を持って作業する状態**は `Claimed` / `Implementing` / `SelfCheck` / `Review` / `Verify` / `MergeQueue`。
+  持たない状態は `Planned` / `AwaitingApproval` / `Merged` / `Orphaned` / `Learn` / `Stopped` / `Escalated`。
+- **持たない状態から持つ状態へ入る辺は、必ず `Claimed` を通る。** 直接 `Implementing` へ入れない。
+  `Claimed` が「空いている clone を取る」場所だからで、取れなければそこで待つ。
+- **パスの claim を持つ状態**は `Claimed` から `Merged` までの全部と `AwaitingApproval`。
+  `Stopped` / `Escalated` / `Learn` に入るときに解放する。
+- **副作用を起こす状態**（`Implementing` 以降のすべて）からは、`Orphaned` と `Stopped` の辺が要る。
+  落ちうるし、止められうるからである。**辺を1本足したら、この2本も足したか確かめる。**
 
 **`AwaitingApproval` は状態であって「待っている気分」ではない。** 人間ゲートを既定にした以上、
 「誰の承認を、どの候補に対して、いつ得たか」が状態として残らなければ、
