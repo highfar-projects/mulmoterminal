@@ -106,6 +106,7 @@ round table が守っている不変条件をそのまま守る。
 | 追加 1 | roster 行に**キャンペーン・フェーズのピル**。既存の PR フェーズピルと同じ形・同じ隣（`rosterPhase.ts` の `PhaseDisplay` にもう1系統） |
 | 追加 2 | `CockpitRowMenu.vue` に「このタスクを止める」を**1項目**追加 |
 | 追加 3 | Settings に Campaign セクション（既存パターン: セクション + `SkillLaunchButton.vue`）。開始・停止・並列数・プロファイル |
+| 追加 4 | `AppToolbar.vue` の既存タリーに**キャンペーン全体の進捗**を1つ（下記） |
 
 **新規コンポーネントは 0、新規ビューも 0。** 追加1は roster 側だけに入れる。
 `docs/grid-view-modes.md` が言うとおり roster 行は `TerminalCell` ではないので、
@@ -114,7 +115,7 @@ round table が守っている不変条件をそのまま守る。
 開始 UI を Settings に置くのは、**新しい入口を作らずに済む**から。
 `mulmoterminal-campaign` スキルを1本ぶら下げれば、設定の読み書きも自然言語で済む（既存スキル群と同じ形）。
 
-### キャンペーン全体の進捗はどこに出るか
+### 追加4: キャンペーン全体の進捗はどこに出るか
 
 roster は**1タスク1行**なので、「1000件のうち今どこか」の居場所が無い。新しいパネルは作らず、
 **`AppToolbar.vue` の既存タリーに寄せる**。あそこには grid 全体の blocked / done / working が
@@ -263,7 +264,7 @@ Review と Verify が実装と別セッションであることが原則3を成�
 | PR5 | レビュー収束（役割分離・blocking/follow-up・再掲検出・上限） | **現象 B**（20ループ） |
 | PR6 | オラクル実行 + 独立検証 | **現象 C**（LGTM 後に出る） |
 | PR7 | clone プール 8並列 + マージキュー + レート制限配分 | 規模 |
-| PR8 | roster ピル / 行メニュー / Settings セクション | **UI 差分はここだけ** |
+| PR8 | roster ピル / 行メニュー / Settings セクション / toolbar のタリー | **UI 差分はここだけ** |
 | PR9 | `refactor` プロファイル（ratchet からの供給） | 放っておくと進む状態 |
 | PR10 | `feature` プロファイル（Spec ゲート・契約先行・受け入れテスト） | 汎用性の検証 |
 
