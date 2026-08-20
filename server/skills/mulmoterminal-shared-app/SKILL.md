@@ -422,7 +422,7 @@ Ask them to confirm, in these terms:
 - on a member's page, pressing a **control actually moves the row** — the list redraws with the new
   status. If it does not, the log below names the refusal: `illegal-transition` is the declared
   `transitions` table, `not-permitted` is the reader's role, `not-writable` is a missing
-  `statusField` / `assigneeField` / `selfDelete`, and `not-in-view` is the page naming a row it was
+  `statusField` / `assigneeField` / `selfDelete` / `writerDelete`, and `not-in-view` is the page naming a row it was
   not handed (the preview writes as the OWNER, so it cannot let the rules decide whose row it is);
 - the **error paths** say something: an empty required field, an unchosen option;
 - **cancelling the confirmation leaves the page where it was** — a page that shows the thank-you or
@@ -787,13 +787,15 @@ Four calls, and a page cannot name a field in any of them:
 await window.__MC_APP_VIEW.submit(cid, values);          // a new record
 await window.__MC_APP_VIEW.transition(cid, itemId, to);  // approve, reject, cancel
 await window.__MC_APP_VIEW.assign(cid, itemId, address); // hand a row to a colleague
-await window.__MC_APP_VIEW.withdraw(cid, itemId);        // take the reader's OWN row away
+await window.__MC_APP_VIEW.withdraw(cid, itemId);        // take a row away (see the two halves below)
 ```
 
 `withdraw` names no destination because nothing moves — the row is deleted, and where the
-collection has a `mirror` the parent reopens it in the same batch. It works only where
-`selfDelete` names the row's current status, only on a participant's page, and (like the two
-above) only on a runtime that has it.
+collection has a `mirror` the parent reopens it in the same batch. **Two permissions answer it**
+and the page asks the capability, never the audience: `can.<cid>.withdrawFrom` is the reader's own
+row from the statuses `selfDelete` names, and `can.<cid>.withdrawAny` is any row at all, for an
+`owner` or `editor` where the collection declares `writerDelete`. Like the two above, it also needs
+a runtime that has it.
 
 **Call `ready()` once, after registering `onState` — nothing arrives until you do.** The parent
 holds the app's data until the view answers the handshake, so a page that listens and never says
@@ -815,6 +817,8 @@ window.__MC_APP_VIEW.onState((data, viewer) => {
   // can.transitionAny  — may approve any row  (owner / editor)
   // can.transitionOwn  — may approve the rows assigned to them  (assignee)
   // can.withdrawFrom   — the statuses this reader may take their OWN row away from
+  // can.withdrawAny    — may take ANY row here away  (owner / editor, where the
+  //                      collection declares `writerDelete`)
   // can.assigneeField  — the field a row carries its owner's address in
   // can.assign         — may hand a row to somebody else
   // can.assignees      — who may be named
@@ -859,11 +863,22 @@ the cost in the text the reader can see.
   that only sends the second half is the worst kind of broken — every call succeeds, the rows say
   what the operator expects, and the screen the audience is looking at does not move. (This is
   exactly what the live-poll desk does; copy it rather than reinventing the pair.)
-- **`withdraw` takes the reader's own row away** and names no destination, because nothing moves.
-  It exists only where `selfDelete` declares the statuses, it is offered on a participant's page
-  and never on a staff one (owner and editor delete by role), and where the collection has a
-  `mirror` the parent reopens it in the same batch. `viewer.can.<cid>.withdrawFrom` is the list of
-  statuses, not a boolean: draw the control on the rows that are actually in one of them.
+- **`withdraw` takes a row away** and names no destination, because nothing moves. Where the
+  collection has a `mirror`, the parent reopens it in the same batch. **Two different permissions
+  answer it, and a page asks whichever one it was handed:**
+  - `viewer.can.<cid>.withdrawFrom` — the reader's OWN row, from the statuses `selfDelete` declares
+    (`public.submit[cid]`). A LIST, not a boolean: draw the control on the rows actually in one of
+    them. This is the participant's and the public visitor's half.
+  - `viewer.can.<cid>.withdrawAny` — ANY row, in any status, for an `owner` or `editor`, where the
+    collection declares `writerDelete: true`. A boolean, because the rules ask no status of a
+    writer (`deleteWith` opens with `isWriter`). This is the staff half, and it is the one to give
+    an owner who needs to remove a task somebody abandoned or a name registered by mistake.
+
+  The staff half did not exist before `@receptron/sharedapp` 0.20.0, and its absence used to be
+  worked around by publishing the OWNER's page as `audience: "participant"` — which costs
+  assignment, the staff transitions and the roster's answer about who is who, and draws the delete
+  control for every participant. If you meet an app shaped that way, that is why; move the page
+  back to `member` and declare `writerDelete`.
 - **`assign` moves `assigneeField`**, and only to an address holding `owner`, `editor` or
   `assignee` on that collection (`assignees` in the capability above). Anything else would write a
   row NOBODY could touch afterwards. An `assignee` cannot hand a row on at all, their own

@@ -94,6 +94,14 @@ const asCapability = (cid: string, value: unknown): ViewCapability => {
     assignees: strings(from.assignees),
     ...(typeof from.assigneeField === "string" ? { assigneeField: from.assigneeField } : {}),
     withdrawFrom: strings(from.withdrawFrom),
+    // The STAFF half of a withdrawal, and a different permission from the list above rather than a
+    // wider setting of it: that one is the statuses a submitter may take their OWN row away from,
+    // and this is the role (`writerDelete` + `writers`, resolved by the package).
+    //
+    // Rebuilt by name like everything else here, and the field that proves why: the package made it
+    // REQUIRED, so leaving it out was a compile error rather than a staff page previewing without
+    // the delete control that the published page draws.
+    withdrawAny: from.withdrawAny === true,
   };
 };
 

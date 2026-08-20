@@ -140,7 +140,9 @@ let lastPending = "";
  *  about anything. A submission is confirmed and can be taken back; a transition, an assignment and
  *  a withdrawal are none of those, on any audience. */
 const movesRecords = computed(() =>
-  Object.values(page.value?.viewer?.can ?? {}).some((can) => can.transitionAny || can.transitionOwn || can.assign || can.withdrawFrom.length > 0),
+  Object.values(page.value?.viewer?.can ?? {}).some(
+    (can) => can.transitionAny || can.transitionOwn || can.assign || can.withdrawAny || can.withdrawFrom.length > 0,
+  ),
 );
 
 /** Every message the parent sends, on its way out.

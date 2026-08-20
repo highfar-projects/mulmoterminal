@@ -55,7 +55,8 @@
     "claims": {
       "submitOnly": true,
       "statusField": "status",
-      "transitions": { "initial": ["doing"], "doing": ["done"], "done": ["doing"] }
+      "transitions": { "initial": ["doing"], "doing": ["done"], "done": ["doing"] },
+      "writerDelete": true
     }
   },
   "views": [
@@ -173,7 +174,7 @@
 | 名前を直す | 取った本人 | `selfUpdate: { "doing": ["name"] }` |
 | 完了にする | 取った本人 | `selfTransitions: { "doing": ["done"] }` |
 | 作業中を解除して降りる | 取った本人 | `selfDelete: ["doing"]` |
-| 他人の担当を消す | owner のみ | writer の delete |
+| 他人の担当を消す | owner のみ | `collections.claims.writerDelete: true` |
 | 作業を足す・消す | owner のみ | `tasks` は公開の submit を持たない |
 
 **`done` は取り下げられません**（`selfDelete` は `doing` のみ）。終わった記録を残すためで、
@@ -273,7 +274,11 @@
   const view = window.__MC_APP_VIEW;
   const rows = document.getElementById("rows");
   const note = document.getElementById("note");
-  view.onState(({ tasks = [], claims = [] }) => {
+  // 誰の担当でも消してよいか。owner / editor だけ true になります（`writerDelete` +
+  // 名簿）。false のまま描くと、押した人全員がルールに拒否されます。
+  let mayRemove = false;
+  view.onState(({ tasks = [], claims = [] }, viewer) => {
+    mayRemove = viewer?.can?.claims?.withdrawAny === true;
     const title = Object.fromEntries(tasks.map((task) => [task.id, task.title ?? task.id]));
     rows.replaceChildren(
       ...claims.map((claim) => {
@@ -281,18 +286,51 @@
         const label = document.createElement("span");
         label.textContent = `${title[claim.taskId] ?? claim.taskId} — ${claim.name}（${claim.status}）`;
         row.append(label);
+        if (mayRemove) row.append(removeButton(claim));
         return row;
       }),
     );
     note.textContent = claims.length === 0 ? "まだ誰も取っていません。" : "";
   });
+
+  // 2 度押しで訊きます。`confirm()` はサンドボックスが無視して false を返すので、
+  // ガードに使うとボタンが黙って効かなくなります。
+  function removeButton(claim) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "担当を外す";
+    let armed = false;
+    button.addEventListener("click", async () => {
+      if (!armed) {
+        armed = true;
+        button.textContent = "本当に外す？";
+        return;
+      }
+      button.disabled = true;
+      const result = await view.withdraw("claims", claim.id);
+      // 行は消えて状態が届き直します。失敗したときだけ、ここに残る文言が要ります。
+      if (!result.ok) {
+        button.disabled = false;
+        armed = false;
+        button.textContent = "担当を外す";
+        note.textContent = `外せませんでした: ${result.error ?? "理由なし"}`;
+      }
+    });
+    return button;
+  }
   view.ready();
 </script>
 ```
 
-**受付が担当を消すのは、この画面ではなくコレクションペインです。** ビューから他人の行を
-消す経路は宣言にありません（`selfDelete` は本人のもの）。owner はペインで claim の行を
-削除し、それで作業が空きに戻ります。
+**行は消えます。** `withdraw` は削除で、`done → 空き` に戻す遷移ではありません。誰が取って
+いたかの記録は残らず、`mail` も紐づけられません（キューのルールは書き込み後の文書を読むので、
+無い文書には反応できません）。記録を残したいなら、消さずに `done` のまま置いて別の状態を
+足す設計にしてください — どちらにするかはユーザーに訊いて決めます。
+
+**`writerDelete` は `@receptron/sharedapp` 0.20.0 から**で、それ以前はビューから他人の行を
+消す経路が本当にありませんでした。owner のページを `audience: "participant"` にして回避した
+アプリが実在しますが、それは担当の付け替え（assign）と受付側の遷移表を失う書き方なので、
+真似しないでください。宣言しない場合に残る道はコレクションペインからの削除です。
 
 ---
 
