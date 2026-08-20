@@ -1,13 +1,10 @@
 // @vitest-environment jsdom
 //
-// The owner's desk from `project-board.md`, RUN rather than read.
+// Both pages of `project-board.md`, RUN rather than read.
 //
-// Its public board is exercised by `skillTemplateSubmitCancel.spec.ts` and its declaration by
-// `skillTemplates.spec.ts`, and neither of those touches this page — which is the half of the
-// template that is new. A desk that drew nothing, or drew everything for everybody, would have
-// passed both.
-//
-// The two failures it is here for are opposite and both silent:
+// `skillTemplates.spec.ts` holds the template to the declaration gate and to the defects a sandbox
+// hides; `skillTemplateSubmitCancel.spec.ts` presses やめる on its public page. Neither executes
+// what this template is FOR, and the failures it can have are ones a declaration cannot show:
 //
 //   A CONTROL THAT IS NOT THERE. `withdrawAny` is `false` for a whole tier until the app is
 //   republished, and a desk that reads the capability wrongly is a page with no buttons — which
@@ -16,6 +13,11 @@
 //   A CONTROL THAT CANNOT WORK. `/m/` admits every member, including a `viewer` and somebody
 //   scoped to another collection. A form drawn for them is refused on every press, by rules that
 //   name nothing.
+//
+//   AN ANSWER MISTAKEN FOR ANOTHER. `view.mine()` has three states, and the board's whole job is
+//   to tell them apart: an empty list is "you have not registered", a missing key is "nobody
+//   looked". Conflating them draws the registration form on top of a registration that exists —
+//   the bug this template was extracted from.
 import { describe, it, expect, beforeEach } from "vitest";
 
 // Through Vite rather than `node:fs`: this spec belongs to the DOM-typed project, which carries no
@@ -123,6 +125,62 @@ const settle = async (): Promise<void> => {
   }
 };
 
+/** The public board, with a parent that records the submissions it is asked to make.
+ *
+ *  A separate loader from the desk's because what has to be controllable is different: this page's
+ *  subject is the VIEWER — what `mine` says, and whether the page believes it — where the desk's is
+ *  `can`. */
+function loadBoard(): {
+  sent: Sent[];
+  tell: (data: Record<string, unknown[]>, mine?: Record<string, unknown[]>) => void;
+  said: () => string;
+  buttons: () => string[];
+  press: (label: string) => void;
+} {
+  const html = pageOf("views/board.html");
+  const [, script] = html.match(/<script>\n([\s\S]*?)\n<\/script>/) ?? [];
+  document.body.innerHTML = html.replace(/<script>[\s\S]*?<\/script>/, "");
+
+  const sent: Sent[] = [];
+  let onState: ((data: unknown, viewer: unknown) => void) | null = null;
+  (window as unknown as { __MC_APP_VIEW: unknown }).__MC_APP_VIEW = {
+    onState: (handler: (data: unknown, viewer: unknown) => void) => {
+      onState = handler;
+    },
+    submit: (cid: string, values: Record<string, string>) => {
+      sent.push({ kind: "submit", cid, values });
+      return Promise.resolve({ ok: true });
+    },
+    transition: (cid: string, id: string, to: string) => {
+      sent.push({ kind: "transition", cid, id, to });
+      return Promise.resolve({ ok: true });
+    },
+    withdraw: (cid: string, id: string) => {
+      sent.push({ kind: "withdraw", cid, id });
+      return Promise.resolve({ ok: true });
+    },
+    ready: () => {},
+  };
+
+  // eslint-disable-next-line sonarjs/code-eval -- the source is a file in this repository, read at test time
+  new Function(script ?? "")();
+
+  const all = (): HTMLButtonElement[] => [...document.querySelectorAll("button")] as HTMLButtonElement[];
+  return {
+    sent,
+    // `mine` OMITTED rather than passed empty when the caller says nothing: that distinction is the
+    // subject of half the cases below, and a harness that invented `{}` would erase it.
+    tell: (data, mine) => onState?.(data, { me: null, can: {}, ...(mine === undefined ? {} : { mine }) }),
+    said: () => document.getElementById("say")?.textContent ?? "",
+    buttons: () => all().map((button) => button.textContent ?? ""),
+    press: (label) => {
+      const button = all().find((candidate) => candidate.textContent === label);
+      expect(`${label}: ${button === undefined ? "missing" : "present"}`).toBe(`${label}: present`);
+      button?.click();
+    },
+  };
+}
+
 const TASKS = [{ id: "fix-login", title: "ログインを直す" }];
 const DOING = [{ id: "fix-login", uid: "uid-1", status: "doing" }];
 const OWNER_CAN = { tasks: may("tasks", { transitionAny: false }), assignments: may("assignments") };
@@ -224,5 +282,89 @@ describe("the project-board owner's desk", () => {
     desk.press("完了にする");
     await settle();
     expect(desk.sent).toEqual([{ kind: "transition", cid: "assignments", id: "fix-login", to: "done" }]);
+  });
+});
+
+describe("the project-board public board", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("offers the work when NOBODY LOOKED, because that is not 'you have not registered'", async () => {
+    // No `mine` key at all — a refused read, an offline blink, a host that answers nothing. The
+    // page must not take the action away from somebody who may well be registered: it offers it,
+    // and lets the refusal explain itself if there is one.
+    const board = loadBoard();
+    board.tell({ tasks: TASKS, assignments: [], names: [] });
+
+    expect(board.buttons()).toContain("これをやります");
+    board.press("これをやります");
+    await settle();
+
+    // The write contract, which is what the declaration is built around: the page sends the task id
+    // and NOTHING else. `uid` comes from the session and `status` from `initialStatus`, both filled
+    // by the host — a page that sent either would be writing values it is not allowed to choose.
+    expect(board.sent).toEqual([{ kind: "submit", cid: "assignments", values: { taskId: "fix-login" } }]);
+  });
+
+  it("stops the write when the read DID land and the reader has not registered", async () => {
+    // The other side of the same distinction. Here "no rows" is an answer, so the page can say the
+    // useful thing instead of sending a write nothing would refuse — the rules do not check the
+    // roster, so this one is the PAGE's promise and the only place it is kept.
+    const board = loadBoard();
+    board.tell({ tasks: TASKS, assignments: [], names: [] }, { names: [], assignments: [] });
+
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent).toEqual([]);
+    expect(board.said()).toContain("先に名前を登録してください");
+  });
+
+  it("stops asking once the reader IS registered, and still lets them take work", async () => {
+    const board = loadBoard();
+    board.tell({ tasks: TASKS, assignments: [], names: [{ id: "uid-1", name: "山田" }] }, { names: [{ id: "uid-1", name: "山田" }], assignments: [] });
+
+    // The registration form is gone and the name is shown back — the screen a reload has to produce
+    // as well, which is why it is drawn from `mine` rather than from what the last submit returned.
+    expect(document.getElementById("who")).toBeNull();
+    expect(document.getElementById("me")?.textContent ?? "").toContain("山田");
+
+    board.press("これをやります");
+    await settle();
+    expect(board.sent).toEqual([{ kind: "submit", cid: "assignments", values: { taskId: "fix-login" } }]);
+  });
+
+  it("shows the owner's instructions to the person who took the work", () => {
+    // `detail` and `due` are filled in by the owner and were drawn nowhere: the sort used the date
+    // and the board showed neither. Work nobody can read the instructions for is work that does not
+    // get done.
+    const board = loadBoard();
+    board.tell({ tasks: [{ id: "fix-login", title: "ログインを直す", detail: "再現手順は issue #12", due: "2026-09-01" }], assignments: [], names: [] });
+
+    const text = document.getElementById("list")?.textContent ?? "";
+    expect(text).toContain("再現手順は issue #12");
+    expect(text).toContain("2026-09-01");
+  });
+
+  it("offers the finish and the withdrawal only on the reader's OWN row", async () => {
+    // Which rows are theirs comes from `mine.assignments`, whose ids ARE the task ids — the uid is
+    // dropped from the projection, so a page comparing `row.uid` to something it never received
+    // compares undefined with undefined and draws the controls on everybody's row or nobody's.
+    const board = loadBoard();
+    const theirs = [{ id: "fix-login", uid: "uid-1", status: "doing" }];
+    board.tell({ tasks: TASKS, assignments: theirs, names: [] }, { names: [{ id: "uid-1" }], assignments: [] });
+    expect(board.buttons()).toEqual([]);
+
+    board.tell({ tasks: TASKS, assignments: theirs, names: [] }, { names: [{ id: "uid-1" }], assignments: [{ id: "fix-login" }] });
+    expect(board.buttons()).toContain("完了にする");
+
+    // And the withdrawal asks first, in the page: `confirm()` is ignored by the sandbox and answers
+    // false, so a guard written with it makes the button do nothing at all.
+    board.press("アサインを外す");
+    expect(board.sent).toEqual([]);
+    board.press("本当に外す");
+    await settle();
+    expect(board.sent).toEqual([{ kind: "withdraw", cid: "assignments", id: "fix-login" }]);
   });
 });
