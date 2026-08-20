@@ -188,7 +188,8 @@ export function mountSharedAppPreviewRoutes(app: Express): void {
     })();
   });
 
-  // A MEMBER'S move, performed as the author. Its own route rather than a shape on the one above,
+  // A MOVE — a member's, or the one a visitor makes on their own row on the public page — performed
+  // as the author. Its own route rather than a shape on the one above,
   // because the two are different operations against different rules: a submission CREATES a record
   // as a visitor would, and this UPDATES one somebody already owns — or removes it. Sharing a route
   // would mean one narrowing deciding which, over a body a sandboxed page's parent composed.

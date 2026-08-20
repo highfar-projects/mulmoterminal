@@ -27,7 +27,6 @@ import { createPreviewLog, renderPreviewLog, type PreviewLogEvent } from "../uti
 import { useUpdateStatus } from "../composables/useUpdateStatus";
 import {
   previewPageKey,
-  type PreviewAudience,
   type PreviewForm,
   type PreviewPage,
   type PreviewUncertainWrite,
@@ -137,9 +136,6 @@ function scopeLog(aid: string): void {
  *  answer this component is watching for. */
 let lastPending = "";
 
-/** The audience of the page being drawn, for the refusals whose meaning depends on it. */
-const audienceNow = (): PreviewAudience => page.value?.audience ?? "public";
-
 /** Every message the parent sends, on its way out.
  *
  *  This is the only place a refusal can be seen. The bridge answers it on the port, into a promise
@@ -161,7 +157,7 @@ function noteOutbound(message: Record<string, unknown>): void {
     remember({ kind: "declined", cid: lastPending });
     return;
   }
-  remember({ kind: "refused", reason, audience: audienceNow() });
+  remember({ kind: "refused", reason });
 }
 
 /** Take the stale page off the screen, DEFERRED — which is the whole of what this host adds to that
@@ -323,11 +319,13 @@ watch(
     // to one nobody opened.
     if (page.value !== null) remember({ kind: "page", id: page.value.id, audience: page.value.audience });
     // Said once per page, and counted as a problem: everything below it is a report about a page
-    // running under the wrong parent.
-    if (page.value !== null && page.value.audience !== "public" && page.value.viewer === undefined) {
+    // that was handed less than the live one gets. EVERY audience, the public page included — it
+    // carries a `viewer` too now, because the rules let whoever submitted a row move it and take it
+    // away, so a public page missing one draws no cancel button either.
+    if (page.value !== null && page.value.viewer === undefined) {
       remember({
         kind: "host",
-        note: "this page is written for the roster but arrived with no capabilities, so it is being run under the PUBLIC parent — it will be sent no `viewer` and its member controls cannot work. The page is not at fault: either this server could not resolve them, or its answer was in a shape this pane could not read.",
+        note: "this page arrived with no capabilities, so it will be sent no `viewer` and every control it draws from `viewer.can` is missing. The page is not at fault: either this server could not resolve them, or its answer was in a shape this pane could not read.",
       });
     }
   },

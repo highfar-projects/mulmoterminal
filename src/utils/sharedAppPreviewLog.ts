@@ -50,22 +50,23 @@ export type PreviewLogEvent =
   | { kind: "handshake" }
   | { kind: "state"; datasets: { cid: string; rows: number }[] }
   | { kind: "submitted"; cid: string; fields: string[] }
-  | { kind: "refused"; reason: string; audience: PreviewAudience }
+  | { kind: "refused"; reason: string }
   | { kind: "declined"; cid: string }
   | { kind: "write"; cid: string; error: string | null }
-  /** A MEMBER'S move — a transition, an assignment, a withdrawal — and what became of it.
+  /** A MOVE — a transition, an assignment, a withdrawal — and what became of it. A member's, or a
+   *  visitor's own on the public page: one parent answers both and one route performs both.
    *
-   *  Separate from `write`, which is a public submission: the two fail for different reasons and an
-   *  author reading "the write to 'questions' was REFUSED" about a button on their own desk would
-   *  go looking at `public.submit`, which has nothing to do with it. `mailed` is here because it is
-   *  the one effect of this path that cannot be taken back. */
+   *  Separate from `write`, which is a submission: the two fail for different reasons and an author
+   *  reading "the write to 'questions' was REFUSED" about a button on their own desk would go
+   *  looking at `public.submit`, which has nothing to do with it. `mailed` is here because it is
+   *  the one effect of this path that cannot be taken back.
+   *
+   *  NO AUDIENCE. It carried one, to pick a vocabulary for the refusal — and there is one
+   *  vocabulary now (`explainRefusal`), because with one parent the audience never said which kind
+   *  of ask had been refused. */
   | {
       kind: "intent";
       intent: IntentKind;
-      /** Which tier's page asked. Carried rather than assumed: a refusal reads the same for both
-       *  today, and a line that hard-codes one would quietly mislabel the other the moment they
-       *  stop reading alike. */
-      audience: Exclude<PreviewAudience, "public">;
       cid: string;
       itemId: string;
       /** Where it was going — a STATUS, and only ever a status.
@@ -191,7 +192,7 @@ const lineFor = (entry: PreviewLogEntry): string[] => {
     case "refused":
       // The half nobody can see. It is answered on the port, into a promise the page usually does
       // not await, so on screen this is a button that did nothing.
-      return [`REFUSED by the parent — ${explainRefusal(entry.reason, entry.audience)}`];
+      return [`REFUSED by the parent — ${explainRefusal(entry.reason)}`];
     case "declined":
       return [`the confirmation for '${entry.cid}' was declined — nothing was written`];
     case "write":
@@ -210,7 +211,7 @@ const lineFor = (entry: PreviewLogEntry): string[] => {
       const withheld = entry.intent === "assign" ? " to an address this log does not carry" : "";
       const move = entry.to === undefined ? withheld : ` to '${entry.to}'`;
       const what = `${entry.intent} of '${entry.cid}/${entry.itemId}'${move}`;
-      if (entry.error !== null) return [`the ${what} was REFUSED:`, `  ${explainRefusal(entry.error, entry.audience)}`];
+      if (entry.error !== null) return [`the ${what} was REFUSED:`, `  ${explainRefusal(entry.error)}`];
       return [
         `PERFORMED the ${what}, as you, judged by the deployed rules`,
         ...(entry.mailed === true ? ["  a notice was QUEUED with it — real mail, to a real member"] : []),

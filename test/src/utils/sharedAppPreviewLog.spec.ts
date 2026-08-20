@@ -51,16 +51,18 @@ describe("the pane's log", () => {
   it("explains a refusal, which is the half that exists nowhere else", () => {
     // Answered on the port, into a promise the page usually does not await. On screen this is a
     // button that did nothing.
-    const block = render((log) => log.add({ kind: "refused", reason: "undeclared-field", audience: "public" }));
+    const block = render((log) => log.add({ kind: "refused", reason: "undeclared-field" }));
     expect(block).toContain("REFUSED by the parent");
     expect(block).toContain("`createFields`");
   });
 
-  it("reads a roster page's declined write as the control working, not as a fault", () => {
-    // The member parent judges `transition`, `assign` and `withdraw` and would perform them on the
-    // live page. Here it has nowhere to write, so it answers `read-only` — and the public
-    // translation of a refusal would read as a fault in a page that did the right thing.
-    const block = render((log) => log.add({ kind: "refused", reason: "read-only", audience: "member" }));
+  it("reads a declined write as the control working, not as a fault", () => {
+    // The parent judges `transition`, `assign` and `withdraw` and would perform them on the live
+    // page. A run with nowhere to write answers `read-only`, and reading that as a fault would
+    // condemn a page that did the right thing. It was explained only on a MEMBER page, because the
+    // audience picked the vocabulary — so a public page's own `selfDelete`, which the one parent
+    // now routes, had this printed at its author raw.
+    const block = render((log) => log.add({ kind: "refused", reason: "read-only" }));
     expect(block).toContain("the control is wired, not that anything is wrong");
   });
 
@@ -76,9 +78,7 @@ describe("the pane's log", () => {
     // The row is NAMED, though the header of that module says values are not carried. A shared
     // app's ids are what the rules pin, so a line about an unnamed row is one an author cannot
     // place — and every one of these is about a row somebody pressed a button on.
-    const block = render((log) =>
-      log.add({ kind: "intent", intent: "transition", audience: "member", cid: "bookings", itemId: "b1", to: "approved", error: null, mailed: true }),
-    );
+    const block = render((log) => log.add({ kind: "intent", intent: "transition", cid: "bookings", itemId: "b1", to: "approved", error: null, mailed: true }));
     expect(block).toContain("PERFORMED the transition of 'bookings/b1' to 'approved'");
     // The one effect of this path that cannot be taken back. It must never happen silently.
     expect(block).toContain("a notice was QUEUED with it");
@@ -89,20 +89,23 @@ describe("the pane's log", () => {
     // promise at the top of that module is about. Dropping the destination entirely would be worse
     // than either: `unknown-assignee` is a refusal ABOUT the address that was named, and a line
     // mentioning no destination reads as an assignment to nobody.
-    const block = render((log) => log.add({ kind: "intent", intent: "assign", audience: "member", cid: "bookings", itemId: "b1", error: "unknown-assignee" }));
+    const block = render((log) => log.add({ kind: "intent", intent: "assign", cid: "bookings", itemId: "b1", error: "unknown-assignee" }));
     expect(block).toContain("to an address this log does not carry");
     expect(block).toContain("nobody on the roster holds an assignable role");
   });
 
-  it("explains an intent's refusal in the INTENT's vocabulary, not the public form's", () => {
-    // The two collide: `unknown-collection` off a public submission is about `public.submit`, and
-    // off an intent it is about the page's own view. Reading one in the other's words sends an
-    // author to a declaration that has nothing to do with what they pressed.
-    const block = render((log) =>
-      log.add({ kind: "intent", intent: "transition", audience: "member", cid: "bookings", itemId: "b1", to: "done", error: "unknown-collection" }),
-    );
-    expect(block).toContain("its own view does not declare");
-    expect(block).not.toContain("public.submit");
+  it("names BOTH declarations for the one refusal that means two things", () => {
+    // `unknown-collection` off a submission is about `public.submit`, and off a move it is about
+    // the page's own view. There were two maps and the AUDIENCE chose between them, which stopped
+    // working when one parent started answering both kinds of ask on every page. Naming both is
+    // what replaced it: neither reader is sent to a declaration that has nothing to do with the
+    // button they pressed.
+    const move = render((log) => log.add({ kind: "intent", intent: "transition", cid: "bookings", itemId: "b1", to: "done", error: "unknown-collection" }));
+    expect(move).toContain("`public.submit`");
+    expect(move).toContain("`collections`");
+    // And the same sentence for a submission, because one vocabulary is the point.
+    const sent = render((log) => log.add({ kind: "refused", reason: "unknown-collection" }));
+    expect(sent).toContain("`public.submit`");
   });
 
   it("marks what the PAGE wrote as the page's, and never lets it end the quotation", () => {
@@ -132,7 +135,7 @@ describe("the pane's log", () => {
     const log = createPreviewLog({ now: ticking() });
     log.add({ kind: "handshake" });
     log.add({ kind: "submitted", cid: "bookings", fields: ["slot"] });
-    log.add({ kind: "refused", reason: "busy", audience: "public" });
+    log.add({ kind: "refused", reason: "busy" });
     log.add({ kind: "write", cid: "bookings", error: "nope" });
     log.add({ kind: "write", cid: "bookings", error: null });
     expect(log.problems()).toBe(2);
@@ -155,8 +158,8 @@ describe("the pane's log", () => {
     // problems" printed over one — and the pane's amber stays lit about events nothing can produce
     // any more. What was lost is said by the dropped line instead.
     const log = createPreviewLog({ now: ticking(), limit: 2 });
-    log.add({ kind: "refused", reason: "busy", audience: "public" });
-    log.add({ kind: "refused", reason: "busy", audience: "public" });
+    log.add({ kind: "refused", reason: "busy" });
+    log.add({ kind: "refused", reason: "busy" });
     expect(log.problems()).toBe(2);
     log.add({ kind: "handshake" });
     log.add({ kind: "handshake" });
@@ -167,7 +170,7 @@ describe("the pane's log", () => {
 
   it("empties on demand, because the buffer belongs to one app", () => {
     const log = createPreviewLog({ now: ticking() });
-    log.add({ kind: "refused", reason: "busy", audience: "public" });
+    log.add({ kind: "refused", reason: "busy" });
     log.clear();
     expect(log.size()).toBe(0);
     expect(log.problems()).toBe(0);

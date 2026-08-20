@@ -400,7 +400,20 @@ describe("narrateHeadlessRun", () => {
     // other, and the blocked form is the one nothing else can report.
     const said = narrate({ presses: [press({ refused: ["unknown-collection"], blockedFormSubmission: true })] });
     expect(said).toContain("BLOCKED a form submission");
-    expect(said).toContain("does not declare");
+    // Both declarations are named, because one refusal means two things and this run cannot tell
+    // which: a submission's collection lives in `public.submit`, a move's in the page's own view.
+    expect(said).toContain("`public.submit`");
+  });
+
+  it("explains a PUBLIC page's declined move, which it used to print raw", () => {
+    // This run performs nothing, so an intent is refused `read-only` — on a public page too, since
+    // one parent answers every page and `selfTransitions` / `selfDelete` are declared inside
+    // `public.submit`. The explanation was reached through the AUDIENCE, and the public branch
+    // consulted the submissions vocabulary only: the author of a page with a cancel button was
+    // handed the bare word `read-only`, which reads as a fault in a page that did the right thing.
+    const said = narrate({ presses: [press({ refused: ["read-only"] })] });
+    expect(said).toContain("the control is wired, not that anything is wrong");
+    expect(said).not.toContain("REFUSED a request — read-only");
   });
 
   it("says how many pages it did not run at all", () => {

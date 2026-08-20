@@ -101,9 +101,7 @@ describe("the pane's intent sender", () => {
     expect(await perform(INTENT)).toEqual({ requestId: "r1", ok: false, error: "illegal-transition" });
     // The screen shows none of this — the page is handed it on the port and usually does not draw
     // it — so the log is the only account of the refusal there is.
-    expect(remembered).toEqual([
-      { kind: "intent", intent: "transition", audience: "member", cid: "questions", itemId: "q1", to: "open", error: "illegal-transition" },
-    ]);
+    expect(remembered).toEqual([{ kind: "intent", intent: "transition", cid: "questions", itemId: "q1", to: "open", error: "illegal-transition" }]);
   });
 
   it("never puts an assignee's address in the log, though it does send it", async () => {
@@ -187,16 +185,28 @@ describe("the pane's intent sender", () => {
     expect(recoveredCount()).toBe(1);
   });
 
-  it("sends nothing at all when there is no page, or the page is a public one", async () => {
+  it("sends nothing at all when there is no page", async () => {
     const nowhere = sender({ ok: true, mailed: false }, null);
     expect(await nowhere.perform(INTENT)).toBeNull();
     expect(nowhere.fetcher).not.toHaveBeenCalled();
+  });
 
-    // A public page has no reader and no roles for a move to be judged against. Null rather than a
-    // refusal: the parent that answers a public page is a different one, and this reaching it at
-    // all would be the bug.
+  it("SENDS a public page's move, which it used to drop before the route could take it", async () => {
+    // The refusal that stood here read "a public page has no reader and no roles for a move to be
+    // judged against". That is about membership, and membership is not what the rules ask: a
+    // `selfTransitions` or `selfDelete` move belongs to whoever submitted the row, on an anonymous
+    // uid, with no role at all. The server was rewritten to judge a public ask as a participant's
+    // and this half was left behind — so the author of a page with a "cancel my booking" button
+    // pressed it in the pane, saw nothing happen, and had no line in the log to say why, while the
+    // published page performed it.
     const open = sender({ ok: true, mailed: false }, { id: "public", html: "<p></p>", audience: "public" });
-    expect(await open.perform(INTENT)).toBeNull();
-    expect(open.fetcher).not.toHaveBeenCalled();
+    const answer = await open.perform({ ...INTENT, kind: "withdraw", to: undefined, cid: "bookings", itemId: "b1" });
+
+    expect(answer).toEqual({ requestId: "r1", ok: true });
+    expect(open.fetcher).toHaveBeenCalledTimes(1);
+    // The page it was asked from travels with it: the server judges a public ask at the roster
+    // tier, against that page's own projection.
+    const sent: unknown = JSON.parse(String(open.fetcher.mock.calls[0]?.[1]?.body));
+    expect(sent).toMatchObject({ page: { id: "public", audience: "public" }, kind: "withdraw", cid: "bookings", itemId: "b1" });
   });
 });

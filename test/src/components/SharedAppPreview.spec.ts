@@ -27,6 +27,12 @@ const FORM_FIELD = { name: "name", label: "お名前", required: true, type: "st
  *  reaching for `viewer.can.transitionAny` gets undefined for every app that has ever existed. */
 const MEMBER_CAPABILITY = { cid: "bookings", transitionAny: true, transitionOwn: false, assign: false, assignees: [], withdrawFrom: [] };
 
+/** And one as it resolves for a PUBLIC page, which carries a viewer too: the rules let whoever
+ *  submitted a row move it and take it away, so `selfTransitions` and `selfDelete` resolve to
+ *  capabilities on the visitor's own rows. `me` is null there and only there — see the note on the
+ *  test that pins it. */
+const PUBLIC_VIEWER = { me: null, can: { bookings: { ...MEMBER_CAPABILITY, transitionAny: false, transitionOwn: true, withdrawFrom: ["booked"] } } };
+
 /** An app whose only page is written for the front desk, so it is the one selected on mount. */
 const memberPayload = () =>
   payload({
@@ -40,7 +46,7 @@ const payload = (over: Record<string, unknown> = {}) => ({
   preview: {
     aid: "aid-1",
     submit: { bookings: { createFields: ["slot", "requesterName"] } },
-    pages: [{ id: "public", html: PAGE, audience: "public" }],
+    pages: [{ id: "public", html: PAGE, audience: "public", viewer: PUBLIC_VIEWER }],
     publicOpen: true,
     fromLiveApp: false,
     generatedForm: false,
@@ -387,7 +393,20 @@ describe("SharedAppPreview", () => {
     // being fast enough is a test that reports a working feature as broken on somebody else's
     // machine.
     const state = await answerFor(answers, (message) => message.type === "mc-public-view:state", "the page's state");
-    expect(state?.viewer).toEqual({ mine: {} });
+    expect(state?.viewer).toEqual({ ...PUBLIC_VIEWER, mine: {} });
+    wrapper.unmount();
+  });
+
+  // The same account for a PUBLIC page, and it was not given one: the warning asked for a member
+  // page, because a public one was assumed to need no capabilities. It needs them for its own
+  // rows — so a public page arriving without them draws no cancel button either, and said nothing
+  // about why.
+  it("says so when a PUBLIC page arrives with no capabilities either", async () => {
+    vi.stubGlobal("fetch", answering(payload({ pages: [{ id: "public", html: PAGE, audience: "public" }] })));
+    const wrapper = await mountPreview();
+    const block = await copyBlock(wrapper);
+    expect(block).toContain("arrived with no capabilities");
+    expect(block).toContain("1 problem");
     wrapper.unmount();
   });
 
