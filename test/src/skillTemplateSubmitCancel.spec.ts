@@ -22,6 +22,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import gym from "../../server/skills/mulmoterminal-shared-app/templates/gym.md?raw";
 import meetingRoom from "../../server/skills/mulmoterminal-shared-app/templates/meeting-room.md?raw";
 import salon from "../../server/skills/mulmoterminal-shared-app/templates/salon.md?raw";
+import projectBoard from "../../server/skills/mulmoterminal-shared-app/templates/project-board.md?raw";
 import survey from "../../server/skills/mulmoterminal-shared-app/templates/survey.md?raw";
 
 /** The html block under one of a template's page headings — the same mapping the other template
@@ -138,6 +139,17 @@ const PAGES: { name: string; open: () => Page; press: () => void }[] = [
       return page;
     },
     press: () => (document.querySelector("#grid button") as HTMLButtonElement).click(),
+  },
+  {
+    name: "project-board.md — views/board.html",
+    open: () => {
+      const page = load(projectBoard, "views/board.html");
+      // No `mine` in the viewer, which is this board's own case: "nobody looked" is not "you have
+      // not registered", so the take button is drawn and pressing it is allowed to reach the write.
+      page.tell({ tasks: [{ id: "t1", title: "掃除" }], names: [], assignments: [] });
+      return page;
+    },
+    press: () => (document.querySelector("#list button") as HTMLButtonElement).click(),
   },
 ];
 
