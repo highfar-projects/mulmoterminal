@@ -145,6 +145,12 @@ describe("the shared-app templates", () => {
         expect(`${file}: paints its root = ${declares("background", "background-color")}`).toBe(`${file}: paints its root = true`);
         // And the other half of it, since a canvas with no foreground is only half a decision.
         expect(`${file}: states its foreground = ${declares("color")}`).toBe(`${file}: states its foreground = true`);
+        // The third, which is the one people leave out: `color-scheme` is what the UA reads for
+        // form controls, scrollbars and its own defaults, so without it a reader whose OS is dark
+        // gets dark widgets on this light paper. DECLARED, not `light` — a template that chooses
+        // dark paper says `dark` here, and a test demanding the value would be the thing standing
+        // in its way.
+        expect(`${file}: states its scheme = ${declares("color-scheme")}`).toBe(`${file}: states its scheme = true`);
       }
     }
   });
