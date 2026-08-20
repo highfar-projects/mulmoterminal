@@ -48,7 +48,7 @@ stateDiagram-v2
     MergeQueue --> Implementing: main 取り込みで壊れた
     MergeQueue --> AwaitingApproval: 人間ゲート（条件は全部緑）
     AwaitingApproval --> Merged: 人間が承認（候補 SHA を指定して）
-    AwaitingApproval --> Leased: 差し戻し / 承認が無効（clone を取り直す）
+    AwaitingApproval --> Leased: 差し戻し / 承認が無効 / forge が拒否（clone を取り直す）
     MergeQueue --> Merged: 自動マージが選べる配備のときだけ
     Merged --> Learn: マージ結果を照合できた
     Learn --> [*]: 完了レジストリと決定ログへ書き戻す
@@ -152,7 +152,9 @@ stateDiagram-v2
     **この設定が有効かどうかは、毎回読んで確かめる。** 設定は人が後から変えられるもので、
     一度確認したら以後も有効だとは言えない。無効なら鮮度を強制する手段が無いので、
     そのキャンペーンではマージを実行しない。
-  - 拒否されたら（409、up-to-date でない）`MergeQueue` へ戻し、取り込み直して再検証し、もう一度聞く。
+  - 拒否されたら（409、up-to-date でない）**`Leased` を通って clone を取り直してから**
+    `MergeQueue` へ戻し、取り込み直して再検証し、もう一度聞く。
+    承認待ちのタスクは clone を返しているので、再検証する作業場所がそのままでは無い。
 - **キャンペーン内のマージは直列にする。** 同時に投げるのは1本だけ。
   これで自分たちが原因の競合は消え、残るのは**外から main が動く場合**になる — そしてそれは
   上の forge 側の条件でしか止められない。だから両方要る。
