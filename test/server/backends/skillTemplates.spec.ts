@@ -131,9 +131,20 @@ describe("the shared-app templates", () => {
         // line in every template, and a pattern spanning `{ … }` across newlines is the kind that
         // backtracks.
         const rule = sheet.split("\n").find((line) => line.trim().startsWith("html {")) ?? "";
-        expect(`${file}: paints its root = ${rule.includes("background:")}`).toBe(`${file}: paints its root = true`);
+        // Split into declarations rather than searched as text: `border-color:` ENDS with the
+        // string `color:`, and `background-color:` ends with it too — so a page declaring
+        // `html { background: #111; border-color: #333 }` would have passed the foreground half
+        // below while rendering dark on dark, which is the exact failure both halves are here to
+        // stop.
+        const declared = rule
+          .replace(/^[^{]*\{/, "")
+          .split(";")
+          .map((part) => part.trim().split(":")[0]?.trim() ?? "");
+        const declares = (...properties: string[]): boolean => properties.some((property) => declared.includes(property));
+        // Either spelling of the canvas, because both are the same decision.
+        expect(`${file}: paints its root = ${declares("background", "background-color")}`).toBe(`${file}: paints its root = true`);
         // And the other half of it, since a canvas with no foreground is only half a decision.
-        expect(`${file}: states its foreground = ${rule.includes("color:")}`).toBe(`${file}: states its foreground = true`);
+        expect(`${file}: states its foreground = ${declares("color")}`).toBe(`${file}: states its foreground = true`);
       }
     }
   });
