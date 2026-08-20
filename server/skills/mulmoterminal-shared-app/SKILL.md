@@ -26,7 +26,7 @@ the user turns this down.
 
 ## Start from a template when one fits
 
-Six shapes are written out in full — declaration, schemas, and the reasoning behind each key:
+Seven shapes are written out in full — declaration, schemas, and the reasoning behind each key:
 
 - **[templates/salon.md](./templates/salon.md)** — a request that a NAMED PERSON approves, and only
   their own (a salon's bookings, interviews, repairs, review assignments). This is what `assignee`
@@ -37,7 +37,7 @@ Six shapes are written out in full — declaration, schemas, and the reasoning b
   rules.
 - **[templates/survey.md](./templates/survey.md)** — **collecting answers**, with nothing to run out
   of (a survey, a quiz, an application form, a sign-up with no cap). The shortest declaration of the
-  six, and the shape most often written with a public page and nothing else — so this one is built
+  seven, and the shape most often written with a public page and nothing else — so this one is built
   around its `member` page, which is where the answers are read. It also spells out the three-way
   trade above, and what a tally may and may not claim about values a respondent typed.
 - **[templates/meeting-room.md](./templates/meeting-room.md)** — a bookable unit you can LIST IN
@@ -55,7 +55,16 @@ Six shapes are written out in full — declaration, schemas, and the reasoning b
   lets the board show WHO is working on something without publishing their address. It is also the
   one where a claim cannot be reassigned, only given back and retaken.
 
-Read the matching one before writing `app.json` by hand. All six are checked against the real
+- **[templates/project-board.md](./templates/project-board.md)** — the same work-claiming board with
+  a ROSTER and an owner's desk: people register a name once (`names`, `idFrom: "auth.uid"`), then
+  take work; the owner adds and removes tasks and frees an abandoned one from `/m/`. This is what
+  `writerDelete` is for, and the one that spells out `view.mine()`'s three states — "you have not
+  registered" and "nobody looked" are different answers, and treating them alike shows the
+  registration form to somebody who has already registered. It also shows the owner-only form: a
+  `public.submit` declaration whose window is CLOSED, which is how a page gets a create form that
+  only a writer may send.
+
+Read the matching one before writing `app.json` by hand. All seven are checked against the real
 publish gate by this repository's tests, so what they show is what publishes — and they spend most
 of their length on the traps, which is the part you cannot recover by guessing.
 

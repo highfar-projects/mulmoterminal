@@ -89,6 +89,10 @@ describe("the shared-app templates", () => {
     expect(problemsFor("todo-board.md", "owner@example.com", [])).toEqual([]);
   });
 
+  it("project-board.md deploys as written", () => {
+    expect(problemsFor("project-board.md", "owner@example.com", [])).toEqual([]);
+  });
+
   it("shows no page the sandbox would silently break", () => {
     // The frame has no `allow-modals` and no `allow-forms`, and the parent sends nothing until the
     // view says `ready()`. All three fail the same way — nothing drawn, nothing thrown — and a
@@ -162,5 +166,8 @@ describe("the shared-app templates", () => {
     expect([...blocksOf("survey.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/questions/schema.json", ".claude/skills/responses/schema.json"]));
     expect([...blocksOf("live-poll.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/questions/schema.json", ".claude/skills/votes/schema.json"]));
     expect([...blocksOf("todo-board.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/tasks/schema.json", ".claude/skills/claims/schema.json"]));
+    expect([...blocksOf("project-board.md").keys()]).toEqual(
+      expect.arrayContaining([".claude/skills/tasks/schema.json", ".claude/skills/names/schema.json", ".claude/skills/assignments/schema.json"]),
+    );
   });
 });
