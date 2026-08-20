@@ -28,8 +28,27 @@ describe("the preview payload", () => {
           assignees: ["a@x.jp"],
           assigneeField: "coach",
           withdrawFrom: ["requested"],
+          withdrawAny: false,
         },
       },
+    });
+  });
+
+  it("carries the WRITER's delete, which is the staff half of a withdrawal", () => {
+    // A different permission from `withdrawFrom` rather than a wider setting of it: that one is the
+    // statuses a submitter may take their OWN row away from, and this is the role. Left out of this
+    // rebuild, a staff page previewed without the delete control the published page draws — which
+    // is the preview/production divergence the one-parent change removed.
+    const viewer = { me: "desk@gym.jp", can: { names: { withdrawAny: true } } };
+    const parsed = asPayload({ aid: "a", pages: [page({ viewer })] });
+    expect(parsed?.pages[0]?.viewer?.can.names).toEqual({
+      cid: "names",
+      transitionAny: false,
+      transitionOwn: false,
+      assign: false,
+      assignees: [],
+      withdrawFrom: [],
+      withdrawAny: true,
     });
   });
 

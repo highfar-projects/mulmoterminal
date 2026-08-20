@@ -2257,10 +2257,10 @@
     modern-tar "^0.8.0"
     yargs "^18.0.0"
 
-"@receptron/sharedapp@^0.19.0":
-  version "0.19.0"
-  resolved "https://registry.yarnpkg.com/@receptron/sharedapp/-/sharedapp-0.19.0.tgz#809ebe3f0cc237752c354a6ff68e7db4aa20f53d"
-  integrity sha512-ABwH5jsG9X+Ts8j/j738uGR0dVXNkXO05vljli7WrZa/7M4SjPQlbAf8iYclOTL7La1XLn7ig5Feph4Fi6USPg==
+"@receptron/sharedapp@^0.20.0":
+  version "0.20.0"
+  resolved "https://registry.yarnpkg.com/@receptron/sharedapp/-/sharedapp-0.20.0.tgz#fe066cdca6e45b8918e5e4a71f36fc4574cb91ff"
+  integrity sha512-jzcT1xJhPdJqNjb6fnV+6kboNNcmUzYAfG/LtuOhUqCcQ76AfSA6DECNt0Ts87WwiylaUUnZYStj+alr06IlgQ==
   dependencies:
     zod "^4.1.13"
 

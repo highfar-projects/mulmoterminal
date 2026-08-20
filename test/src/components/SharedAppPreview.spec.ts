@@ -25,7 +25,7 @@ const FORM_FIELD = { name: "name", label: "お名前", required: true, type: "st
 /** One collection's capability, as the server resolves it for the author. Written out rather than
  *  built, so the SHAPE a page reads is pinned here too: `can` is keyed by collection, and a page
  *  reaching for `viewer.can.transitionAny` gets undefined for every app that has ever existed. */
-const MEMBER_CAPABILITY = { cid: "bookings", transitionAny: true, transitionOwn: false, assign: false, assignees: [], withdrawFrom: [] };
+const MEMBER_CAPABILITY = { cid: "bookings", transitionAny: true, transitionOwn: false, assign: false, assignees: [], withdrawFrom: [], withdrawAny: false };
 
 /** And one as it resolves for a PUBLIC page, which carries a viewer too: the rules let whoever
  *  submitted a row move it and take it away, so `selfTransitions` and `selfDelete` resolve to
@@ -404,6 +404,16 @@ describe("SharedAppPreview", () => {
     const wrapper = await mountPreview();
     expect(wrapper.text()).toContain("There is no confirmation and no undo");
     wrapper.unmount();
+
+    // A page whose ONLY control is the writer's delete is warned too — the sharpest case there is,
+    // since a delete takes the row away and `withdrawFrom` (the submitter's half) is empty on a
+    // staff page. Asking only the halves that existed before `writerDelete` left this page silent
+    // about the one control that empties a collection.
+    const deletes = { me: "owner@gym.jp", can: { names: { ...MEMBER_CAPABILITY, cid: "names", transitionAny: false, withdrawAny: true } } };
+    vi.stubGlobal("fetch", answering(payload({ pages: [{ id: "desk", html: PAGE, audience: "member", viewer: deletes }] })));
+    const deleting = await mountPreview();
+    expect(deleting.text()).toContain("There is no confirmation and no undo");
+    deleting.unmount();
 
     // And it asks the CAPABILITIES rather than the audience: a page that can move nothing is not
     // warned about a control it does not have.
