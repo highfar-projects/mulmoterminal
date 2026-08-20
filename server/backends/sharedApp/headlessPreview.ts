@@ -49,13 +49,22 @@ export interface HeadlessPageInput {
    *  which does not switch the parent's check off but makes it refuse everything with
    *  `unknown-collection`, blaming a declaration that is correct. */
   submit: Record<string, { createFields: string[] }> | null;
-  /** WHO the author is to this page and what they may change, for a member or participant page.
+  /** WHO the author is to this page and what they may change.
    *
-   *  `undefined` for a public one, and that is what SELECTS the parent in the harness — the same
-   *  decision the address makes in production. A member page run without it gets the public parent,
-   *  which sends no `viewer` at all: the page draws none of its buttons and the report says its
-   *  controls were not there, which is a false account of a page that is fine. */
+   *  On EVERY audience: the public page has one too, because the rules let the person who submitted
+   *  a row move it and take it away with no role at all. It no longer selects a parent — there is
+   *  one — but it is still the difference between a page that draws its controls and a page that
+   *  draws none and is reported as having none.
+   *
+   *  `undefined` where the projection resolved nothing, and never `{ me: null, can: {} }`: an empty
+   *  `can` is a claim, and the page must be able to tell it from silence. */
   viewer?: Viewer | undefined;
+  /** What the author has ALREADY SUBMITTED to this app, projected as the live page receives it.
+   *
+   *  Per app rather than per page — it asks after the reader, and the reader is the same person on
+   *  every page. `undefined` is "nobody looked", which a page must not draw as "you have not
+   *  answered": that is how a run reports a page as broken for correctly refusing to guess. */
+  own?: Record<string, PreviewDataset> | undefined;
 }
 
 /** What the host does when a confirmation is accepted, and how it takes the write back.
@@ -656,7 +665,13 @@ async function openDriver(browser: Browser, origin: string): Promise<Driver> {
       // The render is awaited on ITS OWN deadline (`evaluate`'s), because what it waits for is the
       // frame's `load` — which a script that never returns never reaches.
       await evaluate(
-        `window.__preview.render(${JSON.stringify({ html: input.html, datasets: input.datasets, submit: input.submit, viewer: input.viewer ?? null })})`,
+        `window.__preview.render(${JSON.stringify({
+          html: input.html,
+          datasets: input.datasets,
+          submit: input.submit,
+          viewer: input.viewer ?? null,
+          own: input.own ?? null,
+        })})`,
       );
       await page.waitForFunction("window.__preview.observe().readied", { timeout: LIMITS.readyMs }).catch(() => undefined);
       await new Promise((resolve) => setTimeout(resolve, LIMITS.settleMs));
@@ -1104,6 +1119,10 @@ export async function headlessPreview(root: string, opts: { write?: boolean } = 
     html: page.html,
     datasets: preview.datasets[previewPageKey(page.audience, page.id)] ?? {},
     ...(page.viewer === undefined ? {} : { viewer: page.viewer }),
+    // The same rows the pane sends, so a page asking "have I registered?" gets the same answer in
+    // both — an author whose page behaves differently under the two is looking at a difference this
+    // repository invented.
+    own: preview.own,
     submit: Object.keys(preview.submit).length > 0 ? preview.submit : null,
   }));
   return runPagesHeadless(inputs, opts.write === true ? repositoryWriter(root) : null);

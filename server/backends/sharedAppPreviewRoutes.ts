@@ -17,6 +17,7 @@ import { APP_MANIFEST_FILE } from "@mulmoclaude/core/collection/server";
 import { previewSharedApp } from "./sharedApp/preview.js";
 import { undoPreviewSubmission, writePreviewSubmission } from "./sharedApp/previewWrite.js";
 import { performPreviewIntent } from "./sharedApp/previewIntent.js";
+import { previewOwnLookup } from "./sharedApp/previewLookup.js";
 import { requestBody } from "../routes/requestBody.js";
 import { isRecord } from "../../common/isRecord.js";
 import { workspaceForRoute } from "../routes/routeParams.js";
@@ -82,6 +83,7 @@ async function respondPreview(req: Request, res: Response): Promise<void> {
     generatedForm: result.generatedForm,
     formInputs: result.formInputs,
     datasets: result.datasets,
+    own: result.own,
     unreadable: result.unreadable,
     warnings: result.warnings,
   };
@@ -146,6 +148,24 @@ async function respondIntent(req: Request, res: Response): Promise<void> {
   res.json(await performPreviewIntent(cwd, asked));
 }
 
+/** One `view.mine(cid, key)`, answered. Out of the mount below for its line budget, and beside
+ *  `respondIntent` for the same reason: the narrowing is the part with a decision in it.
+ *
+ *  An unreadable ask is `{ ok: false }` — "nobody looked" — and never `{ found: false }`, which
+ *  would tell the page the author has not submitted. */
+async function respondLookup(req: Request, res: Response): Promise<void> {
+  const cwd = workspaceForRoute(req.query.cwd, res);
+  if (cwd === null) return;
+  const body = requestBody(req.body);
+  const cid = typeof body.cid === "string" ? body.cid : "";
+  const key = typeof body.key === "string" ? body.key : "";
+  if (cid === "" || key === "") {
+    res.json({ ok: false });
+    return;
+  }
+  res.json(await previewOwnLookup(cwd, { cid, key }));
+}
+
 export function mountSharedAppPreviewRoutes(app: Express): void {
   // The write the author accepted in the confirmation, performed as them.
   //
@@ -174,6 +194,14 @@ export function mountSharedAppPreviewRoutes(app: Express): void {
   // would mean one narrowing deciding which, over a body a sandboxed page's parent composed.
   app.post("/api/shared-app/preview/intent", (req, res) => {
     void respondIntent(req, res).catch((err: unknown) => fail(res, err));
+  });
+
+  // "Have I already got this row?" — a READ, for the one key the page names, performed with the
+  // author's own credentials against an id this host builds. Its own route because it answers in a
+  // different vocabulary from the two above: `{ known, found }` rather than `{ ok, error }`, and a
+  // page settling one as the other reads "not found" as "refused".
+  app.post("/api/shared-app/preview/lookup", (req, res) => {
+    void respondLookup(req, res).catch((err: unknown) => fail(res, err));
   });
 
   // Taking one back. Its own route rather than a flag on the one above, because the author presses

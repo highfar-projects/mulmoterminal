@@ -56,8 +56,17 @@ class Docs implements FirestoreDocs {
     return this.store.get(collectionPath) ?? new Map();
   }
 
-  list = (collectionPath: string): Promise<FirestoreDoc[]> =>
-    Promise.resolve([...this.read(collectionPath)].sort(([l], [r]) => (l < r ? -1 : 1)).map(([id, data]) => ({ id, data })));
+  /** Refuse to LIST records while leaving a `get` working — which is not a contrived pair. A list
+   *  refused on an app published a moment ago, an offline blink, a transient: the page's keyed
+   *  `view.mine(cid, key)` is a `get` and answers anyway. */
+  denyItemLists = false;
+
+  list = (collectionPath: string): Promise<FirestoreDoc[]> => {
+    if (this.denyItemLists && collectionPath.includes("/collections/")) {
+      return Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }));
+    }
+    return Promise.resolve([...this.read(collectionPath)].sort(([l], [r]) => (l < r ? -1 : 1)).map(([id, data]) => ({ id, data })));
+  };
 
   get = (collectionPath: string, docId: string): Promise<unknown | null> => {
     const existing = this.read(collectionPath).get(docId);
@@ -143,6 +152,9 @@ const bookingApp = () => ({
   views: [
     { id: "desk", audience: "member", path: "views/desk.html", collections: ["bookings"] },
     { id: "mine", audience: "participant", path: "views/desk.html", collections: ["bookings"] },
+    // The page the booking was made on. It draws `slots`, which is all `public.read` opens — the
+    // bookings themselves are the one thing a public page must never list.
+    { id: "public", audience: "public", path: "views/desk.html", collections: ["slots"] },
   ],
   public: {
     enabled: true,
@@ -228,12 +240,19 @@ describe("a member's intent, performed from the preview", () => {
     expect(batched).toEqual([]);
   });
 
-  it("refuses an intent that arrives from a public page", async () => {
-    // A public page has no reader and no roles, so there is nothing to judge the move AS. Answered
-    // by name rather than performed as somebody.
+  it("judges an intent from a PUBLIC page as a participant's, rather than refusing it by kind", async () => {
+    // It used to be refused by name — "a public page has no reader, no roles and no tier". Two of
+    // those are true and the conclusion was not: `ownRow` in the rules asks for `authed()` and
+    // nothing else, and the moves it allows are declared in `public.submit[cid]`. So the visitor who
+    // submitted a row may move it exactly as a participant may, and the refusal was the host's
+    // shape rather than the app's rule.
+    //
+    // This app publishes no public page at all, so the answer is still no — but it is
+    // `no-such-page`, which says which page the ask named, rather than "wrong kind of page", which
+    // named nothing the author could act on. The app below has one, and performs.
     const result = await performPreviewIntent(root, asked({ page: { id: "public", audience: "public" } }));
 
-    expect(result).toEqual({ ok: false, error: "not-a-member-page" });
+    expect(result).toEqual({ ok: false, error: "no-such-page" });
     expect(batched).toEqual([]);
   });
 
@@ -326,6 +345,143 @@ describe("a member's intent, performed from the preview", () => {
       // reopen are both refused, and there is no commit in which the booking is gone and the grid
       // still says taken.
       expect(batched).toEqual([`delete ${bookingsPath}/roomA-1000`, `update apps/${AID}/collections/slots/items/roomA-1000 {"state":"open"}`]);
+    });
+
+    it("acts on a row whose identity is in the document NAME and nowhere else", async () => {
+      // `viewer.mine` is built from a LIST, and `idFrom: "auth.uid+field"` has none: the rules grant
+      // a submitter the document they can NAME rather than a range of them. So a page finds that row
+      // through `view.mine(cid, key)` — live-poll's whole shape — and it is in neither the page's
+      // datasets nor `own`. The ask came back `not-in-view` about a row the page had legitimately
+      // been handed, and it was ALLOWED on the live page, where the rules answer ownership.
+      //
+      // The row is read on demand and accepted only if it is the author's own by the same selector
+      // the dataset read filters with — which is the question `ownRow` asks.
+      writeCollection("votes", {
+        questionId: { type: "string", label: "Q" },
+        choice: { type: "string", label: "Choice" },
+        state: { type: "enum", label: "State", values: ["cast", "withdrawn"] },
+      });
+      writeApp({
+        aid: AID,
+        name: "Poll",
+        members: { [OWNER.email]: { "*": "owner" } },
+        collections: { votes: { submitOnly: true, statusField: "state", transitions: { initial: ["cast"] } }, questions: {} },
+        views: [
+          { id: "desk", audience: "member", path: "views/desk.html", collections: ["questions"] },
+          // The public page draws the QUESTIONS, which is all `public.read` opens — the votes
+          // themselves are the one thing it must never list, which is why the row it acts on can
+          // only have come from a lookup.
+          { id: "public", audience: "public", path: "views/desk.html", collections: ["questions"] },
+        ],
+        public: {
+          enabled: true,
+          read: ["questions"],
+          submit: {
+            votes: {
+              // live-poll's shape, exactly: anonymous, and the uid appears NOWHERE in the record —
+              // the document NAME is the only place it lives.
+              auth: "anonymous",
+              createFields: ["questionId", "choice", "state"],
+              initialStatus: "cast",
+              idFrom: "auth.uid+field",
+              idField: "questionId",
+              selfTransitions: { cast: ["withdrawn"] },
+            },
+          },
+        },
+      });
+      docs.store.set(`apps/${AID}/collections/votes/items`, new Map([[`${OWNER.uid}_q1`, { questionId: "q1", choice: "b", state: "cast" }]]));
+
+      const result = await performPreviewIntent(root, {
+        page: { id: "public", audience: "public" },
+        kind: "transition",
+        cid: "votes",
+        itemId: `${OWNER.uid}_q1`,
+        to: "withdrawn",
+      });
+
+      expect(result).toEqual({ ok: true, mailed: false });
+      expect(batched).toEqual([`update apps/${AID}/collections/votes/items/${OWNER.uid}_q1 {"state":"withdrawn"}`]);
+    });
+
+    it("acts on a row the page could only LOOK UP, when the list was refused", async () => {
+      // `viewer.mine` is built from a LIST and `view.mine(cid, key)` is a `get`, so the two do not
+      // fail together: the collection can be unlistable for a render while the document itself
+      // reads back. The page then draws a control from an answer it really got, and the host
+      // refusing it as `not-in-view` is the rendered-and-refused shape this change exists to
+      // remove — the live page allows the move, because there the rules answer ownership.
+      docs.store.set(bookingsPath, new Map([["roomA-1000", { requesterEmail: OWNER.email, slot: "roomA-1000", status: "booked" }]]));
+      docs.denyItemLists = true;
+
+      const result = await performPreviewIntent(root, {
+        page: { id: "public", audience: "public" },
+        kind: "transition",
+        cid: "bookings",
+        itemId: "roomA-1000",
+        to: "cancelled",
+      });
+
+      expect(result).toEqual({ ok: true, mailed: false });
+      expect(batched).toEqual([`update ${bookingsPath}/roomA-1000 {"status":"cancelled"}`]);
+    });
+
+    it("still refuses a row that is NOT the author's, when only a lookup could reach it", async () => {
+      // The same conditions and the other answer. The read on demand asks `ownsRow` — the predicate
+      // the dataset read filters with, which is `ownRow` in the rules said in this host's terms — so
+      // it cannot be looser than the list it stands in for. It matters here more than anywhere: this
+      // write goes out as the app's OWNER, who may touch anything.
+      docs.store.set(bookingsPath, new Map([["roomA-1000", { requesterEmail: "someone@else.example", slot: "roomA-1000", status: "booked" }]]));
+      docs.denyItemLists = true;
+
+      const result = await performPreviewIntent(root, {
+        page: { id: "public", audience: "public" },
+        kind: "transition",
+        cid: "bookings",
+        itemId: "roomA-1000",
+        to: "cancelled",
+      });
+
+      expect(result).toEqual({ ok: false, error: "not-in-view" });
+      expect(batched).toEqual([]);
+    });
+
+    it("still refuses a row that is NOT the author's, however it was named", async () => {
+      // The other half, and the reason the fallback is a predicate rather than a read: `NOT_IN_VIEW`
+      // stands in for the ownership check the rules would have made, because this write goes out as
+      // the app's OWNER — who may touch anything. A row belonging to somebody else stays refused.
+      docs.store.set(bookingsPath, new Map([["roomA-1000", { requesterEmail: "someone@else.example", slot: "roomA-1000", status: "booked" }]]));
+
+      const result = await performPreviewIntent(root, {
+        page: { id: "public", audience: "public" },
+        kind: "transition",
+        cid: "bookings",
+        itemId: "roomA-1000",
+        to: "cancelled",
+      });
+
+      expect(result).toEqual({ ok: false, error: "not-in-view" });
+      expect(batched).toEqual([]);
+    });
+
+    it("cancels the author's OWN booking from the public page, as a participant would", async () => {
+      // THE ONE THIS CHANGE EXISTS FOR. `selfTransitions` is declared inside `public.submit`, which
+      // is the public page's own declaration, and `ownRow` in the rules asks for `authed()` and
+      // nothing else — no role, no membership, an anonymous uid will do. So the visitor who booked
+      // the slot may cancel it, and the page that took the booking is where they would press it.
+      //
+      // It was refused here by kind ("not a member page") because the public parent had no
+      // `perform` port to reach this with, and on the live page the intent was dropped without an
+      // answer at all. Both halves are wired now, and the ask is judged exactly as `/p/`'s is.
+      const result = await performPreviewIntent(root, {
+        page: { id: "public", audience: "public" },
+        kind: "transition",
+        cid: "bookings",
+        itemId: "roomA-1000",
+        to: "cancelled",
+      });
+
+      expect(result).toEqual({ ok: true, mailed: false });
+      expect(batched).toEqual([`update ${bookingsPath}/roomA-1000 {"status":"cancelled"}`]);
     });
 
     it("writes the assignee into the field the declaration names", async () => {

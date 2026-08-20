@@ -366,14 +366,20 @@ describe("SharedAppPreview", () => {
     // being fast enough is a test that reports a working feature as broken on somebody else's
     // machine.
     const state = await answerFor(answers, (message) => message.type === "mc-public-view:state", "the page's state");
-    expect(state?.viewer).toEqual({ me: "owner@gym.jp", can: { bookings: MEMBER_CAPABILITY } });
+    // `mine` rides in the same envelope now — the two used to belong to different parents, so a
+    // page could have one or the other and a member page always had neither.
+    expect(state?.viewer).toEqual({ me: "owner@gym.jp", can: { bookings: MEMBER_CAPABILITY }, mine: {} });
     wrapper.unmount();
   });
 
-  // A public page must NOT get one. It has no reader and no roles, and a `viewer` there would be an
-  // answer to a question that page never asks — the pane sending one anyway is how a public page
-  // starts branching on something only a member has.
-  it("sends no viewer to a public page", async () => {
+  // A PUBLIC PAGE GETS ONE TOO, and that is the correction. It was withheld because "a public page
+  // has no reader and no roles" — but the rules disagree: `ownRow` asks for `authed()` and nothing
+  // else, and `selfTransitions` / `selfDelete` are declared inside `public.submit`. So the visitor
+  // who submitted a row may move it, and a page with no `viewer` draws no button for that.
+  //
+  // What it carries here is `mine` and nothing else: this payload resolves no capabilities, and an
+  // absent `can` is "this host does not say" rather than "you may do nothing".
+  it("tells a public page what it has already submitted", async () => {
     const wrapper = await mountPreview();
     const { answers } = await connect(wrapper);
     // A port's delivery is a MACROTASK, so `flushPromises` alone does not guarantee it has
@@ -381,7 +387,7 @@ describe("SharedAppPreview", () => {
     // being fast enough is a test that reports a working feature as broken on somebody else's
     // machine.
     const state = await answerFor(answers, (message) => message.type === "mc-public-view:state", "the page's state");
-    expect(state).not.toHaveProperty("viewer");
+    expect(state?.viewer).toEqual({ mine: {} });
     wrapper.unmount();
   });
 
