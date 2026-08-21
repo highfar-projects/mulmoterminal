@@ -108,7 +108,11 @@ describe("stopReport", () => {
   });
 
   it("hands over the pid when it could not stop one, because the registry is no longer readable to the user", () => {
-    const lines = stopReport({ stopped: [], stubborn: [{ ...instance(11), reason: "EPERM" }], unconfirmed: [] });
+    // The platform is named, because the command is not the same on all of them and this case is
+    // about HANDING OVER THE PID — which one it names is pinned by the manualStopCommand suite.
+    // Left to default, this assertion passes on the machine that wrote it and fails on the Windows
+    // runner, which is what it did.
+    const lines = stopReport({ stopped: [], stubborn: [{ ...instance(11), reason: "EPERM" }], unconfirmed: [] }, "darwin");
     expect(lines.join("\n")).toContain("Could NOT stop");
     expect(lines.join("\n")).toContain("kill -9 11");
   });
