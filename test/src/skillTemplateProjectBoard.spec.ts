@@ -18,6 +18,11 @@
 //   to tell them apart: an empty list is "you have not registered", a missing key is "nobody
 //   looked". Conflating them draws the registration form on top of a registration that exists —
 //   the bug this template was extracted from.
+//
+//   AN UNKNOWN TREATED AS A YES. The other half of the same three states, and the one that cost
+//   two published apps: "nobody looked" was let through to the take, the rules do not consult the
+//   roster, so the write SUCCEEDED and produced a claim with a uid and no name. Nothing failed
+//   anywhere — the board drew it under `holderName`'s fallback, beside the real ones.
 import { describe, it, expect, beforeEach } from "vitest";
 
 // Through Vite rather than `node:fs`: this spec belongs to the DOM-typed project, which carries no
@@ -330,21 +335,59 @@ describe("the project-board public board", () => {
     detachPages();
   });
 
-  it("offers the work when NOBODY LOOKED, because that is not 'you have not registered'", async () => {
-    // No `mine` key at all — a refused read, an offline blink, a host that answers nothing. The
-    // page must not take the action away from somebody who may well be registered: it offers it,
-    // and lets the refusal explain itself if there is one.
+  it("REGISTERS FIRST when nobody looked, rather than taking work under no name", async () => {
+    // No `mine` key at all — a refused read, an offline blink, a host that answers nothing (every
+    // host, before mulmoserver wired `mine` into the public page on 2026-08-19). The page must not
+    // take the action away from somebody who may well be registered, and it must not let the press
+    // through either: the rules do not consult the roster, so the write would SUCCEED and leave a
+    // row carrying a uid and no name — drawn on the board under `holderName`'s fallback, with
+    // nothing anywhere reporting a fault. Two published apps reached that state.
+    //
+    // So the third state resolves into the second: the typed name is registered, and only then is
+    // the work taken. Both writes, in that order.
     const board = loadBoard();
     board.tell({ tasks: TASKS, assignments: [], names: [] });
 
     expect(board.buttons()).toContain("これをやります");
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
     board.press("これをやります");
     await settle();
 
     // The write contract, which is what the declaration is built around: the page sends the task id
     // and NOTHING else. `uid` comes from the session and `status` from `initialStatus`, both filled
     // by the host — a page that sent either would be writing values it is not allowed to choose.
-    expect(board.sent).toEqual([{ kind: "submit", cid: "assignments", values: { taskId: "fix-login" } }]);
+    expect(board.sent).toEqual([
+      { kind: "submit", cid: "names", values: { name: "山田" } },
+      { kind: "submit", cid: "assignments", values: { taskId: "fix-login" } },
+    ]);
+  });
+
+  it("takes the work under a name ALREADY registered, even though nobody looked", async () => {
+    // The reason the unknown state registers rather than refusing: a reader who registered on an
+    // earlier visit is in exactly this state, and must not be locked out. Their second `names`
+    // create is refused by the id collision — the document id IS their uid — which costs them
+    // nothing and leaves the first name standing. The take goes through behind it.
+    const board = loadBoard();
+    board.tell({ tasks: TASKS, assignments: [], names: [{ id: "uid-1", name: "山田" }] });
+
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent.map((one) => one.cid)).toEqual(["names", "assignments"]);
+  });
+
+  it("asks for the name instead of writing, when nobody looked and none was typed", async () => {
+    // The empty field is the only thing left to go on once `mine` is absent, so it is what the page
+    // stops at. Nothing is sent — not even the take, which the rules would have accepted.
+    const board = loadBoard();
+    board.tell({ tasks: TASKS, assignments: [], names: [] });
+
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent).toEqual([]);
+    expect(board.said()).toContain("先に名前を登録してください");
   });
 
   it("stops the write when the read DID land and the reader has not registered", async () => {
@@ -381,10 +424,12 @@ describe("the project-board public board", () => {
     // pages delegate one `click` handler on the document, jsdom shares that document across a
     // file, and the labels are the template's own — so a page loaded earlier matches the same
     // press. Nothing would throw; the count would simply be one somewhere nobody was looking.
+    // Told a registered reader, so one press is exactly one write and the count is unambiguous.
+    const registered = { names: [{ id: "uid-1", name: "山田" }], assignments: [] };
     const gone = loadBoard();
-    gone.tell({ tasks: TASKS, assignments: [], names: [] });
+    gone.tell({ tasks: TASKS, assignments: [], names: [{ id: "uid-1", name: "山田" }] }, registered);
     const shown = loadBoard();
-    shown.tell({ tasks: TASKS, assignments: [], names: [] });
+    shown.tell({ tasks: TASKS, assignments: [], names: [{ id: "uid-1", name: "山田" }] }, registered);
 
     shown.press("これをやります");
     await settle();
