@@ -185,6 +185,13 @@ describe("the report when something was left alone", () => {
     expect(text).not.toContain("Stopped http");
   });
 
+  it("names a --force command the reader can actually run", () => {
+    // An npx user has no global `mulmoterminal`, so a hardcoded one would send them to a command
+    // that does not exist — the same defect the already-running prompt was fixed for (Codex).
+    expect(stopReport(left, "darwin", "npx mulmoterminal@latest stop").join("\n")).toContain("npx mulmoterminal@latest stop --force");
+    expect(stopReport(left, "darwin", "mulmoterminal stop").join("\n")).toContain("mulmoterminal stop --force");
+  });
+
   it("is a failure, because it is not what the user asked for", () => {
     expect(stopExitCode(left)).toBe(1);
   });

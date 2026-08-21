@@ -13,6 +13,9 @@
 // `process.title` renames the console there, not the process, so nothing about the naming helps a
 // Windows user find or kill anything.
 import { get as httpGet } from "node:http";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { stopCommandFor } from "./cli-args.js";
 import { isProcessAlive, liveInstances } from "./instances.js";
 
 // How long a server is given to end itself before it is reported as stubborn. Generous on purpose:
@@ -148,8 +151,13 @@ export const describeInstance = (instance) => (instance.port === null ? `pid ${i
 export const manualStopCommand = (pids, platform = process.platform) =>
   platform === "win32" ? pids.map((pid) => `taskkill /PID ${pid} /F`).join(" && ") : `kill -9 ${pids.join(" ")}`;
 
+/** How the user would run this command again — `mulmoterminal stop` for a global install, the npx
+ *  form for an npx one. From this file's OWN location, which is inside the package either way, so
+ *  the recovery hint below cannot name a binary the reader does not have (Codex). */
+const selfStopCommand = () => stopCommandFor(dirname(fileURLToPath(import.meta.url)));
+
 /** Everything the command prints, as lines, so the wording is testable without running it. */
-export function stopReport({ stopped, stubborn, unconfirmed }, platform = process.platform) {
+export function stopReport({ stopped, stubborn, unconfirmed }, platform = process.platform, stopCommand = selfStopCommand()) {
   if (!stopped.length && !stubborn.length && !unconfirmed.length) return ["MulmoTerminal is not running."];
   const lines = stopped.map((i) => `Stopped ${describeInstance(i)}`);
   stubborn.forEach((i) => lines.push(`Could NOT stop ${describeInstance(i)} — ${i.reason}`));
@@ -158,7 +166,7 @@ export function stopReport({ stopped, stubborn, unconfirmed }, platform = proces
   unconfirmed.forEach((i) => lines.push(`Left alone: ${describeInstance(i)} — could not confirm that pid is the server there.`));
   if (unconfirmed.length) {
     lines.push("  It probably crashed, in which case that pid can since have been given to an unrelated program.");
-    lines.push("  Stop it anyway with:  mulmoterminal stop --force");
+    lines.push(`  Stop it anyway with:  ${stopCommand} --force`);
   }
   // Only when something is left behind: the pid is the one thing a user cannot look up once the
   // registry has been read for them.

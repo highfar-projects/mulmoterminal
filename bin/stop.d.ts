@@ -24,6 +24,6 @@ export declare function confirmInstance(instance: InstanceEntry, get?: typeof im
 export declare function stopInstances(instances: readonly InstanceEntry[], effects?: StopEffects): Promise<StopResult>;
 export declare function describeInstance(instance: InstanceEntry): string;
 export declare function manualStopCommand(pids: readonly number[], platform?: NodeJS.Platform): string;
-export declare function stopReport(result: StopResult, platform?: NodeJS.Platform): string[];
+export declare function stopReport(result: StopResult, platform?: NodeJS.Platform, stopCommand?: string): string[];
 export declare function stopExitCode(result: StopResult): number;
 export declare function runStop(args?: readonly string[]): Promise<void>;
