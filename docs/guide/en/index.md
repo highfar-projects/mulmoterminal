@@ -18,9 +18,7 @@ description: A browser-terminal cockpit for running several AI coding agents (Cl
   <a href="../videos/launch-demo-en.mp4">Watch the demo (MP4, 3.3 MB)</a> — this browser can't play it inline.
 </video>
 
-*90 seconds, with sound — one agent, then a grid of them, each cell coloured **working**, **done**
-or **needs you**. Zoom into one and the roster still holds what every other session asked, answered
-and did, so you go to whichever is lit and lose nothing catching up.*
+*90 seconds, with sound — one agent, then a grid of them, each cell coloured **working**, **done** or **needs you**. Zoom into one and the roster still holds what every other session asked, answered and did, so you go to whichever is lit and lose nothing catching up.*
 
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
