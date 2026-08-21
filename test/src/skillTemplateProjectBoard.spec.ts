@@ -439,6 +439,58 @@ describe("the project-board public board", () => {
     expect(board.sent).toEqual([{ kind: "submit", cid: "assignments", values: { taskId: "fix-login" } }]);
   });
 
+  it("re-asks after a refused registration, rather than caching 'not registered' for the visit", async () => {
+    // A negative answer is a snapshot, not a fact about the rest of the visit. The row can appear
+    // afterwards — the same person registering in another tab, or a write whose row landed and
+    // whose reply was lost — and the refusal the register button then earns is the ONLY sign of it.
+    //
+    // Cached, that refusal is a dead end: the take reads "no row", `askHost` never runs again
+    // because something is settled, and registering once more only earns the same refusal. Reload
+    // is the only way out, which is not something a page may require of somebody.
+    const board = loadBoard();
+    board.lookup({ known: true, found: false });
+    board.tell({ tasks: TASKS, assignments: [], names: [] });
+    await settle();
+
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
+    board.press("これをやります");
+    await settle();
+    expect(board.sent).toEqual([]);
+
+    // The row exists after all, and the duplicate refusal is how this page finds out.
+    board.answer({ ok: false, error: "permission-denied" });
+    board.lookup({ known: true, found: true, record: { name: "山田" } });
+    board.press("この名前で参加する");
+    await settle();
+
+    board.answer({ ok: true });
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent.map((one) => one.cid)).toEqual(["names", "assignments"]);
+  });
+
+  it("drops a second press while the first write is still out", async () => {
+    // The take path crosses an `await` on a host that has resolved nothing, so an impatient second
+    // press reads `settled` as false and sends the SAME registration again. No claim comes of it —
+    // but the duplicate is refused by the id collision, so the person who did register reads
+    // "登録できませんでした" about a registration that worked.
+    const board = loadBoard();
+    board.hold();
+    board.tell({ tasks: TASKS, assignments: [], names: [] });
+    await settle();
+    board.release({ known: false });
+    await settle();
+
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
+    // Both presses land before anything is awaited back — the second is dropped, not queued.
+    board.press("これをやります");
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent).toEqual([{ kind: "submit", cid: "names", values: { name: "山田" } }]);
+  });
+
   it("ignores a STALE lookup that lands after a registration succeeded", async () => {
     // The lookup goes out from `onState`, so it is in flight while the visitor is still reading the
     // page — and it was asked BEFORE they registered. If its answer is applied on arrival it

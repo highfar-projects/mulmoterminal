@@ -318,6 +318,16 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
      *  **`settled` と `row` は別の格**です。`row === null` は「行が無い」という答えで、
      *  「まだ訊いていない」ではない。1 つの変数に畳むと、ホストが「無い」と答えた人に登録欄を
      *  出し続けることになります — この板が塞ごうとしている取り違えの、ちょうど裏返しです。 */
+    /** 書き込みが 1 本、外に出ているあいだ。
+     *
+     *  **押下を落とすのは、ここが `await` を跨ぐからです。** 未確定のホストでは 1 押し目が
+     *  `names` を出したまま戻ってこない — その間の 2 押し目は `settled` をまだ `false` と読み、
+     *  同じ登録をもう一度出します。危険ではありません（担当行は出ない）が、2 本目は必ず重複
+     *  拒否になるので、登録できた人が「登録できませんでした」を読むことになります。
+     *
+     *  `arming` と違ってデータではないので、`render()` は見ません。 */
+    let working = false;
+
     let settled = false;
     let resolved = null;
     let asking = false;
@@ -391,7 +401,12 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
       const res = await view.submit("names", { name });
       // 確認で「やめる」を押した人は、取るのもやめています。
       if (res && res.error === "cancelled") { tell("", false); return false; }
-      if (!res || !res.ok) { tell("登録できませんでした（" + ((res && res.error) || "unknown") + "）。", true); return false; }
+      // 同じ理由で訊き直させます（この枝では `settled` はまだ false なので、捨てるものは無い）。
+      if (!res || !res.ok) {
+        void askHost();
+        tell("登録できませんでした（" + ((res && res.error) || "unknown") + "）。", true);
+        return false;
+      }
       settled = true;
       resolved = { name };
       tell("登録しました。もう一度「これをやります」を押すと引き受けます。", false);
@@ -491,33 +506,45 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
       if (!act) return;
       const taskId = event.target.dataset.task;
       if (act === "unarm" || act === "arm") { arming = act === "arm" ? taskId : null; render(); return; }
-      if (act === "register") {
-        const input = document.getElementById("who");
-        const name = input ? input.value.trim() : "";
-        if (name === "") { tell("名前を入れてください。", true); return; }
-        const res = await view.submit("names", { name });
-        // 成立を覚えます。`viewer.mine` が来ないホストでは、ここで覚えておかないと「登録
-        // しました」と言った直後の「これをやります」が、また登録から始めて id の衝突で
-        // 止まります — 登録した人が永久に取れない板になる。
-        if (res && res.ok) { settled = true; resolved = { name }; }
-        report(res, "登録しました。作業を取れます。", "登録できませんでした");
-        return;
-      }
-      if (act === "take") {
-        if (!(await ensureRegistered())) return;
-        // uid も status も送らない。ホストがセッションと宣言から埋めます。
-        report(await view.submit("assignments", { taskId }), "引き受けました。", "引き受けられませんでした。誰かが先に取ったかもしれません");
-        return;
-      }
-      if (act === "finish" || act === "reopen") {
-        const to = act === "finish" ? "done" : "doing";
-        report(await view.transition("assignments", taskId, to), to === "done" ? "完了にしました。" : "未完了に戻しました。", "変えられませんでした");
-        return;
-      }
-      if (act === "drop") {
-        arming = null;
-        report(await view.withdraw("assignments", taskId), "外しました。空きに戻っています。", "外せませんでした");
-        render();
+      // 書き込む操作だけ。上の 2 つは画面の状態で、待つものが無い。
+      if (working) return;
+      working = true;
+      try {
+        if (act === "register") {
+          const input = document.getElementById("who");
+          const name = input ? input.value.trim() : "";
+          if (name === "") { tell("名前を入れてください。", true); return; }
+          const res = await view.submit("names", { name });
+          // 成立を覚えます。`viewer.mine` が来ないホストでは、ここで覚えておかないと「登録
+          // しました」と言った直後の「これをやります」が、また登録から始めて id の衝突で
+          // 止まります — 登録した人が永久に取れない板になる。
+          if (res && res.ok) { settled = true; resolved = { name }; }
+          // **拒否は「既に在る」かもしれません。** 別のタブで登録した、あるいは行はできたのに
+          // 応答を落とした — どちらもこの拒否になります。「行が無い」という古い答えを抱えたまま
+          // だと、`askHost` は `settled` を見て二度と訊かず、この人はリロードするまで取れません。
+          // なので否定のキャッシュを捨てて、訊き直させます（取りはしません）。
+          else if (res && res.error !== "cancelled") { settled = false; resolved = null; void askHost(); }
+          report(res, "登録しました。作業を取れます。", "登録できませんでした");
+          return;
+        }
+        if (act === "take") {
+          if (!(await ensureRegistered())) return;
+          // uid も status も送らない。ホストがセッションと宣言から埋めます。
+          report(await view.submit("assignments", { taskId }), "引き受けました。", "引き受けられませんでした。誰かが先に取ったかもしれません");
+          return;
+        }
+        if (act === "finish" || act === "reopen") {
+          const to = act === "finish" ? "done" : "doing";
+          report(await view.transition("assignments", taskId, to), to === "done" ? "完了にしました。" : "未完了に戻しました。", "変えられませんでした");
+          return;
+        }
+        if (act === "drop") {
+          arming = null;
+          report(await view.withdraw("assignments", taskId), "外しました。空きに戻っています。", "外せませんでした");
+          render();
+        }
+      } finally {
+        working = false;
       }
     });
 
