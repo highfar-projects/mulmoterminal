@@ -54,6 +54,7 @@ export const en = {
       sessions: "Sessions and background tasks",
       surviving: "Sessions that survived a restart",
       cost: "Cost (estimated)",
+      quit: "Quit MulmoTerminal",
       help: "Help & user guide",
     },
 
@@ -407,6 +408,25 @@ export const en = {
       month: "Month",
       failed: "Couldn't load cost estimate.",
       unpriced: "Some turns used a model with no known price and are excluded from these estimates.",
+    },
+
+    quit: {
+      description:
+        "Stop the MulmoTerminal server running on this machine. Closing this tab does not stop it — the server keeps running, and this is how to stop it without going back to the terminal you started it in.",
+      // Message-function form, which skips vue-i18n's message compiler: the literal `@` in
+      // `mulmoterminal@latest` would otherwise be read as a linked-message reference, the compiler
+      // throws, and the whole section renders as nothing.
+      restartHint: () => "To start it again, run `npx mulmoterminal@latest` in a terminal.",
+      button: "Quit MulmoTerminal",
+      confirmBody: "The server stops and this page stops working. Every terminal on the grid disappears from the screen.",
+      sessionsNote:
+        'Same as pressing Ctrl+C: with tmux installed the agent sessions keep running and come back under "Sessions that survived a restart" next time; without it they end with the server.',
+      confirmButton: "Quit",
+      cancel: "Cancel",
+      stopping: "Stopping…",
+      failed: "Couldn't stop the server.",
+      stoppedTitle: "MulmoTerminal has stopped",
+      stoppedBody: "You can close this tab.",
     },
 
     language: {

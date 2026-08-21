@@ -37,6 +37,7 @@ import CostSection from "./settings/CostSection.vue";
 import GitHubSection from "./settings/GitHubSection.vue";
 import SessionSection from "./settings/SessionSection.vue";
 import SurvivingSessionsSection from "./settings/SurvivingSessionsSection.vue";
+import QuitSection from "./settings/QuitSection.vue";
 import HeaderChromeSection from "./settings/HeaderChromeSection.vue";
 import ModelsSection from "./settings/ModelsSection.vue";
 import TerminalKeysSection from "./settings/TerminalKeysSection.vue";
@@ -371,6 +372,9 @@ useModalKeyboard({
           </div>
           <div v-if="visitedTabs.has('cost')" v-show="activeTab === 'cost'" data-testid="settings-pane-cost">
             <CostSection :cwd="cwd" :session-id="sessionId" />
+          </div>
+          <div v-if="visitedTabs.has('quit')" v-show="activeTab === 'quit'" data-testid="settings-pane-quit">
+            <QuitSection />
           </div>
           <div v-if="visitedTabs.has('help')" v-show="activeTab === 'help'" data-testid="settings-pane-help">
             <HelpSection />
