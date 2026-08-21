@@ -36,3 +36,11 @@ issue #1827 が投稿されたことで user-attachments の 2 URL は公開に�
 - 動画に maintainer のディレクトリ・アカウント名が写っていないこと。13 フレームのコンタクトシートで通し確認した。デモ用の `HOME` とデモ用プロジェクト（`acme-*`）で撮られている
 - ガイドから追加した相対参照（`../videos/launch-demo-{en,ja}.mp4`、`../images/README.md`）がすべて実在のファイルに解決すること
 - コーデックがブラウザの共通線であること（h264 High / yuv420p / level 3.1 + AAC-LC 44.1 kHz stereo）
+
+## レビュー対応（iteration 1）
+
+CodeRabbit と Codex GHA が同じ 1 点を指摘した: ナレーション付き動画に字幕も文字起こしも無く、音声を聞けない読者に情報が届かない（README / ガイド en / ガイド ja の 3 箇所）。
+
+対応: 3 箇所とも、プレイヤーの直下に `<details>` で折りたたんだナレーション全文を置いた。本文は動画を生成した MulmoScript デッキ（`mulmo-presentations/mulmoterminal/launch/mulmoterminal-launch-v8{,_ja}.json`）からの逐語転記。デッキはレンダリング後にも編集されうるので、mulmocast がレンダリング時に `_studio.json` へ埋め込んだ `script` と突き合わせ、10 ビートすべてが一致することを確認した（PR の mp4 がそのレンダリングと同一であることは sha256 で確認済み）。`<details>` は GitHub のサニタイザを通るので、`<video>` が丸ごと落とされる github.com 上のガイド `.md` でも本文が読める。
+
+見送り: 同期字幕（WebVTT `<track>`）。ビートごとの時刻は mulmocast が `_studio.json` の `startAt` に書くが、このレンダリングの studio ファイルには無い（movie ステップを通した studio にしか書かれない）。手元にある 8/19 の studio の時刻は 1 つ前の文面（ビート 2・7 が別の文）のもので、ビート 2 以降がずれる。`record-youtube-publish` の `youtube-chapters.js` の推定も「固定尺の html_tailwind ビートがある」として拒否した。再レンダリングすれば時刻が出るので、follow-up で扱う。

@@ -18,6 +18,31 @@ description: A browser-terminal cockpit for running several AI coding agents (Cl
   <a href="../videos/launch-demo-en.mp4">Watch the demo (MP4, 3.3 MB)</a> — this browser can't play it inline.
 </video>
 
+<details markdown="block">
+<summary>Transcript of the narration</summary>
+
+When you ran one coding agent, the slowest thing in the room was the agent.
+
+Now that you run five, the slowest thing in the room is probably you.
+
+One of them is always stopped. A permission prompt. A question. Until you notice, it does nothing at all.
+
+MulmoTerminal puts every session on one screen. Blue is working. Green is done. Amber is waiting on you.
+
+You stop hunting. You go where the light is.
+
+The other kind of slow is: what did I even ask this one? The roster keeps one line per session — what you asked, and what came back. Nothing left to remember.
+
+When one is done, you don't go looking for its window. Click its row — the next order goes in right there.
+
+Then you pick the next one from whatever is lit. Click, answer, move on. You never go looking — the roster tells you.
+
+We built MulmoTerminal for exactly that: not to watch agents, but to triage them.
+
+That is the whole install.
+
+</details>
+
 *90 seconds, with sound — one agent, then a grid of them, each cell coloured **working**, **done** or **needs you**. Zoom into one and the roster still holds what every other session asked, answered and did, so you go to whichever is lit and lose nothing catching up.*
 
 
