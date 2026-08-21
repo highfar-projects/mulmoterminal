@@ -281,7 +281,9 @@ for the details and model notes.
 A global install isn't auto-updated, so on startup MulmoTerminal checks npm and
 prints a one-line notice when a newer version is available — and the web toolbar shows a
 clickable **update badge** with the exact command for your install (`npm i -g mulmoterminal`,
-or `git pull` for a clone). Disable with `MULMOTERMINAL_NO_UPDATE_CHECK=1` (or `NO_UPDATE_NOTIFIER=1`).
+or `git pull` for a clone). The server repeats that check every few hours, so a release that
+ships while it is running still reaches the badge; the startup console notice is printed once
+and is not repeated. Disable with `MULMOTERMINAL_NO_UPDATE_CHECK=1` (or `NO_UPDATE_NOTIFIER=1`).
 
 Options: `--cwd <dir>` (working directory — relative paths allowed; defaults to the
 directory you run the command from), `--port <n>` (default 34567), `--no-open`,

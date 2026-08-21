@@ -58,8 +58,8 @@ function refresh(): void {
   void poll(0);
 }
 
-// What the header badge and the Settings version line read: the running install, and the update
-// notice when there is one. Best-effort — any failure just leaves both hidden.
+// What those three read: the running install, and the update notice when there is one.
+// Best-effort — any failure just leaves the badge and the version line hidden.
 //
 // usePollWhileVisible rather than one module-level timer: it already refreshes on `focus` and
 // `visibilitychange`, so a user returning to the tab sees a badge the server picked up while
@@ -71,7 +71,6 @@ function refresh(): void {
 // cell). Concurrent refreshes still collapse — `polling` admits one chase at a time — so the
 // extra timers cost timers, not requests.
 export function useUpdateStatus() {
-  refresh();
   usePollWhileVisible(refresh, REFRESH_MS);
   return { status: computed(() => status.value), badge: computed(() => parseUpdateNotice(status.value?.notice)) };
 }
