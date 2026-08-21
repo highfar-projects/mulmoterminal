@@ -1,7 +1,9 @@
 // @vitest-environment node
 import { describe, it, expect, vi } from "vitest";
 
-import { stopInstances, stopReport, stopExitCode, describeInstance, manualStopCommand, parseStopArgs } from "../../bin/stop.js";
+import { createServer, type ServerResponse } from "node:http";
+
+import { stopInstances, stopReport, stopExitCode, describeInstance, manualStopCommand, parseStopArgs, confirmInstance } from "../../bin/stop.js";
 
 const instance = (pid: number, port: number | null = 34567) => ({ pid, port, startedAt: 1 });
 
@@ -89,7 +91,8 @@ describe("stopInstances", () => {
 
   it("sends SIGTERM by default — the signal the server has a handler for", async () => {
     const kill = vi.spyOn(process, "kill").mockImplementation(() => true);
-    await stopInstances([instance(11)], { isAlive: () => false, sleep: async () => {}, graceMs: 0 });
+    // force, so this stays about the SIGNAL and does not depend on a server answering.
+    await stopInstances([instance(11)], { isAlive: () => false, sleep: async () => {}, graceMs: 0, force: true });
     expect(kill).toHaveBeenCalledWith(11, "SIGTERM");
     kill.mockRestore();
   });
@@ -173,7 +176,7 @@ describe("the report when something was left alone", () => {
 
   it("says why, rather than reporting it as stopped", () => {
     const text = stopReport(left, "darwin").join("\n");
-    expect(text).toContain("not answering");
+    expect(text).toContain("could not confirm");
     expect(text).toContain("--force");
     expect(text).not.toContain("Stopped http");
   });
@@ -219,5 +222,79 @@ describe("parseStopArgs", () => {
   it("refuses what it does not understand rather than stopping servers anyway", () => {
     expect(parseStopArgs(["--all"])).toMatchObject({ error: expect.stringContaining("--all") });
     expect(parseStopArgs(["34567"])).toMatchObject({ error: expect.stringContaining("34567") });
+  });
+});
+
+// The identity probe itself, against a real loopback server — because what it must reject is a
+// PORT THAT ANSWERS, and a mocked `get` would prove nothing about that (Codex's second pass:
+// "a generic HTTP response does not prove that the recorded PID belongs to that instance").
+describe("confirmInstance against a real server", () => {
+  const serve = async (handler: (req: unknown, res: ServerResponse) => void): Promise<{ port: number; close: () => void }> => {
+    const server = createServer((req, res) => handler(req, res));
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const addr = server.address();
+    if (addr === null || typeof addr === "string") throw new Error("no port");
+    return { port: addr.port, close: () => server.close() };
+  };
+
+  const json = (body: unknown) => (_req: unknown, res: ServerResponse) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify(body));
+  };
+
+  it("accepts a server that reports the pid the registry recorded", async () => {
+    const s = await serve(json({ pid: 4242 }));
+    try {
+      expect(await confirmInstance({ pid: 4242, port: s.port, startedAt: 1 })).toBe(true);
+    } finally {
+      s.close();
+    }
+  });
+
+  it("REJECTS a server on that port reporting a different pid", async () => {
+    // The case a mere reachability probe got wrong: crashed, restarted on the same port, old pid
+    // reused by something unrelated. The port answers; it is still not that pid.
+    const s = await serve(json({ pid: 9999 }));
+    try {
+      expect(await confirmInstance({ pid: 4242, port: s.port, startedAt: 1 })).toBe(false);
+    } finally {
+      s.close();
+    }
+  });
+
+  it("rejects something that is not MulmoTerminal at all", async () => {
+    const s = await serve((_req, res) => {
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end("<html>some other server</html>");
+    });
+    try {
+      expect(await confirmInstance({ pid: 4242, port: s.port, startedAt: 1 })).toBe(false);
+    } finally {
+      s.close();
+    }
+  });
+
+  it("rejects an error status", async () => {
+    const s = await serve((_req, res) => {
+      res.writeHead(404);
+      res.end("nope");
+    });
+    try {
+      expect(await confirmInstance({ pid: 4242, port: s.port, startedAt: 1 })).toBe(false);
+    } finally {
+      s.close();
+    }
+  });
+
+  it("rejects a port nothing is listening on", async () => {
+    const s = await serve(json({ pid: 4242 }));
+    const port = s.port;
+    s.close();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(await confirmInstance({ pid: 4242, port, startedAt: 1 })).toBe(false);
+  });
+
+  it("rejects an entry that never recorded a port, without opening a socket", async () => {
+    expect(await confirmInstance({ pid: 4242, port: null, startedAt: 1 })).toBe(false);
   });
 });

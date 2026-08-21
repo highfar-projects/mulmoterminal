@@ -20,7 +20,7 @@ export type StopArgs = { help: true } | { error: string } | { force: boolean };
 
 export declare const STOP_USAGE: string;
 export declare function parseStopArgs(args: readonly string[]): StopArgs;
-export declare function confirmInstance(instance: InstanceEntry, get?: unknown, timeoutMs?: number): Promise<boolean>;
+export declare function confirmInstance(instance: InstanceEntry, get?: typeof import("node:http").get, timeoutMs?: number): Promise<boolean>;
 export declare function stopInstances(instances: readonly InstanceEntry[], effects?: StopEffects): Promise<StopResult>;
 export declare function describeInstance(instance: InstanceEntry): string;
 export declare function manualStopCommand(pids: readonly number[], platform?: NodeJS.Platform): string;

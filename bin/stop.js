@@ -14,7 +14,6 @@
 // Windows user find or kill anything.
 import { get as httpGet } from "node:http";
 import { isProcessAlive, liveInstances } from "./instances.js";
-import { probeOnce } from "./wait-ready.js";
 
 // How long a server is given to end itself before it is reported as stubborn. Generous on purpose:
 // what happens in that window is the same shutdown Ctrl+C runs, and reporting "did not stop" about
@@ -22,6 +21,7 @@ import { probeOnce } from "./wait-ready.js";
 const GRACE_MS = 5000;
 const POLL_MS = 100;
 const CONFIRM_TIMEOUT_MS = 1000;
+const MAX_IDENTITY_BYTES = 1024;
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -34,19 +34,58 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * already running?"). Signalling raises the stakes: the same staleness would send SIGTERM to a
  * stranger's process (CodeRabbit and Codex both raised this).
  *
- * So the pid has to be corroborated, and the entry carries the corroboration already: the PORT it
- * was serving. Something answering there means a MulmoTerminal is up; the pid being alive means
- * this one is. Through probeOnce rather than a second request of our own, so "the server answers"
- * has one definition here and in the launcher's readiness wait.
- *
- * NOT a complete proof, and the gap is worth naming: a server that crashed, was restarted on the
- * SAME port, and whose old pid has since been reused would pass. Closing that needs the server to
- * say which pid it is, which is an API this does not have. What it does close is the case that
- * happens — a crash leaves the port free, so nothing answers and nothing gets signalled.
+ * Something merely ANSWERING on the recorded port does not settle it, which was this function's
+ * first attempt: a server that crashed and was restarted on the SAME port answers happily while
+ * the recorded pid has since been given to something unrelated (Codex, second pass). Only the
+ * process itself can say who it is, so it is asked — GET /api/instance reports the serving pid,
+ * and the entry is trusted exactly when that matches the pid the file names.
  */
 export function confirmInstance(instance, get = httpGet, timeoutMs = CONFIRM_TIMEOUT_MS) {
   if (instance.port === null) return Promise.resolve(false);
-  return probeOnce(get, instance.port, timeoutMs).then((outcome) => outcome === "ready");
+  return new Promise((resolve) => {
+    let settled = false;
+    // Exactly one outcome per call: destroying a timed-out request itself emits 'error', so
+    // without the latch a timeout would resolve twice (the same trap wait-ready.js documents).
+    const done = (ok) => {
+      if (settled) return;
+      settled = true;
+      resolve(ok);
+    };
+    const req = get({ host: "127.0.0.1", port: instance.port, path: "/api/instance", timeout: timeoutMs }, (res) => {
+      if (res.statusCode !== 200) {
+        res.resume();
+        return done(false);
+      }
+      let body = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => {
+        body += chunk;
+        // A server would answer in a few dozen bytes. Anything longer is not one, and reading it
+        // all first would let whatever IS on that port decide how much memory this spends.
+        if (body.length > MAX_IDENTITY_BYTES) {
+          req.destroy();
+          done(false);
+        }
+      });
+      res.on("end", () => done(parseIdentity(body) === instance.pid));
+      res.on("error", () => done(false));
+    });
+    req.on("error", () => done(false));
+    req.on("timeout", () => {
+      req.destroy();
+      done(false);
+    });
+  });
+}
+
+/** The pid a server claims, or null for anything that is not one of our answers. */
+function parseIdentity(body) {
+  try {
+    const parsed = JSON.parse(body);
+    return parsed && Number.isInteger(parsed.pid) ? parsed.pid : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -114,9 +153,11 @@ export function stopReport({ stopped, stubborn, unconfirmed }, platform = proces
   if (!stopped.length && !stubborn.length && !unconfirmed.length) return ["MulmoTerminal is not running."];
   const lines = stopped.map((i) => `Stopped ${describeInstance(i)}`);
   stubborn.forEach((i) => lines.push(`Could NOT stop ${describeInstance(i)} — ${i.reason}`));
-  unconfirmed.forEach((i) => lines.push(`Left alone: ${describeInstance(i)} is registered but not answering.`));
+  // "not answering" would be wrong for the case that motivated the check: the port can answer
+  // perfectly well and simply be a DIFFERENT server. What is unconfirmed is the pid, so say that.
+  unconfirmed.forEach((i) => lines.push(`Left alone: ${describeInstance(i)} — could not confirm that pid is the server there.`));
   if (unconfirmed.length) {
-    lines.push("  It may have crashed, in which case that pid can now belong to an unrelated program.");
+    lines.push("  It probably crashed, in which case that pid can since have been given to an unrelated program.");
     lines.push("  Stop it anyway with:  mulmoterminal stop --force");
   }
   // Only when something is left behind: the pid is the one thing a user cannot look up once the
