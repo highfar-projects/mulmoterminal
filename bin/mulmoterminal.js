@@ -251,7 +251,7 @@ function printReadyBanner(url) {
   console.log(`\n${bar}`);
   console.log(`\x1b[32m  ✓ MulmoTerminal is ready\x1b[0m`);
   console.log(`\x1b[32m  → ${url}\x1b[0m`);
-  console.log(`\x1b[32m  Press Ctrl+C to stop.\x1b[0m`);
+  console.log(`\x1b[32m  Press Ctrl+C to stop — or \`mulmoterminal stop\` from any terminal.\x1b[0m`);
   console.log(`${bar}\n`);
 }
 
@@ -392,6 +392,8 @@ Commands:
   init              First-run setup: check your environment, seed working-directory
                     presets from your Claude Code history, and write
                     ~/.mulmoterminal/config.json (idempotent — safe to re-run)
+  stop              Stop the running server(s), from any terminal — you do not have
+                    to find the one you started it in
   google login      Link a Google account (browser consent, on this machine) so the
                     Calendar tool and the phone's google.calendar.* commands can run
   room <cmd>        Take part in a conversation room from a shell:
@@ -419,6 +421,12 @@ async function main() {
 
   if (args[0] === "google") {
     await runGoogle(args.slice(1));
+    return;
+  }
+
+  if (args[0] === "stop") {
+    const { runStop } = await import("./stop.js");
+    await runStop();
     return;
   }
 

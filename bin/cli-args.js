@@ -124,6 +124,9 @@ export function runningInstancesPrompt(instances) {
     `${subject} (${where}).`,
     "  Running more than one is NOT a supported setup: they share ~/.mulmoterminal,",
     "  so they can overwrite each other's session state.",
+    // This is the moment the user asks how to stop the old one — most often because they are here
+    // to run a NEWER version (#1820). Answering it anywhere else means answering it too late.
+    "  To stop the running one instead:  mulmoterminal stop",
     "Start another one anyway? [y/N] ",
   ].join("\n");
 }

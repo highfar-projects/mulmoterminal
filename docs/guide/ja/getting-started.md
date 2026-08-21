@@ -30,7 +30,8 @@ npx mulmoterminal@latest
 ```
 
 ブラウザが開いて `http://localhost:34567` が表示されれば成功です。止めるときは、
-コマンドを打ったターミナルで **Ctrl + C**。
+コマンドを打ったターミナルで **Ctrl + C**。そのターミナルが見つからなくなったら、
+別のターミナルで `npx mulmoterminal@latest stop` を実行してください。
 
 - 動いた → [起動できたら、最初にやること](#first-run)
 - 何か言われて止まった → [うまくいかないとき](#troubleshooting)
@@ -249,6 +250,8 @@ npx mulmoterminal@latest
 - `✓ MulmoTerminal is ready` と出て、ブラウザが自動で開きます
 - 開かなければ、自分で `http://localhost:34567` を開いてください
 - **止めるときは Ctrl + C**（ブラウザを閉じただけでは止まりません）
+- **そのターミナルを見失ったら**、別のターミナルで `npx mulmoterminal@latest stop`。
+  動いているサーバを全部止めます。新しい版を起動する前にも、これを使ってください
 
 よく使うオプション：
 

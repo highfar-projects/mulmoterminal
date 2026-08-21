@@ -241,6 +241,12 @@ npm install -g mulmoterminal
 mulmoterminal
 ```
 
+**Stopping it.** `Ctrl+C` in the terminal that started it, or **`mulmoterminal stop`** from any
+terminal — you don't have to find the one you started it in. `stop` ends every running server,
+which is what you want before starting a newer version. With `tmux` installed the agent sessions
+survive either way and come back under **Settings → Surviving sessions**; without it they end with
+the server.
+
 **First-run setup (optional).** `npx mulmoterminal@latest init` checks your environment (Node ≥ 22.9
 and every CLI in the table above), seeds the launcher's **directory
 presets** from the projects in your Claude Code history, and writes `~/.mulmoterminal/config.json`.
