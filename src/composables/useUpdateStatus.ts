@@ -1,19 +1,28 @@
 import { ref, computed } from "vue";
 import { parseUpdateNotice } from "./updateNotice";
+import { usePollWhileVisible } from "./usePollWhileVisible";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { parseUpdateStatus, type UpdateStatus } from "../../common/updateStatus";
 
-// The server runs the check at startup and it reaches the network (git ls-remote can take
-// several seconds), so an early read answers with `ready: false`. Poll a few times to catch the
-// result when it lands, then stop.
+// Two cadences, answering two different questions.
+//
+// The FAST one is the startup race: the server's check reaches the network (git ls-remote can
+// take several seconds), so an early read comes back `ready: false` and has to be chased until
+// it lands. Bounded, because a check that never finishes must not be asked forever.
 const POLL_MS = 3000;
 const MAX_POLLS = 5;
+// The SLOW one is the server re-checking while it runs (#1821). Before that the answer could
+// not change without a restart, so stopping at `ready` cost nothing; now stopping is what keeps
+// the badge from ever appearing for a server started with `npx mulmoterminal@latest`. Minutes
+// against the server's hours, because all this interval decides is the lag between the server
+// noticing and an open tab noticing — and a tab the user comes back to refreshes sooner anyway.
+const REFRESH_MS = 15 * 60_000;
 
-// Module state, not per-caller: two components read this — the header badge and the Settings
-// version line — and the answer is one server-side value that settles once. A second polling
-// loop per consumer would re-ask a question already answered, and the modal would open with an
-// empty line until its own fetch returned.
+// Module state, not per-caller: three components read this — the header badge, the Settings
+// version line, and the shared-app preview's copy-log block — and it is one server-side value.
+// Keeping it here is what lets a consumer appear showing the answer already read rather than
+// blank until its own fetch returns.
 const status = ref<UpdateStatus | null>(null);
 let polling = false;
 
@@ -38,17 +47,30 @@ async function poll(polls: number): Promise<void> {
   setTimeout(() => void poll(polls + 1), POLL_MS);
 }
 
-// Ask again when a consumer appears and the answer still hasn't landed — the loop gives up after
-// MAX_POLLS, and opening Settings ten minutes later must not inherit that dead end.
-function startPolling(): void {
-  if (polling || status.value?.ready) return;
+// Read now, and chase the answer with the fast poll while it has not landed. The guard is
+// `polling` and deliberately NOT `ready`: an answer that has landed is exactly what a later
+// call is here to re-ask, since the server re-checks. Guarding on `ready` too is what used to
+// make this refuse to look again. It also means a server RESTART recovers on its own — a tick
+// reading `ready: false` re-arms the fast poll to chase the new check.
+function refresh(): void {
+  if (polling) return;
   polling = true;
   void poll(0);
 }
 
-// What the header badge and the Settings version line read: the running install, and the update
-// notice when there is one. Best-effort — any failure just leaves both hidden.
+// What those three read: the running install, and the update notice when there is one.
+// Best-effort — any failure just leaves the badge and the version line hidden.
+//
+// usePollWhileVisible rather than one module-level timer: it already refreshes on `focus` and
+// `visibilitychange`, so a user returning to the tab sees a badge the server picked up while
+// they were away instead of waiting out the tick, and each consumer's timer dies with it.
+//
+// The cost is one timer per MOUNTED consumer rather than one per module. That is bounded here
+// and worth checking before adding a caller: the badge is always up, while the Settings line and
+// the preview mount one at a time (the preview lives in the single right-hand pane, not per
+// cell). Concurrent refreshes still collapse — `polling` admits one chase at a time — so the
+// extra timers cost timers, not requests.
 export function useUpdateStatus() {
-  startPolling();
+  usePollWhileVisible(refresh, REFRESH_MS);
   return { status: computed(() => status.value), badge: computed(() => parseUpdateNotice(status.value?.notice)) };
 }

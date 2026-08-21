@@ -3,9 +3,17 @@ import { defineComponent, h } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import type { UpdateStatus } from "../../../common/updateStatus";
 
-afterEach(() => vi.unstubAllGlobals());
+/** jsdom reports "visible" by default; this is how a hidden tab is simulated. */
+const setVisibility = (state: "visible" | "hidden") => Object.defineProperty(document, "visibilityState", { value: state, configurable: true });
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  setVisibility("visible");
+});
 
 const GIT_NOTICE = "Update available: a1b2c3d → origin  ·  run: git pull";
+const POLL_MS = 3000;
+const REFRESH_MS = 15 * 60_000;
 
 const served = (over: Partial<UpdateStatus> = {}): UpdateStatus => ({
   ready: true,
@@ -17,22 +25,28 @@ const served = (over: Partial<UpdateStatus> = {}): UpdateStatus => ({
   ...over,
 });
 
-// The composable holds ONE status for the whole app — two components read it — so each case has
+// The composable holds ONE status for the whole app — three components read it — so each case has
 // to start from a fresh module graph, or it inherits the previous case's answer. That is also why
 // the import lives in here rather than at module scope (vi.resetModules only affects later ones).
+//
+// Mounting a real component matters now that the slow re-read rides on usePollWhileVisible: its
+// tick and its focus/visibility listeners are bound to a component's lifetime, so a bare call
+// would exercise the fast poll and nothing else.
 async function mountStatus() {
   vi.resetModules();
   const { useUpdateStatus } = await import("../../../src/composables/useUpdateStatus");
   let api!: ReturnType<typeof useUpdateStatus>;
-  mount(
-    defineComponent({
-      setup() {
-        api = useUpdateStatus();
-        return () => h("div");
-      },
-    }),
-  );
-  return { badge: () => api.badge.value, status: () => api.status.value };
+  const mountConsumer = () =>
+    mount(
+      defineComponent({
+        setup() {
+          api = useUpdateStatus();
+          return () => h("div");
+        },
+      }),
+    );
+  mountConsumer();
+  return { badge: () => api.badge.value, status: () => api.status.value, mountConsumer };
 }
 
 describe("useUpdateStatus", () => {
@@ -96,55 +110,104 @@ describe("useUpdateStatus", () => {
       expect(badge()).toBeNull();
 
       body = served({ notice: GIT_NOTICE }); // the check finished behind
-      await vi.advanceTimersByTimeAsync(3000);
+      await vi.advanceTimersByTimeAsync(POLL_MS);
       expect(badge()?.command).toBe("git pull");
     } finally {
       vi.useRealTimers();
     }
   });
 
-  // "Up to date" is a ready answer with no notice, and re-asking cannot change it until the
-  // server restarts.
-  it("stops polling as soon as the answer has landed", async () => {
+  // The point of #1821. A ready answer used to end the conversation, because it could not change
+  // without a restart — and that is precisely why a server started with `npx mulmoterminal@latest`
+  // never showed a badge: it is current at startup, and the server now re-checks while it runs.
+  it("keeps re-reading after the answer has landed, so a later release is picked up", async () => {
+    vi.useFakeTimers();
+    try {
+      let body = served(); // up to date at startup, which is what npx @latest always is
+      const fetchMock = vi.fn(async () => ({ ok: true, json: async () => body }));
+      vi.stubGlobal("fetch", fetchMock);
+      const { badge } = await mountStatus();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(badge()).toBeNull();
+      expect(fetchMock.mock.calls).toHaveLength(1);
+
+      body = served({ notice: GIT_NOTICE }); // a release shipped and the server's re-check saw it
+      await vi.advanceTimersByTimeAsync(REFRESH_MS);
+      expect(fetchMock.mock.calls.length).toBeGreaterThan(1);
+      expect(badge()?.command).toBe("git pull");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // A backgrounded tab has nobody looking at the badge, so it must not keep asking.
+  it("does not re-read while the tab is hidden", async () => {
     vi.useFakeTimers();
     try {
       const fetchMock = vi.fn(async () => ({ ok: true, json: async () => served() }));
       vi.stubGlobal("fetch", fetchMock);
       await mountStatus();
-      await vi.advanceTimersByTimeAsync(3000 * 10);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fetchMock.mock.calls).toHaveLength(1);
+
+      setVisibility("hidden");
+      await vi.advanceTimersByTimeAsync(REFRESH_MS * 3);
       expect(fetchMock.mock.calls).toHaveLength(1);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  // A check that never lands must not hammer the endpoint forever.
-  it("gives up after a bounded number of unready reads", async () => {
+  // A server RESTART serves `ready: false` again until its own check lands. The slow tick alone
+  // would leave the badge stale for a whole interval, so an unready read has to re-arm the fast
+  // poll — the same chase that runs at startup.
+  it("re-arms the fast poll when a later read comes back unready", async () => {
+    vi.useFakeTimers();
+    try {
+      let body = served();
+      const fetchMock = vi.fn(async () => ({ ok: true, json: async () => body }));
+      vi.stubGlobal("fetch", fetchMock);
+      const { badge } = await mountStatus();
+      await vi.advanceTimersByTimeAsync(0);
+
+      body = served({ ready: false }); // restarted; its check is still out on the network
+      await vi.advanceTimersByTimeAsync(REFRESH_MS);
+      expect(badge()).toBeNull();
+
+      body = served({ notice: GIT_NOTICE });
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      expect(badge()?.command).toBe("git pull");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // A check that never lands must not hammer the endpoint forever — the fast chase stays bounded
+  // even though the slow tick will eventually start another one.
+  it("gives up the fast chase after a bounded number of unready reads", async () => {
     vi.useFakeTimers();
     try {
       const fetchMock = vi.fn(async () => ({ ok: true, json: async () => served({ ready: false }) }));
       vi.stubGlobal("fetch", fetchMock);
       await mountStatus();
-      await vi.advanceTimersByTimeAsync(3000 * 10);
+      await vi.advanceTimersByTimeAsync(POLL_MS * 10);
       expect(fetchMock.mock.calls).toHaveLength(5);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  // Opening Settings long after the loop gave up must ask again, not inherit the dead end.
+  // Opening Settings long after the chase gave up must ask again, not inherit the dead end.
   it("asks again when a later consumer appears and nothing has landed", async () => {
     vi.useFakeTimers();
     try {
       const fetchMock = vi.fn(async () => ({ ok: true, json: async () => served({ ready: false }) }));
       vi.stubGlobal("fetch", fetchMock);
-      vi.resetModules();
-      const { useUpdateStatus } = await import("../../../src/composables/useUpdateStatus");
-      useUpdateStatus();
-      await vi.advanceTimersByTimeAsync(3000 * 10);
+      const { mountConsumer } = await mountStatus();
+      await vi.advanceTimersByTimeAsync(POLL_MS * 10);
       expect(fetchMock.mock.calls).toHaveLength(5);
 
-      useUpdateStatus();
+      mountConsumer();
       await vi.advanceTimersByTimeAsync(0);
       expect(fetchMock.mock.calls.length).toBeGreaterThan(5);
     } finally {

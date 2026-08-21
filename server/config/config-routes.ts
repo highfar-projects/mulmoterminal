@@ -347,9 +347,10 @@ export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsC
     res.json({ ...configResponse(), home: os.homedir(), worktreesRoot: canonicalPath(worktreesRootDir()) });
   });
 
-  // The update notice for the header's "update available" badge, from the check the server
-  // ran at startup (refreshUpdateStatus). Served from memory; the client re-fetches once so a
-  // request that beat the async check still picks the notice up.
+  // The update notice for the header's "update available" badge, from the check the server runs
+  // at startup and every few hours after (startUpdateStatusRefresh). Served from memory; the
+  // client re-reads on its own cadence, so both a request that beat the first async check and a
+  // release published while this server has been up still reach the badge.
   app.get("/api/update-status", (_req, res) => {
     res.json(getUpdateStatus());
   });

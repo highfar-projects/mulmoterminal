@@ -2,8 +2,11 @@
 // the Settings version line read the same answer. The server runs the check itself (shared
 // computeUpdateInfo) rather than reading a launcher-written file, because under `yarn dev` the
 // launcher isn't in the loop — only the server is. Recomputed on each start so it reflects the
-// current checkout (a `git pull` clears the notice on the next restart); the probe is background
-// and best-effort.
+// current checkout (a `git pull` clears the notice on the next restart), and again on a timer
+// while the server runs, because an `npx …@latest` start is current by definition and would
+// otherwise never be told a release shipped (#1821 — see startUpdateStatusRefresh below).
+// Nothing is latched at the first check, opt-out included; the probe is background and
+// best-effort.
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
@@ -42,4 +45,18 @@ export async function refreshUpdateStatus(): Promise<void> {
   } catch {
     // best-effort — keep the last good value
   }
+}
+
+// Hours rather than minutes: one registry request per tick, against a `latest` that changes at
+// most a few times a day.
+const REFRESH_INTERVAL_MS = 3 * 60 * 60_000;
+
+// Check at startup, then keep checking. The repeat is what makes the check mean anything for the
+// install the README recommends: `npx mulmoterminal@latest` resolves the registry's latest as it
+// starts, so a startup-only check compares a version against itself and can only ever answer "up
+// to date" — and this server is designed to stay up for days, so no restart comes to re-ask
+// (#1821). `unref` so the timer never holds the process open.
+export function startUpdateStatusRefresh(): void {
+  void refreshUpdateStatus();
+  setInterval(() => void refreshUpdateStatus(), REFRESH_INTERVAL_MS).unref();
 }

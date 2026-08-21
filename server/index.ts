@@ -15,7 +15,7 @@ import { enforceKeymap } from "./config/keymap-check.js";
 import { readFileSync } from "node:fs";
 import { submitSequenceForAgent } from "../common/terminalSubmit.js";
 import { sessionDisplayName } from "../common/sessionMemo.js";
-import { refreshUpdateStatus } from "./config/update-status.js";
+import { startUpdateStatusRefresh } from "./config/update-status.js";
 import {
   tmuxAvailable,
   tmuxHasSession,
@@ -1014,9 +1014,10 @@ server.listen(Number(PORT), BIND_HOST, () => {
     console.warn(`[instances] ${peers.length} other MulmoTerminal server(s) running (${where}) — they share ~/.mulmoterminal, which is not a supported setup`);
   }
 
-  // Run the update check for the header badge (best-effort, non-blocking). Works under
-  // `yarn dev` too, where the launcher — which used to be the only checker — isn't involved.
-  void refreshUpdateStatus();
+  // Run the update check for the header badge, at startup and on a timer (best-effort,
+  // non-blocking). Works under `yarn dev` too, where the launcher — which used to be the only
+  // checker — isn't involved.
+  startUpdateStatusRefresh();
 });
 
 installShutdownHandlers();

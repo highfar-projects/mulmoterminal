@@ -287,7 +287,9 @@ for the details and model notes.
 A global install isn't auto-updated, so on startup MulmoTerminal checks npm and
 prints a one-line notice when a newer version is available — and the web toolbar shows a
 clickable **update badge** with the exact command for your install (`npm i -g mulmoterminal`,
-or `git pull` for a clone). Disable with `MULMOTERMINAL_NO_UPDATE_CHECK=1` (or `NO_UPDATE_NOTIFIER=1`).
+or `git pull` for a clone). The server repeats that check every few hours, so a release that
+ships while it is running still reaches the badge; the startup console notice is printed once
+and is not repeated. Disable with `MULMOTERMINAL_NO_UPDATE_CHECK=1` (or `NO_UPDATE_NOTIFIER=1`).
 
 Options: `--cwd <dir>` (working directory — relative paths allowed; defaults to the
 directory you run the command from), `--port <n>` (default 34567), `--no-open`,
@@ -1658,7 +1660,7 @@ From a shell: `mulmoterminal room read <room>` · `room post <room> <text…> [-
 | `GET /api/sound?kind=` · `/api/dir-sound?cwd=&kind=` · `/api/sound-preset/:id` · `/api/dir-config?cwd=` | Custom / per-directory / preset attention sound + per-dir config. `kind` selects a config entry, never a path. |
 | `GET /api/dir-config-detail?cwd=` | The same per-dir config, **plus** the settings a running terminal doesn't need (`provider`, `model`, `skills`, `addDirs`, header button/chip **labels**), **plus** which keys the file set and how each fared (applied / dropped in validation / not a setting at all). Read-only; backs the Settings modal's **Directory settings** preview. Unlike the other `?cwd=` routes this one does **not** fall back to the default workspace — it reports on the directory it was asked about, so a path that no longer exists comes back as `exists:false`. Sound paths and button commands stay server-side. |
 | `GET /api/launch-options` | The Anthropic-compatible backends this server can reach, each with its models and — when it can't — the reason. Reports the **name** of the env var a key is read from, never the key. |
-| `GET /api/update-status` | What is running and whether anything newer exists: `install` (`npm` / `git`), `version`, `commit` (a checkout's short HEAD sha), `latest` (npm, only when newer) and the one-line `notice`. Backs the header's **Update** badge and the Settings version line. Computed once at startup and served from memory — `ready` is false until that check lands. |
+| `GET /api/update-status` | What is running and whether anything newer exists: `install` (`npm` / `git`), `version`, `commit` (a checkout's short HEAD sha), `latest` (npm, only when newer) and the one-line `notice`. Backs the header's **Update** badge and the Settings version line. Served from memory, recomputed at startup and every 3 hours — a long-running server started with `npx mulmoterminal@latest` is current when it starts, so only a later check can tell it a release shipped. `ready` is false until the first check lands. |
 | `GET /api/notifications`(`/history`) · `POST /api/notifications/:id/clear` | Notification feed. |
 | `POST /api/transcribe`(`/model`…) | Voice-input transcription (Whisper, macOS). |
 | `POST /api/translation` | Runtime UI-string translation. |
