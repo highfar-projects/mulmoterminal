@@ -15,6 +15,7 @@ description: A browser-terminal cockpit for running several AI coding agents (Cl
 
 <video controls playsinline preload="metadata" style="width: 100%; max-width: 900px; border-radius: 6px;">
   <source src="../videos/launch-demo-en.mp4" type="video/mp4">
+  <track kind="captions" src="../videos/launch-demo-en.vtt" srclang="en" label="English">
   <a href="../videos/launch-demo-en.mp4">Watch the demo (MP4, 3.3 MB)</a> — this browser can't play it inline.
 </video>
 

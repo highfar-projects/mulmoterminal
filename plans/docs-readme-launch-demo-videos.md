@@ -43,4 +43,14 @@ CodeRabbit と Codex GHA が同じ 1 点を指摘した: ナレーション付�
 
 対応: 3 箇所とも、プレイヤーの直下に `<details>` で折りたたんだナレーション全文を置いた。本文は動画を生成した MulmoScript デッキ（`mulmo-presentations/mulmoterminal/launch/mulmoterminal-launch-v8{,_ja}.json`）からの逐語転記。デッキはレンダリング後にも編集されうるので、mulmocast がレンダリング時に `_studio.json` へ埋め込んだ `script` と突き合わせ、10 ビートすべてが一致することを確認した（PR の mp4 がそのレンダリングと同一であることは sha256 で確認済み）。`<details>` は GitHub のサニタイザを通るので、`<video>` が丸ごと落とされる github.com 上のガイド `.md` でも本文が読める。
 
-見送り: 同期字幕（WebVTT `<track>`）。ビートごとの時刻は mulmocast が `_studio.json` の `startAt` に書くが、このレンダリングの studio ファイルには無い（movie ステップを通した studio にしか書かれない）。手元にある 8/19 の studio の時刻は 1 つ前の文面（ビート 2・7 が別の文）のもので、ビート 2 以降がずれる。`record-youtube-publish` の `youtube-chapters.js` の推定も「固定尺の html_tailwind ビートがある」として拒否した。再レンダリングすれば時刻が出るので、follow-up で扱う。
+同期字幕（WebVTT `<track>`）: いったん見送ったが、同じラウンド内で追加できた（下記）。当初見送った理由 —ビートごとの時刻は mulmocast が `_studio.json` の `startAt` に書くが、このレンダリングの studio ファイルには無い（movie ステップを通した studio にしか書かれない）。手元にある 8/19 の studio の時刻は 1 つ前の文面（ビート 2・7 が別の文）のもので、ビート 2 以降がずれる。`record-youtube-publish` の `youtube-chapters.js` の推定も「固定尺の html_tailwind ビートがある」として拒否した。再レンダリングすれば時刻が出るので、follow-up で扱う。
+
+### 同期字幕の追加（同ラウンド）
+
+presentations の worktree で `yarn movie` を再実行（TTS・コマ撮りはキャッシュ、組み立てのみ）して movie 産の studio を復活させ、`_studio.json`・`audio/`・`images/` を main へ cp してもらった。その studio は全ビートに `startAt` を持ち、埋め込み script は現行の文面。公開版 mp4 との整合は次で確認した:
+
+- `youtube-chapters.js` が studio から時刻を読み、mp4 に対する STALE / DRIFT を出さない
+- 最終ビートの `startAt + duration + introPadding + outroPadding` が mp4 の尺と一致する（en 91.638 s / ja 93.536 s、小数 3 桁まで）
+- 発話区間の検出と cue の切れ目の照合、境界前後のフレームの目視
+
+cue は 1 ビート = 1 cue。開始 = `startAt + introPadding`、終了 = 開始 + `audioDuration`（声が止まる時刻。ビート末の無音や固定尺の残りは含めない）。`<track>` に `default` は付けていない — 画面が端末 UI なので、字幕は読者が CC で出す。README の GitHub 製プレイヤーには track を付けられないので、そちらは文字起こしのみ。

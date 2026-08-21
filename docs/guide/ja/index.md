@@ -15,6 +15,7 @@ description: 複数の AI コーディングエージェント（Claude Code / C
 
 <video controls playsinline preload="metadata" style="width: 100%; max-width: 900px; border-radius: 6px;">
   <source src="../videos/launch-demo-ja.mp4" type="video/mp4">
+  <track kind="captions" src="../videos/launch-demo-ja.vtt" srclang="ja" label="日本語">
   <a href="../videos/launch-demo-ja.mp4">デモ動画（MP4・3.4 MB）</a> — このブラウザではページ内で再生できません。
 </video>
 
