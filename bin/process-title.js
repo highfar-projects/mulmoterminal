@@ -34,11 +34,15 @@ const BASE = "mulmoterminal";
  * room to spare — while letting `pkill -f 'mulmoterminal :34567'` pick one worktree out of
  * several.
  *
- * An unknown port gives the bare name rather than a title claiming a port nobody is serving.
+ * Anything that is not a port gives the bare name rather than a title claiming one nobody is
+ * serving. The range is the one `parsePortArg` already enforces on `--port` — the two describe the
+ * same thing, and a title is no place to introduce a second opinion about what a port is.
  */
+const MAX_PORT = 65535;
+
 export function processTitle(port) {
   const n = Number(port);
-  return Number.isInteger(n) && n > 0 ? `${BASE} :${n}` : BASE;
+  return Number.isInteger(n) && n > 0 && n <= MAX_PORT ? `${BASE} :${n}` : BASE;
 }
 
 /** Name this process. Best-effort by construction — see above, it cannot throw. */

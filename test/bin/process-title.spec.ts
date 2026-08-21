@@ -19,12 +19,17 @@ describe("processTitle", () => {
     expect(processTitle("34567")).toBe(processTitle(34567));
   });
 
-  it.each([null, undefined, "", "abc", 0, -1, 1.5, NaN, Infinity])("falls back to the bare name rather than claiming port %p", (port) => {
+  it.each([null, undefined, "", "abc", 0, -1, 1.5, NaN, Infinity, 65536, 70000])("falls back to the bare name rather than claiming port %p", (port) => {
     expect(processTitle(port)).toBe("mulmoterminal");
   });
 
-  it("stays matchable by `pkill mulmoterminal` on every port", () => {
+  it("stays matchable by `pkill mulmoterminal` across the whole port range", () => {
     for (const port of [1, 80, 34567, 65535]) expect(processTitle(port)).toContain("mulmoterminal");
+  });
+
+  it("names the same range parsePortArg accepts, so the two cannot disagree about what a port is", () => {
+    expect(processTitle(65535)).toBe("mulmoterminal :65535");
+    expect(processTitle(65536)).toBe("mulmoterminal");
   });
 
   it("keeps the base name inside the length Linux preserves", () => {

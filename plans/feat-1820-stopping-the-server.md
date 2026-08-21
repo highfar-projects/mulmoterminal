@@ -52,8 +52,12 @@ is the exact moment the question gets asked.
 
 ## PR 3 — a Quit button in the browser
 
-`POST /api/app/quit` running the same path as SIGINT (`stopWhisperSidecar()` then `exit(0)`,
-`server/index.ts`), behind a confirmation dialog, surfaced in Settings under the `sessions` group.
+`POST /api/shutdown` — the path MulmoClaude already answers this need at (#2616), so both hosts
+stop the same way — behind a confirmation, surfaced in Settings under the `sessions` group.
+
+It runs the same path as Ctrl+C by SIGNALLING ITSELF rather than by calling the cleanup directly:
+`process.kill(process.pid, "SIGTERM")` lands on the handler this PR extracted into
+`server/infra/shutdown.ts`, so there is one shutdown implementation and not two that drift.
 
 No extra CSRF defence is needed and none should be added: `sameOriginGuard` is mounted before
 every route in `app-routes.ts` and covers all state-changing methods by default, which is the
