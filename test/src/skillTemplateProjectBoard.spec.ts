@@ -441,6 +441,52 @@ describe("the project-board public board", () => {
     expect(board.sent).toEqual([{ kind: "submit", cid: "assignments", values: { taskId: "fix-login" } }]);
   });
 
+  it("takes the work after registering, even though `mine.names` is still empty", async () => {
+    // The host DID answer — with `[]`, before the registration. Reading the projection first turns
+    // that stale empty list into "you have not registered" and refuses somebody who just did, until
+    // whenever the next state happens to arrive.
+    const board = loadBoard();
+    board.tell({ tasks: TASKS, assignments: [], names: [] }, { names: [], assignments: [] });
+    await settle();
+
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
+    board.press("この名前で参加する");
+    await settle();
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent).toEqual([
+      { kind: "submit", cid: "names", values: { name: "山田" } },
+      { kind: "submit", cid: "assignments", values: { taskId: "fix-login" } },
+    ]);
+  });
+
+  it("lets a LATER projection overrule what this visit registered", async () => {
+    // The other direction, and the reason the local answer is not simply preferred: the owner can
+    // remove a name from the roster. A page that kept its own answer on top would never hear about
+    // it and would go on making claims for somebody the roster no longer carries — which is the
+    // nameless claim this whole template guards against, arrived at from the far side.
+    //
+    // So neither wins outright. Whichever was established LAST is the one believed.
+    const board = loadBoard();
+    board.tell({ tasks: TASKS, assignments: [], names: [] }, { names: [], assignments: [] });
+    await settle();
+
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
+    board.press("この名前で参加する");
+    await settle();
+
+    // The roster is read again and this reader has no row: newer than the registration.
+    board.tell({ tasks: TASKS, assignments: [], names: [] }, { names: [], assignments: [] });
+    await settle();
+
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent.map((one) => one.cid)).toEqual(["names"]);
+    expect(board.said()).toContain("先に名前を登録してください");
+  });
+
   it("does not let an OVERTAKEN lookup undo the retry a refused registration started", async () => {
     // The narrow ordering, and the one a completed-lookup test cannot reach: the `onState` lookup is
     // STILL OUT when the register button earns its duplicate refusal. Clearing the cache is not

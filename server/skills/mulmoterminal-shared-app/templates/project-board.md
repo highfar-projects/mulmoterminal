@@ -344,6 +344,16 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
     /** 照会の世代。**古い答えを捨てるため**で、`settled` を見るだけでは足りません — 拒否を
      *  受けて否定のキャッシュを捨てたその瞬間、それより前に出ていた照会が「行は無い」を持って
      *  戻ってきて、捨てたばかりのものを書き戻します。捨てた側が新しいので、世代で無効にします。 */
+    /** 届いた状態の通し番号と、手元の答えを入れたときのそれ。
+     *
+     *  **どちらが新しいかを決めるためだけ**にあります。`viewer.mine.names` が `[]` のまま登録が
+     *  成功した直後、投影を先に見ると「行は無い」と読んで、登録できた人の押下を断ってしまう —
+     *  ホストが次の状態を送るまで。かといって手元の答えを恒久的に上に置くと、オーナーが名簿の
+     *  行を消したことが二度と届かず、名前の行が無いまま担当行ができます（この板が塞いでいる
+     *  当のもの）。だから**後に入ったほうが勝つ**にします。 */
+    let states = 0;
+    let settledAt = -1;
+
     let asked = 0;
 
     let settled = false;
@@ -352,7 +362,9 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
 
     const registration = () => {
       const mine = latest.viewer.mine;
-      if (mine && Array.isArray(mine.names)) return { known: true, row: mine.names[0] || null };
+      const projected = mine && Array.isArray(mine.names);
+      if (settled && settledAt >= states) return { known: true, row: resolved };
+      if (projected) return { known: true, row: mine.names[0] || null };
       if (settled) return { known: true, row: resolved };
       return { known: false, row: null };
     };
@@ -382,6 +394,7 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
         // 画面に出すのにそれで足ります。
         if (answer && answer.known === true) {
           settled = true;
+          settledAt = states;
           resolved = answer.found === true ? answer.record || {} : null;
           render();
         }
@@ -439,6 +452,7 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
         return false;
       }
       settled = true;
+      settledAt = states;
       resolved = { name };
       tell("登録しました。もう一度「これをやります」を押すと引き受けます。", false);
       return false;
@@ -527,6 +541,7 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
 
     view.onState((data, viewer) => {
       latest = { data: data || {}, viewer: viewer || {} };
+      states += 1;
       render();
       // 押される前に解決しておきます。押してから訊くと gesture の印を失います。
       if (registration().known === false) void askHost();
@@ -549,7 +564,7 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
           // 成立を覚えます。`viewer.mine` が来ないホストでは、ここで覚えておかないと「登録
           // しました」と言った直後の「これをやります」が、また登録から始めて id の衝突で
           // 止まります — 登録した人が永久に取れない板になる。
-          if (res && res.ok) { settled = true; resolved = { name }; }
+          if (res && res.ok) { settled = true; settledAt = states; resolved = { name }; }
           // **拒否は「既に在る」かもしれません。** 別のタブで登録した、あるいは行はできたのに
           // 応答を落とした — どちらもこの拒否になります。「行が無い」という古い答えを抱えたまま
           // だと、`askHost` は `settled` を見て二度と訊かず、この人はリロードするまで取れません。
