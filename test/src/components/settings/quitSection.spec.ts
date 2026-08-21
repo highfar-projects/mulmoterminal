@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { nextTick } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 
 import QuitSection from "../../../../src/components/settings/QuitSection.vue";
@@ -84,5 +85,34 @@ describe("the quit section", () => {
     await confirm.trigger("click");
     await flushPromises();
     expect(calls()).toHaveLength(1);
+  });
+});
+
+// Focus, because both buttons are REPLACED by the other's panel when clicked. Without moving it,
+// focus lands on <body> and a keyboard user is dropped out of the modal — the defect #1568 fixed
+// for the skill-launch confirmation in this same modal.
+describe("the quit section and the keyboard", () => {
+  it("moves focus into the confirmation it just opened", async () => {
+    const w = mount(QuitSection, { attachTo: document.body });
+    try {
+      await w.get('[data-testid="quit-server"]').trigger("click");
+      await nextTick();
+      expect(document.activeElement).toBe(w.get('[data-testid="quit-confirm-yes"]').element);
+    } finally {
+      w.unmount();
+    }
+  });
+
+  it("hands focus back to the button that opened it when cancelled", async () => {
+    const w = mount(QuitSection, { attachTo: document.body });
+    try {
+      await w.get('[data-testid="quit-server"]').trigger("click");
+      await nextTick();
+      await w.get('[data-testid="quit-cancel"]').trigger("click");
+      await nextTick();
+      expect(document.activeElement).toBe(w.get('[data-testid="quit-server"]').element);
+    } finally {
+      w.unmount();
+    }
   });
 });

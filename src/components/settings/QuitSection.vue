@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { nextTick, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { markServerStopped } from "../../composables/useServerStopped";
-import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../../utils/fetchWithTimeout";
+import { fetchWithTimeout, DEFAULT_REQUEST_TIMEOUT_MS } from "../../utils/fetchWithTimeout";
 
 // Stopping MulmoTerminal from the browser (#1820) — the counterpart of MulmoClaude's Quit tab, at
 // the same route and with the same two-step shape, so someone running both hosts stops them the
@@ -18,6 +18,22 @@ const confirming = ref(false);
 const stopping = ref(false);
 const failed = ref(false);
 
+// Both buttons are replaced by the other's panel when clicked, so without moving focus it lands on
+// <body> and a keyboard user is dropped out of the modal they were part way through — the same
+// defect #1568 fixed in the skill-launch confirmation, in the same modal.
+const confirmEl = ref<HTMLElement>();
+const quitButtonEl = ref<HTMLElement>();
+
+function arm(): void {
+  confirming.value = true;
+  void nextTick(() => confirmEl.value?.querySelector<HTMLElement>("button")?.focus());
+}
+
+function cancel(): void {
+  confirming.value = false;
+  void nextTick(() => quitButtonEl.value?.focus());
+}
+
 async function quit(): Promise<void> {
   if (stopping.value) return;
   stopping.value = true;
@@ -26,7 +42,10 @@ async function quit(): Promise<void> {
     // The server answers BEFORE it stops (server/routes/shutdown-routes.ts), so this response is
     // the signal to put the stopped screen up. Waiting for the socket to die instead would leave
     // the user looking at a live-seeming app that is about to stop answering.
-    const res = await fetchWithTimeout("/api/shutdown", { method: "POST" }, SLOW_COMMAND_TIMEOUT_MS);
+    //
+    // The ordinary deadline, not the slow one: this route shells out to nothing and answers in the
+    // same tick. A minute of "Stopping…" would be a minute of the user not knowing it had failed.
+    const res = await fetchWithTimeout("/api/shutdown", { method: "POST" }, DEFAULT_REQUEST_TIMEOUT_MS);
     if (!res.ok) throw new Error(`POST /api/shutdown -> ${res.status}`);
     markServerStopped();
   } catch (err) {
@@ -44,15 +63,16 @@ async function quit(): Promise<void> {
 
   <button
     v-if="!confirming"
+    ref="quitButtonEl"
     type="button"
     data-testid="quit-server"
     class="cursor-pointer rounded-md border border-[var(--err-strong)] bg-transparent px-3 py-1.5 text-[13px] text-[var(--err-text)] hover:bg-[var(--err-hover-bg)]"
-    @click="confirming = true"
+    @click="arm"
   >
     {{ t("settings.quit.button") }}
   </button>
 
-  <div v-else data-testid="quit-confirm" class="rounded-md border border-[var(--err-strong)] bg-[var(--err-hover-bg)] p-3">
+  <div v-else ref="confirmEl" data-testid="quit-confirm" class="rounded-md border border-[var(--err-strong)] bg-[var(--err-hover-bg)] p-3">
     <p class="mb-1 text-[12px]">{{ t("settings.quit.confirmBody") }}</p>
     <p class="mb-2.5 text-[12px] text-dim">{{ t("settings.quit.sessionsNote") }}</p>
     <div class="flex gap-2">
@@ -70,7 +90,7 @@ async function quit(): Promise<void> {
         data-testid="quit-cancel"
         class="cursor-pointer rounded-md border border-border bg-transparent px-3 py-1.5 text-[13px] hover:bg-hover disabled:cursor-progress"
         :disabled="stopping"
-        @click="confirming = false"
+        @click="cancel"
       >
         {{ t("settings.quit.cancel") }}
       </button>
