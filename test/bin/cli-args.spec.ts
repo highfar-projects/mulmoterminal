@@ -14,6 +14,7 @@ import {
   nodeMeetsMinimum,
   MIN_NODE_LABEL,
   serverNodeArgs,
+  stopCommandFor,
 } from "../../bin/cli-args.js";
 
 const DEFAULT_PORT = 34567;
@@ -365,5 +366,27 @@ describe("runningInstancesPrompt", () => {
 
   it("falls back to the pid when an entry never recorded its port", () => {
     expect(runningInstancesPrompt([{ pid: 77, port: null }])).toContain("pid 77");
+  });
+});
+
+// npx leaves no `mulmoterminal` on the PATH, so telling an npx user to run `mulmoterminal stop` in
+// another terminal names a command they do not have (CodeRabbit on #1824).
+describe("stopCommandFor", () => {
+  it("tells an npx user to use npx", () => {
+    expect(stopCommandFor("/Users/me/.npm/_npx/8f1a2b/node_modules/mulmoterminal")).toBe("npx mulmoterminal@latest stop");
+  });
+
+  it("recognises the Windows cache path too", () => {
+    expect(stopCommandFor("C:\\Users\\me\\AppData\\npm-cache\\_npx\\8f1a2b\\node_modules\\mulmoterminal")).toBe("npx mulmoterminal@latest stop");
+  });
+
+  it("uses the short command for a global install", () => {
+    expect(stopCommandFor("/usr/local/lib/node_modules/mulmoterminal")).toBe("mulmoterminal stop");
+    expect(stopCommandFor("/Users/me/src/mulmoterminal")).toBe("mulmoterminal stop");
+  });
+
+  it("is what the already-running prompt prints", () => {
+    const text = runningInstancesPrompt([{ pid: 42, port: 34567 }], "npx mulmoterminal@latest stop");
+    expect(text).toContain("npx mulmoterminal@latest stop");
   });
 });
