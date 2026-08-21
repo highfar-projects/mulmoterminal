@@ -434,9 +434,21 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
     const ensureRegistered = async () => {
       const reg = registration();
       const input = document.getElementById("who");
+      /** 断るときは、**押した人が見ている場所で**断ります。
+       *
+       *  `#say` はページの末尾にあります。一覧の途中のボタンを押した人には、そこに出た一行は
+       *  画面の外です — 実際、公開したボードで「押しても何も起こらない」と報告されました。
+       *  書き込みは正しく止まっていて、止まったことだけが誰にも見えていなかった。
+       *
+       *  なので登録欄まで運びます。`focus()` はブラウザなら勝手に巻き上げますが、それに任せず
+       *  `scrollIntoView` も呼びます（jsdom には無いので、在るときだけ）。ページが名前の欄まで
+       *  跳ぶこと自体が、文言より先に伝わる答えです。 */
       const refuse = () => {
         tell("先に名前を登録してください。", true);
-        if (input) input.focus();
+        if (input) {
+          if (input.scrollIntoView) input.scrollIntoView({ block: "center" });
+          input.focus();
+        }
         return false;
       };
       if (reg.known) return reg.row !== null ? true : refuse();

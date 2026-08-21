@@ -441,6 +441,30 @@ describe("the project-board public board", () => {
     expect(board.sent).toEqual([{ kind: "submit", cid: "assignments", values: { taskId: "fix-login" } }]);
   });
 
+  it("carries the refusal to the name field, instead of leaving it at the foot of the page", async () => {
+    // The reported failure on a PUBLISHED board, and it is not about the write: the guard held and
+    // nothing was created — the visitor simply could not see that. `#say` sits under the task list,
+    // so the one line it gets is off-screen for anybody who pressed a button further up, and the
+    // button is deliberately not disabled. Pressed, considered, and apparently inert.
+    //
+    // So the page moves to where the answer is. The scroll is the message; the text is the detail.
+    const scrolls: unknown[] = [];
+    (Element.prototype as unknown as { scrollIntoView: (arg?: unknown) => void }).scrollIntoView = (arg) => {
+      scrolls.push(arg);
+    };
+    const board = loadBoard();
+    board.tell({ tasks: TASKS, assignments: [], names: [] }, { names: [], assignments: [] });
+    await settle();
+
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent).toEqual([]);
+    expect(board.said()).toContain("先に名前を登録してください");
+    expect(scrolls.length).toBeGreaterThan(0);
+    expect(document.activeElement?.id).toBe("who");
+  });
+
   it("takes the work after registering, even though `mine.names` is still empty", async () => {
     // The host DID answer — with `[]`, before the registration. Reading the projection first turns
     // that stale empty list into "you have not registered" and refuses somebody who just did, until
