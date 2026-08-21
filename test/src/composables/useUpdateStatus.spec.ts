@@ -25,7 +25,7 @@ const served = (over: Partial<UpdateStatus> = {}): UpdateStatus => ({
   ...over,
 });
 
-// The composable holds ONE status for the whole app — two components read it — so each case has
+// The composable holds ONE status for the whole app — three components read it — so each case has
 // to start from a fresh module graph, or it inherits the previous case's answer. That is also why
 // the import lives in here rather than at module scope (vi.resetModules only affects later ones).
 //
