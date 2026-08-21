@@ -13,6 +13,17 @@ description: 複数の AI コーディングエージェント（Claude Code / C
 > [何が変わって、どう確かめるか](v4.10.1.html)。
 
 
+<video controls playsinline preload="metadata" style="width: 100%; max-width: 900px; border-radius: 6px;">
+  <source src="../videos/launch-demo-ja.mp4" type="video/mp4">
+  <a href="../videos/launch-demo-ja.mp4">デモ動画（MP4・3.4 MB）</a> — このブラウザではページ内で再生できません。
+</video>
+
+*音声つき 1 分半。エージェント 1 体から始めて、グリッドに並んだ複数体へ。セルの色が
+**working**（実行中）・**done**（完了）・**needs you**（あなた待ち）を表します。1 体を拡大しても、
+ロスターが他のセッションの依頼・返答・作業内容を保持しているので、光っているセルへ行くだけでよく、
+状況の把握に時間を取られません。*
+
+
 **はじめての方へ。** ターミナルの開き方から、Node.js・Claude Code・git / gh の入れ方
 （mac / Windows）、起動コマンド、つまずいたときの対処まで、**インストールと起動は 1 ページ**に
 まとめてあります。プログラミングが専門でなくても、そこだけ読めば起動までたどり着けます。
