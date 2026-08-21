@@ -19,9 +19,10 @@ const MAX_POLLS = 5;
 // does, and the returning-tab refresh below usually gets there first.
 const REFRESH_MS = 15 * 60_000;
 
-// Module state, not per-caller: two components read this — the header badge and the Settings
-// version line — and it is one server-side value. Keeping it here is what lets the modal open
-// showing the answer already read rather than blank until its own fetch returns.
+// Module state, not per-caller: three components read this — the header badge, the Settings
+// version line, and the shared-app preview's copy-log block — and it is one server-side value.
+// Keeping it here is what lets a consumer appear showing the answer already read rather than
+// blank until its own fetch returns.
 const status = ref<UpdateStatus | null>(null);
 let polling = false;
 
@@ -62,8 +63,13 @@ function refresh(): void {
 //
 // usePollWhileVisible rather than one module-level timer: it already refreshes on `focus` and
 // `visibilitychange`, so a user returning to the tab sees a badge the server picked up while
-// they were away instead of waiting out the tick. The cost is one timer per mounted consumer
-// rather than one per module — two reads of an in-memory endpoint per tick at worst.
+// they were away instead of waiting out the tick, and each consumer's timer dies with it.
+//
+// The cost is one timer per MOUNTED consumer rather than one per module. That is bounded here
+// and worth checking before adding a caller: the badge is always up, while the Settings line and
+// the preview mount one at a time (the preview lives in the single right-hand pane, not per
+// cell). Concurrent refreshes still collapse — `polling` admits one chase at a time — so the
+// extra timers cost timers, not requests.
 export function useUpdateStatus() {
   refresh();
   usePollWhileVisible(refresh, REFRESH_MS);
