@@ -44,11 +44,20 @@ every call), measured at 14.6ms for the first.
 
 ## PR 2 — `mulmoterminal stop`
 
-Read the registry, signal each live pid, report what was stopped. This is the route that works on
-all three platforms, and the one Windows actually needs.
+Read the registry, signal each pid it can identify, report what was stopped. This is the route that
+works on all three platforms, and the one Windows actually needs.
+
+**A LIVE PID IS NOT AN IDENTITY**, and this is the part worth carrying forward. A server that was
+killed outright leaves its file behind, and the OS may hand that pid to something else — so
+signalling on the file alone SIGTERMs a stranger's process. Corroborating it by "does the recorded
+port answer" is not enough either: a server that crashed and was restarted on the SAME port answers
+happily while the old pid belongs to something unrelated. Only the process can settle it, so
+`GET /api/instance` has it report its own pid, and an entry is trusted exactly when the two match.
+`--force` skips the check, which is the way out for a server that has stopped answering.
 
 Also add a line to the launcher's "already running" prompt naming the command, because that prompt
-is the exact moment the question gets asked.
+is the exact moment the question gets asked — printed in the form the user can actually run, which
+is not the same for an npx user as for a global install.
 
 ## PR 3 — a Quit button in the browser
 
