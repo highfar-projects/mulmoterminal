@@ -15,8 +15,8 @@ const MAX_POLLS = 5;
 // The SLOW one is the server re-checking while it runs (#1821). Before that the answer could
 // not change without a restart, so stopping at `ready` cost nothing; now stopping is what keeps
 // the badge from ever appearing for a server started with `npx mulmoterminal@latest`. Minutes
-// against the server's hours: this only decides how long after the server notices the open tab
-// does, and the returning-tab refresh below usually gets there first.
+// against the server's hours, because all this interval decides is the lag between the server
+// noticing and an open tab noticing — and a tab the user comes back to refreshes sooner anyway.
 const REFRESH_MS = 15 * 60_000;
 
 // Module state, not per-caller: three components read this — the header badge, the Settings

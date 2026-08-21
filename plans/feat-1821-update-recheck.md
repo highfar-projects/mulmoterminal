@@ -10,7 +10,7 @@ not change without a restart.
 That makes the check structurally blind to the install method the README recommends. Verified
 on `a71872a1` by running the real functions:
 
-```
+```text
 npmUpdateNotice("4.10.1", "4.10.1")  ->  null
 ```
 
@@ -47,9 +47,11 @@ also refreshes on `focus` and `visibilitychange` — so a user coming back to th
 badge immediately rather than at the next tick.
 
 Reusing `usePollWhileVisible` rather than a module-level timer means one timer per consuming
-component (the header badge, and the Settings version line while it is open) instead of one for
-the module. That is two reads of an in-memory endpoint per tick in the worst case, which is
-cheaper than the visibility and focus handling it would otherwise have to re-implement.
+component instead of one for the module. There are three consumers — the header badge, the
+Settings version line, and the shared-app preview's copy-log block — and the last two mount one
+at a time, so the ceiling is three timers, not three requests: `polling` admits one chase at a
+time, so concurrent refreshes still collapse into a single read. That is cheaper than
+re-implementing the visibility and focus handling this composable would otherwise need.
 
 The `ready`-based early-out in `startPolling` is replaced by the `polling` guard alone. That
 guard is what collapses overlapping loops; keying on `ready` as well is exactly what made the
