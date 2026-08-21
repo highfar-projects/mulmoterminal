@@ -183,7 +183,11 @@ function loadBoard(): {
   /** What the host answers `view.mine(cid, key)` with. The board asks this from `onState` when
    *  `viewer.mine` said nothing — it is how a reader who registered on an earlier visit is
    *  recognised on a host that carries no `mine`, and both writing hosts wire the port. */
-  lookup: (answer: { known: boolean; found?: boolean }) => void;
+  lookup: (answer: { known: boolean; found?: boolean; record?: Record<string, unknown> }) => void;
+  /** Make the next `view.mine` hang, so a registration can land while it is still out — the race
+   *  that turns a stale answer into a lockout. `release` then delivers the now-obsolete reply. */
+  hold: () => void;
+  release: (answer: { known: boolean; found?: boolean; record?: Record<string, unknown> }) => void;
   tell: (data: Record<string, unknown[]>, mine?: Record<string, unknown[]>) => void;
   said: () => string;
   buttons: () => string[];
@@ -196,7 +200,10 @@ function loadBoard(): {
   const sent: Sent[] = [];
   let outcome: { ok: boolean; error?: string } = { ok: true };
   // `known: false` by default — "nobody looked", which is what a host with no port answers.
-  let looked: { known: boolean; found?: boolean } = { known: false };
+  type Look = { known: boolean; found?: boolean; record?: Record<string, unknown> };
+  let looked: Look = { known: false };
+  let holding = false;
+  let held: ((answer: Look) => void) | null = null;
   let onState: ((data: unknown, viewer: unknown) => void) | null = null;
   (window as unknown as { __MC_APP_VIEW: unknown }).__MC_APP_VIEW = {
     onState: (handler: (data: unknown, viewer: unknown) => void) => {
@@ -214,7 +221,12 @@ function loadBoard(): {
       sent.push({ kind: "withdraw", cid, id });
       return Promise.resolve({ ok: true });
     },
-    mine: () => Promise.resolve(looked),
+    mine: () =>
+      holding
+        ? new Promise<Look>((resolve) => {
+            held = resolve;
+          })
+        : Promise.resolve(looked),
     ready: () => {},
   };
 
@@ -228,6 +240,14 @@ function loadBoard(): {
     },
     lookup: (next) => {
       looked = next;
+    },
+    hold: () => {
+      holding = true;
+    },
+    release: (answer) => {
+      holding = false;
+      held?.(answer);
+      held = null;
     },
     // `mine` OMITTED rather than passed empty when the caller says nothing: that distinction is the
     // subject of half the cases below, and a harness that invented `{}` would erase it.
@@ -417,6 +437,49 @@ describe("the project-board public board", () => {
     await settle();
 
     expect(board.sent).toEqual([{ kind: "submit", cid: "assignments", values: { taskId: "fix-login" } }]);
+  });
+
+  it("ignores a STALE lookup that lands after a registration succeeded", async () => {
+    // The lookup goes out from `onState`, so it is in flight while the visitor is still reading the
+    // page — and it was asked BEFORE they registered. If its answer is applied on arrival it
+    // overwrites what the register button established, and on a host with no `mine` there is
+    // nothing left to correct it: every later take reads "not registered", and registering again
+    // only earns the duplicate refusal. The visit is over for that person.
+    //
+    // Whatever settled first wins. The reply is not wrong, it is old.
+    const board = loadBoard();
+    board.hold();
+    board.tell({ tasks: TASKS, assignments: [], names: [] });
+    await settle();
+
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
+    board.press("この名前で参加する");
+    await settle();
+
+    board.release({ known: true, found: false });
+    await settle();
+
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent).toEqual([
+      { kind: "submit", cid: "names", values: { name: "山田" } },
+      { kind: "submit", cid: "assignments", values: { taskId: "fix-login" } },
+    ]);
+  });
+
+  it("SHOWS the name the lookup found, rather than still asking for one", async () => {
+    // The answer has to reach the SCREEN, not just the guard. A page that resolved this only inside
+    // the take handler goes on drawing the registration form and the "登録済みかは確認できません
+    // でした" note over a registration it has just confirmed — the same mistake as reading a missing
+    // key as "no", wearing different clothes.
+    const board = loadBoard();
+    board.lookup({ known: true, found: true, record: { name: "山田" } });
+    board.tell({ tasks: TASKS, assignments: [], names: [{ id: "uid-1", name: "山田" }] });
+    await settle();
+
+    expect(document.getElementById("who")).toBeNull();
+    expect(document.getElementById("me")?.textContent ?? "").toContain("山田");
   });
 
   it("stops a reader the host says has NO row, without writing a registration first", async () => {

@@ -308,20 +308,26 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
       tell(hint + "（" + reason + "）", true);
     };
 
-    /** 「登録済みか」は 3 状態。キーが無い = 誰も読んでいない、であって「未登録」ではない。
-     *  分からないときは登録欄を出し、拒否に語らせる。 */
+    /** 「この人は登録済みか」の 3 状態。`viewer.mine` が答えればそれ、答えなければ `askHost` が
+     *  確定させたもの、どちらも無ければ「分からない」。
+     *
+     *  **キーが無い = 誰も読んでいない、であって「未登録」ではありません。** そして 2 つ目を
+     *  ここに通すのが大事です — `ensureRegistered` の中だけで見ていると、照会で確定したあとも
+     *  画面は「登録済みかは確認できませんでした」と言い続け、名前も出ません。
+     *
+     *  **`settled` と `row` は別の格**です。`row === null` は「行が無い」という答えで、
+     *  「まだ訊いていない」ではない。1 つの変数に畳むと、ホストが「無い」と答えた人に登録欄を
+     *  出し続けることになります — この板が塞ごうとしている取り違えの、ちょうど裏返しです。 */
+    let settled = false;
+    let resolved = null;
+    let asking = false;
+
     const registration = () => {
       const mine = latest.viewer.mine;
-      if (!mine || !Array.isArray(mine.names)) return { known: false, row: null };
-      return { known: true, row: mine.names[0] || null };
+      if (mine && Array.isArray(mine.names)) return { known: true, row: mine.names[0] || null };
+      if (settled) return { known: true, row: resolved };
+      return { known: false, row: null };
     };
-
-    /** この訪問で分かった「自分の名前の行が在るか」。`null` は**まだ分からない**。
-     *
-     *  `viewer.mine` が来ないホストでは、ここがそれを知っている唯一の場所です（リロードで
-     *  消えてよい — 消えたら下の `askHost` がやり直します）。 */
-    let registered = null;
-    let asking = false;
 
     /** `viewer.mine` が答えないときに、**ホストへ直接訊きます**。
      *
@@ -334,12 +340,20 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
      *  跨いでしまい、gesture の印が付かない `submit` しか出せなくなります。ここで先に解決して
      *  おけば、リロード後の 1 押し目がそのまま取る押下になります。 */
     const askHost = async () => {
-      if (asking || registered !== null || typeof view.mine !== "function") return;
+      if (asking || settled || typeof view.mine !== "function") return;
       asking = true;
       try {
         const answer = await view.mine("names", "-");
+        // **待っている間に確定したものが勝ちます。** この照会はそれより前に出た問いで、戻って
+        // きたときには答えが古い。登録が先に済んでいたのに `found: false` で上書きすると、その
+        // 訪問のあいだ二度と取れなくなります — 登録し直しても重複拒否が返るだけで、直りません。
+        if (settled) return;
+        // `found: false` も答えです。`known: false`（誰も読んでいない）だけが「分からない」。
+        // 行そのものを覚えるのは、`lookup` が `viewer.mine` と同じ投影を返すからで、名前を
+        // 画面に出すのにそれで足ります。
         if (answer && answer.known === true) {
-          registered = answer.found === true;
+          settled = true;
+          resolved = answer.found === true ? answer.record || {} : null;
           render();
         }
       } finally {
@@ -372,15 +386,14 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
         return false;
       };
       if (reg.known) return reg.row !== null ? true : refuse();
-      if (registered === true) return true;
-      if (registered === false) return refuse();
       const name = input ? input.value.trim() : "";
       if (name === "") return refuse();
       const res = await view.submit("names", { name });
       // 確認で「やめる」を押した人は、取るのもやめています。
       if (res && res.error === "cancelled") { tell("", false); return false; }
       if (!res || !res.ok) { tell("登録できませんでした（" + ((res && res.error) || "unknown") + "）。", true); return false; }
-      registered = true;
+      settled = true;
+      resolved = { name };
       tell("登録しました。もう一度「これをやります」を押すと引き受けます。", false);
       return false;
     };
@@ -486,7 +499,7 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
         // 成立を覚えます。`viewer.mine` が来ないホストでは、ここで覚えておかないと「登録
         // しました」と言った直後の「これをやります」が、また登録から始めて id の衝突で
         // 止まります — 登録した人が永久に取れない板になる。
-        if (res && res.ok) registered = true;
+        if (res && res.ok) { settled = true; resolved = { name }; }
         report(res, "登録しました。作業を取れます。", "登録できませんでした");
         return;
       }
