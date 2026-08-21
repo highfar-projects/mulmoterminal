@@ -31,6 +31,7 @@ import {
   serverSpawnEnv,
 } from "./cli-args.js";
 import { liveInstances } from "./instances.js";
+import { setProcessTitle } from "./process-title.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PKG_DIR = join(__dirname, "..");
@@ -475,6 +476,10 @@ async function main() {
   await confirmNoRunningInstance();
 
   const port = await choosePort(requestedPort, portExplicit);
+  // Named only now, because the port is half the name — and named at all so that the user who
+  // loses this terminal has something to search for (#1820). The server child names itself the
+  // same, so `pkill mulmoterminal` reaches whichever half is found first.
+  setProcessTitle(port);
   await runServer(port, noOpen, cwd, (c) => {
     child = c;
   });

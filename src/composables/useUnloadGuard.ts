@@ -1,4 +1,5 @@
 import { onMounted, onUnmounted, ref } from "vue";
+import { serverStopped } from "./useServerStopped";
 
 // How many live terminals each view reports, keyed by source ("single", "grid").
 // Keyed — not a single shared counter — because persistent connections mean the
@@ -51,6 +52,10 @@ export function useUnloadGuard(): void {
       skipNextUnload = false; // one-shot: consume so it never silences a later close
       return; // a reload we initiated (e.g. Vite HMR) — see suppressNextUnloadGuard
     }
+    // The stopped screen says "you can close this tab" — so it must be true. The terminal counts
+    // still read as live because nothing told them otherwise, and there is nothing left to lose:
+    // the server they belonged to is gone (#1820).
+    if (serverStopped.value) return;
     if (totalActive() <= 0) return;
     e.preventDefault();
     e.returnValue = ""; // legacy Chrome/Edge still need returnValue assigned to prompt

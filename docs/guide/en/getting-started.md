@@ -245,6 +245,7 @@ npx mulmoterminal@latest
 - It prints `✓ MulmoTerminal is ready` and opens your browser
 - If nothing opens, go to `http://localhost:34567` yourself
 - **Stop it with Ctrl + C** — closing the browser tab does not stop the server
+- **Lost that terminal?** Stop it from the browser instead: **Settings → Quit MulmoTerminal**
 
 Options worth knowing:
 
