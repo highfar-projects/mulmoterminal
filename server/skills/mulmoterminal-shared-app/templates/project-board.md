@@ -341,6 +341,11 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
      *  `arming` と違ってデータではないので、`render()` は見ません。 */
     let working = false;
 
+    /** 照会の世代。**古い答えを捨てるため**で、`settled` を見るだけでは足りません — 拒否を
+     *  受けて否定のキャッシュを捨てたその瞬間、それより前に出ていた照会が「行は無い」を持って
+     *  戻ってきて、捨てたばかりのものを書き戻します。捨てた側が新しいので、世代で無効にします。 */
+    let asked = 0;
+
     let settled = false;
     let resolved = null;
     let asking = false;
@@ -365,12 +370,13 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
     const askHost = async () => {
       if (asking || settled || typeof view.mine !== "function") return;
       asking = true;
+      const ticket = asked;
       try {
         const answer = await view.mine("names", "-");
         // **待っている間に確定したものが勝ちます。** この照会はそれより前に出た問いで、戻って
         // きたときには答えが古い。登録が先に済んでいたのに `found: false` で上書きすると、その
         // 訪問のあいだ二度と取れなくなります — 登録し直しても重複拒否が返るだけで、直りません。
-        if (settled) return;
+        if (settled || ticket !== asked) return;
         // `found: false` も答えです。`known: false`（誰も読んでいない）だけが「分からない」。
         // 行そのものを覚えるのは、`lookup` が `viewer.mine` と同じ投影を返すからで、名前を
         // 画面に出すのにそれで足ります。
@@ -380,9 +386,21 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
           render();
         }
       } finally {
-        asking = false;
+        // 追い越されていたら、`asking` は新しい走者のものです。
+        if (ticket === asked) asking = false;
       }
     };
+
+    /** 否定の答えを捨てて、訊き直させます。飛んでいる照会は世代で無効にします — **取りはしません**。
+     *  拒否は「既に在る」の証拠になり得るだけで、取ってよい根拠にはなりません。 */
+    const forget = () => {
+      settled = false;
+      resolved = null;
+      asked += 1;
+      asking = false;
+      void askHost();
+    };
+
 
     /** 「名前を登録していない人が作業だけ取る」を塞ぐ唯一の関門。ルールは `names` に行が
      *  在るかを見ない — 宣言に書けない（上の「誰が何を押せるか」）ので、ここが最後です。
@@ -416,7 +434,7 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
       if (res && res.error === "cancelled") { tell("", false); return false; }
       // 同じ理由で訊き直させます（この枝では `settled` はまだ false なので、捨てるものは無い）。
       if (!res || !res.ok) {
-        void askHost();
+        forget();
         tell("登録できませんでした（" + ((res && res.error) || "unknown") + "）。", true);
         return false;
       }
@@ -536,7 +554,7 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
           // 応答を落とした — どちらもこの拒否になります。「行が無い」という古い答えを抱えたまま
           // だと、`askHost` は `settled` を見て二度と訊かず、この人はリロードするまで取れません。
           // なので否定のキャッシュを捨てて、訊き直させます（取りはしません）。
-          else if (res && res.error !== "cancelled") { settled = false; resolved = null; void askHost(); }
+          else if (res && res.error !== "cancelled") forget();
           report(res, "登録しました。作業を取れます。", "登録できませんでした");
           return;
         }

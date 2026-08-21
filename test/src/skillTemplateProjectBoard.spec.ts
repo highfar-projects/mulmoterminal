@@ -184,10 +184,13 @@ function loadBoard(): {
    *  `viewer.mine` said nothing — it is how a reader who registered on an earlier visit is
    *  recognised on a host that carries no `mine`, and both writing hosts wire the port. */
   lookup: (answer: { known: boolean; found?: boolean; record?: Record<string, unknown> }) => void;
-  /** Make the next `view.mine` hang, so a registration can land while it is still out — the race
-   *  that turns a stale answer into a lockout. `release` then delivers the now-obsolete reply. */
+  /** Make every `view.mine` hang, so writes can land while one is still out — the race that turns a
+   *  stale answer into a lockout. They QUEUE: `release` answers the oldest one still waiting, which
+   *  is what lets a test deliver an overtaken reply after a newer request went out. */
   hold: () => void;
   release: (answer: { known: boolean; found?: boolean; record?: Record<string, unknown> }) => void;
+  /** How many lookups are waiting — so a test can assert that a retry actually went out. */
+  waiting: () => number;
   tell: (data: Record<string, unknown[]>, mine?: Record<string, unknown[]>) => void;
   said: () => string;
   buttons: () => string[];
@@ -203,7 +206,7 @@ function loadBoard(): {
   type Look = { known: boolean; found?: boolean; record?: Record<string, unknown> };
   let looked: Look = { known: false };
   let holding = false;
-  let held: ((answer: Look) => void) | null = null;
+  const held: ((answer: Look) => void)[] = [];
   let onState: ((data: unknown, viewer: unknown) => void) | null = null;
   (window as unknown as { __MC_APP_VIEW: unknown }).__MC_APP_VIEW = {
     onState: (handler: (data: unknown, viewer: unknown) => void) => {
@@ -224,7 +227,7 @@ function loadBoard(): {
     mine: () =>
       holding
         ? new Promise<Look>((resolve) => {
-            held = resolve;
+            held.push(resolve);
           })
         : Promise.resolve(looked),
     ready: () => {},
@@ -245,10 +248,9 @@ function loadBoard(): {
       holding = true;
     },
     release: (answer) => {
-      holding = false;
-      held?.(answer);
-      held = null;
+      held.shift()?.(answer);
     },
+    waiting: () => held.length,
     // `mine` OMITTED rather than passed empty when the caller says nothing: that distinction is the
     // subject of half the cases below, and a harness that invented `{}` would erase it.
     tell: (data, mine) => onState?.(data, { me: null, can: {}, ...(mine === undefined ? {} : { mine }) }),
@@ -437,6 +439,44 @@ describe("the project-board public board", () => {
     await settle();
 
     expect(board.sent).toEqual([{ kind: "submit", cid: "assignments", values: { taskId: "fix-login" } }]);
+  });
+
+  it("does not let an OVERTAKEN lookup undo the retry a refused registration started", async () => {
+    // The narrow ordering, and the one a completed-lookup test cannot reach: the `onState` lookup is
+    // STILL OUT when the register button earns its duplicate refusal. Clearing the cache is not
+    // enough on its own — the older request took its `found: false` before the row existed, and if
+    // it is allowed to land afterwards it puts the negative answer straight back. The visitor is
+    // then told to register by a page that has just been told they are registered.
+    //
+    // So the retry both invalidates what is in flight and goes out itself; the stale reply is
+    // dropped on arrival rather than raced with.
+    const board = loadBoard();
+    board.hold();
+    board.tell({ tasks: TASKS, assignments: [], names: [] });
+    await settle();
+    expect(board.waiting()).toBe(1);
+
+    // The row exists (another tab, or a reply that was lost), so the register press is refused.
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
+    board.answer({ ok: false, error: "permission-denied" });
+    board.press("この名前で参加する");
+    await settle();
+
+    // The refusal started a fresh lookup rather than being swallowed by the one already out.
+    expect(board.waiting()).toBe(2);
+
+    // The OLD one answers first, with the snapshot it took before any of this.
+    board.release({ known: true, found: false });
+    await settle();
+    // Then the one the retry sent, which is the current truth.
+    board.release({ known: true, found: true, record: { name: "山田" } });
+    await settle();
+
+    board.answer({ ok: true });
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent.map((one) => one.cid)).toEqual(["names", "assignments"]);
   });
 
   it("re-asks after a refused registration, rather than caching 'not registered' for the visit", async () => {
