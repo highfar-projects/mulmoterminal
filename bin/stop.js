@@ -12,7 +12,6 @@
 // This is the one route that works on EVERY platform, and Windows is the reason it is not optional:
 // `process.title` renames the console there, not the process, so nothing about the naming helps a
 // Windows user find or kill anything.
-import { get as httpGet } from "node:http";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { stopCommandFor } from "./cli-args.js";
@@ -24,8 +23,6 @@ import { portOwners } from "./port-owner.js";
 // a server that was merely mid-shutdown would send the user hunting for a problem that isn't there.
 const GRACE_MS = 5000;
 const POLL_MS = 100;
-const CONFIRM_TIMEOUT_MS = 1000;
-const MAX_IDENTITY_BYTES = 1024;
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -40,73 +37,17 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  *
  * ASK THE KERNEL WHO OWNS THE PORT. The entry pairs a pid with a port, so that pairing is exactly
  * what has to be confirmed, and the OS is the only party that knows it and cannot be lied to over a
- * socket. Two weaker answers were tried first and both are recorded in bin/port-owner.js: the port
- * merely answering HTTP (true for a DIFFERENT server that took the port after a crash), and the
- * server reporting its own pid (an unauthenticated self-report anything on loopback can forge).
+ * socket. Two weaker answers were tried first and both are recorded in bin/port-owner.js.
  *
- * When the kernel cannot be asked — no `lsof`, an unknown platform — fall back to that self-report
- * rather than refusing everything: it is weaker, not worthless, and a user whose machine lacks the
- * tool still deserves a working `stop`.
+ * FAILS CLOSED. When the kernel cannot be asked at all, this says no rather than falling back to
+ * something softer: a fallback would put the weaker check back on the path the user takes by
+ * default, and `--force` already exists to say "I accept the risk" out loud (Codex).
  */
 export async function confirmInstance(instance, deps = {}) {
   if (instance.port === null) return false;
-  const { owners = portOwners, selfReport = reportedPid } = deps;
+  const { owners = portOwners } = deps;
   const pids = await owners(instance.port);
-  if (pids !== null) return pids.includes(instance.pid);
-  return (await selfReport(instance)) === instance.pid;
-}
-
-/**
- * The pid the server at this port claims, over `GET /api/instance`, or null.
- *
- * The fallback only. Kept because it is the one check that needs nothing installed, and dropped to
- * second place because it proves less than it appears to: it is a self-report.
- */
-export function reportedPid(instance, get = httpGet, timeoutMs = CONFIRM_TIMEOUT_MS) {
-  return new Promise((resolve) => {
-    let settled = false;
-    // Exactly one outcome per call: destroying a timed-out request itself emits 'error', so
-    // without the latch a timeout would resolve twice (the same trap wait-ready.js documents).
-    const done = (pid) => {
-      if (settled) return;
-      settled = true;
-      resolve(pid);
-    };
-    const req = get({ host: "127.0.0.1", port: instance.port, path: "/api/instance", timeout: timeoutMs }, (res) => {
-      if (res.statusCode !== 200) {
-        res.resume();
-        return done(null);
-      }
-      let body = "";
-      res.setEncoding("utf8");
-      res.on("data", (chunk) => {
-        body += chunk;
-        // A server would answer in a few dozen bytes. Anything longer is not one, and reading it
-        // all first would let whatever IS on that port decide how much memory this spends.
-        if (body.length > MAX_IDENTITY_BYTES) {
-          req.destroy();
-          done(null);
-        }
-      });
-      res.on("end", () => done(parseIdentity(body)));
-      res.on("error", () => done(null));
-    });
-    req.on("error", () => done(null));
-    req.on("timeout", () => {
-      req.destroy();
-      done(null);
-    });
-  });
-}
-
-/** The pid a server claims, or null for anything that is not one of our answers. */
-function parseIdentity(body) {
-  try {
-    const parsed = JSON.parse(body);
-    return parsed && Number.isInteger(parsed.pid) ? parsed.pid : null;
-  } catch {
-    return null;
-  }
+  return pids !== null && pids.includes(instance.pid);
 }
 
 /**

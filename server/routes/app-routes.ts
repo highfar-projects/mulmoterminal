@@ -36,7 +36,6 @@ import { mountWorktreeRoutes } from "../git/worktree-routes.js";
 import { mountPickFileRoute } from "../files/pick-file.js";
 import { mountCommandSummaryRoute } from "../session/command-summary.js";
 import { mountCostRoute } from "../session/cost.js";
-import { mountInstanceRoute } from "./instance-routes.js";
 import { mountShutdownRoute } from "./shutdown-routes.js";
 import { mountCollectionRoutes } from "../backends/collections.js";
 // "Would this collection survive a clone?" — mounts itself beside the collection routes.
@@ -402,7 +401,6 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
   // GET /api/cost — estimated $ cost (session + today/month roll-up) for a project's
   // sessions, from public per-model pricing. Read-only; shown in the Settings modal (#245).
   mountCostRoute(app, { resolveCwd: workspaceForRoute });
-  mountInstanceRoute(app);
   mountShutdownRoute(app);
 
   // POST /api/remote-host/connect|disconnect + GET /status — start/stop the

@@ -62,8 +62,13 @@ they failed in is the lesson:
 Only the third is a proof: the entry pairs a pid with a port, and the kernel is the one party that
 knows that pairing and cannot be lied to over a socket. It also keeps answering for a process that
 has stopped responding — measured, a SIGSTOPped server answers nothing over HTTP while `lsof` still
-names it. (2) survives as the fallback for a machine with no `lsof`, and `--force` skips the check
-entirely.
+names it.
+
+**And it fails closed.** Keeping (2) as a fallback for a machine with no `lsof` was tried and
+withdrawn: a fallback puts the weaker check back on the path the user takes by DEFAULT, which is
+the one place it must not be. `--force` already exists to say "I accept the risk" out loud. That
+also removed the only reason for `GET /api/instance`, so the route went with it — the check is a
+proof or it is nothing.
 
 The route came from the bug report: the Windows user who lost their terminal stopped the server
 with `Get-NetTCPConnection -LocalPort … | Stop-Process -Id $_.OwningProcess`. The answer to
