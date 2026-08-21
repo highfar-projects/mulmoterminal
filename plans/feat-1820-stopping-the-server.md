@@ -49,11 +49,25 @@ works on all three platforms, and the one Windows actually needs.
 
 **A LIVE PID IS NOT AN IDENTITY**, and this is the part worth carrying forward. A server that was
 killed outright leaves its file behind, and the OS may hand that pid to something else — so
-signalling on the file alone SIGTERMs a stranger's process. Corroborating it by "does the recorded
-port answer" is not enough either: a server that crashed and was restarted on the SAME port answers
-happily while the old pid belongs to something unrelated. Only the process can settle it, so
-`GET /api/instance` has it report its own pid, and an entry is trusted exactly when the two match.
-`--force` skips the check, which is the way out for a server that has stopped answering.
+signalling on the file alone SIGTERMs a stranger's process. Three answers were tried, and the order
+they failed in is the lesson:
+
+1. *the port answers HTTP* — true for a DIFFERENT server that took the port after a crash, and
+   false for a server that is merely hung, which is when you most want to stop it;
+2. *the server reports its own pid* (`GET /api/instance`) — an unauthenticated self-report, so
+   anything on loopback can forge it;
+3. **ask the kernel who owns the port** — `lsof -nP -ti tcp:<port> -sTCP:LISTEN`, or
+   `Get-NetTCPConnection … OwningProcess` on Windows.
+
+Only the third is a proof: the entry pairs a pid with a port, and the kernel is the one party that
+knows that pairing and cannot be lied to over a socket. It also keeps answering for a process that
+has stopped responding — measured, a SIGSTOPped server answers nothing over HTTP while `lsof` still
+names it. (2) survives as the fallback for a machine with no `lsof`, and `--force` skips the check
+entirely.
+
+The route came from the bug report: the Windows user who lost their terminal stopped the server
+with `Get-NetTCPConnection -LocalPort … | Stop-Process -Id $_.OwningProcess`. The answer to
+"this pid is unauthenticated" was not to authenticate it but to stop relying on self-report.
 
 Also add a line to the launcher's "already running" prompt naming the command, because that prompt
 is the exact moment the question gets asked — printed in the form the user can actually run, which

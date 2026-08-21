@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 
 import { createServer, type ServerResponse } from "node:http";
 
-import { stopInstances, stopReport, stopExitCode, describeInstance, manualStopCommand, parseStopArgs, confirmInstance } from "../../bin/stop.js";
+import { stopInstances, stopReport, stopExitCode, describeInstance, manualStopCommand, parseStopArgs, confirmInstance, reportedPid } from "../../bin/stop.js";
 
 const instance = (pid: number, port: number | null = 34567) => ({ pid, port, startedAt: 1 });
 
@@ -236,10 +236,50 @@ describe("parseStopArgs", () => {
   });
 });
 
-// The identity probe itself, against a real loopback server — because what it must reject is a
-// PORT THAT ANSWERS, and a mocked `get` would prove nothing about that (Codex's second pass:
-// "a generic HTTP response does not prove that the recorded PID belongs to that instance").
-describe("confirmInstance against a real server", () => {
+// The identity check. What it must reject is a PORT THAT ANSWERS, so the kernel is asked who owns
+// the port and the server's own self-report is only the fallback (Codex: "trusts an unauthenticated
+// PID returned by an arbitrary loopback listener").
+describe("confirmInstance", () => {
+  const entry = { pid: 4242, port: 34567, startedAt: 1 };
+  const never = async () => null;
+
+  it("confirms when the KERNEL says that pid owns that port", async () => {
+    expect(await confirmInstance(entry, { owners: async () => [4242], selfReport: never })).toBe(true);
+  });
+
+  it("refuses when the kernel names a different owner — however the port answers", async () => {
+    // Crashed, restarted on the same port, old pid reused. The port is healthy; it is not that pid.
+    expect(await confirmInstance(entry, { owners: async () => [9999], selfReport: async () => 4242 })).toBe(false);
+  });
+
+  it("refuses when the kernel says nobody is listening", async () => {
+    expect(await confirmInstance(entry, { owners: async () => [], selfReport: async () => 4242 })).toBe(false);
+  });
+
+  it("does NOT let a forged self-report override the kernel", async () => {
+    // The whole finding: anything on loopback can answer /api/instance with any pid it likes.
+    const selfReport = vi.fn(async () => 4242);
+    expect(await confirmInstance(entry, { owners: async () => [9999], selfReport })).toBe(false);
+    expect(selfReport).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the self-report only when the kernel could not be asked", async () => {
+    // null means "no lsof / unknown platform", which is not the same as "nobody owns it".
+    expect(await confirmInstance(entry, { owners: async () => null, selfReport: async () => 4242 })).toBe(true);
+    expect(await confirmInstance(entry, { owners: async () => null, selfReport: async () => 9999 })).toBe(false);
+    expect(await confirmInstance(entry, { owners: async () => null, selfReport: never })).toBe(false);
+  });
+
+  it("never opens a socket for an entry that recorded no port", async () => {
+    const owners = vi.fn(async () => [4242]);
+    expect(await confirmInstance({ pid: 4242, port: null, startedAt: 1 }, { owners, selfReport: never })).toBe(false);
+    expect(owners).not.toHaveBeenCalled();
+  });
+});
+
+// The fallback, against a real loopback server — a mocked `get` would prove nothing about what an
+// arbitrary listener does.
+describe("reportedPid against a real server", () => {
   const serve = async (handler: (req: unknown, res: ServerResponse) => void): Promise<{ port: number; close: () => void }> => {
     const server = createServer((req, res) => handler(req, res));
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -253,59 +293,44 @@ describe("confirmInstance against a real server", () => {
     res.end(JSON.stringify(body));
   };
 
-  it("accepts a server that reports the pid the registry recorded", async () => {
+  it("reads the pid a server reports", async () => {
     const s = await serve(json({ pid: 4242 }));
     try {
-      expect(await confirmInstance({ pid: 4242, port: s.port, startedAt: 1 })).toBe(true);
+      expect(await reportedPid({ pid: 0, port: s.port, startedAt: 1 })).toBe(4242);
     } finally {
       s.close();
     }
   });
 
-  it("REJECTS a server on that port reporting a different pid", async () => {
-    // The case a mere reachability probe got wrong: crashed, restarted on the same port, old pid
-    // reused by something unrelated. The port answers; it is still not that pid.
-    const s = await serve(json({ pid: 9999 }));
-    try {
-      expect(await confirmInstance({ pid: 4242, port: s.port, startedAt: 1 })).toBe(false);
-    } finally {
-      s.close();
-    }
-  });
-
-  it("rejects something that is not MulmoTerminal at all", async () => {
+  it("yields null for something that is not MulmoTerminal at all", async () => {
     const s = await serve((_req, res) => {
       res.writeHead(200, { "content-type": "text/html" });
       res.end("<html>some other server</html>");
     });
     try {
-      expect(await confirmInstance({ pid: 4242, port: s.port, startedAt: 1 })).toBe(false);
+      expect(await reportedPid({ pid: 0, port: s.port, startedAt: 1 })).toBeNull();
     } finally {
       s.close();
     }
   });
 
-  it("rejects an error status", async () => {
+  it("yields null on an error status", async () => {
     const s = await serve((_req, res) => {
       res.writeHead(404);
       res.end("nope");
     });
     try {
-      expect(await confirmInstance({ pid: 4242, port: s.port, startedAt: 1 })).toBe(false);
+      expect(await reportedPid({ pid: 0, port: s.port, startedAt: 1 })).toBeNull();
     } finally {
       s.close();
     }
   });
 
-  it("rejects a port nothing is listening on", async () => {
+  it("yields null for a port nothing is listening on", async () => {
     const s = await serve(json({ pid: 4242 }));
     const port = s.port;
     s.close();
     await new Promise((r) => setTimeout(r, 50));
-    expect(await confirmInstance({ pid: 4242, port, startedAt: 1 })).toBe(false);
-  });
-
-  it("rejects an entry that never recorded a port, without opening a socket", async () => {
-    expect(await confirmInstance({ pid: 4242, port: null, startedAt: 1 })).toBe(false);
+    expect(await reportedPid({ pid: 0, port, startedAt: 1 })).toBeNull();
   });
 });

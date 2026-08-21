@@ -20,7 +20,12 @@ export type StopArgs = { help: true } | { error: string } | { force: boolean };
 
 export declare const STOP_USAGE: string;
 export declare function parseStopArgs(args: readonly string[]): StopArgs;
-export declare function confirmInstance(instance: InstanceEntry, get?: typeof import("node:http").get, timeoutMs?: number): Promise<boolean>;
+export interface ConfirmDeps {
+  owners?: (port: number) => Promise<number[] | null>;
+  selfReport?: (instance: InstanceEntry) => Promise<number | null>;
+}
+export declare function confirmInstance(instance: InstanceEntry, deps?: ConfirmDeps): Promise<boolean>;
+export declare function reportedPid(instance: InstanceEntry, get?: typeof import("node:http").get, timeoutMs?: number): Promise<number | null>;
 export declare function stopInstances(instances: readonly InstanceEntry[], effects?: StopEffects): Promise<StopResult>;
 export declare function describeInstance(instance: InstanceEntry): string;
 export declare function manualStopCommand(pids: readonly number[], platform?: NodeJS.Platform): string;

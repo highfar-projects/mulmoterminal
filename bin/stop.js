@@ -17,6 +17,7 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { stopCommandFor } from "./cli-args.js";
 import { isProcessAlive, liveInstances } from "./instances.js";
+import { portOwners } from "./port-owner.js";
 
 // How long a server is given to end itself before it is reported as stubborn. Generous on purpose:
 // what happens in that window is the same shutdown Ctrl+C runs, and reporting "did not stop" about
@@ -35,29 +36,46 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * — leaves its file behind, and the OS is free to hand that pid to something else afterwards. The
  * registry has always tolerated that, because its only reader asked a harmless question ("is one
  * already running?"). Signalling raises the stakes: the same staleness would send SIGTERM to a
- * stranger's process (CodeRabbit and Codex both raised this).
+ * stranger's process (CodeRabbit and Codex both raised this on #1824).
  *
- * Something merely ANSWERING on the recorded port does not settle it, which was this function's
- * first attempt: a server that crashed and was restarted on the SAME port answers happily while
- * the recorded pid has since been given to something unrelated (Codex, second pass). Only the
- * process itself can say who it is, so it is asked — GET /api/instance reports the serving pid,
- * and the entry is trusted exactly when that matches the pid the file names.
+ * ASK THE KERNEL WHO OWNS THE PORT. The entry pairs a pid with a port, so that pairing is exactly
+ * what has to be confirmed, and the OS is the only party that knows it and cannot be lied to over a
+ * socket. Two weaker answers were tried first and both are recorded in bin/port-owner.js: the port
+ * merely answering HTTP (true for a DIFFERENT server that took the port after a crash), and the
+ * server reporting its own pid (an unauthenticated self-report anything on loopback can forge).
+ *
+ * When the kernel cannot be asked — no `lsof`, an unknown platform — fall back to that self-report
+ * rather than refusing everything: it is weaker, not worthless, and a user whose machine lacks the
+ * tool still deserves a working `stop`.
  */
-export function confirmInstance(instance, get = httpGet, timeoutMs = CONFIRM_TIMEOUT_MS) {
-  if (instance.port === null) return Promise.resolve(false);
+export async function confirmInstance(instance, deps = {}) {
+  if (instance.port === null) return false;
+  const { owners = portOwners, selfReport = reportedPid } = deps;
+  const pids = await owners(instance.port);
+  if (pids !== null) return pids.includes(instance.pid);
+  return (await selfReport(instance)) === instance.pid;
+}
+
+/**
+ * The pid the server at this port claims, over `GET /api/instance`, or null.
+ *
+ * The fallback only. Kept because it is the one check that needs nothing installed, and dropped to
+ * second place because it proves less than it appears to: it is a self-report.
+ */
+export function reportedPid(instance, get = httpGet, timeoutMs = CONFIRM_TIMEOUT_MS) {
   return new Promise((resolve) => {
     let settled = false;
     // Exactly one outcome per call: destroying a timed-out request itself emits 'error', so
     // without the latch a timeout would resolve twice (the same trap wait-ready.js documents).
-    const done = (ok) => {
+    const done = (pid) => {
       if (settled) return;
       settled = true;
-      resolve(ok);
+      resolve(pid);
     };
     const req = get({ host: "127.0.0.1", port: instance.port, path: "/api/instance", timeout: timeoutMs }, (res) => {
       if (res.statusCode !== 200) {
         res.resume();
-        return done(false);
+        return done(null);
       }
       let body = "";
       res.setEncoding("utf8");
@@ -67,16 +85,16 @@ export function confirmInstance(instance, get = httpGet, timeoutMs = CONFIRM_TIM
         // all first would let whatever IS on that port decide how much memory this spends.
         if (body.length > MAX_IDENTITY_BYTES) {
           req.destroy();
-          done(false);
+          done(null);
         }
       });
-      res.on("end", () => done(parseIdentity(body) === instance.pid));
-      res.on("error", () => done(false));
+      res.on("end", () => done(parseIdentity(body)));
+      res.on("error", () => done(null));
     });
-    req.on("error", () => done(false));
+    req.on("error", () => done(null));
     req.on("timeout", () => {
       req.destroy();
-      done(false);
+      done(null);
     });
   });
 }
