@@ -145,8 +145,11 @@ const PAGES: { name: string; open: () => Page; press: () => void }[] = [
     open: () => {
       const page = load(projectBoard, "views/board.html");
       // No `mine` in the viewer, which is this board's own case: "nobody looked" is not "you have
-      // not registered", so the take button is drawn and pressing it is allowed to reach the write.
+      // not registered", so the take button is drawn and pressing it reaches a write. The name is
+      // typed because that press now REGISTERS first — the board will not take work for somebody it
+      // cannot show a name for, and the confirmation being declined is the `names` write's own.
       page.tell({ tasks: [{ id: "t1", title: "掃除" }], names: [], assignments: [] });
+      type("who", "山田");
       return page;
     },
     press: () => (document.querySelector("#list button") as HTMLButtonElement).click(),

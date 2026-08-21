@@ -18,6 +18,11 @@
 //   to tell them apart: an empty list is "you have not registered", a missing key is "nobody
 //   looked". Conflating them draws the registration form on top of a registration that exists —
 //   the bug this template was extracted from.
+//
+//   AN UNKNOWN TREATED AS A YES. The other half of the same three states, and the one that cost
+//   two published apps: "nobody looked" was let through to the take, the rules do not consult the
+//   roster, so the write SUCCEEDED and produced a claim with a uid and no name. Nothing failed
+//   anywhere — the board drew it under `holderName`'s fallback, beside the real ones.
 import { describe, it, expect, beforeEach } from "vitest";
 
 // Through Vite rather than `node:fs`: this spec belongs to the DOM-typed project, which carries no
@@ -171,6 +176,21 @@ const settle = async (): Promise<void> => {
  *  `can`. */
 function loadBoard(): {
   sent: Sent[];
+  /** What the parent answers the NEXT submission with. The board's guard turns on whether the
+   *  registration actually LANDED, so a stub that only ever succeeds cannot reach the branch that
+   *  matters — a refused `names` write must not be followed by a claim. */
+  answer: (outcome: { ok: boolean; error?: string }) => void;
+  /** What the host answers `view.mine(cid, key)` with. The board asks this from `onState` when
+   *  `viewer.mine` said nothing — it is how a reader who registered on an earlier visit is
+   *  recognised on a host that carries no `mine`, and both writing hosts wire the port. */
+  lookup: (answer: { known: boolean; found?: boolean; record?: Record<string, unknown> }) => void;
+  /** Make every `view.mine` hang, so writes can land while one is still out — the race that turns a
+   *  stale answer into a lockout. They QUEUE: `release` answers the oldest one still waiting, which
+   *  is what lets a test deliver an overtaken reply after a newer request went out. */
+  hold: () => void;
+  release: (answer: { known: boolean; found?: boolean; record?: Record<string, unknown> }) => void;
+  /** How many lookups are waiting — so a test can assert that a retry actually went out. */
+  waiting: () => number;
   tell: (data: Record<string, unknown[]>, mine?: Record<string, unknown[]>) => void;
   said: () => string;
   buttons: () => string[];
@@ -181,6 +201,12 @@ function loadBoard(): {
   document.body.innerHTML = html.replace(/<script>[\s\S]*?<\/script>/, "");
 
   const sent: Sent[] = [];
+  let outcome: { ok: boolean; error?: string } = { ok: true };
+  // `known: false` by default — "nobody looked", which is what a host with no port answers.
+  type Look = { known: boolean; found?: boolean; record?: Record<string, unknown> };
+  let looked: Look = { known: false };
+  let holding = false;
+  const held: ((answer: Look) => void)[] = [];
   let onState: ((data: unknown, viewer: unknown) => void) | null = null;
   (window as unknown as { __MC_APP_VIEW: unknown }).__MC_APP_VIEW = {
     onState: (handler: (data: unknown, viewer: unknown) => void) => {
@@ -188,7 +214,7 @@ function loadBoard(): {
     },
     submit: (cid: string, values: Record<string, string>) => {
       sent.push({ kind: "submit", cid, values });
-      return Promise.resolve({ ok: true });
+      return Promise.resolve(outcome);
     },
     transition: (cid: string, id: string, to: string) => {
       sent.push({ kind: "transition", cid, id, to });
@@ -198,6 +224,12 @@ function loadBoard(): {
       sent.push({ kind: "withdraw", cid, id });
       return Promise.resolve({ ok: true });
     },
+    mine: () =>
+      holding
+        ? new Promise<Look>((resolve) => {
+            held.push(resolve);
+          })
+        : Promise.resolve(looked),
     ready: () => {},
   };
 
@@ -206,6 +238,19 @@ function loadBoard(): {
   const all = (): HTMLButtonElement[] => [...document.querySelectorAll("button")] as HTMLButtonElement[];
   return {
     sent,
+    answer: (next) => {
+      outcome = next;
+    },
+    lookup: (next) => {
+      looked = next;
+    },
+    hold: () => {
+      holding = true;
+    },
+    release: (answer) => {
+      held.shift()?.(answer);
+    },
+    waiting: () => held.length,
     // `mine` OMITTED rather than passed empty when the caller says nothing: that distinction is the
     // subject of half the cases below, and a harness that invented `{}` would erase it.
     tell: (data, mine) => onState?.(data, { me: null, can: {}, ...(mine === undefined ? {} : { mine }) }),
@@ -330,21 +375,358 @@ describe("the project-board public board", () => {
     detachPages();
   });
 
-  it("offers the work when NOBODY LOOKED, because that is not 'you have not registered'", async () => {
-    // No `mine` key at all — a refused read, an offline blink, a host that answers nothing. The
-    // page must not take the action away from somebody who may well be registered: it offers it,
-    // and lets the refusal explain itself if there is one.
+  it("REGISTERS on the press when nobody looked, and does NOT take the work in the same one", async () => {
+    // No `mine` key at all — a refused read, an offline blink, a host that answers nothing (every
+    // host, before mulmoserver wired `mine` into the public page on 2026-08-19). The page must not
+    // take the action away from somebody who may well be registered, and it must not let the press
+    // through either: the rules do not consult the roster, so the write would SUCCEED and leave a
+    // row carrying a uid and no name — drawn on the board under `holderName`'s fallback, with
+    // nothing anywhere reporting a fault. Two published apps reached that state.
+    //
+    // ONE WRITE PER PRESS, which is why the take does not follow the registration here. A `submit`
+    // issued after awaiting an earlier one resumes in a later task, so the runtime does not mark it
+    // as caused by the click — and a host that gates writes on that mark (`manageSharedApp`'s
+    // `preview`) withholds it. Chaining them would register the name and silently drop the claim.
     const board = loadBoard();
     board.tell({ tasks: TASKS, assignments: [], names: [] });
 
     expect(board.buttons()).toContain("これをやります");
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
     board.press("これをやります");
     await settle();
 
-    // The write contract, which is what the declaration is built around: the page sends the task id
-    // and NOTHING else. `uid` comes from the session and `status` from `initialStatus`, both filled
-    // by the host — a page that sent either would be writing values it is not allowed to choose.
+    expect(board.sent).toEqual([{ kind: "submit", cid: "names", values: { name: "山田" } }]);
+    expect(board.said()).toContain("もう一度");
+  });
+
+  it("takes the work on the SECOND press, once the registration landed", async () => {
+    // The other half of the same press-per-write rule, and the reason the page remembers within the
+    // visit: `mine` never arrived and never will on this host, so nothing else can say the name is
+    // there now. The write contract is what the declaration is built around — the page sends the
+    // task id and NOTHING else. `uid` comes from the session and `status` from `initialStatus`,
+    // both filled by the host.
+    const board = loadBoard();
+    board.tell({ tasks: TASKS, assignments: [], names: [] });
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
+
+    board.press("これをやります");
+    await settle();
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent).toEqual([
+      { kind: "submit", cid: "names", values: { name: "山田" } },
+      { kind: "submit", cid: "assignments", values: { taskId: "fix-login" } },
+    ]);
+  });
+
+  it("recognises a reader who registered on an EARLIER VISIT, with no `mine` at all", async () => {
+    // The reload, which is the case a page cannot hold in a variable: `mine` is absent, nothing was
+    // registered in this visit, and the reader has a row sitting in Firestore. Asked from `onState`
+    // rather than from the click, so the answer is already in when they press — a lookup awaited
+    // inside the handler would cost the press its gesture mark and the take with it.
+    //
+    // The key is a placeholder on purpose. Under `idFrom: "auth.uid"` the id IS the uid and
+    // `recordId` never reads the record, so nothing about this collection has a key to name — but
+    // an EMPTY one is refused by the bridge as `invalid-lookup`, so the page passes something.
+    const board = loadBoard();
+    board.lookup({ known: true, found: true });
+    board.tell({ tasks: TASKS, assignments: [], names: [{ id: "uid-1", name: "山田" }] });
+    await settle();
+
+    // ONE press, and no registration in front of it.
+    board.press("これをやります");
+    await settle();
+
     expect(board.sent).toEqual([{ kind: "submit", cid: "assignments", values: { taskId: "fix-login" } }]);
+  });
+
+  it("carries the refusal to the name field, instead of leaving it at the foot of the page", async () => {
+    // The reported failure on a PUBLISHED board, and it is not about the write: the guard held and
+    // nothing was created — the visitor simply could not see that. `#say` sits under the task list,
+    // so the one line it gets is off-screen for anybody who pressed a button further up, and the
+    // button is deliberately not disabled. Pressed, considered, and apparently inert.
+    //
+    // So the page moves to where the answer is. The scroll is the message; the text is the detail.
+    const scrolls: unknown[] = [];
+    (Element.prototype as unknown as { scrollIntoView: (arg?: unknown) => void }).scrollIntoView = (arg) => {
+      scrolls.push(arg);
+    };
+    const board = loadBoard();
+    board.tell({ tasks: TASKS, assignments: [], names: [] }, { names: [], assignments: [] });
+    await settle();
+
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent).toEqual([]);
+    expect(board.said()).toContain("先に名前を登録してください");
+    expect(scrolls.length).toBeGreaterThan(0);
+    expect(document.activeElement?.id).toBe("who");
+  });
+
+  it("takes the work after registering, even though `mine.names` is still empty", async () => {
+    // The host DID answer — with `[]`, before the registration. Reading the projection first turns
+    // that stale empty list into "you have not registered" and refuses somebody who just did, until
+    // whenever the next state happens to arrive.
+    const board = loadBoard();
+    board.tell({ tasks: TASKS, assignments: [], names: [] }, { names: [], assignments: [] });
+    await settle();
+
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
+    board.press("この名前で参加する");
+    await settle();
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent).toEqual([
+      { kind: "submit", cid: "names", values: { name: "山田" } },
+      { kind: "submit", cid: "assignments", values: { taskId: "fix-login" } },
+    ]);
+  });
+
+  it("lets a LATER projection overrule what this visit registered", async () => {
+    // The other direction, and the reason the local answer is not simply preferred: the owner can
+    // remove a name from the roster. A page that kept its own answer on top would never hear about
+    // it and would go on making claims for somebody the roster no longer carries — which is the
+    // nameless claim this whole template guards against, arrived at from the far side.
+    //
+    // So neither wins outright. Whichever was established LAST is the one believed.
+    const board = loadBoard();
+    board.tell({ tasks: TASKS, assignments: [], names: [] }, { names: [], assignments: [] });
+    await settle();
+
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
+    board.press("この名前で参加する");
+    await settle();
+
+    // The roster is read again and this reader has no row: newer than the registration.
+    board.tell({ tasks: TASKS, assignments: [], names: [] }, { names: [], assignments: [] });
+    await settle();
+
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent.map((one) => one.cid)).toEqual(["names"]);
+    expect(board.said()).toContain("先に名前を登録してください");
+  });
+
+  it("does not let an OVERTAKEN lookup undo the retry a refused registration started", async () => {
+    // The narrow ordering, and the one a completed-lookup test cannot reach: the `onState` lookup is
+    // STILL OUT when the register button earns its duplicate refusal. Clearing the cache is not
+    // enough on its own — the older request took its `found: false` before the row existed, and if
+    // it is allowed to land afterwards it puts the negative answer straight back. The visitor is
+    // then told to register by a page that has just been told they are registered.
+    //
+    // So the retry both invalidates what is in flight and goes out itself; the stale reply is
+    // dropped on arrival rather than raced with.
+    const board = loadBoard();
+    board.hold();
+    board.tell({ tasks: TASKS, assignments: [], names: [] });
+    await settle();
+    expect(board.waiting()).toBe(1);
+
+    // The row exists (another tab, or a reply that was lost), so the register press is refused.
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
+    board.answer({ ok: false, error: "permission-denied" });
+    board.press("この名前で参加する");
+    await settle();
+
+    // The refusal started a fresh lookup rather than being swallowed by the one already out.
+    expect(board.waiting()).toBe(2);
+
+    // The OLD one answers first, with the snapshot it took before any of this.
+    board.release({ known: true, found: false });
+    await settle();
+    // Then the one the retry sent, which is the current truth.
+    board.release({ known: true, found: true, record: { name: "山田" } });
+    await settle();
+
+    board.answer({ ok: true });
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent.map((one) => one.cid)).toEqual(["names", "assignments"]);
+  });
+
+  it("re-asks after a refused registration, rather than caching 'not registered' for the visit", async () => {
+    // A negative answer is a snapshot, not a fact about the rest of the visit. The row can appear
+    // afterwards — the same person registering in another tab, or a write whose row landed and
+    // whose reply was lost — and the refusal the register button then earns is the ONLY sign of it.
+    //
+    // Cached, that refusal is a dead end: the take reads "no row", `askHost` never runs again
+    // because something is settled, and registering once more only earns the same refusal. Reload
+    // is the only way out, which is not something a page may require of somebody.
+    const board = loadBoard();
+    board.lookup({ known: true, found: false });
+    board.tell({ tasks: TASKS, assignments: [], names: [] });
+    await settle();
+
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
+    board.press("これをやります");
+    await settle();
+    expect(board.sent).toEqual([]);
+
+    // The row exists after all, and the duplicate refusal is how this page finds out.
+    board.answer({ ok: false, error: "permission-denied" });
+    board.lookup({ known: true, found: true, record: { name: "山田" } });
+    board.press("この名前で参加する");
+    await settle();
+
+    board.answer({ ok: true });
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent.map((one) => one.cid)).toEqual(["names", "assignments"]);
+  });
+
+  it("drops a second press while the first write is still out", async () => {
+    // The take path crosses an `await` on a host that has resolved nothing, so an impatient second
+    // press reads `settled` as false and sends the SAME registration again. No claim comes of it —
+    // but the duplicate is refused by the id collision, so the person who did register reads
+    // "登録できませんでした" about a registration that worked.
+    const board = loadBoard();
+    board.hold();
+    board.tell({ tasks: TASKS, assignments: [], names: [] });
+    await settle();
+    board.release({ known: false });
+    await settle();
+
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
+    // Both presses land before anything is awaited back — the second is dropped, not queued.
+    board.press("これをやります");
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent).toEqual([{ kind: "submit", cid: "names", values: { name: "山田" } }]);
+  });
+
+  it("ignores a STALE lookup that lands after a registration succeeded", async () => {
+    // The lookup goes out from `onState`, so it is in flight while the visitor is still reading the
+    // page — and it was asked BEFORE they registered. If its answer is applied on arrival it
+    // overwrites what the register button established, and on a host with no `mine` there is
+    // nothing left to correct it: every later take reads "not registered", and registering again
+    // only earns the duplicate refusal. The visit is over for that person.
+    //
+    // Whatever settled first wins. The reply is not wrong, it is old.
+    const board = loadBoard();
+    board.hold();
+    board.tell({ tasks: TASKS, assignments: [], names: [] });
+    await settle();
+
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
+    board.press("この名前で参加する");
+    await settle();
+
+    board.release({ known: true, found: false });
+    await settle();
+
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent).toEqual([
+      { kind: "submit", cid: "names", values: { name: "山田" } },
+      { kind: "submit", cid: "assignments", values: { taskId: "fix-login" } },
+    ]);
+  });
+
+  it("SHOWS the name the lookup found, rather than still asking for one", async () => {
+    // The answer has to reach the SCREEN, not just the guard. A page that resolved this only inside
+    // the take handler goes on drawing the registration form and the "登録済みかは確認できません
+    // でした" note over a registration it has just confirmed — the same mistake as reading a missing
+    // key as "no", wearing different clothes.
+    const board = loadBoard();
+    board.lookup({ known: true, found: true, record: { name: "山田" } });
+    board.tell({ tasks: TASKS, assignments: [], names: [{ id: "uid-1", name: "山田" }] });
+    await settle();
+
+    expect(document.getElementById("who")).toBeNull();
+    expect(document.getElementById("me")?.textContent ?? "").toContain("山田");
+  });
+
+  it("stops a reader the host says has NO row, without writing a registration first", async () => {
+    // The same route answering the other way. `found: false` is an answer, so the page says the
+    // useful thing rather than sending a name the reader did not ask to register.
+    const board = loadBoard();
+    board.lookup({ known: true, found: false });
+    board.tell({ tasks: TASKS, assignments: [], names: [] });
+    await settle();
+
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent).toEqual([]);
+    expect(board.said()).toContain("先に名前を登録してください");
+  });
+
+  it("takes the work after the REGISTER BUTTON, with no `mine` to confirm it", async () => {
+    // The dead end the press-per-write split opened, and it is reached by the ordinary route: the
+    // board's own 「この名前で参加する」. Without `mine`, that button is the only thing that knows
+    // the name landed — so if it does not record it, the take that follows starts from registration
+    // again, meets the id collision (the document id IS the uid), and refuses. The page would have
+    // said "登録しました" and then never let that person take anything.
+    const board = loadBoard();
+    board.tell({ tasks: TASKS, assignments: [], names: [] });
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
+
+    board.press("この名前で参加する");
+    await settle();
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent).toEqual([
+      { kind: "submit", cid: "names", values: { name: "山田" } },
+      { kind: "submit", cid: "assignments", values: { taskId: "fix-login" } },
+    ]);
+  });
+
+  it("does not let a REFUSED register button stand in for a registration", async () => {
+    // The other half: the button records the fallback state only when the write actually landed.
+    // A refusal there is the same unknown as before it was pressed.
+    const board = loadBoard();
+    board.tell({ tasks: TASKS, assignments: [], names: [] });
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
+    board.answer({ ok: false, error: "host-error" });
+
+    board.press("この名前で参加する");
+    await settle();
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent.map((one) => one.cid)).toEqual(["names", "names"]);
+  });
+
+  it("does NOT take the work when the registration was refused", async () => {
+    // The hole the fail-open guard had, in its last form: a refusal is not a registration. "You are
+    // already registered" and "that write did not land" come back wearing the same face here, and
+    // the page cannot tell them apart — so it stops, because the one it cannot afford to be wrong
+    // about is the one that leaves a claim with no name behind it.
+    const board = loadBoard();
+    board.tell({ tasks: TASKS, assignments: [], names: [] });
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
+    board.answer({ ok: false, error: "host-error" });
+
+    board.press("これをやります");
+    await settle();
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent.map((one) => one.cid)).toEqual(["names", "names"]);
+    expect(board.said()).toContain("登録できませんでした");
+  });
+
+  it("asks for the name instead of writing, when nobody looked and none was typed", async () => {
+    // The empty field is the only thing left to go on once `mine` is absent, so it is what the page
+    // stops at. Nothing is sent — not even the take, which the rules would have accepted.
+    const board = loadBoard();
+    board.tell({ tasks: TASKS, assignments: [], names: [] });
+
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent).toEqual([]);
+    expect(board.said()).toContain("先に名前を登録してください");
   });
 
   it("stops the write when the read DID land and the reader has not registered", async () => {
@@ -381,10 +763,12 @@ describe("the project-board public board", () => {
     // pages delegate one `click` handler on the document, jsdom shares that document across a
     // file, and the labels are the template's own — so a page loaded earlier matches the same
     // press. Nothing would throw; the count would simply be one somewhere nobody was looking.
+    // Told a registered reader, so one press is exactly one write and the count is unambiguous.
+    const registered = { names: [{ id: "uid-1", name: "山田" }], assignments: [] };
     const gone = loadBoard();
-    gone.tell({ tasks: TASKS, assignments: [], names: [] });
+    gone.tell({ tasks: TASKS, assignments: [], names: [{ id: "uid-1", name: "山田" }] }, registered);
     const shown = loadBoard();
-    shown.tell({ tasks: TASKS, assignments: [], names: [] });
+    shown.tell({ tasks: TASKS, assignments: [], names: [{ id: "uid-1", name: "山田" }] }, registered);
 
     shown.press("これをやります");
     await settle();
