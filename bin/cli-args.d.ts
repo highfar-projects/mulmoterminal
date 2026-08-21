@@ -15,4 +15,5 @@ export interface RunningInstance {
   pid: number;
   port: number | null;
 }
-export declare function runningInstancesPrompt(instances: readonly RunningInstance[]): string;
+export declare function stopCommandFor(pkgDir: string): string;
+export declare function runningInstancesPrompt(instances: readonly RunningInstance[], stopCommand?: string): string;

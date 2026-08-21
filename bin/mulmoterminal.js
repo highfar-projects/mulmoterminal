@@ -24,6 +24,7 @@ import {
   saysYes,
   secondInstancePrompt,
   runningInstancesPrompt,
+  stopCommandFor,
   SECOND_INSTANCE_NOTE,
   nodeMeetsMinimum,
   MIN_NODE_LABEL,
@@ -36,6 +37,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PKG_DIR = join(__dirname, "..");
 const SERVER_ENTRY = join(PKG_DIR, "server", "index.ts");
 const DEFAULT_PORT = 34567;
+// Printed wherever the user is told how to stop a server, so it names a command they actually have.
+const STOP_COMMAND = stopCommandFor(PKG_DIR);
 // Server exit code meaning "port taken at bind time" — keep in sync with
 // server/index.ts (PORT_IN_USE_EXIT_CODE).
 const PORT_IN_USE_EXIT_CODE = 75;
@@ -246,12 +249,12 @@ function isPortFree(port) {
   });
 }
 
-function printReadyBanner(url) {
+function printReadyBanner(url, stopCommand) {
   const bar = "\x1b[32m" + "─".repeat(48) + "\x1b[0m";
   console.log(`\n${bar}`);
   console.log(`\x1b[32m  ✓ MulmoTerminal is ready\x1b[0m`);
   console.log(`\x1b[32m  → ${url}\x1b[0m`);
-  console.log(`\x1b[32m  Press Ctrl+C to stop — or \`mulmoterminal stop\` from any terminal.\x1b[0m`);
+  console.log(`\x1b[32m  Press Ctrl+C to stop — or \`${stopCommand}\` from any terminal.\x1b[0m`);
   console.log(`${bar}\n`);
 }
 
@@ -298,11 +301,11 @@ async function confirmNoRunningInstance() {
   const running = liveInstances();
   if (running.length === 0) return;
   if (!process.stdin.isTTY) {
-    log(runningInstancesPrompt(running).replace(/\nStart another one anyway\? \[y\/N\] $/, ""));
+    log(runningInstancesPrompt(running, STOP_COMMAND).replace(/\nStart another one anyway\? \[y\/N\] $/, ""));
     log(SECOND_INSTANCE_NOTE);
     return;
   }
-  if (!(await promptYesNo(runningInstancesPrompt(running)))) process.exit(0);
+  if (!(await promptYesNo(runningInstancesPrompt(running, STOP_COMMAND)))) process.exit(0);
   log(SECOND_INSTANCE_NOTE);
 }
 
@@ -351,7 +354,7 @@ function runServer(port, noOpen, cwd, onChild) {
 
     const url = `http://localhost:${port}`;
     const cancelReady = waitUntilReady(port, () => {
-      printReadyBanner(url);
+      printReadyBanner(url, STOP_COMMAND);
       if (noOpen) return;
       try {
         // The command is a hardcoded literal; url is http://localhost:<numeric port>.
@@ -392,8 +395,8 @@ Commands:
   init              First-run setup: check your environment, seed working-directory
                     presets from your Claude Code history, and write
                     ~/.mulmoterminal/config.json (idempotent — safe to re-run)
-  stop              Stop the running server(s), from any terminal — you do not have
-                    to find the one you started it in
+  stop [--force]    Stop the running server(s), from any terminal — you do not have
+                    to find the one you started it in ("stop --help" for the rest)
   google login      Link a Google account (browser consent, on this machine) so the
                     Calendar tool and the phone's google.calendar.* commands can run
   room <cmd>        Take part in a conversation room from a shell:
@@ -426,7 +429,7 @@ async function main() {
 
   if (args[0] === "stop") {
     const { runStop } = await import("./stop.js");
-    await runStop();
+    await runStop(args.slice(1));
     return;
   }
 

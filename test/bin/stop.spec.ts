@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, vi } from "vitest";
 
-import { stopInstances, stopReport, stopExitCode, describeInstance } from "../../bin/stop.js";
+import { stopInstances, stopReport, stopExitCode, describeInstance, manualStopCommand, parseStopArgs } from "../../bin/stop.js";
 
 const instance = (pid: number, port: number | null = 34567) => ({ pid, port, startedAt: 1 });
 
@@ -16,6 +16,8 @@ const world = (alive: number[], kill?: (pid: number) => void) => {
       isAlive: (pid: number) => running.has(pid),
       sleep: async () => {},
       graceMs: 300,
+      // Identity is proved separately below; these cases are about the stopping itself.
+      confirm: async () => true,
     },
   };
 };
@@ -95,15 +97,15 @@ describe("stopInstances", () => {
 
 describe("stopReport", () => {
   it("says so plainly when nothing was running", () => {
-    expect(stopReport({ stopped: [], stubborn: [] })).toEqual(["MulmoTerminal is not running."]);
+    expect(stopReport({ stopped: [], stubborn: [], unconfirmed: [] })).toEqual(["MulmoTerminal is not running."]);
   });
 
   it("names each server by the URL the user has open", () => {
-    expect(stopReport({ stopped: [instance(11, 34567)], stubborn: [] })).toEqual(["Stopped http://localhost:34567 (pid 11)"]);
+    expect(stopReport({ stopped: [instance(11, 34567)], stubborn: [], unconfirmed: [] })).toEqual(["Stopped http://localhost:34567 (pid 11)"]);
   });
 
   it("hands over the pid when it could not stop one, because the registry is no longer readable to the user", () => {
-    const lines = stopReport({ stopped: [], stubborn: [{ ...instance(11), reason: "EPERM" }] });
+    const lines = stopReport({ stopped: [], stubborn: [{ ...instance(11), reason: "EPERM" }], unconfirmed: [] });
     expect(lines.join("\n")).toContain("Could NOT stop");
     expect(lines.join("\n")).toContain("kill -9 11");
   });
@@ -115,11 +117,107 @@ describe("stopReport", () => {
 
 describe("stopExitCode", () => {
   it("succeeds when there was nothing to stop, so a script can run it before starting", () => {
-    expect(stopExitCode({ stopped: [], stubborn: [] })).toBe(0);
+    expect(stopExitCode({ stopped: [], stubborn: [], unconfirmed: [] })).toBe(0);
   });
 
   it("fails only when something was asked to stop and did not", () => {
-    expect(stopExitCode({ stopped: [instance(11)], stubborn: [] })).toBe(0);
-    expect(stopExitCode({ stopped: [], stubborn: [{ ...instance(11), reason: "EPERM" }] })).toBe(1);
+    expect(stopExitCode({ stopped: [instance(11)], stubborn: [], unconfirmed: [] })).toBe(0);
+    expect(stopExitCode({ stopped: [], stubborn: [{ ...instance(11), reason: "EPERM" }], unconfirmed: [] })).toBe(1);
+  });
+});
+
+// A LIVE PID IS NOT AN IDENTITY (CodeRabbit, Codex). A server killed outright leaves its registry
+// file behind, and the OS may hand that pid to something else — at which point signalling it would
+// SIGTERM a stranger's process. The old reader of this registry only ever asked "is one running?",
+// which was harmless; stopping is not.
+describe("stopInstances identity check", () => {
+  const alive = { isAlive: () => false, sleep: async () => {}, graceMs: 0 };
+
+  it("does not signal a pid it cannot corroborate", async () => {
+    const kill = vi.fn();
+    const result = await stopInstances([instance(11)], { ...alive, kill, confirm: async () => false });
+    expect(kill).not.toHaveBeenCalled();
+    expect(result.unconfirmed.map((i) => i.pid)).toEqual([11]);
+    expect(result.stopped).toEqual([]);
+  });
+
+  it("signals one it can", async () => {
+    const kill = vi.fn();
+    const result = await stopInstances([instance(11)], { ...alive, kill, confirm: async () => true });
+    expect(kill).toHaveBeenCalledWith(11);
+    expect(result.stopped.map((i) => i.pid)).toEqual([11]);
+  });
+
+  it("stops asking once --force is given, which is the way out for a server that has hung", async () => {
+    const kill = vi.fn();
+    const confirm = vi.fn(async () => false);
+    await stopInstances([instance(11)], { ...alive, kill, confirm, force: true });
+    expect(confirm).not.toHaveBeenCalled();
+    expect(kill).toHaveBeenCalledWith(11);
+  });
+
+  it("judges each instance on its own, so one unconfirmed entry cannot spare the others", async () => {
+    const kill = vi.fn();
+    const result = await stopInstances([instance(11, 34567), instance(22, 34568)], {
+      ...alive,
+      kill,
+      confirm: async (i) => i.pid === 22,
+    });
+    expect(kill.mock.calls).toEqual([[22]]);
+    expect(result.unconfirmed.map((i) => i.pid)).toEqual([11]);
+  });
+});
+
+describe("the report when something was left alone", () => {
+  const left = { stopped: [], stubborn: [], unconfirmed: [instance(11)] };
+
+  it("says why, rather than reporting it as stopped", () => {
+    const text = stopReport(left, "darwin").join("\n");
+    expect(text).toContain("not answering");
+    expect(text).toContain("--force");
+    expect(text).not.toContain("Stopped http");
+  });
+
+  it("is a failure, because it is not what the user asked for", () => {
+    expect(stopExitCode(left)).toBe(1);
+  });
+});
+
+// `kill -9` is not a command in a standard Windows shell — and a Windows report is why this whole
+// feature exists, so printing something unusable there would be the same failure again.
+describe("manualStopCommand", () => {
+  it("gives a Windows user a command Windows has", () => {
+    expect(manualStopCommand([11], "win32")).toBe("taskkill /PID 11 /F");
+    expect(manualStopCommand([11, 22], "win32")).toBe("taskkill /PID 11 /F && taskkill /PID 22 /F");
+  });
+
+  it("keeps the POSIX one everywhere else", () => {
+    expect(manualStopCommand([11, 22], "darwin")).toBe("kill -9 11 22");
+    expect(manualStopCommand([11], "linux")).toBe("kill -9 11");
+  });
+
+  it("is what the report reaches for on each platform", () => {
+    const result = { stopped: [], stubborn: [{ ...instance(11), reason: "EPERM" }], unconfirmed: [] };
+    expect(stopReport(result, "win32").join("\n")).toContain("taskkill /PID 11 /F");
+    expect(stopReport(result, "linux").join("\n")).toContain("kill -9 11");
+  });
+});
+
+// `stop` ignoring its arguments meant `stop --help` SIGTERMed every server instead of printing
+// help (CodeRabbit) — the worst possible reading of a request for information.
+describe("parseStopArgs", () => {
+  it("treats --help as a request for help, not as a request to stop everything", () => {
+    expect(parseStopArgs(["--help"])).toEqual({ help: true });
+    expect(parseStopArgs(["-h"])).toEqual({ help: true });
+  });
+
+  it("accepts --force", () => {
+    expect(parseStopArgs(["--force"])).toEqual({ force: true });
+    expect(parseStopArgs([])).toEqual({ force: false });
+  });
+
+  it("refuses what it does not understand rather than stopping servers anyway", () => {
+    expect(parseStopArgs(["--all"])).toMatchObject({ error: expect.stringContaining("--all") });
+    expect(parseStopArgs(["34567"])).toMatchObject({ error: expect.stringContaining("34567") });
   });
 });
