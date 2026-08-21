@@ -117,13 +117,23 @@ export function saysYes(answer) {
  * deleted by a peer's boot. The clash is a symptom; the shared `~/.mulmoterminal` is the thing
  * that is not supported, and that is true at any port.
  */
-export function runningInstancesPrompt(instances) {
+// npx leaves no `mulmoterminal` on the PATH, so telling an npx user to run `mulmoterminal stop` in
+// another terminal names a command they do not have (CodeRabbit). The package directory says which
+// they are: npx unpacks into `<cache>/_npx/<hash>/node_modules/mulmoterminal`.
+const NPX_INSTALL = /[/\\]_npx[/\\]/;
+
+export const stopCommandFor = (pkgDir) => (NPX_INSTALL.test(String(pkgDir)) ? "npx mulmoterminal@latest stop" : "mulmoterminal stop");
+
+export function runningInstancesPrompt(instances, stopCommand = "mulmoterminal stop") {
   const where = instances.map((i) => (i.port === null ? `pid ${i.pid}` : `http://localhost:${i.port}`)).join(", ");
   const subject = instances.length === 1 ? "MulmoTerminal is already running" : `${instances.length} MulmoTerminal servers are already running`;
   return [
     `${subject} (${where}).`,
     "  Running more than one is NOT a supported setup: they share ~/.mulmoterminal,",
     "  so they can overwrite each other's session state.",
+    // This is the moment the user asks how to stop the old one — most often because they are here
+    // to run a NEWER version (#1820). Answering it anywhere else means answering it too late.
+    `  To stop the running one instead:  ${stopCommand}`,
     "Start another one anyway? [y/N] ",
   ].join("\n");
 }

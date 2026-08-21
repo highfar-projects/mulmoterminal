@@ -241,10 +241,11 @@ npm install -g mulmoterminal
 mulmoterminal
 ```
 
-**Stopping it.** `Ctrl+C` in the terminal that started it, or — if you can no longer find that
-terminal — **Settings → Quit MulmoTerminal** in the browser. Both run the same shutdown: with `tmux`
-installed the agent sessions survive and come back under **Settings → Sessions that survived a
-restart**; without it they end with the server.
+**Stopping it.** `Ctrl+C` in the terminal that started it — or, if you can no longer find that
+terminal, **Settings → Quit MulmoTerminal** in the browser, or **`npx mulmoterminal@latest stop`**
+from any terminal (installed globally, just `mulmoterminal stop`). All three run the same shutdown:
+with `tmux` installed the agent sessions survive and come back under **Settings → Sessions that
+survived a restart**; without it they end with the server.
 
 **First-run setup (optional).** `npx mulmoterminal@latest init` checks your environment (Node ≥ 22.9
 and every CLI in the table above), seeds the launcher's **directory

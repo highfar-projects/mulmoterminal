@@ -30,7 +30,8 @@ npx mulmoterminal@latest
 ```
 
 A browser opens on `http://localhost:34567`. To stop it, press **Ctrl + C** in the terminal
-you ran it from.
+you ran it from — or, if you can no longer find that terminal, run `npx mulmoterminal@latest stop`
+in any other one.
 
 - It worked → [First things to do](#first-run)
 - It printed something and stopped → [When it doesn't work](#troubleshooting)
@@ -245,7 +246,9 @@ npx mulmoterminal@latest
 - It prints `✓ MulmoTerminal is ready` and opens your browser
 - If nothing opens, go to `http://localhost:34567` yourself
 - **Stop it with Ctrl + C** — closing the browser tab does not stop the server
-- **Lost that terminal?** Stop it from the browser instead: **Settings → Quit MulmoTerminal**
+- **Lost that terminal?** Either stop it from the browser — **Settings → Quit MulmoTerminal** —
+  or run `npx mulmoterminal@latest stop` in any other terminal. Both stop every running server,
+  which is also what you want before starting a newer version
 
 Options worth knowing:
 
