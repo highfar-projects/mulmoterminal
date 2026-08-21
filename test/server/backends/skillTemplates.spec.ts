@@ -20,6 +20,33 @@ import { readdirSync } from "node:fs";
 
 const TEMPLATES = path.join(process.cwd(), "server", "skills", "mulmoterminal-shared-app", "templates");
 
+/** The app templates themselves. `design.md` lives beside them and is guidance rather than an app:
+ *  it declares no `app.json` and shows no page, so every check below would read it as a template
+ *  that had lost everything. Named here once so a future sibling is excluded in one place. */
+const TEMPLATE_FILES = readdirSync(TEMPLATES)
+  .filter((name) => name.endsWith(".md") && name !== "design.md")
+  .sort();
+
+/** And what that list must BE. Derived alone, the inventory can go quiet in both directions: an
+ *  empty directory makes every loop below iterate nothing and pass, and a file that reappears —
+ *  the seventh board this change removed is exactly that case — would be picked up as though it
+ *  had always been here. Adding a template is a decision, so it is written down, the same way
+ *  `BUNDLED_SKILL_NAMES` is what ships a skill rather than the directory existing.
+ *
+ *  The removed board is named by its absence from the list below and by the git history, not in
+ *  prose here: its first four letters are a task marker to `sonarjs`, and CI fails on them. */
+const EXPECTED_TEMPLATES = ["gym.md", "live-poll.md", "meeting-room.md", "project-board.md", "salon.md", "survey.md"];
+
+/** The hue as CSS reads it — a NUMBER, in which `25` and `25.0` are one colour and `0` and `360`
+ *  are one angle. Compared as the raw strings they are written in, each of those pairs is two
+ *  different templates' colours, which is precisely the duplicate the test below exists to catch
+ *  walking straight through it. */
+function hueOf(text: string): number | null {
+  const raw = /--hue:\s*(-?[0-9.]+)\s*;/.exec(text)?.[1];
+  const value = raw === undefined ? Number.NaN : Number(raw);
+  return Number.isFinite(value) ? ((value % 360) + 360) % 360 : null;
+}
+
 /** The JSON blocks of one template, keyed by the heading above them. The
  *  headings are the file paths an author writes, so the mapping is the
  *  template's own instruction rather than an ordering this test invented. */
@@ -85,10 +112,6 @@ describe("the shared-app templates", () => {
     expect(problemsFor("live-poll.md", "host@example.com", [])).toEqual([]);
   });
 
-  it("todo-board.md deploys as written", () => {
-    expect(problemsFor("todo-board.md", "owner@example.com", [])).toEqual([]);
-  });
-
   it("project-board.md deploys as written", () => {
     expect(problemsFor("project-board.md", "owner@example.com", [])).toEqual([]);
   });
@@ -100,7 +123,7 @@ describe("the shared-app templates", () => {
     // ships and reports as broken. That is not hypothetical for any of them: `prompt()` was in
     // these samples once, and a `<form>` written from scratch (because no sample showed the
     // alternative) went to a public URL with a Submit button that did nothing.
-    for (const file of readdirSync(TEMPLATES).filter((name) => name.endsWith(".md"))) {
+    for (const file of TEMPLATE_FILES) {
       for (const [, block] of readFileSync(path.join(TEMPLATES, file), "utf8").matchAll(/^```html\n([\s\S]*?)\n```/gm)) {
         const html = block ?? "";
         expect(`${file}: ${modalCallIn(html) ?? ""}`).toBe(`${file}: `);
@@ -124,7 +147,7 @@ describe("the shared-app templates", () => {
     // ON THE ROOT, not on `body`: a background on the root element is what stops the first body's
     // from propagating to the canvas, so a page painting only `body` gets its colour on the body
     // box and the runtime's white around it.
-    for (const file of readdirSync(TEMPLATES).filter((name) => name.endsWith(".md"))) {
+    for (const file of TEMPLATE_FILES) {
       for (const [, block] of readFileSync(path.join(TEMPLATES, file), "utf8").matchAll(/^```html\n([\s\S]*?)\n```/gm)) {
         const sheet = /<style>([\s\S]*?)<\/style>/.exec(block ?? "")?.[1] ?? "";
         // Line by line rather than by one regex over the sheet: the rule is written on its own
@@ -161,7 +184,7 @@ describe("the shared-app templates", () => {
     // not merely teach less — it teaches a declaration whose first deploy fails, and the author is
     // then editing files to recover. (Which is what the gym template did: it described a view in
     // prose, declared nothing, and its ranking was unbuildable from what it showed.)
-    for (const file of readdirSync(TEMPLATES).filter((name) => name.endsWith(".md"))) {
+    for (const file of TEMPLATE_FILES) {
       const text = readFileSync(path.join(TEMPLATES, file), "utf8");
       const manifest = blocksOf(file).get("app.json") as { views?: { path?: string }[] } | undefined;
       const declared = (manifest?.views ?? []).map((view) => view.path).filter((value): value is string => typeof value === "string");
@@ -194,9 +217,44 @@ describe("the shared-app templates", () => {
     // an unknown key at its own manifest schema, before any version is compared — and a floor a
     // sample declares for a feature is a floor every author then copies. See U10 in
     // `plans/feat-shared-app-uid-identity.md`.
-    for (const file of readdirSync(TEMPLATES).filter((name) => name.endsWith(".md"))) {
+    for (const file of TEMPLATE_FILES) {
       const manifest = blocksOf(file).get("app.json") as Record<string, unknown> | undefined;
       expect(`${file}: ${String(manifest?.protocol)}`).toBe(`${file}: ${APP_PROTOCOL}`);
+    }
+  });
+
+  it("makes every template choose its own colour rather than inherit one", () => {
+    // A template is copied VERBATIM — the same reason the canvas rule above is asserted here. So
+    // whatever colour a template ships is the colour of every app written from it, and seven
+    // templates sharing one would mean every shared app in the world arriving in it.
+    //
+    // The palette is derived from a single `--hue`, so this reads that one number: it is the only
+    // decision a page has to make to look like somebody made it, and the one an author skips.
+    // The inventory first, so nothing below can pass over a list that quietly changed.
+    expect(TEMPLATE_FILES).toEqual(EXPECTED_TEMPLATES);
+
+    const hues = new Map<number, string>();
+    for (const file of TEMPLATE_FILES) {
+      const hue = hueOf(readFileSync(path.join(TEMPLATES, file), "utf8"));
+      // Declared at all: a template whose sheet lost its palette teaches the grey it fell back to.
+      expect(`${file}: declares --hue = ${hue !== null}`).toBe(`${file}: declares --hue = true`);
+      const already = hues.get(hue ?? -1);
+      const whose = already === undefined ? "its own" : "shared with " + already;
+      expect(`${file}: --hue ${hue} is ${whose}`).toBe(`${file}: --hue ${hue} is its own`);
+      hues.set(hue ?? -1, file);
+    }
+    expect(hues.size).toBe(EXPECTED_TEMPLATES.length);
+  });
+
+  it("keeps the design guide's worked palette out of the templates", () => {
+    // `design.md` carries a fuller stylesheet than any template ships, and tells the reader not to
+    // publish its colours. A document that only ASKS to be re-coloured gets copied anyway — this is
+    // what makes the ask true, and it is also why the guide's hue is one no template uses.
+    const example = hueOf(readFileSync(path.join(TEMPLATES, "design.md"), "utf8"));
+    expect(`design.md: has a worked --hue = ${example !== null}`).toBe("design.md: has a worked --hue = true");
+    for (const file of TEMPLATE_FILES) {
+      const hue = hueOf(readFileSync(path.join(TEMPLATES, file), "utf8"));
+      expect(`${file}: copied the guide's hue = ${hue === example}`).toBe(`${file}: copied the guide's hue = false`);
     }
   });
 
@@ -210,7 +268,6 @@ describe("the shared-app templates", () => {
     );
     expect([...blocksOf("survey.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/questions/schema.json", ".claude/skills/responses/schema.json"]));
     expect([...blocksOf("live-poll.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/questions/schema.json", ".claude/skills/votes/schema.json"]));
-    expect([...blocksOf("todo-board.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/tasks/schema.json", ".claude/skills/claims/schema.json"]));
     expect([...blocksOf("project-board.md").keys()]).toEqual(
       expect.arrayContaining([".claude/skills/tasks/schema.json", ".claude/skills/names/schema.json", ".claude/skills/assignments/schema.json"]),
     );

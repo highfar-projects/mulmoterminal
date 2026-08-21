@@ -3,18 +3,10 @@
 **いつ使うか** — 作業の一覧を**オーナーが管理し**、参加した人が空いているものを自分で取って
 進めるもの。チームの ToDo、勉強会の準備係、イベントの当日タスク、翻訳の分担。
 
-**[todo-board.md](./todo-board.md) と迷ったら、名簿が要るかで決めてください。**
-
-| | todo-board | このテンプレート |
-|---|---|---|
-| テーブル | 2（`tasks` / `claims`） | 3（`tasks` / `assignments` / `names`） |
-| 名前 | 取るたびに行に書く | **最初に一度だけ登録**し、以後は名簿から引く |
-| 受付の画面 | 無し（オーナーはペインで直す） | **`/m/` のオーナー画面**（足す・消す・担当を外す） |
-| オーナーの操作 | ペインから | ページから（`writerDelete`） |
-
-名簿がある方が長く使う板に向きます — 名前を毎回打たせないし、「誰が参加しているか」が
-一覧になる。代わりに**参加の一手（名前の登録）が最初に挟まります**。使い捨ての板なら
-todo-board の方が軽いです。
+**名簿が要るかを最初に決めてください。** この板は参加した人が名前を一度登録し、以後は名簿から
+引きます — 毎回打たせないし、「誰が参加しているか」が一覧になる。代わりに**参加の一手（名前の
+登録）が最初に挟まります**。使い捨ての板でそれが重いなら、`names` を落として担当行に名前を
+書かせる形にもできますが、名前の出所が 2 つになるので、そのときは名簿を**完全に**やめること。
 
 **最初に利用者へ言うこと**が 3 つあります:
 
@@ -261,19 +253,39 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
 「どの画面を出すか」は常に `onState` が届けたものから引く。そうしておくとリロードしても
 同じ画面が出ますし、別のタブで取られた作業も次の状態で消えます。
 
+The colours below all come from one `--hue`, and **it is meant to be changed** — this one is
+this template's, not your app's. The rules behind the sheet, and how to go further than these
+fifteen lines, are in [design.md](./design.md).
+
 ```html
 <style>
-  html { background: #ffffff; color: #1c1c20; color-scheme: light; }
-  body { margin: 0; padding: 20px 16px 48px; font: 15px/1.6 system-ui, "Hiragino Sans", sans-serif; }
-  section { border: 1px solid #d7d7dc; border-radius: 10px; padding: 14px 16px; margin: 0 0 18px; }
-  h2 { font-size: 13px; color: #6b6b74; margin: 0 0 10px; }
-  .task { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: baseline; padding: 11px 0; border-top: 1px solid #d7d7dc; }
-  .title { flex: 1 1 200px; }
-  .who { font-size: 13px; color: #6b6b74; }
-  .who.mine { color: #1a6fd4; font-weight: 600; }
-  .say { min-height: 1.6em; font-size: 13px; }
-  .say.bad { color: #c0392b; }
-  .note, .empty { font-size: 12px; color: #6b6b74; }
+  /* Every colour is derived from ONE hue — the rules are in design.md. Change it for your app. */
+  :root {
+    --hue: 295;                                    /* violet - a board that keeps a roster */
+    --main: oklch(47% .09 var(--hue));           --fill: oklch(96% .018 var(--hue));
+    --line: oklch(47% .09 var(--hue) / .16);     --ink: oklch(23% .015 var(--hue));
+    --muted: oklch(53% .02 var(--hue));          --paper: oklch(99.4% .007 85);
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--paper); color: var(--ink); color-scheme: light; }
+  body { margin: 0 auto; max-width: 44rem; padding: 28px 18px 56px; font: 15px/1.65 system-ui, "Hiragino Sans", sans-serif; }
+  h1 { margin: 0 0 18px; font-size: clamp(23px, 5vw, 31px); line-height: 1.2; letter-spacing: -.03em; }
+  section { margin: 0 0 16px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 18px; background: var(--fill); }
+  h2 { margin: 0 0 10px; color: var(--muted); font-size: 13px; font-weight: 750; letter-spacing: .04em; }
+  button { min-height: 38px; margin: 4px 6px 0 0; padding: 8px 14px; border: 0; border-radius: 10px; background: var(--main); color: var(--paper); font: inherit; font-weight: 750; cursor: pointer; touch-action: manipulation; }
+  label { display: block; margin: 0 0 14px; color: var(--muted); font-size: 13px; font-weight: 750; }
+  input, textarea { display: block; width: min(22rem, 100%); margin-top: 6px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); font: inherit; }
+  input:focus, textarea:focus { border-color: var(--main); outline: 2px solid var(--line); }
+  .task { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; padding: 11px 0; border-top: 1px solid var(--line); }
+  .task.wanted { padding: 11px 13px; border-radius: 12px; background: oklch(96% .04 55); }
+  .ask { flex: 1 1 100%; margin: 4px 0 0; color: oklch(40% .09 55); font-size: 13px; }
+  .title { flex: 1 1 200px; font-weight: 780; }
+  .title .note { margin-left: 8px; font-weight: 400; }
+  .who { color: var(--muted); font-size: 13px; }
+  .who.mine { color: var(--main); font-weight: 750; }
+  .say { min-height: 1.6em; margin: 14px 0 0; color: var(--main); font-size: 13px; font-weight: 700; }
+  .say.bad { color: oklch(48% .15 25); }
+  .note, .empty { color: var(--muted); font-size: 12px; }
 </style>
 
 <h1>今週の作業</h1>
@@ -293,6 +305,23 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
     /** 取り下げの確認だけは押した行を覚える必要がある。sandbox は confirm() を無視するので
      *  ページの中で訊くしかない。データではないので latest とは別に持つ。 */
     let arming = null;
+    /** 登録を挟んだせいで押下が 2 回に割れた作業。**意図はデータではない**ので `latest` とは
+     *  別に持ちます（`arming` と同じ）。1 押しでは書き込みは 1 回だけ（`ensureRegistered` の
+     *  上の注）なので、登録した人は必ずもう一度押すことになる — その「もう一度」を、文言では
+     *  なく押した行そのもので出すために覚えます。 */
+    let wanted = null;
+
+    /** 名前の欄まで巻き上げられた人を、押した作業まで戻します。**戻さないのが元の不具合です**：
+     *  登録して名簿の行ができると `#me` が「として参加中です」に変わり、それが成功に見える。
+     *  一方で「まだ引き受けていません」は `#say`（ページの末尾）に出るので画面の外にあり、
+     *  引き受けたつもりで板を離れた人が出ました。 */
+    const focusWanted = () => {
+      if (wanted === null) return;
+      // 行を数えて探す。属性セレクタを文字列で組むと、id に " が入った瞬間に壊れます — この板の
+      // 作業 id はホストが作るので今は入りませんが、テンプレートは書き換えられて配られます。
+      const row = [...list.children].find((node) => node.dataset && node.dataset.task === wanted);
+      if (row && row.scrollIntoView) row.scrollIntoView({ block: "center" });
+    };
 
     const el = (tag, text, cls) => {
       const node = document.createElement(tag);
@@ -484,14 +513,21 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
         meBox.replaceChildren(el("div", "「" + String(reg.row.name || "") + "」として参加中です。"));
         return;
       }
+      const note = reg.known ? "登録すると作業を取れます。" : "登録済みかは確認できませんでした。登録済みなら、押しても新しくは作られません。";
+      // **出ているフォームは描き直さない。** `replaceChildren` は `#who` を作り直すので、焦点も
+      // 入力途中の名前も消えます — 断ったその瞬間に名前の欄へ運ぶのが台無しになり、書き込みが
+      // 失敗して訊き直させる枝では、打ってあった名前ごと消えて二度目が空で出ます。
+      // 文言だけは追いつかせること。三状態の答えは後から来るので、`known` は false から true に
+      // 変わります — 入力を作り直さずに、その一行だけ書き替えます。
+      const already = meBox.querySelector("p.note");
+      if (already) { already.textContent = note; return; }
       const label = el("label", "板に出る名前 ");
       const input = el("input");
       input.type = "text";
       input.id = "who";
       input.maxLength = 40;
       label.append(input);
-      meBox.replaceChildren(label, button("この名前で参加する", "register"),
-        el("p", reg.known ? "登録すると作業を取れます。" : "登録済みかは確認できませんでした。登録済みなら、押しても新しくは作られません。", "note"));
+      meBox.replaceChildren(label, button("この名前で参加する", "register"), el("p", note, "note"));
     };
 
     const holderName = (uid) => {
@@ -537,6 +573,7 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
           const claim = held.get(task.id) || null;
           const isMine = mine.has(task.id);
           const row = el("div", null, "task");
+          row.dataset.task = task.id;
           const title = el("div", null, "title");
           title.append(el("b", String(task.title || task.id)));
           // 期限と内容を並べ替えにしか使わない，では足りません。オーナーが入れた指示が
@@ -547,6 +584,19 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
           row.append(el("span", claim ? (isMine ? "あなた" : holderName(claim.uid)) + (claim.status === "done" ? " が完了" : " が作業中") : "空き",
             isMine ? "who mine" : "who"));
           row.append(actions(task, claim, isMine));
+          if (wanted === task.id) {
+            // 押した人が見ている場所で、次の一手を出します。**取られていたら言うこと** —
+            // 登録している間に空きでなくなるのは普通に起きるので、そこで「もう一度押せば
+            // 引き受けます」と言うと、押しても取れないボタンを案内することになります。
+            // `classList` で足すこと。`className` に書くと、行が持っている別の class を落とします
+            // — この板は持っていませんが、`done` を付けて配った派生が実際にあります。
+            row.classList.add("wanted");
+            row.append(el("p", claim
+              ? "登録している間に、この作業はほかの人が取りました。"
+              : registration().row
+                ? "登録できました。この「これをやります」をもう一度押すと、引き受けます。"
+                : "名前を登録したら、ここに戻ってきてもう一度押してください。", "ask"));
+          }
           return row;
         }));
     };
@@ -582,13 +632,20 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
           // だと、`askHost` は `settled` を見て二度と訊かず、この人はリロードするまで取れません。
           // なので否定のキャッシュを捨てて、訊き直させます（取りはしません）。
           else if (res && res.error !== "cancelled") forget();
-          report(res, "登録しました。作業を取れます。", "登録できませんでした");
+          // **していないことを言います。** 「作業を取れます」は、作業を取りに来て名前を訊かれた
+          // 人には「取れました」と読めます。取れていないことのほうが、この人には報せるべき知らせです。
+          report(res, wanted === null ? "登録しました。作業を取れます。" : "登録しました。作業はまだ引き受けていません。", "登録できませんでした");
+          if (res && res.ok) { render(); focusWanted(); }
           return;
         }
         if (act === "take") {
-          if (!(await ensureRegistered())) return;
+          // 断られたら、その作業を覚えて描き直します。**押下はここで終わりです** — 続けて
+          // 取ろうとしても gesture の印が付かず、書き込みを門番するホストでは落ちます。
+          if (!(await ensureRegistered())) { wanted = taskId; render(); return; }
           // uid も status も送らない。ホストがセッションと宣言から埋めます。
-          report(await view.submit("assignments", { taskId }), "引き受けました。", "引き受けられませんでした。誰かが先に取ったかもしれません");
+          const took = await view.submit("assignments", { taskId });
+          if (took && took.ok) { wanted = null; render(); }
+          report(took, "引き受けました。", "引き受けられませんでした。誰かが先に取ったかもしれません");
           return;
         }
         if (act === "finish" || act === "reopen") {
@@ -611,6 +668,22 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
 </script>
 ```
 
+**登録を挟むと、1 つの意図が 2 回の押下に割れます。その 2 回目を、文言ではなく行で出すこと。**
+これは実際に起きた勘違いです。名前を登録していない人が「これをやります」を押す → 断られて名前の
+欄まで画面が飛ぶ → 名前を入れて「この名前で参加する」を押す → **作業も引き受けたつもりで板を離れる**。
+無理もありません。押した結果として `#me` が「◯◯ として参加中です」に変わり、それが成功に見える
+一方で、「まだ引き受けていません」はページの末尾の `#say` にあって画面の外だからです。
+
+1 押しで書き込みを 2 回はできない（上の `ensureRegistered` の注）ので、2 回目の押下は無くせません。
+無くせるのは、2 回目が**必要だと分からないこと**のほうです。`wanted` に押された作業を覚え、登録が
+済んだら `focusWanted()` でその行まで画面を戻し、次の一手をその行の中に置く。そして `#say` では
+**していないことを名指しで言います** — 「作業を取れます」は、作業を取りに来て名前を訊かれた人には
+「取れました」と読めます。
+
+行の文言は 3 通りあり、3 つとも要ります。まだ登録していない（「登録したら、ここに戻ってきてもう一度」）、
+登録できた（「もう一度押すと引き受けます」）、そして**登録している間に取られた**。3 つ目を省いて 2 つ目を
+出すと、押しても取れないボタンを案内することになります。
+
 **`submit` に渡すのは `taskId` だけ**です。`uid` はホストがサインインしたセッションから、
 `status` は `initialStatus` から埋めます — 送ろうとすると、ルールが `createFields` の一致で
 拒否するのではなく、値がホストの埋めたものと食い違って落ちます。
@@ -624,18 +697,32 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
 
 ```html
 <style>
-  html { background: #ffffff; color: #1c1c20; color-scheme: light; }
-  body { margin: 0; padding: 20px 16px 48px; font: 15px/1.6 system-ui, "Hiragino Sans", sans-serif; }
-  section { border: 1px solid #d7d7dc; border-radius: 10px; padding: 14px 16px; margin: 0 0 18px; }
-  h2 { font-size: 13px; color: #6b6b74; margin: 0 0 10px; }
-  label { display: block; font-size: 13px; margin: 0 0 8px; }
-  input, textarea { width: 100%; max-width: 340px; font: inherit; padding: 6px 8px; }
-  .task { padding: 10px 0; border-top: 1px solid #d7d7dc; }
-  .who { font-size: 13px; color: #6b6b74; }
-  .ask { font-size: 13px; margin-top: 6px; }
-  .say { min-height: 1.6em; font-size: 13px; }
-  .say.bad { color: #c0392b; }
-  .note, .empty { font-size: 12px; color: #6b6b74; }
+  /* Every colour is derived from ONE hue — the rules are in design.md. Change it for your app. */
+  :root {
+    --hue: 295;                                    /* violet - a board that keeps a roster */
+    --main: oklch(47% .09 var(--hue));           --fill: oklch(96% .018 var(--hue));
+    --line: oklch(47% .09 var(--hue) / .16);     --ink: oklch(23% .015 var(--hue));
+    --muted: oklch(53% .02 var(--hue));          --paper: oklch(99.4% .007 85);
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--paper); color: var(--ink); color-scheme: light; }
+  body { margin: 0 auto; max-width: 44rem; padding: 28px 18px 56px; font: 15px/1.65 system-ui, "Hiragino Sans", sans-serif; }
+  h1 { margin: 0 0 18px; font-size: clamp(23px, 5vw, 31px); line-height: 1.2; letter-spacing: -.03em; }
+  section { margin: 0 0 16px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 18px; background: var(--fill); }
+  h2 { margin: 0 0 10px; color: var(--muted); font-size: 13px; font-weight: 750; letter-spacing: .04em; }
+  button { min-height: 38px; margin: 4px 6px 0 0; padding: 8px 14px; border: 0; border-radius: 10px; background: var(--main); color: var(--paper); font: inherit; font-weight: 750; cursor: pointer; touch-action: manipulation; }
+  label { display: block; margin: 0 0 14px; color: var(--muted); font-size: 13px; font-weight: 750; }
+  input, textarea { display: block; width: min(22rem, 100%); margin-top: 6px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); font: inherit; }
+  input:focus, textarea:focus { border-color: var(--main); outline: 2px solid var(--line); }
+  .task { padding: 11px 0; border-top: 1px solid var(--line); }
+  .ask { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: oklch(96% .04 55); color: oklch(40% .09 55); font-size: 13px; }
+  .title { flex: 1 1 200px; font-weight: 780; }
+  .title .note { margin-left: 8px; font-weight: 400; }
+  .who { color: var(--muted); font-size: 13px; }
+  .who.mine { color: var(--main); font-weight: 750; }
+  .say { min-height: 1.6em; margin: 14px 0 0; color: var(--main); font-size: 13px; font-weight: 700; }
+  .say.bad { color: oklch(48% .15 25); }
+  .note, .empty { color: var(--muted); font-size: 12px; }
 </style>
 
 <h1>オーナー画面</h1>
