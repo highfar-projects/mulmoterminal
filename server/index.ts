@@ -129,7 +129,7 @@ import { initWorkspaceSetup } from "./backends/workspaceSetup.js";
 import { installBundledSkills } from "./infra/install-bundled-skills.js";
 import { initFileChangePublisher } from "./backends/fileChange.js";
 import { initNotifier } from "./backends/notifier.js";
-import { stopWhisperSidecar } from "./backends/whisper.js";
+import { installShutdownHandlers } from "./infra/shutdown.js";
 import { startCollectionCompletionWatchers } from "./backends/collectionWatchers.js";
 import { initUserTaskScheduler } from "./backends/scheduler.js";
 import { buildSystemTasks } from "./backends/system-tasks.js";
@@ -148,6 +148,7 @@ import { reapSweepLines, survivingAfterSweep, sweepIdleSessions } from "./sessio
 import { installProcessGuards } from "./infra/process-guards.js";
 import { pruneOrphanSettings } from "./session/session-settings.js";
 import { earliestStartedAt, liveInstances, registerInstance } from "../bin/instances.js";
+import { setProcessTitle } from "../bin/process-title.js";
 import { pruneOrphanDrops } from "./session/session-drops.js";
 
 // Per-session activity flags, driven by Claude hooks (see /api/hook).
@@ -156,6 +157,11 @@ import { pruneOrphanDrops } from "./session/session-drops.js";
 // work runs, so a single unhandled error can't silently kill the backend and disconnect
 // every terminal at once (see infra/process-guards.ts).
 installProcessGuards();
+
+// Before the boot rather than after it: a server that is slow to start, or that dies during it, is
+// exactly the one the user goes looking for in `ps` (#1820). Assigned once — on macOS each
+// assignment costs several milliseconds inside libuv.
+setProcessTitle(PORT);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -1013,13 +1019,4 @@ server.listen(Number(PORT), BIND_HOST, () => {
   void refreshUpdateStatus();
 });
 
-// The whisper sidecar is a spawned child that won't die with the parent on a
-// signal. Adding a signal listener suppresses Node's default termination, so we
-// kill the sidecar and exit explicitly. `exit` covers the normal-return path.
-process.once("exit", stopWhisperSidecar);
-for (const signal of ["SIGINT", "SIGTERM"] as const) {
-  process.once(signal, () => {
-    stopWhisperSidecar();
-    process.exit(0);
-  });
-}
+installShutdownHandlers();

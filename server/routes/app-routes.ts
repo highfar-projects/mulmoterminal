@@ -37,6 +37,7 @@ import { mountPickFileRoute } from "../files/pick-file.js";
 import { mountCommandSummaryRoute } from "../session/command-summary.js";
 import { mountCostRoute } from "../session/cost.js";
 import { mountInstanceRoute } from "./instance-routes.js";
+import { mountShutdownRoute } from "./shutdown-routes.js";
 import { mountCollectionRoutes } from "../backends/collections.js";
 // "Would this collection survive a clone?" — mounts itself beside the collection routes.
 import { mountSelfContainmentRoutes } from "../backends/collectionSelfContainment.js";
@@ -402,6 +403,7 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
   // sessions, from public per-model pricing. Read-only; shown in the Settings modal (#245).
   mountCostRoute(app, { resolveCwd: workspaceForRoute });
   mountInstanceRoute(app);
+  mountShutdownRoute(app);
 
   // POST /api/remote-host/connect|disconnect + GET /status — start/stop the
   // Firestore host loop from the toolbar Connect control. Same-origin guarded like

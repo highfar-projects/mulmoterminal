@@ -17,6 +17,7 @@ import GithubOverlay from "./components/GithubOverlay.vue";
 import RoomsOverlay from "./components/RoomsOverlay.vue";
 import FilesOverlay from "./components/FilesOverlay.vue";
 import HoverTip from "./components/HoverTip.vue";
+import ServerStoppedOverlay from "./components/ServerStoppedOverlay.vue";
 import GridView from "./components/GridView.vue";
 import { useSessions } from "./composables/useSessions";
 import { useAppConfig } from "./composables/useAppConfig";
@@ -96,4 +97,7 @@ useFaviconState(sessions);
        document can never hold two — it teleports to <body> and positions itself against whichever
        chip the pointer is on. -->
   <HoverTip />
+  <!-- Over everything, including the settings modal it was pressed in: once the server is gone
+       nothing behind it works, and a live-looking pane underneath would say otherwise (#1820). -->
+  <ServerStoppedOverlay />
 </template>

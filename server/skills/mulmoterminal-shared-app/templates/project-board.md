@@ -203,7 +203,7 @@ uid も**書きません**。uid は id として既に在るので、フィー�
 | 操作 | 誰が | どう宣言されているか |
 |---|---|---|
 | 名前を登録する | **メールを確認済み**のサインイン（`auth: "verifiedEmail"`） | `public.submit.names`（id が uid なので 1 人 1 行） |
-| 作業を取る | 同上。**ルールは登録の有無を見ません** — 板が先に登録欄を出すだけ | `public.submit.assignments`（id 衝突で先着 1 人） |
+| 作業を取る | 同上。**ルールは登録の有無を見ません** — 名簿に行が在ることを確かめるのはページ | `public.submit.assignments`（id 衝突で先着 1 人） |
 | 完了にする / 戻す | 取った本人 | `selfTransitions: { doing: ["done"], done: ["doing"] }` |
 | 担当を降りる | 取った本人・`doing` のときだけ | `selfDelete: ["doing"]` |
 | 他人の担当を外す | owner / editor | `collections.assignments.writerDelete` |
@@ -214,9 +214,44 @@ uid も**書きません**。uid は id として既に在るので、フィー�
 やり直すときは「未完了に戻す」を押してから降ります。
 
 **「登録していないと取れない」はルールに書けません。** `assignments` の create が見るのは
-サインインと宣言だけで、`names` に行が在るかは見ない。だから**それはページの約束**です
-（板は登録欄を先に出します）。厳密に縛りたいなら `idIn` のような参照はここには使えない —
-`idIn` が見るのは `idField` が指す先で、身元ではありません。
+サインインと宣言だけで、`names` に行が在るかは見ない。だから**それはページの約束**です。
+厳密に縛りたいなら `idIn` のような参照はここには使えない — `idIn` が見るのは `idField` が
+指す先で、身元ではありません。
+
+**そしてその約束は、「登録欄を先に出す」では守れません。** ページが握っている「この人は
+登録済みか」は 3 状態で、3 つ目が `viewer.mine` の来ない「分からない」です。分からないから
+と通すと、uid だけを持つ担当行ができる — 板には `holderName` の既定値（「担当者」）が出る
+だけなので、名前の無い担当が普通の担当と同じ顔で並び、**どこにもエラーが出ません**。実際に
+公開済みのアプリ 2 本がそうなりました。`viewer.mine` が公開ページに届くようになったのは
+mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちています。
+
+**まず、`view.mine` に訊いてください**（下の `askHost`）。これが 3 つ目の状態を潰す本命です。
+
+`view.mine` は合成 id（`auth.uid+field`）のためのもの、と読めますが、`idFrom: "auth.uid"` でも
+使えます — その id は uid そのもので、`recordId` はレコードを見ないからです。**つまりキーは
+答えに影響しません。** ただし空文字だけはブリッジが `invalid-lookup` として弾くので、何か
+1 文字渡します。返るのは `{ known, found, record }` で、`record` は `viewer.mine` と同じ投影
+なので、名前を画面に出すのにも足ります。
+
+**訊くのは `onState` からで、クリックからではありません。** 押してから訊くと、その押下は
+`await` を跨いでしまい、続く `submit` に gesture の印（`GESTURE_MARK`）が付きません。印で
+書き込みを門番するホスト — `manageSharedApp` の `preview` — はそれを**書きません**
+（`writeWithheld`）。先に解決しておけば、リロード後の 1 押し目がそのまま取る押下になります。
+
+同じ理由で、**1 押しに 2 本の書き込みを詰めてはいけません。**「登録して、それから取る」を
+1 押しに書くと、登録だけが書かれて取るのが黙って落ちます。`viewer.mine` も `lookup` も無い
+ホストのためにその枝を残すなら、登録に 1 押し・取るのに 1 押しに分けてください。
+
+**そして登録が成立したときだけ取らせてください。** 拒否には「既に登録済み」（id が uid なので
+2 度目の create は必ず拒否される）と「一時的な失敗」が同じ顔（生の Firestore メッセージ）で
+返ってきて、ページには見分けがつきません。通すと、名前の行が無いまま担当行だけができる —
+塞ごうとしている当のものなので、止める側に倒します。
+
+**ただし「無い」を訪問ぶんの事実にしないこと。** `found: false` はその時点の写しです。行は
+あとから現れます（同じ人が別のタブで登録した、行はできたのに応答を落とした）。そしてそれは
+「登録ボタンが重複拒否を受け取る」形で現れるので、その拒否を受けたら否定の答えを捨てて
+訊き直させてください。抱えたままだと、`askHost` は「もう確定している」と判断して二度と訊かず、
+その人はリロードするまで取れません。**ページが人にリロードを要求してよい場面ではありません。**
 
 ---
 
@@ -286,12 +321,153 @@ uid も**書きません**。uid は id として既に在るので、フィー�
       tell(hint + "（" + reason + "）", true);
     };
 
-    /** 「登録済みか」は 3 状態。キーが無い = 誰も読んでいない、であって「未登録」ではない。
-     *  分からないときは登録欄を出し、拒否に語らせる。 */
+    /** 「この人は登録済みか」の 3 状態。`viewer.mine` が答えればそれ、答えなければ `askHost` が
+     *  確定させたもの、どちらも無ければ「分からない」。
+     *
+     *  **キーが無い = 誰も読んでいない、であって「未登録」ではありません。** そして 2 つ目を
+     *  ここに通すのが大事です — `ensureRegistered` の中だけで見ていると、照会で確定したあとも
+     *  画面は「登録済みかは確認できませんでした」と言い続け、名前も出ません。
+     *
+     *  **`settled` と `row` は別の格**です。`row === null` は「行が無い」という答えで、
+     *  「まだ訊いていない」ではない。1 つの変数に畳むと、ホストが「無い」と答えた人に登録欄を
+     *  出し続けることになります — この板が塞ごうとしている取り違えの、ちょうど裏返しです。 */
+    /** 書き込みが 1 本、外に出ているあいだ。
+     *
+     *  **押下を落とすのは、ここが `await` を跨ぐからです。** 未確定のホストでは 1 押し目が
+     *  `names` を出したまま戻ってこない — その間の 2 押し目は `settled` をまだ `false` と読み、
+     *  同じ登録をもう一度出します。危険ではありません（担当行は出ない）が、2 本目は必ず重複
+     *  拒否になるので、登録できた人が「登録できませんでした」を読むことになります。
+     *
+     *  `arming` と違ってデータではないので、`render()` は見ません。 */
+    let working = false;
+
+    /** 照会の世代。**古い答えを捨てるため**で、`settled` を見るだけでは足りません — 拒否を
+     *  受けて否定のキャッシュを捨てたその瞬間、それより前に出ていた照会が「行は無い」を持って
+     *  戻ってきて、捨てたばかりのものを書き戻します。捨てた側が新しいので、世代で無効にします。 */
+    /** 届いた状態の通し番号と、手元の答えを入れたときのそれ。
+     *
+     *  **どちらが新しいかを決めるためだけ**にあります。`viewer.mine.names` が `[]` のまま登録が
+     *  成功した直後、投影を先に見ると「行は無い」と読んで、登録できた人の押下を断ってしまう —
+     *  ホストが次の状態を送るまで。かといって手元の答えを恒久的に上に置くと、オーナーが名簿の
+     *  行を消したことが二度と届かず、名前の行が無いまま担当行ができます（この板が塞いでいる
+     *  当のもの）。だから**後に入ったほうが勝つ**にします。 */
+    let states = 0;
+    let settledAt = -1;
+
+    let asked = 0;
+
+    let settled = false;
+    let resolved = null;
+    let asking = false;
+
     const registration = () => {
       const mine = latest.viewer.mine;
-      if (!mine || !Array.isArray(mine.names)) return { known: false, row: null };
-      return { known: true, row: mine.names[0] || null };
+      const projected = mine && Array.isArray(mine.names);
+      if (settled && settledAt >= states) return { known: true, row: resolved };
+      if (projected) return { known: true, row: mine.names[0] || null };
+      if (settled) return { known: true, row: resolved };
+      return { known: false, row: null };
+    };
+
+    /** `viewer.mine` が答えないときに、**ホストへ直接訊きます**。
+     *
+     *  `idFrom: "auth.uid"` の id は uid そのもので、`recordId` はレコードを見ません — つまり
+     *  この照会に**キーは要りません**。ただし空文字だけはブリッジが `invalid-lookup` として弾く
+     *  ので、何か 1 文字渡します。答えない runtime や、`lookup` を配線していないホスト
+     *  （`manageSharedApp` の `preview`）は `known: false` を返すので、**確定したときだけ**覚えます。
+     *
+     *  クリックではなく `onState` から訊くのが要点です。押してから訊くと、その押下は `await` を
+     *  跨いでしまい、gesture の印が付かない `submit` しか出せなくなります。ここで先に解決して
+     *  おけば、リロード後の 1 押し目がそのまま取る押下になります。 */
+    const askHost = async () => {
+      if (asking || settled || typeof view.mine !== "function") return;
+      asking = true;
+      const ticket = asked;
+      try {
+        const answer = await view.mine("names", "-");
+        // **待っている間に確定したものが勝ちます。** この照会はそれより前に出た問いで、戻って
+        // きたときには答えが古い。登録が先に済んでいたのに `found: false` で上書きすると、その
+        // 訪問のあいだ二度と取れなくなります — 登録し直しても重複拒否が返るだけで、直りません。
+        if (settled || ticket !== asked) return;
+        // `found: false` も答えです。`known: false`（誰も読んでいない）だけが「分からない」。
+        // 行そのものを覚えるのは、`lookup` が `viewer.mine` と同じ投影を返すからで、名前を
+        // 画面に出すのにそれで足ります。
+        if (answer && answer.known === true) {
+          settled = true;
+          settledAt = states;
+          resolved = answer.found === true ? answer.record || {} : null;
+          render();
+        }
+      } finally {
+        // 追い越されていたら、`asking` は新しい走者のものです。
+        if (ticket === asked) asking = false;
+      }
+    };
+
+    /** 否定の答えを捨てて、訊き直させます。飛んでいる照会は世代で無効にします — **取りはしません**。
+     *  拒否は「既に在る」の証拠になり得るだけで、取ってよい根拠にはなりません。 */
+    const forget = () => {
+      settled = false;
+      resolved = null;
+      asked += 1;
+      asking = false;
+      void askHost();
+    };
+
+
+    /** 「名前を登録していない人が作業だけ取る」を塞ぐ唯一の関門。ルールは `names` に行が
+     *  在るかを見ない — 宣言に書けない（上の「誰が何を押せるか」）ので、ここが最後です。
+     *
+     *  **1 回の押下で書き込みは 1 回だけ**です。`await` を挟んだ先の `submit` はクリックの
+     *  dispatch が終わったあとに出るので gesture の印が付かず、印で書き込みを門番するホスト
+     *  — `manageSharedApp` の `preview` — はそれを**書きません**。「登録して、それから取る」を
+     *  1 押しに詰め込むと、登録だけが書かれて取るのが落ちる。
+     *
+     *  最後の枝（何も確定していないホスト）だけが 2 押しになります。`viewer.mine` も `lookup` も
+     *  無いホストで、そこでは既に登録済みの人も一度は拒否されます — が、書き込みを門番している
+     *  ホストはまさにそれで、**そこでは何も書かれません**。書くホストは 2 つとも `lookup` を
+     *  配線しているので、`askHost` が先に答えます。
+     *
+     *  そして**登録が成立したときだけ**取らせます。拒否には「既に登録済み」と「一時的な失敗」が
+     *  同じ顔（生の Firestore メッセージ）で返ってきて、ページには見分けられない — 通すと、名前の
+     *  行が無いまま担当行だけができます。塞ごうとしている当のものなので、止める側に倒します。 */
+    const ensureRegistered = async () => {
+      const reg = registration();
+      const input = document.getElementById("who");
+      /** 断るときは、**押した人が見ている場所で**断ります。
+       *
+       *  `#say` はページの末尾にあります。一覧の途中のボタンを押した人には、そこに出た一行は
+       *  画面の外です — 実際、公開したボードで「押しても何も起こらない」と報告されました。
+       *  書き込みは正しく止まっていて、止まったことだけが誰にも見えていなかった。
+       *
+       *  なので登録欄まで運びます。`focus()` はブラウザなら勝手に巻き上げますが、それに任せず
+       *  `scrollIntoView` も呼びます（jsdom には無いので、在るときだけ）。ページが名前の欄まで
+       *  跳ぶこと自体が、文言より先に伝わる答えです。 */
+      const refuse = () => {
+        tell("先に名前を登録してください。", true);
+        if (input) {
+          if (input.scrollIntoView) input.scrollIntoView({ block: "center" });
+          input.focus();
+        }
+        return false;
+      };
+      if (reg.known) return reg.row !== null ? true : refuse();
+      const name = input ? input.value.trim() : "";
+      if (name === "") return refuse();
+      const res = await view.submit("names", { name });
+      // 確認で「やめる」を押した人は、取るのもやめています。
+      if (res && res.error === "cancelled") { tell("", false); return false; }
+      // 同じ理由で訊き直させます（この枝では `settled` はまだ false なので、捨てるものは無い）。
+      if (!res || !res.ok) {
+        forget();
+        tell("登録できませんでした（" + ((res && res.error) || "unknown") + "）。", true);
+        return false;
+      }
+      settled = true;
+      settledAt = states;
+      resolved = { name };
+      tell("登録しました。もう一度「これをやります」を押すと引き受けます。", false);
+      return false;
     };
 
     /** 自分が持っている作業 id。担当の行 id は作業 id そのものなので、これで足ります
@@ -327,8 +503,8 @@ uid も**書きません**。uid は id として既に在るので、フィー�
 
     const actions = (task, held, isMine) => {
       const box = el("div");
-      // disabled にしない。未登録かどうかは押したときに言う — 「分からない」ときに押せない
-      // ボタンを描くと、登録済みの人から操作を取り上げることになる。
+      // disabled にしない。未登録かどうかは押したときに解決する（`ensureRegistered`）— 「分から
+      // ない」ときに押せないボタンを描くと、登録済みの人から操作を取り上げることになる。
       if (!held) {
         box.append(button("これをやります", "take", task.id));
         return box;
@@ -377,7 +553,10 @@ uid も**書きません**。uid は id として既に在るので、フィー�
 
     view.onState((data, viewer) => {
       latest = { data: data || {}, viewer: viewer || {} };
+      states += 1;
       render();
+      // 押される前に解決しておきます。押してから訊くと gesture の印を失います。
+      if (registration().known === false) void askHost();
     });
 
     document.addEventListener("click", async (event) => {
@@ -385,31 +564,45 @@ uid も**書きません**。uid は id として既に在るので、フィー�
       if (!act) return;
       const taskId = event.target.dataset.task;
       if (act === "unarm" || act === "arm") { arming = act === "arm" ? taskId : null; render(); return; }
-      if (act === "register") {
-        const input = document.getElementById("who");
-        const name = input ? input.value.trim() : "";
-        if (name === "") { tell("名前を入れてください。", true); return; }
-        report(await view.submit("names", { name }), "登録しました。作業を取れます。", "登録できませんでした");
-        return;
-      }
-      if (act === "take") {
-        const reg = registration();
-        // known かつ行が無いときだけ止める。known: false は「誰も読んでいない」であって
-        // 未登録ではない。
-        if (reg.known && reg.row === null) { tell("先に名前を登録してください。", true); return; }
-        // uid も status も送らない。ホストがセッションと宣言から埋めます。
-        report(await view.submit("assignments", { taskId }), "引き受けました。", "引き受けられませんでした。誰かが先に取ったかもしれません");
-        return;
-      }
-      if (act === "finish" || act === "reopen") {
-        const to = act === "finish" ? "done" : "doing";
-        report(await view.transition("assignments", taskId, to), to === "done" ? "完了にしました。" : "未完了に戻しました。", "変えられませんでした");
-        return;
-      }
-      if (act === "drop") {
-        arming = null;
-        report(await view.withdraw("assignments", taskId), "外しました。空きに戻っています。", "外せませんでした");
-        render();
+      // 書き込む操作だけ。上の 2 つは画面の状態で、待つものが無い。
+      if (working) return;
+      working = true;
+      try {
+        if (act === "register") {
+          const input = document.getElementById("who");
+          const name = input ? input.value.trim() : "";
+          if (name === "") { tell("名前を入れてください。", true); return; }
+          const res = await view.submit("names", { name });
+          // 成立を覚えます。`viewer.mine` が来ないホストでは、ここで覚えておかないと「登録
+          // しました」と言った直後の「これをやります」が、また登録から始めて id の衝突で
+          // 止まります — 登録した人が永久に取れない板になる。
+          if (res && res.ok) { settled = true; settledAt = states; resolved = { name }; }
+          // **拒否は「既に在る」かもしれません。** 別のタブで登録した、あるいは行はできたのに
+          // 応答を落とした — どちらもこの拒否になります。「行が無い」という古い答えを抱えたまま
+          // だと、`askHost` は `settled` を見て二度と訊かず、この人はリロードするまで取れません。
+          // なので否定のキャッシュを捨てて、訊き直させます（取りはしません）。
+          else if (res && res.error !== "cancelled") forget();
+          report(res, "登録しました。作業を取れます。", "登録できませんでした");
+          return;
+        }
+        if (act === "take") {
+          if (!(await ensureRegistered())) return;
+          // uid も status も送らない。ホストがセッションと宣言から埋めます。
+          report(await view.submit("assignments", { taskId }), "引き受けました。", "引き受けられませんでした。誰かが先に取ったかもしれません");
+          return;
+        }
+        if (act === "finish" || act === "reopen") {
+          const to = act === "finish" ? "done" : "doing";
+          report(await view.transition("assignments", taskId, to), to === "done" ? "完了にしました。" : "未完了に戻しました。", "変えられませんでした");
+          return;
+        }
+        if (act === "drop") {
+          arming = null;
+          report(await view.withdraw("assignments", taskId), "外しました。空きに戻っています。", "外せませんでした");
+          render();
+        }
+      } finally {
+        working = false;
       }
     });
 
@@ -680,6 +873,11 @@ B さんの操作は普通の「これをやります」になります。
 - **公開ページに `viewer.mine` が来ないことがあります。** ホストが読めなかったとき（refuse、
   一時的な失敗）はキーごと来ません。**空の配列ではありません** — 空は「あなたは登録していない」、
   キー無しは「誰も読んでいない」。取り違えると、登録済みの人に登録欄を出し続けます。
+
+  **そして「来ない」を通す側に倒すと、名前の無い担当ができます。** 取り違えの被害は登録欄が
+  余分に出ることだけではありません — 上の `askHost` と `ensureRegistered` は、そのために
+  書いてあります。**`viewer.mine` が答えないなら `view.mine` に訊けます**（同じ投影が返ります）。
+  それでも答えないのは `lookup` を配線していないホストだけで、そこは何も書きません。
 - **`confirm()` は無視され、`false` を返します。** `if (!confirm(…)) return;` と書くと、
   ボタンは黙って何もしないものになります。訊くならページの中の要素で（上の 2 度押し）。
 - **担当を消すと記録は残りません。** `withdraw` は削除です。誰がいつ降りたかを残したいなら、
