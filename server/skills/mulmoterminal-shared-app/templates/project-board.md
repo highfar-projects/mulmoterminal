@@ -316,10 +316,36 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
       return { known: true, row: mine.names[0] || null };
     };
 
-    /** この訪問で登録が成立したこと。`viewer.mine` が来ないホストでは、ここがそれを知って
-     *  いる唯一の場所です（[live-poll.md](./live-poll.md) の `Map` と同じ役目で、リロードで
-     *  消えてよい — 消えたら次の押下がまた登録から始めるだけです）。 */
-    let registeredHere = false;
+    /** この訪問で分かった「自分の名前の行が在るか」。`null` は**まだ分からない**。
+     *
+     *  `viewer.mine` が来ないホストでは、ここがそれを知っている唯一の場所です（リロードで
+     *  消えてよい — 消えたら下の `askHost` がやり直します）。 */
+    let registered = null;
+    let asking = false;
+
+    /** `viewer.mine` が答えないときに、**ホストへ直接訊きます**。
+     *
+     *  `idFrom: "auth.uid"` の id は uid そのもので、`recordId` はレコードを見ません — つまり
+     *  この照会に**キーは要りません**。ただし空文字だけはブリッジが `invalid-lookup` として弾く
+     *  ので、何か 1 文字渡します。答えない runtime や、`lookup` を配線していないホスト
+     *  （`manageSharedApp` の `preview`）は `known: false` を返すので、**確定したときだけ**覚えます。
+     *
+     *  クリックではなく `onState` から訊くのが要点です。押してから訊くと、その押下は `await` を
+     *  跨いでしまい、gesture の印が付かない `submit` しか出せなくなります。ここで先に解決して
+     *  おけば、リロード後の 1 押し目がそのまま取る押下になります。 */
+    const askHost = async () => {
+      if (asking || registered !== null || typeof view.mine !== "function") return;
+      asking = true;
+      try {
+        const answer = await view.mine("names", "-");
+        if (answer && answer.known === true) {
+          registered = answer.found === true;
+          render();
+        }
+      } finally {
+        asking = false;
+      }
+    };
 
     /** 「名前を登録していない人が作業だけ取る」を塞ぐ唯一の関門。ルールは `names` に行が
      *  在るかを見ない — 宣言に書けない（上の「誰が何を押せるか」）ので、ここが最後です。
@@ -327,28 +353,34 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
      *  **1 回の押下で書き込みは 1 回だけ**です。`await` を挟んだ先の `submit` はクリックの
      *  dispatch が終わったあとに出るので gesture の印が付かず、印で書き込みを門番するホスト
      *  — `manageSharedApp` の `preview` — はそれを**書きません**。「登録して、それから取る」を
-     *  1 押しに詰め込むと、登録だけが書かれて取るのが落ちる。だから登録に 1 押し、取るのに
-     *  1 押しに分けてあります。
+     *  1 押しに詰め込むと、登録だけが書かれて取るのが落ちる。
      *
-     *  そして**登録が成立したときだけ**取らせます。拒否には「既に登録済み」と「一時的な失敗」
-     *  が同じ顔で返ってきて、ページには見分けられない — 通すと、名前の行が無いまま担当行だけが
-     *  できます。塞ごうとしている当のものなので、分からないときは止める側に倒します。 */
+     *  最後の枝（何も確定していないホスト）だけが 2 押しになります。`viewer.mine` も `lookup` も
+     *  無いホストで、そこでは既に登録済みの人も一度は拒否されます — が、書き込みを門番している
+     *  ホストはまさにそれで、**そこでは何も書かれません**。書くホストは 2 つとも `lookup` を
+     *  配線しているので、`askHost` が先に答えます。
+     *
+     *  そして**登録が成立したときだけ**取らせます。拒否には「既に登録済み」と「一時的な失敗」が
+     *  同じ顔（生の Firestore メッセージ）で返ってきて、ページには見分けられない — 通すと、名前の
+     *  行が無いまま担当行だけができます。塞ごうとしている当のものなので、止める側に倒します。 */
     const ensureRegistered = async () => {
       const reg = registration();
-      if (reg.known && reg.row !== null) return true;
-      if (registeredHere) return true;
       const input = document.getElementById("who");
-      const name = input ? input.value.trim() : "";
-      if (name === "") {
+      const refuse = () => {
         tell("先に名前を登録してください。", true);
         if (input) input.focus();
         return false;
-      }
+      };
+      if (reg.known) return reg.row !== null ? true : refuse();
+      if (registered === true) return true;
+      if (registered === false) return refuse();
+      const name = input ? input.value.trim() : "";
+      if (name === "") return refuse();
       const res = await view.submit("names", { name });
       // 確認で「やめる」を押した人は、取るのもやめています。
       if (res && res.error === "cancelled") { tell("", false); return false; }
       if (!res || !res.ok) { tell("登録できませんでした（" + ((res && res.error) || "unknown") + "）。", true); return false; }
-      registeredHere = true;
+      registered = true;
       tell("登録しました。もう一度「これをやります」を押すと引き受けます。", false);
       return false;
     };
@@ -437,6 +469,8 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
     view.onState((data, viewer) => {
       latest = { data: data || {}, viewer: viewer || {} };
       render();
+      // 押される前に解決しておきます。押してから訊くと gesture の印を失います。
+      if (registration().known === false) void askHost();
     });
 
     document.addEventListener("click", async (event) => {
@@ -452,7 +486,7 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
         // 成立を覚えます。`viewer.mine` が来ないホストでは、ここで覚えておかないと「登録
         // しました」と言った直後の「これをやります」が、また登録から始めて id の衝突で
         // 止まります — 登録した人が永久に取れない板になる。
-        if (res && res.ok) registeredHere = true;
+        if (res && res.ok) registered = true;
         report(res, "登録しました。作業を取れます。", "登録できませんでした");
         return;
       }

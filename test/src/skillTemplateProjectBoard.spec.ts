@@ -180,6 +180,10 @@ function loadBoard(): {
    *  registration actually LANDED, so a stub that only ever succeeds cannot reach the branch that
    *  matters — a refused `names` write must not be followed by a claim. */
   answer: (outcome: { ok: boolean; error?: string }) => void;
+  /** What the host answers `view.mine(cid, key)` with. The board asks this from `onState` when
+   *  `viewer.mine` said nothing — it is how a reader who registered on an earlier visit is
+   *  recognised on a host that carries no `mine`, and both writing hosts wire the port. */
+  lookup: (answer: { known: boolean; found?: boolean }) => void;
   tell: (data: Record<string, unknown[]>, mine?: Record<string, unknown[]>) => void;
   said: () => string;
   buttons: () => string[];
@@ -191,6 +195,8 @@ function loadBoard(): {
 
   const sent: Sent[] = [];
   let outcome: { ok: boolean; error?: string } = { ok: true };
+  // `known: false` by default — "nobody looked", which is what a host with no port answers.
+  let looked: { known: boolean; found?: boolean } = { known: false };
   let onState: ((data: unknown, viewer: unknown) => void) | null = null;
   (window as unknown as { __MC_APP_VIEW: unknown }).__MC_APP_VIEW = {
     onState: (handler: (data: unknown, viewer: unknown) => void) => {
@@ -208,6 +214,7 @@ function loadBoard(): {
       sent.push({ kind: "withdraw", cid, id });
       return Promise.resolve({ ok: true });
     },
+    mine: () => Promise.resolve(looked),
     ready: () => {},
   };
 
@@ -218,6 +225,9 @@ function loadBoard(): {
     sent,
     answer: (next) => {
       outcome = next;
+    },
+    lookup: (next) => {
+      looked = next;
     },
     // `mine` OMITTED rather than passed empty when the caller says nothing: that distinction is the
     // subject of half the cases below, and a harness that invented `{}` would erase it.
@@ -386,6 +396,43 @@ describe("the project-board public board", () => {
       { kind: "submit", cid: "names", values: { name: "山田" } },
       { kind: "submit", cid: "assignments", values: { taskId: "fix-login" } },
     ]);
+  });
+
+  it("recognises a reader who registered on an EARLIER VISIT, with no `mine` at all", async () => {
+    // The reload, which is the case a page cannot hold in a variable: `mine` is absent, nothing was
+    // registered in this visit, and the reader has a row sitting in Firestore. Asked from `onState`
+    // rather than from the click, so the answer is already in when they press — a lookup awaited
+    // inside the handler would cost the press its gesture mark and the take with it.
+    //
+    // The key is a placeholder on purpose. Under `idFrom: "auth.uid"` the id IS the uid and
+    // `recordId` never reads the record, so nothing about this collection has a key to name — but
+    // an EMPTY one is refused by the bridge as `invalid-lookup`, so the page passes something.
+    const board = loadBoard();
+    board.lookup({ known: true, found: true });
+    board.tell({ tasks: TASKS, assignments: [], names: [{ id: "uid-1", name: "山田" }] });
+    await settle();
+
+    // ONE press, and no registration in front of it.
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent).toEqual([{ kind: "submit", cid: "assignments", values: { taskId: "fix-login" } }]);
+  });
+
+  it("stops a reader the host says has NO row, without writing a registration first", async () => {
+    // The same route answering the other way. `found: false` is an answer, so the page says the
+    // useful thing rather than sending a name the reader did not ask to register.
+    const board = loadBoard();
+    board.lookup({ known: true, found: false });
+    board.tell({ tasks: TASKS, assignments: [], names: [] });
+    await settle();
+
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent).toEqual([]);
+    expect(board.said()).toContain("先に名前を登録してください");
   });
 
   it("takes the work after the REGISTER BUTTON, with no `mine` to confirm it", async () => {
