@@ -388,6 +388,43 @@ describe("the project-board public board", () => {
     ]);
   });
 
+  it("takes the work after the REGISTER BUTTON, with no `mine` to confirm it", async () => {
+    // The dead end the press-per-write split opened, and it is reached by the ordinary route: the
+    // board's own 「この名前で参加する」. Without `mine`, that button is the only thing that knows
+    // the name landed — so if it does not record it, the take that follows starts from registration
+    // again, meets the id collision (the document id IS the uid), and refuses. The page would have
+    // said "登録しました" and then never let that person take anything.
+    const board = loadBoard();
+    board.tell({ tasks: TASKS, assignments: [], names: [] });
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
+
+    board.press("この名前で参加する");
+    await settle();
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent).toEqual([
+      { kind: "submit", cid: "names", values: { name: "山田" } },
+      { kind: "submit", cid: "assignments", values: { taskId: "fix-login" } },
+    ]);
+  });
+
+  it("does not let a REFUSED register button stand in for a registration", async () => {
+    // The other half: the button records the fallback state only when the write actually landed.
+    // A refusal there is the same unknown as before it was pressed.
+    const board = loadBoard();
+    board.tell({ tasks: TASKS, assignments: [], names: [] });
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
+    board.answer({ ok: false, error: "host-error" });
+
+    board.press("この名前で参加する");
+    await settle();
+    board.press("これをやります");
+    await settle();
+
+    expect(board.sent.map((one) => one.cid)).toEqual(["names", "names"]);
+  });
+
   it("does NOT take the work when the registration was refused", async () => {
     // The hole the fail-open guard had, in its last form: a refusal is not a registration. "You are
     // already registered" and "that write did not land" come back wearing the same face here, and

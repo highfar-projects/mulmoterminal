@@ -448,7 +448,12 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
         const input = document.getElementById("who");
         const name = input ? input.value.trim() : "";
         if (name === "") { tell("名前を入れてください。", true); return; }
-        report(await view.submit("names", { name }), "登録しました。作業を取れます。", "登録できませんでした");
+        const res = await view.submit("names", { name });
+        // 成立を覚えます。`viewer.mine` が来ないホストでは、ここで覚えておかないと「登録
+        // しました」と言った直後の「これをやります」が、また登録から始めて id の衝突で
+        // 止まります — 登録した人が永久に取れない板になる。
+        if (res && res.ok) registeredHere = true;
+        report(res, "登録しました。作業を取れます。", "登録できませんでした");
         return;
       }
       if (act === "take") {
