@@ -176,6 +176,10 @@ const settle = async (): Promise<void> => {
  *  `can`. */
 function loadBoard(): {
   sent: Sent[];
+  /** What the parent answers the NEXT submission with. The board's guard turns on whether the
+   *  registration actually LANDED, so a stub that only ever succeeds cannot reach the branch that
+   *  matters — a refused `names` write must not be followed by a claim. */
+  answer: (outcome: { ok: boolean; error?: string }) => void;
   tell: (data: Record<string, unknown[]>, mine?: Record<string, unknown[]>) => void;
   said: () => string;
   buttons: () => string[];
@@ -186,6 +190,7 @@ function loadBoard(): {
   document.body.innerHTML = html.replace(/<script>[\s\S]*?<\/script>/, "");
 
   const sent: Sent[] = [];
+  let outcome: { ok: boolean; error?: string } = { ok: true };
   let onState: ((data: unknown, viewer: unknown) => void) | null = null;
   (window as unknown as { __MC_APP_VIEW: unknown }).__MC_APP_VIEW = {
     onState: (handler: (data: unknown, viewer: unknown) => void) => {
@@ -193,7 +198,7 @@ function loadBoard(): {
     },
     submit: (cid: string, values: Record<string, string>) => {
       sent.push({ kind: "submit", cid, values });
-      return Promise.resolve({ ok: true });
+      return Promise.resolve(outcome);
     },
     transition: (cid: string, id: string, to: string) => {
       sent.push({ kind: "transition", cid, id, to });
@@ -211,6 +216,9 @@ function loadBoard(): {
   const all = (): HTMLButtonElement[] => [...document.querySelectorAll("button")] as HTMLButtonElement[];
   return {
     sent,
+    answer: (next) => {
+      outcome = next;
+    },
     // `mine` OMITTED rather than passed empty when the caller says nothing: that distinction is the
     // subject of half the cases below, and a harness that invented `{}` would erase it.
     tell: (data, mine) => onState?.(data, { me: null, can: {}, ...(mine === undefined ? {} : { mine }) }),
@@ -335,7 +343,7 @@ describe("the project-board public board", () => {
     detachPages();
   });
 
-  it("REGISTERS FIRST when nobody looked, rather than taking work under no name", async () => {
+  it("REGISTERS on the press when nobody looked, and does NOT take the work in the same one", async () => {
     // No `mine` key at all — a refused read, an offline blink, a host that answers nothing (every
     // host, before mulmoserver wired `mine` into the public page on 2026-08-19). The page must not
     // take the action away from somebody who may well be registered, and it must not let the press
@@ -343,8 +351,10 @@ describe("the project-board public board", () => {
     // row carrying a uid and no name — drawn on the board under `holderName`'s fallback, with
     // nothing anywhere reporting a fault. Two published apps reached that state.
     //
-    // So the third state resolves into the second: the typed name is registered, and only then is
-    // the work taken. Both writes, in that order.
+    // ONE WRITE PER PRESS, which is why the take does not follow the registration here. A `submit`
+    // issued after awaiting an earlier one resumes in a later task, so the runtime does not mark it
+    // as caused by the click — and a host that gates writes on that mark (`manageSharedApp`'s
+    // `preview`) withholds it. Chaining them would register the name and silently drop the claim.
     const board = loadBoard();
     board.tell({ tasks: TASKS, assignments: [], names: [] });
 
@@ -353,28 +363,48 @@ describe("the project-board public board", () => {
     board.press("これをやります");
     await settle();
 
-    // The write contract, which is what the declaration is built around: the page sends the task id
-    // and NOTHING else. `uid` comes from the session and `status` from `initialStatus`, both filled
-    // by the host — a page that sent either would be writing values it is not allowed to choose.
+    expect(board.sent).toEqual([{ kind: "submit", cid: "names", values: { name: "山田" } }]);
+    expect(board.said()).toContain("もう一度");
+  });
+
+  it("takes the work on the SECOND press, once the registration landed", async () => {
+    // The other half of the same press-per-write rule, and the reason the page remembers within the
+    // visit: `mine` never arrived and never will on this host, so nothing else can say the name is
+    // there now. The write contract is what the declaration is built around — the page sends the
+    // task id and NOTHING else. `uid` comes from the session and `status` from `initialStatus`,
+    // both filled by the host.
+    const board = loadBoard();
+    board.tell({ tasks: TASKS, assignments: [], names: [] });
+    (document.getElementById("who") as HTMLInputElement).value = "山田";
+
+    board.press("これをやります");
+    await settle();
+    board.press("これをやります");
+    await settle();
+
     expect(board.sent).toEqual([
       { kind: "submit", cid: "names", values: { name: "山田" } },
       { kind: "submit", cid: "assignments", values: { taskId: "fix-login" } },
     ]);
   });
 
-  it("takes the work under a name ALREADY registered, even though nobody looked", async () => {
-    // The reason the unknown state registers rather than refusing: a reader who registered on an
-    // earlier visit is in exactly this state, and must not be locked out. Their second `names`
-    // create is refused by the id collision — the document id IS their uid — which costs them
-    // nothing and leaves the first name standing. The take goes through behind it.
+  it("does NOT take the work when the registration was refused", async () => {
+    // The hole the fail-open guard had, in its last form: a refusal is not a registration. "You are
+    // already registered" and "that write did not land" come back wearing the same face here, and
+    // the page cannot tell them apart — so it stops, because the one it cannot afford to be wrong
+    // about is the one that leaves a claim with no name behind it.
     const board = loadBoard();
-    board.tell({ tasks: TASKS, assignments: [], names: [{ id: "uid-1", name: "山田" }] });
-
+    board.tell({ tasks: TASKS, assignments: [], names: [] });
     (document.getElementById("who") as HTMLInputElement).value = "山田";
+    board.answer({ ok: false, error: "host-error" });
+
+    board.press("これをやります");
+    await settle();
     board.press("これをやります");
     await settle();
 
-    expect(board.sent.map((one) => one.cid)).toEqual(["names", "assignments"]);
+    expect(board.sent.map((one) => one.cid)).toEqual(["names", "names"]);
+    expect(board.said()).toContain("登録できませんでした");
   });
 
   it("asks for the name instead of writing, when nobody looked and none was typed", async () => {

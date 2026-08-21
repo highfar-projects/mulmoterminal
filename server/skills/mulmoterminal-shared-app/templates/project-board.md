@@ -227,9 +227,18 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
 
 `view.mine("names", …)` は代わりになりません。あれは合成 id（`auth.uid+field`）のためのもので、
 `idFrom: "auth.uid"` にはページが名指せるキーが無く、空のキーはブリッジが `invalid-lookup` として
-`known: false` を返します。**だから分からないときは、止めるのでも通すのでもなく「その場で登録
-してから取る」**にしてください（下の `ensureRegistered`）。登録済みの人が通っても、id が uid
-なので 2 度目の create が拒否されるだけで前の名前は消えません。
+`known: false` を返します。**だから分からないときは、通すのではなく「この押下では登録だけして、
+取るのは次の押下」**にしてください（下の `ensureRegistered`）。
+
+**1 押しに詰め込んではいけません。** `await view.submit(…)` の先で出す 2 本目の `submit` は、
+クリックの dispatch が終わったあとに出るので gesture の印（`GESTURE_MARK`）が付かない。印で
+書き込みを門番するホスト — `manageSharedApp` の `preview` — はそれを**書きません**（`writeWithheld`）。
+「登録して、それから取る」を 1 押しに書くと、登録だけが書かれて取るのが黙って落ちます。
+
+**そして登録が成立したときだけ取らせてください。** 拒否には「既に登録済み」（id が uid なので
+2 度目の create は必ず拒否される）と「一時的な失敗」が同じ顔で返ってきて、ページには見分けが
+つきません。通すと、名前の行が無いまま担当行だけができる — 塞ごうとしている当のものなので、
+分からないときは止める側に倒します。
 
 ---
 
@@ -307,23 +316,28 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
       return { known: true, row: mine.names[0] || null };
     };
 
+    /** この訪問で登録が成立したこと。`viewer.mine` が来ないホストでは、ここがそれを知って
+     *  いる唯一の場所です（[live-poll.md](./live-poll.md) の `Map` と同じ役目で、リロードで
+     *  消えてよい — 消えたら次の押下がまた登録から始めるだけです）。 */
+    let registeredHere = false;
+
     /** 「名前を登録していない人が作業だけ取る」を塞ぐ唯一の関門。ルールは `names` に行が
      *  在るかを見ない — 宣言に書けない（上の「誰が何を押せるか」）ので、ここが最後です。
      *
-     *  だから known: false を素通りさせてはいけません。「誰も読んでいない」は未登録ではない、
-     *  というのは正しいのですが、通した先で作られるのは uid だけを持つ担当行で、板には
-     *  `holderName` の既定値が出るだけ — 名前の無い担当が、普通の担当と同じ顔で並びます。
-     *  誰も気づけないまま通るので、実際にそうなりました。
+     *  **1 回の押下で書き込みは 1 回だけ**です。`await` を挟んだ先の `submit` はクリックの
+     *  dispatch が終わったあとに出るので gesture の印が付かず、印で書き込みを門番するホスト
+     *  — `manageSharedApp` の `preview` — はそれを**書きません**。「登録して、それから取る」を
+     *  1 押しに詰め込むと、登録だけが書かれて取るのが落ちる。だから登録に 1 押し、取るのに
+     *  1 押しに分けてあります。
      *
-     *  なので分からないときは、止めるのでも通すのでもなく**その場で登録します**。既に登録
-     *  していた人が通っても害はありません: id が uid なので 2 度目の create は「既に在る文書へ
-     *  の create」として拒否されるだけで、前の名前は消えません（登録欄の但し書きどおり）。
-     *  サインインしていない等の本当の失敗は、続く assignments の送信が同じ理由で拒否して
-     *  報告します。 */
+     *  そして**登録が成立したときだけ**取らせます。拒否には「既に登録済み」と「一時的な失敗」
+     *  が同じ顔で返ってきて、ページには見分けられない — 通すと、名前の行が無いまま担当行だけが
+     *  できます。塞ごうとしている当のものなので、分からないときは止める側に倒します。 */
     const ensureRegistered = async () => {
       const reg = registration();
-      const input = document.getElementById("who");
       if (reg.known && reg.row !== null) return true;
+      if (registeredHere) return true;
+      const input = document.getElementById("who");
       const name = input ? input.value.trim() : "";
       if (name === "") {
         tell("先に名前を登録してください。", true);
@@ -333,7 +347,10 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
       const res = await view.submit("names", { name });
       // 確認で「やめる」を押した人は、取るのもやめています。
       if (res && res.error === "cancelled") { tell("", false); return false; }
-      return true;
+      if (!res || !res.ok) { tell("登録できませんでした（" + ((res && res.error) || "unknown") + "）。", true); return false; }
+      registeredHere = true;
+      tell("登録しました。もう一度「これをやります」を押すと引き受けます。", false);
+      return false;
     };
 
     /** 自分が持っている作業 id。担当の行 id は作業 id そのものなので、これで足ります
