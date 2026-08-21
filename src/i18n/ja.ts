@@ -51,6 +51,7 @@ export const ja: Messages = {
       sessions: "セッションとバックグラウンド処理",
       surviving: "再起動を生き延びたセッション",
       cost: "コスト（推定）",
+      quit: "MulmoTerminal を終了",
       help: "ヘルプとユーザーガイド",
     },
 
@@ -405,6 +406,25 @@ export const ja: Messages = {
       month: "今月",
       failed: "コストの推定を読み込めませんでした。",
       unpriced: "価格が分からないモデルを使ったターンがあり、この推定からは除外されています。",
+    },
+
+    quit: {
+      description:
+        "このマシンで動いている MulmoTerminal サーバを終了します。このタブを閉じてもサーバは止まりません。起動したターミナルに戻らずに止める手段がここです。",
+      // Message-function form, which skips vue-i18n's message compiler: the literal `@` in
+      // `mulmoterminal@latest` would otherwise be read as a linked-message reference, the compiler
+      // throws, and the whole section renders as nothing.
+      restartHint: () => "もう一度起動するには、ターミナルで `npx mulmoterminal@latest` を実行してください。",
+      button: "MulmoTerminal を終了",
+      confirmBody: "サーバが停止し、このページは動かなくなります。グリッド上のターミナルは画面から消えます。",
+      sessionsNote:
+        "Ctrl+C と同じです。tmux が入っていればエージェントのセッションは動き続け、次回起動時に「再起動を生き延びたセッション」に出ます。無ければサーバと一緒に終わります。",
+      confirmButton: "終了する",
+      cancel: "キャンセル",
+      stopping: "終了しています…",
+      failed: "サーバを停止できませんでした。",
+      stoppedTitle: "MulmoTerminal を終了しました",
+      stoppedBody: "このタブは閉じて構いません。",
     },
 
     language: {

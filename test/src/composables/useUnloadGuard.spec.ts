@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { defineComponent } from "vue";
 import { mount } from "@vue/test-utils";
 import { useUnloadGuard, reportActiveTerminals, suppressNextUnloadGuard } from "../../../src/composables/useUnloadGuard";
@@ -95,5 +95,34 @@ describe("useUnloadGuard", () => {
     wrapper.unmount();
     wrapper = null;
     expect(fireBeforeUnload()).toBe(false);
+  });
+});
+
+// Stopping the server from the browser (#1820) leaves the terminal counts reading as live, because
+// nothing tells them otherwise. The stopped screen says "you can close this tab" — so the guard
+// must not then argue with it. The flag is module-level and ONE-WAY, so this lives in its own
+// describe with its own module instance rather than being ordered around inside the file above.
+describe("useUnloadGuard once the server has been stopped", () => {
+  it("stops warning, because there is nothing left to lose", async () => {
+    vi.resetModules();
+    const guard = await import("../../../src/composables/useUnloadGuard");
+    const { markServerStopped } = await import("../../../src/composables/useServerStopped");
+
+    const StoppedHost = defineComponent({
+      setup() {
+        guard.useUnloadGuard();
+        return () => null;
+      },
+    });
+    const w = mount(StoppedHost);
+    try {
+      guard.reportActiveTerminals("grid", 3);
+      expect(fireBeforeUnload()).toBe(true);
+
+      markServerStopped();
+      expect(fireBeforeUnload()).toBe(false);
+    } finally {
+      w.unmount();
+    }
   });
 });

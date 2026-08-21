@@ -34,6 +34,7 @@ export type SettingsTabId =
   | "sessions"
   | "surviving"
   | "cost"
+  | "quit"
   | "help";
 
 export interface SettingsGroup {
@@ -51,7 +52,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
   { key: "models", tabs: ["models", "mcp"] },
   { key: "notifications", tabs: ["sounds", "push", "quickCommands"] },
   { key: "integrations", tabs: ["github", "prRepos", "google"] },
-  { key: "sessions", tabs: ["sessions", "surviving", "cost"] },
+  { key: "sessions", tabs: ["sessions", "surviving", "cost", "quit"] },
   { key: "help", tabs: ["help"] },
 ];
 
