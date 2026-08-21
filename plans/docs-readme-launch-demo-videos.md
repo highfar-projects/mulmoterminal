@@ -53,4 +53,6 @@ presentations の worktree で `yarn movie` を再実行（TTS・コマ撮りは
 - 最終ビートの `startAt + duration + introPadding + outroPadding` が mp4 の尺と一致する（en 91.638 s / ja 93.536 s、小数 3 桁まで）
 - 発話区間の検出と cue の切れ目の照合、境界前後のフレームの目視
 
+ブラウザ側の検証もローカルで行った（Jekyll は手元で動かないので、ガイドと同じ `<video>` マークアップのテストページを静的サーバで配り、Playwright の Chromium で確認）: 両言語とも `textTracks[0].cues.length === 10`、kind / srclang / label が期待どおり、7 s・23 s・85 s（ja は 86.5 s）で `activeCues` が期待の文、タイピング区間（60 s / 62 s）では空、そして字幕がプレイヤー上に描画されていることをスクリーンショットで確認。残るのは本番 Pages が `.vtt` を `text/vtt` で配るかだけで、これはデプロイ後に `curl -sI` と CC ボタンで確かめる。
+
 cue は 1 ビート = 1 cue。開始 = `startAt + introPadding`、終了 = 開始 + `audioDuration`（声が止まる時刻。ビート末の無音や固定尺の残りは含めない）。`<track>` に `default` は付けていない — 画面が端末 UI なので、字幕は読者が CC で出す。README の GitHub 製プレイヤーには track を付けられないので、そちらは文字起こしのみ。
