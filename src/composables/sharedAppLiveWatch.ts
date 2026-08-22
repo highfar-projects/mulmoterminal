@@ -45,6 +45,40 @@ export const withChanges = (
   changes: PreviewRecordChange[],
 ): Record<string, Record<string, Record<string, unknown>[]>> => changes.reduce(withChange, datasets);
 
+/** The changes that landed while a one-shot read was in flight, and NOTHING at any other time.
+ *
+ *  Its own object because both halves of that sentence are load-bearing. A read answers with the
+ *  rows as they were when it STARTED, so a change that arrived at T1 is undone by assigning it —
+ *  and no second snapshot is coming, because nothing has changed since. That is what has to be kept.
+ *
+ *  What must NOT be kept is everything else. A previewed chat room left open for an afternoon
+ *  receives a change per message; holding them all against a read that may never come is a list
+ *  that only grows. So nothing is held unless a read is out (`open`), and while one is, a page's
+ *  collection holds only its LATEST rows — every change carries the whole collection, so an older
+ *  one for the same pair says nothing the newer one does not.
+ *
+ *  At most one entry per watched page-and-collection, for as long as one read takes. */
+export const pendingChanges = (): {
+  open: () => void;
+  record: (change: PreviewRecordChange) => void;
+  close: () => PreviewRecordChange[];
+} => {
+  let held: Map<string, PreviewRecordChange> | null = null;
+  return {
+    open: () => {
+      held = new Map();
+    },
+    record: (change) => {
+      held?.set(`${change.key}|${change.cid}`, change);
+    },
+    close: () => {
+      const caught = held === null ? [] : [...held.values()];
+      held = null;
+      return caught;
+    },
+  };
+};
+
 /** Hold a stream open while the shown page watches records, and let go when it does not.
  *
  *  ONE STREAM FOR THE APP, not one per page: the server subscribes to every collection any page

@@ -29,7 +29,6 @@ import {
   previewPageKey,
   type PreviewForm,
   type PreviewPage,
-  type PreviewRecordChange,
   type PreviewUncertainWrite,
   type PreviewWrittenRecord,
   type SharedAppPreview,
@@ -42,7 +41,7 @@ import {
 const props = defineProps<{ cwd: string | null; pickerTarget?: HTMLElement | null }>();
 
 import { asPayload } from "../utils/sharedAppPreviewPayload";
-import { keepWatchedPageCurrent, withChange, withChanges } from "../composables/sharedAppLiveWatch";
+import { keepWatchedPageCurrent, pendingChanges, withChange, withChanges } from "../composables/sharedAppLiveWatch";
 import { createIntentSender } from "../utils/sharedAppPreviewIntent";
 import { structuredCloneable } from "../utils/structuredCloneable";
 
@@ -536,13 +535,12 @@ let refreshGeneration = 0;
  *  A write changes the records, so the frame has to be told — but the DOCUMENT has not changed, and
  *  tearing it down to say so would throw away the conversation it is having. Only the payload is
  *  swapped; the page, its nonce and its channel all stay. */
-/** Record changes that landed while a one-shot read was in flight, oldest first. Cleared when one
- *  starts, applied on top of the answer it brings back. */
-let duringRefresh: PreviewRecordChange[] = [];
+/** What the stream said while a read was out, to be put back on top of that read's answer. */
+const caughtDuringRead = pendingChanges();
 
 async function refresh(): Promise<boolean> {
   const mine = ++refreshGeneration;
-  duringRefresh = [];
+  caughtDuringRead.open();
   const load = generation;
   try {
     const res = await fetchWithTimeout(previewUrl());
@@ -556,8 +554,8 @@ async function refresh(): Promise<boolean> {
     if (!isRecord(body) || body.ok !== true) return false;
     const next = asPayload(body.preview);
     if (next === null) return false;
-    // The stream is NEWER than this answer wherever the two disagree — see `duringRefresh`.
-    payload.value = { ...next, datasets: withChanges(next.datasets, duringRefresh) };
+    // The stream is NEWER than this answer wherever the two disagree — see `pendingChanges`.
+    payload.value = { ...next, datasets: withChanges(next.datasets, caughtDuringRead.close()) };
     scopeLog(next.aid);
     return true;
   } catch {
@@ -565,6 +563,11 @@ async function refresh(): Promise<boolean> {
     // the middle of something is still not the answer — but the CALLER may need to know, and until
     // this said so a member's move could be acknowledged over a screen that never moved.
     return false;
+  } finally {
+    // EVERY WAY OUT, not only the one that used the changes. A read that was superseded, refused or
+    // threw would otherwise leave the buffer open, and it goes on collecting until the next read
+    // happens to close it. Closing twice is closing once — the second returns nothing.
+    caughtDuringRead.close();
   }
 }
 
@@ -653,10 +656,11 @@ keepWatchedPageCurrent(
   () => page.value,
   () => writeUrl("watch"),
   (change) => {
-    // KEPT AS WELL AS APPLIED, until the next one-shot read lands. A re-read answers with the rows
-    // as they were when it STARTED, so assigning its answer would undo a change that arrived while
-    // it was in flight — and no second snapshot is coming, because nothing has changed since.
-    duringRefresh.push(change);
+    // KEPT AS WELL AS APPLIED while a one-shot read is out, and only then: a read answers with the
+    // rows as they were when it STARTED, so assigning its answer would undo a change that arrived
+    // while it was in flight, and no second snapshot is coming. See `pendingChanges` for why
+    // nothing is held the rest of the time.
+    caughtDuringRead.record(change);
     const held = payload.value;
     if (held === null) return;
     // A NEW PAYLOAD, because what holds it is a `shallowRef`: writing into the map it points at

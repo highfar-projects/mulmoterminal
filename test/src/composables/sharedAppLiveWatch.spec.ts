@@ -10,7 +10,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { effectScope, ref } from "vue";
 
-import { keepWatchedPageCurrent, watchesRecords, withChange, withChanges } from "../../../src/composables/sharedAppLiveWatch";
+import { keepWatchedPageCurrent, pendingChanges, watchesRecords, withChange, withChanges } from "../../../src/composables/sharedAppLiveWatch";
 import type { PreviewPage, PreviewRecordChange } from "../../../common/sharedAppPreview";
 
 const pageOf = (live?: string[]): PreviewPage => ({
@@ -94,6 +94,44 @@ describe("withChanges", () => {
     // Oldest first, so the last one wins — which is the one the records are actually in.
     expect(withChanges(readAtT0, arrivedDuring)["member:room"]?.messages).toHaveLength(3);
     expect(withChanges(readAtT0, [])).toBe(readAtT0);
+  });
+});
+
+describe("pendingChanges", () => {
+  const change = (cid: string, ids: string[]) => ({ key: "member:room", cid, rows: ids.map((id) => ({ id })) });
+
+  it("holds nothing while no read is out", () => {
+    // The whole reason this is not a list the stream appends to. A previewed chat room left open
+    // for an afternoon receives a change per message; keeping them against a read that may never
+    // come is memory that only grows.
+    const caught = pendingChanges();
+    caught.record(change("messages", ["m1"]));
+    caught.record(change("messages", ["m1", "m2"]));
+    expect(caught.close()).toEqual([]);
+  });
+
+  it("keeps only the latest rows per page and collection while one is", () => {
+    // Every change carries the WHOLE collection, so an older one for the same pair says nothing the
+    // newer one does not — and the buffer is bounded by what is watched rather than by traffic.
+    const caught = pendingChanges();
+    caught.open();
+    caught.record(change("messages", ["m1"]));
+    caught.record(change("notes", ["n1"]));
+    caught.record(change("messages", ["m1", "m2"]));
+
+    const held = caught.close();
+    expect(held).toHaveLength(2);
+    expect(held.find((entry) => entry.cid === "messages")?.rows).toHaveLength(2);
+  });
+
+  it("closes once, and closing again is closing nothing", () => {
+    // Every way out of a read closes it — superseded, refused, threw — so the second call has to be
+    // harmless rather than a way to replay the last one's changes onto the next one's answer.
+    const caught = pendingChanges();
+    caught.open();
+    caught.record(change("messages", ["m1"]));
+    expect(caught.close()).toHaveLength(1);
+    expect(caught.close()).toEqual([]);
   });
 });
 

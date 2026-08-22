@@ -47,17 +47,14 @@ describe("holdOpen", () => {
     const req = request();
     const stop = vi.fn();
     const beat = vi.fn(() => vi.fn());
-    // Assigned inside the executor, so a nullable would narrow to `null` at the call below.
-    let arrive: (handle: { ok: true; watching: string[]; stop: () => void }) => void = () => {
-      throw new Error("the watch was answered before it was opened");
-    };
-    const opening = new Promise<{ ok: true; watching: string[]; stop: () => void }>((resolve) => {
-      arrive = resolve;
-    });
+    // The resolver, held in a list rather than in a `let`: assigned inside the executor, a nullable
+    // narrows to `null` at the call below and a placeholder function lies about its arity.
+    const answer: ((handle: { ok: true; watching: string[]; stop: () => void }) => void)[] = [];
+    const opening = new Promise<{ ok: true; watching: string[]; stop: () => void }>((resolve) => answer.push(resolve));
 
     const held = holdOpen({ onClose: req.onClose, open: () => opening, beat, end: vi.fn() });
     req.close();
-    arrive({ ok: true, watching: ["messages"], stop });
+    answer[0]?.({ ok: true, watching: ["messages"], stop });
     await held;
 
     expect(stop).toHaveBeenCalledTimes(1);
