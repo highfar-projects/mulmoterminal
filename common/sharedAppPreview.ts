@@ -35,6 +35,14 @@ export interface PreviewPage {
    *  the pane resolve it would be the second implementation this whole change
    *  exists to remove. */
   viewer?: Viewer;
+  /** The collections this page WATCHES, off the same projection the published site reads.
+   *
+   *  A page that declares `live` is written for `onState` to arrive more than once — production
+   *  subscribes to those collections and re-delivers on every change. This pane read the records
+   *  once, so a page previewed here sat still while the live one moved: somebody else's message
+   *  never appeared, which reads as a broken page rather than as a preview that does not watch.
+   *  The pane re-reads while the page on screen names any, and this is how it knows to. */
+  live?: string[];
 }
 
 export type PreviewDataset = Record<string, unknown>[];

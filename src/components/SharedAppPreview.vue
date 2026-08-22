@@ -41,6 +41,7 @@ import {
 const props = defineProps<{ cwd: string | null; pickerTarget?: HTMLElement | null }>();
 
 import { asPayload } from "../utils/sharedAppPreviewPayload";
+import { keepWatchedPageCurrent } from "../composables/sharedAppLiveWatch";
 import { createIntentSender } from "../utils/sharedAppPreviewIntent";
 import { structuredCloneable } from "../utils/structuredCloneable";
 
@@ -635,6 +636,16 @@ async function copyLog(): Promise<void> {
 }
 
 onBeforeUnmount(() => window.clearTimeout(copiedTimer));
+
+// A PAGE THAT WATCHES ITS RECORDS is re-read while it is the one on screen — see
+// `sharedAppLiveWatch` for why this is a poll rather than a listener, and for what it costs. Before
+// it, the pane was the only place a `live` page stood still: the author's own writes refreshed it
+// and nobody else's did, so a chat room previewed here looked broken in a way the published one was
+// not.
+keepWatchedPageCurrent(
+  () => page.value,
+  () => void refresh(),
+);
 
 // The DIRECTORY is the other half of the app's identity, and it changes without a payload landing
 // — a cell moved to a repository whose server cannot be reached keeps the old entries under the new

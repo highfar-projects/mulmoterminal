@@ -367,6 +367,40 @@ describe("shared app preview", () => {
     expect(docs.writes).toEqual([]);
   });
 
+  it("says which collections a page WATCHES, so the pane can keep it current", async () => {
+    // The pane reads once. A page that declared `live` is written for `onState` to arrive again —
+    // production subscribes and re-delivers — so previewed here it stood still while the published
+    // one moved, and somebody else's message never appeared. This is what tells the pane to re-read,
+    // and it must be per page: an app can watch on one page and not on another.
+    mkdirSync(path.join(root, "views"), { recursive: true });
+    writeApp(
+      root,
+      declaration({
+        public: { read: ["bookings"] },
+        views: [
+          { id: "public", path: "views/front.html", audience: "public", collections: ["bookings"], live: ["bookings"] },
+          { id: "room", path: "views/room.html", audience: "member", collections: ["notes"], live: ["notes"] },
+          { id: "ledger", path: "views/ledger.html", audience: "member", collections: ["notes"] },
+        ],
+      }),
+    );
+    writeFileSync(path.join(root, "views", "front.html"), "<p>front</p>");
+    writeFileSync(path.join(root, "views", "room.html"), "<p>room</p>");
+    writeFileSync(path.join(root, "views", "ledger.html"), "<p>ledger</p>");
+
+    const result = await previewSharedApp(root, stamp);
+
+    expect(result.ok === false ? result.problems : []).toEqual([]);
+    const live = result.ok ? Object.fromEntries(result.pages.map((page) => [`${page.audience}:${page.id}`, page.live])) : {};
+    expect(live["member:room"]).toEqual(["notes"]);
+    // Declared nothing, so there is nothing to poll for — absent rather than empty, and the pane
+    // reads that page exactly as often as it did before any of this.
+    expect(live["member:ledger"]).toBeUndefined();
+    // The anonymous page has its own watch list, in its own document.
+    expect(live["public:public"]).toEqual(["bookings"]);
+    expect(docs.writes).toEqual([]);
+  });
+
   it("carries what a public create may contain, so the parent can judge a submission", async () => {
     writeApp(root, declaration({ public: { read: ["bookings"], submit: { bookings: { auth: "verifiedEmail", createFields: ["note"] } } } }));
 

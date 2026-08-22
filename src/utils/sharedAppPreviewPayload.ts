@@ -75,7 +75,12 @@ const asPage = (value: unknown): PreviewPage[] => {
   if (!isRecord(value) || typeof value.id !== "string" || typeof value.html !== "string") return [];
   const audience = AUDIENCES.find((candidate) => candidate === value.audience);
   if (audience === undefined) return [];
-  return [{ id: value.id, html: value.html, audience, ...asViewer(value.viewer) }];
+  // `live` floors to absent rather than to `[]`, which is the same distinction the projection
+  // makes: a page that watches nothing and a page whose watch list could not be read must not both
+  // read as "watches nothing" — but here they may, because the only thing the pane does with it is
+  // re-read, and re-reading a page that does not need it costs a poll rather than correctness.
+  const live = strings(value.live);
+  return [{ id: value.id, html: value.html, audience, ...asViewer(value.viewer), ...(live.length === 0 ? {} : { live }) }];
 };
 
 /** One collection's capability, field by field.

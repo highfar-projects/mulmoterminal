@@ -37,7 +37,7 @@ import { declaredView, readAppViewFile } from "./publicView.js";
 import { isRecord } from "../../../common/isRecord.js";
 // Both from `/view`, which is where the PARENT's vocabulary lives — and where the read-back has to
 // be: the root entry reaches the compiler, and the compiler imports core's server half at runtime.
-import { ownRowsFor, projectedWritesOf, PUBLIC_WRITE_TIER, viewerFor, writableFields } from "@receptron/sharedapp/view";
+import { ownRowsFor, projectedWritesOf, PUBLIC_WRITE_TIER, viewerFor, writableFields, type Viewer } from "@receptron/sharedapp/view";
 import {
   previewPageKey,
   type PreviewDataset,
@@ -176,6 +176,35 @@ async function readDatasets(
   // change.
   return { datasets, unreadable: [...unreadable].sort((left, right) => (left < right ? -1 : 1)) };
 }
+
+/** The collections a page WATCHES, read off the projection rather than off the declaration —
+ *  `withLive` in the package drops names the tier may not read, and a pane that polled for one of
+ *  those would be watching something production does not.
+ *
+ *  A tier document lists its pages under `views`; the public one has a single `view`. */
+/** ABSENT rather than empty when a page watches nothing, which is how the projection itself writes
+ *  it: `live: []` on the wire would say the author declared an empty watch list. */
+const watching = (live: string[]): { live?: string[] } => {
+  if (live.length === 0) return {};
+  return { live };
+};
+
+const liveOf = (value: unknown): string[] => {
+  if (!isRecord(value) || !Array.isArray(value.live)) return [];
+  return value.live.filter((cid): cid is string => typeof cid === "string");
+};
+
+const tierLive = (config: unknown, viewId: string): string[] => {
+  if (!isRecord(config) || !Array.isArray(config.views)) return [];
+  return liveOf(config.views.find((view) => isRecord(view) && view.id === viewId));
+};
+
+/** The anonymous page, or none. Its own function so the run above stays a list of steps: what it
+ *  needs is the HTML, the viewer already resolved, and the public document's own watch list. */
+const publicPageOf = (html: string | null, viewer: Viewer, config: unknown): PreviewPage[] => {
+  if (html === null) return [];
+  return [{ id: PUBLIC_PAGE_ID, html, audience: "public", viewer, ...watching(liveOf(isRecord(config) ? config.view : null)) }];
+};
 
 /** What one tier's projection says each of its pages may query for. */
 function tierRequests(plan: TierPlan): { key: string; collections: RequestedCollection[] }[] {
@@ -333,8 +362,7 @@ export async function previewSharedApp(root: string, opts: SharedAppOptions = {}
   // The author's address is NOT substituted here either, and that is the point of the whole file: a
   // preview that handed the page one more thing than production hands it is a preview of a page
   // that does not exist. The author IS a reader here, and this is what a reader gets.
-  const publicViewer = viewerFor(writes.public, null, PUBLIC_WRITE_TIER);
-  const publicPages: PreviewPage[] = publicHtml === null ? [] : [{ id: PUBLIC_PAGE_ID, html: publicHtml, audience: "public", viewer: publicViewer }];
+  const publicPages = publicPageOf(publicHtml, viewerFor(writes.public, null, PUBLIC_WRITE_TIER), face.config);
   const tierPages: PreviewPage[] = tiers.plans.flatMap((plan) => {
     // The author, as this tier's projection resolves them. `viewerFor` is the
     // package's, and mulmoserver calls the same one with the same projection —
@@ -346,7 +374,13 @@ export async function previewSharedApp(root: string, opts: SharedAppOptions = {}
     const projected = projectedWritesOf(plan.config);
     writes[plan.tier] = projected;
     const viewer = viewerFor(projected, handle.email, plan.tier);
-    return plan.pages.map((tierPage): PreviewPage => ({ id: tierPage.id, html: tierPage.html, audience: plan.tier, viewer }));
+    return plan.pages.map((tierPage): PreviewPage => ({
+      id: tierPage.id,
+      html: tierPage.html,
+      audience: plan.tier,
+      viewer,
+      ...watching(tierLive(plan.config, tierPage.id)),
+    }));
   });
   const pages = [...publicPages, ...tierPages];
 
