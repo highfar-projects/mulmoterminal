@@ -30,9 +30,17 @@ describe("holdOpen", () => {
     const stop = vi.fn();
     const quiet = vi.fn();
     const beat = vi.fn(() => quiet);
+    const begin = vi.fn();
 
-    await holdOpen({ onClose: req.onClose, open: () => Promise.resolve({ ok: true, watching: ["messages"], stop }), beat, end: vi.fn() });
+    await holdOpen({
+      onClose: req.onClose,
+      open: () => Promise.resolve({ ok: true, watching: ["messages"], stop }),
+      begin,
+      beat,
+      nothing: vi.fn(),
+    });
 
+    expect(begin).toHaveBeenCalledTimes(1);
     expect(beat).toHaveBeenCalledTimes(1);
     expect(stop).not.toHaveBeenCalled();
 
@@ -52,25 +60,47 @@ describe("holdOpen", () => {
     const answer: ((handle: { ok: true; watching: string[]; stop: () => void }) => void)[] = [];
     const opening = new Promise<{ ok: true; watching: string[]; stop: () => void }>((resolve) => answer.push(resolve));
 
-    const held = holdOpen({ onClose: req.onClose, open: () => opening, beat, end: vi.fn() });
+    const begin = vi.fn();
+    const held = holdOpen({ onClose: req.onClose, open: () => opening, begin, beat, nothing: vi.fn() });
     req.close();
     answer[0]?.({ ok: true, watching: ["messages"], stop });
     await held;
 
     expect(stop).toHaveBeenCalledTimes(1);
-    // And no heartbeat was ever started, so there is no timer to leak either.
+    // And nothing was started for it: no heartbeat to leak, and no response begun for a request
+    // that has already gone.
+    expect(beat).not.toHaveBeenCalled();
+    expect(begin).not.toHaveBeenCalled();
+  });
+
+  it("answers terminally when there is nothing to watch, without beginning a stream", async () => {
+    // No app here, no page that declared `live`, or no session. Beginning a stream and ending it is
+    // what an `EventSource` reconnects to — for ever, recomputing the whole preview each time,
+    // which is the poll this feature exists to avoid arriving through the error path.
+    const nothing = vi.fn();
+    const begin = vi.fn();
+    const beat = vi.fn(() => vi.fn());
+
+    await holdOpen({ onClose: request().onClose, open: () => Promise.resolve({ ok: false }), begin, beat, nothing });
+
+    expect(nothing).toHaveBeenCalledTimes(1);
+    expect(begin).not.toHaveBeenCalled();
     expect(beat).not.toHaveBeenCalled();
   });
 
-  it("ends the response when there is nothing to watch, and starts no heartbeat", async () => {
-    // No app here, no page that declared `live`, or no session. A stream held open that will never
-    // speak looks exactly like one whose records stopped moving.
-    const end = vi.fn();
-    const beat = vi.fn(() => vi.fn());
+  it("says nothing at all to a request that closed before the answer came", async () => {
+    // Writing a status onto a response whose request has gone is an error on some servers and a
+    // no-op on others; either way there is nobody to read it.
+    const req = request();
+    const nothing = vi.fn();
+    const answer: ((handle: { ok: false }) => void)[] = [];
+    const opening = new Promise<{ ok: false }>((resolve) => answer.push(resolve));
 
-    await holdOpen({ onClose: request().onClose, open: () => Promise.resolve({ ok: false }), beat, end });
+    const held = holdOpen({ onClose: req.onClose, open: () => opening, begin: vi.fn(), beat: vi.fn(() => vi.fn()), nothing });
+    req.close();
+    answer[0]?.({ ok: false });
+    await held;
 
-    expect(end).toHaveBeenCalledTimes(1);
-    expect(beat).not.toHaveBeenCalled();
+    expect(nothing).not.toHaveBeenCalled();
   });
 });

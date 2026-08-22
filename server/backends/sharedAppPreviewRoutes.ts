@@ -180,25 +180,39 @@ async function respondLookup(req: Request, res: Response): Promise<void> {
 async function streamRecords(req: Request, res: Response): Promise<void> {
   const cwd = workspaceForRoute(req.query.cwd, res);
   if (cwd === null) return;
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache, no-transform",
-    Connection: "keep-alive",
-  });
+  // WRITTEN ONLY ONCE THE STREAM HAS BEGUN. `onSnapshot` delivers what it already has as soon as it
+  // is subscribed, and that can be before this response has any headers on it — which would send
+  // the first change as an ordinary 200 body and leave the pane reading rows it cannot parse.
+  let sending = false;
+  const held: string[] = [];
+  const send = (line: string) => {
+    if (sending) res.write(line);
+    else held.push(line);
+  };
   // The ORDER is `holdOpen`'s, and it is the point of that function: the cleanup is registered
   // before the watch is opened, because opening it is asynchronous and a pane that changes page
   // meanwhile closes this request while it runs.
   await holdOpen({
     onClose: (release) => req.on("close", release),
-    open: () => watchPreviewRecords(cwd, (change) => res.write(`data: ${JSON.stringify(change)}\n\n`)),
+    open: () => watchPreviewRecords(cwd, (change) => send(`data: ${JSON.stringify(change)}\n\n`)),
+    begin: () => {
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+      });
+      sending = true;
+      for (const line of held) res.write(line);
+      held.length = 0;
+    },
     beat: () => {
       const timer = setInterval(() => res.write(": open\n\n"), HEARTBEAT_MS);
       return () => clearInterval(timer);
     },
-    // Nothing to watch — no app here, no page that declared `live`, or no session. ENDED rather
-    // than held open: an `EventSource` on a closed stream reconnects on its own, and a pane holding
-    // one that will never speak looks exactly like one whose records stopped moving.
-    end: () => res.end(),
+    // NOTHING TO WATCH — no app here, no page that declared `live`, or no session. Answered 204,
+    // which is the one status an `EventSource` treats as "do not come back": an opened-then-ended
+    // 200 stream is reconnected for ever, and every reconnection recomputes the whole preview.
+    nothing: () => res.status(204).end(),
   });
 }
 

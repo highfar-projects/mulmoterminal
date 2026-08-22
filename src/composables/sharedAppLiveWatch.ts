@@ -110,6 +110,10 @@ export const keepWatchedPageCurrent = (page: () => PreviewPage | null, url: () =
     (address) => {
       close();
       if (address === null) return;
+      // A stream that drops is REOPENED by the browser on its own, which is what should happen to a
+      // server restarted under an open pane. The one answer that must not be retried — there is no
+      // app here, no page that declared `live`, or no session — is a 204, which an `EventSource`
+      // treats as "do not come back". That is the route's half of this; see `holdOpen`.
       stream = new EventSource(address);
       stream.onmessage = (event: MessageEvent<string>) => {
         // Whatever arrives is JSON from this host's own server, and it is narrowed rather than

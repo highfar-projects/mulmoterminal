@@ -88,28 +88,34 @@ export async function watchPreviewRecords(cwd: string, emit: (change: PreviewRec
   };
 }
 
-/** Hold a stream open until the request closes — WITH THE CLEANUP REGISTERED FIRST.
+/** Hold a stream open until the request closes — WITH THE CLEANUP REGISTERED FIRST, and with the
+ *  response begun only once there is something to send.
  *
- *  Opening the watch is asynchronous (the preview has to be computed before there is anything to
- *  subscribe to), and a pane that changes page or directory in the meantime closes the request
- *  while that is still running. Registering the close handler afterwards means the event has
- *  already fired by the time anything is listening: the subscriptions and the heartbeat are created
- *  a moment later and nothing ever stops them — Firestore listeners billing for a reader who has
- *  gone, until the server exits.
+ *  THE ORDER OF THE CLEANUP. Opening the watch is asynchronous (the preview has to be computed
+ *  before there is anything to subscribe to), and a pane that changes page or directory in the
+ *  meantime closes the request while that is still running. Registering the close handler
+ *  afterwards means the event has already fired by the time anything is listening: the
+ *  subscriptions and the heartbeat are created a moment later and nothing ever stops them —
+ *  Firestore listeners billing for a reader who has gone, until the server exits. So the handler
+ *  goes on FIRST and the watch is handed to it when it exists.
  *
- *  So the handler goes on FIRST and the watch is handed to it when it exists. A request that closed
- *  during setup is not a special case to detect afterwards; it is the ordinary one, and the watch it
- *  produced is stopped the moment it is returned.
+ *  AND NOTHING TO WATCH IS NOT AN EMPTY STREAM. An `EventSource` whose 200 stream ends reconnects,
+ *  by design and for ever — so answering "no app here, no `live`, no session" with an opened-then-
+ *  ended stream is a client reconnecting every few seconds and a server recomputing the whole
+ *  preview each time, which is the poll this feature exists to avoid, arriving through the error
+ *  path. `nothing` therefore answers TERMINALLY, before the stream has begun.
  *
  *  Everything it touches is injected, so the ordering can be tested without express or a session. */
 export async function holdOpen(deps: {
   onClose: (release: () => void) => void;
   open: () => Promise<PreviewWatchHandle>;
-  /** Start the heartbeat; the returned function stops it. Not started at all for a stream that
-   *  ends, and never started for a request that has already gone. */
+  /** Begin the SSE response. Called once, only when there IS a watch, and never for a request that
+   *  has already gone. */
+  begin: () => void;
+  /** Start the heartbeat; the returned function stops it. */
   beat: () => () => void;
-  /** End the response: nothing to watch, so nothing to wait for. */
-  end: () => void;
+  /** Answer terminally: there is nothing to watch, and the client must not come back for more. */
+  nothing: () => void;
 }): Promise<void> {
   let stop: (() => void) | null = null;
   let quiet: (() => void) | null = null;
@@ -121,7 +127,7 @@ export async function holdOpen(deps: {
   });
   const watch = await deps.open();
   if (!watch.ok) {
-    deps.end();
+    if (!gone) deps.nothing();
     return;
   }
   if (gone) {
@@ -129,5 +135,6 @@ export async function holdOpen(deps: {
     return;
   }
   stop = watch.stop;
+  deps.begin();
   quiet = deps.beat();
 }
