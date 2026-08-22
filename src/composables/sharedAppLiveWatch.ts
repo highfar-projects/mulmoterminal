@@ -36,6 +36,15 @@ export const withChange = (
   return { ...datasets, [change.key]: { ...page, [change.cid]: change.rows } };
 };
 
+/** Several changes, oldest first. What it is FOR is the race with a one-shot read: a re-read
+ *  started at T0 answers with rows as they were at T0, so a change that arrived at T1 is undone by
+ *  assigning that answer — and Firestore will not send it again, because nothing has changed since.
+ *  The changes that landed while the read was in flight are therefore applied on top of it. */
+export const withChanges = (
+  datasets: Record<string, Record<string, Record<string, unknown>[]>>,
+  changes: PreviewRecordChange[],
+): Record<string, Record<string, Record<string, unknown>[]>> => changes.reduce(withChange, datasets);
+
 /** Hold a stream open while the shown page watches records, and let go when it does not.
  *
  *  ONE STREAM FOR THE APP, not one per page: the server subscribes to every collection any page

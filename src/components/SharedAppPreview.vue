@@ -29,6 +29,7 @@ import {
   previewPageKey,
   type PreviewForm,
   type PreviewPage,
+  type PreviewRecordChange,
   type PreviewUncertainWrite,
   type PreviewWrittenRecord,
   type SharedAppPreview,
@@ -41,7 +42,7 @@ import {
 const props = defineProps<{ cwd: string | null; pickerTarget?: HTMLElement | null }>();
 
 import { asPayload } from "../utils/sharedAppPreviewPayload";
-import { keepWatchedPageCurrent, withChange } from "../composables/sharedAppLiveWatch";
+import { keepWatchedPageCurrent, withChange, withChanges } from "../composables/sharedAppLiveWatch";
 import { createIntentSender } from "../utils/sharedAppPreviewIntent";
 import { structuredCloneable } from "../utils/structuredCloneable";
 
@@ -535,8 +536,13 @@ let refreshGeneration = 0;
  *  A write changes the records, so the frame has to be told — but the DOCUMENT has not changed, and
  *  tearing it down to say so would throw away the conversation it is having. Only the payload is
  *  swapped; the page, its nonce and its channel all stay. */
+/** Record changes that landed while a one-shot read was in flight, oldest first. Cleared when one
+ *  starts, applied on top of the answer it brings back. */
+let duringRefresh: PreviewRecordChange[] = [];
+
 async function refresh(): Promise<boolean> {
   const mine = ++refreshGeneration;
+  duringRefresh = [];
   const load = generation;
   try {
     const res = await fetchWithTimeout(previewUrl());
@@ -550,7 +556,8 @@ async function refresh(): Promise<boolean> {
     if (!isRecord(body) || body.ok !== true) return false;
     const next = asPayload(body.preview);
     if (next === null) return false;
-    payload.value = next;
+    // The stream is NEWER than this answer wherever the two disagree — see `duringRefresh`.
+    payload.value = { ...next, datasets: withChanges(next.datasets, duringRefresh) };
     scopeLog(next.aid);
     return true;
   } catch {
@@ -646,6 +653,10 @@ keepWatchedPageCurrent(
   () => page.value,
   () => writeUrl("watch"),
   (change) => {
+    // KEPT AS WELL AS APPLIED, until the next one-shot read lands. A re-read answers with the rows
+    // as they were when it STARTED, so assigning its answer would undo a change that arrived while
+    // it was in flight — and no second snapshot is coming, because nothing has changed since.
+    duringRefresh.push(change);
     const held = payload.value;
     if (held === null) return;
     // A NEW PAYLOAD, because what holds it is a `shallowRef`: writing into the map it points at

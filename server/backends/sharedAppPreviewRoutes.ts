@@ -15,7 +15,7 @@ import { access } from "node:fs/promises";
 import path from "node:path";
 import { APP_MANIFEST_FILE } from "@mulmoclaude/core/collection/server";
 import { previewSharedApp } from "./sharedApp/preview.js";
-import { watchPreviewRecords } from "./sharedApp/previewWatch.js";
+import { holdOpen, watchPreviewRecords } from "./sharedApp/previewWatch.js";
 import { undoPreviewSubmission, writePreviewSubmission } from "./sharedApp/previewWrite.js";
 import { performPreviewIntent } from "./sharedApp/previewIntent.js";
 import { previewOwnLookup } from "./sharedApp/previewLookup.js";
@@ -185,20 +185,20 @@ async function streamRecords(req: Request, res: Response): Promise<void> {
     "Cache-Control": "no-cache, no-transform",
     Connection: "keep-alive",
   });
-  const watch = await watchPreviewRecords(cwd, (change) => {
-    res.write(`data: ${JSON.stringify(change)}\n\n`);
-  });
-  if (!watch.ok) {
-    // Nothing to watch — no app here, no page that declared `live`, or no session. The stream is
-    // ENDED rather than held open: an `EventSource` on a closed stream reconnects on its own, and a
-    // pane holding one that will never speak looks exactly like one whose records stopped moving.
-    res.end();
-    return;
-  }
-  const beat = setInterval(() => res.write(": open\n\n"), HEARTBEAT_MS);
-  req.on("close", () => {
-    clearInterval(beat);
-    watch.stop();
+  // The ORDER is `holdOpen`'s, and it is the point of that function: the cleanup is registered
+  // before the watch is opened, because opening it is asynchronous and a pane that changes page
+  // meanwhile closes this request while it runs.
+  await holdOpen({
+    onClose: (release) => req.on("close", release),
+    open: () => watchPreviewRecords(cwd, (change) => res.write(`data: ${JSON.stringify(change)}\n\n`)),
+    beat: () => {
+      const timer = setInterval(() => res.write(": open\n\n"), HEARTBEAT_MS);
+      return () => clearInterval(timer);
+    },
+    // Nothing to watch — no app here, no page that declared `live`, or no session. ENDED rather
+    // than held open: an `EventSource` on a closed stream reconnects on its own, and a pane holding
+    // one that will never speak looks exactly like one whose records stopped moving.
+    end: () => res.end(),
   });
 }
 

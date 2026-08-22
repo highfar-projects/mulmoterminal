@@ -10,7 +10,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { effectScope, ref } from "vue";
 
-import { keepWatchedPageCurrent, watchesRecords, withChange } from "../../../src/composables/sharedAppLiveWatch";
+import { keepWatchedPageCurrent, watchesRecords, withChange, withChanges } from "../../../src/composables/sharedAppLiveWatch";
 import type { PreviewPage, PreviewRecordChange } from "../../../common/sharedAppPreview";
 
 const pageOf = (live?: string[]): PreviewPage => ({
@@ -77,6 +77,23 @@ describe("withChange", () => {
   it("ignores a page the pane is not holding rather than inventing one", () => {
     const next = withChange(held, { key: "public:public", cid: "messages", rows: [{ id: "x" }] });
     expect(next).toBe(held);
+  });
+});
+
+describe("withChanges", () => {
+  it("puts the stream on top of an answer that was read before it", () => {
+    // The race: a re-read started at T0 answers with the rows as they were at T0, so assigning that
+    // answer would undo a change that arrived at T1 — and no second snapshot is coming, because
+    // nothing has changed since. The preview would sit on the older rows for good.
+    const readAtT0 = { "member:room": { messages: [{ id: "m1" }] } };
+    const arrivedDuring = [
+      { key: "member:room", cid: "messages", rows: [{ id: "m1" }, { id: "m2" }] },
+      { key: "member:room", cid: "messages", rows: [{ id: "m1" }, { id: "m2" }, { id: "m3" }] },
+    ];
+
+    // Oldest first, so the last one wins — which is the one the records are actually in.
+    expect(withChanges(readAtT0, arrivedDuring)["member:room"]?.messages).toHaveLength(3);
+    expect(withChanges(readAtT0, [])).toBe(readAtT0);
   });
 });
 
