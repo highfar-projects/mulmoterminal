@@ -47,6 +47,18 @@ export interface PreviewPage {
 
 export type PreviewDataset = Record<string, unknown>[];
 
+/** One collection's rows, for one page, as they stand now — what the record stream sends when a
+ *  watched collection changes.
+ *
+ *  THE ROWS RATHER THAN A DIFF. The pane holds a map keyed by page and collection; replacing one
+ *  entry cannot be applied out of order, and a diff against a map the sender cannot see could be. */
+export interface PreviewRecordChange {
+  /** `previewPageKey(audience, id)` — the same key the page's datasets are filed under. */
+  key: string;
+  cid: string;
+  rows: PreviewDataset;
+}
+
 /** The records ONE page is handed, per collection.
  *
  *  Per page rather than one map for the app, and that is the point rather than tidiness: a member

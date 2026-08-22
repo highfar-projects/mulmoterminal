@@ -1,15 +1,17 @@
 // A previewed page that WATCHES its records, and the one place it used to stand still.
 //
-// The pane read the records once and refreshed after the author's own write, so a page declaring
+// The pane read the records once and re-read after the author's own write, so a page declaring
 // `live` — a chat room, a live poll's audience screen — showed nothing when somebody ELSE wrote.
-// The published page moved and the preview of it did not, which reads as a broken page rather than
-// as a preview that does not watch.
+// The published page moved and the preview of it did not.
+//
+// What closed it is a stream, not a clock: the server holds the `onSnapshot` (it has the session)
+// and sends one collection's rows for one page when they change. These tests drive that end.
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { effectScope, ref } from "vue";
 
-import { LIVE_POLL_MS, keepWatchedPageCurrent, watchesRecords } from "../../../src/composables/sharedAppLiveWatch";
-import type { PreviewPage } from "../../../common/sharedAppPreview";
+import { keepWatchedPageCurrent, watchesRecords, withChange } from "../../../src/composables/sharedAppLiveWatch";
+import type { PreviewPage, PreviewRecordChange } from "../../../common/sharedAppPreview";
 
 const pageOf = (live?: string[]): PreviewPage => ({
   id: "room",
@@ -18,20 +20,36 @@ const pageOf = (live?: string[]): PreviewPage => ({
   ...(live === undefined ? {} : { live }),
 });
 
-/** Run `body` inside a scope, then dispose it — which is what the pane going away does. */
+/** Every stream this file opened, so a test can speak on it and assert it was closed. */
+const opened: { url: string; closed: boolean; send: (data: string) => void }[] = [];
+
+class FakeStream {
+  public onmessage: ((event: MessageEvent<string>) => void) | null = null;
+  public constructor(url: string) {
+    opened.push({
+      url,
+      closed: false,
+      send: (data: string) => this.onmessage?.({ data } as MessageEvent<string>),
+    });
+    this.index = opened.length - 1;
+  }
+  private readonly index: number;
+  public close(): void {
+    const entry = opened[this.index];
+    if (entry !== undefined) entry.closed = true;
+  }
+}
+
+vi.stubGlobal("EventSource", FakeStream);
+
 const inScope = (body: () => void): (() => void) => {
   const scope = effectScope();
   scope.run(body);
   return () => scope.stop();
 };
 
-const hide = (state: "visible" | "hidden") => {
-  Object.defineProperty(document, "visibilityState", { value: state, configurable: true });
-};
-
 afterEach(() => {
-  vi.useRealTimers();
-  hide("visible");
+  opened.length = 0;
 });
 
 describe("watchesRecords", () => {
@@ -43,75 +61,83 @@ describe("watchesRecords", () => {
   });
 });
 
+describe("withChange", () => {
+  const held = { "member:room": { messages: [{ id: "m1" }] }, "member:ledger": { notes: [] } };
+
+  it("replaces one collection on one page and leaves the rest alone", () => {
+    const next = withChange(held, { key: "member:room", cid: "messages", rows: [{ id: "m1" }, { id: "m2" }] });
+    expect(next["member:room"]?.messages).toHaveLength(2);
+    expect(next["member:ledger"]).toBe(held["member:ledger"]);
+    // A NEW MAP: what holds this is a `shallowRef`, so a mutation would change the records and
+    // tell nobody.
+    expect(next).not.toBe(held);
+    expect(held["member:room"]?.messages).toHaveLength(1);
+  });
+
+  it("ignores a page the pane is not holding rather than inventing one", () => {
+    const next = withChange(held, { key: "public:public", cid: "messages", rows: [{ id: "x" }] });
+    expect(next).toBe(held);
+  });
+});
+
 describe("keepWatchedPageCurrent", () => {
-  it("re-reads a watching page, over and over", () => {
-    vi.useFakeTimers();
-    const reread = vi.fn();
-    const stop = inScope(() => keepWatchedPageCurrent(() => pageOf(["messages"]), reread));
+  const streamFor = (page: PreviewPage | null, apply = vi.fn()) => {
+    const shown = ref<PreviewPage | null>(page);
+    const stop = inScope(() =>
+      keepWatchedPageCurrent(
+        () => shown.value,
+        () => "/api/shared-app/preview/watch?cwd=/repo",
+        apply,
+      ),
+    );
+    return { shown, apply, stop };
+  };
 
-    expect(reread).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(LIVE_POLL_MS * 3);
-    expect(reread).toHaveBeenCalledTimes(3);
+  it("opens one stream for a watching page and files what arrives", () => {
+    const { apply, stop } = streamFor(pageOf(["messages"]));
+
+    expect(opened).toHaveLength(1);
+    expect(opened[0]?.url).toBe("/api/shared-app/preview/watch?cwd=/repo");
+
+    const change: PreviewRecordChange = { key: "member:room", cid: "messages", rows: [{ id: "m2" }] };
+    opened[0]?.send(JSON.stringify(change));
+    expect(apply).toHaveBeenCalledWith(change);
     stop();
   });
 
-  it("leaves a page that watches nothing exactly as often read as before", () => {
-    vi.useFakeTimers();
-    const reread = vi.fn();
-    const stop = inScope(() => keepWatchedPageCurrent(() => pageOf(), reread));
-
-    vi.advanceTimersByTime(LIVE_POLL_MS * 10);
-    expect(reread).not.toHaveBeenCalled();
+  it("opens nothing for a page that watches nothing", () => {
+    const { stop } = streamFor(pageOf());
+    expect(opened).toHaveLength(0);
     stop();
   });
 
-  it("starts and stops as the author walks between pages", async () => {
-    vi.useFakeTimers();
-    const shown = ref<PreviewPage | null>(pageOf());
-    const reread = vi.fn();
-    const stop = inScope(() => keepWatchedPageCurrent(() => shown.value, reread));
+  it("survives a line it cannot read, and leaves the records alone", () => {
+    // Whatever arrives is JSON from this host's own server — and a shape this pane cannot read must
+    // leave the records as they are rather than throw inside a handler nobody is awaiting.
+    const { apply, stop } = streamFor(pageOf(["messages"]));
+    for (const line of ["not json", "null", '{"key":"member:room"}', '{"key":1,"cid":"messages","rows":[]}']) {
+      opened[0]?.send(line);
+    }
+    expect(apply).not.toHaveBeenCalled();
+    stop();
+  });
 
-    shown.value = pageOf(["messages"]);
-    await Promise.resolve();
-    vi.advanceTimersByTime(LIVE_POLL_MS);
-    expect(reread).toHaveBeenCalledTimes(1);
-
-    // Back to a page that watches nothing: the polling has to END, not merely be ignored.
+  it("closes the stream when the author walks to a page that watches nothing", async () => {
+    const { shown, stop } = streamFor(pageOf(["messages"]));
     shown.value = pageOf();
     await Promise.resolve();
-    vi.advanceTimersByTime(LIVE_POLL_MS * 5);
-    expect(reread).toHaveBeenCalledTimes(1);
+
+    expect(opened[0]?.closed).toBe(true);
+    expect(opened).toHaveLength(1);
     stop();
   });
 
-  it("skips a hidden window, and picks up again when it comes back", () => {
-    // The reason to re-read is that somebody is LOOKING. A pane behind another window is a request
-    // every few seconds for nobody — and the timer stays, so returning needs no new one.
-    vi.useFakeTimers();
-    const reread = vi.fn();
-    const stop = inScope(() => keepWatchedPageCurrent(() => pageOf(["messages"]), reread));
-
-    hide("hidden");
-    vi.advanceTimersByTime(LIVE_POLL_MS * 4);
-    expect(reread).not.toHaveBeenCalled();
-
-    hide("visible");
-    vi.advanceTimersByTime(LIVE_POLL_MS);
-    expect(reread).toHaveBeenCalledTimes(1);
+  it("closes the stream when the pane goes away", () => {
+    // Left open it holds a listener on this host, and a Firestore subscription behind that, for as
+    // long as the app is running.
+    const { stop } = streamFor(pageOf(["messages"]));
+    expect(opened[0]?.closed).toBe(false);
     stop();
-  });
-
-  it("stops when the pane goes away", () => {
-    // A timer that outlived the pane would go on asking this host's server about a directory
-    // nobody is looking at, for as long as the app is open.
-    vi.useFakeTimers();
-    const reread = vi.fn();
-    const stop = inScope(() => keepWatchedPageCurrent(() => pageOf(["messages"]), reread));
-
-    vi.advanceTimersByTime(LIVE_POLL_MS);
-    expect(reread).toHaveBeenCalledTimes(1);
-    stop();
-    vi.advanceTimersByTime(LIVE_POLL_MS * 5);
-    expect(reread).toHaveBeenCalledTimes(1);
+    expect(opened[0]?.closed).toBe(true);
   });
 });

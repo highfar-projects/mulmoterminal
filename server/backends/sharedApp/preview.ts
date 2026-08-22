@@ -63,6 +63,20 @@ export interface PreviewSuccess extends SharedAppPreview {
    *  judge there — one that could disagree with the one that performs the write — which is the
    *  divergence `PreviewPage.viewer` was introduced to remove. */
   writes: Partial<Record<PreviewAudience, ProjectedViewWrite[]>>;
+  /** What a LISTENER has to hold to keep this preview current: one entry per page that declared
+   *  `live`, carrying the request THAT page makes of that collection.
+   *
+   *  Server-only, and the request rather than the cid alone: the same collection is read `all` for
+   *  the desk and `own` for the participant, so one change has to become rows per page. See
+   *  `previewWatch.ts`, its only caller. */
+  watches: PreviewWatch[];
+}
+
+/** One collection, watched for one page. */
+export interface PreviewWatch {
+  /** `previewPageKey(audience, id)` — the key its rows are filed under. */
+  key: string;
+  want: RequestedCollection;
 }
 
 export type PreviewResult = PreviewSuccess | SharedAppFailure;
@@ -204,6 +218,30 @@ const tierLive = (config: unknown, viewId: string): string[] => {
 const publicPageOf = (html: string | null, viewer: Viewer, config: unknown): PreviewPage[] => {
   if (html === null) return [];
   return [{ id: PUBLIC_PAGE_ID, html, audience: "public", viewer, ...watching(liveOf(isRecord(config) ? config.view : null)) }];
+};
+
+/** What every page asks for, in one list. Its own function so the run above stays a list of steps
+ *  — and so the watch plan and the one-shot read cannot be built from two different readings. */
+const requestsOf = (publicHtml: string | null, config: PublishedConfigDoc, plans: TierPlan[]): { key: string; collections: RequestedCollection[] }[] => {
+  const anonymous = publicHtml === null ? [] : [{ key: previewPageKey("public", PUBLIC_PAGE_ID), collections: publicRequests(config) }];
+  return [...anonymous, ...plans.flatMap(tierRequests)];
+};
+
+/** WHICH READS A LISTENER REPEATS: the collections each page declared `live`, paired with the
+ *  request that page makes of them.
+ *
+ *  Intersected with what the page actually asks for rather than taken from `live` alone. `live` is
+ *  a subset of `collections` by construction, and this is where that stops being trusted: a watch
+ *  with no request behind it would be a listener on a collection the page never reads.
+ *
+ *  Pure, so the mapping is testable without a session. */
+export const watchesOf = (pages: PreviewPage[], requests: { key: string; collections: RequestedCollection[] }[]): PreviewWatch[] => {
+  const asked = new Map(requests.map((entry) => [entry.key, entry.collections]));
+  return pages.flatMap((page) => {
+    const key = previewPageKey(page.audience, page.id);
+    const live = new Set(page.live ?? []);
+    return (asked.get(key) ?? []).filter((want) => live.has(want.cid)).map((want) => ({ key, want }));
+  });
 };
 
 /** What one tier's projection says each of its pages may query for. */
@@ -388,10 +426,8 @@ export async function previewSharedApp(root: string, opts: SharedAppOptions = {}
   // `public.read` is what a visitor may see, and reading everything on disk would draw a page the
   // author cannot ship. Per page rather than one list for the app, because a member page may name a
   // collection the public one must never receive.
-  const { datasets, unreadable } = await readDatasets(handle, aid, [
-    ...(publicHtml === null ? [] : [{ key: previewPageKey("public", PUBLIC_PAGE_ID), collections: publicRequests(face.config) }]),
-    ...tiers.plans.flatMap(tierRequests),
-  ]);
+  const requests = requestsOf(publicHtml, face.config, tiers.plans);
+  const { datasets, unreadable } = await readDatasets(handle, aid, requests);
 
   // THE AUTHOR'S OWN ROWS, read separately from the pages and never as a page's datasets: they
   // travel as `viewer.mine`, which is a different message saying a different thing. A cid that
@@ -418,6 +454,7 @@ export async function previewSharedApp(root: string, opts: SharedAppOptions = {}
     generatedForm: publicHtml === null && Object.keys(form).length > 0,
     formInputs,
     datasets,
+    watches: watchesOf(pages, requests),
     // Projected to the fields a page in this position could have SENT — the package's rule, so the
     // preview hands a page exactly what mulmoserver hands the live one. A page given one more field
     // here than production gives it is a preview of a page that does not exist.

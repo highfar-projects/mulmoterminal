@@ -401,6 +401,33 @@ describe("shared app preview", () => {
     expect(docs.writes).toEqual([]);
   });
 
+  it("says what a LISTENER would have to hold, and holds nothing for a page that watches nothing", async () => {
+    // The plan the record stream subscribes from. Per PAGE rather than per collection: two pages
+    // can name the same collection and read it differently — `all` for the desk, `own` for a
+    // participant — so one change has to become rows per page, with that page's own scope.
+    mkdirSync(path.join(root, "views"), { recursive: true });
+    writeApp(
+      root,
+      declaration({
+        public: { read: [] },
+        views: [
+          { id: "desk", path: "views/desk.html", audience: "member", collections: ["bookings"], live: ["bookings"] },
+          { id: "quiet", path: "views/quiet.html", audience: "member", collections: ["notes"] },
+        ],
+      }),
+    );
+    for (const page of ["desk", "quiet"]) writeFileSync(path.join(root, "views", `${page}.html`), `<p>${page}</p>`);
+
+    const result = await previewSharedApp(root, stamp);
+
+    expect(result.ok === false ? result.problems : []).toEqual([]);
+    const watches = (result.ok ? result.watches : []).map((entry) => ({ key: entry.key, cid: entry.want.cid, scope: entry.want.scope }));
+    expect(watches).toEqual([{ key: "member:desk", cid: "bookings", scope: "all" }]);
+    // `quiet` declared no `live`, so nothing is subscribed for it — a listener on a page nobody
+    // asked to watch is a bill with no reader.
+    expect(docs.writes).toEqual([]);
+  });
+
   it("carries what a public create may contain, so the parent can judge a submission", async () => {
     writeApp(root, declaration({ public: { read: ["bookings"], submit: { bookings: { auth: "verifiedEmail", createFields: ["note"] } } } }));
 

@@ -41,7 +41,7 @@ import {
 const props = defineProps<{ cwd: string | null; pickerTarget?: HTMLElement | null }>();
 
 import { asPayload } from "../utils/sharedAppPreviewPayload";
-import { keepWatchedPageCurrent } from "../composables/sharedAppLiveWatch";
+import { keepWatchedPageCurrent, withChange } from "../composables/sharedAppLiveWatch";
 import { createIntentSender } from "../utils/sharedAppPreviewIntent";
 import { structuredCloneable } from "../utils/structuredCloneable";
 
@@ -637,14 +637,22 @@ async function copyLog(): Promise<void> {
 
 onBeforeUnmount(() => window.clearTimeout(copiedTimer));
 
-// A PAGE THAT WATCHES ITS RECORDS is re-read while it is the one on screen — see
-// `sharedAppLiveWatch` for why this is a poll rather than a listener, and for what it costs. Before
-// it, the pane was the only place a `live` page stood still: the author's own writes refreshed it
-// and nobody else's did, so a chat room previewed here looked broken in a way the published one was
-// not.
+// A PAGE THAT WATCHES ITS RECORDS is kept current from the records themselves — the server holds
+// the `onSnapshot` (it has the session; this pane has no Firestore of its own) and streams what it
+// sees. Before it, the pane was the only place a `live` page stood still: the author's own writes
+// refreshed it and nobody else's did, so a chat room previewed here looked broken in a way the
+// published one was not.
 keepWatchedPageCurrent(
   () => page.value,
-  () => void refresh(),
+  () => writeUrl("watch"),
+  (change) => {
+    const held = payload.value;
+    if (held === null) return;
+    // A NEW PAYLOAD, because what holds it is a `shallowRef`: writing into the map it points at
+    // would change the records and tell nobody. Replacing it runs the same watcher a re-read does,
+    // which is what puts the rows on the page.
+    payload.value = { ...held, datasets: withChange(held.datasets, change) };
+  },
 );
 
 // The DIRECTORY is the other half of the app's identity, and it changes without a payload landing
