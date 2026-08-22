@@ -45,36 +45,46 @@ export const withChanges = (
   changes: PreviewRecordChange[],
 ): Record<string, Record<string, Record<string, unknown>[]>> => changes.reduce(withChange, datasets);
 
-/** The changes that landed while a one-shot read was in flight, and NOTHING at any other time.
+/** The changes that landed while a one-shot read was in flight — PER READ, and nothing at any
+ *  other time.
  *
- *  Its own object because both halves of that sentence are load-bearing. A read answers with the
- *  rows as they were when it STARTED, so a change that arrived at T1 is undone by assigning it —
- *  and no second snapshot is coming, because nothing has changed since. That is what has to be kept.
+ *  A read answers with the rows as they were when it STARTED, so a change that arrived at T1 is
+ *  undone by assigning that answer, and no second snapshot is coming because nothing has changed
+ *  since. That is what has to be kept, and it has to be kept for the read that will use it.
+ *
+ *  ONE BUFFER PER READ, because reads overlap: they are started fire-and-forget by a write, by an
+ *  intent and by the pane, and `refresh` supersedes rather than serialises. A single buffer let a
+ *  superseded read close the live one's — so a change caught during the read that was about to land
+ *  went missing, which is the bug this whole object exists to prevent, arriving by another door.
  *
  *  What must NOT be kept is everything else. A previewed chat room left open for an afternoon
- *  receives a change per message; holding them all against a read that may never come is a list
- *  that only grows. So nothing is held unless a read is out (`open`), and while one is, a page's
- *  collection holds only its LATEST rows — every change carries the whole collection, so an older
- *  one for the same pair says nothing the newer one does not.
+ *  receives a change per message; holding them against a read that may never come is a list that
+ *  only grows. So a buffer exists only between `begin` and its own close, and while it does, a
+ *  page's collection holds only its LATEST rows — every change carries the whole collection, so an
+ *  older one for the same pair says nothing the newer one does not.
  *
- *  At most one entry per watched page-and-collection, for as long as one read takes. */
+ *  Bounded by the reads actually in flight times what they watch. */
 export const pendingChanges = (): {
-  open: () => void;
+  begin: () => () => PreviewRecordChange[];
   record: (change: PreviewRecordChange) => void;
-  close: () => PreviewRecordChange[];
 } => {
-  let held: Map<string, PreviewRecordChange> | null = null;
+  const reading = new Set<Map<string, PreviewRecordChange>>();
   return {
-    open: () => {
-      held = new Map();
+    begin: () => {
+      const held = new Map<string, PreviewRecordChange>();
+      reading.add(held);
+      let closed = false;
+      // IDEMPOTENT: every way out of a read closes it — superseded, refused, threw — so the second
+      // call has to be nothing rather than a way to replay these onto another read's answer.
+      return () => {
+        if (closed) return [];
+        closed = true;
+        reading.delete(held);
+        return [...held.values()];
+      };
     },
     record: (change) => {
-      held?.set(`${change.key}|${change.cid}`, change);
-    },
-    close: () => {
-      const caught = held === null ? [] : [...held.values()];
-      held = null;
-      return caught;
+      for (const held of reading) held.set(`${change.key}|${change.cid}`, change);
     },
   };
 };

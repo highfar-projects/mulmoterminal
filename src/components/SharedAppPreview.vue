@@ -540,7 +540,10 @@ const caughtDuringRead = pendingChanges();
 
 async function refresh(): Promise<boolean> {
   const mine = ++refreshGeneration;
-  caughtDuringRead.open();
+  // THIS read's own buffer. Reads overlap — a write starts one, an intent starts one, and the pane
+  // starts one — so a shared buffer let whichever finished first close the one the landing read was
+  // about to use.
+  const caught = caughtDuringRead.begin();
   const load = generation;
   try {
     const res = await fetchWithTimeout(previewUrl());
@@ -555,7 +558,7 @@ async function refresh(): Promise<boolean> {
     const next = asPayload(body.preview);
     if (next === null) return false;
     // The stream is NEWER than this answer wherever the two disagree — see `pendingChanges`.
-    payload.value = { ...next, datasets: withChanges(next.datasets, caughtDuringRead.close()) };
+    payload.value = { ...next, datasets: withChanges(next.datasets, caught()) };
     scopeLog(next.aid);
     return true;
   } catch {
@@ -565,9 +568,9 @@ async function refresh(): Promise<boolean> {
     return false;
   } finally {
     // EVERY WAY OUT, not only the one that used the changes. A read that was superseded, refused or
-    // threw would otherwise leave the buffer open, and it goes on collecting until the next read
-    // happens to close it. Closing twice is closing once — the second returns nothing.
-    caughtDuringRead.close();
+    // threw would otherwise leave its buffer collecting for as long as the pane is open. Closing
+    // twice is closing once — the second returns nothing.
+    caught();
   }
 }
 

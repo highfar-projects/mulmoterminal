@@ -107,31 +107,53 @@ describe("pendingChanges", () => {
     const caught = pendingChanges();
     caught.record(change("messages", ["m1"]));
     caught.record(change("messages", ["m1", "m2"]));
-    expect(caught.close()).toEqual([]);
+    expect(caught.begin()()).toEqual([]);
   });
 
   it("keeps only the latest rows per page and collection while one is", () => {
     // Every change carries the WHOLE collection, so an older one for the same pair says nothing the
     // newer one does not — and the buffer is bounded by what is watched rather than by traffic.
     const caught = pendingChanges();
-    caught.open();
+    const close = caught.begin();
     caught.record(change("messages", ["m1"]));
     caught.record(change("notes", ["n1"]));
     caught.record(change("messages", ["m1", "m2"]));
 
-    const held = caught.close();
+    const held = close();
     expect(held).toHaveLength(2);
     expect(held.find((entry) => entry.cid === "messages")?.rows).toHaveLength(2);
   });
 
+  it("gives every read its own buffer, so a finished one cannot empty a running one", () => {
+    // Reads overlap: a write starts one, an intent starts one, the pane starts one, and `refresh`
+    // supersedes rather than serialises. With one buffer between them, whichever finished first
+    // closed the one the LANDING read was about to use — and the change it had caught was assigned
+    // away by an answer read before it. No second snapshot is coming, so the preview stays wrong.
+    const caught = pendingChanges();
+    const first = caught.begin();
+    const second = caught.begin();
+    caught.record(change("messages", ["m1", "m2"]));
+
+    expect(first()).toHaveLength(1);
+    expect(second()).toHaveLength(1);
+  });
+
   it("closes once, and closing again is closing nothing", () => {
     // Every way out of a read closes it — superseded, refused, threw — so the second call has to be
-    // harmless rather than a way to replay the last one's changes onto the next one's answer.
+    // harmless rather than a way to replay one read's changes onto another read's answer.
     const caught = pendingChanges();
-    caught.open();
+    const close = caught.begin();
     caught.record(change("messages", ["m1"]));
-    expect(caught.close()).toHaveLength(1);
-    expect(caught.close()).toEqual([]);
+    expect(close()).toHaveLength(1);
+    expect(close()).toEqual([]);
+  });
+
+  it("stops collecting for a read that has closed", () => {
+    const caught = pendingChanges();
+    const close = caught.begin();
+    close();
+    caught.record(change("messages", ["m1"]));
+    expect(caught.begin()()).toEqual([]);
   });
 });
 
