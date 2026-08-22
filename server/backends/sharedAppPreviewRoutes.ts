@@ -15,6 +15,7 @@ import { access } from "node:fs/promises";
 import path from "node:path";
 import { APP_MANIFEST_FILE } from "@mulmoclaude/core/collection/server";
 import { previewSharedApp } from "./sharedApp/preview.js";
+import { holdOpen, watchPreviewRecords } from "./sharedApp/previewWatch.js";
 import { undoPreviewSubmission, writePreviewSubmission } from "./sharedApp/previewWrite.js";
 import { performPreviewIntent } from "./sharedApp/previewIntent.js";
 import { previewOwnLookup } from "./sharedApp/previewLookup.js";
@@ -166,6 +167,73 @@ async function respondLookup(req: Request, res: Response): Promise<void> {
   res.json(await previewOwnLookup(cwd, { cid, key }));
 }
 
+/** THE RECORDS, STREAMED while a page that watches them is open.
+ *
+ *  Server-sent events rather than a socket: this is one-way, it is text, and it needs no handshake
+ *  — the pane opens an `EventSource` and the listener behind it is closed when the request is.
+ *  And rather than a poll, which is what the pane would otherwise have to do: a listener fires when
+ *  the records change and at no other time, which is what the published page gets.
+ *
+ *  A HEARTBEAT, as a comment line: an idle stream through a proxy is a stream that gets closed, and
+ *  a comment is the one thing an `EventSource` reads and does not deliver. It carries no records and
+ *  asks the database nothing — it is not the poll wearing a hat. */
+async function streamRecords(req: Request, res: Response): Promise<void> {
+  const cwd = workspaceForRoute(req.query.cwd, res);
+  if (cwd === null) return;
+  // WRITTEN ONLY ONCE THE STREAM HAS BEGUN. `onSnapshot` delivers what it already has as soon as it
+  // is subscribed, and that can be before this response has any headers on it — which would send
+  // the first change as an ordinary 200 body and leave the pane reading rows it cannot parse.
+  let sending = false;
+  const held: string[] = [];
+  const send = (line: string) => {
+    if (sending) res.write(line);
+    else held.push(line);
+  };
+  // The ORDER is `holdOpen`'s, and it is the point of that function: the cleanup is registered
+  // before the watch is opened, because opening it is asynchronous and a pane that changes page
+  // meanwhile closes this request while it runs.
+  await holdOpen({
+    onClose: (release) => req.on("close", release),
+    open: () => watchPreviewRecords(cwd, (change) => send(`data: ${JSON.stringify(change)}\n\n`)),
+    begin: () => {
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+      });
+      sending = true;
+      for (const line of held) res.write(line);
+      held.length = 0;
+    },
+    beat: () => {
+      const timer = setInterval(() => res.write(": open\n\n"), HEARTBEAT_MS);
+      return () => clearInterval(timer);
+    },
+    // NOTHING TO WATCH — no app here, no page that declared `live`, or no session. Answered 204,
+    // which is the one status an `EventSource` treats as "do not come back": an opened-then-ended
+    // 200 stream is reconnected for ever, and every reconnection recomputes the whole preview.
+    nothing: () => res.status(204).end(),
+  });
+}
+
+/** Often enough that nothing between here and the pane calls the stream idle, rarely enough to be
+ *  invisible. Both ends are on this machine; this is about proxies, not about latency. */
+const HEARTBEAT_MS = 25_000;
+
+/** The records as they change. Its own mount because it is the one route here that does not end:
+ *  the others answer a question, this one stays open until the pane goes away. */
+function mountRecordStream(app: Express): void {
+  app.get("/api/shared-app/preview/watch", (req, res) => {
+    void (async () => {
+      try {
+        await streamRecords(req, res);
+      } catch (err) {
+        fail(res, err);
+      }
+    })();
+  });
+}
+
 export function mountSharedAppPreviewRoutes(app: Express): void {
   // The write the author accepted in the confirmation, performed as them.
   //
@@ -242,6 +310,8 @@ export function mountSharedAppPreviewRoutes(app: Express): void {
       }
     })();
   });
+
+  mountRecordStream(app);
 
   app.get("/api/shared-app/preview", (req, res) => {
     void (async () => {

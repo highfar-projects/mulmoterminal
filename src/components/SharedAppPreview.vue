@@ -41,6 +41,7 @@ import {
 const props = defineProps<{ cwd: string | null; pickerTarget?: HTMLElement | null }>();
 
 import { asPayload } from "../utils/sharedAppPreviewPayload";
+import { keepWatchedPageCurrent, pendingChanges, withChange, withChanges } from "../composables/sharedAppLiveWatch";
 import { createIntentSender } from "../utils/sharedAppPreviewIntent";
 import { structuredCloneable } from "../utils/structuredCloneable";
 
@@ -534,8 +535,15 @@ let refreshGeneration = 0;
  *  A write changes the records, so the frame has to be told — but the DOCUMENT has not changed, and
  *  tearing it down to say so would throw away the conversation it is having. Only the payload is
  *  swapped; the page, its nonce and its channel all stay. */
+/** What the stream said while a read was out, to be put back on top of that read's answer. */
+const caughtDuringRead = pendingChanges();
+
 async function refresh(): Promise<boolean> {
   const mine = ++refreshGeneration;
+  // THIS read's own buffer. Reads overlap — a write starts one, an intent starts one, and the pane
+  // starts one — so a shared buffer let whichever finished first close the one the landing read was
+  // about to use.
+  const caught = caughtDuringRead.begin();
   const load = generation;
   try {
     const res = await fetchWithTimeout(previewUrl());
@@ -549,7 +557,8 @@ async function refresh(): Promise<boolean> {
     if (!isRecord(body) || body.ok !== true) return false;
     const next = asPayload(body.preview);
     if (next === null) return false;
-    payload.value = next;
+    // The stream is NEWER than this answer wherever the two disagree — see `pendingChanges`.
+    payload.value = { ...next, datasets: withChanges(next.datasets, caught()) };
     scopeLog(next.aid);
     return true;
   } catch {
@@ -557,6 +566,11 @@ async function refresh(): Promise<boolean> {
     // the middle of something is still not the answer — but the CALLER may need to know, and until
     // this said so a member's move could be acknowledged over a screen that never moved.
     return false;
+  } finally {
+    // EVERY WAY OUT, not only the one that used the changes. A read that was superseded, refused or
+    // threw would otherwise leave its buffer collecting for as long as the pane is open. Closing
+    // twice is closing once — the second returns nothing.
+    caught();
   }
 }
 
@@ -635,6 +649,29 @@ async function copyLog(): Promise<void> {
 }
 
 onBeforeUnmount(() => window.clearTimeout(copiedTimer));
+
+// A PAGE THAT WATCHES ITS RECORDS is kept current from the records themselves — the server holds
+// the `onSnapshot` (it has the session; this pane has no Firestore of its own) and streams what it
+// sees. Before it, the pane was the only place a `live` page stood still: the author's own writes
+// refreshed it and nobody else's did, so a chat room previewed here looked broken in a way the
+// published one was not.
+keepWatchedPageCurrent(
+  () => page.value,
+  () => writeUrl("watch"),
+  (change) => {
+    // KEPT AS WELL AS APPLIED while a one-shot read is out, and only then: a read answers with the
+    // rows as they were when it STARTED, so assigning its answer would undo a change that arrived
+    // while it was in flight, and no second snapshot is coming. See `pendingChanges` for why
+    // nothing is held the rest of the time.
+    caughtDuringRead.record(change);
+    const held = payload.value;
+    if (held === null) return;
+    // A NEW PAYLOAD, because what holds it is a `shallowRef`: writing into the map it points at
+    // would change the records and tell nobody. Replacing it runs the same watcher a re-read does,
+    // which is what puts the rows on the page.
+    payload.value = { ...held, datasets: withChange(held.datasets, change) };
+  },
+);
 
 // The DIRECTORY is the other half of the app's identity, and it changes without a payload landing
 // — a cell moved to a repository whose server cannot be reached keeps the old entries under the new

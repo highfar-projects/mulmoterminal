@@ -35,9 +35,29 @@ export interface PreviewPage {
    *  the pane resolve it would be the second implementation this whole change
    *  exists to remove. */
   viewer?: Viewer;
+  /** The collections this page WATCHES, off the same projection the published site reads.
+   *
+   *  A page that declares `live` is written for `onState` to arrive more than once — production
+   *  subscribes to those collections and re-delivers on every change. This pane read the records
+   *  once, so a page previewed here sat still while the live one moved: somebody else's message
+   *  never appeared, which reads as a broken page rather than as a preview that does not watch.
+   *  The pane re-reads while the page on screen names any, and this is how it knows to. */
+  live?: string[];
 }
 
 export type PreviewDataset = Record<string, unknown>[];
+
+/** One collection's rows, for one page, as they stand now — what the record stream sends when a
+ *  watched collection changes.
+ *
+ *  THE ROWS RATHER THAN A DIFF. The pane holds a map keyed by page and collection; replacing one
+ *  entry cannot be applied out of order, and a diff against a map the sender cannot see could be. */
+export interface PreviewRecordChange {
+  /** `previewPageKey(audience, id)` — the same key the page's datasets are filed under. */
+  key: string;
+  cid: string;
+  rows: PreviewDataset;
+}
 
 /** The records ONE page is handed, per collection.
  *

@@ -367,6 +367,67 @@ describe("shared app preview", () => {
     expect(docs.writes).toEqual([]);
   });
 
+  it("says which collections a page WATCHES, so the pane can keep it current", async () => {
+    // The pane reads once. A page that declared `live` is written for `onState` to arrive again —
+    // production subscribes and re-delivers — so previewed here it stood still while the published
+    // one moved, and somebody else's message never appeared. This is what tells the pane to re-read,
+    // and it must be per page: an app can watch on one page and not on another.
+    mkdirSync(path.join(root, "views"), { recursive: true });
+    writeApp(
+      root,
+      declaration({
+        public: { read: ["bookings"] },
+        views: [
+          { id: "public", path: "views/front.html", audience: "public", collections: ["bookings"], live: ["bookings"] },
+          { id: "room", path: "views/room.html", audience: "member", collections: ["notes"], live: ["notes"] },
+          { id: "ledger", path: "views/ledger.html", audience: "member", collections: ["notes"] },
+        ],
+      }),
+    );
+    writeFileSync(path.join(root, "views", "front.html"), "<p>front</p>");
+    writeFileSync(path.join(root, "views", "room.html"), "<p>room</p>");
+    writeFileSync(path.join(root, "views", "ledger.html"), "<p>ledger</p>");
+
+    const result = await previewSharedApp(root, stamp);
+
+    expect(result.ok === false ? result.problems : []).toEqual([]);
+    const live = result.ok ? Object.fromEntries(result.pages.map((page) => [`${page.audience}:${page.id}`, page.live])) : {};
+    expect(live["member:room"]).toEqual(["notes"]);
+    // Declared nothing, so there is nothing to poll for — absent rather than empty, and the pane
+    // reads that page exactly as often as it did before any of this.
+    expect(live["member:ledger"]).toBeUndefined();
+    // The anonymous page has its own watch list, in its own document.
+    expect(live["public:public"]).toEqual(["bookings"]);
+    expect(docs.writes).toEqual([]);
+  });
+
+  it("says what a LISTENER would have to hold, and holds nothing for a page that watches nothing", async () => {
+    // The plan the record stream subscribes from. Per PAGE rather than per collection: two pages
+    // can name the same collection and read it differently — `all` for the desk, `own` for a
+    // participant — so one change has to become rows per page, with that page's own scope.
+    mkdirSync(path.join(root, "views"), { recursive: true });
+    writeApp(
+      root,
+      declaration({
+        public: { read: [] },
+        views: [
+          { id: "desk", path: "views/desk.html", audience: "member", collections: ["bookings"], live: ["bookings"] },
+          { id: "quiet", path: "views/quiet.html", audience: "member", collections: ["notes"] },
+        ],
+      }),
+    );
+    for (const page of ["desk", "quiet"]) writeFileSync(path.join(root, "views", `${page}.html`), `<p>${page}</p>`);
+
+    const result = await previewSharedApp(root, stamp);
+
+    expect(result.ok === false ? result.problems : []).toEqual([]);
+    const watches = (result.ok ? result.watches : []).map((entry) => ({ key: entry.key, cid: entry.want.cid, scope: entry.want.scope }));
+    expect(watches).toEqual([{ key: "member:desk", cid: "bookings", scope: "all" }]);
+    // `quiet` declared no `live`, so nothing is subscribed for it — a listener on a page nobody
+    // asked to watch is a bill with no reader.
+    expect(docs.writes).toEqual([]);
+  });
+
   it("carries what a public create may contain, so the parent can judge a submission", async () => {
     writeApp(root, declaration({ public: { read: ["bookings"], submit: { bookings: { auth: "verifiedEmail", createFields: ["note"] } } } }));
 

@@ -37,7 +37,7 @@ import { declaredView, readAppViewFile } from "./publicView.js";
 import { isRecord } from "../../../common/isRecord.js";
 // Both from `/view`, which is where the PARENT's vocabulary lives — and where the read-back has to
 // be: the root entry reaches the compiler, and the compiler imports core's server half at runtime.
-import { ownRowsFor, projectedWritesOf, PUBLIC_WRITE_TIER, viewerFor, writableFields } from "@receptron/sharedapp/view";
+import { ownRowsFor, projectedWritesOf, PUBLIC_WRITE_TIER, viewerFor, writableFields, type Viewer } from "@receptron/sharedapp/view";
 import {
   previewPageKey,
   type PreviewDataset,
@@ -63,6 +63,20 @@ export interface PreviewSuccess extends SharedAppPreview {
    *  judge there — one that could disagree with the one that performs the write — which is the
    *  divergence `PreviewPage.viewer` was introduced to remove. */
   writes: Partial<Record<PreviewAudience, ProjectedViewWrite[]>>;
+  /** What a LISTENER has to hold to keep this preview current: one entry per page that declared
+   *  `live`, carrying the request THAT page makes of that collection.
+   *
+   *  Server-only, and the request rather than the cid alone: the same collection is read `all` for
+   *  the desk and `own` for the participant, so one change has to become rows per page. See
+   *  `previewWatch.ts`, its only caller. */
+  watches: PreviewWatch[];
+}
+
+/** One collection, watched for one page. */
+export interface PreviewWatch {
+  /** `previewPageKey(audience, id)` — the key its rows are filed under. */
+  key: string;
+  want: RequestedCollection;
 }
 
 export type PreviewResult = PreviewSuccess | SharedAppFailure;
@@ -176,6 +190,59 @@ async function readDatasets(
   // change.
   return { datasets, unreadable: [...unreadable].sort((left, right) => (left < right ? -1 : 1)) };
 }
+
+/** The collections a page WATCHES, read off the projection rather than off the declaration —
+ *  `withLive` in the package drops names the tier may not read, and a pane that polled for one of
+ *  those would be watching something production does not.
+ *
+ *  A tier document lists its pages under `views`; the public one has a single `view`. */
+/** ABSENT rather than empty when a page watches nothing, which is how the projection itself writes
+ *  it: `live: []` on the wire would say the author declared an empty watch list. */
+const watching = (live: string[]): { live?: string[] } => {
+  if (live.length === 0) return {};
+  return { live };
+};
+
+const liveOf = (value: unknown): string[] => {
+  if (!isRecord(value) || !Array.isArray(value.live)) return [];
+  return value.live.filter((cid): cid is string => typeof cid === "string");
+};
+
+const tierLive = (config: unknown, viewId: string): string[] => {
+  if (!isRecord(config) || !Array.isArray(config.views)) return [];
+  return liveOf(config.views.find((view) => isRecord(view) && view.id === viewId));
+};
+
+/** The anonymous page, or none. Its own function so the run above stays a list of steps: what it
+ *  needs is the HTML, the viewer already resolved, and the public document's own watch list. */
+const publicPageOf = (html: string | null, viewer: Viewer, config: unknown): PreviewPage[] => {
+  if (html === null) return [];
+  return [{ id: PUBLIC_PAGE_ID, html, audience: "public", viewer, ...watching(liveOf(isRecord(config) ? config.view : null)) }];
+};
+
+/** What every page asks for, in one list. Its own function so the run above stays a list of steps
+ *  — and so the watch plan and the one-shot read cannot be built from two different readings. */
+const requestsOf = (publicHtml: string | null, config: PublishedConfigDoc, plans: TierPlan[]): { key: string; collections: RequestedCollection[] }[] => {
+  const anonymous = publicHtml === null ? [] : [{ key: previewPageKey("public", PUBLIC_PAGE_ID), collections: publicRequests(config) }];
+  return [...anonymous, ...plans.flatMap(tierRequests)];
+};
+
+/** WHICH READS A LISTENER REPEATS: the collections each page declared `live`, paired with the
+ *  request that page makes of them.
+ *
+ *  Intersected with what the page actually asks for rather than taken from `live` alone. `live` is
+ *  a subset of `collections` by construction, and this is where that stops being trusted: a watch
+ *  with no request behind it would be a listener on a collection the page never reads.
+ *
+ *  Pure, so the mapping is testable without a session. */
+export const watchesOf = (pages: PreviewPage[], requests: { key: string; collections: RequestedCollection[] }[]): PreviewWatch[] => {
+  const asked = new Map(requests.map((entry) => [entry.key, entry.collections]));
+  return pages.flatMap((page) => {
+    const key = previewPageKey(page.audience, page.id);
+    const live = new Set(page.live ?? []);
+    return (asked.get(key) ?? []).filter((want) => live.has(want.cid)).map((want) => ({ key, want }));
+  });
+};
 
 /** What one tier's projection says each of its pages may query for. */
 function tierRequests(plan: TierPlan): { key: string; collections: RequestedCollection[] }[] {
@@ -333,8 +400,7 @@ export async function previewSharedApp(root: string, opts: SharedAppOptions = {}
   // The author's address is NOT substituted here either, and that is the point of the whole file: a
   // preview that handed the page one more thing than production hands it is a preview of a page
   // that does not exist. The author IS a reader here, and this is what a reader gets.
-  const publicViewer = viewerFor(writes.public, null, PUBLIC_WRITE_TIER);
-  const publicPages: PreviewPage[] = publicHtml === null ? [] : [{ id: PUBLIC_PAGE_ID, html: publicHtml, audience: "public", viewer: publicViewer }];
+  const publicPages = publicPageOf(publicHtml, viewerFor(writes.public, null, PUBLIC_WRITE_TIER), face.config);
   const tierPages: PreviewPage[] = tiers.plans.flatMap((plan) => {
     // The author, as this tier's projection resolves them. `viewerFor` is the
     // package's, and mulmoserver calls the same one with the same projection —
@@ -346,7 +412,13 @@ export async function previewSharedApp(root: string, opts: SharedAppOptions = {}
     const projected = projectedWritesOf(plan.config);
     writes[plan.tier] = projected;
     const viewer = viewerFor(projected, handle.email, plan.tier);
-    return plan.pages.map((tierPage): PreviewPage => ({ id: tierPage.id, html: tierPage.html, audience: plan.tier, viewer }));
+    return plan.pages.map((tierPage): PreviewPage => ({
+      id: tierPage.id,
+      html: tierPage.html,
+      audience: plan.tier,
+      viewer,
+      ...watching(tierLive(plan.config, tierPage.id)),
+    }));
   });
   const pages = [...publicPages, ...tierPages];
 
@@ -354,10 +426,8 @@ export async function previewSharedApp(root: string, opts: SharedAppOptions = {}
   // `public.read` is what a visitor may see, and reading everything on disk would draw a page the
   // author cannot ship. Per page rather than one list for the app, because a member page may name a
   // collection the public one must never receive.
-  const { datasets, unreadable } = await readDatasets(handle, aid, [
-    ...(publicHtml === null ? [] : [{ key: previewPageKey("public", PUBLIC_PAGE_ID), collections: publicRequests(face.config) }]),
-    ...tiers.plans.flatMap(tierRequests),
-  ]);
+  const requests = requestsOf(publicHtml, face.config, tiers.plans);
+  const { datasets, unreadable } = await readDatasets(handle, aid, requests);
 
   // THE AUTHOR'S OWN ROWS, read separately from the pages and never as a page's datasets: they
   // travel as `viewer.mine`, which is a different message saying a different thing. A cid that
@@ -384,6 +454,7 @@ export async function previewSharedApp(root: string, opts: SharedAppOptions = {}
     generatedForm: publicHtml === null && Object.keys(form).length > 0,
     formInputs,
     datasets,
+    watches: watchesOf(pages, requests),
     // Projected to the fields a page in this position could have SENT — the package's rule, so the
     // preview hands a page exactly what mulmoserver hands the live one. A page given one more field
     // here than production gives it is a preview of a page that does not exist.
