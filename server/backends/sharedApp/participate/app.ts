@@ -280,8 +280,12 @@ async function readApp(handle: SharedAppHandle, slug: string): Promise<JoinedApp
  *  from whether a `public` block EXISTS, so an app that deliberately declares one with
  *  `enabled: false` reads as published there while anonymous reads stay closed. */
 function openness(appDoc: Record<string, unknown> | null, publicConfig: Record<string, unknown> | null, reservation: Record<string, unknown>): boolean {
-  const authorized = isRecord(appDoc?.public) ? appDoc.public.enabled : undefined;
-  if (typeof authorized === "boolean") return authorized;
+  // A READABLE APP DOCUMENT IS THE WHOLE ANSWER, absence included. `publicOn` reads
+  // `"public" in a && a.public.enabled == true`, so a document with no `public` block at all is
+  // CLOSED — and that is a real state rather than a missing value: an opening publish writes
+  // `config/public` before the app document, so a run that stops between them leaves exactly this
+  // pair. Falling through to the projection there reports "open" about an app the rules keep shut.
+  if (appDoc !== null) return isRecord(appDoc.public) && appDoc.public.enabled === true;
   if (typeof publicConfig?.enabled === "boolean") return publicConfig.enabled;
   return reservation.published === true;
 }
