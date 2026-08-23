@@ -35,6 +35,18 @@ export const mailDocId = (cid: string, itemId: string, template: string): string
 
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
+/** WAS THIS READ REFUSED, or did it merely fail?
+ *
+ *  The difference decides whether the mirrored write may take the branch that does not check first,
+ *  so it may not be guessed. A refusal is a fact about the caller — they are a participant, the
+ *  rules will never open this document to them, and the branch below is safe for exactly that
+ *  reason. A network blip is a fact about the moment, and treating it as a refusal would hand a
+ *  WRITER the unchecked branch, which is the one that can overwrite a stranger's booking.
+ *
+ *  Matched on the SDK's code rather than the message: the message is English and localised, the
+ *  code is the contract. */
+const refused = (err: unknown): boolean => typeof err === "object" && err !== null && "code" in err && err.code === "permission-denied";
+
 /** The id was already there. Named rather than reported as a rules refusal: under
  *  `idFrom: "field"` the id IS the thing being claimed, so this means somebody has it. */
 const TAKEN = "already-taken";
@@ -77,7 +89,13 @@ export async function commitPlannedWrite(handle: SharedAppHandle, aid: string, p
     const readable = await handle.docs
       .get(itemsPath(aid, plan.cid), plan.id)
       .then((held) => ({ ok: true as const, held }))
-      .catch(() => ({ ok: false as const, held: null }));
+      .catch((err: unknown) => {
+        // ONLY A REFUSAL FALLS THROUGH. Anything else — a blip, an offline moment — is reported as
+        // itself and writes nothing: a transient failure read as "cannot read" would give a writer
+        // the unchecked branch, and the whole point of the check is that writers do not get it.
+        if (refused(err)) return { ok: false as const, held: null };
+        throw err;
+      });
     if (readable.ok && readable.held !== null) return TAKEN;
 
     if (!readable.ok) {

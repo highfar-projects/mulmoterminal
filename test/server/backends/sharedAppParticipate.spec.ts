@@ -114,6 +114,8 @@ class Docs implements FirestoreDocs {
   denyList = new Set<string>();
   /** Which document paths refuse a GET — how a role scoped to one collection meets `apps/{aid}`. */
   denyGet = new Set<string>();
+  /** Document paths whose GET fails WITHOUT a permission code — a blip, not a refusal. */
+  breakGet = new Set<string>();
   created: { path: string; id: string; data: Record<string, unknown> }[] = [];
 
   put(collectionPath: string, id: string, data: Record<string, unknown>): void {
@@ -134,6 +136,7 @@ class Docs implements FirestoreDocs {
   };
 
   get = (collectionPath: string, docId: string): Promise<unknown | null> => {
+    if (this.breakGet.has(`${collectionPath}/${docId}`)) return Promise.reject(new Error("network"));
     if (this.denyGet.has(`${collectionPath}/${docId}`)) return Promise.reject(Object.assign(new Error("refused"), { code: "permission-denied" }));
     return Promise.resolve(this.store.get(collectionPath)?.get(docId) ?? null);
   };
@@ -418,6 +421,17 @@ describe("useSharedApp — taking part in somebody else's app", () => {
     ]);
   });
 
+  it("writes nothing when the destination read merely FAILED rather than being refused", async () => {
+    publish();
+    docs.put(slotsPath, "10:00", { state: "open" });
+    docs.breakGet.add(`${bookingsPath}/10:00`);
+    const said = await run({ action: "submit", slug: "sakura", cid: "bookings", values: { slot: "10:00" } });
+    // A blip is not a refusal. Read as one, a WRITER would take the unchecked branch — the one that
+    // can turn `set` into an update over somebody else's booking.
+    expect(said).toContain("network");
+    expect(batched).toEqual([]);
+  });
+
   it("names the missing field rather than letting the rules refuse it namelessly", async () => {
     publish();
     const said = await run({ action: "submit", slug: "sakura", cid: "bookings", values: {} });
@@ -528,6 +542,27 @@ describe("useSharedApp — taking part in somebody else's app", () => {
     const said = await run({ action: "withdraw", slug: "sakura", cid: "bookings", id: "10:00" });
     expect(said).toContain("The record is gone");
     expect(batched).toEqual([`delete ${bookingsPath}/10:00`, `update ${slotsPath}/10:00 {"state":"open"}`]);
+  });
+
+  it("lowers an ask no inspection needs, and says it did", async () => {
+    publish();
+    docs.denyList.add(bookingsPath);
+    docs.put(bookingsPath, "b0", { requesterEmail: ME.email, slot: "0:00", status: "booked" });
+    const said = await run({ action: "records", slug: "sakura", cid: "bookings", limit: 1_000_000_000 });
+    // A billion is a finite number the schema accepts. Passed through, it bills a read per row in
+    // somebody else's app and serializes the lot into a context window.
+    expect(capped).toEqual([500]);
+    expect(said).toContain("this tool reads at most 500");
+  });
+
+  it("says a full page might not be the whole collection", async () => {
+    publish();
+    docs.put(slotsPath, "10:00", { state: "open" });
+    docs.put(slotsPath, "11:00", { state: "open" });
+    const said = await run({ action: "records", slug: "sakura", cid: "slots", limit: 1 });
+    // A count that exactly fills the ask says nothing about what is behind it, and an agent reads
+    // "1 row" as the collection.
+    expect(said).toContain("there may be more");
   });
 
   it("keeps a refused read apart from an absent record", async () => {

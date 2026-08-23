@@ -29,6 +29,14 @@ export type UseSharedAppAction = (typeof USE_SHARED_APP_ACTIONS)[number];
 
 const DEFAULT_LIMIT = 50;
 
+/** The most rows one `records` call will ever ask for.
+ *
+ *  A ceiling rather than a preference. Without one, `limit: 1000000` is a finite number the schema
+ *  accepts: it bills a read per row in somebody else's app and returns a result that has to travel
+ *  through the MCP channel and into a context window. The number is inspection-sized on purpose —
+ *  this tool is for looking at a collection and acting on a row, not for exporting one. */
+const MAX_LIMIT = 500;
+
 export const USE_SHARED_APP: ToolDefinition = {
   type: "function",
   name: "useSharedApp",
@@ -71,7 +79,10 @@ export const USE_SHARED_APP: ToolDefinition = {
           "submit: the form's answers, keyed by the field names `describe` reported. Every value is a STRING and is sent as written — including the answer to a number, date or enum field, which is exactly what the app's own web form sends for those. A value of another JSON type is dropped rather than converted, because converting it would write a different document than the page would.",
         additionalProperties: true,
       },
-      limit: { type: "number", description: `records: how many rows at most (default ${DEFAULT_LIMIT}).` },
+      limit: {
+        type: "number",
+        description: `records: how many rows at most (default ${DEFAULT_LIMIT}, ceiling ${MAX_LIMIT} — a larger ask is lowered and the report says so).`,
+      },
     },
     required: ["action"],
   },
@@ -210,17 +221,28 @@ async function narrateApps(): Promise<string> {
   ].join("\n");
 }
 
-async function narrateRecords(slug: string, cid: string | undefined, limit: number): Promise<string> {
+/** WHAT WAS LEFT OUT, said rather than left to be inferred from a count.
+ *
+ *  Two cases and they are different sentences: an ask this tool would not make, and a page that
+ *  filled up exactly. Both are read by an agent as "that is the collection" when nothing says
+ *  otherwise, and a row count is the least reliable thing to infer completeness from. */
+function whatIsMissing(limit: { rows: number; asked?: number }, got: number): string[] {
+  if (limit.asked !== undefined) return [`You asked for ${limit.asked} rows; this tool reads at most ${MAX_LIMIT} at a time. There may be more.`];
+  if (got === limit.rows) return ["That is as many as were asked for, so there may be more."];
+  return [];
+}
+
+async function narrateRecords(slug: string, cid: string | undefined, limit: { rows: number; asked?: number }): Promise<string> {
   if (cid === undefined) return "useSharedApp records: `cid` is required — run `describe` to see which collections this app has.";
   const joined = await joinApp(slug);
   if (!joined.ok) return joined.problems.join("\n");
-  const read = await readRecords(joined.app, cid, limit);
+  const read = await readRecords(joined.app, cid, limit.rows);
   if (read.scope === "none") return `Nothing readable in "${cid}": ${read.note}.`;
   const header =
     read.scope === "all"
       ? `${read.rows.length} row(s) in "${cid}" — the whole collection, as far as the rules opened it.`
       : `${read.rows.length} row(s) in "${cid}" — YOUR OWN ONLY (${read.note}). This is not the collection; do not describe it as one.`;
-  return [header, JSON.stringify(read.rows, null, 2)].join("\n");
+  return [header, ...whatIsMissing(limit, read.rows.length), JSON.stringify(read.rows, null, 2)].join("\n");
 }
 
 async function narrateSubmit(slug: string, cid: string | undefined, given: Record<string, string>): Promise<string> {
@@ -287,9 +309,12 @@ function narrateForget(slug: string, result: ForgetResult): string {
  *  `catch`. So a caller asking for half a row would get an exception where every other bad argument
  *  gets a sentence. Clamped rather than refused, because there is no reading of "0.5 rows" that the
  *  user needs told about — they wanted some rows. */
-function rowCap(raw: unknown): number {
-  if (typeof raw !== "number" || !Number.isFinite(raw) || raw < 1) return DEFAULT_LIMIT;
-  return Math.max(1, Math.floor(raw));
+function rowCap(raw: unknown): { rows: number; asked?: number } {
+  if (typeof raw !== "number" || !Number.isFinite(raw) || raw < 1) return { rows: DEFAULT_LIMIT };
+  const wanted = Math.max(1, Math.floor(raw));
+  // The ask is CARRIED when it was lowered, so the report can say so. A cap applied silently reads
+  // as "that is the whole collection", which is the one thing a row count must never imply.
+  return wanted > MAX_LIMIT ? { rows: MAX_LIMIT, asked: wanted } : { rows: wanted };
 }
 
 /** Run one action and narrate it. The agent's whole contract with this tool is actionable prose, so
