@@ -106,15 +106,31 @@ const readDoc = async (handle: SharedAppHandle, path: string, id: string): Promi
  *  would name a missing document as if it were a denial. */
 const writesOf = (doc: Record<string, unknown> | null): ProjectedViewWrite[] | null => (doc === null ? null : projectedWritesOf(doc));
 
-/** Merge two projections of the same tier by cid, first wins.
+/** Merge the roster tier's two sources, KEY BY KEY rather than entry by entry.
  *
- *  The roster tier has two sources — its own `config` document and the public form's `write` — and
- *  they are the same publish's answer about different collections: the tier config covers what the
- *  participant PAGES draw, the public config covers what a submission may do to its own row. An app
- *  can have both, and neither is a subset of the other. */
-const mergeByCid = (first: ProjectedViewWrite[], second: ProjectedViewWrite[]): ProjectedViewWrite[] => {
-  const seen = new Set(first.map((entry) => entry.cid));
-  return [...first, ...second.filter((entry) => !seen.has(entry.cid))];
+ *  The tier has two: its own `config` document, covering what the participant PAGES draw, and the
+ *  public form's `write`, covering what a submitter may do to their own row. An app can have both,
+ *  and neither is a subset of the other.
+ *
+ *  Dropping a whole entry because the other source names the same cid was the first shape and it
+ *  was wrong. In one publish the two are identical for a shared cid — `transitionPart`,
+ *  `assignPart` and `withdrawPart` in `appViews.ts` do not branch between `participant` and
+ *  `public` at all — so it cost nothing in the ordinary case and everything in the one that
+ *  matters: `runWrites` can stop after ANY step (principle 8), and `config/public` is written
+ *  BEFORE the tier documents (`publish.ts`), so a half-finished run leaves a tier entry from this
+ *  publish beside a public entry from the last one. Dropping the public half there loses a
+ *  `selfDelete` or a `withdrawMirror` the deployed rules would have honoured, and the tool refuses
+ *  a withdrawal its own app allows.
+ *
+ *  The tier entry wins where both define a key, for the same reason: it is the LATER write of the
+ *  two, so where they disagree it is the one that describes this publish. */
+const mergeByCid = (fromTier: ProjectedViewWrite[], fromPublic: ProjectedViewWrite[]): ProjectedViewWrite[] => {
+  const byCid = new Map(fromTier.map((entry) => [entry.cid, entry]));
+  for (const entry of fromPublic) {
+    const held = byCid.get(entry.cid);
+    byCid.set(entry.cid, held === undefined ? entry : { ...entry, ...held });
+  }
+  return [...byCid.values()];
 };
 
 /** The roster tier's writes, from the two documents that can carry them. Null when neither did. */

@@ -168,7 +168,7 @@ const submitBlock = {
 };
 
 /** Publish this app into the fake database. Nothing here is read off disk — that is the point. */
-function publish({ memberTier = true, roles = { "*": "editor" } as Record<string, string> | null, writers = [ME.email] } = {}): void {
+function publish({ memberTier = true, roles = { "*": "editor" } as Record<string, string> | null, writers = [ME.email], rosterTier = false } = {}): void {
   docs.put("appSlugs", "sakura", { aid: AID, published: true });
   if (roles !== null) docs.put("apps", AID, { aid: AID, name: "Sakura Hair", members: { [ME.email]: roles }, memberEmails: [ME.email] });
   docs.put(`apps/${AID}/config`, "public", {
@@ -196,6 +196,18 @@ function publish({ memberTier = true, roles = { "*": "editor" } as Record<string
     write: [{ cid: "bookings", statusField: "status", transitions: { booked: ["cancelled"] }, selfDelete: ["booked"], withdrawMirror: "slots" }],
     publishedAt: 1,
   });
+  if (rosterTier)
+    // A participant page's own projection, left behind by an EARLIER publish: it names the same
+    // collection as `config/public` and carries only the transition half. `runWrites` can stop
+    // after any step and `config/public` is written before the tier documents, so this pair is a
+    // real state — and dropping either half of it takes away a move the deployed rules allow.
+    docs.put(appViewTierPath(AID, "roster"), viewConfigDocId(), {
+      protocol: "1.0.0",
+      views: [{ id: "mine", collections: [{ cid: "bookings", scope: "own" }] }],
+      submit: {},
+      write: [{ cid: "bookings", statusField: "status", transitions: { booked: ["cancelled"] } }],
+      publishedAt: 1,
+    });
   if (memberTier)
     // The tier's own id, taken from the package rather than spelled here: it carries a `live:`
     // prefix, and a document written at "config" is a document nothing reads.
@@ -431,6 +443,18 @@ describe("useSharedApp — taking part in somebody else's app", () => {
     const said = await run({ action: "records", slug: "sakura", cid: "bookings", limit: 0.5 });
     expect(capped).toEqual([DEFAULT_ROWS]);
     expect(said).toContain("YOUR OWN ONLY");
+  });
+
+  it("keeps both halves of the roster tier when the two sources name one collection", async () => {
+    publish({ rosterTier: true, memberTier: false });
+    docs.put(bookingsPath, "10:00", { requesterEmail: ME.email, slot: "10:00", status: "booked" });
+    docs.put(slotsPath, "10:00", { state: "taken" });
+    // The withdrawal lives only in `config/public` (`selfDelete` + `withdrawMirror`); the tier
+    // document names the same cid and carries only the transitions. Keeping one entry and dropping
+    // the other would refuse a withdrawal this app allows.
+    const said = await run({ action: "withdraw", slug: "sakura", cid: "bookings", id: "10:00" });
+    expect(said).toContain("The record is gone");
+    expect(batched).toEqual([`delete ${bookingsPath}/10:00`, `update ${slotsPath}/10:00 {"state":"open"}`]);
   });
 
   it("keeps a refused read apart from an absent record", async () => {
