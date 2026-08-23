@@ -143,6 +143,13 @@ export default [
     // long because they explain themselves, not because they do too much.
     rules: {
       "max-lines": ["error", { max: 600, skipBlankLines: true, skipComments: true }],
+      // Both of these read a FIXTURE as if it were a deployment detail. `no-hardcoded-ip` exists
+      // to catch a real endpoint baked into shipped code instead of configuration; in a spec the
+      // address IS the input under test, and the alternative — assembling `192.168.64.1` from
+      // pieces to get past the rule — hides what the case is about. `publicly-writable-directories`
+      // reads a `/tmp/...` string the same way, and a spec's is a string nothing opens.
+      "sonarjs/no-hardcoded-ip": "off",
+      "sonarjs/publicly-writable-directories": "off",
       "max-lines-per-function": ["error", { max: 60, skipBlankLines: true, skipComments: true, IIFEs: true }],
       complexity: ["error", 20],
       "max-depth": ["error", 4],
