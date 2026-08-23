@@ -301,6 +301,27 @@ describe("useSharedApp — reading somebody else's app", () => {
     expect(said.length).toBeLessThan(260_000);
   });
 
+  it("counts the bytes it will emit, not JavaScript's code units", async () => {
+    publish();
+    // Three UTF-8 bytes per unit. Counted as units, 5 rows of 40k characters read as 200k and pass;
+    // emitted, they are 600 KB.
+    for (let n = 0; n < 5; n += 1) bag.docs.put(slotsPath, `s${n}`, { state: "open", note: "\u3042".repeat(40_000) });
+    const said = await run({ action: "records", slug: "sakura", cid: "slots" });
+    expect(Buffer.byteLength(said, "utf8")).toBeLessThan(260_000);
+    expect(said).toContain("are NOT shown");
+  });
+
+  it("budgets the stubs too, so a page of them is not its own overrun", async () => {
+    publish();
+    // Every row oversized, and Firestore allows document ids of 1500 bytes — so the stubs alone can
+    // run past the cap several times over if they are added without being counted.
+    for (let n = 0; n < 400; n += 1) bag.docs.put(slotsPath, `${"i".repeat(1400)}-${n}`, { state: "open", blob: "x".repeat(220_000) });
+    const said = await run({ action: "records", slug: "sakura", cid: "slots", limit: 400 });
+    expect(Buffer.byteLength(said, "utf8")).toBeLessThan(260_000);
+    expect(said).toContain("shown as a stub");
+    expect(said).toContain("are NOT shown");
+  });
+
   it("refuses a URL name nothing answers to", async () => {
     const said = await run({ action: "describe", slug: "nobody" });
     expect(said).toContain('No shared app answers to "nobody"');

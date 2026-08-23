@@ -272,6 +272,14 @@ function whatIsMissing(limit: { rows: number; asked?: number }, more: boolean, f
  *    enough to blow the whole budget. A row that cannot fit is now replaced by a STUB carrying its
  *    id and its size — bounded, honest, and still actionable: `transition`, `assign` and `withdraw`
  *    need the id and nothing else.
+ *
+ *  And two the second attempt still had:
+ *
+ *    IT COUNTED UTF-16 CODE UNITS. A record in Japanese is three bytes per unit, so the budget was
+ *    three times what it said for the apps most likely to hold long text.
+ *
+ *    IT ADDED STUBS WITHOUT BUDGETING THEM. Small is not free: with long ids, a page of stubs is
+ *    its own overrun.
  */
 const RECORD_BYTES = 200_000;
 
@@ -282,26 +290,31 @@ const tooLarge = (row: Record<string, unknown>, size: number): Record<string, un
   omitted: `this record is ${size} bytes and is not shown; act on it by id, or read it in the app`,
 });
 
+/** What one row costs the report: the bytes it will actually occupy.
+ *
+ *  UTF-8 BYTES, not `String.length`. JavaScript counts UTF-16 code units, and a record written in
+ *  Japanese or Chinese is three bytes per unit — so a budget counted in units is three times the
+ *  budget that was meant, for exactly the apps most likely to have long text in them. Measured
+ *  after `escapeInvisible` for the same reason: what is measured has to be what is emitted. */
+const costOf = (value: unknown): number => Buffer.byteLength(escapeInvisible(JSON.stringify(value, null, 2)), "utf8");
+
 function fittingRows(rows: Record<string, unknown>[]): { json: string; dropped: number; oversized: number } {
   const shown: Record<string, unknown>[] = [];
   let spent = 0;
   let oversized = 0;
   let taken = 0;
   for (const row of rows) {
-    // MEASURED AS EMITTED: same indent, same escaping.
-    const size = escapeInvisible(JSON.stringify(row, null, 2)).length;
-    if (size > RECORD_BYTES) {
-      const stub = tooLarge(row, size);
-      spent += JSON.stringify(stub, null, 2).length;
-      shown.push(stub);
-      oversized += 1;
-      taken += 1;
-      continue;
-    }
+    // A row too big to show becomes a stub — and the STUB is then budgeted like anything else. It
+    // is small but not free, and an app whose ids are long enough (Firestore allows 1500 bytes of
+    // them) could otherwise fill the report with nothing but stubs.
+    const whole = costOf(row);
+    const entry = whole > RECORD_BYTES ? tooLarge(row, whole) : row;
+    const size = entry === row ? whole : costOf(entry);
     if (spent + size > RECORD_BYTES) break;
-    shown.push(row);
+    shown.push(entry);
     spent += size;
     taken += 1;
+    if (entry !== row) oversized += 1;
   }
   return { json: escapeInvisible(JSON.stringify(shown, null, 2)), dropped: rows.length - taken, oversized };
 }
