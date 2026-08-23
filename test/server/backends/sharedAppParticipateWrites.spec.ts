@@ -86,7 +86,7 @@ describe("useSharedApp — writing to somebody else's app", () => {
     publish();
     bag.docs.put(slotsPath, "10:00", { state: "open" });
     const said = await run({ action: "submit", slug: "sakura", cid: "bookings", values: { slot: "10:00", guests: "2", seat: "window" } });
-    expect(said).toContain("The record's id is 10:00");
+    expect(said).toContain("The record's id is \u00ab10:00\u00bb");
     // The mirror travelled with it, in ONE batch: the rules read the second document with
     // `getAfter()`, so a mirror written singly is refused with nothing to say why.
     expect(bag.batched).toEqual([
@@ -125,7 +125,7 @@ describe("useSharedApp — writing to somebody else's app", () => {
     // refused before it wrote anything. The paired write still has to go out.
     bag.docs.denyGet.add(`${bookingsPath}/10:00`);
     const said = await run({ action: "submit", slug: "sakura", cid: "bookings", values: { slot: "10:00" } });
-    expect(said).toContain("The record's id is 10:00");
+    expect(said).toContain("The record's id is \u00ab10:00\u00bb");
     expect(bag.batched).toEqual([
       `set ${bookingsPath}/10:00 ${JSON.stringify({ slot: "10:00", requesterEmail: ME.email, status: "booked" })}`,
       `update ${slotsPath}/10:00 {"state":"taken"}`,
@@ -150,7 +150,7 @@ describe("useSharedApp — writing to somebody else's app", () => {
     publish({ mirror: false });
     bag.docs.denyGet.add(`${bookingsPath}/10:00`);
     const said = await run({ action: "submit", slug: "sakura", cid: "bookings", values: { slot: "10:00" } });
-    expect(said).toContain("The record's id is 10:00");
+    expect(said).toContain("The record's id is \u00ab10:00\u00bb");
     // Through the seam's plain `set`, which is what a submission with no mirror needs — and which
     // does not ask for an SDK handle the caller may not have.
     expect(bag.docs.sets).toEqual([`${bookingsPath}/10:00`]);

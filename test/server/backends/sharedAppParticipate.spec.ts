@@ -254,6 +254,30 @@ describe("useSharedApp — reading somebody else's app", () => {
     expect(said).not.toContain("\u202e");
   });
 
+  it("caps the answer by SIZE as well as by count, and says how many it held back", async () => {
+    publish();
+    // A Firestore document runs to 1 MiB, so a row cap alone bounds nothing: five hundred of them
+    // is half a gigabyte through the MCP channel and into a context window.
+    for (let n = 0; n < 4; n += 1) bag.docs.put(slotsPath, `s${n}`, { state: "open", blob: "x".repeat(90_000) });
+    const said = await run({ action: "records", slug: "sakura", cid: "slots" });
+    expect(said).toContain("4 row(s) read");
+    expect(said).toContain("are NOT shown");
+    // Whole records, never a truncated one: the JSON that comes back still parses.
+    const block = said.slice(said.indexOf("["), said.lastIndexOf("]") + 1);
+    expect(JSON.parse(block).length).toBeLessThan(4);
+  });
+
+  it("says there are more rows when a query came back full, whatever the merge left", async () => {
+    publish({ bothIdentities: true });
+    bag.denyQuery.add(bookingsPath);
+    // Both queries match the SAME row, so the second one's window is filled entirely by a row the
+    // first already returned. The merged count is 1 — comparing it with the cap would call that the
+    // whole answer.
+    bag.docs.put(bookingsPath, "both", { uid: ME.uid, requesterEmail: ME.email, slot: "9:00", status: "booked" });
+    const said = await run({ action: "records", slug: "sakura", cid: "bookings", limit: 1 });
+    expect(said).toContain("came back full");
+  });
+
   it("refuses a URL name nothing answers to", async () => {
     const said = await run({ action: "describe", slug: "nobody" });
     expect(said).toContain('No shared app answers to "nobody"');
@@ -344,7 +368,7 @@ describe("useSharedApp — reading somebody else's app", () => {
     const said = await run({ action: "records", slug: "sakura", cid: "slots", limit: 1 });
     // A count that exactly fills the ask says nothing about what is behind it, and an agent reads
     // "1 row" as the collection.
-    expect(said).toContain("there may be more");
+    expect(said).toContain("came back full");
   });
 
   it("does not report a broken read as a permission boundary", async () => {

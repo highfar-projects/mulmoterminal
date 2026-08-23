@@ -340,6 +340,11 @@ export interface ReadRecords {
   rows: Record<string, unknown>[];
   /** Why the scope is what it is, in one clause, or undefined when `all` succeeded. */
   note?: string;
+  /** Did a query come back FULL? The only honest signal that rows were left behind, and it cannot
+   *  be recovered from the count: with two identity queries, the second's window can be filled
+   *  entirely by rows the first already returned, so the merged list is short while the collection
+   *  still holds more. Compared lengths would call that the whole answer. */
+  more?: boolean;
 }
 
 /** The own-row selector this collection declares, out of the PUBLISHED submit block.
@@ -393,7 +398,7 @@ export async function readRecords(app: JoinedApp, cid: string, limit: number): P
     // a reader whose next attempt would have succeeded — they would be told their own rows are all
     // they may see.
     .catch((err: unknown) => ({ ok: false as const, refusal: refused(err), why: messageOf(err) }));
-  if (listed.ok) return { scope: "all", rows: listed.rows };
+  if (listed.ok) return { scope: "all", rows: listed.rows, more: listed.rows.length === limit };
   if (!listed.refusal) return { scope: "failed", rows: [], note: listed.why };
 
   const want = ownSelector(app, cid);
@@ -421,7 +426,8 @@ export async function readRecords(app: JoinedApp, cid: string, limit: number): P
       .catch((err: unknown) => ({ ok: false as const, refusal: refused(err), why: messageOf(err) }));
     if (!own.ok && !own.refusal) return { scope: "failed", rows: [], note: own.why };
     const found = own.ok ? own.found : null;
-    return { scope: "own", rows: isRecord(found) ? [{ ...found, id: want.id }] : [], note: "only your own row is readable here" };
+    // One document, named. There is nothing behind it to be missing.
+    return { scope: "own", rows: isRecord(found) ? [{ ...found, id: want.id }] : [], note: "only your own row is readable here", more: false };
   }
   return ownRowsBy(db, path, want.fields, limit);
 }
@@ -435,6 +441,7 @@ export async function readRecords(app: JoinedApp, cid: string, limit: number): P
 async function ownRowsBy(db: Firestore, path: string, fields: { field: string; value: string }[], limit: number): Promise<ReadRecords> {
   const byId = new Map<string, Record<string, unknown>>();
   let refusals = 0;
+  let more = false;
   for (const field of fields) {
     // THE BUDGET IS SPENT DOWN, NOT SPENT TWICE. Capping each query at the full limit would read —
     // and bill — up to one limit PER IDENTITY and then throw the overflow away at the merge, which
@@ -452,10 +459,13 @@ async function ownRowsBy(db: Firestore, path: string, fields: { field: string; v
       refusals += 1;
       continue;
     }
+    // A FULL WINDOW MEANS MORE, whatever the merge then leaves. Rows this query returned may all be
+    // ones the previous query already had, so the count after deduplication says nothing.
+    if (answer.found.docs.length === room) more = true;
     for (const entry of answer.found.docs) byId.set(entry.id, { ...entry.data(), id: entry.id });
   }
   if (refusals === fields.length) return { scope: "none", rows: [], note: "neither the collection nor your own rows in it could be read" };
-  return { scope: "own", rows: [...byId.values()], note: "only your own rows are readable here" };
+  return { scope: "own", rows: [...byId.values()], note: "only your own rows are readable here", more };
 }
 
 /** One record, with THREE answers where a reader sees one.
