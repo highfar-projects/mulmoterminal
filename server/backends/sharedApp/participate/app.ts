@@ -311,17 +311,20 @@ function ownSelector(app: JoinedApp, cid: string): { field: string; value: strin
  *  participant's page is handed, and the scope is reported either way. */
 export async function readRecords(app: JoinedApp, cid: string, limit: number): Promise<ReadRecords> {
   const path = itemsPath(app.aid, cid);
-  // THE WHOLE-COLLECTION READ IS UNCAPPED AT THE SEAM, and the slice below is all this host can do
-  // about it: `FirestoreDocs.list` in `@mulmoclaude/core` takes a path and nothing else. Adding a
-  // limit there is a change to an interface two hosts implement and every collection backend
-  // consumes, which is not this feature's to make — and the own-row path below, which is the one a
-  // participant actually takes, does cap in the query. Said out loud rather than left to be
-  // discovered: a member reading a big collection pays for all of it.
-  const listed = await app.handle.docs
-    .list(path)
-    .then((docs) => docs.map((entry) => ({ ...(isRecord(entry.data) ? entry.data : {}), id: entry.id })))
+  const db = currentFirestore();
+  // NOT `handle.docs.list`, and the reason is the cap. That seam takes a path and nothing else
+  // (`FirestoreDocs` in `@mulmoclaude/core`), so every row of the collection would be billed,
+  // transferred and held in memory in order to show a page of it — and adding a limit THERE is a
+  // change to an interface two hosts implement and every collection backend consumes. Issuing the
+  // query here costs nothing and bounds the read at the source, which is where a cap has to be.
+  //
+  // The ORDER is the seam's: `list` sorts by document id, and a query with no `orderBy` is ordered
+  // by `__name__` too, so the same page comes back. Ordering by a record field would silently drop
+  // the documents that lack it.
+  const listed = await getDocs(query(collection(db, path), limitTo(limit)))
+    .then((snapshot) => snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })))
     .catch(() => null);
-  if (listed !== null) return { scope: "all", rows: listed.slice(0, limit) };
+  if (listed !== null) return { scope: "all", rows: listed };
 
   const want = ownSelector(app, cid);
   if (want === null)
@@ -342,9 +345,7 @@ export async function readRecords(app: JoinedApp, cid: string, limit: number): P
     const found = await app.handle.docs.get(path, want.id).catch(() => null);
     return { scope: "own", rows: isRecord(found) ? [{ ...found, id: want.id }] : [], note: "only your own row is readable here" };
   }
-  const db = currentFirestore();
-  // THE CAP IS IN THE QUERY, not applied afterwards: Firestore bills and transfers what the query
-  // matched, so slicing a fetched result costs the whole collection to show a page of it.
+  // THE CAP IS IN THE QUERY here too, for the same reason.
   const asked = query(collection(db, path), where(want.field, "==", want.value), limitTo(limit));
   const snapshot = await getDocs(asked).catch(() => null);
   if (snapshot === null) return { scope: "none", rows: [], note: "neither the collection nor your own rows in it could be read" };

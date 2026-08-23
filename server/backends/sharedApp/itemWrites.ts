@@ -67,25 +67,26 @@ const TAKEN = "already-taken";
  *  and re-runs when the document changed under it, which is the only thing that actually closes it.
  *  (Codex on #1843. The batch is still what the rules see: a transaction commits as one write.)
  *
- *  AND IT IS ONLY AVAILABLE TO A READER, which is why there are two shapes below rather than one.
- *  See the branch: the participant who cannot read the destination is the one the rules already
- *  protect, and the writer the transaction protects against is the one who can read. */
+ *  AND NEITHER CHECKED SHAPE IS AVAILABLE TO A SUBMITTER WHO CANNOT READ, which is why there are
+ *  four paths below rather than two. The participant who cannot read the destination is the one the
+ *  rules already protect; the writer the check protects against is the one who can read. */
 export async function commitPlannedWrite(handle: SharedAppHandle, aid: string, plan: PlannedWrite): Promise<string | null> {
   try {
-    if (plan.mirror === undefined) {
-      const made = await handle.docs.create(itemsPath(aid, plan.cid), plan.id, plan.record);
-      return made ? null : TAKEN;
-    }
-    const db = currentFirestore();
-    const mirror = plan.mirror;
-    // CAN THIS WRITER READ THE DESTINATION AT ALL? Asked first, because the answer decides which of
-    // the two shapes below is even available — and because for most submitters it is NO.
+    // CAN THIS SUBMITTER READ THE DESTINATION AT ALL? Asked once, before either shape, because the
+    // answer decides which of them is even available — and because for most submitters it is NO.
     //
     // A collection people submit to is exactly the one `public.read` cannot open, so a participant
     // reaches a row only through `ownRow` — which reads fields off a document that, here, does not
-    // exist yet. The rules deny that get, and Firestore authorizes a TRANSACTION's reads separately:
-    // a transaction that opens with this read is refused for the ordinary participant before it
-    // writes anything.
+    // exist yet. The rules deny that get. Both create shapes otherwise open with exactly this read:
+    // `handle.docs.create` runs a TRANSACTION that reads the id first (`createFirestoreDocs` in
+    // core), and the mirrored path's transaction does the same. Firestore authorizes a
+    // transaction's reads separately, so either would be refused for the ordinary participant
+    // before writing anything — a private survey could not be answered at all.
+    //
+    // ASKED SEPARATELY rather than inferred from a create that failed, and that is the point: a
+    // refusal from the create seam cannot say whether the READ or the WRITE was turned down, and
+    // treating a refused write as "cannot read" would retry it as a plain `set` — which for a
+    // WRITER is an allowed update over somebody else's record.
     const readable = await handle.docs
       .get(itemsPath(aid, plan.cid), plan.id)
       .then((held) => ({ ok: true as const, held }))
@@ -99,18 +100,36 @@ export async function commitPlannedWrite(handle: SharedAppHandle, aid: string, p
     if (readable.ok && readable.held !== null) return TAKEN;
 
     if (!readable.ok) {
-      // WE CANNOT READ, AND THE RULES CLOSE IT FOR US. Every write this branch can make is a create
-      // or an update of the caller's OWN row: `set` on somebody else's record is an update, and
-      // `updateWith` refuses one that does not satisfy `ownRow`. The race the transaction exists to
-      // close is a WRITER's — an owner or editor, for whom `set` is an allowed update — and a writer
-      // can read the collection, so a writer never arrives here.
+      // THE UNCHECKED WRITE, for the caller who may not read. Every write it can make is a create
+      // or an update of the caller's OWN row: `set` over somebody else's record is an update, and
+      // `updateWith` refuses one that does not satisfy `ownRow`. The race the checked shapes exist
+      // to close is a WRITER's — an owner or editor, for whom `set` is an allowed update — and a
+      // writer can read the collection, so a writer never arrives here.
+      if (plan.mirror === undefined) {
+        // THROUGH THE SEAM, which has a plain `set` and reaches Firestore without the SDK handle.
+        // Not a detail: `currentFirestore()` throws when no session is open, and an unmirrored
+        // submission never needed one — asking for it here would replace the rules' refusal with a
+        // message about a session, on the one path where the rules' answer is what the caller is
+        // waiting for.
+        await handle.docs.set(itemsPath(aid, plan.cid), plan.id, plan.record);
+        return null;
+      }
+      const db = currentFirestore();
+      const item = doc(collection(db, itemsPath(aid, plan.cid)), plan.id);
       const batch = writeBatch(db);
-      batch.set(doc(collection(db, itemsPath(aid, plan.cid)), plan.id), plan.record);
-      batch.update(doc(collection(db, itemsPath(aid, mirror.cid)), mirror.id), { state: mirror.state });
+      batch.set(item, plan.record);
+      batch.update(doc(collection(db, itemsPath(aid, plan.mirror.cid)), plan.mirror.id), { state: plan.mirror.state });
       await batch.commit();
       return null;
     }
 
+    // A READER, so the id can be held against a concurrent claim.
+    if (plan.mirror === undefined) {
+      const made = await handle.docs.create(itemsPath(aid, plan.cid), plan.id, plan.record);
+      return made ? null : TAKEN;
+    }
+    const db = currentFirestore();
+    const mirror = plan.mirror;
     await runTransaction(db, async (tx) => {
       const item = doc(collection(db, itemsPath(aid, plan.cid)), plan.id);
       // READS BEFORE WRITES, which a transaction requires — and this read is the whole point of

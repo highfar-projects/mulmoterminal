@@ -93,6 +93,10 @@ class RecordingDocs implements FirestoreDocs {
 
   set = (collectionPath: string, docId: string, data: Record<string, unknown>): Promise<void> => {
     this.writes.push(`set ${collectionPath}/${docId}`);
+    // `denyWrites` is the RULES refusing, so it has to bite here as well as on `create` — a
+    // submission whose destination cannot be read is written through this seam, and a fake that
+    // let it through would report a success the deployed rules never gave.
+    if (this.denyWrites) return Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }));
     this.bucket(collectionPath).set(docId, data);
     return Promise.resolve();
   };

@@ -40,17 +40,30 @@ vi.mock("firebase/firestore", () => ({
   doc: (parent: { collectionPath: string }, docId: string) => ({ path: `${parent.collectionPath}/${docId}` }),
   // The own-row query, recorded as a description rather than run: what matters is that the field
   // and the value came from the DECLARATION and the session, not from anything a caller passed.
-  query: (source: { collectionPath: string }, clause: { field: string; value: unknown }, cap: { rows: number }) => {
+  // Constraints arrive in whatever combination the caller built: a whole-collection read is a cap
+  // alone, an own-row read is a `where` and a cap. Sorted out here rather than by position, so the
+  // fake cannot quietly accept a query that forgot one.
+  query: (source: { collectionPath: string }, ...constraints: ({ field: string; value: unknown } | { rows: number })[]) => {
+    const clause = constraints.find((entry): entry is { field: string; value: unknown } => "field" in entry);
+    const cap = constraints.find((entry): entry is { rows: number } => "rows" in entry);
+    if (cap === undefined) throw new Error("a query was built with no row cap");
     capped.push(cap.rows);
     return { ...source, clause, cap };
   },
   where: (field: string, _op: string, value: unknown) => ({ field, value }),
   limit: (rows: number) => ({ rows }),
-  getDocs: (asked: { collectionPath: string; clause: { field: string; value: unknown }; cap: { rows: number } }) => {
+  getDocs: (asked: { collectionPath: string; clause?: { field: string; value: unknown }; cap: { rows: number } }) => {
+    // Refused only WITHOUT a where clause — which is the shape the rules actually take: listing a
+    // collection people submit to is denied, while a query narrowed to the reader's own rows is
+    // the one a participant's page issues and is allowed.
+    if (denyQuery.has(asked.collectionPath) && asked.clause === undefined) {
+      return Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }));
+    }
     const rows = queryable.get(asked.collectionPath) ?? [];
+    const clause = asked.clause;
     return Promise.resolve({
       docs: rows
-        .filter((row) => row.data[asked.clause.field] === asked.clause.value)
+        .filter((row) => clause === undefined || row.data[clause.field] === clause.value)
         // The fake honours the cap, so a host that stopped passing one would hand back more rows
         // than it asked for and the assertion would notice.
         .slice(0, asked.cap.rows)
@@ -101,17 +114,18 @@ vi.mock("firebase/firestore", () => ({
 
 vi.mock("../../../server/backends/remoteHost/session.js", () => ({ currentFirestore: () => ({}) }));
 
-/** The row cap each own-row query carried. */
+/** The row cap each query carried. */
 const capped: number[] = [];
+
+/** Collection paths whose UNFILTERED query is refused — the shape a collection people submit to
+ *  has for everyone but its staff. */
+const denyQuery = new Set<string>();
 
 /** What `getDocs` can see — filled from the same store the docs seam holds. */
 const queryable = new Map<string, { id: string; data: Record<string, unknown> }[]>();
 
 class Docs implements FirestoreDocs {
   readonly store = new Map<string, Map<string, Record<string, unknown>>>();
-  /** Which collection paths refuse a LIST — the ordinary state of a collection people submit to,
-   *  where one visitor listing every other visitor's answer is exactly what the rules prevent. */
-  denyList = new Set<string>();
   /** Which document paths refuse a GET — how a role scoped to one collection meets `apps/{aid}`. */
   denyGet = new Set<string>();
   /** Document paths whose GET fails WITHOUT a permission code — a blip, not a refusal. */
@@ -129,8 +143,6 @@ class Docs implements FirestoreDocs {
   }
 
   list = (collectionPath: string): Promise<FirestoreDoc[]> => {
-    if (this.denyList.has(collectionPath))
-      return Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }));
     const held = this.store.get(collectionPath) ?? new Map();
     return Promise.resolve([...held].sort(([l], [r]) => (l < r ? -1 : 1)).map(([id, data]) => ({ id, data })));
   };
@@ -148,7 +160,14 @@ class Docs implements FirestoreDocs {
     return Promise.resolve(true);
   };
 
-  set = (): Promise<void> => Promise.resolve();
+  /** Document paths a plain `set` landed on. */
+  sets: string[] = [];
+
+  set = (collectionPath: string, docId: string, data: Record<string, unknown>): Promise<void> => {
+    this.sets.push(`${collectionPath}/${docId}`);
+    this.put(collectionPath, docId, data);
+    return Promise.resolve();
+  };
   delete = (): Promise<boolean> => Promise.resolve(true);
   watch = (): (() => void) => () => {};
 }
@@ -173,7 +192,13 @@ const submitBlock = {
 };
 
 /** Publish this app into the fake database. Nothing here is read off disk — that is the point. */
-function publish({ memberTier = true, roles = { "*": "editor" } as Record<string, string> | null, writers = [ME.email], rosterTier = false } = {}): void {
+function publish({
+  memberTier = true,
+  roles = { "*": "editor" } as Record<string, string> | null,
+  writers = [ME.email],
+  rosterTier = false,
+  mirror = true,
+} = {}): void {
   docs.put("appSlugs", "sakura", { aid: AID, published: true });
   if (roles !== null) docs.put("apps", AID, { aid: AID, name: "Sakura Hair", members: { [ME.email]: roles }, memberEmails: [ME.email] });
   docs.put(`apps/${AID}/config`, "public", {
@@ -181,7 +206,7 @@ function publish({ memberTier = true, roles = { "*": "editor" } as Record<string
     name: "Sakura Hair",
     enabled: true,
     read: ["slots"],
-    submit: { bookings: submitBlock },
+    submit: { bookings: mirror ? submitBlock : { ...submitBlock, mirror: undefined } },
     form: {
       bookings: {
         fields: {
@@ -247,6 +272,7 @@ describe("useSharedApp — taking part in somebody else's app", () => {
     docs = new Docs();
     queryable.clear();
     capped.length = 0;
+    denyQuery.clear();
     batched.length = 0;
     batchFails = false;
     batchRefusals = 0;
@@ -361,7 +387,7 @@ describe("useSharedApp — taking part in somebody else's app", () => {
 
   it("falls back to the reader's OWN rows when the list is refused, and says which it gave", async () => {
     publish();
-    docs.denyList.add(bookingsPath);
+    denyQuery.add(bookingsPath);
     docs.put(bookingsPath, "10:00", { requesterEmail: ME.email, slot: "10:00", status: "booked" });
     docs.put(bookingsPath, "11:00", { requesterEmail: "someone@example.com", slot: "11:00", status: "booked" });
     const said = await run({ action: "records", slug: "sakura", cid: "bookings" });
@@ -432,6 +458,20 @@ describe("useSharedApp — taking part in somebody else's app", () => {
     expect(batched).toEqual([]);
   });
 
+  it("answers a private form whose collection the submitter may not read", async () => {
+    // No mirror: the whole submission is one document. Both checked shapes open by READING the id
+    // — core's `create` runs a transaction that does — and on a collection reached only through
+    // `ownRow` the rules deny that read, so a private survey could not be answered at all.
+    publish({ mirror: false });
+    docs.denyGet.add(`${bookingsPath}/10:00`);
+    const said = await run({ action: "submit", slug: "sakura", cid: "bookings", values: { slot: "10:00" } });
+    expect(said).toContain("The record's id is 10:00");
+    // Through the seam's plain `set`, which is what a submission with no mirror needs — and which
+    // does not ask for an SDK handle the caller may not have.
+    expect(docs.sets).toEqual([`${bookingsPath}/10:00`]);
+    expect(batched).toEqual([]);
+  });
+
   it("names the missing field rather than letting the rules refuse it namelessly", async () => {
     publish();
     const said = await run({ action: "submit", slug: "sakura", cid: "bookings", values: {} });
@@ -480,12 +520,14 @@ describe("useSharedApp — taking part in somebody else's app", () => {
 
   it("caps the own-row query in the QUERY, not after the fetch", async () => {
     publish();
-    docs.denyList.add(bookingsPath);
+    denyQuery.add(bookingsPath);
     for (let n = 0; n < 5; n += 1) docs.put(bookingsPath, `b${n}`, { requesterEmail: ME.email, slot: `${n}:00`, status: "booked" });
     const said = await run({ action: "records", slug: "sakura", cid: "bookings", limit: 2 });
     // The cap reached Firestore rather than being applied to a fetched result: the query carried it,
     // so what came back is already two rows.
-    expect(capped).toEqual([2]);
+    // Twice: the refused whole-collection attempt and the own-row query that answered. Both carry
+    // the cap, which is the property under test.
+    expect([...new Set(capped)]).toEqual([2]);
     expect(said).toContain("2 row(s)");
   });
 
@@ -522,13 +564,13 @@ describe("useSharedApp — taking part in somebody else's app", () => {
 
   it("never asks Firestore for nought rows", async () => {
     publish();
-    docs.denyList.add(bookingsPath);
+    denyQuery.add(bookingsPath);
     docs.put(bookingsPath, "b0", { requesterEmail: ME.email, slot: "0:00", status: "booked" });
     // `Math.floor(0.5)` is 0, and `limit(0)` is REFUSED by Firestore at the moment the constraint is
     // built — before the read this tool wraps in a catch. So half a row would have thrown where
     // every other bad argument produces a sentence.
     const said = await run({ action: "records", slug: "sakura", cid: "bookings", limit: 0.5 });
-    expect(capped).toEqual([DEFAULT_ROWS]);
+    expect([...new Set(capped)]).toEqual([DEFAULT_ROWS]);
     expect(said).toContain("YOUR OWN ONLY");
   });
 
@@ -546,12 +588,12 @@ describe("useSharedApp — taking part in somebody else's app", () => {
 
   it("lowers an ask no inspection needs, and says it did", async () => {
     publish();
-    docs.denyList.add(bookingsPath);
+    denyQuery.add(bookingsPath);
     docs.put(bookingsPath, "b0", { requesterEmail: ME.email, slot: "0:00", status: "booked" });
     const said = await run({ action: "records", slug: "sakura", cid: "bookings", limit: 1_000_000_000 });
     // A billion is a finite number the schema accepts. Passed through, it bills a read per row in
     // somebody else's app and serializes the lot into a context window.
-    expect(capped).toEqual([500]);
+    expect([...new Set(capped)]).toEqual([500]);
     expect(said).toContain("this tool reads at most 500");
   });
 
