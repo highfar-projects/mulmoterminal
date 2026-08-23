@@ -81,6 +81,12 @@ function syncDirectory(dir: string): void {
   }
 }
 
+/** Is `candidate` `root` itself, or somewhere inside it? */
+function atOrBelow(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
 /** Every directory from `top` down to `leaf`, inclusive. */
 function chainDown(top: string, leaf: string): string[] {
   const relative = path.relative(top, leaf);
@@ -89,8 +95,9 @@ function chainDown(top: string, leaf: string): string[] {
 }
 
 /**
- * Create the campaigns directory and make every name it needed durable. Call once, before a
- * campaign starts; idempotent, and throws rather than reporting a hierarchy that may not survive.
+ * Create the campaigns directory and make its names durable, from `MULMOTERMINAL_HOME` down. Call
+ * once, before a campaign starts; idempotent, and throws rather than reporting a hierarchy that
+ * may not survive.
  *
  * **Why this is a separate step rather than part of every append.** A directory's durability is a
  * property of its whole ancestor chain, and of every other process writing there — one writer can
@@ -103,16 +110,33 @@ export function ensureCampaignStore(): void {
   const home = mulmoterminalHome();
   const dir = campaignsDir();
   mkdirSync(dir, { recursive: true });
-  // Unconditionally, and from a FIXED starting point rather than from whatever this call happened
-  // to create. Two runners starting at once would otherwise race: the second one's `mkdirSync`
-  // reports creating nothing, so it syncs less and can return while the first is still working.
-  // A caller that syncs the whole chain itself needs to know nothing about what the others did.
+  // The whole chain, from the filesystem root, unconditionally — not from whatever this call
+  // happened to create. Two runners starting at once would otherwise race: the second one's
+  // `mkdirSync` reports creating nothing, so it syncs a shorter chain and can return while the
+  // first is still working. A caller that syncs the same fixed chain itself needs to know nothing
+  // about what the others did, and `MULMOTERMINAL_HOME` can point anywhere, so the only starting
+  // point that covers every directory this call might have created is the root.
   //
-  // Where the chain starts is a choice: this app makes durable the tree it owns, MULMOTERMINAL_HOME
-  // and below. Above that is the machine's own filesystem, which it neither created nor manages,
-  // and chasing further ends at fsyncing `/`. So when HOME itself points somewhere that had to be
-  // created, the entries ABOVE HOME are outside this promise.
-  chainDown(path.dirname(home), dir).forEach(syncDirectory);
+  // The two halves are not equally this app's business, and they fail differently:
+  //
+  //  - **HOME and below** is the tree it owns. A failure here means a hierarchy that may not
+  //    survive, which is exactly what a caller must not be told is ready — so it throws.
+  //  - **Above HOME** belongs to the machine. Syncing is attempted, because HOME itself may have
+  //    been created just now, but a refusal is not fatal: turning "the OS would not let us fsync
+  //    `/`" into a campaign that cannot start is a worse failure than the one it prevents.
+  chainDown(path.parse(dir).root, dir).forEach((entry) => {
+    if (atOrBelow(home, entry)) syncDirectory(entry);
+    else trySyncDirectory(entry);
+  });
+}
+
+/** `syncDirectory` for a directory this app does not own — see `ensureCampaignStore`. */
+function trySyncDirectory(dir: string): void {
+  try {
+    syncDirectory(dir);
+  } catch {
+    // The machine's own tree. Best effort by design; the promise stops at HOME.
+  }
 }
 
 /**

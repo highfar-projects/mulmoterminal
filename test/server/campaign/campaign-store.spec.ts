@@ -231,6 +231,35 @@ describe("preparing the store", () => {
     expect(() => ensureCampaignStore()).not.toThrow();
   });
 
+  // The two halves of the chain fail differently on purpose, so both are driven.
+  //
+  // `0o100` and not `0o500`: execute-only still allows traversing INTO the directory, which the
+  // rest of the call needs, while refusing to open it for reading — which is what a directory
+  // fsync does. `0o500` leaves the fsync working and the check proves nothing.
+  const EXEC_ONLY = 0o100;
+
+  it.skipIf(process.platform === "win32")("does not fail on an ancestor it does not own", () => {
+    const outer = path.join(home, "outer");
+    process.env.MULMOTERMINAL_HOME = path.join(outer, "home");
+    ensureCampaignStore();
+    chmodSync(outer, EXEC_ONLY);
+    try {
+      if (process.getuid?.() !== 0) expect(() => ensureCampaignStore()).not.toThrow();
+    } finally {
+      chmodSync(outer, 0o700);
+    }
+  });
+
+  it.skipIf(process.platform === "win32")("throws when a directory it does own cannot be made durable", () => {
+    ensureCampaignStore();
+    chmodSync(campaignsDir(), EXEC_ONLY);
+    try {
+      if (process.getuid?.() !== 0) expect(() => ensureCampaignStore()).toThrow();
+    } finally {
+      chmodSync(campaignsDir(), 0o700);
+    }
+  });
+
   it("leaves records alone", () => {
     appendCampaignRecord("c1", intent);
     ensureCampaignStore();
