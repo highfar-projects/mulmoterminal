@@ -191,8 +191,17 @@ export function appendCampaignRecord(campaign: string, record: CampaignRecord): 
     // package requires >=22.9. `rooms.ts` does not flush and is right not to — a lost message is
     // a lost message, while a lost intent is a side effect nobody can reconcile.
     appendFileSync(file, line, { encoding: "utf8", flush: true });
-    // And the file's own name, which the flush above does not cover.
-    syncDirectory(dir);
+    // The record is on disk from here on, so nothing after this point may report failure.
+    //
+    // Syncing the file's own name is beyond what this call promises (see above), and a refusal
+    // must not turn a written record into a reported one. `false` would leave the caller declining
+    // the effect while the log holds an intent for it — which blocks the retry as
+    // `intent-while-pending` and sends the next restart reconciling a crash window that never was.
+    try {
+      syncDirectory(dir);
+    } catch (err) {
+      console.warn(`[campaign] recorded in ${campaign}, but could not sync its directory: ${err instanceof Error ? err.message : String(err)}`);
+    }
     return true;
   } catch (err) {
     console.warn(`[campaign] could not append to ${campaign}: ${err instanceof Error ? err.message : String(err)}`);

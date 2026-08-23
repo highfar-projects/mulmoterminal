@@ -155,6 +155,23 @@ describe("reading and appending", () => {
     }
   });
 
+  // Once the record is on disk, nothing afterwards may report failure. `false` here would leave
+  // the caller declining the effect while the log holds an intent for it — blocking the retry as
+  // `intent-while-pending` and sending the next restart to reconcile a crash window that never was.
+  //
+  // `0o300` is what drives it: write + execute lets the append land, while the missing read bit
+  // makes the directory fsync fail.
+  it.skipIf(process.platform === "win32")("reports success for a record it wrote but could not follow up on", () => {
+    mkdirSync(campaignsDir(), { recursive: true });
+    chmodSync(campaignsDir(), 0o300);
+    try {
+      if (process.getuid?.() !== 0) expect(appendCampaignRecord("c1", intent)).toBe(true);
+    } finally {
+      chmodSync(campaignsDir(), 0o700);
+    }
+    expect(readCampaign("c1")).toEqual([intent]);
+  });
+
   it("survives a file that was cut off mid-append", () => {
     appendCampaignRecord("c1", intent);
     const file = campaignFile("c1");
