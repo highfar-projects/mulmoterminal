@@ -166,11 +166,49 @@ export function ownsRow(want: RequestedCollection, row: Record<string, unknown>,
  *
  *  ABSENT IS EXCLUDED, not sorted last, and that is Firestore's behaviour rather than a choice: a
  *  document missing the ordered field is not returned by an ordered query at all. A preview that
- *  kept those rows would show records the published page never receives. */
-function orderKey(value: unknown): number | string | null {
-  if (typeof value === "number" || typeof value === "string") return value;
+ *  kept those rows would show records the published page never receives.
+ *
+ *  A TUPLE, not a number, and the seconds and the nanos stay APART. `seconds + nanos / 1e9` looks
+ *  equivalent and is not: at epoch scale a double cannot resolve anything finer than about 240ns,
+ *  so two instants inside the same second collapse to one value — and where the cap boundary falls
+ *  between them, the preview would keep whichever the input order happened to put first while the
+ *  published query keeps the later one. The leading rank is Firestore's own type order (number
+ *  before timestamp before string), so a collection whose stamp changed shape mid-life is at least
+ *  ordered the way the query would order it. */
+type OrderKey = [number, number, number, string];
+
+interface Ordered {
+  row: Record<string, unknown>;
+  id: string;
+  key: OrderKey;
+}
+
+function orderKey(value: unknown): OrderKey | null {
+  if (typeof value === "number") return [0, value, 0, ""];
+  if (typeof value === "string") return [2, 0, 0, value];
   if (!isRecord(value) || typeof value.seconds !== "number") return null;
-  return value.seconds + (typeof value.nanoseconds === "number" ? value.nanoseconds / 1e9 : 0);
+  return [1, value.seconds, typeof value.nanoseconds === "number" ? value.nanoseconds : 0, ""];
+}
+
+/** Later first — and, where two records carry the SAME stamp, the higher document id first.
+ *
+ *  The tie-break is not arbitrary: an ordered Firestore query carries an implicit `__name__` in the
+ *  same direction, so a descending read breaks equal stamps by name descending. Returning 0 here
+ *  would leave the pair in the input order instead, which is name ASCENDING — and at the cap
+ *  boundary that is the opposite row from the one the published page is handed. */
+function laterFirst(left: Ordered, right: Ordered): number {
+  const pairs: [number | string, number | string][] = [
+    [left.key[0], right.key[0]],
+    [left.key[1], right.key[1]],
+    [left.key[2], right.key[2]],
+    [left.key[3], right.key[3]],
+    [left.id, right.id],
+  ];
+  for (const [mine, theirs] of pairs) {
+    if (mine === theirs) continue;
+    return mine < theirs ? 1 : -1;
+  }
+  return 0;
 }
 
 /** The LATEST `rows` records, as the published page would be handed them.
@@ -183,13 +221,11 @@ function orderKey(value: unknown): number | string | null {
 export function capped(want: RequestedCollection, rows: PreviewDataset): PreviewDataset {
   const cap = want.limit;
   if (cap === undefined) return rows;
-  const ordered = rows
-    .map((row) => ({ row, key: orderKey(row[cap.field]) }))
-    .filter((entry): entry is { row: Record<string, unknown>; key: number | string } => entry.key !== null);
-  ordered.sort((left, right) => {
-    if (left.key === right.key) return 0;
-    return left.key < right.key ? 1 : -1;
-  });
+  // The id is always a string here — the read puts the document id on the record — and it is read
+  // back defensively anyway: this is also handed rows from a listener's snapshot.
+  const named = rows.map((row) => ({ row, id: typeof row.id === "string" ? row.id : "", key: orderKey(row[cap.field]) }));
+  const ordered = named.filter((entry): entry is Ordered => entry.key !== null);
+  ordered.sort(laterFirst);
   return ordered.slice(0, cap.rows).map((entry) => entry.row);
 }
 
