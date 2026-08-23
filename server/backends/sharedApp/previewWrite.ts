@@ -40,7 +40,7 @@ import {
 import { isRecord } from "../../../common/isRecord.js";
 import type { PreviewWrittenRecord } from "../../../common/sharedAppPreview.js";
 import { currentFirestore } from "../remoteHost/session.js";
-import { commitPlannedWrite, itemsPath } from "./itemWrites.js";
+import { commitPlannedWrite, itemsPath, TAKEN } from "./itemWrites.js";
 import { submitSpecOf } from "./submitSpec.js";
 import { previewSharedApp } from "./preview.js";
 import { sharedAppContext, type SharedAppHandle } from "./context.js";
@@ -121,6 +121,15 @@ async function explainRefusal(handle: SharedAppHandle, aid: string, raw: Record<
   return (await bound(window.untilField, "closes")) ?? (await bound(window.fromField, "opens"));
 }
 
+/** Which of the three a failed write was. `taken` is this host's own answer about an id that is
+ *  already there; the other two are the RULES and the network, which are opposite advice — an
+ *  author sent to change a declaration the rules never saw is the confusion `reason`'s own doc
+ *  comment exists to prevent. */
+const writeReason = (failed: { error: string; refusal: boolean }): "taken" | "rules" | "host" => {
+  if (failed.error === TAKEN) return "taken";
+  return failed.refusal ? "rules" : "host";
+};
+
 /** WHAT THIS PROCESS WROTE, and nothing else.
  *
  *  Undo performs a delete through the AUTHOR's handle, which is authorized to delete anything in
@@ -182,7 +191,10 @@ export async function writePreviewSubmission(root: string, cid: string, values: 
   if (failed !== null) {
     const raw = preview.config.submit?.[cid];
     const why = isRecord(raw) ? await explainRefusal(handle, preview.aid, raw, record) : null;
-    return { ok: false, reason: failed.error === "already-taken" ? "taken" : "rules", error: why === null ? failed.error : `${why} (${failed.error})` };
+    // `reason` follows the flag the write itself carried: a network failure reported as `rules`
+    // sends the author to change a declaration the rules never saw, which is the exact confusion
+    // this field's own doc comment exists to prevent.
+    return { ok: false, reason: writeReason(failed), error: why === null ? failed.error : `${why} (${failed.error})` };
   }
   const written: PreviewWrittenRecord = {
     cid: plan.cid,

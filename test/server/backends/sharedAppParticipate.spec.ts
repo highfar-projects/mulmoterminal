@@ -244,6 +244,16 @@ describe("useSharedApp — reading somebody else's app", () => {
     expect(said).toContain("3 row(s)");
   });
 
+  it("escapes the invisible characters JSON leaves in a record, rather than removing them", async () => {
+    publish();
+    bag.docs.put(slotsPath, "10:00", { note: "a\u202eb\u200cc", state: "open" });
+    const said = await run({ action: "records", slug: "sakura", cid: "slots" });
+    // `JSON.stringify` escapes C0 and leaves these as themselves — legal JSON that can still
+    // reorder the report. Escaped rather than stripped, because the agent acts on the VALUE.
+    expect(said).toContain("a\\u202eb\\u200cc");
+    expect(said).not.toContain("\u202e");
+  });
+
   it("refuses a URL name nothing answers to", async () => {
     const said = await run({ action: "describe", slug: "nobody" });
     expect(said).toContain('No shared app answers to "nobody"');

@@ -26,7 +26,7 @@ import {
   type WritableField,
 } from "@receptron/sharedapp/view";
 import { isRecord } from "../../../../common/isRecord.js";
-import { commitPlannedWrite } from "../itemWrites.js";
+import { commitPlannedWrite, TAKEN } from "../itemWrites.js";
 import { quoted, quotedList } from "../quoted.js";
 import { submitSpecOf } from "../submitSpec.js";
 import { formBlockOf, submitBlockOf, type JoinedApp } from "./app.js";
@@ -111,7 +111,7 @@ export type SubmitResult =
 
 /** Which of the four a failed write was. */
 const submitReason = (failed: { error: string; refusal: boolean }): "taken" | "rules" | "failed" => {
-  if (failed.error === "already-taken") return "taken";
+  if (failed.error === TAKEN) return "taken";
   return failed.refusal ? "rules" : "failed";
 };
 

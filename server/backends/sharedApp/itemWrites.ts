@@ -37,8 +37,12 @@ export const mailDocId = (cid: string, itemId: string, template: string): string
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 /** The id was already there. Named rather than reported as a rules refusal: under
- *  `idFrom: "field"` the id IS the thing being claimed, so this means somebody has it. */
-const TAKEN = "already-taken";
+ *  `idFrom: "field"` the id IS the thing being claimed, so this means somebody has it.
+ *
+ *  EXPORTED because both callers branch on it. Spelled in three places it is a string two of them
+ *  can drift from without anything failing — the write would simply stop being reported as a claim
+ *  somebody else holds and start being reported as a rules refusal. */
+export const TAKEN = "already-taken";
 
 /** Write one submission. Null on success, else the reason.
  *

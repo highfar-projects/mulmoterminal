@@ -44,3 +44,20 @@ export function quoted(value: string): string {
 
 /** The same for a list, which is where most of an app's vocabulary arrives. */
 export const quotedList = (values: readonly string[], separator = ", "): string => values.map(quoted).join(separator);
+
+/** THE SAME CHARACTERS, ESCAPED RATHER THAN REMOVED — for the records block, where the values have
+ *  to survive intact because the agent acts on them.
+ *
+ *  `JSON.stringify` is not the boundary it looks like. It escapes C0, and it leaves DEL, the C1
+ *  block, the zero-width and bidi characters and U+2028/U+2029 in the output as themselves — all of
+ *  them legal in JSON, and every one of them able to reorder or break up the report they land in.
+ *  Escaping them to `\uXXXX` keeps the JSON valid AND the value exact: a reader parses it back to
+ *  the character that was there, and nothing renders it on the way.
+ *
+ *  Applied AFTER serialization on purpose. Walking the value instead would have to know which
+ *  fields are strings, and would change the data this tool is reporting. */
+export const escapeInvisible = (json: string): string =>
+  json.replace(
+    /[\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\u2028\u2029]/g,
+    (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`,
+  );
