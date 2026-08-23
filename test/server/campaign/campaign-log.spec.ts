@@ -74,6 +74,10 @@ describe("the file format", () => {
     ["a settlement naming no real phase", '{"kind":"settled","at":1,"task":"t","attempt":1,"event":"accept","phase":"Planned"}'],
     ["an abandonment with no note", '{"kind":"abandoned","at":1,"task":"t","attempt":1,"event":"accept"}'],
     ["a task that is not a string", '{"kind":"intent","at":1,"task":7,"attempt":1,"event":"accept"}'],
+    ["attempt zero", '{"kind":"intent","at":1,"task":"t","attempt":0,"event":"accept"}'],
+    ["a negative attempt", '{"kind":"intent","at":1,"task":"t","attempt":-1,"event":"accept"}'],
+    ["a fractional attempt", '{"kind":"intent","at":1,"task":"t","attempt":1.5,"event":"accept"}'],
+    ["an attempt past the safe integers", '{"kind":"intent","at":1,"task":"t","attempt":1e20,"event":"accept"}'],
     ["an array", "[1,2,3]"],
     ["a bare string", '"accept"'],
     ["null", "null"],
@@ -176,6 +180,54 @@ describe("what the fold refuses to believe", () => {
     const fold = foldCampaignLog([intent("t1", "accept"), intent("t1", "reject", 2)]);
     expect(fold.rejected.map(({ reason }) => reason)).toEqual(["intent-while-pending"]);
     expect(only(fold.tasks).pending).toMatchObject({ event: "accept" });
+  });
+
+  // The attempt number is half the idempotency key, so reusing one aims a retry at whatever the
+  // previous try left lying around outside — a branch, a PR — and a restart reads that as
+  // "already done".
+  it("rejects an intent that reuses an attempt already spent", () => {
+    const records = [
+      ...upTo("t1", [["accept", "planned"]]),
+      intent("t1", "lease", 2),
+      abandoned("t1", "lease", "no clone was free", 2),
+      intent("t1", "lease", 2),
+    ];
+    const fold = foldCampaignLog(records);
+    expect(fold.rejected.map(({ reason }) => reason)).toEqual(["attempt-reused"]);
+    expect(only(fold.tasks)).toMatchObject({ phase: "planned", pending: null, attempt: 2 });
+  });
+
+  it("accepts the retry once it takes a fresh attempt", () => {
+    const records = [
+      ...upTo("t1", [["accept", "planned"]]),
+      intent("t1", "lease", 2),
+      abandoned("t1", "lease", "no clone was free", 2),
+      intent("t1", "lease", 3),
+    ];
+    const fold = foldCampaignLog(records);
+    expect(fold.rejected).toEqual([]);
+    expect(only(fold.tasks).pending).toMatchObject({ event: "lease", attempt: 3 });
+  });
+
+  it("rejects an attempt that goes backwards", () => {
+    const records = [...upTo("t1", [["accept", "planned"]]), intent("t1", "lease", 5), abandoned("t1", "lease", "x", 5), intent("t1", "lease", 4)];
+    expect(foldCampaignLog(records).rejected.map(({ reason }) => reason)).toEqual(["attempt-reused"]);
+  });
+
+  it("never lets one task use one idempotency key twice", () => {
+    const records = [
+      ...upTo("t1", [["accept", "planned"]]),
+      intent("t1", "lease", 2),
+      abandoned("t1", "lease", "x", 2),
+      intent("t1", "lease", 2),
+      intent("t1", "lease", 3),
+    ];
+    const accepted = foldCampaignLog(records);
+    const keys = records
+      .filter((record) => record.kind === "intent")
+      .filter((record) => !accepted.rejected.some((bad) => bad.record === record))
+      .map((record) => idempotencyKey("c", record.task, record.attempt));
+    expect(new Set(keys).size).toBe(keys.length);
   });
 
   it("rejects an abandonment that answers no intent", () => {

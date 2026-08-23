@@ -55,6 +55,12 @@ runner はそれを人に見せる必要がある）:
 | `no-intent` | 誰も宣言していない書き込み |
 | `wrong-event` | 未決の intent と event か attempt が違う（古い再試行が新しいものに答えるのを防ぐ） |
 | `phase-mismatch` | そのイベントの行き先と違うフェーズを名乗っている |
+| `attempt-reused` | 使い切った attempt をもう一度使おうとした（下記） |
+
+**attempt はタスクごとに厳密増加する。** これが冪等キーを1回限りにする。
+危ないのは `abandoned` の直後で、放棄された試行がその名前でブランチや PR を
+外に残しているかもしれない。同じ attempt で再試行すると、再起動時の
+「その名前のものは既にあるか」がその残骸を見つけて「もう済んでいる」と答える。
 
 ## `appendCampaignRecord` が `postToRoom` と違うところ
 

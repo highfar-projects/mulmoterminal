@@ -58,8 +58,13 @@ export const idempotencyKey = (campaign: string, task: string, attempt: number):
  *  appended record starts its own line, so a torn write costs one record and not the next. */
 export const recordLine = (record: CampaignRecord): string => `\n${JSON.stringify(record)}`;
 
+// An attempt is a positive whole number and nothing else. It comes off a file, so it is unbounded
+// until something bounds it — and `1e20` would render into an idempotency key and compare in ways
+// no reader expects, the reason `isIssueNumber` in common/prPhase.ts is written the same way.
+const isAttempt = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v) && v > 0;
+
 function isCommon(raw: Record<string, unknown>): boolean {
-  return typeof raw.at === "number" && typeof raw.task === "string" && typeof raw.attempt === "number" && isCampaignEvent(raw.event);
+  return typeof raw.at === "number" && typeof raw.task === "string" && isAttempt(raw.attempt) && isCampaignEvent(raw.event);
 }
 
 const isCampaignRecord = (raw: unknown): raw is CampaignRecord => {
@@ -90,7 +95,7 @@ export const parseCampaignLog = (contents: string): CampaignRecord[] => contents
 /** Why a record could not be applied. Never dropped silently — see `CampaignFold.rejected`. */
 export interface RejectedRecord {
   record: CampaignRecord;
-  reason: "no-intent" | "wrong-event" | "illegal-transition" | "phase-mismatch" | "intent-while-pending";
+  reason: "no-intent" | "wrong-event" | "illegal-transition" | "phase-mismatch" | "intent-while-pending" | "attempt-reused";
 }
 
 export interface TaskState {
@@ -123,7 +128,12 @@ function applyIntent(state: TaskState, record: CampaignIntent): TaskState | Reje
   if (advance(state.phase, record.event) === null) return "illegal-transition";
   // Two effects in flight for one task is not a state this pipeline has. The second is the bug.
   if (state.pending !== null) return "intent-while-pending";
-  return { ...state, pending: record, attempt: Math.max(state.attempt, record.attempt) };
+  // Attempts STRICTLY increase, which is what makes an idempotency key single-use. Reusing one
+  // after an abandonment is the dangerous case: the abandoned attempt may have left a branch or a
+  // PR behind under that very name, and a restart asking the forge "does this already exist?"
+  // would find it and conclude the retry had already happened.
+  if (record.attempt <= state.attempt) return "attempt-reused";
+  return { ...state, pending: record, attempt: record.attempt };
 }
 
 /** Whether this settlement or abandonment answers the intent that is actually outstanding. */
