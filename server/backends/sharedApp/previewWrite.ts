@@ -41,6 +41,7 @@ import { isRecord } from "../../../common/isRecord.js";
 import type { PreviewWrittenRecord } from "../../../common/sharedAppPreview.js";
 import { currentFirestore } from "../remoteHost/session.js";
 import { commitPlannedWrite, itemsPath } from "./itemWrites.js";
+import { submitSpecOf } from "./submitSpec.js";
 import { previewSharedApp } from "./preview.js";
 import { sharedAppContext, type SharedAppHandle } from "./context.js";
 
@@ -72,32 +73,15 @@ export interface PreviewWriteFailure {
 
 export type PreviewWriteResult = PreviewWriteSuccess | PreviewWriteFailure;
 
-/** One collection's declaration and form, out of the projection this publish would write. */
+/** One collection's declaration and form, out of the projection this publish would write.
+ *
+ *  The declaration half is `submitSpecOf`, shared with the participate path: the two read the same
+ *  published shape, one before it is written and one after. */
 function specFor(config: PublishedConfigDoc, form: Record<string, DrawnForm>, cid: string): { submit: SubmitSpec; drawn: DrawnForm } | null {
   const raw = config.submit?.[cid];
   const drawn = form[cid];
   if (!isRecord(raw) || drawn === undefined) return null;
-  const createFields = Array.isArray(raw.createFields) ? raw.createFields.filter((field): field is string => typeof field === "string") : [];
-  const text = (key: string): string | undefined => (typeof raw[key] === "string" ? raw[key] : undefined);
-  return {
-    submit: {
-      createFields,
-      auth: text("auth"),
-      emailField: text("emailField"),
-      // Filled by `recordOf` from the handle below, exactly as the address is. Read off the
-      // published declaration for the reason the stamp is: `uidOk` tests the submit block.
-      uidField: text("uidField"),
-      initialStatus: text("initialStatus"),
-      idFrom: text("idFrom"),
-      idField: text("idField"),
-      mirror: text("mirror"),
-      // Read back off the PUBLISHED declaration, which is where the rules read it from too. The
-      // form beside it carries the same name, and this is deliberately not that one: `stampOk`
-      // tests `"stampField" in s` against the submit block, so the submit block is the authority.
-      stampField: text("stampField"),
-    },
-    drawn,
-  };
+  return { submit: submitSpecOf(raw), drawn };
 }
 
 /** WHY THE RULES SAID NO, asked only once they have.

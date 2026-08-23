@@ -27,6 +27,7 @@ import {
 } from "@receptron/sharedapp/view";
 import { isRecord } from "../../../../common/isRecord.js";
 import { commitPlannedWrite } from "../itemWrites.js";
+import { submitSpecOf } from "../submitSpec.js";
 import { formBlockOf, submitBlockOf, type JoinedApp } from "./app.js";
 
 export interface SubmitPlan {
@@ -46,21 +47,7 @@ export function submitPlan(app: JoinedApp, cid: string): SubmitPlan | null {
   const raw = submitBlockOf(app, cid);
   const drawnRaw = formBlockOf(app, cid);
   if (raw === null || drawnRaw === null) return null;
-  const text = (key: string): string | undefined => {
-    const value = raw[key];
-    return typeof value === "string" ? value : undefined;
-  };
-  const submit: SubmitSpec = {
-    createFields: Array.isArray(raw.createFields) ? raw.createFields.filter((field): field is string => typeof field === "string") : [],
-    auth: text("auth"),
-    emailField: text("emailField"),
-    uidField: text("uidField"),
-    initialStatus: text("initialStatus"),
-    idFrom: text("idFrom"),
-    idField: text("idField"),
-    mirror: text("mirror"),
-    stampField: text("stampField"),
-  };
+  const submit = submitSpecOf(raw);
   const drawn: DrawnForm = {
     fields: drawnFields(drawnRaw.fields),
     ...(typeof drawnRaw.statusField === "string" ? { statusField: drawnRaw.statusField } : {}),
