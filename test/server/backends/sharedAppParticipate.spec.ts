@@ -403,6 +403,21 @@ describe("useSharedApp — taking part in somebody else's app", () => {
     expect(batched).toEqual([]);
   });
 
+  it("claims a slot without reading it, for a submitter the rules will not let read", async () => {
+    publish();
+    docs.put(slotsPath, "10:00", { state: "open" });
+    // A participant reaches a booking only through `ownRow`, which reads fields off a document that
+    // does not exist yet — so the rules deny this get, and a transaction opening with it would be
+    // refused before it wrote anything. The paired write still has to go out.
+    docs.denyGet.add(`${bookingsPath}/10:00`);
+    const said = await run({ action: "submit", slug: "sakura", cid: "bookings", values: { slot: "10:00" } });
+    expect(said).toContain("The record's id is 10:00");
+    expect(batched).toEqual([
+      `set ${bookingsPath}/10:00 ${JSON.stringify({ slot: "10:00", requesterEmail: ME.email, status: "booked" })}`,
+      `update ${slotsPath}/10:00 {"state":"taken"}`,
+    ]);
+  });
+
   it("names the missing field rather than letting the rules refuse it namelessly", async () => {
     publish();
     const said = await run({ action: "submit", slug: "sakura", cid: "bookings", values: {} });

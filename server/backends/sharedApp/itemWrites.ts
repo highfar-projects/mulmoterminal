@@ -53,7 +53,11 @@ const TAKEN = "already-taken";
  *  satisfied it perfectly — and for a writer the `set` was an allowed update. Two people claiming
  *  the same slot ended with one of them holding a record they never wrote. A transaction re-reads
  *  and re-runs when the document changed under it, which is the only thing that actually closes it.
- *  (Codex on #1843. The batch is still what the rules see: a transaction commits as one write.) */
+ *  (Codex on #1843. The batch is still what the rules see: a transaction commits as one write.)
+ *
+ *  AND IT IS ONLY AVAILABLE TO A READER, which is why there are two shapes below rather than one.
+ *  See the branch: the participant who cannot read the destination is the one the rules already
+ *  protect, and the writer the transaction protects against is the one who can read. */
 export async function commitPlannedWrite(handle: SharedAppHandle, aid: string, plan: PlannedWrite): Promise<string | null> {
   try {
     if (plan.mirror === undefined) {
@@ -62,10 +66,38 @@ export async function commitPlannedWrite(handle: SharedAppHandle, aid: string, p
     }
     const db = currentFirestore();
     const mirror = plan.mirror;
+    // CAN THIS WRITER READ THE DESTINATION AT ALL? Asked first, because the answer decides which of
+    // the two shapes below is even available — and because for most submitters it is NO.
+    //
+    // A collection people submit to is exactly the one `public.read` cannot open, so a participant
+    // reaches a row only through `ownRow` — which reads fields off a document that, here, does not
+    // exist yet. The rules deny that get, and Firestore authorizes a TRANSACTION's reads separately:
+    // a transaction that opens with this read is refused for the ordinary participant before it
+    // writes anything.
+    const readable = await handle.docs
+      .get(itemsPath(aid, plan.cid), plan.id)
+      .then((held) => ({ ok: true as const, held }))
+      .catch(() => ({ ok: false as const, held: null }));
+    if (readable.ok && readable.held !== null) return TAKEN;
+
+    if (!readable.ok) {
+      // WE CANNOT READ, AND THE RULES CLOSE IT FOR US. Every write this branch can make is a create
+      // or an update of the caller's OWN row: `set` on somebody else's record is an update, and
+      // `updateWith` refuses one that does not satisfy `ownRow`. The race the transaction exists to
+      // close is a WRITER's — an owner or editor, for whom `set` is an allowed update — and a writer
+      // can read the collection, so a writer never arrives here.
+      const batch = writeBatch(db);
+      batch.set(doc(collection(db, itemsPath(aid, plan.cid)), plan.id), plan.record);
+      batch.update(doc(collection(db, itemsPath(aid, mirror.cid)), mirror.id), { state: mirror.state });
+      await batch.commit();
+      return null;
+    }
+
     await runTransaction(db, async (tx) => {
       const item = doc(collection(db, itemsPath(aid, plan.cid)), plan.id);
       // READS BEFORE WRITES, which a transaction requires — and this read is the whole point of
-      // using one: it is what the commit is re-run against.
+      // using one: it is what the commit is re-run against. The read above is NOT that guarantee;
+      // it only established that this caller may make it.
       const held = await tx.get(item);
       if (held.exists()) throw new Error(TAKEN);
       tx.set(item, plan.record);
