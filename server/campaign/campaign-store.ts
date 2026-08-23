@@ -84,6 +84,29 @@ function syncDirectory(dir: string): void {
   }
 }
 
+/** Every directory from `top` down to `leaf`, inclusive. */
+function chainDown(top: string, leaf: string): string[] {
+  const relative = path.relative(top, leaf);
+  const segments = relative === "" ? [] : relative.split(path.sep);
+  return segments.reduce<string[]>((chain, segment) => [...chain, path.join(chain[chain.length - 1] ?? top, segment)], [top]);
+}
+
+/**
+ * Make durable the name of everything this append brought into existence.
+ *
+ * The file's entry lives in its directory, and a directory just created needs the entry naming it
+ * made durable too — which lives in ITS parent. Left unbounded that regresses to the root, so the
+ * walk is bounded by what was actually created: `mkdirSync(…, { recursive: true })` reports the
+ * topmost directory it made, and above that nothing is new and every entry is already durable.
+ */
+function syncNewNames(dir: string, firstCreated: string | undefined): void {
+  if (firstCreated === undefined) {
+    syncDirectory(dir);
+    return;
+  }
+  [path.dirname(firstCreated), ...chainDown(firstCreated, dir)].forEach(syncDirectory);
+}
+
 /**
  * Append one record.
  *
@@ -93,9 +116,10 @@ function syncDirectory(dir: string): void {
  * a lost message, while a lost intent is a merge nobody knows happened.
  *
  * `true` means the record survives a host or power failure, not merely this process exiting — the
- * data is flushed and the directory entry naming it is synced. **On Windows the second half is not
- * available**, so there `true` means "written and flushed" and a power cut can still lose a file
- * created in the same moment.
+ * data is flushed, and so is the entry naming it, and so are the entries naming every directory
+ * this call had to create on the way. **On Windows that second half is not available**, so there
+ * `true` means "written and flushed" and a power cut can still lose a file created in the same
+ * moment.
  */
 export function appendCampaignRecord(campaign: string, record: CampaignRecord): boolean {
   const file = campaignFile(campaign);
@@ -115,17 +139,16 @@ export function appendCampaignRecord(campaign: string, record: CampaignRecord): 
   if (parseCampaignLog(line).length !== 1) return false;
   try {
     const dir = path.dirname(file);
-    mkdirSync(dir, { recursive: true });
+    const firstCreated = mkdirSync(dir, { recursive: true });
     // `flush: true` is what makes the `true` below mean something across a power cut: without it
     // the write sits in the page cache, and a host that dies after this call loses the intent
     // while the caller has already been told to go ahead. Node supports it from 21.x and this
     // package requires >=22.9. `rooms.ts` does not flush and is right not to — a lost message is
     // a lost message, while a lost intent is a side effect nobody can reconcile.
     appendFileSync(file, line, { encoding: "utf8", flush: true });
-    // And the file's name, which the flush above does not cover. Both directories: a fsync of
-    // `campaigns/` does not make `campaigns/` itself durable inside its own parent.
-    syncDirectory(dir);
-    syncDirectory(path.dirname(dir));
+    // And the file's name, which the flush above does not cover — along with the names of any
+    // directories this call had to create, up to the first one that already existed.
+    syncNewNames(dir, firstCreated);
     return true;
   } catch (err) {
     console.warn(`[campaign] could not append to ${campaign}: ${err instanceof Error ? err.message : String(err)}`);

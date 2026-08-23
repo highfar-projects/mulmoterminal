@@ -188,6 +188,16 @@ describe("what append refuses to promise", () => {
     expect(appendCampaignRecord("c1", intent)).toBe(true);
     expect(readCampaign("c1")).toEqual([intent]);
   });
+
+  // MULMOTERMINAL_HOME can itself be several levels of nothing. Every one of those is a name this
+  // append created, so every one is walked — and the walk has to terminate at the first directory
+  // that already existed rather than at the root.
+  it("still succeeds when the whole home directory had to be created", () => {
+    process.env.MULMOTERMINAL_HOME = path.join(home, "deep", "er", "still");
+    expect(appendCampaignRecord("c1", intent)).toBe(true);
+    expect(readCampaign("c1")).toEqual([intent]);
+    expect(listCampaigns()).toEqual(["c1"]);
+  });
 });
 
 describe("listing what a restart has to reconcile", () => {
