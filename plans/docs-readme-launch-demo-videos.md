@@ -34,7 +34,7 @@ issue #1827 が投稿されたことで user-attachments の 2 URL は公開に�
 
 - 2 URL が未ログインで取得できること（上記）
 - 動画に maintainer のディレクトリ・アカウント名が写っていないこと。13 フレームのコンタクトシートで通し確認した。デモ用の `HOME` とデモ用プロジェクト（`acme-*`）で撮られている
-- ガイドから追加した相対参照（`../videos/launch-demo-{en,ja}.mp4`、`../images/README.md`）がすべて実在のファイルに解決すること
+- ガイドから追加した相対参照（`../videos/launch-demo-{en,ja}.mp4`、`../videos/launch-demo-{en,ja}.vtt`、`../images/README.md`）がすべて実在のファイルに解決すること（字幕追加後に再実行）
 - コーデックがブラウザの共通線であること（h264 High / yuv420p / level 3.1 + AAC-LC 44.1 kHz stereo）
 
 ## レビュー対応（iteration 1）
