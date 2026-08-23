@@ -103,12 +103,20 @@ function chainDown(top: string, leaf: string): string[] {
  * and the records have different lifetimes, so they get different calls.
  */
 export function ensureCampaignStore(): void {
+  const home = mulmoterminalHome();
   const dir = campaignsDir();
-  const firstCreated = mkdirSync(dir, { recursive: true });
-  // Bounded by what was created: above the topmost new directory nothing is new, and every entry
-  // there is already durable.
-  if (firstCreated === undefined) syncDirectory(dir);
-  else [path.dirname(firstCreated), ...chainDown(firstCreated, dir)].forEach(syncDirectory);
+  mkdirSync(dir, { recursive: true });
+  // Unconditionally, and from a FIXED starting point rather than from whatever this call happened
+  // to create. Two runners starting at once would otherwise race: the second one's `mkdirSync`
+  // reports creating nothing, so it syncs less and can return while the first is still working.
+  // A caller that syncs the whole chain itself needs to know nothing about what the others did.
+  //
+  // Where the chain starts is a line, and it is drawn here: this app makes durable the tree it
+  // owns — MULMOTERMINAL_HOME and below. Above that is the machine's own filesystem, which it did
+  // not create and does not manage; chasing further ends at fsyncing `/`. So if HOME itself points
+  // somewhere that had to be created, the entries ABOVE HOME are outside this promise, and that
+  // residual is stated rather than hidden.
+  chainDown(path.dirname(home), dir).forEach(syncDirectory);
 }
 
 /**

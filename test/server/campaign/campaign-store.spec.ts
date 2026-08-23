@@ -215,6 +215,17 @@ describe("preparing the store", () => {
     expect(existsSync(campaignsDir())).toBe(true);
   });
 
+  // The race this shape removes: a second caller must not depend on the first having finished.
+  // Both syncs start from the same fixed point, so neither needs to know what the other did.
+  it("prepares the same store twice over without either call depending on the other", () => {
+    process.env.MULMOTERMINAL_HOME = path.join(home, "deep", "er", "still");
+    ensureCampaignStore();
+    ensureCampaignStore();
+    expect(existsSync(campaignsDir())).toBe(true);
+    expect(appendCampaignRecord("c1", intent)).toBe(true);
+    expect(readCampaign("c1")).toEqual([intent]);
+  });
+
   it("can be called again on a store that is already there", () => {
     ensureCampaignStore();
     expect(() => ensureCampaignStore()).not.toThrow();
