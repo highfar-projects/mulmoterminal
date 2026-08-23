@@ -157,6 +157,30 @@ describe("reading and appending", () => {
   });
 });
 
+// The return value is a promise to the caller: `true` means "this will be here after a restart",
+// and the caller acts on it by causing a side effect nobody can undo. `CampaignRecord` is looser
+// than the file format, so the promise has to be checked rather than assumed.
+describe("what append refuses to promise", () => {
+  // Typed as `CampaignRecord` so the compiler agrees these are records a caller could really hand
+  // over: the point is that the TYPE admits them and the FORMAT does not.
+  const unwritable: [string, CampaignRecord][] = [
+    ["attempt zero", { kind: "intent", at: 1, task: "t1", attempt: 0, event: "accept" }],
+    ["a fractional attempt", { kind: "intent", at: 1, task: "t1", attempt: 1.5, event: "accept" }],
+    ["a timestamp JSON cannot carry", { kind: "intent", at: Number.POSITIVE_INFINITY, task: "t1", attempt: 1, event: "accept" }],
+    ["a NaN timestamp", { kind: "intent", at: Number.NaN, task: "t1", attempt: 1, event: "accept" }],
+  ];
+
+  it.each(unwritable)("refuses %s rather than writing something the reader drops", (_label, record) => {
+    expect(appendCampaignRecord("c1", record)).toBe(false);
+    expect(readCampaign("c1")).toEqual([]);
+  });
+
+  it("promises only what comes back identical", () => {
+    expect(appendCampaignRecord("c1", intent)).toBe(true);
+    expect(readCampaign("c1")).toEqual([intent]);
+  });
+});
+
 describe("listing what a restart has to reconcile", () => {
   it("lists nothing before any campaign exists", () => {
     expect(listCampaigns()).toEqual([]);

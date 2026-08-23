@@ -72,9 +72,22 @@ export function readCampaign(campaign: string): CampaignRecord[] {
 export function appendCampaignRecord(campaign: string, record: CampaignRecord): boolean {
   const file = campaignFile(campaign);
   if (file === null) return false;
+  const line = recordLine(record);
+  // Write nothing the reader would throw away. `CampaignRecord` is looser than what the file
+  // format accepts — `attempt: 0` is a `number`, and `at: Infinity` becomes `null` in JSON — so a
+  // record can type-check, land on disk, and be invisible after a restart. That is the lost intent
+  // this whole return value exists to prevent.
+  //
+  // A ROUND TRIP rather than a second predicate: asking whether the reader accepts this exact line
+  // cannot drift from what `readCampaign` really accepts, whereas two guards can.
+  //
+  // Reading back as one record is the whole test — comparing it to `record` afterwards would be
+  // tautological, since both sides are then the same JSON projection. (Written that way at first;
+  // the mutation sweep found the comparison could not fail, which is what a sweep is for.)
+  if (parseCampaignLog(line).length !== 1) return false;
   try {
     mkdirSync(path.dirname(file), { recursive: true });
-    appendFileSync(file, recordLine(record), "utf8");
+    appendFileSync(file, line, "utf8");
     return true;
   } catch (err) {
     console.warn(`[campaign] could not append to ${campaign}: ${err instanceof Error ? err.message : String(err)}`);
