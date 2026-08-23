@@ -23,6 +23,8 @@ import { useSharedApp } from "../../../server/infra/use-shared-app-tool.js";
 import { makeTempDir } from "../../support/tempDir";
 
 const AID = "app-sakura";
+/** The tool's own default, restated so the assertion below says what it is checking. */
+const DEFAULT_ROWS = 50;
 const ME = { uid: "uid-me", email: "me@example.com" };
 
 const batched: string[] = [];
@@ -52,6 +54,29 @@ vi.mock("firebase/firestore", () => ({
         .slice(0, asked.cap.rows)
         .map((row) => ({ id: row.id, data: () => row.data })),
     });
+  },
+  // The transaction the mirrored create goes through. It is not a batch with a nicer name: the
+  // `get` inside it is what the commit is re-run against, which is what makes claiming a slot
+  // atomic. The fake answers it from the same store, so a host that stopped reading would claim a
+  // slot somebody already holds and the test would notice.
+  runTransaction: async (_db: unknown, body: (tx: unknown) => Promise<void>) => {
+    const ops: string[] = [];
+    const at = (path: string): { collectionPath: string; id: string } => {
+      const cut = path.lastIndexOf("/");
+      return { collectionPath: path.slice(0, cut), id: path.slice(cut + 1) };
+    };
+    await body({
+      get: (ref: { path: string }) => {
+        const { collectionPath, id } = at(ref.path);
+        const held = docs.store.get(collectionPath)?.has(id) === true;
+        return Promise.resolve({ exists: () => held });
+      },
+      set: (ref: { path: string }, data: Record<string, unknown>) => ops.push(`set ${ref.path} ${JSON.stringify(data)}`),
+      update: (ref: { path: string }, data: Record<string, unknown>) => ops.push(`update ${ref.path} ${JSON.stringify(data)}`),
+      delete: (ref: { path: string }) => ops.push(`delete ${ref.path}`),
+    });
+    if (batchFails) throw Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" });
+    batched.push(...ops);
   },
   writeBatch: () => {
     const ops: string[] = [];
@@ -295,6 +320,19 @@ describe("useSharedApp — taking part in somebody else's app", () => {
     expect(said.toLowerCase()).not.toContain("secured");
   });
 
+  it("refuses a slot somebody already holds, inside the transaction", async () => {
+    publish();
+    docs.put(slotsPath, "10:00", { state: "taken" });
+    docs.put(bookingsPath, "10:00", { requesterEmail: "guest@example.com", slot: "10:00", status: "booked" });
+    const said = await run({ action: "submit", slug: "sakura", cid: "bookings", values: { slot: "10:00" } });
+    expect(said).toContain("somebody has it");
+    // Nothing was written. The read that refused is INSIDE the transaction, which is what stops a
+    // writer's `set` from replacing the booking that is already there: `mirrorClaimed` in the rules
+    // only asks that the mirror end up `taken`, so a slot another participant just claimed would
+    // have satisfied it.
+    expect(batched).toEqual([]);
+  });
+
   it("names the missing field rather than letting the rules refuse it namelessly", async () => {
     publish();
     const said = await run({ action: "submit", slug: "sakura", cid: "bookings", values: {} });
@@ -381,6 +419,18 @@ describe("useSharedApp — taking part in somebody else's app", () => {
     expect(said).toContain("Judged on the roster tier");
     // ONE write landed — the refused batch wrote nothing, which is what makes the retry safe.
     expect(batched).toEqual([`update ${bookingsPath}/b1 {"status":"cancelled"}`]);
+  });
+
+  it("never asks Firestore for nought rows", async () => {
+    publish();
+    docs.denyList.add(bookingsPath);
+    docs.put(bookingsPath, "b0", { requesterEmail: ME.email, slot: "0:00", status: "booked" });
+    // `Math.floor(0.5)` is 0, and `limit(0)` is REFUSED by Firestore at the moment the constraint is
+    // built — before the read this tool wraps in a catch. So half a row would have thrown where
+    // every other bad argument produces a sentence.
+    const said = await run({ action: "records", slug: "sakura", cid: "bookings", limit: 0.5 });
+    expect(capped).toEqual([DEFAULT_ROWS]);
+    expect(said).toContain("YOUR OWN ONLY");
   });
 
   it("keeps a refused read apart from an absent record", async () => {

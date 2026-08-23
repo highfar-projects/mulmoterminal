@@ -39,7 +39,7 @@ import {
   viewConfigDocId,
   type ProjectedViewWrite,
 } from "@receptron/sharedapp";
-import { capabilitiesFor, type ViewCapability, type WriteTier } from "@receptron/sharedapp/view";
+import { capabilitiesFor, projectedWritesOf, type ViewCapability, type WriteTier } from "@receptron/sharedapp/view";
 import { firestoreHandle } from "@mulmoclaude/core/collection/server";
 import { isRecord } from "../../../../common/isRecord.js";
 import { currentFirestore } from "../../remoteHost/session.js";
@@ -92,10 +92,19 @@ const readDoc = async (handle: SharedAppHandle, path: string, id: string): Promi
   return isRecord(found) ? found : null;
 };
 
-const writesOf = (doc: Record<string, unknown> | null): ProjectedViewWrite[] | null => {
-  if (doc === null || !Array.isArray(doc.write)) return null;
-  return doc.write.filter((entry): entry is ProjectedViewWrite => isRecord(entry) && typeof entry.cid === "string");
-};
+/** A tier's writable half, read with the PACKAGE's own reader.
+ *
+ *  `projectedWritesOf` is what mulmoserver runs over the same document, and it drops an entry it
+ *  cannot read whole rather than passing a half-parsed one down — a `transitions` that is not a
+ *  table, a `statusField` with no table beside it. A shallow filter here would be a second reading
+ *  of a document written by somebody else's publish, and the two could disagree about what a page
+ *  may do.
+ *
+ *  The null is this host's: `projectedWritesOf` answers `[]` both for "the document says nothing is
+ *  writable" and for "there is no document", and those are different answers here. A tier with no
+ *  projection published says NOTHING about what this reader may do, and reporting it as a refusal
+ *  would name a missing document as if it were a denial. */
+const writesOf = (doc: Record<string, unknown> | null): ProjectedViewWrite[] | null => (doc === null ? null : projectedWritesOf(doc));
 
 /** Merge two projections of the same tier by cid, first wins.
  *

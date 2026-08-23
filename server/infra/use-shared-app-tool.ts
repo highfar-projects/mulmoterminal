@@ -271,6 +271,19 @@ function performed(action: "transition" | "assign" | "withdraw", cid: string, id
   return `Moved ${cid}/${id} to "${to}".`;
 }
 
+/** How many rows to ask for, and never fewer than one.
+ *
+ *  THE FLOOR IS THE POINT. `Math.floor` of a fraction the schema happily accepts — `0.5` is a valid
+ *  JSON number — is `0`, and `limit(0)` is not a smaller request: Firestore REFUSES it, and it
+ *  refuses at the moment the constraint is built, which is before the read this file wraps in a
+ *  `catch`. So a caller asking for half a row would get an exception where every other bad argument
+ *  gets a sentence. Clamped rather than refused, because there is no reading of "0.5 rows" that the
+ *  user needs told about — they wanted some rows. */
+function rowCap(raw: unknown): number {
+  if (typeof raw !== "number" || !Number.isFinite(raw) || raw < 1) return DEFAULT_LIMIT;
+  return Math.max(1, Math.floor(raw));
+}
+
 /** Run one action and narrate it. The agent's whole contract with this tool is actionable prose, so
  *  a refusal is text and never a throw. */
 export async function useSharedApp(args: unknown): Promise<string> {
@@ -285,7 +298,7 @@ export async function useSharedApp(args: unknown): Promise<string> {
 
   const cid = str(body.cid);
   if (action === "describe") return narrateDescribe(slug);
-  if (action === "records") return narrateRecords(slug, cid, typeof body.limit === "number" && body.limit > 0 ? Math.floor(body.limit) : DEFAULT_LIMIT);
+  if (action === "records") return narrateRecords(slug, cid, rowCap(body.limit));
   if (action === "submit") return narrateSubmit(slug, cid, values(body.values));
   return narrateIntent(slug, action, cid, str(body.id), str(body.to));
 }

@@ -15,7 +15,7 @@
 // batch goes through `writeBatch` on `currentFirestore()` rather than through `handle.docs`,
 // because that seam has `set` / `create` / `delete` and no batch — see the note in `previewWrite.ts`
 // on why core is not the place to add one.
-import { collection, doc, writeBatch } from "firebase/firestore";
+import { collection, doc, runTransaction, writeBatch } from "firebase/firestore";
 import { appSchemasPath, APPS_COLLECTION } from "@receptron/sharedapp";
 import { MIRROR_OPEN, type JudgedIntent, type PlannedWrite } from "@receptron/sharedapp/view";
 import { currentFirestore } from "../remoteHost/session.js";
@@ -35,30 +35,42 @@ export const mailDocId = (cid: string, itemId: string, template: string): string
 
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
+/** The id was already there. Named rather than reported as a rules refusal: under
+ *  `idFrom: "field"` the id IS the thing being claimed, so this means somebody has it. */
+const TAKEN = "already-taken";
+
 /** Write one submission. Null on success, else the reason.
  *
  *  CREATE, NEVER OVERWRITE. A submission is create-only, and for `idFrom: "field"` the id IS the
- *  thing being claimed — so an id that already exists means somebody has it. `set` would be an
- *  UPDATE, which the rules permit an owner to make: previewing your own app would silently replace
- *  a real visitor's booking with a test one. */
+ *  thing being claimed. `set` would be an UPDATE, which the deployed rules permit a WRITER to make:
+ *  an owner submitting through their own app would silently replace a real visitor's booking.
+ *
+ *  THE MIRRORED PATH IS A TRANSACTION, and it has to be. `WriteBatch` has `set`, `update` and
+ *  `delete` and no create, so this used to read the id first and then write — a check, not a
+ *  guarantee. The comment that stood here said the mirror's own `update` closed the race, and that
+ *  was WRONG: `mirrorClaimed` in `firestore.rules:450` only requires the AFTER state to be `taken`
+ *  and says nothing about what it was before, so a slot another participant had just claimed
+ *  satisfied it perfectly — and for a writer the `set` was an allowed update. Two people claiming
+ *  the same slot ended with one of them holding a record they never wrote. A transaction re-reads
+ *  and re-runs when the document changed under it, which is the only thing that actually closes it.
+ *  (Codex on #1843. The batch is still what the rules see: a transaction commits as one write.) */
 export async function commitPlannedWrite(handle: SharedAppHandle, aid: string, plan: PlannedWrite): Promise<string | null> {
   try {
     if (plan.mirror === undefined) {
       const made = await handle.docs.create(itemsPath(aid, plan.cid), plan.id, plan.record);
-      return made ? null : "already-taken";
+      return made ? null : TAKEN;
     }
-    // The paired path cannot ask for create-only: the web SDK's `WriteBatch` has `set`, `update`
-    // and `delete`, and no create. So the id is CHECKED first — a check, not a guarantee, and the
-    // difference is a real race with anybody submitting at the same moment. What closes it is the
-    // batch's own `update` on the mirror: a slot somebody else has just taken no longer satisfies
-    // what the rules require of it, and the commit is refused rather than overwriting.
     const db = currentFirestore();
-    const taken = await handle.docs.get(itemsPath(aid, plan.cid), plan.id);
-    if (taken !== null) return "already-taken";
-    const batch = writeBatch(db);
-    batch.set(doc(collection(db, itemsPath(aid, plan.cid)), plan.id), plan.record);
-    batch.update(doc(collection(db, itemsPath(aid, plan.mirror.cid)), plan.mirror.id), { state: plan.mirror.state });
-    await batch.commit();
+    const mirror = plan.mirror;
+    await runTransaction(db, async (tx) => {
+      const item = doc(collection(db, itemsPath(aid, plan.cid)), plan.id);
+      // READS BEFORE WRITES, which a transaction requires — and this read is the whole point of
+      // using one: it is what the commit is re-run against.
+      const held = await tx.get(item);
+      if (held.exists()) throw new Error(TAKEN);
+      tx.set(item, plan.record);
+      tx.update(doc(collection(db, itemsPath(aid, mirror.cid)), mirror.id), { state: mirror.state });
+    });
     return null;
   } catch (err) {
     return messageOf(err);
