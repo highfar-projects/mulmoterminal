@@ -321,7 +321,13 @@ export async function startWatch(sessionId: string, app: JoinedApp, cid: string)
 async function joinExisting(existing: Watch): Promise<StartResult> {
   if (existing.starting === null) return { started: "already", id: existing.id };
   const outcome = await existing.starting;
-  return outcome.started === true ? { started: "already", id: outcome.id } : outcome;
+  if (outcome.started !== true) return outcome;
+  // AND IT CAN HAVE ENDED WHILE WE WAITED. Waiting is itself a window: the watch we joined may have
+  // been stopped, or have lost its subscription, between succeeding and this line. Saying "already
+  // watching, and it has missed nothing" then leaves the caller certain of a watch that is gone —
+  // the same lie the wait was added to prevent, one step later.
+  if (existing.stopped) return { started: false, why: "the watch this call joined ended before it could be handed over — start it again" };
+  return { started: "already", id: outcome.id };
 }
 
 async function beginWatch(watch: Watch, app: JoinedApp, cid: string, key: string): Promise<StartResult> {
@@ -349,11 +355,14 @@ async function beginWatch(watch: Watch, app: JoinedApp, cid: string, key: string
       owe(sessionId, endedLine(watch, why));
     },
   ).catch((err: unknown) => {
-    dropWatch(sessionId, key);
+    // BY IDENTITY, like the callback above and for the same reason: this rejection can arrive after
+    // the reservation was stopped and a replacement took the slot, and an unqualified drop would
+    // remove that replacement without calling its `stop` (Codex on #1844).
+    dropWatch(sessionId, key, watch);
     throw err;
   });
   if (!subscribed.ok) {
-    dropWatch(sessionId, key);
+    dropWatch(sessionId, key, watch);
     return { started: false, why: subscribed.why };
   }
 

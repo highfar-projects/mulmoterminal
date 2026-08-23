@@ -447,6 +447,23 @@ describe("useSharedApp — watching a collection", () => {
     expect(bag.listeners[0].stopped).toBe(true);
   });
 
+  it("does not hand over a watch that ended while a second caller was waiting for it", async () => {
+    publish();
+    const joined = await joinApp("sakura");
+    if (!joined.ok) throw new Error(`fixture: ${joined.problems.join(" ")}`);
+    const first = startWatch(SESSION, joined.app, "bookings");
+    // The second caller finds the reservation and waits for the first's outcome. Waiting is itself
+    // a window: the watch it joined can be stopped between succeeding and being handed over, and
+    // "already watching, and it has missed nothing" would then leave it certain of a watch that is
+    // gone — the same lie the wait was added to prevent, one step later.
+    const second = startWatch(SESSION, joined.app, "bookings");
+    stopWatchesFor(SESSION);
+    const [, joinedOutcome] = await Promise.all([first, second]);
+
+    expect(joinedOutcome.started).toBe(false);
+    expect(bag.listeners.every((listener) => listener.stopped)).toBe(true);
+  });
+
   it("gives concurrent watches distinct ids", async () => {
     publish();
     const said = await Promise.all([watch("one"), watch("two")]);

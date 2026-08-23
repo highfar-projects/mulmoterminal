@@ -274,8 +274,23 @@ function mountUseSharedAppRoute(app: Express): void {
       // NORMALIZED, not forwarded. A header is an assertion by whatever reached this route, and for
       // `watch` an unchecked one is not a wrong directory but a live Firestore listener attached on
       // behalf of a session that does not exist — unreapable, billed to the app's owner, and, with a
-      // different made-up value each time, not subject to the per-session ceiling either. A REAL id
-      // belonging to somebody else's session would aim the notification at that terminal (Codex).
+      // different made-up value each time, not subject to the per-session ceiling either. `watch`
+      // additionally requires the id to name a LIVE pty (`startWatch`).
+      //
+      // WHAT THIS IS NOT is authorization, and it is worth being exact about what remains. A caller
+      // that knows ANOTHER live session's id can still aim a watch at that terminal. Three things
+      // bound what that is worth: this server is reachable only from this machine (loopback — see
+      // infra/loopback-listener.ts, and `isAllowedOrigin` trusts an Origin-less request only from a
+      // loopback peer), every session on it belongs to the SAME local user, and the line a watch
+      // types is a fixed string naming itself as mulmoterminal's, carrying none of the app's data.
+      // So the actor is a local process already running as that user, and the effect is a
+      // self-identifying line in another of their own terminals.
+      //
+      // The header has never been more than an assertion, for any of the three routes here: the two
+      // above resolve ANOTHER session's directory from it just as readily, and write there. Making
+      // it a binding means the broker minting a per-session secret and all three routes demanding
+      // it — a change to what the header IS, not to this route, and one that has to be made once for
+      // all of them rather than in the middle of a feature (Codex on #1844).
       return res.json({ message: await useSharedApp(req.body, sessionIdFromHeader(req.get(SESSION_HEADER)) ?? undefined) });
     } catch (err) {
       console.error(`[useSharedApp] dispatch failed: ${messageOf(err)}`);
