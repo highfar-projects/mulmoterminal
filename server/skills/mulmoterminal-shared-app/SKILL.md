@@ -718,6 +718,26 @@ entry per page, each naming **who it is for**:
   draws an empty page, which is the one failure nothing reports. Publish refuses a `public` page
   fed a collection outside `public.read`, and a `participant` page fed one a participant cannot
   reach at all (neither in `participantRead` nor their own row through `public.submit`).
+- **A collection that grows forever needs `limit`, or every reader pays for its whole history.**
+  A view is handed its datasets WHOLE, so a chat room's page fetches every message ever posted to
+  draw the last twenty — a bill and a payload that grow with the app's age, paid by everyone who
+  opens the page. Drawing fewer does not help: the read already happened. Cap the READ instead,
+  per page, over a subset of `collections`:
+
+  ```json
+  { "id": "room", "audience": "member", "path": "views/room.html",
+    "collections": ["messages"], "live": ["messages"], "limit": { "messages": 200 } }
+  ```
+
+  It is the **latest** N, never the first N, and that is what makes the key usable: the cap is
+  ordered by the collection's own `public.submit[cid].stampField`, so **a collection without one is
+  refused the cap** rather than ordered by something a submitter can write. (Unordered, a limit
+  falls back to Firestore's document-id order — an arbitrary N, and a new record never arrives.
+  Nothing errors, and the page looks like it is working.) Two more things to know: the rows arrive
+  **newest first**, so sort them if the page draws oldest-at-the-top; and the older records are
+  still there — this is a window, not a deletion, and nothing pages back to them. A participant's
+  OWN-ROW page cannot be capped (that query is already narrowed by the submitter's address, and
+  ordering it too needs an index no deployment has) — publish says so.
 - **`submit` carries STRINGS and nothing else.** A number, a boolean or a nested object in
   `values` is not read as a partial submission — the whole message stops being one, and the view
   is answered `not-a-submission`, which names no field. `attendees: 3` breaks a booking; `"3"`
