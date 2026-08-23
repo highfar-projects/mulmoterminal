@@ -218,6 +218,14 @@ describe("phase predicates", () => {
     expect(releasesClaim("leased")).toBe(false);
   });
 
+  // Indeterminate is not the same as free. The phase does not carry the answer, but nothing at
+  // `orphaned` gives the paths back either — a reconciler that "tidies up" an orphan's claim lets
+  // a sibling into paths the orphan may still be halfway through.
+  it("never releases an orphan's claim, even though it cannot say whether one exists", () => {
+    expect(claimHolding("orphaned")).toBe("unknown");
+    expect(releasesClaim("orphaned")).toBe(false);
+  });
+
   it("holds the claim through `merged`, so a crash before the write-back leaves an owner", () => {
     expect(claimHolding("merged")).toBe("held");
     expect(claimHolding("learn")).toBe("held");
