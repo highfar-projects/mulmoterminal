@@ -37,43 +37,49 @@ export type BoundAddress = string | { address: string } | null;
 // answer a question nobody asks.
 const V4_LOOPBACK = "127.0.0.1";
 
-// A wildcard bind already serves the v4 loopback — measured for both — so it needs no second
-// listener, and this is the case that makes "just widen the bind" wrong as a fix: `0.0.0.0`
-// serves loopback perfectly well while naming every other interface too, which is more exposure
-// than the operator asked for.
+// `0.0.0.0` is the v4 wildcard, so it serves the v4 loopback by definition — no kernel setting
+// changes that, and nothing more is needed.
+const V4_WILDCARD = "0.0.0.0";
+
+// `::` is the one genuinely ambiguous bind. It usually accepts v4 as well, but a Linux kernel with
+// `net.ipv6.bindv6only=1` makes it v6-only, and there the fixed 127.0.0.1 urls stay unreachable
+// (Codex on #1838).
 //
-// KNOWN GAP: a Linux kernel with `net.ipv6.bindv6only=1` makes `::` v6-only, and there this would
-// wrongly conclude loopback is covered. Left alone deliberately — the alternative is to attempt
-// the bind and warn on the EADDRINUSE that a correct dual-stack setup would produce every time,
-// which trains the operator to ignore the one warning that means something.
-const WILDCARD_ADDRESSES = new Set(["0.0.0.0", "::"]);
+// Rather than guess which kind of kernel this is, ATTEMPT the bind and read the answer: holding
+// `[::]:P` dual-stack is what makes `127.0.0.1:P` unavailable, so EADDRINUSE PROVES the primary
+// already covers loopback — and if it binds instead, that kernel did not, and the gap just closed.
+const V6_WILDCARD = "::";
 
-/** Whether the primary bind already answers on `127.0.0.1`. The family distinction is the whole
- *  point and is easy to lose: `isLoopbackAddress("::1")` is true and correct, yet a server bound
- *  to `::1` REFUSES a client dialing 127.0.0.1 (measured) — which is why `MULMOTERMINAL_HOST=localhost`
- *  is broken today, since it resolves to `::1` while the GUI MCP url says `127.0.0.1`. */
-const servesV4Loopback = (address: string): boolean => WILDCARD_ADDRESSES.has(address) || (isLoopbackAddress(address) && !address.includes(":"));
+/** Whether the primary bind already answers on `127.0.0.1` for certain. The family distinction is
+ *  the whole point and is easy to lose: `isLoopbackAddress("::1")` is true and correct, yet a
+ *  server bound to `::1` REFUSES a client dialing 127.0.0.1 (measured) — which is why
+ *  `MULMOTERMINAL_HOST=localhost` is broken today, since it resolves to `::1` while the GUI MCP
+ *  url says `127.0.0.1`. */
+const servesV4Loopback = (address: string): boolean => isLoopbackAddress(address) && !address.includes(":");
 
-/**
- * The loopback address to ALSO listen on, or null when the primary already serves it.
- */
-export function loopbackListenAddress(bound: BoundAddress): string | null {
-  // A string address is a pipe or a UNIX socket, and null is "not listening" — neither is a
-  // network bind this can reason about, and neither is reachable by a url a session would build.
-  if (bound === null || typeof bound === "string") return null;
-  return servesV4Loopback(bound.address) ? null : V4_LOOPBACK;
+export interface LoopbackPlan {
+  address: string;
+  /**
+   * Whether EADDRINUSE is a fine outcome rather than something to warn about.
+   *
+   * True only under a wildcard primary, where the port being taken is the primary itself and
+   * therefore proof that loopback is already served. Warning there would fire on every correct
+   * dual-stack boot, which is how an operator learns to ignore the warning that means something.
+   */
+  inUseIsFine: boolean;
 }
 
 /**
- * Serve loopback as well, when the primary bind took it away.
- *
- * BEST EFFORT, and deliberately not fatal: the operator asked for the address they named, and
- * that one is already listening by the time this runs. Failing the boot because the extra one
- * could not bind would turn a degraded setup into no setup at all — so it warns, naming the
- * symptom rather than the errno, and carries on. EADDRINUSE is the realistic failure (another
- * MulmoTerminal already holds loopback on this port), and it is exactly the case where taking
- * the port would be the wrong thing to do.
+ * How to serve `127.0.0.1` alongside the primary bind, or null when the primary already does.
  */
+export function loopbackListenPlan(bound: BoundAddress): LoopbackPlan | null {
+  // A string address is a pipe or a UNIX socket, and null is "not listening" — neither is a
+  // network bind this can reason about, and neither is reachable by a url a session would build.
+  if (bound === null || typeof bound === "string") return null;
+  if (bound.address === V4_WILDCARD || servesV4Loopback(bound.address)) return null;
+  return { address: V4_LOOPBACK, inUseIsFine: bound.address === V6_WILDCARD };
+}
+
 export interface PrimaryListener {
   address(): BoundAddress;
 }
@@ -85,15 +91,24 @@ export interface LoopbackListener {
   listen(port: number, host: string, onListening: () => void): unknown;
 }
 
+/**
+ * Serve loopback as well, when the primary bind did not.
+ *
+ * BEST EFFORT, and deliberately not fatal: the operator asked for the address they named, and
+ * that one is already listening by the time this runs. Failing the boot because the extra one
+ * could not bind would turn a degraded setup into no setup at all — so it warns, naming the
+ * symptom rather than the errno, and carries on.
+ */
 export function startLoopbackListener(primary: PrimaryListener, loopback: LoopbackListener, port: string | number): void {
-  const address = loopbackListenAddress(primary.address());
-  if (address === null) return;
+  const plan = loopbackListenPlan(primary.address());
+  if (plan === null) return;
   loopback.once("error", (err: NodeJS.ErrnoException) => {
+    if (plan.inUseIsFine && err.code === "EADDRINUSE") return;
     console.warn(
-      `\x1b[33m[bind]\x1b[0m could not also listen on ${address}:${port} (${err.code ?? err.message}) — this machine's own sessions reach the server over loopback, so hooks and the GUI MCP will fail until it is free.`,
+      `\x1b[33m[bind]\x1b[0m could not also listen on ${plan.address}:${port} (${err.code ?? err.message}) — this machine's own sessions reach the server over loopback, so hooks and the GUI MCP will fail until it is free.`,
     );
   });
-  loopback.listen(Number(port), address, () => {
-    console.log(`[bind] also listening on ${address}:${port} so this machine's own sessions can reach the server`);
+  loopback.listen(Number(port), plan.address, () => {
+    console.log(`[bind] also listening on ${plan.address}:${port} so this machine's own sessions can reach the server`);
   });
 }

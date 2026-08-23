@@ -57,6 +57,7 @@ Every bind, on the real app: hooks POST, the GUI MCP url, and a PTY over the ter
 |---|---|---|---|---|
 | unset | no | 200 | reachable | ok |
 | `0.0.0.0` | no | 200 | reachable | ok |
+| `::` | attempted | 200 | reachable | ok |
 | `localhost` | **yes** | 200 | **reachable (was refused)** | ok |
 | `192.168.64.1` | **yes** | **200 (was refused)** | **reachable (was refused)** | ok |
 
@@ -64,8 +65,14 @@ Plus a real browser against both listeners — the grid loads and a shell cell r
 no console errors — because the change puts a second server in front of every request and every
 WebSocket, which a green suite does not exercise.
 
-## Known gap
+## The two wildcards are not the same question
 
-A Linux kernel with `net.ipv6.bindv6only=1` makes `::` v6-only, and the wildcard check assumes it
-covers v4. Attempting the bind instead would warn on the EADDRINUSE that a correct dual-stack setup
-produces every time, which trains the operator to ignore the warning that means something.
+`0.0.0.0` IS the v4 wildcard, so it serves the v4 loopback by definition and needs nothing.
+
+`::` is the ambiguous one: it usually accepts v4 as well, but a Linux kernel with
+`net.ipv6.bindv6only=1` makes it v6-only, and there the fixed `127.0.0.1` urls stay unreachable
+(raised by Codex on the PR). Rather than guess which kernel this is, the bind is ATTEMPTED and the
+answer read: holding `[::]:P` dual-stack is what makes `127.0.0.1:P` unavailable, so EADDRINUSE
+proves loopback is already covered and is not warned about — and if it binds instead, that kernel
+did not cover it and the gap just closed. Measured across all five binds: no configuration produces
+a warning.

@@ -7,21 +7,21 @@
 import { describe, it, expect, vi } from "vitest";
 
 import {
-  loopbackListenAddress,
+  loopbackListenPlan,
   startLoopbackListener,
   type BoundAddress,
   type LoopbackListener,
   type PrimaryListener,
 } from "../../../server/infra/loopback-listener.js";
 
-describe("loopbackListenAddress", () => {
+describe("loopbackListenPlan", () => {
   it("is not needed for the default bind — nothing changes for an untouched install", () => {
-    expect(loopbackListenAddress({ address: "127.0.0.1" })).toBeNull();
+    expect(loopbackListenPlan({ address: "127.0.0.1" })).toBeNull();
   });
 
   it("is not needed for any of 127.0.0.0/8, which is all loopback", () => {
     for (const address of ["127.0.0.1", "127.0.0.53", "127.1.2.3"]) {
-      expect(loopbackListenAddress({ address })).toBeNull();
+      expect(loopbackListenPlan({ address })).toBeNull();
     }
   });
 
@@ -29,34 +29,40 @@ describe("loopbackListenAddress", () => {
     // `MULMOTERMINAL_HOST=localhost` resolves to `::1` on a dual-stack machine, and a server there
     // REFUSES a client dialing 127.0.0.1 (both measured) — so the GUI MCP url, which says
     // 127.0.0.1 literally, is unreachable today. This is the second bug #1834 turned up.
-    expect(loopbackListenAddress({ address: "::1" })).toBe("127.0.0.1");
+    expect(loopbackListenPlan({ address: "::1" })).toEqual({ address: "127.0.0.1", inUseIsFine: false });
   });
 
-  it("is not needed for a wildcard bind, which already serves loopback", () => {
-    // The case that makes "just widen the bind" wrong as a fix: 0.0.0.0 serves loopback fine, and
-    // a second listener on the same port would collide with the wildcard that already holds it.
-    expect(loopbackListenAddress({ address: "0.0.0.0" })).toBeNull();
-    expect(loopbackListenAddress({ address: "::" })).toBeNull();
+  it("needs nothing for the v4 wildcard, which serves the v4 loopback by definition", () => {
+    // Not merely "usually": 0.0.0.0 IS the v4 wildcard, and no kernel setting takes loopback out
+    // of it. Attempting a bind here would only add a log line to a configuration that works.
+    expect(loopbackListenPlan({ address: "0.0.0.0" })).toBeNull();
+  });
+
+  it("ATTEMPTS the bind for the v6 wildcard, treating a clash as proof rather than failure", () => {
+    // `::` usually accepts v4 too, so the bind is expected to fail — and that failure is the
+    // proof. On a kernel with net.ipv6.bindv6only=1 it succeeds instead, which is exactly the host
+    // where `::` leaves the fixed 127.0.0.1 urls unreachable (Codex on #1838).
+    expect(loopbackListenPlan({ address: "::" })).toEqual({ address: "127.0.0.1", inUseIsFine: true });
   });
 
   it("IS needed for a specific non-loopback address — the reported case", () => {
-    expect(loopbackListenAddress({ address: "192.168.64.1" })).toBe("127.0.0.1");
-    expect(loopbackListenAddress({ address: "100.101.102.103" })).toBe("127.0.0.1");
+    expect(loopbackListenPlan({ address: "192.168.64.1" })).toEqual({ address: "127.0.0.1", inUseIsFine: false });
+    expect(loopbackListenPlan({ address: "100.101.102.103" })).toEqual({ address: "127.0.0.1", inUseIsFine: false });
   });
 
   it("takes the v4 loopback for a v6 bind too, because that is what our callers dial", () => {
     // Not a family match: six of the eight callers write `127.0.0.1` literally and none writes
     // `::1`, so serving `::1` would answer a question nobody asks.
-    expect(loopbackListenAddress({ address: "fe80::1" })).toBe("127.0.0.1");
-    expect(loopbackListenAddress({ address: "2001:db8::5" })).toBe("127.0.0.1");
+    expect(loopbackListenPlan({ address: "fe80::1" })?.address).toBe("127.0.0.1");
+    expect(loopbackListenPlan({ address: "2001:db8::5" })?.address).toBe("127.0.0.1");
   });
 
   it("says no for a pipe or UNIX socket, which no session url can name", () => {
-    expect(loopbackListenAddress("/tmp/mulmoterminal.sock")).toBeNull();
+    expect(loopbackListenPlan("/tmp/mulmoterminal.sock")).toBeNull();
   });
 
   it("says no when the server is not listening at all", () => {
-    expect(loopbackListenAddress(null)).toBeNull();
+    expect(loopbackListenPlan(null)).toBeNull();
   });
 });
 
@@ -99,6 +105,34 @@ describe("startLoopbackListener", () => {
     expect(() => handlers[0]?.(Object.assign(new Error("in use"), { code: "EADDRINUSE" }))).not.toThrow();
     // Names the symptom the operator would otherwise have to diagnose from failing hooks.
     expect(warn.mock.calls[0]?.[0]).toContain("hooks");
+    warn.mockRestore();
+  });
+});
+
+describe("startLoopbackListener under a v6 wildcard primary", () => {
+  const wildcard = (): PrimaryListener => ({ address: () => ({ address: "::" }) });
+
+  const recorder = () => {
+    const handlers: ((err: NodeJS.ErrnoException) => void)[] = [];
+    const loopback: LoopbackListener = { listen: () => {}, once: (_event, handler) => handlers.push(handler) };
+    return { handlers, loopback };
+  };
+
+  it("says nothing when the port is already taken — that IS the wildcard covering loopback", () => {
+    const { handlers, loopback } = recorder();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    startLoopbackListener(wildcard(), loopback, 34567);
+    handlers[0]?.(Object.assign(new Error("in use"), { code: "EADDRINUSE" }));
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("still warns about a failure that is NOT the expected clash", () => {
+    const { handlers, loopback } = recorder();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    startLoopbackListener(wildcard(), loopback, 34567);
+    handlers[0]?.(Object.assign(new Error("denied"), { code: "EACCES" }));
+    expect(warn).toHaveBeenCalledTimes(1);
     warn.mockRestore();
   });
 });
