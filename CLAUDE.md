@@ -269,10 +269,7 @@ procedure: open this file, paste this, restart what, how to tell it worked, what
   heading — the old convention used a book emoji, dropped per **No emojis** above). Before this
   existed the changelog had one link into the guide in 717 lines, which is why nobody found the
   manual.
-- **Point the guide index at the new page.** `docs/guide/{en,ja}/index.md` opens with a
-  `> 🆕` banner naming the newest release. Adding a version page does not update it, and nothing
-  fails when it goes stale — it sat on 2.0.0 through four releases, so the front door advertised
-  a version nobody was running.
+- **Point the guide index at the new page.** `docs/guide/{en,ja}/index.md` carries a `> 🆕` banner naming the newest release, right under the launch demo at the top of the page (the demo stays above it on purpose: the banner changes every release, and a video sitting directly below it reads as that release's video — #1839). Adding a version page does not update the banner, and nothing fails when it goes stale — it sat on 2.0.0 through four releases, so the front door advertised a version nobody was running.
 - **Verify before committing**: every internal link resolves to a real page *and anchor*, and any
   config sample is run through its real validator — a bad `keymap` sample stops a reader's server
   from starting.

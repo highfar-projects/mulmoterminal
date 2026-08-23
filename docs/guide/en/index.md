@@ -8,16 +8,16 @@ description: A browser-terminal cockpit for running several AI coding agents (Cl
 
 # MulmoTerminal Guide (English)
 
-> **4.10.1 is out.** A zoomed cell no longer grows a scrollbar that scrolls nothing, and the
-> Prompts pane can be selected and copied with the mouse. Nothing to configure —
-> [what changed and how to tell](v4.10.1.html).
-
+**Demo (90 seconds, with sound).** One agent, then a grid of them.
+{: #demo }
 
 <video controls playsinline preload="metadata" style="width: 100%; max-width: 900px; border-radius: 6px;">
   <source src="../videos/launch-demo-en.mp4" type="video/mp4">
   <track kind="captions" src="../videos/launch-demo-en.vtt" srclang="en" label="English">
   <a href="../videos/launch-demo-en.mp4">Watch the demo (MP4, 3.3 MB)</a> — this browser can't play it inline.
 </video>
+
+*Each cell is coloured **working**, **done** or **needs you**. Zoom into one and the roster still holds what every other session asked, answered and did, so you go to whichever is lit and lose nothing catching up.*
 
 <details markdown="block">
 <summary>Transcript of the narration</summary>
@@ -44,8 +44,9 @@ That is the whole install.
 
 </details>
 
-*90 seconds, with sound — one agent, then a grid of them, each cell coloured **working**, **done** or **needs you**. Zoom into one and the roster still holds what every other session asked, answered and did, so you go to whichever is lit and lose nothing catching up.*
-
+> **4.10.1 is out.** A zoomed cell no longer grows a scrollbar that scrolls nothing, and the
+> Prompts pane can be selected and copied with the mouse. Nothing to configure —
+> [what changed and how to tell](v4.10.1.html).
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching
