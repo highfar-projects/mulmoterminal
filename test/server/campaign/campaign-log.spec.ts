@@ -74,6 +74,9 @@ describe("the file format", () => {
     ["a settlement naming no real phase", '{"kind":"settled","at":1,"task":"t","attempt":1,"event":"accept","phase":"Planned"}'],
     ["an abandonment with no note", '{"kind":"abandoned","at":1,"task":"t","attempt":1,"event":"accept"}'],
     ["a task that is not a string", '{"kind":"intent","at":1,"task":7,"attempt":1,"event":"accept"}'],
+    ["a timestamp JSON.parse turns into Infinity", '{"kind":"intent","at":1e309,"task":"t","attempt":1,"event":"accept"}'],
+    ["a negative infinity timestamp", '{"kind":"intent","at":-1e309,"task":"t","attempt":1,"event":"accept"}'],
+    ["a timestamp that is not a number", '{"kind":"intent","at":"now","task":"t","attempt":1,"event":"accept"}'],
     ["attempt zero", '{"kind":"intent","at":1,"task":"t","attempt":0,"event":"accept"}'],
     ["a negative attempt", '{"kind":"intent","at":1,"task":"t","attempt":-1,"event":"accept"}'],
     ["a fractional attempt", '{"kind":"intent","at":1,"task":"t","attempt":1.5,"event":"accept"}'],
@@ -83,6 +86,19 @@ describe("the file format", () => {
     ["null", "null"],
   ])("rejects %s", (_label, line) => {
     expect(parseCampaignLog(line)).toEqual([]);
+  });
+
+  // The reader must refuse exactly what the writer refuses. Any gap makes the round-trip check in
+  // `appendCampaignRecord` measure a laxer reader than the one that runs after a restart.
+  it("refuses the same records the writer refuses", () => {
+    const unwritable: CampaignRecord[] = [
+      { kind: "intent", at: Number.POSITIVE_INFINITY, task: "t1", attempt: 1, event: "accept" },
+      { kind: "intent", at: Number.NEGATIVE_INFINITY, task: "t1", attempt: 1, event: "accept" },
+      { kind: "intent", at: Number.NaN, task: "t1", attempt: 1, event: "accept" },
+      { kind: "intent", at: 1, task: "t1", attempt: 0, event: "accept" },
+      { kind: "intent", at: 1, task: "t1", attempt: 1.5, event: "accept" },
+    ];
+    unwritable.forEach((record) => expect(parseCampaignLog(recordLine(record))).toEqual([]));
   });
 
   it("reads an empty file as no records rather than as a problem", () => {

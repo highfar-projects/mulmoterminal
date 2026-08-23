@@ -63,8 +63,12 @@ export const recordLine = (record: CampaignRecord): string => `\n${JSON.stringif
 // no reader expects, the reason `isIssueNumber` in common/prPhase.ts is written the same way.
 const isAttempt = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v) && v > 0;
 
+// `Number.isFinite` and not `typeof === "number"`: `JSON.parse` turns `1e309` into `Infinity`,
+// which `JSON.stringify` writes back as `null` — so a record accepted with one would not survive
+// being re-serialised. The reader has to refuse exactly what the writer refuses, or the round-trip
+// check in `appendCampaignRecord` is checking against a laxer reader than the one that runs later.
 function isCommon(raw: Record<string, unknown>): boolean {
-  return typeof raw.at === "number" && typeof raw.task === "string" && isAttempt(raw.attempt) && isCampaignEvent(raw.event);
+  return Number.isFinite(raw.at) && typeof raw.task === "string" && isAttempt(raw.attempt) && isCampaignEvent(raw.event);
 }
 
 const isCampaignRecord = (raw: unknown): raw is CampaignRecord => {
