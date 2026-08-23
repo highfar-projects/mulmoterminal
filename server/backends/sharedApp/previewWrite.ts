@@ -25,7 +25,7 @@
 // second host to serve, and a shared app's operations are this host's by design (D5).
 import { doc, collection, serverTimestamp, writeBatch } from "firebase/firestore";
 import { randomUUID } from "node:crypto";
-import { appSchemasPath, type PublishedConfigDoc } from "@receptron/sharedapp";
+import type { PublishedConfigDoc } from "@receptron/sharedapp";
 import {
   MIRROR_OPEN,
   missingIdField,
@@ -35,17 +35,14 @@ import {
   recordOf,
   writableFields,
   type DrawnForm,
-  type PlannedWrite,
   type SubmitSpec,
 } from "@receptron/sharedapp/view";
 import { isRecord } from "../../../common/isRecord.js";
 import type { PreviewWrittenRecord } from "../../../common/sharedAppPreview.js";
 import { currentFirestore } from "../remoteHost/session.js";
+import { commitPlannedWrite, itemsPath } from "./itemWrites.js";
 import { previewSharedApp } from "./preview.js";
 import { sharedAppContext, type SharedAppHandle } from "./context.js";
-
-/** Where a shared collection's records live. */
-const itemsPath = (aid: string, cid: string): string => `${appSchemasPath(aid)}/${cid}/items`;
 
 export interface PreviewWriteSuccess {
   ok: true;
@@ -140,37 +137,6 @@ async function explainRefusal(handle: SharedAppHandle, aid: string, raw: Record<
   return (await bound(window.untilField, "closes")) ?? (await bound(window.fromField, "opens"));
 }
 
-/** The write itself. Single through the ordinary seam; paired through a batch, for the reason at
- *  the top of this file.
- *
- *  CREATE, NEVER OVERWRITE. A public submission is create-only, and for `idFrom: "field"` the id IS
- *  the thing being claimed — so an id that already exists means somebody has it. `set` would be an
- *  UPDATE, and the rules permit an owner to update an item (`allow update` on `items`): the author
- *  previewing their own app would silently replace a real visitor's booking with their test one. */
-async function commit(handle: SharedAppHandle, aid: string, plan: PlannedWrite): Promise<string | null> {
-  try {
-    if (plan.mirror === undefined) {
-      const made = await handle.docs.create(itemsPath(aid, plan.cid), plan.id, plan.record);
-      return made ? null : "already-taken";
-    }
-    // The paired path cannot ask for create-only: the web SDK's `WriteBatch` has `set`, `update`
-    // and `delete`, and no create. So the id is CHECKED first — a check, not a guarantee, and the
-    // difference is a real race with anybody submitting at the same moment. What closes it is the
-    // batch's own `update` on the mirror: a slot somebody else has just taken no longer satisfies
-    // what the rules require of it, and the commit is refused rather than overwriting.
-    const db = currentFirestore();
-    const taken = await handle.docs.get(itemsPath(aid, plan.cid), plan.id);
-    if (taken !== null) return "already-taken";
-    const batch = writeBatch(db);
-    batch.set(doc(collection(db, itemsPath(aid, plan.cid)), plan.id), plan.record);
-    batch.update(doc(collection(db, itemsPath(aid, plan.mirror.cid)), plan.mirror.id), { state: plan.mirror.state });
-    await batch.commit();
-    return null;
-  } catch (err) {
-    return err instanceof Error ? err.message : String(err);
-  }
-}
-
 /** WHAT THIS PROCESS WROTE, and nothing else.
  *
  *  Undo performs a delete through the AUTHOR's handle, which is authorized to delete anything in
@@ -228,7 +194,7 @@ export async function writePreviewSubmission(root: string, cid: string, values: 
   const id = recordId(spec.submit, handle.uid, record, randomUUID());
 
   const plan = plannedWrite(cid, spec.submit, id, record);
-  const failed = await commit(handle, preview.aid, plan);
+  const failed = await commitPlannedWrite(handle, preview.aid, plan);
   if (failed !== null) {
     const raw = preview.config.submit?.[cid];
     const why = isRecord(raw) ? await explainRefusal(handle, preview.aid, raw, record) : null;

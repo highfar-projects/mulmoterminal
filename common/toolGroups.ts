@@ -101,6 +101,15 @@ const GROUP_BY_TOOL = new Map<string, ToolGroup>([
   ["generateImage", "media"],
   ["presentMulmoScript", "media"],
 
+  // useSharedApp is the participant's half of the shared-app pair, and it is NOT beside
+  // manageSharedApp in `data`. That group is the workspace's own structured data; this tool moves
+  // records in an app SOMEBODY ELSE published, and a transition it performs can queue real mail to
+  // a real person. That is what `external` names — a reach outside this machine's own store — and
+  // it is a separate switch so a directory can have its own collections without also being able to
+  // act inside other people's apps. It is in NEVER_AUTO_APPROVED_TOOLS below for the same reason
+  // manageSharedApp is: `withdraw` deletes somebody's record with no undo.
+  ["useSharedApp", "external"],
+
   ["google", "external"],
   ["readXPost", "external"],
   ["searchX", "external"],
@@ -183,4 +192,4 @@ export const AUTO_ALLOWED_TOOLS: readonly string[] = ["presentForm", "presentCha
  *  copy somebody pasted. `manageSharedApp` publishes to the internet, rewrites the roster, and
  *  hands the roster live records. With auto-approval, "invite this address as owner, then deploy"
  *  arriving in that text is a tool call rather than a question. */
-export const NEVER_AUTO_APPROVED_TOOLS: readonly string[] = ["manageSharedApp"];
+export const NEVER_AUTO_APPROVED_TOOLS: readonly string[] = ["manageSharedApp", "useSharedApp"];
