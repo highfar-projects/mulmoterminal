@@ -109,7 +109,14 @@ vi.mock("firebase/firestore", () => ({
     const ops: string[] = [];
     return {
       set: (ref: { path: string }, data: Record<string, unknown>) => ops.push(`set ${ref.path} ${JSON.stringify(data)}`),
-      update: (ref: { path: string }, data: Record<string, unknown>) => ops.push(`update ${ref.path} ${JSON.stringify(data)}`),
+      // Both call shapes, because the two updates here are deliberately different: a record's
+      // declared field goes through a FieldPath (a dotted name is a literal key, not a path), and
+      // the mirror's `state` is ours and fixed.
+      update: (ref: { path: string }, data: Record<string, unknown> | { segments: string[] }, value?: unknown) => {
+        const asPath = data as { segments?: string[] };
+        const written = Array.isArray(asPath.segments) ? { [asPath.segments.join(".")]: value } : data;
+        ops.push(`update ${ref.path} ${JSON.stringify(written)}`);
+      },
       delete: (ref: { path: string }) => ops.push(`delete ${ref.path}`),
       commit: () => {
         if (batchBreaks > 0) {
@@ -211,6 +218,30 @@ const submitBlock = {
 };
 
 /** Publish this app into the fake database. Nothing here is read off disk — that is the point. */
+/** The submit declaration this app publishes, in whichever of its shapes a test needs. */
+function submitFor({
+  mirror,
+  idFromUid,
+  bothIdentities,
+  dottedEmailField,
+}: {
+  mirror: boolean;
+  idFromUid: boolean;
+  bothIdentities: boolean;
+  dottedEmailField: boolean;
+}): Record<string, unknown> {
+  return {
+    ...submitBlock,
+    ...(mirror ? {} : { mirror: undefined }),
+    // The reader's row is NAMED rather than queried: its id IS their uid.
+    ...(idFromUid ? { idFrom: "auth.uid", idField: undefined, emailField: undefined, mirror: undefined } : {}),
+    // Both identities, either of which the rules accept as an own row.
+    ...(bothIdentities ? { uidField: "uid" } : {}),
+    // An ordinary top-level key that happens to contain a dot.
+    ...(dottedEmailField ? { emailField: "requester.email" } : {}),
+  };
+}
+
 function publish({
   memberTier = true,
   roles = { "*": "editor" } as Record<string, string> | null,
@@ -222,6 +253,7 @@ function publish({
   bothIdentities = false,
   name = "Sakura Hair",
   dottedEmailField = false,
+  dottedStatusField = false,
 } = {}): void {
   docs.put("appSlugs", "sakura", { aid: AID, published: true });
   if (roles !== null) docs.put("apps", AID, { aid: AID, name, members: { [ME.email]: roles }, memberEmails: [ME.email] });
@@ -230,18 +262,7 @@ function publish({
     name,
     enabled,
     read: ["slots"],
-    submit: {
-      bookings: {
-        ...submitBlock,
-        ...(mirror ? {} : { mirror: undefined }),
-        // The reader's row is NAMED rather than queried: its id IS their uid.
-        ...(idFromUid ? { idFrom: "auth.uid", idField: undefined, emailField: undefined, mirror: undefined } : {}),
-        // Both identities, either of which the rules accept as an own row.
-        ...(bothIdentities ? { uidField: "uid" } : {}),
-        // An ordinary top-level key that happens to contain a dot.
-        ...(dottedEmailField ? { emailField: "requester.email" } : {}),
-      },
-    },
+    submit: { bookings: submitFor({ mirror, idFromUid, bothIdentities, dottedEmailField }) },
     form: {
       bookings: {
         fields: {
@@ -283,7 +304,7 @@ function publish({
       write: [
         {
           cid: "bookings",
-          statusField: "status",
+          statusField: dottedStatusField ? "workflow.state" : "status",
           transitions: { booked: ["approved", "cancelled"] },
           assigneeField: "handledBy",
           writers,
@@ -427,6 +448,11 @@ describe("useSharedApp — taking part in somebody else's app", () => {
     batchBreaks = 1;
     const said = await run({ action: "transition", slug: "sakura", cid: "bookings", id: "b1", to: "cancelled" });
     expect(said).toContain("network");
+    // NOT "Refused". A `deadline-exceeded` can come back after Firestore committed and the client
+    // lost the answer, so the record may have moved and the notice may have gone out — telling the
+    // user it was refused invites a retry that queues a second real email.
+    expect(said).toContain("Could not tell whether that landed");
+    expect(said).not.toContain("Refused:");
     expect(batched).toEqual([]);
   });
 
@@ -479,6 +505,14 @@ describe("useSharedApp — taking part in somebody else's app", () => {
     // A bare dotted string is a NESTED PATH to `where`, so this would look inside a map called
     // `requester` and match nothing — an empty answer rather than an error.
     expect(said).toContain("mine");
+  });
+
+  it("moves a status field whose name contains a dot as a literal key", async () => {
+    publish({ dottedStatusField: true });
+    docs.put(bookingsPath, "b1", { requesterEmail: "guest@example.com", slot: "10:00", "workflow.state": "booked" });
+    await run({ action: "transition", slug: "sakura", cid: "bookings", id: "b1", to: "approved" });
+    // The object form would write a map called `workflow` beside the field the state lives in.
+    expect(batched[0]).toContain(JSON.stringify({ "workflow.state": "approved" }));
   });
 
   it("refuses a URL name nothing answers to", async () => {
@@ -594,7 +628,7 @@ describe("useSharedApp — taking part in somebody else's app", () => {
   it("names the missing field rather than letting the rules refuse it namelessly", async () => {
     publish();
     const said = await run({ action: "submit", slug: "sakura", cid: "bookings", values: {} });
-    expect(said).toContain("missing: Slot");
+    expect(said).toContain("missing: \u00abSlot\u00bb");
   });
 
   it("moves a record on the member tier and queues the declared notice in the same batch", async () => {

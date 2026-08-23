@@ -15,7 +15,7 @@
 // batch goes through `writeBatch` on `currentFirestore()` rather than through `handle.docs`,
 // because that seam has `set` / `create` / `delete` and no batch — see the note in `previewWrite.ts`
 // on why core is not the place to add one.
-import { collection, doc, runTransaction, writeBatch } from "firebase/firestore";
+import { collection, doc, FieldPath, runTransaction, writeBatch } from "firebase/firestore";
 import { appSchemasPath, APPS_COLLECTION } from "@receptron/sharedapp";
 import { MIRROR_OPEN, type JudgedIntent, type PlannedWrite } from "@receptron/sharedapp/view";
 import { currentFirestore } from "../remoteHost/session.js";
@@ -194,7 +194,13 @@ export async function commitIntent(aid: string, intent: JudgedIntent): Promise<I
       // somebody's record.
       return { error: `intent ${intent.kind} has no field to move`, refusal: false };
     }
-    batch.update(item, { [intent.field]: intent.to });
+    // `new FieldPath(name)` rather than the object form, and for the reason the own-row query uses
+    // one: a dotted key is a NESTED PATH to `update`, so an app whose `statusField` is
+    // `workflow.state` — a literal top-level field to the records and to the rules — would have a
+    // map called `workflow` written beside the field the state actually lives in. The rules read the
+    // one the declaration names, so the transition is refused; where they did not, the record would
+    // be quietly corrupted.
+    batch.update(item, new FieldPath(intent.field), intent.to);
     if (intent.mail !== undefined) {
       const { to, template, data } = intent.mail;
       const queued: Record<string, unknown> = { cid: intent.cid, itemId: intent.itemId, to, template };

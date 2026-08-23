@@ -27,6 +27,7 @@ import {
 } from "@receptron/sharedapp/view";
 import { isRecord } from "../../../../common/isRecord.js";
 import { commitPlannedWrite } from "../itemWrites.js";
+import { quotedList } from "../quoted.js";
 import { submitSpecOf } from "../submitSpec.js";
 import { formBlockOf, submitBlockOf, type JoinedApp } from "./app.js";
 
@@ -125,7 +126,10 @@ export async function submitToApp(app: JoinedApp, cid: string, values: Record<st
     };
 
   const missing = missingRequired(plan.fields, values);
-  if (missing.length > 0) return { ok: false, reason: "host", error: `missing: ${missing.join(" / ")}` };
+  // QUOTED, because these are the published LABELS — the app author's own words, on their way into
+  // a report the model reads. Quoting at the narration would have missed them: this string travels
+  // to the agent whole.
+  if (missing.length > 0) return { ok: false, reason: "host", error: `missing: ${quotedList(missing, " / ")}` };
 
   // `serverTimestamp` is what this host offers where the rules require GOOGLE's clock, and it is
   // handed over whether or not the app declares a `stampField` — that is the declaration's answer

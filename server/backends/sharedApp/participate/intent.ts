@@ -30,7 +30,13 @@ export interface AskedIntent {
   to?: string | undefined;
 }
 
-export type IntentOutcome = { ok: true; tier: WriteTier; mailed: boolean } | { ok: false; error: string; refusals?: { tier: WriteTier; reason: string }[] };
+export type IntentOutcome =
+  | { ok: true; tier: WriteTier; mailed: boolean }
+  /** `refusal: false` means the write did not COMPLETE, which is not the same as not happening: a
+   *  `deadline-exceeded` can come back after Firestore committed and the client lost the answer.
+   *  The caller has to say so — "refused" states the opposite of what may have occurred, and the
+   *  batch it may have committed carries the notice as well as the record. */
+  | { ok: false; error: string; refusal: boolean; refusals?: { tier: WriteTier; reason: string }[] };
 
 /** The row cannot be read, so nothing can be judged about it.
  *
@@ -60,7 +66,7 @@ function whyNotJudgeable(found: Awaited<ReturnType<typeof readRecord>>, asked: A
 export async function performIntent(app: JoinedApp, asked: AskedIntent): Promise<IntentOutcome> {
   const found = await readRecord(app, asked.cid, asked.itemId);
   const why = whyNotJudgeable(found, asked);
-  if (why !== null) return { ok: false, error: why };
+  if (why !== null) return { ok: false, error: why, refusal: found.read || found.refusal };
   const row = found.read && found.row !== null ? found.row : {};
 
   const holding = (cid: string, itemId: string): Record<string, unknown> | null => (cid === asked.cid && itemId === asked.itemId ? row : null);
@@ -95,7 +101,7 @@ export async function performIntent(app: JoinedApp, asked: AskedIntent): Promise
       // retrying it on the next tier can land the same move through a projection that carries no
       // `mail` — so the record moves and the notice the first tier declared is never queued. That
       // is the one thing the single-shape batch in `itemWrites.ts` exists to prevent.
-      if (!failed.refusal) return { ok: false, error: failed.error, refusals };
+      if (!failed.refusal) return { ok: false, error: failed.error, refusal: false, refusals };
       // A RULES REFUSAL DOES NOT END THE LOOP, and that is a decision rather than a fall-through.
       // The tiers are different DECLARATIONS about the same reader, and the rules answer about the
       // record: a stale `writers` list can carry a move the deployed rules refuse this person as
@@ -116,9 +122,10 @@ export async function performIntent(app: JoinedApp, asked: AskedIntent): Promise
   if (refusals.length === 0)
     return {
       ok: false,
+      refusal: true,
       error:
         "this app published no projection either tier could judge that against — it has no member or participant pages, and no public submit block for this collection. " +
         "Nothing was written.",
     };
-  return { ok: false, error: refusals.map((entry) => `${entry.tier}: ${entry.reason}`).join("; "), refusals };
+  return { ok: false, refusal: true, error: refusals.map((entry) => `${entry.tier}: ${entry.reason}`).join("; "), refusals };
 }
