@@ -19,7 +19,8 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
 import { setFirestoreAccessor, setSharedCollectionsSupport } from "@mulmoclaude/core/collection/server";
 import { useSharedApp } from "../../../server/infra/use-shared-app-tool.js";
-import { stopWatchesFor } from "../../../server/session/shared-app-watches.js";
+import { startWatch, stopWatchesFor } from "../../../server/session/shared-app-watches.js";
+import { joinApp } from "../../../server/backends/sharedApp/participate/app.js";
 import { AID, bookingsPath, freshBag, ME, publishApp, slotsPath, type Bag } from "../../support/participateHarness.js";
 import { makeTempDir } from "../../support/tempDir";
 
@@ -427,6 +428,25 @@ describe("useSharedApp — watching a collection", () => {
     expect(bag.listeners).toHaveLength(0);
   });
 
+  it("detaches a subscription that finished arriving after its session was torn down", async () => {
+    publish();
+    const joined = await joinApp("sakura");
+    if (!joined.ok) throw new Error(`fixture: ${joined.problems.join(" ")}`);
+    // `startWatch` puts its reservation in place before its first await, so calling teardown on the
+    // very next line lands exactly in the window this is about: registered, not yet subscribed.
+    const pending = startWatch(SESSION, joined.app, "bookings");
+    stopWatchesFor(SESSION);
+    const outcome = await pending;
+
+    expect(outcome.started).toBe(false);
+    // The captured map still holds the reservation — teardown drops the SESSION's entry, and the
+    // next watch would build a fresh map — so a check against that map would call this registered
+    // while nothing can reach it. Its `stop` would then sit on an object no teardown ever walks,
+    // and the Firestore listener would live until the process restarted.
+    expect(bag.listeners).toHaveLength(1);
+    expect(bag.listeners[0].stopped).toBe(true);
+  });
+
   it("gives concurrent watches distinct ids", async () => {
     publish();
     const said = await Promise.all([watch("one"), watch("two")]);
@@ -553,6 +573,33 @@ describe("useSharedApp — watching a collection", () => {
     term.sendFails = false;
     await vi.advanceTimersByTimeAsync(HOLD_MS * 3);
     expect(term.sent).toHaveLength(0);
+  });
+
+  it("does not let a dead listener tear down the watch that replaced it", async () => {
+    publish();
+    await watch();
+    settle();
+    const first = bag.listeners[0];
+    await unwatch();
+    // The same session watches the same collection again — a new watch in the slot the old one had.
+    expect(await watch()).toContain("Watching");
+    const second = bag.listeners[1];
+    settle();
+
+    // Now the OLD listener's failure, queued before the unsubscribe, finally lands. A drop by key
+    // alone would delete the replacement without calling its `stop`, leaving a live Firestore
+    // listener nothing can reach or detach (Codex on #1844).
+    first.failAfterStop(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }));
+    await vi.advanceTimersByTimeAsync(HOLD_MS * 2);
+
+    // The replacement is untouched and still reachable: it fires, and `unwatch` still finds it.
+    expect(second.stopped).toBe(false);
+    second.fire(["r1"]);
+    await vi.advanceTimersByTimeAsync(COALESCE_MS);
+    expect(texts().filter((line) => line.includes("changed"))).toHaveLength(1);
+    expect(texts().some((line) => line.includes("has ENDED"))).toBe(false);
+    expect(await unwatch()).toContain("Stopped watch");
+    expect(second.stopped).toBe(true);
   });
 
   it("says plainly when there was nothing to stop", async () => {

@@ -66,6 +66,8 @@ export interface Listener {
    *  at the edges, so this is a real thing a callback does — and the only way a spec can put the
    *  host's own post-teardown guard under load, since `fire` stops honouring a stopped listener. */
   fireAfterStop: (changed: number | string[]) => void;
+  /** The same for a FAILURE that was already queued when the host unsubscribed. */
+  failAfterStop: (err: unknown) => void;
   stopped: boolean;
 }
 
@@ -205,6 +207,7 @@ const subscribe = (bag: Bag) => (target: Record<string, unknown>, next: (snapsho
       if (!entry.stopped) error(err);
     },
     fireAfterStop: (changed) => next({ docChanges: () => shapedChanges(changed) }),
+    failAfterStop: (err) => error(err),
     stopped: false,
   };
   bag.listeners.push(entry);

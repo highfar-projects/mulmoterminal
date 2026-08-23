@@ -304,7 +304,7 @@ export async function startWatch(sessionId: string, app: JoinedApp, cid: string)
   // ASSIGNED WITHOUT YIELDING. Calling an async function runs its body up to its first await and
   // then hands back the promise, so nothing else gets to look at this entry before `starting` is on
   // it -- which is what makes the reservation and its outcome one indivisible thing.
-  const setup = beginWatch(watch, app, cid, key, watches);
+  const setup = beginWatch(watch, app, cid, key);
   watch.starting = setup;
   try {
     return await setup;
@@ -324,7 +324,7 @@ async function joinExisting(existing: Watch): Promise<StartResult> {
   return outcome.started === true ? { started: "already", id: outcome.id } : outcome;
 }
 
-async function beginWatch(watch: Watch, app: JoinedApp, cid: string, key: string, watches: Map<string, Watch>): Promise<StartResult> {
+async function beginWatch(watch: Watch, app: JoinedApp, cid: string, key: string): Promise<StartResult> {
   const sessionId = watch.sessionId;
   const subscribed = await subscribeToCollection(
     app,
@@ -334,9 +334,18 @@ async function beginWatch(watch: Watch, app: JoinedApp, cid: string, key: string
       armed(watch, COALESCE_MS);
     },
     (why) => {
-      // The subscription is already down; the bookkeeping goes BEFORE the notice, so a `watch`
-      // issued after reading it starts a real new one rather than being told it is already on.
-      dropWatch(sessionId, key);
+      // ALREADY DETACHED IS NOT NEWS. `unwatch` has told the agent, or the session is gone; either
+      // way an error queued before that is about a watch nobody is waiting on.
+      if (watch.stopped) return;
+      // AND THE DROP IS BY IDENTITY. `key` names a slot, not this watch: an error already in flight
+      // when `unwatch` ran can land after the same session has started a REPLACEMENT for the same
+      // collection, and an unqualified drop would delete that replacement without calling its
+      // `stop` -- leaving a live Firestore listener nothing can reach or detach, billed to the
+      // app's owner until the process restarts (Codex on #1844).
+      //
+      // The bookkeeping goes BEFORE the notice, so a `watch` issued after reading it starts a real
+      // new one rather than being told it is already on.
+      dropWatch(sessionId, key, watch);
       owe(sessionId, endedLine(watch, why));
     },
   ).catch((err: unknown) => {
@@ -353,17 +362,30 @@ async function beginWatch(watch: Watch, app: JoinedApp, cid: string, key: string
   // THE RESERVATION CAN HAVE GONE while we waited: the session was reaped, or the subscription died
   // before it was ever handed back. Detached here rather than stored, because putting it back would
   // resurrect a watch on a session that has already been told everything it will ever be told.
-  if (watches.get(key) !== watch) {
+  //
+  // ASKED OF `bySession`, NOT OF THE CAPTURED MAP, and `stopped` is asked as well. A teardown drops
+  // the session's whole entry, after which the next `watch` builds a FRESH map — so the map this
+  // call is holding can still contain this reservation while being orphaned, and a check against it
+  // would say the watch is registered when nothing can reach it. Its listener would then never be
+  // detached: `stop` is stored on an object no teardown will ever walk, which is the leak the
+  // reservation was added to prevent, one step further along.
+  if (watch.stopped || bySession.get(sessionId)?.get(key) !== watch) {
     subscribed.handle.stop();
     return { started: false, why: "the session ended while the watch was being set up" };
   }
   return { started: true, id: watch.id, scope: watch.scope };
 }
 
-function dropWatch(sessionId: string, key: string): Watch | null {
+/** Remove the watch registered under `key`, or nothing.
+ *
+ *  `only` narrows that to one particular watch. A key names a SLOT, and the same session can fill it
+ *  again after emptying it -- so a caller holding a watch from before must say which one it means,
+ *  or it will remove a stranger's. */
+function dropWatch(sessionId: string, key: string, only?: Watch): Watch | null {
   const watches = bySession.get(sessionId);
   const watch = watches?.get(key);
   if (!watches || !watch) return null;
+  if (only !== undefined && watch !== only) return null;
   watches.delete(key);
   if (watches.size === 0) bySession.delete(sessionId);
   if (watch.timer !== null) clearTimeout(watch.timer);
@@ -407,5 +429,8 @@ export function stopWatchesFor(sessionId: string): void {
       // Already detached.
     }
   }
+  // Emptied as well as dropped. The map can be held by a `startWatch` still inside its await, and a
+  // reservation left in it would read as registered to that call's own final check.
+  watches.clear();
   bySession.delete(sessionId);
 }
