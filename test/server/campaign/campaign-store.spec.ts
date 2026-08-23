@@ -48,7 +48,7 @@ describe("where a campaign lives", () => {
     expect(campaignsDir()).not.toContain(process.cwd());
   });
 
-  it.each(["lint-2026", "a", "A1", "x".repeat(64)])("accepts %s as an id", (id) => {
+  it.each(["lint-2026", "a", "a1", "x".repeat(64)])("accepts %s as an id", (id) => {
     expect(isCampaignId(id)).toBe(true);
     expect(campaignFile(id)).toBe(path.join(campaignsDir(), `${id}.jsonl`));
   });
@@ -61,6 +61,9 @@ describe("where a campaign lives", () => {
     ["a windows separator", "a\\b"],
     ["a dot", "a.b"],
     ["a leading hyphen", "-lead"],
+    ["an upper-case letter", "Lint"],
+    ["a shouted id", "LINT"],
+    ["one upper-case letter in the middle", "lintX"],
     ["empty", ""],
     ["too long", "x".repeat(65)],
     ["a null byte", "a\u0000b"],
@@ -72,6 +75,26 @@ describe("where a campaign lives", () => {
 
   it.each([null, undefined, 7, {}, ["a"]])("refuses %o, which is not a string at all", (id) => {
     expect(isCampaignId(id)).toBe(false);
+  });
+});
+
+// A case-insensitive filesystem — the default on macOS and Windows — is what makes this worth a
+// rule rather than a preference: two spellings would be one file, so two campaigns would append
+// into one log and `listCampaigns()` would report whichever spelling the directory happened to
+// keep. Rejecting the variant outright is the only answer that does not depend on the platform.
+describe("case", () => {
+  it("admits one spelling of an id, so two campaigns cannot share one log", () => {
+    expect(isCampaignId("lint")).toBe(true);
+    expect(isCampaignId("Lint")).toBe(false);
+    expect(campaignFile("Lint")).toBeNull();
+    expect(appendCampaignRecord("Lint", intent)).toBe(false);
+  });
+
+  it("leaves a lower-case campaign untouched by a shouted one", () => {
+    appendCampaignRecord("lint", intent);
+    appendCampaignRecord("LINT", settled);
+    expect(readCampaign("lint")).toEqual([intent]);
+    expect(listCampaigns()).toEqual(["lint"]);
   });
 });
 

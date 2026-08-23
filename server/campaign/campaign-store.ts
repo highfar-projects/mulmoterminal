@@ -14,9 +14,12 @@ import { parseCampaignLog, recordLine, type CampaignRecord } from "./campaign-lo
 const CAMPAIGNS_DIR = "campaigns";
 const CAMPAIGN_EXT = ".jsonl";
 
-/** A campaign id this app will accept: letters, digits, hyphen. No separator and no dot, which is
- *  what makes the join below unable to leave the directory. */
-const CAMPAIGN_ID = /^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/;
+/** A campaign id becomes a FILENAME, so this is the whole defence: no separators, no dots, nothing
+ *  that could leave the campaigns directory. **Lowercase**, for the reason `ROOM_ID_RE` is — a
+ *  case-insensitive filesystem (the default on macOS and Windows) would otherwise let `Lint` and
+ *  `lint` append into one log under two names, and reconciliation would derive idempotency keys
+ *  with a different campaign id than the writer used. */
+const CAMPAIGN_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 export const isCampaignId = (v: unknown): v is string => typeof v === "string" && CAMPAIGN_ID.test(v);
 
