@@ -77,10 +77,15 @@ type Edges = Partial<Record<CampaignEvent, CampaignPhase>>;
 const TRANSITIONS: Record<CampaignPhase, Edges> = {
   intake: { accept: "planned", reject: "rejected" },
   planned: { lease: "leased", stop: "stopped" },
-  // `revalidate` skips `claimed` on purpose: a task whose base merely went stale already
-  // declared its paths and still holds them, so there is nothing left to claim.
-  leased: { declare: "claimed", revalidate: "merge-queue", crash: "orphaned", stop: "stopped" },
-  claimed: { begin: "implementing", crash: "orphaned", stop: "stopped" },
+  // The only way out of `leased` into work is `declare`. Routing anything else onward lets a task
+  // that never declared its paths reach the merge with no exclusion at all — which is what the
+  // claim exists to prevent, and what an earlier `leased -> merge-queue` edge here allowed.
+  leased: { declare: "claimed", crash: "orphaned", stop: "stopped" },
+  // `revalidate` is the task whose base merely went stale: no implementation to redo, straight
+  // back to the queue. It hangs off `claimed` rather than `leased` so that `declare` sits on
+  // every route to the merge. For a task returning from a send-back or an orphan the declaration
+  // is a re-assertion of paths it never gave back, not a second acquisition.
+  claimed: { begin: "implementing", revalidate: "merge-queue", crash: "orphaned", stop: "stopped" },
   implementing: { submit: "self-check", crash: "orphaned", stop: "stopped" },
   "self-check": { "self-check-failed": "implementing", "self-check-passed": "review", crash: "orphaned", stop: "stopped" },
   review: { "review-blocking": "implementing", "review-passed": "verify", crash: "orphaned", stop: "stopped" },

@@ -66,10 +66,41 @@ describe("the table and the predicates agree", () => {
   // Every way back into work, in one place. Each was added in a different round of the design
   // review and each was written without `leased` the first time, so the useful check is over the
   // category rather than over any one of them.
-  it("routes every return to work through `leased`, carrying the claim", () => {
+  it("routes every return to work through `leased`, and none of them gives the paths back", () => {
     const returns = edges.filter(({ from, to }) => to === "leased" && from !== "planned");
     expect(returns.map(({ from, event }) => `${from} ${event}`).sort()).toEqual(["awaiting-approval send-back", "orphaned resolved-in-flight"]);
-    returns.forEach(({ from }) => expect(claimHolding(from)).toBe("held"));
+    returns.forEach(({ from, to }) => {
+      expect(claimHolding(from)).not.toBe("free");
+      expect(releasesClaim(to)).toBe(false);
+    });
+  });
+
+  // The hole this closed: `leased -> merge-queue` used to let a task that never declared its
+  // paths run all the way to `merged`, with no exclusion over anything it touched.
+  it("leaves `leased` only by declaring", () => {
+    expect(
+      eventsFrom("leased")
+        .map((event) => `${event} -> ${advance("leased", event)}`)
+        .sort(),
+    ).toEqual(["crash -> orphaned", "declare -> claimed", "stop -> stopped"]);
+  });
+
+  it("reaches nothing but the start of a task without declaring, and without reconciling", () => {
+    // `claimed` is where paths are declared; `orphaned` is where reconciliation reads the records
+    // and decides. Refuse both and a task should get nowhere near work, a queue or a merge.
+    const seen = new Set<CampaignPhase>(["intake"]);
+    const queue: CampaignPhase[] = ["intake"];
+    while (queue.length > 0) {
+      const phase = queue.shift();
+      if (phase === undefined) break;
+      eventsFrom(phase).forEach((event) => {
+        const next = advance(phase, event);
+        if (next === null || next === "claimed" || next === "orphaned" || seen.has(next)) return;
+        seen.add(next);
+        queue.push(next);
+      });
+    }
+    expect([...seen].sort()).toEqual(["intake", "leased", "planned", "rejected", "stopped"]);
   });
 });
 
@@ -162,9 +193,17 @@ describe("the asymmetries that read as omissions", () => {
     expect(canCrash("planned")).toBe(false);
   });
 
-  it("skips `claimed` when only the base went stale — the paths were already declared", () => {
-    expect(advance("leased", "revalidate")).toBe("merge-queue");
-    expect(advance("leased", "declare")).toBe("claimed");
+  it("sends a merely-stale base back to the queue from `claimed`, with no implementation to redo", () => {
+    expect(advance("claimed", "revalidate")).toBe("merge-queue");
+    expect(advance("claimed", "begin")).toBe("implementing");
+    // Not from `leased`: `declare` has to sit on every route to the merge.
+    expect(advance("leased", "revalidate")).toBeNull();
+  });
+
+  it("reports the claim as unknown after a crash — `planned -> leased -> orphaned` never declared", () => {
+    expect(advance("planned", "lease")).toBe("leased");
+    expect(advance("leased", "crash")).toBe("orphaned");
+    expect(claimHolding("orphaned")).toBe("unknown");
   });
 });
 

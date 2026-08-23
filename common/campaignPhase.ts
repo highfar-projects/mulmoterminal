@@ -79,14 +79,21 @@ export function cloneHolding(phase: CampaignPhase): Holding {
 /**
  * Does the task hold its exclusive claim over the paths it declared?
  *
- * `leased` is `unknown` **by entry path, not by ignorance**: arriving from `planned` the task has
- * not declared anything yet, while arriving from a send-back, a voided approval, a refused merge
- * or an orphan it is only re-acquiring a workspace and still owns its paths. Reading this as
- * "free" drops the exclusion on every recovery — which is when a sibling task is most likely to
- * be sitting on those same paths. Use `releasesClaim` to decide, never this.
+ * Two phases answer `unknown`, and in both the phase genuinely does not carry the answer — the
+ * campaign's records do, which is why the claim registry and not this function is the authority
+ * on who owns what:
+ *
+ * - `leased` depends on **how it was entered**. From `planned` nothing has been declared yet;
+ *   from a send-back, a voided approval, a refused merge or an orphan the task is re-acquiring a
+ *   workspace and still owns its paths. Reading this as "free" drops the exclusion on every
+ *   recovery — which is when a sibling is most likely to be sitting on those same paths.
+ * - `orphaned` depends on **where it crashed**. `planned -> leased -> orphaned` is a real route
+ *   and that task never declared anything, so reconciliation has to read the records.
+ *
+ * Never decide a release from this. `releasesClaim` is that rule, and it holds on every route.
  */
 export function claimHolding(phase: CampaignPhase): Holding {
-  if (phase === "leased") return "unknown";
+  if (phase === "leased" || phase === "orphaned") return "unknown";
   if (isTerminal(phase) || phase === "intake" || phase === "planned") return "free";
   return "held";
 }
