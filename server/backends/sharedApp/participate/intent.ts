@@ -39,14 +39,29 @@ export type IntentOutcome = { ok: true; tier: WriteTier; mailed: boolean } | { o
  *  against a status of `undefined`, which no table carries, so the refusal would name the wrong
  *  thing. */
 const UNREADABLE =
-  "that record could not be read, so nothing here can say what state it is in. Either it is in a collection this app does not open to you, " +
+  "that record is not readable by you, so nothing here can say what state it is in. Either it is in a collection this app does not open to you, " +
   "or the app has not been published. Nothing was written.";
+
+/** The read BROKE, which is not the same sentence at all: nothing about this reader's permissions
+ *  was established, and the ask is worth making again. Told the refusal above instead, the caller
+ *  stops asking about a record they may well be entitled to move. */
+const unreadableNow = (why: string): string =>
+  `that record could not be read: ${why}. That is a failure, not a permission boundary — nothing was written, and the ask is worth making again.`;
+
+/** Why an intent cannot even be judged, or null when the row is in hand. Three answers, kept apart
+ *  for the reason every read in this feature keeps them apart: they send the caller to opposite
+ *  places, and two of them are final while the third is not. */
+function whyNotJudgeable(found: Awaited<ReturnType<typeof readRecord>>, asked: AskedIntent): string | null {
+  if (!found.read) return found.refusal ? UNREADABLE : unreadableNow(found.why);
+  if (found.row === null) return `no record "${asked.itemId}" in "${asked.cid}". Nothing was written.`;
+  return null;
+}
 
 export async function performIntent(app: JoinedApp, asked: AskedIntent): Promise<IntentOutcome> {
   const found = await readRecord(app, asked.cid, asked.itemId);
-  if (!found.read) return { ok: false, error: UNREADABLE };
-  if (found.row === null) return { ok: false, error: `no record "${asked.itemId}" in "${asked.cid}". Nothing was written.` };
-  const row = found.row;
+  const why = whyNotJudgeable(found, asked);
+  if (why !== null) return { ok: false, error: why };
+  const row = found.read && found.row !== null ? found.row : {};
 
   const holding = (cid: string, itemId: string): Record<string, unknown> | null => (cid === asked.cid && itemId === asked.itemId ? row : null);
 

@@ -208,15 +208,27 @@ function publish({
   writers = [ME.email],
   rosterTier = false,
   mirror = true,
+  idFromUid = false,
+  enabled = true,
+  bothIdentities = false,
 } = {}): void {
   docs.put("appSlugs", "sakura", { aid: AID, published: true });
   if (roles !== null) docs.put("apps", AID, { aid: AID, name: "Sakura Hair", members: { [ME.email]: roles }, memberEmails: [ME.email] });
   docs.put(`apps/${AID}/config`, "public", {
     protocol: "1.0.0",
     name: "Sakura Hair",
-    enabled: true,
+    enabled,
     read: ["slots"],
-    submit: { bookings: mirror ? submitBlock : { ...submitBlock, mirror: undefined } },
+    submit: {
+      bookings: {
+        ...submitBlock,
+        ...(mirror ? {} : { mirror: undefined }),
+        // The reader's row is NAMED rather than queried: its id IS their uid.
+        ...(idFromUid ? { idFrom: "auth.uid", idField: undefined, emailField: undefined, mirror: undefined } : {}),
+        // Both identities, either of which the rules accept as an own row.
+        ...(bothIdentities ? { uidField: "uid" } : {}),
+      },
+    },
     form: {
       bookings: {
         fields: {
@@ -403,6 +415,28 @@ describe("useSharedApp — taking part in somebody else's app", () => {
     const said = await run({ action: "transition", slug: "sakura", cid: "bookings", id: "b1", to: "cancelled" });
     expect(said).toContain("network");
     expect(batched).toEqual([]);
+  });
+
+  it("does not call a roster-only board open just because it publishes a public block", async () => {
+    publish({ enabled: false });
+    const said = await run({ action: "describe", slug: "sakura" });
+    // Publish marks the slug reservation from whether a `public` block EXISTS, so an app that
+    // deliberately declares one with `enabled: false` — the member-only append feed among the
+    // shipped templates — reads as published while the rules keep anonymous reads closed.
+    expect(said).toContain("NOT open to the public");
+  });
+
+  it("finds the rows held under EITHER identity when both are declared", async () => {
+    publish({ bothIdentities: true });
+    denyQuery.add(bookingsPath);
+    // The rules accept either, so a row staff entered on somebody's behalf carries the address and
+    // no uid while that person's own submissions carry the uid. Querying one field only hides half
+    // of what is theirs — as an empty answer rather than as an error.
+    docs.put(bookingsPath, "by-uid", { uid: ME.uid, slot: "9:00", status: "booked" });
+    docs.put(bookingsPath, "by-desk", { requesterEmail: ME.email, slot: "10:00", status: "booked" });
+    const said = await run({ action: "records", slug: "sakura", cid: "bookings" });
+    expect(said).toContain("by-uid");
+    expect(said).toContain("by-desk");
   });
 
   it("refuses a URL name nothing answers to", async () => {
@@ -663,10 +697,31 @@ describe("useSharedApp — taking part in somebody else's app", () => {
     expect(said).not.toContain("YOUR OWN ONLY");
   });
 
+  it("does not report a broken record read as a permission boundary", async () => {
+    publish();
+    docs.breakGet.add(`${bookingsPath}/b1`);
+    const said = await run({ action: "transition", slug: "sakura", cid: "bookings", id: "b1", to: "approved" });
+    expect(said).toContain("worth making again");
+    expect(said).not.toContain("not readable by you");
+    expect(batched).toEqual([]);
+  });
+
+  it("does not report a broken own-row lookup as an empty own-row answer", async () => {
+    // `idFrom: "auth.uid"`: the reader's row is NAMED, so the fallback is a get rather than a
+    // query. An empty answer here means "you have not got one", and a blip must not borrow that
+    // sentence.
+    publish({ idFromUid: true });
+    denyQuery.add(bookingsPath);
+    docs.breakGet.add(`${bookingsPath}/${ME.uid}`);
+    const said = await run({ action: "records", slug: "sakura", cid: "bookings" });
+    expect(said).toContain("a failure, not a permission boundary");
+    expect(said).not.toContain("YOUR OWN ONLY");
+  });
+
   it("keeps a refused read apart from an absent record", async () => {
     publish();
     docs.denyGet.add(`${bookingsPath}/b1`);
-    expect(await run({ action: "transition", slug: "sakura", cid: "bookings", id: "b1", to: "approved" })).toContain("could not be read");
+    expect(await run({ action: "transition", slug: "sakura", cid: "bookings", id: "b1", to: "approved" })).toContain("not readable by you");
     expect(await run({ action: "transition", slug: "sakura", cid: "bookings", id: "b2", to: "approved" })).toContain('no record "b2"');
     expect(batched).toEqual([]);
   });

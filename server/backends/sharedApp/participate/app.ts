@@ -29,7 +29,7 @@
 //
 // So this host judges against precisely the projection production judges against, and where there
 // is none it says there is none.
-import { collection, getDocs, limit as limitTo, query, where } from "firebase/firestore";
+import { collection, getDocs, limit as limitTo, query, where, type Firestore } from "firebase/firestore";
 import {
   APP_PROTOCOL,
   protocolOf,
@@ -58,8 +58,17 @@ export interface JoinedApp {
   aid: string;
   /** The app's own name, when the roster let us read the app document. */
   name?: string;
-  /** Is the URL name resolving for the world? A roster-only app answers false and still works for
-   *  the people on it — the reservation resolves for them either way (`appSlugs` read). */
+  /** Is this app OPEN to anyone with the link?
+   *
+   *  Read from `config/public.enabled`, which is what the rules read (`publicOn`), and NOT from the
+   *  slug reservation's `published`. Publish sets that flag from whether a `public` block EXISTS
+   *  (`setSlugPublished(…, face.public !== undefined)`), so an app that deliberately publishes one
+   *  with `enabled: false` — the member-only append feed among the shipped templates — carries a
+   *  reservation saying published while anonymous reads stay closed. Reporting that as open tells
+   *  somebody their roster-only board is on the internet.
+   *
+   *  The reservation is the fallback for the app whose `config/public` is not there to read, where
+   *  its own answer is the only one available. */
   published: boolean;
   /** `config/public`, when the app publishes a public face — the submit declarations and the form
    *  live here.
@@ -243,7 +252,7 @@ async function readApp(handle: SharedAppHandle, slug: string): Promise<JoinedApp
     app: {
       slug,
       aid,
-      published: reservation.published === true,
+      published: typeof publicConfig?.enabled === "boolean" ? publicConfig.enabled : reservation.published === true,
       config: publicConfig,
       writes: {
         ...(memberWrites === null ? {} : { member: memberWrites }),
@@ -319,12 +328,19 @@ export interface ReadRecords {
  *  rules grant a submitter the document they can NAME rather than a range of them — so a query
  *  cannot be built and pretending otherwise would return an empty list that reads as "you have
  *  nothing here". */
-function ownSelector(app: JoinedApp, cid: string): { field: string; value: string } | { id: string } | "unlistable" | null {
+function ownSelector(app: JoinedApp, cid: string): { fields: { field: string; value: string }[] } | { id: string } | "unlistable" | null {
   const raw = submitBlockOf(app, cid);
   if (raw === null) return null;
   const handle = app.handle;
-  if (typeof raw.uidField === "string") return { field: raw.uidField, value: handle.uid };
-  if (typeof raw.emailField === "string") return { field: raw.emailField, value: handle.email };
+  // BOTH, when the declaration carries both. `ownRow` in the rules accepts EITHER identity, so a
+  // row staff entered on somebody's behalf can hold the address and no uid while that person's own
+  // submissions hold the uid — and querying one field only would hide half of what is theirs, as an
+  // empty answer rather than as an error.
+  const fields = [
+    ...(typeof raw.uidField === "string" ? [{ field: raw.uidField, value: handle.uid }] : []),
+    ...(typeof raw.emailField === "string" ? [{ field: raw.emailField, value: handle.email }] : []),
+  ];
+  if (fields.length > 0) return { fields };
   if (raw.idFrom === "auth.uid") return { id: handle.uid };
   if (raw.idFrom === "auth.uid+field") return "unlistable";
   return null;
@@ -375,35 +391,59 @@ export async function readRecords(app: JoinedApp, cid: string, limit: number): P
         "so your rows cannot be listed at all. Name the record directly if you know which one it is",
     };
   if ("id" in want) {
-    const found = await app.handle.docs.get(path, want.id).catch(() => null);
+    // SAME DISTINCTION AS EVERY OTHER READ HERE. An empty answer means "you have not got one",
+    // which is a real and actionable thing to be told; a blip reported that way is the same
+    // sentence about a row that may well exist.
+    const own = await app.handle.docs
+      .get(path, want.id)
+      .then((found) => ({ ok: true as const, found }))
+      .catch((err: unknown) => ({ ok: false as const, refusal: refused(err), why: messageOf(err) }));
+    if (!own.ok && !own.refusal) return { scope: "failed", rows: [], note: own.why };
+    const found = own.ok ? own.found : null;
     return { scope: "own", rows: isRecord(found) ? [{ ...found, id: want.id }] : [], note: "only your own row is readable here" };
   }
-  // THE CAP IS IN THE QUERY here too, for the same reason.
-  const asked = query(collection(db, path), where(want.field, "==", want.value), limitTo(limit));
-  const snapshot = await getDocs(asked)
-    .then((found) => ({ ok: true as const, found }))
-    .catch((err: unknown) => ({ ok: false as const, refusal: refused(err), why: messageOf(err) }));
-  if (!snapshot.ok)
-    return snapshot.refusal
-      ? { scope: "none", rows: [], note: "neither the collection nor your own rows in it could be read" }
-      : { scope: "failed", rows: [], note: snapshot.why };
-  return {
-    scope: "own",
-    rows: snapshot.found.docs.map((entry) => ({ ...entry.data(), id: entry.id })),
-    note: "only your own rows are readable here",
-  };
+  return ownRowsBy(db, path, want.fields, limit);
 }
 
-/** One record, with a REFUSAL kept apart from an absence.
+/** The reader's own rows, by every identity the declaration names.
  *
- *  Both are "no row" to a reader and they send an agent to opposite places: absent means the id is
- *  wrong or the row is gone, refused means the row may well be there and is not yours to see. An
- *  intent judged against a row nobody could read would be judged against nothing. */
-export async function readRecord(app: JoinedApp, cid: string, id: string): Promise<{ read: true; row: Record<string, unknown> | null } | { read: false }> {
+ *  ONE QUERY PER IDENTITY, each capped in the QUERY for the same reason the collection read is:
+ *  Firestore bills what the query matched. It cannot ask for "either field equals mine" in one go
+ *  without an `or`, and the two answers are disjoint sets of documents anyway — merged by id here,
+ *  so a row that somehow carried both is not shown twice. */
+async function ownRowsBy(db: Firestore, path: string, fields: { field: string; value: string }[], limit: number): Promise<ReadRecords> {
+  const answers = await Promise.all(
+    fields.map((field) =>
+      getDocs(query(collection(db, path), where(field.field, "==", field.value), limitTo(limit)))
+        .then((found) => ({ ok: true as const, found }))
+        .catch((err: unknown) => ({ ok: false as const, refusal: refused(err), why: messageOf(err) })),
+    ),
+  );
+  const broke = answers.find((answer) => !answer.ok && !answer.refusal);
+  if (broke !== undefined && !broke.ok) return { scope: "failed", rows: [], note: broke.why };
+  if (answers.every((answer) => !answer.ok)) return { scope: "none", rows: [], note: "neither the collection nor your own rows in it could be read" };
+  const byId = new Map<string, Record<string, unknown>>();
+  for (const answer of answers) {
+    if (!answer.ok) continue;
+    for (const entry of answer.found.docs) byId.set(entry.id, { ...entry.data(), id: entry.id });
+  }
+  return { scope: "own", rows: [...byId.values()].slice(0, limit), note: "only your own rows are readable here" };
+}
+
+/** One record, with THREE answers where a reader sees one.
+ *
+ *  Absent, refused and failed all look like "no row" and send an agent to opposite places: absent
+ *  means the id is wrong or the row is gone, refused means the row may well be there and is not
+ *  yours to see, and failed means nobody knows — try again. An intent judged against a row nobody
+ *  could read would be judged against nothing, and told the wrong reason for it the caller stops
+ *  asking. */
+export type ReadRecord = { read: true; row: Record<string, unknown> | null } | { read: false; refusal: boolean; why: string };
+
+export async function readRecord(app: JoinedApp, cid: string, id: string): Promise<ReadRecord> {
   try {
     const found = await app.handle.docs.get(itemsPath(app.aid, cid), id);
     return { read: true, row: isRecord(found) ? { ...found, id } : null };
-  } catch {
-    return { read: false };
+  } catch (err) {
+    return { read: false, refusal: refused(err), why: messageOf(err) };
   }
 }
