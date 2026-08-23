@@ -179,6 +179,15 @@ describe("what append refuses to promise", () => {
     expect(appendCampaignRecord("c1", intent)).toBe(true);
     expect(readCampaign("c1")).toEqual([intent]);
   });
+
+  // Durability itself is not unit-testable — it needs a power cut — so what is pinned here is the
+  // reachability of the path that provides it: the first append creates two directories and must
+  // still succeed, on every platform, with the record readable afterwards.
+  it("still succeeds on the append that creates the directories", () => {
+    expect(existsSync(campaignsDir())).toBe(false);
+    expect(appendCampaignRecord("c1", intent)).toBe(true);
+    expect(readCampaign("c1")).toEqual([intent]);
+  });
 });
 
 describe("listing what a restart has to reconcile", () => {

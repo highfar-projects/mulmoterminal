@@ -5,7 +5,7 @@
 // It protects an honest task from a mistake — on the trust model this repo accepts it does not
 // stop an adversarial one, which is stated where the decision was made rather than implied here
 // (`future/grid-campaign-mode.md`, decision 4).
-import { appendFileSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
+import { appendFileSync, closeSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync } from "node:fs";
 import { isRecord } from "../../common/isRecord.js";
 import path from "node:path";
 import { mulmoterminalHome } from "../infra/mulmoterminal-home.js";
@@ -62,12 +62,40 @@ export function readCampaign(campaign: string): CampaignRecord[] {
 }
 
 /**
+ * Make a directory's own contents durable, so the NAME of a file inside it survives a power cut.
+ *
+ * Flushing a file does not do this: the entry that points at it lives in the parent, and a host
+ * that dies at the wrong moment can leave a fsynced file that nothing refers to. Only matters for
+ * the append that creates the file (and the one that creates `campaigns/`), but doing it every time
+ * costs one fsync on a path that runs at agent pace, not in a loop.
+ *
+ * Windows cannot open a directory this way, and there is nothing to fall back to — so on Windows
+ * this is skipped and the guarantee below is correspondingly weaker, which `appendCampaignRecord`
+ * says out loud rather than implying. Anywhere else a failure here is a real failure and is thrown:
+ * a name that may not survive is exactly what the caller must not be told `true` about.
+ */
+function syncDirectory(dir: string): void {
+  if (process.platform === "win32") return;
+  const fd = openSync(dir, "r");
+  try {
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/**
  * Append one record.
  *
  * Returns whether it was stored, and a caller that gets `false` MUST NOT go on to cause the effect
  * the record describes: an unwritten intent is an effect nobody can reconcile afterwards. That is
  * the opposite of `postToRoom`'s tolerance of a failed append, and for a reason — a lost message is
  * a lost message, while a lost intent is a merge nobody knows happened.
+ *
+ * `true` means the record survives a host or power failure, not merely this process exiting — the
+ * data is flushed and the directory entry naming it is synced. **On Windows the second half is not
+ * available**, so there `true` means "written and flushed" and a power cut can still lose a file
+ * created in the same moment.
  */
 export function appendCampaignRecord(campaign: string, record: CampaignRecord): boolean {
   const file = campaignFile(campaign);
@@ -86,13 +114,18 @@ export function appendCampaignRecord(campaign: string, record: CampaignRecord): 
   // the mutation sweep found the comparison could not fail, which is what a sweep is for.)
   if (parseCampaignLog(line).length !== 1) return false;
   try {
-    mkdirSync(path.dirname(file), { recursive: true });
+    const dir = path.dirname(file);
+    mkdirSync(dir, { recursive: true });
     // `flush: true` is what makes the `true` below mean something across a power cut: without it
     // the write sits in the page cache, and a host that dies after this call loses the intent
     // while the caller has already been told to go ahead. Node supports it from 21.x and this
     // package requires >=22.9. `rooms.ts` does not flush and is right not to — a lost message is
     // a lost message, while a lost intent is a side effect nobody can reconcile.
     appendFileSync(file, line, { encoding: "utf8", flush: true });
+    // And the file's name, which the flush above does not cover. Both directories: a fsync of
+    // `campaigns/` does not make `campaigns/` itself durable inside its own parent.
+    syncDirectory(dir);
+    syncDirectory(path.dirname(dir));
     return true;
   } catch (err) {
     console.warn(`[campaign] could not append to ${campaign}: ${err instanceof Error ? err.message : String(err)}`);
