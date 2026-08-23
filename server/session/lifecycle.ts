@@ -45,7 +45,8 @@ import { runCompletionHook } from "./completion-hooks.js";
 import { messageOf } from "../errors.js";
 import { tmuxKillSession } from "../infra/tmux.js";
 import { forgetAnsweredQuestion } from "./answerQuestion.js";
-import { stopWatchingOtherWrites } from "./write-to-session.js";
+import { forgetUserInputClock, stopWatchingOtherWrites } from "./write-to-session.js";
+import { stopWatchesFor } from "./shared-app-watches.js";
 
 // The channel every session row is published on.
 export const SESSIONS_CHANNEL = "sessions";
@@ -154,6 +155,11 @@ function reap(deps: SessionLifecycleDeps, id: string) {
   // answer is scoped to the session, so it ends with it.
   forgetAnsweredQuestion(id);
   stopWatchingOtherWrites(id);
+  forgetUserInputClock(id);
+  // Shared-app watches are the session's, and only the session's (#1843 follow-up). Each holds live
+  // Firestore listeners billed for as long as they are attached, and there is nothing left to type
+  // a change into — so they are detached here rather than left to a reconnect that will not come.
+  stopWatchesFor(id);
   // NOT customAgentSessions: the transcript outlives the pty, and a resume ignores the picker, so
   // dropping the mapping here would silently continue that conversation on plain claude (a
   // different model). Persisted for the same reason — see custom-agent-log.ts.

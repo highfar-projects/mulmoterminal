@@ -37,6 +37,7 @@ const bag = vi.hoisted(
       breakQuery: new Set<string>(),
       denyQuery: new Set<string>(),
       queryable: new Map(),
+      listeners: [],
     }) as unknown as Bag,
 );
 

@@ -358,7 +358,7 @@ export interface ReadRecords {
  *  rules grant a submitter the document they can NAME rather than a range of them — so a query
  *  cannot be built and pretending otherwise would return an empty list that reads as "you have
  *  nothing here". */
-function ownSelector(app: JoinedApp, cid: string): { fields: { field: string; value: string }[] } | { id: string } | "unlistable" | null {
+export function ownSelector(app: JoinedApp, cid: string): { fields: { field: string; value: string }[] } | { id: string } | "unlistable" | null {
   const raw = submitBlockOf(app, cid);
   if (raw === null) return null;
   const handle = app.handle;
