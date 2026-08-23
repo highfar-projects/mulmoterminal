@@ -1,4 +1,4 @@
-// Where a campaign's records live, and the two things anybody does with them (#1815).
+// Where a campaign's records live, and what anybody does with them (#1815).
 //
 // Deliberately OUTSIDE every clone and outside the repository tree. That is not only tidiness: a
 // task touching this directory is then outside the paths it claimed, so the merge gate rejects it.
@@ -65,14 +65,11 @@ export function readCampaign(campaign: string): CampaignRecord[] {
  * Make a directory's own contents durable, so the NAME of a file inside it survives a power cut.
  *
  * Flushing a file does not do this: the entry that points at it lives in the parent, and a host
- * that dies at the wrong moment can leave a fsynced file that nothing refers to. Only matters for
- * the append that creates the file (and the one that creates `campaigns/`), but doing it every time
- * costs one fsync on a path that runs at agent pace, not in a loop.
+ * that dies at the wrong moment can leave a fsynced file that nothing refers to.
  *
- * Windows cannot open a directory this way, and there is nothing to fall back to — so on Windows
- * this is skipped and the guarantee below is correspondingly weaker, which `appendCampaignRecord`
- * says out loud rather than implying. Anywhere else a failure here is a real failure and is thrown:
- * a name that may not survive is exactly what the caller must not be told `true` about.
+ * Windows cannot open a directory this way and there is nothing to fall back to, so there this is
+ * skipped — both callers document the weaker promise that leaves. Anywhere else a failure here is
+ * thrown: a name that may not survive is what a caller must not be told `true` about.
  */
 function syncDirectory(dir: string): void {
   if (process.platform === "win32") return;
@@ -111,11 +108,10 @@ export function ensureCampaignStore(): void {
   // reports creating nothing, so it syncs less and can return while the first is still working.
   // A caller that syncs the whole chain itself needs to know nothing about what the others did.
   //
-  // Where the chain starts is a line, and it is drawn here: this app makes durable the tree it
-  // owns — MULMOTERMINAL_HOME and below. Above that is the machine's own filesystem, which it did
-  // not create and does not manage; chasing further ends at fsyncing `/`. So if HOME itself points
-  // somewhere that had to be created, the entries ABOVE HOME are outside this promise, and that
-  // residual is stated rather than hidden.
+  // Where the chain starts is a choice: this app makes durable the tree it owns, MULMOTERMINAL_HOME
+  // and below. Above that is the machine's own filesystem, which it neither created nor manages,
+  // and chasing further ends at fsyncing `/`. So when HOME itself points somewhere that had to be
+  // created, the entries ABOVE HOME are outside this promise.
   chainDown(path.dirname(home), dir).forEach(syncDirectory);
 }
 
@@ -145,9 +141,8 @@ export function appendCampaignRecord(campaign: string, record: CampaignRecord): 
   // A ROUND TRIP rather than a second predicate: asking whether the reader accepts this exact line
   // cannot drift from what `readCampaign` really accepts, whereas two guards can.
   //
-  // Reading back as one record is the whole test — comparing it to `record` afterwards would be
-  // tautological, since both sides are then the same JSON projection. (Written that way at first;
-  // the mutation sweep found the comparison could not fail, which is what a sweep is for.)
+  // Reading back as one record is the whole test: comparing it to `record` afterwards could not
+  // fail, both sides being the same JSON projection by then.
   if (parseCampaignLog(line).length !== 1) return false;
   try {
     const dir = path.dirname(file);
