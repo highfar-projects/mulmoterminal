@@ -13,18 +13,18 @@ Issue: #1839（#1828 のフォローアップ）
 
 ## 変更
 
-1. **`docs/guide/ja/index.md` / `docs/guide/en/index.md`** — 動画ブロックを H1 の直後（バナーの上）へ移し、順番を「太字のリード文 → `<video>` → 斜体キャプション → 文字起こし」にする。
-   - リード文は同ページの `**はじめての方へ。**` / `**New here?**` と同じ形の 1 文。ja `**デモ動画（1 分半・音声つき）。** エージェント 1 体から始めて、グリッドに並んだ複数体へ。` / en `**Demo (90 seconds, with sound).** One agent, then a grid of them.`
-   - `##` 見出しにはしない。H1 直下に `## デモ` を置くと、バナー・「はじめての方へ」・リリースノート群が次の `## おすすめ機能` までその配下に入る
-   - README の `## Demo` と同じ `#demo` でリンクできるよう、リード文の段落の直後に kramdown の `{: #demo }` を置く（`features.md` の `{: #question-pane }` と同じ書き方）
-   - キャプションの文面は変えない。冒頭の「音声つき 1 分半。」/「90 seconds, with sound —」はリード文へ移ったので、キャプションからは落とす
+1. **`docs/guide/ja/index.md` / `docs/guide/en/index.md`** — 順番を「バナー → はじめての方へ（＋ボタン）→ 繋ぎ文 → `<video>` → 斜体キャプション → 文字起こし → リリースノート群」にする。
+   - 最初は動画ブロックを H1 の直後（バナーの上）に出す案で進めたが、レビューで「バナー → はじめての方へ＋動画への繋ぎ文 → 動画」の順に変更した。動画はリリース告知から離れて「はじめての方へ」の続きとして出るので突然感は消え、バナーが先頭のままなので CLAUDE.md のリリース手順も変えずに済む
+   - 繋ぎ文は同ページの `**はじめての方へ。**` / `**New here?**` と同じ形の 1 文。ja `**まず動いているところを見たい方へ。** 1 分半・音声つき。エージェント 1 体から始めて、グリッドに並んだ複数体へ。` / en `**Rather see it running first?** Ninety seconds, with sound — one agent, then a grid of them.`
+   - ボタンは「インストールと起動は 1 ページにまとめてあります」の行き先なので段落の直後に残し、動画はその下
+   - `##` 見出しにはしない。README の `## Demo` と同じ `#demo` でリンクできるよう、繋ぎ文の段落の直後に kramdown の `{: #demo }` を置く（`features.md` の `{: #question-pane }` と同じ書き方）
+   - キャプションの文面は変えない。冒頭の「音声つき 1 分半。…複数体へ。」/「90 seconds, with sound — one agent, then a grid of them,」は繋ぎ文へ移ったので、キャプションからは落とす
    - 文字起こしの `<details>` は summary の文言そのままで、キャプションの後ろへ
-2. **`CLAUDE.md`** — リリース手順の「`docs/guide/{en,ja}/index.md` opens with a `> 🆕` banner」を、デモの後にバナーが来る現状に合わせる。
-3. **`docs/guide/videos/README.md`** — 文字起こしの位置を「プレイヤーの直下」と書いている箇所を、ガイドではキャプションの後ろになることに合わせる。
+2. **`docs/guide/videos/README.md`** — 埋め込み位置と文字起こしの位置の記述を現状に合わせる。
 
-README は対象外。
+README と CLAUDE.md は対象外。
 
 ## 確認
 
-- `git diff` で順番が「リード文 → video → caption → details → バナー」になっていること（ja / en）
+- `git diff` で順番が「バナー → はじめての方へ → ボタン → 繋ぎ文 → video → caption → details → リリースノート」になっていること（ja / en）
 - Jekyll のローカルビルドは通せない（このマシンの Ruby は 2.6）。`{: #demo }` は `features.md` で実績のある書き方なので同じ形で書き、描画は Pages のデプロイ後に確認する

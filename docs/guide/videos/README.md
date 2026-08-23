@@ -1,6 +1,6 @@
 # Guide videos
 
-The launch demo, embedded at the top of both language indexes (`../en/index.md`, `../ja/index.md`) and — the English one — in the repository README under `## Demo`.
+The launch demo, embedded near the top of both language indexes (`../en/index.md`, `../ja/index.md` — right after the getting-started paragraph and its buttons) and — the English one — in the repository README under `## Demo`.
 
 Captured from the same **throwaway demo instance** the screenshots use — a scratch `HOME` and neutral demo projects (`acme-web`, `acme-api`, `acme-docs` under `mt-demo`), so no personal session data appears. Read every frame before committing a new one; the rules and the traps are in [`../images/README.md`](../images/README.md).
 
