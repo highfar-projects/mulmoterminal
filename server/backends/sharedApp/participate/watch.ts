@@ -64,14 +64,14 @@ const messageOf = (err: unknown): string => (err instanceof Error ? err.message 
  *
  *  `onSnapshot` delivers the current contents immediately. Reported as a change, it would wake the
  *  agent to tell it the collection holds what it already read. */
-function afterFirst(report: (count: number) => void): (count: number) => void {
+function afterFirst(report: (ids: readonly string[]) => void): (ids: readonly string[]) => void {
   let seenFirst = false;
-  return (count: number) => {
+  return (ids: readonly string[]) => {
     if (!seenFirst) {
       seenFirst = true;
       return;
     }
-    report(count);
+    report(ids);
   };
 }
 
@@ -93,14 +93,14 @@ function stopAll(stoppers: (() => void)[]): void {
  *  What has to be true of all of them is the same either way, so it is held here rather than at each
  *  attach point -- the first snapshot is not a change, and the LAST listener to die is what ends the
  *  watch. */
-function fanout(onChange: (changes: number) => void, onEnded: (why: string) => void) {
+function fanout(onChange: (ids: readonly string[]) => void, onEnded: (why: string) => void) {
   const stoppers: (() => void)[] = [];
   let alive = 0;
   let ended = false;
 
-  const changed = (count: number) => {
-    if (ended || count === 0) return;
-    onChange(count);
+  const changed = (ids: readonly string[]) => {
+    if (ended || ids.length === 0) return;
+    onChange(ids);
   };
 
   // A listener that dies takes only itself with it. With two identity queries the rules can close
@@ -114,7 +114,7 @@ function fanout(onChange: (changes: number) => void, onEnded: (why: string) => v
   };
 
   return {
-    attach(build: (report: (count: number) => void, fail: (err: unknown) => void) => () => void): void {
+    attach(build: (report: (ids: readonly string[]) => void, fail: (err: unknown) => void) => () => void): void {
       alive += 1;
       stoppers.push(build(afterFirst(changed), died));
     },
@@ -127,13 +127,23 @@ function fanout(onChange: (changes: number) => void, onEnded: (why: string) => v
 
 /** Attach a live subscription to one collection.
  *
- *  `onChange` is called with the number of documents that changed, NEVER with the documents. That is
- *  the feature's central rule and it is enforced here, at the only place the data is in hand: the
- *  snapshot is counted and dropped. See `server/session/shared-app-watches.ts` for why. */
+ *  `onChange` is called with the IDS of the documents that changed and NOTHING ELSE about them — no
+ *  fields, no values. That is the feature's central rule and it is enforced here, at the only place
+ *  the data is in hand: the snapshot is reduced to its ids and dropped.
+ *
+ *  IDS RATHER THAN A COUNT because a count cannot be deduplicated. An own-row watch attaches one
+ *  listener PER IDENTITY the declaration names, and a row carrying both the reader's uid and their
+ *  address matches both — so one edit arrives twice and the terminal says two records changed when
+ *  one did (Codex on #1844). The same is true of two edits to one row inside a coalescing window:
+ *  the line counts RECORDS, so it has to be able to tell one row from two. `ownRowsBy` merges by id
+ *  for the same reason on the read side.
+ *
+ *  The ids never reach the terminal. They are counted in `server/session/shared-app-watches.ts` and
+ *  go no further — see the rules at the top of that file. */
 export async function subscribeToCollection(
   app: JoinedApp,
   cid: string,
-  onChange: (changes: number) => void,
+  onChange: (ids: readonly string[]) => void,
   onEnded: (why: string) => void,
 ): Promise<SubscribeResult> {
   // ONE REAL READ decides the scope -- see the note at the top of the file. Its cost is a single
@@ -148,7 +158,7 @@ export async function subscribeToCollection(
   const fan = fanout(onChange, onEnded);
 
   if (probe.scope === "all") {
-    fan.attach((report, fail) => onSnapshot(collection(db, path), (snapshot) => report(snapshot.docChanges().length), fail));
+    fan.attach((report, fail) => onSnapshot(collection(db, path), (snapshot) => report(snapshot.docChanges().map((change) => change.doc.id)), fail));
     return { ok: true, handle: { scope: "all", stop: fan.stop } };
   }
 
@@ -162,13 +172,17 @@ export async function subscribeToCollection(
 
   // One named row. `onSnapshot` on a document reports no change count, and one is what it is.
   if ("id" in want) {
-    fan.attach((report, fail) => onSnapshot(doc(db, path, want.id), () => report(1), fail));
+    fan.attach((report, fail) => onSnapshot(doc(db, path, want.id), () => report([want.id]), fail));
     return { ok: true, handle: { scope: "own", stop: fan.stop } };
   }
 
   for (const field of want.fields) {
     fan.attach((report, fail) =>
-      onSnapshot(query(collection(db, path), where(new FieldPath(field.field), "==", field.value)), (snapshot) => report(snapshot.docChanges().length), fail),
+      onSnapshot(
+        query(collection(db, path), where(new FieldPath(field.field), "==", field.value)),
+        (snapshot) => report(snapshot.docChanges().map((change) => change.doc.id)),
+        fail,
+      ),
     );
   }
   if (fan.alive === 0) return { ok: false, why: "the declaration names no field your own rows could be watched by" };

@@ -146,8 +146,8 @@ describe("useSharedApp — watching a collection", () => {
     publish();
     await watch();
     settle();
-    bag.listeners[0].fire(2);
-    bag.listeners[0].fire(3);
+    bag.listeners[0].fire(["a", "b"]);
+    bag.listeners[0].fire(["c", "d", "e"]);
     await vi.advanceTimersByTimeAsync(COALESCE_MS);
     // A script writing ten rows is one thing that happened. Ten wake-ups for it would cost ten turns
     // to learn the same fact.
@@ -200,6 +200,56 @@ describe("useSharedApp — watching a collection", () => {
     // arrives only through `records`.
     expect(texts()[0]).toContain("do what the user asked you to do");
     expect(texts()[0]).not.toContain("rather than acting");
+  });
+
+  it("counts a row once when it arrives through both identity listeners", async () => {
+    publish({ bothIdentities: true });
+    bag.denyQuery.add(bookingsPath);
+    bag.docs.put(bookingsPath, "mine", { uid: ME.uid, slot: "9:00", status: "booked" });
+    await watch();
+    settle();
+    // A row carrying BOTH the reader's uid and their address matches both listeners, so one edit is
+    // reported twice. The read side merges by id for the same reason (`ownRowsBy`); the line says
+    // how many RECORDS changed, so it has to be able to tell one row from two.
+    bag.listeners[0].fire(["mine"]);
+    bag.listeners[1].fire(["mine"]);
+    await vi.advanceTimersByTimeAsync(COALESCE_MS);
+    expect(texts()[0]).toContain("1 record changed");
+  });
+
+  it("counts a row once when it is edited twice inside one window", async () => {
+    publish();
+    await watch();
+    settle();
+    bag.listeners[0].fire(["r1"]);
+    bag.listeners[0].fire(["r1"]);
+    bag.listeners[0].fire(["r2"]);
+    await vi.advanceTimersByTimeAsync(COALESCE_MS);
+    expect(texts()[0]).toContain("2 records changed");
+  });
+
+  it("never lets a record id reach the terminal", async () => {
+    publish();
+    await watch();
+    settle();
+    // The ids exist only so the count can be deduplicated. An id is a string somebody else chose,
+    // and rule 1 is that none of an app's strings reach the position where the user types.
+    bag.listeners[0].fire(["a-very-distinctive-record-id"]);
+    await vi.advanceTimersByTimeAsync(COALESCE_MS);
+    expect(texts()[0]).toContain("1 record changed");
+    expect(texts()[0]).not.toContain("a-very-distinctive-record-id");
+  });
+
+  it("refuses to watch on behalf of a session that is not running", async () => {
+    publish();
+    // The route checks the header is SHAPED like a session id; only the PTY table knows whether it
+    // names one. A watch on a session that does not exist could never deliver and nothing would
+    // ever reap it — the teardown hangs off a real session ending — so its listeners would bill the
+    // app's owner until the process restarted, and a caller inventing a new id each time is never
+    // twice in the same session for the ceiling to catch (Codex on #1844).
+    const said = await watch("bookings", "no-such-session");
+    expect(said).toContain("no live terminal");
+    expect(bag.listeners).toHaveLength(0);
   });
 
   it("keeps firing: a watch is a subscription, not a one-shot", async () => {
@@ -303,11 +353,11 @@ describe("useSharedApp — watching a collection", () => {
     await watch();
     settle();
     term.sendFails = true;
-    bag.listeners[0].fire(2);
+    bag.listeners[0].fire(["a", "b"]);
     await vi.advanceTimersByTimeAsync(COALESCE_MS);
     expect(term.sent).toHaveLength(0);
     term.sendFails = false;
-    bag.listeners[0].fire(1);
+    bag.listeners[0].fire(["c"]);
     await vi.advanceTimersByTimeAsync(HOLD_MS);
     // The two that failed to land are not lost; what arrived meanwhile is simply added to them,
     // which is what coalescing means.
@@ -345,6 +395,63 @@ describe("useSharedApp — watching a collection", () => {
     // Told it started, an agent would conclude the previous one had stopped; told nothing at all,
     // it would count every change twice.
     expect(bag.listeners).toHaveLength(1);
+  });
+
+  it("registers before it subscribes, so two calls at once cannot both attach", async () => {
+    publish();
+    // Setting up a subscription is asynchronous, so two tool calls in one turn can both be inside
+    // `startWatch`. Registering only on the way out let both pass the already-watching check and
+    // attach their own listeners — and the second overwrote the first, whose `stop` was the only
+    // reference anything held. Those listeners leaked for the life of the process, billing the
+    // app's owner for a watch nobody could see or cancel.
+    const both = await Promise.all([watch(), watch()]);
+    expect(both.filter((said) => said.includes("Already watching"))).toHaveLength(1);
+    expect(bag.listeners).toHaveLength(1);
+    // And stopping it really does stop everything that was attached.
+    await unwatch();
+    expect(bag.listeners.every((listener) => listener.stopped)).toBe(true);
+  });
+
+  it("gives concurrent watches distinct ids", async () => {
+    publish();
+    const said = await Promise.all([watch("one"), watch("two")]);
+    const ids = said.map((line) => /\(watch (\d+)\)/.exec(line)?.[1]);
+    // The id was read before the await and advanced after it, so two starts in flight together both
+    // reported the same number — the one thing the report gives an agent to tell them apart by.
+    expect(ids[0]).toBeDefined();
+    expect(ids[0]).not.toEqual(ids[1]);
+  });
+
+  it("still delivers the ended notice across a lost-and-reattached pty", async () => {
+    publish();
+    await watch();
+    settle();
+    // The gap between a client dying and the reattach that follows: `ptys` has no entry, but the
+    // session is very much alive and will be typed into again. Retrying only while a PTY existed
+    // dropped the notice here — the exact silence rule 3 is for.
+    term.ptys.delete(SESSION);
+    bag.listeners[0].fail(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }));
+    await vi.advanceTimersByTimeAsync(HOLD_MS * 2);
+    expect(term.sent).toHaveLength(0);
+    term.ptys.set(SESSION, {});
+    await vi.advanceTimersByTimeAsync(HOLD_MS);
+    expect(texts()[0]).toContain("has ENDED");
+  });
+
+  it("drops an undelivered ended notice when the session is reaped", async () => {
+    publish();
+    await watch();
+    settle();
+    term.activity.set(SESSION, { working: true, event: "PreToolUse" });
+    bag.listeners[0].fail(new Error("unavailable"));
+    await vi.advanceTimersByTimeAsync(HOLD_MS);
+    expect(term.sent).toHaveLength(0);
+    stopWatchesFor(SESSION);
+    term.activity.set(SESSION, { working: false, event: "Stop" });
+    await vi.advanceTimersByTimeAsync(HOLD_MS * 3);
+    // There is nothing left to deliver it to, and a retry that outlives its session is a timer
+    // against a conversation that has ended.
+    expect(term.sent).toHaveLength(0);
   });
 
   it("ends the watch out loud when its subscription dies", async () => {
@@ -428,6 +535,7 @@ describe("useSharedApp — watching a collection", () => {
     await watch();
     // The key is the session, so a second terminal watching the same collection is its own watch
     // and its own listener — and stopping one must not stop the other.
+    term.ptys.set("sess-2", {});
     expect(await watch("bookings", "sess-2")).toContain("Watching");
     expect(bag.listeners).toHaveLength(2);
     stopWatchesFor("sess-2");

@@ -57,8 +57,9 @@ export interface Bag {
 export interface Listener {
   /** The query or document reference the host subscribed to, as the fake described it. */
   target: { collectionPath?: string; path?: string; clause?: { field: string; value: unknown }; cap?: { rows: number } };
-  /** Deliver a snapshot carrying `changes` changed documents. */
-  fire: (changes: number) => void;
+  /** Deliver a snapshot. A NUMBER means that many distinct rows changed; a LIST names the rows, so
+   *  a spec can say the same row arrived twice. */
+  fire: (changed: number | string[]) => void;
   /** Fail this listener the way Firestore does — asynchronously, after it was attached. */
   fail: (err: unknown) => void;
   stopped: boolean;
@@ -158,10 +159,17 @@ const batchFor = (bag: Bag): Record<string, unknown> => {
   };
 };
 
-/** A snapshot's changed documents, as the host reads them: only the COUNT is ever looked at, so
- *  these are shaped rather than real. A fake that handed back rows would let a change to this
- *  feature start reporting an app's data without a spec noticing. */
-const shapedChanges = (changes: number): { index: number }[] => Array.from({ length: changes }, (_unused, index) => ({ index }));
+/** A snapshot's changed documents, as the host reads them: the ID and nothing else.
+ *
+ *  Ids rather than a count because the host has to DEDUPLICATE — one row can arrive through two
+ *  identity listeners, and twice through one within a coalescing window. Given a number, the fake
+ *  invents that many distinct ids, which is the "n different rows changed" case; given a list, those
+ *  are the rows, which is how a spec says the same row twice.
+ *
+ *  Deliberately no `data()`: a fake that offered one would let a change to this feature start
+ *  reporting an app's own values into a terminal without a spec noticing. */
+const shapedChanges = (changed: number | string[]): { doc: { id: string } }[] =>
+  (typeof changed === "number" ? Array.from({ length: changed }, (_unused, index) => `row-${index}`) : changed).map((id) => ({ doc: { id } }));
 
 /** The subscription seam. It REGISTERS rather than answers: nothing is delivered until a spec fires
  *  it, which is the only way "the first snapshot is not a change" can be checked at all. */

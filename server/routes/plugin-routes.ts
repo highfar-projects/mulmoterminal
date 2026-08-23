@@ -18,8 +18,7 @@ import type { TerminalAgent } from "../../common/sessionAgent.js";
 import { registeredGuiMcpGroups } from "../infra/gui-mcp-registration.js";
 import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups.js";
 import { codexifySkillSeed } from "../agents/codex-skills.js";
-import { SESSION_HEADER } from "../backends/presentPathRoot.js";
-import { SESSION_ID_RE } from "../config/env.js";
+import { SESSION_HEADER, sessionIdFromHeader } from "../backends/presentPathRoot.js";
 import { cwdForSession } from "../session/session-cwd.js";
 import { projectScopeForCwd, rootForProjectId } from "../infra/project-root.js";
 import { manageCollectionHandlerFor } from "../infra/collection-tool.js";
@@ -221,8 +220,7 @@ function mountCollectionRoute(app: Express): void {
       // The session id rides in a header from the MCP broker, and `cwdForSession` is the same
       // lookup presentDocument's relative paths already resolve through, so the tool and the
       // documents it produces agree on where "here" is.
-      const header = req.get(SESSION_HEADER);
-      const sessionId = header && SESSION_ID_RE.test(header) ? header : null;
+      const sessionId = sessionIdFromHeader(req.get(SESSION_HEADER));
       const handler = manageCollectionHandlerFor(projectScopeForCwd(cwdForSession(sessionId)).workspaceRoot);
       const message = await handler(isRecord(req.body) ? req.body : {});
       return res.json({ message });
@@ -244,8 +242,7 @@ function mountSharedAppRoute(app: Express): void {
   // collection, that one is visible to other people the moment it lands.
   app.post("/api/plugin/manageSharedApp", async (req, res) => {
     try {
-      const header = req.get(SESSION_HEADER);
-      const sessionId = header && SESSION_ID_RE.test(header) ? header : null;
+      const sessionId = sessionIdFromHeader(req.get(SESSION_HEADER));
       const root = projectScopeForCwd(cwdForSession(sessionId)).workspaceRoot;
       return res.json({ message: await manageSharedApp(root, req.body) });
     } catch (err) {
@@ -274,7 +271,12 @@ function mountUseSharedAppRoute(app: Express): void {
   // everywhere (see the note above).
   app.post("/api/plugin/useSharedApp", async (req, res) => {
     try {
-      return res.json({ message: await useSharedApp(req.body, req.get(SESSION_HEADER)) });
+      // NORMALIZED, not forwarded. A header is an assertion by whatever reached this route, and for
+      // `watch` an unchecked one is not a wrong directory but a live Firestore listener attached on
+      // behalf of a session that does not exist — unreapable, billed to the app's owner, and, with a
+      // different made-up value each time, not subject to the per-session ceiling either. A REAL id
+      // belonging to somebody else's session would aim the notification at that terminal (Codex).
+      return res.json({ message: await useSharedApp(req.body, sessionIdFromHeader(req.get(SESSION_HEADER)) ?? undefined) });
     } catch (err) {
       console.error(`[useSharedApp] dispatch failed: ${messageOf(err)}`);
       return res.json({ message: `useSharedApp failed: ${messageOf(err)}` });

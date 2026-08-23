@@ -56,8 +56,16 @@ interface Watch {
   cid: string;
   scope: WatchScope;
   stop: () => void;
-  /** Changes seen since the last line was delivered. */
-  pending: number;
+  /** The DISTINCT RECORDS changed since the last line was delivered, by id.
+   *
+   *  A set rather than a count, because the same record can be reported twice: an own-row watch has
+   *  one listener per identity and a row carrying both matches both, and two edits to one row inside
+   *  a coalescing window are two reports of one record. The line says how many RECORDS changed, so
+   *  it has to be able to tell one row from two (Codex on #1844).
+   *
+   *  THE IDS GO NO FURTHER THAN THIS FIELD. Only `size` is ever read, and never the members — an id
+   *  is a string somebody else chose, and rule 1 above is that none of those reach the terminal. */
+  pending: Set<string>;
   timer: NodeJS.Timeout | null;
 }
 
@@ -137,25 +145,56 @@ function endedLine(watch: Watch, why: string): string {
   );
 }
 
-/** Type one line into a session once it is safe to, retrying until it is.
+/** A line a session is OWED that no longer has a watch behind it -- in practice, the notice that a
+ *  watch has died.
  *
- *  `stillWanted` is what stops a retry outliving its reason: a reaped session, or a watch the agent
- *  has since dropped. Without it a held line would keep a timer alive against a conversation that
- *  has ended. */
-function deliverEventually(sessionId: string, text: string, stillWanted: () => boolean): void {
-  const attempt = () => {
-    if (!stillWanted()) return;
-    if (!deliverable(sessionId)) {
-      later(attempt, HOLD_MS);
-      return;
-    }
-    void deliver(sessionId, text).catch(() => {
-      // The PTY went between the check and the write. Not a failure to report to anyone -- there is
-      // no caller left holding this -- so it goes back in the queue and waits like everything else.
-      later(attempt, HOLD_MS);
-    });
+ *  It needs its own queue because it outlives the thing that produced it. The watch is gone from the
+ *  bookkeeping the moment its subscription dies (so the agent can immediately start a real new one
+ *  rather than being told it is already watching), and the notice still has to wait for a moment
+ *  when typing into the terminal is safe -- which can be minutes.
+ *
+ *  HELD BY SESSION so that teardown can cancel it. An earlier version retried only while the session
+ *  had a live PTY, which quietly DROPPED the notice during the gap between a client dying and the
+ *  reattach that follows -- the exact silence rule 3 exists to prevent. */
+interface Notice {
+  text: string;
+  timer: NodeJS.Timeout | null;
+}
+
+const owed = new Map<string, Set<Notice>>();
+
+function owe(sessionId: string, text: string): void {
+  const notice: Notice = { text, timer: null };
+  const queue = owed.get(sessionId) ?? new Set<Notice>();
+  queue.add(notice);
+  owed.set(sessionId, queue);
+  attemptNotice(sessionId, notice);
+}
+
+function attemptNotice(sessionId: string, notice: Notice): void {
+  notice.timer = null;
+  // Membership IS the cancellation: teardown empties the queue, and a notice that is no longer in it
+  // has nothing left to be delivered to.
+  if (owed.get(sessionId)?.has(notice) !== true) return;
+  const again = () => {
+    notice.timer = later(() => attemptNotice(sessionId, notice), HOLD_MS);
   };
-  attempt();
+  if (!deliverable(sessionId)) {
+    again();
+    return;
+  }
+  void deliver(sessionId, notice.text)
+    .then(() => forgetNotice(sessionId, notice))
+    // The PTY went between the check and the write. Back in the queue, and it waits like everything
+    // else -- there is no caller left holding this to report a failure to.
+    .catch(again);
+}
+
+function forgetNotice(sessionId: string, notice: Notice): void {
+  const queue = owed.get(sessionId);
+  if (!queue) return;
+  queue.delete(notice);
+  if (queue.size === 0) owed.delete(sessionId);
 }
 
 /** A timer that does not hold the process open.
@@ -181,25 +220,43 @@ const armed = (watch: Watch, ms: number): void => {
 
 function flush(watch: Watch): void {
   watch.timer = null;
-  if (watch.pending === 0) return;
+  if (watch.pending.size === 0) return;
   if (!deliverable(watch.sessionId)) {
     armed(watch, HOLD_MS);
     return;
   }
-  const changes = watch.pending;
-  watch.pending = 0;
-  void deliver(watch.sessionId, changeLine(watch, changes)).catch(() => {
-    // Put the count back rather than dropping it -- anything that arrived in the meantime is simply
-    // added to it, which is what coalescing means.
-    watch.pending += changes;
+  const taken = watch.pending;
+  watch.pending = new Set();
+  void deliver(watch.sessionId, changeLine(watch, taken.size)).catch(() => {
+    // Put them back rather than dropping them -- anything that arrived in the meantime merges with
+    // them, which is what coalescing means, and the union is still one record per id.
+    for (const id of taken) watch.pending.add(id);
     armed(watch, HOLD_MS);
   });
 }
 
 export type StartResult = { started: true; id: number; scope: WatchScope } | { started: "already"; id: number } | { started: false; why: string };
 
-/** Begin watching one collection on behalf of one session. */
+/** Begin watching one collection on behalf of one session.
+ *
+ *  THE ENTRY IS RESERVED BEFORE THE AWAIT, and the id is taken before it too. Setting up a
+ *  subscription is asynchronous, so two calls can be inside this function at once -- two tool calls
+ *  in one turn, or a retry over a slow one. Registering only on the way out let both of them pass
+ *  the "already watching" check and attach their own listeners, and then the second `set` overwrote
+ *  the first: its `stop` was the only reference anything held, so ITS LISTENERS LEAKED for the life
+ *  of the process, billing the app's owner for a watch nobody could see or cancel. Both would also
+ *  have reported the same id, since `nextId` was read before the await and advanced after it. */
 export async function startWatch(sessionId: string, app: JoinedApp, cid: string): Promise<StartResult> {
+  // A WATCH NEEDS A TERMINAL, and this is where that is required rather than assumed. The route
+  // checks that the id is well formed; only the PTY table knows whether it names anything. A watch
+  // on a session that is not running could never deliver, and nothing would ever reap it — the
+  // teardown that detaches listeners hangs off a real session ending, so one attached on behalf of a
+  // session that never existed holds its Firestore listeners, billed to the app's owner, until the
+  // process restarts. The per-session ceiling is no help either: it is per session, and a caller
+  // inventing a new id each time is never twice in the same one (Codex on #1844).
+  if (!ptys.has(sessionId)) {
+    return { started: false, why: "there is no live terminal for this session on this host, so a change could never be delivered to it" };
+  }
   const watches = bySession.get(sessionId) ?? new Map<string, Watch>();
   const key = keyOf(app.slug, cid);
   const existing = watches.get(key);
@@ -211,37 +268,42 @@ export async function startWatch(sessionId: string, app: JoinedApp, cid: string)
     return { started: false, why: `this session is already watching ${MAX_WATCHES} collections, which is the most it may -- stop one first` };
   }
 
-  const watch: Watch = {
-    id: nextId,
-    sessionId,
-    slug: app.slug,
-    cid,
-    scope: "all",
-    stop: () => {},
-    pending: 0,
-    timer: null,
-  };
+  const watch: Watch = { id: nextId, sessionId, slug: app.slug, cid, scope: "all", stop: () => {}, pending: new Set(), timer: null };
+  nextId += 1;
+  watches.set(key, watch);
+  bySession.set(sessionId, watches);
+
   const subscribed = await subscribeToCollection(
     app,
     cid,
-    (changes) => {
-      watch.pending += changes;
+    (ids) => {
+      for (const id of ids) watch.pending.add(id);
       armed(watch, COALESCE_MS);
     },
     (why) => {
-      // The subscription is already down; drop the bookkeeping BEFORE the notice, so a `watch`
+      // The subscription is already down; the bookkeeping goes BEFORE the notice, so a `watch`
       // issued after reading it starts a real new one rather than being told it is already on.
       dropWatch(sessionId, key);
-      deliverEventually(sessionId, endedLine(watch, why), () => ptys.has(sessionId));
+      owe(sessionId, endedLine(watch, why));
     },
-  );
-  if (!subscribed.ok) return { started: false, why: subscribed.why };
+  ).catch((err: unknown) => {
+    dropWatch(sessionId, key);
+    throw err;
+  });
+  if (!subscribed.ok) {
+    dropWatch(sessionId, key);
+    return { started: false, why: subscribed.why };
+  }
 
-  nextId += 1;
   watch.scope = subscribed.handle.scope;
   watch.stop = subscribed.handle.stop;
-  watches.set(key, watch);
-  bySession.set(sessionId, watches);
+  // THE RESERVATION CAN HAVE GONE while we waited: the session was reaped, or the subscription died
+  // before it was ever handed back. Detached here rather than stored, because putting it back would
+  // resurrect a watch on a session that has already been told everything it will ever be told.
+  if (watches.get(key) !== watch) {
+    subscribed.handle.stop();
+    return { started: false, why: "the session ended while the watch was being set up" };
+  }
   return { started: true, id: watch.id, scope: watch.scope };
 }
 
@@ -263,7 +325,7 @@ export function stopWatch(sessionId: string, slug: string, cid: string): StopRes
   const watch = dropWatch(sessionId, keyOf(slug, cid));
   if (watch === null) return { stopped: false };
   watch.stop();
-  return { stopped: true, id: watch.id, dropped: watch.pending };
+  return { stopped: true, id: watch.id, dropped: watch.pending.size };
 }
 
 /** Every watch this session holds, for a report. */
@@ -275,6 +337,10 @@ export const watchesFor = (sessionId: string): { slug: string; cid: string; id: 
  *  No notice is delivered: there is nothing left to deliver it to, which is the whole difference
  *  between this and a watch that dies while its session lives. */
 export function stopWatchesFor(sessionId: string): void {
+  for (const notice of owed.get(sessionId) ?? []) {
+    if (notice.timer !== null) clearTimeout(notice.timer);
+  }
+  owed.delete(sessionId);
   const watches = bySession.get(sessionId);
   if (!watches) return;
   for (const watch of watches.values()) {
