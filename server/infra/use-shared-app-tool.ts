@@ -316,7 +316,18 @@ function fittingRows(rows: Record<string, unknown>[]): { json: string; dropped: 
     taken += 1;
     if (entry !== row) oversized += 1;
   }
-  return { json: escapeInvisible(JSON.stringify(shown, null, 2)), dropped: rows.length - taken, oversized };
+  // AND THEN THE ACTUAL STRING IS MEASURED. Everything above budgets rows as if each stood alone;
+  // what is emitted is one pretty-printed ARRAY, whose brackets, commas and extra indentation are
+  // real bytes nobody charged for. Rather than model that framing — which is another thing to get
+  // subtly wrong — the finished payload is weighed and rows are given back until it fits.
+  let json = escapeInvisible(JSON.stringify(shown, null, 2));
+  while (Buffer.byteLength(json, "utf8") > RECORD_BYTES && shown.length > 0) {
+    const given = shown.pop();
+    if (given !== undefined && typeof given.omitted === "string") oversized -= 1;
+    taken -= 1;
+    json = escapeInvisible(JSON.stringify(shown, null, 2));
+  }
+  return { json, dropped: rows.length - taken, oversized };
 }
 
 async function narrateRecords(slug: string, cid: string | undefined, limit: { rows: number; asked?: number }): Promise<string> {

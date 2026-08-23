@@ -329,6 +329,17 @@ describe("useSharedApp — reading somebody else's app", () => {
     expect(await run({ action: "describe", slug: "sakura" })).toContain("NOT open to the public");
   });
 
+  it("charges the array framing too, so the finished payload is what is weighed", async () => {
+    publish();
+    // Rows sized so their standalone total lands just under the cap: the brackets, commas and the
+    // extra indentation an array adds are what carries it over.
+    for (let n = 0; n < 40; n += 1) bag.docs.put(slotsPath, `s${n}`, { state: "open", blob: "x".repeat(4_950) });
+    const said = await run({ action: "records", slug: "sakura", cid: "slots" });
+    const block = said.slice(said.indexOf("["), said.lastIndexOf("]") + 1);
+    expect(Buffer.byteLength(block, "utf8")).toBeLessThanOrEqual(200_000);
+    expect(JSON.parse(block).length).toBeGreaterThan(0);
+  });
+
   it("refuses a URL name nothing answers to", async () => {
     const said = await run({ action: "describe", slug: "nobody" });
     expect(said).toContain('No shared app answers to "nobody"');
