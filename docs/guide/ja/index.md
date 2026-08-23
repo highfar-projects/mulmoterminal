@@ -23,7 +23,7 @@ description: 複数の AI コーディングエージェント（Claude Code / C
 **まず動いているところを見たい方へ。** 1 分半・音声つき。エージェント 1 体から始めて、グリッドに並んだ複数体へ。
 {: #demo }
 
-<video controls playsinline preload="metadata" style="width: 100%; max-width: 900px; border-radius: 6px;">
+<video controls playsinline preload="metadata" poster="../videos/launch-demo-poster.png" style="width: 100%; max-width: 900px; border-radius: 6px;">
   <source src="../videos/launch-demo-ja.mp4" type="video/mp4">
   <track kind="captions" src="../videos/launch-demo-ja.vtt" srclang="ja" label="日本語">
   <a href="../videos/launch-demo-ja.mp4">デモ動画（MP4・3.4 MB）</a> — このブラウザではページ内で再生できません。

@@ -23,7 +23,7 @@ running grid. Already set up? `npx mulmoterminal@latest` is the whole thing.
 **Rather see it running first?** Ninety seconds, with sound — one agent, then a grid of them.
 {: #demo }
 
-<video controls playsinline preload="metadata" style="width: 100%; max-width: 900px; border-radius: 6px;">
+<video controls playsinline preload="metadata" poster="../videos/launch-demo-poster.png" style="width: 100%; max-width: 900px; border-radius: 6px;">
   <source src="../videos/launch-demo-en.mp4" type="video/mp4">
   <track kind="captions" src="../videos/launch-demo-en.vtt" srclang="en" label="English">
   <a href="../videos/launch-demo-en.mp4">Watch the demo (MP4, 3.3 MB)</a> — this browser can't play it inline.
