@@ -107,8 +107,11 @@ function chainDown(top: string, leaf: string): string[] {
  * and the records have different lifetimes, so they get different calls.
  */
 export function ensureCampaignStore(): void {
-  const home = mulmoterminalHome();
-  const dir = campaignsDir();
+  // Resolved, because MULMOTERMINAL_HOME may be relative: `path.parse("state/campaigns").root` is
+  // the empty string, so the walk below would start at `""`, fail there quietly, and never reach
+  // the directory that actually holds the new home — the working directory.
+  const home = path.resolve(mulmoterminalHome());
+  const dir = path.resolve(campaignsDir());
   mkdirSync(dir, { recursive: true });
   // The whole chain, from the filesystem root, unconditionally — not from whatever this call
   // happened to create. Two runners starting at once would otherwise race: the second one's

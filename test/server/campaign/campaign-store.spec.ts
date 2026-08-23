@@ -260,6 +260,22 @@ describe("preparing the store", () => {
     }
   });
 
+  // A relative home makes every path here depend on the working directory, and the chain has to
+  // start at a real root rather than at the empty string.
+  it("prepares a store under a relative home", () => {
+    const cwd = process.cwd();
+    process.chdir(home);
+    try {
+      process.env.MULMOTERMINAL_HOME = path.join("state", "here");
+      ensureCampaignStore();
+      expect(existsSync(path.join(home, "state", "here", "campaigns"))).toBe(true);
+      expect(appendCampaignRecord("c1", intent)).toBe(true);
+      expect(readCampaign("c1")).toEqual([intent]);
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
   it("leaves records alone", () => {
     appendCampaignRecord("c1", intent);
     ensureCampaignStore();
