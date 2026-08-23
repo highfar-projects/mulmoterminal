@@ -20,7 +20,7 @@ import { capabilitiesOn, joinApp, readRecords, submitCids, TIERS, worldReadable,
 import type { ViewCapability } from "@receptron/sharedapp/view";
 import { performIntent } from "../backends/sharedApp/participate/intent.js";
 import { submitPlan, submitToApp } from "../backends/sharedApp/participate/submit.js";
-import { forgetApp, rememberApp, rememberedApps } from "../backends/sharedApp/participate/registry.js";
+import { forgetApp, rememberApp, rememberedApps, type ForgetResult } from "../backends/sharedApp/participate/registry.js";
 import { isRecord } from "../../common/isRecord.js";
 import { MULMOSERVER_ORIGIN } from "../../common/firebaseConfig.js";
 
@@ -271,6 +271,14 @@ function performed(action: "transition" | "assign" | "withdraw", cid: string, id
   return `Moved ${cid}/${id} to "${to}".`;
 }
 
+/** What a `forget` did. The failure is SAID rather than swallowed: this is the whole of what was
+ *  asked, so answering "forgotten" about an entry still on disk would be the report lying. */
+function narrateForget(slug: string, result: ForgetResult): string {
+  if (result === "forgotten") return `Forgot "${slug}". Nothing in the app itself changed.`;
+  if (result === "not-known") return `"${slug}" was not in the local list. Nothing changed.`;
+  return `"${slug}" is still in the local list — it could not be written: ${result.failed}. Nothing in the app itself changed either way.`;
+}
+
 /** How many rows to ask for, and never fewer than one.
  *
  *  THE FLOOR IS THE POINT. `Math.floor` of a fraction the schema happily accepts — `0.5` is a valid
@@ -294,7 +302,7 @@ export async function useSharedApp(args: unknown): Promise<string> {
 
   const slug = str(body.slug);
   if (slug === undefined) return `useSharedApp ${action}: \`slug\` is required — the app's URL name, the last part of https://…/a/<slug>.`;
-  if (action === "forget") return (await forgetApp(slug)) ? `Forgot "${slug}". Nothing in the app itself changed.` : `"${slug}" was not in the local list.`;
+  if (action === "forget") return narrateForget(slug, await forgetApp(slug));
 
   const cid = str(body.cid);
   if (action === "describe") return narrateDescribe(slug);

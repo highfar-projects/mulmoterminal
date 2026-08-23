@@ -31,6 +31,8 @@
 // is none it says there is none.
 import { collection, getDocs, limit as limitTo, query, where } from "firebase/firestore";
 import {
+  APP_PROTOCOL,
+  protocolOf,
   APP_SLUGS_COLLECTION,
   APPS_COLLECTION,
   PUBLIC_CONFIG_DOC,
@@ -76,6 +78,33 @@ export interface JoinedApp {
 }
 
 export type JoinedAppResult = { ok: true; app: JoinedApp } | { ok: false; problems: string[] };
+
+/** MAY THIS BUILD READ THIS DOCUMENT AT ALL?
+ *
+ *  Every published document carries the version of the contract it was written against, and the
+ *  MAJOR is the load-bearing half: at a higher one an existing key's MEANING has moved, so a reader
+ *  that goes ahead does not fail — it acts on a document it has misunderstood. This is the same gate
+ *  mulmoserver puts in front of `/m/` and `/p/` (`protocolDrawable`), and it answers the same three
+ *  ways:
+ *
+ *    ABSENT is 1.0.0. Every app published before the key existed carries nothing, and those are the
+ *    documents in Firestore right now. That is not a lenient default; it is what they are.
+ *
+ *    UNREADABLE is refused. A version that does not parse is most likely written by something NEWER
+ *    than this, and guessing low is the direction every decision then goes wrong quietly — which is
+ *    why `protocolOf` answers null rather than a version.
+ *
+ *    A HIGHER MAJOR is refused. Not narrowed, not half-read: the app is refused whole, because a
+ *    tool that reported some of what a person may do and silently dropped the rest is worse than one
+ *    that says it is too old. */
+const readable = (doc: Record<string, unknown> | null): boolean => {
+  const stated = doc?.protocol;
+  if (stated === undefined) return true;
+  if (typeof stated !== "string") return false;
+  const version = protocolOf(stated);
+  const mine = protocolOf(APP_PROTOCOL);
+  return version !== null && mine !== null && version.major <= mine.major;
+};
 
 const NO_SESSION =
   "this needs a signed-in session: connect remote-host first. A shared app answers to `request.auth` and nothing else — " +
@@ -166,6 +195,18 @@ export async function joinApp(slug: string): Promise<JoinedAppResult> {
     readDoc(handle, appViewTierPath(aid, "member"), viewConfigDocId()),
     readDoc(handle, appViewTierPath(aid, "roster"), viewConfigDocId()),
   ]);
+
+  // THE WHOLE APP, not the document that happens to be too new. A reader that dropped one
+  // projection and kept the others would report a capability list missing the half it could not
+  // read, with nothing anywhere saying so.
+  if (![publicConfig, memberConfig, rosterConfig].every(readable))
+    return {
+      ok: false,
+      problems: [
+        `"${slug}" was published against a newer version of the shared-app contract than this build understands. ` +
+          "Reading it here would mean acting on a document whose keys may no longer mean what this build thinks — so it is refused whole rather than read in part. Update MulmoTerminal.",
+      ],
+    };
 
   const roles = rolesOf(appDoc, handle.email);
   const memberWrites = writesOf(memberConfig);

@@ -20,6 +20,8 @@ import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
 import { appViewTierPath, viewConfigDocId } from "@receptron/sharedapp";
 import { setFirestoreAccessor, setSharedCollectionsSupport, type FirestoreDoc, type FirestoreDocs } from "@mulmoclaude/core/collection/server";
 import { useSharedApp } from "../../../server/infra/use-shared-app-tool.js";
+import { chmodSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { makeTempDir } from "../../support/tempDir";
 
 const AID = "app-sakura";
@@ -276,6 +278,61 @@ describe("useSharedApp — taking part in somebody else's app", () => {
     expect(said).toContain("bookings (member): move any row's status");
   });
 
+  it("refuses an app published against a newer contract, whole rather than in part", async () => {
+    publish();
+    const config = docs.store.get(`apps/${AID}/config`)?.get("public");
+    if (config !== undefined) config.protocol = "2.0.0";
+    const said = await run({ action: "describe", slug: "sakura" });
+    expect(said).toContain("newer version of the shared-app contract");
+    // Not a narrowed answer: nothing about the app is reported, because a capability list missing
+    // the half this build could not read would say nothing about being incomplete.
+    expect(said).not.toContain("You may:");
+  });
+
+  it("reads an app published before the contract carried a version", async () => {
+    publish();
+    const config = docs.store.get(`apps/${AID}/config`)?.get("public");
+    if (config !== undefined) delete config.protocol;
+    // Absent is the FIRST contract — that is what every app published before the key existed is,
+    // and those are the documents in Firestore now.
+    expect(await run({ action: "describe", slug: "sakura" })).toContain("You may:");
+  });
+
+  it("does not lose an entry when two apps are remembered at once", async () => {
+    publish();
+    docs.put("appSlugs", "kaede", { aid: "app-kaede", published: true });
+    docs.put("apps", "app-kaede", { aid: "app-kaede", name: "Kaede", members: { [ME.email]: { "*": "viewer" } } });
+    // Both describes read the register, change it and write it back. Unserialized, the second
+    // computes its list from the file the first has already replaced and drops the first's entry.
+    await Promise.all([run({ action: "describe", slug: "sakura" }), run({ action: "describe", slug: "kaede" })]);
+    const listed = await run({ action: "apps" });
+    expect(listed).toContain("sakura");
+    expect(listed).toContain("kaede");
+  });
+
+  it("says a forget failed rather than throwing out of the tool", async (ctx) => {
+    publish();
+    await run({ action: "describe", slug: "sakura" });
+    // A home directory that cannot be WRITTEN while still being readable: the entry is known, and
+    // replacing the list fails. The tool's contract is actionable prose, and an exception reaches
+    // the agent as a stack trace instead.
+    const home = process.env.MULMOTERMINAL_HOME ?? "";
+    chmodSync(home, 0o555);
+    try {
+      // Skipped rather than asserted where the permission does not bite — a root container, and
+      // Windows, where `chmod` is not what decides. A test that cannot create the condition it is
+      // about must say so rather than pass.
+      writeFileSync(path.join(home, "probe"), "x");
+      ctx.skip();
+    } catch {
+      const said = await run({ action: "forget", slug: "sakura" });
+      expect(said).toContain("could not be written");
+      expect(said).toContain("still in the local list");
+    } finally {
+      chmodSync(home, 0o755);
+    }
+  });
+
   it("refuses a URL name nothing answers to", async () => {
     const said = await run({ action: "describe", slug: "nobody" });
     expect(said).toContain('No shared app answers to "nobody"');
@@ -287,6 +344,7 @@ describe("useSharedApp — taking part in somebody else's app", () => {
     await run({ action: "describe", slug: "sakura" });
     expect(await run({ action: "apps" })).toContain("sakura — Sakura Hair");
     expect(await run({ action: "forget", slug: "sakura" })).toContain('Forgot "sakura"');
+    expect(await run({ action: "forget", slug: "sakura" })).toContain("was not in the local list");
     expect(await run({ action: "apps" })).toContain("No shared apps are remembered");
   });
 
