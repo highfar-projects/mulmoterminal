@@ -6,7 +6,15 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { appendCampaignRecord, campaignFile, campaignsDir, isCampaignId, listCampaigns, readCampaign } from "../../../server/campaign/campaign-store.js";
+import {
+  appendCampaignRecord,
+  campaignFile,
+  campaignsDir,
+  ensureCampaignStore,
+  isCampaignId,
+  listCampaigns,
+  readCampaign,
+} from "../../../server/campaign/campaign-store.js";
 import { foldCampaignLog, type CampaignRecord } from "../../../server/campaign/campaign-log.js";
 
 let home: string;
@@ -189,14 +197,44 @@ describe("what append refuses to promise", () => {
     expect(readCampaign("c1")).toEqual([intent]);
   });
 
-  // MULMOTERMINAL_HOME can itself be several levels of nothing. Every one of those is a name this
-  // append created, so every one is walked — and the walk has to terminate at the first directory
-  // that already existed rather than at the root.
   it("still succeeds when the whole home directory had to be created", () => {
     process.env.MULMOTERMINAL_HOME = path.join(home, "deep", "er", "still");
     expect(appendCampaignRecord("c1", intent)).toBe(true);
     expect(readCampaign("c1")).toEqual([intent]);
     expect(listCampaigns()).toEqual(["c1"]);
+  });
+});
+
+// The hierarchy is a setup concern with its own lifetime, which is why it is not part of every
+// append — see the comment on `ensureCampaignStore`.
+describe("preparing the store", () => {
+  it("creates the directory, however many levels of it are missing", () => {
+    process.env.MULMOTERMINAL_HOME = path.join(home, "deep", "er", "still");
+    expect(existsSync(campaignsDir())).toBe(false);
+    ensureCampaignStore();
+    expect(existsSync(campaignsDir())).toBe(true);
+  });
+
+  it("can be called again on a store that is already there", () => {
+    ensureCampaignStore();
+    expect(() => ensureCampaignStore()).not.toThrow();
+  });
+
+  it("leaves records alone", () => {
+    appendCampaignRecord("c1", intent);
+    ensureCampaignStore();
+    expect(readCampaign("c1")).toEqual([intent]);
+  });
+
+  // Reporting a hierarchy that may not survive is the one thing it must not do.
+  it.skipIf(process.platform === "win32")("throws rather than reporting a directory it could not prepare", () => {
+    mkdirSync(home, { recursive: true });
+    chmodSync(home, 0o500);
+    try {
+      if (process.getuid?.() !== 0) expect(() => ensureCampaignStore()).toThrow();
+    } finally {
+      chmodSync(home, 0o700);
+    }
   });
 });
 

@@ -92,19 +92,23 @@ function chainDown(top: string, leaf: string): string[] {
 }
 
 /**
- * Make durable the name of everything this append brought into existence.
+ * Create the campaigns directory and make every name it needed durable. Call once, before a
+ * campaign starts; idempotent, and throws rather than reporting a hierarchy that may not survive.
  *
- * The file's entry lives in its directory, and a directory just created needs the entry naming it
- * made durable too — which lives in ITS parent. Left unbounded that regresses to the root, so the
- * walk is bounded by what was actually created: `mkdirSync(…, { recursive: true })` reports the
- * topmost directory it made, and above that nothing is new and every entry is already durable.
+ * **Why this is a separate step rather than part of every append.** A directory's durability is a
+ * property of its whole ancestor chain, and of every other process writing there — one writer can
+ * create the hierarchy while a second, whose own `mkdirSync` therefore reports creating nothing,
+ * returns before the first has synced it. Chasing that inside `appendCampaignRecord` means either
+ * syncing to the filesystem root or racing; both are answers to the wrong question. The hierarchy
+ * and the records have different lifetimes, so they get different calls.
  */
-function syncNewNames(dir: string, firstCreated: string | undefined): void {
-  if (firstCreated === undefined) {
-    syncDirectory(dir);
-    return;
-  }
-  [path.dirname(firstCreated), ...chainDown(firstCreated, dir)].forEach(syncDirectory);
+export function ensureCampaignStore(): void {
+  const dir = campaignsDir();
+  const firstCreated = mkdirSync(dir, { recursive: true });
+  // Bounded by what was created: above the topmost new directory nothing is new, and every entry
+  // there is already durable.
+  if (firstCreated === undefined) syncDirectory(dir);
+  else [path.dirname(firstCreated), ...chainDown(firstCreated, dir)].forEach(syncDirectory);
 }
 
 /**
@@ -115,11 +119,11 @@ function syncNewNames(dir: string, firstCreated: string | undefined): void {
  * the opposite of `postToRoom`'s tolerance of a failed append, and for a reason — a lost message is
  * a lost message, while a lost intent is a merge nobody knows happened.
  *
- * `true` means the record survives a host or power failure, not merely this process exiting — the
- * data is flushed, and so is the entry naming it, and so are the entries naming every directory
- * this call had to create on the way. **On Windows that second half is not available**, so there
- * `true` means "written and flushed" and a power cut can still lose a file created in the same
- * moment.
+ * `true` means the record survives a host or power failure and not merely this process exiting:
+ * the data is flushed and the entry naming it is synced. That holds **given a durable campaigns
+ * directory**, which is `ensureCampaignStore`'s job and not this one's — see there for why the two
+ * are separate. **On Windows no directory entry can be synced at all**, so there `true` means
+ * "written and flushed" and nothing more.
  */
 export function appendCampaignRecord(campaign: string, record: CampaignRecord): boolean {
   const file = campaignFile(campaign);
@@ -139,16 +143,17 @@ export function appendCampaignRecord(campaign: string, record: CampaignRecord): 
   if (parseCampaignLog(line).length !== 1) return false;
   try {
     const dir = path.dirname(file);
-    const firstCreated = mkdirSync(dir, { recursive: true });
+    // Convenience so a first append works without setup; the durable-hierarchy promise still
+    // belongs to `ensureCampaignStore`, which the runner calls before any of this.
+    mkdirSync(dir, { recursive: true });
     // `flush: true` is what makes the `true` below mean something across a power cut: without it
     // the write sits in the page cache, and a host that dies after this call loses the intent
     // while the caller has already been told to go ahead. Node supports it from 21.x and this
     // package requires >=22.9. `rooms.ts` does not flush and is right not to — a lost message is
     // a lost message, while a lost intent is a side effect nobody can reconcile.
     appendFileSync(file, line, { encoding: "utf8", flush: true });
-    // And the file's name, which the flush above does not cover — along with the names of any
-    // directories this call had to create, up to the first one that already existed.
-    syncNewNames(dir, firstCreated);
+    // And the file's own name, which the flush above does not cover.
+    syncDirectory(dir);
     return true;
   } catch (err) {
     console.warn(`[campaign] could not append to ${campaign}: ${err instanceof Error ? err.message : String(err)}`);
