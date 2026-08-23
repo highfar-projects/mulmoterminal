@@ -12,8 +12,18 @@ export interface Publisher {
   publish(channel: string, data: unknown): void;
 }
 
-export function createPubSub(server: HttpServer, isAllowedOrigin: (origin: string | undefined, remoteAddress: string | undefined) => boolean = () => true) {
-  const io = new IOServer(server, {
+// `servers` is plural for #1834: a non-loopback bind gets a second listener on loopback, and the
+// pub/sub socket has to work on whichever one the browser reached. socket.io attaches to any
+// number of http servers and pools their sockets, so the rooms — and therefore publish — stay one
+// set however many are listening.
+export function createPubSub(
+  servers: readonly [HttpServer, ...HttpServer[]],
+  isAllowedOrigin: (origin: string | undefined, remoteAddress: string | undefined) => boolean = () => true,
+) {
+  // A non-empty tuple rather than an array: socket.io needs one server to construct against, and
+  // a plain array would make "someone passed []" a runtime error instead of a type error.
+  const [primary, ...rest] = servers;
+  const io = new IOServer(primary, {
     path: "/ws/pubsub",
     transports: ["websocket"],
     // Reject cross-origin connections so an untrusted website can't subscribe to
@@ -28,6 +38,8 @@ export function createPubSub(server: HttpServer, isAllowedOrigin: (origin: strin
       credentials: true,
     },
   });
+
+  rest.forEach((server) => io.attach(server));
 
   io.on("connection", (socket) => {
     socket.on("subscribe", (channel) => {
