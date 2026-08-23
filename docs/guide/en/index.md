@@ -12,12 +12,24 @@ description: A browser-terminal cockpit for running several AI coding agents (Cl
 > Prompts pane can be selected and copied with the mouse. Nothing to configure —
 > [what changed and how to tell](v4.10.1.html).
 
+**New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
+Windows, the start command, and what to do when it doesn't work — **installing and launching
+is one page**, written so someone who doesn't write code for a living still ends up with a
+running grid. Already set up? `npx mulmoterminal@latest` is the whole thing.
+
+[Getting started — from zero to running](getting-started.html){: .btn .btn-purple .fs-5 .mb-4 .mb-md-0 .mr-2 }
+[Basics — how to read the screen](basics.html){: .btn .fs-5 .mb-4 .mb-md-0 }
+
+**Rather see it running first?** Ninety seconds, with sound — one agent, then a grid of them.
+{: #demo }
 
 <video controls playsinline preload="metadata" style="width: 100%; max-width: 900px; border-radius: 6px;">
   <source src="../videos/launch-demo-en.mp4" type="video/mp4">
   <track kind="captions" src="../videos/launch-demo-en.vtt" srclang="en" label="English">
   <a href="../videos/launch-demo-en.mp4">Watch the demo (MP4, 3.3 MB)</a> — this browser can't play it inline.
 </video>
+
+*Each cell is coloured **working**, **done** or **needs you**. Zoom into one and the roster still holds what every other session asked, answered and did, so you go to whichever is lit and lose nothing catching up.*
 
 <details markdown="block">
 <summary>Transcript of the narration</summary>
@@ -43,17 +55,6 @@ We built MulmoTerminal for exactly that: not to watch agents, but to triage them
 That is the whole install.
 
 </details>
-
-*90 seconds, with sound — one agent, then a grid of them, each cell coloured **working**, **done** or **needs you**. Zoom into one and the roster still holds what every other session asked, answered and did, so you go to whichever is lit and lose nothing catching up.*
-
-
-**New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
-Windows, the start command, and what to do when it doesn't work — **installing and launching
-is one page**, written so someone who doesn't write code for a living still ends up with a
-running grid. Already set up? `npx mulmoterminal@latest` is the whole thing.
-
-[Getting started — from zero to running](getting-started.html){: .btn .btn-purple .fs-5 .mb-4 .mb-md-0 .mr-2 }
-[Basics — how to read the screen](basics.html){: .btn .fs-5 .mb-4 .mb-md-0 }
 
 > **[What's new in 4.8.4](v4.8.4.html)** — **fixes only; nothing to configure**. A push notification whose body was **the prompt you had just typed** is fixed — the reply now comes from the value the hook that reports the turn already carries, instead of being re-read from the transcript. In a session you had **`/clear`ed, every later finished push** was that way. Also fixed: terminal Japanese arriving as **runs of `_`** (not the font — tmux was substituting because it found no UTF-8 locale name), a shared app's publish handing out **a URL that does not open**, and the public view's **link refusal doing nothing on Windows** (as of 2026-08-15)
 >

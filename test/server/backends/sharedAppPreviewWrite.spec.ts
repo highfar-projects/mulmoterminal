@@ -43,6 +43,29 @@ vi.mock("firebase/firestore", () => ({
   // clock read here would be the author's.
   serverTimestamp: () => ({ __serverTimestamp: true }),
   doc: (parent: { collectionPath: string }, docId: string) => ({ path: `${parent.collectionPath}/${docId}` }),
+  // The transaction the mirrored create goes through. It is not a batch with a nicer name: the
+  // `get` inside it is what the commit is re-run against, which is what makes claiming a slot
+  // atomic. The fake answers it from the same store, so a host that stopped reading would claim a
+  // slot somebody already holds and the test would notice.
+  runTransaction: async (_db: unknown, body: (tx: unknown) => Promise<void>) => {
+    const ops: string[] = [];
+    const at = (path: string): { collectionPath: string; id: string } => {
+      const cut = path.lastIndexOf("/");
+      return { collectionPath: path.slice(0, cut), id: path.slice(cut + 1) };
+    };
+    await body({
+      get: (ref: { path: string }) => {
+        const { collectionPath, id } = at(ref.path);
+        const held = docs.store.get(collectionPath)?.has(id) === true;
+        return Promise.resolve({ exists: () => held });
+      },
+      set: (ref: { path: string }, data: Record<string, unknown>) => ops.push(`set ${ref.path} ${JSON.stringify(data)}`),
+      update: (ref: { path: string }, data: Record<string, unknown>) => ops.push(`update ${ref.path} ${JSON.stringify(data)}`),
+      delete: (ref: { path: string }) => ops.push(`delete ${ref.path}`),
+    });
+    if (batchFails) throw Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" });
+    batched.push(...ops);
+  },
   writeBatch: () => {
     const ops: string[] = [];
     return {

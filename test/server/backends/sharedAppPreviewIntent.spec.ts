@@ -30,13 +30,25 @@ let batchFails = false;
 
 vi.mock("firebase/firestore", () => ({
   collection: (_db: unknown, collectionPath: string) => ({ collectionPath }),
+  FieldPath: class {
+    segments: string[];
+    constructor(...segments: string[]) {
+      this.segments = segments;
+    }
+  },
   serverTimestamp: () => ({ __serverTimestamp: true }),
   doc: (parent: { collectionPath: string }, docId: string) => ({ path: `${parent.collectionPath}/${docId}` }),
   writeBatch: () => {
     const ops: string[] = [];
     return {
       set: (ref: { path: string }, data: Record<string, unknown>) => ops.push(`set ${ref.path} ${JSON.stringify(data)}`),
-      update: (ref: { path: string }, data: Record<string, unknown>) => ops.push(`update ${ref.path} ${JSON.stringify(data)}`),
+      // Both call shapes. A record's declared field goes through a FieldPath — a dotted name is a
+      // literal key, not a path into a map — while the mirror's `state` is ours and fixed.
+      update: (ref: { path: string }, data: Record<string, unknown> | { segments: string[] }, value?: unknown) => {
+        const asPath = data as { segments?: string[] };
+        const written = Array.isArray(asPath.segments) ? { [asPath.segments.join(".")]: value } : data;
+        ops.push(`update ${ref.path} ${JSON.stringify(written)}`);
+      },
       delete: (ref: { path: string }) => ops.push(`delete ${ref.path}`),
       commit: () => {
         if (batchFails) return Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }));

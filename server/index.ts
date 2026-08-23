@@ -32,6 +32,7 @@ import { bindSecurityWarning, browserOriginHostnames, createIsAllowedOrigin } fr
 import { serverErrorExit } from "./infra/server-exit.js";
 import { PORT, BIND_HOST, CLAUDE_CWD, MULMOTERMINAL_HOME, SESSION_ID_RE } from "./config/env.js";
 import { isLoopbackBinding } from "./infra/loopback.js";
+import { startLoopbackListener } from "./infra/loopback-listener.js";
 import { messageOf } from "./errors.js";
 import { hookSettingsJson } from "./session/hook-settings.js";
 import { mcpConfigJson } from "./session/mcp-config.js";
@@ -530,7 +531,15 @@ mountAppRoutes(app, {
 });
 
 const server = http.createServer(app);
-pubsub = createPubSub(server, isAllowedOrigin);
+// The second listener, for the case where the operator bound a specific non-loopback address and
+// everything this server spawns can therefore no longer reach it (#1834). Built unconditionally
+// and wired into the same app, sockets and upgrade routing as the primary, because that wiring
+// happens well before `listen()` tells us which address the OS actually chose; whether it ever
+// serves anything is decided down at the bind, and an http server that never listens costs
+// nothing.
+const loopbackServer = http.createServer(app);
+const listeners: readonly [http.Server, http.Server] = [server, loopbackServer];
+pubsub = createPubSub(listeners, isAllowedOrigin);
 
 // Wire the shared file-change publisher (markdown + html live-refresh) against
 // pubsub + the workspace. Must run before any write route fires (publishFileChange
@@ -921,7 +930,7 @@ try {
 
 // The terminal WebSocket endpoints (routes/ws-routes.ts).
 mountTerminalWebSockets({
-  server,
+  servers: listeners,
   isAllowedOrigin,
   claudeBin: CLAUDE_BIN,
   setWaiting: (id, waiting) => setWaiting(id, waiting),
@@ -969,6 +978,12 @@ server.listen(Number(PORT), BIND_HOST, () => {
   if (!isLoopbackBinding(server.address())) {
     console.warn(bindSecurityWarning(BIND_HOST, PORT, browserHostnames));
   }
+  // Unconditional, and NOT folded into the branch above: the two ask different questions. That
+  // one is "is this exposed?" — true for a specific LAN address, false for `::1`. This one is
+  // "can our own sessions still reach us?" — false for BOTH, because a server on `::1` refuses a
+  // client dialing 127.0.0.1. Gating this on the warning left `MULMOTERMINAL_HOST=localhost`
+  // broken, which is how that wiring mistake showed up here.
+  startLoopbackListener(server, loopbackServer, PORT);
   const surviving = tmuxAvailable() ? tmuxListSessionIds() : [];
   const reaped: string[] = [];
   if (tmuxAvailable()) {

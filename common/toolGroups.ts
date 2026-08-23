@@ -101,6 +101,15 @@ const GROUP_BY_TOOL = new Map<string, ToolGroup>([
   ["generateImage", "media"],
   ["presentMulmoScript", "media"],
 
+  // useSharedApp is the participant's half of the shared-app pair, and it is NOT beside
+  // manageSharedApp in `data`. That group is the workspace's own structured data; this tool moves
+  // records in an app SOMEBODY ELSE published, and a transition it performs can queue real mail to
+  // a real person. That is what `external` names — a reach outside this machine's own store — and
+  // it is a separate switch so a directory can have its own collections without also being able to
+  // act inside other people's apps. It is in NEVER_AUTO_APPROVED_TOOLS below for the same reason
+  // manageSharedApp is: `withdraw` deletes somebody's record with no undo.
+  ["useSharedApp", "external"],
+
   ["google", "external"],
   ["readXPost", "external"],
   ["searchX", "external"],
@@ -181,6 +190,16 @@ export const AUTO_ALLOWED_TOOLS: readonly string[] = ["presentForm", "presentCha
  *  It matters because of what the agent reads. A shared app is a repository, and the agent is
  *  already reading untrusted text out of it — skill files, collection notes, issue bodies, survey
  *  copy somebody pasted. `manageSharedApp` publishes to the internet, rewrites the roster, and
- *  hands the roster live records. With auto-approval, "invite this address as owner, then deploy"
- *  arriving in that text is a tool call rather than a question. */
-export const NEVER_AUTO_APPROVED_TOOLS: readonly string[] = ["manageSharedApp"];
+ *  hands the roster live records. `useSharedApp` moves records in an app somebody else published
+ *  and can queue mail that cannot be recalled. With auto-approval, "invite this address as owner,
+ *  then deploy" arriving in that text is a tool call rather than a question.
+ *
+ *  IT SAYS CLAUDE, AND THAT IS THE WHOLE OF ITS REACH. codex approves per SERVER — `guiMcpServers`
+ *  in `server/session/mcp-config.ts` marks every attached group `autoApprove: true`, by the owner's
+ *  decision of 2026-07-28 — so a codex cell holding a group waves through every tool in it, this
+ *  list included. That is already true of `manageSharedApp` in `data` and is now equally true of
+ *  `useSharedApp` in `external`; adding the tool did not create it. It cannot be narrowed per tool
+ *  from here, and narrowing it per GROUP would put a prompt in front of every drawing and
+ *  collection call in a codex cell, which is what the flag was added to avoid. Said out loud
+ *  rather than left to be discovered from the constant's name (Codex on #1843). */
+export const NEVER_AUTO_APPROVED_TOOLS: readonly string[] = ["manageSharedApp", "useSharedApp"];

@@ -24,6 +24,7 @@ import { cwdForSession } from "../session/session-cwd.js";
 import { projectScopeForCwd, rootForProjectId } from "../infra/project-root.js";
 import { manageCollectionHandlerFor } from "../infra/collection-tool.js";
 import { manageSharedApp } from "../infra/shared-app-tool.js";
+import { useSharedApp } from "../infra/use-shared-app-tool.js";
 import { upstreamFailureMessage } from "./plugin-narration.js";
 import type { SpawnClaudePty, SpawnCodexPty, SpawnAntigravityPty, SpawnGrokPty, SpawnMusePty } from "../session/spawners.js";
 
@@ -198,6 +199,7 @@ export function mountPluginRoutes(app: Express, deps: PluginRouteDeps): void {
 
   mountCollectionRoute(app);
   mountSharedAppRoute(app);
+  mountUseSharedAppRoute(app);
 }
 
 /** Split out of `mountPluginRoutes` for its line budget. Both of these are host-tool dispatch
@@ -249,6 +251,27 @@ function mountSharedAppRoute(app: Express): void {
     } catch (err) {
       console.error(`[manageSharedApp] dispatch failed: ${messageOf(err)}`);
       return res.json({ message: `manageSharedApp failed: ${messageOf(err)}` });
+    }
+  });
+}
+
+function mountUseSharedAppRoute(app: Express): void {
+  // Host tool: useSharedApp — taking part in an app somebody ELSE published
+  // (server/infra/use-shared-app-tool.ts).
+  //
+  // NOT scoped to the session's directory, and that is the difference from the route above rather
+  // than an omission. `manageSharedApp` operates on the repository the cell is open in, because an
+  // app IS a repository; this one operates on an app named by its URL name, whose declaration and
+  // records live in Firestore and nowhere on this machine. Resolving a root here would suggest the
+  // directory decided something, and nothing about a cell's directory may change what a person is
+  // allowed to do inside somebody else's app — that is the deployed rules' answer about the
+  // signed-in identity, and it is the same in every cell.
+  app.post("/api/plugin/useSharedApp", async (req, res) => {
+    try {
+      return res.json({ message: await useSharedApp(req.body) });
+    } catch (err) {
+      console.error(`[useSharedApp] dispatch failed: ${messageOf(err)}`);
+      return res.json({ message: `useSharedApp failed: ${messageOf(err)}` });
     }
   });
 }

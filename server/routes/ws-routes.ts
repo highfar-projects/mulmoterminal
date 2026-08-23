@@ -7,7 +7,8 @@
 // off, the origin check, the working/waiting flags, and the spawners it built.
 import type { IPty } from "node-pty";
 import { WebSocketServer, WebSocket } from "ws";
-import type { Server } from "node:http";
+import type { IncomingMessage, Server } from "node:http";
+import type { Duplex } from "node:stream";
 import { randomUUID } from "node:crypto";
 import { messageOf } from "../errors.js";
 import { CLAUDE_CWD, SESSION_ID_RE } from "../config/env.js";
@@ -74,8 +75,13 @@ import { createKeySerializer } from "../infra/serialize-per-key.js";
 const sessionConnects = createKeySerializer();
 
 export interface WsRouteDeps {
-  /** The http server these endpoints hang their `upgrade` handler off. */
-  server: Server;
+  /** The http servers these endpoints hang their `upgrade` handler off.
+   *
+   *  Plural because a non-loopback bind gets a SECOND listener on loopback (#1834), and a
+   *  terminal has to work on whichever one the browser reached. A single `server` plus an
+   *  optional extra would be the same defect the origin predicate's factory exists to avoid:
+   *  the caller that forgets the second argument gets the old behaviour silently. */
+  servers: readonly Server[];
   /** Only same-machine browser origins may open a terminal socket. */
   isAllowedOrigin: (origin: string | undefined, remoteAddress: string | undefined) => boolean;
   claudeBin: string;
@@ -1002,7 +1008,7 @@ export function mountTerminalWebSockets(deps: WsRouteDeps) {
     grok: runGrokWss,
     muse: runMuseWss,
   };
-  deps.server.on("upgrade", (req, socket, head) => {
+  const onUpgrade = (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const { pathname } = new URL(req.url ?? "/", "http://localhost");
     const kind = terminalWsKind(pathname);
     // Not ours (e.g. /ws/pubsub) — leave it for socket.io's own upgrade handler. This
@@ -1019,7 +1025,8 @@ export function mountTerminalWebSockets(deps: WsRouteDeps) {
       attachSocketErrorLogger(ws, kind);
       target.emit("connection", ws, req);
     });
-  });
+  };
+  deps.servers.forEach((server) => server.on("upgrade", onUpgrade));
 
   wss.on("connection", (ws, req) => void handleClaudeConnection(deps, ws, req));
   runWss.on("connection", (ws, req) => handleRunConnection(deps, ws, req));
