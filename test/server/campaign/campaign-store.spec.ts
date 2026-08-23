@@ -152,6 +152,35 @@ describe("listing what a restart has to reconcile", () => {
     appendCampaignRecord("real", intent);
     expect(listCampaigns()).toEqual(["real"]);
   });
+
+  // A directory named like a campaign would otherwise be listed and then fail to read as one.
+  it("ignores a directory whose name ends in .jsonl", () => {
+    mkdirSync(path.join(campaignsDir(), "impostor.jsonl"), { recursive: true });
+    appendCampaignRecord("real", intent);
+    expect(listCampaigns()).toEqual(["real"]);
+  });
+
+  // The half `existsSync` collapses. An empty list here reads as "no campaigns", and a restart
+  // that believes it skips reconciliation for tasks that are really mid-flight.
+  it.skipIf(process.platform === "win32")("throws when the campaigns directory cannot be read", () => {
+    mkdirSync(campaignsDir(), { recursive: true });
+    chmodSync(campaignsDir(), 0o000);
+    try {
+      if (process.getuid?.() !== 0) expect(() => listCampaigns()).toThrow();
+    } finally {
+      chmodSync(campaignsDir(), 0o700);
+    }
+  });
+
+  it.skipIf(process.platform === "win32")("throws when a campaign's directory cannot be traversed", () => {
+    appendCampaignRecord("c1", intent);
+    chmodSync(campaignsDir(), 0o000);
+    try {
+      if (process.getuid?.() !== 0) expect(() => readCampaign("c1")).toThrow();
+    } finally {
+      chmodSync(campaignsDir(), 0o700);
+    }
+  });
 });
 
 describe("the round trip a restart actually makes", () => {

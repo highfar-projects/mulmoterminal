@@ -5,7 +5,8 @@
 // It protects an honest task from a mistake — on the trust model this repo accepts it does not
 // stop an adversarial one, which is stated where the decision was made rather than implied here
 // (`future/grid-campaign-mode.md`, decision 4).
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
+import { isRecord } from "../../common/isRecord.js";
 import path from "node:path";
 import { mulmoterminalHome } from "../infra/mulmoterminal-home.js";
 import { parseCampaignLog, recordLine, type CampaignRecord } from "./campaign-log.js";
@@ -32,6 +33,15 @@ export function campaignFile(campaign: string): string | null {
   return isCampaignId(campaign) ? path.join(campaignsDir(), `${campaign}${CAMPAIGN_EXT}`) : null;
 }
 
+/**
+ * Is this the filesystem saying "there is nothing here", as opposed to "I could not find out"?
+ *
+ * The distinction is the whole point of the two functions below. `existsSync` collapses it — it
+ * answers `false` for a path that does not exist AND for one it cannot traverse — so it is not
+ * used here at all.
+ */
+const isMissing = (err: unknown): boolean => isRecord(err) && err.code === "ENOENT";
+
 /** Every record for a campaign, oldest first.
  *
  *  A campaign that does not exist is EMPTY; one that cannot be read THROWS. Those are different
@@ -39,8 +49,13 @@ export function campaignFile(campaign: string): string | null {
  *  let a runner start a campaign again from `intake` while its real tasks are mid-flight. */
 export function readCampaign(campaign: string): CampaignRecord[] {
   const file = campaignFile(campaign);
-  if (file === null || !existsSync(file)) return [];
-  return parseCampaignLog(readFileSync(file, "utf8"));
+  if (file === null) return [];
+  try {
+    return parseCampaignLog(readFileSync(file, "utf8"));
+  } catch (err) {
+    if (isMissing(err)) return [];
+    throw err;
+  }
 }
 
 /**
@@ -64,12 +79,25 @@ export function appendCampaignRecord(campaign: string, record: CampaignRecord): 
   }
 }
 
-/** The campaigns on disk. Used by a restart to find what it has to reconcile before doing anything. */
+/**
+ * The campaigns on disk. A restart reads this to find what it must reconcile before doing anything.
+ *
+ * Regular files only, like `listRooms()`: a DIRECTORY named `c1.jsonl` would otherwise be reported
+ * as a campaign and then fail to read as one.
+ *
+ * Where it deliberately differs from `listRooms()` is the catch. That one swallows every failure,
+ * which is right for a listing nobody depends on — here an empty list is indistinguishable from
+ * "no campaigns", and a restart would skip reconciliation for tasks that are mid-flight. So only
+ * "the directory is not there yet" is empty; anything else reaches the caller.
+ */
 export function listCampaigns(): string[] {
-  const dir = campaignsDir();
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir)
-    .filter((name) => name.endsWith(CAMPAIGN_EXT))
-    .map((name) => name.slice(0, -CAMPAIGN_EXT.length))
-    .filter(isCampaignId);
+  try {
+    return readdirSync(campaignsDir(), { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith(CAMPAIGN_EXT))
+      .map((entry) => entry.name.slice(0, -CAMPAIGN_EXT.length))
+      .filter(isCampaignId);
+  } catch (err) {
+    if (isMissing(err)) return [];
+    throw err;
+  }
 }
