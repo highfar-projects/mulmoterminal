@@ -345,8 +345,22 @@ describe("useSharedApp — reading somebody else's app", () => {
     const said = await run({ action: "describe", slug: "sakura" });
     // A label may be shortened — it is prose. A declared VALUE may not: the agent is told never to
     // send a shortened value back, so truncating this one makes a legal submission impossible.
-    expect(said).toContain("w".repeat(300));
+    // Two thousand characters, and it arrives whole. There is no length at which shortening it
+    // becomes the right answer: the rules compare an enum choice exactly, and this tool tells the
+    // agent never to send a shortened value back — so a prefix is not a smaller answer, it is an
+    // answer that cannot be used.
+    expect(said).toContain("w".repeat(2_000));
     expect(said).not.toContain("more characters, dropped");
+  });
+
+  it("leaves a value out whole rather than handing back a prefix", async () => {
+    publish({ hugeEnum: true });
+    const said = await run({ action: "describe", slug: "sakura" });
+    // The list has a budget; a single value bigger than it is OMITTED and counted, never cut. A
+    // choice that large cannot be passed through this tool, and saying so beats a prefix the rules
+    // will refuse.
+    expect(said).toContain("more not shown whole");
+    expect(said).not.toContain("z".repeat(200));
   });
 
   it("refuses a URL name nothing answers to", async () => {

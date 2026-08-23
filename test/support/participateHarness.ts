@@ -251,6 +251,13 @@ export function submitFor({
 
 /** `config/public` as this app publishes it — the declaration, the drawn form, and the roster
  *  tier's own writes, which this document carries whether or not the app publishes any page. */
+/** The `seat` choices, in whichever of their three shapes a test needs. */
+const enumValues = (over: { longEnum: boolean; hugeEnum: boolean }): string[] => {
+  if (over.hugeEnum) return ["z".repeat(20_000), "aisle"];
+  if (over.longEnum) return ["w".repeat(2_000), "aisle"];
+  return ["window", "aisle"];
+};
+
 const publicConfig = (over: {
   name: string;
   enabled: boolean;
@@ -259,6 +266,7 @@ const publicConfig = (over: {
   bothIdentities: boolean;
   dottedEmailField: boolean;
   longEnum: boolean;
+  hugeEnum: boolean;
 }): Record<string, unknown> => ({
   protocol: "1.0.0",
   name: over.name,
@@ -274,7 +282,7 @@ const publicConfig = (over: {
         // The two types publish deliberately allows, and that a string-only tool was accused of
         // making unsubmittable.
         guests: { label: "Guests", type: "number" },
-        seat: { label: "Seat", type: "enum", values: over.longEnum ? ["w".repeat(300), "aisle"] : ["window", "aisle"] },
+        seat: { label: "Seat", type: "enum", values: enumValues(over) },
       },
       statusField: "status",
     },
@@ -307,6 +315,8 @@ export function publishApp(
     dottedStatusField = false,
     /** An enum choice longer than the display cap — legal, and the rules compare it exactly. */
     longEnum = false,
+    /** An enum choice larger than a whole list's budget: omitted, never cut. */
+    hugeEnum = false,
     /** The app document's own `public` block: undefined mirrors `enabled`, null omits it, an object
      *  sets it apart from the projection — the shape a half-finished publish leaves. */
     appPublic = undefined as Record<string, unknown> | null | undefined,
@@ -323,7 +333,7 @@ export function publishApp(
       // because publish writes the two separately and a run can stop between them.
       ...appPublicBlock(appPublic, enabled),
     });
-  bag.docs.put(`apps/${AID}/config`, "public", publicConfig({ name, enabled, mirror, idFromUid, bothIdentities, dottedEmailField, longEnum }));
+  bag.docs.put(`apps/${AID}/config`, "public", publicConfig({ name, enabled, mirror, idFromUid, bothIdentities, dottedEmailField, longEnum, hugeEnum }));
   if (rosterTier)
     // A participant page's own projection, left behind by an EARLIER publish: it names the same
     // collection as `config/public` and carries only the transition half. `runWrites` can stop

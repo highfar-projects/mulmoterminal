@@ -24,23 +24,24 @@
 // of the fields that were left empty, and that string travels to the agent whole.
 const QUOTED_LIMIT = 160;
 
-/** The cap for a value the agent has to REPRODUCE — an enum choice, a status name, a collection id,
- *  an address. Much larger than the display cap and still a cap.
+/** A value the agent has to REPRODUCE — an enum choice, a status name, a collection id, an address.
+ *  NEVER SHORTENED, at any length.
  *
- *  The two are different because the caps do different jobs. A label is prose: shortening one costs
- *  the reader nothing they cannot get elsewhere. A declared VALUE is not prose — the rules compare
- *  it exactly, so a shortened one is unusable, and this tool's own instruction tells the agent never
- *  to send a shortened value back. Truncating an enum choice at 160 characters would therefore make
- *  a legal submission impossible to compose, which is the failure the whole `describe` action
- *  exists to prevent.
+ *  A label is prose: shortening one costs the reader nothing they cannot get elsewhere. A declared
+ *  VALUE is not prose — the rules compare it exactly, and this tool's own instruction tells the
+ *  agent never to send a shortened value back. So a truncated one is not a smaller answer, it is an
+ *  answer that makes a legal submission impossible to compose, which is the failure `describe`
+ *  exists to prevent. There is no length at which that stops being true: 1024 was a second guess at
+ *  a number that should not exist (Codex on #1843, twice — the first cap was 160).
  *
- *  Still bounded, because a declaration is somebody else's document and nothing stops it declaring
- *  a choice the size of a book. What structure-forging can be done is already gone either way: both
- *  paths flatten and both escape their own quotes. */
-const TERM_LIMIT = 1024;
-
-/** A value the agent must be able to pass back exactly. See {@link TERM_LIMIT}. */
-export const quotedTerm = (value: string): string => quotedTo(value, TERM_LIMIT);
+ *  WHAT BOUNDS THE REPORT IS THE LIST, not the value. `quotedList` spends a budget across WHOLE
+ *  values and says how many it left out, so nothing shown is unusable and nothing omitted is
+ *  pretended to be there — the same shape the records block takes, and for the same reason.
+ *
+ *  A single value larger than that budget is therefore omitted rather than cut. It is a real limit
+ *  and it is stated: a choice that big cannot be passed through this tool, and saying so is better
+ *  than handing back a prefix that will be refused. */
+export const quotedTerm = (value: string): string => quotedTo(value, Number.POSITIVE_INFINITY);
 
 export const quoted = (value: string): string => quotedTo(value, QUOTED_LIMIT);
 
@@ -63,8 +64,32 @@ function quotedTo(value: string, cap: number): string {
 }
 
 /** The same for a list, which is where most of an app's vocabulary arrives. */
-/** A list of VALUES — every list in this feature is vocabulary, not prose. */
-export const quotedList = (values: readonly string[], separator = ", "): string => values.map(quotedTerm).join(separator);
+/** How much of a report one list of declared values may take.
+ *
+ *  Generous, because these are the words an agent needs in order to act at all, and bounded,
+ *  because the declaration is somebody else's document and nothing stops it holding a choice the
+ *  size of a book. */
+const LIST_BUDGET = 8192;
+
+/** A list of VALUES — every list in this feature is vocabulary, not prose.
+ *
+ *  Whole values until the budget is spent, then a count of what was left out. Never a truncated
+ *  one: see {@link quotedTerm}. */
+export function quotedList(values: readonly string[], separator = ", "): string {
+  const shown: string[] = [];
+  let spent = 0;
+  for (const value of values) {
+    const quotedValue = quotedTerm(value);
+    if (spent + quotedValue.length > LIST_BUDGET && shown.length > 0) break;
+    if (quotedValue.length > LIST_BUDGET) break;
+    shown.push(quotedValue);
+    spent += quotedValue.length + separator.length;
+  }
+  const left = values.length - shown.length;
+  const note =
+    left === 0 ? "" : `${separator}(${left} more not shown whole — they are too large to list here, and this tool will not hand back a shortened value)`;
+  return `${shown.join(separator)}${note}`;
+}
 
 /** THE SAME CHARACTERS, ESCAPED RATHER THAN REMOVED — for the records block, where the values have
  *  to survive intact because the agent acts on them.
