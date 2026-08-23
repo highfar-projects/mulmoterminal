@@ -230,6 +230,20 @@ describe("useSharedApp — reading somebody else's app", () => {
     expect(await run({ action: "describe", slug: "sakura" })).toContain("NOT open to the public");
   });
 
+  it("spends one row budget across both identities rather than one each", async () => {
+    publish({ bothIdentities: true });
+    bag.denyQuery.add(bookingsPath);
+    bag.docs.put(bookingsPath, "u1", { uid: ME.uid, slot: "9:00", status: "booked" });
+    bag.docs.put(bookingsPath, "u2", { uid: ME.uid, slot: "9:30", status: "booked" });
+    bag.docs.put(bookingsPath, "e1", { requesterEmail: ME.email, slot: "10:00", status: "booked" });
+    const said = await run({ action: "records", slug: "sakura", cid: "bookings", limit: 3 });
+    // The refused whole-collection attempt asked for 3; the uid query asked for 3 and answered 2;
+    // the email query then asked for the ONE that was left. Two queries of 3 would read — and bill
+    // — twice the cap and throw the overflow away at the merge.
+    expect(bag.capped).toEqual([3, 3, 1]);
+    expect(said).toContain("3 row(s)");
+  });
+
   it("refuses a URL name nothing answers to", async () => {
     const said = await run({ action: "describe", slug: "nobody" });
     expect(said).toContain('No shared app answers to "nobody"');

@@ -428,32 +428,34 @@ export async function readRecords(app: JoinedApp, cid: string, limit: number): P
 
 /** The reader's own rows, by every identity the declaration names.
  *
- *  ONE QUERY PER IDENTITY, each capped in the QUERY for the same reason the collection read is:
- *  Firestore bills what the query matched. It cannot ask for "either field equals mine" in one go
- *  without an `or`, and the two answers are disjoint sets of documents anyway — merged by id here,
- *  so a row that somehow carried both is not shown twice. */
+ *  ONE QUERY PER IDENTITY, in TURN, and the turn-taking is what keeps the cap honest — see below.
+ *  Firestore cannot ask for "either field equals mine" in one go without an `or`, and the two
+ *  answers are near-disjoint sets of documents anyway; merging by id here is what stops a row that
+ *  carried both from being shown twice. */
 async function ownRowsBy(db: Firestore, path: string, fields: { field: string; value: string }[], limit: number): Promise<ReadRecords> {
-  const answers = await Promise.all(
-    fields.map((field) =>
-      // `new FieldPath(name)` rather than the bare string, and this is not defensive dressing: a
-      // dotted string is a NESTED PATH to `where`, so a declaration whose `emailField` is
-      // `requester.email` — a perfectly ordinary top-level key, which the rules and every
-      // submission treat literally — would be queried as `email` inside a map called `requester`
-      // and match nothing. An empty answer, not an error.
-      getDocs(query(collection(db, path), where(new FieldPath(field.field), "==", field.value), limitTo(limit)))
-        .then((found) => ({ ok: true as const, found }))
-        .catch((err: unknown) => ({ ok: false as const, refusal: refused(err), why: messageOf(err) })),
-    ),
-  );
-  const broke = answers.find((answer) => !answer.ok && !answer.refusal);
-  if (broke !== undefined && !broke.ok) return { scope: "failed", rows: [], note: broke.why };
-  if (answers.every((answer) => !answer.ok)) return { scope: "none", rows: [], note: "neither the collection nor your own rows in it could be read" };
   const byId = new Map<string, Record<string, unknown>>();
-  for (const answer of answers) {
-    if (!answer.ok) continue;
+  let refusals = 0;
+  for (const field of fields) {
+    // THE BUDGET IS SPENT DOWN, NOT SPENT TWICE. Capping each query at the full limit would read —
+    // and bill — up to one limit PER IDENTITY and then throw the overflow away at the merge, which
+    // is the thing the cap exists to prevent. What is left is asked for next, so the total read is
+    // the limit however many identities the declaration names.
+    const room = limit - byId.size;
+    if (room <= 0) break;
+    const answer = await getDocs(query(collection(db, path), where(new FieldPath(field.field), "==", field.value), limitTo(room)))
+      .then((found) => ({ ok: true as const, found }))
+      .catch((err: unknown) => ({ ok: false as const, refusal: refused(err), why: messageOf(err) }));
+    if (!answer.ok) {
+      // A BREAKAGE STOPS EVERYTHING, a refusal only closes one door. Carrying on after a failure
+      // would answer from the identities that happened to work and call it "your own rows".
+      if (!answer.refusal) return { scope: "failed", rows: [], note: answer.why };
+      refusals += 1;
+      continue;
+    }
     for (const entry of answer.found.docs) byId.set(entry.id, { ...entry.data(), id: entry.id });
   }
-  return { scope: "own", rows: [...byId.values()].slice(0, limit), note: "only your own rows are readable here" };
+  if (refusals === fields.length) return { scope: "none", rows: [], note: "neither the collection nor your own rows in it could be read" };
+  return { scope: "own", rows: [...byId.values()], note: "only your own rows are readable here" };
 }
 
 /** One record, with THREE answers where a reader sees one.
