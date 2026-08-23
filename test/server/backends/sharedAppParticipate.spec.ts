@@ -262,6 +262,7 @@ describe("useSharedApp — reading somebody else's app", () => {
     const said = await run({ action: "records", slug: "sakura", cid: "slots" });
     expect(said).toContain("4 row(s) read");
     expect(said).toContain("are NOT shown");
+    expect(said.length).toBeLessThan(260_000);
     // Whole records, never a truncated one: the JSON that comes back still parses.
     const block = said.slice(said.indexOf("["), said.lastIndexOf("]") + 1);
     expect(JSON.parse(block).length).toBeLessThan(4);
@@ -276,6 +277,28 @@ describe("useSharedApp — reading somebody else's app", () => {
     bag.docs.put(bookingsPath, "both", { uid: ME.uid, requesterEmail: ME.email, slot: "9:00", status: "booked" });
     const said = await run({ action: "records", slug: "sakura", cid: "bookings", limit: 1 });
     expect(said).toContain("came back full");
+  });
+
+  it("shows a record too big for the whole answer as a stub with its id", async () => {
+    publish();
+    // Retained whole, one document near Firestore's 1 MiB limit is by itself far over the budget —
+    // and the id is the whole of what the write actions need, so the stub is still actionable.
+    bag.docs.put(slotsPath, "huge", { state: "open", blob: "x".repeat(300_000) });
+    const said = await run({ action: "records", slug: "sakura", cid: "slots" });
+    expect(said).toContain("shown as a stub");
+    expect(said).toContain('"id": "huge"');
+    expect(said).not.toContain("xxxxxxxxxx");
+    expect(said.length).toBeLessThan(260_000);
+  });
+
+  it("measures a row as it will be EMITTED, escapes included", async () => {
+    publish();
+    // Every one of these characters becomes six on the way out. Measured before escaping, a row
+    // this size passes the budget and is written at six times it.
+    bag.docs.put(slotsPath, "sneaky", { state: "open", blob: "\u200b".repeat(60_000) });
+    const said = await run({ action: "records", slug: "sakura", cid: "slots" });
+    expect(said).toContain("shown as a stub");
+    expect(said.length).toBeLessThan(260_000);
   });
 
   it("refuses a URL name nothing answers to", async () => {
