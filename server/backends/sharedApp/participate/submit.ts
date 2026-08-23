@@ -103,7 +103,16 @@ function drawnFields(raw: unknown): DrawnForm["fields"] {
 }
 
 export type SubmitResult =
-  { ok: true; cid: string; id: string; mirror?: { cid: string; id: string } } | { ok: false; reason: "host" | "taken" | "rules"; error: string };
+  | { ok: true; cid: string; id: string; mirror?: { cid: string; id: string } }
+  /** `host` never reached Firestore, `taken` is an id somebody has, `rules` is a refusal, and
+   *  `failed` is a write that broke — the last two are opposite advice and used to be one word. */
+  | { ok: false; reason: "host" | "taken" | "rules" | "failed"; error: string };
+
+/** Which of the four a failed write was. */
+const submitReason = (failed: { error: string; refusal: boolean }): "taken" | "rules" | "failed" => {
+  if (failed.error === "already-taken") return "taken";
+  return failed.refusal ? "rules" : "failed";
+};
 
 /** Send one submission. */
 export async function submitToApp(app: JoinedApp, cid: string, values: Record<string, string>): Promise<SubmitResult> {
@@ -132,6 +141,6 @@ export async function submitToApp(app: JoinedApp, cid: string, values: Record<st
   const id = recordId(plan.submit, app.handle.uid, record, randomUUID());
   const write = plannedWrite(cid, plan.submit, id, record);
   const failed = await commitPlannedWrite(app.handle, app.aid, write);
-  if (failed !== null) return { ok: false, reason: failed === "already-taken" ? "taken" : "rules", error: failed };
+  if (failed !== null) return { ok: false, reason: submitReason(failed), error: failed.error };
   return { ok: true, cid, id, ...(write.mirror === undefined ? {} : { mirror: { cid: write.mirror.cid, id: write.mirror.id } }) };
 }

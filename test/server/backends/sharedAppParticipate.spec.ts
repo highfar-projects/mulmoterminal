@@ -52,7 +52,16 @@ vi.mock("firebase/firestore", () => ({
     capped.push(cap.rows);
     return { ...source, clause, cap };
   },
-  where: (field: string, _op: string, value: unknown) => ({ field, value }),
+  // The real `where` takes a FieldPath here, whose `segments` are the literal key. The fake reads
+  // it the same way, so a host that went back to passing a bare string would query a nested path
+  // and this file would notice.
+  FieldPath: class {
+    segments: string[];
+    constructor(...segments: string[]) {
+      this.segments = segments;
+    }
+  },
+  where: (field: { segments: string[] }, _op: string, value: unknown) => ({ field: field.segments.join("."), value }),
   limit: (rows: number) => ({ rows }),
   getDocs: (asked: { collectionPath: string; clause?: { field: string; value: unknown }; cap: { rows: number } }) => {
     // Refused only WITHOUT a where clause — which is the shape the rules actually take: listing a
@@ -212,6 +221,7 @@ function publish({
   enabled = true,
   bothIdentities = false,
   name = "Sakura Hair",
+  dottedEmailField = false,
 } = {}): void {
   docs.put("appSlugs", "sakura", { aid: AID, published: true });
   if (roles !== null) docs.put("apps", AID, { aid: AID, name, members: { [ME.email]: roles }, memberEmails: [ME.email] });
@@ -228,6 +238,8 @@ function publish({
         ...(idFromUid ? { idFrom: "auth.uid", idField: undefined, emailField: undefined, mirror: undefined } : {}),
         // Both identities, either of which the rules accept as an own row.
         ...(bothIdentities ? { uidField: "uid" } : {}),
+        // An ordinary top-level key that happens to contain a dot.
+        ...(dottedEmailField ? { emailField: "requester.email" } : {}),
       },
     },
     form: {
@@ -457,6 +469,16 @@ describe("useSharedApp — taking part in somebody else's app", () => {
     publish({ name: "x".repeat(400) });
     const said = await run({ action: "describe", slug: "sakura" });
     expect(said).toContain("more characters, dropped)");
+  });
+
+  it("queries an identity field whose name contains a dot as a literal key", async () => {
+    publish({ dottedEmailField: true });
+    denyQuery.add(bookingsPath);
+    docs.put(bookingsPath, "mine", { "requester.email": ME.email, slot: "9:00", status: "booked" });
+    const said = await run({ action: "records", slug: "sakura", cid: "bookings" });
+    // A bare dotted string is a NESTED PATH to `where`, so this would look inside a map called
+    // `requester` and match nothing — an empty answer rather than an error.
+    expect(said).toContain("mine");
   });
 
   it("refuses a URL name nothing answers to", async () => {

@@ -29,7 +29,7 @@
 //
 // So this host judges against precisely the projection production judges against, and where there
 // is none it says there is none.
-import { collection, getDocs, limit as limitTo, query, where, type Firestore } from "firebase/firestore";
+import { collection, FieldPath, getDocs, limit as limitTo, query, where, type Firestore } from "firebase/firestore";
 import {
   APP_PROTOCOL,
   protocolOf,
@@ -414,7 +414,12 @@ export async function readRecords(app: JoinedApp, cid: string, limit: number): P
 async function ownRowsBy(db: Firestore, path: string, fields: { field: string; value: string }[], limit: number): Promise<ReadRecords> {
   const answers = await Promise.all(
     fields.map((field) =>
-      getDocs(query(collection(db, path), where(field.field, "==", field.value), limitTo(limit)))
+      // `new FieldPath(name)` rather than the bare string, and this is not defensive dressing: a
+      // dotted string is a NESTED PATH to `where`, so a declaration whose `emailField` is
+      // `requester.email` — a perfectly ordinary top-level key, which the rules and every
+      // submission treat literally — would be queried as `email` inside a map called `requester`
+      // and match nothing. An empty answer, not an error.
+      getDocs(query(collection(db, path), where(new FieldPath(field.field), "==", field.value), limitTo(limit)))
         .then((found) => ({ ok: true as const, found }))
         .catch((err: unknown) => ({ ok: false as const, refusal: refused(err), why: messageOf(err) })),
     ),

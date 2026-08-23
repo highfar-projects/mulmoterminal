@@ -313,6 +313,8 @@ async function narrateSubmit(slug: string, cid: string | undefined, given: Recor
   if (!result.ok) {
     if (result.reason === "taken")
       return `Refused: something with that id already exists in "${cid}". Where the id IS the thing being claimed — a slot, a seat, one answer per person — that means somebody has it, and it may be you.`;
+    if (result.reason === "failed")
+      return `Not submitted: ${result.error}. That is a failure, not a refusal — nothing was written, and the submission is worth making again.`;
     return `Not submitted (${result.reason}): ${result.error}`;
   }
   return [

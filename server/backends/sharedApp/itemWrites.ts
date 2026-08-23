@@ -59,7 +59,7 @@ const TAKEN = "already-taken";
  *  AND NEITHER CHECKED SHAPE IS AVAILABLE TO A SUBMITTER WHO CANNOT READ, which is why there are
  *  four paths below rather than two. The participant who cannot read the destination is the one the
  *  rules already protect; the writer the check protects against is the one who can read. */
-export async function commitPlannedWrite(handle: SharedAppHandle, aid: string, plan: PlannedWrite): Promise<string | null> {
+export async function commitPlannedWrite(handle: SharedAppHandle, aid: string, plan: PlannedWrite): Promise<WriteFailure | null> {
   try {
     // CAN THIS SUBMITTER READ THE DESTINATION AT ALL? Asked once, before either shape, because the
     // answer decides which of them is even available — and because for most submitters it is NO.
@@ -86,7 +86,7 @@ export async function commitPlannedWrite(handle: SharedAppHandle, aid: string, p
         if (refused(err)) return { ok: false as const, held: null };
         throw err;
       });
-    if (readable.ok && readable.held !== null) return TAKEN;
+    if (readable.ok && readable.held !== null) return { error: TAKEN, refusal: false };
 
     if (!readable.ok) {
       // THE UNCHECKED WRITE, for the caller who may not read. Every write it can make is a create
@@ -115,7 +115,7 @@ export async function commitPlannedWrite(handle: SharedAppHandle, aid: string, p
     // A READER, so the id can be held against a concurrent claim.
     if (plan.mirror === undefined) {
       const made = await handle.docs.create(itemsPath(aid, plan.cid), plan.id, plan.record);
-      return made ? null : TAKEN;
+      return made ? null : { error: TAKEN, refusal: false };
     }
     const db = currentFirestore();
     const mirror = plan.mirror;
@@ -131,7 +131,10 @@ export async function commitPlannedWrite(handle: SharedAppHandle, aid: string, p
     });
     return null;
   } catch (err) {
-    return messageOf(err);
+    // `TAKEN` is thrown out of the transaction body to abort it, and it is not a rules refusal —
+    // it is this host's own answer about an id that is already there.
+    const error = messageOf(err);
+    return { error, refusal: error !== TAKEN && refused(err) };
   }
 }
 
@@ -149,6 +152,15 @@ export async function commitPlannedWrite(handle: SharedAppHandle, aid: string, p
  *  Note the asymmetry the author's preview has and the participate path does not: there the write
  *  goes out as the app's OWNER, so the rules do not close the race either. Here it goes out as the
  *  reader, and `ownRow` / the transition table are evaluated against the STORED record. */
+/** A write that did not land, and whether the RULES are what turned it down.
+ *
+ *  The same pair `readRecord` and `readRecords` carry, for the same reason: a refusal is final and
+ *  a failure is worth retrying, and the caller reports them in opposite words. */
+export interface WriteFailure {
+  error: string;
+  refusal: boolean;
+}
+
 export interface IntentFailure {
   error: string;
   /** Did the RULES turn this down, as opposed to the write failing?

@@ -182,7 +182,7 @@ export async function writePreviewSubmission(root: string, cid: string, values: 
   if (failed !== null) {
     const raw = preview.config.submit?.[cid];
     const why = isRecord(raw) ? await explainRefusal(handle, preview.aid, raw, record) : null;
-    return { ok: false, reason: failed === "already-taken" ? "taken" : "rules", error: why === null ? failed : `${why} (${failed})` };
+    return { ok: false, reason: failed.error === "already-taken" ? "taken" : "rules", error: why === null ? failed.error : `${why} (${failed.error})` };
   }
   const written: PreviewWrittenRecord = {
     cid: plan.cid,
