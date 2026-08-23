@@ -340,6 +340,15 @@ describe("useSharedApp — reading somebody else's app", () => {
     expect(JSON.parse(block).length).toBeGreaterThan(0);
   });
 
+  it("keeps a long enum choice whole, because the rules compare it exactly", async () => {
+    publish({ longEnum: true });
+    const said = await run({ action: "describe", slug: "sakura" });
+    // A label may be shortened — it is prose. A declared VALUE may not: the agent is told never to
+    // send a shortened value back, so truncating this one makes a legal submission impossible.
+    expect(said).toContain("w".repeat(300));
+    expect(said).not.toContain("more characters, dropped");
+  });
+
   it("refuses a URL name nothing answers to", async () => {
     const said = await run({ action: "describe", slug: "nobody" });
     expect(said).toContain('No shared app answers to "nobody"');

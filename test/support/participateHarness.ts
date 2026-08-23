@@ -258,6 +258,7 @@ const publicConfig = (over: {
   idFromUid: boolean;
   bothIdentities: boolean;
   dottedEmailField: boolean;
+  longEnum: boolean;
 }): Record<string, unknown> => ({
   protocol: "1.0.0",
   name: over.name,
@@ -273,7 +274,7 @@ const publicConfig = (over: {
         // The two types publish deliberately allows, and that a string-only tool was accused of
         // making unsubmittable.
         guests: { label: "Guests", type: "number" },
-        seat: { label: "Seat", type: "enum", values: ["window", "aisle"] },
+        seat: { label: "Seat", type: "enum", values: over.longEnum ? ["w".repeat(300), "aisle"] : ["window", "aisle"] },
       },
       statusField: "status",
     },
@@ -304,6 +305,8 @@ export function publishApp(
     name = "Sakura Hair",
     dottedEmailField = false,
     dottedStatusField = false,
+    /** An enum choice longer than the display cap — legal, and the rules compare it exactly. */
+    longEnum = false,
     /** The app document's own `public` block: undefined mirrors `enabled`, null omits it, an object
      *  sets it apart from the projection — the shape a half-finished publish leaves. */
     appPublic = undefined as Record<string, unknown> | null | undefined,
@@ -320,7 +323,7 @@ export function publishApp(
       // because publish writes the two separately and a run can stop between them.
       ...appPublicBlock(appPublic, enabled),
     });
-  bag.docs.put(`apps/${AID}/config`, "public", publicConfig({ name, enabled, mirror, idFromUid, bothIdentities, dottedEmailField }));
+  bag.docs.put(`apps/${AID}/config`, "public", publicConfig({ name, enabled, mirror, idFromUid, bothIdentities, dottedEmailField, longEnum }));
   if (rosterTier)
     // A participant page's own projection, left behind by an EARLIER publish: it names the same
     // collection as `config/public` and carries only the transition half. `runWrites` can stop

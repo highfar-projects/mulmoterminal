@@ -24,7 +24,27 @@
 // of the fields that were left empty, and that string travels to the agent whole.
 const QUOTED_LIMIT = 160;
 
-export function quoted(value: string): string {
+/** The cap for a value the agent has to REPRODUCE — an enum choice, a status name, a collection id,
+ *  an address. Much larger than the display cap and still a cap.
+ *
+ *  The two are different because the caps do different jobs. A label is prose: shortening one costs
+ *  the reader nothing they cannot get elsewhere. A declared VALUE is not prose — the rules compare
+ *  it exactly, so a shortened one is unusable, and this tool's own instruction tells the agent never
+ *  to send a shortened value back. Truncating an enum choice at 160 characters would therefore make
+ *  a legal submission impossible to compose, which is the failure the whole `describe` action
+ *  exists to prevent.
+ *
+ *  Still bounded, because a declaration is somebody else's document and nothing stops it declaring
+ *  a choice the size of a book. What structure-forging can be done is already gone either way: both
+ *  paths flatten and both escape their own quotes. */
+const TERM_LIMIT = 1024;
+
+/** A value the agent must be able to pass back exactly. See {@link TERM_LIMIT}. */
+export const quotedTerm = (value: string): string => quotedTo(value, TERM_LIMIT);
+
+export const quoted = (value: string): string => quotedTo(value, QUOTED_LIMIT);
+
+function quotedTo(value: string, cap: number): string {
   // The control characters are the POINT of this line, so the rule against them in a regular
   // expression is disabled here rather than worked around: what is being removed is exactly the
   // set that can forge structure — C0, DEL, C1, the zero-width and bidi marks, and the two
@@ -38,12 +58,13 @@ export function quoted(value: string): string {
   // eslint-disable-next-line no-control-regex
   const flattened = value.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\u2028\u2029]/g, " ").replace(/[\u00ab\u00bb]/g, '"');
   const collapsed = flattened.replace(/\s+/g, " ").trim();
-  if (collapsed.length <= QUOTED_LIMIT) return `\u00ab${collapsed}\u00bb`;
-  return `\u00ab${collapsed.slice(0, QUOTED_LIMIT)}…\u00bb (${collapsed.length - QUOTED_LIMIT} more characters, dropped)`;
+  if (collapsed.length <= cap) return `\u00ab${collapsed}\u00bb`;
+  return `\u00ab${collapsed.slice(0, cap)}…\u00bb (${collapsed.length - cap} more characters, dropped)`;
 }
 
 /** The same for a list, which is where most of an app's vocabulary arrives. */
-export const quotedList = (values: readonly string[], separator = ", "): string => values.map(quoted).join(separator);
+/** A list of VALUES — every list in this feature is vocabulary, not prose. */
+export const quotedList = (values: readonly string[], separator = ", "): string => values.map(quotedTerm).join(separator);
 
 /** THE SAME CHARACTERS, ESCAPED RATHER THAN REMOVED — for the records block, where the values have
  *  to survive intact because the agent acts on them.

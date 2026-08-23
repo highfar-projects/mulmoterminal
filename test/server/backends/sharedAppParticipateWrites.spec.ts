@@ -247,7 +247,7 @@ describe("useSharedApp — writing to somebody else's app", () => {
     publish();
     bag.docs.denyGet.add(`${bookingsPath}/b1`);
     expect(await run({ action: "transition", slug: "sakura", cid: "bookings", id: "b1", to: "approved" })).toContain("not readable by you");
-    expect(await run({ action: "transition", slug: "sakura", cid: "bookings", id: "b2", to: "approved" })).toContain('no record "b2"');
+    expect(await run({ action: "transition", slug: "sakura", cid: "bookings", id: "b2", to: "approved" })).toContain("no record \u00abb2\u00bb");
     expect(bag.batched).toEqual([]);
   });
 

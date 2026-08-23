@@ -21,7 +21,7 @@ import type { ViewCapability } from "@receptron/sharedapp/view";
 import { performIntent } from "../backends/sharedApp/participate/intent.js";
 import { submitPlan, submitToApp } from "../backends/sharedApp/participate/submit.js";
 import { forgetApp, rememberApp, rememberedApps, type ForgetResult } from "../backends/sharedApp/participate/registry.js";
-import { escapeInvisible, quoted, quotedList } from "../backends/sharedApp/quoted.js";
+import { escapeInvisible, quoted, quotedList, quotedTerm } from "../backends/sharedApp/quoted.js";
 import { isRecord } from "../../common/isRecord.js";
 import { MULMOSERVER_ORIGIN } from "../../common/firebaseConfig.js";
 
@@ -121,7 +121,7 @@ function capabilityParts(can: ViewCapability): string[] {
   const parts: string[] = [];
   if (can.transitionAny) parts.push("move any row's status");
   if (can.transitionOwn)
-    parts.push(`move the status of rows assigned to you (${can.assigneeField === undefined ? "assignee field not published" : quoted(can.assigneeField)})`);
+    parts.push(`move the status of rows assigned to you (${can.assigneeField === undefined ? "assignee field not published" : quotedTerm(can.assigneeField)})`);
   if (can.assign) parts.push(`assign rows to: ${quotedList(can.assignees)}`);
   if (can.withdrawFrom.length > 0) parts.push(`withdraw your own row while it is: ${quotedList(can.withdrawFrom, " / ")}`);
   if (can.withdrawAny) parts.push("delete any row");
@@ -135,7 +135,7 @@ function capabilityLines(app: JoinedApp): string[] {
     if (app.writes[tier] === undefined) continue;
     for (const [cid, can] of Object.entries(capabilitiesOn(app, tier))) {
       const parts = capabilityParts(can);
-      if (parts.length > 0) lines.push(`  - ${quoted(cid)} (${tier}): ${parts.join("; ")}`);
+      if (parts.length > 0) lines.push(`  - ${quotedTerm(cid)} (${tier}): ${parts.join("; ")}`);
     }
   }
   if (lines.length === 0)
@@ -151,9 +151,9 @@ function transitionLines(app: JoinedApp): string[] {
       const table = write.transitions;
       if (table === undefined || Object.keys(table).length === 0) continue;
       const moves = Object.entries(table)
-        .map(([from, to]) => `${quoted(from)} -> ${quotedList(to, " / ")}`)
+        .map(([from, to]) => `${quotedTerm(from)} -> ${quotedList(to, " / ")}`)
         .join(", ");
-      lines.push(`  - ${quoted(write.cid)} (${tier}, field ${write.statusField === undefined ? "?" : quoted(write.statusField)}): ${moves}`);
+      lines.push(`  - ${quotedTerm(write.cid)} (${tier}, field ${write.statusField === undefined ? "?" : quotedTerm(write.statusField)}): ${moves}`);
     }
   }
   return lines;
@@ -170,7 +170,7 @@ function describedField(field: { name: string; label: string; required: boolean 
     ...(hint?.type === undefined ? [] : [quoted(hint.type)]),
     ...(hint?.values === undefined ? [] : [`one of: ${quotedList(hint.values, " / ")}`]),
   ];
-  return `${quoted(field.name)}${field.required ? "*" : ""} (${about.join(", ")})`;
+  return `${quotedTerm(field.name)}${field.required ? "*" : ""} (${about.join(", ")})`;
 }
 
 function formLines(app: JoinedApp): string[] {
@@ -180,11 +180,11 @@ function formLines(app: JoinedApp): string[] {
   for (const cid of cids) {
     const plan = submitPlan(app, cid);
     if (plan === null) {
-      lines.push(`  - ${quoted(cid)}: declared, but this app published no form for it — nothing here can say which fields to send.`);
+      lines.push(`  - ${quotedTerm(cid)}: declared, but this app published no form for it — nothing here can say which fields to send.`);
       continue;
     }
     const fields = plan.fields.map((field) => describedField(field, plan.hints[field.name])).join(", ");
-    lines.push(`  - ${quoted(cid)}: ${fields.length === 0 ? "no fields — submitting is the whole answer" : fields}`);
+    lines.push(`  - ${quotedTerm(cid)}: ${fields.length === 0 ? "no fields — submitting is the whole answer" : fields}`);
   }
   lines.push("  (* required. Fields the host fills in — your address, your uid, the initial status, the server stamp — are not listed and must not be sent.)");
   return lines;
@@ -205,7 +205,7 @@ async function narrateDescribe(slug: string): Promise<string> {
     app.roles === undefined
       ? "Your roles: not readable — the app document is open only to people holding an app-wide role, so a role scoped to one collection cannot read it. What you may do is below either way."
       : `Your roles: ${Object.entries(app.roles)
-          .map(([where, role]) => `${quoted(role)} of ${where === "*" ? "the whole app" : quoted(where)}`)
+          .map(([where, role]) => `${quotedTerm(role)} of ${where === "*" ? "the whole app" : quotedTerm(where)}`)
           .join(", ")}`;
   const readable = worldReadable(app);
   return [
@@ -343,8 +343,8 @@ async function narrateRecords(slug: string, cid: string | undefined, limit: { ro
   if (read.scope === "none") return `Nothing readable in "${cid}": ${read.note}.`;
   const header =
     read.scope === "all"
-      ? `${read.rows.length} row(s) read in ${quoted(cid)} — the whole collection, as far as the rules opened it.`
-      : `${read.rows.length} row(s) read in ${quoted(cid)} — YOUR OWN ONLY (${read.note}). This is not the collection; do not describe it as one.`;
+      ? `${read.rows.length} row(s) read in ${quotedTerm(cid)} — the whole collection, as far as the rules opened it.`
+      : `${read.rows.length} row(s) read in ${quotedTerm(cid)} — YOUR OWN ONLY (${read.note}). This is not the collection; do not describe it as one.`;
   // THE ROWS ARE THE LARGEST UNTRUSTED SURFACE HERE, and they are the one thing that cannot be
   // quoted field by field — an agent has to be able to read a record's real values back. So they
   // are fenced instead: JSON, inside a marked block, under the standing note.
@@ -383,8 +383,8 @@ async function narrateSubmit(slug: string, cid: string | undefined, given: Recor
     // The id is QUOTED even though this host built it: for `idFrom: "field"` it is built out of a
     // value the submitter sent, and Firestore takes almost anything in a document id — including
     // newlines. A published enum whose choice carried one would otherwise arrive here as prose.
-    `Submitted to ${quoted(cid)} as ${joined.app.handle.email}. The record's id is ${quoted(result.id)}.`,
-    ...(result.mirror === undefined ? [] : [`It claimed ${quoted(result.mirror.cid)}/${quoted(result.mirror.id)} in the same write.`]),
+    `Submitted to ${quotedTerm(cid)} as ${joined.app.handle.email}. The record's id is ${quotedTerm(result.id)}.`,
+    ...(result.mirror === undefined ? [] : [`It claimed ${quotedTerm(result.mirror.cid)}/${quotedTerm(result.mirror.id)} in the same write.`]),
     "That is a record written, not a place held: a shared app cannot count rows in its rules, so where the app has a limit it is worked out from ORDER. " +
       "Read the collection if the user wants to know where they stand.",
   ].join("\n");
@@ -422,10 +422,10 @@ async function narrateIntent(
 /** What just happened, in the app's terms. Withdrawal says the most because it is the one that
  *  cannot be taken back: the record is gone and whatever it was holding is on offer again. */
 function performed(action: "transition" | "assign" | "withdraw", cid: string, id: string, to: string | undefined): string {
-  const row = `${quoted(cid)}/${quoted(id)}`;
+  const row = `${quotedTerm(cid)}/${quotedTerm(id)}`;
   if (action === "withdraw") return `Withdrew ${row}. The record is gone; any slot it was holding is open again. There is no undo.`;
-  if (action === "assign") return `Assigned ${row} to ${to === undefined ? "?" : quoted(to)}.`;
-  return `Moved ${row} to ${to === undefined ? "?" : quoted(to)}.`;
+  if (action === "assign") return `Assigned ${row} to ${to === undefined ? "?" : quotedTerm(to)}.`;
+  return `Moved ${row} to ${to === undefined ? "?" : quotedTerm(to)}.`;
 }
 
 /** What a `forget` did. The failure is SAID rather than swallowed: this is the whole of what was

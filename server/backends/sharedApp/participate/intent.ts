@@ -21,6 +21,7 @@
 // desk their own transitions on an app whose participant page happened to be found first.
 import { readIntentMessage, VIEW_MESSAGE, type IntentKind, type WriteTier } from "@receptron/sharedapp/view";
 import { commitIntent } from "../itemWrites.js";
+import { quotedTerm } from "../quoted.js";
 import { readRecord, TIERS, type JoinedApp } from "./app.js";
 
 export interface AskedIntent {
@@ -59,7 +60,10 @@ const unreadableNow = (why: string): string =>
  *  places, and two of them are final while the third is not. */
 function whyNotJudgeable(found: Awaited<ReturnType<typeof readRecord>>, asked: AskedIntent): string | null {
   if (!found.read) return found.refusal ? UNREADABLE : unreadableNow(found.why);
-  if (found.row === null) return `no record "${asked.itemId}" in "${asked.cid}". Nothing was written.`;
+  // QUOTED, though the id came from the CALLER: it came from the caller having read it out of
+  // `records`, which is the app's own data. Firestore takes newlines in a document id, so an id
+  // built from a submitted value can carry one here.
+  if (found.row === null) return `no record ${quotedTerm(asked.itemId)} in ${quotedTerm(asked.cid)}. Nothing was written.`;
   return null;
 }
 
