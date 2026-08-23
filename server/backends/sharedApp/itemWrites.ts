@@ -19,6 +19,7 @@ import { collection, doc, runTransaction, writeBatch } from "firebase/firestore"
 import { appSchemasPath, APPS_COLLECTION } from "@receptron/sharedapp";
 import { MIRROR_OPEN, type JudgedIntent, type PlannedWrite } from "@receptron/sharedapp/view";
 import { currentFirestore } from "../remoteHost/session.js";
+import { refused } from "./refused.js";
 import type { SharedAppHandle } from "./context.js";
 
 /** Where a shared collection's records live. */
@@ -34,18 +35,6 @@ export const mailPath = (aid: string): string => `${APPS_COLLECTION}/${aid}/mail
 export const mailDocId = (cid: string, itemId: string, template: string): string => `${cid}_${itemId}_${template}`;
 
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
-
-/** WAS THIS READ REFUSED, or did it merely fail?
- *
- *  The difference decides whether the mirrored write may take the branch that does not check first,
- *  so it may not be guessed. A refusal is a fact about the caller — they are a participant, the
- *  rules will never open this document to them, and the branch below is safe for exactly that
- *  reason. A network blip is a fact about the moment, and treating it as a refusal would hand a
- *  WRITER the unchecked branch, which is the one that can overwrite a stranger's booking.
- *
- *  Matched on the SDK's code rather than the message: the message is English and localised, the
- *  code is the contract. */
-const refused = (err: unknown): boolean => typeof err === "object" && err !== null && "code" in err && err.code === "permission-denied";
 
 /** The id was already there. Named rather than reported as a rules refusal: under
  *  `idFrom: "field"` the id IS the thing being claimed, so this means somebody has it. */
@@ -160,7 +149,19 @@ export async function commitPlannedWrite(handle: SharedAppHandle, aid: string, p
  *  Note the asymmetry the author's preview has and the participate path does not: there the write
  *  goes out as the app's OWNER, so the rules do not close the race either. Here it goes out as the
  *  reader, and `ownRow` / the transition table are evaluated against the STORED record. */
-export async function commitIntent(aid: string, intent: JudgedIntent): Promise<string | null> {
+export interface IntentFailure {
+  error: string;
+  /** Did the RULES turn this down, as opposed to the write failing?
+   *
+   *  Carried because the caller offers the ask to another tier, and only a refusal makes that
+   *  right: a tier is a different DECLARATION about the same reader, so the rules answering "no" to
+   *  one leaves the next worth asking. A network failure answers nothing about either — retried, it
+   *  can land the same move through a projection that carries no `mail`, so the record moves and
+   *  the notice the first tier declared is never queued. */
+  refusal: boolean;
+}
+
+export async function commitIntent(aid: string, intent: JudgedIntent): Promise<IntentFailure | null> {
   try {
     const db = currentFirestore();
     const batch = writeBatch(db);
@@ -179,7 +180,7 @@ export async function commitIntent(aid: string, intent: JudgedIntent): Promise<s
       // Unreachable: only a withdrawal is judged without a field, and it left above. Stated rather
       // than asserted away, because the alternative is writing `{ undefined: undefined }` into
       // somebody's record.
-      return `intent ${intent.kind} has no field to move`;
+      return { error: `intent ${intent.kind} has no field to move`, refusal: false };
     }
     batch.update(item, { [intent.field]: intent.to });
     if (intent.mail !== undefined) {
@@ -193,6 +194,6 @@ export async function commitIntent(aid: string, intent: JudgedIntent): Promise<s
     await batch.commit();
     return null;
   } catch (err) {
-    return messageOf(err);
+    return { error: messageOf(err), refusal: refused(err) };
   }
 }

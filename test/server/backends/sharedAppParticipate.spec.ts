@@ -33,6 +33,8 @@ const batched: string[] = [];
 let batchFails = false;
 /** How many commits refuse before the rest succeed — the rules saying no to one tier's attempt. */
 let batchRefusals = 0;
+/** How many commits FAIL without a permission code — a blip, which must not be read as a refusal. */
+let batchBreaks = 0;
 
 vi.mock("firebase/firestore", () => ({
   collection: (_db: unknown, collectionPath: string) => ({ collectionPath }),
@@ -56,6 +58,7 @@ vi.mock("firebase/firestore", () => ({
     // Refused only WITHOUT a where clause — which is the shape the rules actually take: listing a
     // collection people submit to is denied, while a query narrowed to the reader's own rows is
     // the one a participant's page issues and is allowed.
+    if (breakQuery.has(asked.collectionPath)) return Promise.reject(new Error("unavailable"));
     if (denyQuery.has(asked.collectionPath) && asked.clause === undefined) {
       return Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }));
     }
@@ -100,6 +103,10 @@ vi.mock("firebase/firestore", () => ({
       update: (ref: { path: string }, data: Record<string, unknown>) => ops.push(`update ${ref.path} ${JSON.stringify(data)}`),
       delete: (ref: { path: string }) => ops.push(`delete ${ref.path}`),
       commit: () => {
+        if (batchBreaks > 0) {
+          batchBreaks -= 1;
+          return Promise.reject(new Error("network"));
+        }
         if (batchRefusals > 0) {
           batchRefusals -= 1;
           return Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }));
@@ -116,6 +123,9 @@ vi.mock("../../../server/backends/remoteHost/session.js", () => ({ currentFirest
 
 /** The row cap each query carried. */
 const capped: number[] = [];
+
+/** Collection paths whose query FAILS without a permission code — a blip, not a refusal. */
+const breakQuery = new Set<string>();
 
 /** Collection paths whose UNFILTERED query is refused — the shape a collection people submit to
  *  has for everyone but its staff. */
@@ -273,9 +283,11 @@ describe("useSharedApp — taking part in somebody else's app", () => {
     queryable.clear();
     capped.length = 0;
     denyQuery.clear();
+    breakQuery.clear();
     batched.length = 0;
     batchFails = false;
     batchRefusals = 0;
+    batchBreaks = 0;
     process.env.MULMOTERMINAL_HOME = makeTempDir("mt-participate-home-");
   });
 
@@ -347,19 +359,50 @@ describe("useSharedApp — taking part in somebody else's app", () => {
     // the agent as a stack trace instead.
     const home = process.env.MULMOTERMINAL_HOME ?? "";
     chmodSync(home, 0o555);
+    // PROBED FIRST, AND `skip` IS CALLED OUTSIDE THE TRY. `ctx.skip()` aborts by THROWING, so
+    // calling it inside a `catch`-all would have the catch swallow the abort and run the assertions
+    // anyway — on exactly the platforms where the condition could not be created (a root container,
+    // Windows, where `chmod` is not what decides).
+    let writable = true;
     try {
-      // Skipped rather than asserted where the permission does not bite — a root container, and
-      // Windows, where `chmod` is not what decides. A test that cannot create the condition it is
-      // about must say so rather than pass.
       writeFileSync(path.join(home, "probe"), "x");
-      ctx.skip();
     } catch {
+      writable = false;
+    }
+    if (writable) {
+      chmodSync(home, 0o755);
+      ctx.skip();
+      return;
+    }
+    try {
       const said = await run({ action: "forget", slug: "sakura" });
       expect(said).toContain("could not be written");
       expect(said).toContain("still in the local list");
     } finally {
       chmodSync(home, 0o755);
     }
+  });
+
+  it("does not answer from half the projections when one read breaks", async () => {
+    publish();
+    docs.breakGet.add(`apps/${AID}/member/${viewConfigDocId()}`);
+    const said = await run({ action: "describe", slug: "sakura" });
+    // Absorbed, this would report the roster half alone — in the same words as an app that
+    // genuinely published no staff page, with nothing to say a read failed.
+    expect(said).toContain("could not be read");
+    expect(said).toContain("not a permission boundary");
+    expect(said).not.toContain("You may:");
+  });
+
+  it("does not offer an intent to the next tier when the write merely FAILED", async () => {
+    publish();
+    docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked" });
+    // Both tiers carry `booked -> cancelled`. Retried after a blip, the roster projection would land
+    // the same move carrying no `mail` — the record moves and a declared notice is never queued.
+    batchBreaks = 1;
+    const said = await run({ action: "transition", slug: "sakura", cid: "bookings", id: "b1", to: "cancelled" });
+    expect(said).toContain("network");
+    expect(batched).toEqual([]);
   });
 
   it("refuses a URL name nothing answers to", async () => {
@@ -605,6 +648,19 @@ describe("useSharedApp — taking part in somebody else's app", () => {
     // A count that exactly fills the ask says nothing about what is behind it, and an agent reads
     // "1 row" as the collection.
     expect(said).toContain("there may be more");
+  });
+
+  it("does not report a broken read as a permission boundary", async () => {
+    publish();
+    breakQuery.add(bookingsPath);
+    docs.put(bookingsPath, "b0", { requesterEmail: ME.email, slot: "0:00", status: "booked" });
+    const said = await run({ action: "records", slug: "sakura", cid: "bookings" });
+    // Narrowed to the reader's own rows, this would say "only your own rows are readable here"
+    // about a collection they may in fact read whole — and the agent would repeat it as the app's
+    // answer.
+    expect(said).toContain("a failure, not a permission boundary");
+    expect(said).toContain("unavailable");
+    expect(said).not.toContain("YOUR OWN ONLY");
   });
 
   it("keeps a refused read apart from an absent record", async () => {

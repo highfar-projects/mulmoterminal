@@ -180,7 +180,7 @@ export async function performPreviewIntent(root: string, asked: PreviewIntent): 
   if (holding(read.intent.cid, read.intent.itemId) === null) return { ok: false, error: NOT_IN_VIEW };
 
   const failed = await commitIntent(preview.aid, read.intent);
-  if (failed !== null) return { ok: false, error: failed };
+  if (failed !== null) return { ok: false, error: failed.error };
   // Claimed only on success, and only where the declaration named a notice for this move: a batch
   // that was refused sent nothing, and saying otherwise on the same line as the failure would be
   // the one part of the report that lies.

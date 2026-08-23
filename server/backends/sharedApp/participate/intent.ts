@@ -76,6 +76,11 @@ export async function performIntent(app: JoinedApp, asked: AskedIntent): Promise
     }
     const failed = await commitIntent(app.aid, read.intent);
     if (failed !== null) {
+      // ONLY A REFUSAL MOVES ON. A write that merely failed answers nothing about this reader, and
+      // retrying it on the next tier can land the same move through a projection that carries no
+      // `mail` — so the record moves and the notice the first tier declared is never queued. That
+      // is the one thing the single-shape batch in `itemWrites.ts` exists to prevent.
+      if (!failed.refusal) return { ok: false, error: failed.error, refusals };
       // A RULES REFUSAL DOES NOT END THE LOOP, and that is a decision rather than a fall-through.
       // The tiers are different DECLARATIONS about the same reader, and the rules answer about the
       // record: a stale `writers` list can carry a move the deployed rules refuse this person as
@@ -86,7 +91,7 @@ export async function performIntent(app: JoinedApp, asked: AskedIntent): Promise
       // attempt wrote nothing at all; and `mail` is projected to the MEMBER tier only — the rules
       // let a writer queue it and nobody else — so a roster-tier attempt carrying no notice is that
       // tier's own correct shape, not a dropped one.
-      refusals.push({ tier, reason: failed });
+      refusals.push({ tier, reason: failed.error });
       continue;
     }
     // Claimed only on success, and only where the declaration named a notice for this move: a batch

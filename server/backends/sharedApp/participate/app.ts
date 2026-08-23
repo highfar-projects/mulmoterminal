@@ -46,6 +46,7 @@ import { firestoreHandle } from "@mulmoclaude/core/collection/server";
 import { isRecord } from "../../../../common/isRecord.js";
 import { currentFirestore } from "../../remoteHost/session.js";
 import { itemsPath } from "../itemWrites.js";
+import { refused } from "../refused.js";
 import type { SharedAppHandle } from "../context.js";
 
 /** The tiers, widest first. An intent is offered to each in turn and the first that carries it
@@ -106,18 +107,27 @@ const readable = (doc: Record<string, unknown> | null): boolean => {
   return version !== null && mine !== null && version.major <= mine.major;
 };
 
+const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+
 const NO_SESSION =
   "this needs a signed-in session: connect remote-host first. A shared app answers to `request.auth` and nothing else — " +
   "everything here is read and written as YOU, which is the whole point of this tool.";
 
-/** Read a document, or null for any reason at all.
+/** Read a document: the document, or null for absent-or-refused.
  *
- *  A refusal and an absent document are collapsed ON PURPOSE here, and only here: every one of
+ *  A refusal and an absent document are collapsed ON PURPOSE, and only those two: every one of
  *  these reads is optional, and the caller's next line is the same either way — the projection is
- *  not available, so say what is available instead. Where the difference matters (a record the
- *  reader is about to act on) it is kept: see `readRecord`. */
+ *  not available, so say what IS available instead.
+ *
+ *  A TRANSIENT FAILURE IS NOT ONE OF THEM and is rethrown. Read as "not available", a blip on the
+ *  member tier lets `joinApp` answer from the roster projection alone: a capability list missing
+ *  the staff half, reported in the same words as an app that genuinely published no staff page.
+ *  The caller then acts on it — and there is nothing anywhere in the answer to say a read broke. */
 const readDoc = async (handle: SharedAppHandle, path: string, id: string): Promise<Record<string, unknown> | null> => {
-  const found = await handle.docs.get(path, id).catch(() => null);
+  const found = await handle.docs.get(path, id).catch((err: unknown) => {
+    if (refused(err)) return null;
+    throw err;
+  });
   return isRecord(found) ? found : null;
 };
 
@@ -173,7 +183,21 @@ function rosterTier(fromTier: ProjectedViewWrite[] | null, fromPublic: Projected
 export async function joinApp(slug: string): Promise<JoinedAppResult> {
   const handle = firestoreHandle();
   if (!handle) return { ok: false, problems: [NO_SESSION] };
+  try {
+    return await readApp(handle, slug);
+  } catch (err) {
+    // A read that BROKE, as opposed to one the rules refused — the refusals are already null above.
+    // Reported rather than absorbed: every absorbed one narrows this answer silently.
+    return {
+      ok: false,
+      problems: [
+        `"${slug}" could not be read: ${messageOf(err)}. That is a failure, not a permission boundary — nothing was written, and this says nothing about what you may do.`,
+      ],
+    };
+  }
+}
 
+async function readApp(handle: SharedAppHandle, slug: string): Promise<JoinedAppResult> {
   // `appSlugs/{slug}` is `published == true || listedIn(slugApp())`, so this read failing is a real
   // answer: either the name does not exist, or it names an unpublished app you are not on the
   // roster of. Both are "not yours to open", and neither is worth two sentences.
@@ -275,9 +299,13 @@ export const capabilitiesOn = (app: JoinedApp, tier: WriteTier): Record<string, 
 
 /** How a set of records was obtained — reported with them, because the two answers mean different
  *  things and an agent told neither will describe an own-row list as the whole collection. */
-export type RecordScope = "all" | "own" | "none";
+export type RecordScope = "all" | "own" | "none" | "failed";
 
 export interface ReadRecords {
+  /** `all` the collection, `own` the reader's rows, `none` nothing the rules would open — and
+   *  `failed`, which is NOT one of those. A read that broke says so as itself: narrowed silently it
+   *  reads as a boundary the rules drew, and the caller then describes a partial answer as the
+   *  whole of what they are allowed. */
   scope: RecordScope;
   rows: Record<string, unknown>[];
   /** Why the scope is what it is, in one clause, or undefined when `all` succeeded. */
@@ -322,9 +350,14 @@ export async function readRecords(app: JoinedApp, cid: string, limit: number): P
   // by `__name__` too, so the same page comes back. Ordering by a record field would silently drop
   // the documents that lack it.
   const listed = await getDocs(query(collection(db, path), limitTo(limit)))
-    .then((snapshot) => snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })))
-    .catch(() => null);
-  if (listed !== null) return { scope: "all", rows: listed };
+    .then((snapshot) => ({ ok: true as const, rows: snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })) }))
+    // ONLY A REFUSAL NARROWS. Anything else is reported as itself: the own-row fallback below is the
+    // right answer for a reader the rules will never open this collection to, and the wrong one for
+    // a reader whose next attempt would have succeeded — they would be told their own rows are all
+    // they may see.
+    .catch((err: unknown) => ({ ok: false as const, refusal: refused(err), why: messageOf(err) }));
+  if (listed.ok) return { scope: "all", rows: listed.rows };
+  if (!listed.refusal) return { scope: "failed", rows: [], note: listed.why };
 
   const want = ownSelector(app, cid);
   if (want === null)
@@ -347,11 +380,16 @@ export async function readRecords(app: JoinedApp, cid: string, limit: number): P
   }
   // THE CAP IS IN THE QUERY here too, for the same reason.
   const asked = query(collection(db, path), where(want.field, "==", want.value), limitTo(limit));
-  const snapshot = await getDocs(asked).catch(() => null);
-  if (snapshot === null) return { scope: "none", rows: [], note: "neither the collection nor your own rows in it could be read" };
+  const snapshot = await getDocs(asked)
+    .then((found) => ({ ok: true as const, found }))
+    .catch((err: unknown) => ({ ok: false as const, refusal: refused(err), why: messageOf(err) }));
+  if (!snapshot.ok)
+    return snapshot.refusal
+      ? { scope: "none", rows: [], note: "neither the collection nor your own rows in it could be read" }
+      : { scope: "failed", rows: [], note: snapshot.why };
   return {
     scope: "own",
-    rows: snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })),
+    rows: snapshot.found.docs.map((entry) => ({ ...entry.data(), id: entry.id })),
     note: "only your own rows are readable here",
   };
 }

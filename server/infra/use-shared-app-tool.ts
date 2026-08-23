@@ -237,6 +237,11 @@ async function narrateRecords(slug: string, cid: string | undefined, limit: { ro
   const joined = await joinApp(slug);
   if (!joined.ok) return joined.problems.join("\n");
   const read = await readRecords(joined.app, cid, limit.rows);
+  // A BREAKAGE IS NOT A BOUNDARY. Kept apart because they send the caller to opposite places, and
+  // because the wrong one of the two is acted on: "the rules do not open this to you" is final, and
+  // an agent told that about a moment's failure reports it to the user as the app's answer.
+  if (read.scope === "failed")
+    return `Could not read "${cid}": ${read.note}. That is a failure, not a permission boundary — nothing here says what you may see. Try again.`;
   if (read.scope === "none") return `Nothing readable in "${cid}": ${read.note}.`;
   const header =
     read.scope === "all"
