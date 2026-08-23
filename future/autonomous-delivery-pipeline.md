@@ -35,7 +35,7 @@ stateDiagram-v2
     Planned --> Leased: 空いている clone を lease する（計画にもコードを読む必要がある）
     Leased --> Claimed: 触る範囲と提供する契約を宣言し、パスの claim を取る
     Claimed --> Implementing
-    Leased --> MergeQueue: ベースが古くなっただけ（claim は保持のまま再検証へ）
+    Claimed --> MergeQueue: ベースが古くなっただけ（実装はやり直さず再検証へ）
     Implementing --> SelfCheck: Done 条件の機械判定
     SelfCheck --> Implementing: 未達
     SelfCheck --> Review: 役割別に並列レビュー
@@ -78,6 +78,11 @@ stateDiagram-v2
     Stopped --> [*]
 ```
 
+> **この図と表は、実装が存在する今は二次資料である。** 機械の権威は
+> `server/campaign/campaign-state.ts` の遷移表と `common/campaignPhase.ts` の述語で、
+> 両者を突き合わせるテストがある。ここを直したら実装も直す（逆も同じ）。
+> 図だけを直して満足すると、次の読み手は塞いだ穴を復活させる。
+
 **辺を足すときに毎回確かめる不変条件を、先に書いておく。** この文書はこれまで、
 規則を1箇所に書いて、それが支配する辺へ運び忘れる誤りを繰り返してきた。
 規則を散文で述べるのをやめ、**状態ごとに答えを埋めた表**にする。
@@ -105,6 +110,12 @@ stateDiagram-v2
 - **clone を持たない状態から持つ状態へ入る辺は、必ず `Leased` を通る。** `Leased` が
   「空いている clone を取る」唯一の場所だからで、取れなければそこで待つ。
   直接 `Implementing` へも `MergeQueue` へも入れない。
+- **`Leased` から出て作業へ向かう辺は `Claimed` だけ。** つまり `declare` が
+  マージへの全経路に乗る。この図の初版は `Leased --> MergeQueue`（ベースが古いだけの再検証）を
+  持っていたが、それだと**パスを一度も宣言していないタスクが `Merged` まで到達できた** —
+  排他ゼロでのマージで、claim が存在する理由そのものである。実装時に発見（#1837）。
+  差し戻しや孤児からの復帰にとっての `declare` は、手放していないパスの再主張であって
+  二重取得ではないので、全経路に置いても代償が無い。
 - **`Leased` と `Claimed` を分けてあるのは、計画にもコードを読む必要があるからである。**
   触る範囲は計画して初めて分かるので、「宣言してから作業場所を取る」順にはできない。
   作業場所を取る → 読んで計画する → 宣言してパスを claim する、が実際の順序。
