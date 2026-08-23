@@ -62,14 +62,16 @@ export function readCampaign(campaign: string): CampaignRecord[] {
 }
 
 /**
- * Make a directory's own contents durable, so the NAME of a file inside it survives a power cut.
+ * Ask the filesystem to make a directory's own contents durable, so that the NAME of a file inside
+ * it has a better chance of surviving a power cut.
  *
- * Flushing a file does not do this: the entry that points at it lives in the parent, and a host
- * that dies at the wrong moment can leave a fsynced file that nothing refers to.
+ * Flushing a file does not do this: the entry pointing at it lives in the parent, and a host that
+ * dies at the wrong moment can leave a fsynced file that nothing refers to. Windows cannot open a
+ * directory this way and there is nothing to fall back to, so there it is skipped entirely.
  *
- * Windows cannot open a directory this way and there is nothing to fall back to, so there this is
- * skipped — both callers document the weaker promise that leaves. Anywhere else a failure here is
- * thrown: a name that may not survive is what a caller must not be told `true` about.
+ * Neither caller promises the result — see their comments for why — but a refusal below
+ * `MULMOTERMINAL_HOME` is still thrown rather than swallowed, because it usually means something
+ * else is wrong with the tree this app owns.
  */
 function syncDirectory(dir: string): void {
   if (process.platform === "win32") return;
@@ -95,9 +97,13 @@ function chainDown(top: string, leaf: string): string[] {
 }
 
 /**
- * Create the campaigns directory and make its names durable, from `MULMOTERMINAL_HOME` down. Call
- * once, before a campaign starts; idempotent, and throws rather than reporting a hierarchy that
- * may not survive.
+ * Create the campaigns directory, and make a best effort at the durability of the names leading to
+ * it. Call once, before a campaign starts; idempotent.
+ *
+ * **Best effort, not a guarantee.** Directory syncing is what a record's name rests on across a
+ * power cut, and it is done here as well as it can be — but it cannot be demonstrated by any test,
+ * so it is not something to promise. What IS promised is the ordinary part: the directory exists
+ * afterwards, and a failure to create it throws rather than being reported as ready.
  *
  * **Why this is a separate step rather than part of every append.** A directory's durability is a
  * property of its whole ancestor chain, and of every other process writing there — one writer can
@@ -122,8 +128,8 @@ export function ensureCampaignStore(): void {
   //
   // The two halves are not equally this app's business, and they fail differently:
   //
-  //  - **HOME and below** is the tree it owns. A failure here means a hierarchy that may not
-  //    survive, which is exactly what a caller must not be told is ready — so it throws.
+  //  - **HOME and below** is the tree this app owns, so a refusal is surfaced: it usually means
+  //    something else is wrong there, and that is worth stopping for.
   //  - **Above HOME** belongs to the machine. Syncing is attempted, because HOME itself may have
   //    been created just now, but a refusal is not fatal: turning "the OS would not let us fsync
   //    `/`" into a campaign that cannot start is a worse failure than the one it prevents.
@@ -150,11 +156,14 @@ function trySyncDirectory(dir: string): void {
  * the opposite of `postToRoom`'s tolerance of a failed append, and for a reason — a lost message is
  * a lost message, while a lost intent is a merge nobody knows happened.
  *
- * `true` means the record survives a host or power failure and not merely this process exiting:
- * the data is flushed and the entry naming it is synced. That holds **given a durable campaigns
- * directory**, which is `ensureCampaignStore`'s job and not this one's — see there for why the two
- * are separate. **On Windows no directory entry can be synced at all**, so there `true` means
- * "written and flushed" and nothing more.
+ * **What `true` promises, and only this**: the record was validated against the reader, written,
+ * and flushed — so it survives this process exiting, and it is readable by the next one.
+ *
+ * Surviving a *power cut* needs more than that: the entry naming the file, the entry naming its
+ * directory, and so on up. This call syncs the first of those and `ensureCampaignStore` makes a
+ * best effort at the rest, but none of it is promised, because none of it can be demonstrated —
+ * telling a fsync from no fsync needs a real power failure, not a test. Do not build a caller that
+ * treats `true` as proof against one.
  */
 export function appendCampaignRecord(campaign: string, record: CampaignRecord): boolean {
   const file = campaignFile(campaign);
