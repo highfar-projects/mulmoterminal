@@ -299,35 +299,41 @@ const tooLarge = (row: Record<string, unknown>, size: number): Record<string, un
 const costOf = (value: unknown): number => Buffer.byteLength(escapeInvisible(JSON.stringify(value, null, 2)), "utf8");
 
 function fittingRows(rows: Record<string, unknown>[]): { json: string; dropped: number; oversized: number } {
-  const shown: Record<string, unknown>[] = [];
+  // WHETHER AN ENTRY IS A STUB IS REMEMBERED, never inferred from its shape. A record may perfectly
+  // well have a field called `omitted` — it is somebody else's schema — and sniffing for one made
+  // the rollback below miscount an ordinary row as a stub it had put there itself (Codex on #1843).
+  const shown: { entry: Record<string, unknown>; stub: boolean }[] = [];
   let spent = 0;
-  let oversized = 0;
-  let taken = 0;
   for (const row of rows) {
     // A row too big to show becomes a stub — and the STUB is then budgeted like anything else. It
     // is small but not free, and an app whose ids are long enough (Firestore allows 1500 bytes of
     // them) could otherwise fill the report with nothing but stubs.
     const whole = costOf(row);
-    const entry = whole > RECORD_BYTES ? tooLarge(row, whole) : row;
-    const size = entry === row ? whole : costOf(entry);
+    const stub = whole > RECORD_BYTES;
+    const entry = stub ? tooLarge(row, whole) : row;
+    const size = stub ? costOf(entry) : whole;
     if (spent + size > RECORD_BYTES) break;
-    shown.push(entry);
+    shown.push({ entry, stub });
     spent += size;
-    taken += 1;
-    if (entry !== row) oversized += 1;
   }
   // AND THEN THE ACTUAL STRING IS MEASURED. Everything above budgets rows as if each stood alone;
   // what is emitted is one pretty-printed ARRAY, whose brackets, commas and extra indentation are
   // real bytes nobody charged for. Rather than model that framing — which is another thing to get
   // subtly wrong — the finished payload is weighed and rows are given back until it fits.
-  let json = escapeInvisible(JSON.stringify(shown, null, 2));
+  const emitted = (): string =>
+    escapeInvisible(
+      JSON.stringify(
+        shown.map((held) => held.entry),
+        null,
+        2,
+      ),
+    );
+  let json = emitted();
   while (Buffer.byteLength(json, "utf8") > RECORD_BYTES && shown.length > 0) {
-    const given = shown.pop();
-    if (given !== undefined && typeof given.omitted === "string") oversized -= 1;
-    taken -= 1;
-    json = escapeInvisible(JSON.stringify(shown, null, 2));
+    shown.pop();
+    json = emitted();
   }
-  return { json, dropped: rows.length - taken, oversized };
+  return { json, dropped: rows.length - shown.length, oversized: shown.filter((held) => held.stub).length };
 }
 
 async function narrateRecords(slug: string, cid: string | undefined, limit: { rows: number; asked?: number }): Promise<string> {

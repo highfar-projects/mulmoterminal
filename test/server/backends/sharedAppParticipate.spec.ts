@@ -363,6 +363,18 @@ describe("useSharedApp — reading somebody else's app", () => {
     expect(said).not.toContain("z".repeat(200));
   });
 
+  it("counts stubs by what it put there, not by what a record happens to be called", async () => {
+    publish();
+    // `omitted` is an ordinary field name — this is somebody else's schema. Sniffed for, an
+    // ordinary row popped by the framing rollback was miscounted as a stub the tool had inserted.
+    for (let n = 0; n < 41; n += 1) bag.docs.put(slotsPath, `s${n}`, { state: "open", omitted: "no", blob: "x".repeat(4_900) });
+    const said = await run({ action: "records", slug: "sakura", cid: "slots" });
+    expect(said).not.toContain("shown as a stub");
+    expect(said).not.toContain("-1 row");
+    const block = said.slice(said.indexOf("["), said.lastIndexOf("]") + 1);
+    expect(Buffer.byteLength(block, "utf8")).toBeLessThanOrEqual(200_000);
+  });
+
   it("refuses a URL name nothing answers to", async () => {
     const said = await run({ action: "describe", slug: "nobody" });
     expect(said).toContain('No shared app answers to "nobody"');
