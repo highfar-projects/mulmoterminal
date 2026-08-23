@@ -25,7 +25,7 @@
 // second host to serve, and a shared app's operations are this host's by design (D5).
 import { doc, collection, serverTimestamp, writeBatch } from "firebase/firestore";
 import { randomUUID } from "node:crypto";
-import { appSchemasPath, type PublishedConfigDoc } from "@receptron/sharedapp";
+import type { PublishedConfigDoc } from "@receptron/sharedapp";
 import {
   MIRROR_OPEN,
   missingIdField,
@@ -35,17 +35,15 @@ import {
   recordOf,
   writableFields,
   type DrawnForm,
-  type PlannedWrite,
   type SubmitSpec,
 } from "@receptron/sharedapp/view";
 import { isRecord } from "../../../common/isRecord.js";
 import type { PreviewWrittenRecord } from "../../../common/sharedAppPreview.js";
 import { currentFirestore } from "../remoteHost/session.js";
+import { commitPlannedWrite, itemsPath, TAKEN } from "./itemWrites.js";
+import { submitSpecOf } from "./submitSpec.js";
 import { previewSharedApp } from "./preview.js";
 import { sharedAppContext, type SharedAppHandle } from "./context.js";
-
-/** Where a shared collection's records live. */
-const itemsPath = (aid: string, cid: string): string => `${appSchemasPath(aid)}/${cid}/items`;
 
 export interface PreviewWriteSuccess {
   ok: true;
@@ -75,32 +73,15 @@ export interface PreviewWriteFailure {
 
 export type PreviewWriteResult = PreviewWriteSuccess | PreviewWriteFailure;
 
-/** One collection's declaration and form, out of the projection this publish would write. */
+/** One collection's declaration and form, out of the projection this publish would write.
+ *
+ *  The declaration half is `submitSpecOf`, shared with the participate path: the two read the same
+ *  published shape, one before it is written and one after. */
 function specFor(config: PublishedConfigDoc, form: Record<string, DrawnForm>, cid: string): { submit: SubmitSpec; drawn: DrawnForm } | null {
   const raw = config.submit?.[cid];
   const drawn = form[cid];
   if (!isRecord(raw) || drawn === undefined) return null;
-  const createFields = Array.isArray(raw.createFields) ? raw.createFields.filter((field): field is string => typeof field === "string") : [];
-  const text = (key: string): string | undefined => (typeof raw[key] === "string" ? raw[key] : undefined);
-  return {
-    submit: {
-      createFields,
-      auth: text("auth"),
-      emailField: text("emailField"),
-      // Filled by `recordOf` from the handle below, exactly as the address is. Read off the
-      // published declaration for the reason the stamp is: `uidOk` tests the submit block.
-      uidField: text("uidField"),
-      initialStatus: text("initialStatus"),
-      idFrom: text("idFrom"),
-      idField: text("idField"),
-      mirror: text("mirror"),
-      // Read back off the PUBLISHED declaration, which is where the rules read it from too. The
-      // form beside it carries the same name, and this is deliberately not that one: `stampOk`
-      // tests `"stampField" in s` against the submit block, so the submit block is the authority.
-      stampField: text("stampField"),
-    },
-    drawn,
-  };
+  return { submit: submitSpecOf(raw), drawn };
 }
 
 /** WHY THE RULES SAID NO, asked only once they have.
@@ -140,36 +121,14 @@ async function explainRefusal(handle: SharedAppHandle, aid: string, raw: Record<
   return (await bound(window.untilField, "closes")) ?? (await bound(window.fromField, "opens"));
 }
 
-/** The write itself. Single through the ordinary seam; paired through a batch, for the reason at
- *  the top of this file.
- *
- *  CREATE, NEVER OVERWRITE. A public submission is create-only, and for `idFrom: "field"` the id IS
- *  the thing being claimed — so an id that already exists means somebody has it. `set` would be an
- *  UPDATE, and the rules permit an owner to update an item (`allow update` on `items`): the author
- *  previewing their own app would silently replace a real visitor's booking with their test one. */
-async function commit(handle: SharedAppHandle, aid: string, plan: PlannedWrite): Promise<string | null> {
-  try {
-    if (plan.mirror === undefined) {
-      const made = await handle.docs.create(itemsPath(aid, plan.cid), plan.id, plan.record);
-      return made ? null : "already-taken";
-    }
-    // The paired path cannot ask for create-only: the web SDK's `WriteBatch` has `set`, `update`
-    // and `delete`, and no create. So the id is CHECKED first — a check, not a guarantee, and the
-    // difference is a real race with anybody submitting at the same moment. What closes it is the
-    // batch's own `update` on the mirror: a slot somebody else has just taken no longer satisfies
-    // what the rules require of it, and the commit is refused rather than overwriting.
-    const db = currentFirestore();
-    const taken = await handle.docs.get(itemsPath(aid, plan.cid), plan.id);
-    if (taken !== null) return "already-taken";
-    const batch = writeBatch(db);
-    batch.set(doc(collection(db, itemsPath(aid, plan.cid)), plan.id), plan.record);
-    batch.update(doc(collection(db, itemsPath(aid, plan.mirror.cid)), plan.mirror.id), { state: plan.mirror.state });
-    await batch.commit();
-    return null;
-  } catch (err) {
-    return err instanceof Error ? err.message : String(err);
-  }
-}
+/** Which of the three a failed write was. `taken` is this host's own answer about an id that is
+ *  already there; the other two are the RULES and the network, which are opposite advice — an
+ *  author sent to change a declaration the rules never saw is the confusion `reason`'s own doc
+ *  comment exists to prevent. */
+const writeReason = (failed: { error: string; refusal: boolean }): "taken" | "rules" | "host" => {
+  if (failed.error === TAKEN) return "taken";
+  return failed.refusal ? "rules" : "host";
+};
 
 /** WHAT THIS PROCESS WROTE, and nothing else.
  *
@@ -228,11 +187,14 @@ export async function writePreviewSubmission(root: string, cid: string, values: 
   const id = recordId(spec.submit, handle.uid, record, randomUUID());
 
   const plan = plannedWrite(cid, spec.submit, id, record);
-  const failed = await commit(handle, preview.aid, plan);
+  const failed = await commitPlannedWrite(handle, preview.aid, plan);
   if (failed !== null) {
     const raw = preview.config.submit?.[cid];
     const why = isRecord(raw) ? await explainRefusal(handle, preview.aid, raw, record) : null;
-    return { ok: false, reason: failed === "already-taken" ? "taken" : "rules", error: why === null ? failed : `${why} (${failed})` };
+    // `reason` follows the flag the write itself carried: a network failure reported as `rules`
+    // sends the author to change a declaration the rules never saw, which is the exact confusion
+    // this field's own doc comment exists to prevent.
+    return { ok: false, reason: writeReason(failed), error: why === null ? failed.error : `${why} (${failed.error})` };
   }
   const written: PreviewWrittenRecord = {
     cid: plan.cid,

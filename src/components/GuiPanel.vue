@@ -237,6 +237,7 @@ const TOOL_HINTS = new Map<string, string>([
   ["generateImage", "an image generated from a prompt"],
   ["presentMulmoScript", "a MulmoScript presentation, built and played here"],
 
+  ["useSharedApp", "shared apps other people published, from your side of them"],
   ["google", "your linked Google account: Calendar, Tasks, Drive"],
   ["readXPost", "one post on X, fetched by URL or id"],
   ["searchX", "recent posts on X matching a query"],

@@ -24,25 +24,12 @@
 // almost any record, so a host that wrote first and let the rules judge would perform moves the
 // projection forbids the reader who is actually on screen. The projection is therefore judged HERE,
 // against the page the ask came from, before anything is sent.
-import { doc, collection, writeBatch } from "firebase/firestore";
-import { APPS_COLLECTION, appSchemasPath } from "@receptron/sharedapp";
-import { MIRROR_OPEN, readIntentMessage, VIEW_MESSAGE, type JudgedIntent, type WriteTier } from "@receptron/sharedapp/view";
+import { readIntentMessage, VIEW_MESSAGE, type WriteTier } from "@receptron/sharedapp/view";
 import { isRecord } from "../../../common/isRecord.js";
 import { previewPageKey, type PreviewAudience, type PreviewIntent, type PreviewIntentResult } from "../../../common/sharedAppPreview.js";
-import { currentFirestore } from "../remoteHost/session.js";
+import { commitIntent, itemsPath } from "./itemWrites.js";
 import { ownSelectors, ownsRow, previewSharedApp } from "./preview.js";
 import { sharedAppContext } from "./context.js";
-
-/** Where a shared collection's records live. Spelled as `previewWrite.ts` spells it. */
-const itemsPath = (aid: string, cid: string): string => `${appSchemasPath(aid)}/${cid}/items`;
-
-/** Where a queued notice lives, and the id the RULES rebuild — `{cid}_{itemId}_{template}`.
- *
- *  Fixed rather than chosen, and that is what makes pressing the button twice queue one notice
- *  rather than two. Matched to mulmoserver's `mailDocId`; a divergence here does not fail, it
- *  queues a document the mail rule refuses. */
-const mailPath = (aid: string): string => `${APPS_COLLECTION}/${aid}/mail`;
-const mailDocId = (cid: string, itemId: string, template: string): string => `${cid}_${itemId}_${template}`;
 
 /** WHAT REPLACED `NOT_A_MEMBER_PAGE`.
  *
@@ -78,8 +65,6 @@ export const NO_SUCH_PAGE = "no-such-page";
  *  would have asked, in the only terms this host can ask it. */
 export const NOT_IN_VIEW = "not-in-view";
 
-const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
-
 /** WHICH TIER JUDGES THIS PAGE'S ASK.
  *
  *  The public page is judged as a PARTICIPANT, and that is a statement about the rules rather than
@@ -97,68 +82,6 @@ const tierOf = (audience: PreviewAudience): WriteTier => {
   }
   return "roster";
 };
-
-/** The batch, and every intent goes through one.
- *
- *  A transition with no notice is a single `update` and could have been sent alone; it is not,
- *  because the branch that decides would then be the only thing standing between a declared notice
- *  and a record that moved without it. One shape, judged once.
- *
- *  THE JUDGEMENT IS OF A SNAPSHOT, AND THIS DOES NOT RE-READ IT. Between the projection above and
- *  this commit, another writer can move the record — so a transition judged legal from the status
- *  the page held can land on a record that has since left it. The window is left open, on purpose,
- *  three times over:
- *
- *  - THE LIVE PAGE HAS IT TOO. mulmoserver's `performIntent` issues the same unconditional
- *    `batch.update` from the same held snapshot, and the package says why: `judgeTransition`
- *    "decides which button should have been drawn, and the rules decide the race". Closing it here
- *    alone would make this host's write a different program from the one it previews.
- *  - `previewWrite.ts` MADE THE SAME CALL for the mirror it checks before claiming — "a check, not
- *    a guarantee, and the difference is a real race with anybody submitting at the same moment".
- *  - AND THE PREVIEW SAYS SO. "Nobody else exists here, so nothing was concurrent" is in the pane's
- *    copied log, in the skill and in this feature's plan — a stated limit rather than a claim this
- *    quietly breaks.
- *
- *  What is NOT excused by any of that: in production the rules close the race, because they compare
- *  the stored status themselves, and here they do not — the write goes out as the OWNER. So the
- *  residue is real and it is named (CodeRabbit on #1802, declined with this note). A transaction is
- *  what would close it, and it belongs to a change that closes it on BOTH hosts. */
-async function commit(aid: string, intent: JudgedIntent): Promise<string | null> {
-  try {
-    const db = currentFirestore();
-    const batch = writeBatch(db);
-    const item = doc(collection(db, itemsPath(aid, intent.cid)), intent.itemId);
-    if (intent.kind === "withdraw") {
-      batch.delete(item);
-      // The pair the rules require of a withdrawal: `deleteWith` reads `getAfter(mirror).state`, so
-      // the row going and the slot reopening are one write or neither.
-      if (intent.mirror !== undefined) {
-        batch.update(doc(collection(db, itemsPath(aid, intent.mirror)), intent.itemId), { state: MIRROR_OPEN });
-      }
-      await batch.commit();
-      return null;
-    }
-    if (intent.field === undefined || intent.to === undefined) {
-      // Unreachable: only a withdrawal is judged without a field, and it left above. Stated rather
-      // than asserted away, because the alternative is writing `{ undefined: undefined }` into
-      // somebody's record.
-      return `intent ${intent.kind} has no field to move`;
-    }
-    batch.update(item, { [intent.field]: intent.to });
-    if (intent.mail !== undefined) {
-      const { to, template, data } = intent.mail;
-      const queued: Record<string, unknown> = { cid: intent.cid, itemId: intent.itemId, to, template };
-      // Attached rather than spread: `mailShapeOk` accepts these keys and no others, so a key
-      // holding `undefined` is a document the rule refuses.
-      if (data !== undefined) queued.data = data;
-      batch.set(doc(collection(db, mailPath(aid)), mailDocId(intent.cid, intent.itemId, template)), queued);
-    }
-    await batch.commit();
-    return null;
-  } catch (err) {
-    return messageOf(err);
-  }
-}
 
 /** Perform one intent the pane's member parent received.
  *
@@ -256,8 +179,8 @@ export async function performPreviewIntent(root: string, asked: PreviewIntent): 
   // would otherwise be reported as a missing row.
   if (holding(read.intent.cid, read.intent.itemId) === null) return { ok: false, error: NOT_IN_VIEW };
 
-  const failed = await commit(preview.aid, read.intent);
-  if (failed !== null) return { ok: false, error: failed };
+  const failed = await commitIntent(preview.aid, read.intent);
+  if (failed !== null) return { ok: false, error: failed.error };
   // Claimed only on success, and only where the declaration named a notice for this move: a batch
   // that was refused sent nothing, and saying otherwise on the same line as the failure would be
   // the one part of the report that lies.
