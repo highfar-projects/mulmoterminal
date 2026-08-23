@@ -266,9 +266,15 @@ function mountUseSharedAppRoute(app: Express): void {
   // directory decided something, and nothing about a cell's directory may change what a person is
   // allowed to do inside somebody else's app — that is the deployed rules' answer about the
   // signed-in identity, and it is the same in every cell.
+  //
+  // The SESSION is passed, and it is the one thing about the caller this tool is allowed to know.
+  // `watch` outlives its own call: what it produces is typed into a terminal minutes later, so it
+  // has to be told which one. Nothing else here reads it, and it must not become a way for a cell's
+  // identity to change what a person may do — that answer is the rules', and it is the same
+  // everywhere (see the note above).
   app.post("/api/plugin/useSharedApp", async (req, res) => {
     try {
-      return res.json({ message: await useSharedApp(req.body) });
+      return res.json({ message: await useSharedApp(req.body, req.get(SESSION_HEADER)) });
     } catch (err) {
       console.error(`[useSharedApp] dispatch failed: ${messageOf(err)}`);
       return res.json({ message: `useSharedApp failed: ${messageOf(err)}` });

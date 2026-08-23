@@ -66,12 +66,42 @@ export const noteOtherWrite = (sessionId: string): void => {
 // user typing, which is the false alarm this whole path exists to avoid (#1693).
 const partialReply = new Map<string, string>();
 
+// WHEN THE PERSON AT THE KEYBOARD LAST TYPED, per session.
+//
+// Separate from the counter above because it answers a different question. The counter asks "has
+// anything happened since this dialog opened" and is armed only while an answer is in flight; this
+// asks "is somebody typing RIGHT NOW", and it has to be answerable at any moment, for any session.
+//
+// What needs it is unsolicited text — a shared-app watch firing (server/session/shared-app-watches.ts).
+// An agent's input box holds whatever the user has typed until they submit, so a paste lands after
+// their draft and the two are submitted merged (#572). The phone's own typing empties the box first,
+// which it may do because the user asked for that send; nothing the user did not ask for may throw
+// their draft away. Waiting for quiet is what is left.
+//
+// It sees the BROWSER's keystrokes, which is where they come from for a session in the grid. A user
+// typing into a tmux attach in another window is invisible here, and this makes no claim about them.
+const lastUserInputAt = new Map<string, number>();
+
+/** Milliseconds since the user last typed here, or Infinity if they never have in this process. */
+export const msSinceUserInput = (sessionId: string, now = Date.now()): number => {
+  const at = lastUserInputAt.get(sessionId);
+  return at === undefined ? Number.POSITIVE_INFINITY : now - at;
+};
+
 /** Classify one chunk of terminal input and count it if the user produced it. */
 export const noteInput = (sessionId: string, data: string): void => {
   const { fromUser, pending } = scanForUserInput(partialReply.get(sessionId) ?? "", data);
   if (pending) partialReply.set(sessionId, pending);
   else partialReply.delete(sessionId);
-  if (fromUser) noteOtherWrite(sessionId);
+  if (fromUser) {
+    lastUserInputAt.set(sessionId, Date.now());
+    noteOtherWrite(sessionId);
+  }
+};
+
+/** Teardown for a session that has ended. */
+export const forgetUserInputClock = (sessionId: string): void => {
+  lastUserInputAt.delete(sessionId);
 };
 
 /** Write on behalf of anything but an answer: the phone's typing, and anything added later. */
