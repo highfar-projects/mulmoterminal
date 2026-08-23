@@ -31,6 +31,12 @@ afterEach(() => {
   rmSync(home, { recursive: true, force: true });
 });
 
+// Permission bits decide nothing for root, and on Windows `chmod` only moves the read-only
+// attribute — so a test that needs a write or a read to be REFUSED cannot be written there.
+// Named once and used as the skip condition, rather than guarding assertions inside the body:
+// a guard inside is what let an assertion sit outside it and fail as root (CodeRabbit review).
+const CANNOT_REFUSE_ACCESS = process.platform === "win32" || process.getuid?.() === 0;
+
 /** An existing campaign file with its permissions taken away, and the path back to restore them. */
 function lockedFile(campaign: string, mode: number): string {
   mkdirSync(campaignsDir(), { recursive: true });
@@ -135,10 +141,10 @@ describe("reading and appending", () => {
   // Not on Windows, and not as root, for the reason rooms.spec.ts records (#1484): chmod there
   // moves the read-only attribute and nothing else, and root ignores the bit — so the write this
   // test needs to fail simply succeeds.
-  it.skipIf(process.platform === "win32")("reports a failed append, so a caller can decline to cause the effect", () => {
+  it.skipIf(CANNOT_REFUSE_ACCESS)("reports a failed append, so a caller can decline to cause the effect", () => {
     const file = lockedFile("locked", 0o400);
     try {
-      if (process.getuid?.() !== 0) expect(appendCampaignRecord("locked", intent)).toBe(false);
+      expect(appendCampaignRecord("locked", intent)).toBe(false);
     } finally {
       chmodSync(file, 0o600);
     }
@@ -146,10 +152,10 @@ describe("reading and appending", () => {
 
   // Different answers for different questions: "nothing has been recorded" and "I could not find
   // out" must not look alike, or a restart resumes a campaign whose tasks are really mid-flight.
-  it.skipIf(process.platform === "win32")("throws when a campaign exists but cannot be read", () => {
+  it.skipIf(CANNOT_REFUSE_ACCESS)("throws when a campaign exists but cannot be read", () => {
     const file = lockedFile("unreadable", 0o000);
     try {
-      if (process.getuid?.() !== 0) expect(() => readCampaign("unreadable")).toThrow();
+      expect(() => readCampaign("unreadable")).toThrow();
     } finally {
       chmodSync(file, 0o600);
     }
@@ -161,11 +167,11 @@ describe("reading and appending", () => {
   //
   // `0o300` is what drives it: write + execute lets the append land, while the missing read bit
   // makes the directory fsync fail.
-  it.skipIf(process.platform === "win32")("reports success for a record it wrote but could not follow up on", () => {
+  it.skipIf(CANNOT_REFUSE_ACCESS)("reports success for a record it wrote but could not follow up on", () => {
     mkdirSync(campaignsDir(), { recursive: true });
     chmodSync(campaignsDir(), 0o300);
     try {
-      if (process.getuid?.() !== 0) expect(appendCampaignRecord("c1", intent)).toBe(true);
+      expect(appendCampaignRecord("c1", intent)).toBe(true);
     } finally {
       chmodSync(campaignsDir(), 0o700);
     }
@@ -255,23 +261,23 @@ describe("preparing the store", () => {
   // fsync does. `0o500` leaves the fsync working and the check proves nothing.
   const EXEC_ONLY = 0o100;
 
-  it.skipIf(process.platform === "win32")("does not fail on an ancestor it does not own", () => {
+  it.skipIf(CANNOT_REFUSE_ACCESS)("does not fail on an ancestor it does not own", () => {
     const outer = path.join(home, "outer");
     process.env.MULMOTERMINAL_HOME = path.join(outer, "home");
     ensureCampaignStore();
     chmodSync(outer, EXEC_ONLY);
     try {
-      if (process.getuid?.() !== 0) expect(() => ensureCampaignStore()).not.toThrow();
+      expect(() => ensureCampaignStore()).not.toThrow();
     } finally {
       chmodSync(outer, 0o700);
     }
   });
 
-  it.skipIf(process.platform === "win32")("throws when a directory it does own cannot be made durable", () => {
+  it.skipIf(CANNOT_REFUSE_ACCESS)("throws when a directory it does own cannot be made durable", () => {
     ensureCampaignStore();
     chmodSync(campaignsDir(), EXEC_ONLY);
     try {
-      if (process.getuid?.() !== 0) expect(() => ensureCampaignStore()).toThrow();
+      expect(() => ensureCampaignStore()).toThrow();
     } finally {
       chmodSync(campaignsDir(), 0o700);
     }
@@ -300,11 +306,11 @@ describe("preparing the store", () => {
   });
 
   // Reporting a hierarchy that may not survive is the one thing it must not do.
-  it.skipIf(process.platform === "win32")("throws rather than reporting a directory it could not prepare", () => {
+  it.skipIf(CANNOT_REFUSE_ACCESS)("throws rather than reporting a directory it could not prepare", () => {
     mkdirSync(home, { recursive: true });
     chmodSync(home, 0o500);
     try {
-      if (process.getuid?.() !== 0) expect(() => ensureCampaignStore()).toThrow();
+      expect(() => ensureCampaignStore()).toThrow();
     } finally {
       chmodSync(home, 0o700);
     }
@@ -339,21 +345,21 @@ describe("listing what a restart has to reconcile", () => {
 
   // The half `existsSync` collapses. An empty list here reads as "no campaigns", and a restart
   // that believes it skips reconciliation for tasks that are really mid-flight.
-  it.skipIf(process.platform === "win32")("throws when the campaigns directory cannot be read", () => {
+  it.skipIf(CANNOT_REFUSE_ACCESS)("throws when the campaigns directory cannot be read", () => {
     mkdirSync(campaignsDir(), { recursive: true });
     chmodSync(campaignsDir(), 0o000);
     try {
-      if (process.getuid?.() !== 0) expect(() => listCampaigns()).toThrow();
+      expect(() => listCampaigns()).toThrow();
     } finally {
       chmodSync(campaignsDir(), 0o700);
     }
   });
 
-  it.skipIf(process.platform === "win32")("throws when a campaign's directory cannot be traversed", () => {
+  it.skipIf(CANNOT_REFUSE_ACCESS)("throws when a campaign's directory cannot be traversed", () => {
     appendCampaignRecord("c1", intent);
     chmodSync(campaignsDir(), 0o000);
     try {
-      if (process.getuid?.() !== 0) expect(() => readCampaign("c1")).toThrow();
+      expect(() => readCampaign("c1")).toThrow();
     } finally {
       chmodSync(campaignsDir(), 0o700);
     }
