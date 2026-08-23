@@ -27,6 +27,8 @@ const ME = { uid: "uid-me", email: "me@example.com" };
 
 const batched: string[] = [];
 let batchFails = false;
+/** How many commits refuse before the rest succeed — the rules saying no to one tier's attempt. */
+let batchRefusals = 0;
 
 vi.mock("firebase/firestore", () => ({
   collection: (_db: unknown, collectionPath: string) => ({ collectionPath }),
@@ -34,12 +36,21 @@ vi.mock("firebase/firestore", () => ({
   doc: (parent: { collectionPath: string }, docId: string) => ({ path: `${parent.collectionPath}/${docId}` }),
   // The own-row query, recorded as a description rather than run: what matters is that the field
   // and the value came from the DECLARATION and the session, not from anything a caller passed.
-  query: (source: { collectionPath: string }, clause: { field: string; value: unknown }) => ({ ...source, clause }),
+  query: (source: { collectionPath: string }, clause: { field: string; value: unknown }, cap: { rows: number }) => {
+    capped.push(cap.rows);
+    return { ...source, clause, cap };
+  },
   where: (field: string, _op: string, value: unknown) => ({ field, value }),
-  getDocs: (asked: { collectionPath: string; clause: { field: string; value: unknown } }) => {
+  limit: (rows: number) => ({ rows }),
+  getDocs: (asked: { collectionPath: string; clause: { field: string; value: unknown }; cap: { rows: number } }) => {
     const rows = queryable.get(asked.collectionPath) ?? [];
     return Promise.resolve({
-      docs: rows.filter((row) => row.data[asked.clause.field] === asked.clause.value).map((row) => ({ id: row.id, data: () => row.data })),
+      docs: rows
+        .filter((row) => row.data[asked.clause.field] === asked.clause.value)
+        // The fake honours the cap, so a host that stopped passing one would hand back more rows
+        // than it asked for and the assertion would notice.
+        .slice(0, asked.cap.rows)
+        .map((row) => ({ id: row.id, data: () => row.data })),
     });
   },
   writeBatch: () => {
@@ -49,6 +60,10 @@ vi.mock("firebase/firestore", () => ({
       update: (ref: { path: string }, data: Record<string, unknown>) => ops.push(`update ${ref.path} ${JSON.stringify(data)}`),
       delete: (ref: { path: string }) => ops.push(`delete ${ref.path}`),
       commit: () => {
+        if (batchRefusals > 0) {
+          batchRefusals -= 1;
+          return Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }));
+        }
         if (batchFails) return Promise.reject(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" }));
         batched.push(...ops);
         return Promise.resolve();
@@ -58,6 +73,9 @@ vi.mock("firebase/firestore", () => ({
 }));
 
 vi.mock("../../../server/backends/remoteHost/session.js", () => ({ currentFirestore: () => ({}) }));
+
+/** The row cap each own-row query carried. */
+const capped: number[] = [];
 
 /** What `getDocs` can see — filled from the same store the docs seam holds. */
 const queryable = new Map<string, { id: string; data: Record<string, unknown> }[]>();
@@ -115,7 +133,7 @@ const slotsPath = `apps/${AID}/collections/slots/items`;
 const submitBlock = {
   auth: "verifiedEmail",
   emailField: "requesterEmail",
-  createFields: ["requesterEmail", "slot", "status"],
+  createFields: ["requesterEmail", "slot", "status", "guests", "seat"],
   initialStatus: "booked",
   idFrom: "field",
   idField: "slot",
@@ -125,7 +143,7 @@ const submitBlock = {
 };
 
 /** Publish this app into the fake database. Nothing here is read off disk — that is the point. */
-function publish({ memberTier = true, roles = { "*": "editor" } as Record<string, string> | null } = {}): void {
+function publish({ memberTier = true, roles = { "*": "editor" } as Record<string, string> | null, writers = [ME.email] } = {}): void {
   docs.put("appSlugs", "sakura", { aid: AID, published: true });
   if (roles !== null) docs.put("apps", AID, { aid: AID, name: "Sakura Hair", members: { [ME.email]: roles }, memberEmails: [ME.email] });
   docs.put(`apps/${AID}/config`, "public", {
@@ -135,7 +153,18 @@ function publish({ memberTier = true, roles = { "*": "editor" } as Record<string
     read: ["slots"],
     submit: { bookings: submitBlock },
     form: {
-      bookings: { fields: { requesterEmail: { label: "Email" }, slot: { label: "Slot", required: true }, status: { label: "Status" } }, statusField: "status" },
+      bookings: {
+        fields: {
+          requesterEmail: { label: "Email", type: "email" },
+          slot: { label: "Slot", type: "string", required: true },
+          status: { label: "Status", type: "string" },
+          // The two types publish deliberately allows, and that a string-only tool was accused of
+          // making unsubmittable.
+          guests: { label: "Guests", type: "number" },
+          seat: { label: "Seat", type: "enum", values: ["window", "aisle"] },
+        },
+        statusField: "status",
+      },
     },
     // The roster tier's own writes, which `config/public` carries whether or not the app publishes
     // any page at all — the half a participant needs and the reason this works with no views.
@@ -153,9 +182,9 @@ function publish({ memberTier = true, roles = { "*": "editor" } as Record<string
         {
           cid: "bookings",
           statusField: "status",
-          transitions: { booked: ["approved"] },
+          transitions: { booked: ["approved", "cancelled"] },
           assigneeField: "handledBy",
-          writers: [ME.email],
+          writers,
           rowWriters: [],
           mail: { toField: "requesterEmail", on: { approved: { from: ["booked"], to: "approved" } } },
         },
@@ -175,8 +204,10 @@ describe("useSharedApp — taking part in somebody else's app", () => {
   beforeEach(() => {
     docs = new Docs();
     queryable.clear();
+    capped.length = 0;
     batched.length = 0;
     batchFails = false;
+    batchRefusals = 0;
     process.env.MULMOTERMINAL_HOME = makeTempDir("mt-participate-home-");
   });
 
@@ -192,7 +223,10 @@ describe("useSharedApp — taking part in somebody else's app", () => {
     expect(said).toContain("booked -> approved");
     // The form, with the host-filled fields kept out of it: an address compared to the token, a
     // status pinned to `initialStatus`.
-    expect(said).toContain("slot* (Slot)");
+    expect(said).toContain("slot* (Slot, string)");
+    // The type and the choices, so the agent does not fill an enum in from the field's NAME.
+    expect(said).toContain("guests (Guests, number)");
+    expect(said).toContain("seat (Seat, enum, one of: window / aisle)");
     expect(said).not.toContain("requesterEmail (Email)");
   });
 
@@ -242,12 +276,16 @@ describe("useSharedApp — taking part in somebody else's app", () => {
   it("submits through the published form, and reports a record rather than a seat", async () => {
     publish();
     docs.put(slotsPath, "10:00", { state: "open" });
-    const said = await run({ action: "submit", slug: "sakura", cid: "bookings", values: { slot: "10:00" } });
+    const said = await run({ action: "submit", slug: "sakura", cid: "bookings", values: { slot: "10:00", guests: "2", seat: "window" } });
     expect(said).toContain("The record's id is 10:00");
     // The mirror travelled with it, in ONE batch: the rules read the second document with
     // `getAfter()`, so a mirror written singly is refused with nothing to say why.
     expect(batched).toEqual([
-      `set ${bookingsPath}/10:00 ${JSON.stringify({ slot: "10:00", requesterEmail: ME.email, status: "booked" })}`,
+      // The typed fields land as the STRINGS they were sent as, which is what mulmoserver's own
+      // page writes for them (`recordOf` takes `Record<string, string>` and writes it verbatim).
+      // Coercing here would make this host write a different document than the page for the same
+      // answer — read differently by the app's own views.
+      `set ${bookingsPath}/10:00 ${JSON.stringify({ slot: "10:00", guests: "2", seat: "window", requesterEmail: ME.email, status: "booked" })}`,
       `update ${slotsPath}/10:00 {"state":"taken"}`,
     ]);
     // Principle 3, said out loud: what a create buys is a position, and this report must never
@@ -301,6 +339,48 @@ describe("useSharedApp — taking part in somebody else's app", () => {
     expect(said).toContain("The record is gone");
     expect(said).toContain("There is no undo");
     expect(batched).toEqual([`delete ${bookingsPath}/10:00`, `update ${slotsPath}/10:00 {"state":"open"}`]);
+  });
+
+  it("caps the own-row query in the QUERY, not after the fetch", async () => {
+    publish();
+    docs.denyList.add(bookingsPath);
+    for (let n = 0; n < 5; n += 1) docs.put(bookingsPath, `b${n}`, { requesterEmail: ME.email, slot: `${n}:00`, status: "booked" });
+    const said = await run({ action: "records", slug: "sakura", cid: "bookings", limit: 2 });
+    // The cap reached Firestore rather than being applied to a fetched result: the query carried it,
+    // so what came back is already two rows.
+    expect(capped).toEqual([2]);
+    expect(said).toContain("2 row(s)");
+  });
+
+  it("refuses an assignee nobody on the roster could be", async () => {
+    publish();
+    docs.put(bookingsPath, "b1", { requesterEmail: "guest@example.com", slot: "10:00", status: "booked" });
+    const said = await run({ action: "assign", slug: "sakura", cid: "bookings", id: "b1", to: "stranger@example.com" });
+    // Refused by NAME. Written, the row would belong to somebody who may never touch it again.
+    expect(said).toContain("unknown-assignee");
+    expect(batched).toEqual([]);
+  });
+
+  it("refuses a move this reader's role does not carry, and says which tier said what", async () => {
+    publish({ writers: ["somebody-else@example.com"] });
+    docs.put(bookingsPath, "b1", { requesterEmail: "guest@example.com", slot: "10:00", status: "booked" });
+    const said = await run({ action: "transition", slug: "sakura", cid: "bookings", id: "b1", to: "approved" });
+    expect(said).toContain("member:");
+    expect(said).toContain("roster:");
+    expect(batched).toEqual([]);
+  });
+
+  it("tries the next tier when the RULES refuse the first tier's write", async () => {
+    publish();
+    docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked" });
+    // Both tiers carry `booked -> cancelled`, so the member projection is judged first and its
+    // write is the one the rules turn down. Stopping there would deny this person a move they hold
+    // as the row's own submitter.
+    batchRefusals = 1;
+    const said = await run({ action: "transition", slug: "sakura", cid: "bookings", id: "b1", to: "cancelled" });
+    expect(said).toContain("Judged on the roster tier");
+    // ONE write landed — the refused batch wrote nothing, which is what makes the retry safe.
+    expect(batched).toEqual([`update ${bookingsPath}/b1 {"status":"cancelled"}`]);
   });
 
   it("keeps a refused read apart from an absent record", async () => {

@@ -10,9 +10,13 @@
 // answers from a `ProjectedViewWrite` — the projection of one TIER of one publish. There are two
 // places publish leaves one:
 //
-//   apps/{aid}/member/config   the staff tier's writes  (readable by anyone holding a role)
-//   apps/{aid}/roster/config   the participant tier's   (readable by anyone on the roster)
-//   apps/{aid}/config/public   the public form's writes (readable by the world)
+//   apps/{aid}/member/live:config   the staff tier's writes  (readable by anyone holding a role)
+//   apps/{aid}/roster/live:config   the participant tier's   (readable by anyone on the roster)
+//   apps/{aid}/config/public        the public form's writes (readable by the world)
+//
+// The `live:` on the first two is not a typo and not decoration: it is `viewDocId`'s prefix, which
+// is why both are addressed through `viewConfigDocId()` below rather than spelled here. A document
+// written or looked for at plain `config` is a document nothing reads.
 //
 // The first two exist only when the app published PAGES for that tier; the third is written
 // whenever the declaration opens a collection for submission, pages or no pages. So an app with no
@@ -25,7 +29,7 @@
 //
 // So this host judges against precisely the projection production judges against, and where there
 // is none it says there is none.
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, getDocs, limit as limitTo, query, where } from "firebase/firestore";
 import {
   APP_SLUGS_COLLECTION,
   APPS_COLLECTION,
@@ -241,6 +245,12 @@ function ownSelector(app: JoinedApp, cid: string): { field: string; value: strin
  *  participant's page is handed, and the scope is reported either way. */
 export async function readRecords(app: JoinedApp, cid: string, limit: number): Promise<ReadRecords> {
   const path = itemsPath(app.aid, cid);
+  // THE WHOLE-COLLECTION READ IS UNCAPPED AT THE SEAM, and the slice below is all this host can do
+  // about it: `FirestoreDocs.list` in `@mulmoclaude/core` takes a path and nothing else. Adding a
+  // limit there is a change to an interface two hosts implement and every collection backend
+  // consumes, which is not this feature's to make — and the own-row path below, which is the one a
+  // participant actually takes, does cap in the query. Said out loud rather than left to be
+  // discovered: a member reading a big collection pays for all of it.
   const listed = await app.handle.docs
     .list(path)
     .then((docs) => docs.map((entry) => ({ ...(isRecord(entry.data) ? entry.data : {}), id: entry.id })))
@@ -267,11 +277,14 @@ export async function readRecords(app: JoinedApp, cid: string, limit: number): P
     return { scope: "own", rows: isRecord(found) ? [{ ...found, id: want.id }] : [], note: "only your own row is readable here" };
   }
   const db = currentFirestore();
-  const snapshot = await getDocs(query(collection(db, path), where(want.field, "==", want.value))).catch(() => null);
+  // THE CAP IS IN THE QUERY, not applied afterwards: Firestore bills and transfers what the query
+  // matched, so slicing a fetched result costs the whole collection to show a page of it.
+  const asked = query(collection(db, path), where(want.field, "==", want.value), limitTo(limit));
+  const snapshot = await getDocs(asked).catch(() => null);
   if (snapshot === null) return { scope: "none", rows: [], note: "neither the collection nor your own rows in it could be read" };
   return {
     scope: "own",
-    rows: snapshot.docs.slice(0, limit).map((entry) => ({ ...entry.data(), id: entry.id })),
+    rows: snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })),
     note: "only your own rows are readable here",
   };
 }

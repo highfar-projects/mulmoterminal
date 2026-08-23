@@ -41,7 +41,7 @@ export const USE_SHARED_APP: ToolDefinition = {
     '**apps** lists the apps this machine has been asked about before. There is NO index of "apps I belong to" anywhere — Firestore cannot be asked that question — so this list is a local memory that fills itself in as you use `describe`. An app missing from it is not an app you are not in; ask the user for the URL name.\n' +
     "**describe** is the first thing to run for any app, and it takes a `slug` (the URL name, the last part of https://…/a/<slug>). It reports the app's name, whether it is open to the world, the roles the roster gives you, what each collection lets you change, and the fields of any form it publishes. Run it before anything else — the rest of this tool takes the collection ids and field names it reports.\n" +
     "**records** lists a collection's rows. Read the `scope` it reports: `all` means the whole collection, `own` means the rules only let you see your own rows and this is them, `none` means nothing could be read and says why. Never describe an `own` list as the collection.\n" +
-    "**submit** fills the app's form in, with `values` keyed by the field names `describe` reported. It writes a REAL record in somebody else's app, so confirm the values with the user first.\n" +
+    "**submit** fills the app's form in, with `values` keyed by the field names `describe` reported. Send every answer as a STRING, including for a number, date or enum field — that is what the app's own web form sends, so the record matches. `describe` reports each field's type and an enum's choices; use them rather than guessing. It writes a REAL record in somebody else's app, so confirm the values with the user first.\n" +
     "**transition** moves a record's status (`to` names the new one). **assign** hands a record to somebody (`to` is their address, and it must be one `describe` listed as assignable). **withdraw** DELETES the record — it is how a submitter takes their own entry back, it frees whatever slot the entry was holding, and there is no undo. Ask before every one of these.\n" +
     "A transition can queue a real notification email to a real person, in the same write. The report says when one was queued; do not describe a move as private.\n" +
     "**forget** drops an app from the local list. It changes nothing in the app itself.\n" +
@@ -68,7 +68,7 @@ export const USE_SHARED_APP: ToolDefinition = {
       values: {
         type: "object",
         description:
-          "submit: the form's answers, keyed by the field names `describe` reported. Every value is a STRING and is sent as written — a value of another type is dropped rather than converted, because the rules read a field's type and this host does not get to decide it.",
+          "submit: the form's answers, keyed by the field names `describe` reported. Every value is a STRING and is sent as written — including the answer to a number, date or enum field, which is exactly what the app's own web form sends for those. A value of another JSON type is dropped rather than converted, because converting it would write a different document than the page would.",
         additionalProperties: true,
       },
       limit: { type: "number", description: `records: how many rows at most (default ${DEFAULT_LIMIT}).` },
@@ -82,10 +82,19 @@ const parseAction = (raw: unknown): UseSharedAppAction | null =>
 
 const str = (value: unknown): string | undefined => (typeof value === "string" && value.length > 0 ? value : undefined);
 
-/** The form's answers, narrowed. Anything that is not a string is DROPPED rather than coerced: a
- *  number written as `42` and a number written as `"42"` are different documents to a rule reading
- *  `is string`, and quietly converting one into the other would be this host deciding a field's
- *  type on the author's behalf. A dropped required field is reported by `missingRequired`. */
+/** The form's answers, narrowed to strings.
+ *
+ *  A STRING IS WHAT A SUBMISSION IS, everywhere — not a limitation of this tool. `recordOf` in
+ *  `@receptron/sharedapp/view` takes `Record<string, string>` and writes each value verbatim, and
+ *  mulmoserver's own page hands it exactly that (`usePublicSubmit.ts`): a `number` field filled in
+ *  on the live public form lands in Firestore as the string that was typed. So a typed field IS
+ *  submittable here, and it lands as the same document the page would have written.
+ *
+ *  Which is why a non-string argument is DROPPED rather than coerced. Converting `42` to `42` (a
+ *  JSON number) would make this host write a DIFFERENT document from the page for the same answer —
+ *  read differently by the app's own views, and by any rule testing `is string`. This host does not
+ *  get to decide a field's storage type on the author's behalf. A dropped required field is
+ *  reported by name through `missingRequired`, never silently. */
 const values = (raw: unknown): Record<string, string> => {
   if (!isRecord(raw)) return {};
   return Object.fromEntries(Object.entries(raw).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
@@ -136,6 +145,16 @@ function transitionLines(app: JoinedApp): string[] {
   return lines;
 }
 
+/** One input, with everything the published form says about it.
+ *
+ *  The type and an enum's choices are here because an agent without them GUESSES: it fills a
+ *  select in from the field's name and sends prose to a date. Both are accepted by the rules and
+ *  useless to the app, which is a worse outcome than a refusal. */
+function describedField(field: { name: string; label: string; required: boolean }, hint: { type?: string; values?: string[] } | undefined): string {
+  const about = [field.label, ...(hint?.type === undefined ? [] : [hint.type]), ...(hint?.values === undefined ? [] : [`one of: ${hint.values.join(" / ")}`])];
+  return `${field.name}${field.required ? "*" : ""} (${about.join(", ")})`;
+}
+
 function formLines(app: JoinedApp): string[] {
   const cids = submitCids(app);
   if (cids.length === 0) return [];
@@ -146,7 +165,7 @@ function formLines(app: JoinedApp): string[] {
       lines.push(`  - ${cid}: declared, but this app published no form for it — nothing here can say which fields to send.`);
       continue;
     }
-    const fields = plan.fields.map((field) => `${field.name}${field.required ? "*" : ""} (${field.label})`).join(", ");
+    const fields = plan.fields.map((field) => describedField(field, plan.hints[field.name])).join(", ");
     lines.push(`  - ${cid}: ${fields.length === 0 ? "no fields — submitting is the whole answer" : fields}`);
   }
   lines.push("  (* required. Fields the host fills in — your address, your uid, the initial status, the server stamp — are not listed and must not be sent.)");

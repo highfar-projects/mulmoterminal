@@ -215,14 +215,20 @@ publish 済みの文書だけを偽の Firestore に置いて `useSharedApp` を
 
 - **肯定** — participant が自分の行を宣言された遷移で動かせる／`selfDelete` の status から
   取り下げられる／member がロールの範囲で他人の行を動かせる／通知が**同じバッチ**に入る。
-- **否定** — `illegal-transition`、`unknown-assignee`（名簿に無いアドレス）、
-  `not-permitted`（viewer、同僚の行に手を出す assignee）、`not-writable`（participant が
-  スタッフの遷移を名指す）。
+- **否定** — `illegal-transition`、`unknown-assignee`（名簿に無いアドレス）、ロールが運んで
+  いない遷移（**どのティアが何と言ったか**を両方出す）、読めない行と存在しない行の区別。
 - **綴り** — mail の id が `{cid}_{itemId}_{template}` であること（`../mulmoserver` と
   照合する pin）。
 - **M8** — `submit` の応答に "reserved" / "secured" が入らず、"not a place held" が入ること。
 - **M5** — アプリ文書が読めない読者（`apps/{aid}` が拒否）でも capability が出ること。
 - **読みの scope** — 全体の list が拒否されたら自分の行に落ち、応答が**そう言う**こと。
+
+- **ティアを順に試す**の詰め — member の判定が通って**ルールが拒否した**とき、roster に回して
+  そちらが通ること（拒否されたバッチは何も書いていないので、着地する書き込みは 1 本だけ）。
+- **型と選択肢** — `describe` が `number` / `enum` を型と `values` ごと出すこと。値は**文字列で
+  送る**（`recordOf` が `Record<string, string>` を verbatim に書き、mulmoserver のページも
+  そうしている）ので、数値フィールドも公開ページと**同じ文書**になる。
+- **cap はクエリに乗る** — 自分の行の読みは `limit()` を積んで発行する。
 
 **実装で 1 つ落とし穴があった**: ティアの射影の文書 id は `config` ではなく **`live:config`**
 （`viewDocId` の接頭辞）。テストが直書きして通らず、`viewConfigDocId()` を使って直した。

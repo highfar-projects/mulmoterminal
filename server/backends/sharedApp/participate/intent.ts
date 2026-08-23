@@ -75,7 +75,20 @@ export async function performIntent(app: JoinedApp, asked: AskedIntent): Promise
       continue;
     }
     const failed = await commitIntent(app.aid, read.intent);
-    if (failed !== null) return { ok: false, error: failed, refusals };
+    if (failed !== null) {
+      // A RULES REFUSAL DOES NOT END THE LOOP, and that is a decision rather than a fall-through.
+      // The tiers are different DECLARATIONS about the same reader, and the rules answer about the
+      // record: a stale `writers` list can carry a move the deployed rules refuse this person as
+      // staff and allow them as the row's own submitter. Stopping here would deny an action they
+      // are entitled to, on the strength of a projection that was merely tried first.
+      //
+      // Retrying is safe and does not lose a declared notice. A batch is atomic, so the refused
+      // attempt wrote nothing at all; and `mail` is projected to the MEMBER tier only — the rules
+      // let a writer queue it and nobody else — so a roster-tier attempt carrying no notice is that
+      // tier's own correct shape, not a dropped one.
+      refusals.push({ tier, reason: failed });
+      continue;
+    }
     // Claimed only on success, and only where the declaration named a notice for this move: a batch
     // that was refused sent nothing.
     return { ok: true, tier, mailed: read.intent.mail !== undefined };

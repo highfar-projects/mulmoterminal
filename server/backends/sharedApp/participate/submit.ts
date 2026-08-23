@@ -34,6 +34,20 @@ export interface SubmitPlan {
   submit: SubmitSpec;
   drawn: DrawnForm;
   fields: WritableField[];
+  /** What the published form says each input IS, beyond its label — the `type` publish took from
+   *  the schema, and an `enum`'s `values`.
+   *
+   *  KEPT FOR THE REPORT, NOT FOR THE WRITE. `writableFields` and `recordOf` read `label` and
+   *  `required` and nothing else, so this changes no document. What it changes is what the agent is
+   *  told: without the choices it fills an enum in from the field's NAME, and without the type it
+   *  sends "next tuesday" to a date. Either lands as a record the rules accept and the app cannot
+   *  use, which is worse than a refusal.
+   *
+   *  It is reported and NOT enforced, deliberately. A host that rejected a value outside `values`
+   *  would be stricter than the deployed rules — which check `validate.keyFields`, not the schema's
+   *  enum — and a submission they would have accepted is not this host's to refuse (principle 2:
+   *  the checks here are diagnosis). */
+  hints: Record<string, { type?: string; values?: string[] }>;
 }
 
 /** One collection's declaration and form out of `config/public`.
@@ -52,7 +66,23 @@ export function submitPlan(app: JoinedApp, cid: string): SubmitPlan | null {
     fields: drawnFields(drawnRaw.fields),
     ...(typeof drawnRaw.statusField === "string" ? { statusField: drawnRaw.statusField } : {}),
   };
-  return { submit, drawn, fields: writableFields(drawn, submit) };
+  return { submit, drawn, fields: writableFields(drawn, submit), hints: hintsOf(drawnRaw.fields) };
+}
+
+/** The type and the choices each published input carries, for the report. Same document as
+ *  `drawnFields` and read separately because the package's `DrawnForm` has no room for them —
+ *  which is right: they are not part of building the record. */
+function hintsOf(raw: unknown): Record<string, { type?: string; values?: string[] }> {
+  if (!isRecord(raw)) return {};
+  return Object.fromEntries(
+    Object.entries(raw).flatMap(([name, spec]) => {
+      if (!isRecord(spec)) return [];
+      const type = typeof spec.type === "string" ? spec.type : undefined;
+      const values = Array.isArray(spec.values) ? spec.values.filter((value): value is string => typeof value === "string") : undefined;
+      if (type === undefined && values === undefined) return [];
+      return [[name, { ...(type === undefined ? {} : { type }), ...(values === undefined || values.length === 0 ? {} : { values }) }]];
+    }),
+  );
 }
 
 /** The published form's inputs, rebuilt field by field.
