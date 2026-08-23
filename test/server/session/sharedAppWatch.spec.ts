@@ -412,6 +412,21 @@ describe("useSharedApp — watching a collection", () => {
     expect(bag.listeners.every((listener) => listener.stopped)).toBe(true);
   });
 
+  it("does not call a pending watch a running one", async () => {
+    publish();
+    bag.denyQuery.add(slotsPath);
+    // The entry has to be in the map before the subscription is awaited, which makes a RESERVATION
+    // look exactly like a live watch to a second caller. Told "already watching, and it has missed
+    // nothing" for a subscription that then turns out to be refused, that caller waits forever on a
+    // watch that does not exist (Codex on #1844). A second caller waits for the first instead, and
+    // is given the same answer.
+    const both = await Promise.all([watch("slots"), watch("slots")]);
+    expect(both[0]).toContain("Not watching");
+    expect(both[1]).toContain("Not watching");
+    expect(both.some((said) => said.includes("Already watching"))).toBe(false);
+    expect(bag.listeners).toHaveLength(0);
+  });
+
   it("gives concurrent watches distinct ids", async () => {
     publish();
     const said = await Promise.all([watch("one"), watch("two")]);
@@ -496,6 +511,48 @@ describe("useSharedApp — watching a collection", () => {
     // unchanged to an agent that stopped watching a moment after it fired.
     expect(said).toContain("3 change(s) had been seen");
     expect(bag.listeners[0].stopped).toBe(true);
+  });
+
+  it("ignores a change that was in the air when the watch was stopped", async () => {
+    publish();
+    await watch();
+    settle();
+    const listener = bag.listeners[0];
+    await unwatch();
+    // Detaching is asynchronous at the edges, so a callback can still land after the unsubscribe.
+    // Without the guard it re-arms a timer on a watch nothing can reach — and after a REAP there is
+    // no PTY, so `deliverable` says no forever and it reschedules itself for the life of the
+    // process.
+    listener.fireAfterStop(["late"]);
+    await vi.advanceTimersByTimeAsync(COALESCE_MS + HOLD_MS * 3);
+    expect(term.sent).toHaveLength(0);
+  });
+
+  it("ignores a change that was in the air when the session was reaped", async () => {
+    publish();
+    await watch();
+    settle();
+    const listener = bag.listeners[0];
+    stopWatchesFor(SESSION);
+    listener.fireAfterStop(["late"]);
+    await vi.advanceTimersByTimeAsync(COALESCE_MS + HOLD_MS * 3);
+    expect(term.sent).toHaveLength(0);
+  });
+
+  it("does not retry a delivery for a watch that was stopped while it was in flight", async () => {
+    publish();
+    await watch();
+    settle();
+    term.sendFails = true;
+    bag.listeners[0].fire(["a"]);
+    await vi.advanceTimersByTimeAsync(COALESCE_MS);
+    // The write failed, so the ids went back and a retry is armed. `unwatch` now lands between that
+    // retry and its turn: without the stopped flag the timer fires on a detached object and types a
+    // change notice for a watch the agent explicitly gave up (CodeRabbit on #1844).
+    await unwatch();
+    term.sendFails = false;
+    await vi.advanceTimersByTimeAsync(HOLD_MS * 3);
+    expect(term.sent).toHaveLength(0);
   });
 
   it("says plainly when there was nothing to stop", async () => {

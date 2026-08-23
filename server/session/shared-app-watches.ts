@@ -67,6 +67,23 @@ interface Watch {
    *  is a string somebody else chose, and rule 1 above is that none of those reach the terminal. */
   pending: Set<string>;
   timer: NodeJS.Timeout | null;
+  /** Detached — by `unwatch`, by the session ending, or by its subscription dying.
+   *
+   *  Belt and braces over the unsubscribe. Detaching a listener is asynchronous at the edges, and a
+   *  callback already in flight can still land afterwards; without this it would re-arm a timer on a
+   *  watch nothing can reach, against a session that in the reap case no longer exists. Nothing
+   *  would ever deliver it — `deliverable` says no forever with no PTY — so it would sit there
+   *  rescheduling itself for the life of the process. */
+  stopped: boolean;
+  /** The outcome of its setup, while that is still in flight. Null once it is running.
+   *
+   *  A RESERVATION IS NOT A RUNNING WATCH, and the difference is only visible from here. The entry
+   *  has to go into the map before the subscription is awaited (see below), which makes a pending
+   *  watch look exactly like a live one to a second caller — and that caller was told "already
+   *  watching, and it has missed nothing" for a subscription that could still turn out to be
+   *  refused, leaving it certain of a watch that does not exist (Codex on #1844). So a second caller
+   *  WAITS FOR THE FIRST and is given the same answer it got. */
+  starting: Promise<StartResult> | null;
 }
 
 /** Type into a session, resolving the sender only when there is something to type.
@@ -212,6 +229,7 @@ function later(run: () => void, ms: number): NodeJS.Timeout {
 }
 
 const armed = (watch: Watch, ms: number): void => {
+  if (watch.stopped) return;
   // NOT re-armed while one is pending: a steady trickle of changes would push the timer forward
   // forever and the agent would never be told about any of them.
   if (watch.timer !== null) return;
@@ -220,7 +238,7 @@ const armed = (watch: Watch, ms: number): void => {
 
 function flush(watch: Watch): void {
   watch.timer = null;
-  if (watch.pending.size === 0) return;
+  if (watch.stopped || watch.pending.size === 0) return;
   if (!deliverable(watch.sessionId)) {
     armed(watch, HOLD_MS);
     return;
@@ -263,16 +281,51 @@ export async function startWatch(sessionId: string, app: JoinedApp, cid: string)
   // ALREADY WATCHING IS NOT AN ERROR AND NOT A NO-OP TO HIDE. Told it started, an agent would
   // reasonably conclude the previous one had stopped; told nothing, it would double-count. So the
   // existing watch is named and kept -- replacing it would drop changes in the gap.
-  if (existing) return { started: "already", id: existing.id };
+  if (existing) return joinExisting(existing);
   if (watches.size >= MAX_WATCHES) {
     return { started: false, why: `this session is already watching ${MAX_WATCHES} collections, which is the most it may -- stop one first` };
   }
 
-  const watch: Watch = { id: nextId, sessionId, slug: app.slug, cid, scope: "all", stop: () => {}, pending: new Set(), timer: null };
+  const watch: Watch = {
+    id: nextId,
+    sessionId,
+    slug: app.slug,
+    cid,
+    scope: "all",
+    stop: () => {},
+    pending: new Set(),
+    timer: null,
+    stopped: false,
+    starting: null,
+  };
   nextId += 1;
   watches.set(key, watch);
   bySession.set(sessionId, watches);
+  // ASSIGNED WITHOUT YIELDING. Calling an async function runs its body up to its first await and
+  // then hands back the promise, so nothing else gets to look at this entry before `starting` is on
+  // it -- which is what makes the reservation and its outcome one indivisible thing.
+  const setup = beginWatch(watch, app, cid, key, watches);
+  watch.starting = setup;
+  try {
+    return await setup;
+  } finally {
+    watch.starting = null;
+  }
+}
 
+/** What a second caller gets for a watch that is already there.
+ *
+ *  If it is RUNNING, "already". If it is still starting, the same answer the first caller will get:
+ *  its success reads as "already" from here, and its failure is passed through as itself, because a
+ *  caller told a watch is running when its setup was refused would wait forever on it. */
+async function joinExisting(existing: Watch): Promise<StartResult> {
+  if (existing.starting === null) return { started: "already", id: existing.id };
+  const outcome = await existing.starting;
+  return outcome.started === true ? { started: "already", id: outcome.id } : outcome;
+}
+
+async function beginWatch(watch: Watch, app: JoinedApp, cid: string, key: string, watches: Map<string, Watch>): Promise<StartResult> {
+  const sessionId = watch.sessionId;
   const subscribed = await subscribeToCollection(
     app,
     cid,
@@ -315,6 +368,7 @@ function dropWatch(sessionId: string, key: string): Watch | null {
   if (watches.size === 0) bySession.delete(sessionId);
   if (watch.timer !== null) clearTimeout(watch.timer);
   watch.timer = null;
+  watch.stopped = true;
   return watch;
 }
 
@@ -345,6 +399,8 @@ export function stopWatchesFor(sessionId: string): void {
   if (!watches) return;
   for (const watch of watches.values()) {
     if (watch.timer !== null) clearTimeout(watch.timer);
+    watch.timer = null;
+    watch.stopped = true;
     try {
       watch.stop();
     } catch {
