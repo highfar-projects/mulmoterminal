@@ -101,6 +101,14 @@ export interface RequestedCollection {
    *  `viewer.mine`, and an intent about one came back `not-in-view` about a row the page had
    *  legitimately been handed. */
   ownIdField?: string | undefined;
+  /** Read only the LATEST `rows` records, ordered by `field` — the cap the page's own projection
+   *  declared (`views[].limit`).
+   *
+   *  HERE FOR PARITY, not for cost. Production issues this as `orderBy(field, "desc") + limit(rows)`
+   *  and is handed that many rows; the pane reads the collection whole either way, on the author's
+   *  own machine. What it must not do is show MORE than the published page will — the one direction
+   *  this whole file is not allowed to be wrong in — so the same window is taken after the read. */
+  limit?: { rows: number; field: string } | undefined;
 }
 
 /** One collection's records, read with the author's own credentials.
@@ -119,8 +127,11 @@ async function readCollection(handle: SharedAppHandle, aid: string, want: Reques
   // The id is put ON the record. The rules use the document id as the record's identity
   // (a booking's id IS its slot), and a page that renders a list needs it as a field.
   const rows: PreviewDataset = docs.map((doc) => ({ ...(isRecord(doc.data) ? doc.data : {}), id: doc.id }));
-  if (want.scope === "all") return rows;
-  return rows.filter((row) => ownsRow(want, row, handle));
+  if (want.scope === "all") return capped(want, rows);
+  return capped(
+    want,
+    rows.filter((row) => ownsRow(want, row, handle)),
+  );
 }
 
 /** IS THIS ROW THE READER'S OWN? — the question `ownRow` asks in the rules, asked here in the only
@@ -145,6 +156,77 @@ export function ownsRow(want: RequestedCollection, row: Record<string, unknown>,
   const field = want.emailField;
   if (field === undefined) return false;
   return row[field] === who.email;
+}
+
+/** One record's place in the order a cap is taken along, or null when it has none.
+ *
+ *  A `stampField` is written by the RULES (`request.time`), and what the host hands back for it is
+ *  either the ISO text or the seconds/nanos pair, depending on which reader converted it. Both are
+ *  ordered here, and anything else is treated as absent.
+ *
+ *  ABSENT IS EXCLUDED, not sorted last, and that is Firestore's behaviour rather than a choice: a
+ *  document missing the ordered field is not returned by an ordered query at all. A preview that
+ *  kept those rows would show records the published page never receives.
+ *
+ *  A TUPLE, not a number, and the seconds and the nanos stay APART. `seconds + nanos / 1e9` looks
+ *  equivalent and is not: at epoch scale a double cannot resolve anything finer than about 240ns,
+ *  so two instants inside the same second collapse to one value — and where the cap boundary falls
+ *  between them, the preview would keep whichever the input order happened to put first while the
+ *  published query keeps the later one. The leading rank is Firestore's own type order (number
+ *  before timestamp before string), so a collection whose stamp changed shape mid-life is at least
+ *  ordered the way the query would order it. */
+type OrderKey = [number, number, number, string];
+
+interface Ordered {
+  row: Record<string, unknown>;
+  id: string;
+  key: OrderKey;
+}
+
+function orderKey(value: unknown): OrderKey | null {
+  if (typeof value === "number") return [0, value, 0, ""];
+  if (typeof value === "string") return [2, 0, 0, value];
+  if (!isRecord(value) || typeof value.seconds !== "number") return null;
+  return [1, value.seconds, typeof value.nanoseconds === "number" ? value.nanoseconds : 0, ""];
+}
+
+/** Later first — and, where two records carry the SAME stamp, the higher document id first.
+ *
+ *  The tie-break is not arbitrary: an ordered Firestore query carries an implicit `__name__` in the
+ *  same direction, so a descending read breaks equal stamps by name descending. Returning 0 here
+ *  would leave the pair in the input order instead, which is name ASCENDING — and at the cap
+ *  boundary that is the opposite row from the one the published page is handed. */
+function laterFirst(left: Ordered, right: Ordered): number {
+  const pairs: [number | string, number | string][] = [
+    [left.key[0], right.key[0]],
+    [left.key[1], right.key[1]],
+    [left.key[2], right.key[2]],
+    [left.key[3], right.key[3]],
+    [left.id, right.id],
+  ];
+  for (const [mine, theirs] of pairs) {
+    if (mine === theirs) continue;
+    return mine < theirs ? 1 : -1;
+  }
+  return 0;
+}
+
+/** The LATEST `rows` records, as the published page would be handed them.
+ *
+ *  Shared by the one-shot read and the LISTENER (`previewWatch.ts`) for the same reason `ownsRow`
+ *  is: two copies of "which rows does this page see" are two chances for the pane and the page to
+ *  disagree, and the disagreement is invisible until somebody counts.
+ *
+ *  Descending, so N means the newest N — the same direction the query carries. */
+export function capped(want: RequestedCollection, rows: PreviewDataset): PreviewDataset {
+  const cap = want.limit;
+  if (cap === undefined) return rows;
+  // The id is always a string here — the read puts the document id on the record — and it is read
+  // back defensively anyway: this is also handed rows from a listener's snapshot.
+  const named = rows.map((row) => ({ row, id: typeof row.id === "string" ? row.id : "", key: orderKey(row[cap.field]) }));
+  const ordered = named.filter((entry): entry is Ordered => entry.key !== null);
+  ordered.sort(laterFirst);
+  return ordered.slice(0, cap.rows).map((entry) => entry.row);
 }
 
 /** The selector each collection's own rows are found by, per cid — see {@link ownRequests}.
@@ -175,7 +257,7 @@ async function readDatasets(
     for (const want of page.collections) {
       // Keyed on the SCOPE too: the same collection read `all` for the front desk and `own` for the
       // participant is two different answers, and sharing one would hand a page rows it may not see.
-      const key = `${want.cid}:${want.scope}:${want.emailField ?? ""}:${want.uidField ?? ""}:${want.ownDocId ?? ""}`;
+      const key = `${want.cid}:${want.scope}:${want.emailField ?? ""}:${want.uidField ?? ""}:${want.ownDocId ?? ""}:${want.limit?.rows ?? ""}:${want.limit?.field ?? ""}`;
       if (!cache.has(key)) {
         cache.set(key, await readCollection(handle, aid, want).catch(() => null));
       }
@@ -256,6 +338,18 @@ function tierRequests(plan: TierPlan): { key: string; collections: RequestedColl
   return plan.pages.map((page) => ({ key: previewPageKey(plan.tier, page.id), collections: byId.get(page.id) ?? [] }));
 }
 
+/** The cap a projection carries, or nothing — BOTH halves, and only on a scope that can be
+ *  ordered. Read the way the published runtime reads it (mulmoserver `appViewShape.ts`), so the
+ *  pane cannot honour a shape production drops: a count with no field would take an arbitrary N
+ *  here and the newest N there, which is a preview that disagrees with the page it is previewing. */
+const askedCap = (value: unknown, scope: "all" | "own"): { limit?: { rows: number; field: string } } => {
+  if (scope !== "all" || !isRecord(value)) return {};
+  const { rows, field } = value;
+  if (typeof rows !== "number" || !Number.isInteger(rows) || rows < 1) return {};
+  if (typeof field !== "string" || field === "") return {};
+  return { limit: { rows, field } };
+};
+
 const asRequested = (value: unknown): RequestedCollection[] => {
   if (!isRecord(value) || typeof value.cid !== "string") return [];
   const scope = value.scope === "own" ? "own" : "all";
@@ -266,6 +360,7 @@ const asRequested = (value: unknown): RequestedCollection[] => {
       ...(typeof value.emailField === "string" ? { emailField: value.emailField } : {}),
       ...(typeof value.uidField === "string" ? { uidField: value.uidField } : {}),
       ...(value.ownDocId === "auth.uid" ? { ownDocId: "auth.uid" as const } : {}),
+      ...askedCap(value.limit, scope),
     },
   ];
 };
@@ -354,8 +449,18 @@ const PUBLIC_PAGE_ID = "public";
 
 /** What the anonymous page may query for. Everything at `scope: "all"`: a visitor holds no identity
  *  the rules could narrow a read by, which is why `public.read` is a list of whole collections. */
-const publicRequests = (config: PublishedConfigDoc): RequestedCollection[] =>
-  (config.view?.collections ?? config.read).map((cid) => ({ cid, scope: "all" as const }));
+const publicRequests = (config: PublishedConfigDoc): RequestedCollection[] => {
+  // Keyed by cid on the public document rather than riding on each entry: `view.collections` there
+  // is a list of NAMES with nowhere to hang a value. `Object.hasOwn` before the lookup, because
+  // `constructor` and `toString` are valid collection names and would otherwise reach a prototype
+  // member.
+  const caps = config.view?.limit;
+  return (config.view?.collections ?? config.read).map((cid) => ({
+    cid,
+    scope: "all" as const,
+    ...askedCap(caps !== undefined && Object.hasOwn(caps, cid) ? caps[cid] : undefined, "all"),
+  }));
+};
 
 export async function previewSharedApp(root: string, opts: SharedAppOptions = {}): Promise<PreviewResult> {
   const context = await sharedAppContext(root);

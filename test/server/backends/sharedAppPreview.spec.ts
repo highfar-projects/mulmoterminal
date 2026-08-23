@@ -20,7 +20,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { setFirestoreAccessor, setSharedCollectionsSupport, type FirestoreDocs, type FirestoreDoc } from "@mulmoclaude/core/collection/server";
 import { initCollectionsBackend } from "../../../server/backends/collections.js";
-import { previewSharedApp } from "../../../server/backends/sharedApp/preview.js";
+import { capped, previewSharedApp } from "../../../server/backends/sharedApp/preview.js";
 import { makeTempDir } from "../../support/tempDir";
 
 const AID = "app-under-preview";
@@ -118,6 +118,9 @@ const schemaFor = (slug: string) => ({
     // A window bound the declaration below points at. The publish gate checks that the field it
     // names EXISTS, so a fixture without it now fails before the case it is testing.
     closesAt: { type: "number", label: "Closes" },
+    // What a `stampField` has to be declared as: the rules write `request.time` there, and a
+    // number would make every comparison a type error (publish refuses that pair).
+    stampedAt: { type: "datetime", label: "Stamped" },
   },
 });
 
@@ -140,6 +143,44 @@ function writeApp(root: string, app: Record<string, unknown>): void {
 const stamp = { now: () => 1_700_000_000_000, resolveCommit: () => Promise.resolve({ commit: "c0ffee", dirty: false }) };
 
 let root = "";
+
+describe("the window a capped page is handed", () => {
+  // `capped` is what stands between the pane and "the preview showed a row the page never gets".
+  // Exercised directly as well as through a preview, because the interesting cases are BOUNDARIES —
+  // which of two rows the cap keeps — and they are unreachable through a fixture that has to
+  // publish an app first.
+  const want = { cid: "messages", scope: "all" as const, limit: { rows: 2, field: "at" } };
+
+  it("keeps the newest, and drops a row with no stamp at all", () => {
+    // Firestore does not sort an unstamped document last — it does not RETURN it.
+    const rows = [{ id: "a", at: "2026-08-22T09:00:00Z" }, { id: "b", at: "2026-08-22T11:00:00Z" }, { id: "c" }, { id: "d", at: "2026-08-22T10:00:00Z" }];
+    expect(capped(want, rows).map((row) => row.id)).toEqual(["b", "d"]);
+    // And with no cap declared, the rows are handed over untouched — unstamped ones included.
+    expect(capped({ cid: "messages", scope: "all" }, rows).map((row) => row.id)).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("separates two Timestamps inside the same second", () => {
+    // `seconds + nanoseconds / 1e9` cannot: at epoch scale a double resolves no finer than ~240ns,
+    // so these two would collapse to one value and the boundary would fall by input order.
+    const rows = [
+      { id: "a", at: { seconds: 1_800_000_000, nanoseconds: 1 } },
+      { id: "b", at: { seconds: 1_800_000_000, nanoseconds: 2 } },
+      { id: "c", at: { seconds: 1_799_999_999, nanoseconds: 999_999_999 } },
+    ];
+    expect(capped(want, rows).map((row) => row.id)).toEqual(["b", "a"]);
+  });
+
+  it("breaks an exact tie by document name DESCENDING, as the query's implicit __name__ does", () => {
+    // Input order is name ascending. Left alone, the boundary would keep the opposite row from the
+    // one the published page is handed.
+    const rows = [
+      { id: "a", at: "2026-08-22T09:00:00Z" },
+      { id: "b", at: "2026-08-22T09:00:00Z" },
+      { id: "c", at: "2026-08-22T09:00:00Z" },
+    ];
+    expect(capped(want, rows).map((row) => row.id)).toEqual(["c", "b"]);
+  });
+});
 
 describe("shared app preview", () => {
   beforeAll(() => {
@@ -425,6 +466,45 @@ describe("shared app preview", () => {
     expect(watches).toEqual([{ key: "member:desk", cid: "bookings", scope: "all" }]);
     // `quiet` declared no `live`, so nothing is subscribed for it — a listener on a page nobody
     // asked to watch is a bill with no reader.
+    expect(docs.writes).toEqual([]);
+  });
+
+  it("hands a capped page the NEWEST rows only — never more than the published page will get", async () => {
+    // `views[].limit` exists so a collection that grows forever is not read whole on every open.
+    // Production issues it as an ordered query; the pane reads the collection whole either way, on
+    // the author's own machine. What it must not do is DRAW more than the published page will.
+    mkdirSync(path.join(root, "views"), { recursive: true });
+    writeApp(
+      root,
+      declaration({
+        collections: { bookings: { submitOnly: true } },
+        public: {
+          read: [],
+          submit: { bookings: { auth: "verifiedEmail", emailField: "note", createFields: ["note", "stampedAt"], stampField: "stampedAt" } },
+        },
+        views: [{ id: "desk", path: "views/desk.html", audience: "member", collections: ["bookings"], live: ["bookings"], limit: { bookings: 2 } }],
+      }),
+    );
+    writeFileSync(path.join(root, "views", "desk.html"), "<p>desk</p>");
+    docs.store.set(
+      `apps/${AID}/collections/bookings/items`,
+      new Map([
+        ["b1", { note: "oldest", stampedAt: "2026-08-22T09:00:00.000000001Z" }],
+        ["b2", { note: "middle", stampedAt: "2026-08-22T10:00:00.000000002Z" }],
+        ["b3", { note: "newest", stampedAt: "2026-08-22T11:00:00.000000003Z" }],
+        // No stamp at all. Firestore does not sort such a row last — it does not RETURN it — so a
+        // preview that kept it would show a record the published page never receives.
+        ["b4", { note: "unstamped" }],
+      ]),
+    );
+
+    const result = await previewSharedApp(root, stamp);
+
+    expect(result.ok === false ? result.problems : []).toEqual([]);
+    expect(result.ok && (result.datasets["member:desk"]?.bookings ?? []).map((row) => row.note)).toEqual(["newest", "middle"]);
+    // And the LISTENER is told the same cap, or the first change after the page opened would
+    // silently deliver the whole collection back.
+    expect(result.ok && result.watches.map((entry) => entry.want.limit)).toEqual([{ rows: 2, field: "stampedAt" }]);
     expect(docs.writes).toEqual([]);
   });
 
