@@ -252,7 +252,7 @@ async function readApp(handle: SharedAppHandle, slug: string): Promise<JoinedApp
     app: {
       slug,
       aid,
-      published: typeof publicConfig?.enabled === "boolean" ? publicConfig.enabled : reservation.published === true,
+      published: openness(appDoc, publicConfig, reservation),
       config: publicConfig,
       writes: {
         ...(memberWrites === null ? {} : { member: memberWrites }),
@@ -263,6 +263,27 @@ async function readApp(handle: SharedAppHandle, slug: string): Promise<JoinedApp
       handle,
     },
   };
+}
+
+/** IS THIS APP OPEN TO ANYONE WITH THE LINK?
+ *
+ *  Answered from `apps/{aid}` where that document can be read, because that is the document the
+ *  RULES answer from: `publicOn(a)` reads `a.public.enabled`, and nothing anonymous is authorized by
+ *  `config/public` at all. The order matters during a partial publish — `config/public` is written
+ *  BEFORE the app document (`publish.ts`), so a run that stops between them leaves the new intent in
+ *  one and the live authorization in the other. Reporting the projection there would say "open"
+ *  about an app the rules still keep closed, or the reverse.
+ *
+ *  `config/public` is the fallback, because most readers cannot read `apps/{aid}` at all — it is
+ *  `readerOf(a, '*')`, which a collection-scoped role does not satisfy — and the projection is the
+ *  only answer they have. The slug reservation is the last resort, and the weakest: publish sets it
+ *  from whether a `public` block EXISTS, so an app that deliberately declares one with
+ *  `enabled: false` reads as published there while anonymous reads stay closed. */
+function openness(appDoc: Record<string, unknown> | null, publicConfig: Record<string, unknown> | null, reservation: Record<string, unknown>): boolean {
+  const authorized = isRecord(appDoc?.public) ? appDoc.public.enabled : undefined;
+  if (typeof authorized === "boolean") return authorized;
+  if (typeof publicConfig?.enabled === "boolean") return publicConfig.enabled;
+  return reservation.published === true;
 }
 
 /** This reader's own row of the roster, when the app document was readable.

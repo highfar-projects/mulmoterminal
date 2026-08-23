@@ -27,7 +27,7 @@ import {
 } from "@receptron/sharedapp/view";
 import { isRecord } from "../../../../common/isRecord.js";
 import { commitPlannedWrite } from "../itemWrites.js";
-import { quotedList } from "../quoted.js";
+import { quoted, quotedList } from "../quoted.js";
 import { submitSpecOf } from "../submitSpec.js";
 import { formBlockOf, submitBlockOf, type JoinedApp } from "./app.js";
 
@@ -140,7 +140,9 @@ export async function submitToApp(app: JoinedApp, cid: string, values: Record<st
   // `idFrom: "field"` produces `""`, and `auth.uid+field` produces `"<uid>_"` — a valid id, one per
   // person, so a second claim lands on the first one's document.
   const noId = missingIdField(plan.submit, record);
-  if (noId !== undefined) return { ok: false, reason: "host", error: `no-id: the submission has no value for "${noId}", which its id is built from` };
+  // QUOTED for the reason the labels above are: `missingIdField` answers with the FIELD NAME the
+  // declaration carries, which is the app author's word and travels to the agent whole.
+  if (noId !== undefined) return { ok: false, reason: "host", error: `no-id: the submission has no value for ${quoted(noId)}, which its id is built from` };
 
   const id = recordId(plan.submit, app.handle.uid, record, randomUUID());
   const write = plannedWrite(cid, plan.submit, id, record);

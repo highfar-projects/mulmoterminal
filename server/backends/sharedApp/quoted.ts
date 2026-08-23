@@ -28,9 +28,15 @@ export function quoted(value: string): string {
   // The control characters are the POINT of this line, so the rule against them in a regular
   // expression is disabled here rather than worked around: what is being removed is exactly the
   // set that can forge structure — C0, DEL, C1, the zero-width and bidi marks, and the two
-  // separators that count as line breaks.
+  // separators that count as line breaks, and the bidi EMBEDDINGS, OVERRIDES and ISOLATES.
+  //
+  // The bidi block is the one that was missing. `u200b-u200f` covers the marks; `u202a-u202e` and
+  // `u2066-u2069` are the ones that REORDER what follows them, so a value can render as text it
+  // does not contain — including as though it were the report's own prose rather than a quotation.
+  // Found by a spec written to prove this class parses at all: the review that pointed here read
+  // the range wrongly, and was right that the line wanted looking at.
   // eslint-disable-next-line no-control-regex
-  const flattened = value.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028\u2029]/g, " ").replace(/[\u00ab\u00bb]/g, '"');
+  const flattened = value.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\u2028\u2029]/g, " ").replace(/[\u00ab\u00bb]/g, '"');
   const collapsed = flattened.replace(/\s+/g, " ").trim();
   if (collapsed.length <= QUOTED_LIMIT) return `\u00ab${collapsed}\u00bb`;
   return `\u00ab${collapsed.slice(0, QUOTED_LIMIT)}…\u00bb (${collapsed.length - QUOTED_LIMIT} more characters, dropped)`;
