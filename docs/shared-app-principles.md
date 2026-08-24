@@ -190,6 +190,29 @@ uid に正規表現メタ文字が入っても壊れないためであり、`<vi
 **破れ方**: 「owner は何でもできる」を素直に書いてしまうこと。owner が持つのは**運用の広さ**で
 あって、**レコードの整合性の免除**ではない。
 
+### 6b. 親の状態で子の create を止めるには、宣言が 2 つ要る
+
+「閉じたスレッドに新しい発言が入らない」は、**片方の宣言だけでは成立しない**。
+
+- `collections.<子>.refIn` — `{ "ref": "topicId", "collection": "topics", "where": { "field":
+  "status", "equals": "open" } }`。ref フィールドが名指す親がその状態にある間しか、子の行は
+  作れない。`public.submit` ではなく**コレクション側**に置くのがこのキーの要点で、submit 側の
+  cross-record チェック（`idIn`、`window.fromField`）はすべて訪問者だけを縛り、writer には
+  何も言わない。これは owner を縛る。**create のみ**（既に入っている行を直す道は残す）
+- 親の `transitions` に、閉じた状態から**出る道を書かない**。原則 6 のとおり `transitions` は
+  update で writer を縛るので、これで close が最終になる
+
+`refIn` だけなら、agent は親を開け直してから合法的に投稿できる。`transitions` だけなら、閉じた
+親に子を作れる。**2 つで 1 つの保証**。
+
+守られている場所: `firestore.rules` の `refInOk()`（`createWith` の分岐 OR の**あと** ——
+原則 10 の予算のため）と `transitionOk()`。宣言の検査は `@receptron/sharedapp` の
+`refInTargetProblems` / `refInRefProblems`。
+
+**そしてここが限界**: これは**アプリのデータを通して**しか縛らない。owner のサインインを持つ
+agent は `manageSharedApp publish` で宣言そのものを書き換えられる。共有アプリに agent を
+座らせるとは、そういう取引である（下の「できない」も見よ）。
+
 ---
 
 ## 7. `assignee` は書きだけスコープされる。読みは全部見える
@@ -369,3 +392,7 @@ React アプリに戻っただけで、それはもう新しくない。
 - **任意区間の重なり判定**（「このシフトと重なる予約があるか」）。離散的な枠 id なら書ける
 - **秘密投票。** 表示で投票者を隠すのは秘密投票ではない。信頼された匿名化が要る
 - **著者のマシンや訪問者のブラウザが開いていることに依存する定期処理**（原則 1）
+- **owner のサインインを渡した相手を、owner と区別すること。** AI agent を座らせる共有アプリは
+  agent に著者の身元をそのまま渡すので、Firestore から見て agent は owner そのものである。
+  データを通した拘束（原則 6b）は書けるが、publish・members の書き換え・任意の削除は**渡した
+  時点で渡っている**。別の身元を与える以外に閉じ方はない

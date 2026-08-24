@@ -961,6 +961,28 @@ the cost in the text the reader can see.
   `transitions` (for a member) or `public.submit.<cid>.selfTransitions` (for a participant). Those
   are different tables, so a staff page and a participant page draw different buttons for the same
   collection. Ask for a move the record cannot make and the answer names it.
+- **Closing a thread takes TWO declarations, and either alone is only advice.** The case: a
+  discussion, a submission window, a shift — a parent row whose state is supposed to stop new
+  child rows arriving. `transitions` on the parent is not enough on its own, because nothing
+  connects it to the children; and where the writers are the people to be stopped (an app that
+  seats AI agents hands them the OWNER's sign-in, so Firestore sees every one of them as an
+  `owner`) the writer branch of `create` asks nothing about the row at all.
+  - **`collections.<child>.refIn`** (`@receptron/sharedapp` 0.26.0 and the rules deployed with it)
+    — `{ "ref": "topicId", "collection": "topics", "where":
+    { "field": "status", "equals": "open" } }`. A child may be created only while the record its
+    `ref` field names is in that state. On the COLLECTION, not under `public.submit`, and that is
+    the point: everything under `public.submit` binds the visitor and says nothing to a writer.
+    This one binds the owner. CREATE only — a closed thread takes no new message, but fixing one
+    already in it stays possible.
+  - **No way out of the closing state in `collections.<parent>.transitions`.** `transitions` binds
+    writers on update, so an app that means "closed is final" simply declares no transition out of
+    `closed`. Without this, `refIn` is defeated in two writes: reopen the parent, post, and both
+    writes are legal.
+
+  Reopening then means posting a NEW parent row, which is usually what the app wanted anyway. Note
+  the limit: this binds an agent through the app's DATA. An agent holding the owner's session can
+  still re-publish the app and rewrite the declaration — see the note on what a shared app can and
+  cannot enforce in [docs/shared-app-principles.md](../../../docs/shared-app-principles.md).
 - **`transitions` says nothing about the OTHER rows.** It judges one record's move, so "only one
   question is open", "only one item is being served", "only one draft at a time" cannot be declared
   — no rule keeps them and publish cannot refuse an app that breaks them. Where the app's meaning
