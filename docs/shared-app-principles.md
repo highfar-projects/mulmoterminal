@@ -190,9 +190,10 @@ uid に正規表現メタ文字が入っても壊れないためであり、`<vi
 **破れ方**: 「owner は何でもできる」を素直に書いてしまうこと。owner が持つのは**運用の広さ**で
 あって、**レコードの整合性の免除**ではない。
 
-### 6b. 親の状態で子の create を止めるには、宣言が 2 つ要る
+### 6b. 親の状態で子の create を止めるには、宣言が 3 つ要る
 
-「閉じたスレッドに新しい発言が入らない」は、**片方の宣言だけでは成立しない**。
+「閉じたスレッドに新しい発言が入らない」は、**どれか 1 つでは成立しない**。owner のサインインを
+持つ相手に対しては、どの穴も**書き込み 2 回**で抜けられるからである。
 
 - `collections.<子>.refIn` — `{ "ref": "topicId", "collection": "topics", "where": { "field":
   "status", "equals": "open" } }`。ref フィールドが名指す親がその状態にある間しか、子の行は
@@ -201,13 +202,20 @@ uid に正規表現メタ文字が入っても壊れないためであり、`<vi
   何も言わない。これは owner を縛る。**create のみ**（既に入っている行を直す道は残す）
 - 親の `transitions` に、閉じた状態から**出る道を書かない**。原則 6 のとおり `transitions` は
   update で writer を縛るので、これで close が最終になる
+- `collections.<親>.sealed: ["closed"]` — その状態の行は**誰も削除できない**。`deleteWith` は
+  writer に何も訊かない（`writerDelete` はページが読む宣言で、ルールは見ていない）ので、これが
+  無いと「閉じた親を消して、initial の状態で書き直す」で close が戻る。しかもそのとき `refIn`
+  は**本当に開いている親**を見ているので、正しく通してしまう
 
-`refIn` だけなら、agent は親を開け直してから合法的に投稿できる。`transitions` だけなら、閉じた
-親に子を作れる。**2 つで 1 つの保証**。
+塞いでいる穴はそれぞれ別: 閉じた親に作る（`refIn`）、開け直す（`transitions`）、消して作り直す
+（`sealed`）。**4 つ目は宣言なしでルールが塞ぐ** —— `refIn` を宣言したコレクションでは
+**参照そのものが動かせない**（`refHeld`）。開いている親に作った行を、あとから閉じた親に
+付け替えることはできない。`refIn` を create だけで見てよいのはこれがあるから。
 
 守られている場所: `firestore.rules` の `refInOk()`（`createWith` の分岐 OR の**あと** ——
-原則 10 の予算のため）と `transitionOk()`。宣言の検査は `@receptron/sharedapp` の
-`refInTargetProblems` / `refInRefProblems`。
+原則 10 の予算のため。読みは `getAfter()`、でないと「閉じる update と create を同じ batch に
+束ねる」で最後の一言が入る）、`refHeld()`、`sealedNow()`、`transitionOk()`。宣言の検査は
+`@receptron/sharedapp` の `refInTargetProblems` / `refInRefProblems` / `sealedProblems`。
 
 **そしてここが限界**: これは**アプリのデータを通して**しか縛らない。owner のサインインを持つ
 agent は `manageSharedApp publish` で宣言そのものを書き換えられる。共有アプリに agent を
@@ -394,5 +402,5 @@ React アプリに戻っただけで、それはもう新しくない。
 - **著者のマシンや訪問者のブラウザが開いていることに依存する定期処理**（原則 1）
 - **owner のサインインを渡した相手を、owner と区別すること。** AI agent を座らせる共有アプリは
   agent に著者の身元をそのまま渡すので、Firestore から見て agent は owner そのものである。
-  データを通した拘束（原則 6b）は書けるが、publish・members の書き換え・任意の削除は**渡した
-  時点で渡っている**。別の身元を与える以外に閉じ方はない
+  データを通した拘束（原則 6b）は書けるが、publish と members の書き換えは**渡した時点で渡って
+  いる**。別の身元を与える以外に閉じ方はない
