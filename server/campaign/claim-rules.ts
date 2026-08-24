@@ -137,5 +137,14 @@ export function fencingVerdict(claim: Claim, presented: ClaimToken, now: number)
  */
 export const nextToken = (previous: ClaimToken, owner: string): ClaimToken => ({ owner, generation: previous.generation + 1 });
 
-/** A renewal keeps the same token and moves the deadline — it is not a change of hands. */
-export const renewed = (claim: Claim, now: number, termMs: number): Claim => ({ ...claim, expiresAt: now + termMs });
+/**
+ * A renewal keeps the same token and moves the deadline — it is not a change of hands.
+ *
+ * **Null once the term has run out**, and that is the point of having a term at all. Renewing an
+ * expired claim in place would leave the generation where it was, so a holder that fencing had
+ * already turned away as `expired` would come back as `ok` — while the paths may meanwhile have
+ * been taken over by somebody whose only distinguishing mark is a higher generation.
+ *
+ * There is no renewing your way out of that. A lapsed claim is reacquired, through `nextToken`.
+ */
+export const renewed = (claim: Claim, now: number, termMs: number): Claim | null => (isLive(claim, now) ? { ...claim, expiresAt: now + termMs } : null);

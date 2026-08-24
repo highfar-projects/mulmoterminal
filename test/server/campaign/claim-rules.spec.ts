@@ -229,13 +229,27 @@ describe("changing hands and staying put", () => {
   it("moves the deadline on a renewal and leaves the token alone", () => {
     const held = claim([p("repo", "src")], "t1", 7, 1000);
     const still = renewed(held, 900, 500);
-    expect(still.expiresAt).toBe(1400);
-    expect(still.token).toEqual(held.token);
-    expect(still.paths).toEqual(held.paths);
+    expect(still).toMatchObject({ expiresAt: 1400, token: held.token, paths: held.paths });
   });
 
   it("renews from now, not from the old deadline — a late renewal does not bank the gap", () => {
     const held = claim([p("repo", "src")], "t1", 7, 1000);
-    expect(renewed(held, 5000, 500).expiresAt).toBe(5500);
+    expect(renewed(held, 999, 500)?.expiresAt).toBe(1499);
+  });
+
+  // Renewing in place after the term would leave the generation where it was, so a holder that
+  // fencing had already turned away as `expired` would come back as `ok` — while somebody else may
+  // hold the paths, distinguishable only by a higher generation.
+  it("refuses to renew a claim whose term has run out", () => {
+    const lapsed = claim([p("repo", "src")], "t1", 7, 1000);
+    expect(renewed(lapsed, 1000, 500)).toBeNull();
+    expect(renewed(lapsed, 5000, 500)).toBeNull();
+  });
+
+  it("does not let a renewal undo a fencing verdict", () => {
+    const lapsed = claim([p("repo", "src")], "t1", 7, 1000);
+    const holder: ClaimToken = { owner: "t1", generation: 7 };
+    expect(fencingVerdict(lapsed, holder, 1500)).toBe("expired");
+    expect(renewed(lapsed, 1500, 500)).toBeNull();
   });
 });
