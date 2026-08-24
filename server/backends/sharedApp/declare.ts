@@ -13,11 +13,13 @@
 // one that rewrites most of the file — is still writing what the author asked for by name.
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { APP_MANIFEST_FILE, firestoreHandle } from "@mulmoclaude/core/collection/server";
+import { APP_MANIFEST_FILE, firestoreHandle, type LoadedCollection } from "@mulmoclaude/core/collection/server";
 import { holdNewName } from "./establish.js";
-import { APPS_COLLECTION, parseAuthoredApp, type AuthoredApp } from "@receptron/sharedapp";
+import { APPS_COLLECTION, parseAuthoredApp, projectPublish, type AuthoredApp } from "@receptron/sharedapp";
 import { isRecord } from "../../../common/isRecord.js";
-import { declarationProblems, sharedCollections, type SharedAppFailure } from "./context.js";
+import { declarationProblems, schemasOf, sharedCollections, type SharedAppFailure, type SharedAppHandle } from "./context.js";
+import { frozenKeyProblems } from "./exclusivity.js";
+import { oversizeProblem, publicFormOf } from "./publicForm.js";
 import { createManifest, newAid, updateManifest } from "./manifestWrite.js";
 import { viewFilesReport } from "./publicView.js";
 import { strandedApp } from "./recovery.js";
@@ -461,16 +463,59 @@ export async function checkSharedApp(root: string): Promise<CheckReport | Shared
   // implementations of "would this be refused?" answer it differently, and the answer that matters
   // is the one publish gives.
   const records: RecordScanResult = handle === null ? { scanned: false, why: "no-session" } : { scanned: true, scan: await scanRecords(collections, root) };
+  // The last two halves of publish's gate, and the ones that used to be missing here — which made
+  // the sentence above ("the SAME gate a publish runs") false in the one direction that costs an
+  // agent the most: `check` said publishable, publish refused, and `confirm` — the thing an agent
+  // reaches for at that point — does not override either of them.
+  //
+  // One reads nothing (the projection is built from the working tree) and the other has to read the
+  // LIVE records, so only the second is gated on a session — reported through the same
+  // `RecordScanResult` that says the row scan did not run.
+  const sizeAndKeys = [...oversizeProblems(parsed.app, collections), ...(handle === null ? [] : await frozenProblems(parsed.app, handle))];
   return {
     ok: true,
     aid: parsed.app.aid,
     collections: collections.map((collection) => collection.slug),
     checkedAs: handle?.email ?? null,
     declaredOwner: ownerFromRoster(parsed.app),
-    problems: [...problems, ...pages.problems],
+    problems: [...problems, ...pages.problems, ...sizeAndKeys],
     warnings: pages.warnings,
     records,
   };
+}
+
+/** Publish's size gate, asked here — where it costs nothing, rather than mid-run after the schemas
+ *  have gone out.
+ *
+ *  The stamp is this check's own: it is not published, and what it contributes to the document is a
+ *  uid, an address and a number, none of which move the answer near a 700 kB budget. Projecting can
+ *  throw on a declaration the problems above already name, and a size complaint on top of those
+ *  would be noise — so a failure to project is simply no answer here. */
+function oversizeProblems(app: AuthoredApp, collections: readonly LoadedCollection[]): string[] {
+  const schemas = schemasOf(collections);
+  try {
+    const face = projectPublish(app, schemas, { uid: "", email: "", publishedAt: 0 }, null);
+    const oversize = oversizeProblem({ ...face.config, form: publicFormOf(app, schemas) });
+    return oversize === null ? [] : [oversize];
+  } catch {
+    return [];
+  }
+}
+
+/** The identity keys, against the app as it stands — publish's other refusal that `confirm` does
+ *  not override, and the one an agent is most likely to meet at the dangerous step: renaming
+ *  `idField` under live bookings reads as an ordinary edit right up to the publish that refuses it.
+ *
+ *  A read that fails is not an answer, and it is not this action's to report twice: the record scan
+ *  beside it reads the same app with the same session and says so in its own voice. */
+async function frozenProblems(app: AuthoredApp, handle: SharedAppHandle): Promise<string[]> {
+  if (app.aid === "") return [];
+  try {
+    const live = await handle.docs.get(APPS_COLLECTION, app.aid);
+    return await frozenKeyProblems(app, app.collections ?? {}, isRecord(live) ? live : null, handle);
+  } catch {
+    return [];
+  }
 }
 
 /** The first address the declaration makes an app-wide owner, or undefined when it names none.

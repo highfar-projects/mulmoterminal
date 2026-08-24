@@ -522,7 +522,15 @@ entries for one person differing only in case, `invite` refuses and names them: 
 ### 4b. Check, whenever you have edited `app.json`
 
 `manageSharedApp` with `action: "check"` runs the gate publish runs — the declaration, the
-collections it names — and writes nothing. It needs no connection.
+collections it names, the pages, and the size of the public form — and writes nothing. That much
+needs no connection.
+
+With a session open it also asks publish's two questions about what is ALREADY in the app: whether
+the live records still fit these schemas, and whether an identity key moved under them
+(`idFrom`, `idField`, `idIn`, `mirror`, `mirrorOf`). Both refuse a publish, and **`confirm` gets
+past neither of the second kind** — so meeting them here, rather than at publish, is the difference
+between an edit and a collection that has to be emptied. Signed out, `check` says which of those it
+could not run rather than staying silent about them.
 
 Use it after any hand edit, and before telling the user something is ready. The alternative is
 finding out at publish, and a publish that refuses in the middle is where an agent starts editing

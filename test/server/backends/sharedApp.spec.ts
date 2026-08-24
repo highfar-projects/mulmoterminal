@@ -338,6 +338,23 @@ describe("shared app publish / unpublish", () => {
     expect(docs.app()?.public).toMatchObject({ enabled: true });
   });
 
+  it("keeps a live app open through the writes of a re-publish that fails", async () => {
+    // The trade this ordering makes (D10): a re-publish never closes the app, so a run that stops
+    // part-way leaves it OPEN on a mixed set of versions rather than dark. The app document written
+    // in the middle of the run REPLACES, and publish holds its own `public` block back for the last
+    // write — so without `stillOpen` carrying the live block through, the slug step between the two
+    // is a window where the app is closed, and a failure there closes it until somebody publishes
+    // again.
+    writeApp(root, declaration({ slug: "sakura-hair", public: { enabled: true, read: ["bookings"] } }));
+    await publishSharedApp(root, stamp);
+    expect(docs.app()?.public).toMatchObject({ enabled: true });
+
+    docs.failAt = "appSlugs/sakura-hair";
+    const result = await publishSharedApp(root, stamp);
+    expect(result.ok).toBe(false);
+    expect(docs.app()?.public).toMatchObject({ enabled: true });
+  });
+
   it("publishes the form the public page draws from", async () => {
     // The page cannot read the schema, so the config document — the only one a visitor may read —
     // carries the labels and the choices. Without it the form is a row of unlabelled boxes.

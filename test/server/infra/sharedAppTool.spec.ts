@@ -105,7 +105,10 @@ describe("manageSharedApp, the tool", () => {
 
     const message = await manageSharedApp(root, { action: "check" });
     expect(message).toContain("NOT scanned");
-    expect(message).toContain("Publish checks them too");
+    // And the OTHER half of publish's gate that needs a session: the identity keys, which
+    // `confirm` does not override when publish meets them.
+    expect(message).toContain("identity keys were NOT compared");
+    expect(message).toContain("Publish does both");
   });
 
   it("reports the rows it DID find beside the collection it could not read", () => {

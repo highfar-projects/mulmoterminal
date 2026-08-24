@@ -168,6 +168,31 @@ describe("check", () => {
     expect(report.ok && report.records.scanned && report.records.scan.records).toBe(0);
   });
 
+  it("refuses an identity key that moved under live records, as publish does", async () => {
+    // The half `check` used to miss. Publish runs `frozenKeyProblems` as well as the record scan,
+    // and `confirm` does not override it — so an agent that heard "publishable" here met the
+    // refusal at the one step where the only thing left to reach for does not work.
+    withApp(root, '<div id="grid"></div><script>view.onState((d) => draw(d)); view.ready();</script>');
+    withSlots(root);
+    setFirestoreAccessor(() => ({
+      email: "owner@example.com",
+      uid: "uid_owner",
+      docs: {
+        // One booking already written under the OLD key, and the app document that names it.
+        list: async () => [{ id: "court-a-0800", data: { id: "court-a-0800" } }],
+        get: async () => ({ public: { submit: { signups: { idFrom: "field", idField: "slot" } } } }),
+        set: async () => {},
+        create: async () => true,
+        delete: async () => false,
+        watch: () => () => {},
+      },
+    }));
+    const report = await checkSharedApp(root);
+    expect(report.ok).toBe(true);
+    expect(report.ok && report.problems.join(" ")).toContain("WHICH DOCUMENT a submission claims");
+    expect(report.ok && report.problems.join(" ")).toContain("`confirm` overrides");
+  });
+
   it("scans nothing, and says so, when there is no session", async () => {
     // `check` answers offline and must keep doing so — but a report with no record line reads as
     // "the records are fine", which is the belief that carried those 720 rows to a publish. The

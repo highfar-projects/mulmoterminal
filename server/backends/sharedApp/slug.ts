@@ -5,9 +5,11 @@
 //
 //   - it is a TOP-LEVEL collection, because the public page has to resolve a slug BEFORE it can
 //     read anything under `apps/{aid}`;
-//   - it is UNREADABLE until the app is published (`allow read: if resource.data.published ==
-//     true`), so that a human-readable name cannot be guessed to discover the aid — which is the
-//     the address everything under `apps/{aid}` is keyed by.
+//   - it is unreadable to a STRANGER until the app is published, so that a human-readable name
+//     cannot be guessed to discover the aid — the address everything under `apps/{aid}` is keyed
+//     by. The app's own roster reads it either way (the rule falls back to `readerOf(app)`), which
+//     is what makes `/m/{slug}` work from the moment the app is created and before anything is
+//     public.
 //
 // The second one is why this is more than a write. Nobody — the owner included — can ask which
 // slug an app already holds, so `app.json` is the record: the reserved name is written back
