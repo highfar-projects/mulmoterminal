@@ -175,6 +175,23 @@ describe("fencing", () => {
     expect(fencingVerdict(takenOver, holder, 999)).toBe("superseded");
   });
 
+  // One situation, one answer. Reported as `not-the-owner` before, purely because somebody ELSE
+  // took the claim over — which reads to a runner as a bug in its own code rather than as
+  // "somebody has this now, stop".
+  it("says the same thing when the claim changed hands to another task", () => {
+    const takenOverByOther = claim([p("repo", "src")], "t2", 4, 1000);
+    expect(fencingVerdict(takenOverByOther, holder, 999)).toBe("superseded");
+  });
+
+  it("still refuses a stranger presenting the CURRENT generation", () => {
+    expect(fencingVerdict(held, { owner: "t2", generation: 3 }, 999)).toBe("not-the-owner");
+  });
+
+  // No registry ever issued it, so it is an invented token rather than a late one.
+  it("refuses a generation above the current one as a caller bug, not as a stale holder", () => {
+    expect(fencingVerdict(held, { owner: "t1", generation: 9 }, 999)).toBe("not-the-owner");
+  });
+
   it("refuses the holder once the claim has lapsed, without calling it a stranger", () => {
     expect(fencingVerdict(held, holder, 1000)).toBe("expired");
   });

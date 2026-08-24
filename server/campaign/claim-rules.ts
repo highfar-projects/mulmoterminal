@@ -91,10 +91,18 @@ export type FencingVerdict = "ok" | "not-the-owner" | "superseded" | "expired";
  * with them: `not-the-owner` is a bug in the caller, `superseded` means somebody took the claim
  * over and this task must stop, and `expired` means nobody holds it — the task has to reacquire
  * before it may touch anything.
+ *
+ * **The generation is asked first, and that ordering is the distinction.** A holder from an earlier
+ * generation is superseded whoever holds it now — asking about the owner first would answer
+ * `not-the-owner` when the claim changed hands to somebody else, and `superseded` when the same
+ * task took it back, which is one situation reported two ways. A stale holder is not a caller bug.
+ *
+ * A generation ABOVE the current one was never issued by any registry, so it is a caller bug like
+ * any other invented token, not a holder that is merely late.
  */
 export function fencingVerdict(claim: Claim, presented: ClaimToken, now: number): FencingVerdict {
-  if (presented.owner !== claim.token.owner) return "not-the-owner";
-  if (presented.generation !== claim.token.generation) return "superseded";
+  if (presented.generation < claim.token.generation) return "superseded";
+  if (presented.owner !== claim.token.owner || presented.generation !== claim.token.generation) return "not-the-owner";
   return isLive(claim, now) ? "ok" : "expired";
 }
 
