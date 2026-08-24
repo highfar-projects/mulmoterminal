@@ -53,6 +53,14 @@
     { "id": "desk", "audience": "member", "path": "views/desk.html", "collections": ["bookings", "slots"] },
     { "id": "mine", "audience": "participant", "path": "views/mine.html", "collections": ["bookings"] }
   ],
+  "agents": [
+    {
+      "id": "desk",
+      "audience": "member",
+      "watch": ["bookings"],
+      "instruction": "pending の予約が来たら、自分が動かせる行だけを見る。枠と担当が空いていれば approved に、埋まっていれば rejected に動かす。承認するとお客さまにメールが飛ぶので、迷ったら動かさずに人に聞くこと。予約の削除は、この端末の人に頼まれたときだけ。"
+    }
+  ],
   "public": {
     "enabled": true,
     "read": ["services", "stylists", "slots"],
@@ -82,6 +90,15 @@
 （文書が守るのは、それを射影した compiler の版）。宣言より古い publisher は**拒否**されるので、
 新しい書き方に頼ったアプリが、それを実装していない publisher に黙って通ることがありません。
 何も宣言しないアプリは `1.0.0` — このキーが無かった頃に publish されたアプリはそれです。
+
+**`agents[]` は、ここに座る agent への「持ち場」**です。ページが人に見せるものなら、これは
+**LLM に渡す持ち場**。`describe` がこれを読んで、その audience に宛てた指示として報告します。
+権限は 1 ミリも増えません — 「全部承認して」と書いても、その読み手が持っていない遷移は
+今まで通り拒否されます。端末の人の指示が優先で、レコードの中の文はどちらにも勝てません。
+
+`watch` を書くと「このコレクションを購読して待て」という意味になります（購読を始めるのは
+agent で、`describe` ではありません）。**この宣言は member ドキュメントにだけ載る** — 承認や
+削除の判断はアプリの内部の語彙なので、世界が読める `config/public` には出ません。
 
 **申込みの宣言は丸ごと書いてください。** `idFrom` と `idField` だけを書いた短い版は
 **publish が拒否します**（`idIn` が無ければ、実在しない枠の予約が黙って通るので）。

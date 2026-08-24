@@ -52,9 +52,17 @@ interface TierPage {
 export interface TierPlan {
   tier: "member" | "roster";
   pages: TierPage[];
-  /** The projection document, or null when this tier has no pages at all — in
-   *  which case the whole tier is removed rather than left holding a config
-   *  that lists nothing. */
+  /** The projection document, or null when this audience has neither pages nor
+   *  a standing instruction — in which case the whole tier is removed rather
+   *  than left holding a config that lists nothing.
+   *
+   *  PAGES ARE NOT THE CONDITION ANY MORE. An app may publish a duty for its
+   *  staff without publishing any HTML for them (`agents[]`), and that duty
+   *  needs the `write` projection this document carries — a brief asking for an
+   *  approval, beside no transition table, is a job nothing can say is legal.
+   *  Read the other way, the same condition is what stops the sweep deleting a
+   *  tier whose last page was withdrawn while its agent remains: "no views" was
+   *  enough to delete before, and after this it is not. */
   config: Record<string, unknown> | null;
 }
 
@@ -112,7 +120,7 @@ export async function planAppViewTiers(root: string, authored: AuthoredApp, stam
         warnings.push(...read.view.warnings);
       } else problems.push(...read.problems);
     }
-    plans.push({ tier: tier.tier, pages, config: tier.views.length > 0 ? tier.config : null });
+    plans.push({ tier: tier.tier, pages, config: tier.views.length > 0 || tier.agents.length > 0 ? tier.config : null });
   }
   return problems.length > 0 ? { ok: false, problems } : { ok: true, plans, warnings };
 }

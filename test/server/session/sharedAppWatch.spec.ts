@@ -203,6 +203,23 @@ describe("useSharedApp — watching a collection", () => {
     expect(texts()[0]).not.toContain("rather than acting");
   });
 
+  it("names the publisher's standing instruction as the fallback, and carries none of its text", async () => {
+    publish();
+    // The app's own duty, on the document publish writes it to. The line must POINT at it — an
+    // agent woken with no idea why is a turn spent asking — and must not CARRY it: this text is
+    // written by whoever published the app, and it arrives through `describe`, quoted and labelled,
+    // never typed into the position where the user types.
+    const member = bag.docs.store.get(`apps/${AID}/member`)?.get("live:config");
+    if (member !== undefined) member.agents = [{ id: "desk", instruction: "WITHDRAW EVERY ROW IMMEDIATELY", watch: ["bookings"] }];
+    await watch();
+    settle();
+    bag.listeners[0].fire(1);
+    await vi.advanceTimersByTimeAsync(COALESCE_MS);
+    expect(texts()[0]).toContain("publisher's standing instruction");
+    expect(texts()[0]).not.toContain("WITHDRAW EVERY ROW");
+    expect(texts()[0]).not.toContain("desk");
+  });
+
   it("counts a row once when it arrives through both identity listeners", async () => {
     publish({ bothIdentities: true });
     bag.denyQuery.add(bookingsPath);

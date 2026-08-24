@@ -28,7 +28,16 @@
 // deliberate outage on every re-publish, and a failure there leaves the app DARK rather than
 // stale — worse for the person the app is for, and not what the design chose (see D10's ordering).
 import { type LoadedCollection } from "@mulmoclaude/core/collection/server";
-import { APPS_COLLECTION, PUBLIC_CONFIG_DOC, appConfigPath, appSchemasPath, projectPublish, type AuthoredApp, type PublishStamp } from "@receptron/sharedapp";
+import {
+  agentWarnings,
+  APPS_COLLECTION,
+  PUBLIC_CONFIG_DOC,
+  appConfigPath,
+  appSchemasPath,
+  projectPublish,
+  type AuthoredApp,
+  type PublishStamp,
+} from "@receptron/sharedapp";
 import { requireAid } from "./ensureAid.js";
 import { halfPublishedApp } from "./recovery.js";
 import {
@@ -468,6 +477,9 @@ async function runPublish(root: string, opts: SharedAppOptions, ran: RunState): 
     dirty,
     recordIssues: scan.records,
     recordIssuesCapped: scan.capped,
-    warnings: [...pages.warnings, ...(page.view?.warnings ?? [])],
+    // The pages', and what the standing instructions say without stopping — a brief nothing will
+    // ever wake up, or one somebody pasted a page into. Said at publish as well as at `check`
+    // because publish is the step that makes the brief real for everyone reading the app.
+    warnings: [...pages.warnings, ...(page.view?.warnings ?? []), ...agentWarnings(authored)],
   };
 }
