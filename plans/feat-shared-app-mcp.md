@@ -8,6 +8,10 @@
 **前提**: [`docs/shared-app-principles.md`](../docs/shared-app-principles.md)（特に原則 2・3・5・11 と D7）、
 [`plans/feat-shared-app-preview-intent.md`](./feat-shared-app-preview-intent.md)（ホストから会員の操作を
 実行する既存の 1 本）、[`plans/feat-shared-app-uid-identity.md`](./feat-shared-app-uid-identity.md)（身元）。
+**続き**: **持ち場（standing instruction）は宣言に移った** —
+[`plans/feat-shared-app-agents.md`](./feat-shared-app-agents.md)。「このアプリで何をするのか」は
+セルの prompt では無く `app.json` の `agents[]` に書き、publish が tier のドキュメントへ射影し、
+`describe` が読み手宛ての依頼として報告する（M5 の「ページの無い tier」の穴もそこで閉じた）。
 **言葉の権威**: `@receptron/sharedapp/view`（`intent.ts` / `capability.ts`）と mulmoserver の
 `src/firestore/appWrite.ts`（`performIntent`）・`src/composables/useAppIntent.ts`。
 

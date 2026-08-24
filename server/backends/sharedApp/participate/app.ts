@@ -53,6 +53,51 @@ import type { SharedAppHandle } from "../context.js";
  *  wins — see `judgeTiers` in `intent.ts` for why that is not a permission decision. */
 export const TIERS: readonly WriteTier[] = ["member", "roster"];
 
+/** The tiers a STANDING INSTRUCTION can arrive on.
+ *
+ *  The two write tiers, plus `public` — which is not a write tier at all (`config/public` is the
+ *  world-readable projection, and `capabilitiesFor` never takes it) and IS a place a brief is
+ *  published, because an app may ask something of whoever sits at its public face. */
+export type BriefTier = WriteTier | "public";
+
+export const BRIEF_TIERS: readonly BriefTier[] = ["member", "roster", "public"];
+
+/** One standing instruction, as this reader obtained it.
+ *
+ *  Read KEY BY KEY off somebody else's document rather than asserted into the package's own
+ *  `ProjectedAgent`: the app was published by a version of the projection this build is not
+ *  necessarily the same as, and an assertion there is a claim about a document nobody here wrote.
+ *  Every field is narrowed to what it must be, and an entry that is not readable whole is dropped —
+ *  a half-read duty is worse than no duty, because it reads as the author's whole request. */
+export interface AppBrief {
+  id: string;
+  instruction: string;
+  watch: string[];
+  collections: string[];
+}
+
+const stringsOf = (value: unknown): string[] => (Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : []);
+
+/** The briefs one document carries, or none.
+ *
+ *  An entry with no instruction is dropped rather than reported: it says nothing, and naming it
+ *  would put a stranger's `id` into the report for no reason. */
+const briefsOf = (doc: Record<string, unknown> | null): AppBrief[] | null => {
+  if (doc === null) return null;
+  const declared = doc.agents;
+  if (!Array.isArray(declared)) return null;
+  const briefs = declared.flatMap((entry): AppBrief[] => {
+    if (!isRecord(entry) || typeof entry.id !== "string" || typeof entry.instruction !== "string") return [];
+    const instruction = entry.instruction.trim();
+    if (instruction.length === 0) return [];
+    // Held WHOLE, and bounded where it is printed (`quotedBrief`): a slice here would shorten a
+    // stranger's instruction with nothing anywhere saying it had been shortened, which is the one
+    // thing this feature's quoting refuses to do.
+    return [{ id: entry.id, instruction, watch: stringsOf(entry.watch), collections: stringsOf(entry.collections) }];
+  });
+  return briefs.length > 0 ? briefs : null;
+};
+
 export interface JoinedApp {
   slug: string;
   aid: string;
@@ -84,6 +129,13 @@ export interface JoinedApp {
   /** The roles the app document lists for this reader, when it was readable. Absent means the
    *  document was denied — the ordinary state for a collection-scoped role. */
   roles?: Record<string, string>;
+  /** What the PUBLISHER asks whoever sits here to do, per tier this reader obtained.
+   *
+   *  It comes off the same documents the capability does, which is the whole of why the tier
+   *  vocabulary is reused: a brief is readable by exactly the audience whose document carries it,
+   *  and a reader who was refused a tier is not told what that tier's job is. An absent tier means
+   *  "no published duty" — never "invent one" — and so does a document that carries none. */
+  briefs: Partial<Record<BriefTier, AppBrief[]>>;
   handle: SharedAppHandle;
 }
 
@@ -246,6 +298,19 @@ async function readApp(handle: SharedAppHandle, slug: string): Promise<JoinedApp
   const rosterWrites = writesOf(rosterConfig);
   const publicWrites = writesOf(publicConfig);
   const roster = rosterTier(rosterWrites, publicWrites);
+  // The briefs stay PER DOCUMENT — unlike the writes, whose two roster sources are merged. A brief
+  // is not a capability the rules will answer for: that merge exists because a half-finished publish
+  // can leave one source behind the other about the SAME permission, and there is no such pairing
+  // here. Two documents carrying briefs are two audiences, and this reader is in both.
+  const briefs: Partial<Record<BriefTier, AppBrief[]>> = {};
+  for (const [tier, doc] of [
+    ["member", memberConfig],
+    ["roster", rosterConfig],
+    ["public", publicConfig],
+  ] as const) {
+    const found = briefsOf(doc);
+    if (found !== null) briefs[tier] = found;
+  }
 
   return {
     ok: true,
@@ -258,6 +323,7 @@ async function readApp(handle: SharedAppHandle, slug: string): Promise<JoinedApp
         ...(memberWrites === null ? {} : { member: memberWrites }),
         ...(roster === null ? {} : { roster }),
       },
+      briefs,
       ...(typeof appDoc?.name === "string" ? { name: appDoc.name } : {}),
       ...(roles === null ? {} : { roles }),
       handle,

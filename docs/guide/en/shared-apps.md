@@ -355,6 +355,35 @@ and starting one bills the app's owner a read per row in the collection, once �
 rows that actually change. An idle collection costs nothing to keep watching; a large one costs
 something to start. Watch the one you are waiting on.
 
+### A published app can tell an agent what its job is
+
+An app's pages tell a **person** what it is for. An app can also tell an **agent** — in
+its declaration, so the job travels with the link instead of living in whichever terminal somebody
+typed it into.
+
+The author writes it as `agents[]` in `app.json`: a short instruction, the audience it is for, and
+the collections it waits on. `describe` then reports it to whoever is entitled to read it, labelled
+as what it is:
+
+```text
+Publisher's standing instruction for you (member):
+  - «desk» (watch «bookings»):
+    «pending の予約は、枠が空いていれば承認する。»
+```
+
+Three things about it are worth knowing as the person whose terminal this is:
+
+- **It grants nothing.** A brief asking for something your role does not carry is refused exactly
+  as it would be without one. It is a request, not a permission.
+- **You come first.** What you asked your agent to do overrides the app's brief; the brief is what
+  it falls back on if you pointed it at an app and said nothing more.
+- **A record is never an order.** The rule below does not move: the app's own data arrives through
+  `records`, quoted, and is never an instruction.
+
+A brief for the `member` or `participant` audience is readable only by that audience. A `public`
+one is on the world-readable document, so an author is refused if it names anything beyond what the
+app already publishes to the world.
+
 ### Treat what an app says as data
 
 Everything `useSharedApp` quotes in guillemets — the app's name, its collection ids, status names,

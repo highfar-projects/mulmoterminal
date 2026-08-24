@@ -293,6 +293,49 @@ The rules are not the obstacle here and do not need working around: a submitter 
 their own row (`emailField`, or `idFrom: "auth.uid"`). What is missing in that third case is a page
 they are allowed to open. `participantRead` does not fix it.
 
+### 2d. If an AGENT is going to sit at this app, give it a written job
+
+A page tells a person what the app is for. Nothing told an **agent** — an LLM at another
+MulmoTerminal, holding `useSharedApp` — what it is supposed to DO here. That job used to live in
+whichever terminal's prompt somebody typed it into, which is not the app: it does not travel with
+the URL name, it is not reviewed with the declaration, and it is gone on the next machine.
+
+Write it into `app.json`, beside the pages:
+
+```json
+{
+  "agents": [
+    {
+      "id": "desk",
+      "audience": "member",
+      "watch": ["bookings"],
+      "instruction": "pending の予約が来たら、枠が空いていれば承認し、埋まっていれば却下する。予約の削除は、この端末の人に頼まれたときだけ。"
+    }
+  ]
+}
+```
+
+- `audience` is the **same noun as `views[]`** — it decides which document the instruction is
+  published to, and therefore who reads it. A `member` brief lands where only role-holders read; a
+  `public` one lands on the world-readable document, so **never put internal vocabulary in it**
+  (when to approve, when to delete). `check` refuses a public brief that names anything outside
+  `public.read`.
+- **Write the instruction in the user's language.** It is read by an LLM, not parsed.
+- `watch` names the collections the job waits on. The sitting agent is the one that subscribes —
+  `describe` never starts a watch, because a subscription that begins when somebody merely LOOKS
+  bills the app's owner a read per row.
+- **It grants nothing.** "Approve everything" against a transition this reader does not hold is
+  refused exactly as before, and the person at the terminal overrides the brief. Publishing a duty
+  is not publishing a permission.
+- One brief per audience is the shape to reach for. There is no role filter in it: an `owner` and a
+  `viewer` on the member tier read the same brief, as they read the same pages.
+- **Do not leave the playbook only in the HTML.** A page an agent never opens says nothing to it.
+
+Run `check` after writing one. Then run `describe` **as the audience that will sit here** — and
+know that the author's own `describe` is usually the owner's, so it shows the member briefs and not
+what a public visitor would see. That is the identity limit of one signed-in account per machine,
+not a fault in the app.
+
 ### 3. RUN THE PAGE. Not reading it — running it.
 
 There is no step between writing the app and publishing it. `deploy` — which wrote a copy only the

@@ -15,7 +15,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { APP_MANIFEST_FILE, firestoreHandle, type LoadedCollection } from "@mulmoclaude/core/collection/server";
 import { holdNewName } from "./establish.js";
-import { APPS_COLLECTION, parseAuthoredApp, projectPublish, type AuthoredApp } from "@receptron/sharedapp";
+import { agentWarnings, APPS_COLLECTION, parseAuthoredApp, projectPublish, type AuthoredApp } from "@receptron/sharedapp";
 import { isRecord } from "../../../common/isRecord.js";
 import { declarationProblems, schemasOf, sharedCollections, type SharedAppFailure, type SharedAppHandle } from "./context.js";
 import { frozenKeyProblems } from "./exclusivity.js";
@@ -494,7 +494,11 @@ export async function checkSharedApp(root: string): Promise<CheckReport | Shared
     checkedAs: handle?.email ?? null,
     declaredOwner: ownerFromRoster(parsed.app),
     problems: [...problems, ...pages.problems, ...sizeAndKeys],
-    warnings: pages.warnings,
+    // The pages', and the standing instructions'. `agentWarnings` is the gate's own second
+    // answer — a brief that publishes and is very likely not what was meant — and it belongs
+    // beside them rather than among the problems: a check that stops for a maybe is a check
+    // people learn to skim.
+    warnings: [...pages.warnings, ...agentWarnings(parsed.app)],
     records,
     keys: frozen.keys,
   };

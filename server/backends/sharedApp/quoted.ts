@@ -45,6 +45,17 @@ export const quotedTerm = (value: string): string => quotedTo(value, Number.POSI
 
 export const quoted = (value: string): string => quotedTo(value, QUOTED_LIMIT);
 
+/** A PARAGRAPH the app's author wrote FOR the agent — a published standing instruction.
+ *
+ *  The only string in this feature that is meant to be read as prose rather than passed back as an
+ *  argument, and it still goes through the same flattening: an instruction with a newline in it
+ *  could otherwise forge the report's own line structure and grow itself a fake "You may:" heading.
+ *
+ *  Capped, and at the size the gate publishes rather than at a label's: 4096 is what this host
+ *  refuses to publish past, so a brief IT published always prints whole and one published elsewhere
+ *  is marked as shortened instead of silently arriving in full. */
+export const quotedBrief = (value: string): string => quotedTo(value, 4096);
+
 function quotedTo(value: string, cap: number): string {
   // The control characters are the POINT of this line, so the rule against them in a regular
   // expression is disabled here rather than worked around: what is being removed is exactly the

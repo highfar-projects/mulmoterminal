@@ -132,6 +132,21 @@ describe("forkSharedApp", () => {
     expect(written.participantRead).toEqual(CLONED.participantRead);
   });
 
+  // The duty is part of what an app IS, so a clone carries it: the cloned form comes with the job
+  // that goes with the form. The ROSTER does not, which is what keeps that from being a transfer of
+  // anything — the brief asks, and the new owner's own declaration is what answers.
+  it("carries the standing instructions over, like every other rule-facing key", async () => {
+    const agents = [{ id: "desk", audience: "member", watch: ["responses"], instruction: "来た回答を読んで返信する。" }];
+    writeFileSync(path.join(root, "app.json"), JSON.stringify({ ...CLONED, agents }, null, 2));
+
+    const result = await forkSharedApp(root, undefined, undefined);
+
+    expect(result.ok).toBe(true);
+    const written = JSON.parse(readFileSync(path.join(root, "app.json"), "utf-8")) as Record<string, unknown>;
+    expect(written.agents).toEqual(agents);
+    expect(written.members).toEqual({ [ME.email]: { "*": "owner" } });
+  });
+
   it("takes the new aid on the server before it reaches app.json", async () => {
     const result = await forkSharedApp(root, undefined, undefined);
     expect(result.ok).toBe(true);

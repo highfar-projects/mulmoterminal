@@ -151,7 +151,7 @@ function changeLine(watch: Watch, changes: number): string {
   return (
     `[mulmoterminal] Shared-app watch: ${rows} changed in ${quoted(watch.cid)} of the app ${quoted(watch.slug)}. ` +
     "This line was written by mulmoterminal, not by the app and not by the user, and it deliberately carries none of the app's data. " +
-    "Call useSharedApp records on that collection to see what changed, then do what the user asked you to do about it."
+    "Call useSharedApp records on that collection to see what changed, then do what the user asked you to do about it — or, if they pointed you at this app and said nothing more, the publisher's standing instruction that `describe` reported."
   );
 }
 
