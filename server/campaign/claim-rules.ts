@@ -17,9 +17,10 @@ export interface ClaimToken {
   /** The task that took it. */
   owner: string;
   /**
-   * Bumped every time the claim changes hands. The whole point of the number: a holder whose
-   * lease expired and was taken over still believes it holds the claim, and its next write must
-   * be refused — the generation is what tells the two apart when both name the same owner.
+   * Bumped every time the claim changes hands. The whole point of the number: a holder whose lease
+   * expired and was taken over still believes it holds the claim, and its next write must be
+   * refused. The generation is what tells it from the current holder — whoever that now is, and
+   * whether or not it is the same task taking its own claim back.
    */
   generation: number;
 }
@@ -35,10 +36,9 @@ export interface Claim {
 /**
  * A path without the trailing separators, so the two spellings of one directory compare equal.
  *
- * A root trims to the empty string, which is fine here and deliberately not guarded against: the
- * caller appends a separator before comparing, so `/` and `""` answer identically for every path.
- * A floor at the root was written first and removed — no input distinguished it, and a branch no
- * input can reach reads as a safeguard while guaranteeing nothing.
+ * A root trims to the empty string, which is deliberate rather than an oversight: the caller
+ * appends a separator before comparing, so `/` and `""` answer identically for every path. A floor
+ * at the root would be a branch no input can reach.
  *
  * Not a regex: `[/\\]+$` is the anchored-quantifier shape that backtracks super-linearly, and a
  * path is a value from outside. The recursion is bounded by the number of trailing separators.
@@ -56,9 +56,8 @@ function withoutTrailingSeparator(p: string): string {
  * they were excluded from each other — or refuse a task for a collision that is not one.
  *
  * Both sides are trimmed of trailing separators first, so the two spellings of one directory get
- * one answer. Untrimmed, `/a/` did not cover `/a` while `/a` covered `/a/` — the same pair, decided
- * by which way round it was asked. `pathsConflict` hid that by asking both ways, but this is
- * exported and a caller using it directly would have been told the wrong thing.
+ * one answer whichever way round the question is asked. `pathsConflict` would survive without that
+ * — it asks both ways — but this is exported, and a caller using it directly would not.
  */
 export function covers(outer: string, inner: string): boolean {
   const from = withoutTrailingSeparator(outer);
