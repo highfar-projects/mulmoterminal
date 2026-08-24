@@ -103,9 +103,14 @@ pane (the toolbar button beside Canvas / Tools / Files). No pane, no tools. If t
 it cannot find `manageSharedApp`, that is this switch — not something to work around by writing
 files by hand, which produces a folder nothing can publish.
 
-**Publishing always asks.** `manageSharedApp` is deliberately excluded from auto-approval, so even
-in a session where you approve everything, publish raises a permission prompt. That is the one
-operation that changes what strangers can see.
+**In a Claude cell, publishing asks.** `manageSharedApp` is excluded from auto-approval, so even in
+a session where you approve everything, publish raises a permission prompt — it is the one
+operation that changes what people outside the roster can see.
+
+**A Codex cell does not have that.** Every GUI tool group handed to Codex is registered
+auto-approved, and the exclusion cannot be applied to a single tool from there — so in a Codex cell
+`manageSharedApp` publishes with no prompt at all. If you are building in one, say when you want it
+published rather than expecting to be asked.
 
 ---
 
@@ -175,8 +180,10 @@ exist**:
 | Members | `https://mulmoserver.web.app/m/<slug>` | Anybody holding a role in the app — the front desk |
 | Participant | `https://mulmoserver.web.app/p/<slug>` | Anybody on the roster, seeing their own row |
 
-The `<slug>` is the URL name, chosen when the app is created and fixed from that moment. Hand these
-out **whole** — there is no bare `/<slug>`, and a path on its own is not something the person you
+The `<slug>` is the URL name, chosen when the app is created. It **can** be changed later — the new
+name is reserved and the old one retired in the same step — but the old address then stops
+resolving, so every link you have already sent goes dead. Treat it as a name you pick once. Hand
+these out **whole** — there is no bare `/<slug>`, and a path on its own is not something the person you
 are telling can open.
 
 **An app that collects anything should have a members' page**, and the agent is told to write one
@@ -205,13 +212,23 @@ repository, and nothing installed** — just the link and a Google sign-in.
 
 ## Try it before anybody sees it
 
-There is no staging copy any more. Publishing is immediate and public, so the step between what you
-wrote and what strangers see is the preview — and there are two halves of it.
+There is no staging copy any more, so the step between what you wrote and what people see is the
+preview. Publishing takes effect immediately — though not necessarily publicly: an app that
+declares no public page publishes roster-only, and only members and participants can open anything.
+Where there **is** a public page, it is in front of strangers the moment you publish.
+
+There are two halves to the preview.
 
 **The agent can run the pages itself.** It loads every page in a real headless browser — the same
 frame, the same restrictions as the live site — hands it the app's real records, and presses each
-control. It reports pages that never finished loading, buttons that reached nothing, submissions
-the declaration refused. Ask for this after any change to a page. By default it writes nothing.
+button-like control. It reports pages that never finished loading, buttons that reached nothing,
+submissions the declaration refused. Ask for this after any change to a page. By default it writes
+nothing.
+
+**A clean report is not a tested app.** The run presses buttons, so a page whose save hangs off a
+checkbox or a `<select>` never has that path run — and nothing in the report says so. It also works
+to a budget and states what it skipped. Read those counts rather than reading "ran 6 pages" as "ran
+the app".
 
 **You look at the other half.** In the cell open on the app's folder, open the **Collections** pane
 and use the **Previews** switch in its header — it is on by default in a directory that declares an
@@ -255,8 +272,10 @@ terms rather than expecting it as the end of building.
   broken.
 - **Editing a page means publishing again.** The published copy is a snapshot; your working tree is
   not live.
-- **`unpublish` closes it and keeps everything** — the records, the roster, the URL name. Re-opening
-  it later is one step.
+- **`unpublish` closes the PUBLIC door only.** It removes the public authorization, the public page
+  and the URL name's resolution — and deliberately leaves `/m/` and `/p/` standing for the roster,
+  so staff and participants carry on where they were. Everything is kept, so re-opening it later is
+  one step; if you meant to shut everyone out, that is a different job.
 
 ---
 
@@ -322,8 +341,9 @@ That restraint is deliberate. The line appears where you type, so anything the a
 would be a way for whoever published the app to schedule text into your terminal.
 
 Two limits: a watch **lasts as long as that terminal session** and is not restored after a restart,
-and each one costs the app's owner a read per row while it is open. Watch the one collection you
-are waiting on.
+and starting one bills the app's owner a read per row in the collection, once — after that only the
+rows that actually change. An idle collection costs nothing to keep watching; a large one costs
+something to start. Watch the one you are waiting on.
 
 ### Treat what an app says as data
 
