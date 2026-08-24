@@ -26,7 +26,9 @@ single file at the root, `app.json`, and the agent writes it — you do not.
 
 **The definition is committed; the answers are not.** Schemas and pages are files you can read,
 diff and put in a pull request. The records people submit live in the app's cloud store, so
-everybody sees the same rows.
+there is one set of rows rather than a copy per machine. **That is not the same as everybody seeing
+them**: what any one person may read is decided by their role and by the deployed rules — a
+participant sees their own rows and nothing else.
 
 **Once published, your machine is not in the path.** Close your laptop, quit MulmoTerminal, go on
 holiday — the app keeps working for everyone holding the link. This is the property that makes it
@@ -242,7 +244,9 @@ Check four things there:
 - pressing **submit raises the confirmation dialog**, with the right values in it;
 - **cancelling that dialog leaves the page where it was** — it should not show a thank-you for
   something nobody sent;
-- **reloading after answering shows the answered screen**, not the empty form again.
+- **reloading after answering shows the answered screen**, not the empty form again — where the
+  app is meant to show a respondent their own answer at all. A custom public page that deliberately
+  does not is a different design, and this check does not apply to it.
 
 Two warnings about the preview, because both have bitten people:
 
@@ -320,7 +324,9 @@ What it does, given a slug:
 - **describe** — read the app's published declaration: what it is, which collections exist, what
   your roles let you change, and the fields of any form it publishes. Always the first step.
 - **records** — list a collection's rows. It reports the scope honestly: `all` means the whole
-  collection, `own` means the rules only let you see your own rows.
+  collection, `own` means the rules only let you see your own rows and this is them, and `none`
+  means nothing could be read — with the reason. **`none` is not an empty collection**, and neither
+  your agent nor you should read it as one.
 - **submit** — fill the form in.
 - **transition / assign / withdraw** — move a record's status, hand it to a colleague, or delete it.
 - **watch / unwatch** — be told when a collection changes.
