@@ -5,7 +5,15 @@
 // retry rather than report. So every path out of here is a string.
 import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
-import { MANAGE_SHARED_APP, SHARED_APP_ACTIONS, checkRecordNote, manageSharedApp, pageNote, recordsHeadline } from "../../../server/infra/shared-app-tool.js";
+import {
+  MANAGE_SHARED_APP,
+  SHARED_APP_ACTIONS,
+  checkKeyNote,
+  checkRecordNote,
+  manageSharedApp,
+  pageNote,
+  recordsHeadline,
+} from "../../../server/infra/shared-app-tool.js";
 import { HOST_TOOL_DEFINITIONS } from "../../../server/infra/host-tools.js";
 import { groupOfTool } from "../../../common/toolGroups.js";
 import { setFirestoreAccessor, setSharedCollectionsSupport } from "@mulmoclaude/core/collection/server";
@@ -105,7 +113,26 @@ describe("manageSharedApp, the tool", () => {
 
     const message = await manageSharedApp(root, { action: "check" });
     expect(message).toContain("NOT scanned");
+    // And the OTHER half of publish's gate that needs a session: the identity keys, which
+    // `confirm` does not override when publish meets them.
     expect(message).toContain("Publish checks them too");
+    // And the OTHER half of publish's gate that needs a session, reported separately because it
+    // reads a different document: `apps/{aid}`, not the records.
+    expect(message).toContain("identity keys");
+    expect(message).toContain("NOT compared");
+  });
+
+  it("says a key comparison that did not run, and stays quiet about one that did", () => {
+    // A clean gate is what "publishable" already means, so a comparison that RAN adds nothing. One
+    // that did not has to be said: the gate reads `apps/{aid}` while the scan reads the records, so
+    // a complete scan beside it is not evidence either way.
+    expect(checkKeyNote({ compared: true })).toEqual([]);
+    const unreadable = checkKeyNote({ compared: false, why: "unreadable-app" }).join(" ");
+    expect(unreadable).toContain("NOT compared");
+    expect(unreadable).toContain("DIFFERENT document");
+    expect(unreadable).toContain("`confirm` does not override");
+    // Nothing to compare, and the declaration's own problems already send the author to `init`.
+    expect(checkKeyNote({ compared: false, why: "no-app" })).toEqual([]);
   });
 
   it("reports the rows it DID find beside the collection it could not read", () => {

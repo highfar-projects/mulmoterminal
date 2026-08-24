@@ -17,8 +17,14 @@ export interface WriteStep {
   run: () => Promise<void>;
 }
 
-/** Run the steps in order. Returns null when every one landed, a failure otherwise. */
-export async function runWrites(steps: readonly WriteStep[], what: string): Promise<SharedAppFailure | null> {
+/** Run the steps in order. Returns null when every one landed, a failure otherwise.
+ *
+ *  `wroteBefore` is what the OPERATION did before this list — publish claims the app document and
+ *  reserves the URL name outside it. Without it a failure on the first step here reports `partial:
+ *  false` and "Nothing was written", and both are false: the reservation is irreversible, and the
+ *  advice about what is standing (`halfPublishedApp`) hangs off exactly that flag, so the run that
+ *  most needs it is the one that used to be told the least. */
+export async function runWrites(steps: readonly WriteStep[], what: string, wroteBefore = false): Promise<SharedAppFailure | null> {
   const landed: string[] = [];
   for (const [index, step] of steps.entries()) {
     try {
@@ -29,11 +35,11 @@ export async function runWrites(steps: readonly WriteStep[], what: string): Prom
       return {
         ok: false,
         // The whole reason the flag exists: this is the one failure where documents ARE live.
-        partial: index > 0,
+        partial: index > 0 || wroteBefore,
         problems: [
           `${what} failed while writing ${step.what}: ${reason}`,
           // The failed step belongs to "not written" — it is the first thing that did not land.
-          ...partialState(landed, [step.what, ...steps.slice(index + 1).map((rest) => rest.what)], what),
+          ...partialState(landed, [step.what, ...steps.slice(index + 1).map((rest) => rest.what)], what, wroteBefore),
         ],
       };
     }
@@ -46,9 +52,14 @@ export async function runWrites(steps: readonly WriteStep[], what: string): Prom
  *  Two facts, and both matter for the repair: a document this run wrote is live NOW, and a
  *  document it did not write still holds what the LAST run left — which is not the same as being
  *  absent, and not the same as matching the declaration that was just half-applied. */
-function partialState(landed: readonly string[], notWritten: readonly string[], what: string): string[] {
+function partialState(landed: readonly string[], notWritten: readonly string[], what: string, wroteBefore: boolean): string[] {
   const repair = `Running ${what} again is the repair: the write is idempotent, and it re-does every step, including the ones that did land.`;
-  if (landed.length === 0) return [`Nothing was written. ${repair}`];
+  if (landed.length === 0)
+    return [
+      wroteBefore
+        ? `None of these writes landed — but this ${what} had already written to the app before them (the app document, or the URL name it reserved). ${repair}`
+        : `Nothing was written. ${repair}`,
+    ];
   return [
     `Written by this ${what}, and live now: ${landed.join("; ")}.`,
     `NOT written: ${notWritten.join("; ")} — ${notWritten.length === 1 ? "it still holds" : "they still hold"} whatever the previous ${what} left.`,

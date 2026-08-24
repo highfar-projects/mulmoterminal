@@ -2,9 +2,15 @@
 //
 // Not by the agent (design D2b): `apps/{aid}` is a shelf every user of the deployment shares, and
 // the rules' `allow create` asks only that you name yourself owner — so a memorable aid is
-// first-come-first-served, cannot be checked for availability (the app document is not readable
-// until you are on its roster), and frees up again when an app is deleted. A UUID has none of
-// those properties, and a model asked to invent an identifier writes a memorable one.
+// first-come-first-served and cannot be checked for availability (the app document is not readable
+// until you are on its roster). A UUID has neither property, and a model asked to invent an
+// identifier writes a memorable one.
+//
+// It never comes back, either: `apps/{aid}` has no client delete at all (`allow delete: if false`
+// in mulmoserver's rules — Firestore does not cascade, so a client-deleted parent would leave every
+// child permanently unreachable), and removing one is a trusted recursive operation. So an aid that
+// has been written down is spent, which is why publish refuses to mint one and why `init` claims
+// the document before the value reaches a committed file.
 //
 // And it happens when `app.json` is WRITTEN rather than at publish: `acceptStorageSchema` refuses
 // a firestore schema whose root declares no aid, so waiting until publish would make the author's

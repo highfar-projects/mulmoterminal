@@ -13,11 +13,13 @@
 // one that rewrites most of the file — is still writing what the author asked for by name.
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { APP_MANIFEST_FILE, firestoreHandle } from "@mulmoclaude/core/collection/server";
+import { APP_MANIFEST_FILE, firestoreHandle, type LoadedCollection } from "@mulmoclaude/core/collection/server";
 import { holdNewName } from "./establish.js";
-import { APPS_COLLECTION, parseAuthoredApp, type AuthoredApp } from "@receptron/sharedapp";
+import { APPS_COLLECTION, parseAuthoredApp, projectPublish, type AuthoredApp } from "@receptron/sharedapp";
 import { isRecord } from "../../../common/isRecord.js";
-import { declarationProblems, sharedCollections, type SharedAppFailure } from "./context.js";
+import { declarationProblems, schemasOf, sharedCollections, type SharedAppFailure, type SharedAppHandle } from "./context.js";
+import { frozenKeyProblems } from "./exclusivity.js";
+import { oversizeProblem, publicFormOf } from "./publicForm.js";
 import { createManifest, newAid, updateManifest } from "./manifestWrite.js";
 import { viewFilesReport } from "./publicView.js";
 import { strandedApp } from "./recovery.js";
@@ -405,7 +407,20 @@ export interface CheckReport {
    *  not running want opposite things from the author — one is "connect", the other is "fix
    *  `app.json`" — so a single null would send half of them to the wrong repair. */
   records: RecordScanResult;
+  /** Whether publish's OTHER live-reading gate ran — the identity keys, frozen once records exist —
+   *  or why it did not.
+   *
+   *  Its own answer rather than a share of `records`, because the two read DIFFERENT documents with
+   *  the same session: the scan lists `…/items`, this reads `apps/{aid}`. A transient failure on
+   *  one is not a failure of the other, and reporting a complete scan while this silently did
+   *  nothing is `check` certifying a gate it never ran. */
+  keys: IdentityKeyResult;
 }
+
+/** Either the comparison, or the reason there is none. `unreadable-app` is the one that needs
+ *  saying most: the session is open, the records may well have been scanned, and the one document
+ *  this gate is about did not come back. */
+export type IdentityKeyResult = { compared: true } | { compared: false; why: "no-session" | "unparsed-declaration" | "no-app" | "unreadable-app" };
 
 /** Either the scan, or the reason there is none.
  *
@@ -438,6 +453,7 @@ export async function checkSharedApp(root: string): Promise<CheckReport | Shared
       problems: parsed.problems,
       warnings: [],
       records: { scanned: false, why: "unparsed-declaration" },
+      keys: { compared: false, why: "unparsed-declaration" },
     };
 
   const collections = await sharedCollections(root);
@@ -461,16 +477,67 @@ export async function checkSharedApp(root: string): Promise<CheckReport | Shared
   // implementations of "would this be refused?" answer it differently, and the answer that matters
   // is the one publish gives.
   const records: RecordScanResult = handle === null ? { scanned: false, why: "no-session" } : { scanned: true, scan: await scanRecords(collections, root) };
+  // The last two halves of publish's gate, and the ones that used to be missing here — which made
+  // the sentence above ("the SAME gate a publish runs") false in the one direction that costs an
+  // agent the most: `check` said publishable, publish refused, and `confirm` — the thing an agent
+  // reaches for at that point — does not override either of them.
+  //
+  // One reads nothing (the projection is built from the working tree) and the other has to read the
+  // LIVE records, so only the second is gated on a session — reported through the same
+  // `RecordScanResult` that says the row scan did not run.
+  const frozen = handle === null ? { problems: [], keys: { compared: false as const, why: "no-session" as const } } : await frozenProblems(parsed.app, handle);
+  const sizeAndKeys = [...oversizeProblems(parsed.app, collections), ...frozen.problems];
   return {
     ok: true,
     aid: parsed.app.aid,
     collections: collections.map((collection) => collection.slug),
     checkedAs: handle?.email ?? null,
     declaredOwner: ownerFromRoster(parsed.app),
-    problems: [...problems, ...pages.problems],
+    problems: [...problems, ...pages.problems, ...sizeAndKeys],
     warnings: pages.warnings,
     records,
+    keys: frozen.keys,
   };
+}
+
+/** Publish's size gate, asked here — where it costs nothing, rather than mid-run after the schemas
+ *  have gone out.
+ *
+ *  The stamp is this check's own: it is not published, and what it contributes to the document is a
+ *  uid, an address and a number, none of which move the answer near a 700 kB budget. Projecting can
+ *  throw on a declaration the problems above already name, and a size complaint on top of those
+ *  would be noise — so a failure to project is simply no answer here. */
+function oversizeProblems(app: AuthoredApp, collections: readonly LoadedCollection[]): string[] {
+  const schemas = schemasOf(collections);
+  try {
+    const face = projectPublish(app, schemas, { uid: "", email: "", publishedAt: 0 }, null);
+    const oversize = oversizeProblem({ ...face.config, form: publicFormOf(app, schemas) });
+    return oversize === null ? [] : [oversize];
+  } catch {
+    return [];
+  }
+}
+
+/** The identity keys, against the app as it stands — publish's other refusal that `confirm` does
+ *  not override, and the one an agent is most likely to meet at the dangerous step: renaming
+ *  `idField` under live bookings reads as an ordinary edit right up to the publish that refuses it.
+ *
+ *  A READ THAT FAILS IS SAID, not swallowed. It reads `apps/{aid}`, which the record scan beside it
+ *  never touches — so a scan that completed says nothing about this one, and returning silently
+ *  would let `check` report "publishable" for a declaration whose frozen keys nothing compared. */
+async function frozenProblems(app: AuthoredApp, handle: SharedAppHandle): Promise<{ problems: string[]; keys: IdentityKeyResult }> {
+  // Nothing to compare against: there is no app yet, and `declarationProblems` above already says
+  // so in the voice that sends the author to `init`.
+  if (app.aid === "") return { problems: [], keys: { compared: false, why: "no-app" } };
+  try {
+    const live = await handle.docs.get(APPS_COLLECTION, app.aid);
+    return { problems: await frozenKeyProblems(app, app.collections ?? {}, isRecord(live) ? live : null, handle), keys: { compared: true } };
+  } catch {
+    // Including the refusal that means "this app document does not exist": the rules resolve the
+    // roster out of the document, so a missing one is DENIED rather than empty, and the two cannot
+    // be told apart from here. Both leave the gate unrun, which is the thing to report.
+    return { problems: [], keys: { compared: false, why: "unreadable-app" } };
+  }
 }
 
 /** The first address the declaration makes an app-wide owner, or undefined when it names none.

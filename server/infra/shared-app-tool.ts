@@ -23,6 +23,7 @@ import {
   initSharedApp,
   inviteToSharedApp,
   type AppRoleName,
+  type IdentityKeyResult,
   type RecordScanResult,
 } from "../backends/sharedApp/declare.js";
 import { isRecord } from "../../common/isRecord.js";
@@ -45,7 +46,7 @@ export const MANAGE_SHARED_APP: ToolDefinition = {
     "`manageSharedApp` operates on the repository the session is open in — the one holding `app.json` — and it is the only way to write a shared app.\n" +
     "**init** writes `app.json` for a repository that has none, with the SIGNED-IN address as its owner — use it instead of composing the file yourself, because the owner has to be the address this machine is signed in with and you cannot read that.\n" +
     "**fork** turns a CLONE of somebody else's shared app into the user's own — a new `aid`, a roster of one, the same collections. It is the answer to \"this repository is a clone, make it mine\", and the ONLY one: `init` refuses a repository that already declares an app, so composing the file by hand or deleting `app.json` first are both worse versions of this. It carries `collections` and `public` over unchanged, never touches `.claude/skills/`, and refuses outright when the signed-in address already owns the app.\n" +
-    "**check** reports everything wrong with the declaration and this repository's shared collections WITHOUT writing anything. Run it after any edit to `app.json`; it is the only way to find out whether a declaration is publishable before it is published.\n" +
+    "**check** reports everything wrong with the declaration and this repository's shared collections WITHOUT writing anything. Run it after any edit to `app.json`; it is the only way to find out whether a declaration is publishable before it is published. It runs publish's own gate: the declaration, the pages, the size of the public form, and — with a session open — the live records and the identity keys (`idFrom`, `idField`, `idIn`, `mirror`, `mirrorOf`) that publish freezes once records exist. `confirm` does not override that last one at publish, so it is the one to meet here. Signed out, it says which of those it could not run.\n" +
     "**preview** RUNS the pages. It loads each one in a real headless browser, inside the same sandbox and CSP a visitor gets, hands it the app's real records, and presses each control on a freshly loaded copy of the page. It runs to a budget and SAYS what it left out, so read the counts rather than assuming everything was covered. It reports what a person would otherwise have to notice by eye: a page that never finished loading, a button that does nothing, a form the sandbox blocked, a submission the declaration refused. BY DEFAULT IT WRITES NOTHING, and that is the mode to reach for after an edit. With `confirm: true` it WRITES a real record for a press the runtime marked as click-caused, reads what the DEPLOYED RULES said, and removes the record straight away — reporting the verdict, and whether the removal succeeded. Ask the user before sending `confirm`: the record is real while it exists, something may act on it, and the removal can fail. In the default read-only mode every submission is reported as WITHHELD. With `confirm: true`, a submission the runtime did not mark is reported as WITHHELD and nothing is written for it: a timer, `onState`, a runtime older than 0.9.0, and — the one that surprises authors — a click handler that `await`s work which actually yields, such as `async () => { await validate(); submit() }`, because it resumes in a later task. Tell the author THAT is why their save wrote nothing, rather than letting them conclude the button is broken. Writes run to their own budget; over it, a confirmation is declined and counted. THREE THINGS IT CANNOT TELL YOU, and all of them are silent: a control that saves from its own `change` handler (a checkbox, a select) is never pressed at all, so it produces no line — not even a withheld one — and the save path goes untested; and the verdict is always the AUTHOR's, because this and the Collections pane both write through the same author path, so NEITHER preview says what the rules would answer a visitor or a participant. Say so rather than letting a clean report stand for either. And a view that declares `live` is SUBSCRIBED in production — `onState` arrives again on every change — while this run delivers state ONCE, so whether such a page redraws correctly on a second state, or wipes a selection or a half-typed field when an update lands mid-edit, is not tested here or in the pane. It also TRIES to write a picture of each page and gives you the path for every one it managed; open it when the words leave the layout in doubt, and read the line that says why a page has none. Run it after writing or editing any view, and again before you publish. If it cannot start a browser it says so; then ask the user to press Preview in the Collections pane.\n" +
     "**invite** adds, changes or removes ONE address on the roster (`email`, `role`, optional `cid`; omit `role` to remove). It edits app.json only — it takes effect at the next publish.\n" +
     "**publish** is the dangerous one, and it is the ONLY thing that writes an app after `init`. It writes this repository's declaration, schemas and pages as they are right now, and — when app.json declares `public` — opens the app to anonymous visitors. A declaration with no `public` block publishes to the roster and grants the world nothing. Run `preview` first: nothing else stands between what an LLM wrote and what everybody sees. Publish only when the user asks for it in those terms.\n" +
@@ -290,6 +291,31 @@ export function checkRecordNote(records: RecordScanResult): string[] {
   return notes;
 }
 
+/** Whether publish's identity-key gate ran, in `check`'s voice — and, when it did not, WHY.
+ *
+ *  Silence is the failure mode this exists to prevent, and it is worse here than for the records:
+ *  the gate reads a different document from the record scan (`apps/{aid}`, not `…/items`), so a
+ *  report carrying a complete scan says nothing at all about this one. An agent reads that as
+ *  checked. Publish then refuses — and `confirm`, the thing an agent reaches for at that point,
+ *  does not override this refusal.
+ *
+ *  A comparison that RAN says nothing: a clean gate is what "publishable" already means. */
+export function checkKeyNote(keys: IdentityKeyResult): string[] {
+  if (keys.compared) return [];
+  const publishDoes =
+    "Publish compares them against the app as it stands and refuses a key that moved under records that exist — which `confirm` does not override.";
+  if (keys.why === "no-session")
+    return [
+      `The app's identity keys (\`idFrom\`, \`idField\`, \`idIn\`, \`mirror\`, \`mirrorOf\`) were NOT compared — that needs a session open. ${publishDoes}`,
+    ];
+  if (keys.why === "unparsed-declaration") return [];
+  if (keys.why === "no-app") return [];
+  return [
+    "The app's identity keys were NOT compared: `apps/{aid}` could not be read. That is a DIFFERENT document from the records above, so a scan that " +
+      `completed says nothing about this. ${publishDoes} Either the app does not exist yet (\`init\` creates it), or the read failed — try check again before publishing.`,
+  ];
+}
+
 /** The headline when the records alone would stop a publish, or null when they would not. A
  *  declaration can be perfect and a publish still refuse, which is why this is not decided by
  *  `problems` on its own.
@@ -311,7 +337,7 @@ async function narrateCheck(root: string): Promise<string> {
   const report = await checkSharedApp(root);
   if (!report.ok) return report.problems.join("\n");
   const found = report.collections.length === 0 ? "no shared collections in this repository yet" : `shared collections: ${report.collections.join(", ")}`;
-  const records = checkRecordNote(report.records);
+  const records = [...checkRecordNote(report.records), ...checkKeyNote(report.keys)];
   // WHOSE publish was checked, always said out loud: signed in it is you, signed out it is the
   // owner the declaration names, and "it would publish for somebody else" is not the same answer.
   const as =

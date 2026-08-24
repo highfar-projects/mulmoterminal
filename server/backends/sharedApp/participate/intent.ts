@@ -32,7 +32,15 @@ export interface AskedIntent {
 }
 
 export type IntentOutcome =
-  | { ok: true; tier: WriteTier; mailed: boolean }
+  | {
+      ok: true;
+      tier: WriteTier;
+      mailed: boolean;
+      /** Whether the withdrawal reopened a MIRROR — the projected row a booking claimed. Reported
+       *  rather than assumed from the action: a survey withdrawal frees nothing, and telling its
+       *  author "the slot is open again" invents a place that never existed. */
+      reopened: boolean;
+    }
   /** `refusal: false` means the write did not COMPLETE, which is not the same as not happening: a
    *  `deadline-exceeded` can come back after Firestore committed and the client lost the answer.
    *  The caller has to say so — "refused" states the opposite of what may have occurred, and the
@@ -121,7 +129,7 @@ export async function performIntent(app: JoinedApp, asked: AskedIntent): Promise
     }
     // Claimed only on success, and only where the declaration named a notice for this move: a batch
     // that was refused sent nothing.
-    return { ok: true, tier, mailed: read.intent.mail !== undefined };
+    return { ok: true, tier, mailed: read.intent.mail !== undefined, reopened: read.intent.mirror !== undefined };
   }
   if (refusals.length === 0)
     return {

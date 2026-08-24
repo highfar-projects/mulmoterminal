@@ -92,9 +92,12 @@ interface PublishStepsInput {
    *  make the record scan answerable. Writing it twice is harmless and saying so is not: the
    *  second write is skipped so the step list reads as what actually happened. */
   established: boolean;
+  /** The app document as it stands RIGHT NOW, so the bookkeeping write below can carry its live
+   *  `public` block through (`stillOpen`). Null for a first publish, which has nothing to carry. */
+  live: Record<string, unknown> | null;
 }
 
-function publishSteps({ handle, aid, stamp, face, slug, form, view, tiers, established }: PublishStepsInput): WriteStep[] {
+function publishSteps({ handle, aid, stamp, face, slug, form, view, tiers, established, live }: PublishStepsInput): WriteStep[] {
   return [
     ...face.schemas.map(({ cid, doc }) => ({
       what: `the schema for '${cid}' (apps/${aid}/collections/${cid})`,
@@ -154,7 +157,23 @@ function publishSteps({ handle, aid, stamp, face, slug, form, view, tiers, estab
     // The app document WITHOUT `public`: the rule configuration lands beside the schemas it was
     // projected with, so the public write path is never judged by one version's constraints
     // against another's schema. Skipped when `claimApp` wrote exactly this a moment ago.
-    ...(established ? [] : [{ what: `the app document (apps/${aid})`, run: () => handle.docs.set(APPS_COLLECTION, aid, face.app) }]),
+    //
+    // It carries the LIVE `public` block through (`stillOpen`) for the reason the slug reservation
+    // does: this write REPLACES, publish holds its own block back for the last write, and the slug
+    // step sits between the two. Without it, re-publishing an open app takes the authorization away
+    // for the length of those writes, and a failure in between leaves it DARK rather than open on a
+    // mixed version — the opposite of the trade this ordering exists to make.
+    //
+    // Not when this publish CLOSES the app: there `face.public` is undefined, no last write follows,
+    // and carrying the old block through would leave the app open for good.
+    ...(established
+      ? []
+      : [
+          {
+            what: `the app document (apps/${aid})`,
+            run: () => handle.docs.set(APPS_COLLECTION, aid, face.public === undefined ? face.app : stillOpen(face.app, live)),
+          },
+        ]),
     // The URL name follows the app's own openness — `face.public` — and NOT the fact that a
     // publish happened.
     //
@@ -423,10 +442,12 @@ async function runPublish(root: string, opts: SharedAppOptions, ran: RunState): 
     // Already written, byte for byte: `claimApp` wrote this projection, and a reservation made
     // just now rewrote the same thing with the name on it.
     established,
+    live: existingApp,
   });
-  const failure = await runWrites(steps, "publish");
-  // `runWrites` marks a failure partial exactly when a step before it landed, so its own answer is
-  // the reliable one here — a first-step failure wrote nothing, whatever came before it.
+  // `ran.wrote` is handed in because a step before this list may already have written: `claimApp`
+  // for a new app, and a slug reservation that took a name. Judging `partial` from this list alone
+  // called such a run "Nothing was written" and dropped the advice about what is standing.
+  const failure = await runWrites(steps, "publish", ran.wrote === true);
   if (failure) {
     if (failure.partial) ran.wrote = true;
     return failure;

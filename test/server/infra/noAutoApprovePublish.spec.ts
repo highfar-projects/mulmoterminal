@@ -17,6 +17,19 @@ describe("auto-approval never covers manageSharedApp", () => {
     expect(names.some((name) => name.endsWith("__manageSharedApp"))).toBe(false);
   });
 
+  // The OTHER half of the pair, and the one CI would not have missed if it had been dropped from
+  // the list: `useSharedApp` moves records in an app somebody else published, and `withdraw`
+  // deletes a person's row with no undo. Same prompt, and — because the model is one tool with many
+  // `action`s — approving it once covers `describe` and `withdraw` alike.
+  it("keeps useSharedApp out of both lists as well", () => {
+    expect(groupOfTool("useSharedApp")).toBe("external");
+    expect(allowedToolNames().some((name) => name.endsWith("__useSharedApp"))).toBe(false);
+    expect(allowedToolNames("external").some((name) => name.endsWith("__useSharedApp"))).toBe(false);
+    expect(autoAllowedToolNames().some((name) => name.endsWith("__useSharedApp"))).toBe(false);
+    // The group is still reachable — its other tools are listed.
+    expect(allowedToolNames("external").some((name) => name.endsWith("__google"))).toBe(true);
+  });
+
   it("keeps it out of every per-group list too", () => {
     const group = groupOfTool("manageSharedApp");
     expect(group).toBe("data");

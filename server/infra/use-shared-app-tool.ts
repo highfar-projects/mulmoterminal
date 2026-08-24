@@ -425,7 +425,7 @@ async function narrateIntent(
     return result.refusal
       ? `Refused: ${result.error}`
       : `Could not tell whether that landed: ${result.error}. The write may have COMMITTED — the record, and any notice it queues — or may not have. Read the record before trying again; do not simply repeat it.`;
-  const what = performed(action, cid, id, to);
+  const what = performed(action, cid, id, to, result.reopened);
   return [
     what,
     `Judged on the ${result.tier} tier and performed by the deployed rules as ${joined.app.handle.email}.`,
@@ -435,9 +435,12 @@ async function narrateIntent(
 
 /** What just happened, in the app's terms. Withdrawal says the most because it is the one that
  *  cannot be taken back: the record is gone and whatever it was holding is on offer again. */
-function performed(action: "transition" | "assign" | "withdraw", cid: string, id: string, to: string | undefined): string {
+function performed(action: "transition" | "assign" | "withdraw", cid: string, id: string, to: string | undefined, reopened: boolean): string {
   const row = `${quotedTerm(cid)}/${quotedTerm(id)}`;
-  if (action === "withdraw") return `Withdrew ${row}. The record is gone; any slot it was holding is open again. There is no undo.`;
+  // The reopening is said only when one HAPPENED. A withdrawal reopens a mirror where the app
+  // declares one, and most collections declare none — a survey answer holds no place, and saying a
+  // slot is free again there describes an app the author does not have.
+  if (action === "withdraw") return `Withdrew ${row}. The record is gone${reopened ? ", and the row it was holding is on offer again" : ""}. There is no undo.`;
   if (action === "assign") return `Assigned ${row} to ${to === undefined ? "?" : quotedTerm(to)}.`;
   return `Moved ${row} to ${to === undefined ? "?" : quotedTerm(to)}.`;
 }
