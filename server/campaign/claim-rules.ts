@@ -33,16 +33,19 @@ export interface Claim {
 }
 
 /**
- * A path without the trailing separators that name the same directory.
+ * A path without the trailing separators, so the two spellings of one directory compare equal.
  *
- * Never shorter than the root, so `/` stays `/` and `C:\` stays `C:\` rather than becoming
- * something relative.
+ * A root trims to the empty string, which is fine here and deliberately not guarded against: the
+ * caller appends a separator before comparing, so `/` and `""` answer identically for every path.
+ * A floor at the root was written first and removed — no input distinguished it, and a branch no
+ * input can reach reads as a safeguard while guaranteeing nothing.
+ *
+ * Not a regex: `[/\\]+$` is the anchored-quantifier shape that backtracks super-linearly, and a
+ * path is a value from outside. The recursion is bounded by the number of trailing separators.
  */
-function withoutTrailingSeparator(p: string, root = path.parse(p).root): string {
-  // Not a regex: `[/\\]+$` is the anchored-quantifier shape that backtracks super-linearly, and a
-  // path is a value from outside. Recursion here is bounded by the number of trailing separators.
+function withoutTrailingSeparator(p: string): string {
   const isSeparator = p.endsWith("/") || p.endsWith(path.sep);
-  return p.length > root.length && isSeparator ? withoutTrailingSeparator(p.slice(0, -1), root) : p;
+  return isSeparator ? withoutTrailingSeparator(p.slice(0, -1)) : p;
 }
 
 /**

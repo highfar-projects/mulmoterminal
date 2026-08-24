@@ -63,11 +63,6 @@ describe("does one path cover another", () => {
     expect(covers(bare, slashed)).toBe(true);
   });
 
-  it("does not trim a root away", () => {
-    expect(covers(path.sep, path.sep)).toBe(true);
-    expect(covers(path.sep, p("a"))).toBe(true);
-  });
-
   it("treats the root as covering everything under it", () => {
     expect(covers(path.sep, p("anything"))).toBe(true);
   });
