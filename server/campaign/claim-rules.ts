@@ -5,12 +5,20 @@
 // check by reading. The filesystem side — the compare-and-set that makes acquisition atomic — is a
 // different kind of problem and gets its own review.
 //
-// Every path here is expected to be CANONICAL already: `server/infra/canonical-path.ts` resolves
-// symlinks and, on a case-insensitive filesystem, returns the one spelling the disk actually has.
-// Normalising is not repeated here, because a second normaliser is a second answer, and two
-// answers about "is this the same path" is exactly what exclusion cannot survive.
-import path from "node:path";
+// Every path here is expected to be CANONICAL and ABSOLUTE already — `server/infra/canonical-path.ts`
+// resolves symlinks and returns the spelling the disk has. Normalising is not repeated here: a
+// second normaliser is a second answer, and two answers to "is this the same path" is what
+// exclusion cannot survive.
+//
+// **One gap in that, and it belongs to whoever keys the claims.** `canonicalPath` re-attaches
+// components that do not exist yet exactly as they were typed — and a claim is declared BEFORE the
+// work, so a path to a file about to be created is the ordinary case. On a case-insensitive volume
+// `…/NewThing.ts` and `…/newthing.ts` are then two keys for one file, and two tasks can both claim
+// it. `isWithin` folds case on Windows; macOS does not fold, deliberately (see path-within.ts), so
+// the registry has to key missing components against the volume's actual case behaviour. Named
+// here rather than left to be discovered (raised by CodeRabbit on #1845).
 import { byCodeUnit } from "../../common/byCodeUnit.js";
+import { isWithin } from "../infra/path-within.js";
 
 /** Who holds a claim, and which generation of it. A holder presents both to act. */
 export interface ClaimToken {
@@ -34,38 +42,18 @@ export interface Claim {
 }
 
 /**
- * A path without the trailing separators, so the two spellings of one directory compare equal.
- *
- * A root trims to the empty string, which is deliberate rather than an oversight: the caller
- * appends a separator before comparing, so `/` and `""` answer identically for every path. A floor
- * at the root would be a branch no input can reach.
- *
- * Not a regex: `[/\\]+$` is the anchored-quantifier shape that backtracks super-linearly, and a
- * path is a value from outside. The recursion is bounded by the number of trailing separators.
- */
-function withoutTrailingSeparator(p: string): string {
-  const isSeparator = p.endsWith("/") || p.endsWith(path.sep);
-  return isSeparator ? withoutTrailingSeparator(p.slice(0, -1)) : p;
-}
-
-/**
  * Does one path cover the other?
  *
- * Segment-aware on purpose: `src/foo` and `src/foobar` are different files, and a prefix test on
- * raw strings says otherwise. That mistake would let two tasks edit neighbouring paths believing
- * they were excluded from each other — or refuse a task for a collision that is not one.
+ * `isWithin` and not a prefix test of its own. That module exists because this exact comparison had
+ * been hand-rolled in eight places and was wrong on Windows in two of them, and it carries what a
+ * hand-rolled one keeps missing: the platform's own `path` implementation, case folded on Windows,
+ * trailing separators and roots handled by `resolve`.
  *
- * Both sides are trimmed of trailing separators first, so the two spellings of one directory get
- * one answer whichever way round the question is asked. `pathsConflict` would survive without that
- * — it asks both ways — but this is exported, and a caller using it directly would not.
+ * What a raw `startsWith` gets wrong, and why this is worth a named function at all: `src/foo` and
+ * `src/foobar` are different files. Calling them one exclusion would let two tasks edit both
+ * believing they were kept apart.
  */
-export function covers(outer: string, inner: string): boolean {
-  const from = withoutTrailingSeparator(outer);
-  const to = withoutTrailingSeparator(inner);
-  if (from === to) return true;
-  const withSeparator = from.endsWith(path.sep) ? from : from + path.sep;
-  return to.startsWith(withSeparator);
-}
+export const covers = (outer: string, inner: string, platform: NodeJS.Platform = process.platform): boolean => isWithin(outer, inner, platform);
 
 /** Do these two paths conflict? Either covering the other is a conflict, in both directions. */
 export const pathsConflict = (a: string, b: string): boolean => covers(a, b) || covers(b, a);

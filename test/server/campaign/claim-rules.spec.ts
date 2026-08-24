@@ -54,6 +54,15 @@ describe("does one path cover another", () => {
     expect(covers(p("repo", "src") + path.sep, p("repo", "src", "a.ts"))).toBe(true);
   });
 
+  // A path is a value from outside, so this has to survive a silly one. Two hand-rolled trims did
+  // not — a regex backtracked super-linearly, and recursing per separator threw `RangeError` at
+  // twenty thousand — which is part of why the comparison is now the shared `isWithin`.
+  it("survives a path with an absurd number of trailing separators", () => {
+    const silly = p("repo", "src") + path.sep.repeat(50_000);
+    expect(covers(silly, p("repo", "src", "a.ts"))).toBe(true);
+    expect(covers(silly, p("repo", "srcfoo"))).toBe(false);
+  });
+
   // The same directory spelled two ways must get ONE answer. Before the trim, `/a/` did not cover
   // `/a` while `/a` covered `/a/` — decided by which way round it was asked.
   it("gives one answer for the two spellings of one directory", () => {
@@ -65,6 +74,20 @@ describe("does one path cover another", () => {
 
   it("treats the root as covering everything under it", () => {
     expect(covers(path.sep, p("anything"))).toBe(true);
+  });
+});
+
+// The gap `canonicalPath` leaves, pinned so it is a known limitation rather than a surprise: a
+// component that does not exist yet keeps the case it was typed with, and a claim is declared
+// before the work. On Windows `isWithin` folds and these are one claim; on a case-insensitive macOS
+// volume they are two keys for one file, and closing that is the registry's job.
+describe("case, and what this layer cannot decide", () => {
+  it("folds case on Windows, where the OS does", () => {
+    expect(covers("C:\\repo\\Src", "C:\\repo\\src\\a.ts", "win32")).toBe(true);
+  });
+
+  it("does not fold on posix, where two spellings are genuinely two paths", () => {
+    expect(covers("/repo/Src", "/repo/src/a.ts", "linux")).toBe(false);
   });
 });
 
