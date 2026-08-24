@@ -23,6 +23,7 @@ import {
   initSharedApp,
   inviteToSharedApp,
   type AppRoleName,
+  type IdentityKeyResult,
   type RecordScanResult,
 } from "../backends/sharedApp/declare.js";
 import { isRecord } from "../../common/isRecord.js";
@@ -257,9 +258,8 @@ export function checkRecordNote(records: RecordScanResult): string[] {
   if (!records.scanned)
     return records.why === "no-session"
       ? [
-          "The live records were NOT scanned, and the app's identity keys were NOT compared — `check` can only read either with a session open. " +
-            "Publish does both: it refuses the rows that do not fit these schemas, and it refuses a moved `idFrom`/`idField`/`idIn`/`mirror`/`mirrorOf` " +
-            "under records that exist, which `confirm` does not override.",
+          "The live records were NOT scanned — `check` can only read them with a session open. Publish checks them too, " +
+            "against these same schemas, and refuses the rows that do not fit.",
         ]
       : [
           "The live records were NOT scanned — nothing knows which app or which collections to read until `app.json` parses. " +
@@ -291,6 +291,31 @@ export function checkRecordNote(records: RecordScanResult): string[] {
   return notes;
 }
 
+/** Whether publish's identity-key gate ran, in `check`'s voice — and, when it did not, WHY.
+ *
+ *  Silence is the failure mode this exists to prevent, and it is worse here than for the records:
+ *  the gate reads a different document from the record scan (`apps/{aid}`, not `…/items`), so a
+ *  report carrying a complete scan says nothing at all about this one. An agent reads that as
+ *  checked. Publish then refuses — and `confirm`, the thing an agent reaches for at that point,
+ *  does not override this refusal.
+ *
+ *  A comparison that RAN says nothing: a clean gate is what "publishable" already means. */
+export function checkKeyNote(keys: IdentityKeyResult): string[] {
+  if (keys.compared) return [];
+  const publishDoes =
+    "Publish compares them against the app as it stands and refuses a key that moved under records that exist — which `confirm` does not override.";
+  if (keys.why === "no-session")
+    return [
+      `The app's identity keys (\`idFrom\`, \`idField\`, \`idIn\`, \`mirror\`, \`mirrorOf\`) were NOT compared — that needs a session open. ${publishDoes}`,
+    ];
+  if (keys.why === "unparsed-declaration") return [];
+  if (keys.why === "no-app") return [];
+  return [
+    "The app's identity keys were NOT compared: `apps/{aid}` could not be read. That is a DIFFERENT document from the records above, so a scan that " +
+      `completed says nothing about this. ${publishDoes} Either the app does not exist yet (\`init\` creates it), or the read failed — try check again before publishing.`,
+  ];
+}
+
 /** The headline when the records alone would stop a publish, or null when they would not. A
  *  declaration can be perfect and a publish still refuse, which is why this is not decided by
  *  `problems` on its own.
@@ -312,7 +337,7 @@ async function narrateCheck(root: string): Promise<string> {
   const report = await checkSharedApp(root);
   if (!report.ok) return report.problems.join("\n");
   const found = report.collections.length === 0 ? "no shared collections in this repository yet" : `shared collections: ${report.collections.join(", ")}`;
-  const records = checkRecordNote(report.records);
+  const records = [...checkRecordNote(report.records), ...checkKeyNote(report.keys)];
   // WHOSE publish was checked, always said out loud: signed in it is you, signed out it is the
   // owner the declaration names, and "it would publish for somebody else" is not the same answer.
   const as =

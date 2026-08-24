@@ -407,7 +407,20 @@ export interface CheckReport {
    *  not running want opposite things from the author — one is "connect", the other is "fix
    *  `app.json`" — so a single null would send half of them to the wrong repair. */
   records: RecordScanResult;
+  /** Whether publish's OTHER live-reading gate ran — the identity keys, frozen once records exist —
+   *  or why it did not.
+   *
+   *  Its own answer rather than a share of `records`, because the two read DIFFERENT documents with
+   *  the same session: the scan lists `…/items`, this reads `apps/{aid}`. A transient failure on
+   *  one is not a failure of the other, and reporting a complete scan while this silently did
+   *  nothing is `check` certifying a gate it never ran. */
+  keys: IdentityKeyResult;
 }
+
+/** Either the comparison, or the reason there is none. `unreadable-app` is the one that needs
+ *  saying most: the session is open, the records may well have been scanned, and the one document
+ *  this gate is about did not come back. */
+export type IdentityKeyResult = { compared: true } | { compared: false; why: "no-session" | "unparsed-declaration" | "no-app" | "unreadable-app" };
 
 /** Either the scan, or the reason there is none.
  *
@@ -440,6 +453,7 @@ export async function checkSharedApp(root: string): Promise<CheckReport | Shared
       problems: parsed.problems,
       warnings: [],
       records: { scanned: false, why: "unparsed-declaration" },
+      keys: { compared: false, why: "unparsed-declaration" },
     };
 
   const collections = await sharedCollections(root);
@@ -471,7 +485,8 @@ export async function checkSharedApp(root: string): Promise<CheckReport | Shared
   // One reads nothing (the projection is built from the working tree) and the other has to read the
   // LIVE records, so only the second is gated on a session — reported through the same
   // `RecordScanResult` that says the row scan did not run.
-  const sizeAndKeys = [...oversizeProblems(parsed.app, collections), ...(handle === null ? [] : await frozenProblems(parsed.app, handle))];
+  const frozen = handle === null ? { problems: [], keys: { compared: false as const, why: "no-session" as const } } : await frozenProblems(parsed.app, handle);
+  const sizeAndKeys = [...oversizeProblems(parsed.app, collections), ...frozen.problems];
   return {
     ok: true,
     aid: parsed.app.aid,
@@ -481,6 +496,7 @@ export async function checkSharedApp(root: string): Promise<CheckReport | Shared
     problems: [...problems, ...pages.problems, ...sizeAndKeys],
     warnings: pages.warnings,
     records,
+    keys: frozen.keys,
   };
 }
 
@@ -506,15 +522,21 @@ function oversizeProblems(app: AuthoredApp, collections: readonly LoadedCollecti
  *  not override, and the one an agent is most likely to meet at the dangerous step: renaming
  *  `idField` under live bookings reads as an ordinary edit right up to the publish that refuses it.
  *
- *  A read that fails is not an answer, and it is not this action's to report twice: the record scan
- *  beside it reads the same app with the same session and says so in its own voice. */
-async function frozenProblems(app: AuthoredApp, handle: SharedAppHandle): Promise<string[]> {
-  if (app.aid === "") return [];
+ *  A READ THAT FAILS IS SAID, not swallowed. It reads `apps/{aid}`, which the record scan beside it
+ *  never touches — so a scan that completed says nothing about this one, and returning silently
+ *  would let `check` report "publishable" for a declaration whose frozen keys nothing compared. */
+async function frozenProblems(app: AuthoredApp, handle: SharedAppHandle): Promise<{ problems: string[]; keys: IdentityKeyResult }> {
+  // Nothing to compare against: there is no app yet, and `declarationProblems` above already says
+  // so in the voice that sends the author to `init`.
+  if (app.aid === "") return { problems: [], keys: { compared: false, why: "no-app" } };
   try {
     const live = await handle.docs.get(APPS_COLLECTION, app.aid);
-    return await frozenKeyProblems(app, app.collections ?? {}, isRecord(live) ? live : null, handle);
+    return { problems: await frozenKeyProblems(app, app.collections ?? {}, isRecord(live) ? live : null, handle), keys: { compared: true } };
   } catch {
-    return [];
+    // Including the refusal that means "this app document does not exist": the rules resolve the
+    // roster out of the document, so a missing one is DENIED rather than empty, and the two cannot
+    // be told apart from here. Both leave the gate unrun, which is the thing to report.
+    return { problems: [], keys: { compared: false, why: "unreadable-app" } };
   }
 }
 

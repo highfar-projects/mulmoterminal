@@ -193,6 +193,32 @@ describe("check", () => {
     expect(report.ok && report.problems.join(" ")).toContain("`confirm` overrides");
   });
 
+  it("says the identity keys went uncompared when the app document could not be read", async () => {
+    // The two live reads are INDEPENDENT: the scan lists `…/items`, the key gate reads `apps/{aid}`.
+    // A scan that completed therefore says nothing about the gate — and a silent gate would let
+    // `check` answer "publishable" for a declaration nothing compared, which is the one refusal
+    // `confirm` does not get past at publish.
+    withApp(root, '<div id="grid"></div><script>view.onState((d) => draw(d)); view.ready();</script>');
+    withSlots(root);
+    setFirestoreAccessor(() => ({
+      email: "owner@example.com",
+      uid: "uid_owner",
+      docs: {
+        list: async () => [],
+        get: () => Promise.reject(Object.assign(new Error("unavailable (test)"), { code: "unavailable" })),
+        set: async () => {},
+        create: async () => true,
+        delete: async () => false,
+        watch: () => () => {},
+      },
+    }));
+    const report = await checkSharedApp(root);
+    expect(report.ok).toBe(true);
+    // The records DID scan — which is exactly why the key gate has to answer for itself.
+    expect(report.ok && report.records.scanned).toBe(true);
+    expect(report.ok && report.keys).toEqual({ compared: false, why: "unreadable-app" });
+  });
+
   it("scans nothing, and says so, when there is no session", async () => {
     // `check` answers offline and must keep doing so — but a report with no record line reads as
     // "the records are fine", which is the belief that carried those 720 rows to a publish. The
