@@ -33,16 +33,36 @@ export interface Claim {
 }
 
 /**
+ * A path without the trailing separators that name the same directory.
+ *
+ * Never shorter than the root, so `/` stays `/` and `C:\` stays `C:\` rather than becoming
+ * something relative.
+ */
+function withoutTrailingSeparator(p: string, root = path.parse(p).root): string {
+  // Not a regex: `[/\\]+$` is the anchored-quantifier shape that backtracks super-linearly, and a
+  // path is a value from outside. Recursion here is bounded by the number of trailing separators.
+  const isSeparator = p.endsWith("/") || p.endsWith(path.sep);
+  return p.length > root.length && isSeparator ? withoutTrailingSeparator(p.slice(0, -1), root) : p;
+}
+
+/**
  * Does one path cover the other?
  *
  * Segment-aware on purpose: `src/foo` and `src/foobar` are different files, and a prefix test on
  * raw strings says otherwise. That mistake would let two tasks edit neighbouring paths believing
  * they were excluded from each other — or refuse a task for a collision that is not one.
+ *
+ * Both sides are trimmed of trailing separators first, so the two spellings of one directory get
+ * one answer. Untrimmed, `/a/` did not cover `/a` while `/a` covered `/a/` — the same pair, decided
+ * by which way round it was asked. `pathsConflict` hid that by asking both ways, but this is
+ * exported and a caller using it directly would have been told the wrong thing.
  */
 export function covers(outer: string, inner: string): boolean {
-  if (outer === inner) return true;
-  const withSeparator = outer.endsWith(path.sep) ? outer : outer + path.sep;
-  return inner.startsWith(withSeparator);
+  const from = withoutTrailingSeparator(outer);
+  const to = withoutTrailingSeparator(inner);
+  if (from === to) return true;
+  const withSeparator = from.endsWith(path.sep) ? from : from + path.sep;
+  return to.startsWith(withSeparator);
 }
 
 /** Do these two paths conflict? Either covering the other is a conflict, in both directions. */

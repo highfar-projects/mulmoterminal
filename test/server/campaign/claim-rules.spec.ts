@@ -54,6 +54,20 @@ describe("does one path cover another", () => {
     expect(covers(p("repo", "src") + path.sep, p("repo", "src", "a.ts"))).toBe(true);
   });
 
+  // The same directory spelled two ways must get ONE answer. Before the trim, `/a/` did not cover
+  // `/a` while `/a` covered `/a/` — decided by which way round it was asked.
+  it("gives one answer for the two spellings of one directory", () => {
+    const bare = p("repo", "src");
+    const slashed = bare + path.sep;
+    expect(covers(slashed, bare)).toBe(true);
+    expect(covers(bare, slashed)).toBe(true);
+  });
+
+  it("does not trim a root away", () => {
+    expect(covers(path.sep, path.sep)).toBe(true);
+    expect(covers(path.sep, p("a"))).toBe(true);
+  });
+
   it("treats the root as covering everything under it", () => {
     expect(covers(path.sep, p("anything"))).toBe(true);
   });
