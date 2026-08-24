@@ -401,9 +401,11 @@ identity: the pane posts to `/api/shared-app/preview/submit`, which calls the sa
 `writePreviewSubmission` as the headless run, so **both write as the author**. Neither preview can
 tell you what the rules would say to a visitor or a participant — only a real session as that person
 does. In
-the cell open on this repository: the **Collections pane** → the **"Preview the shared app"** button at the top → the
-page appears, drawn from the working tree. Opening it reads only: nothing is written and no URL
-name is taken.
+the cell open on this repository: the **Collections pane** → the **Previews** switch in its header
+→ the page appears, drawn from the working tree, and the **page picker** beside that switch
+(`<id> — <audience>`) chooses which one. In a directory that declares an app the switch starts ON,
+so the pages are usually already there; turning it OFF is what shows the collections underneath
+them. Opening it reads only: nothing is written and no URL name is taken.
 
 **Accepting a submission there DOES write a real record**, as the signed-in author, into the live
 app — the pane says so at the button and lists what it made with an Undo beside it. So it is a
