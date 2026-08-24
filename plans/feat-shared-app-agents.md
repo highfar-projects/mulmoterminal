@@ -105,6 +105,13 @@ brief が名指す cid の**和**で射影する。最後のページを外し�
 
 `agents` に `public` があって `public` ブロックが無ければ publish は拒否する。
 
+**mulmoserver の人向けページに 1 つだけ見える差がある**（コード変更は不要）。ページ無しの
+member tier が存在すると、`readTiers` がその tier を返すので `memberViewRun.ts` の
+`admitted` が true になり、`/m/{slug}` の文言が「入れません」から「入れるが、この種類の
+ページはこのアプリに無い」（`no-view`）に変わる。ロールは実際に持っているので、これは
+今までより正確な答えで、`openableViews` は `config.views` を flatMap するだけなので
+開けるページの一覧は空のまま — 描画は変わらない。
+
 ## 6. パースは `@receptron/sharedapp` に置く
 
 `AuthoredAppZ` は `.strict()`。`agents` を書いた `app.json` は、スキーマが無い限り**丸ごと**
