@@ -249,8 +249,8 @@ fifteen lines, are in [design.md](./design.md).
 - **`requesterEmail` は送らない。** サインインした訪問者のアドレスを親が入れます
 
 **publish の前に、プレビューで実際に押してもらってください** — Collections ペインの
-「Preview the shared app」で、`/a/{slug}` と**同じ親・同じサンドボックス**のままこのページが
-動きます（[SKILL.md](../SKILL.md) の「3. RUN THE PAGE」）。ここの不具合は読んでも見つからず、
+**Previews**（アプリを宣言しているフォルダでは既定でオン）で、`/a/{slug}` と**同じ親・
+同じサンドボックス**のままこのページが動きます（[SKILL.md](../SKILL.md) の「3. RUN THE PAGE」）。ここの不具合は読んでも見つからず、
 押すと確認ダイアログが出るところまで見て初めて分かります。
 
 **押した瞬間には書き込まれません。** 親が値を iframe の外に描いて確認を取り、訪問者が
