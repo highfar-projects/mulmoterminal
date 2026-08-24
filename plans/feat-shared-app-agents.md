@@ -129,6 +129,12 @@ member tier が存在すると、`readTiers` がその tier を返すので `mem
 **その audience が何もできない cid だけを名指す brief**（フォームも遷移も割当も取り下げも無い =
 起きて読んで拒否されるだけ） / `public` ブロックの無い `audience: "public"`。
 
+**名指した cid はすべて「その audience が読める、または書ける」でなければならない。** 検査を
+`watch` にしか掛けていなかった版では、`collections` に書いた staff 専用の cid が世界の読める
+`config/public` に載っていた（原則 5 の漏れ、#49 で Grok が指摘）。読めるだけ／書けるだけの
+片方で足りる — 世界が読めない `public.submit` のコレクションを案内する greeter が、まさに
+このキーの用途だから。
+
 「フォームがある」は行動と数えない場合がある: `public.submit[cid].audience: "participant"` は
 `publicCreate` が create を **participant ロール**に固定するので、member tier（`staffOf` =
 owner / editor / viewer / assignee）と公開の来訪者はそのフォームを使えない（sharedapp#49 で
