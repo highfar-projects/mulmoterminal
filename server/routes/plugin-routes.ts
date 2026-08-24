@@ -18,8 +18,7 @@ import type { TerminalAgent } from "../../common/sessionAgent.js";
 import { registeredGuiMcpGroups } from "../infra/gui-mcp-registration.js";
 import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups.js";
 import { codexifySkillSeed } from "../agents/codex-skills.js";
-import { SESSION_HEADER } from "../backends/presentPathRoot.js";
-import { SESSION_ID_RE } from "../config/env.js";
+import { SESSION_HEADER, sessionIdFromHeader } from "../backends/presentPathRoot.js";
 import { cwdForSession } from "../session/session-cwd.js";
 import { projectScopeForCwd, rootForProjectId } from "../infra/project-root.js";
 import { manageCollectionHandlerFor } from "../infra/collection-tool.js";
@@ -221,8 +220,7 @@ function mountCollectionRoute(app: Express): void {
       // The session id rides in a header from the MCP broker, and `cwdForSession` is the same
       // lookup presentDocument's relative paths already resolve through, so the tool and the
       // documents it produces agree on where "here" is.
-      const header = req.get(SESSION_HEADER);
-      const sessionId = header && SESSION_ID_RE.test(header) ? header : null;
+      const sessionId = sessionIdFromHeader(req.get(SESSION_HEADER));
       const handler = manageCollectionHandlerFor(projectScopeForCwd(cwdForSession(sessionId)).workspaceRoot);
       const message = await handler(isRecord(req.body) ? req.body : {});
       return res.json({ message });
@@ -244,8 +242,7 @@ function mountSharedAppRoute(app: Express): void {
   // collection, that one is visible to other people the moment it lands.
   app.post("/api/plugin/manageSharedApp", async (req, res) => {
     try {
-      const header = req.get(SESSION_HEADER);
-      const sessionId = header && SESSION_ID_RE.test(header) ? header : null;
+      const sessionId = sessionIdFromHeader(req.get(SESSION_HEADER));
       const root = projectScopeForCwd(cwdForSession(sessionId)).workspaceRoot;
       return res.json({ message: await manageSharedApp(root, req.body) });
     } catch (err) {
@@ -266,9 +263,35 @@ function mountUseSharedAppRoute(app: Express): void {
   // directory decided something, and nothing about a cell's directory may change what a person is
   // allowed to do inside somebody else's app — that is the deployed rules' answer about the
   // signed-in identity, and it is the same in every cell.
+  //
+  // The SESSION is passed, and it is the one thing about the caller this tool is allowed to know.
+  // `watch` outlives its own call: what it produces is typed into a terminal minutes later, so it
+  // has to be told which one. Nothing else here reads it, and it must not become a way for a cell's
+  // identity to change what a person may do — that answer is the rules', and it is the same
+  // everywhere (see the note above).
   app.post("/api/plugin/useSharedApp", async (req, res) => {
     try {
-      return res.json({ message: await useSharedApp(req.body) });
+      // NORMALIZED, not forwarded. A header is an assertion by whatever reached this route, and for
+      // `watch` an unchecked one is not a wrong directory but a live Firestore listener attached on
+      // behalf of a session that does not exist — unreapable, billed to the app's owner, and, with a
+      // different made-up value each time, not subject to the per-session ceiling either. `watch`
+      // additionally requires the id to name a LIVE pty (`startWatch`).
+      //
+      // WHAT THIS IS NOT is authorization, and it is worth being exact about what remains. A caller
+      // that knows ANOTHER live session's id can still aim a watch at that terminal. Three things
+      // bound what that is worth: this server is reachable only from this machine (loopback — see
+      // infra/loopback-listener.ts, and `isAllowedOrigin` trusts an Origin-less request only from a
+      // loopback peer), every session on it belongs to the SAME local user, and the line a watch
+      // types is a fixed string naming itself as mulmoterminal's, carrying none of the app's data.
+      // So the actor is a local process already running as that user, and the effect is a
+      // self-identifying line in another of their own terminals.
+      //
+      // The header has never been more than an assertion, for any of the three routes here: the two
+      // above resolve ANOTHER session's directory from it just as readily, and write there. Making
+      // it a binding means the broker minting a per-session secret and all three routes demanding
+      // it — a change to what the header IS, not to this route, and one that has to be made once for
+      // all of them rather than in the middle of a feature (Codex on #1844).
+      return res.json({ message: await useSharedApp(req.body, sessionIdFromHeader(req.get(SESSION_HEADER)) ?? undefined) });
     } catch (err) {
       console.error(`[useSharedApp] dispatch failed: ${messageOf(err)}`);
       return res.json({ message: `useSharedApp failed: ${messageOf(err)}` });

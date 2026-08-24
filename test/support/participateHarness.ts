@@ -44,7 +44,31 @@ export interface Bag {
   denyQuery: Set<string>;
   /** What `getDocs` can see — filled from the same store the docs seam holds. */
   queryable: Map<string, { id: string; data: Record<string, unknown> }[]>;
+  /** Live subscriptions the host has opened, in the order it opened them.
+   *
+   *  A watch is the one thing here that does not finish inside its own call, so the fake cannot
+   *  answer it and be done: what the specs need is to hold the callbacks and FIRE them later, which
+   *  is the only way to check that the first snapshot is not a change and that the last listener to
+   *  die ends the watch. */
+  listeners: Listener[];
   docs: Docs;
+}
+
+export interface Listener {
+  /** The query or document reference the host subscribed to, as the fake described it. */
+  target: { collectionPath?: string; path?: string; clause?: { field: string; value: unknown }; cap?: { rows: number } };
+  /** Deliver a snapshot. A NUMBER means that many distinct rows changed; a LIST names the rows, so
+   *  a spec can say the same row arrived twice. */
+  fire: (changed: number | string[]) => void;
+  /** Fail this listener the way Firestore does — asynchronously, after it was attached. */
+  fail: (err: unknown) => void;
+  /** A delivery that was ALREADY IN THE AIR when the host unsubscribed. Detaching is asynchronous
+   *  at the edges, so this is a real thing a callback does — and the only way a spec can put the
+   *  host's own post-teardown guard under load, since `fire` stops honouring a stopped listener. */
+  fireAfterStop: (changed: number | string[]) => void;
+  /** The same for a FAILURE that was already queued when the host unsubscribed. */
+  failAfterStop: (err: unknown) => void;
+  stopped: boolean;
 }
 
 export const freshBag = (bag: Bag): void => {
@@ -56,6 +80,8 @@ export const freshBag = (bag: Bag): void => {
   bag.breakQuery.clear();
   bag.denyQuery.clear();
   bag.queryable.clear();
+  bag.listeners.length = 0;
+  forgetRowIds();
   bag.docs = new Docs(bag);
 };
 
@@ -140,10 +166,64 @@ const batchFor = (bag: Bag): Record<string, unknown> => {
   };
 };
 
+/** A snapshot's changed documents, as the host reads them: the ID and nothing else.
+ *
+ *  Ids rather than a count because the host has to DEDUPLICATE — one row can arrive through two
+ *  identity listeners, and twice through one within a coalescing window. Given a number, the fake
+ *  invents that many distinct ids, which is the "n different rows changed" case; given a list, those
+ *  are the rows, which is how a spec says the same row twice.
+ *
+ *  Deliberately no `data()`: a fake that offered one would let a change to this feature start
+ *  reporting an app's own values into a terminal without a spec noticing. */
+let nextRow = 0;
+
+/** Reset by `freshBag`, so ids do not carry meaning between specs. */
+export const forgetRowIds = (): void => {
+  nextRow = 0;
+};
+
+const shapedChanges = (changed: number | string[]): { doc: { id: string } }[] =>
+  (typeof changed === "number"
+    ? Array.from({ length: changed }, () => {
+        // FRESH EVERY TIME, not restarted per call. Restarting made two `fire(1)` calls model the
+        // same record twice -- which is the opposite of what a NUMBER means here, and it would have
+        // hidden an undercount by quietly deduplicating rows a spec meant to be different
+        // (CodeRabbit on #1844). A spec that means "the same row again" says so with a list.
+        nextRow += 1;
+        return `row-${nextRow}`;
+      })
+    : changed
+  ).map((id) => ({ doc: { id } }));
+
+/** The subscription seam. It REGISTERS rather than answers: nothing is delivered until a spec fires
+ *  it, which is the only way "the first snapshot is not a change" can be checked at all. */
+const subscribe = (bag: Bag) => (target: Record<string, unknown>, next: (snapshot: unknown) => void, error: (err: unknown) => void) => {
+  const entry: Listener = {
+    target: target as Listener["target"],
+    fire: (changes) => {
+      if (!entry.stopped) next({ docChanges: () => shapedChanges(changes) });
+    },
+    fail: (err) => {
+      if (!entry.stopped) error(err);
+    },
+    fireAfterStop: (changed) => next({ docChanges: () => shapedChanges(changed) }),
+    failAfterStop: (err) => error(err),
+    stopped: false,
+  };
+  bag.listeners.push(entry);
+  return () => {
+    entry.stopped = true;
+  };
+};
+
 export const firestoreMock = (bag: Bag): Record<string, unknown> => ({
   collection: (_db: unknown, collectionPath: string) => ({ collectionPath }),
   serverTimestamp: () => ({ __serverTimestamp: true }),
-  doc: (parent: { collectionPath: string }, docId: string) => ({ path: `${parent.collectionPath}/${docId}` }),
+  // BOTH SHAPES THE REAL `doc` TAKES. `doc(collectionRef, id)` is what the write paths build; the
+  // watch builds `doc(firestore, collectionPath, id)`, which is equally real and which a fake that
+  // knew only the first would reject as a host error.
+  doc: (first: { collectionPath?: string } | unknown, second: string, third?: string) =>
+    third === undefined ? { path: `${(first as { collectionPath: string }).collectionPath}/${second}` } : { path: `${second}/${third}` },
   // The own-row query, recorded as a description rather than run: what matters is that the field
   // and the value came from the DECLARATION and the session, not from anything a caller passed.
   // Constraints arrive in whatever combination the caller built: a whole-collection read is a cap
@@ -152,8 +232,11 @@ export const firestoreMock = (bag: Bag): Record<string, unknown> => ({
   query: (source: { collectionPath: string }, ...constraints: ({ field: string; value: unknown } | { rows: number })[]) => {
     const clause = constraints.find((entry): entry is { field: string; value: unknown } => "field" in entry);
     const cap = constraints.find((entry): entry is { rows: number } => "rows" in entry);
-    if (cap === undefined) throw new Error("a query was built with no row cap");
-    bag.capped.push(cap.rows);
+    // A CAP IS REQUIRED OF A READ, NOT OF A QUERY. It used to be demanded here, which was the same
+    // thing while `getDocs` was the only consumer — a subscription is the second, and it is
+    // deliberately uncapped (see the note at the top of participate/watch.ts). Demanded at the read
+    // instead, so the guard still catches the thing it was written for.
+    if (cap !== undefined) bag.capped.push(cap.rows);
     return { ...source, clause, cap };
   },
   // The real `where` takes a FieldPath here, whose `segments` are the literal key. The fake reads
@@ -167,7 +250,10 @@ export const firestoreMock = (bag: Bag): Record<string, unknown> => ({
   },
   where: (field: { segments: string[] }, _op: string, value: unknown) => ({ field: field.segments.join("."), value }),
   limit: (rows: number) => ({ rows }),
-  getDocs: (asked: { collectionPath: string; clause?: { field: string; value: unknown }; cap: { rows: number } }) => {
+  onSnapshot: subscribe(bag),
+  getDocs: (asked: { collectionPath: string; clause?: { field: string; value: unknown }; cap?: { rows: number } }) => {
+    if (asked.cap === undefined) throw new Error("a read was issued with no row cap");
+    const cap = asked.cap;
     // Refused only WITHOUT a where clause — which is the shape the rules actually take: listing a
     // collection people submit to is denied, while a query narrowed to the reader's own rows is
     // the one a participant's page issues and is allowed.
@@ -182,7 +268,7 @@ export const firestoreMock = (bag: Bag): Record<string, unknown> => ({
         .filter((row) => clause === undefined || row.data[clause.field] === clause.value)
         // The fake honours the cap, so a host that stopped passing one would hand back more rows
         // than it asked for and the assertion would notice.
-        .slice(0, asked.cap.rows)
+        .slice(0, cap.rows)
         .map((row) => ({ id: row.id, data: () => row.data })),
     });
   },

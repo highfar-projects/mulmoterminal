@@ -28,6 +28,22 @@ import { isSamePath } from "../infra/path-within.js";
  *  broker (server/mcp/broker.ts), which is the only caller that knows it. */
 export const SESSION_HEADER = "x-mulmoterminal-session";
 
+/** The session a request claims to be from, or null.
+ *
+ *  A HEADER IS AN ASSERTION, and this is the one line that treats it as one. Anything that can reach
+ *  a dispatch route can put whatever it likes here, so a value that is not shaped like a session id
+ *  is not a session — it is a string, and the routes that resolve a directory from it would resolve
+ *  one from nonsense.
+ *
+ *  Named rather than repeated because the number of readers grew: it was two directory-scoped routes
+ *  where a bad value merely fell back to the workspace, and then `useSharedApp watch`, where a made
+ *  up value opens a live Firestore listener against a session that does not exist and can never be
+ *  reaped (Codex on #1844). The check was missing there precisely because it was an idiom rather
+ *  than a function.
+ *
+ *  It says the id is WELL FORMED, never that the session is live — see `startWatch` for that. */
+export const sessionIdFromHeader = (header: string | undefined): string | null => (header && SESSION_ID_RE.test(header) ? header : null);
+
 /** The tools whose `path` argument this applies to, with the extensions each accepts —
  *  the same lists their by-path FileOps are built with, so the lexical gate below asks
  *  exactly the question core will ask again downstream.
@@ -105,9 +121,7 @@ export function mountPresentPathRoot(app: Express, deps: { cwdForSession: (id: s
     const toolName = req.params.toolName;
     const extensions = typeof toolName === "string" ? PRESENT_PATH_EXTENSIONS.get(toolName) : undefined;
     if (!extensions) return next();
-    const header = req.get(SESSION_HEADER);
-    const sessionId = header && SESSION_ID_RE.test(header) ? header : null;
-    const cwd = deps.cwdForSession(sessionId);
+    const cwd = deps.cwdForSession(sessionIdFromHeader(req.get(SESSION_HEADER)));
     if (isSamePath(cwd, deps.workspace)) return next();
 
     const rewritten = absolutizePresentPath(req.body, cwd, extensions);
