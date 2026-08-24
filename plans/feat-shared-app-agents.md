@@ -122,6 +122,11 @@ brief が名指す cid の**和**で射影する。最後のページを外し�
 **その audience が何もできない cid だけを名指す brief**（フォームも遷移も割当も取り下げも無い =
 起きて読んで拒否されるだけ） / `public` ブロックの無い `audience: "public"`。
 
+「フォームがある」は行動と数えない場合がある: `public.submit[cid].audience: "participant"` は
+`publicCreate` が create を **participant ロール**に固定するので、member tier（`staffOf` =
+owner / editor / viewer / assignee）と公開の来訪者はそのフォームを使えない（sharedapp#49 で
+Sourcery が指摘）。
+
 警告（止めない、`agentWarnings`）: `watch` が無い（一度読まれるだけで、持ち場では無い）/
 指示にマークアップが入っている（ページを貼り間違えている）。
 
@@ -133,7 +138,7 @@ brief が名指す cid の**和**で射影する。最後のページを外し�
 （package の型に決めつけない — 他人の publish が書いた文書）。既存の「You may:」・遷移・
 フォームの後に、ホスト自身の声で:
 
-```
+```text
 Publisher's standing instruction for you (member):
   - «desk» (watch «bookings»):
     «…instruction、quoted.ts と同じ平坦化・4096 で上限…»

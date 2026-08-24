@@ -365,7 +365,7 @@ The author writes it as `agents[]` in `app.json`: a short instruction, the audie
 the collections it waits on. `describe` then reports it to whoever is entitled to read it, labelled
 as what it is:
 
-```
+```text
 Publisher's standing instruction for you (member):
   - «desk» (watch «bookings»):
     «pending の予約は、枠が空いていれば承認する。»
