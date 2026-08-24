@@ -317,7 +317,11 @@ a link to. It needs no repository and never touches a declaration.
 It is in the **External accounts** group (`external`), not the data group, and for a reason: it
 reaches outside your machine and acts inside another person's app, where a single call can queue
 real mail to a real person. So it is a separate switch — a folder can have its own collections
-without also being able to act in other people's apps — and it is never auto-approved.
+without also being able to act in other people's apps — and in a **Claude** cell it is excluded from
+auto-approval, so every call raises a permission prompt. **In a Codex cell it does not**, for the
+same reason publishing does not (above): the exclusion is per tool and Codex approves per server.
+A Codex cell with External accounts switched on can submit, move or delete a record in somebody
+else's app — and queue the mail that goes with it — without asking you first.
 
 What it does, given a slug:
 
