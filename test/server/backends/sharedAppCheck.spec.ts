@@ -78,6 +78,30 @@ const withApp = (root: string, html: string | null): void => {
   writeFileSync(path.join(root, "views", "signup.html"), html);
 };
 
+/** An app whose public form is `bytes` of labels — the one thing that decides whether the
+ *  world-readable config document fits. Written as one collection of equal fields so a test can say
+ *  "just over" and "just under" the budget without arithmetic in the assertion. */
+const withFormOfSize = (root: string, bytes: number): void => {
+  const dir = path.join(root, ".claude", "skills", "answers");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(path.join(dir, "SKILL.md"), "---\nname: answers\ndescription: answers\n---\n");
+  const names = Array.from({ length: 40 }, (_, index) => `q${index}`);
+  const per = Math.floor(bytes / names.length);
+  const fields: Record<string, unknown> = { id: { type: "string", label: "ID", primary: true, required: true } };
+  for (const name of names) fields[name] = { type: "string", label: "x".repeat(per) };
+  writeFileSync(path.join(dir, "schema.json"), JSON.stringify({ title: "Answers", icon: "list", primaryKey: "id", storage: { type: "firestore" }, fields }));
+  writeFileSync(
+    path.join(root, "app.json"),
+    JSON.stringify({
+      aid: AID,
+      name: "Big",
+      members: { "owner@example.com": { "*": "owner" } },
+      collections: { answers: { submitOnly: true } },
+      public: { enabled: true, read: [], submit: { answers: { auth: "verifiedEmail", emailField: "q0", createFields: names } } },
+    }),
+  );
+};
+
 describe("check", () => {
   let root: string;
 
@@ -217,6 +241,30 @@ describe("check", () => {
     // The records DID scan — which is exactly why the key gate has to answer for itself.
     expect(report.ok && report.records.scanned).toBe(true);
     expect(report.ok && report.keys).toEqual({ compared: false, why: "unreadable-app" });
+  });
+
+  it("refuses a public form too large for one document, with no connection", async () => {
+    // Publish's size gate, asked where it costs nothing. It used to run only mid-publish — after
+    // the app document had been established and the schemas were on their way out — and the
+    // database's own refusal says only that a document was too large, naming no app and no field.
+    // Signed out on purpose: this half of the gate reads nothing live, and that is what it claims.
+    withFormOfSize(root, 900_000);
+
+    const report = await checkSharedApp(root);
+    expect(report.ok).toBe(true);
+    expect(report.ok && report.problems.join(" ")).toContain("the public form comes to");
+    expect(report.ok && report.problems.join(" ")).toContain("has to fit in one Firestore document");
+    // Said with nobody signed in, which is the path this half of the gate advertises.
+    expect(report.ok && report.checkedAs).toBeNull();
+  });
+
+  it("says nothing about a large form that still fits", async () => {
+    // The other side of the boundary, because a gate that refuses everything large is the same
+    // mistake in the other direction: a big form is a normal app, and only 700 kB is the line.
+    withFormOfSize(root, 600_000);
+
+    const report = await checkSharedApp(root);
+    expect(report.ok && report.problems.join(" ")).not.toContain("the public form comes to");
   });
 
   it("scans nothing, and says so, when there is no session", async () => {
