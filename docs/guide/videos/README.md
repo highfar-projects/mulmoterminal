@@ -8,8 +8,17 @@ Captured from the same **throwaway demo instance** the screenshots use — a scr
 |---|---|---|---|
 | `launch-demo-en.mp4` | 1:32 | 3.3 MB | One agent, then a grid of them — **working / done / needs you** in colour, the cockpit roster holding what each session asked and answered, and picking whichever cell is lit. English narration |
 | `launch-demo-ja.mp4` | 1:34 | 3.4 MB | The same footage, Japanese narration. The screen is the English one — only the voice differs |
+| `launch-demo-poster.png` | — | 315 KB | The `poster` of both guide embeds: the 24 s frame — the coloured grid under the `working / done / needs you` title card. One file serves both languages because the picture is the same |
 
-Both are 1280x720, h264 + aac.
+Both videos are 1280x720, h264 + aac; the poster is the same 1280x720.
+
+**The guide embeds carry a `poster`** because without one the player is a plain grey box until play is pressed — `preload="metadata"` does not make Safari draw the first frame, and the first frame is a dark single cell anyway (#1842). The frame is taken from the Japanese cut with an output-side seek (`-ss` after `-i`, so the time is exact) and the English cut would give the same picture:
+
+```bash
+ffmpeg -i docs/guide/videos/launch-demo-ja.mp4 -ss 24 -frames:v 1 docs/guide/videos/launch-demo-poster.png
+```
+
+If the cut is ever re-rendered, re-extract the poster — the title card may have moved.
 
 **Each embed carries a transcript of the narration** in a `<details>` block below the player (README, `en/index.md`, `ja/index.md`) — in the guides it comes after the italic caption, so the caption stays attached to the video. The text is the narration as rendered — copied verbatim from the MulmoScript deck that produced the cut, `mulmo-presentations/mulmoterminal/launch/mulmoterminal-launch-v8.json` and `…_ja.json`, checked against the `script` that mulmocast embedded in the render's `_studio.json` (the deck file can be edited after a render; the studio copy is what was spoken). **`launch-demo-{en,ja}.vtt` are the same narration as WebVTT captions**, one cue per beat, wired into each guide's `<video>` as `<track kind="captions">` (the README's GitHub player cannot take a track, so there only the transcript is available). The cue times come from the deck's render record, `output/<deck>/<deck>_studio.json`: a cue starts at the beat's `startAt` plus `audioParams.introPadding` (the movie opens with that much silence and `startAt` does not include it) and ends `audioDuration` later, when the voice stops. mulmocast writes `startAt` only when the **movie** step runs, and `mulmo pdf` rewrites the studio file without it — so if the times are missing, run the movie step again (cached TTS and frames make that a few minutes of assembly) before regenerating; `record-youtube-publish`'s `youtube-chapters.js` reads the same fields and stops when the studio file cannot be trusted. Sanity check after generating: the last beat's `startAt + duration + introPadding + outroPadding` must equal the mp4's duration — here 91.638 s and 93.536 s, both exact.
 
