@@ -1896,10 +1896,10 @@
   resolved "https://registry.yarnpkg.com/@mulmoclaude/common/-/common-1.2.0.tgz#ad2d696a6a06ea47c078e45d8d7f6f41b53d4aeb"
   integrity sha512-Y459jz/3fGY+QPSOtRUpq+JA1v839qlhaKmuz6LohoJp0nneP9Eot+gsn7Yl8RKhEGqxhfmJaCDa28bWK7RhCA==
 
-"@mulmoclaude/core@4.4.0":
-  version "4.4.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/core/-/core-4.4.0.tgz#a8183596c4e3115fbe44d929780e8ea02cf3536a"
-  integrity sha512-Uqol+QAYnrM0Bwf5wtyZnL7iXDxqZNLiEBEXwl2xy64Mca81eQiNYqLWAOjFbJRZELfQSAM5+JGN2xH6qF5tcg==
+"@mulmoclaude/core@4.4.1":
+  version "4.4.1"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/core/-/core-4.4.1.tgz#83b7837fc4b18c27911d594855237dc2c8c598ad"
+  integrity sha512-MLPyv50jlpm/0QeLLIepSyv3gO9Va9bBYYhfiskL2H+GveD77IEcmMYXEWb4HY+8zcpMOXnsU0GYwn7GnnxPug==
   dependencies:
     "@duckdb/node-api" "^1.5.5-r.2"
     "@mulmoclaude/common" "^1.2.0"
@@ -1949,10 +1949,10 @@
     js-yaml "^5.2.3"
     marked "^18.0.7"
 
-"@mulmoclaude/mulmoscript-plugin@^4.1.1":
-  version "4.1.1"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/mulmoscript-plugin/-/mulmoscript-plugin-4.1.1.tgz#38661c678fe88eccdaa2772daed55ddd7868abdf"
-  integrity sha512-YlTW4WvrzYfsjbg3UfgX5LBKiIJM6dvRTkWkO/ijSDHCcTsyUGba8fg2tYbSD4Xg3IK32xUfoHFSkzBkLSPrCw==
+"@mulmoclaude/mulmoscript-plugin@^4.4.0":
+  version "4.4.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/mulmoscript-plugin/-/mulmoscript-plugin-4.4.0.tgz#fea94651fbcfc0f7f580ba5675991353fd8413df"
+  integrity sha512-q88OhCdtt5UjGfnWxFcku8aAkbd+LPA2yOsE5mSTBmAiKcemtcKNV70XuItEJnRG9Hp2scUjqCKrLtBuCBSwHg==
   dependencies:
     "@mulmoclaude/common" "^1.2.0"
 
