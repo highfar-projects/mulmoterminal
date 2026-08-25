@@ -35,7 +35,7 @@ const TEMPLATE_FILES = readdirSync(TEMPLATES)
  *
  *  The removed board is named by its absence from the list below and by the git history, not in
  *  prose here: its first four letters are a task marker to `sonarjs`, and CI fails on them. */
-const EXPECTED_TEMPLATES = ["append-feed.md", "gym.md", "live-poll.md", "meeting-room.md", "project-board.md", "salon.md", "survey.md"];
+const EXPECTED_TEMPLATES = ["ai-council.md", "append-feed.md", "gym.md", "live-poll.md", "meeting-room.md", "project-board.md", "salon.md", "survey.md"];
 
 /** The hue as CSS reads it — a NUMBER, in which `25` and `25.0` are one colour and `0` and `360`
  *  are one angle. Compared as the raw strings they are written in, each of those pairs is two
@@ -118,6 +118,10 @@ describe("the shared-app templates", () => {
 
   it("append-feed.md deploys as written", () => {
     expect(problemsFor("append-feed.md", "owner@example.jp", [])).toEqual([]);
+  });
+
+  it("ai-council.md deploys as written", () => {
+    expect(problemsFor("ai-council.md", "host@example.com", [])).toEqual([]);
   });
 
   it("shows no page the sandbox would silently break", () => {
@@ -276,5 +280,8 @@ describe("the shared-app templates", () => {
       expect.arrayContaining([".claude/skills/tasks/schema.json", ".claude/skills/names/schema.json", ".claude/skills/assignments/schema.json"]),
     );
     expect([...blocksOf("append-feed.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/messages/schema.json"]));
+    expect([...blocksOf("ai-council.md").keys()]).toEqual(
+      expect.arrayContaining([".claude/skills/topics/schema.json", ".claude/skills/speakers/schema.json", ".claude/skills/messages/schema.json"]),
+    );
   });
 });

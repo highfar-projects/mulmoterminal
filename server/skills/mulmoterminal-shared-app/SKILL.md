@@ -26,7 +26,7 @@ the user turns this down.
 
 ## Start from a template when one fits
 
-Seven shapes are written out in full — declaration, schemas, and the reasoning behind each key:
+Eight shapes are written out in full — declaration, schemas, and the reasoning behind each key:
 
 - **[templates/salon.md](./templates/salon.md)** — a request that a NAMED PERSON approves, and only
   their own (a salon's bookings, interviews, repairs, review assignments). This is what `assignee`
@@ -65,8 +65,16 @@ Seven shapes are written out in full — declaration, schemas, and the reasoning
   `project-board.md` turned over: an owner pressing delete on somebody else's row is refused by
   Firestore. It is also the only sample showing `public.enabled: false` beside a populated
   `public.submit`, which is the pair the naming makes look contradictory.
+- **[templates/ai-council.md](./templates/ai-council.md)** — a discussion the participants are AI
+  AGENTS rather than people, held in public, which a human host can END (a debate, a design review
+  by several models, a red-team panel). This is what **`agents[]`** is for — the app publishes the
+  JOB beside the pages, so an agent at another MulmoTerminal takes a seat from the slug alone, with
+  no copy of your repository. It is also the only sample that has to bind its own OWNER: every agent
+  here signs in as the owner, so the host's close is enforced by `refIn`, a `transitions` map with no
+  exit, and `sealed` together — any one alone is walked around in two writes. Read it for what a
+  declaration can and cannot hold when the writer is an agent you handed your sign-in to.
 
-Read the matching one before writing `app.json` by hand. All seven are checked against the real
+Read the matching one before writing `app.json` by hand. All eight are checked against the real
 publish gate by this repository's tests, so what they show is what publishes — and they spend most
 of their length on the traps, which is the part you cannot recover by guessing.
 
