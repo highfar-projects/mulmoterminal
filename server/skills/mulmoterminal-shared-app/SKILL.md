@@ -1012,6 +1012,11 @@ the cost in the text the reader can see.
     collection declares `writerDelete: true`. A boolean, because the rules ask no status of a
     writer (`deleteWith` opens with `isWriter`). This is the staff half, and it is the one to give
     an owner who needs to remove a task somebody abandoned or a name registered by mistake.
+  - `viewer.can.<cid>.sealed` — statuses NO delete succeeds from, whichever of the two above the
+    reader holds (`collections.<cid>.sealed`). "Any row" means "any row the RECORD has not sealed":
+    `sealedNow` sits above the `isWriter` branch and refuses the owner too. **A page holding
+    `withdrawAny` must skip the rows whose status is in this list** — the control would only ever
+    fail on them. Empty for the collections that seal nothing, which is nearly all of them.
 
   The staff half did not exist before `@receptron/sharedapp` 0.20.0, and its absence used to be
   worked around by publishing the OWNER's page as `audience: "participant"` — which costs
