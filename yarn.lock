@@ -1949,10 +1949,10 @@
     js-yaml "^5.2.3"
     marked "^18.0.7"
 
-"@mulmoclaude/mulmoscript-plugin@^4.1.1":
-  version "4.1.1"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/mulmoscript-plugin/-/mulmoscript-plugin-4.1.1.tgz#38661c678fe88eccdaa2772daed55ddd7868abdf"
-  integrity sha512-YlTW4WvrzYfsjbg3UfgX5LBKiIJM6dvRTkWkO/ijSDHCcTsyUGba8fg2tYbSD4Xg3IK32xUfoHFSkzBkLSPrCw==
+"@mulmoclaude/mulmoscript-plugin@^4.3.0":
+  version "4.3.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/mulmoscript-plugin/-/mulmoscript-plugin-4.3.0.tgz#3a7d8e2ad4dd2b28b0eec1ded5c9507d28a9f5ec"
+  integrity sha512-4Jszq9hRsoF7LYzQxBDkL9/bpMzC+9Dt93mKCGcbUxp+cBCvKJ9jkNj9mHB2ziUZBoSMkSAy/TGarYGcLPMK9A==
   dependencies:
     "@mulmoclaude/common" "^1.2.0"
 
