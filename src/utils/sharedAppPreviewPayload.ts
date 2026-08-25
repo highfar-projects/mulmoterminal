@@ -107,6 +107,19 @@ const asCapability = (cid: string, value: unknown): ViewCapability => {
     // REQUIRED, so leaving it out was a compile error rather than a staff page previewing without
     // the delete control that the published page draws.
     withdrawAny: from.withdrawAny === true,
+    // The statuses NO delete succeeds from, whichever of the two permissions above the reader
+    // holds. It has to be here for the pane to be worth anything: `withdrawAny` says "any row" and
+    // the rules mean "any row the RECORD has not sealed", so a pane without it draws a delete on a
+    // closed topic and the author learns the truth from production.
+    //
+    // The ONE field here that does not floor in the refusing direction, and it cannot: an empty
+    // list reads as "nothing is sealed", and there is no value that means "assume everything is".
+    // What makes that acceptable is where the floor is reached from — this JSON comes from this
+    // host's own server, running the same package, where `capabilityOf` always sets the key. An
+    // absent one therefore means an OLDER server, whose published pages do not honour seals
+    // either, so the pane matches what that server actually serves. The refusal that is not a
+    // matter of taste stays in `firestore.rules`.
+    sealed: strings(from.sealed),
   };
 };
 
