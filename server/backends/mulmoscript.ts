@@ -23,6 +23,7 @@ import {
   createMulmoScriptDispatchHandler,
   executeMulmoScriptSave,
   GENERATION_EVENT,
+  SCRIPT_CHANGED_EVENT,
   type MulmoScriptServerOps,
   type MulmoScriptDispatchHandler,
 } from "@mulmoclaude/mulmoscript-plugin/server";
@@ -34,6 +35,10 @@ import { isRecord } from "../../common/isRecord.js";
  *  `plugin:<scope>:<event>`, matching the client runtime's channel formula
  *  (src/composables/pluginRuntime.ts) with scope "mulmoScript". */
 const GENERATION_CHANNEL = `plugin:mulmoScript:${GENERATION_EVENT}`;
+
+/** Same formula, for "this script was written" — what makes an agent's edit appear in a
+ *  canvas that is already open, instead of only after the user reopens it. */
+const SCRIPT_CHANGED_CHANNEL = `plugin:mulmoScript:${SCRIPT_CHANGED_EVENT}`;
 
 interface PubSubLike {
   publish(channel: string, data: unknown): void;
@@ -85,6 +90,11 @@ export function initMulmoScriptBackend(deps: { workspace: string; pubsub: PubSub
     // reload-on-finish) is the only consumer.
     onGenerationEvent: (_chatSessionId, event) => {
       deps.pubsub?.publish(GENERATION_CHANNEL, event);
+    },
+    // An agent — or another window — wrote this script. Every open View reloads from disk;
+    // the one that made the write recognises its own `origin` on the event and skips it.
+    onScriptChanged: (event) => {
+      deps.pubsub?.publish(SCRIPT_CHANGED_CHANNEL, event);
     },
     log: {
       info: (message, data) => console.info(`[mulmo-script] ${message}`, data ?? ""),
@@ -166,6 +176,12 @@ async function handleToolCall(body: Record<string, unknown>, res: Response, inst
  *  Handles everything itself — MUST be registered BEFORE mountAllRoutes so the
  *  generic catch-all (lexical guard only, no movie trigger) never runs for
  *  this tool. */
+/** Drive the script-changed broadcast without a real write — the publish is the feature, and
+ *  it has no other observable, so a test needs a way to reach it. */
+export function publishMulmoScriptChangedForTest(filePath: string, origin?: string): void {
+  ops?.publishScriptChanged(filePath, origin);
+}
+
 export function mountMulmoScriptDispatchRoute(app: Express): void {
   app.post("/api/plugin/presentMulmoScript", async (req: Request, res: Response) => {
     if (!ops || !dispatchHandler) {
