@@ -961,6 +961,39 @@ the cost in the text the reader can see.
   `transitions` (for a member) or `public.submit.<cid>.selfTransitions` (for a participant). Those
   are different tables, so a staff page and a participant page draw different buttons for the same
   collection. Ask for a move the record cannot make and the answer names it.
+- **Closing a thread takes THREE declarations, and any one alone is only advice.** The case: a
+  discussion, a submission window, a shift — a parent row whose state is supposed to stop new
+  child rows arriving. `transitions` on the parent is not enough on its own, because nothing
+  connects it to the children; and where the writers are the people to be stopped (an app that
+  seats AI agents hands them the OWNER's sign-in, so Firestore sees every one of them as an
+  `owner`) the writer branch of `create` asks nothing about the row at all.
+  - **`collections.<child>.refIn`** (`@receptron/sharedapp` 0.26.0 and the rules deployed with it)
+    — `{ "ref": "topicId", "collection": "topics", "where":
+    { "field": "status", "equals": "open" } }`. A child may be created only while the record its
+    `ref` field names is in that state. On the COLLECTION, not under `public.submit`, and that is
+    the point: everything under `public.submit` binds the visitor and says nothing to a writer.
+    This one binds the owner. CREATE only — a closed thread takes no new message, but fixing one
+    already in it stays possible.
+  - **No way out of the closing state in `collections.<parent>.transitions`.** `transitions` binds
+    writers on update, so an app that means "closed is final" simply declares no transition out of
+    `closed`. Without this, `refIn` is defeated in two writes: reopen the parent, post, and both
+    writes are legal.
+  - **`collections.<parent>.sealed: ["closed"]`** — the statuses a record may not be DELETED from,
+    by anybody. `deleteWith` asks a writer nothing (`writerDelete` is read by the pages; the rules
+    never look at it), so without this the close is undone by deleting the parent and writing it
+    again in its initial state — and `refIn` then reports a genuinely open parent and is right to.
+
+  Each of the three closes a different two-write bypass, which is why none of them is optional:
+  create into a closed parent (`refIn`), reopen it (`transitions`), delete and recreate it
+  (`sealed`). A fourth is closed by the rules themselves without a declaration: **the reference
+  cannot MOVE**, so a row created in an open parent can never be rewritten to point at a closed
+  one. That is why `refIn` is safe to check on create only — the record stays correctable where it
+  stands, but it cannot change which parent it belongs to, ever.
+
+  Reopening then means posting a NEW parent row, which is usually what the app wanted anyway. Note
+  the limit: this binds an agent through the app's DATA. An agent holding the owner's session can
+  still re-publish the app and rewrite the declarations — see the note on what a shared app can and
+  cannot enforce in [docs/shared-app-principles.md](../../../docs/shared-app-principles.md).
 - **`transitions` says nothing about the OTHER rows.** It judges one record's move, so "only one
   question is open", "only one item is being served", "only one draft at a time" cannot be declared
   — no rule keeps them and publish cannot refuse an app that breaks them. Where the app's meaning
@@ -979,6 +1012,11 @@ the cost in the text the reader can see.
     collection declares `writerDelete: true`. A boolean, because the rules ask no status of a
     writer (`deleteWith` opens with `isWriter`). This is the staff half, and it is the one to give
     an owner who needs to remove a task somebody abandoned or a name registered by mistake.
+  - `viewer.can.<cid>.sealed` — statuses NO delete succeeds from, whichever of the two above the
+    reader holds (`collections.<cid>.sealed`). "Any row" means "any row the RECORD has not sealed":
+    `sealedNow` sits above the `isWriter` branch and refuses the owner too. **A page holding
+    `withdrawAny` must skip the rows whose status is in this list** — the control would only ever
+    fail on them. Empty for the collections that seal nothing, which is nearly all of them.
 
   The staff half did not exist before `@receptron/sharedapp` 0.20.0, and its absence used to be
   worked around by publishing the OWNER's page as `audience: "participant"` — which costs

@@ -29,6 +29,7 @@ describe("the preview payload", () => {
           assigneeField: "coach",
           withdrawFrom: ["requested"],
           withdrawAny: false,
+          sealed: [],
         },
       },
     });
@@ -49,7 +50,21 @@ describe("the preview payload", () => {
       assignees: [],
       withdrawFrom: [],
       withdrawAny: true,
+      sealed: [],
     });
+  });
+
+  it("carries the SEAL, so the pane does not offer a delete the rules refuse", () => {
+    // `withdrawAny` says "any row" and the rules mean "any row the RECORD has not sealed"
+    // (`sealedNow` refuses the owner too). Dropped here, the pane draws a delete on a closed topic
+    // and the author finds out from production — the preview/production divergence this rebuild
+    // exists to prevent, in the direction that matters.
+    //
+    // A NON-EMPTY list on purpose: the neighbouring assertions would pass just as well against a
+    // field that is always `[]`, which is what a forgotten key looks like.
+    const viewer = { me: "desk@gym.jp", can: { topics: { withdrawAny: true, sealed: ["closed"] } } };
+    const parsed = asPayload({ aid: "a", pages: [page({ viewer })] });
+    expect(parsed?.pages[0]?.viewer?.can.topics?.sealed).toEqual(["closed"]);
   });
 
   it("floors every permission to false, so a renamed field removes a control rather than inventing one", () => {

@@ -25,7 +25,16 @@ const FORM_FIELD = { name: "name", label: "お名前", required: true, type: "st
 /** One collection's capability, as the server resolves it for the author. Written out rather than
  *  built, so the SHAPE a page reads is pinned here too: `can` is keyed by collection, and a page
  *  reaching for `viewer.can.transitionAny` gets undefined for every app that has ever existed. */
-const MEMBER_CAPABILITY = { cid: "bookings", transitionAny: true, transitionOwn: false, assign: false, assignees: [], withdrawFrom: [], withdrawAny: false };
+const MEMBER_CAPABILITY = {
+  cid: "bookings",
+  transitionAny: true,
+  transitionOwn: false,
+  assign: false,
+  assignees: [],
+  withdrawFrom: [],
+  withdrawAny: false,
+  sealed: [],
+};
 
 /** And one as it resolves for a PUBLIC page, which carries a viewer too: the rules let whoever
  *  submitted a row move it and take it away, so `selfTransitions` and `selfDelete` resolve to

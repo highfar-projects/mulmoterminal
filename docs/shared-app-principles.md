@@ -190,6 +190,37 @@ uid に正規表現メタ文字が入っても壊れないためであり、`<vi
 **破れ方**: 「owner は何でもできる」を素直に書いてしまうこと。owner が持つのは**運用の広さ**で
 あって、**レコードの整合性の免除**ではない。
 
+### 6b. 親の状態で子の create を止めるには、宣言が 3 つ要る
+
+「閉じたスレッドに新しい発言が入らない」は、**どれか 1 つでは成立しない**。owner のサインインを
+持つ相手に対しては、どの穴も**書き込み 2 回**で抜けられるからである。
+
+- `collections.<子>.refIn` — `{ "ref": "topicId", "collection": "topics", "where": { "field":
+  "status", "equals": "open" } }`。ref フィールドが名指す親がその状態にある間しか、子の行は
+  作れない。`public.submit` ではなく**コレクション側**に置くのがこのキーの要点で、submit 側の
+  cross-record チェック（`idIn`、`window.fromField`）はすべて訪問者だけを縛り、writer には
+  何も言わない。これは owner を縛る。**create のみ**（既に入っている行を直す道は残す）
+- 親の `transitions` に、閉じた状態から**出る道を書かない**。原則 6 のとおり `transitions` は
+  update で writer を縛るので、これで close が最終になる
+- `collections.<親>.sealed: ["closed"]` — その状態の行は**誰も削除できない**。`deleteWith` は
+  writer に何も訊かない（`writerDelete` はページが読む宣言で、ルールは見ていない）ので、これが
+  無いと「閉じた親を消して、initial の状態で書き直す」で close が戻る。しかもそのとき `refIn`
+  は**本当に開いている親**を見ているので、正しく通してしまう
+
+塞いでいる穴はそれぞれ別: 閉じた親に作る（`refIn`）、開け直す（`transitions`）、消して作り直す
+（`sealed`）。**4 つ目は宣言なしでルールが塞ぐ** —— `refIn` を宣言したコレクションでは
+**参照そのものが動かせない**（`refHeld`）。開いている親に作った行を、あとから閉じた親に
+付け替えることはできない。`refIn` を create だけで見てよいのはこれがあるから。
+
+守られている場所: `firestore.rules` の `refInOk()`（`createWith` の分岐 OR の**あと** ——
+原則 10 の予算のため。読みは `getAfter()`、でないと「閉じる update と create を同じ batch に
+束ねる」で最後の一言が入る）、`refHeld()`、`sealedNow()`、`transitionOk()`。宣言の検査は
+`@receptron/sharedapp` の `refInTargetProblems` / `refInRefProblems` / `sealedProblems`。
+
+**そしてここが限界**: これは**アプリのデータを通して**しか縛らない。owner のサインインを持つ
+agent は `manageSharedApp publish` で宣言そのものを書き換えられる。共有アプリに agent を
+座らせるとは、そういう取引である（下の「できない」も見よ）。
+
 ---
 
 ## 7. `assignee` は書きだけスコープされる。読みは全部見える
@@ -369,3 +400,7 @@ React アプリに戻っただけで、それはもう新しくない。
 - **任意区間の重なり判定**（「このシフトと重なる予約があるか」）。離散的な枠 id なら書ける
 - **秘密投票。** 表示で投票者を隠すのは秘密投票ではない。信頼された匿名化が要る
 - **著者のマシンや訪問者のブラウザが開いていることに依存する定期処理**（原則 1）
+- **owner のサインインを渡した相手を、owner と区別すること。** AI agent を座らせる共有アプリは
+  agent に著者の身元をそのまま渡すので、Firestore から見て agent は owner そのものである。
+  データを通した拘束（原則 6b）は書けるが、publish と members の書き換えは**渡した時点で渡って
+  いる**。別の身元を与える以外に閉じ方はない
