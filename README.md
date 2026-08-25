@@ -12,19 +12,13 @@ and a **phone push** reaches you when a turn finishes.
 of object here — which is why the one-session-per-worktree limit applies to **agents only**, and
 a shell or a `yarn dev` launcher can sit in the same worktree an agent is working in.
 
-### 📖 Documentation — **[receptron.github.io/mulmoterminal](https://receptron.github.io/mulmoterminal/)**
-
-- **User guide:** [English](https://receptron.github.io/mulmoterminal/guide/en/) — the grid
-  view, everyday workflows, the full feature list, configuration, and mobile push notifications.
-- **ユーザーガイド:** [日本語](https://receptron.github.io/mulmoterminal/guide/ja/) —
-  グリッドの使い方・日々のワークフロー・機能一覧・設定・スマホ通知の設定はこちら。
-- **Updates / アップデート情報:** new releases and features are announced **in Japanese** on X —
-  新バージョンや新機能のお知らせは X の
-  [Singularity Society (@SingularitySoci)](https://x.com/SingularitySoci) で。
-
 ## Demo
 
 https://github.com/user-attachments/assets/0b8dd582-6c0d-4be3-b0b4-3740ad0bdba6
+
+*90 seconds, with sound — one agent, then a grid of them, each cell coloured **working**, **done** or **needs you**. Zoom into one and the roster still holds what every other session asked, answered and did, so you go to whichever is lit and lose nothing catching up. Then the same grid, live:*
+
+![MulmoTerminal — a grid of live Claude Code sessions, each color-coded by state, updating in real time](https://raw.githubusercontent.com/receptron/mulmoterminal/main/docs/guide/images/hero.gif)
 
 <details markdown="block">
 <summary>Transcript of the narration</summary>
@@ -51,10 +45,6 @@ That is the whole install.
 
 </details>
 
-*90 seconds, with sound — one agent, then a grid of them, each cell coloured **working**, **done** or **needs you**. Zoom into one and the roster still holds what every other session asked, answered and did, so you go to whichever is lit and lose nothing catching up. Then the same grid, live:*
-
-![MulmoTerminal — a grid of live Claude Code sessions, each color-coded by state, updating in real time](https://raw.githubusercontent.com/receptron/mulmoterminal/main/docs/guide/images/hero.gif)
-
 MulmoTerminal turns [Claude Code](https://claude.com/claude-code) (and OpenAI's **Codex**)
 into a parallel, observable workspace: many agent sessions at once in a grid, each one
 color-coded so you see at a glance which are **working**, which **need you**, and which are
@@ -65,20 +55,22 @@ ping to your phone when a task finishes. One `npx` command, no Electron, no conf
 npx mulmoterminal@latest        # starts on http://localhost:34567 and opens your browser
 ```
 
+Requires **Node ≥ 22.9** and the [`claude`](https://claude.com/claude-code) CLI on your
+`PATH`, already logged in. `npx mulmoterminal@latest init` reports what it can't find.
+
+### Why not tmux + iTerm panes?
+
+Running agents in parallel was never the hard part — tmux does that fine. What gets lost
+is **which** of the five is waiting for you. A pane is opaque: working, finished and
+blocked-on-a-permission all look the same until you read it. Here every cell reports its
+state back to one grid — working (blue), done (green), **needs you** (amber) — with a chime
+when one goes amber off-screen, and a [cockpit roster](#why-youll-want-it) of one line per
+session so you can answer one without losing your place in the other four. It runs *on*
+tmux when you have it, for [persistence across restarts](#session-persistence-tmux).
+
 Built by **[receptron](https://github.com/receptron)** — **[Satoshi Nakajima](https://x.com/snakajima)**,
 software architect for **Windows 95** at Microsoft, and **[Isamu Arimoto](https://github.com/isamu)**;
 the same two behind **[GraphAI](https://github.com/receptron/graphai)**. [More ↓](#who-builds-this)
-
-> **Something looks wrong?** Type `/mulmoterminal-bug-report` in any MulmoTerminal session. The
-> bundled skill hears the symptom out, checks your **real** config, schema and version to see
-> whether the behaviour is configuration or by design, searches the existing issues — and only
-> helps you file one if none of that explains it, with the environment collected and secrets
-> masked. Getting you unstuck is the goal; an issue is what is left when the first three steps
-> fail.
-
-![MulmoTerminal's grid view — four live Claude sessions running side by side, each in its own color-coded project](https://raw.githubusercontent.com/receptron/mulmoterminal/main/docs/guide/images/grid-2x2-live.png)
-
-*The grid is a **cockpit for parallel agents** — here, four live Claude sessions, each in its own color-coded project. Every cell's header carries what you need to triage at a glance: **model · context %**, **token counts** (`⇡in ⇣out`), the **git branch / changes** chip, and an AI summary of what the agent is doing. A cell's **border color signals state** — working (blue), done (green), needs-you (amber — e.g. waiting on a permission), idle — with an attention chime so a stuck cell off-screen still pulls you back. Supervise many; only step in where you're called.*
 
 ## Why you'll want it
 
@@ -108,6 +100,10 @@ the same two behind **[GraphAI](https://github.com/receptron/graphai)**. [More �
 - **Make it yours.** Per-directory **themes, colors, and name badges** (`prod` in red,
   `staging` in amber), a configurable header (buttons + info chips), custom attention sounds,
   and Run / Skill menus to launch a project's scripts and `.claude/skills` right inside a cell.
+
+![MulmoTerminal's grid view — four live Claude sessions running side by side, each in its own color-coded project](https://raw.githubusercontent.com/receptron/mulmoterminal/main/docs/guide/images/grid-2x2-live.png)
+
+*The grid is a **cockpit for parallel agents** — here, four live Claude sessions, each in its own color-coded project. Every cell's header carries what you need to triage at a glance: **model · context %**, **token counts** (`⇡in ⇣out`), the **git branch / changes** chip, and an AI summary of what the agent is doing. A cell's **border color signals state** — working (blue), done (green), needs-you (amber — e.g. waiting on a permission), idle — with an attention chime so a stuck cell off-screen still pulls you back. Supervise many; only step in where you're called.*
 
 ![The cockpit roster — a one-row-per-session summary list beside the enlarged terminal](https://raw.githubusercontent.com/receptron/mulmoterminal/main/docs/guide/images/cockpit-roster.png)
 
@@ -239,6 +235,18 @@ more.
 
 ---
 
+### 📖 Documentation — **[receptron.github.io/mulmoterminal](https://receptron.github.io/mulmoterminal/)**
+
+- **User guide:** [English](https://receptron.github.io/mulmoterminal/guide/en/) — the grid
+  view, everyday workflows, the full feature list, configuration, and mobile push notifications.
+- **ユーザーガイド:** [日本語](https://receptron.github.io/mulmoterminal/guide/ja/) —
+  グリッドの使い方・日々のワークフロー・機能一覧・設定・スマホ通知の設定はこちら。
+- **Updates / アップデート情報:** new releases and features are announced **in Japanese** on X —
+  新バージョンや新機能のお知らせは X の
+  [Singularity Society (@SingularitySoci)](https://x.com/SingularitySoci) で。
+
+---
+
 ## Install & run
 
 Needs **Node ≥ 22.9**, plus these CLIs on your `PATH`:
@@ -337,6 +345,13 @@ server, and opens the browser. For local development from a clone, see
 
 **Won't start with `ERR_MODULE_NOT_FOUND`?** If a first `npx` run was interrupted, a half-unpacked `~/.npm/_npx/<hash>` cache can remain and a later run fails at startup — a corrupted npx cache, not a bug in the published package.
 The launcher detects it and prints the exact, OS-appropriate removal command; run that, then `npx mulmoterminal@latest` again.
+
+> **Something looks wrong?** Type `/mulmoterminal-bug-report` in any MulmoTerminal session. The
+> bundled skill hears the symptom out, checks your **real** config, schema and version to see
+> whether the behaviour is configuration or by design, searches the existing issues — and only
+> helps you file one if none of that explains it, with the environment collected and secrets
+> masked. Getting you unstuck is the goal; an issue is what is left when the first three steps
+> fail.
 
 ---
 
