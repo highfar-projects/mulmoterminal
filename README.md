@@ -14,11 +14,13 @@ a shell or a `yarn dev` launcher can sit in the same worktree an agent is workin
 
 ## Demo
 
+![MulmoTerminal — a grid of live Claude Code sessions, each color-coded by state, updating in real time](https://raw.githubusercontent.com/receptron/mulmoterminal/main/docs/guide/images/hero.gif)
+
+*The grid, live — each cell coloured **working**, **done** or **needs you**.*
+
 https://github.com/user-attachments/assets/0b8dd582-6c0d-4be3-b0b4-3740ad0bdba6
 
-*90 seconds, with sound — one agent, then a grid of them, each cell coloured **working**, **done** or **needs you**. Zoom into one and the roster still holds what every other session asked, answered and did, so you go to whichever is lit and lose nothing catching up. Then the same grid, live:*
-
-![MulmoTerminal — a grid of live Claude Code sessions, each color-coded by state, updating in real time](https://raw.githubusercontent.com/receptron/mulmoterminal/main/docs/guide/images/hero.gif)
+*90 seconds, with sound: one agent, then a grid of them. Zoom into one and the roster still holds what every other session asked, answered and did, so you go to whichever is lit and lose nothing catching up.*
 
 <details markdown="block">
 <summary>Transcript of the narration</summary>
