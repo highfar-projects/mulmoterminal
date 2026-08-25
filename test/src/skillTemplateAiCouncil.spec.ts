@@ -286,6 +286,7 @@ function loadDesk(): {
   type: (title: string, question?: string) => void;
   post: () => void;
   titleValue: () => string;
+  questionValue: () => string;
 } {
   const { script, html } = scriptOf("views/desk.html");
   document.body.innerHTML = html.replace(/<script>[\s\S]*?<\/script>/, "");
@@ -341,6 +342,7 @@ function loadDesk(): {
     },
     post: () => (document.getElementById("post") as HTMLButtonElement).click(),
     titleValue: () => title.value,
+    questionValue: () => question.value,
   };
 }
 
@@ -413,13 +415,31 @@ describe("ai-council.md's desk page", () => {
     expect(desk.titleValue()).toBe("second");
   });
 
+  it("keeps a question rewritten while the last one was in flight, even when the title stands", async () => {
+    // The near-miss: guarding both fields on the TITLE alone passes the test above and still eats
+    // this, because the host who rewrote only the question never touched the title.
+    const desk = loadDesk();
+    desk.tell({ topics: [], speakers: [], messages: [] });
+    desk.hold();
+    desk.type("Ship on Friday?", "first context");
+    desk.post();
+    await settle();
+    desk.type("Ship on Friday?", "second context");
+    desk.release({ ok: true });
+    await settle();
+    expect(desk.questionValue()).toBe("second context");
+    // And the title, which WAS what was sent, is cleared as before.
+    expect(desk.titleValue()).toBe("");
+  });
+
   it("clears the box when what was sent is still what is in it", async () => {
     const desk = loadDesk();
     desk.tell({ topics: [], speakers: [], messages: [] });
-    desk.type("first");
+    desk.type("first", "context");
     desk.post();
     await settle();
     expect(desk.titleValue()).toBe("");
+    expect(desk.questionValue()).toBe("");
   });
 
   it("says nothing when the host cancels the confirmation, because that is not an error", async () => {

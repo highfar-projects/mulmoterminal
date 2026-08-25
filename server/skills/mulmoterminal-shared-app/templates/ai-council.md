@@ -881,7 +881,12 @@ It watches `topics` and `messages`, so it moves while the agents are speaking.
         // Only clear what was actually sent: a submission waits on a confirmation and a write, and
         // somebody who kept typing has written the NEXT question. Clearing unconditionally throws
         // it away.
-        if ($("title").value.trim() === title) { $("title").value = ""; $("question").value = ""; }
+        //
+        // Each field is judged SEPARATELY. Guarding both on the title alone looks equivalent and is
+        // not: a host who left the title and rewrote only the question still matches on the title,
+        // and the question they had just typed goes with the clear.
+        if ($("title").value.trim() === title) $("title").value = "";
+        if ($("question").value.trim() === question) $("question").value = "";
         picked = null;                       // fall back to "newest open", which is this one
         say("saySubmit", "Posted. It is on the public page now.");
       } else if (res.error === "cancelled") {
