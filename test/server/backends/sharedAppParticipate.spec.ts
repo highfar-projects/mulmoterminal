@@ -69,6 +69,10 @@ describe("useSharedApp — reading somebody else's app", () => {
     // The participant's own half, from `config/public` — present although the app published no
     // participant page whatsoever.
     expect(said).toContain("withdraw your own row while it is: «booked»");
+    // And what `update` may change, per status. Reported because this tool's own prompt sends the
+    // agent here to learn it — without it the only ways left were to guess, or to provoke a
+    // refusal on somebody else's real record.
+    expect(said).toContain("correct your own row while it is «booked»: «note» / «guests»");
     expect(said).toContain("«booked» -> «approved»");
     // The form, with the host-filled fields kept out of it: an address compared to the token, a
     // status pinned to `initialStatus`.

@@ -50,10 +50,25 @@ const statusOf = (row: Record<string, unknown>, statusField: string | undefined)
   return typeof held === "string" ? held : null;
 };
 
-/** What this reader may correct in this row, and on which tier — widest first, as `performIntent`
- *  does, and for the same reason: there is no page here to say which tier the ask came from, so
- *  each one this reader is admitted to is offered it and the first that carries it wins. */
-function correctableFields(app: JoinedApp, cid: string, row: Record<string, unknown>): { fields: string[]; status: string } | null {
+/** What this reader may correct in this row, and on which tier.
+ *
+ *  Every tier this reader is admitted to is offered the ask, as `performIntent` does and for the
+ *  same reason: there is no page here to say which tier it came from.
+ *
+ *  WHAT IT CHOOSES ON is the ASK, not merely the first tier with anything to say. Taking the first
+ *  non-empty answer made this host STRICTER THAN THE RULES for a reader admitted to both: where
+ *  the member projection allows `note` and the roster's allows `guests`, an ask for `guests` was
+ *  answered from the member tier and refused — while the rules, which read ONE declaration
+ *  (`public.submit[cid].selfUpdate`, via `sub()`), would have accepted it.
+ *
+ *  The two tiers can only disagree because they are two DOCUMENTS: `runWrites` can stop after any
+ *  write, so a tier's projection can be a publish behind `config/public`. Choosing the tier that
+ *  covers the whole ask is what makes a half-finished publish cost nothing here.
+ *
+ *  It reports the WIDEST answer when nothing covers the ask, so the refusal names the most the
+ *  reader could have sent rather than whichever tier was looked at first. */
+function correctableFields(app: JoinedApp, cid: string, row: Record<string, unknown>, asked: readonly string[]): { fields: string[]; status: string } | null {
+  const offered: { fields: string[]; status: string }[] = [];
   for (const tier of TIERS) {
     const capability = capabilitiesOn(app, tier)[cid];
     if (capability === undefined) continue;
@@ -62,9 +77,13 @@ function correctableFields(app: JoinedApp, cid: string, row: Record<string, unkn
     const status = statusOf(row, app.writes[tier]?.find((write) => write.cid === cid)?.statusField);
     if (status === null) continue;
     const fields = capability.correctFrom[status];
-    if (fields !== undefined && fields.length > 0) return { fields, status };
+    if (fields === undefined || fields.length === 0) continue;
+    // The ask fits here: nothing further along could be more right, and a shorter list that also
+    // covers it would only make a later refusal name fewer fields.
+    if (asked.every((field) => fields.includes(field))) return { fields, status };
+    offered.push({ fields, status });
   }
-  return null;
+  return offered.toSorted((left, right) => right.fields.length - left.fields.length)[0] ?? null;
 }
 
 /** Why this correction cannot be made, said in the DECLARATION's terms — never the rules', which
@@ -128,7 +147,7 @@ export async function performCorrection(app: JoinedApp, asked: AskedCorrection):
     };
   }
   if (found.row === null) return { ok: false, refusal: true, error: `no record ${quotedTerm(asked.itemId)} in ${quotedTerm(asked.cid)}. Nothing was written.` };
-  const allowed = correctableFields(app, asked.cid, found.row);
+  const allowed = correctableFields(app, asked.cid, found.row, Object.keys(asked.values));
   const why = whyNot(allowed, asked);
   if (why !== null || allowed === null) return { ok: false, refusal: true, error: why ?? "nothing is correctable here." };
   const failed = await commitCorrection(app.aid, asked);

@@ -260,7 +260,7 @@ below.
 
 ## The URL
 
-```
+```text
 /a/{slug}                     the index
 /a/{slug}/{articleId}         one article
 ```

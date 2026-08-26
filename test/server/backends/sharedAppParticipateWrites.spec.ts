@@ -354,6 +354,32 @@ describe("useSharedApp — writing to somebody else's app", () => {
     expect(said).not.toContain("Not updated");
   });
 
+  it("takes the tier that covers the WHOLE ask, not the first one with anything to say", async () => {
+    // Codex / CodeRabbit on #1864. A reader admitted to both tiers, whose two projections disagree
+    // — which they can, because they are two DOCUMENTS and `runWrites` can stop between them.
+    // Answering from the first non-empty one made this host stricter than the rules, which read
+    // ONE declaration and would have accepted the write.
+    publish({ rosterTier: true });
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old", guests: "2" });
+    // The member tier is consulted first and allows only `note` here; the roster's allows `guests`.
+    const member = bag.docs.store.get(`apps/${AID}/member`)?.get("live:config") as { write?: Record<string, unknown>[] } | undefined;
+    if (member?.write?.[0] !== undefined) member.write[0] = { ...member.write[0], selfUpdate: { booked: ["note"] } };
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { guests: "4" } });
+    expect(said).toContain("Corrected");
+    expect(bag.batched[0]).toContain(JSON.stringify({ guests: "4" }));
+  });
+
+  it("names the widest set when nothing covers the ask", async () => {
+    // The refusal has to name the most the reader could have sent, rather than whichever tier
+    // happened to be looked at first — otherwise the agent retries against a shorter list.
+    publish({ rosterTier: true });
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { slot: "11:00" } });
+    expect(said).toContain("Not updated");
+    expect(said).toContain("\u00abnote\u00bb");
+    expect(bag.batched).toEqual([]);
+  });
+
   it("says so when the record is not there", async () => {
     publish();
     const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "nope", values: { note: "new" } });

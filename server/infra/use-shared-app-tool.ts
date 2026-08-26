@@ -149,7 +149,21 @@ function capabilityParts(can: ViewCapability): string[] {
   if (can.assign) parts.push(`assign rows to: ${quotedList(can.assignees)}`);
   if (can.withdrawFrom.length > 0) parts.push(`withdraw your own row while it is: ${quotedList(can.withdrawFrom, " / ")}`);
   if (can.withdrawAny) parts.push("delete any row");
+  parts.push(...correctParts(can));
   return parts;
+}
+
+/** What `update` may change, per status.
+ *
+ *  PER STATUS and not a single list, because that is how the declaration reads and how the rules
+ *  judge it: the fields a row admits depend on where it is now. Reported rather than left to be
+ *  discovered, and that is not a nicety — this tool's own prompt tells the agent to learn the
+ *  correctable set from `describe`, so leaving it out sent them to a report that never said it.
+ *  The only ways left were to guess, or to provoke a refusal on somebody else's real record. */
+function correctParts(can: ViewCapability): string[] {
+  return Object.entries(can.correctFrom)
+    .filter(([, fields]) => fields.length > 0)
+    .map(([status, fields]) => `correct your own row while it is ${quotedTerm(status)}: ${quotedList(fields, " / ")}`);
 }
 
 /** What each collection lets this reader change, said in the app's own words. */
@@ -482,7 +496,12 @@ async function narrateUpdate(slug: string, cid: string | undefined, id: string |
       : `Could not tell whether that landed: ${result.error}. The write may have COMMITTED or may not have. Read the record before trying again; do not simply repeat it.`;
   return [
     `Corrected ${quotedList(result.fields)} on ${quotedTerm(cid)}/${quotedTerm(id)}, as ${joined.app.handle.email}.`,
-    `The record was ${quotedTerm(result.status)} and still is — an update changes fields, never status. The rest of the record is untouched.`,
+    // What THIS WRITE did, not what the record now holds. The status is read before the update and
+    // the update does not touch it, but somebody else may have moved the row in between — saying
+    // it "still is" whatever was read would be this tool asserting a value it did not re-read, and
+    // the next action would be planned against it.
+    `It changed those fields and nothing else; an update never moves a status. The record was ${quotedTerm(result.status)} when it was read — ` +
+      "read it again if you need to know where it stands now.",
   ].join("\n");
 }
 
