@@ -137,6 +137,23 @@ const values = (raw: unknown): Record<string, string> => {
   return Object.fromEntries(Object.entries(raw).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
 };
 
+/** The keys whose values were NOT strings, so a caller can be refused by name rather than quietly
+ *  written half of.
+ *
+ *  The page path refuses such a message outright (`valuesOf` in `view/intent.ts`), and this is the
+ *  same policy said in this caller's terms. `values` above still filters, because the answer
+ *  differs by ACTION: a submission missing a required field is refused by name a moment later
+ *  (`missingRequired` reads the declaration and says which), while a correction of an existing
+ *  record just writes the fields that survived and reports success — the caller is told
+ *  `Corrected «title»` about a call that also named `count`, and nothing says the second was
+ *  dropped. (CodeRabbit on #1870.) */
+const notStrings = (raw: unknown): string[] => {
+  if (!isRecord(raw)) return [];
+  return Object.entries(raw)
+    .filter(([, held]) => typeof held !== "string")
+    .map(([name]) => name);
+};
+
 /** One collection's capability, as a list of things a person could be told they may do.
  *
  *  Empty means "nothing", which the caller drops: a line saying a collection allows nothing is
@@ -485,8 +502,14 @@ async function narrateSubmit(slug: string, cid: string | undefined, given: Recor
  *  `selfUpdate[<current status>]` (see `participate/correct.ts` for why that line is drawn where
  *  it is). What it shares is the report's shape, and the part of it that matters most: a write
  *  that did not COMPLETE is not a write that was refused. */
-async function narrateUpdate(slug: string, cid: string | undefined, id: string | undefined, given: Record<string, string>): Promise<string> {
+async function narrateUpdate(slug: string, cid: string | undefined, id: string | undefined, given: Record<string, string>, dropped: string[]): Promise<string> {
   if (cid === undefined || id === undefined) return "useSharedApp update: `cid` and `id` are both required — `records` reports them.";
+  if (dropped.length > 0) {
+    return (
+      `Not updated: ${quotedList(dropped)} ${dropped.length === 1 ? "was" : "were"} not sent as a string. The rules compare stored values without coercing, so a ` +
+      "number here writes a different document than the app's own page writes for the same answer. Nothing was written — send every value as a string and try again."
+    );
+  }
   const joined = await joinApp(slug);
   if (!joined.ok) return joined.problems.join("\n");
   const result = await performCorrection(joined.app, { cid, itemId: id, values: given });
@@ -650,7 +673,7 @@ export async function useSharedApp(args: unknown, sessionId?: string): Promise<s
   if (action === "describe") return narrateDescribe(slug);
   if (action === "records") return narrateRecords(slug, cid, rowCap(body.limit));
   if (action === "submit") return narrateSubmit(slug, cid, values(body.values));
-  if (action === "update") return narrateUpdate(slug, cid, str(body.id), values(body.values));
+  if (action === "update") return narrateUpdate(slug, cid, str(body.id), values(body.values), notStrings(body.values));
   if (action === "watch") return narrateWatch(sessionId, slug, cid);
   if (action === "unwatch") return narrateUnwatch(sessionId, slug, cid);
   return narrateIntent(slug, action, cid, str(body.id), str(body.to));

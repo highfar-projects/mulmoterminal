@@ -472,6 +472,19 @@ describe("useSharedApp — writing to somebody else's app", () => {
     expect(bag.batched).toEqual([]);
   });
 
+  it("refuses a correction whose values are not all strings, rather than writing the half that were", async () => {
+    // The PAGE path refuses such a message outright, and this is the same policy in this caller's
+    // terms. Filtered instead, `{ note: "new", guests: 4 }` writes `note`, reports `Corrected
+    // «note»`, and says nothing at all about the field that was dropped — the caller reads a
+    // success and plans the next step against a record that never took half of it. (CodeRabbit.)
+    publish();
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "new", guests: 4 } });
+    expect(said).toContain("Not updated");
+    expect(said).toContain("\u00abguests\u00bb");
+    expect(bag.batched).toEqual([]);
+  });
+
   it("reads the status field from the declaration the RULES read, not from a tier that moved on", async () => {
     // A publish that stops after the tiers and before `apps/{aid}` leaves the two disagreeing, and
     // this guard is what keeps a correction from setting a status. Judged off the tier alone, an
