@@ -197,7 +197,7 @@ An app that genuinely wants editorial review declares **two collections** — a 
 different app, it costs a copy, and it must not be described as a status change on one collection.
 Say so in the skill rather than letting an author discover it.
 
-### A5. The index reads whole documents, and that is the accepted cost for now
+### A5. The index reads whole documents, and what bounds it is `maxLen` x `limit`
 
 The index page reads the articles collection with `limit: { rows, field: stampField }` — the
 latest N, descending, which is what `ProjectedViewCollection.limit` already projects. Those are
@@ -209,6 +209,13 @@ fine is **not** a rule and not a filter — it is principle 3's second aggregati
 mirror: a `articleIndex` collection carrying title/date/summary, written in the same batch as the
 article and required by the rules with `getAfter()`, the way `mirror` already works for a booking
 slot. **Do not build it until it is needed**, and do not reach for anything else when it is.
+
+**Revised 2026-08-26, and this paragraph is why.** "A few hundred KB" was an assumption about two
+numbers the declaration did not carry. `limit` was **optional** on an article view, so an app could
+publish an index that reads every article ever written; and nothing capped a body at all, so the
+ceiling on one row was Firestore's 1 MiB document, chosen by whoever wrote the article rather than
+by the app. Codex named both in the architecture review, and both were real. See A8 — the mirror
+above is still the answer when the product of the two stops being enough, and is still not built.
 
 ### A6. `useSharedApp` gains an `update` action
 
@@ -257,6 +264,39 @@ whether an older reader may draw an app that declares one. A reader that does no
 below.
 
 ---
+
+### A8. The length of an article is declared, and checked where the writing happens
+
+An article body carries `public.submit[cid].maxLen: { <field>: <chars> }`, and it is **not a
+rule**.
+
+That is a decision rather than an omission. A length test on `items` create and update sits on the
+path **every app in the deployment writes through**, so its expressions are paid by apps that have
+no articles (principle 10). What it would buy is a bound against somebody the owner **invited** —
+`type: "article"` requires `audience: "participant"`, so the only people who may write an article
+are the people a roster names. Set against a cost every app pays, a bound over invited writers is
+worth having at the gate and at the host, and not in the rules.
+
+So it is enforced twice, in the two places the writing passes through:
+
+- **publish** checks the declaration — the cap exists, it names a real text field, it is under what
+  a Firestore document can hold, and **`limit` x `maxLen` is what a reader pays on every open of
+  the index**. That product is the number this whole decision is about, and publish is the only
+  place in the system where it can be computed before somebody pays it.
+- **the host** (`useSharedApp submit` / `update`) refuses an over-long value before sending it, so
+  the refusal names the field and the cap instead of arriving as a rules error.
+
+**What it does not bind is a participant writing straight to Firestore**, and that is the accepted
+cost — the same shape as every other host-side check here (principle 2: the host buys a refusal
+with a name, and the rules answer last). It stops the accident and the runaway agent, which is
+what the writers of a magazine actually produce.
+
+`audience: "participant"` is the load-bearing half. Let a collection with `type: "article"` be
+submitted to by the world and `maxLen` becomes a comment, so publish refuses that pair.
+
+**A dead end found while writing the gate**: an article collection with no `public.submit` block
+could not be published either way — the index needs `limit`, `limit` needs a `stampField` to order
+by, and `stampField` lives in `public.submit[cid]`. It now refuses by naming the collection.
 
 ## The URL
 
@@ -363,3 +403,9 @@ Neither is code, and the feature does not work until both are done — **in this
 Then, and only then, step 5 of the ordering above: the skill routing entry and a `magazine.md`
 template. Written after the rules and the runtime are in production, per this plan's own rule —
 a template is copied verbatim by an agent that cannot check it.
+
+**Added 2026-08-26 by A8**, and it rides the same ordering: the publish gate is
+`receptron/sharedapp#53` and needs the same bump-and-publish as everything above, after which the
+**host preflight** (`useSharedApp submit` / `update` refusing an over-long value before sending it)
+lands here. The `magazine.md` template must declare `maxLen`, `limit` and `audience: "participant"`
+or it will not publish — which is the point.
