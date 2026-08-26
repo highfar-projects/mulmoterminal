@@ -81,13 +81,14 @@ const statusOf = (row: Record<string, unknown>, statusField: string | undefined)
  *  wrong direction — that document is written EARLIER than the tiers, so it is further ahead of
  *  the rules, not closer to them.
  *
- *  Null when the app document was denied (a collection-scoped role does not read it), and then the
- *  tier projections below are all there is — with the mismatch that implies, which is the same one
- *  `performIntent` accepts and for the same reason: the rules answer last either way, and what the
- *  host buys is a refusal with a name. */
-function authorizedFields(app: JoinedApp, cid: string, row: Record<string, unknown>): { fields: string[]; status: string } | null {
-  const held = app.authorizing;
-  if (held === undefined) return null;
+ *  Null when it names nothing for this record's status — a REFUSAL, and the caller must not read it
+ *  as "ask somewhere else". Whether the document was readable at all is `app.authorizing`, which
+ *  the caller checks before this runs. */
+function authorizedFields(
+  held: { submit: Record<string, unknown>; collections: Record<string, unknown> },
+  cid: string,
+  row: Record<string, unknown>,
+): { fields: string[]; status: string } | null {
   const submit = held.submit[cid];
   const collection = held.collections[cid];
   if (!isRecord(submit) || !isRecord(collection)) return null;
@@ -100,11 +101,20 @@ function authorizedFields(app: JoinedApp, cid: string, row: Record<string, unkno
 }
 
 function correctableFields(app: JoinedApp, cid: string, row: Record<string, unknown>, asked: readonly string[]): { fields: string[]; status: string } | null {
-  // The rules' own declaration wins outright where it is readable. Not merged with the tiers: a
-  // union would be looser than the rules and an intersection stricter, and both would be answers
-  // about a document nobody judges by.
-  const authorized = authorizedFields(app, cid, row);
-  if (authorized !== null) return authorized;
+  // The rules' own declaration wins outright where it is READABLE, and that includes when it says
+  // no. Not merged with the tiers: a union would be looser than the rules and an intersection
+  // stricter, and both would be answers about a document nobody judges by.
+  //
+  // The presence check is the whole point and it is not the same as a non-empty answer. Falling
+  // through on an empty one puts a stale tier in front of a declaration that refuses: `apps/{aid}`
+  // carrying `selfUpdate: {}` while a roster projection a publish behind still lists `note` would
+  // send the batch, and the reader would get "Missing or insufficient permissions" for a field the
+  // host had just told them they could correct. The tiers are for the reader who cannot read the
+  // app document AT ALL — the collection-scoped role — with the mismatch that implies, which is
+  // the one `performIntent` accepts and for the same reason: the rules answer last either way, and
+  // what the host buys is a refusal with a name.
+  const held = app.authorizing;
+  if (held !== undefined) return authorizedFields(held, cid, row);
   const offered: { fields: string[]; status: string }[] = [];
   for (const tier of TIERS) {
     const capability = capabilitiesOn(app, tier)[cid];

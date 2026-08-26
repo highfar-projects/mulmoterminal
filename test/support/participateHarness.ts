@@ -13,6 +13,7 @@
 // this feature is required to keep apart.
 import type { FirestoreDoc, FirestoreDocs } from "@mulmoclaude/core/collection/server";
 import { appViewTierPath, viewConfigDocId } from "@receptron/sharedapp";
+import { isRecord } from "../../common/isRecord.js";
 
 export const AID = "app-sakura";
 export const ME = { uid: "uid-me", email: "me@example.com" };
@@ -419,17 +420,27 @@ const appPublicBlock = (given: Record<string, unknown> | null | undefined, enabl
   return { public: given };
 };
 
+/** The default `selfUpdate` on the app document, MIRRORING the projection's — because that is what
+ *  a publish that ran to the end leaves, and the two differ only when one stopped part-way. */
+const MIRRORED_SELF_UPDATE: Record<string, string[]> = { booked: ["note", "guests"] };
+
 /** The app document as a REAL publish leaves it: carrying the `public.submit` and `collections`
  *  that the deployed rules resolve `sub()` and `col()` out of.
  *
- *  Off by default so the tests written before this keep exercising the tier projections, which is
- *  the path a reader takes when the app document is denied them. On, it is the path the rules
- *  themselves take — and the two differ exactly when a publish stopped part-way, because this block
- *  is the LAST thing publish writes. */
-const appAuthorizingBlock = (selfUpdate: Record<string, string[]> | undefined, enabled: boolean): Record<string, unknown> => {
-  if (selfUpdate === undefined) return {};
+ *  ON BY DEFAULT, mirroring the projection. It was off once, and that made the ordinary `publish()`
+ *  leave a document no real publish leaves — one whose `public` block declares nothing submittable
+ *  while `config/public` and the tiers declare a correctable field. The preflight reads this
+ *  document, so a test written against that pair was testing a state production cannot reach.
+ *
+ *  `null` turns it off, and it does NOT mean "use the tiers": a readable document declaring nothing
+ *  is a refusal, since `sub()` resolves to nothing out of it. The tier path belongs to the reader
+ *  who cannot read this document at all — deny it with `denyGet` to take it. */
+const appAuthorizingBlock = (selfUpdate: Record<string, string[]> | null | undefined, publicBlock: Record<string, unknown>): Record<string, unknown> => {
+  if (selfUpdate === null) return {};
+  const held = publicBlock.public;
+  if (!isRecord(held)) return {};
   return {
-    public: { enabled, read: ["slots"], submit: { bookings: { selfUpdate } } },
+    public: { ...held, submit: { bookings: { selfUpdate: selfUpdate ?? MIRRORED_SELF_UPDATE } } },
     collections: { bookings: { statusField: "status" } },
   };
 };
@@ -459,19 +470,22 @@ function putAppDoc(
     name: string;
     enabled: boolean;
     appPublic: Record<string, unknown> | null | undefined;
-    appSelfUpdate: Record<string, string[]> | undefined;
+    appSelfUpdate: Record<string, string[]> | null | undefined;
   },
 ): void {
   if (roles === null) return;
+  // The block the RULES read for anonymous access. Carried here as well as in `config/public`
+  // because publish writes the two separately and a run can stop between them.
+  const publicBlock = appPublicBlock(appPublic, enabled);
   bag.docs.put("apps", AID, {
     aid: AID,
     name,
     members: { [ME.email]: roles },
     memberEmails: [ME.email],
-    // The block the RULES read for anonymous access. Carried here as well as in `config/public`
-    // because publish writes the two separately and a run can stop between them.
-    ...appPublicBlock(appPublic, enabled),
-    ...appAuthorizingBlock(appSelfUpdate, enabled),
+    ...publicBlock,
+    // Merged INTO that block rather than written beside it: they are one field on one document,
+    // and a second spread would drop whichever half a test had set deliberately.
+    ...appAuthorizingBlock(appSelfUpdate, publicBlock),
   });
 }
 
@@ -528,8 +542,9 @@ export function publishApp(
      *  `publicBlock`: undefined mirrors `enabled`, null omits it, an object sets it apart from the
      *  projection — the shape a half-finished publish leaves.
      *  `selfUpdate`: writes `public.submit.bookings.selfUpdate` and the collection's statusField,
-     *  which is the declaration a correction is judged by. */
-    appDoc = {} as { publicBlock?: Record<string, unknown> | null; selfUpdate?: Record<string, string[]> },
+     *  which is the declaration a correction is judged by. Defaults to mirroring the projection;
+     *  `null` leaves the document declaring nothing, which is a REFUSAL and not a fallback. */
+    appDoc = {} as { publicBlock?: Record<string, unknown> | null; selfUpdate?: Record<string, string[]> | null },
   } = {},
 ): void {
   bag.docs.put("appSlugs", "sakura", { aid: AID, published: true });

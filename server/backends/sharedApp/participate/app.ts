@@ -130,8 +130,10 @@ export interface JoinedApp {
    *
    *  THE RULES' OWN SOURCE — see `authorizing()`. Held apart from `writes` because it is a
    *  different KIND of answer: those are projections written for an audience to draw controls
-   *  from, and this is the declaration the deployed rules will actually judge the write by. Absent
-   *  when the document was denied. */
+   *  from, and this is the declaration the deployed rules will actually judge the write by.
+   *
+   *  ABSENT MEANS DENIED, and nothing else. A readable document with neither block is present and
+   *  empty — the rules read the same nothing out of it and refuse. */
   authorizing?: { submit: Record<string, unknown>; collections: Record<string, unknown> };
   /** The roles the app document lists for this reader, when it was readable. Absent means the
    *  document was denied — the ordinary state for a collection-scoped role. */
@@ -366,13 +368,17 @@ async function readApp(handle: SharedAppHandle, slug: string): Promise<JoinedApp
  *
  *  So a host that wants its preflight to agree with the rules reads this and nothing else. Null
  *  when the app document was denied — the ordinary state for a collection-scoped role — and then
- *  the tier projections are all there is. */
+ *  the tier projections are all there is.
+ *
+ *  PRESENT MEANS READABLE, and an EMPTY answer is one of the readable ones. A document carrying no
+ *  `public.submit` at all is not a missing value: `sub(a, cid)` resolves to nothing out of it and
+ *  `selfWriteOk` is false, so the rules deny every correction. Reporting that as "denied me, use
+ *  the projections" is how a stale tier gets to answer for a declaration that says no. */
 function authorizing(appDoc: Record<string, unknown> | null): { submit: Record<string, unknown>; collections: Record<string, unknown> } | null {
   if (appDoc === null) return null;
-  const submit = isRecord(appDoc.public) && isRecord(appDoc.public.submit) ? appDoc.public.submit : null;
-  const collections = isRecord(appDoc.collections) ? appDoc.collections : null;
-  if (submit === null && collections === null) return null;
-  return { submit: submit ?? {}, collections: collections ?? {} };
+  const submit = isRecord(appDoc.public) && isRecord(appDoc.public.submit) ? appDoc.public.submit : {};
+  const collections = isRecord(appDoc.collections) ? appDoc.collections : {};
+  return { submit, collections };
 }
 
 function openness(appDoc: Record<string, unknown> | null, publicConfig: Record<string, unknown> | null, reservation: Record<string, unknown>): boolean {

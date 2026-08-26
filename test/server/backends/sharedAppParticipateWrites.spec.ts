@@ -359,7 +359,11 @@ describe("useSharedApp — writing to somebody else's app", () => {
     // — which they can, because they are two DOCUMENTS and `runWrites` can stop between them.
     // Answering from the first non-empty one made this host stricter than the rules, which read
     // ONE declaration and would have accepted the write.
+    //
+    // The app document is DENIED, because that is the only reader the tiers answer for — and with
+    // it readable this test passes without reaching the tier code at all.
     publish({ rosterTier: true });
+    bag.docs.denyGet.add(`apps/${AID}`);
     bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old", guests: "2" });
     // The member tier is consulted first and allows only `note` here; the roster's allows `guests`.
     const member = bag.docs.store.get(`apps/${AID}/member`)?.get("live:config") as { write?: Record<string, unknown>[] } | undefined;
@@ -373,6 +377,7 @@ describe("useSharedApp — writing to somebody else's app", () => {
     // The refusal has to name the most the reader could have sent, rather than whichever tier
     // happened to be looked at first — otherwise the agent retries against a shorter list.
     publish({ rosterTier: true });
+    bag.docs.denyGet.add(`apps/${AID}`);
     bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old" });
     const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { slot: "11:00" } });
     expect(said).toContain("Not updated");
@@ -407,6 +412,19 @@ describe("useSharedApp — writing to somebody else's app", () => {
     const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "new" } });
     expect(said).toContain("Not updated");
     expect(said).toContain("\u00abguests\u00bb");
+    expect(bag.batched).toEqual([]);
+  });
+
+  it("refuses when the readable declaration allows NOTHING, rather than asking the tiers", async () => {
+    // CodeRabbit on #1864. The presence of the app document is what decides, not whether its answer
+    // is non-empty: a run that stopped part-way can leave `apps/{aid}` declaring nothing
+    // correctable while a tier projection still lists `note`. Falling through there would send a
+    // batch the deployed rules refuse with a bare permission error — the exact failure the
+    // preflight exists to replace, arriving after the host had said the field was allowed.
+    publish({ rosterTier: true, appDoc: { selfUpdate: {} } });
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "new" } });
+    expect(said).toContain("Not updated");
     expect(bag.batched).toEqual([]);
   });
 
