@@ -286,11 +286,21 @@ worth having at the gate and at the host, and not in the rules.
 
 So it is enforced twice, in the two places the writing passes through:
 
-- **publish** checks the declaration — the cap exists, it names a real text field, it is at or under
-  **100,000 bytes for one article** (about 40,000 characters of Japanese), and **`limit` x
-  `maxBytes` is at or under 1,000,000 bytes**, which is what a reader pays on every open of the
-  index. That product is the number this whole decision is about, and publish is the only place in
-  the system where it can be computed before somebody pays it.
+- **publish** checks the declaration — **every text field the article page draws** carries a cap,
+  each names a real text field, each is at or under **100,000 bytes** (about 40,000 characters of
+  Japanese), and **`limit` x the sum of them is at or under 1,000,000 bytes**. That product is the
+  number this whole decision is about, and publish is the only place in the system where it can be
+  computed before somebody pays it.
+
+  **Every drawn field, and not just the body**, because capping the body alone leaves the long text
+  one rename away: a contributor — or a `useSharedApp` agent that will not stop — puts it in
+  `title` or `summary`, publish reports a cheap index, and the row is still whatever Firestore will
+  hold.
+
+  And the product is a **floor on what a reader pays, not the whole of it**. A rule cannot project
+  a field away, so the index downloads whole records: the slug, the status, the stamp and every
+  other field ride along uncounted. Bounding the drawn text is what publish can honestly do from
+  the declaration; the atomic mirror in A5 is what bounds the rest, when it is needed.
 - **the host** (`useSharedApp submit` / `update`) refuses an over-long value before sending it, so
   the refusal names the field and the cap instead of arriving as a rules error.
 
