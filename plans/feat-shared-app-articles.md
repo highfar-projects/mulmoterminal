@@ -1,8 +1,9 @@
 # Shared apps — publishing articles
 
-**Status**: implemented across four repositories; **not released** — `@receptron/sharedapp` is
-unpublished and `firestore.rules` is undeployed. See "What is left" at the end.
-**Date**: 2026-08-25
+**Status** (2026-08-26): **in production.** `firestore.rules` is deployed, `@receptron/sharedapp`
+is published at 0.27.0 and locked here. What remains is not the rollout — see "What is left".
+**Date**: 2026-08-25, and the decisions below are as of then. Where one has been revised the
+revision says so in place (A5, A8); the rest is unchanged.
 **Prerequisites**: [`docs/shared-app-principles.md`](../docs/shared-app-principles.md) (the invariants) and
 [`plans/feat-shareable-collections.md`](./feat-shareable-collections.md) (D1–D10)
 **Related**: [`plans/feat-shared-app-platform.md`](./feat-shared-app-platform.md) (this is a new
@@ -342,12 +343,15 @@ Per `feat-shared-app-platform.md`'s ordering, and the two easily-forgotten facts
    ones (checklist item 8): a legal slug is accepted, a second writer taking the same one is
    refused, a slug with a `/` is refused, a rename after create is refused by `idHeld`.
    **Then deploy it by hand**, and note the date here — nothing else records it.
+   **Deployed 2026-08-26.**
 2. **`../../sharedapp` (`@receptron/sharedapp`)** — `idFrom: "slug"` in `SubmitZ`; `recordId`
    returning the field verbatim for it; `missingIdField` covering it; the grammar refused at
    publish with the same message the rules enforce; `type: "article"` in the view declaration and
    its projection; `publishChecks` refusing an article view whose collection is not readable by
    its audience, whose named fields are not in the schema, or which has no `stampField` to order
    by. Bump, `yarn test`, **publish to npm** — MulmoTerminal consumes `dist/` from the tarball.
+   **Published 2026-08-26 as 0.27.0**, and the pin here had to move with it: `^0.26.0` on a 0.x
+   version means `>=0.26.0 <0.27.0`, so a publish alone delivers nothing.
 3. **`../mulmoserver` — runtime.** The `/a/:slug/:id` route; the article page; the index; `marked`
    + `dompurify` (new dependencies, matching the two hosts); `@unhead/vue` for the per-article
    `<title>` (already a dependency); i18n for both languages; the `type: "article"` branch in
@@ -409,21 +413,28 @@ Three things, each because the code said so rather than the design:
 
 ## What is left
 
-Neither is code, and the feature does not work until both are done — **in this order**:
+**The rollout is done.** Both steps this section used to hold are complete, and they are recorded
+rather than deleted because the deploy state is written down nowhere else:
 
-1. **Deploy `../mulmoserver/firestore.rules` by hand.** There is CI for the rules and none for the
-   deploy, and the deploy state is recorded in no repository. Until this is done, every `slug`
-   create is refused by the deployed rules, and the author sees a publish that succeeded.
-2. **Bump and publish `@receptron/sharedapp`.** MulmoTerminal consumes `dist/` from the tarball;
-   the working tree here is linked into `node_modules` for verification only, so a clean install
-   loses every change. It is a MINOR — new keys, no existing meaning moved.
+1. **`../mulmoserver/firestore.rules` is deployed** (2026-08-26, by hand). There is CI for the
+   rules and none for the deploy. Until it was done, every `slug` create was refused by the
+   deployed rules while the author saw a publish that had succeeded.
+2. **`@receptron/sharedapp@0.27.0` is published**, and this branch locks it. The caret had to move
+   with it: the pin was `^0.26.0`, and a 0.x caret means `>=0.26.0 <0.27.0` — so publishing alone
+   would never have delivered the new version.
 
-Then, and only then, step 5 of the ordering above: the skill routing entry and a `magazine.md`
-template. Written after the rules and the runtime are in production, per this plan's own rule —
-a template is copied verbatim by an agent that cannot check it.
+What actually remains:
 
-**Added 2026-08-26 by A8**, and it rides the same ordering: the publish gate is
-`receptron/sharedapp#53` and needs the same bump-and-publish as everything above, after which the
-**host preflight** (`useSharedApp submit` / `update` refusing an over-long value before sending it)
-lands here. The `magazine.md` template must declare `maxBytes`, `limit` and `audience: "participant"`
-or it will not publish — which is the point.
+- **The skill routing entry and a `magazine.md` template.** Held until the rules and the runtime
+  were in production, per this plan's own rule — a template is copied verbatim by an agent that
+  cannot check it. That condition is now met, so this is next. The template must declare
+  `maxBytes`, `limit` and `audience: "participant"` or it will not publish, which is the point.
+- **A8's bounds**, added 2026-08-26 and one release behind the rest: the publish gate is
+  `receptron/sharedapp#53`, which ships in **0.28.0** together with the self-write ownership gate
+  (`#52`). After that publishes, the **host preflight** — `useSharedApp submit` / `update`
+  refusing an over-long value before sending it, so the refusal names the field and the cap —
+  lands here.
+- **Three things the architecture review raised and nobody has decided**: whether authorship is
+  permanent or revocable (a removed contributor still holds `selfUpdate` over their own articles);
+  whether a deleted slug may be taken by somebody else, whose mitigation is `sealed`; and whether
+  enabling the MCP server should say in so many words that it authorises autonomous publication.
