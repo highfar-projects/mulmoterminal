@@ -882,7 +882,7 @@ admits, forever, so not writing it again is not enough.
 
 ### What a page may WRITE
 
-**`transition`, `assign` and `withdraw` need the runtime deployed, and they do not fail softly.** `submit` has
+**`transition`, `assign`, `withdraw` and `correct` need the runtime deployed, and they do not fail softly.** `submit` has
 been on the bridge since public forms; these two and the `/p/{slug}` entrance arrived with the
 shared-app runtime, and on anything older they are simply ABSENT — a page calling one throws
 `__MC_APP_VIEW.transition is not a function`, which in an iframe looks like a page that does
@@ -895,14 +895,45 @@ capability comes back empty and the page draws a read-only view of itself. It st
 the app is published again — a projection without those lists cannot tell a receptionist from an
 observer, and refuses rather than assuming.
 
-Four calls, and a page cannot name a field in any of them:
+Five calls. Three of them cannot name a field at all; the two that carry values are bounded by the
+declaration instead:
 
 ```js
-await window.__MC_APP_VIEW.submit(cid, values);          // a new record
-await window.__MC_APP_VIEW.transition(cid, itemId, to);  // approve, reject, cancel
-await window.__MC_APP_VIEW.assign(cid, itemId, address); // hand a row to a colleague
-await window.__MC_APP_VIEW.withdraw(cid, itemId);        // take a row away (see the two halves below)
+await window.__MC_APP_VIEW.submit(cid, values);            // a new record
+await window.__MC_APP_VIEW.transition(cid, itemId, to);    // approve, reject, cancel
+await window.__MC_APP_VIEW.assign(cid, itemId, address);   // hand a row to a colleague
+await window.__MC_APP_VIEW.withdraw(cid, itemId);          // take a row away (see the two halves below)
+await window.__MC_APP_VIEW.correct(cid, itemId, values);   // rewrite fields of a row that exists
 ```
+
+`correct` is how an article gets a typo fixed without becoming a second article. **Two permissions
+answer it**, and the page asks the capability rather than the audience:
+
+- `can.<cid>.correctFrom` — `{ "<status>": ["<field>", …] }`, the fields the reader may change in a
+  row **they submitted**, while it holds that status.
+- `can.<cid>.correctAny` — **any field of any row**, for an `owner` or `editor`. A boolean and not a
+  list, because the rules answer a writing role with no status condition and no field list — which
+  is why an ordinary blog, which declares no `selfUpdate` at all, still lets its author edit.
+
+**`can.<cid>.frozen` is the list of fields it will refuse whoever asks — draw no input for them.**
+Two kinds are in it:
+
+- **the fields the rules froze when the record was created** — the `stampField`, the field an
+  `idFrom: "field"` / `"slug"` id was built out of, the `uidField`. A record that needs a different
+  id is a NEW record; renaming one would strand every link ever shared.
+- **the two fields the other asks own** — the collection's `statusField`, which moves through
+  `transition` (judged against the declared table, carrying whatever notice the declaration names
+  for that move), and its `assigneeField`, which moves through `assign` (which refuses an address
+  nobody on the roster holds a role at — writing one produces a row nobody may touch afterwards).
+
+Two more refusals:
+
+- **values over `can.<cid>.maxBytes`** — `{ "<field>": <bytes> }`, measured in bytes of UTF-8, and
+  absent where the app declared none. This is the one bound the deployed rules do NOT also make.
+- **an empty `values`** — answered by name rather than ignored, so the button does not hang.
+
+`values` must be an object of **strings**. A number is not coerced: the whole call is refused,
+because half-understanding an edit is worse than declining one.
 
 `withdraw` names no destination because nothing moves — the row is deleted, and where the
 collection has a `mirror` the parent reopens it in the same batch. **Two permissions answer it**
@@ -933,6 +964,10 @@ window.__MC_APP_VIEW.onState((data, viewer) => {
   // can.withdrawFrom   — the statuses this reader may take their OWN row away from
   // can.withdrawAny    — may take ANY row here away  (owner / editor, where the
   //                      collection declares `writerDelete`)
+  // can.correctFrom    — { status: [field...] } the reader may edit in their OWN row
+  // can.correctAny     — may rewrite any field of any row here  (owner / editor)
+  // can.frozen         — the fields NO correction may write, whoever asks
+  // can.maxBytes       — { field: bytes } a correction or submission may not exceed
   // can.assigneeField  — the field a row carries its owner's address in
   // can.assign         — may hand a row to somebody else
   // can.assignees      — who may be named

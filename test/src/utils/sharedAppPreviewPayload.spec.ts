@@ -35,6 +35,8 @@ describe("the preview payload", () => {
           // by field, so a key the payload stops carrying is a control the preview stops drawing
           // while the published page goes on drawing it.
           correctFrom: {},
+          correctAny: false,
+          frozen: [],
         },
       },
     });
@@ -57,6 +59,8 @@ describe("the preview payload", () => {
       withdrawAny: true,
       sealed: [],
       correctFrom: {},
+      correctAny: false,
+      frozen: [],
     });
   });
 

@@ -73,6 +73,11 @@ describe("useSharedApp — reading somebody else's app", () => {
     // agent here to learn it — without it the only ways left were to guess, or to provoke a
     // refusal on somebody else's real record.
     expect(said).toContain("correct your own row while it is «booked»: «note» / «guests»");
+    // AND the role's half, which is not a status map at all: `isWriter` in the rules carries no
+    // status condition and no field list. Reported only from the map, this tool told the app's own
+    // owner they could correct nothing while the rules allowed every field of every row — and an
+    // agent following the tool's contract would never have tried. (Codex on #1870.)
+    expect(said).toContain("correct any field of any row here");
     expect(said).toContain("«booked» -> «approved»");
     // The form, with the host-filled fields kept out of it: an address compared to the token, a
     // status pinned to `initialStatus`.

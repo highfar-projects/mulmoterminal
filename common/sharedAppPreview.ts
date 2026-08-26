@@ -224,8 +224,13 @@ export interface PreviewIntent {
   kind: IntentKind;
   cid: string;
   itemId: string;
-  /** Where it is going. Absent on a withdrawal, which moves nothing — the row is removed. */
+  /** Where it is going. Absent on a withdrawal, which moves nothing — the row is removed, and on a
+   *  correction, which names its own fields instead. */
   to?: string;
+  /** `correct` only: the fields to rewrite and their values. Strings, as the page sent them — the
+   *  rules compare stored values without coercing, and `maxBytes` has nothing to measure on a
+   *  number. */
+  values?: Record<string, string>;
 }
 
 /** What became of it.

@@ -218,6 +218,39 @@ describe("a member's intent, performed from the preview", () => {
     docs.store.set(itemsPath, new Map([["q1", { text: "Falcon 9?", state: "draft" }]]));
   });
 
+  // --- a correction --------------------------------------------------------------------------
+  //
+  // The pane is how an author finds out whether the edit button they just wrote works, BEFORE the
+  // page is published — so a correction the live parent performs and this one drops is a control
+  // the author can only test in production, on real records.
+
+  const correction = (over: Partial<PreviewIntent> = {}): PreviewIntent => ({
+    page: { id: "desk", audience: "member" },
+    kind: "correct",
+    cid: "questions",
+    itemId: "q1",
+    values: { text: "Falcon Heavy?" },
+    ...over,
+  });
+
+  it("writes the fields the page named, and only those", async () => {
+    expect(await performPreviewIntent(root, correction())).toEqual({ ok: true, mailed: false });
+    expect(batched).toEqual([`update ${itemsPath}/q1 {"text":"Falcon Heavy?"}`]);
+  });
+
+  it("refuses the fields the other asks own, because that is what they are for", async () => {
+    const result = await performPreviewIntent(root, correction({ values: { state: "open" } }));
+    expect(result).toEqual({ ok: false, error: "reserved-field" });
+    expect(batched).toEqual([]);
+  });
+
+  it("refuses a correction naming no fields rather than writing an empty update", async () => {
+    // An `update` carrying nothing succeeds and writes nothing, which would be reported as a
+    // correction that happened.
+    expect(await performPreviewIntent(root, correction({ values: {} }))).toEqual({ ok: false, error: "nothing-to-correct" });
+    expect(batched).toEqual([]);
+  });
+
   it("moves the one field the declaration names, and nothing else", async () => {
     const result = await performPreviewIntent(root, asked());
 

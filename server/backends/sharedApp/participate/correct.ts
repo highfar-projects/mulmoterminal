@@ -1,5 +1,12 @@
-// Correcting a record you submitted — the fourth thing `useSharedApp` can ask of one, and the only
-// one that is not a MOVE.
+// Correcting a record — the fourth thing `useSharedApp` can ask of one, and the only one that is
+// not a MOVE.
+//
+// TWO PERMISSIONS, which are the rules' own two branches of `updateWith`. The SUBMITTER corrects
+// their own row, in the fields `selfUpdate` names for the status it is in — that is what most of
+// this file is about. A WRITER corrects any field of any row, because `isWriter(r)` sits beside
+// that branch carrying no status condition and no field list at all. Only the first existed here,
+// which meant an app declaring no `selfUpdate` — an ordinary blog, where nobody but the author
+// writes — refused its own owner every correction while the rules allowed all of them.
 //
 // The other three (`transition`, `assign`, `withdraw`) are `IntentKind`, which is the vocabulary a
 // SANDBOXED PAGE may send its parent. This one is deliberately NOT in that set. The reason is the
@@ -40,7 +47,7 @@ export interface AskedCorrection {
 }
 
 export type CorrectionOutcome =
-  | { ok: true; fields: string[]; status: string }
+  | { ok: true; fields: string[]; status?: string }
   /** `refusal: false` means the write did not COMPLETE, which is not the same as not happening — a
    *  `deadline-exceeded` can arrive after Firestore committed. The caller must say so. */
   | { ok: false; error: string; refusal: boolean };
@@ -199,6 +206,35 @@ function overLong(app: JoinedApp, asked: AskedCorrection): string | null {
   );
 }
 
+/** Does this reader's ROLE let them rewrite any field here?
+ *
+ *  The other half of the rules' `updateWith`, and the half `selfUpdate` cannot express: `isWriter`
+ *  carries no status condition and no field list, so a writer's permission is a BOOLEAN and every
+ *  attempt to enumerate it describes a narrowing the rules do not apply.
+ *
+ *  Without it an owner could not correct their own app's records through this tool at all. An
+ *  ordinary blog declares no `selfUpdate` — nobody but the author writes there — so
+ *  `authorizedFields` answers null for the one person the rules let rewrite everything, and the
+ *  agent instruction telling them they may was false.
+ *
+ *  Every tier is asked, as `correctableFields` asks them and for the same reason: there is no page
+ *  here to say which one the ask came from. `correctAny` is itself tier-guarded inside the package.
+ */
+function writesAnyField(app: JoinedApp, cid: string): boolean {
+  return TIERS.some((tier) => capabilitiesOn(app, tier)[cid]?.correctAny === true);
+}
+
+/** The fields the rules FROZE when the record was created — the stamp, the field an id was built
+ *  out of, the uid.
+ *
+ *  Checked for everybody and BEFORE the role, because no role makes them writable: `stampHeld`,
+ *  `idHeld` and `uidHeld` are conjuncts of `updateWith`, ahead of the branch that asks who is
+ *  asking. Before `correctAny` existed this could not be reached — publish refuses a `selfUpdate`
+ *  naming any of them — and a writer naming one has no such gate in front of it. */
+function frozenIn(app: JoinedApp, cid: string): string[] {
+  return TIERS.flatMap((tier) => app.writes[tier]?.find((write) => write.cid === cid)?.frozen ?? []);
+}
+
 /** Write the correction, as the signed-in person.
  *
  *  `new FieldPath(name)` for each field, and not the object form, for the reason `commitIntent` uses
@@ -229,7 +265,97 @@ async function commitCorrection(aid: string, asked: AskedCorrection): Promise<{ 
   }
 }
 
+/** The field this collection's status lives in — from the declaration THE RULES READ, where that is
+ *  readable.
+ *
+ *  `apps/{aid}` first, for `authorizedFields`' reason and with a sharper consequence. A publish that
+ *  stops after the tiers and before the app document leaves the two disagreeing, and this guard is
+ *  what keeps a correction from setting a status. Read off the tiers alone, an author who RENAMED
+ *  the field mid-publish would have the guard looking for `workflow.state` while the rules still
+ *  judge by `status` — and an update naming `status` would sail past it and be COMMITTED through
+ *  the unrestricted writer branch, going round the transition table and the notice bound to the
+ *  move. That is the one direction this whole file must not fail in. (Codex on #1870.)
+ *
+ *  Presence is what decides, empty included: an app document that is readable and names no
+ *  `statusField` for this collection means there is none, not "ask somewhere else".
+ *
+ *  The tiers answer only for the reader who cannot read `apps/{aid}` at all — the collection-scoped
+ *  role — with the mismatch that implies, which is the one this module accepts everywhere else.
+ *
+ *  `frozen` beside it is left on the projection deliberately: the same drift there fails the other
+ *  way. A frozen field the tiers name and the rules do not is a refusal the host makes and the
+ *  rules would not; one the rules freeze and the tiers omit is a permission error rather than a
+ *  write that should not have happened. */
+function statusFieldOf(app: JoinedApp, cid: string): string | undefined {
+  const held = app.authorizing;
+  // `Object.hasOwn` before the lookup: a collection id may be `constructor`.
+  if (held !== undefined && Object.hasOwn(held.collections, cid)) {
+    const declared = held.collections[cid];
+    if (isRecord(declared)) return typeof declared.statusField === "string" ? declared.statusField : undefined;
+  }
+  if (held !== undefined) return undefined;
+  return TIERS.map((tier) => app.writes[tier]?.find((write) => write.cid === cid)?.statusField).find((field) => field !== undefined);
+}
+
+/** The fields the OTHER asks own, and which an update may therefore never write — whoever asks.
+ *
+ *  Not frozen: both of them move. They move through `transition` and `assign`, and each of those is
+ *  more than a write. A transition is judged against the declared table and carries whatever notice
+ *  the declaration names for that move. An assignment refuses an address nobody on the roster holds
+ *  an assignable role at — writing one produces a row NOBODY may touch afterwards, which is the
+ *  whole reason that check exists. A correction able to set either goes round a check the rules do
+ *  NOT make, so nothing downstream would catch it. (Codex on #1870.)
+ *
+ *  The assignee is read off the tier projections and the status is not (`statusFieldOf` prefers the
+ *  app document): `collections[cid].assigneeField` is not carried on the tier the rules read here,
+ *  and the drift fails in the safe direction anyway — an assignee field the tiers name and the
+ *  rules do not is a refusal this host makes and the rules would have allowed, which is a message
+ *  rather than a write that should not have happened. */
+function reservedIn(app: JoinedApp, cid: string): string[] {
+  const assignee = TIERS.map((tier) => app.writes[tier]?.find((write) => write.cid === cid)?.assigneeField).find((field) => field !== undefined);
+  return [statusFieldOf(app, cid), assignee].filter((field): field is string => field !== undefined);
+}
+
+/** Why those fields are refused, said as the ask that owns each one — the actionable half is which
+ *  OTHER call to make, not that this one said no. */
+function whyReserved(reserved: string[], app: JoinedApp, cid: string): string {
+  const status = statusFieldOf(app, cid);
+  const named = reserved.map((field) =>
+    field === status
+      ? `${quotedTerm(field)} is this collection's status, and a status moves through \`transition\` — judged against the declared table, carrying whatever notice the declaration names for that move`
+      : `${quotedTerm(field)} is this collection's assignee, and an assignee moves through \`assign\` — which refuses an address nobody on the roster holds a role at, because writing one produces a row nobody may touch afterwards`,
+  );
+  return `${named.join("; ")}. An update sets neither. Nothing was written.`;
+}
+
+/** May this reader write these fields, and what did the record say when it was read?
+ *
+ *  THE ROLE FIRST, because it is the rules' own order and because it answers without a list: a
+ *  writer is not narrowed per status, so there is nothing for `whyNot` to compare and a status is
+ *  reported only where the collection has one. Everybody else falls through to the submitter's
+ *  half, which is where the field list and the status both come from. */
+function permitted(app: JoinedApp, asked: AskedCorrection, row: Record<string, unknown>): { ok: true; status?: string } | { ok: false; error: string } {
+  if (writesAnyField(app, asked.cid)) {
+    const status = statusOf(row, statusFieldOf(app, asked.cid));
+    return status === null ? { ok: true } : { ok: true, status };
+  }
+  const allowed = correctableFields(app, asked.cid, row, Object.keys(asked.values));
+  const why = whyNot(allowed, asked);
+  if (why !== null || allowed === null) return { ok: false, error: why ?? "nothing is correctable here." };
+  return { ok: true, status: allowed.status };
+}
+
 export async function performCorrection(app: JoinedApp, asked: AskedCorrection): Promise<CorrectionOutcome> {
+  // BEFORE the record is read, and before either permission is asked: an ask naming no fields has
+  // nothing to judge and nothing to write, and an `update` carrying an empty object succeeds
+  // without writing anything — which would be reported as a correction that happened.
+  if (Object.keys(asked.values).length === 0) {
+    return {
+      ok: false,
+      refusal: true,
+      error: "`values` is empty — there is nothing to correct. Send the fields to change, keyed by their names as `describe` reported them.",
+    };
+  }
   const found = await readRecord(app, asked.cid, asked.itemId);
   if (!found.read) {
     return {
@@ -241,12 +367,26 @@ export async function performCorrection(app: JoinedApp, asked: AskedCorrection):
     };
   }
   if (found.row === null) return { ok: false, refusal: true, error: `no record ${quotedTerm(asked.itemId)} in ${quotedTerm(asked.cid)}. Nothing was written.` };
-  const allowed = correctableFields(app, asked.cid, found.row, Object.keys(asked.values));
-  const why = whyNot(allowed, asked);
-  if (why !== null || allowed === null) return { ok: false, refusal: true, error: why ?? "nothing is correctable here." };
+  const frozen = Object.keys(asked.values).filter((field) => frozenIn(app, asked.cid).includes(field));
+  if (frozen.length > 0) {
+    return {
+      ok: false,
+      refusal: true,
+      error:
+        `${quotedList(frozen)} cannot be rewritten: the rules fixed ${frozen.length === 1 ? "it" : "them"} when the record was created — the server clock a queue ` +
+        "is ranked by, the field the record's id was built out of, or the uid that says whose row it is. Nobody may write these afterwards, this app's owner " +
+        "included. Nothing was written. A record that needs a different id is a new record.",
+    };
+  }
+  const reserved = reservedIn(app, asked.cid).filter((field) => Object.hasOwn(asked.values, field));
+  if (reserved.length > 0) {
+    return { ok: false, refusal: true, error: whyReserved(reserved, app, asked.cid) };
+  }
+  const judged = permitted(app, asked, found.row);
+  if (!judged.ok) return { ok: false, refusal: true, error: judged.error };
   const tooLong = overLong(app, asked);
   if (tooLong !== null) return { ok: false, refusal: true, error: tooLong };
   const failed = await commitCorrection(app.aid, asked);
   if (failed !== null) return { ok: false, error: failed.error, refusal: failed.refusal };
-  return { ok: true, fields: Object.keys(asked.values), status: allowed.status };
+  return { ok: true, fields: Object.keys(asked.values), ...(judged.status === undefined ? {} : { status: judged.status }) };
 }

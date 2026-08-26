@@ -192,8 +192,28 @@ export async function commitIntent(aid: string, intent: JudgedIntent): Promise<I
       await batch.commit();
       return null;
     }
+    if (intent.kind === "correct") {
+      // Unreachable when empty: `nothing-to-correct` is refused by the judgement above. Handled
+      // rather than asserted away — an `update` with nothing in it succeeds and writes nothing,
+      // while the page is told it worked.
+      const pairs = Object.entries(intent.values ?? {});
+      // `new FieldPath(name)` per field, for the reason the transition below gives: a dotted key is
+      // a NESTED PATH to `update`, so a collection whose field is literally called `workflow.state`
+      // would get a map named `workflow` written beside the field the value belongs in. A
+      // correction is where this bites hardest — its field names come from the PAGE, one write at a
+      // time, rather than from a `statusField` the declaration named once.
+      // Head and tail rather than a flattened array, as `commitCorrection` builds it and for the
+      // same reason: `update`'s variadic form is typed `(field, value, ...more)`, and a flat
+      // `unknown[]` needs an assertion to fit it.
+      const [head, ...tail] = pairs;
+      if (head === undefined) return { error: "correct intent has no values to write", refusal: false };
+      batch.update(item, new FieldPath(head[0]), head[1], ...tail.flatMap(([name, value]) => [new FieldPath(name), value]));
+      await batch.commit();
+      return null;
+    }
     if (intent.field === undefined || intent.to === undefined) {
-      // Unreachable: only a withdrawal is judged without a field, and it left above. Stated rather
+      // Unreachable: only a withdrawal and a correction are judged without a field, and both left
+      // above. Stated rather
       // than asserted away, because the alternative is writing `{ undefined: undefined }` into
       // somebody's record.
       return { error: `intent ${intent.kind} has no field to move`, refusal: false };

@@ -74,13 +74,33 @@ export const REFUSALS: Record<string, string> = {
     "else's row the way they would for the person the page was built for — so the pane requires the page to actually hold the row. If the row does exist, the " +
     "pane's records are stale: reopen it",
   "no-such-page": "the page that asked is no longer in the projection — `app.json` changed under a document that is still on screen. Reload the pane",
+  "nothing-to-correct": "the page asked to correct a record but named no fields — `correct(cid, itemId, values)` was called with an empty `values`",
+  "frozen-field":
+    'the page tried to rewrite a field the rules FROZE when the record was created — the `stampField`, the field an id was built out of (`idFrom: "field"` / ' +
+    '`"slug"`), or the `uidField`. Nobody may write these afterwards, the app\'s owner included: they are what a rule derived an identity from, and a rename ' +
+    "would strand every link ever shared. Republishing under a new name is a new record",
+  "reserved-field":
+    "the page tried to set a field one of the other asks owns, through a correction. A status moves through `transition`, which is judged against the declared " +
+    "`transitions` table and carries the notice the declaration names for that move; an assignee moves through `assign`, which refuses an address nobody on the " +
+    "roster holds a role at — writing one produces a row NOBODY may touch afterwards. A correction able to set either would go round a check that exists. " +
+    "`viewer.can[cid].frozen` lists every field a correction may not name, so a form can leave them out",
+  "too-long":
+    "a value is longer than the app's own `public.submit[cid].maxBytes` allows, measured in BYTES of UTF-8 — Japanese runs about 2.4 bytes a character. This is " +
+    "the one refusal here the deployed rules do NOT also make: the cap is charged at publish and held by whoever writes, so nothing downstream would have caught it",
 };
 
 /** One refusal, in the words that fit it.
  *
  *  NO SECOND ARGUMENT. It took the audience of the page that asked, which is how one of the two
  *  maps above was chosen — and the audience decided nothing else about a refusal. */
-export const explainRefusal = (reason: string): string => REFUSALS[reason] ?? reason;
+export const explainRefusal = (reason: string): string => {
+  // `Object.hasOwn` before the lookup, and not `?? reason`: a refusal name arrives on the wire, and
+  // `constructor` is a string. A plain index reaches `Object.prototype` and hands back a FUNCTION,
+  // which is not undefined — so the fallback never fires and the log renders a function body.
+  if (!Object.hasOwn(REFUSALS, reason)) return reason;
+  const held = REFUSALS[reason];
+  return held ?? reason;
+};
 
 /** What a page that never answered the handshake is doing, and the one thing that causes it. */
 export const READY_DEADLOCK =

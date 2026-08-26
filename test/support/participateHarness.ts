@@ -561,6 +561,10 @@ export function publishApp(
     name = "Sakura Hair",
     dottedEmailField = false,
     dottedStatusField = false,
+    /** The fields the rules FROZE when the record was created, as the tier projection carries them
+     *  (`stampField`, the field an id was built out of, the uid). Not a permission and not
+     *  narrowed by one: a writer is refused these too. */
+    frozen = [] as string[],
     /** An enum choice longer than the display cap — legal, and the rules compare it exactly. */
     longEnum = false,
     /** An enum choice larger than a whole list's budget: omitted, never cut. */
@@ -584,24 +588,31 @@ export function publishApp(
   putAppDoc(bag, { roles, name, enabled, appPublic: appDoc.publicBlock, appSelfUpdate: appDoc.selfUpdate });
   putPublicConfig(bag, { name, enabled, mirror, idFromUid, idFromSlug, bothIdentities, dottedEmailField, longEnum, hugeEnum });
   if (rosterTier) putRosterTier(bag);
-  if (memberTier)
-    // The tier's own id, taken from the package rather than spelled here: it carries a `live:`
-    // prefix, and a document written at "config" is a document nothing reads.
-    bag.docs.put(appViewTierPath(AID, "member"), viewConfigDocId(), {
-      protocol: "1.0.0",
-      views: [{ id: "desk", collections: [{ cid: "bookings", scope: "all" }] }],
-      submit: {},
-      write: [
-        {
-          cid: "bookings",
-          statusField: dottedStatusField ? "workflow.state" : "status",
-          transitions: { booked: ["approved", "cancelled"] },
-          assigneeField: "handledBy",
-          writers,
-          rowWriters: [],
-          mail: { toField: "requesterEmail", on: { approved: { from: ["booked"], to: "approved" } } },
-        },
-      ],
-      publishedAt: 1,
-    });
+  // The tier's own id, taken from the package rather than spelled here: it carries a `live:`
+  // prefix, and a document written at "config" is a document nothing reads.
+  if (memberTier) bag.docs.put(appViewTierPath(AID, "member"), viewConfigDocId(), memberTierDoc({ dottedStatusField, writers, frozen }));
+}
+
+/** The staff tier's own document. Lifted out of `publishApp` rather than inlined, because that
+ *  function's branches are what its option list costs and this one is a value rather than a
+ *  decision. */
+function memberTierDoc({ dottedStatusField, writers, frozen }: { dottedStatusField: boolean; writers: string[]; frozen: string[] }): Record<string, unknown> {
+  return {
+    protocol: "1.0.0",
+    views: [{ id: "desk", collections: [{ cid: "bookings", scope: "all" }] }],
+    submit: {},
+    write: [
+      {
+        cid: "bookings",
+        statusField: dottedStatusField ? "workflow.state" : "status",
+        transitions: { booked: ["approved", "cancelled"] },
+        assigneeField: "handledBy",
+        writers,
+        rowWriters: [],
+        mail: { toField: "requesterEmail", on: { approved: { from: ["booked"], to: "approved" } } },
+        ...(frozen.length === 0 ? {} : { frozen }),
+      },
+    ],
+    publishedAt: 1,
+  };
 }

@@ -167,6 +167,7 @@ export async function performPreviewIntent(root: string, asked: PreviewIntent): 
       cid: asked.cid,
       itemId: asked.itemId,
       ...(asked.to === undefined ? {} : { to: asked.to }),
+      ...(asked.values === undefined ? {} : { values: asked.values }),
     },
     write,
     holding,

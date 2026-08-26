@@ -306,7 +306,10 @@ describe("useSharedApp — writing to somebody else's app", () => {
   it("refuses a field the current status does not allow, and NAMES it", async () => {
     // The whole reason the host judges at all. The rules would refuse this too, with "Missing or
     // insufficient permissions" and no field in it — which an agent cannot act on.
-    publish();
+    // WRITERS ARE SOMEBODY ELSE, deliberately: this is the SUBMITTER's half, and a reader who is
+    // also a writer is answered by the ROLE branch instead — any field, any status, no list to
+    // compare against.
+    publish({ writers: ["desk@example.com"] });
     bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old" });
     const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { slot: "11:00" } });
     expect(said).toContain("Not updated");
@@ -318,7 +321,7 @@ describe("useSharedApp — writing to somebody else's app", () => {
   it("refuses every field when the record is in a status that allows none", async () => {
     // `selfUpdate` is declared PER STATUS, so the answer depends on where the record is now — this
     // is the same row and the same field as the passing case above, after the desk moved it.
-    publish();
+    publish({ writers: ["desk@example.com"] });
     bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "approved", note: "old" });
     const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "new" } });
     expect(said).toContain("Not updated");
@@ -376,7 +379,7 @@ describe("useSharedApp — writing to somebody else's app", () => {
   it("names the widest set when nothing covers the ask", async () => {
     // The refusal has to name the most the reader could have sent, rather than whichever tier
     // happened to be looked at first — otherwise the agent retries against a shorter list.
-    publish({ rosterTier: true });
+    publish({ rosterTier: true, writers: ["desk@example.com"] });
     bag.docs.denyGet.add(`apps/${AID}`);
     bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old" });
     const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { slot: "11:00" } });
@@ -390,7 +393,7 @@ describe("useSharedApp — writing to somebody else's app", () => {
     // which is a projection of it for the public page, and not out of the tier documents, which are
     // projections for an audience. Where the app document is readable, that is what the preflight
     // must agree with.
-    publish({ rosterTier: true, appDoc: { selfUpdate: { booked: ["guests"] } } });
+    publish({ rosterTier: true, writers: ["desk@example.com"], appDoc: { selfUpdate: { booked: ["guests"] } } });
     bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old", guests: "2" });
     const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { guests: "4" } });
     expect(said).toContain("Corrected");
@@ -407,7 +410,7 @@ describe("useSharedApp — writing to somebody else's app", () => {
     //
     // It is also why deriving this from `config/public` would be the wrong direction: that document
     // is written EARLIER than the tiers, so it is further ahead of the rules, not closer to them.
-    publish({ rosterTier: true, appDoc: { selfUpdate: { booked: ["guests"] } } });
+    publish({ rosterTier: true, writers: ["desk@example.com"], appDoc: { selfUpdate: { booked: ["guests"] } } });
     bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old", guests: "2" });
     const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "new" } });
     expect(said).toContain("Not updated");
@@ -421,7 +424,7 @@ describe("useSharedApp — writing to somebody else's app", () => {
     // correctable while a tier projection still lists `note`. Falling through there would send a
     // batch the deployed rules refuse with a bare permission error — the exact failure the
     // preflight exists to replace, arriving after the host had said the field was allowed.
-    publish({ rosterTier: true, appDoc: { selfUpdate: {} } });
+    publish({ rosterTier: true, writers: ["desk@example.com"], appDoc: { selfUpdate: {} } });
     bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old" });
     const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "new" } });
     expect(said).toContain("Not updated");
@@ -437,6 +440,89 @@ describe("useSharedApp — writing to somebody else's app", () => {
     bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old" });
     const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "new" } });
     expect(said).toContain("Corrected");
+  });
+
+  // --- the ROLE half of a correction ------------------------------------------------------------
+  //
+  // `updateWith` has two branches and `selfUpdate` describes only one of them. `isWriter(r)` sits
+  // beside it carrying no status condition and no field list at all — which is what an ordinary
+  // blog rests on, because nobody but the author writes there and no `selfUpdate` is ever
+  // declared. Answering such an app from `selfUpdate` alone refused its OWNER every correction
+  // while the deployed rules allowed all of them.
+
+  it("lets a WRITER correct a field no `selfUpdate` names", async () => {
+    // `slot` is outside every `selfUpdate` list in this app — the submitter's case two blocks up
+    // is refused for exactly this field. The role is the whole difference.
+    publish();
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: "guest@example.com", slot: "10:00", status: "booked", note: "old" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { slot: "11:00" } });
+    expect(said).toContain("Corrected");
+    expect(bag.batched[0]).toContain(JSON.stringify({ slot: "11:00" }));
+  });
+
+  it("refuses a WRITER the collection's status, because that is what `transition` is for", async () => {
+    // A status moves through the declared table and carries whatever notice the declaration names
+    // for that move. A correction able to set it would be a way past both, and the role branch
+    // asks nothing about tables.
+    publish();
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: "guest@example.com", slot: "10:00", status: "booked" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { status: "approved" } });
+    expect(said).toContain("Not updated");
+    expect(said).toContain("transition");
+    expect(bag.batched).toEqual([]);
+  });
+
+  it("refuses a correction whose values are not all strings, rather than writing the half that were", async () => {
+    // The PAGE path refuses such a message outright, and this is the same policy in this caller's
+    // terms. Filtered instead, `{ note: "new", guests: 4 }` writes `note`, reports `Corrected
+    // «note»`, and says nothing at all about the field that was dropped — the caller reads a
+    // success and plans the next step against a record that never took half of it. (CodeRabbit.)
+    publish();
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "new", guests: 4 } });
+    expect(said).toContain("Not updated");
+    expect(said).toContain("\u00abguests\u00bb");
+    expect(bag.batched).toEqual([]);
+  });
+
+  it("reads the status field from the declaration the RULES read, not from a tier that moved on", async () => {
+    // A publish that stops after the tiers and before `apps/{aid}` leaves the two disagreeing, and
+    // this guard is what keeps a correction from setting a status. Judged off the tier alone, an
+    // author who RENAMED the field mid-publish has the guard looking for `workflow.state` while the
+    // rules still judge by `status` — and an update naming `status` sails past it and is committed
+    // through the unrestricted writer branch, going round the transition table and the notice bound
+    // to the move. (Codex on #1870.)
+    publish({ dottedStatusField: true });
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: "guest@example.com", slot: "10:00", status: "booked" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { status: "approved" } });
+    expect(said).toContain("Not updated");
+    expect(bag.batched).toEqual([]);
+  });
+
+  it("refuses a WRITER the ASSIGNEE too, which is the sharper half of the same rule", async () => {
+    // `assign` refuses an address nobody on the roster holds an assignable role at, because writing
+    // one produces a row NOBODY may touch afterwards. The rules do NOT make that check — it is this
+    // host's and the page's — so a correction reaching the field goes round it with nothing
+    // downstream to catch it. The status was already reserved for the same class of reason.
+    // (Codex on #1870.)
+    publish();
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: "guest@example.com", slot: "10:00", status: "booked" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { handledBy: "stranger@example.com" } });
+    expect(said).toContain("Not updated");
+    expect(said).toContain("assign");
+    expect(bag.batched).toEqual([]);
+  });
+
+  it("refuses a frozen field to a WRITER, because no role makes one writable", async () => {
+    // `stampHeld`, `idHeld` and `uidHeld` are conjuncts of `updateWith`, AHEAD of the branch that
+    // asks who is asking. Before the role branch existed this was unreachable — publish refuses a
+    // `selfUpdate` naming any of them — and a writer naming one has no such gate in front of it.
+    publish({ frozen: ["bookedAt", "slot"] });
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: "guest@example.com", slot: "10:00", status: "booked" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { slot: "11:00" } });
+    expect(said).toContain("Not updated");
+    expect(said).toContain("\u00abslot\u00bb");
+    expect(bag.batched).toEqual([]);
   });
 
   // --- the declared length cap, which no rule enforces ------------------------------------------
