@@ -267,8 +267,15 @@ below.
 
 ### A8. The length of an article is declared, and checked where the writing happens
 
-An article body carries `public.submit[cid].maxLen: { <field>: <chars> }`, and it is **not a
+An article body carries `public.submit[cid].maxBytes: { <field>: <bytes> }`, and it is **not a
 rule**.
+
+**In bytes, and the first draft was in characters.** Measured against a real manuscript, Japanese
+runs about **2.4 bytes a character** — so a cap of "40,000 characters" is 96 KB, and an index of
+twenty of them delivers 2 MB where the declaration appeared to promise 800 KB. Every cost this key
+bounds is paid in bytes: the 1 MiB document limit, the index payload, the reader's connection. The
+name moved with the unit for the same reason — an author reading `maxLen` writes the number they
+have in characters.
 
 That is a decision rather than an omission. A length test on `items` create and update sits on the
 path **every app in the deployment writes through**, so its expressions are paid by apps that have
@@ -279,10 +286,11 @@ worth having at the gate and at the host, and not in the rules.
 
 So it is enforced twice, in the two places the writing passes through:
 
-- **publish** checks the declaration — the cap exists, it names a real text field, it is under what
-  a Firestore document can hold, and **`limit` x `maxLen` is what a reader pays on every open of
-  the index**. That product is the number this whole decision is about, and publish is the only
-  place in the system where it can be computed before somebody pays it.
+- **publish** checks the declaration — the cap exists, it names a real text field, it is at or under
+  **100,000 bytes for one article** (about 40,000 characters of Japanese), and **`limit` x
+  `maxBytes` is at or under 1,000,000 bytes**, which is what a reader pays on every open of the
+  index. That product is the number this whole decision is about, and publish is the only place in
+  the system where it can be computed before somebody pays it.
 - **the host** (`useSharedApp submit` / `update`) refuses an over-long value before sending it, so
   the refusal names the field and the cap instead of arriving as a rules error.
 
@@ -292,7 +300,7 @@ with a name, and the rules answer last). It stops the accident and the runaway a
 what the writers of a magazine actually produce.
 
 `audience: "participant"` is the load-bearing half. Let a collection with `type: "article"` be
-submitted to by the world and `maxLen` becomes a comment, so publish refuses that pair.
+submitted to by the world and `maxBytes` becomes a comment, so publish refuses that pair.
 
 **A dead end found while writing the gate**: an article collection with no `public.submit` block
 could not be published either way — the index needs `limit`, `limit` needs a `stampField` to order
@@ -407,5 +415,5 @@ a template is copied verbatim by an agent that cannot check it.
 **Added 2026-08-26 by A8**, and it rides the same ordering: the publish gate is
 `receptron/sharedapp#53` and needs the same bump-and-publish as everything above, after which the
 **host preflight** (`useSharedApp submit` / `update` refusing an over-long value before sending it)
-lands here. The `magazine.md` template must declare `maxLen`, `limit` and `audience: "participant"`
+lands here. The `magazine.md` template must declare `maxBytes`, `limit` and `audience: "participant"`
 or it will not publish — which is the point.
