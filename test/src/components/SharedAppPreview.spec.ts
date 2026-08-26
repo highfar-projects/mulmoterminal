@@ -34,6 +34,7 @@ const MEMBER_CAPABILITY = {
   withdrawFrom: [],
   withdrawAny: false,
   sealed: [],
+  correctFrom: {},
 };
 
 /** And one as it resolves for a PUBLIC page, which carries a viewer too: the rules let whoever

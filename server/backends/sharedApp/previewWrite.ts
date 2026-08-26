@@ -28,6 +28,7 @@ import { randomUUID } from "node:crypto";
 import type { PublishedConfigDoc } from "@receptron/sharedapp";
 import {
   MIRROR_OPEN,
+  badSlugField,
   missingIdField,
   missingRequired,
   plannedWrite,
@@ -184,6 +185,19 @@ export async function writePreviewSubmission(root: string, cid: string, values: 
   // WHICH field, which is the only part of it they can act on.
   const noId = missingIdField(spec.submit, record);
   if (noId !== undefined) return { ok: false, reason: "host", error: `no-id: the submission has no value for "${noId}", which its id is built from` };
+  // And the same question for `idFrom: "slug"`, asked here for the same reason: `recordId` refuses
+  // a malformed name by THROWING, and a throw out of the preview is a stack trace where the author
+  // needs to be told which field and what a name may be. Refusing here also keeps the preview from
+  // being LOOSER than production, which is this file's whole property — the rules refuse it too.
+  const badSlug = badSlugField(spec.submit, record);
+  if (badSlug !== undefined)
+    return {
+      ok: false,
+      reason: "host",
+      error:
+        `bad-name: "${badSlug}" becomes this record's id and its URL, so it must be lowercase letters, digits and hyphens, ` +
+        "start with a letter or digit, and be at most 64 characters",
+    };
   const id = recordId(spec.submit, handle.uid, record, randomUUID());
 
   const plan = plannedWrite(cid, spec.submit, id, record);

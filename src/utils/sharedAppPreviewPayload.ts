@@ -83,6 +83,15 @@ const asPage = (value: unknown): PreviewPage[] => {
   return [{ id: value.id, html: value.html, audience, ...asViewer(value.viewer), ...(live.length === 0 ? {} : { live }) }];
 };
 
+/** `{ <status>: [<field>...] }`, entry by entry.
+ *
+ *  Every value goes through `strings`, so a map whose entries are not lists of strings floors to
+ *  an empty list for that status rather than reaching a caller that would send them as fields. */
+const stringMap = (value: unknown): Record<string, string[]> => {
+  if (!isRecord(value)) return {};
+  return Object.fromEntries(Object.entries(value).map(([key, held]) => [key, strings(held)]));
+};
+
 /** One collection's capability, field by field.
  *
  *  Rebuilt rather than passed through, and NOT asserted into shape: what arrives is JSON from this
@@ -99,6 +108,10 @@ const asCapability = (cid: string, value: unknown): ViewCapability => {
     assignees: strings(from.assignees),
     ...(typeof from.assigneeField === "string" ? { assigneeField: from.assigneeField } : {}),
     withdrawFrom: strings(from.withdrawFrom),
+    // The fields a submitter may CORRECT in their own row, per status. Rebuilt entry by entry
+    // rather than passed through, and floored to `{}` — an empty map offers no correction, which
+    // is the direction that refuses.
+    correctFrom: stringMap(from.correctFrom),
     // The STAFF half of a withdrawal, and a different permission from the list above rather than a
     // wider setting of it: that one is the statuses a submitter may take their OWN row away from,
     // and this is the role (`writerDelete` + `writers`, resolved by the package).

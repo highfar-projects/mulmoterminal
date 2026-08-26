@@ -363,7 +363,11 @@ export async function viewFilesReport(root: string, authored: AuthoredApp): Prom
   // publishing — and the clock is close enough for a limit with a 100 KB margin under it.
   const publishedAt = Date.now();
   for (const view of normalized.views) {
-    const read = await readAppViewFile(root, view, publishedAt, view.where);
+    // A PLATFORM-DRAWN page has no file to read, judge or size (`views[].type`). Skipped rather
+    // than reported: there is nothing wrong with it, and `normalizeViews` above has already
+    // refused every way of declaring one badly.
+    if (view.path === undefined) continue;
+    const read = await readAppViewFile(root, { path: view.path }, publishedAt, view.where);
     if (read.ok) warnings.push(...read.view.warnings);
     else problems.push(...read.problems);
   }
@@ -381,5 +385,12 @@ export async function viewFilesReport(root: string, authored: AuthoredApp): Prom
 export const declaredView = (authored: AuthoredApp): { path: string } | null => {
   const normalized = normalizeViews(authored);
   if (!normalized.ok) return null;
-  return normalized.views.find((view) => view.audience === "public") ?? null;
+  const view = normalized.views.find((entry) => entry.audience === "public");
+  // A PLATFORM-DRAWN page (`views[].type`, e.g. an article index) has no file, so there is nothing
+  // for this to hand back — and null is the right answer rather than a special case, because it is
+  // also what publish must do with `config/view`: DELETE it. An app that had HTML and now declares
+  // an article view would otherwise leave the old page fetchable by anyone who kept the path, since
+  // `config/{docId}` is `allow read: if true` forever.
+  if (view?.path === undefined) return null;
+  return { path: view.path };
 };

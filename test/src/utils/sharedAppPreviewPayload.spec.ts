@@ -30,6 +30,11 @@ describe("the preview payload", () => {
           withdrawFrom: ["requested"],
           withdrawAny: false,
           sealed: [],
+          // The fields a submitter may CORRECT in their own row, per status. Empty here and still
+          // written out, for the reason every other field in this fixture is: the rebuild is field
+          // by field, so a key the payload stops carrying is a control the preview stops drawing
+          // while the published page goes on drawing it.
+          correctFrom: {},
         },
       },
     });
@@ -51,6 +56,7 @@ describe("the preview payload", () => {
       withdrawFrom: [],
       withdrawAny: true,
       sealed: [],
+      correctFrom: {},
     });
   });
 

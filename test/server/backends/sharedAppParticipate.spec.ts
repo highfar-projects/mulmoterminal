@@ -91,7 +91,10 @@ describe("useSharedApp — reading somebody else's app", () => {
   it("refuses an app published against a newer contract, whole rather than in part", async () => {
     publish();
     const config = bag.docs.store.get(`apps/${AID}/config`)?.get("public");
-    if (config !== undefined) config.protocol = "2.0.0";
+    // A major ABOVE what this build implements. It moved from 2.0.0 when article views made 2.0.0
+    // a contract this build reads — the test is about the refusal, not about a fixed number, and
+    // pinning the number would turn every future contract into a failure here.
+    if (config !== undefined) config.protocol = "99.0.0";
     const said = await run({ action: "describe", slug: "sakura" });
     expect(said).toContain("newer version of the shared-app contract");
     // Not a narrowed answer: nothing about the app is reported, because a capability list missing
