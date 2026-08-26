@@ -20,7 +20,7 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
 import { setFirestoreAccessor, setSharedCollectionsSupport } from "@mulmoclaude/core/collection/server";
 import { useSharedApp } from "../../../server/infra/use-shared-app-tool.js";
-import { AID, bookingsPath, freshBag, ME, publishApp, slotsPath, type Bag } from "../../support/participateHarness.js";
+import { AID, bookingsPath, declareCaps, freshBag, ME, publishApp, slotsPath, type Bag } from "../../support/participateHarness.js";
 import { makeTempDir } from "../../support/tempDir";
 
 // CREATED WITH `vi.hoisted` because the mock factory below is hoisted above the imports: a plain
@@ -437,6 +437,96 @@ describe("useSharedApp — writing to somebody else's app", () => {
     bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old" });
     const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "new" } });
     expect(said).toContain("Corrected");
+  });
+
+  // --- the declared length cap, which no rule enforces ------------------------------------------
+  //
+  // Every other refusal these two verbs make is checked again by `firestore.rules`, so a host that
+  // skipped one would collect a permission error and somebody would notice. `maxBytes` is not in
+  // the rules at all — a length test on `items` create is paid by every app in the deployment,
+  // against a bound whose writers the owner invited by name — so a host that skips THIS simply
+  // writes the record, at any length, and the index the author published pays on every open.
+
+  it("refuses a submission longer than the app allows, naming the size and the cap", async () => {
+    // Both numbers, because an agent told only that something is too long rewrites and retries
+    // blind — which for an article means doing it more than once.
+    publish();
+    declareCaps(bag, { slot: 8 });
+    const said = await run({ action: "submit", slug: "sakura", cid: "bookings", values: { slot: "10:00 in the morning" } });
+    expect(said).toContain("too-long");
+    expect(said).toContain("20 bytes");
+    expect(said).toContain("allows 8");
+    expect(bag.batched).toEqual([]);
+  });
+
+  it("counts BYTES of UTF-8, not characters", async () => {
+    // The whole reason the key is called `maxBytes`. Five Japanese characters are 15 bytes, so a
+    // host counting `length` would accept this against a cap of 9 — and the store, the index and
+    // the reader's connection are all paid in bytes.
+    publish();
+    declareCaps(bag, { slot: 9 });
+    const said = await run({ action: "submit", slug: "sakura", cid: "bookings", values: { slot: "\u3042\u3044\u3046\u3048\u304a" } });
+    expect(said).toContain("15 bytes");
+    expect(bag.batched).toEqual([]);
+  });
+
+  it("accepts a value of exactly the cap, and any value at all where none is declared", async () => {
+    // The acceptance half. A check that refused everything would satisfy both tests above, and an
+    // app that has never declared a cap must go on submitting whatever it likes.
+    publish();
+    declareCaps(bag, { slot: 5 });
+    expect(await run({ action: "submit", slug: "sakura", cid: "bookings", values: { slot: "10:00" } })).toContain("Submitted");
+    bag.batched.length = 0;
+    publish();
+    expect(await run({ action: "submit", slug: "sakura", cid: "bookings", values: { slot: "x".repeat(500) } })).toContain("Submitted");
+  });
+
+  it("refuses a CORRECTION that would exceed the cap, which is where the length actually moves", async () => {
+    // A submission is written once; `selfUpdate` is the verb that lets the same person come back
+    // and make the field bigger. A cap enforced only on create bounds the first version of an
+    // article and nothing after it.
+    publish({ rosterTier: true });
+    declareCaps(bag, { note: 6 });
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "a much longer note" } });
+    expect(said).toContain("too long");
+    expect(said).toContain("allows 6");
+    expect(bag.batched).toEqual([]);
+  });
+
+  it("lets a correction through at exactly the cap", async () => {
+    publish({ rosterTier: true });
+    declareCaps(bag, { note: 6 });
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old" });
+    expect(await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "abcdef" } })).toContain("Corrected");
+  });
+
+  it("caps a correction from the WORLD-READABLE declaration when the app document is denied", async () => {
+    // Codex on #1866. A collection-scoped role cannot read `apps/{aid}`, and requiring it made the
+    // cap depend on the reader: the same person was capped when they CREATED a record and uncapped
+    // when they corrected it, through a `selfUpdate` the tier projection grants them. A cap a
+    // second write escapes is not a cap.
+    //
+    // Reading `config/public` here is right for a reason that does not apply to `selfUpdate` one
+    // function above: THAT one must agree with the deployed rules, which read `apps/{aid}`.
+    // `maxBytes` is read by no rule at all, so there is nothing to agree with and the question is
+    // only what the author published — which this host already trusts for the same key on submit.
+    publish({ rosterTier: true });
+    declareCaps(bag, { note: 6 });
+    bag.docs.denyGet.add(`apps/${AID}`);
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "a much longer note" } });
+    expect(said).toContain("too long");
+    expect(said).toContain("allows 6");
+    expect(bag.batched).toEqual([]);
+  });
+
+  it("still corrects at the cap with the app document denied, so the fallback is not a blanket refusal", async () => {
+    publish({ rosterTier: true });
+    declareCaps(bag, { note: 6 });
+    bag.docs.denyGet.add(`apps/${AID}`);
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old" });
+    expect(await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "abcdef" } })).toContain("Corrected");
   });
 
   it("says so when the record is not there", async () => {

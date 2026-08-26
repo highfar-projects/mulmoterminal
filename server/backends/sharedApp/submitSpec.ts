@@ -8,6 +8,7 @@
 // keys by the AUTHOR's own names — so a cast would be a claim about a document neither caller
 // wrote. What is not a string is absent, which is what every one of these keys means to the rules.
 import type { SubmitSpec } from "@receptron/sharedapp/view";
+import { isRecord } from "../../../common/isRecord.js";
 
 export function submitSpecOf(raw: Record<string, unknown>): SubmitSpec {
   const text = (key: string): string | undefined => {
@@ -29,5 +30,19 @@ export function submitSpecOf(raw: Record<string, unknown>): SubmitSpec {
     // beside it carries the same name, and this is deliberately not that one: `stampOk` tests
     // `"stampField" in s` against the submit block, so the submit block is the authority.
     stampField: text("stampField"),
+    // THE ONE KEY HERE THAT NO RULE ENFORCES. Every other field above is read by `firestore.rules`,
+    // so a host that drops one collects a permission error and somebody notices; a dropped
+    // `maxBytes` fails silently in the other direction — the write is ACCEPTED, at any length, and
+    // the index the author published pays for it on every open. This copier is exactly the closed
+    // list the package's own note warns about, so the key is copied here and the check itself comes
+    // from the package (`overLongFields`) rather than being re-derived.
+    //
+    // Numbers only, and own properties only: a field name has no grammar, so `toString` is a legal
+    // one and a plain index would hand back a function.
+    ...(isRecord(raw.maxBytes) ? { maxBytes: capsOf(raw.maxBytes) } : {}),
   };
+}
+
+function capsOf(raw: Record<string, unknown>): Record<string, number> {
+  return Object.fromEntries(Object.entries(raw).filter((entry): entry is [string, number] => typeof entry[1] === "number"));
 }

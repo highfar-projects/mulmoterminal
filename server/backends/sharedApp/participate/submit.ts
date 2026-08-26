@@ -18,6 +18,7 @@ import {
   badSlugField,
   missingIdField,
   missingRequired,
+  overLongFields,
   plannedWrite,
   recordId,
   recordOf,
@@ -116,6 +117,11 @@ const submitReason = (failed: { error: string; refusal: boolean }): "taken" | "r
   return failed.refusal ? "rules" : "failed";
 };
 
+/** One over-long field, said with BOTH numbers: told only that something is too long, an agent
+ *  rewrites and retries blind — which for an article means doing it more than once. */
+const saidTooLong = (field: { name: string; bytes: number; cap: number }): string =>
+  `${quoted(field.name)} is ${field.bytes} bytes and this app allows ${field.cap}`;
+
 /** Send one submission. */
 export async function submitToApp(app: JoinedApp, cid: string, values: Record<string, string>): Promise<SubmitResult> {
   const plan = submitPlan(app, cid);
@@ -131,6 +137,25 @@ export async function submitToApp(app: JoinedApp, cid: string, values: Record<st
   // a report the model reads. Quoting at the narration would have missed them: this string travels
   // to the agent whole.
   if (missing.length > 0) return { ok: false, reason: "host", error: `missing: ${quotedList(missing, " / ")}` };
+
+  // AND WHETHER ANYTHING IS TOO LONG. Unlike every other refusal in this function, NOTHING BEHIND
+  // THIS ONE WILL CATCH IT: `maxBytes` is not in `firestore.rules` (a length test on `items` create
+  // is paid by every app in the deployment, against a bound whose writers the owner invited by
+  // name), so a host that skips this simply writes the record. The declaration says what the app
+  // can afford; this is where an agent finds out before spending it.
+  //
+  // The measurement comes from the package rather than from here, so both hosts count the same
+  // thing — BYTES of UTF-8, where a Japanese article runs about 2.4 bytes a character and a host
+  // counting `length` would let through nearly two and a half times the cap.
+  const tooLong = overLongFields(values, plan.submit);
+  if (tooLong.length > 0)
+    return {
+      ok: false,
+      reason: "host",
+      // The size AND the cap, per field: told only that something is too long, an agent rewrites
+      // and retries blind — which for an article means doing it more than once.
+      error: `too-long: ${tooLong.map(saidTooLong).join(" / ")}`,
+    };
 
   // `serverTimestamp` is what this host offers where the rules require GOOGLE's clock, and it is
   // handed over whether or not the app declares a `stampField` — that is the declaration's answer
