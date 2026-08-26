@@ -259,4 +259,190 @@ describe("useSharedApp — writing to somebody else's app", () => {
     const said = await run({ action: "transition", slug: "sakura", cid: "bookings", id: "b1", to: "approved" });
     expect(said).toContain("Missing or insufficient permissions");
   });
+  it("refuses a submitted slug that could not be a URL, and names the field", async () => {
+    // `idFrom: "slug"` — the id is the article's own name, so a name the rules refuse (`slugOk`) is
+    // a write that cannot land. `recordId` in the package refuses it by THROWING, which out of here
+    // would reach the agent as a stack trace where this tool's contract is actionable prose.
+    publish({ idFromSlug: true });
+    const said = await run({ action: "submit", slug: "sakura", cid: "bookings", values: { slot: "Not A Slug" } });
+    expect(said).toContain("bad-name");
+    expect(said).toContain("lowercase letters, digits and hyphens");
+    expect(bag.batched).toEqual([]);
+  });
+
+  it("submits a legal slug as the record's own id", async () => {
+    // The positive half, without which the refusal above proves only that something was refused.
+    publish({ idFromSlug: true });
+    const said = await run({ action: "submit", slug: "sakura", cid: "bookings", values: { slot: "why-terminals-won" } });
+    expect(said).toContain("\u00abwhy-terminals-won\u00bb");
+  });
+
+  // --- update: correcting a record you submitted ------------------------------------------------
+  //
+  // The fourth ask, and the only one that is not a MOVE. It is deliberately NOT part of the intent
+  // vocabulary a sandboxed page may send (see `participate/correct.ts`): what makes it available
+  // here is who is asking — an agent on the machine of the person whose row it is, on the same
+  // footing as that person retyping a paragraph on the app's own page.
+
+  it("corrects the fields the declaration names for the record's current status", async () => {
+    publish();
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old", guests: "2" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "new" } });
+    expect(said).toContain("Corrected");
+    expect(bag.batched[0]).toContain(JSON.stringify({ note: "new" }));
+  });
+
+  it("writes every corrected field in ONE update", async () => {
+    // The rules judge a WRITE and `selfWriteOk` reads the whole diff. Split into one write per
+    // field, a two-field correction is two writes either of which can be the one that fails —
+    // leaving the record half corrected with nothing able to say which half.
+    publish();
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old", guests: "2" });
+    await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "new", guests: "4" } });
+    expect(bag.batched).toHaveLength(1);
+    expect(bag.batched[0]).toContain(JSON.stringify({ note: "new", guests: "4" }));
+  });
+
+  it("refuses a field the current status does not allow, and NAMES it", async () => {
+    // The whole reason the host judges at all. The rules would refuse this too, with "Missing or
+    // insufficient permissions" and no field in it — which an agent cannot act on.
+    publish();
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { slot: "11:00" } });
+    expect(said).toContain("Not updated");
+    expect(said).toContain("\u00abslot\u00bb");
+    expect(said).toContain("\u00abbooked\u00bb");
+    expect(bag.batched).toEqual([]);
+  });
+
+  it("refuses every field when the record is in a status that allows none", async () => {
+    // `selfUpdate` is declared PER STATUS, so the answer depends on where the record is now — this
+    // is the same row and the same field as the passing case above, after the desk moved it.
+    publish();
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "approved", note: "old" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "new" } });
+    expect(said).toContain("Not updated");
+    expect(bag.batched).toEqual([]);
+  });
+
+  it("never moves the status, whatever is sent", async () => {
+    // An update changes fields. A status change is `transition`, which is judged against the
+    // published table — so a correction that could set `status` would be a way around it.
+    publish();
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { status: "approved" } });
+    expect(said).toContain("Not updated");
+    expect(bag.batched).toEqual([]);
+  });
+
+  it("says what is missing rather than writing an empty update", async () => {
+    publish();
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked" });
+    expect(await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: {} })).toContain("nothing to correct");
+    expect(await run({ action: "update", slug: "sakura", cid: "bookings", values: { note: "x" } })).toContain("`cid` and `id` are both required");
+    expect(bag.batched).toEqual([]);
+  });
+
+  it("does not report a failed write as a refusal", async () => {
+    // The same distinction every write here keeps: `deadline-exceeded` can arrive AFTER Firestore
+    // committed, so "refused" states the one thing that might be false.
+    publish();
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old" });
+    bag.batchBreaks = 1;
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "new" } });
+    expect(said).toContain("Could not tell whether that landed");
+    expect(said).not.toContain("Not updated");
+  });
+
+  it("takes the tier that covers the WHOLE ask, not the first one with anything to say", async () => {
+    // Codex / CodeRabbit on #1864. A reader admitted to both tiers, whose two projections disagree
+    // — which they can, because they are two DOCUMENTS and `runWrites` can stop between them.
+    // Answering from the first non-empty one made this host stricter than the rules, which read
+    // ONE declaration and would have accepted the write.
+    //
+    // The app document is DENIED, because that is the only reader the tiers answer for — and with
+    // it readable this test passes without reaching the tier code at all.
+    publish({ rosterTier: true });
+    bag.docs.denyGet.add(`apps/${AID}`);
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old", guests: "2" });
+    // The member tier is consulted first and allows only `note` here; the roster's allows `guests`.
+    const member = bag.docs.store.get(`apps/${AID}/member`)?.get("live:config") as { write?: Record<string, unknown>[] } | undefined;
+    if (member?.write?.[0] !== undefined) member.write[0] = { ...member.write[0], selfUpdate: { booked: ["note"] } };
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { guests: "4" } });
+    expect(said).toContain("Corrected");
+    expect(bag.batched[0]).toContain(JSON.stringify({ guests: "4" }));
+  });
+
+  it("names the widest set when nothing covers the ask", async () => {
+    // The refusal has to name the most the reader could have sent, rather than whichever tier
+    // happened to be looked at first — otherwise the agent retries against a shorter list.
+    publish({ rosterTier: true });
+    bag.docs.denyGet.add(`apps/${AID}`);
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { slot: "11:00" } });
+    expect(said).toContain("Not updated");
+    expect(said).toContain("\u00abnote\u00bb");
+    expect(bag.batched).toEqual([]);
+  });
+
+  it("judges by the declaration the RULES read, not by a tier projection", async () => {
+    // `selfWriteOk` resolves `sub()` and `col()` out of `apps/{aid}` — not out of `config/public`,
+    // which is a projection of it for the public page, and not out of the tier documents, which are
+    // projections for an audience. Where the app document is readable, that is what the preflight
+    // must agree with.
+    publish({ rosterTier: true, appDoc: { selfUpdate: { booked: ["guests"] } } });
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old", guests: "2" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { guests: "4" } });
+    expect(said).toContain("Corrected");
+    expect(bag.batched[0]).toContain(JSON.stringify({ guests: "4" }));
+  });
+
+  it("refuses a field only a STALE tier still allows, because the rules would refuse it", async () => {
+    // THE PARTIAL REPUBLISH. `apps/{aid}`'s public block is the LAST write publish makes, so an
+    // interrupted run leaves the rules judging by the PREVIOUS declaration while `config/public`
+    // and the tier documents have already moved on. Here the tiers still offer `note` and the
+    // rules no longer do — and a preflight that believed the tiers would say "allowed", write, and
+    // collect a bare permission error from Firestore. That is the generic failure this whole
+    // check exists to replace.
+    //
+    // It is also why deriving this from `config/public` would be the wrong direction: that document
+    // is written EARLIER than the tiers, so it is further ahead of the rules, not closer to them.
+    publish({ rosterTier: true, appDoc: { selfUpdate: { booked: ["guests"] } } });
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old", guests: "2" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "new" } });
+    expect(said).toContain("Not updated");
+    expect(said).toContain("\u00abguests\u00bb");
+    expect(bag.batched).toEqual([]);
+  });
+
+  it("refuses when the readable declaration allows NOTHING, rather than asking the tiers", async () => {
+    // CodeRabbit on #1864. The presence of the app document is what decides, not whether its answer
+    // is non-empty: a run that stopped part-way can leave `apps/{aid}` declaring nothing
+    // correctable while a tier projection still lists `note`. Falling through there would send a
+    // batch the deployed rules refuse with a bare permission error — the exact failure the
+    // preflight exists to replace, arriving after the host had said the field was allowed.
+    publish({ rosterTier: true, appDoc: { selfUpdate: {} } });
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "new" } });
+    expect(said).toContain("Not updated");
+    expect(bag.batched).toEqual([]);
+  });
+
+  it("falls back to the tier projections when the app document is denied", async () => {
+    // A collection-scoped role does not read `apps/{aid}`, so there the tiers are all there is —
+    // with the mismatch that implies, which is the same one `performIntent` accepts: the rules
+    // answer last either way, and what the host buys is a refusal with a name.
+    publish({ rosterTier: true });
+    bag.docs.denyGet.add(`apps/${AID}`);
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "new" } });
+    expect(said).toContain("Corrected");
+  });
+
+  it("says so when the record is not there", async () => {
+    publish();
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "nope", values: { note: "new" } });
+    expect(said).toContain("no record");
+    expect(bag.batched).toEqual([]);
+  });
 });

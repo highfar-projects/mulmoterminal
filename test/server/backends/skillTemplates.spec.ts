@@ -13,7 +13,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { CollectionSchema } from "@mulmoclaude/core/collection";
 import { declarationProblems } from "../../../server/backends/sharedApp/context.js";
-import { APP_PROTOCOL, parseAuthoredApp } from "@receptron/sharedapp";
+import { APP_PROTOCOL_BASE, parseAuthoredApp } from "@receptron/sharedapp";
 import { modalCallIn } from "../../../server/backends/sharedApp/modalCall.js";
 import { formElementIn, readyNeverCalled } from "../../../server/backends/sharedApp/viewDefects.js";
 import { readdirSync } from "node:fs";
@@ -225,9 +225,17 @@ describe("the shared-app templates", () => {
     // an unknown key at its own manifest schema, before any version is compared — and a floor a
     // sample declares for a feature is a floor every author then copies. See U10 in
     // `plans/feat-shared-app-uid-identity.md`.
+    //
+    // AGAINST THE *BASE* CONTRACT, and this is the distinction the day a feature moved the number
+    // actually turned on. `APP_PROTOCOL` is the newest contract this compiler can EMIT — 2.0.0
+    // since article views, which a reader must understand to draw. `APP_PROTOCOL_BASE` is what an
+    // app that uses none of that keeps, and what every deployed reader already knows. A floor says
+    // what the app NEEDS, so a template declaring the newer one would make every app written from
+    // it refuse to draw on readers that could have drawn it perfectly well — the exact cost the
+    // per-app stamp exists to avoid. A template that ships an article view will state its own.
     for (const file of TEMPLATE_FILES) {
       const manifest = blocksOf(file).get("app.json") as Record<string, unknown> | undefined;
-      expect(`${file}: ${String(manifest?.protocol)}`).toBe(`${file}: ${APP_PROTOCOL}`);
+      expect(`${file}: ${String(manifest?.protocol)}`).toBe(`${file}: ${APP_PROTOCOL_BASE}`);
     }
   });
 

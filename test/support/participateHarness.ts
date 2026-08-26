@@ -13,6 +13,7 @@
 // this feature is required to keep apart.
 import type { FirestoreDoc, FirestoreDocs } from "@mulmoclaude/core/collection/server";
 import { appViewTierPath, viewConfigDocId } from "@receptron/sharedapp";
+import { isRecord } from "../../common/isRecord.js";
 
 export const AID = "app-sakura";
 export const ME = { uid: "uid-me", email: "me@example.com" };
@@ -144,9 +145,23 @@ const batchFor = (bag: Bag): Record<string, unknown> => {
     // Both call shapes, because the two updates here are deliberately different: a record's declared
     // field goes through a FieldPath (a dotted name is a literal key, not a path), and the mirror's
     // `state` is ours and fixed.
-    update: (ref: { path: string }, data: Record<string, unknown> | { segments: string[] }, value?: unknown) => {
+    // BOTH SHAPES of Firestore's own `update`, including the VARIADIC one:
+    // `(ref, field, value, ...moreFieldsAndValues)`. The rest was ignored here while the only
+    // caller moved one field, and a correction writes several — a mock that dropped them would
+    // report a one-field write and let a caller that split the update into several land the same
+    // assertion, which is precisely the thing worth pinning (the rules judge a write, and
+    // `selfWriteOk` reads the whole diff).
+    update: (ref: { path: string }, data: Record<string, unknown> | { segments: string[] }, value?: unknown, ...more: unknown[]) => {
       const asPath = data as { segments?: string[] };
-      const written = Array.isArray(asPath.segments) ? { [asPath.segments.join(".")]: value } : data;
+      if (!Array.isArray(asPath.segments)) {
+        ops.push(`update ${ref.path} ${JSON.stringify(data)}`);
+        return;
+      }
+      const written: Record<string, unknown> = { [asPath.segments.join(".")]: value };
+      for (let at = 0; at + 1 < more.length; at += 2) {
+        const field = more[at] as { segments?: string[] };
+        if (Array.isArray(field.segments)) written[field.segments.join(".")] = more[at + 1];
+      }
       ops.push(`update ${ref.path} ${JSON.stringify(written)}`);
     },
     delete: (ref: { path: string }) => ops.push(`delete ${ref.path}`),
@@ -315,11 +330,13 @@ const submitBlock = {
 export function submitFor({
   mirror,
   idFromUid,
+  idFromSlug,
   bothIdentities,
   dottedEmailField,
 }: {
   mirror: boolean;
   idFromUid: boolean;
+  idFromSlug: boolean;
   bothIdentities: boolean;
   dottedEmailField: boolean;
 }): Record<string, unknown> {
@@ -328,6 +345,10 @@ export function submitFor({
     ...(mirror ? {} : { mirror: undefined }),
     // The reader's row is NAMED rather than queried: its id IS their uid.
     ...(idFromUid ? { idFrom: "auth.uid", idField: undefined, emailField: undefined, mirror: undefined } : {}),
+    // The record is named by a field it carries, with no `idIn` and no mirror: `slug` is a claim
+    // about the record ITSELF rather than about another one, so what stands where `idIn` stands is
+    // the grammar the rules enforce.
+    ...(idFromSlug ? { idFrom: "slug", idField: "slot", idIn: undefined, mirror: undefined } : {}),
     // Both identities, either of which the rules accept as an own row.
     ...(bothIdentities ? { uidField: "uid" } : {}),
     // An ordinary top-level key that happens to contain a dot.
@@ -349,6 +370,7 @@ const publicConfig = (over: {
   enabled: boolean;
   mirror: boolean;
   idFromUid: boolean;
+  idFromSlug: boolean;
   bothIdentities: boolean;
   dottedEmailField: boolean;
   longEnum: boolean;
@@ -373,7 +395,20 @@ const publicConfig = (over: {
       statusField: "status",
     },
   },
-  write: [{ cid: "bookings", statusField: "status", transitions: { booked: ["cancelled"] }, selfDelete: ["booked"], withdrawMirror: "slots" }],
+  // `selfUpdate` rides here beside `selfDelete`, because this is where a real publish puts it: the
+  // public audience's own `write` entry, projected from `public.submit[cid]`. It is also the only
+  // source most apps have — an app that publishes no participant PAGE still publishes this, and
+  // `rosterTier` merges the two.
+  write: [
+    {
+      cid: "bookings",
+      statusField: "status",
+      transitions: { booked: ["cancelled"] },
+      selfDelete: ["booked"],
+      selfUpdate: { booked: ["note", "guests"] },
+      withdrawMirror: "slots",
+    },
+  ],
   publishedAt: 1,
 });
 
@@ -385,6 +420,104 @@ const appPublicBlock = (given: Record<string, unknown> | null | undefined, enabl
   return { public: given };
 };
 
+/** The default `selfUpdate` on the app document, MIRRORING the projection's — because that is what
+ *  a publish that ran to the end leaves, and the two differ only when one stopped part-way. */
+const MIRRORED_SELF_UPDATE: Record<string, string[]> = { booked: ["note", "guests"] };
+
+/** The app document as a REAL publish leaves it: carrying the `public.submit` and `collections`
+ *  that the deployed rules resolve `sub()` and `col()` out of.
+ *
+ *  ON BY DEFAULT, mirroring the projection. It was off once, and that made the ordinary `publish()`
+ *  leave a document no real publish leaves — one whose `public` block declares nothing submittable
+ *  while `config/public` and the tiers declare a correctable field. The preflight reads this
+ *  document, so a test written against that pair was testing a state production cannot reach.
+ *
+ *  `null` turns it off, and it does NOT mean "use the tiers": a readable document declaring nothing
+ *  is a refusal, since `sub()` resolves to nothing out of it. The tier path belongs to the reader
+ *  who cannot read this document at all — deny it with `denyGet` to take it.
+ *
+ *  MERGED INTO whatever the test already put in the block, rather than written over it. A test
+ *  that sets `publicBlock` with a submit declaration of its own is describing the document it
+ *  wants judged, and replacing it here would take that away with nothing failing — which is how
+ *  this file has already produced a green test that verified nothing (see the note above). */
+const appAuthorizingBlock = (selfUpdate: Record<string, string[]> | null | undefined, publicBlock: Record<string, unknown>): Record<string, unknown> => {
+  if (selfUpdate === null) return {};
+  const held = publicBlock.public;
+  if (!isRecord(held)) return {};
+  const submit = isRecord(held.submit) ? held.submit : {};
+  const bookings = isRecord(submit.bookings) ? submit.bookings : {};
+  return {
+    public: { ...held, submit: { ...submit, bookings: { ...bookings, selfUpdate: selfUpdate ?? MIRRORED_SELF_UPDATE } } },
+    collections: { bookings: { statusField: "status" } },
+  };
+};
+
+/** The app document itself, or nothing when the test is publishing an app whose roster this reader
+ *  cannot read — the ordinary state for a collection-scoped role.
+ *
+ *  Out of `publishApp`, which is at its complexity cap: a branch that reads four of its options and
+ *  is one `put` does not need to be counted against it.
+ */
+/** The world-readable projection. Out of `publishApp` for its complexity budget, which every
+ *  default parameter counts against — the shape it needs is already one object. */
+function putPublicConfig(bag: Bag, shape: Parameters<typeof publicConfig>[0]): void {
+  bag.docs.put(`apps/${AID}/config`, "public", publicConfig(shape));
+}
+
+function putAppDoc(
+  bag: Bag,
+  {
+    roles,
+    name,
+    enabled,
+    appPublic,
+    appSelfUpdate,
+  }: {
+    roles: Record<string, string> | null;
+    name: string;
+    enabled: boolean;
+    appPublic: Record<string, unknown> | null | undefined;
+    appSelfUpdate: Record<string, string[]> | null | undefined;
+  },
+): void {
+  if (roles === null) return;
+  // The block the RULES read for anonymous access. Carried here as well as in `config/public`
+  // because publish writes the two separately and a run can stop between them.
+  const publicBlock = appPublicBlock(appPublic, enabled);
+  bag.docs.put("apps", AID, {
+    aid: AID,
+    name,
+    members: { [ME.email]: roles },
+    memberEmails: [ME.email],
+    ...publicBlock,
+    // Merged INTO that block rather than written beside it: they are one field on one document,
+    // and a second spread would drop whichever half a test had set deliberately.
+    ...appAuthorizingBlock(appSelfUpdate, publicBlock),
+  });
+}
+
+/** A participant page's own projection, left behind by an EARLIER publish: it names the same
+ *  collection as `config/public` and carries only the transition half. `runWrites` can stop after
+ *  any step and `config/public` is written before the tier documents, so this pair is a real state
+ *  — and dropping either half of it takes away a move the deployed rules allow.
+ *
+ *  Its own function rather than a block inside `publishApp`, which is at its line and complexity
+ *  caps: every flag added to that signature has to buy its place, and a document that depends on
+ *  exactly one of them does not need to be written there. */
+function putRosterTier(bag: Bag): void {
+  bag.docs.put(appViewTierPath(AID, "roster"), viewConfigDocId(), {
+    protocol: "1.0.0",
+    views: [{ id: "mine", collections: [{ cid: "bookings", scope: "own" }] }],
+    submit: {},
+    // `selfUpdate` beside the transitions, because they are different asks about the same row: one
+    // MOVES it, the other corrects fields inside it while it stands still. Declared per status for
+    // the reason the transitions are — "may edit while booked" and "may edit after the desk
+    // approved it" are different promises.
+    write: [{ cid: "bookings", statusField: "status", transitions: { booked: ["cancelled"] }, selfUpdate: { booked: ["note", "guests"] } }],
+    publishedAt: 1,
+  });
+}
+
 export function publishApp(
   bag: Bag,
   {
@@ -394,6 +527,9 @@ export function publishApp(
     rosterTier = false,
     mirror = true,
     idFromUid = false,
+    /** Publish `bookings` with `idFrom: "slug"` — the record is NAMED by a submitted field rather
+     *  than claiming another record, so there is no `idIn` and the grammar stands in its place. */
+    idFromSlug = false,
     enabled = true,
     bothIdentities = false,
     name = "Sakura Hair",
@@ -403,35 +539,25 @@ export function publishApp(
     longEnum = false,
     /** An enum choice larger than a whole list's budget: omitted, never cut. */
     hugeEnum = false,
-    /** The app document's own `public` block: undefined mirrors `enabled`, null omits it, an object
-     *  sets it apart from the projection — the shape a half-finished publish leaves. */
-    appPublic = undefined as Record<string, unknown> | null | undefined,
+    /** What goes on the APP DOCUMENT, which is what the deployed rules resolve `sub()` and `col()`
+     *  out of — as opposed to `config/public`, which is a projection of it.
+     *
+     *  ONE option rather than two, and not only for the complexity budget every default parameter
+     *  here counts against: both halves describe the same document, and a test that sets one
+     *  without meaning the other has almost certainly made a mistake.
+     *
+     *  `publicBlock`: undefined mirrors `enabled`, null omits it, an object sets it apart from the
+     *  projection — the shape a half-finished publish leaves.
+     *  `selfUpdate`: writes `public.submit.bookings.selfUpdate` and the collection's statusField,
+     *  which is the declaration a correction is judged by. Defaults to mirroring the projection;
+     *  `null` leaves the document declaring nothing, which is a REFUSAL and not a fallback. */
+    appDoc = {} as { publicBlock?: Record<string, unknown> | null; selfUpdate?: Record<string, string[]> | null },
   } = {},
 ): void {
   bag.docs.put("appSlugs", "sakura", { aid: AID, published: true });
-  if (roles !== null)
-    bag.docs.put("apps", AID, {
-      aid: AID,
-      name,
-      members: { [ME.email]: roles },
-      memberEmails: [ME.email],
-      // The block the RULES read for anonymous access. Carried here as well as in `config/public`
-      // because publish writes the two separately and a run can stop between them.
-      ...appPublicBlock(appPublic, enabled),
-    });
-  bag.docs.put(`apps/${AID}/config`, "public", publicConfig({ name, enabled, mirror, idFromUid, bothIdentities, dottedEmailField, longEnum, hugeEnum }));
-  if (rosterTier)
-    // A participant page's own projection, left behind by an EARLIER publish: it names the same
-    // collection as `config/public` and carries only the transition half. `runWrites` can stop
-    // after any step and `config/public` is written before the tier documents, so this pair is a
-    // real state — and dropping either half of it takes away a move the deployed rules allow.
-    bag.docs.put(appViewTierPath(AID, "roster"), viewConfigDocId(), {
-      protocol: "1.0.0",
-      views: [{ id: "mine", collections: [{ cid: "bookings", scope: "own" }] }],
-      submit: {},
-      write: [{ cid: "bookings", statusField: "status", transitions: { booked: ["cancelled"] } }],
-      publishedAt: 1,
-    });
+  putAppDoc(bag, { roles, name, enabled, appPublic: appDoc.publicBlock, appSelfUpdate: appDoc.selfUpdate });
+  putPublicConfig(bag, { name, enabled, mirror, idFromUid, idFromSlug, bothIdentities, dottedEmailField, longEnum, hugeEnum });
+  if (rosterTier) putRosterTier(bag);
   if (memberTier)
     // The tier's own id, taken from the package rather than spelled here: it carries a `live:`
     // prefix, and a document written at "config" is a document nothing reads.

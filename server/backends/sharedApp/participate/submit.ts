@@ -15,6 +15,7 @@
 import { randomUUID } from "node:crypto";
 import { serverTimestamp } from "firebase/firestore";
 import {
+  badSlugField,
   missingIdField,
   missingRequired,
   plannedWrite,
@@ -143,6 +144,20 @@ export async function submitToApp(app: JoinedApp, cid: string, values: Record<st
   // QUOTED for the reason the labels above are: `missingIdField` answers with the FIELD NAME the
   // declaration carries, which is the app author's word and travels to the agent whole.
   if (noId !== undefined) return { ok: false, reason: "host", error: `no-id: the submission has no value for ${quoted(noId)}, which its id is built from` };
+
+  // AND WHETHER IT IS A LEGAL NAME, for `idFrom: "slug"`. Asked here rather than caught below,
+  // because `recordId` REFUSES this one by throwing — and an exception out of this module reaches
+  // the agent as a stack trace where the tool's whole contract is actionable prose. The rules refuse
+  // it too (`slugOk`); what this buys is a refusal that names the field and says what a name may be.
+  const badSlug = badSlugField(plan.submit, record);
+  if (badSlug !== undefined)
+    return {
+      ok: false,
+      reason: "host",
+      error:
+        `bad-name: ${quoted(badSlug)} becomes this record's id and its URL, so it must be lowercase letters, digits and hyphens, ` +
+        "start with a letter or digit, and be at most 64 characters",
+    };
 
   const id = recordId(plan.submit, app.handle.uid, record, randomUUID());
   const write = plannedWrite(cid, plan.submit, id, record);

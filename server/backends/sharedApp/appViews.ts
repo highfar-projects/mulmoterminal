@@ -114,7 +114,12 @@ export async function planAppViewTiers(root: string, authored: AuthoredApp, stam
     const pages: TierPage[] = [];
     for (const view of tier.views) {
       problems.push(...unreachableProblems(authored, view, tier.audience, participantRead));
-      const read = await readAppViewFile(root, view, stamp.publishedAt, view.where);
+      // A platform-drawn page names no file. The package refuses `type` on these tiers outright —
+      // they draw through a different bridge with its own intents — so this is unreachable, and it
+      // is a `continue` rather than an assertion because the alternative is asking the filesystem
+      // for `undefined` and reporting whatever it says about it.
+      if (view.path === undefined) continue;
+      const read = await readAppViewFile(root, { path: view.path }, stamp.publishedAt, view.where);
       if (read.ok) {
         pages.push({ id: view.id, html: read.view.html });
         warnings.push(...read.view.warnings);
