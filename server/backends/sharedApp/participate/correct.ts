@@ -265,12 +265,35 @@ async function commitCorrection(aid: string, asked: AskedCorrection): Promise<{ 
   }
 }
 
-/** The field this collection's status lives in, as the tier projections carry it.
+/** The field this collection's status lives in — from the declaration THE RULES READ, where that is
+ *  readable.
  *
- *  Asked of every tier, as everything else here is: there is no page to say which one. They agree
- *  about this field where both carry it — it is `collections[cid].statusField`, one value in the
- *  declaration — so the first answer is the answer. */
+ *  `apps/{aid}` first, for `authorizedFields`' reason and with a sharper consequence. A publish that
+ *  stops after the tiers and before the app document leaves the two disagreeing, and this guard is
+ *  what keeps a correction from setting a status. Read off the tiers alone, an author who RENAMED
+ *  the field mid-publish would have the guard looking for `workflow.state` while the rules still
+ *  judge by `status` — and an update naming `status` would sail past it and be COMMITTED through
+ *  the unrestricted writer branch, going round the transition table and the notice bound to the
+ *  move. That is the one direction this whole file must not fail in. (Codex on #1870.)
+ *
+ *  Presence is what decides, empty included: an app document that is readable and names no
+ *  `statusField` for this collection means there is none, not "ask somewhere else".
+ *
+ *  The tiers answer only for the reader who cannot read `apps/{aid}` at all — the collection-scoped
+ *  role — with the mismatch that implies, which is the one this module accepts everywhere else.
+ *
+ *  `frozen` beside it is left on the projection deliberately: the same drift there fails the other
+ *  way. A frozen field the tiers name and the rules do not is a refusal the host makes and the
+ *  rules would not; one the rules freeze and the tiers omit is a permission error rather than a
+ *  write that should not have happened. */
 function statusFieldOf(app: JoinedApp, cid: string): string | undefined {
+  const held = app.authorizing;
+  // `Object.hasOwn` before the lookup: a collection id may be `constructor`.
+  if (held !== undefined && Object.hasOwn(held.collections, cid)) {
+    const declared = held.collections[cid];
+    if (isRecord(declared)) return typeof declared.statusField === "string" ? declared.statusField : undefined;
+  }
+  if (held !== undefined) return undefined;
   return TIERS.map((tier) => app.writes[tier]?.find((write) => write.cid === cid)?.statusField).find((field) => field !== undefined);
 }
 

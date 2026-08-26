@@ -472,6 +472,20 @@ describe("useSharedApp — writing to somebody else's app", () => {
     expect(bag.batched).toEqual([]);
   });
 
+  it("reads the status field from the declaration the RULES read, not from a tier that moved on", async () => {
+    // A publish that stops after the tiers and before `apps/{aid}` leaves the two disagreeing, and
+    // this guard is what keeps a correction from setting a status. Judged off the tier alone, an
+    // author who RENAMED the field mid-publish has the guard looking for `workflow.state` while the
+    // rules still judge by `status` — and an update naming `status` sails past it and is committed
+    // through the unrestricted writer branch, going round the transition table and the notice bound
+    // to the move. (Codex on #1870.)
+    publish({ dottedStatusField: true });
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: "guest@example.com", slot: "10:00", status: "booked" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { status: "approved" } });
+    expect(said).toContain("Not updated");
+    expect(bag.batched).toEqual([]);
+  });
+
   it("refuses a frozen field to a WRITER, because no role makes one writable", async () => {
     // `stampHeld`, `idHeld` and `uidHeld` are conjuncts of `updateWith`, AHEAD of the branch that
     // asks who is asking. Before the role branch existed this was unreachable — publish refuses a
