@@ -434,13 +434,20 @@ const MIRRORED_SELF_UPDATE: Record<string, string[]> = { booked: ["note", "guest
  *
  *  `null` turns it off, and it does NOT mean "use the tiers": a readable document declaring nothing
  *  is a refusal, since `sub()` resolves to nothing out of it. The tier path belongs to the reader
- *  who cannot read this document at all — deny it with `denyGet` to take it. */
+ *  who cannot read this document at all — deny it with `denyGet` to take it.
+ *
+ *  MERGED INTO whatever the test already put in the block, rather than written over it. A test
+ *  that sets `publicBlock` with a submit declaration of its own is describing the document it
+ *  wants judged, and replacing it here would take that away with nothing failing — which is how
+ *  this file has already produced a green test that verified nothing (see the note above). */
 const appAuthorizingBlock = (selfUpdate: Record<string, string[]> | null | undefined, publicBlock: Record<string, unknown>): Record<string, unknown> => {
   if (selfUpdate === null) return {};
   const held = publicBlock.public;
   if (!isRecord(held)) return {};
+  const submit = isRecord(held.submit) ? held.submit : {};
+  const bookings = isRecord(submit.bookings) ? submit.bookings : {};
   return {
-    public: { ...held, submit: { bookings: { selfUpdate: selfUpdate ?? MIRRORED_SELF_UPDATE } } },
+    public: { ...held, submit: { ...submit, bookings: { ...bookings, selfUpdate: selfUpdate ?? MIRRORED_SELF_UPDATE } } },
     collections: { bookings: { statusField: "status" } },
   };
 };
