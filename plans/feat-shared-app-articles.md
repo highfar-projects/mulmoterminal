@@ -197,7 +197,7 @@ An app that genuinely wants editorial review declares **two collections** — a 
 different app, it costs a copy, and it must not be described as a status change on one collection.
 Say so in the skill rather than letting an author discover it.
 
-### A5. The index reads whole documents, and what bounds it is `maxLen` x `limit`
+### A5. The index reads whole documents, and what bounds it is `maxBytes` x `limit`
 
 The index page reads the articles collection with `limit: { rows, field: stampField }` — the
 latest N, descending, which is what `ProjectedViewCollection.limit` already projects. Those are
