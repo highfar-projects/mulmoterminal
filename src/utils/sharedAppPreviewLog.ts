@@ -76,6 +76,9 @@ export type PreviewLogEvent =
        *  a record. The sender withholds it and the renderer says so, rather than a caller being
        *  trusted to remember which kind of intent carries what. */
       to?: string;
+      /** `correct` only: which fields it named. NAMES, never the values — see the sender, and the
+       *  promise at the top of this file. */
+      fields?: string[];
       error: string | null;
       mailed?: boolean;
     }
@@ -178,6 +181,42 @@ const stamp = (ms: number): string => `+${(ms / 1000).toFixed(3)}`.padStart(9);
 const datasetList = (datasets: { cid: string; rows: number }[]): string =>
   datasets.length === 0 ? "none — this app declares no datasets for this page" : datasets.map((set) => `${set.cid}=${set.rows}`).join(", ");
 
+/** What one intent was ABOUT, in a phrase.
+ *
+ *  The RECORD is named, and its id is a value out of the app — which the header of this file says
+ *  is not carried. It is carried for the same reason the id is a field on the record rather than a
+ *  key inside it: a shared app's ids are what the RULES pin, so a refusal about an unnamed row is a
+ *  refusal an author cannot place, and every one of these lines is about a row somebody pressed a
+ *  button on.
+ *
+ *  An assignment's destination is a person's ADDRESS and is not carried (see the sender). The FACT
+ *  of one is, because `unknown-assignee` is about the address that was named — a line mentioning no
+ *  destination at all would read as an assignment to nobody.
+ *
+ *  A correction goes nowhere and names FIELDS instead. Listed rather than counted: "3 fields" is
+ *  not something an author can compare against the form they just filled in. */
+const intentSubject = (entry: PreviewLogEntry & { kind: "intent" }): string => {
+  const row = `${entry.intent} of '${entry.cid}/${entry.itemId}'`;
+  if (entry.fields !== undefined) {
+    return `${row} (${entry.fields.join(", ")})`;
+  }
+  if (entry.to !== undefined) {
+    return `${row} to '${entry.to}'`;
+  }
+  return entry.intent === "assign" ? `${row} to an address this log does not carry` : row;
+};
+
+const intentLine = (entry: PreviewLogEntry & { kind: "intent" }): string[] => {
+  const what = intentSubject(entry);
+  if (entry.error !== null) {
+    return [`the ${what} was REFUSED:`, `  ${explainRefusal(entry.error)}`];
+  }
+  return [
+    `PERFORMED the ${what}, as you, judged by the deployed rules`,
+    ...(entry.mailed === true ? ["  a notice was QUEUED with it — real mail, to a real member"] : []),
+  ];
+};
+
 /** One event, in the words of what a person would have seen. */
 const lineFor = (entry: PreviewLogEntry): string[] => {
   switch (entry.kind) {
@@ -199,24 +238,8 @@ const lineFor = (entry: PreviewLogEntry): string[] => {
       return entry.error === null
         ? [`WROTE a real record to '${entry.cid}', as you, judged by the deployed rules`]
         : [`the write to '${entry.cid}' was REFUSED:`, `  ${entry.error}`];
-    case "intent": {
-      // The RECORD is named, and its id is a value out of the app — which the header of this file
-      // says is not carried. It is carried here for the same reason the id is a field on the record
-      // rather than a key inside it: a shared app's ids are what the RULES pin, so a refusal about
-      // an unnamed row is a refusal an author cannot place, and every one of these lines is about a
-      // row somebody pressed a button on.
-      // An assignment's destination is a person's address and is not carried (see the sender). The
-      // FACT of one is, because `unknown-assignee` is about the address that was named — a line
-      // that mentioned no destination at all would read as an assignment to nobody.
-      const withheld = entry.intent === "assign" ? " to an address this log does not carry" : "";
-      const move = entry.to === undefined ? withheld : ` to '${entry.to}'`;
-      const what = `${entry.intent} of '${entry.cid}/${entry.itemId}'${move}`;
-      if (entry.error !== null) return [`the ${what} was REFUSED:`, `  ${explainRefusal(entry.error)}`];
-      return [
-        `PERFORMED the ${what}, as you, judged by the deployed rules`,
-        ...(entry.mailed === true ? ["  a notice was QUEUED with it — real mail, to a real member"] : []),
-      ];
-    }
+    case "intent":
+      return intentLine(entry);
     case "notice":
       // PAGE-AUTHORED, and marked as such. The reader is often a model, and a sentence the page
       // chose must not arrive looking like something this host is saying.

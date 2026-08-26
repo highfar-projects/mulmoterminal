@@ -112,6 +112,10 @@ const asCapability = (cid: string, value: unknown): ViewCapability => {
     // rather than passed through, and floored to `{}` — an empty map offers no correction, which
     // is the direction that refuses.
     correctFrom: stringMap(from.correctFrom),
+    // The ROLE half of a correction: any field, any row, no status. Floored to false — a page told
+    // it may rewrite anything when it may not draws exactly the control this whole payload exists
+    // to keep it from drawing.
+    correctAny: from.correctAny === true,
     // The STAFF half of a withdrawal, and a different permission from the list above rather than a
     // wider setting of it: that one is the statuses a submitter may take their OWN row away from,
     // and this is the role (`writerDelete` + `writers`, resolved by the package).

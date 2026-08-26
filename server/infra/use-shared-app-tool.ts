@@ -500,8 +500,14 @@ async function narrateUpdate(slug: string, cid: string | undefined, id: string |
     // the update does not touch it, but somebody else may have moved the row in between — saying
     // it "still is" whatever was read would be this tool asserting a value it did not re-read, and
     // the next action would be planned against it.
-    `It changed those fields and nothing else; an update never moves a status. The record was ${quotedTerm(result.status)} when it was read — ` +
-      "read it again if you need to know where it stands now.",
+    //
+    // ABSENT where the collection has no status field at all, which a correction made by ROLE can
+    // reach: `selfUpdate` is declared per status and so implies one, and `isWriter` implies
+    // nothing. A sentence naming the status of a record that has none would be inventing one.
+    result.status === undefined
+      ? "It changed those fields and nothing else."
+      : `It changed those fields and nothing else; an update never moves a status. The record was ${quotedTerm(result.status)} when it was read — ` +
+        "read it again if you need to know where it stands now.",
   ].join("\n");
 }
 

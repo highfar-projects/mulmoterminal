@@ -1,5 +1,12 @@
-// Correcting a record you submitted — the fourth thing `useSharedApp` can ask of one, and the only
-// one that is not a MOVE.
+// Correcting a record — the fourth thing `useSharedApp` can ask of one, and the only one that is
+// not a MOVE.
+//
+// TWO PERMISSIONS, which are the rules' own two branches of `updateWith`. The SUBMITTER corrects
+// their own row, in the fields `selfUpdate` names for the status it is in — that is what most of
+// this file is about. A WRITER corrects any field of any row, because `isWriter(r)` sits beside
+// that branch carrying no status condition and no field list at all. Only the first existed here,
+// which meant an app declaring no `selfUpdate` — an ordinary blog, where nobody but the author
+// writes — refused its own owner every correction while the rules allowed all of them.
 //
 // The other three (`transition`, `assign`, `withdraw`) are `IntentKind`, which is the vocabulary a
 // SANDBOXED PAGE may send its parent. This one is deliberately NOT in that set. The reason is the
@@ -40,7 +47,7 @@ export interface AskedCorrection {
 }
 
 export type CorrectionOutcome =
-  | { ok: true; fields: string[]; status: string }
+  | { ok: true; fields: string[]; status?: string }
   /** `refusal: false` means the write did not COMPLETE, which is not the same as not happening — a
    *  `deadline-exceeded` can arrive after Firestore committed. The caller must say so. */
   | { ok: false; error: string; refusal: boolean };
@@ -199,6 +206,35 @@ function overLong(app: JoinedApp, asked: AskedCorrection): string | null {
   );
 }
 
+/** Does this reader's ROLE let them rewrite any field here?
+ *
+ *  The other half of the rules' `updateWith`, and the half `selfUpdate` cannot express: `isWriter`
+ *  carries no status condition and no field list, so a writer's permission is a BOOLEAN and every
+ *  attempt to enumerate it describes a narrowing the rules do not apply.
+ *
+ *  Without it an owner could not correct their own app's records through this tool at all. An
+ *  ordinary blog declares no `selfUpdate` — nobody but the author writes there — so
+ *  `authorizedFields` answers null for the one person the rules let rewrite everything, and the
+ *  agent instruction telling them they may was false.
+ *
+ *  Every tier is asked, as `correctableFields` asks them and for the same reason: there is no page
+ *  here to say which one the ask came from. `correctAny` is itself tier-guarded inside the package.
+ */
+function writesAnyField(app: JoinedApp, cid: string): boolean {
+  return TIERS.some((tier) => capabilitiesOn(app, tier)[cid]?.correctAny === true);
+}
+
+/** The fields the rules FROZE when the record was created — the stamp, the field an id was built
+ *  out of, the uid.
+ *
+ *  Checked for everybody and BEFORE the role, because no role makes them writable: `stampHeld`,
+ *  `idHeld` and `uidHeld` are conjuncts of `updateWith`, ahead of the branch that asks who is
+ *  asking. Before `correctAny` existed this could not be reached — publish refuses a `selfUpdate`
+ *  naming any of them — and a writer naming one has no such gate in front of it. */
+function frozenIn(app: JoinedApp, cid: string): string[] {
+  return TIERS.flatMap((tier) => app.writes[tier]?.find((write) => write.cid === cid)?.frozen ?? []);
+}
+
 /** Write the correction, as the signed-in person.
  *
  *  `new FieldPath(name)` for each field, and not the object form, for the reason `commitIntent` uses
@@ -229,7 +265,43 @@ async function commitCorrection(aid: string, asked: AskedCorrection): Promise<{ 
   }
 }
 
+/** The field this collection's status lives in, as the tier projections carry it.
+ *
+ *  Asked of every tier, as everything else here is: there is no page to say which one. They agree
+ *  about this field where both carry it — it is `collections[cid].statusField`, one value in the
+ *  declaration — so the first answer is the answer. */
+function statusFieldOf(app: JoinedApp, cid: string): string | undefined {
+  return TIERS.map((tier) => app.writes[tier]?.find((write) => write.cid === cid)?.statusField).find((field) => field !== undefined);
+}
+
+/** May this reader write these fields, and what did the record say when it was read?
+ *
+ *  THE ROLE FIRST, because it is the rules' own order and because it answers without a list: a
+ *  writer is not narrowed per status, so there is nothing for `whyNot` to compare and a status is
+ *  reported only where the collection has one. Everybody else falls through to the submitter's
+ *  half, which is where the field list and the status both come from. */
+function permitted(app: JoinedApp, asked: AskedCorrection, row: Record<string, unknown>): { ok: true; status?: string } | { ok: false; error: string } {
+  if (writesAnyField(app, asked.cid)) {
+    const status = statusOf(row, statusFieldOf(app, asked.cid));
+    return status === null ? { ok: true } : { ok: true, status };
+  }
+  const allowed = correctableFields(app, asked.cid, row, Object.keys(asked.values));
+  const why = whyNot(allowed, asked);
+  if (why !== null || allowed === null) return { ok: false, error: why ?? "nothing is correctable here." };
+  return { ok: true, status: allowed.status };
+}
+
 export async function performCorrection(app: JoinedApp, asked: AskedCorrection): Promise<CorrectionOutcome> {
+  // BEFORE the record is read, and before either permission is asked: an ask naming no fields has
+  // nothing to judge and nothing to write, and an `update` carrying an empty object succeeds
+  // without writing anything — which would be reported as a correction that happened.
+  if (Object.keys(asked.values).length === 0) {
+    return {
+      ok: false,
+      refusal: true,
+      error: "`values` is empty — there is nothing to correct. Send the fields to change, keyed by their names as `describe` reported them.",
+    };
+  }
   const found = await readRecord(app, asked.cid, asked.itemId);
   if (!found.read) {
     return {
@@ -241,12 +313,32 @@ export async function performCorrection(app: JoinedApp, asked: AskedCorrection):
     };
   }
   if (found.row === null) return { ok: false, refusal: true, error: `no record ${quotedTerm(asked.itemId)} in ${quotedTerm(asked.cid)}. Nothing was written.` };
-  const allowed = correctableFields(app, asked.cid, found.row, Object.keys(asked.values));
-  const why = whyNot(allowed, asked);
-  if (why !== null || allowed === null) return { ok: false, refusal: true, error: why ?? "nothing is correctable here." };
+  const frozen = Object.keys(asked.values).filter((field) => frozenIn(app, asked.cid).includes(field));
+  if (frozen.length > 0) {
+    return {
+      ok: false,
+      refusal: true,
+      error:
+        `${quotedList(frozen)} cannot be rewritten: the rules fixed ${frozen.length === 1 ? "it" : "them"} when the record was created — the server clock a queue ` +
+        "is ranked by, the field the record's id was built out of, or the uid that says whose row it is. Nobody may write these afterwards, this app's owner " +
+        "included. Nothing was written. A record that needs a different id is a new record.",
+    };
+  }
+  const statusField = statusFieldOf(app, asked.cid);
+  if (statusField !== undefined && Object.hasOwn(asked.values, statusField)) {
+    return {
+      ok: false,
+      refusal: true,
+      error:
+        `${quotedTerm(statusField)} is this collection's status, and an update never moves a status. It moves through \`transition\`, which is judged against the ` +
+        "declared table and carries whatever notice the declaration names for that move — so setting it here would be a way past both. Nothing was written.",
+    };
+  }
+  const judged = permitted(app, asked, found.row);
+  if (!judged.ok) return { ok: false, refusal: true, error: judged.error };
   const tooLong = overLong(app, asked);
   if (tooLong !== null) return { ok: false, refusal: true, error: tooLong };
   const failed = await commitCorrection(app.aid, asked);
   if (failed !== null) return { ok: false, error: failed.error, refusal: failed.refusal };
-  return { ok: true, fields: Object.keys(asked.values), status: allowed.status };
+  return { ok: true, fields: Object.keys(asked.values), ...(judged.status === undefined ? {} : { status: judged.status }) };
 }

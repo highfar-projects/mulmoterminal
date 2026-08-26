@@ -36,6 +36,18 @@ const REFRESH_ATTEMPTS = 2;
 /** What the ask reaches this module as, plus the id the page is waiting on. */
 type AskedHere = PreviewIntent & { requestId: string };
 
+/** A correction's values, or null when the message does not describe a set of them.
+ *
+ *  STRINGS ONLY, and the whole message is refused rather than the offending entry dropped — the
+ *  same line `readIntentMessage` draws, because a page sending a number has been half understood by
+ *  a filter and the write that followed would be a different write from the one it asked for. */
+const valuesOf = (value: unknown): Record<string, string> | null => {
+  if (!isRecord(value)) return null;
+  const entries = Object.entries(value);
+  if (!entries.every((entry): entry is [string, string] => typeof entry[1] === "string")) return null;
+  return Object.fromEntries(entries);
+};
+
 /** Is this an intent, and which one? SHAPE ONLY — the same line the package's own reader draws,
  *  and deliberately no further.
  *
@@ -48,12 +60,20 @@ export function askedIntent(data: unknown, current: PreviewPage): AskedHere | nu
   // An empty id is nobody waiting, and answering it would be answering something nobody asked —
   // the package draws the same line in `answerId`.
   if (typeof requestId !== "string" || requestId === "") return null;
-  if (kind !== "transition" && kind !== "assign" && kind !== "withdraw") return null;
+  if (kind !== "transition" && kind !== "assign" && kind !== "withdraw" && kind !== "correct") return null;
   if (typeof cid !== "string" || typeof itemId !== "string") return null;
   const asked = { requestId, page: { id: current.id, audience: current.audience }, cid, itemId };
   // A withdrawal names no destination, and one carrying a `to` is not a withdrawal with decoration
   // — it is an ask this parent cannot describe, so it is not read as an intent at all.
   if (kind === "withdraw") return to === undefined ? { ...asked, kind } : null;
+  // A correction names none either, and carries values instead. An EMPTY map still travels: the
+  // server refuses it by name (`nothing-to-correct`) rather than this dropping it, because a page
+  // bug that leaves a promise unanswered looks exactly like a button that does nothing — which is
+  // the failure this whole module is written against.
+  if (kind === "correct") {
+    const values = valuesOf(data.values);
+    return to === undefined && values !== null ? { ...asked, kind, values } : null;
+  }
   if (typeof to !== "string") return null;
   return { ...asked, kind, to };
 }
@@ -127,6 +147,11 @@ export const createIntentSender = (ports: IntentSenderPorts): PerformIntent => {
       cid: body.cid,
       itemId: body.itemId,
       ...(body.kind === "transition" && body.to !== undefined ? { to: body.to } : {}),
+      // FIELD NAMES, never the values — which is the promise at the top of `sharedAppPreviewLog.ts`
+      // said about the one intent that actually carries record content. An author reading the log
+      // needs to know WHICH fields a refusal was about; what was typed into them is in front of
+      // them on the screen.
+      ...(body.values === undefined ? {} : { fields: Object.keys(body.values) }),
     };
     try {
       const res = await fetchWithTimeout(
