@@ -419,12 +419,33 @@ const appPublicBlock = (given: Record<string, unknown> | null | undefined, enabl
   return { public: given };
 };
 
+/** The app document as a REAL publish leaves it: carrying the `public.submit` and `collections`
+ *  that the deployed rules resolve `sub()` and `col()` out of.
+ *
+ *  Off by default so the tests written before this keep exercising the tier projections, which is
+ *  the path a reader takes when the app document is denied them. On, it is the path the rules
+ *  themselves take — and the two differ exactly when a publish stopped part-way, because this block
+ *  is the LAST thing publish writes. */
+const appAuthorizingBlock = (selfUpdate: Record<string, string[]> | undefined, enabled: boolean): Record<string, unknown> => {
+  if (selfUpdate === undefined) return {};
+  return {
+    public: { enabled, read: ["slots"], submit: { bookings: { selfUpdate } } },
+    collections: { bookings: { statusField: "status" } },
+  };
+};
+
 /** The app document itself, or nothing when the test is publishing an app whose roster this reader
  *  cannot read — the ordinary state for a collection-scoped role.
  *
  *  Out of `publishApp`, which is at its complexity cap: a branch that reads four of its options and
  *  is one `put` does not need to be counted against it.
  */
+/** The world-readable projection. Out of `publishApp` for its complexity budget, which every
+ *  default parameter counts against — the shape it needs is already one object. */
+function putPublicConfig(bag: Bag, shape: Parameters<typeof publicConfig>[0]): void {
+  bag.docs.put(`apps/${AID}/config`, "public", publicConfig(shape));
+}
+
 function putAppDoc(
   bag: Bag,
   {
@@ -432,7 +453,14 @@ function putAppDoc(
     name,
     enabled,
     appPublic,
-  }: { roles: Record<string, string> | null; name: string; enabled: boolean; appPublic: Record<string, unknown> | null | undefined },
+    appSelfUpdate,
+  }: {
+    roles: Record<string, string> | null;
+    name: string;
+    enabled: boolean;
+    appPublic: Record<string, unknown> | null | undefined;
+    appSelfUpdate: Record<string, string[]> | undefined;
+  },
 ): void {
   if (roles === null) return;
   bag.docs.put("apps", AID, {
@@ -443,6 +471,7 @@ function putAppDoc(
     // The block the RULES read for anonymous access. Carried here as well as in `config/public`
     // because publish writes the two separately and a run can stop between them.
     ...appPublicBlock(appPublic, enabled),
+    ...appAuthorizingBlock(appSelfUpdate, enabled),
   });
 }
 
@@ -489,18 +518,23 @@ export function publishApp(
     longEnum = false,
     /** An enum choice larger than a whole list's budget: omitted, never cut. */
     hugeEnum = false,
-    /** The app document's own `public` block: undefined mirrors `enabled`, null omits it, an object
-     *  sets it apart from the projection — the shape a half-finished publish leaves. */
-    appPublic = undefined as Record<string, unknown> | null | undefined,
+    /** What goes on the APP DOCUMENT, which is what the deployed rules resolve `sub()` and `col()`
+     *  out of — as opposed to `config/public`, which is a projection of it.
+     *
+     *  ONE option rather than two, and not only for the complexity budget every default parameter
+     *  here counts against: both halves describe the same document, and a test that sets one
+     *  without meaning the other has almost certainly made a mistake.
+     *
+     *  `publicBlock`: undefined mirrors `enabled`, null omits it, an object sets it apart from the
+     *  projection — the shape a half-finished publish leaves.
+     *  `selfUpdate`: writes `public.submit.bookings.selfUpdate` and the collection's statusField,
+     *  which is the declaration a correction is judged by. */
+    appDoc = {} as { publicBlock?: Record<string, unknown> | null; selfUpdate?: Record<string, string[]> },
   } = {},
 ): void {
   bag.docs.put("appSlugs", "sakura", { aid: AID, published: true });
-  putAppDoc(bag, { roles, name, enabled, appPublic });
-  bag.docs.put(
-    `apps/${AID}/config`,
-    "public",
-    publicConfig({ name, enabled, mirror, idFromUid, idFromSlug, bothIdentities, dottedEmailField, longEnum, hugeEnum }),
-  );
+  putAppDoc(bag, { roles, name, enabled, appPublic: appDoc.publicBlock, appSelfUpdate: appDoc.selfUpdate });
+  putPublicConfig(bag, { name, enabled, mirror, idFromUid, idFromSlug, bothIdentities, dottedEmailField, longEnum, hugeEnum });
   if (rosterTier) putRosterTier(bag);
   if (memberTier)
     // The tier's own id, taken from the package rather than spelled here: it carries a `live:`

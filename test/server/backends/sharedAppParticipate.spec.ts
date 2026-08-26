@@ -234,7 +234,7 @@ describe("useSharedApp — reading somebody else's app", () => {
   it("reports openness from the document the RULES read, not from the projection", async () => {
     // A publish that stopped between the two: `config/public` says the app is now open, the app
     // document — which is what `publicOn` reads — still says it is not.
-    publish({ enabled: true, appPublic: { enabled: false, read: ["slots"] } });
+    publish({ enabled: true, appDoc: { publicBlock: { enabled: false, read: ["slots"] } } });
     expect(await run({ action: "describe", slug: "sakura" })).toContain("NOT open to the public");
   });
 
@@ -333,7 +333,7 @@ describe("useSharedApp — reading somebody else's app", () => {
   it("treats an app document with no public block at all as closed", async () => {
     // The other half of the half-finished opening publish: `config/public` is there and says open,
     // the app document has no `public` block yet. `publicOn` requires the block to EXIST.
-    publish({ enabled: true, appPublic: null });
+    publish({ enabled: true, appDoc: { publicBlock: null } });
     expect(await run({ action: "describe", slug: "sakura" })).toContain("NOT open to the public");
   });
 

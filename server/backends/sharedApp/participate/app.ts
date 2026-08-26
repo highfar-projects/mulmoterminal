@@ -126,6 +126,13 @@ export interface JoinedApp {
   /** The projected writes per tier, and the document they came from. An absent tier is "this app
    *  published no projection for it", which is different from "you may do nothing". */
   writes: Partial<Record<WriteTier, ProjectedViewWrite[]>>;
+  /** `apps/{aid}`'s own `public.submit` and `collections`, when the app document was readable.
+   *
+   *  THE RULES' OWN SOURCE — see `authorizing()`. Held apart from `writes` because it is a
+   *  different KIND of answer: those are projections written for an audience to draw controls
+   *  from, and this is the declaration the deployed rules will actually judge the write by. Absent
+   *  when the document was denied. */
+  authorizing?: { submit: Record<string, unknown>; collections: Record<string, unknown> };
   /** The roles the app document lists for this reader, when it was readable. Absent means the
    *  document was denied — the ordinary state for a collection-scoped role. */
   roles?: Record<string, string>;
@@ -312,6 +319,8 @@ async function readApp(handle: SharedAppHandle, slug: string): Promise<JoinedApp
     if (found !== null) briefs[tier] = found;
   }
 
+  const authorized = authorizing(appDoc);
+
   return {
     ok: true,
     app: {
@@ -324,6 +333,7 @@ async function readApp(handle: SharedAppHandle, slug: string): Promise<JoinedApp
         ...(roster === null ? {} : { roster }),
       },
       briefs,
+      ...(authorized === null ? {} : { authorizing: authorized }),
       ...(typeof appDoc?.name === "string" ? { name: appDoc.name } : {}),
       ...(roles === null ? {} : { roles }),
       handle,
@@ -345,6 +355,26 @@ async function readApp(handle: SharedAppHandle, slug: string): Promise<JoinedApp
  *  only answer they have. The slug reservation is the last resort, and the weakest: publish sets it
  *  from whether a `public` block EXISTS, so an app that deliberately declares one with
  *  `enabled: false` reads as published there while anonymous reads stay closed. */
+/** THE DOCUMENT THE RULES THEMSELVES READ, when this reader may read it.
+ *
+ *  `sub(a, cid)` and `col(a, cid)` in `firestore.rules` both resolve out of `apps/{aid}` — NOT out
+ *  of `config/public`, which is a projection of it for the public page. The difference is invisible
+ *  until a publish stops part-way, and then it is the whole story: the app document's `public`
+ *  block is the LAST thing publish writes (`publish.ts`), so during any interrupted run the rules
+ *  are still judging by the PREVIOUS declaration while `config/public` and the tier documents have
+ *  already moved on.
+ *
+ *  So a host that wants its preflight to agree with the rules reads this and nothing else. Null
+ *  when the app document was denied — the ordinary state for a collection-scoped role — and then
+ *  the tier projections are all there is. */
+function authorizing(appDoc: Record<string, unknown> | null): { submit: Record<string, unknown>; collections: Record<string, unknown> } | null {
+  if (appDoc === null) return null;
+  const submit = isRecord(appDoc.public) && isRecord(appDoc.public.submit) ? appDoc.public.submit : null;
+  const collections = isRecord(appDoc.collections) ? appDoc.collections : null;
+  if (submit === null && collections === null) return null;
+  return { submit: submit ?? {}, collections: collections ?? {} };
+}
+
 function openness(appDoc: Record<string, unknown> | null, publicConfig: Record<string, unknown> | null, reservation: Record<string, unknown>): boolean {
   // A READABLE APP DOCUMENT IS THE WHOLE ANSWER, absence included. `publicOn` reads
   // `"public" in a && a.public.enabled == true`, so a document with no `public` block at all is

@@ -24,6 +24,7 @@ import { messageOf } from "../../../errors.js";
 import { itemsPath } from "../itemWrites.js";
 import { refused } from "../refused.js";
 import { quotedList, quotedTerm } from "../quoted.js";
+import { isRecord } from "../../../../common/isRecord.js";
 import { capabilitiesOn, readRecord, TIERS, type JoinedApp } from "./app.js";
 
 export interface AskedCorrection {
@@ -67,7 +68,43 @@ const statusOf = (row: Record<string, unknown>, statusField: string | undefined)
  *
  *  It reports the WIDEST answer when nothing covers the ask, so the refusal names the most the
  *  reader could have sent rather than whichever tier was looked at first. */
+/** What the DEPLOYED RULES will judge this correction by, when this reader can see it.
+ *
+ *  `selfWriteOk` reads `sub(a, cid)` and `col(a, cid)`, and both resolve out of `apps/{aid}` — not
+ *  out of `config/public`, which is a projection of it, and not out of the tier documents, which
+ *  are projections for an audience. The distinction is invisible until a publish stops part-way,
+ *  and then it decides everything: the app document's `public` block is the LAST write publish
+ *  makes, so during any interrupted run the rules are still judging by the PREVIOUS declaration
+ *  while `config/public` and the tiers have already moved on.
+ *
+ *  Which is why the preflight prefers this and why deriving it from `config/public` would be the
+ *  wrong direction — that document is written EARLIER than the tiers, so it is further ahead of
+ *  the rules, not closer to them.
+ *
+ *  Null when the app document was denied (a collection-scoped role does not read it), and then the
+ *  tier projections below are all there is — with the mismatch that implies, which is the same one
+ *  `performIntent` accepts and for the same reason: the rules answer last either way, and what the
+ *  host buys is a refusal with a name. */
+function authorizedFields(app: JoinedApp, cid: string, row: Record<string, unknown>): { fields: string[]; status: string } | null {
+  const held = app.authorizing;
+  if (held === undefined) return null;
+  const submit = held.submit[cid];
+  const collection = held.collections[cid];
+  if (!isRecord(submit) || !isRecord(collection)) return null;
+  const status = statusOf(row, typeof collection.statusField === "string" ? collection.statusField : undefined);
+  if (status === null || !isRecord(submit.selfUpdate)) return null;
+  const fields = submit.selfUpdate[status];
+  if (!Array.isArray(fields)) return null;
+  const named = fields.filter((field): field is string => typeof field === "string");
+  return named.length === 0 ? null : { fields: named, status };
+}
+
 function correctableFields(app: JoinedApp, cid: string, row: Record<string, unknown>, asked: readonly string[]): { fields: string[]; status: string } | null {
+  // The rules' own declaration wins outright where it is readable. Not merged with the tiers: a
+  // union would be looser than the rules and an intersection stricter, and both would be answers
+  // about a document nobody judges by.
+  const authorized = authorizedFields(app, cid, row);
+  if (authorized !== null) return authorized;
   const offered: { fields: string[]; status: string }[] = [];
   for (const tier of TIERS) {
     const capability = capabilitiesOn(app, tier)[cid];

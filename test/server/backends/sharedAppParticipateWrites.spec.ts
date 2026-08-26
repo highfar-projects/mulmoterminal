@@ -380,6 +380,47 @@ describe("useSharedApp — writing to somebody else's app", () => {
     expect(bag.batched).toEqual([]);
   });
 
+  it("judges by the declaration the RULES read, not by a tier projection", async () => {
+    // `selfWriteOk` resolves `sub()` and `col()` out of `apps/{aid}` — not out of `config/public`,
+    // which is a projection of it for the public page, and not out of the tier documents, which are
+    // projections for an audience. Where the app document is readable, that is what the preflight
+    // must agree with.
+    publish({ rosterTier: true, appDoc: { selfUpdate: { booked: ["guests"] } } });
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old", guests: "2" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { guests: "4" } });
+    expect(said).toContain("Corrected");
+    expect(bag.batched[0]).toContain(JSON.stringify({ guests: "4" }));
+  });
+
+  it("refuses a field only a STALE tier still allows, because the rules would refuse it", async () => {
+    // THE PARTIAL REPUBLISH. `apps/{aid}`'s public block is the LAST write publish makes, so an
+    // interrupted run leaves the rules judging by the PREVIOUS declaration while `config/public`
+    // and the tier documents have already moved on. Here the tiers still offer `note` and the
+    // rules no longer do — and a preflight that believed the tiers would say "allowed", write, and
+    // collect a bare permission error from Firestore. That is the generic failure this whole
+    // check exists to replace.
+    //
+    // It is also why deriving this from `config/public` would be the wrong direction: that document
+    // is written EARLIER than the tiers, so it is further ahead of the rules, not closer to them.
+    publish({ rosterTier: true, appDoc: { selfUpdate: { booked: ["guests"] } } });
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old", guests: "2" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "new" } });
+    expect(said).toContain("Not updated");
+    expect(said).toContain("\u00abguests\u00bb");
+    expect(bag.batched).toEqual([]);
+  });
+
+  it("falls back to the tier projections when the app document is denied", async () => {
+    // A collection-scoped role does not read `apps/{aid}`, so there the tiers are all there is —
+    // with the mismatch that implies, which is the same one `performIntent` accepts: the rules
+    // answer last either way, and what the host buys is a refusal with a name.
+    publish({ rosterTier: true });
+    bag.docs.denyGet.add(`apps/${AID}`);
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "new" } });
+    expect(said).toContain("Corrected");
+  });
+
   it("says so when the record is not there", async () => {
     publish();
     const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "nope", values: { note: "new" } });
