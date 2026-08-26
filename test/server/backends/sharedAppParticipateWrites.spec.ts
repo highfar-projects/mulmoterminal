@@ -499,6 +499,20 @@ describe("useSharedApp — writing to somebody else's app", () => {
     expect(bag.batched).toEqual([]);
   });
 
+  it("refuses a WRITER the ASSIGNEE too, which is the sharper half of the same rule", async () => {
+    // `assign` refuses an address nobody on the roster holds an assignable role at, because writing
+    // one produces a row NOBODY may touch afterwards. The rules do NOT make that check — it is this
+    // host's and the page's — so a correction reaching the field goes round it with nothing
+    // downstream to catch it. The status was already reserved for the same class of reason.
+    // (Codex on #1870.)
+    publish();
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: "guest@example.com", slot: "10:00", status: "booked" });
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { handledBy: "stranger@example.com" } });
+    expect(said).toContain("Not updated");
+    expect(said).toContain("assign");
+    expect(bag.batched).toEqual([]);
+  });
+
   it("refuses a frozen field to a WRITER, because no role makes one writable", async () => {
     // `stampHeld`, `idHeld` and `uidHeld` are conjuncts of `updateWith`, AHEAD of the branch that
     // asks who is asking. Before the role branch existed this was unreachable — publish refuses a

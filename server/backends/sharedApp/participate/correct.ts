@@ -297,6 +297,37 @@ function statusFieldOf(app: JoinedApp, cid: string): string | undefined {
   return TIERS.map((tier) => app.writes[tier]?.find((write) => write.cid === cid)?.statusField).find((field) => field !== undefined);
 }
 
+/** The fields the OTHER asks own, and which an update may therefore never write — whoever asks.
+ *
+ *  Not frozen: both of them move. They move through `transition` and `assign`, and each of those is
+ *  more than a write. A transition is judged against the declared table and carries whatever notice
+ *  the declaration names for that move. An assignment refuses an address nobody on the roster holds
+ *  an assignable role at — writing one produces a row NOBODY may touch afterwards, which is the
+ *  whole reason that check exists. A correction able to set either goes round a check the rules do
+ *  NOT make, so nothing downstream would catch it. (Codex on #1870.)
+ *
+ *  The assignee is read off the tier projections and the status is not (`statusFieldOf` prefers the
+ *  app document): `collections[cid].assigneeField` is not carried on the tier the rules read here,
+ *  and the drift fails in the safe direction anyway — an assignee field the tiers name and the
+ *  rules do not is a refusal this host makes and the rules would have allowed, which is a message
+ *  rather than a write that should not have happened. */
+function reservedIn(app: JoinedApp, cid: string): string[] {
+  const assignee = TIERS.map((tier) => app.writes[tier]?.find((write) => write.cid === cid)?.assigneeField).find((field) => field !== undefined);
+  return [statusFieldOf(app, cid), assignee].filter((field): field is string => field !== undefined);
+}
+
+/** Why those fields are refused, said as the ask that owns each one — the actionable half is which
+ *  OTHER call to make, not that this one said no. */
+function whyReserved(reserved: string[], app: JoinedApp, cid: string): string {
+  const status = statusFieldOf(app, cid);
+  const named = reserved.map((field) =>
+    field === status
+      ? `${quotedTerm(field)} is this collection's status, and a status moves through \`transition\` — judged against the declared table, carrying whatever notice the declaration names for that move`
+      : `${quotedTerm(field)} is this collection's assignee, and an assignee moves through \`assign\` — which refuses an address nobody on the roster holds a role at, because writing one produces a row nobody may touch afterwards`,
+  );
+  return `${named.join("; ")}. An update sets neither. Nothing was written.`;
+}
+
 /** May this reader write these fields, and what did the record say when it was read?
  *
  *  THE ROLE FIRST, because it is the rules' own order and because it answers without a list: a
@@ -347,15 +378,9 @@ export async function performCorrection(app: JoinedApp, asked: AskedCorrection):
         "included. Nothing was written. A record that needs a different id is a new record.",
     };
   }
-  const statusField = statusFieldOf(app, asked.cid);
-  if (statusField !== undefined && Object.hasOwn(asked.values, statusField)) {
-    return {
-      ok: false,
-      refusal: true,
-      error:
-        `${quotedTerm(statusField)} is this collection's status, and an update never moves a status. It moves through \`transition\`, which is judged against the ` +
-        "declared table and carries whatever notice the declaration names for that move — so setting it here would be a way past both. Nothing was written.",
-    };
+  const reserved = reservedIn(app, asked.cid).filter((field) => Object.hasOwn(asked.values, field));
+  if (reserved.length > 0) {
+    return { ok: false, refusal: true, error: whyReserved(reserved, app, asked.cid) };
   }
   const judged = permitted(app, asked, found.row);
   if (!judged.ok) return { ok: false, refusal: true, error: judged.error };
