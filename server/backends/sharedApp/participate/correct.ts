@@ -25,7 +25,10 @@ import { itemsPath } from "../itemWrites.js";
 import { refused } from "../refused.js";
 import { quotedList, quotedTerm } from "../quoted.js";
 import { isRecord } from "../../../../common/isRecord.js";
+import { overLongFields } from "@receptron/sharedapp/view";
+
 import { capabilitiesOn, readRecord, TIERS, type JoinedApp } from "./app.js";
+import { submitSpecOf } from "../submitSpec.js";
 
 export interface AskedCorrection {
   cid: string;
@@ -152,6 +155,32 @@ function whyNot(allowed: { fields: string[]; status: string } | null, asked: Ask
   );
 }
 
+/** Anything in this correction that is longer than the app allows.
+ *
+ *  A CORRECTION IS WHERE THE LENGTH ACTUALLY MOVES. A submission is written once; `selfUpdate` is
+ *  the verb that lets the same person come back and make the field bigger, so a cap enforced only
+ *  on create bounds the first version of an article and nothing after it.
+ *
+ *  Read off `app.authorizing` — `apps/{aid}`'s own `public.submit`, which is the document the
+ *  deployed rules judge by and the same one `authorizedFields` reads. Absent for a reader who
+ *  cannot see that document (the collection-scoped role), and then there is no cap to apply: the
+ *  tier projections carry `selfUpdate` but not `maxBytes`, and inventing one from a document this
+ *  reader never read would be a refusal the app never declared. The rules do not enforce this
+ *  either way, so what is lost is a named refusal, not a bound the deployment was relying on. */
+function overLong(app: JoinedApp, asked: AskedCorrection): string | null {
+  const held = app.authorizing;
+  if (held === undefined) return null;
+  const submit = held.submit[asked.cid];
+  if (!isRecord(submit)) return null;
+  const over = overLongFields(asked.values, submitSpecOf(submit));
+  if (over.length === 0) return null;
+  return (
+    `too long for ${quotedTerm(asked.cid)}: ` +
+    over.map((field) => `${quotedTerm(field.name)} is ${field.bytes} bytes and this app allows ${field.cap}`).join("; ") +
+    ". Nothing was written. Bytes of UTF-8, not characters — Japanese runs about 2.4 bytes a character."
+  );
+}
+
 /** Write the correction, as the signed-in person.
  *
  *  `new FieldPath(name)` for each field, and not the object form, for the reason `commitIntent` uses
@@ -197,6 +226,8 @@ export async function performCorrection(app: JoinedApp, asked: AskedCorrection):
   const allowed = correctableFields(app, asked.cid, found.row, Object.keys(asked.values));
   const why = whyNot(allowed, asked);
   if (why !== null || allowed === null) return { ok: false, refusal: true, error: why ?? "nothing is correctable here." };
+  const tooLong = overLong(app, asked);
+  if (tooLong !== null) return { ok: false, refusal: true, error: tooLong };
   const failed = await commitCorrection(app.aid, asked);
   if (failed !== null) return { ok: false, error: failed.error, refusal: failed.refusal };
   return { ok: true, fields: Object.keys(asked.values), status: allowed.status };

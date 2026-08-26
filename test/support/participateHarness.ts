@@ -447,7 +447,10 @@ const appAuthorizingBlock = (selfUpdate: Record<string, string[]> | null | undef
   const submit = isRecord(held.submit) ? held.submit : {};
   const bookings = isRecord(submit.bookings) ? submit.bookings : {};
   return {
-    public: { ...held, submit: { ...submit, bookings: { ...bookings, selfUpdate: selfUpdate ?? MIRRORED_SELF_UPDATE } } },
+    public: {
+      ...held,
+      submit: { ...submit, bookings: { ...bookings, selfUpdate: selfUpdate ?? MIRRORED_SELF_UPDATE } },
+    },
     collections: { bookings: { statusField: "status" } },
   };
 };
@@ -494,6 +497,29 @@ function putAppDoc(
     // and a second spread would drop whichever half a test had set deliberately.
     ...appAuthorizingBlock(appSelfUpdate, publicBlock),
   });
+}
+
+/** Declare a length cap on this app's fields, AFTER `publish()`.
+ *
+ *  Its own function rather than an option on `publishApp`, for the reason `putRosterTier` gives:
+ *  that signature is at its complexity cap and every default parameter counts against it, so a
+ *  thing exactly one kind of test asks for does not belong there.
+ *
+ *  It patches BOTH documents, and that is the point rather than convenience. `submit` reads the
+ *  declaration out of `config/public`; `update` reads it out of `apps/{aid}`, because that is the
+ *  one the deployed rules judge by. A cap written to only one of them would be enforced by one
+ *  verb and not the other, which is a state a finished publish never leaves. */
+export function declareCaps(bag: Bag, maxBytes: Record<string, number>): void {
+  for (const [path, id] of [
+    ["apps", AID],
+    [`apps/${AID}/config`, "public"],
+  ] as const) {
+    const doc = bag.docs.store.get(path)?.get(id);
+    if (!isRecord(doc)) continue;
+    const block = path === "apps" ? doc.public : doc;
+    if (!isRecord(block) || !isRecord(block.submit) || !isRecord(block.submit.bookings)) continue;
+    block.submit.bookings = { ...block.submit.bookings, maxBytes };
+  }
 }
 
 /** A participant page's own projection, left behind by an EARLIER publish: it names the same
