@@ -501,16 +501,32 @@ describe("useSharedApp — writing to somebody else's app", () => {
     expect(await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "abcdef" } })).toContain("Corrected");
   });
 
-  it("applies no cap to a correction when the app document is DENIED", async () => {
-    // The tier projections carry `selfUpdate` and not `maxBytes`, so a collection-scoped role has
-    // no declaration to read one from. Inventing a cap out of a document this reader never saw
-    // would be a refusal the app never made — and the rules do not enforce this either way, so
-    // what is lost is a named refusal rather than a bound the deployment relied on.
+  it("caps a correction from the WORLD-READABLE declaration when the app document is denied", async () => {
+    // Codex on #1866. A collection-scoped role cannot read `apps/{aid}`, and requiring it made the
+    // cap depend on the reader: the same person was capped when they CREATED a record and uncapped
+    // when they corrected it, through a `selfUpdate` the tier projection grants them. A cap a
+    // second write escapes is not a cap.
+    //
+    // Reading `config/public` here is right for a reason that does not apply to `selfUpdate` one
+    // function above: THAT one must agree with the deployed rules, which read `apps/{aid}`.
+    // `maxBytes` is read by no rule at all, so there is nothing to agree with and the question is
+    // only what the author published — which this host already trusts for the same key on submit.
     publish({ rosterTier: true });
     declareCaps(bag, { note: 6 });
     bag.docs.denyGet.add(`apps/${AID}`);
     bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old" });
-    expect(await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "a much longer note" } })).toContain("Corrected");
+    const said = await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "a much longer note" } });
+    expect(said).toContain("too long");
+    expect(said).toContain("allows 6");
+    expect(bag.batched).toEqual([]);
+  });
+
+  it("still corrects at the cap with the app document denied, so the fallback is not a blanket refusal", async () => {
+    publish({ rosterTier: true });
+    declareCaps(bag, { note: 6 });
+    bag.docs.denyGet.add(`apps/${AID}`);
+    bag.docs.put(bookingsPath, "b1", { requesterEmail: ME.email, slot: "10:00", status: "booked", note: "old" });
+    expect(await run({ action: "update", slug: "sakura", cid: "bookings", id: "b1", values: { note: "abcdef" } })).toContain("Corrected");
   });
 
   it("says so when the record is not there", async () => {

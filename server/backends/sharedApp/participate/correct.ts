@@ -27,7 +27,7 @@ import { quotedList, quotedTerm } from "../quoted.js";
 import { isRecord } from "../../../../common/isRecord.js";
 import { overLongFields } from "@receptron/sharedapp/view";
 
-import { capabilitiesOn, readRecord, TIERS, type JoinedApp } from "./app.js";
+import { capabilitiesOn, readRecord, submitBlockOf, TIERS, type JoinedApp } from "./app.js";
 import { submitSpecOf } from "../submitSpec.js";
 
 export interface AskedCorrection {
@@ -155,24 +155,42 @@ function whyNot(allowed: { fields: string[]; status: string } | null, asked: Ask
   );
 }
 
+/** The length caps this app declares for a collection, from whichever document is readable.
+ *
+ *  THE APP DOCUMENT IS NOT REQUIRED HERE, and that is the difference between this and
+ *  `authorizedFields` directly above. That one must read `apps/{aid}` because `selfWriteOk`
+ *  reads it: the question there is what the DEPLOYED RULES will judge the write by, and during
+ *  an interrupted publish `config/public` has moved on while the rules have not.
+ *
+ *  `maxBytes` is read by NO RULE. So there is no "what the rules will judge by" to agree with,
+ *  and the question collapses to what the author published — which `config/public` states, world
+ *  readably, and which this host already trusts for exactly this on the submit path.
+ *
+ *  Requiring the app document made the cap depend on the READER: a collection-scoped role cannot
+ *  see `apps/{aid}`, so the same person was capped when they created a record and uncapped when
+ *  they corrected it — through a `selfUpdate` the tier projection grants them. A cap that a
+ *  second write escapes is not a cap, and correcting is the write where the length actually
+ *  moves. */
+function capsFor(app: JoinedApp, cid: string): Record<string, unknown> | null {
+  const held = app.authorizing;
+  // `Object.hasOwn` before the lookup: a collection id may be `constructor`, and a plain index
+  // into a map that does not name it reaches Object.prototype.
+  if (held !== undefined && Object.hasOwn(held.submit, cid)) {
+    const declared = held.submit[cid];
+    if (isRecord(declared)) return declared;
+  }
+  return submitBlockOf(app, cid);
+}
+
 /** Anything in this correction that is longer than the app allows.
  *
  *  A CORRECTION IS WHERE THE LENGTH ACTUALLY MOVES. A submission is written once; `selfUpdate` is
  *  the verb that lets the same person come back and make the field bigger, so a cap enforced only
- *  on create bounds the first version of an article and nothing after it.
- *
- *  Read off `app.authorizing` — `apps/{aid}`'s own `public.submit`, which is the document the
- *  deployed rules judge by and the same one `authorizedFields` reads. Absent for a reader who
- *  cannot see that document (the collection-scoped role), and then there is no cap to apply: the
- *  tier projections carry `selfUpdate` but not `maxBytes`, and inventing one from a document this
- *  reader never read would be a refusal the app never declared. The rules do not enforce this
- *  either way, so what is lost is a named refusal, not a bound the deployment was relying on. */
+ *  on create bounds the first version of an article and nothing after it. */
 function overLong(app: JoinedApp, asked: AskedCorrection): string | null {
-  const held = app.authorizing;
-  if (held === undefined) return null;
-  const submit = held.submit[asked.cid];
-  if (!isRecord(submit)) return null;
-  const over = overLongFields(asked.values, submitSpecOf(submit));
+  const declared = capsFor(app, asked.cid);
+  if (declared === null) return null;
+  const over = overLongFields(asked.values, submitSpecOf(declared));
   if (over.length === 0) return null;
   return (
     `too long for ${quotedTerm(asked.cid)}: ` +
