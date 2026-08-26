@@ -24,4 +24,5 @@ export const MEMBER_CAPABILITY = {
   /** The ROLE half of the same ask: any field, any row, no status. Not narrowed by the map beside
    *  it — `isWriter` in the rules carries no field list at all. */
   correctAny: false,
+  frozen: [],
 };

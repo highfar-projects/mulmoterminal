@@ -92,6 +92,14 @@ const stringMap = (value: unknown): Record<string, string[]> => {
   return Object.fromEntries(Object.entries(value).map(([key, held]) => [key, strings(held)]));
 };
 
+/** `{ <field>: <bytes> }`, entry by entry. A cap that is not a positive number is DROPPED rather
+ *  than clamped: a page comparing a length against a malformed one would refuse a value nothing
+ *  else in the stack objects to. */
+const capsOf = (value: Record<string, unknown>): Record<string, number> =>
+  Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, number] => typeof entry[1] === "number" && Number.isFinite(entry[1]) && entry[1] > 0),
+  );
+
 /** One collection's capability, field by field.
  *
  *  Rebuilt rather than passed through, and NOT asserted into shape: what arrives is JSON from this
@@ -116,6 +124,16 @@ const asCapability = (cid: string, value: unknown): ViewCapability => {
     // it may rewrite anything when it may not draws exactly the control this whole payload exists
     // to keep it from drawing.
     correctAny: from.correctAny === true,
+    // The fields NO correction may write — the ones the rules froze when the record was created,
+    // plus the status and the assignee, which move through their own asks. Floored to `[]`, which
+    // is the direction that draws MORE inputs rather than fewer — the opposite of every flag above
+    // — and deliberately: a preview that hid a field production allows is a preview whose author
+    // cannot see the control they wrote. Being refused when pressed is the correct failure here,
+    // and the refusal names the field.
+    frozen: strings(from.frozen),
+    // Absent rather than `{}` where the app declared none: an empty map read as a cap is "every
+    // field is capped at nothing".
+    ...(isRecord(from.maxBytes) ? { maxBytes: capsOf(from.maxBytes) } : {}),
     // The STAFF half of a withdrawal, and a different permission from the list above rather than a
     // wider setting of it: that one is the statuses a submitter may take their OWN row away from,
     // and this is the role (`writerDelete` + `writers`, resolved by the package).

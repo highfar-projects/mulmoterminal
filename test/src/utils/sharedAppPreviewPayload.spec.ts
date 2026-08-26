@@ -36,6 +36,7 @@ describe("the preview payload", () => {
           // while the published page goes on drawing it.
           correctFrom: {},
           correctAny: false,
+          frozen: [],
         },
       },
     });
@@ -59,6 +60,7 @@ describe("the preview payload", () => {
       sealed: [],
       correctFrom: {},
       correctAny: false,
+      frozen: [],
     });
   });
 

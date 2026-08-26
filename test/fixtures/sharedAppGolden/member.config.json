@@ -35,6 +35,12 @@
         "owner@salon.example",
         "reception@salon.example"
       ]
+    },
+    {
+      "cid": "notices",
+      "writers": [
+        "owner@salon.example"
+      ]
     }
   ],
   "views": [

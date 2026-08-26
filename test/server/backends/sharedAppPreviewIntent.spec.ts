@@ -238,9 +238,9 @@ describe("a member's intent, performed from the preview", () => {
     expect(batched).toEqual([`update ${itemsPath}/q1 {"text":"Falcon Heavy?"}`]);
   });
 
-  it("refuses the status field, because that is what a transition is for", async () => {
+  it("refuses the fields the other asks own, because that is what they are for", async () => {
     const result = await performPreviewIntent(root, correction({ values: { state: "open" } }));
-    expect(result).toEqual({ ok: false, error: "status-field" });
+    expect(result).toEqual({ ok: false, error: "reserved-field" });
     expect(batched).toEqual([]);
   });
 

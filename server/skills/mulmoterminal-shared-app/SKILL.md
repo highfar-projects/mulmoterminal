@@ -915,14 +915,21 @@ answer it**, and the page asks the capability rather than the audience:
   list, because the rules answer a writing role with no status condition and no field list — which
   is why an ordinary blog, which declares no `selfUpdate` at all, still lets its author edit.
 
-Four things it will refuse whoever asks, so do not draw an input for them:
+**`can.<cid>.frozen` is the list of fields it will refuse whoever asks — draw no input for them.**
+Two kinds are in it:
 
-- **the collection's own `statusField`** — a status moves through `transition`, which is judged
-  against the declared table and carries whatever notice the declaration names for that move.
-- **the fields the rules froze when the record was created** — the `stampField`, the field a
+- **the fields the rules froze when the record was created** — the `stampField`, the field an
   `idFrom: "field"` / `"slug"` id was built out of, the `uidField`. A record that needs a different
   id is a NEW record; renaming one would strand every link ever shared.
-- **values over `public.submit[cid].maxBytes`**, measured in bytes of UTF-8.
+- **the two fields the other asks own** — the collection's `statusField`, which moves through
+  `transition` (judged against the declared table, carrying whatever notice the declaration names
+  for that move), and its `assigneeField`, which moves through `assign` (which refuses an address
+  nobody on the roster holds a role at — writing one produces a row nobody may touch afterwards).
+
+Two more refusals:
+
+- **values over `can.<cid>.maxBytes`** — `{ "<field>": <bytes> }`, measured in bytes of UTF-8, and
+  absent where the app declared none. This is the one bound the deployed rules do NOT also make.
 - **an empty `values`** — answered by name rather than ignored, so the button does not hang.
 
 `values` must be an object of **strings**. A number is not coerced: the whole call is refused,
@@ -959,6 +966,8 @@ window.__MC_APP_VIEW.onState((data, viewer) => {
   //                      collection declares `writerDelete`)
   // can.correctFrom    — { status: [field...] } the reader may edit in their OWN row
   // can.correctAny     — may rewrite any field of any row here  (owner / editor)
+  // can.frozen         — the fields NO correction may write, whoever asks
+  // can.maxBytes       — { field: bytes } a correction or submission may not exceed
   // can.assigneeField  — the field a row carries its owner's address in
   // can.assign         — may hand a row to somebody else
   // can.assignees      — who may be named
