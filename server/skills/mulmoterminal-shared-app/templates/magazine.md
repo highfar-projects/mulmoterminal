@@ -22,11 +22,13 @@
   "protocol": "2.0.0",
   "members": {
     "editor@example.jp": { "*": "owner" },
-    "kei@example.jp": { "articles": "editor" },
-    "mika@example.jp": { "articles": "editor" }
+    "kei@example.jp": { "*": "participant" },
+    "mika@example.jp": { "*": "participant" }
   },
   "collections": {
     "articles": {
+      "statusField": "status",
+      "submitOnly": true,
       "writerDelete": true
     }
   },
@@ -45,6 +47,12 @@
       "audience": "member",
       "path": "views/desk.html",
       "collections": ["articles"]
+    },
+    {
+      "id": "write",
+      "audience": "participant",
+      "path": "views/desk.html",
+      "collections": ["articles"]
     }
   ],
   "public": {
@@ -53,13 +61,17 @@
     "submit": {
       "articles": {
         "auth": "verifiedEmail",
-        "createFields": ["slug", "title", "summary", "body", "publishedAt"],
+        "audience": "participant",
+        "uidField": "byUid",
+        "createFields": ["slug", "title", "summary", "body", "byUid", "status", "publishedAt"],
+        "initialStatus": "published",
         "validate": { "required": ["title", "body"] },
         "idFrom": "slug",
         "idField": "slug",
         "stampField": "publishedAt",
         "maxBytes": { "title": 200, "summary": 800, "body": 60000 },
-        "window": { "until": "2000-01-01T00:00:00Z" }
+        "selfUpdate": { "published": ["title", "summary", "body"] },
+        "selfDelete": ["published"]
       }
     }
   }
@@ -85,13 +97,47 @@ URL になります。文法は `^[a-z0-9][a-z0-9-]{0,63}$`（小文字・数字
 **`stampField: "publishedAt"`** — 日付は**サーバの時計**が打ちます。送っても凍結されても書けません。
 索引はこの順に並ぶので、日付を打てるなら並び順を打てることになる、というのがこの鍵の意味です。
 
-**`window.until` を過去にして閉じる** — 閉じた窓は `publicCreate` を殺し、`createWith` に残るのは
-**writer の枝だけ**になります。つまり「名簿の owner / editor だけが投稿できる」。参加者や通りすがりに
-書かせたいときは [外から寄稿を受けたいとき](#外から寄稿を受けたいとき変種) を読んでください——
-窓を開けるのは「名簿を開ける」ではなく「世界に開ける」です。
+**`audience: "participant"` — 招いた人だけが書け、互いの記事には触れない、を作る鍵です。**
+ルールはこう読みます: `s.get("audience","") != "participant" || r == "participant"`。名簿で解決した役が
+**ちょうど `participant`** でなければ、投稿の枝は立ちません。名簿に無い人は役が `null` なので、
+検証済みメールでサインインしていても書けません。**窓（`window`）は開けたままで構いません** ——
+門番は窓ではなく、この 1 行と名簿です。
 
-**`writerDelete: true`** — owner / editor がどの記事でも消せます。**これがこのアプリで唯一の
-「取り下げ」です**（次節）。
+**`uidField: "byUid"`** — 「その行を書いたのは誰か」をルールが記録し、`ownRow` がそれを見ます。
+**`emailField` ではなく uid を使うのは、このコレクションが世界に読めるからです。** フィールドは
+隠せません（見せる／見せないの境界はドキュメント）ので、`emailField` を選ぶと寄稿者の
+メールアドレスが記事と一緒に全世界に読まれます。uid は同じことを言って、住所を持ちません。
+**値はホストが入れます** —— ページはこの欄を描かず、送りもしません（`uidOk` は
+`request.auth.uid` と一致するかを見るので、送れる値は 1 つしかない）。
+
+**`selfUpdate` と `selfDelete`** — 寄稿者が**自分の記事だけ**を直し、取り下げられる。
+どちらも**状態ごと**に宣言するので、状態が 1 つしか無くても `statusField` が要ります
+（`initialStatus: "published"` で全部そこに入り、`transitions` は宣言していません）。
+状態を増やすなら [状態は何も隠しません](#状態は何も隠しません) を先に読んでください。
+
+**`submitOnly: true` — publish がこれを要求します。そして、要求する理由がこの形の核心です。**
+`uidField` と `audience: "participant"` は、レコードに「**これを出した人がそう言った**」という
+意味を持たせます。writer の枝で作られた行は同じ形をしていて、その意味を**持っていません** ——
+編集長が誰かの名前で記事を足せてしまう。だから publish は「per-person に縛るなら writer の
+create を閉じろ」と言います。
+
+**その代償は、編集長がこのコレクションに記事を出せなくなることです。** `createWith` の writer の
+枝は `isWriter(r) && !flagOn(c, "submitOnly")` なので、`submitOnly` は編集長の投稿ごと閉じます。
+**直すのと消すのは閉じません**（`updateWith` と `deleteWith` の `isWriter` の枝は `submitOnly` を
+見ない）。つまりこのアプリの編集長は、**載せない人で、直す人で、下ろす人**です。
+
+編集長も書きたいなら、名簿での役を `{ "articles": "participant" }` にします。`role()` は
+コレクション固有の指定を `*` より優先するので、そのとき**他人の記事を直す力を失います**。
+どちらか一方です。
+
+**`writerDelete: true`** — **owner だけ**がどの記事でも消せます。寄稿者どうしは互いの記事に
+届きません（`correctAny` も `withdrawAny` も持たない）。
+
+**同じ HTML を 2 つの audience に宣言しています。** `participant` の役だけを持つ人は
+**member の階層を読めません**（ルールの `staffOf` は owner / editor / viewer / assignee のどれかを
+要求します）。つまり寄稿者は `/m/{slug}` を開けず、入口は `/p/{slug}` です。ページは同じもので、
+渡される capability が違うだけ —— 編集長には「どの記事でも」、寄稿者には「自分の記事を、その状態で」。
+どちらの枝も下のページが読みます。
 
 **`theme.hue`** — プラットフォームが描くページに、このアプリの色を渡す唯一の手段。0–359 の整数 1 つで、
 索引も記事ページもこの色相で組まれます。`views/desk.html` の `--hue` と揃えてください（別々に書く 2 つの
@@ -115,6 +161,8 @@ URL になります。文法は `^[a-z0-9][a-z0-9-]{0,63}$`（小文字・数字
     "title": { "type": "string", "label": "見出し", "required": true },
     "summary": { "type": "text", "label": "リード（索引に出る 2 行）" },
     "body": { "type": "markdown", "label": "本文", "required": true },
+    "byUid": { "type": "string", "label": "書いた人（uid）" },
+    "status": { "type": "enum", "label": "状態", "values": ["published"], "default": "published" },
     "publishedAt": { "type": "datetime", "label": "公開日時" }
   }
 }
@@ -310,10 +358,20 @@ URL になります。文法は `^[a-z0-9][a-z0-9-]{0,63}$`（小文字・数字
       return over.join("。") + "。文字数ではなく UTF-8 のバイト数で、かなと漢字は 1 文字 3 バイトです。何も送っていません。";
     };
 
-    // 書ける人か。「作ってよい」という capability は無く、窓を閉じてあるので `publicCreate` は
-    // 立たない——作れる＝writer の枝、なので role をそのまま訊く。`correctAny` が role そのもの。
-    // `withdrawAny` は古いランタイム用の予備で、そちらは `writerDelete` の宣言にも依存する。
-    var mayWrite = function () {
+    // 出せる人か。**「作ってよい」という capability はありません** —— capability が語るのは
+    // 既にある行への書き込みだけなので、間接的に訊きます。
+    //
+    // `submitOnly` があるので、出せるのは `audience: "participant"` の枝だけ ——
+    // **編集長は出せません**（役で直せて消せるだけ）。その寄稿者は同じ宣言から
+    // `selfUpdate` / `selfDelete` も受け取っているので、`correctFrom` / `withdrawFrom` が
+    // 空でないことがその人の印になります。役を持つだけの `viewer` はどちらも持ちません。
+    var maySubmit = function () {
+      var can = capOf();
+      return Object.keys(can.correctFrom || {}).length > 0 || (can.withdrawFrom || []).length > 0;
+    };
+
+    // 役で「どの記事でも」触れる人か。偽なら、この人が触れるのは自分の記事だけです。
+    var isDesk = function () {
       var can = capOf();
       return can.correctAny === true || can.withdrawAny === true;
     };
@@ -403,10 +461,12 @@ URL になります。文法は `^[a-z0-9][a-z0-9-]{0,63}$`（小文字・数字
     };
 
     var renderCompose = function () {
-      if (!mayWrite()) {
+      if (!maySubmit()) {
         compose.replaceChildren();
         compose.appendChild(el("h2", null, "新しい記事"));
-        compose.appendChild(el("p", "note", "書けるのは owner と editor だけです。名簿を変えたあと publish していないと、ここはこう出ます。"));
+        compose.appendChild(el("p", "note", isDesk()
+          ? "編集長はここから記事を出せません（`submitOnly`）。記事は寄稿者が出し、あなたは直せて、下ろせます。自分でも書くなら、名簿での役を articles: participant にしてください——そのとき他人の記事を直す力と引き換えになります。"
+          : "投稿できるのは名簿に招かれた寄稿者だけです。招かれているのにこう出るなら、名簿を変えたあと publish していません。"));
         built = false;
         return;
       }
@@ -511,6 +571,12 @@ URL になります。文法は `^[a-z0-9][a-z0-9-]{0,63}$`（小文字・数字
       // 「保存する」を押せないように落とす。
       if (editing !== null && !all.some(function (r) { return r.id === editing.id; })) editing = null;
 
+      // 自分の記事だけ触れる人への注記。ページはどれが自分のものか見分けられないので、
+      // 操作は全部の行に出ます——先に言っておかないと、断られてから気づくことになります。
+      if (!isDesk() && maySubmit()) {
+        list.appendChild(el("p", "note", "直せる・消せるのは自分が書いた記事だけです。このページからは見分けられないので操作はどの行にも出ますが、他の人の記事では断られます。"));
+      }
+
       if (!all.length) {
         list.appendChild(el("p", "note", "まだ 1 本もありません。"));
         return;
@@ -541,7 +607,12 @@ URL になります。文法は `^[a-z0-9][a-z0-9-]{0,63}$`（小文字・数字
           side.appendChild(edit);
         }
 
-        if (can.withdrawAny === true) {
+        // 消せるのは 2 通り: 役でどれでも（`withdrawAny`）か、自分の記事をその状態から
+        // （`withdrawFrom`）。後者のとき、**その行が自分のものかどうかはページから分かりません**
+        // ——`uidField` はアドレスを持たず、射影も読み手の uid を運ばないからです（意図的：
+        // 持ち主かどうかはルールが答えます）。だから寄稿者にはどの行にも操作が出て、
+        // 他人の記事で押すと断られます。上の注記がそれを先に言います。
+        if (can.withdrawAny === true || (can.withdrawFrom || []).indexOf(r.status) !== -1) {
           if (arming[r.id]) {
             side.appendChild(el("span", "confirm", "本当に消しますか？"));
             var yes = el("button", "btn danger small", "消す");
@@ -580,7 +651,7 @@ URL になります。文法は `^[a-z0-9][a-z0-9-]{0,63}$`（小文字・数字
     };
 
     if (!view) {
-      composeNote.textContent = "このページはホストの中でしか動きません。/m/field-notes で開いてください。";
+      composeNote.textContent = "このページはホストの中でしか動きません。編集長は /m/field-notes、寄稿者は /p/field-notes で開いてください。";
       return;
     }
 
@@ -699,51 +770,49 @@ id は `primaryKey` から取るので、両方落ちます。
 保存されるだけで表示されない欄を足すより正直です——世界に読めるコレクションは 1 行まるごと
 世界に読めるので、「出ない欄」は書いた人の知らないところに置かれた文字列になります。
 
-## 外から寄稿を受けたいとき（変種）
+## 誰が何をできるか
 
-上の宣言は**窓を閉じてある**ので、書けるのは名簿の owner / editor だけです。名簿に足せば書き手が
-増えます——それが普通の答えです。
+| | 記事を出す | 自分の記事を直す・消す | 他人の記事を直す・消す | 入口 |
+|---|---|---|---|---|
+| `owner`（編集長） | **×** | — | ○ | `/m/{slug}` |
+| `participant`（寄稿者） | ○ | ○ | × | `/p/{slug}` |
+| 名簿に無い人 | × | — | × | 公開ページだけ |
+| 通りすがり | × | — | × | 公開ページだけ |
 
-名簿に**載っていない**人からも受けたいときは、窓を開けます。そのとき変わることが 4 つあります。
+読むのは全世界で、サインインも要りません。
 
-1. **`window` を消す**（または未来まで開ける）。`publicCreate` が立ちます。
-2. **開くのは「名簿」ではなく「世界」です。** `auth: "verifiedEmail"` は「メールが検証済みの
-   サインイン済みの誰か」であって、あなたが招いた人ではありません。**Google アカウントを持つ
-   全員が、あなたのサイトに記事を出せます。**
-3. **`emailField` を足します**（例 `"byEmail"`）。ルールがそこに書き手のアドレスを入れ、
-   `ownRow` がそれを見て「自分の記事」を判定します。これが無いと、寄稿者は自分の記事すら直せません。
-4. **そのアドレスは公開されます。** 世界に読めるコレクションは 1 行まるごと世界に読めるので、
-   `byEmail` は記事と一緒に誰にでも読まれます。避けたいなら `uidField` を使ってください
-   （不透明な id で、人には読めません。ただし人に見せる名前にも使えません）。
+**編集長が出せないのは `submitOnly` の代償です**（上の鍵の説明）。載せない人で、直す人で、
+下ろす人になります。
 
-そのうえで `statusField` と `selfUpdate` を足すと、「寄稿者は自分の記事を、デスクが確認する前まで
-直せる」が書けます:
+**寄稿者の「出せる」と「直せる」は別の宣言です。** 出せるのは `audience: "participant"`、
+直せるのは `selfUpdate` / `selfDelete`。前者だけ書くと、出したあと**自分でも直せない**記事に
+なります。
 
-```json
-"collections": {
-  "articles": {
-    "statusField": "status",
-    "transitions": { "initial": ["fresh"], "fresh": ["checked"], "checked": ["fresh"] },
-    "writerDelete": true
-  }
-},
-"public": {
-  "submit": {
-    "articles": {
-      "emailField": "byEmail",
-      "initialStatus": "fresh",
-      "selfUpdate": { "fresh": ["title", "summary", "body"] },
-      "selfDelete": ["fresh"]
-    }
-  }
-}
-```
+**入口が違うのは、ルールが階層を分けているからです。** member の階層を読めるのは
+owner / editor / viewer / assignee のどれかで（`staffOf`）、`participant` はそこに入りません。
+だから同じ HTML を 2 つの audience に宣言し、寄稿者は `/p/{slug}` から入ります。
 
-`selfUpdate` は**状態ごと**に宣言します——ルールは行の現在の状態を読んでから欄のリストを見るので、
-`checked` になった記事はデスクしか直せなくなります。上のページはこれをそのまま描きます
-（`correctFrom` を読む枝が、そのとき初めて効きます）。
+### 変えたいときの差分
 
-**`status` は相変わらず何も隠しません。** `fresh` の記事も `checked` の記事も、同じように公開されています。
+- **チームで 1 つの媒体を出す（互いの記事も直す）** — `uidField`・`audience`・`selfUpdate`・
+  `selfDelete`・`submitOnly` を全部落とし、名簿の役を `editor` にして、`window` を過去で閉じます。
+  そうすると `publicCreate` が死んで writer の枝だけが残り、**名簿の全員が出せて、互いの記事を
+  書き換えても消してもよくなります**。編集長も書けます。**per-person の縛りと引き換えです** ——
+  縛りを外したので `submitOnly` も要らなくなる、という順序で考えてください。
+- **世界の誰でも投稿できるようにしたい** — `audience: "participant"` を消します。残るのは
+  `auth: "verifiedEmail"` だけで、これは「メールが検証済みのサインイン済みの誰か」——
+  つまり **Google アカウントを持つ全員**です。招いた人ではありません。
+- **デスクが確認したら本人は直せなくする** — 状態を増やします。
+
+  ```json
+  "collections": { "articles": { "statusField": "status", "transitions": { "published": ["checked"], "checked": ["published"] }, "writerDelete": true } },
+  "public": { "submit": { "articles": { "selfUpdate": { "published": ["title", "summary", "body"] } } } }
+  ```
+
+  `checked` は `selfUpdate` に無いので、その状態に入った記事は owner しか直せません。
+  **`checked` にしても公開は止まりません**（状態は何も隠さない）。
+- **住所を出してよいので誰が書いたか名簿と突き合わせたい** — `uidField` を `emailField` に
+  変えます。そのアドレスは記事と一緒に**全世界に公開されます**。
 
 ## 落とし穴
 
@@ -756,6 +825,12 @@ id は `primaryKey` から取るので、両方落ちます。
   ページが先に断らないと、ルールは欄を名指さない permission エラーを返します。
 - **`theme.hue` とページの `--hue` がずれる** — 別々に書く 2 つの数字です。描かれるページと
   デスクが違う色になります。
+- **編集長のアカウントで投稿しようとする** — `submitOnly` が writer の create を閉じています。
+  記事は寄稿者が出します。
+- **寄稿者のページで、他人の記事にも操作が出る** — 仕様です。`uidField` はアドレスを持たず、
+  射影も読み手の uid を運ばないので、**どの行が自分のものかページには分かりません**（持ち主かは
+  ルールが答えます）。上のページは先にその旨を 1 行出します。`emailField` に変えれば見分けられますが、
+  そのアドレスは公開されます。
 - **プレビューで押さずに publish する** — 記事は取り消せません。ペインで一度押してください。
 
 ## 作る順番
@@ -765,4 +840,5 @@ id は `primaryKey` から取るので、両方落ちます。
 3. `app.json` を上の形で書く。`slug`・`name`・`members`・`theme.hue` を自分のものに。
 4. `views/desk.html` を置く。`--hue` を `theme.hue` と揃え、見出しの文言を自分のものに。
 5. `check` → ペインで desk を開き、**実際に 1 本投稿して、書き直して、消す**。
-6. `publish`。`/a/{slug}` が索引、`/a/{slug}/{記事名}` が記事、`/m/{slug}` がデスク。
+6. `publish`。`/a/{slug}` が索引、`/a/{slug}/{記事名}` が記事、`/m/{slug}` が編集長のデスク、
+   `/p/{slug}` が寄稿者の入口。
