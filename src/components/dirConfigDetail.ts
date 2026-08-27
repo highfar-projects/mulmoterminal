@@ -143,6 +143,12 @@ function extraRows(extras: Record<string, unknown>): DirConfigRow[] {
   if (chips.length) rows.push({ key: "chips", label: "Header chips", value: chips.join(", "), color: null });
   const worktreeEnv = stringList(extras.worktreeEnvNames);
   if (worktreeEnv.length) rows.push({ key: "worktreeEnv", label: "Per-worktree env", value: worktreeEnv.join(", "), color: null });
+  // Same reasoning as appendSystemPrompt above: only ever written `true` (see
+  // config/devcontainer-flag.ts), but the TYPE check keeps this consistent with that row rather
+  // than relying on the one value it happens to take today.
+  if (typeof extras.devcontainer === "boolean") {
+    rows.push({ key: "devcontainer", label: "Devcontainer", value: extras.devcontainer ? "on" : "off", color: null });
+  }
   return rows;
 }
 

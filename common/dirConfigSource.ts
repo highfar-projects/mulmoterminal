@@ -35,6 +35,7 @@ export const DIR_CONFIG_KEYS = [
   "addDirs",
   "appendSystemPrompt",
   "worktreeEnv",
+  "devcontainer",
 ] as const;
 
 export interface DirConfigSource {
@@ -85,6 +86,10 @@ export interface DirConfigExtras {
   // values belong to a tree rather than to the file, and each cell already shows its own on the
   // `env` header chip; what this panel answers is whether the declaration was read at all.
   worktreeEnvNames: string[];
+  // Whether this directory's sessions run inside its devcontainer — same tri-state reasoning as
+  // appendSystemPrompt above: `true` is a fact this file (not the user typing it) recorded, once
+  // the launcher actually built and started the container (config/devcontainer-flag.ts).
+  devcontainer: boolean | null;
 }
 
 export const EMPTY_DIR_CONFIG_EXTRAS: DirConfigExtras = {
@@ -97,6 +102,7 @@ export const EMPTY_DIR_CONFIG_EXTRAS: DirConfigExtras = {
   chipLabels: [],
   autoIcon: null,
   worktreeEnvNames: [],
+  devcontainer: null,
 };
 
 // "The loader kept nothing for this key" — null/undefined, but also the empty collections the

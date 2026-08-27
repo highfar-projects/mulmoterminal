@@ -52,6 +52,7 @@ import {
   dirProviderField,
   dirModelField,
   dirAppendSystemPromptField,
+  dirDevcontainerField,
   dirWorktreeEnvField,
   type ThemeId,
   type HeaderButton,
@@ -101,6 +102,9 @@ export interface DirConfig extends DirChrome {
   // Which variables every working tree of this project needs its own value of (#1367). The
   // DECLARATION, not the values — reserving those touches disk and lives in worktree-env.ts.
   worktreeEnv: WorktreeEnvSpec | null;
+  // Whether this directory's sessions run inside its .devcontainer (see config/devcontainer-flag.ts
+  // and session/spawn-claude.ts). null = no, run on the host as usual.
+  devcontainer: boolean | null;
 }
 
 // What the browser receives: the raw sound path stays server-side (streamed via
@@ -178,6 +182,7 @@ const EMPTY: DirConfig = {
   addDirs: null,
   appendSystemPrompt: null,
   worktreeEnv: null,
+  devcontainer: null,
 };
 
 /** Every layer as ONE object, the more specific winning per top-level key.
@@ -245,6 +250,7 @@ export function loadDirConfig(cwd: string): DirConfig {
       addDirs: resolveAddDirs(raw.addDirs, base, (p) => statSync(p).isDirectory()),
       appendSystemPrompt: dirAppendSystemPromptField.parse(raw.appendSystemPrompt),
       worktreeEnv: dirWorktreeEnvField.parse(raw.worktreeEnv),
+      devcontainer: dirDevcontainerField.parse(raw.devcontainer),
     };
   } catch {
     return EMPTY;
@@ -341,13 +347,14 @@ export interface DirConfigDetail {
 const chipLabel = (chip: HeaderChip): string => (typeof chip === "string" ? chip : chip.label);
 
 function dirConfigExtras(cwd: string): DirConfigExtras {
-  const { provider, model, skills, addDirs, appendSystemPrompt, buttons, chips, icon, worktreeEnv } = loadDirConfig(cwd);
+  const { provider, model, skills, addDirs, appendSystemPrompt, buttons, chips, icon, worktreeEnv, devcontainer } = loadDirConfig(cwd);
   return {
     provider,
     model,
     skills,
     addDirs,
     appendSystemPrompt,
+    devcontainer,
     buttonLabels: (buttons ?? []).map((button) => button.label),
     chipLabels: (chips ?? []).map(chipLabel),
     autoIcon: autoIconRef(cwd, icon),

@@ -45,7 +45,11 @@ const PROJECT = {
 // not here (#1617): the project's cell had the colour, its worktrees quietly did not, and only
 // someone opening a worktree beside its parent would see it. The list below is what makes leaving
 // a key out a decision instead of an omission.
-const DELIBERATELY_NOT_INHERITED = ["sound", "sounds", "addDirs", "buttons", "chips", "skills", "appendSystemPrompt"];
+// `devcontainer` is here too: it means THIS worktree's own container was actually built and
+// started (config/devcontainer-flag.ts), which a fresh worktree's has not been yet regardless of
+// what its parent project is flagged as — carrying it forward would claim a container is running
+// that never was.
+const DELIBERATELY_NOT_INHERITED = ["sound", "sounds", "addDirs", "buttons", "chips", "skills", "appendSystemPrompt", "devcontainer"];
 
 describe("every directory setting is inherited or deliberately not", () => {
   it("accounts for every key the loader reads", () => {

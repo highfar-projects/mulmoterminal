@@ -15,6 +15,7 @@ import { ensureWorktreeEnv } from "../config/worktree-env.js";
 import { splitLines } from "../infra/split-lines.js";
 import { DIR_CONFIG_FILE, DIR_LOCAL_CONFIG_FILE } from "../config/dir-config.js";
 import { writeInheritedDirConfig } from "../config/worktree-dir-config.js";
+import { hasDevcontainerConfig } from "../config/devcontainer-flag.js";
 import { ISSUE_BRANCH_PREFIX, issueFromAnchoredBranch } from "../../common/prPhase.js";
 
 // realpathSync.native, not the JS one: on Windows only the native call expands an
@@ -303,9 +304,13 @@ async function adoptParentDirConfig(repo: string, worktreeDir: string): Promise<
 
 // Create a fresh worktree + branch for `task`, forked from the repo's base branch. Pass `issue`
 // to anchor the branch to a GitHub issue (`issue/<N>-<slug>`), which also forks from the base as
-// the REMOTE has it. Returns the worktree path + branch, or null if `repoDir` isn't a git repo /
-// the worktree add fails.
-export async function createWorktree(repoDir: string, task: string, issue?: number | undefined): Promise<{ path: string; branch: string } | null> {
+// the REMOTE has it. Returns the worktree path + branch + whether it carries a devcontainer
+// config, or null if `repoDir` isn't a git repo / the worktree add fails.
+export async function createWorktree(
+  repoDir: string,
+  task: string,
+  issue?: number | undefined,
+): Promise<{ path: string; branch: string; hasDevcontainer: boolean } | null> {
   const repo = await repoRoot(repoDir);
   if (!repo) return null;
   const stem = branchStem(task, issue);
@@ -317,7 +322,10 @@ export async function createWorktree(repoDir: string, task: string, issue?: numb
   return serializeCreate(async () => {
     const branch = await uniqueBranch(repo, stem, root);
     const dir = path.join(root, worktreeDirName(branch));
-    const res = await git(["worktree", "add", "-b", branch, dir, start], repo);
+    // --relative-paths: required for `devcontainer up --mount-git-worktree-common-dir` to work
+    // later (see config/devcontainer-flag.ts) — that flag needs the worktree's .git file to point
+    // at the common dir with a relative path, not an absolute host path a container can't resolve.
+    const res = await git(["worktree", "add", "--relative-paths", "-b", branch, dir, start], repo);
     if (!res.ok) return null;
     await adoptParentDirConfig(repo, dir);
     // AFTER the config is adopted — the declaration this reads is the one just written — and here
@@ -325,7 +333,7 @@ export async function createWorktree(repoDir: string, task: string, issue?: numb
     // spawned directly (routes/issue-work-routes.ts), never through a terminal socket. Reserving
     // only there would leave the one flow this feature is most for without its port.
     await ensureWorktreeEnv(dir);
-    return { path: dir, branch };
+    return { path: dir, branch, hasDevcontainer: hasDevcontainerConfig(dir) };
   });
 }
 

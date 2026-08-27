@@ -287,6 +287,13 @@ export type Provider = z.infer<typeof providerSchema>;
 // what makes "follow the global setting" distinguishable from an explicit `false` here.
 export const dirAppendSystemPromptField = z.boolean().nullable().catch(null);
 
+// Whether this directory's sessions run inside its .devcontainer via `devcontainer exec` rather
+// than directly on the host. Set by markDevcontainerEnabled (config/devcontainer-flag.ts) once the
+// container has actually been built and started for a worktree — never inferred merely from the
+// devcontainer.json file's presence, since building/starting it is a real, possibly slow decision
+// the launcher confirms with the user rather than one every spawn should silently redo.
+export const dirDevcontainerField = z.boolean().nullable().catch(null);
+
 // Which provider/model a directory's sessions run on. Both lenient: a typo must not stop
 // the directory's other settings from loading — resolveProvider reports the real problem
 // at spawn time, where the user sees it.

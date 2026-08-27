@@ -43,6 +43,7 @@ const EMPTY = {
   addDirs: null,
   appendSystemPrompt: null,
   worktreeEnv: null,
+  devcontainer: null,
 };
 
 function withConfig(body: unknown): { dir: string; cleanup: () => void } {
@@ -176,6 +177,7 @@ describe("loadDirConfig", () => {
       addDirs: null,
       appendSystemPrompt: false,
       worktreeEnv: { PORT: { kind: "port", base: 3000 } },
+      devcontainer: null,
     });
     cleanup();
   });
@@ -493,6 +495,7 @@ describe("dirConfigDetail", () => {
       chipLabels: [],
       autoIcon: null,
       worktreeEnvNames: [],
+      devcontainer: null,
     });
     rmSync(dir, { recursive: true, force: true });
   });

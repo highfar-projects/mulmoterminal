@@ -2,9 +2,10 @@
 // uses these to detect a git repo, list/reuse existing worktrees, and create/remove
 // them. Mutations are same-origin guarded like the other local-only routes; remove
 // uses POST (not DELETE) so a request body survives every proxy.
-import type { Express } from "express";
-import { repoRoot, defaultBaseBranch, listWorktrees, createWorktree, removeWorktree, isDirty } from "./worktrees.js";
+import type { Express, Request, Response } from "express";
+import { repoRoot, defaultBaseBranch, listWorktrees, createWorktree, removeWorktree, isDirty, isManagedWorktree } from "./worktrees.js";
 import { releaseWorktreeEnv } from "../config/worktree-env.js";
+import { hasDevcontainerConfig, markDevcontainerEnabled, runDevcontainerUp } from "../config/devcontainer-flag.js";
 import { worktreeDiff } from "./worktree-diff.js";
 import { pushWorktree, createOrOpenPR } from "./worktree-pr.js";
 import { requestOriginAllowed } from "../routes/same-origin-guard.js";
@@ -23,6 +24,52 @@ const SERVER_ERROR_REASONS = new Set(["failed", "push-failed"]);
 function statusFor(result: { ok: boolean; reason?: string | undefined }): number {
   if (result.ok) return 200;
   return SERVER_ERROR_REASONS.has(result.reason ?? "") ? 500 : 409;
+}
+
+// Build and start a worktree's devcontainer, then mark the directory so every later spawn in it
+// (spawn-claude.ts) runs through `devcontainer exec` instead of the host. Guarded like remove
+// (path must be a managed worktree of repoDir) — this shells out to Docker, so an arbitrary path
+// is not something to accept on request. Slow (a cold image build can run minutes): the launcher
+// is expected to wait it out, not poll. Split out of mountWorktreeRoutes to keep that one readable.
+async function handleDevcontainerUp(req: Request, res: Response): Promise<void> {
+  const { repoDir, path: worktreePath } = requestBody(req.body);
+  if (typeof repoDir !== "string" || typeof worktreePath !== "string") {
+    res.status(400).json({ error: "repoDir and path are required" });
+    return;
+  }
+  const repo = await repoRoot(repoDir);
+  if (!repo || !isManagedWorktree(repo, worktreePath)) {
+    res.status(409).json({ ok: false, error: "not a managed worktree" });
+    return;
+  }
+  if (!hasDevcontainerConfig(worktreePath)) {
+    res.status(409).json({ ok: false, error: "no .devcontainer config here" });
+    return;
+  }
+  const result = await runDevcontainerUp(worktreePath);
+  if (result.ok) markDevcontainerEnabled(worktreePath);
+  res.status(result.ok ? 200 : 500).json(result);
+}
+
+async function handleCreateWorktree(req: Request, res: Response): Promise<void> {
+  const { repoDir, task, issue } = requestBody(req.body);
+  if (typeof repoDir !== "string" || typeof task !== "string" || !task.trim()) {
+    res.status(400).json({ error: "repoDir and a non-empty task are required" });
+    return;
+  }
+  // An unusable `issue` is refused rather than dropped: the number ends up in the branch name
+  // and from there in the PR's `Fixes`, so silently creating an UNANCHORED worktree would look
+  // like it worked and only diverge later, once nothing closes the issue.
+  if (issue !== undefined && !isIssueNumber(issue)) {
+    res.status(400).json({ error: "issue must be a positive integer" });
+    return;
+  }
+  const wt = await createWorktree(repoDir, task, issue);
+  if (!wt) {
+    res.status(500).json({ error: "could not create the worktree (is this a git repo?)" });
+    return;
+  }
+  res.json(wt);
 }
 
 export function mountWorktreeRoutes(app: Express, { isAllowedOrigin }: WorktreeRouteOptions): void {
@@ -58,19 +105,7 @@ export function mountWorktreeRoutes(app: Express, { isAllowedOrigin }: WorktreeR
 
   app.post("/api/worktrees/create", async (req, res) => {
     if (!requestOriginAllowed(req, isAllowedOrigin)) return res.status(403).end();
-    const { repoDir, task, issue } = requestBody(req.body);
-    if (typeof repoDir !== "string" || typeof task !== "string" || !task.trim()) {
-      return res.status(400).json({ error: "repoDir and a non-empty task are required" });
-    }
-    // An unusable `issue` is refused rather than dropped: the number ends up in the branch name
-    // and from there in the PR's `Fixes`, so silently creating an UNANCHORED worktree would look
-    // like it worked and only diverge later, once nothing closes the issue.
-    if (issue !== undefined && !isIssueNumber(issue)) {
-      return res.status(400).json({ error: "issue must be a positive integer" });
-    }
-    const wt = await createWorktree(repoDir, task, issue);
-    if (!wt) return res.status(500).json({ error: "could not create the worktree (is this a git repo?)" });
-    res.json(wt);
+    await handleCreateWorktree(req, res);
   });
 
   // Remove a managed worktree. 409 for a client-resolvable conflict (dirty → the UI
@@ -93,6 +128,12 @@ export function mountWorktreeRoutes(app: Express, { isAllowedOrigin }: WorktreeR
       return res.json(result);
     }
     res.status(result.reason === "failed" ? 500 : 409).json(result);
+  });
+
+  // Build and start a worktree's devcontainer (see handleDevcontainerUp).
+  app.post("/api/worktrees/devcontainer-up", async (req, res) => {
+    if (!requestOriginAllowed(req, isAllowedOrigin)) return res.status(403).end();
+    await handleDevcontainerUp(req, res);
   });
 
   // Push the worktree's branch to origin (the first half of "取り込み").

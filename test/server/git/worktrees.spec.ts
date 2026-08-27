@@ -454,7 +454,8 @@ describe("git worktree lifecycle", () => {
   it.skipIf(!hasGit)(
     "allocates distinct branches for CONCURRENT creates of the same task (no TOCTOU collision)",
     async () => {
-      const isWt = (r: { path: string; branch: string } | null): r is { path: string; branch: string } => r !== null;
+      const isWt = (r: { path: string; branch: string; hasDevcontainer: boolean } | null): r is { path: string; branch: string; hasDevcontainer: boolean } =>
+        r !== null;
       const results = (
         await Promise.all([createWorktree(repo, "race"), createWorktree(repo, "race"), createWorktree(repo, "race"), createWorktree(repo, "race")])
       ).filter(isWt);

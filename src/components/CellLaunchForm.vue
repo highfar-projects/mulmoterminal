@@ -29,7 +29,7 @@ import { filePickerOpen, pickPaths } from "../composables/pickPaths";
 import { useBusyAction } from "../composables/useBusyAction";
 import { useSessionStop } from "../composables/useSessionStop";
 import { worktreeRequestFailure } from "./cellChromeRules";
-import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
+import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS, DEVCONTAINER_UP_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 // What an EMPTY grid cell shows: pick a directory, pick what to run in it, and start — or resume
 // a session that already exists there, run one of its scripts, or isolate the work in a worktree.
@@ -526,10 +526,35 @@ async function requestWorktree(repoDir: string, task: string): Promise<void> {
       return;
     }
     worktreeTask.value = "";
+    if (isRecord(body) && body.hasDevcontainer === true) await offerDevcontainer(path);
     await syncMcpGroupsInto(path);
     emit("start", path);
   } catch (e) {
     reportWorktreeFailure(repoDir, requestFailureText(e));
+  }
+}
+
+// Confirmed every time a devcontainer is found (never auto-started): building/starting one is
+// slow and runs arbitrary postCreateCommand shell, so it stays an explicit choice per worktree
+// rather than something the launcher decides on the user's behalf. Declining is not a failure —
+// the worktree still opens, just on the host — so this never reports through worktreeError.
+async function offerDevcontainer(path: string): Promise<void> {
+  const repoDir = targetDir.value;
+  if (!window.confirm(`This worktree has a devcontainer:\n${path}\n\nBuild and start it now?`)) return;
+  try {
+    const res = await fetchWithTimeout(
+      "/api/worktrees/devcontainer-up",
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ repoDir, path }) },
+      DEVCONTAINER_UP_TIMEOUT_MS,
+    );
+    if (!res.ok) {
+      const body = await jsonBody(res);
+      window.alert(
+        `Could not start the devcontainer — continuing on the host.\n\n${isRecord(body) && typeof body.output === "string" ? body.output : res.statusText}`,
+      );
+    }
+  } catch (e) {
+    window.alert(`Could not start the devcontainer — continuing on the host.\n\n${requestFailureText(e)}`);
   }
 }
 

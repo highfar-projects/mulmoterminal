@@ -22,6 +22,13 @@ export const DEFAULT_REQUEST_TIMEOUT_MS = 8_000;
 export const SLOW_COMMAND_TIMEOUT_MS = 60_000;
 
 /**
+ * For `POST /api/worktrees/devcontainer-up`: an image build plus its postCreateCommand can run
+ * several minutes on a cold cache — longer than any other shell-out this app makes, which is why
+ * SLOW_COMMAND_TIMEOUT_MS (sized for `git`/`gh`) is not reused here. Still bounded, same reasoning.
+ */
+export const DEVCONTAINER_UP_TIMEOUT_MS = 10 * 60_000;
+
+/**
  * `fetch`, but it gives up.
  *
  * A `signal` the caller passes in its `init` is kept: it is how a composable cancels on unmount,

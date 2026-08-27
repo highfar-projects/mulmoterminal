@@ -180,6 +180,13 @@ function resolveCustomAgent(sessionId: string, requestedId: string | undefined, 
  * `note` is the start-log line's suffix. The wrapper is named there rather than left to be
  * inferred: `[pty] claude started` for a session actually running `ollama` is exactly what would
  * mislead someone debugging "why is this session on the wrong model".
+ *
+ * `useDevcontainer` (from the directory's own config — see config/devcontainer-flag.ts) wraps
+ * whatever would otherwise run in `devcontainer exec --workspace-folder <cwd> -- …`, so a worktree
+ * whose container the launcher started runs its agent INSIDE it rather than on the host. No
+ * `binEnvVar` on that branch, for the same reason the custom-agent branch below has none: there is
+ * no env override that would fix an unrunnable `devcontainer` CLI, so the child reports its own
+ * failure rather than this pre-flight guessing at one.
  */
 function sessionProgram(
   claudeBin: string,
@@ -187,13 +194,26 @@ function sessionProgram(
   customAgentId: string | undefined,
   resume: string | null,
   unset: readonly string[],
+  devcontainer: { cwd: string; enabled: boolean },
 ): { file: string; prefixArgs: string[]; spawnEnv: PtySpawnEnv; note: string | null } {
   // `resume` is non-null exactly when this is a continuation (the caller passes it only for a
   // resumable transcript), which is the same signal effectiveChoice takes as `resuming`.
   const customAgent = resolveCustomAgent(sessionId, customAgentId, resume !== null);
-  const note = [customAgent ? `via ${customAgent.id}` : null, resume ? `resume ${resume}` : null].filter(Boolean).join(" ") || null;
+  const note =
+    [customAgent ? `via ${customAgent.id}` : null, devcontainer.enabled ? "in devcontainer" : null, resume ? `resume ${resume}` : null]
+      .filter(Boolean)
+      .join(" ") || null;
   const env = { unset, env: guiMcpEnv(sessionId, PORT) };
   const launch = customAgent ? customAgentLaunch(customAgent.command) : null;
+  const inner: { file: string; prefixArgs: string[] } = launch ?? { file: claudeBin, prefixArgs: [] };
+  if (devcontainer.enabled) {
+    return {
+      file: "devcontainer",
+      prefixArgs: ["exec", "--workspace-folder", devcontainer.cwd, "--mount-git-worktree-common-dir", inner.file, ...inner.prefixArgs],
+      spawnEnv: env,
+      note,
+    };
+  }
   if (!launch) return { file: claudeBin, prefixArgs: [], spawnEnv: { ...env, binEnvVar: claudeAdapter.binEnvVar }, note };
   return { file: launch.file, prefixArgs: launch.prefixArgs, spawnEnv: env, note };
 }
@@ -283,7 +303,10 @@ export function createClaudeSpawner(deps: SpawnDeps) {
 
     function spawnEntry(): PtyEntry {
       recordCapabilitiesForThisSpawn();
-      const program = sessionProgram(deps.claudeBin, sessionId, customAgentId, canResume ? resume : null, resolved.unset);
+      const program = sessionProgram(deps.claudeBin, sessionId, customAgentId, canResume ? resume : null, resolved.unset, {
+        cwd,
+        enabled: dir.devcontainer === true,
+      });
       const { term, tmux, reattached } = ptySpawn(sessionId, program.file, [...program.prefixArgs, ...args], cwd, true, program.spawnEnv);
       console.log(ptyStartLine({ agent: "claude", pid: term.pid, cwd, tmux, reattached, sessionId, note: program.note }));
       return { term, ws, buffer: "", cwd, tmux, active: false, agent: "claude" }; // "claude" whatever wrapper started it — see sessionProgram
