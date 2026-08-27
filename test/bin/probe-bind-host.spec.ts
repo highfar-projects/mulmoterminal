@@ -248,7 +248,20 @@ describe("the companions a bound address implies", () => {
       });
     expect(await bound("0:0:0:0:0:0:0:0")).toBe("::");
     expect(await bound("0:0:0:0:0:0:0:1")).toBe("::1");
-    expect(await bound("127.1")).toBe("127.0.0.1");
+  });
+
+  // `127.1` normalises to 127.0.0.1 on macOS and Linux and is REJECTED on Windows —
+  // `getaddrinfo ENOTFOUND 127.1`, which is how CI caught this assertion sitting in the block
+  // above as though it were universal. It is a BSD shorthand, not a portable address.
+  //
+  // The production path does not care, and that is worth stating rather than assuming: an
+  // ENOTFOUND is not EADDRINUSE, so probeFailureIsPortInUse says "the probe could not ask",
+  // isPortFree returns free with a null address, no companions are checked, and the server binds
+  // for real and reports the actual errno. Which is the designed behaviour for an address this
+  // machine cannot resolve.
+  it("is not asked to normalise a spelling the platform rejects — that path reports instead", () => {
+    expect(probeFailureIsPortInUse({ code: "ENOTFOUND" })).toBe(false);
+    expect(companionHostsFor("127.0.0.1")).toEqual([]);
   });
 });
 

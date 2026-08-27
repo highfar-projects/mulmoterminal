@@ -609,8 +609,15 @@ listen(0, "0:0:0:0:0:0:0:0") -> {"address":"::"}
 listen(0, "::0")             -> {"address":"::"}
 listen(0, "localhost")       -> {"address":"::1"}
 listen(0, "0:0:0:0:0:0:0:1") -> {"address":"::1"}
-listen(0, "127.1")           -> {"address":"127.0.0.1"}
+listen(0, "127.1")           -> {"address":"127.0.0.1"}   ← macOS/Linux のみ。Windows は拒否
 ```
+
+> **`127.1` は BSD の短縮形で、Windows では `getaddrinfo ENOTFOUND 127.1` になる。** これを
+> 普遍の前提としてテストに書いてしまい、CI の `test_windows` が捕まえた（iter-10）。
+> **プロダクションは無関係**: ENOTFOUND は EADDRINUSE ではないので
+> `probeFailureIsPortInUse` が「probe は問えなかった」と答え、`isPortFree` は address=null で
+> 返り、companion は調べられず、サーバが本当に bind して本当の errno を報告する ——
+> 解決できないアドレスに対する設計どおりの挙動。
 
 **カーネルの入力語彙は無限だが、出力語彙は有限で固定。** だから正規化後のリテラル比較は
 列挙ではない。`probeHostsFor(bindHost)` を `companionHostsFor(boundAddress)` に置き換えた:
@@ -630,7 +637,7 @@ listen(0, "127.1")           -> {"address":"127.0.0.1"}
 |---|---|
 | `0:0:0:0:0:0:0:0` | `Port 34770 is already in use.` |
 | `localhost` | 同上 |
-| `127.1` | 同上 |
+| `127.1` | 同上（**macOS/Linux のみ**。Windows は住所として受け付けない —— 上の注記） |
 
 過剰検知なし（stranger 無しなら `0:0:0:0:0:0:0:0` → `http://[::1]` 200、`localhost` → 同、
 既定 → `http://127.0.0.1` 200）。LAN bind（`192.168.11.12`）は 127.0.0.1 が塞がっていても
