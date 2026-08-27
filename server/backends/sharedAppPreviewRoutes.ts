@@ -102,6 +102,18 @@ function submissionOf(body: unknown): PreviewSubmission | null {
   return { cid: body.cid, values: Object.fromEntries(entries) };
 }
 
+/** A correction's values, or null when the request does not describe a set of them.
+ *
+ *  Its own function rather than `submissionOf`'s inline filter, because the two differ in one place
+ *  that matters: an empty map is a legitimate correction message (answered `nothing-to-correct` by
+ *  name) and never a legitimate submission. */
+function correctionValues(raw: unknown): Record<string, string> | null {
+  if (!isRecord(raw)) return null;
+  const entries = Object.entries(raw);
+  if (!entries.every((entry): entry is [string, string] => typeof entry[1] === "string")) return null;
+  return Object.fromEntries(entries);
+}
+
 /** The intent a member's page asked for, narrowed off the request.
  *
  *  SHAPE ONLY. Whether the move is legal, whether this reader may make it and whether the record is
@@ -111,13 +123,24 @@ function intentOf(body: unknown): PreviewIntent | null {
   if (!isRecord(body) || !isRecord(body.page)) return null;
   const { id, audience } = body.page;
   if (typeof id !== "string" || (audience !== "public" && audience !== "member" && audience !== "roster")) return null;
-  if (body.kind !== "transition" && body.kind !== "assign" && body.kind !== "withdraw") return null;
+  if (body.kind !== "transition" && body.kind !== "assign" && body.kind !== "withdraw" && body.kind !== "correct") return null;
   if (typeof body.cid !== "string" || typeof body.itemId !== "string") return null;
   // A withdrawal names no destination, and one arriving with a `to` is not a withdrawal with
   // decoration — it is an ask this host cannot describe, so it is not read as one.
   if (body.kind === "withdraw") {
     if (body.to !== undefined) return null;
     return { page: { id, audience }, kind: body.kind, cid: body.cid, itemId: body.itemId };
+  }
+  // A correction names none either, and carries values instead. STRINGS ONLY, and the whole message
+  // is refused rather than trimmed — `submissionOf` above draws the same line for the same reason:
+  // the rules compare stored values without coercing, so writing the string half of a mixed payload
+  // produces a record that differs BY TYPE from the identical-looking one the published page
+  // writes. An EMPTY map still passes: `nothing-to-correct` is a refusal with a name, and the page
+  // is holding a promise while it happens.
+  if (body.kind === "correct") {
+    const values = correctionValues(body.values);
+    if (body.to !== undefined || values === null) return null;
+    return { page: { id, audience }, kind: body.kind, cid: body.cid, itemId: body.itemId, values };
   }
   if (typeof body.to !== "string") return null;
   return { page: { id, audience }, kind: body.kind, cid: body.cid, itemId: body.itemId, to: body.to };

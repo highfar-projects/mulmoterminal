@@ -52,6 +52,22 @@ async function get(url: string): Promise<{ status: number; body: unknown }> {
   return { status: res.status, body: await res.json() };
 }
 
+/** The intent route, called the way the pane calls it: one JSON body, one answer. */
+async function postIntent(body: unknown): Promise<{ status: number; body: unknown }> {
+  const { mountSharedAppPreviewRoutes } = await import("../../../server/backends/sharedAppPreviewRoutes.js");
+  const server = express();
+  server.use(express.json());
+  mountSharedAppPreviewRoutes(server);
+  const res = await appRequest(server)(`/api/shared-app/preview/intent?cwd=${encodeURIComponent(root)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return { status: res.status, body: await res.json() };
+}
+
+const CORRECTION = { page: { id: "desk", audience: "member" }, kind: "correct", cid: "posts", itemId: "hello", values: { title: "again" } };
+
 describe("shared app preview routes", () => {
   beforeAll(() => {
     app = express();
@@ -132,6 +148,49 @@ describe("shared app preview routes", () => {
     // The guard answered and the handler returned without touching the response.
     expect(preview).not.toHaveBeenCalled();
     expect(result.status).toBe(400);
+  });
+
+  // --- what the intent route will read off a request ---------------------------------------------
+  //
+  // THE THIRD NARROWING OF THE SAME MESSAGE, and the one that had no test. The browser narrows an
+  // ask before it posts (`askedIntent`), this route narrows the request, and the package narrows it
+  // again before judging (`readIntentMessage`). When `correct` was added, the first and the third
+  // learned it and this one did not — so a correction the page sent and the parent would have
+  // performed came back `not-an-intent`, from the layer nobody was looking at. Every kind belongs
+  // here, or the route is a filter on the vocabulary rather than a check of the shape.
+
+  it("reads a correction, values and all", async () => {
+    const result = await postIntent(CORRECTION);
+
+    // Past the narrowing: what comes back is the BACKEND's answer about a directory with no app,
+    // not this route's refusal to read the message. `not-an-intent` here would be the bug.
+    expect(result.status).toBe(200);
+    expect(result.body).not.toEqual({ ok: false, error: "not-an-intent" });
+  });
+
+  it("refuses a correction whose values are not all strings", async () => {
+    // The rules compare stored values without coercing, so writing the string half of a mixed
+    // payload produces a record that differs BY TYPE from the identical-looking one the published
+    // page writes. Refused whole rather than trimmed, exactly as a submission is.
+    const result = await postIntent({ ...CORRECTION, values: { title: "ok", views: 12 } });
+
+    expect(result.body).toEqual({ ok: false, error: "not-an-intent" });
+  });
+
+  it("carries an EMPTY correction through to be refused BY NAME", async () => {
+    // The one place this differs from a submission: a page that names no fields is holding a
+    // promise, and `nothing-to-correct` is an answer where a dropped message is a dead button.
+    const result = await postIntent({ ...CORRECTION, values: {} });
+
+    expect(result.body).not.toEqual({ ok: false, error: "not-an-intent" });
+  });
+
+  it("refuses a correction that also names a destination", async () => {
+    // A correction names fields, not a `to`. One arriving with both is an ask this host cannot
+    // describe — the same line the withdrawal above draws.
+    const result = await postIntent({ ...CORRECTION, to: "archived" });
+
+    expect(result.body).toEqual({ ok: false, error: "not-an-intent" });
   });
 
   it("mounts on an express app without touching anything else", async () => {
