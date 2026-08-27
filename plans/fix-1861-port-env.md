@@ -1,5 +1,15 @@
 # fix(cli): PORT を launcher が読み、server へは argv で渡す (#1861 / #1857)
 
+> **この文書の読み方 —— 時系列のログであって、現状の仕様書ではない。**
+>
+> 設計時の判断・実測・レビュー対応を、起きた順に記録している。**節の見出しに「（設計時）」
+> と付いたものは、その時点のコードについての記述**で、以後の修正で当てはまらなくなっている
+> ことがある（当てはまらなくなった経緯も、消さずに後ろの節に書いてある）。
+>
+> **現在のコードの仕様はコードが唯一の情報源。** この文書のコード片や関数シグネチャを、
+> 現在のものとして引用しないこと。codex-cross-review round 3・4 が拾ったのは、まさにこれを
+> 現在の主張として読める形で置いていたため。
+
 ## 症状
 
 - `PORT=34601 npx mulmoterminal` が **34567 で起動する**。`--port` だけが効く (#1861)
@@ -9,9 +19,14 @@
 
 両方とも `bin/cli-args.js` の同じ 1 行が発生源。
 
-## 再現（ユニットレベル、2026-08-27 実測）
+## 再現（設計時、修正前のコードに対する 2026-08-27 の実測）
+
+**下の 2 行は修正前のシグネチャで、現在のツリーでは動かない**（現在は
+`parsePortArg(args, env, defaultPort)` と `serverSpawnEnv(env, cwd)`）。バグが実在したことの
+記録として残してある。
 
 ```
+# 修正前（origin/main 51067ecb）の signature に対して
 parsePortArg([], 34567)                        -> {"port":34567,"explicit":false}   # env 完全無視
 serverSpawnEnv({PORT:'34601'}, 34567, '/x')    -> {"PORT":"34567","CLAUDE_CWD":"/x"} # 上書き
 ```
@@ -29,7 +44,7 @@ PTY サニタイザで落とす案も採らない。`sanitizePtyEnv` は **ユ�
 
 → **argv で渡す。** argv は PTY に継承されないので leak 面がゼロになる。
 
-## 変更
+## 変更（設計時の計画。実際に入ったものは下の「code-review 対応」まで読むこと）
 
 1. `parsePortArg(args, env, defaultPort)` — 優先順位 **`--port` > `env.PORT` > default**
    （`bin/room.js:54` が既に持っている順序に合わせる）
@@ -40,7 +55,9 @@ PTY サニタイザで落とす案も採らない。`sanitizePtyEnv` は **ユ�
 2. `serverSpawnEnv(env, cwd)` — `PORT` を足すのをやめる（#1857 の発生源）。
    ユーザー自身の `PORT` はそのまま通す
 3. `serverNodeArgs(serverEntry, launchDir, port)` — `--port <n>` を script 引数として付ける
-4. `server/config/env.ts` — `portFromArgv(process.argv) ?? process.env.PORT ?? 34567`
+4. `server/config/env.ts` — `ARGV_PORT ?? (process.env.PORT || 34567)`、`ARGV_PORT = portFromArgv(process.argv)`
+   - **`??` ではなく `||` なのは意図的。** `PORT=""` は `??` だと空文字が通ってしまい、
+     `Number("")` = 0 でランダムポートに bind する。空文字は「値なし」でなければならない
    - launcher 経由: argv が勝つ
    - `yarn dev` 経由: `PORT`（`vite.config.ts:9` が同じ変数でプロキシ先を決めているので、
      この経路は従来どおりでなければならない）
@@ -57,7 +74,7 @@ PTY サニタイザで落とす案も採らない。`sanitizePtyEnv` は **ユ�
 > だったため、触らなければ room が別インスタンスに話しかける。code-review が見つけた。
 > 実際の変更は下の「code-review 対応」節の 1 番。
 
-## 検証
+## 検証（設計時に立てた計画。実施結果は下の実機検証・再検証の節）
 
 - ユニット: `parsePortArg` の優先順位・不正値・explicit、`serverSpawnEnv` に `PORT` が無いこと、
   `serverNodeArgs` が `--port` を entry の **後ろ** に置くこと、`portFromArgv` の純関数テスト
@@ -85,9 +102,15 @@ PTY サニタイザで落とす案も採らない。`sanitizePtyEnv` は **ユ�
 | `PORT=abc` | `Invalid PORT value: "abc" (expected integer 1..65535)`、exit 1、サーバは起動しない |
 | 実 PTY（`/ws/run`）の env | `RAWPORT=[]` — 生の `PORT` が入らないことを実測（#1857） |
 
-`MULMOTERMINAL_PORT` がエージェントセルに届くことは直接は測れていない（`ps eww` が実行できず）。
-`spawn-claude.ts:195` が `guiMcpEnv(sessionId, PORT)` に渡すのは `server/config/env.ts` の同じ定数で、
-その定数が正しいことは 34611/34612 に bind したこと自体が示している。
+`MULMOTERMINAL_PORT` について、**測れた範囲と測れていない範囲**（後続の追試で範囲が変わったので、
+ここに最新の切り分けを置く）:
+
+- **測れた**: シェル PTY（`/ws/run`）に `MTPORT=[34614]` / `[34615]` が届くこと。tmux 有り・無しの
+  両方で実測（下の 2 節）。これは `spawnEnvFor` 経由で、**全 PTY 共通の経路**
+- **測れていない**: エージェントセル（claude 等）の env を直接読むこと。`ps eww` が
+  このセッションでは実行できないため。ただしエージェントセルは上の共通経路に加えて
+  `spawn-claude.ts:195` の `guiMcpEnv(sessionId, PORT)` が同じ名前に同じ値を重ねるだけで、
+  その `PORT` は `server/config/env.ts` の同じ定数 —— 正しさは 34611/34612 に bind したこと自体が示す
 
 ## tmux 経路の検証（2026-08-27 追試）
 
