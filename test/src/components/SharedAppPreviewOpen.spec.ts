@@ -171,6 +171,20 @@ describe("opening one of the app's own articles", () => {
     expect(answers).toContainEqual(expect.objectContaining({ requestId: "r-none", opened: false, reason: "unknown-collection" }));
   });
 
+  it("does not offer it on a MEMBER page, which production never would", async () => {
+    // The article page is published under the PUBLIC entrance alone. A member page's own parent in
+    // production is handed no article declaration and refuses the ask — so a pane that answered
+    // "the published page would go there" here would be validating a link that does not exist.
+    vi.stubGlobal("fetch", answering(magazine({ pages: [{ id: "desk", html: PAGE, audience: "member", viewer: { me: "owner@x.jp", can: {} } }] })));
+    const wrapper = await mountPreview();
+    const { port, answers } = await connect(wrapper);
+
+    port.postMessage(open({ requestId: "r-desk" }));
+    await until(answered(answers, "r-desk"), "an answer for r-desk");
+
+    expect(answers).toContainEqual(expect.objectContaining({ requestId: "r-desk", opened: false, reason: "unknown-collection" }));
+  });
+
   it("refuses an id that is not a single path segment, before it can reach a URL", async () => {
     // The grammar is the defence that does not depend on a host remembering to encode. Pinned here
     // as well as in the package because this is the path a real page takes.

@@ -183,6 +183,26 @@ const recover = () => window.setTimeout(() => void load(), 0);
  *  pinned without a frame. */
 const sendIntent = createIntentSender({ page: () => page.value, url: () => writeUrl("intent"), remember, refresh, recover });
 
+/** The declaration the PARENT judges an ask against: what may be submitted, and the one collection
+ *  `view.open` may name.
+ *
+ *  THE REAL DECLARATION, never an empty map. An empty one does not switch the check off — it makes
+ *  the parent refuse every submission with `unknown-collection`, which reads as "the cid your page
+ *  submits to is not declared" about a declaration that is correct. That shipped, and it sent an
+ *  author debugging the wrong repository: the page was fine, the app was fine, and the preview was
+ *  the only thing wrong.
+ *
+ *  `articleCid` ONLY WHILE A PUBLIC PAGE IS ON SCREEN, and that is not tidiness. The article page
+ *  is published under the public entrance alone; a member page's own parent in production
+ *  (mulmoserver's `AppViewFrame`) is handed no article declaration and refuses the ask. Offered
+ *  here on every page, the pane would answer a `/m/` page's `view.open` with "the published page
+ *  would go there" — which is false, and false in the direction a preview exists to prevent. */
+const viewConfig = () => {
+  if (payload.value === null) return null;
+  const cid = page.value?.audience === "public" ? payload.value.articleCid : undefined;
+  return { submit: payload.value.submit, ...(cid === undefined ? {} : { articleCid: cid }) };
+};
+
 /** ONE PARENT, for whichever page is on screen.
  *
  *  There were two — the package's public bridge for `/a/`-style pages and its member bridge for the
@@ -260,16 +280,7 @@ const parent = viewParent(
         note: `the preview could not answer request ${requestId ?? "(none)"}: ${error instanceof Error ? error.message : String(error)}`,
       }),
   },
-  // The REAL declaration, never an empty map.
-  //
-  // An empty one does not switch the check off — it makes the parent refuse every submission with
-  // `unknown-collection`, which reads as "the cid your page submits to is not declared" about a
-  // declaration that is correct. That shipped, and it sent an author debugging the wrong
-  // repository: the page was fine, the app was fine, and the preview was the only thing wrong.
-  () =>
-    payload.value === null
-      ? null
-      : { submit: payload.value.submit, ...(payload.value.articleCid === undefined ? {} : { articleCid: payload.value.articleCid }) },
+  () => viewConfig(),
   () => nonce.value,
   cells,
 );
