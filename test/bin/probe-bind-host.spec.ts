@@ -62,10 +62,11 @@ describe("the launcher probes the address the server binds", () => {
     // Matched as an EXPRESSION, not a layout: the first version of this guard keyed on
     // `waitUntilReady(port,` and went red the moment prettier wrapped the call across lines. A
     // guard that a formatter can break is a guard that gets deleted rather than fixed.
-    // Was `launcherReachHost(BIND_HOST)` until the launcher stopped classifying BIND_HOST and
-    // started polling the address the CHILD reports. What must never come back is the poll being
-    // left on its hardcoded loopback default, so that is what this asserts.
-    expect(launcher, "the readiness poll must be given a host, not left on its loopback default").toMatch(/host:\s*launcherReachHost\(/);
+    // Was `launcherReachHost(BIND_HOST)`, then `launcherReachHost(reachHost)`, and is now the
+    // concrete host itself because callers resolve before calling. What must never come back is
+    // the poll left on its hardcoded loopback default, so THAT is what this asserts — the shape
+    // the guard survives, rather than whichever spelling the call site happens to have today.
+    expect(launcher, "the readiness poll must be given a host, not left on its loopback default").toMatch(/host:\s*reachHost/);
   });
 });
 
@@ -106,6 +107,15 @@ describe("the address the launcher uses to reach the server it started", () => {
     expect(launcherReachHost("127.0.0.1")).toBe("127.0.0.1");
   });
 
+  // THE INVERSION, and the assertion that makes it fail closed. Four rounds each found a
+  // different spelling a guess got wrong, so the rule stopped enumerating bad forms and now
+  // permits only what the platform itself calls an IP. Everything else is null — REPORTED, not
+  // guessed at. A future spelling nobody imagined arrives as null, which is a missing banner and
+  // a sentence explaining it, rather than a confident poll of a stranger.
+  it.each(["localhost", "foo.local", "127.1", "127.000.000.001", "", "LOCALHOST"])("cannot know what %o resolves to, and says so with null", (host) => {
+    expect(launcherReachHost(host)).toBeNull();
+  });
+
   // A wildcard is not an address you connect to; it maps to the loopback its OWN family serves.
   it("maps the v4 wildcard to v4 loopback", () => {
     expect(launcherReachHost("0.0.0.0")).toBe("127.0.0.1");
@@ -123,25 +133,33 @@ describe("the address the launcher uses to reach the server it started", () => {
   // `::1` and `127.0.0.1`, so a browser can open the very process the poll avoided. Flagged by
   // CodeRabbit as a Major on the first head it reviewed after the readiness fix.
   describe("and the URL it prints for that address", () => {
+    // launcherUrl now takes the CONCRETE address launcherReachHost produced, so these compose the
+    // two the way the launcher does.
+    const urlFor = (bindHost: string) => {
+      const reach = launcherReachHost(bindHost);
+      expect(reach, `launcherReachHost(${bindHost}) should be nameable`).not.toBeNull();
+      return launcherUrl(String(reach), 34567);
+    };
+
     it("never says localhost, whatever the bind", () => {
-      ["127.0.0.1", "0.0.0.0", "::", "192.168.11.12", "fd00::1"].forEach((host) => expect(launcherUrl(host, 34567)).not.toContain("localhost"));
+      ["127.0.0.1", "0.0.0.0", "::", "192.168.11.12", "fd00::1"].forEach((host) => expect(urlFor(host)).not.toContain("localhost"));
     });
 
     it("names v4 loopback for the default and for the v4 wildcard", () => {
-      ["127.0.0.1", "0.0.0.0"].forEach((host) => expect(new URL(launcherUrl(host, 34567)).hostname).toBe("127.0.0.1"));
+      ["127.0.0.1", "0.0.0.0"].forEach((host) => expect(new URL(urlFor(host)).hostname).toBe("127.0.0.1"));
     });
 
     // The one that matters most: `::` polls `::1`, so the URL has to say `::1` too, or the two
     // disagree about which process was checked.
     it("names v6 loopback for the v6 wildcard, matching what the poll checked", () => {
-      expect(new URL(launcherUrl("::", 34567)).hostname).toBe("[::1]");
+      expect(new URL(urlFor("::")).hostname).toBe("[::1]");
     });
 
     // Asserted through URL rather than against a literal string: `http://<a LAN address>` trips
     // sonarjs/no-clear-text-protocols, and this says the thing that matters anyway — which host
     // and port the launcher will send the user to.
     it("names the real address when localhost would not reach it", () => {
-      const url = new URL(launcherUrl("192.168.11.12", 34567));
+      const url = new URL(urlFor("192.168.11.12"));
       expect(url.hostname).toBe("192.168.11.12");
       expect(url.port).toBe("34567");
       expect(url.protocol).toBe("http:");
@@ -188,15 +206,24 @@ describe("the launcher asks the child rather than classifying BIND_HOST", () => 
     expect(launcher, "the server's { type: 'listening' } message needs a channel to arrive on").toMatch(/stdio:\s*\[[^\]]*"ipc"[^\]]*\]/);
   });
 
-  it("starts the readiness check from the reported address", () => {
-    expect(launcher, "readiness must be gated on the child's own message, not on a BIND_HOST guess").toMatch(
-      /msg\.type === "listening"[\s\S]{0,120}beginReady\(msg\.address\)/,
-    );
+  // Two independent single-expression assertions, deliberately NOT one regex spanning both. A
+  // multi-line shape has been broken twice in this loop — once by prettier rewrapping the call,
+  // once by a refactor renaming the argument — and each time the guard went red for a reason that
+  // was not a defect. A guard that keeps crying wolf is a guard someone deletes.
+  it("resolves the address the child reported, rather than trusting the string", () => {
+    expect(launcher).toMatch(/launcherReachHost\(msg\.address\)/);
   });
 
-  // The guess survives only as a fallback, so a server that reports nothing still gets a banner.
-  it("keeps a BIND_HOST fallback so a silent server is not left without a banner", () => {
-    expect(launcher).toMatch(/beginReady\(BIND_HOST\)/);
+  it("starts the readiness check from that resolved address", () => {
+    expect(launcher).toMatch(/beginReady\(reported\)/);
+  });
+
+  // The guess survives only as a fallback, and ONLY for an address that can be named without
+  // asking: `beginReady(guessed)` where `guessed = launcherReachHost(BIND_HOST)`. Passing
+  // BIND_HOST straight through is what re-opened the hole on a slow boot (round 5, P1).
+  it("falls back only on an address it can name, never on the raw BIND_HOST", () => {
+    expect(launcher, "the fallback must resolve BIND_HOST through launcherReachHost first").toMatch(/const guessed = launcherReachHost\(BIND_HOST\)/);
+    expect(launcher, "a raw beginReady(BIND_HOST) is the round-5 P1 coming back").not.toMatch(/beginReady\(BIND_HOST\)/);
   });
 });
 

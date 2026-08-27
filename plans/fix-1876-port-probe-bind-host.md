@@ -386,3 +386,68 @@ P1 のシナリオを実機で確認（stranger が 127.0.0.1:34695 を保持、
 break-verify: `"ipc"` を stdio から外すと 1 red、`beginReady(msg.address)` を
 `beginReady(BIND_HOST)` に戻すと 1 red。復元は byte-identical。
 
+### iter-5 — 反転を最後までやる（**4 件目**）と、チェックポイント
+
+CI Codex の P1、iter-4 の修正そのものに対して:
+
+> The 20-second fallback still reinstates the `localhost` false-ready race this IPC path fixes.
+
+**正しい。** ルールを反転させておきながら、**古い列挙をフォールバックとして残した**ので、
+そこから同じ穴が開いていた。起動が 20 秒を超えると `beginReady(BIND_HOST)` が走り、
+`launcherReachHost("localhost")` は未解決のまま返していた。
+
+これが同じルールへの **4 件目**。反転を最後までやる ——
+**名指しできるものだけを許可し、それ以外は null を返して「分からない」と報告する**:
+
+```js
+export function launcherReachHost(bindHost) {
+  if (bindHost === "0.0.0.0") return "127.0.0.1";
+  if (bindHost === "::") return "::1";
+  return isIP(bindHost) ? bindHost : null;   // 名前は kernel に訊く。ここでは推測しない
+}
+```
+
+`net.isIP` を使うのは、これが**列挙ではない**から。`localhost` / `foo.local` / `127.1` /
+`127.000.000.001` / `""` はすべて null になる —— 綴りを 1 つずつ潰すのではなく、
+プラットフォーム自身が IP と呼ぶものだけを通す。**fail closed**: 誰も想像しなかった
+将来の綴りは「バナーが出ずに理由が 1 行出る」であって、「見知らぬプロセスを自信満々に
+poll する」ではない。
+
+フォールバックは `launcherReachHost(BIND_HOST)` が非 null のときだけ走る。名前のときは
+走らず、代わりにこう出る:
+
+```text
+Started, but localhost is a name and the server has not reported which address it bound
+— not guessing. It may still be starting.
+```
+
+実機確認（stranger が 127.0.0.1:34700 を保持、`MULMOTERMINAL_HOST=localhost`）:
+バナー `http://[::1]:34700` → 200。既定構成は `http://127.0.0.1:34701` → 200。
+
+### iteration 5 のチェックポイント（PR 全体の読み直し）
+
+- **PR は当初の主張どおりか** —— 部分的に否。当初は「probe の host」だけだったが、いまは
+  launcher の「このポートはどのアドレスか」を問う**全 3 箇所**（probe / readiness / URL）に
+  及ぶ。**PR 本文が実態から乖離していたので更新した。**
+- **重心は動いたか** —— 動いた。元の修正 282 行に対しレビュー由来 603 行。ただし 283 行は
+  この plan（ループの記録）、186 行はテストで、プロダクションコードは 166 行
+- **分割すべきか** —— しない。3 箇所は**1 つの不変条件**の 3 つの現れで、どれか 1 つだけ
+  revert すると「ガードは効くがバナーは嘘をつく」かその逆になる。まとめて正しいか
+  まとめて間違っているかのどちらか
+- **最大の残存リスク** —— IPC チャネルは**全 npx ユーザーが通る起動経路**に足した新しい配線。
+  実機で確認済み: launcher に SIGTERM → launcher・子とも終了、ポート解放（`000`）
+- **レビュー由来のコードで自分が作ったミス 3 件**（すべてこのループ中に自分で潰した）:
+  `URL.hostname` が括弧なし IPv6 を黙って無視する / source-guard を書式依存で書いて
+  prettier に壊された / それを直した guard をさらにリファクタで壊した。
+  **guard は単一トークンの式で照合する** —— 複数行の形は 2 回壊れた
+
+break-verify（iter-5 追加分。各回 `diff -q` で byte-identical 復元を確認）:
+
+| ミューテーション | 結果 |
+|---|---|
+| フォールバックが生の `BIND_HOST` を推測する | 2 red |
+| reach host が任意の文字列を通す（反転前のルール） | 7 red |
+| `::` を v4 loopback にマップ | 3 red |
+| 報告された文字列を解決せずに信じる | 1 red |
+| 解決した値でなく生の文字列から readiness を開始 | 1 red |
+

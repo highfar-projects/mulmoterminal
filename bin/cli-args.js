@@ -9,6 +9,7 @@
 //
 // These return a decision; the caller prints and exits. Nothing here reads argv, the
 // environment or the filesystem.
+import { isIP } from "node:net";
 import { join } from "node:path";
 
 /** A port a user typed, in either of the two places they can type one. `parseInt` stops at the
@@ -87,42 +88,46 @@ export function probeFailureIsPortInUse(err) {
 }
 
 /**
- * The address the LAUNCHER should connect to, to reach the server it just started.
+ * The concrete address the LAUNCHER should connect to, or **null when it cannot know**.
  *
- * This is the third place in the launcher that asks "which address does this port mean", after
- * the two probes — and it was the last one still answering with a hardcoded `127.0.0.1`. That is
- * #1876's mistake in the readiness check: with `MULMOTERMINAL_HOST` set to a specific address and
- * a stranger holding loopback, the poll got the STRANGER's 200 and printed
- * "MulmoTerminal is ready" over a URL serving somebody else's app. Measured end to end.
+ * This is the PERMITTED set, not a list of bad cases, and it got there the hard way: four review
+ * rounds each found a different spelling of `BIND_HOST` that a guess got wrong — the poll
+ * ignoring it, the URL turning `::1` back into `localhost`, `localhost` passing through
+ * unresolved, and then the fallback re-opening that same hole. A host string has no last case
+ * (`127.1`, `127.000.000.001`, a hosts file pointing `localhost` somewhere else), so the rule
+ * is inverted: an address the platform itself calls an IP is usable, the two wildcards map to
+ * the loopback of their own family, and **everything else is null** — reported rather than
+ * guessed at.
  *
- * A wildcard is not an address you connect to, so it maps to the loopback its own family serves.
- * `::` maps to `::1` rather than `127.0.0.1` on purpose: a v4 socket on 127.0.0.1 is MORE
- * SPECIFIC than our dual-stack bind and wins the connection, which is the exact case above.
+ * `::` maps to `::1` and not to `127.0.0.1` on purpose: a v4 socket on 127.0.0.1 is MORE
+ * SPECIFIC than a dual-stack bind and wins the connection, so polling v4 could be answered by
+ * the very stranger this exists to avoid.
+ *
+ * The authority for a name is the kernel, not this function, and the launcher asks it the only
+ * way that is exact — the child reports what `server.address()` says it bound. See
+ * server/infra/loopback.ts, which had already written the argument down for its own question.
  */
 export function launcherReachHost(bindHost) {
   if (bindHost === "0.0.0.0") return "127.0.0.1";
   if (bindHost === "::") return "::1";
-  return bindHost;
+  return isIP(bindHost) ? bindHost : null;
 }
 
-/** What to PRINT for that address — the CONCRETE one, never `localhost`.
+/** What to PRINT for a concrete address — never `localhost`.
  *
  *  It did say `localhost` for the loopback cases, because that is friendlier. CodeRabbit caught
  *  what that throws away: `launcherReachHost` picks `::1` precisely so an IPv4 listener cannot
- *  answer for us, and printing `localhost` hands the choice straight back — measured on this
- *  machine, `localhost` resolves to BOTH `::1` and `127.0.0.1`, so the browser may open the very
- *  process the poll was written to avoid. A URL the user clicks has to name the address that was
- *  checked.
+ *  answer for us, and printing `localhost` hands the choice straight back — measured, `localhost`
+ *  resolves to BOTH `::1` and `127.0.0.1`, so the browser may open the very process the poll was
+ *  written to avoid. A URL the user clicks has to name the address that was checked.
  *
- *  Built through `URL` rather than by concatenation, so the platform does the escaping: an IPv6
- *  literal has to be bracketed or `http://::1:34567` is not a URL at all. The brackets go on
- *  BEFORE the assignment because the `hostname` setter silently REJECTS an unbracketed v6
- *  literal — measured: it leaves the previous host in place, so the launcher would have printed
- *  the base host and sent the user somewhere else entirely. */
-export function launcherUrl(bindHost, port) {
-  const host = launcherReachHost(bindHost);
+ *  Built through `URL` so the platform does the escaping: an IPv6 literal has to be bracketed or
+ *  `http://::1:34567` is not a URL at all. The brackets go on BEFORE the assignment because the
+ *  `hostname` setter silently REJECTS an unbracketed v6 literal — measured: it leaves the
+ *  previous host in place, so the launcher would have printed the base host instead. */
+export function launcherUrl(reachHost, port) {
   const url = new URL(`http://localhost:${port}`);
-  url.hostname = host.includes(":") ? `[${host}]` : host;
+  url.hostname = reachHost.includes(":") ? `[${reachHost}]` : reachHost;
   return url.origin;
 }
 

@@ -393,6 +393,7 @@ function runServer(port, noOpen, cwd, onChild) {
     // starts on a timer so such a server is not left without a banner.
     let readyStarted = false;
     let cancelReady = () => {};
+    // Takes a CONCRETE address — callers resolve first, and a caller that cannot does not call.
     const beginReady = (reachHost) => {
       if (readyStarted) return;
       readyStarted = true;
@@ -411,13 +412,25 @@ function runServer(port, noOpen, cwd, onChild) {
             log(`Open your browser: ${url}`);
           }
         },
-        { host: launcherReachHost(reachHost) },
+        { host: reachHost },
       );
     };
     server.on("message", (msg) => {
-      if (isRecordLike(msg) && msg.type === "listening" && typeof msg.address === "string") beginReady(msg.address);
+      if (!isRecordLike(msg) || msg.type !== "listening" || typeof msg.address !== "string") return;
+      const reported = launcherReachHost(msg.address);
+      if (reported) beginReady(reported);
     });
-    const fallbackReady = setTimeout(() => beginReady(BIND_HOST), REPORTED_ADDRESS_GRACE_MS);
+    // The fallback runs ONLY on an address we can name without asking anyone. Guessing from a
+    // NAME is what the child's report exists to replace, and a fallback that guessed anyway just
+    // re-opened the hole on a slow boot (round 5, P1): with MULMOTERMINAL_HOST=localhost the
+    // child can bind `::1` while a stranger owns 127.0.0.1, and an unresolved `localhost` poll
+    // reaches the stranger. So a name gets no fallback — it gets a sentence saying why.
+    const guessed = launcherReachHost(BIND_HOST);
+    const fallbackReady = setTimeout(() => {
+      if (guessed) return beginReady(guessed);
+      if (!readyStarted)
+        log(`Started, but ${BIND_HOST} is a name and the server has not reported which address it bound — not guessing. It may still be starting.`);
+    }, REPORTED_ADDRESS_GRACE_MS);
     fallbackReady.unref?.();
 
     // `close`, not `exit`: it fires only once the piped stderr has fully drained, so the
