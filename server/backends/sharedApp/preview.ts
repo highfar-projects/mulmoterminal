@@ -550,6 +550,11 @@ export async function previewSharedApp(root: string, opts: SharedAppOptions = {}
     ok: true,
     aid,
     submit: submitDeclarations(face.config),
+    // WHICH collection the platform draws as articles, resolved by the projection rather than
+    // re-derived here: `articleCid` in the package settles the single-collection case once, and a
+    // second answer computed in the preview is how a pane comes to refuse an `open` the published
+    // page performs.
+    ...(face.config.view?.article === undefined ? {} : { articleCid: face.config.view.article.collection }),
     config: face.config,
     form,
     writes,

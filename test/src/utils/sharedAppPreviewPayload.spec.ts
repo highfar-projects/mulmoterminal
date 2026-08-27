@@ -114,6 +114,19 @@ describe("the preview payload", () => {
     expect(asPayload({ aid: "a", pages: [page({ audience: "staff" })] })?.pages).toEqual([]);
   });
 
+  it("carries the article collection, which is the only cid `view.open` may name", () => {
+    expect(asPayload({ aid: "a", articleCid: "articles", pages: [page()] })?.articleCid).toBe("articles");
+  });
+
+  it("leaves it ABSENT rather than empty on an app that publishes no articles", () => {
+    // "" is a collection id nothing declares, and the parent compares this against the cid a page
+    // names. Absent refuses every `open` — which is right, there is no such page to reach — where a
+    // floor of "" would be a value that happens to match nothing, for as long as that holds.
+    for (const bad of [undefined, "", 7, null, {}]) {
+      expect("articleCid" in (asPayload({ aid: "a", articleCid: bad, pages: [] }) ?? {})).toBe(false);
+    }
+  });
+
   it("answers a payload it cannot read at all with null, rather than throwing", () => {
     expect(asPayload("nope")).toBeNull();
     expect(asPayload({})?.pages).toEqual([]);

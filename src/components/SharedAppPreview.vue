@@ -20,8 +20,9 @@
 // a role may WRITE is not tested; nobody else exists, so nothing here is concurrent; and it cannot
 // tell whether the Firestore rules a new declaration needs have been deployed at all.
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
-import { portChannel, publicViewSrcdoc, viewNonce, viewParent, VIEW_MESSAGE, type LookupAsk, type PendingSubmit } from "@receptron/sharedapp/view";
+import { portChannel, publicViewSrcdoc, viewNonce, viewParent, VIEW_MESSAGE, type PendingSubmit } from "@receptron/sharedapp/view";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
+import { lookupOwnRow } from "../utils/sharedAppPreviewLookup";
 import { isRecord } from "../../common/isRecord";
 import { createPreviewLog, renderPreviewLog, type PreviewLogEvent } from "../utils/sharedAppPreviewLog";
 import { useUpdateStatus } from "../composables/useUpdateStatus";
@@ -182,25 +183,6 @@ const recover = () => window.setTimeout(() => void load(), 0);
  *  pinned without a frame. */
 const sendIntent = createIntentSender({ page: () => page.value, url: () => writeUrl("intent"), remember, refresh, recover });
 
-/** "Have I already got this row?", asked of the server for the one key the page names.
- *
- *  A REJECTION is the honest failure and `{ found: false }` is not: a refused read, an app that has
- *  never been published and a collection whose ids cannot be built from a key are all "nobody
- *  looked", and the parent turns a rejection into exactly that. Answering "no" instead would tell
- *  the author's page that they have not submitted, and it would stop offering an action they are
- *  entitled to. */
-async function lookupOwn(ask: LookupAsk): Promise<{ found: boolean; record?: Record<string, unknown> }> {
-  const res = await fetchWithTimeout(
-    writeUrl("lookup"),
-    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cid: ask.cid, key: ask.key }) },
-    SLOW_COMMAND_TIMEOUT_MS,
-  );
-  const body: unknown = await res.json();
-  if (!isRecord(body) || body.ok !== true) throw new Error("nothing could be looked up");
-  const record = isRecord(body.record) ? body.record : undefined;
-  return { found: body.found === true, ...(record === undefined ? {} : { record }) };
-}
-
 /** ONE PARENT, for whichever page is on screen.
  *
  *  There were two — the package's public bridge for `/a/`-style pages and its member bridge for the
@@ -260,7 +242,13 @@ const parent = viewParent(
     // "Have I already got this row?", for the one key the page names — the half `mine` cannot
     // cover, because a composite id has no range the rules will list. A REJECTION here is answered
     // `known: false`, which is the honest "nobody looked".
-    lookup: (ask) => lookupOwn(ask),
+    lookup: (ask) => lookupOwnRow(writeUrl("lookup"), ask),
+    // THE WAY OUT OF THE FRAME, which this pane does not take — see the `open` entry in
+    // `sharedAppPreviewLog.ts` for why the line matters more here than the navigation.
+    navigate: (ask) => {
+      remember({ kind: "open", cid: ask.cid, id: ask.id });
+      return false;
+    },
     // A DEFECT OF OURS — a port rejected, or threw before it could answer. The page has already
     // been told `ok: false` with a fixed code and never sees this; what is left is whether the
     // author does. It goes in the same log as everything else the pane collects, as a `host` line:
@@ -278,7 +266,10 @@ const parent = viewParent(
   // `unknown-collection`, which reads as "the cid your page submits to is not declared" about a
   // declaration that is correct. That shipped, and it sent an author debugging the wrong
   // repository: the page was fine, the app was fine, and the preview was the only thing wrong.
-  () => (payload.value === null ? null : { submit: payload.value.submit }),
+  () =>
+    payload.value === null
+      ? null
+      : { submit: payload.value.submit, ...(payload.value.articleCid === undefined ? {} : { articleCid: payload.value.articleCid }) },
   () => nonce.value,
   cells,
 );

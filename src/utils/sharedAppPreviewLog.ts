@@ -82,6 +82,13 @@ export type PreviewLogEvent =
       error: string | null;
       mailed?: boolean;
     }
+  /** The page asked to OPEN one of its articles, and this pane did not go anywhere.
+   *
+   *  NOT A PROBLEM, and deliberately not counted as one (`isProblem`): the pane has no browser
+   *  history to push onto, and the published page will navigate. It is here because the alternative
+   *  is a link that looks broken — the author clicks a headline in their own front page, nothing
+   *  moves, and there is nothing anywhere to say whether the page asked or simply did nothing. */
+  | { kind: "open"; cid: string; id: string }
   | { kind: "notice"; code: ViewNoticeCode; detail: string }
   | { kind: "host"; note: string };
 
@@ -240,6 +247,8 @@ const lineFor = (entry: PreviewLogEntry): string[] => {
         : [`the write to '${entry.cid}' was REFUSED:`, `  ${entry.error}`];
     case "intent":
       return intentLine(entry);
+    case "open":
+      return [`the page asked to open '${entry.id}' in '${entry.cid}' — the published page would go there; this pane stays where it is`];
     case "notice":
       // PAGE-AUTHORED, and marked as such. The reader is often a model, and a sentence the page
       // chose must not arrive looking like something this host is saying.

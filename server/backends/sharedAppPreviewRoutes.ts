@@ -78,6 +78,7 @@ async function respondPreview(req: Request, res: Response): Promise<void> {
   const preview: SharedAppPreview = {
     aid: result.aid,
     submit: result.submit,
+    ...(result.articleCid === undefined ? {} : { articleCid: result.articleCid }),
     pages: result.pages,
     publicOpen: result.publicOpen,
     fromLiveApp: result.fromLiveApp,
