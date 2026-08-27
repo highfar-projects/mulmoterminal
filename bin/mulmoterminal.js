@@ -52,6 +52,13 @@ const STOP_COMMAND = stopCommandFor(PKG_DIR);
 // Server exit code meaning "port taken at bind time" — keep in sync with
 // server/index.ts (PORT_IN_USE_EXIT_CODE).
 const PORT_IN_USE_EXIT_CODE = 75;
+// How long to wait for the child to report the address it bound before falling back to guessing
+// from BIND_HOST. The message is posted from inside the listen callback, so it arrives when the
+// server becomes ready — this only has to outlast boot, which is seconds. Generous because the
+// cost of being early is the guess this whole change exists to avoid, and the cost of being late
+// is nothing: the banner is gated on an HTTP 200 either way.
+const REPORTED_ADDRESS_GRACE_MS = 20_000;
+
 // Only the end of stderr matters for the crash diagnosis; a long-lived server can log
 // arbitrarily much before dying, so the tail is bounded.
 const STDERR_TAIL_MAX_BYTES = 64 * 1024;
@@ -59,6 +66,9 @@ const STDERR_TAIL_MAX_BYTES = 64 * 1024;
 // Single source of truth: read the version from the shipped package.json so
 // `--version` never drifts from the published version.
 const { version: VERSION } = createRequire(import.meta.url)("../package.json");
+
+// An IPC payload is whatever the other side sent, so its shape is checked rather than assumed.
+const isRecordLike = (value) => typeof value === "object" && value !== null;
 
 const log = (msg) => console.log(`\x1b[36m[mulmoterminal]\x1b[0m ${msg}`);
 const error = (msg) => console.error(`\x1b[31m[mulmoterminal]\x1b[0m ${msg}`);
@@ -359,7 +369,11 @@ function runServer(port, noOpen, cwd, onChild) {
     const server = spawn(process.execPath, serverNodeArgs(SERVER_ENTRY, process.cwd(), port), {
       cwd: PKG_DIR,
       env: serverSpawnEnv(process.env, cwd),
-      stdio: ["inherit", "inherit", "pipe"],
+      // "ipc" is the fourth entry and the reason the readiness check can stop guessing: the
+      // server posts { type: "listening", address } from inside its listen callback, and only it
+      // knows what BIND_HOST actually resolved to. Without a channel here that message is a
+      // no-op, which is what its own comment in server/index.ts says.
+      stdio: ["inherit", "inherit", "pipe", "ipc"],
     });
     let stderrTail = "";
     server.stderr.on("data", (chunk) => {
@@ -368,25 +382,43 @@ function runServer(port, noOpen, cwd, onChild) {
     });
     onChild(server);
 
-    // Both derived from BIND_HOST, not hardcoded: the launcher must check the server IT started
-    // and name an address that actually reaches it (#1876).
-    const url = launcherUrl(BIND_HOST, port);
-    const cancelReady = waitUntilReady(
-      port,
-      () => {
-        printReadyBanner(url, STOP_COMMAND);
-        if (noOpen) return;
-        try {
-          // The command is a hardcoded literal; url is built by launcherUrl from BIND_HOST and a
-          // numeric port, so it is one of http://localhost:<n>, http://<addr>:<n> or http://[<v6>]:<n>.
+    // The address to check is the one the CHILD REPORTS, not one derived from BIND_HOST — three
+    // rounds of review found three different spellings BIND_HOST can take that a guess gets
+    // wrong (`::` vs `::1`, `localhost` resolving per-platform, a printed `localhost` that a
+    // browser re-resolves). server/infra/loopback.ts already argued this for its own question:
+    // "classifying the requested string cannot be made right … asking after the fact answers all
+    // of them, because the kernel has already resolved whatever was typed" (#1876).
+    //
+    // The BIND_HOST guess survives only as the fallback for a server that sends nothing, and it
+    // starts on a timer so such a server is not left without a banner.
+    let readyStarted = false;
+    let cancelReady = () => {};
+    const beginReady = (reachHost) => {
+      if (readyStarted) return;
+      readyStarted = true;
+      const url = launcherUrl(reachHost, port);
+      cancelReady = waitUntilReady(
+        port,
+        () => {
+          printReadyBanner(url, STOP_COMMAND);
+          if (noOpen) return;
+          try {
+            // The command is a hardcoded literal; url is built by launcherUrl from the address the
+            // child reported and a numeric port, so it is http://<addr>:<n> or http://[<v6>]:<n>.
 
-          execSync(`${pickOpenCommand()} ${url}`, { stdio: "pipe" });
-        } catch {
-          log(`Open your browser: ${url}`);
-        }
-      },
-      { host: launcherReachHost(BIND_HOST) },
-    );
+            execSync(`${pickOpenCommand()} ${url}`, { stdio: "pipe" });
+          } catch {
+            log(`Open your browser: ${url}`);
+          }
+        },
+        { host: launcherReachHost(reachHost) },
+      );
+    };
+    server.on("message", (msg) => {
+      if (isRecordLike(msg) && msg.type === "listening" && typeof msg.address === "string") beginReady(msg.address);
+    });
+    const fallbackReady = setTimeout(() => beginReady(BIND_HOST), REPORTED_ADDRESS_GRACE_MS);
+    fallbackReady.unref?.();
 
     // `close`, not `exit`: it fires only once the piped stderr has fully drained, so the
     // whole crash output — including a trailing `_npx/<hash>` line that can arrive after

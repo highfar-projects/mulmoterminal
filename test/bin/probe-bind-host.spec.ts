@@ -16,6 +16,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { bindHostFor, launcherReachHost, launcherUrl, probeFailureIsPortInUse } from "../../bin/cli-args.js";
+import { boundAddress } from "../../server/infra/loopback.js";
 import { BIND_HOST } from "../../server/config/env.js";
 
 const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -61,9 +62,10 @@ describe("the launcher probes the address the server binds", () => {
     // Matched as an EXPRESSION, not a layout: the first version of this guard keyed on
     // `waitUntilReady(port,` and went red the moment prettier wrapped the call across lines. A
     // guard that a formatter can break is a guard that gets deleted rather than fixed.
-    expect(launcher, "the readiness poll must be given the host BIND_HOST resolves to, not left on its loopback default").toMatch(
-      /host:\s*launcherReachHost\(BIND_HOST\)/,
-    );
+    // Was `launcherReachHost(BIND_HOST)` until the launcher stopped classifying BIND_HOST and
+    // started polling the address the CHILD reports. What must never come back is the poll being
+    // left on its hardcoded loopback default, so that is what this asserts.
+    expect(launcher, "the readiness poll must be given a host, not left on its loopback default").toMatch(/host:\s*launcherReachHost\(/);
   });
 });
 
@@ -154,6 +156,47 @@ describe("the address the launcher uses to reach the server it started", () => {
       // spelling a clear-text URL out as a literal.
       expect(new URL(launcherUrl("fd00::1", 34567)).hostname).toBe("[fd00::1]");
     });
+  });
+});
+
+// THE INVERSION. Three review rounds each found a different spelling of BIND_HOST that a guess
+// gets wrong — `::` vs `::1`, `localhost` resolving per platform, a printed `localhost` a browser
+// re-resolves. A host string has no last case, so the launcher stopped classifying the REQUESTED
+// string and now asks the child what it actually bound. server/infra/loopback.ts had already
+// argued exactly this for its own question: "classifying the requested string cannot be made
+// right … asking after the fact answers all of them, because the kernel has already resolved
+// whatever was typed."
+describe("the address the child reports, which is what the launcher now polls", () => {
+  it("is the address the OS says it bound", () => {
+    expect(boundAddress({ address: "::1" })).toBe("::1");
+    expect(boundAddress({ address: "192.168.11.12" })).toBe("192.168.11.12");
+  });
+
+  // A pipe or a UNIX socket is not something a client dials, and null is "not listening yet".
+  // Both mean "no address to poll", not "poll the empty string".
+  it.each([null, "/tmp/some.sock"])("is null for %o, which a client cannot dial", (address) => {
+    expect(boundAddress(address)).toBeNull();
+  });
+});
+
+describe("the launcher asks the child rather than classifying BIND_HOST", () => {
+  const launcher = readFileSync(path.join(REPO_ROOT, "bin", "mulmoterminal.js"), "utf8");
+
+  // Without an ipc channel the server's announcement is a no-op — its own comment in
+  // server/index.ts says so — and the launcher is back to guessing.
+  it("opens an ipc channel to the server it spawns", () => {
+    expect(launcher, "the server's { type: 'listening' } message needs a channel to arrive on").toMatch(/stdio:\s*\[[^\]]*"ipc"[^\]]*\]/);
+  });
+
+  it("starts the readiness check from the reported address", () => {
+    expect(launcher, "readiness must be gated on the child's own message, not on a BIND_HOST guess").toMatch(
+      /msg\.type === "listening"[\s\S]{0,120}beginReady\(msg\.address\)/,
+    );
+  });
+
+  // The guess survives only as a fallback, so a server that reports nothing still gets a banner.
+  it("keeps a BIND_HOST fallback so a silent server is not left without a banner", () => {
+    expect(launcher).toMatch(/beginReady\(BIND_HOST\)/);
   });
 });
 

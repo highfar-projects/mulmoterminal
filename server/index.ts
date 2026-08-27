@@ -31,7 +31,7 @@ import {
 import { bindSecurityWarning, browserOriginHostnames, createIsAllowedOrigin } from "./infra/allowed-origin.js";
 import { serverErrorExit } from "./infra/server-exit.js";
 import { PORT, BIND_HOST, CLAUDE_CWD, MULMOTERMINAL_HOME, SESSION_ID_RE } from "./config/env.js";
-import { isLoopbackBinding } from "./infra/loopback.js";
+import { boundAddress, isLoopbackBinding } from "./infra/loopback.js";
 import { startLoopbackListener } from "./infra/loopback-listener.js";
 import { messageOf } from "./errors.js";
 import { hookSettingsJson } from "./session/hook-settings.js";
@@ -974,7 +974,11 @@ server.listen(Number(PORT), BIND_HOST, () => {
   // kills the process, so neither `?.` nor a try/catch stops it. That is reachable: Ctrl+C on the
   // supervisor while this server is still in its ~3s of setup. The callback catches the same
   // error for a channel that closes between the check and the write.
-  if (process.connected) process.send?.({ type: "listening", port: Number(PORT) }, undefined, undefined, () => {});
+  // The ADDRESS goes with it, not just the port, and that is what stops the launcher guessing.
+  // `BIND_HOST` can be a NAME — `localhost` resolves to `::1` here and `127.0.0.1` elsewhere —
+  // and a launcher that guesses wrong polls a stranger and calls it ready (#1876). Only this
+  // process knows what it actually bound. Additive: the dev supervisor keys on `type` alone.
+  if (process.connected) process.send?.({ type: "listening", port: Number(PORT), address: boundAddress(server.address()) }, undefined, undefined, () => {});
   if (!isLoopbackBinding(server.address())) {
     console.warn(bindSecurityWarning(BIND_HOST, PORT, browserHostnames));
   }

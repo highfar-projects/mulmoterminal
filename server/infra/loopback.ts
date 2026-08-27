@@ -38,3 +38,16 @@ export function isLoopbackBinding(address: string | { address: string } | null):
   if (typeof address === "string") return true;
   return isLoopbackAddress(address.address);
 }
+
+// What the OS says this server bound, as a plain address, or null when there is nothing a client
+// could dial (a pipe, a UNIX socket, or not listening yet).
+//
+// Its reason is the one written above isLoopbackBinding: classifying the REQUESTED string cannot
+// be made right, and asking after the fact answers every spelling because the kernel has already
+// resolved whatever was typed. The launcher needs that same answer for a different question —
+// which address to poll to confirm THIS server is up — so it is sent over IPC rather than guessed
+// from BIND_HOST (#1876; `localhost` binds `::1` on macOS and `127.0.0.1` elsewhere).
+export function boundAddress(address: string | { address: string } | null): string | null {
+  if (address === null || typeof address === "string") return null;
+  return address.address;
+}

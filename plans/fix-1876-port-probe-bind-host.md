@@ -335,3 +335,54 @@ MD040（fence に言語指定が無い）も指摘された。CodeRabbit が挙�
 
 break-verify: URL を `localhost` に戻すと 3 red。復元は byte-identical。
 
+### iter-4 — P1、そして **3 件目なのでルールを反転させた**
+
+CI Codex の P1:
+
+> `localhost` is neither normalized nor resolved here, so it reintroduces the false-ready path
+> this change is trying to eliminate. … Map this supported hostname to the concrete address
+> actually selected by the child (or communicate that bound address back from the child)
+
+実測で裏付け:
+
+```text
+server.listen(port,"localhost") -> {"address":"::1","family":"IPv6"}   （このマシンでは）
+launcherReachHost("localhost")  -> "localhost"                          （未処理・曖昧なまま）
+```
+
+**これは `launcherReachHost` への 3 件目の指摘**（iter-2: poll のハードコード、iter-3: URL が
+`localhost` に戻す、iter-4: `localhost` という綴り）。ケースを足し続けるのをやめる ——
+ホスト文字列の綴りに最後のケースは無い（`localhost` / `127.1` / `127.000.000.001` /
+hosts ファイルで別所を指す `localhost` …）。
+
+**反転**: 要求された文字列を分類するのをやめ、**子プロセスに実際に bind したアドレスを
+報告させる**。`server/index.ts` には既に `{ type: "listening", port }` の IPC 通知があり、
+コメントに「launcher が IPC を開かないので no-op」と書いてあった —— 半分できていた。
+
+そして `server/infra/loopback.ts` が、まさにこの反転の根拠を既に書いていた:
+
+> Classifying the requested string cannot be made right: `localhost`, `127.1`, `127.0.1` and
+> `127.000.000.001` are all valid ways to ask for loopback, and `localhost` can be pointed
+> somewhere else entirely by a hosts file. **Asking after the fact answers all of them, because
+> the kernel has already resolved whatever was typed.**
+
+（errno のときの `worktree-env.ts` と同じで、repo は既に答えを知っていた。）
+
+- `server/infra/loopback.ts` に `boundAddress()` を追加（`isLoopbackBinding` の隣）
+- `server/index.ts` は IPC 通知に **address を載せる**（dev supervisor は `type` しか見ないので追加は安全）
+- launcher は spawn の stdio に `"ipc"` を足し、`{type:"listening", address}` で readiness を開始
+- `BIND_HOST` からの推測は **20 秒のフォールバック**としてのみ残す（何も報告しないサーバでも
+  バナーが出るように）
+
+P1 のシナリオを実機で確認（stranger が 127.0.0.1:34695 を保持、`MULMOTERMINAL_HOST=localhost`）:
+
+```text
+  ✓ MulmoTerminal is ready
+  → http://[::1]:34695        -> HTTP 200（我々のサーバ）
+```
+
+回帰確認: 既定構成は `http://127.0.0.1:34696` で 200、埋まったポートのガードも従来どおり発動。
+
+break-verify: `"ipc"` を stdio から外すと 1 red、`beginReady(msg.address)` を
+`beginReady(BIND_HOST)` に戻すと 1 red。復元は byte-identical。
+
