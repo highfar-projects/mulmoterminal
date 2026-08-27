@@ -322,7 +322,9 @@ describe("shared app preview", () => {
     const result = await previewSharedApp(root, stamp);
 
     expect(result.ok === false ? result.problems : []).toEqual([]);
-    expect(result.ok && result.articleCid).toBe("bookings");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.articleCid).toBe("bookings");
   });
 
   it("has no article collection to name on an app that publishes none", async () => {
@@ -330,7 +332,13 @@ describe("shared app preview", () => {
     // from `collections` here would let a page open an address the platform does not draw.
     const result = await previewSharedApp(root, stamp);
 
-    expect(result.ok && "articleCid" in result).toBe(false);
+    // THE SUCCESS FIRST. `result.ok && …` is false whenever the preview failed, so an assertion
+    // written that way passes without ever reaching the thing it claims to check — a green that
+    // means "the declaration was refused", which is not what this test is about.
+    expect(result.ok === false ? result.problems : []).toEqual([]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect("articleCid" in result).toBe(false);
   });
 
   it("hands back what the AUTHOR has already submitted, projected as the page will see it", async () => {
