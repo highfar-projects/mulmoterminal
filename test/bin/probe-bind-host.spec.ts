@@ -15,7 +15,7 @@ import { createServer, type Server } from "node:net";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { bindHostFor, launcherReachHost, launcherUrl, probeFailureIsPortInUse, probeHostsFor } from "../../bin/cli-args.js";
+import { bindHostFor, companionHostsFor, launcherReachHost, launcherUrl, probeFailureIsPortInUse } from "../../bin/cli-args.js";
 import { boundAddress } from "../../server/infra/loopback.js";
 import { BIND_HOST } from "../../server/config/env.js";
 
@@ -60,8 +60,8 @@ describe("the launcher probes the address the server binds", () => {
   // checked only itself is how a stranger ended up behind the ready banner.
   it("requires every needed address to be free, not just the first", () => {
     const launcher = readFileSync(path.join(REPO_ROOT, "bin", "mulmoterminal.js"), "utf8");
-    expect(launcher).toMatch(/probeHostsFor\(BIND_HOST\)/);
-    expect(launcher, "isPortFree must fail on the FIRST address that is taken").toMatch(/if \(!\(await canBind\(port, host\)\)\) return false;/);
+    expect(launcher, "the companions must be derived from what the kernel bound, not from BIND_HOST").toMatch(/companionHostsFor\(primary\.address\)/);
+    expect(launcher, "isPortFree must fail on the FIRST companion that is taken").toMatch(/if \(!\(await canBind\(port, host\)\)\.free\) return/);
   });
 
   // ...and neither may the readiness poll, which is the same question asked a third way. A
@@ -191,46 +191,36 @@ describe("the address the launcher uses to reach the server it started", () => {
 // ours. Measured with a stranger on 127.0.0.1:34720: listen(34720,"0.0.0.0") succeeds while
 // listen(34720,"127.0.0.1") is EADDRINUSE — and the banner then served the stranger. The fifth
 // finding on this rule, and the last address the launcher was still taking on faith.
-describe("every address a launch needs the port to be free on", () => {
-  it("is just the one for a specific bind, which nothing else can hold", () => {
-    expect(probeHostsFor("192.168.11.12")).toEqual(["192.168.11.12"]);
-    expect(probeHostsFor("127.0.0.1")).toEqual(["127.0.0.1"]);
+// Asked about the address the KERNEL SAYS the bind landed on, never about the string that was
+// typed. Eight review rounds went to spellings — `::` vs `0:0:0:0:0:0:0:0`, `::1` vs its long
+// form, `localhost`, `127.1` — and a host string has no last case. Measured: the kernel reports
+// `::` for all three v6 wildcard spellings, `::1` for `localhost`, `127.0.0.1` for `127.1`. So
+// the comparisons this rests on are exact: the kernel's OUTPUT vocabulary is finite even though
+// its input vocabulary is not.
+describe("the companions a bound address implies", () => {
+  // A wildcard serves this machine among others, so this machine's own clients must not be
+  // misrouted. `::` needs both loopbacks; `0.0.0.0` serves v4 loopback itself.
+  it("gives a v6 wildcard both loopbacks, and a v4 wildcard the one it does not already serve", () => {
+    expect(companionHostsFor("::")).toEqual(["::1", "127.0.0.1"]);
+    expect(companionHostsFor("0.0.0.0")).toEqual(["127.0.0.1"]);
   });
 
-  // The loopback of the wildcard's OWN family — the address launcherReachHost will send the user
-  // to. Checking it here is what makes that mapping sound rather than a guess.
-  it("adds the loopback a wildcard would otherwise let a stranger hold", () => {
-    expect(probeHostsFor("0.0.0.0")).toEqual(["0.0.0.0", "127.0.0.1"]);
-    expect(probeHostsFor("::")).toContain("::1");
+  // Loopback-only: the whole purpose is local access, so a misrouted local client leaves nothing.
+  // Every GUI MCP client dials 127.0.0.1 by literal (guiMcpUrlTemplate).
+  it("gives a loopback bind the v4 address GUI MCP clients dial", () => {
+    expect(companionHostsFor("::1")).toEqual(["127.0.0.1"]);
+    expect(companionHostsFor("127.0.0.2")).toEqual(["127.0.0.1"]);
   });
 
-  // `::` needs v4 loopback too, and NOT because of shadowing: every GUI MCP client dials
-  // `http://127.0.0.1:<port>` by literal. The server tries to serve it and, for a `::` primary
-  // only, treats EADDRINUSE there as fine — so a stranger holding it is SILENT and those clients
-  // reach the other process. Nothing else in the system says a word, which is why this must.
-  //
-  // This overturns what iteration 6 recorded as correct ("a v4 occupant should not block a v6
-  // launch"). It should, when the app itself requires v4 loopback.
-  it("reserves the v4 loopback that GUI MCP clients dial, even for a v6 wildcard", () => {
-    expect(probeHostsFor("::")).toContain("127.0.0.1");
+  it("asks for nothing extra when the bind already IS that address", () => {
+    expect(companionHostsFor("127.0.0.1")).toEqual([]);
   });
 
-  // Decided by a PROPERTY, not a list of addresses — the line has moved twice already. A bind
-  // that serves only this machine has no purpose left once this machine's own clients are
-  // misrouted, so spellings nobody enumerated are covered rather than becoming another round.
-  it.each(["::1", "0:0:0:0:0:0:0:1", "::ffff:127.0.0.1", "127.0.0.2"])("treats %s as loopback-only and reserves the companion", (host) => {
-    expect(probeHostsFor(host)).toEqual([host, "127.0.0.1"]);
-  });
-
-  it("does not repeat itself when the bind already IS that address", () => {
-    expect(probeHostsFor("127.0.0.1")).toEqual(["127.0.0.1"]);
-  });
-
-  // The other half of the property, and the round-2 call that still stands: a specific
-  // non-loopback bind was chosen to serve OTHER machines, and that purpose survives a degraded
-  // local listener — which the server warns about. The launcher does not veto it.
-  it.each(["192.168.11.12", "10.0.0.5", "128.0.0.1"])("leaves a remote-serving bind alone: %s", (host) => {
-    expect(probeHostsFor(host)).toEqual([host]);
+  // The other half, and the round-2 call that still stands: a specific non-loopback bind was
+  // chosen to serve OTHER machines, and that purpose survives a degraded local listener — which
+  // the server warns about. Not the launcher's to veto.
+  it.each(["192.168.11.12", "10.0.0.5", "128.0.0.1"])("asks for nothing extra for a remote-serving bind: %s", (address) => {
+    expect(companionHostsFor(address)).toEqual([]);
   });
 
   // The predicate is duplicated into bin/ because that is plain JS. Pinned against its source so
@@ -242,18 +232,23 @@ describe("every address a launch needs the port to be free on", () => {
     expect(loopback, "isLoopbackAddress no longer covers the whole 127.0.0.0/8 block").toContain("^127");
   });
 
-  // The literal is duplicated into bin/ because that is plain JS and cannot import the server's
-  // TypeScript. Pinned against its source the way PORT_IN_USE_EXIT_CODE is, so the two cannot
-  // drift into disagreeing about which address local clients use.
-  it("agrees with gui-mcp-registration.ts about the address those clients dial", () => {
-    const registration = readFileSync(path.join(REPO_ROOT, "server", "infra", "gui-mcp-registration.ts"), "utf8");
-    expect(registration, "guiMcpUrlTemplate no longer dials 127.0.0.1 by literal — probeHostsFor's reason moved").toMatch(/http:\/\/127\.0\.0\.1:/);
-  });
-
-  // The two lists have to agree, or the launcher verifies one address and then points the user
-  // at another.
-  it.each(["0.0.0.0", "::", "127.0.0.1", "192.168.11.12"])("includes the address it will send the user to, for %s", (host) => {
-    expect(probeHostsFor(host)).toContain(launcherReachHost(host));
+  // And the reason none of this needs a spelling list: the kernel normalises. Asserted for real,
+  // because it is the premise the whole design rests on.
+  it("is only ever handed a normalised address, because the kernel resolves the spelling", async () => {
+    const bound = (host: string) =>
+      new Promise<string>((resolve, reject) => {
+        const s = createServer();
+        s.once("error", reject);
+        s.once("listening", () => {
+          const a = s.address();
+          const address = a !== null && typeof a !== "string" ? a.address : "";
+          s.close(() => resolve(address));
+        });
+        s.listen(0, host);
+      });
+    expect(await bound("0:0:0:0:0:0:0:0")).toBe("::");
+    expect(await bound("0:0:0:0:0:0:0:1")).toBe("::1");
+    expect(await bound("127.1")).toBe("127.0.0.1");
   });
 });
 
@@ -298,11 +293,14 @@ describe("the launcher asks the child rather than classifying BIND_HOST", () => 
     expect(launcher).toMatch(/beginReady\(reported\)/);
   });
 
-  // The guess survives only as a fallback, and ONLY for an address that can be named without
-  // asking: `beginReady(guessed)` where `guessed = launcherReachHost(BIND_HOST)`. Passing
-  // BIND_HOST straight through is what re-opened the hole on a slow boot (round 5, P1).
-  it("falls back only on an address it can name, never on the raw BIND_HOST", () => {
-    expect(launcher, "the fallback must resolve BIND_HOST through launcherReachHost first").toMatch(/const guessed = launcherReachHost\(BIND_HOST\)/);
+  // The fallback prefers the address the PROBE learned from the kernel, and never passes a raw
+  // BIND_HOST to the poll — that is the round-5 P1, where a slow boot polled an unresolved
+  // `localhost`. Two single-expression assertions, for the reason given above.
+  it("prefers the address the probe learned from the kernel", () => {
+    expect(launcher).toMatch(/launcherReachHost\(probedAddress\)/);
+  });
+
+  it("never hands the raw BIND_HOST to the readiness poll", () => {
     expect(launcher, "a raw beginReady(BIND_HOST) is the round-5 P1 coming back").not.toMatch(/beginReady\(BIND_HOST\)/);
   });
 });

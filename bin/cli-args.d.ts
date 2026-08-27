@@ -3,7 +3,7 @@ export type CwdChoice = { path: string; mustExist: boolean } | { error: string }
 export declare function parsePortArg(args: string[], env: Record<string, string | undefined>, defaultPort: number): PortChoice;
 export declare function bindHostFor(env: Record<string, string | undefined>): string;
 export declare function probeFailureIsPortInUse(err: { code?: string } | null | undefined): boolean;
-export declare function probeHostsFor(bindHost: string): string[];
+export declare function companionHostsFor(boundAddress: string): string[];
 export declare function launcherReachHost(bindHost: string): string | null;
 export declare function launcherUrl(reachHost: string, port: number): string;
 export declare function chooseCwd(args: string[], env: Record<string, string | undefined>): CwdChoice;

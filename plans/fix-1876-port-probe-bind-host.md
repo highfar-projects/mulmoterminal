@@ -592,3 +592,50 @@ CI Codex の P1: `MULMOTERMINAL_HOST=::1`（および `localhost` が `::1` に�
 break-verify: loopback bind が companion を失う → 4 red、`::1` の長い綴りを落とす → 1 red、
 全リテラルを loopback 扱い（過剰検知）→ 4 red。復元は byte-identical。
 
+### iter-9 — 綴りの分類そのものをやめた（**8 件目**、そしてクラスの終わり）
+
+CI Codex の P1: `probeHostsFor` はワイルドカードを `::` というリテラルでしか認識しないので、
+`MULMOTERMINAL_HOST=0:0:0:0:0:0:0:0`（同じアドレスの別綴り）が companion probe を素通りする。
+
+正しい。iter-8 で loopback 側は**性質**で書いたが、**ワイルドカード側はリテラル比較のまま
+残していた**。同じクラスが半分だけ生き残っていた。
+
+#### 綴りを足すのではなく、カーネルに正規化させる
+
+probe は**実際に bind する**。ならば `server.address()` を読めばよい。実測:
+
+```text
+listen(0, "0:0:0:0:0:0:0:0") -> {"address":"::"}
+listen(0, "::0")             -> {"address":"::"}
+listen(0, "localhost")       -> {"address":"::1"}
+listen(0, "0:0:0:0:0:0:0:1") -> {"address":"::1"}
+listen(0, "127.1")           -> {"address":"127.0.0.1"}
+```
+
+**カーネルの入力語彙は無限だが、出力語彙は有限で固定。** だから正規化後のリテラル比較は
+列挙ではない。`probeHostsFor(bindHost)` を `companionHostsFor(boundAddress)` に置き換えた:
+
+- `canBind` は `{ free, address }` を返す（`address` は OS が言う実際の bind 先）
+- `isPortFree` はまず BIND_HOST を probe し、**カーネルが答えたアドレスから** companion を決める
+- そのアドレスは `choosePort` 経由で launcher まで運ばれ、readiness の fallback にも使われる
+  （`BIND_HOST` を解釈するより正確）
+
+これは `server/infra/loopback.ts` が最初から書いていた主張そのもの ——
+「要求された文字列の分類は正しくできない。後から訊けば、カーネルが既に解決している」。
+**8 ラウンドかけて、repo が最初から知っていた場所に辿り着いた。**
+
+実機確認（stranger が 127.0.0.1:34770 を保持）—— **どの綴りでも同じ挙動**:
+
+| `MULMOTERMINAL_HOST` | 結果 |
+|---|---|
+| `0:0:0:0:0:0:0:0` | `Port 34770 is already in use.` |
+| `localhost` | 同上 |
+| `127.1` | 同上 |
+
+過剰検知なし（stranger 無しなら `0:0:0:0:0:0:0:0` → `http://[::1]` 200、`localhost` → 同、
+既定 → `http://127.0.0.1` 200）。LAN bind（`192.168.11.12`）は 127.0.0.1 が塞がっていても
+**起動する** —— round-2 の判断は生きている。
+
+break-verify: companion を typed string から決める → 1 red、v6 ワイルドカードが `::1` を失う
+→ 1 red、fallback が probe の答えを無視する → 1 red。復元は byte-identical。
+

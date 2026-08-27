@@ -19,7 +19,7 @@ import { waitUntilReady } from "./wait-ready.js";
 import {
   bindHostFor,
   chooseCwd,
-  probeHostsFor,
+  companionHostsFor,
   launcherReachHost,
   launcherUrl,
   probeFailureIsPortInUse,
@@ -262,24 +262,37 @@ function pickOpenCommand() {
 // only with the same address (measured), so the probe uses the one the server will use. It
 // bound the `::` wildcard until #1876, which answered "free" for a port a running MulmoTerminal
 // held on loopback and so kept the second-instance guard from ever firing.
+// Resolves { free, address } — `address` is what the OS says this bind LANDED ON, which is the
+// only answer that survives every spelling of a host (`0:0:0:0:0:0:0:0` reports `::`, `localhost`
+// reports `::1`, `127.1` reports `127.0.0.1`). Null when the probe could not ask.
 function canBind(port, host) {
   return new Promise((resolve) => {
     const probe = createServer();
     // A failed probe is not automatically a taken port — see probeFailureIsPortInUse.
-    probe.once("error", (err) => resolve(!probeFailureIsPortInUse(err)));
-    probe.once("listening", () => probe.close(() => resolve(true)));
+    probe.once("error", (err) => resolve({ free: !probeFailureIsPortInUse(err), address: null }));
+    probe.once("listening", () => {
+      const bound = probe.address();
+      const address = bound !== null && typeof bound !== "string" ? bound.address : null;
+      probe.close(() => resolve({ free: true, address }));
+    });
     probe.listen(port, host);
   });
 }
 
-// Free means free on EVERY address this launch needs — see probeHostsFor. Sequential rather than
-// parallel: two probes racing for the same port would report the second one busy against the
-// first, which is this file's own bug wearing a different hat.
+// Free means free on the requested address AND on every companion that address implies — see
+// companionHostsFor, which is asked about what the kernel bound rather than about what was typed.
+// Sequential rather than parallel: two probes racing for the same port would report the second
+// busy against the first, which is this file's own bug wearing a different hat.
+//
+// Resolves { free, address } so the caller learns the concrete address too: it is the honest
+// fallback for the readiness poll, and unlike BIND_HOST it needs no interpreting.
 async function isPortFree(port) {
-  for (const host of probeHostsFor(BIND_HOST)) {
-    if (!(await canBind(port, host))) return false;
+  const primary = await canBind(port, BIND_HOST);
+  if (!primary.free || primary.address === null) return primary;
+  for (const host of companionHostsFor(primary.address)) {
+    if (!(await canBind(port, host)).free) return { free: false, address: primary.address };
   }
-  return true;
+  return primary;
 }
 
 function printReadyBanner(url, stopCommand) {
@@ -336,7 +349,8 @@ async function findEphemeralPort() {
     probe.listen(0, BIND_HOST);
   });
   if (offered === null) return null;
-  return (await isPortFree(offered)) ? offered : null;
+  const checked = await isPortFree(offered);
+  return checked.free ? { port: offered, address: checked.address } : null;
 }
 
 // Ask about an ALREADY-RUNNING server, whatever port this one will use. Declining exits 0: the
@@ -354,7 +368,8 @@ async function confirmNoRunningInstance() {
 }
 
 async function choosePort(requested, explicit) {
-  if (await isPortFree(requested)) return requested;
+  const asked = await isPortFree(requested);
+  if (asked.free) return { port: requested, address: asked.address };
   // No SILENT fallback: starting a second server on another port without saying so is how
   // someone ends up with two sharing one home directory without knowing (#611).
   if (portInUseAction(explicit, process.stdin.isTTY) === "stop") {
@@ -376,7 +391,7 @@ async function choosePort(requested, explicit) {
 // the port was taken at bind time before it became ready — the caller then
 // reports that and stops. In every other case (clean shutdown, fatal error,
 // or the server simply running) the process exits with the server's code.
-function runServer(port, noOpen, cwd, onChild) {
+function runServer(port, probedAddress, noOpen, cwd, onChild) {
   return new Promise((resolveExit) => {
     log(`Starting MulmoTerminal on port ${port}...`);
     // stderr is piped (and passed through) so a fatal boot error can be inspected once the
@@ -443,7 +458,10 @@ function runServer(port, noOpen, cwd, onChild) {
     // re-opened the hole on a slow boot (round 5, P1): with MULMOTERMINAL_HOST=localhost the
     // child can bind `::1` while a stranger owns 127.0.0.1, and an unresolved `localhost` poll
     // reaches the stranger. So a name gets no fallback — it gets a sentence saying why.
-    const guessed = launcherReachHost(BIND_HOST);
+    // The probe's own answer first — it came from the kernel, so it needs no interpreting and it
+    // covers every spelling BIND_HOST could have been. launcherReachHost only turns a wildcard
+    // into something connectable; BIND_HOST is the last resort and returns null for a name.
+    const guessed = probedAddress ? launcherReachHost(probedAddress) : launcherReachHost(BIND_HOST);
     const fallbackReady = setTimeout(() => {
       if (guessed) return beginReady(guessed);
       if (!readyStarted)
@@ -592,12 +610,15 @@ async function main() {
   // prompt nobody can answer: a script that asked for a server should still get one.
   await confirmNoRunningInstance();
 
-  const port = await choosePort(requestedPort, portExplicit);
+  // The address comes back with the port because the PROBE learned it from the kernel, which is
+  // the one answer that needs no interpreting (#1876). It is the fallback the readiness poll uses
+  // when the child reports nothing.
+  const { port, address: probedAddress } = await choosePort(requestedPort, portExplicit);
   // Named only now, because the port is half the name — and named at all so that the user who
   // loses this terminal has something to search for (#1820). The server child names itself the
   // same, so `pkill mulmoterminal` reaches whichever half is found first.
   setProcessTitle(port);
-  await runServer(port, noOpen, cwd, (c) => {
+  await runServer(port, probedAddress, noOpen, cwd, (c) => {
     child = c;
   });
   error(portInUseMessage(port, portExplicit));

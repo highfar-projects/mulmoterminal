@@ -17,6 +17,11 @@ import { isIP } from "node:net";
 // the same way PORT_IN_USE_EXIT_CODE is.
 const V4_LOOPBACK_CLIENTS_DIAL = "127.0.0.1";
 
+// The two addresses a kernel reports for a wildcard bind. Exact, not a list of spellings: these
+// are what `server.address()` RETURNS, and it returns nothing else for an unspecified bind.
+const V4_UNSPECIFIED = "0.0.0.0";
+const V6_UNSPECIFIED = "::";
+
 // Whether a bind address serves only this machine. Mirrors isLoopbackAddress in
 // server/infra/loopback.ts — the whole 127.0.0.0/8 block, `::1` in both spellings, and the
 // `::ffff:` mapped form — because bin/ is plain JS and cannot import it. A spec pins the two
@@ -109,52 +114,40 @@ export function probeFailureIsPortInUse(err) {
 }
 
 /**
- * Every address the port has to be free on before this launch can succeed.
+ * Given the address the OS says a bind actually LANDED ON, which other addresses must also be
+ * free before this launch is worth starting.
  *
- * One address for a specific bind — nothing else can hold it, so whoever answers there is us.
- * TWO for a wildcard, and that second one is the fifth finding on this rule: a wildcard and a
- * specific address COEXIST. Measured, with a stranger on `127.0.0.1:34720`:
- * `listen(34720,"0.0.0.0")` succeeds, `listen(34720,"127.0.0.1")` is EADDRINUSE — so the child
- * starts, and the banner's `http://127.0.0.1:34720` serves the stranger.
+ * It takes the bound address and not the requested string, and that is the whole point. Eight
+ * review rounds were spent on spellings — `::` vs `0:0:0:0:0:0:0:0`, `::1` vs its long form,
+ * `localhost`, `127.1` — and a host string has no last case. The kernel has none of that
+ * problem, because it has already resolved whatever was typed. Measured: `listen(0,
+ * "0:0:0:0:0:0:0:0")` reports `::`, `listen(0,"localhost")` reports `::1`, `listen(0,"127.1")`
+ * reports `127.0.0.1`. So the comparisons below are exact rather than a list, because the
+ * kernel's OUTPUT vocabulary is finite and fixed even though its input vocabulary is not.
  *
- * Checking it here rather than tolerating it is NOT the same call as the one declined in
- * round 2, and the difference is whose decision it overrides. There, the bind was specific and
- * `loopbackListenPlan` deliberately degrades: best effort, warns, carries on. Here the plan
- * returns null — the server adds no second listener because it ASSUMES the wildcard covers
- * loopback. There is no deliberate degradation to preserve, only an assumption that can be false.
+ * server/infra/loopback.ts made the same argument for its own question: "Classifying the
+ * requested string cannot be made right … Asking after the fact answers all of them."
  *
- * A `::` primary needs `127.0.0.1` too, and that one is not about shadowing — it is a hard
- * requirement of this app. `guiMcpUrlTemplate` dials `http://127.0.0.1:<port>` by literal, so
- * every GUI MCP client does. The server tries to serve it (`startLoopbackListener`) and, for a
- * `::` primary ONLY, treats EADDRINUSE there as fine — `inUseIsFine`, on the reasoning that its
- * own dual-stack socket already covers v4. That reasoning cannot tell "my own socket" from "a
- * stranger", so the failure is SILENT and the MCP clients reach the other process. Nothing else
- * in the system will say a word, which is why the launcher has to.
+ * WHICH BINDS GET A COMPANION, by the bind's PURPOSE rather than by the server's volume:
  *
- * WHICH BINDS GET THE COMPANION, stated as a property rather than a list of addresses — the line
- * moved once already and a list would move again. It is not "does the server warn":
- *
- *   - a bind that serves ONLY THIS MACHINE (a wildcard, or any loopback address) has no purpose
- *     left once this machine's own clients are misrouted, so the launch is pointless and the
- *     port counts as taken;
+ *   - a wildcard, or any loopback address, serves ONLY this machine (or this machine among
+ *     others), so misrouting this machine's own clients leaves the launch with no purpose. Every
+ *     GUI MCP client dials `http://127.0.0.1:<port>` by literal (guiMcpUrlTemplate), and for a
+ *     `::` primary the server's own loopback listener treats EADDRINUSE as fine and says nothing
+ *     — so nobody else will report it.
  *   - a specific NON-loopback bind was chosen to serve other machines, and that purpose survives
- *     intact. Local convenience degrading is the server's own warned trade-off, and the launcher
- *     does not veto it (the call declined in round 2, and it still stands).
- *
- * `::1` is why this is a property. Round 7 drew the line at "the server stays silent", which put
- * `::1` on the wrong side — it warns, but it is loopback-only, so a warned degradation still
- * leaves a server nobody local can reach correctly.
+ *     a degraded local listener, which the server does warn about. Not the launcher's to veto
+ *     (the call declined in round 2, and it still stands).
  *
  * The probe/bind race the launcher already lives with is unchanged: this narrows the window, it
  * does not close it.
  */
-export function probeHostsFor(bindHost) {
-  if (bindHost === "0.0.0.0") return ["0.0.0.0", V4_LOOPBACK_CLIENTS_DIAL];
-  if (bindHost === "::") return ["::", "::1", V4_LOOPBACK_CLIENTS_DIAL];
-  // A bind that serves ONLY this machine has no purpose left if this machine's own clients are
-  // misrouted, so its companion address is required rather than nice to have.
-  if (isLoopbackBindHost(bindHost)) return [bindHost, ...(bindHost === V4_LOOPBACK_CLIENTS_DIAL ? [] : [V4_LOOPBACK_CLIENTS_DIAL])];
-  return [bindHost];
+export function companionHostsFor(boundAddress) {
+  const companions = boundAddress === V6_UNSPECIFIED ? ["::1", V4_LOOPBACK_CLIENTS_DIAL] : [V4_LOOPBACK_CLIENTS_DIAL];
+  if (boundAddress === V4_UNSPECIFIED || boundAddress === V6_UNSPECIFIED || isLoopbackBindHost(boundAddress)) {
+    return companions.filter((host) => host !== boundAddress);
+  }
+  return [];
 }
 
 /**
