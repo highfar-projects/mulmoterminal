@@ -105,18 +105,23 @@ export function launcherReachHost(bindHost) {
   return bindHost;
 }
 
-/** What to PRINT for that address. `localhost` where it is honest — it is friendlier and it is
- *  what the loopback listener serves — and the real address otherwise.
+/** What to PRINT for that address — the CONCRETE one, never `localhost`.
+ *
+ *  It did say `localhost` for the loopback cases, because that is friendlier. CodeRabbit caught
+ *  what that throws away: `launcherReachHost` picks `::1` precisely so an IPv4 listener cannot
+ *  answer for us, and printing `localhost` hands the choice straight back — measured on this
+ *  machine, `localhost` resolves to BOTH `::1` and `127.0.0.1`, so the browser may open the very
+ *  process the poll was written to avoid. A URL the user clicks has to name the address that was
+ *  checked.
  *
  *  Built through `URL` rather than by concatenation, so the platform does the escaping: an IPv6
  *  literal has to be bracketed or `http://::1:34567` is not a URL at all. The brackets go on
  *  BEFORE the assignment because the `hostname` setter silently REJECTS an unbracketed v6
  *  literal — measured: it leaves the previous host in place, so the launcher would have printed
- *  `localhost` for a v6 bind and sent the user to whatever holds it. */
+ *  the base host and sent the user somewhere else entirely. */
 export function launcherUrl(bindHost, port) {
   const host = launcherReachHost(bindHost);
   const url = new URL(`http://localhost:${port}`);
-  if (host === "127.0.0.1" || host === "::1") return url.origin;
   url.hostname = host.includes(":") ? `[${host}]` : host;
   return url.origin;
 }

@@ -132,7 +132,7 @@ probe.once("error", () => resolve(false));
 host 無しの bind は事実上失敗しないので、この雑さは今まで表に出なかった。host を名乗らせた
 ことで初めて到達可能になる（macOS で実測）:
 
-```
+```text
 listen(34655, '10.255.255.1')  -> EADDRNOTAVAIL   （このマシンに無いアドレス）
 listen(34655, 'nonsense-host') -> ENOTFOUND
 listen(34655, '::')            -> OK              （この PR より前の probe）
@@ -140,7 +140,7 @@ listen(34655, '::')            -> OK              （この PR より前の prob
 
 `MULMOTERMINAL_HOST=10.255.255.1` での実機出力（errno ルールを入れる前）:
 
-```
+```text
 Port 34656 is already in use.
   If that is MulmoTerminal, it is already running at http://localhost:34656
   Pick a different --port, or stop the other process.
@@ -164,7 +164,7 @@ export function probeFailureIsPortInUse(err) {
 
 修正後の同じコマンド:
 
-```
+```text
 [mulmoterminal] server error: listen EADDRNOTAVAIL: address not available 10.255.255.1:34656
 ```
 
@@ -237,7 +237,7 @@ CodeRabbit の 3 件目（plan 内のチェックマーク）は **却下**。2 
 の**後に** `startLoopbackListener` で `127.0.0.1:<port>` も bind する。probe はその 1 つ目しか
 見ていなかった。**実測で完全に再現**:
 
-```
+```text
 （stranger が 127.0.0.1:34660 を保持している状態で）
 listen(34660, "192.168.11.12") -> free        <- 修正済み probe が問うもの
 listen(34660, "127.0.0.1")     -> EADDRINUSE  <- 子が「も」必要とするもの
@@ -270,7 +270,7 @@ degrade して警告する、は server が選んだ挙動。**本当の欠陥�
 
 修正後、同じシナリオ:
 
-```
+```text
   ✓ MulmoTerminal is ready
   → http://192.168.11.12:34661        <- 200、我々の server
 （localhost:34661 は stranger のまま。server 自身の [bind] 警告がその degrade を説明する）
@@ -299,4 +299,39 @@ degrade して警告する、は server が選んだ挙動。**本当の欠陥�
 
 ゲート: format / lint / typecheck / build / test すべて exit 0。
 `yarn test` は **親 `c8901e90` + この節の変更を入れたツリーで 11470 passed**（前方参照にしないため、既知の sha で書いた）。
+
+### iter-3 — CodeRabbit が現 head を初めて読み、Major を 1 件
+
+CI Codex は `c109f61b` に **LGTM** を出した。同じ head を CodeRabbit が読んで、**正確な Major**:
+
+> `launcherReachHost` selects `::1` to prevent an IPv4 loopback listener from answering the
+> readiness check. Line 119 then converts `::1` back to `localhost`. A browser can resolve
+> `localhost` to the competing IPv4 listener, so the printed and auto-opened URL can again
+> target another process.
+
+そのとおりだった。**poll を精密にしておきながら、URL でその精度を捨てていた。** 実測:
+
+```text
+localhost resolves to: [{"address":"::1","family":6},{"address":"127.0.0.1","family":4}]
+```
+
+`localhost` は両方に解決するので、ブラウザは poll が避けたはずのプロセスを開き得る。
+**ユーザーがクリックする URL は、チェックしたアドレスを名乗らなければならない。**
+
+`launcherUrl` は `localhost` を返すのをやめ、常に具体アドレスを名乗る:
+
+| bind | 表示 |
+|---|---|
+| `127.0.0.1` / `0.0.0.0` | `http://127.0.0.1:<port>` |
+| `::` | `http://[::1]:<port>` |
+| 具体アドレス | そのアドレス |
+
+既定構成のユーザーにも見える変更（`localhost` → `127.0.0.1`）だが、この PR の主題は
+**launcher が嘘をつかないこと**なので、親しみやすさより真実を取る。実機で確認:
+バナーが `http://127.0.0.1:34670` を出し、その URL が 200 を返す。
+
+MD040（fence に言語指定が無い）も指摘された。CodeRabbit が挙げたのは diff hunk 内の 2 箇所
+だったが、**ファイル全体を走査して 5 箇所すべて**にラベルを付けた（closer は対象外）。
+
+break-verify: URL を `localhost` に戻すと 3 red。復元は byte-identical。
 

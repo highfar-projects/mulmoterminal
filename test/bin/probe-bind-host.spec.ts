@@ -116,9 +116,23 @@ describe("the address the launcher uses to reach the server it started", () => {
     expect(launcherReachHost("::")).toBe("::1");
   });
 
+  // The URL names the CONCRETE address, never `localhost`. Printing `localhost` throws away the
+  // precision the reach host just established: measured on macOS, `localhost` resolves to BOTH
+  // `::1` and `127.0.0.1`, so a browser can open the very process the poll avoided. Flagged by
+  // CodeRabbit as a Major on the first head it reviewed after the readiness fix.
   describe("and the URL it prints for that address", () => {
-    it.each(["127.0.0.1", "0.0.0.0", "::"])("says localhost for %s, which is friendlier and true", (host) => {
-      expect(launcherUrl(host, 34567)).toBe("http://localhost:34567");
+    it("never says localhost, whatever the bind", () => {
+      ["127.0.0.1", "0.0.0.0", "::", "192.168.11.12", "fd00::1"].forEach((host) => expect(launcherUrl(host, 34567)).not.toContain("localhost"));
+    });
+
+    it("names v4 loopback for the default and for the v4 wildcard", () => {
+      ["127.0.0.1", "0.0.0.0"].forEach((host) => expect(new URL(launcherUrl(host, 34567)).hostname).toBe("127.0.0.1"));
+    });
+
+    // The one that matters most: `::` polls `::1`, so the URL has to say `::1` too, or the two
+    // disagree about which process was checked.
+    it("names v6 loopback for the v6 wildcard, matching what the poll checked", () => {
+      expect(new URL(launcherUrl("::", 34567)).hostname).toBe("[::1]");
     });
 
     // Asserted through URL rather than against a literal string: `http://<a LAN address>` trips
