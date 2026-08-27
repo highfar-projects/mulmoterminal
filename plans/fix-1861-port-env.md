@@ -50,8 +50,12 @@ PTY サニタイザで落とす案も採らない。`sanitizePtyEnv` は **ユ�
 ## 触らないもの
 
 - `server/session/mcp-config.ts` の `MULMOTERMINAL_PORT`（PTY 向け、正しい）
-- `bin/room.js`（既に `PORT` を読む）
 - `scripts/dev-server-config.js` の `set PORT=<n>`（dev 経路では元から正しい）
+
+> **当初ここに `bin/room.js` を「既に `PORT` を読むので触らない」と書いていたが、これは誤り
+> だった。** room がセル内で読んでいた `PORT` の唯一の供給源が、この変更で消す行そのもの
+> だったため、触らなければ room が別インスタンスに話しかける。code-review が見つけた。
+> 実際の変更は下の「code-review 対応」節の 1 番。
 
 ## 検証
 
@@ -66,9 +70,11 @@ PTY サニタイザで落とす案も採らない。`sanitizePtyEnv` は **ユ�
   **意図して** `PORT` を配る opt-in 機能。launcher が生の `PORT` を全 PTY に撒いていた間は、
   この機能を使っていないディレクトリにも `PORT` が入っていた。今回の変更で「`PORT` が入るのは
   ユーザーが export したときか、この機能を有効にしたときだけ」になる
-- `bin/room.js` は `Number(process.env.PORT)` で不正値を黙ってデフォルトに落とす。今回 launcher 側だけ
+- `bin/room.js` は `Number(...)` で不正値を黙ってデフォルトに落とす。今回 launcher 側だけ
   厳しくしたので、`PORT=abc mulmoterminal` は止まるが `PORT=abc mulmoterminal room` は 34567 を使う。
-  room は既存サーバに話しかけるだけで bind しないため今回は触っていない（レビュー対象）
+  room は既存サーバに話しかけるだけで bind しないので、**不正値の扱いは**触っていない（レビュー対象）。
+  ただし **room の優先順位そのものは変更した** —— `--port` > `MULMOTERMINAL_PORT` > `PORT` > default。
+  理由は下の「code-review 対応」節の 1 番
 
 ## 実機検証（2026-08-27、clean env + scratch HOME で実施）
 
@@ -154,4 +160,5 @@ tmux -L mt-porttest show-environment -g | grep -iE '^-?PORT=|^-?MULMOTERMINAL_PO
 | `MULMOTERMINAL_PORT=34615 mulmoterminal room list` | exit 0（到達） |
 | `MULMOTERMINAL_PORT=34699` で同上 | `could not reach the server at http://localhost:34699` |
 
-ゲート: format / lint / typecheck / build すべて 0、`yarn test` **11438 passed**（+8）。
+ゲート: format / lint / typecheck / build すべて 0。`yarn test` は **commit 77db6135 の時点で
+11438 passed**（sha に紐づけた事実なので、あとから増えても嘘にならない）。
