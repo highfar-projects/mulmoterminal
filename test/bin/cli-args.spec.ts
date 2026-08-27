@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import path from "node:path";
 
 import {
+  bindHostFor,
   parsePortArg,
   chooseCwd,
   portInUseAction,
@@ -116,6 +117,35 @@ describe("parsePortArg", () => {
       const result = port(["--port", "80x"]);
       expect("error" in result && result.error).toContain('"80x"');
     });
+  });
+});
+
+// Which address a port question is about. This is the whole of #1876: the probe asked about the
+// `::` wildcard while the server bound loopback, so it reported a held port free and the
+// second-instance guard never fired. A bind collides only with the SAME address.
+describe("bindHostFor", () => {
+  it("is loopback when the operator named no address", () => {
+    expect(bindHostFor({})).toBe("127.0.0.1");
+  });
+
+  // Not a fixed 127.0.0.1: pinning it would re-break what #31 fixed, by missing a peer on the
+  // wildcard for an operator who deliberately widened the bind.
+  it("follows a widened bind, so the probe still matches what the server will do", () => {
+    expect(bindHostFor({ MULMOTERMINAL_HOST: "0.0.0.0" })).toBe("0.0.0.0");
+    expect(bindHostFor({ MULMOTERMINAL_HOST: "::" })).toBe("::");
+    expect(bindHostFor({ MULMOTERMINAL_HOST: "192.168.1.10" })).toBe("192.168.1.10");
+  });
+
+  // An exported-but-empty value is not an address; `??` here would hand `listen()` an empty
+  // string. Same shape as the empty-PORT case in parsePortArg.
+  it.each(["", undefined])("falls back to loopback for %o", (value) => {
+    expect(bindHostFor({ MULMOTERMINAL_HOST: value })).toBe("127.0.0.1");
+  });
+
+  it("reads only the environment it is given", () => {
+    const env = { MULMOTERMINAL_HOST: "0.0.0.0" };
+    bindHostFor(env);
+    expect(env).toEqual({ MULMOTERMINAL_HOST: "0.0.0.0" });
   });
 });
 

@@ -17,6 +17,7 @@ import { computeUpdateNotice, isUpdateCheckDisabled } from "./update-check.js";
 import { detectNpxCacheDir, npxCacheHintLines } from "./npx-cache-hint.js";
 import { waitUntilReady } from "./wait-ready.js";
 import {
+  bindHostFor,
   chooseCwd,
   parsePortArg,
   portInUseAction,
@@ -38,6 +39,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PKG_DIR = join(__dirname, "..");
 const SERVER_ENTRY = join(PKG_DIR, "server", "index.ts");
 const DEFAULT_PORT = 34567;
+// The address every port question in this file is about. Read once: a probe that asked about a
+// different address than the server binds is #1876, and asking the same variable the server asks
+// is what stops that drifting again. Keep the default in step with BIND_HOST in
+// server/config/env.ts — a spec asserts the two agree.
+const BIND_HOST = bindHostFor(process.env);
 // Printed wherever the user is told how to stop a server, so it names a command they actually have.
 const STOP_COMMAND = stopCommandFor(PKG_DIR);
 // Server exit code meaning "port taken at bind time" — keep in sync with
@@ -237,16 +243,17 @@ function pickOpenCommand() {
   return "xdg-open";
 }
 
-// Resolve with true if nothing is listening on `port`, false otherwise. Binds
-// without a host — same as the server's `server.listen(port)` (the `::`
-// dual-stack address) — so the probe and the real bind agree on availability.
-// Probing 127.0.0.1 here let a port held only on `::` slip through as "free".
+// Resolve with true if the SERVER could bind `port`, false otherwise — which is the question
+// choosePort needs answered, and not the same as "is anyone using this port". A bind collides
+// only with the same address (measured), so the probe uses the one the server will use. It
+// bound the `::` wildcard until #1876, which answered "free" for a port a running MulmoTerminal
+// held on loopback and so kept the second-instance guard from ever firing.
 function isPortFree(port) {
   return new Promise((resolve) => {
     const probe = createServer();
     probe.once("error", () => resolve(false));
     probe.once("listening", () => probe.close(() => resolve(true)));
-    probe.listen(port);
+    probe.listen(port, BIND_HOST);
   });
 }
 
@@ -284,6 +291,10 @@ function resolveCwd(args) {
 
 // Ask the OS for a free port (listen on 0) and return the one it assigned, or null. Only
 // reached once someone has said yes to a second instance.
+//
+// On BIND_HOST for the same reason isPortFree is (#1876): a port the OS calls free on the
+// wildcard can be taken on the address the server will actually bind, and handing back one of
+// those sends the user to a second instance that cannot start.
 function findEphemeralPort() {
   return new Promise((resolve) => {
     const probe = createServer();
@@ -292,7 +303,7 @@ function findEphemeralPort() {
       const { port } = probe.address();
       probe.close(() => resolve(port));
     });
-    probe.listen(0);
+    probe.listen(0, BIND_HOST);
   });
 }
 

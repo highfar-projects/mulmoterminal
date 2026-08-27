@@ -44,6 +44,32 @@ export function parsePortArg(args, env, defaultPort) {
 }
 
 /**
+ * The address the server will bind, and therefore the ONE address a port probe has to try.
+ *
+ * `isPortFree` used to probe with no host — the `::` dual-stack wildcard — and its comment
+ * justified that by saying the server did the same. It did, until the server moved to loopback
+ * by default (b696a967, 2026-07-26) and never touched this file. From then on the probe asked
+ * about an address nothing was listening on, so it answered "free" for a port a running
+ * MulmoTerminal was holding, and the second-instance guard (#611, #653) stopped firing (#1876).
+ *
+ * Measured on macOS: a bind only collides with the SAME address. With 34567 held on
+ * `127.0.0.1`, `listen(34567)`, `listen(34567,'::')` and `listen(34567,'0.0.0.0')` all
+ * succeed; only `listen(34567,'127.0.0.1')` reports EADDRINUSE.
+ *
+ * So this is deliberately NOT a fixed host. Pinning `127.0.0.1` would re-break what #31 fixed —
+ * an operator who widens the bind would go back to missing a peer on the wildcard. The probe
+ * follows whatever the server will do, by reading the same variable the server reads
+ * (`BIND_HOST` in server/config/env.ts). Keep the default in step with that file; a spec
+ * asserts the two agree, the same way PORT_IN_USE_EXIT_CODE is pinned.
+ *
+ * And note what the probe is FOR: not "is anyone using this port", but "will the child's
+ * listen(port, BIND_HOST) succeed". Probing the same address answers exactly that.
+ */
+export function bindHostFor(env) {
+  return env.MULMOTERMINAL_HOST || "127.0.0.1";
+}
+
+/**
  * Which directory to run in, before it is made absolute.
  * Precedence: `--cwd` (relative allowed) > CLAUDE_CWD > the directory the launcher was run
  * from. `mustExist` is set only for `--cwd`: a typo there should stop the launch, while a

@@ -1,6 +1,7 @@
 export type PortChoice = { port: number; explicit: boolean } | { error: string };
 export type CwdChoice = { path: string; mustExist: boolean } | { error: string };
 export declare function parsePortArg(args: string[], env: Record<string, string | undefined>, defaultPort: number): PortChoice;
+export declare function bindHostFor(env: Record<string, string | undefined>): string;
 export declare function chooseCwd(args: string[], env: Record<string, string | undefined>): CwdChoice;
 export declare function portInUseMessage(port: number, explicit: boolean): string;
 export declare function portInUseAction(explicit: boolean, isTTY: boolean | undefined): "ask" | "stop";
