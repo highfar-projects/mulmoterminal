@@ -416,6 +416,20 @@ Options:
 `);
 }
 
+/**
+ * Where a port nobody typed on this command line came from.
+ *
+ * A `PORT` can arrive from a shell profile or direnv, so the number alone leaves the user no way
+ * to see why we wanted it (#1861 review). Both facts are said out loud because they are separate
+ * surprises: we TOOK the port they may have meant for something else, and — unlike a `--port`
+ * launch — that variable is still in every cell, since it is theirs and the launcher only decides
+ * what it ADDS (see serverSpawnEnv).
+ */
+function notePortFromEnvironment(port) {
+  log(`Port ${port} comes from the PORT environment variable — MulmoTerminal is taking it as its own server port.`);
+  log(`  Your PORT is also inherited by terminals inside cells, as in any shell you exported it from.`);
+}
+
 async function main() {
   const args = process.argv.slice(2);
 
@@ -465,9 +479,7 @@ async function main() {
   }
 
   const { port: requestedPort, explicit: portExplicit } = decideOrExit(parsePortArg(args, process.env, DEFAULT_PORT));
-  // A PORT can come from a shell profile or direnv rather than from this command line, so the
-  // number alone leaves the user no way to see why we wanted it (#1861 review).
-  if (portExplicit && !args.includes("--port")) log(`Port ${requestedPort} comes from the PORT environment variable`);
+  if (portExplicit && !args.includes("--port")) notePortFromEnvironment(requestedPort);
   const noOpen = args.includes("--no-open");
   const cwd = resolveCwd(args);
   log(`Workspace: ${cwd}`);

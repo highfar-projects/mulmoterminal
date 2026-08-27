@@ -6,7 +6,7 @@
 // still printing "Done". PORT left by the same route until #1857, where a dev server started
 // in a cell read it and tried to take MulmoTerminal's own port.
 import { describe, it, expect } from "vitest";
-import { serverSpawnEnv } from "../../bin/cli-args.js";
+import { parsePortArg, serverSpawnEnv } from "../../bin/cli-args.js";
 
 const CWD = "/Users/u/project";
 
@@ -51,5 +51,37 @@ describe("serverSpawnEnv", () => {
     const original = { HOME: "/Users/u" };
     serverSpawnEnv(original, CWD);
     expect(original).toEqual({ HOME: "/Users/u" });
+  });
+});
+
+// The two halves of the launcher's port decision, asserted TOGETHER — which is the only place
+// the #1861/#1857 trade-off is visible. Codex read the passthrough above as the old injection
+// still happening (round 1, P2); what distinguishes them is PROVENANCE, and provenance is a
+// property of the pair, not of either function alone.
+describe("what a launcher-chosen port leaves in the server's environment", () => {
+  const DEFAULT_PORT = 34567;
+
+  // The user's own variable, read as the request AND left alone. A cell then sees exactly what
+  // the shell that launched us saw — which is what #1857 asked for. Stripping it here would be
+  // #955's bug pointed the other way, and it would not free the port we are holding anyway.
+  it("keeps a PORT the user exported, having taken it as the request", () => {
+    const env = { HOME: "/Users/u", PORT: "34601" };
+    expect(parsePortArg([], env, DEFAULT_PORT)).toEqual({ port: 34601, explicit: true });
+    expect(serverSpawnEnv(env, CWD).PORT).toBe("34601");
+  });
+
+  // Regression (#1857): with no PORT in the user's shell, nothing invents one. The port the
+  // launcher chose travels in argv (serverNodeArgs), which no pty inherits.
+  it("adds no PORT of its own when the port came from --port", () => {
+    const env = { HOME: "/Users/u" };
+    expect(parsePortArg(["--port", "34601"], env, DEFAULT_PORT)).toEqual({ port: 34601, explicit: true });
+    expect("PORT" in serverSpawnEnv(env, CWD)).toBe(false);
+  });
+
+  // And --port winning does NOT turn into a licence to strip: the user's variable is still theirs.
+  it("keeps the user's PORT even when --port overrode it as the request", () => {
+    const env = { HOME: "/Users/u", PORT: "3000" };
+    expect(parsePortArg(["--port", "34601"], env, DEFAULT_PORT)).toEqual({ port: 34601, explicit: true });
+    expect(serverSpawnEnv(env, CWD).PORT).toBe("3000");
   });
 });
