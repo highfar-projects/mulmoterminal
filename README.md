@@ -333,7 +333,8 @@ ships while it is running still reaches the badge; the startup console notice is
 and is not repeated. Disable with `MULMOTERMINAL_NO_UPDATE_CHECK=1` (or `NO_UPDATE_NOTIFIER=1`).
 
 Options: `--cwd <dir>` (working directory — relative paths allowed; defaults to the
-directory you run the command from), `--port <n>` (default 34567), `--no-open`,
+directory you run the command from), `--port <n>` (default 34567; the
+`PORT` environment variable is used when the flag is absent), `--no-open`,
 `--version`, `--help`.
 
 ```bash

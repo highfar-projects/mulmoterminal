@@ -43,6 +43,7 @@ const S1 = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1";
 const S2 = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2";
 
 const { spawnPty, ptySpawn, ptyWouldReattach, TMUX_CLIENT_CWD } = await import("../../../server/session/pty-spawn.js");
+const { PORT } = await import("../../../server/config/env.js");
 
 const envOf = (call: number = 0): NodeJS.ProcessEnv => (spawn.mock.calls[call] as unknown as [string, string[], { env: NodeJS.ProcessEnv }])[2].env;
 const cwdOf = (call: number = 0): string => (spawn.mock.calls[call] as unknown as [string, string[], { cwd: string }])[2].cwd;
@@ -75,6 +76,30 @@ describe("spawnPty — the environment it hands the pty", () => {
   it("leaves the environment alone when nothing is named", () => {
     spawnPty("claude", [], EXISTING_CWD);
     expect(envOf().ANTHROPIC_API_KEY).toBe("sk-ant-leftover");
+  });
+});
+
+// Every terminal, not only the agent ones. `mulmoterminal room` is a plain CLI a user runs in a
+// shell cell and it has to reach THIS server: it used to find the port through the raw `PORT` the
+// launcher exported to every PTY, which is the leak #1857 is about and had to go. guiMcpEnv still
+// sets the same name on agent spawns, with the same value.
+describe("spawnPty — the port a terminal can find this server on", () => {
+  it("gives every terminal MULMOTERMINAL_PORT, agent or not", () => {
+    spawnPty("zsh", [], EXISTING_CWD);
+    expect(envOf().MULMOTERMINAL_PORT).toBe(String(PORT));
+  });
+
+  // Regression (#1857): the generic name is what a third-party dev server reads.
+  it("does not put the port under the generic PORT name", () => {
+    spawnPty("zsh", [], EXISTING_CWD);
+    expect(envOf()).not.toHaveProperty("PORT");
+  });
+
+  it("reaches a tmux pane too, where the environment comes from -e", () => {
+    tmuxOn = true;
+    ptySpawn(S1, "claude", [], EXISTING_CWD, true);
+    const args = (spawn.mock.calls[0] as unknown as [string, string[]])[1];
+    expect(args).toContain(`MULMOTERMINAL_PORT=${PORT}`);
   });
 });
 

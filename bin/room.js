@@ -47,11 +47,18 @@ function splitAtTerminator(args) {
   return at < 0 ? { options: args, literal: [] } : { options: args.slice(0, at), literal: args.slice(at + 1) };
 }
 
-/** The port to talk to: `--port`, else PORT from the environment, else the default. Read the same
- *  way the server itself reads it, so a user who moved the server does not have to say so twice. */
+/** The port to talk to: `--port`, else MULMOTERMINAL_PORT, else PORT, else the default.
+ *
+ *  MULMOTERMINAL_PORT is what a terminal INSIDE MulmoTerminal is given (server/session/pty-spawn.ts),
+ *  and it has to be preferred: `PORT` used to carry the same answer only because the launcher
+ *  exported it to every PTY, which is the leak #1857 is about. Without this, `room` run in a cell
+ *  of a server on 34601 would talk to whatever holds 34567 — or to another instance entirely.
+ *
+ *  `PORT` is kept behind it for a user running `room` in their own shell against a server they
+ *  moved with `PORT=<n>`, which is the same variable the launcher now reads (#1861). */
 function portFrom(options) {
   const at = options.indexOf("--port");
-  const named = at >= 0 ? Number(options[at + 1]) : Number(process.env.PORT);
+  const named = at >= 0 ? Number(options[at + 1]) : Number(process.env.MULMOTERMINAL_PORT || process.env.PORT);
   return Number.isFinite(named) && named > 0 ? named : DEFAULT_PORT;
 }
 

@@ -11,7 +11,7 @@ import { resolvePtyLaunchForEnv } from "../infra/resolve-bin.js";
 import { binaryProblemMessage, diagnoseBinary, type BinaryDiagnosis } from "../infra/has-binary.js";
 import { cwdProblemMessage, diagnoseSpawnCwd, type CwdDiagnosis } from "../infra/spawn-cwd.js";
 import { withoutUnset } from "./provider-env.js";
-import { SESSION_ID_RE } from "../config/env.js";
+import { PORT, SESSION_ID_RE } from "../config/env.js";
 import { reservedWorktreeEnv } from "../config/worktree-env.js";
 import { tmuxAvailable, tmuxHasSession, tmuxNewSessionArgs, tmuxScrubEnvNames } from "../infra/tmux.js";
 
@@ -48,7 +48,21 @@ export function ptyEnv(unset: readonly string[] = [], extra: Readonly<Record<str
  *
  *  Reserved, never allocated — allocation is async and happens before the spawn (see
  *  config/worktree-env.ts for why a probe at this moment would move a running server's port). */
-const spawnEnvFor = (cwd: string, requested: Readonly<Record<string, string>>): Record<string, string> => ({ ...reservedWorktreeEnv(cwd), ...requested });
+//  MULMOTERMINAL_PORT is first because it is the weakest: it is a fact about this server that
+//  EVERY terminal needs, agent or not. `mulmoterminal room` is a plain CLI a user runs in a shell
+//  cell and it has to reach THIS server rather than whatever holds 34567 — it used to find the
+//  port through the raw `PORT` the launcher gave every PTY, which is the leak #1857 is about and
+//  had to go. It belongs HERE rather than in ptyEnv: a tmux pane's environment comes from
+//  `new-session -e`, which is built from this and not from ptyEnv, so a shell cell under tmux
+//  would otherwise get nothing. guiMcpEnv sets the same name for agent spawns, same value.
+//
+//  Written out, never read back by server/config/env.ts — a `yarn dev` inside a cell would then
+//  bind MulmoTerminal's own port. See config/port-from-argv.ts.
+const spawnEnvFor = (cwd: string, requested: Readonly<Record<string, string>>): Record<string, string> => ({
+  MULMOTERMINAL_PORT: String(PORT),
+  ...reservedWorktreeEnv(cwd),
+  ...requested,
+});
 
 // pty.spawn with the binary as a PARAMETER (never a string literal at the call site),
 // so the tmux/shell/claude spawns aren't flagged as spawn-of-a-string-literal.

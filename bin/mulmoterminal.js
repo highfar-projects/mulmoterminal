@@ -341,9 +341,9 @@ function runServer(port, noOpen, cwd, onChild) {
     // and without reading stderr the launcher cannot tell that from a real bug.
     // The .env comes from where the user ran the command — the spawn's own cwd is the
     // package directory, so serverNodeArgs makes that path absolute (#795).
-    const server = spawn(process.execPath, serverNodeArgs(SERVER_ENTRY, process.cwd()), {
+    const server = spawn(process.execPath, serverNodeArgs(SERVER_ENTRY, process.cwd(), port), {
       cwd: PKG_DIR,
-      env: serverSpawnEnv(process.env, port, cwd),
+      env: serverSpawnEnv(process.env, cwd),
       stdio: ["inherit", "inherit", "pipe"],
     });
     let stderrTail = "";
@@ -406,13 +406,33 @@ Commands:
 
 Options:
   --cwd <dir>       Working directory claude runs in (default: current directory; relative paths allowed)
-  --port <number>   Server port (default: ${DEFAULT_PORT}). If it is in use, you are asked
-                    whether to start a second instance on a free port; with --port, or
-                    with no terminal to ask, startup stops instead.
+  --port <number>   Server port (default: ${DEFAULT_PORT}; the PORT environment variable is
+                    used when this flag is absent). If it is in use, you are asked
+                    whether to start a second instance on a free port; with a port
+                    named, or with no terminal to ask, startup stops instead.
   --no-open         Don't open the browser automatically
   --version         Show version
   --help            Show this help
 `);
+}
+
+/**
+ * Where a port nobody typed on this command line came from.
+ *
+ * A `PORT` can arrive from a shell profile or direnv, so the number alone leaves the user no way
+ * to see why we wanted it (#1861 review). Both facts are said out loud because they are separate
+ * surprises: we are asking for a port they may have meant for something else, and — unlike a
+ * `--port` launch — that variable is still in every cell, since it is theirs and the launcher
+ * only decides what it ADDS (see serverSpawnEnv).
+ *
+ * It says ASKING FOR, not taking. This prints before confirmNoRunningInstance, choosePort and the
+ * bind, any of which can end the launch — so "taking" was a completed action claimed twenty lines
+ * before anything was attempted (Codex round 2). Printing it later instead would lose it on the
+ * busy-port path, which is the one where "why does it want 34601?" is the actual question.
+ */
+function notePortFromEnvironment(port) {
+  log(`Port ${port} comes from the PORT environment variable — that is the port MulmoTerminal is asking for.`);
+  log(`  Terminals inside cells inherit that PORT too, as in any shell you exported it from.`);
 }
 
 async function main() {
@@ -463,7 +483,8 @@ async function main() {
     process.exit(1);
   }
 
-  const { port: requestedPort, explicit: portExplicit } = decideOrExit(parsePortArg(args, DEFAULT_PORT));
+  const { port: requestedPort, explicit: portExplicit } = decideOrExit(parsePortArg(args, process.env, DEFAULT_PORT));
+  if (portExplicit && !args.includes("--port")) notePortFromEnvironment(requestedPort);
   const noOpen = args.includes("--no-open");
   const cwd = resolveCwd(args);
   log(`Workspace: ${cwd}`);
