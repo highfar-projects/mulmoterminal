@@ -16,6 +16,21 @@ import { isIP } from "node:net";
 // here because bin/ is plain JS and cannot import the server's TypeScript, and pinned by a spec
 // the same way PORT_IN_USE_EXIT_CODE is.
 const V4_LOOPBACK_CLIENTS_DIAL = "127.0.0.1";
+
+// Whether a bind address serves only this machine. Mirrors isLoopbackAddress in
+// server/infra/loopback.ts — the whole 127.0.0.0/8 block, `::1` in both spellings, and the
+// `::ffff:` mapped form — because bin/ is plain JS and cannot import it. A spec pins the two
+// together. Written as a property so a spelling nobody listed (`127.0.0.2`, `::ffff:127.0.0.1`)
+// is covered rather than becoming another review round.
+const LOOPBACK_V4_OCTET = "(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)";
+const LOOPBACK_V4 = new RegExp(`^127\\.${LOOPBACK_V4_OCTET}\\.${LOOPBACK_V4_OCTET}\\.${LOOPBACK_V4_OCTET}$`);
+
+function isLoopbackBindHost(address) {
+  if (!address) return false;
+  const bare = address.startsWith("::ffff:") ? address.slice("::ffff:".length) : address;
+  if (bare === "::1" || bare === "0:0:0:0:0:0:0:1") return true;
+  return LOOPBACK_V4.test(bare);
+}
 import { join } from "node:path";
 
 /** A port a user typed, in either of the two places they can type one. `parseInt` stops at the
@@ -116,8 +131,19 @@ export function probeFailureIsPortInUse(err) {
  * stranger", so the failure is SILENT and the MCP clients reach the other process. Nothing else
  * in the system will say a word, which is why the launcher has to.
  *
- * A specific non-loopback bind is deliberately NOT in that boat: there `inUseIsFine` is false and
- * the server warns, so its choice to degrade stands (the call declined in round 2).
+ * WHICH BINDS GET THE COMPANION, stated as a property rather than a list of addresses — the line
+ * moved once already and a list would move again. It is not "does the server warn":
+ *
+ *   - a bind that serves ONLY THIS MACHINE (a wildcard, or any loopback address) has no purpose
+ *     left once this machine's own clients are misrouted, so the launch is pointless and the
+ *     port counts as taken;
+ *   - a specific NON-loopback bind was chosen to serve other machines, and that purpose survives
+ *     intact. Local convenience degrading is the server's own warned trade-off, and the launcher
+ *     does not veto it (the call declined in round 2, and it still stands).
+ *
+ * `::1` is why this is a property. Round 7 drew the line at "the server stays silent", which put
+ * `::1` on the wrong side — it warns, but it is loopback-only, so a warned degradation still
+ * leaves a server nobody local can reach correctly.
  *
  * The probe/bind race the launcher already lives with is unchanged: this narrows the window, it
  * does not close it.
@@ -125,6 +151,9 @@ export function probeFailureIsPortInUse(err) {
 export function probeHostsFor(bindHost) {
   if (bindHost === "0.0.0.0") return ["0.0.0.0", V4_LOOPBACK_CLIENTS_DIAL];
   if (bindHost === "::") return ["::", "::1", V4_LOOPBACK_CLIENTS_DIAL];
+  // A bind that serves ONLY this machine has no purpose left if this machine's own clients are
+  // misrouted, so its companion address is required rather than nice to have.
+  if (isLoopbackBindHost(bindHost)) return [bindHost, ...(bindHost === V4_LOOPBACK_CLIENTS_DIAL ? [] : [V4_LOOPBACK_CLIENTS_DIAL])];
   return [bindHost];
 }
 

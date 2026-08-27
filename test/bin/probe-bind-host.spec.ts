@@ -215,6 +215,33 @@ describe("every address a launch needs the port to be free on", () => {
     expect(probeHostsFor("::")).toContain("127.0.0.1");
   });
 
+  // Decided by a PROPERTY, not a list of addresses — the line has moved twice already. A bind
+  // that serves only this machine has no purpose left once this machine's own clients are
+  // misrouted, so spellings nobody enumerated are covered rather than becoming another round.
+  it.each(["::1", "0:0:0:0:0:0:0:1", "::ffff:127.0.0.1", "127.0.0.2"])("treats %s as loopback-only and reserves the companion", (host) => {
+    expect(probeHostsFor(host)).toEqual([host, "127.0.0.1"]);
+  });
+
+  it("does not repeat itself when the bind already IS that address", () => {
+    expect(probeHostsFor("127.0.0.1")).toEqual(["127.0.0.1"]);
+  });
+
+  // The other half of the property, and the round-2 call that still stands: a specific
+  // non-loopback bind was chosen to serve OTHER machines, and that purpose survives a degraded
+  // local listener — which the server warns about. The launcher does not veto it.
+  it.each(["192.168.11.12", "10.0.0.5", "128.0.0.1"])("leaves a remote-serving bind alone: %s", (host) => {
+    expect(probeHostsFor(host)).toEqual([host]);
+  });
+
+  // The predicate is duplicated into bin/ because that is plain JS. Pinned against its source so
+  // the two cannot drift into disagreeing about what loopback means.
+  it("agrees with server/infra/loopback.ts about what counts as loopback", () => {
+    const loopback = readFileSync(path.join(REPO_ROOT, "server", "infra", "loopback.ts"), "utf8");
+    expect(loopback, "isLoopbackAddress no longer unwraps the ::ffff: mapped form").toContain('startsWith("::ffff:")');
+    expect(loopback, "isLoopbackAddress no longer accepts both ::1 spellings").toContain('"0:0:0:0:0:0:0:1"');
+    expect(loopback, "isLoopbackAddress no longer covers the whole 127.0.0.0/8 block").toContain("^127");
+  });
+
   // The literal is duplicated into bin/ because that is plain JS and cannot import the server's
   // TypeScript. Pinned against its source the way PORT_IN_USE_EXIT_CODE is, so the two cannot
   // drift into disagreeing about which address local clients use.
