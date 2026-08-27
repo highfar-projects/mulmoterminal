@@ -19,6 +19,7 @@ import { waitUntilReady } from "./wait-ready.js";
 import {
   bindHostFor,
   chooseCwd,
+  probeFailureIsPortInUse,
   parsePortArg,
   portInUseAction,
   portInUseMessage,
@@ -251,7 +252,8 @@ function pickOpenCommand() {
 function isPortFree(port) {
   return new Promise((resolve) => {
     const probe = createServer();
-    probe.once("error", () => resolve(false));
+    // A failed probe is not automatically a taken port — see probeFailureIsPortInUse.
+    probe.once("error", (err) => resolve(!probeFailureIsPortInUse(err)));
     probe.once("listening", () => probe.close(() => resolve(true)));
     probe.listen(port, BIND_HOST);
   });

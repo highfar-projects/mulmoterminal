@@ -109,3 +109,86 @@ probe するのはどちらでも正しい）。
 
 ゲート: format / lint / typecheck / build / test すべて 0。
 `yarn test` は **commit 時点で 11451 passed**（sha に紐づけた事実として記録）。
+
+## codex-cross-review 対応（2026-08-27、round 1）
+
+Codex は round 1 で **LGTM**（全 10 軸 none、FINDINGS COMPLETE あり）。しかし自分の評価で
+**Codex が挙げなかった MUST-FIX を 1 件**見つけたので、この round は clean にしていない。
+
+### probe が host を名乗ったことで、新しい errno クラスが到達可能になった
+
+`isPortFree` は **あらゆる** エラーを「使用中」に潰していた:
+
+```js
+probe.once("error", () => resolve(false));
+```
+
+host 無しの bind は事実上失敗しないので、この雑さは今まで表に出なかった。host を名乗らせた
+ことで初めて到達可能になる（macOS で実測）:
+
+```
+listen(34655, '10.255.255.1')  -> EADDRNOTAVAIL   （このマシンに無いアドレス）
+listen(34655, 'nonsense-host') -> ENOTFOUND
+listen(34655, '::')            -> OK              （この PR より前の probe）
+```
+
+`MULMOTERMINAL_HOST=10.255.255.1` での実機出力（errno ルールを入れる前）:
+
+```
+Port 34656 is already in use.
+  If that is MulmoTerminal, it is already running at http://localhost:34656
+  Pick a different --port, or stop the other process.
+```
+
+**全文が嘘。** 34656 は誰も掴んでいないし、問題はポートではなくアドレスが存在しないこと。
+しかも「動いているプロセスを止めろ」「別のポートにしろ」と、存在しない相手を追わせる。
+
+### 直し方
+
+「このポートは取られているか」に答えられるのは `EADDRINUSE` だけ。それ以外は
+**probe が問えなかった**のであって、そのときは launch を進めてサーバに本当の errno を
+報告させるのが有用（= この PR より前の挙動と同じ）。
+
+```js
+// bin/cli-args.js — socket 無しで検証できるよう純関数に
+export function probeFailureIsPortInUse(err) {
+  return Boolean(err) && err.code === "EADDRINUSE";
+}
+```
+
+修正後の同じコマンド:
+
+```
+[mulmoterminal] server error: listen EADDRNOTAVAIL: address not available 10.255.255.1:34656
+```
+
+### Codex の判断（step C-bis、同一 round 内）
+
+4 点すべて同意。1 点、私の言い方より正確な指摘があったので採用した ——
+**雑なルール自体は元からあり、この PR は `EADDRNOTAVAIL` / `ENOTFOUND` を「到達可能にした」**。
+「この PR が作った」ではない。
+
+`findEphemeralPort` は据え置きで合意。「このホストで空きポートを取れるか」を問うており、
+BIND_HOST が bind 不能なら「空きポートが見つからない」は精度は低いがその launch にとって真。
+
+### 前例を後から見つけた
+
+`server/config/worktree-env.ts:63` の `isPortFree` は **既にこのルールを正しく実装していて、
+コメントに理由まで書いてある**:
+
+> Loopback and not 0.0.0.0: a dev server listening on every interface makes a loopback bind fail
+> too, so this still sees it, while probing 0.0.0.0 would MISS a server bound to 127.0.0.1 only.
+
+つまり repo は答えを知っていて、**launcher だけが仲間外れ**だった。そちらの errno 潰しは
+`127.0.0.1` 固定（loopback は必ず存在する）なので EADDRNOTAVAIL / ENOTFOUND が起き得ず、
+正しいまま。
+
+### break-verify（追加分）
+
+| ミューテーション | 結果 |
+|---|---|
+| `probeFailureIsPortInUse` が常に true | 7 red |
+| `isPortFree` の error ハンドラを `resolve(false)` に戻す | 実機で偽の "already in use" が再現 |
+
+各回のあと `diff -q` でバックアップと byte-identical であることを確認。
+

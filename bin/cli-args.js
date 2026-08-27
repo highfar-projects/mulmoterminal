@@ -70,6 +70,23 @@ export function bindHostFor(env) {
 }
 
 /**
+ * A port probe failed. Does that mean the PORT IS TAKEN, or only that the probe could not ask?
+ *
+ * Only `EADDRINUSE` answers the question. Naming a host on the probe (see bindHostFor) made the
+ * other errors reachable for the first time: a `MULMOTERMINAL_HOST` that is not an address on
+ * this machine fails `EADDRNOTAVAIL`, a name that does not resolve fails `ENOTFOUND`, and a
+ * privileged port fails `EACCES`. Folding any of those into "in use" tells the operator to stop
+ * a process that does not exist and to pick a port that was never the problem.
+ *
+ * The honest answer for those is "I could not tell", and the useful behaviour is to let the
+ * launch proceed: the server binds for real and reports the actual errno, which is exactly what
+ * happened before the probe named a host.
+ */
+export function probeFailureIsPortInUse(err) {
+  return Boolean(err) && err.code === "EADDRINUSE";
+}
+
+/**
  * Which directory to run in, before it is made absolute.
  * Precedence: `--cwd` (relative allowed) > CLAUDE_CWD > the directory the launcher was run
  * from. `mustExist` is set only for `--cwd`: a typo there should stop the launch, while a

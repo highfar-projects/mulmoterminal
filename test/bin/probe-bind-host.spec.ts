@@ -15,7 +15,7 @@ import { createServer } from "node:net";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { bindHostFor } from "../../bin/cli-args.js";
+import { bindHostFor, probeFailureIsPortInUse } from "../../bin/cli-args.js";
 import { BIND_HOST } from "../../server/config/env.js";
 
 const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -42,6 +42,29 @@ describe("the launcher probes the address the server binds", () => {
     const probes = [...launcher.matchAll(/probe\.listen\(([^)]*)\)/g)].map((m) => m[1]);
     expect(probes.length, "bin/mulmoterminal.js no longer probes with a `probe.listen(...)` — #1876's guard moved or was renamed").toBeGreaterThan(0);
     probes.forEach((args) => expect(args, `probe.listen(${args}) names no host, so it binds the :: wildcard — that is #1876`).toContain("BIND_HOST"));
+  });
+});
+
+// Naming a host on the probe made a whole class of errno reachable that a hostless bind never
+// produced, and folding them into "the port is in use" is a message that sends the operator
+// after a process that does not exist. Found during Claude review of this PR, not flagged by
+// Codex, which had already returned LGTM.
+describe("what a failed probe actually tells you", () => {
+  it("EADDRINUSE means the port is taken", () => {
+    expect(probeFailureIsPortInUse({ code: "EADDRINUSE" })).toBe(true);
+  });
+
+  // Each of these became reachable only because the probe now names a host: an address that is
+  // not on this machine, a name that does not resolve, a privileged port. Measured on macOS:
+  // listen(port,'10.255.255.1') is EADDRNOTAVAIL and listen(port,'nonsense-host') is ENOTFOUND.
+  it.each(["EADDRNOTAVAIL", "ENOTFOUND", "EACCES", "EINVAL"])("%s means the probe could not ask, not that the port is taken", (code) => {
+    expect(probeFailureIsPortInUse({ code })).toBe(false);
+  });
+
+  // Defensive rather than reachable: `error` always carries an Error here. A rule that throws on
+  // the shape it is handed would turn a bad launch into a crashed launcher.
+  it.each([null, undefined, {}])("treats %o as 'could not ask'", (err) => {
+    expect(probeFailureIsPortInUse(err)).toBe(false);
   });
 });
 
