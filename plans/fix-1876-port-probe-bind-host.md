@@ -205,3 +205,98 @@ format / lint / typecheck / build / test すべて exit 0。
 
 > 数値と sha は**同じ行**に置くこと。前の行に sha があっても人間は読めるが、行単位の grep
 > からは見えないので、claims sweep がすり抜ける。
+
+## gh-review-loop 対応（2026-08-27）
+
+`/codex-cross-review` は**ローカルの `codex exec`** を回すもので、**GitHub 側の bot が PR に
+書いたものを一切読まない**。そのループが 3 ラウンドで LGTM に収束している間、CI の
+`Codex auto-review` と CodeRabbit の指摘がスレッドに未読で残っていた（CI Codex 自身が
+"this remains the unresolved … issue from the earlier Codex changes-requested" と言っている）。
+**2 つのループは代替ではない。**
+
+### iter-1 — spec 自体の欠陥 2 件（CI Codex と CodeRabbit が独立に同じ 2 件）
+
+1. **default-host の assertion が実行環境に依存していた。** `bindHostFor({})`（常に fallback）と
+   `BIND_HOST`（実値）を比較していたので、`MULMOTERMINAL_HOST` を export している runner では
+   欠陥が無くても赤くなる。修正前に再現: `MULMOTERMINAL_HOST=0.0.0.0` で
+   `expected '127.0.0.1' to be '0.0.0.0'`。絡まっていた 3 つの主張に分解した ——
+   ①どんな環境でも launcher と server は同じアドレスを選ぶ ②**default** は server の
+   **ソース**に対して固定（実環境が届かない） ③widen した場合。
+2. **`peer.release()` が非同期 close を投げて即 return し、固定 50ms sleep が代役をしていた。**
+   遅い runner では次の bind が close と競合し、自分のテストの peer を「衝突」と報告し得る。
+   close コールバックで resolve する promise を返し、両呼び出し側で await。
+
+CodeRabbit の 3 件目（plan 内のチェックマーク）は **却下**。2 箇所とも backtick 内で
+`printReadyBanner` が実際に出力する文字列の逐語引用で、CLAUDE.md が `bin/mulmoterminal.js` の
+`✓ / ✗ / ○` を意図的な機能的例外として明記している。消すと引用が嘘になる。理由は inline
+スレッドに返信済み。
+
+### iter-2 — 「子プロセスの bind は 1 つではない」（CI Codex、質の高い指摘）
+
+`MULMOTERMINAL_HOST` が非 loopback の具体アドレスのとき、`server/index.ts` は primary の bind
+の**後に** `startLoopbackListener` で `127.0.0.1:<port>` も bind する。probe はその 1 つ目しか
+見ていなかった。**実測で完全に再現**:
+
+```
+（stranger が 127.0.0.1:34660 を保持している状態で）
+listen(34660, "192.168.11.12") -> free        <- 修正済み probe が問うもの
+listen(34660, "127.0.0.1")     -> EADDRINUSE  <- 子が「も」必要とするもの
+
+MULMOTERMINAL_HOST=192.168.11.12 mulmoterminal --port 34660
+  ✓ MulmoTerminal is ready
+  → http://localhost:34660
+$ curl http://localhost:34660/   ->  NOT MULMOTERMINAL
+```
+
+**bot の提案する修正には従っていない。** 「両方の listener を reserve/check せよ」だが、それは
+launch を止めることになり、server 側の**意図的な判断**を上書きする ——
+`startLoopbackListener` のコメントが明記している:
+
+> BEST EFFORT, and deliberately not fatal: … Failing the boot because the extra one could not
+> bind would turn a degraded setup into no setup at all — so it warns … and carries on.
+
+degrade して警告する、は server が選んだ挙動。**本当の欠陥はバナーが嘘をつくこと**で、そちらは
+どこにも意図されていない。原因は #1876 とまったく同じ形 —— **launcher の 3 つ目の
+「このポートはどのアドレスのことか」問い合わせ箇所が、`127.0.0.1` をハードコードしていた**
+（`bin/wait-ready.js` の `probeOnce`）。probe を 2 箇所直して 3 箇所目を残すのは
+「site を直して class を直さない」そのもの。
+
+- `launcherReachHost(bindHost)` —— 起動した server に**到達する**アドレス。
+  `0.0.0.0`→`127.0.0.1`、`::`→**`::1`**（127.0.0.1 の v4 socket は dual-stack より
+  **specific** なので接続を奪う。それが今回の事象そのもの）、具体アドレス→自分自身
+- `launcherUrl(bindHost, port)` —— 表示用。loopback を serve するなら `localhost`、
+  でなければ実アドレス
+- `probeOnce` / `waitUntilReady` が host を受け取るようにし、launcher が渡す
+
+修正後、同じシナリオ:
+
+```
+  ✓ MulmoTerminal is ready
+  → http://192.168.11.12:34661        <- 200、我々の server
+（localhost:34661 は stranger のまま。server 自身の [bind] 警告がその degrade を説明する）
+```
+
+### 途中で潰した自分のミス 2 件
+
+- **`new URL` の `hostname` setter は括弧なしの IPv6 を黙って無視する。** 実測すると
+  `fd00::1` を入れても `localhost` のまま。信じて出荷していたら、v6 bind で
+  launcher が `localhost` を表示して**赤の他人に案内する**という、この PR が扱っている
+  クラスそのもののバグになっていた。代入前に括弧を付ける
+- **最初に書いた source-guard は書式に依存していた。** `waitUntilReady(port,` を探していたが、
+  prettier が呼び出しを複数行に折り返した瞬間に赤くなった。**formatter が壊せる guard は
+  直されずに消される**ので、レイアウトではなく式（`host: launcherReachHost(BIND_HOST)`）で照合する
+
+### break-verify（iter-1 / iter-2 追加分）
+
+| ミューテーション | 結果 |
+|---|---|
+| `bindHostFor` を定数に固定 | env 未設定で 1 red、`=0.0.0.0` で 2 red |
+| `release` を no-op に | 1 red |
+| readiness poll を loopback ハードコードに戻す | 1 red |
+| `::` を `127.0.0.1` にマップ（shadowing バグ） | 1 red |
+
+各回のあと `diff -q` で byte-identical 復元を確認。
+
+ゲート: format / lint / typecheck / build / test すべて exit 0。
+`yarn test` は **親 `c8901e90` + この節の変更を入れたツリーで 11470 passed**（前方参照にしないため、既知の sha で書いた）。
+

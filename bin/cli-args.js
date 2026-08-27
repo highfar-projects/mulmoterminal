@@ -87,6 +87,41 @@ export function probeFailureIsPortInUse(err) {
 }
 
 /**
+ * The address the LAUNCHER should connect to, to reach the server it just started.
+ *
+ * This is the third place in the launcher that asks "which address does this port mean", after
+ * the two probes — and it was the last one still answering with a hardcoded `127.0.0.1`. That is
+ * #1876's mistake in the readiness check: with `MULMOTERMINAL_HOST` set to a specific address and
+ * a stranger holding loopback, the poll got the STRANGER's 200 and printed
+ * "MulmoTerminal is ready" over a URL serving somebody else's app. Measured end to end.
+ *
+ * A wildcard is not an address you connect to, so it maps to the loopback its own family serves.
+ * `::` maps to `::1` rather than `127.0.0.1` on purpose: a v4 socket on 127.0.0.1 is MORE
+ * SPECIFIC than our dual-stack bind and wins the connection, which is the exact case above.
+ */
+export function launcherReachHost(bindHost) {
+  if (bindHost === "0.0.0.0") return "127.0.0.1";
+  if (bindHost === "::") return "::1";
+  return bindHost;
+}
+
+/** What to PRINT for that address. `localhost` where it is honest — it is friendlier and it is
+ *  what the loopback listener serves — and the real address otherwise.
+ *
+ *  Built through `URL` rather than by concatenation, so the platform does the escaping: an IPv6
+ *  literal has to be bracketed or `http://::1:34567` is not a URL at all. The brackets go on
+ *  BEFORE the assignment because the `hostname` setter silently REJECTS an unbracketed v6
+ *  literal — measured: it leaves the previous host in place, so the launcher would have printed
+ *  `localhost` for a v6 bind and sent the user to whatever holds it. */
+export function launcherUrl(bindHost, port) {
+  const host = launcherReachHost(bindHost);
+  const url = new URL(`http://localhost:${port}`);
+  if (host === "127.0.0.1" || host === "::1") return url.origin;
+  url.hostname = host.includes(":") ? `[${host}]` : host;
+  return url.origin;
+}
+
+/**
  * Which directory to run in, before it is made absolute.
  * Precedence: `--cwd` (relative allowed) > CLAUDE_CWD > the directory the launcher was run
  * from. `mustExist` is set only for `--cwd`: a typo there should stop the launch, while a

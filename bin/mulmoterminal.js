@@ -19,6 +19,8 @@ import { waitUntilReady } from "./wait-ready.js";
 import {
   bindHostFor,
   chooseCwd,
+  launcherReachHost,
+  launcherUrl,
   probeFailureIsPortInUse,
   parsePortArg,
   portInUseAction,
@@ -366,18 +368,25 @@ function runServer(port, noOpen, cwd, onChild) {
     });
     onChild(server);
 
-    const url = `http://localhost:${port}`;
-    const cancelReady = waitUntilReady(port, () => {
-      printReadyBanner(url, STOP_COMMAND);
-      if (noOpen) return;
-      try {
-        // The command is a hardcoded literal; url is http://localhost:<numeric port>.
+    // Both derived from BIND_HOST, not hardcoded: the launcher must check the server IT started
+    // and name an address that actually reaches it (#1876).
+    const url = launcherUrl(BIND_HOST, port);
+    const cancelReady = waitUntilReady(
+      port,
+      () => {
+        printReadyBanner(url, STOP_COMMAND);
+        if (noOpen) return;
+        try {
+          // The command is a hardcoded literal; url is built by launcherUrl from BIND_HOST and a
+          // numeric port, so it is one of http://localhost:<n>, http://<addr>:<n> or http://[<v6>]:<n>.
 
-        execSync(`${pickOpenCommand()} ${url}`, { stdio: "pipe" });
-      } catch {
-        log(`Open your browser: ${url}`);
-      }
-    });
+          execSync(`${pickOpenCommand()} ${url}`, { stdio: "pipe" });
+        } catch {
+          log(`Open your browser: ${url}`);
+        }
+      },
+      { host: launcherReachHost(BIND_HOST) },
+    );
 
     // `close`, not `exit`: it fires only once the piped stderr has fully drained, so the
     // whole crash output — including a trailing `_npx/<hash>` line that can arrive after
