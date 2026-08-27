@@ -10,6 +10,12 @@
 // These return a decision; the caller prints and exits. Nothing here reads argv, the
 // environment or the filesystem.
 import { isIP } from "node:net";
+
+// The v4 loopback every local client of this server dials by literal — `guiMcpUrlTemplate` in
+// server/infra/gui-mcp-registration.ts builds `http://127.0.0.1:<port>/api/mcp/...`. Duplicated
+// here because bin/ is plain JS and cannot import the server's TypeScript, and pinned by a spec
+// the same way PORT_IN_USE_EXIT_CODE is.
+const V4_LOOPBACK_CLIENTS_DIAL = "127.0.0.1";
 import { join } from "node:path";
 
 /** A port a user typed, in either of the two places they can type one. `parseInt` stops at the
@@ -102,12 +108,23 @@ export function probeFailureIsPortInUse(err) {
  * returns null — the server adds no second listener because it ASSUMES the wildcard covers
  * loopback. There is no deliberate degradation to preserve, only an assumption that can be false.
  *
+ * A `::` primary needs `127.0.0.1` too, and that one is not about shadowing — it is a hard
+ * requirement of this app. `guiMcpUrlTemplate` dials `http://127.0.0.1:<port>` by literal, so
+ * every GUI MCP client does. The server tries to serve it (`startLoopbackListener`) and, for a
+ * `::` primary ONLY, treats EADDRINUSE there as fine — `inUseIsFine`, on the reasoning that its
+ * own dual-stack socket already covers v4. That reasoning cannot tell "my own socket" from "a
+ * stranger", so the failure is SILENT and the MCP clients reach the other process. Nothing else
+ * in the system will say a word, which is why the launcher has to.
+ *
+ * A specific non-loopback bind is deliberately NOT in that boat: there `inUseIsFine` is false and
+ * the server warns, so its choice to degrade stands (the call declined in round 2).
+ *
  * The probe/bind race the launcher already lives with is unchanged: this narrows the window, it
  * does not close it.
  */
 export function probeHostsFor(bindHost) {
-  if (bindHost === "0.0.0.0") return ["0.0.0.0", "127.0.0.1"];
-  if (bindHost === "::") return ["::", "::1"];
+  if (bindHost === "0.0.0.0") return ["0.0.0.0", V4_LOOPBACK_CLIENTS_DIAL];
+  if (bindHost === "::") return ["::", "::1", V4_LOOPBACK_CLIENTS_DIAL];
   return [bindHost];
 }
 

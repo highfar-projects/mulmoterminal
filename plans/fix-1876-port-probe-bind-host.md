@@ -499,10 +499,53 @@ export function probeHostsFor(bindHost) {
 | 条件 | 結果 |
 |---|---|
 | `MULMOTERMINAL_HOST=0.0.0.0`、127.0.0.1 を占有 | `Port 34730 is already in use.` —— **ガードが発動、偽 ready 無し** |
-| `MULMOTERMINAL_HOST=::`、127.0.0.1 を占有（v4 のみ） | 起動、バナー `http://[::1]:34731` → 200。v4 の stranger は v6 の launch を妨げない |
+| `MULMOTERMINAL_HOST=::`、127.0.0.1 を占有（v4 のみ） | 起動、バナー `http://[::1]:34731` → 200。**この行の「v4 の stranger は v6 の launch を妨げない」という判断は iter-7 で覆った** —— 下の節を参照 |
 | 既定構成 | `http://127.0.0.1:34740` → 200 |
 | 埋まったポート | ガード発動 |
 
 break-verify: ワイルドカードが自分だけを probe → 2 red、`isPortFree` が BIND_HOST しか
 見ない → 1 red。復元は byte-identical。
+
+### iter-7 — 自分が「正しい」と記録した挙動が間違いだった（**6 件目**）
+
+CI Codex の P1:
+
+> The IPv6-wildcard case still leaves the server's required IPv4 loopback endpoint unchecked.
+> … `startLoopbackListener` tries its necessary `127.0.0.1` listener, gets `EADDRINUSE`, and
+> **deliberately suppresses that error for a `::` primary**. Local hooks and GUI MCP clients
+> dial `127.0.0.1`, so they reach the other process rather than this server.
+
+前提を 3 点とも確認した（推測ではなく grep で）:
+
+1. `server/infra/gui-mcp-registration.ts:23` —— `guiMcpUrlTemplate` は
+   `http://127.0.0.1:${MULMOTERMINAL_PORT}/api/mcp/...` を**リテラルで**組み立てる
+2. `loopback-listener.ts:80` —— `inUseIsFine: bound.address === V6_WILDCARD`、つまり
+   `::` のときだけ EADDRINUSE を「問題なし」とする
+3. `loopback-listener.ts:106` —— `if (plan.inUseIsFine && err.code === "EADDRINUSE") return;`
+   **警告すら出ない**
+
+`inUseIsFine` の根拠は「自分の dual-stack socket が既に v4 を覆っている」だが、
+**EADDRINUSE からは「自分の socket」と「見知らぬプロセス」が区別できない**。だから
+`::` + v4 stranger は、GUI MCP が黙って他人と喋る状態になる。
+
+**これは iter-6 で私が「v4 の stranger は v6 の launch を妨げない —— 正しい挙動」と
+記録したケースそのもの。間違っていた。** アプリ自身が v4 loopback を要求している以上、
+妨げるべきだった。上の iter-6 の表にも訂正を入れた。
+
+`probeHostsFor("::")` は `["::", "::1", "127.0.0.1"]` になった。127.0.0.1 は
+**shadowing の話ではなくアプリの要件**なので、`gui-mcp-registration.ts` を読む
+contract test で固定した（`PORT_IN_USE_EXIT_CODE` と同じやり方）。
+
+**具体アドレスの bind は今も対象外**で、根拠は iter-2 で述べたものと同じ:
+そちらは `inUseIsFine` が false で**サーバが警告する**ので、degrade するという判断が
+成立している。`::` は黙るから launcher が言うしかない。
+
+実機確認:
+
+| 条件 | 結果 |
+|---|---|
+| `MULMOTERMINAL_HOST=::`、127.0.0.1 を v4 stranger が占有 | `Port 34750 is already in use.` —— **iter-6 とは逆に、正しく止まる** |
+| 同、stranger なし | 起動、バナー `http://[::1]:34751` → 200、**GUI MCP が dial する 127.0.0.1 も 200**（過剰検知ではない） |
+
+break-verify: `::` から v4 loopback を落とすと 1 red。復元は byte-identical。
 

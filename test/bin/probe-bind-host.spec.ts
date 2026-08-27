@@ -201,7 +201,26 @@ describe("every address a launch needs the port to be free on", () => {
   // to. Checking it here is what makes that mapping sound rather than a guess.
   it("adds the loopback a wildcard would otherwise let a stranger hold", () => {
     expect(probeHostsFor("0.0.0.0")).toEqual(["0.0.0.0", "127.0.0.1"]);
-    expect(probeHostsFor("::")).toEqual(["::", "::1"]);
+    expect(probeHostsFor("::")).toContain("::1");
+  });
+
+  // `::` needs v4 loopback too, and NOT because of shadowing: every GUI MCP client dials
+  // `http://127.0.0.1:<port>` by literal. The server tries to serve it and, for a `::` primary
+  // only, treats EADDRINUSE there as fine — so a stranger holding it is SILENT and those clients
+  // reach the other process. Nothing else in the system says a word, which is why this must.
+  //
+  // This overturns what iteration 6 recorded as correct ("a v4 occupant should not block a v6
+  // launch"). It should, when the app itself requires v4 loopback.
+  it("reserves the v4 loopback that GUI MCP clients dial, even for a v6 wildcard", () => {
+    expect(probeHostsFor("::")).toContain("127.0.0.1");
+  });
+
+  // The literal is duplicated into bin/ because that is plain JS and cannot import the server's
+  // TypeScript. Pinned against its source the way PORT_IN_USE_EXIT_CODE is, so the two cannot
+  // drift into disagreeing about which address local clients use.
+  it("agrees with gui-mcp-registration.ts about the address those clients dial", () => {
+    const registration = readFileSync(path.join(REPO_ROOT, "server", "infra", "gui-mcp-registration.ts"), "utf8");
+    expect(registration, "guiMcpUrlTemplate no longer dials 127.0.0.1 by literal — probeHostsFor's reason moved").toMatch(/http:\/\/127\.0\.0\.1:/);
   });
 
   // The two lists have to agree, or the launcher verifies one address and then points the user
