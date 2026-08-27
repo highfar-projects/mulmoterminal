@@ -274,6 +274,73 @@ describe("shared app preview", () => {
     expect(docs.writes).toEqual([]);
   });
 
+  it("names the article collection even when the author did not have to", async () => {
+    // THE CROSS-REPOSITORY JOIN, executed. `article.collection` is OPTIONAL in an authored app when
+    // the view reads exactly one collection — which is the shape both blogs are written in — and
+    // publish resolves it, so the PROJECTION always carries it. A preview that re-derived it from
+    // `view.collections` instead would be the second reader of an inference publish already made,
+    // and the two eventually disagree on a document neither can ask about.
+    //
+    // What is at stake if this is undefined: the payload omits `articleCid`, the parent judges every
+    // `view.open("articles", id)` against nothing, and every headline on the app's own front page
+    // is refused as `unknown-collection`.
+    mkdirSync(path.join(root, "views"), { recursive: true });
+    writeFileSync(path.join(root, "views", "home.html"), "<h1>Journal</h1>");
+    writeApp(
+      root,
+      declaration({
+        theme: { hue: 200 },
+        collections: { bookings: { submitOnly: true } },
+        public: {
+          enabled: true,
+          read: ["bookings"],
+          submit: {
+            bookings: {
+              auth: "verifiedEmail",
+              audience: "participant",
+              createFields: ["note", "stampedAt"],
+              stampField: "stampedAt",
+              maxBytes: { note: 60_000 },
+            },
+          },
+        },
+        // NO `article.collection`, on purpose: this is the documented one-collection shape, and the
+        // one both blogs are written in.
+        views: [
+          {
+            id: "public",
+            audience: "public",
+            path: "views/home.html",
+            collections: ["bookings"],
+            article: { title: "note", body: "note" },
+            limit: { bookings: 16 },
+          },
+        ],
+      }),
+    );
+
+    const result = await previewSharedApp(root, stamp);
+
+    expect(result.ok === false ? result.problems : []).toEqual([]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.articleCid).toBe("bookings");
+  });
+
+  it("has no article collection to name on an app that publishes none", async () => {
+    // Absent rather than guessed. Most apps declare no `article` block at all, and a cid invented
+    // from `collections` here would let a page open an address the platform does not draw.
+    const result = await previewSharedApp(root, stamp);
+
+    // THE SUCCESS FIRST. `result.ok && …` is false whenever the preview failed, so an assertion
+    // written that way passes without ever reaching the thing it claims to check — a green that
+    // means "the declaration was refused", which is not what this test is about.
+    expect(result.ok === false ? result.problems : []).toEqual([]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect("articleCid" in result).toBe(false);
+  });
+
   it("hands back what the AUTHOR has already submitted, projected as the page will see it", async () => {
     // The port that did not exist. A collection people submit to is exactly the one `public.read`
     // cannot open — one visitor would be reading every other visitor's answer — so a page cannot

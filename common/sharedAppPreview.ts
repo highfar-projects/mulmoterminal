@@ -105,6 +105,15 @@ export interface SharedAppPreview {
    *  reads as "your declaration is wrong" about a declaration that is fine. That shipped once
    *  (2026-08-14) and cost an author a debugging session pointed at the wrong repository. */
   submit: Record<string, { createFields: string[] }>;
+  /** The collection whose records the platform draws as ARTICLES, when this app publishes any.
+   *
+   *  Carried for the same reason `submit` is: the PARENT judges an `open` against it, and the pane
+   *  hands it to `viewParent` as `articleCid`. Absent on every app that publishes no articles,
+   *  where a page asking to open one is refused because there is no such page to reach.
+   *
+   *  It is what a page's index links THROUGH — a sandboxed frame cannot navigate for itself — so an
+   *  app whose front page is a list of headlines has all of them dead without it. */
+  articleCid?: string;
   /** Every page this publish would put live, public first. */
   pages: PreviewPage[];
   /** Whether this publish would leave the app open to anonymous visitors. False is normal: an app

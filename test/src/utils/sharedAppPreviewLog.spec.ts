@@ -134,6 +134,24 @@ describe("the pane's log", () => {
     expect(block).toContain("a name this host does not know");
   });
 
+  it("says the page asked to open an article, and that this pane stayed put", () => {
+    // The alternative is a link that looks broken. The author clicks a headline on their own front
+    // page — which is HTML they wrote, since the platform gave the index back — nothing moves, and
+    // there is nothing anywhere to say whether the page asked or simply did nothing.
+    const block = render((log) => log.add({ kind: "open", cid: "articles", id: "why-terminals-won" }));
+    expect(block).toContain("the page asked to open 'why-terminals-won' in 'articles'");
+    expect(block).toContain("the published page would go there");
+  });
+
+  it("does not count that as a problem, because nothing about it went wrong", () => {
+    // The pane has no browser history to push onto, which is a fact about the pane. Counted, it
+    // would light the amber on every correctly-wired magazine.
+    const log = createPreviewLog({ now: ticking() });
+    log.add({ kind: "open", cid: "articles", id: "why-terminals-won" });
+    expect(log.problems()).toBe(0);
+    expect(log.size()).toBe(1);
+  });
+
   it("counts the problems and leaves an ordinary event alone", () => {
     const log = createPreviewLog({ now: ticking() });
     log.add({ kind: "handshake" });
