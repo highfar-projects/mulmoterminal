@@ -301,6 +301,53 @@ The rules are not the obstacle here and do not need working around: a submitter 
 their own row (`emailField`, or `idFrom: "auth.uid"`). What is missing in that third case is a page
 they are allowed to open. `participantRead` does not fix it.
 
+### 2c-2. If the app publishes ARTICLES, the platform draws ONE page and you draw the rest
+
+An `article` block on the public view says "this collection's records are markdown, and the platform
+draws one of them at **`/a/{slug}/{id}`**":
+
+```json
+{ "id": "public", "audience": "public",
+  "path": "views/home.html",
+  "collections": ["articles"],
+  "article": { "title": "title", "body": "body", "summary": "summary", "byline": "byline" } }
+```
+
+**`path` is still required, and the page it names is the front page.** `/a/{slug}` is yours — the
+index, the masthead, the sections, an About. It is handed the same datasets any public page gets, so
+the list of articles is a loop over records you write however the publication should look. The
+platform draws the article itself because markdown is rendered on the host's own origin without a
+sandbox, which makes the render a security boundary rather than a layout.
+
+**Link an entry to its article with `view.open(cid, id)`.** A published page is
+`sandbox="allow-scripts"` and nothing else, so an `<a href>` out of it is inert — no top navigation,
+no popups. The page names a RECORD and the host builds the address, which is also why a page cannot
+send a reader anywhere but into an article of its own app.
+
+```js
+card.addEventListener("click", () => { view.open("articles", record.id); });
+```
+
+It answers `{ opened, reason }` and **usually does not answer at all**, because a navigation that
+happened took the document with it. `opened: false` with `reason: "no-navigation"` is a host that
+does not navigate — the preview pane, where the log line says the page asked — and there is nothing
+for the page to do about it. Do not `await` it and then act.
+
+Four more things this shape settles:
+
+- **`collection` inside the `article` block**, when the view names more than one collection. With
+  one, it is inferred. `/a/{slug}/{id}` carries nothing that says which collection an id is in.
+- **`summary` is the article's standfirst**, under the title. Your index draws its own summaries out
+  of the records, so the two are not the same line.
+- **`byline` is a string somebody typed**, not an identity the rules hold. Never put an address in
+  it — the field is drawn to the whole world.
+- **`theme.hue` colours the article page and nothing else.** Your own pages carry their own CSS, and
+  publish refuses `theme` on an app that declares no `article` block.
+
+`type: "article"` is REFUSED. It used to mean "the platform draws this page", and it took the index
+with it — an app that published articles had no public face of its own. If you meet one in an
+existing `app.json`: delete `type`, keep `article`, add `path`.
+
 ### 2d. If an AGENT is going to sit at this app, give it a written job
 
 A page tells a person what the app is for. Nothing told an **agent** — an LLM at another

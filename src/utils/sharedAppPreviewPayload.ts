@@ -17,6 +17,10 @@ export function asPayload(value: unknown): SharedAppPreview | null {
   return {
     aid: typeof value.aid === "string" ? value.aid : "",
     submit: asSubmit(value.submit),
+    // ABSENT rather than "", because "" is a collection id nothing declares and the parent compares
+    // this against the cid a page names. Absent is the app that publishes no articles, which is the
+    // shape that must refuse an `open` rather than one that accidentally matches nothing.
+    ...(typeof value.articleCid === "string" && value.articleCid !== "" ? { articleCid: value.articleCid } : {}),
     pages: Array.isArray(value.pages) ? value.pages.flatMap(asPage) : [],
     publicOpen: value.publicOpen === true,
     fromLiveApp: value.fromLiveApp === true,
