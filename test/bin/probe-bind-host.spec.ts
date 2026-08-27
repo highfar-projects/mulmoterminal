@@ -11,7 +11,7 @@
 // across `bin/` (plain JS, cannot import the server's TypeScript) and `server/` needs a test
 // standing between the two copies, or the next person to move one leaves the other behind.
 import { describe, it, expect } from "vitest";
-import { createServer } from "node:net";
+import { createServer, type Server } from "node:net";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,18 +21,27 @@ import { BIND_HOST } from "../../server/config/env.js";
 const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 describe("the launcher probes the address the server binds", () => {
-  it("agrees with server/config/env.ts on the default", () => {
-    expect(bindHostFor({})).toBe(BIND_HOST);
+  // The contract, and it holds in ANY environment: given the same env, the launcher and the
+  // server pick the same address. The first version of this asserted `bindHostFor({})` against
+  // `BIND_HOST` — a fallback against a live value — so a runner that exports MULMOTERMINAL_HOST
+  // reddened it with no defect present. Reproduced: with MULMOTERMINAL_HOST=0.0.0.0 it failed
+  // "expected '127.0.0.1' to be '0.0.0.0'". Flagged by CodeRabbit and the CI Codex.
+  it("chooses the same address the server chose, whatever this process's environment is", () => {
+    expect(bindHostFor(process.env)).toBe(BIND_HOST);
   });
 
-  // BIND_HOST is read once at import, so the widened case cannot be asserted through it without
-  // reloading the module. Assert the EXPRESSION instead: both sides must read the same variable,
-  // which is what makes the agreement survive someone changing the default.
-  it("reads the same variable server/config/env.ts reads", () => {
+  // The DEFAULT, pinned against the server's SOURCE rather than its runtime value, so no live
+  // environment can reach this assertion at all.
+  it("falls back to the same default server/config/env.ts falls back to", () => {
     const serverEnv = readFileSync(path.join(REPO_ROOT, "server", "config", "env.ts"), "utf8");
     expect(serverEnv, "server/config/env.ts no longer derives BIND_HOST from MULMOTERMINAL_HOST").toMatch(
       /BIND_HOST\s*=\s*process\.env\.MULMOTERMINAL_HOST\s*\|\|\s*"127\.0\.0\.1"/,
     );
+    expect(bindHostFor({})).toBe("127.0.0.1");
+  });
+
+  // And the configured case, which the source regex above says the server treats the same way.
+  it("follows a widened bind rather than pinning loopback", () => {
     expect(bindHostFor({ MULMOTERMINAL_HOST: "0.0.0.0" })).toBe("0.0.0.0");
   });
 
@@ -82,14 +91,20 @@ describe("what a port collision requires (the premise of #1876)", () => {
   // on the line below, but a guard says which case is expected instead of asserting it away.
   const isNetworkAddress = (a: unknown): a is { port: number } => typeof a === "object" && a !== null && typeof Reflect.get(a, "port") === "number";
 
+  // `release` RESOLVES WHEN THE PORT IS ACTUALLY FREE. It used to be a bare `peer.close()` — which
+  // returns immediately — followed by a fixed 50ms sleep, so on a slow runner the next bind could
+  // race the close and report a collision that was the test's own peer. Flagged by CodeRabbit and
+  // the CI Codex; the repo has hit fixed-delay flakiness on Windows CI before.
+  const closed = (server: Server) => new Promise<void>((done) => server.close(() => done()));
+
   const takePort = (host: string) =>
-    new Promise<{ port: number; release: () => void }>((resolve, reject) => {
+    new Promise<{ port: number; release: () => Promise<void> }>((resolve, reject) => {
       const peer = createServer();
       peer.once("error", reject);
       peer.once("listening", () => {
         const address = peer.address();
         if (!isNetworkAddress(address)) return reject(new Error(`expected a network address, got ${JSON.stringify(address)}`));
-        resolve({ port: address.port, release: () => peer.close() });
+        resolve({ port: address.port, release: () => closed(peer) });
       });
       peer.listen(0, host);
     });
@@ -107,14 +122,13 @@ describe("what a port collision requires (the premise of #1876)", () => {
     try {
       expect(await canBind(peer.port, "127.0.0.1")).toBe(false);
     } finally {
-      peer.release();
+      await peer.release();
     }
   });
 
   it("and reports free once the peer lets go, so it is measuring the peer and not the port", async () => {
     const peer = await takePort("127.0.0.1");
-    peer.release();
-    await new Promise((r) => setTimeout(r, 50));
+    await peer.release();
     expect(await canBind(peer.port, "127.0.0.1")).toBe(true);
   });
 });
