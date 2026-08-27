@@ -26,7 +26,7 @@ the user turns this down.
 
 ## Start from a template when one fits
 
-Eight shapes are written out in full — declaration, schemas, and the reasoning behind each key:
+Nine shapes are written out in full — declaration, schemas, and the reasoning behind each key:
 
 - **[templates/salon.md](./templates/salon.md)** — a request that a NAMED PERSON approves, and only
   their own (a salon's bookings, interviews, repairs, review assignments). This is what `assignee`
@@ -37,7 +37,7 @@ Eight shapes are written out in full — declaration, schemas, and the reasoning
   rules.
 - **[templates/survey.md](./templates/survey.md)** — **collecting answers**, with nothing to run out
   of (a survey, a quiz, an application form, a sign-up with no cap). The shortest declaration of the
-  eight, and the shape most often written with a public page and nothing else — so this one is built
+  nine, and the shape most often written with a public page and nothing else — so this one is built
   around its `member` page, which is where the answers are read. It also spells out the three-way
   trade above, and what a tally may and may not claim about values a respondent typed.
 - **[templates/meeting-room.md](./templates/meeting-room.md)** — a bookable unit you can LIST IN
@@ -65,6 +65,17 @@ Eight shapes are written out in full — declaration, schemas, and the reasoning
   `project-board.md` turned over: an owner pressing delete on somebody else's row is refused by
   Firestore. It is also the only sample showing `public.enabled: false` beside a populated
   `public.submit`, which is the pair the naming makes look contradictory.
+- **[templates/magazine.md](./templates/magazine.md)** — writing people READ: a magazine, a blog, a
+  notice board, research notes. **This is what `views[].type: "article"` is for**, and it is the only
+  one of the nine where you write no public page at all — name which field is the headline and which
+  is the body, and the platform draws the index and a page per record, each at its own URL
+  (`idFrom: "slug"`). It is also the only one that raises its own `protocol`, the only one that has a
+  colour of its own to give a page it does not own (`theme.hue`), and the only one that shows
+  `correct` — rewriting a record that already exists. Most of its length is what this shape CANNOT
+  do, because the limits arrive late otherwise: **there are no drafts** (a readable collection is
+  readable row by row, so creating is publishing), **a status hides nothing**, `putItems` cannot
+  write to it at all, and the byline goes in the body because the drawn page maps three fields and
+  no more.
 - **[templates/ai-council.md](./templates/ai-council.md)** — a discussion the participants are AI
   AGENTS rather than people, held in public, which a human host can END (a debate, a design review
   by several models, a red-team panel). This is what **`agents[]`** is for — the app publishes the
@@ -74,7 +85,7 @@ Eight shapes are written out in full — declaration, schemas, and the reasoning
   exit, and `sealed` together — any one alone is walked around in two writes. Read it for what a
   declaration can and cannot hold when the writer is an agent you handed your sign-in to.
 
-Read the matching one before writing `app.json` by hand. All eight are checked against the real
+Read the matching one before writing `app.json` by hand. All nine are checked against the real
 publish gate by this repository's tests, so what they show is what publishes — and they spend most
 of their length on the traps, which is the part you cannot recover by guessing.
 

@@ -13,7 +13,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { CollectionSchema } from "@mulmoclaude/core/collection";
 import { declarationProblems } from "../../../server/backends/sharedApp/context.js";
-import { APP_PROTOCOL_BASE, parseAuthoredApp } from "@receptron/sharedapp";
+import { APP_PROTOCOL, APP_PROTOCOL_BASE, parseAuthoredApp } from "@receptron/sharedapp";
 import { modalCallIn } from "../../../server/backends/sharedApp/modalCall.js";
 import { formElementIn, readyNeverCalled } from "../../../server/backends/sharedApp/viewDefects.js";
 import { readdirSync } from "node:fs";
@@ -35,7 +35,25 @@ const TEMPLATE_FILES = readdirSync(TEMPLATES)
  *
  *  The removed board is named by its absence from the list below and by the git history, not in
  *  prose here: its first four letters are a task marker to `sonarjs`, and CI fails on them. */
-const EXPECTED_TEMPLATES = ["ai-council.md", "append-feed.md", "gym.md", "live-poll.md", "meeting-room.md", "project-board.md", "salon.md", "survey.md"];
+const EXPECTED_TEMPLATES = [
+  "ai-council.md",
+  "append-feed.md",
+  "gym.md",
+  "live-poll.md",
+  "magazine.md",
+  "meeting-room.md",
+  "project-board.md",
+  "salon.md",
+  "survey.md",
+];
+
+/** The templates whose declaration needs a contract NEWER than the floor, and what each one needs.
+ *
+ *  A list rather than a per-file lookup of `protocolFor`, because the point of the assertion below
+ *  is that a template's protocol is a DECISION somebody made: derived from the same function the
+ *  compiler uses, it would agree with itself forever and pin nothing. An article view is the only
+ *  key so far that moves it — see `APP_PROTOCOL`'s own note. */
+const RAISED_PROTOCOL: Record<string, string> = { "magazine.md": APP_PROTOCOL };
 
 /** The hue as CSS reads it — a NUMBER, in which `25` and `25.0` are one colour and `0` and `360`
  *  are one angle. Compared as the raw strings they are written in, each of those pairs is two
@@ -122,6 +140,10 @@ describe("the shared-app templates", () => {
 
   it("ai-council.md deploys as written", () => {
     expect(problemsFor("ai-council.md", "host@example.com", [])).toEqual([]);
+  });
+
+  it("magazine.md deploys as written", () => {
+    expect(problemsFor("magazine.md", "editor@example.jp", [])).toEqual([]);
   });
 
   it("shows no page the sandbox would silently break", () => {
@@ -235,7 +257,12 @@ describe("the shared-app templates", () => {
     // per-app stamp exists to avoid. A template that ships an article view will state its own.
     for (const file of TEMPLATE_FILES) {
       const manifest = blocksOf(file).get("app.json") as Record<string, unknown> | undefined;
-      expect(`${file}: ${String(manifest?.protocol)}`).toBe(`${file}: ${APP_PROTOCOL_BASE}`);
+      // `magazine.md` is the "template that ships an article view" this note anticipated: its
+      // public page is DRAWN by the reader rather than copied out of the declaration, so a reader
+      // that does not know `views[].type` draws the generated form in a magazine's place. It is
+      // listed above rather than derived, so raising a template's floor stays a decision.
+      const floor = Object.hasOwn(RAISED_PROTOCOL, file) ? RAISED_PROTOCOL[file] : APP_PROTOCOL_BASE;
+      expect(`${file}: ${String(manifest?.protocol)}`).toBe(`${file}: ${floor}`);
     }
   });
 
@@ -288,6 +315,7 @@ describe("the shared-app templates", () => {
       expect.arrayContaining([".claude/skills/tasks/schema.json", ".claude/skills/names/schema.json", ".claude/skills/assignments/schema.json"]),
     );
     expect([...blocksOf("append-feed.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/messages/schema.json"]));
+    expect([...blocksOf("magazine.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/articles/schema.json"]));
     expect([...blocksOf("ai-council.md").keys()]).toEqual(
       expect.arrayContaining([".claude/skills/topics/schema.json", ".claude/skills/speakers/schema.json", ".claude/skills/messages/schema.json"]),
     );
