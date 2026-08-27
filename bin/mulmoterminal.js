@@ -19,6 +19,7 @@ import { waitUntilReady } from "./wait-ready.js";
 import {
   bindHostFor,
   chooseCwd,
+  probeHostsFor,
   launcherReachHost,
   launcherUrl,
   probeFailureIsPortInUse,
@@ -261,14 +262,24 @@ function pickOpenCommand() {
 // only with the same address (measured), so the probe uses the one the server will use. It
 // bound the `::` wildcard until #1876, which answered "free" for a port a running MulmoTerminal
 // held on loopback and so kept the second-instance guard from ever firing.
-function isPortFree(port) {
+function canBind(port, host) {
   return new Promise((resolve) => {
     const probe = createServer();
     // A failed probe is not automatically a taken port — see probeFailureIsPortInUse.
     probe.once("error", (err) => resolve(!probeFailureIsPortInUse(err)));
     probe.once("listening", () => probe.close(() => resolve(true)));
-    probe.listen(port, BIND_HOST);
+    probe.listen(port, host);
   });
+}
+
+// Free means free on EVERY address this launch needs — see probeHostsFor. Sequential rather than
+// parallel: two probes racing for the same port would report the second one busy against the
+// first, which is this file's own bug wearing a different hat.
+async function isPortFree(port) {
+  for (const host of probeHostsFor(BIND_HOST)) {
+    if (!(await canBind(port, host))) return false;
+  }
+  return true;
 }
 
 function printReadyBanner(url, stopCommand) {
@@ -309,8 +320,13 @@ function resolveCwd(args) {
 // On BIND_HOST for the same reason isPortFree is (#1876): a port the OS calls free on the
 // wildcard can be taken on the address the server will actually bind, and handing back one of
 // those sends the user to a second instance that cannot start.
-function findEphemeralPort() {
-  return new Promise((resolve) => {
+//
+// And the number it comes back with is then run through isPortFree, which checks EVERY address
+// this launch needs (probeHostsFor). Asking the OS for a free port only asks about one of them,
+// so a wildcard bind could otherwise be handed a number whose loopback is already held — the
+// same shadowing that put a stranger behind the ready banner.
+async function findEphemeralPort() {
+  const offered = await new Promise((resolve) => {
     const probe = createServer();
     probe.once("error", () => resolve(null));
     probe.once("listening", () => {
@@ -319,6 +335,8 @@ function findEphemeralPort() {
     });
     probe.listen(0, BIND_HOST);
   });
+  if (offered === null) return null;
+  return (await isPortFree(offered)) ? offered : null;
 }
 
 // Ask about an ALREADY-RUNNING server, whatever port this one will use. Declining exits 0: the

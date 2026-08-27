@@ -15,7 +15,7 @@ import { createServer, type Server } from "node:net";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { bindHostFor, launcherReachHost, launcherUrl, probeFailureIsPortInUse } from "../../bin/cli-args.js";
+import { bindHostFor, launcherReachHost, launcherUrl, probeFailureIsPortInUse, probeHostsFor } from "../../bin/cli-args.js";
 import { boundAddress } from "../../server/infra/loopback.js";
 import { BIND_HOST } from "../../server/config/env.js";
 
@@ -51,7 +51,17 @@ describe("the launcher probes the address the server binds", () => {
     const launcher = readFileSync(path.join(REPO_ROOT, "bin", "mulmoterminal.js"), "utf8");
     const probes = [...launcher.matchAll(/probe\.listen\(([^)]*)\)/g)].map((m) => m[1]);
     expect(probes.length, "bin/mulmoterminal.js no longer probes with a `probe.listen(...)` — #1876's guard moved or was renamed").toBeGreaterThan(0);
-    probes.forEach((args) => expect(args, `probe.listen(${args}) names no host, so it binds the :: wildcard — that is #1876`).toContain("BIND_HOST"));
+    // `host` is the parameter canBind takes; BIND_HOST is what findEphemeralPort still asks the
+    // OS with. Either names an address; a bare `probe.listen(port)` names none, and that is the bug.
+    probes.forEach((args) => expect(args, `probe.listen(${args}) names no host, so it binds the :: wildcard — that is #1876`).toMatch(/host|BIND_HOST/));
+  });
+
+  // The port is free only when it is free on every address probeHostsFor names — a wildcard that
+  // checked only itself is how a stranger ended up behind the ready banner.
+  it("requires every needed address to be free, not just the first", () => {
+    const launcher = readFileSync(path.join(REPO_ROOT, "bin", "mulmoterminal.js"), "utf8");
+    expect(launcher).toMatch(/probeHostsFor\(BIND_HOST\)/);
+    expect(launcher, "isPortFree must fail on the FIRST address that is taken").toMatch(/if \(!\(await canBind\(port, host\)\)\) return false;/);
   });
 
   // ...and neither may the readiness poll, which is the same question asked a third way. A
@@ -174,6 +184,30 @@ describe("the address the launcher uses to reach the server it started", () => {
       // spelling a clear-text URL out as a literal.
       expect(new URL(launcherUrl("fd00::1", 34567)).hostname).toBe("[fd00::1]");
     });
+  });
+});
+
+// A wildcard and a specific address COEXIST, so a wildcard bind alone never proves the port is
+// ours. Measured with a stranger on 127.0.0.1:34720: listen(34720,"0.0.0.0") succeeds while
+// listen(34720,"127.0.0.1") is EADDRINUSE — and the banner then served the stranger. The fifth
+// finding on this rule, and the last address the launcher was still taking on faith.
+describe("every address a launch needs the port to be free on", () => {
+  it("is just the one for a specific bind, which nothing else can hold", () => {
+    expect(probeHostsFor("192.168.11.12")).toEqual(["192.168.11.12"]);
+    expect(probeHostsFor("127.0.0.1")).toEqual(["127.0.0.1"]);
+  });
+
+  // The loopback of the wildcard's OWN family — the address launcherReachHost will send the user
+  // to. Checking it here is what makes that mapping sound rather than a guess.
+  it("adds the loopback a wildcard would otherwise let a stranger hold", () => {
+    expect(probeHostsFor("0.0.0.0")).toEqual(["0.0.0.0", "127.0.0.1"]);
+    expect(probeHostsFor("::")).toEqual(["::", "::1"]);
+  });
+
+  // The two lists have to agree, or the launcher verifies one address and then points the user
+  // at another.
+  it.each(["0.0.0.0", "::", "127.0.0.1", "192.168.11.12"])("includes the address it will send the user to, for %s", (host) => {
+    expect(probeHostsFor(host)).toContain(launcherReachHost(host));
   });
 });
 

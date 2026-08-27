@@ -88,6 +88,30 @@ export function probeFailureIsPortInUse(err) {
 }
 
 /**
+ * Every address the port has to be free on before this launch can succeed.
+ *
+ * One address for a specific bind — nothing else can hold it, so whoever answers there is us.
+ * TWO for a wildcard, and that second one is the fifth finding on this rule: a wildcard and a
+ * specific address COEXIST. Measured, with a stranger on `127.0.0.1:34720`:
+ * `listen(34720,"0.0.0.0")` succeeds, `listen(34720,"127.0.0.1")` is EADDRINUSE — so the child
+ * starts, and the banner's `http://127.0.0.1:34720` serves the stranger.
+ *
+ * Checking it here rather than tolerating it is NOT the same call as the one declined in
+ * round 2, and the difference is whose decision it overrides. There, the bind was specific and
+ * `loopbackListenPlan` deliberately degrades: best effort, warns, carries on. Here the plan
+ * returns null — the server adds no second listener because it ASSUMES the wildcard covers
+ * loopback. There is no deliberate degradation to preserve, only an assumption that can be false.
+ *
+ * The probe/bind race the launcher already lives with is unchanged: this narrows the window, it
+ * does not close it.
+ */
+export function probeHostsFor(bindHost) {
+  if (bindHost === "0.0.0.0") return ["0.0.0.0", "127.0.0.1"];
+  if (bindHost === "::") return ["::", "::1"];
+  return [bindHost];
+}
+
+/**
  * The concrete address the LAUNCHER should connect to, or **null when it cannot know**.
  *
  * This is the PERMITTED set, not a list of bad cases, and it got there the hard way: four review

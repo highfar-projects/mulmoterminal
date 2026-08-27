@@ -451,3 +451,58 @@ break-verify（iter-5 追加分。各回 `diff -q` で byte-identical 復元を�
 | 報告された文字列を解決せずに信じる | 1 red |
 | 解決した値でなく生の文字列から readiness を開始 | 1 red |
 
+### iter-6 — ワイルドカードそのものが最後の推測だった（**5 件目**）
+
+CI Codex の P1:
+
+> Mapping a wildcard bind to loopback is still not a reliable way to identify the child. …
+> a pre-existing `127.0.0.1:<port>` process can answer the readiness poll/browser URL while
+> the child is only serving through its wildcard socket.
+
+**正しい。** ワイルドカードと具体アドレスは**共存できる**ので、ワイルドカードで bind できても
+そのポートが自分のものだとは言えない。実測（stranger が 127.0.0.1:34720 を保持）:
+
+```text
+listen(34720, "0.0.0.0")   -> free         子はワイルドカードに bind できる
+listen(34720, "127.0.0.1") -> EADDRINUSE   だが loopback は stranger
+→ バナー: http://127.0.0.1:34720  ->  NOT MULMOTERMINAL
+```
+
+**証拠を取り違えかけた。** 最初 `http://0.0.0.0:34720` をバナーと読んだが、それは security
+警告文の中の URL を grep が拾ったもの。ログを直接読むと本当のバナーは
+`→ http://127.0.0.1:34720` だった。**期待した単語を grep せず、行を読むこと。**
+
+#### 直し方 —— probe を「この launch が必要とする全アドレス」に
+
+```js
+export function probeHostsFor(bindHost) {
+  if (bindHost === "0.0.0.0") return ["0.0.0.0", "127.0.0.1"];
+  if (bindHost === "::") return ["::", "::1"];
+  return [bindHost];               // 具体アドレスは他が持てないので 1 つで足りる
+}
+```
+
+**これは iter-2 で却下した「両方 reserve せよ」と同じ判断ではない。** 違いは
+*誰の決定を上書きするか*:
+
+- iter-2 は**具体アドレス**の bind で、`loopbackListenPlan` が**意図的に degrade する**
+  （best effort、warn して継続）。launcher が止めるのはその決定の上書きになる
+- ここは**ワイルドカード**で、plan は `null` を返す —— サーバは「ワイルドカードが loopback も
+  カバーする」と**仮定して**second listener を足さない。**意図的な degrade は無く、
+  偽になり得る仮定があるだけ**。上書きするものが無い
+
+`findEphemeralPort` も同じ理由で `isPortFree` に通すようにした（OS が「空き」と言うのは
+1 アドレスについてだけなので、2 個目のインスタンスに loopback が塞がった番号を渡し得た）。
+
+実機確認:
+
+| 条件 | 結果 |
+|---|---|
+| `MULMOTERMINAL_HOST=0.0.0.0`、127.0.0.1 を占有 | `Port 34730 is already in use.` —— **ガードが発動、偽 ready 無し** |
+| `MULMOTERMINAL_HOST=::`、127.0.0.1 を占有（v4 のみ） | 起動、バナー `http://[::1]:34731` → 200。v4 の stranger は v6 の launch を妨げない |
+| 既定構成 | `http://127.0.0.1:34740` → 200 |
+| 埋まったポート | ガード発動 |
+
+break-verify: ワイルドカードが自分だけを probe → 2 red、`isPortFree` が BIND_HOST しか
+見ない → 1 red。復元は byte-identical。
+
