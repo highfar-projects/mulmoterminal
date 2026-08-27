@@ -18,13 +18,48 @@ import {
 } from "../../bin/cli-args.js";
 
 const DEFAULT_PORT = 34567;
-const port = (args: string[]) => parsePortArg(args, DEFAULT_PORT);
+const port = (args: string[], env: Record<string, string | undefined> = {}) => parsePortArg(args, env, DEFAULT_PORT);
 const cwd = (args: string[], env: Record<string, string | undefined> = {}) => chooseCwd(args, env);
 
 describe("parsePortArg", () => {
-  it("falls back to the default when the flag is absent", () => {
+  it("falls back to the default when neither the flag nor PORT is set", () => {
     expect(port([])).toEqual({ port: DEFAULT_PORT, explicit: false });
     expect(port(["--cwd", "/tmp"])).toEqual({ port: DEFAULT_PORT, explicit: false });
+  });
+
+  // #1861: PORT was read by nothing here, so `PORT=34601 npx mulmoterminal` started on 34567 —
+  // while the busy-port message told the user to set exactly that. The order is bin/room.js's,
+  // so the two entry points of this package cannot disagree about what a port is.
+  describe("PORT from the environment", () => {
+    it("is used when there is no flag", () => {
+      expect(port([], { PORT: "34601" })).toEqual({ port: 34601, explicit: true });
+    });
+
+    it("loses to --port", () => {
+      expect(port(["--port", "3000"], { PORT: "34601" })).toEqual({ port: 3000, explicit: true });
+    });
+
+    // `explicit` decides whether a busy port stops the launch or offers a second instance on
+    // another one. The user named a port either way.
+    it("counts as explicit, so a busy port is not silently swapped for a different one", () => {
+      expect(port([], { PORT: "34601" })).toHaveProperty("explicit", true);
+    });
+
+    // An exported-but-empty PORT is not a value. `??` here would bind port 0.
+    it.each(["", undefined])("falls through to the default for %o", (value) => {
+      expect(port([], { PORT: value })).toEqual({ port: DEFAULT_PORT, explicit: false });
+    });
+
+    // Silently launching on the default is the bug being fixed, not the safe fallback.
+    it.each(["abc", "80x", "0", "65536", "3000.5", "+3000", " 3000"])("refuses %s", (value) => {
+      expect(port([], { PORT: value })).toHaveProperty("error");
+    });
+
+    it("names PORT, not --port, when PORT is the one at fault", () => {
+      const result = port([], { PORT: "80x" });
+      expect("error" in result && result.error).toContain("PORT");
+      expect("error" in result && result.error).not.toContain("--port");
+    });
   });
 
   // `explicit` is what decides whether a busy port is a hard error or a silent retry on
@@ -305,30 +340,38 @@ describe("serverNodeArgs", () => {
   // The gap #795 closes: the dev scripts always passed this flag and the launcher never did,
   // so a key written into .env was silently absent from the server.
   it("reads .env from the launch directory, by absolute path", () => {
-    expect(serverNodeArgs(ENTRY, "/home/u/project")).toContain(`--env-file-if-exists=${path.join("/home/u/project", ".env")}`);
+    expect(serverNodeArgs(ENTRY, "/home/u/project", 34567)).toContain(`--env-file-if-exists=${path.join("/home/u/project", ".env")}`);
   });
 
   // The spawn runs with cwd set to the package directory, so a relative path would be looked
   // for inside node_modules.
   it("does not pass a bare relative .env", () => {
-    expect(serverNodeArgs(ENTRY, "/home/u/project")).not.toContain("--env-file-if-exists=.env");
+    expect(serverNodeArgs(ENTRY, "/home/u/project", 34567)).not.toContain("--env-file-if-exists=.env");
   });
 
-  // A node option after the script path is an argument to the script, not to node.
-  it("keeps every node option ahead of the entry script", () => {
-    const args = serverNodeArgs(ENTRY, "/home/u/project");
-    expect(args[args.length - 1]).toBe(ENTRY);
-    expect(args.filter((a) => a.startsWith("--")).every((a) => args.indexOf(a) < args.indexOf(ENTRY))).toBe(true);
+  // A node option after the script path is an argument to the script, not to node — and that
+  // is exactly what --port has to be, so the entry script is the boundary between the two.
+  it("keeps every node option ahead of the entry script, and --port behind it", () => {
+    const args = serverNodeArgs(ENTRY, "/home/u/project", 34601);
+    const entryAt = args.indexOf(ENTRY);
+    expect(args.slice(0, entryAt).filter((a) => a.startsWith("--"))).toEqual(["--import", `--env-file-if-exists=${path.join("/home/u/project", ".env")}`]);
+    expect(args.slice(entryAt + 1)).toEqual(["--port", "34601"]);
+  });
+
+  // #1857: the port used to travel in the environment, which the server hands to every PTY, so
+  // a dev server started in a cell tried to take MulmoTerminal's own port. argv is not inherited.
+  it("carries the port as a string argument", () => {
+    expect(serverNodeArgs(ENTRY, "/home/u/project", 34601)).toContain("34601");
   });
 
   it("still loads tsx, which is what lets the server entry be TypeScript", () => {
-    expect(serverNodeArgs(ENTRY, "/home/u/p").slice(0, 2)).toEqual(["--import", "tsx"]);
+    expect(serverNodeArgs(ENTRY, "/home/u/p", 34567).slice(0, 2)).toEqual(["--import", "tsx"]);
   });
 
   // No shell is involved in the spawn, so a directory with spaces needs no quoting — and
   // must not get any, or the path would carry literal quote characters.
   it("leaves a launch directory containing spaces as one unquoted argument", () => {
-    const flag = serverNodeArgs(ENTRY, "/home/u/My Projects/app").find((a) => a.startsWith("--env-file"));
+    const flag = serverNodeArgs(ENTRY, "/home/u/My Projects/app", 34567).find((a) => a.startsWith("--env-file"));
     expect(flag).toBe(`--env-file-if-exists=${path.join("/home/u/My Projects/app", ".env")}`);
     expect(flag).not.toContain('"');
   });

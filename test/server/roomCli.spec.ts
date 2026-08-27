@@ -41,6 +41,49 @@ describe("room CLI arguments", () => {
     expect(portForTest(["post", "r", "--", "try", "--port", "9999"])).not.toBe(9999);
     expect(portForTest(["post", "r", "--port", "34599", "hello"])).toBe(34599);
   });
+
+  // Run INSIDE a cell, `room` has to reach the server that owns the cell. It used to find it
+  // through the raw `PORT` the launcher gave every PTY — the leak #1857 is about, now gone — so
+  // the namespaced name every terminal gets (server/session/pty-spawn.ts) has to be preferred.
+  // Without this, `room` in a cell of a server on 34601 talks to whatever holds 34567.
+  describe("which server it talks to", () => {
+    const saved = { mt: process.env.MULMOTERMINAL_PORT, port: process.env.PORT };
+    const set = (mt?: string, port?: string) => {
+      if (mt === undefined) delete process.env.MULMOTERMINAL_PORT;
+      else process.env.MULMOTERMINAL_PORT = mt;
+      if (port === undefined) delete process.env.PORT;
+      else process.env.PORT = port;
+    };
+    afterEach(() => set(saved.mt, saved.port));
+
+    it("prefers MULMOTERMINAL_PORT, which is what a cell is given", () => {
+      set("34601", undefined);
+      expect(portForTest(["list"])).toBe(34601);
+    });
+
+    // A user's own PORT is not this server's port; ours wins where both are present.
+    it("prefers MULMOTERMINAL_PORT over a PORT the user exported for something else", () => {
+      set("34601", "3000");
+      expect(portForTest(["list"])).toBe(34601);
+    });
+
+    // Kept behind it for someone running `room` in their own shell against a server they moved
+    // with PORT=<n> — the same variable the launcher now reads (#1861).
+    it("falls back to PORT outside a cell", () => {
+      set(undefined, "34602");
+      expect(portForTest(["list"])).toBe(34602);
+    });
+
+    it("--port still beats both", () => {
+      set("34601", "3000");
+      expect(portForTest(["list", "--port", "34603"])).toBe(34603);
+    });
+
+    it("falls back to the default when neither is set", () => {
+      set(undefined, undefined);
+      expect(portForTest(["list"])).toBe(34567);
+    });
+  });
 });
 
 // What the parser decides is only half of it — CodeRabbit asked for the REQUEST. This asserts the

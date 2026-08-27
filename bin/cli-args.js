@@ -11,21 +11,36 @@
 // environment or the filesystem.
 import { join } from "node:path";
 
-/**
- * Which port the launcher should ask for.
- * `--port` must be a plain integer in range: a value that merely starts with digits ("80x")
- * or carries a sign or padding ("+80", "080") is a typo, and silently launching on 80 is
- * worse than saying so.
- */
-export function parsePortArg(args, defaultPort) {
-  const at = args.indexOf("--port");
-  if (at === -1) return { port: defaultPort, explicit: false };
-  const raw = args[at + 1];
+/** A port a user typed, in either of the two places they can type one. `parseInt` stops at the
+ *  first non-digit, so a typo would otherwise launch on a port nobody named — "80x" silently
+ *  becoming 80 is worse than being told. `source` names the place, so the message points at
+ *  what to correct. */
+function readPort(raw, source) {
   const parsed = Number.parseInt(raw ?? "", 10);
   if (!Number.isInteger(parsed) || String(parsed) !== raw || parsed < 1 || parsed > 65535) {
-    return { error: `Invalid --port value: "${raw ?? ""}" (expected integer 1..65535)` };
+    return { error: `Invalid ${source} value: "${raw ?? ""}" (expected integer 1..65535)` };
   }
   return { port: parsed, explicit: true };
+}
+
+/**
+ * Which port the launcher should ask for: `--port` > `PORT` > the default — the order
+ * `bin/room.js` already uses, so the two entry points of this package agree.
+ *
+ * `PORT` was ignored entirely until #1861, while the busy-port message told people to set it.
+ * An invalid one is refused rather than dropped for the same reason a bad `--port` is: falling
+ * back to the default silently IS the bug being fixed. An empty or unset `PORT` is not a value
+ * and falls through.
+ *
+ * A `PORT` from the environment counts as `explicit`, which is what decides whether a busy port
+ * stops the launch or offers a second instance on another one. The user named a port either
+ * way, and offering a different one answers a question nobody asked.
+ */
+export function parsePortArg(args, env, defaultPort) {
+  const at = args.indexOf("--port");
+  if (at !== -1) return readPort(args[at + 1], "--port");
+  if (env.PORT === undefined || env.PORT === "") return { port: defaultPort, explicit: false };
+  return readPort(env.PORT, "PORT");
 }
 
 /**
@@ -68,10 +83,10 @@ export function portInUseMessage(port, explicit) {
  * What to do when the wanted port is taken: "ask" whether to start a second instance,
  * or "stop".
  *
- * Two conditions rule the question out. An explicit --port already named the port that
- * was wanted, so offering a different one answers a question nobody asked; and with no
- * terminal to type into (a script, a service, CI) a prompt has nobody to answer it and
- * would hang the start instead of failing it.
+ * Two conditions rule the question out. A port the user NAMED — `--port`, or `PORT` in the
+ * environment (#1861) — already says which one was wanted, so offering a different one answers
+ * a question nobody asked; and with no terminal to type into (a script, a service, CI) a prompt
+ * has nobody to answer it and would hang the start instead of failing it.
  */
 export function portInUseAction(explicit, isTTY) {
   return explicit || !isTTY ? "stop" : "ask";
@@ -176,23 +191,31 @@ export function nodeMeetsMinimum(version) {
  *
  * Node options must precede the script path; anything after it is an argument to the script.
  * The launch directory is passed rather than read here so the choice stays checkable.
+ *
+ * The port goes here rather than in the environment because ARGV IS NOT INHERITED. The server
+ * hands its own environment to every PTY it spawns, so a port set there reaches every terminal
+ * in every cell — which is how a raw `PORT` made a dev server started in a cell try to take
+ * MulmoTerminal's own port (#1857). Renaming it would only move that: `MULMOTERMINAL_PORT` is
+ * deliberately given to PTYs (server/session/mcp-config.ts) for the MCP URLs, so a server
+ * reading it as its bind port would clash with itself the moment `yarn dev` ran inside a cell.
  */
-export function serverNodeArgs(serverEntry, launchDir) {
-  return ["--import", "tsx", `--env-file-if-exists=${join(launchDir, ".env")}`, serverEntry];
+export function serverNodeArgs(serverEntry, launchDir, port) {
+  return ["--import", "tsx", `--env-file-if-exists=${join(launchDir, ".env")}`, serverEntry, "--port", String(port)];
 }
 
 /**
  * The environment the launcher spawns the server with.
  *
- * Only the two values the server cannot work out for itself. In particular NOT `NODE_ENV`:
+ * Only the ONE value the server cannot work out for itself. In particular NOT `NODE_ENV`:
  * the server hands its own environment to every PTY it spawns, so a `NODE_ENV=production`
  * set here reaches every terminal in every cell — where yarn v1 reads it and installs
  * WITHOUT devDependencies while still reporting success (#955). Express is pinned to
  * production separately, in the server, so nothing here needs to say it.
  *
- * A `NODE_ENV` the user exported themselves passes through untouched: this decides what the
- * launcher adds, not what it removes.
+ * `PORT` was the same bug with a different name (#1857) and left by the same route; it is now
+ * an argument instead (see serverNodeArgs). A `PORT` or `NODE_ENV` the user exported themselves
+ * passes through untouched: this decides what the launcher adds, not what it removes.
  */
-export function serverSpawnEnv(env, port, cwd) {
-  return { ...env, PORT: String(port), CLAUDE_CWD: cwd };
+export function serverSpawnEnv(env, cwd) {
+  return { ...env, CLAUDE_CWD: cwd };
 }

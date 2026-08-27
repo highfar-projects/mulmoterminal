@@ -1,11 +1,23 @@
-// Process-wide settings read from the environment. Their own module because the session
-// registry persists under MULMOTERMINAL_HOME and validates ids with SESSION_ID_RE — taking
-// them from index.ts would make the registry import its own importer.
+// Process-wide settings read from the environment (and, for the port, the command line).
+// Their own module because the session registry persists under MULMOTERMINAL_HOME and
+// validates ids with SESSION_ID_RE — taking them from index.ts would make the registry
+// import its own importer.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { portFromArgv } from "./port-from-argv.js";
 
-export const PORT = process.env.PORT || 34567;
+// `--port` is the launcher's channel (see port-from-argv.ts for why it is not an env var).
+// `PORT` is the DEV channel and must stay: `yarn dev` runs server/index.ts directly, and
+// vite.config.ts decides its proxy target from the same variable — the two have to agree.
+const ARGV_PORT = portFromArgv(process.argv);
+// Said out loud rather than swallowed: binding a port nobody asked for is the same class of
+// surprise this whole change is about, and a hand-run `--port $UNSET_VAR` would otherwise
+// diverge from whatever the caller probed or registered, with nothing erring anywhere.
+if (ARGV_PORT === null && process.argv.includes("--port")) {
+  console.warn("[mulmoterminal] ignoring an unusable --port argument (expected integer 1..65535)");
+}
+export const PORT = ARGV_PORT ?? (process.env.PORT || 34567);
 
 // The interface the HTTP server binds to. LOOPBACK BY DEFAULT — this server has no
 // authentication of its own: every /api route, the terminal WebSockets, and the routes that

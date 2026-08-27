@@ -67,7 +67,7 @@ describe("node --env-file-if-exists", () => {
     writeFileSync(stub, "console.log(process.env.MT_ONLY_A ?? '<unset>');\n");
     // --import tsx is dropped: this exercises the .env flag, and loading tsx here would only
     // add a dependency on the transform.
-    const args = serverNodeArgs(stub, launchDir).filter((arg) => arg !== "--import" && arg !== "tsx");
+    const args = serverNodeArgs(stub, launchDir, 34567).filter((arg) => arg !== "--import" && arg !== "tsx");
     try {
       const out = execFileSync(process.execPath, args, { cwd: process.cwd(), env: { ...process.env }, encoding: "utf8" });
       expect(out.trim()).toBe("from-launch-dir");
