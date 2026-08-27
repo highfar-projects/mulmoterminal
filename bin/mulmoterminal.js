@@ -421,13 +421,18 @@ Options:
  *
  * A `PORT` can arrive from a shell profile or direnv, so the number alone leaves the user no way
  * to see why we wanted it (#1861 review). Both facts are said out loud because they are separate
- * surprises: we TOOK the port they may have meant for something else, and — unlike a `--port`
- * launch — that variable is still in every cell, since it is theirs and the launcher only decides
- * what it ADDS (see serverSpawnEnv).
+ * surprises: we are asking for a port they may have meant for something else, and — unlike a
+ * `--port` launch — that variable is still in every cell, since it is theirs and the launcher
+ * only decides what it ADDS (see serverSpawnEnv).
+ *
+ * It says ASKING FOR, not taking. This prints before confirmNoRunningInstance, choosePort and the
+ * bind, any of which can end the launch — so "taking" was a completed action claimed twenty lines
+ * before anything was attempted (Codex round 2). Printing it later instead would lose it on the
+ * busy-port path, which is the one where "why does it want 34601?" is the actual question.
  */
 function notePortFromEnvironment(port) {
-  log(`Port ${port} comes from the PORT environment variable — MulmoTerminal is taking it as its own server port.`);
-  log(`  Your PORT is also inherited by terminals inside cells, as in any shell you exported it from.`);
+  log(`Port ${port} comes from the PORT environment variable — that is the port MulmoTerminal is asking for.`);
+  log(`  Terminals inside cells inherit that PORT too, as in any shell you exported it from.`);
 }
 
 async function main() {
