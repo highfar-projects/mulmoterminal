@@ -1186,7 +1186,8 @@ enlarged one".
 
 Bound entries are listed in **Settings → Keyboard shortcuts** alongside the actions, written in the
 caret notation a terminal uses (`^E`), so you can see what a key will send without decoding
-`\uXXXX`.
+`\uXXXX`. With none bound the section still carries one **Send keys to the terminal — Not set**
+row, so the mechanism is visible before you have used it.
 
 ### Binding syntax
 

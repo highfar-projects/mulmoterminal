@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-keys
-description: Bind keyboard shortcuts and fix keyboard/clipboard behaviour in MulmoTerminal. Writes `keymap`, `copyOnSelect` and `terminalSubmit` in `~/.mulmoterminal/config.json` — the keymap cannot be set from Settings at all (its Keyboard shortcuts section only lists what is bound), while the other two have a checkbox and a picker there that this skill can explain instead of writing. Covers zooming a cell, jumping to whichever agent is waiting for you, opening and closing terminals, copy/paste, sending raw bytes to the terminal so a key the shell understands can be reached from a key your keyboard has (Cmd+Right for end-of-line), copying by selecting with no key pressed, and the Enter-vs-newline binding. Use when the user wants a shortcut or hotkey, wants to switch cells or reach a waiting agent without the mouse, wants selecting text to copy it, or reports that Shift+Enter submits their prompt instead of adding a line, that Enter drops to a new line instead of sending, that Ctrl+C stopped interrupting, or that a shortcut does nothing.
+description: Bind keyboard shortcuts and fix keyboard/clipboard behaviour in MulmoTerminal. Writes `keymap`, `copyOnSelect` and `terminalSubmit` in `~/.mulmoterminal/config.json` — the keymap cannot be set from Settings at all (its Keyboard shortcuts section only lists what is bound, `send` included), while the other two have a checkbox and a picker there that this skill can explain instead of writing. Covers zooming a cell, jumping to whichever agent is waiting for you, opening and closing terminals, copy/paste, sending raw bytes to the terminal so a key the shell understands can be reached from a key your keyboard has (Cmd+Right for end-of-line), copying by selecting with no key pressed, and the Enter-vs-newline binding. Use when the user wants a shortcut or hotkey, wants to switch cells or reach a waiting agent without the mouse, wants selecting text to copy it, or reports that Shift+Enter submits their prompt instead of adding a line, that Enter drops to a new line instead of sending, that Ctrl+C stopped interrupting, that a shortcut does nothing, or that on a Mac Cmd+Left / Cmd+Right / Cmd+Delete behave as though the Cmd were ignored — moving or deleting one character, the same as the unmodified key.
 ---
 
 # Keyboard, shortcuts and clipboard
@@ -11,6 +11,29 @@ survive.
 
 Settings has a **Keyboard shortcuts** section, but it is **read-only** — it lists every action and
 its current binding. Point the user at it after writing, as the check.
+
+## Open with a proposal, not a question
+
+Most people reach you from the **Set up shortcuts…** button in Settings, which they pressed
+without a specific binding in mind — the screen told them the feature exists and they want to know
+what it is good for. "What would you like to bind?" hands that question straight back, and it is
+the one they came to have answered.
+
+So look first, then offer:
+
+1. **Read what is already there** — `~/.mulmoterminal/config.json`. Say what is bound now (or that
+   nothing is), so the proposal is about what is missing.
+2. **Check the platform** — `uname`. It decides which sets are even usable: no `F1`–`F12` and no
+   `Option`+letter on macOS, and the Cmd line-editing set below only makes sense there.
+3. **Offer two concrete sets, one of each kind** — one from the action starter sets, and one from
+   the `send` starter sets. Name what each key will do in the terminal they are sitting in.
+4. **Write only what they pick.** The rule below still holds: every binding takes a key away from
+   the program inside the terminal, so nothing goes in unasked.
+
+**On macOS, lead with the `send` line-editing set.** Cmd+Left / Cmd+Right / Cmd+Delete are what a
+Mac user presses out of habit in every other text field; in a terminal the Cmd is dropped and the
+bare arrow gets through, so the key appears to half-work rather than to be unbound — which is
+harder to diagnose than silence (#1858). If they have not mentioned it, ask whether it bothers them.
 
 ## `keymap` — shortcuts
 
@@ -92,6 +115,32 @@ has. The motivating request was `Cmd+Right` for end-of-line on a Mac.
 A **list**, unlike the actions, because each entry carries its own payload. Control characters are
 written the way JSON writes them (`\uXXXX`) and are **not** re-interpreted — the value reaches the
 program exactly as written.
+
+#### Starter set — the one to offer unprompted
+
+The actions have starter sets and `send` did not, so `send` was only ever reached by someone who
+already knew it existed. There is exactly **one** worth proposing on its own, and padding the list
+would be worse than a short one — every other combination either already works or is reserved:
+
+| Set | Entries | Suits |
+|---|---|---|
+| **macOS line editing** | `Cmd+ArrowLeft` → `\u0001`, `Cmd+ArrowRight` → `\u0005`, `Cmd+Backspace` → `\u0015` | **The one to lead with on a Mac.** Start of line, end of line, delete to start of line — the habit every other macOS text field has trained. `Cmd+Backspace` is the Mac Delete key; `\u0015` is `Ctrl+U` |
+
+It costs nothing, which is what makes it safe to offer unprompted: those three keystrokes reach the
+terminal today as the **bare** arrow or Delete, because the Cmd is dropped. Binding them takes away
+a keystroke nobody was using.
+
+**Two that look like obvious additions and are not:**
+
+- **`Alt+ArrowLeft` / `Alt+ArrowRight` for word motion.** On macOS these usually work already —
+  the terminal receives the Option and moves by words. A `send` binding would replace working
+  behaviour with a fixed `\u001bb` / `\u001bf`, which is the same thing right up until a program
+  wanted the original. Check what the user's terminal does before offering it.
+- **`Cmd+k` for kill-to-end.** The browser takes it (`Cmd`/`Ctrl`+`K` focuses the address bar), so
+  the binding silently does nothing — the trap the syntax section lists for `W` / `T` / `N`. And
+  `Ctrl+K` is already typeable on every keyboard, so there is nothing to reach.
+
+For anything else, build the entry from the `bytes` table below rather than from a set.
 
 | Want | `bytes` | Is |
 |---|---|---|

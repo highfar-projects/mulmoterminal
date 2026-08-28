@@ -1400,7 +1400,11 @@ Favorited collections get their own toolbar buttons.
   grid — so you can flip between "see everything" and "focus on one" in a click. While
   zoomed, keys you bind walk the enlargement along the on-screen order without reaching for
   the mouse — **opt-in, nothing is bound by default**, since any bound key is taken from the
-  terminal underneath. Add a `keymap` to `~/.mulmoterminal/config.json`; see the
+  terminal underneath. Press **Set up shortcuts…** in Settings → **Keyboard shortcuts** and an
+  agent writes the `keymap` for you, checking each binding against what is already running in your
+  terminal; that section also lists what is bound now, including the
+  [keys sent straight to the terminal](https://receptron.github.io/mulmoterminal/guide/en/config.html#keymap-send).
+  To write it by hand, add a `keymap` to `~/.mulmoterminal/config.json` — see the
   [guide](https://receptron.github.io/mulmoterminal/guide/en/config.html#keymap)
   for the syntax, the action list, and combinations a browser can never bind.
 
