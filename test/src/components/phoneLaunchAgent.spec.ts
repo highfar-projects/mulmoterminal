@@ -103,7 +103,9 @@ describe("a cell the grid already knows what to run", () => {
   it("tells the grid which agent it started, so a reload reconnects to the same endpoint", async () => {
     const w = mountCell({ autoStart: true, initialAgent: "codex" });
     await flushPromises();
-    expect(w.emitted("agent")?.[0]).toEqual(["codex"]);
+    // Both halves: a launch reports the wrapper it went through, and a built-in reports none.
+    // Reporting the agent alone could not be told apart from switching off a wrapper (#1890).
+    expect(w.emitted("agent")?.[0]).toEqual([{ agent: "codex", customAgent: null }]);
   });
 
   // Nothing sets the flag without a directory today (the host refuses a session it has no cwd for),

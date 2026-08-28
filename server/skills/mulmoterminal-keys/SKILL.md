@@ -27,11 +27,21 @@ binding you add is a key the program inside the terminal (Claude Code, `vim`, `l
 | `zoom-toggle` | Enlarge / collapse — the only action that does; it enlarges whichever terminal the cursor is in | no |
 | `zoom-next` / `zoom-prev` | Move the enlargement along the on-screen order | **yes** |
 | `next-attention` | Go to the next terminal awaiting input, then finished-unreviewed, then idle — skipping cells mid-turn. Never enlarges or collapses | no |
-| `terminal-new` | Add a terminal at the end (the toolbar's `＋`) | no |
-| `terminal-new-adjacent` | Add one right after the current terminal, inheriting its cwd | **yes** |
+| `terminal-new` | Open the launch panel on the default workspace (the toolbar's `＋`) | no |
+| `terminal-new-here` | Open the launch panel on the current terminal's directory | no |
+| `terminal-new-adjacent` | Start a **shell** in the current terminal's directory, straight away — no form | **yes** |
 | `terminal-close` | Close the current terminal | **yes** |
 | `copy` | Copy the terminal's selection. Acts **only** when something is selected, so `Ctrl+C` stays usable as interrupt — with no selection the key reaches the program untouched | no |
 | `paste` | Paste into the terminal | no |
+
+The three above are easy to confuse. `terminal-new` and `terminal-new-here` open the same panel —
+the launch form, at the right edge, over whatever the grid is showing — and differ only in which
+directory it starts on. Neither needs a zoomed cell; with no terminal in view `terminal-new-here`
+falls back to the workspace rather than doing nothing. `terminal-new-adjacent` is the odd one out:
+it starts a shell immediately and shows no form at all, which is why it still needs a current cell.
+
+Neither panel action has to be bound to be reachable: the toolbar's `＋` and the `＋` on every
+terminal's header do the same two things.
 
 **Always bind `zoom-toggle` or `next-attention`.** Everything marked "yes" needs something already
 enlarged, so a keymap without one of those two can't be used without a mouse click first. Offer
