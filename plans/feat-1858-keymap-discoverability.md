@@ -282,6 +282,25 @@ CodeRabbit の Major（Arrows が macOS で単語移動を奪う）を **SKILL.m
 ターミナルより先にキーを奪う）と、そのペアで足りる理由（拡大していなくても使えるのは `zoom-toggle`
 と `next-attention` の 2 つ）付き。
 
+### スクリーンショットが古かった（ローカル codex、grep には映らない）
+
+> grep misses it because it is embedded in PNGs.
+
+**画像は撮った時点の UI を写す。** 撮影は `19a89031`（18:44 JST）、intro を掃いたのは `5fbb2578`
+（19:49 JST）。つまり committed の PNG 2 枚は、**その 1 時間後に消した文言**（"this lists what is
+bound under `keymap` now" / 「いま `keymap` に割り当てられているものが出ます」）を写したままで、
+すぐ隣のガイド本文と矛盾していた。
+
+**掃いたつもりの grep が 0 件を返したのは、文字が PNG の中にあるから。** ビルドしたバンドルを
+grep して新しい文字列を確認したのに、画像は確認していなかった。
+
+両方を現在のビルドから撮り直した（en は "Read-only, and everything is listed whether it is bound
+or not"、ja は「読み取り専用で、割り当ての有無にかかわらず全部…」を写している）。
+
+**残る危険として記録しておく**: ドキュメントのスクリーンショットは UI の文言を焼き込むので、
+**その文言を変えたら撮り直しが要る**。テストでは検出できない —— PNG を読めるものがリポジトリに
+無い。この PR では 1 巡かけて偶然見つかったが、次は見つからないかもしれない。
+
 ### ゲート
 
 `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0。
