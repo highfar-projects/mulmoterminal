@@ -178,6 +178,44 @@ describe("validateKeymap — a send and an action on one keystroke", () => {
     expect(problems[0].reason).toContain("only `zoom-next` will fire");
   });
 
+  // The three-way collision, and the reason the winner has to be resolved per GROUP rather than
+  // pairwise (codex on #1906). With copy plus TWO sends on one key there are two reachable claims
+  // and no more: copy with a selection, `send[0]` without one — because `sendBytesFor` takes the
+  // first match. Telling the user `send[1]` "fires when nothing is selected" is the same class of
+  // lie #1901 was filed for, just one entry further down.
+  it("names the first send as the no-selection winner and says the later ones never fire", () => {
+    const problems = validateKeymap({
+      copy: "Ctrl+c",
+      send: [
+        { key: "Ctrl+c", bytes: CTRL_A },
+        { key: "Ctrl+c", bytes: CTRL_E },
+      ],
+    });
+
+    expect(problems.map((p) => p.action)).toEqual(["send[0]", "send[1]"]);
+    expect(problems[0].reason).toContain("only while text is selected");
+    expect(problems[0].reason).toContain("`send[0]` fires when nothing is");
+
+    expect(problems[1].reason).toContain("never fires");
+    expect(problems[1].reason).toContain("`send[0]` when nothing is");
+    // The defect: send[1] was told it fires in the gap that send[0] already takes.
+    expect(problems[1].reason).not.toContain("`send[1]` fires when nothing is");
+  });
+
+  // A second ACTION on the key is unreachable in BOTH states, because actionForKey returns the
+  // lowest-ranked bound action and stops — so `paste` here never runs, and the claim that fires
+  // without a selection is still the send. Saying "only `copy` will fire" would be wrong twice.
+  it("does not promote a second action into copy's no-selection gap", () => {
+    const problems = validateKeymap({ copy: "Ctrl+c", paste: "Ctrl+c", send: [{ key: "Ctrl+c", bytes: CTRL_A }] });
+
+    const paste = problems.find((p) => p.action === "paste");
+    expect(paste?.reason).toContain("never fires");
+    expect(paste?.reason).toContain("`send[0]` when nothing is");
+
+    const send = problems.find((p) => p.action === "send[0]");
+    expect(send?.reason).toContain("`send[0]` fires when nothing is");
+  });
+
   it("warns about the later of two send entries claiming one keystroke", () => {
     const problems = validateKeymap({
       send: [
@@ -233,5 +271,21 @@ describe("copy vs send on one keystroke — what actually happens", () => {
   it("with nothing selected copy stands aside and the send fires — the case the old warning denied", () => {
     expect(clipboardActionFor(KEYMAP, ctrlC, false)).toBeNull();
     expect(sendBytesFor(KEYMAP, ctrlC)).toBe(CTRL_A);
+  });
+
+  // What makes `send[1]` unreachable rather than merely second: dispatch never consults it, in
+  // either selection state. This is the runtime half of the warning above.
+  it("a second send on the same key is unreachable — the first match wins", () => {
+    const twoSends: Keymap = {
+      copy: "Ctrl+c",
+      send: [
+        { key: "Ctrl+c", bytes: CTRL_A },
+        { key: "Ctrl+c", bytes: CTRL_E },
+      ],
+    };
+
+    expect(clipboardActionFor(twoSends, ctrlC, true)).toBe("copy");
+    expect(clipboardActionFor(twoSends, ctrlC, false)).toBeNull();
+    expect(sendBytesFor(twoSends, ctrlC)).toBe(CTRL_A);
   });
 });

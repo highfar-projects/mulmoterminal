@@ -72,3 +72,55 @@ same keystroke as `copy` — only `copy` will fire
 | `clipboardActionFor` から選択の条件を外す（挙動を文言に合わせる） | **2 red**（うち 1 件は既存の `^C` テスト） |
 
 2 つ目が要点 —— **メッセージと実挙動のどちらを動かしても赤くなる**ので、乖離できない。
+
+## codex review で見つかった残り —— 衝突が 3 者のとき（PR #1906 レビュー）
+
+最初の直しは **winner と loser の 2 者**でしか考えていなかった。`collisionReason` の条件が
+`winner.label === "copy" && loser.kind === "send"` なので、**同じキーに send が 2 つある**と
+両方が「選択が無いときに発火する」と言われる:
+
+```json
+{ "copy": "Ctrl+c", "send": [{ "key": "Ctrl+c", "bytes": "^A" }, { "key": "Ctrl+c", "bytes": "^B" }] }
+```
+
+**再現済み。** `validateKeymap` は `send[0]` と `send[1]` の両方に
+「`copy` は選択中だけ、`send[N]` は選択が無いとき」を返す。一方 `sendBytesFor` は
+**最初に一致した 1 件**を返す（`keymap.ts` のコメントどおり "First match wins"）ので、
+実際に返るのは `^A` = `send[0]` だけ。**`send[1]` はどちらの状態でも発火しない。**
+#1901 と同じ「実際には起きないことを起きると言う」欠陥が、1 つ下の要素に残っていた。
+
+### 直し方 —— 衝突「グループ」として解決する
+
+ペアではなく、同じキーストロークを主張する claim 全体を rank 順に並べて解決する:
+
+- **`actionForKey` は最も rank の低いアクションを返して止まる**ので、2 つ目のアクションは
+  どちらの状態でも到達しない（`copy` + `paste` + send なら `paste` は発火しない）
+- **`copy` だけが条件付き**。選択が無いと `clipboardActionFor` が null を返し、キーは
+  send ハンドラへ落ちる。そこで勝つのは `sendBytesFor` の**最初の一致**
+- よって **到達可能な claim はちょうど 2 つ**（選択あり = `copy`、選択なし = 最初の send）で、
+  **それ以外は全部 unreachable**
+
+`unselectedWinner()` を足してその「2 人目の勝者」を求め、`collisionReason` を 3 分岐にした:
+
+| loser | 文言 |
+|---|---|
+| 条件付き勝者（最初の send） | `copy` は選択中だけ、これは選択が無いとき（従来どおり） |
+| それ以外（後続の send、2 つ目のアクション） | **`copy` と `send[0]` が両状態を取るので、これは発火しない** |
+| `copy` が勝者でない全ケース | only `X` will fire（従来どおり） |
+
+### 検証
+
+- **追加した 2 件は、直す前のコードで red・直した後で green** を確認済み
+  （`git stash` で `common/keymap.ts` だけ戻して実行 → `2 failed | 31 passed`、
+  復元後 `33 passed`。復元が byte-identical であることも `diff` で確認）
+- ディスパッチ側も pin した: `copy` + send 2 件で `sendBytesFor` が `send[0]` のバイト列を返す
+  = `send[1]` が到達不能であることをテストが押さえる
+- `test/common` 全体 + `keymap-check.spec.ts` で **905 tests green**、
+  `vue-tsc -b` **exit 0**、`eslint` **exit 0**、`prettier` 差分なし
+
+**なお、最初の `vue-tsc` は 48 error を出したが全て環境要因だった。** worktree に
+symlink した `node_modules` が別チェックアウトのもので `@receptron/sharedapp@0.26.0`、
+このブランチが要求するのは `^0.34.0`。エラーは全て sharedApp 系ファイルで、
+`keymap.ts` / `keymapSend.spec.ts` には 1 件も無し。正しいバージョンを持つ
+チェックアウトの `node_modules` に貼り替えて再実行し、exit 0 を確認した。
+

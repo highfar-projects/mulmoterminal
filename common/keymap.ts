@@ -240,24 +240,35 @@ function duplicateWarnings(bound: Map<string, Claim[]>): KeymapProblem[] {
     if (claims.length < 2) return [];
     const [winner, ...losers] = [...claims].sort((a, b) => a.rank - b.rank);
     if (!winner) return []; // unreachable: claims.length >= 2 was checked above
+    const runnerUp = unselectedWinner(winner, losers);
     return losers.map((loser) => ({
       action: loser.label,
       binding: loser.binding,
-      reason: collisionReason(winner, loser),
+      reason: collisionReason(winner, runnerUp, loser),
       fatal: false,
     }));
   });
 }
 
-// What the user will actually see, which is not always a single winner.
+// The claim that fires when NOTHING is selected, or null when the winner takes both states.
 //
-// `copy` acts only while something is SELECTED (clipboardActionFor returns null otherwise, so
-// Ctrl+C keeps working as interrupt), and a send on the same keystroke fires in exactly that gap.
-// Reporting `copy` as the winner would be wrong for every keypress made without a selection.
-const collisionReason = (winner: Claim, loser: Claim): string =>
-  winner.label === "copy" && loser.kind === "send"
-    ? `same keystroke as \`copy\` — \`copy\` acts only while text is selected, and \`${loser.label}\` fires when nothing is`
-    : `same keystroke as \`${winner.label}\` — only \`${winner.label}\` will fire`;
+// `copy` is the only claim whose outcome depends on runtime state: clipboardActionFor returns
+// null with no selection (so Ctrl+C keeps working as interrupt) and the key falls through to the
+// send handler. Which send it lands on is `sendBytesFor`, and that takes the FIRST match — so a
+// copy collision has exactly TWO reachable claims, and every later send is unreachable in BOTH
+// states. Only a send can be this one: actionForKey returns the lowest-ranked bound action and
+// stops, so a second ACTION on the key is never reached either way.
+const unselectedWinner = (winner: Claim, losers: Claim[]): Claim | null =>
+  winner.label === "copy" ? (losers.find((claim) => claim.kind === "send") ?? null) : null;
+
+// What the user will actually see, which is not always a single winner.
+const collisionReason = (winner: Claim, runnerUp: Claim | null, loser: Claim): string => {
+  if (runnerUp === null) return `same keystroke as \`${winner.label}\` — only \`${winner.label}\` will fire`;
+  if (loser === runnerUp) {
+    return `same keystroke as \`copy\` — \`copy\` acts only while text is selected, and \`${loser.label}\` fires when nothing is`;
+  }
+  return `same keystroke as \`copy\` and \`${runnerUp.label}\` — \`copy\` fires while text is selected and \`${runnerUp.label}\` when nothing is, so \`${loser.label}\` never fires`;
+};
 
 // A binding's identity as a keystroke, for spotting two actions that claim the same one.
 const canonicalBinding = (b: KeyBinding): string => `${b.shift ? "S" : ""}${b.alt ? "A" : ""}${b.ctrl ? "C" : ""}${b.meta ? "M" : ""}|${b.key}`;
