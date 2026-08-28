@@ -60,6 +60,26 @@
 - **Esc で閉じたことはそのダイアログについて記憶される**ので、セルに戻っても開き直さない。
   次の質問は通常どおり開く
 
+### 2 巡目 —— 列挙にもう 1 つ足すのではなく、規則で書き直した
+
+codex（2 度目）: 「開くのはこの 2 つだけ」は誤りで、**3 つ目がある** ——
+`onPubSubReconnect` → `revealQuestion` が、リロードや接続断からの復帰でも開く。
+**そのコードは自分で読んでいたのに、絶対の列挙を書いた。**
+
+#1904 で出たばかりの結論がそのまま当てはまる:
+
+> Adding the word to the list would have been the same mistake a third time — **the list is what
+> failed, twice.**
+
+なので列挙をやめ、**規則**にした:
+
+> 規則は「質問が来たら開く」ではなく、**「拡大しているセルは、そのセッションが止まっている質問を
+> 出す」**
+
+これは `revealQuestion` の 3 つの呼び出し元（質問の到着 / 拡大セルの変化 / pubsub 再接続）を
+すべて含み、しかもどれも `expandedSessionId` で守られているという実装そのものの形。
+「ページを再読み込みしても質問を失わない」という**読者にとっての意味**も同時に言える。
+
 ## 検証
 
 - 節がリンクするアンカー（`copy-on-select` / `keymap` / `question-pane` / `terminal-submit`）が

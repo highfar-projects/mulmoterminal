@@ -1050,10 +1050,14 @@ question, so the next question your session asks will already use the new settin
   never notice the pane is there.
 - **The pane opens by itself on the ENLARGED cell** when that session asks something, and its
   buttons disappear as soon as the question is answered — in the terminal, in the pane, or with Esc.
-- **A question that arrives while its cell is tiled is not lost.** The session is still blocked on
-  it, and the pane opens the moment you enlarge that cell — which is the only other thing that
-  opens it, since it has no button of its own. Closing it with Esc is remembered for that one
-  dialog, so coming back to the cell does not put it up again; the next question opens normally.
+- **A question that arrives while its cell is tiled is not lost.** The rule is not "it opens when
+  the question arrives" but **"the enlarged cell shows the question it is blocked on"** — so
+  enlarging that cell later brings the pane up, and so does a reload or a dropped connection
+  recovering, which is why you do not lose a question by refreshing the page. It has no button of
+  its own; there is nothing to press.
+- **Closing it with Esc is remembered for that one dialog**, so coming back to the cell does not
+  put it up again — you are telling it you will answer in the terminal. The next question in that
+  cell opens normally.
 - **Claude sessions only.** The choices arrive on Claude Code's own tool hooks; a codex or shell cell
   has nothing to publish, so no pane opens there.
 - **This is the pane, not the phone.** MulmoTerminal on a phone answers the same questions whether
