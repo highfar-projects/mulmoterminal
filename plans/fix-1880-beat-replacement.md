@@ -124,3 +124,43 @@ POST … {"filePath":"stories/…json","beatIndex":2,"beat":{…"# REPRO MARKER"
 ゲート: format / lint / typecheck / build / test すべて 0。
 `yarn test` は **11514 passed**（+7、この PR が足したもの）。
 
+
+## レビューループ（`/gh-review-loop`、2026-08-28）
+
+PR #1886。codex は 1〜3 巡すべて `LGTM`。CodeRabbit は 1 巡目で 1 件、2 巡目は **rate limit で
+レビューできず**（沈黙は承認ではないので clean round に数えない）。Sourcery はこのリポジトリに
+設定されていない。
+
+**指摘を受けて直したもの**
+
+- CodeRabbit: MD040 —— 症状の再現ブロックに言語タグが無かった（`text`、他の 2 つに揃えた）
+
+**bot が挙げず、こちらの読み直しで見つけたもの**
+
+- spec が temp workspace を消していなかった。このリポジトリの `mkdtempSync` を使う spec 69 本の
+  うち 65 本は消している。1 つのテストがルートを 2 回呼ぶので、変数 1 つではなく配列で追跡する
+- **レスポンスが書き込み後のスクリプトを返すことを何も pin していなかった。** エージェントが
+  読めるのはレスポンスだけで、修正前はそれが**書き込み前**のスクリプトを成功に見えるメッセージ
+  付きで返していた。以前のスナップショットを返すホストでも全アサーションが緑のままになる
+
+**確認して「欠陥ではない」と判断したもの**（根拠付き、パッケージのソースを読んで）
+
+- **書き込みが起きていないのに publish し得るか** → しない。`executeMulmoScriptSave` は
+  `hasScript === hasFilePath` で `script`+`filePath` の同時指定も `script` 単独＋beat 対も
+  badRequest にし、`executeUpdateBeat` が失敗したらその失敗をそのまま返す。
+  よって `outcome.ok` かつ両フィールドあり ⇒ 書き込みは起きている
+- **検証されていない書き込み経路が増えるか** → 増えない。届く先は View の `updateBeat` kind が
+  既に使っている `executeUpdateBeat` そのもので、`mulmoBeatSchema.safeParse`・整数/非負・
+  ディスク上のスクリプト長との境界チェックを通り、`parsed.data` を書く
+- **publish の形はパッケージ自身のものと一致するか** → する。kind ルータも `outcome.ok` の後に
+  `ops.publishScriptChanged(filePath, origin)` を呼ぶ。こちらはそれの `origin` 無し版で、
+  wire path の正規化は `publishScriptChanged` 自身がやる
+- **メッセージを「ビートを差し替えた」にすべきか** → スコープ外。`outcome.message` はパッケージの
+  もの。エージェントの ground truth は返ってくるスクリプトで、それは上記のテストで pin した
+
+**break-verify の更新（`515cb848` 時点）**
+
+レスポンスのアサーションを足したので、M1（allowlist を #1880 に戻す）で赤くなるのが
+**4 件 → 5 件**（全 8 件中）になった。`yarn test` は **11515 passed**。
+
+`origin/main`（#1887）を取り込み、マージ結果で全ゲートを再実行。
