@@ -13,6 +13,8 @@ import { DIR_LOCAL_CONFIG_FILE } from "./dir-config.js";
 import { readJsonFile } from "../infra/read-text-file.js";
 import { isRecord } from "../../common/isRecord.js";
 import { worktreeRepoRootMount } from "../git/worktrees.js";
+import { hookSocketPath } from "../infra/hook-socket.js";
+import { PORT } from "./env.js";
 
 /** Whether `dir` has a devcontainer config, checked the same way the `devcontainer` CLI itself
  *  resolves one (`.devcontainer/devcontainer.json`, else `.devcontainer.json`). */
@@ -35,7 +37,14 @@ const DEVCONTAINER_UP_TIMEOUT_MS = 10 * 60_000;
  *  worktreeRepoRootMount's absolute-pointer approach doesn't have that failure mode. */
 export async function runDevcontainerUp(dir: string): Promise<{ ok: boolean; output: string }> {
   const mount = await worktreeRepoRootMount(dir);
-  const args = ["up", "--workspace-folder", dir, ...(mount ? ["--mount", mount] : [])];
+  // Bind-mounted 1:1 (same path inside as out) so a session spawned into this container later
+  // (spawn-claude.ts) can point its hook's curl at exactly the path it already knows — see
+  // infra/hook-socket.ts. Only when the socket actually exists: `--mount` on a missing source
+  // fails the whole `up` rather than skipping it, and the listener is best-effort (Windows,
+  // or a bind that lost a race), so a container must still come up without it.
+  const socketPath = hookSocketPath(PORT);
+  const socketMount = existsSync(socketPath) ? `type=bind,source=${socketPath},target=${socketPath}` : null;
+  const args = ["up", "--workspace-folder", dir, ...(mount ? ["--mount", mount] : []), ...(socketMount ? ["--mount", socketMount] : [])];
   return new Promise((resolve) => {
     // eslint-disable-next-line sonarjs/no-os-command-from-path -- 'devcontainer' is a standard tool from PATH, same convention as git() in worktrees.ts; all inputs go through argv (no shell)
     const child = spawn("devcontainer", args, {

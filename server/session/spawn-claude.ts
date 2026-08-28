@@ -3,6 +3,7 @@
 // sidebar's optimistic row, the draft typed into the input box, and teardown on exit.
 import type { WebSocket } from "ws";
 import { CLAUDE_CWD, PORT } from "../config/env.js";
+import { hookSocketPath } from "../infra/hook-socket.js";
 import { guiMcpEnv, carriesFullGuiMcp, fullGuiAllowedTools } from "./mcp-config.js";
 import { getUserMcpServers, getPrWorkdirFooter, getAppendSystemPrompt, getTerminalSubmit, getCustomAgents } from "../config/config-routes.js";
 import { submitSequenceForAgent } from "../../common/terminalSubmit.js";
@@ -237,7 +238,10 @@ export function createClaudeSpawner(deps: SpawnDeps) {
     const { dir, resolved } = resolveSessionBackend({ cwd, sessionId, launch, canResume });
     const addDirs = sessionAddDirs(sessionId, dir.addDirs);
 
-    const hookSettings = deps.hookSettingsJson("localhost", sessionId, resolved.env);
+    // A devcontainer session's network namespace can't reach `localhost` on the host at all
+    // (see infra/hook-socket.ts) — its hook curl is redirected onto the socket bind-mounted
+    // into the container instead, at the same path it has here.
+    const hookSettings = deps.hookSettingsJson("localhost", sessionId, resolved.env, dir.devcontainer === true ? hookSocketPath(PORT) : undefined);
     const mcpJson = deps.mcpConfigJson(sessionId, "127.0.0.1");
     // File-ized only when it is actually passed (fullGuiMcp), so a cell that never carries
     // the GUI MCP leaves no file behind for reap to clean up.

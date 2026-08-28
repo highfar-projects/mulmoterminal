@@ -19,7 +19,7 @@ export interface SpawnDeps {
   gridMcpTools: string;
   /** Bytes of pty output kept for a client that reattaches later. */
   outputBufferLimit: number;
-  hookSettingsJson: (host: string, sessionId: string, env?: Record<string, string>) => string;
+  hookSettingsJson: (host: string, sessionId: string, env?: Record<string, string>, unixSocket?: string) => string;
   mcpConfigJson: (sessionId: string, host?: string) => string;
   reap: (id: string) => void;
   setWorking: (id: string, working: boolean, event?: string) => void;

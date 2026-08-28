@@ -22,6 +22,12 @@ export interface HookSettingsInput {
   // environment, not ours — and inside a container. Omitted entirely when empty, so a
   // non-provider session's settings stay free of anything secret.
   env?: Record<string, string> | undefined;
+  // Reach the hook route via this Unix socket instead of `host`/`port` — set for a devcontainer
+  // spawn, whose network namespace can't reach loopback at all (see infra/hook-socket.ts for
+  // why `host`/`port` alone can't fix that). Same path on both sides: the socket file is
+  // bind-mounted 1:1 (devcontainer-flag.ts) rather than relocated, so nothing here needs to know
+  // the container's own filesystem layout.
+  unixSocket?: string | undefined;
 }
 
 // Tag every hook with mulmoterminal's STABLE session id via a header. Claude reissues its own
@@ -33,11 +39,13 @@ export interface HookSettingsInput {
 // from randomUUID() or a SESSION_ID_RE match, so a quote cannot reach here; the assertion is
 // in the tests rather than a runtime check, because a session id that got this far malformed
 // is a bug upstream and not something to paper over.
-const hookCommand = (host: string, port: string | number, sessionId: string): string =>
-  `curl -s -X POST http://${host}:${port}/api/hook ` + `-H 'content-type: application/json' -H 'x-mt-session: ${sessionId}' -d @- >/dev/null 2>&1`;
+const hookCommand = (host: string, port: string | number, sessionId: string, unixSocket: string | undefined): string => {
+  const target = unixSocket ? `--unix-socket ${unixSocket} http://localhost/api/hook` : `http://${host}:${port}/api/hook`;
+  return `curl -s -X POST ${target} -H 'content-type: application/json' -H 'x-mt-session: ${sessionId}' -d @- >/dev/null 2>&1`;
+};
 
-export function hookSettingsJson({ host, port, sessionId, env = {} }: HookSettingsInput): string {
-  const cmd = hookCommand(host, port, sessionId);
+export function hookSettingsJson({ host, port, sessionId, env = {}, unixSocket }: HookSettingsInput): string {
+  const cmd = hookCommand(host, port, sessionId, unixSocket);
   const entry = [{ hooks: [{ type: "command", command: cmd }] }];
   // Tool hooks take a matcher; "" matches all tools.
   const toolEntry = [{ matcher: "", hooks: [{ type: "command", command: cmd }] }];

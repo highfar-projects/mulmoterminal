@@ -33,6 +33,7 @@ import { serverErrorExit } from "./infra/server-exit.js";
 import { PORT, BIND_HOST, CLAUDE_CWD, MULMOTERMINAL_HOME, SESSION_ID_RE } from "./config/env.js";
 import { isLoopbackBinding } from "./infra/loopback.js";
 import { startLoopbackListener } from "./infra/loopback-listener.js";
+import { startHookSocketListener } from "./infra/hook-socket.js";
 import { messageOf } from "./errors.js";
 import { hookSettingsJson } from "./session/hook-settings.js";
 import { mcpConfigJson } from "./session/mcp-config.js";
@@ -338,7 +339,7 @@ const spawnDeps: SpawnDeps = {
   guiMcpTools: GUI_MCP_TOOLS,
   gridMcpTools: GRID_MCP_TOOLS,
   outputBufferLimit: OUTPUT_BUFFER_LIMIT,
-  hookSettingsJson: (host, sessionId, env) => hookSettingsJson({ host, port: PORT, sessionId, env }),
+  hookSettingsJson: (host, sessionId, env, unixSocket) => hookSettingsJson({ host, port: PORT, sessionId, env, unixSocket }),
   // The user's MCP servers are read per spawn, so a settings edit applies to the next session.
   mcpConfigJson: (sessionId, host) => mcpConfigJson({ sessionId, host, port: PORT, userMcpServers: getUserMcpServers() }),
   reap: (id) => reap(id),
@@ -540,6 +541,12 @@ const server = http.createServer(app);
 const loopbackServer = http.createServer(app);
 const listeners: readonly [http.Server, http.Server] = [server, loopbackServer];
 pubsub = createPubSub(listeners, isAllowedOrigin);
+// A fourth-ish listener, on a Unix socket rather than a port — the only way a devcontainer
+// session's hook can reach this server at all, since its network namespace has no path to
+// loopback (see infra/hook-socket.ts). Not part of `listeners`/pubsub: nothing sockets a
+// WebSocket over it, only the hook's one-shot curl. Started down at the primary bind, with
+// startLoopbackListener, rather than here — nothing about it depends on `app` being ready
+// any earlier than that.
 
 // Wire the shared file-change publisher (markdown + html live-refresh) against
 // pubsub + the workspace. Must run before any write route fires (publishFileChange
@@ -984,6 +991,7 @@ server.listen(Number(PORT), BIND_HOST, () => {
   // client dialing 127.0.0.1. Gating this on the warning left `MULMOTERMINAL_HOST=localhost`
   // broken, which is how that wiring mistake showed up here.
   startLoopbackListener(server, loopbackServer, PORT);
+  startHookSocketListener(http.createServer(app), PORT);
   const surviving = tmuxAvailable() ? tmuxListSessionIds() : [];
   const reaped: string[] = [];
   if (tmuxAvailable()) {
