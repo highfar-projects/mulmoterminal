@@ -40,6 +40,16 @@ export const isKeymapAction = (value: unknown): value is KeymapAction => typeof 
 //     ^C. A handler that has already swallowed the key cannot change its mind.
 export const TERMINAL_SCOPED_ACTIONS: readonly KeymapAction[] = ["copy", "paste"];
 
+// Actions that act ON a terminal and so need one the grid can name. The enlarged cell is the only
+// such state the grid has, so un-zoomed these do nothing rather than guessing which cell was meant.
+// `terminal-new` is exempt (appending needs no subject), and so are `zoom-toggle` / `next-attention`,
+// which pick the cell themselves — that is what makes them the keyboard's way INTO the zoom.
+//
+// Here rather than beside gridShortcutFor because BOTH sides decide from it: the grid dispatches on
+// it, and validateKeymap has to know that these decline the key — the handler returns WITHOUT
+// stopping the event, so a `send` on the same keystroke fires instead (codex on #1906).
+export const NEEDS_A_CURRENT_TERMINAL: readonly KeymapAction[] = ["zoom-next", "zoom-prev", "terminal-new-adjacent", "terminal-close"];
+
 // A key that puts BYTES into the focused terminal instead of running an app action (#1005) —
 // Cmd+Right as Ctrl+E for end-of-line, say, or Alt+B for word-back.
 //
@@ -240,7 +250,7 @@ function duplicateWarnings(bound: Map<string, Claim[]>): KeymapProblem[] {
     if (claims.length < 2) return [];
     const [winner, ...losers] = [...claims].sort((a, b) => a.rank - b.rank);
     if (!winner) return []; // unreachable: claims.length >= 2 was checked above
-    const runnerUp = unselectedWinner(winner, losers);
+    const runnerUp = fallthroughWinner(winner, losers);
     return losers.map((loser) => ({
       action: loser.label,
       binding: loser.binding,
@@ -250,24 +260,43 @@ function duplicateWarnings(bound: Map<string, Claim[]>): KeymapProblem[] {
   });
 }
 
-// The claim that fires when NOTHING is selected, or null when the winner takes both states.
+// An action that DECLINES the keystroke in some runtime state, letting it fall through to a `send`
+// binding on the same key. Naming such an action as the sole winner is wrong whenever the user is
+// in the other state, which is the whole of #1901.
 //
-// `copy` is the only claim whose outcome depends on runtime state: clipboardActionFor returns
-// null with no selection (so Ctrl+C keeps working as interrupt) and the key falls through to the
-// send handler. Which send it lands on is `sendBytesFor`, and that takes the FIRST match — so a
-// copy collision has exactly TWO reachable claims, and every later send is unreachable in BOTH
-// states. Only a send can be this one: actionForKey returns the lowest-ranked bound action and
-// stops, so a second ACTION on the key is never reached either way.
-const unselectedWinner = (winner: Claim, losers: Claim[]): Claim | null =>
-  winner.label === "copy" ? (losers.find((claim) => claim.kind === "send") ?? null) : null;
+// Two handlers decline, for the same structural reason — each returns WITHOUT stopping the event:
+//
+//   - `copy` with no selection (clipboardActionFor), deliberately, so Ctrl+C stays interrupt.
+//   - NEEDS_A_CURRENT_TERMINAL with nothing enlarged (gridShortcutFor).
+//
+// `acts` and `otherwise` are the two halves of what the user is told.
+interface StandsAside {
+  acts: string;
+  otherwise: string;
+}
+const WHILE_ENLARGED: StandsAside = { acts: "only while a terminal is enlarged", otherwise: "when none is" };
+const standsAside = (label: string): StandsAside | null => {
+  if (label === "copy") return { acts: "only while text is selected", otherwise: "when nothing is" };
+  return NEEDS_A_CURRENT_TERMINAL.some((action) => action === label) ? WHILE_ENLARGED : null;
+};
+
+// The claim that fires when the winner stands aside, or null when the winner takes every state.
+//
+// Only a send can be this one. `actionForKey` returns the lowest-ranked bound action and stops, so
+// a second ACTION on the key is never reached in either state; and `sendBytesFor` takes the FIRST
+// match, so only the first send is. A conditional collision therefore has exactly TWO reachable
+// claims and every later one is unreachable in BOTH states.
+const fallthroughWinner = (winner: Claim, losers: Claim[]): Claim | null =>
+  winner.kind === "action" && standsAside(winner.label) !== null ? (losers.find((claim) => claim.kind === "send") ?? null) : null;
 
 // What the user will actually see, which is not always a single winner.
 const collisionReason = (winner: Claim, runnerUp: Claim | null, loser: Claim): string => {
-  if (runnerUp === null) return `same keystroke as \`${winner.label}\` — only \`${winner.label}\` will fire`;
+  const aside = standsAside(winner.label);
+  if (runnerUp === null || aside === null) return `same keystroke as \`${winner.label}\` — only \`${winner.label}\` will fire`;
   if (loser === runnerUp) {
-    return `same keystroke as \`copy\` — \`copy\` acts only while text is selected, and \`${loser.label}\` fires when nothing is`;
+    return `same keystroke as \`${winner.label}\` — \`${winner.label}\` acts ${aside.acts}, and \`${loser.label}\` fires ${aside.otherwise}`;
   }
-  return `same keystroke as \`copy\` and \`${runnerUp.label}\` — \`copy\` fires while text is selected and \`${runnerUp.label}\` when nothing is, so \`${loser.label}\` never fires`;
+  return `same keystroke as \`${winner.label}\` and \`${runnerUp.label}\` — \`${winner.label}\` acts ${aside.acts} and \`${runnerUp.label}\` fires ${aside.otherwise}, so \`${loser.label}\` never fires`;
 };
 
 // A binding's identity as a keystroke, for spotting two actions that claim the same one.

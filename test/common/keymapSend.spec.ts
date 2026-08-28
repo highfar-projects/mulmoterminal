@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { sanitizeKeymap, sendBytesFor, validateKeymap, type Keymap } from "../../common/keymap.js";
 import { clipboardActionFor } from "../../common/terminalClipboard.js";
+import { gridShortcutFor } from "../../src/composables/gridShortcut.js";
 
 // #1005 — a key that puts bytes into the terminal instead of running an app action.
 //
@@ -170,13 +171,29 @@ describe("validateKeymap — a send and an action on one keystroke", () => {
     expect(problems[0].reason).toContain("only `paste` will fire");
   });
 
-  // Everything that DOES go through the grid keeps the plain wording — the fix is one exception,
-  // not a rewrite of the rule.
-  it("still says a grid action wins outright over a send", () => {
-    const problems = validateKeymap({ "zoom-next": "Ctrl+c", send: [{ key: "Ctrl+c", bytes: CTRL_A }] });
+  // A grid action that needs no subject really does win outright: `terminal-new` appends a cell
+  // and `zoom-toggle` picks its own, so neither ever hands the key back.
+  it("still says a subject-less grid action wins outright over a send", () => {
+    const problems = validateKeymap({ "terminal-new": "Ctrl+c", send: [{ key: "Ctrl+c", bytes: CTRL_A }] });
 
-    expect(problems[0].reason).toContain("only `zoom-next` will fire");
+    expect(problems[0].reason).toContain("only `terminal-new` will fire");
   });
+
+  // codex on #1906: `copy` is not the only conditional claim. The four in NEEDS_A_CURRENT_TERMINAL
+  // are refused by gridShortcutFor with nothing enlarged, and that handler returns WITHOUT
+  // stopping the event — so the same-key send fires in exactly that state. Calling `zoom-next` the
+  // outright winner is the #1901 defect again, on a different condition.
+  it.each(["zoom-next", "zoom-prev", "terminal-new-adjacent", "terminal-close"])(
+    "does not claim `%s` wins outright — it needs a terminal to act on",
+    (action) => {
+      const problems = validateKeymap({ [action]: "Ctrl+c", send: [{ key: "Ctrl+c", bytes: CTRL_A }] });
+
+      expect(problems.map((p) => p.action)).toEqual(["send[0]"]);
+      expect(problems[0].reason).toContain("only while a terminal is enlarged");
+      expect(problems[0].reason).toContain("`send[0]` fires when none is");
+      expect(problems[0].reason).not.toContain(`only \`${action}\` will fire`);
+    },
+  );
 
   // The three-way collision, and the reason the winner has to be resolved per GROUP rather than
   // pairwise (codex on #1906). With copy plus TWO sends on one key there are two reachable claims
@@ -197,7 +214,7 @@ describe("validateKeymap — a send and an action on one keystroke", () => {
     expect(problems[0].reason).toContain("`send[0]` fires when nothing is");
 
     expect(problems[1].reason).toContain("never fires");
-    expect(problems[1].reason).toContain("`send[0]` when nothing is");
+    expect(problems[1].reason).toContain("`send[0]` fires when nothing is");
     // The defect: send[1] was told it fires in the gap that send[0] already takes.
     expect(problems[1].reason).not.toContain("`send[1]` fires when nothing is");
   });
@@ -210,7 +227,7 @@ describe("validateKeymap — a send and an action on one keystroke", () => {
 
     const paste = problems.find((p) => p.action === "paste");
     expect(paste?.reason).toContain("never fires");
-    expect(paste?.reason).toContain("`send[0]` when nothing is");
+    expect(paste?.reason).toContain("`send[0]` fires when nothing is");
 
     const send = problems.find((p) => p.action === "send[0]");
     expect(send?.reason).toContain("`send[0]` fires when nothing is");
@@ -287,5 +304,30 @@ describe("copy vs send on one keystroke — what actually happens", () => {
     expect(clipboardActionFor(twoSends, ctrlC, true)).toBe("copy");
     expect(clipboardActionFor(twoSends, ctrlC, false)).toBeNull();
     expect(sendBytesFor(twoSends, ctrlC)).toBe(CTRL_A);
+  });
+});
+
+// The other conditional winner, pinned the same way (codex on #1906). `gridShortcutFor` is the
+// handler that declines here, so it is the one the message has to agree with — and the send that
+// fires in the gap is the same `sendBytesFor` first match.
+describe("a grid action needing a terminal vs send — what actually happens", () => {
+  const KEYMAP: Keymap = { "zoom-next": "Ctrl+c", send: [{ key: "Ctrl+c", bytes: CTRL_A }] };
+  const ctrlC = { ...keydown({ key: "c", ctrlKey: true, metaKey: false }), type: "keydown" };
+
+  it("zoom-next takes the key while a terminal is enlarged", () => {
+    expect(gridShortcutFor(KEYMAP, ctrlC, true)).toBe("zoom-next");
+  });
+
+  it("with nothing enlarged it stands aside and the send fires — what the old wording denied", () => {
+    expect(gridShortcutFor(KEYMAP, ctrlC, false)).toBeNull();
+    expect(sendBytesFor(KEYMAP, ctrlC)).toBe(CTRL_A);
+  });
+
+  // The counterpart that really is unconditional, so the exception stays an exception.
+  it("terminal-new takes the key in both states", () => {
+    const subjectless: Keymap = { "terminal-new": "Ctrl+c", send: [{ key: "Ctrl+c", bytes: CTRL_A }] };
+
+    expect(gridShortcutFor(subjectless, ctrlC, true)).toBe("terminal-new");
+    expect(gridShortcutFor(subjectless, ctrlC, false)).toBe("terminal-new");
   });
 });

@@ -124,3 +124,62 @@ symlink した `node_modules` が別チェックアウトのもので `@receptro
 `keymap.ts` / `keymapSend.spec.ts` には 1 件も無し。正しいバージョンを持つ
 チェックアウトの `node_modules` に貼り替えて再実行し、exit 0 を確認した。
 
+## codex review 2 巡目 —— 条件付きなのは `copy` だけではなかった
+
+前節の直しでもまだ不足だった。`runnerUp === null` を「無条件の勝者」と見なしていたが、
+**グリッドのアクション 4 つも条件付き**だった:
+
+```
+NEEDS_A_CURRENT_TERMINAL = ["zoom-next", "zoom-prev", "terminal-new-adjacent", "terminal-close"]
+```
+
+`gridShortcutFor` は**拡大中のセルが無いとこれらを拒否**して null を返す。そして
+`GridView.vue` のハンドラは
+
+```ts
+const shortcut = gridShortcutFor(getActiveKeymap(), e, expandedUid.value !== null);
+if (!shortcut) return;          // ← preventDefault も stopPropagation もしない
+```
+
+なので、**イベントはそのままターミナルへ流れ**、`makeSendHandler` → `sendBytesFor` で
+send が発火する。つまり `{"zoom-next":"Ctrl+c","send":[{"key":"Ctrl+c","bytes":"^A"}]}` は
+グリッドが拡大されていない間ずっと `send[0]` が発火するのに、
+`validateKeymap` は「only `zoom-next` will fire」と言っていた。**#1901 と同じ欠陥、条件が違うだけ。**
+
+### 一般化した
+
+「`copy` かどうか」ではなく「**そのアクションはキーを手放すか**」で判定する形に変えた。
+手放す条件は 2 つあり、構造は同じ（**どちらのハンドラも event を止めずに return する**）:
+
+| アクション | 手放す状態 | 判定するハンドラ |
+|---|---|---|
+| `copy` | 選択が無い | `clipboardActionFor` |
+| `zoom-next` / `zoom-prev` / `terminal-new-adjacent` / `terminal-close` | 拡大中のセルが無い | `gridShortcutFor` |
+
+`standsAside()` がこの表で、`acts` / `otherwise` の 2 文が文言になる。
+`fallthroughWinner()` は `copy` 固定をやめて「手放すアクションなら最初の send」を返す。
+
+### `NEEDS_A_CURRENT_TERMINAL` を `common/` へ移した
+
+判定に必要になったが、リストは `src/composables/gridShortcut.ts` のローカル定数だった。
+**両側が同じ値から判断する**ので、CLAUDE.md の規則どおり `common/keymap.ts` の
+`TERMINAL_SCOPED_ACTIONS` の隣に置き、`gridShortcut.ts` は import に変更。
+中身は変えていない（同じ 4 要素）。コピーを 2 つ持つと、**この PR が直している「文言と実挙動の乖離」を
+自分で再生産する**ことになる。
+
+### 検証
+
+- **追加した 6 件が、直す前のコードで red・直した後で green**
+  （`common/keymap.ts` と `gridShortcut.ts` を stash → `6 failed | 34 passed`、
+  復元後 `40 passed`。両ファイルとも byte-identical 復元を確認）
+- ディスパッチ側も pin: `gridShortcutFor` が拡大中 = `zoom-next` / 非拡大 = null かつ
+  `sendBytesFor` がバイト列を返す。**無条件側の対照**として `terminal-new` が両状態で
+  発火することも押さえた（例外が例外のままであることの担保）
+- `test/common` + `gridShortcut.spec.ts` + `keymap-check.spec.ts` で **930 tests green**、
+  `vue-tsc -b` / `eslint` / `prettier` すべて exit 0
+
+**`test/src/components/GridView.spec.ts` だけはローカルで実行できていない。** worktree の
+`node_modules` が symlink なので vite の `fs.allow` が worktree 外のパスを拒否する
+（`Denied ID .../@mulmoclaude/markdown-plugin/dist/style.css?inline`）。**変更を stash しても
+同じエラーが出る**ことを確認済みで、変更とは無関係。ここは CI が検証する。
+
