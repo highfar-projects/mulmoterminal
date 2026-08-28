@@ -196,6 +196,9 @@ describe("TerminalCell", () => {
     expect(w.find('[data-testid="cell-launch"]').exists()).toBe(true);
     await w.find('[data-testid="cell-dir-input"]').setValue("/home/me/picked");
     await w.find('[data-testid="cell-dir-input"]').trigger("keydown.enter");
+    // startHere() checks /api/devcontainer/status before emitting start (useDevcontainerOffer) —
+    // one microtask hop even when (as here) there's nothing to offer.
+    await flushPromises();
     const term = w.findComponent({ name: "TerminalView" });
     expect(term.exists()).toBe(true);
     expect(term.props("cwd")).toBe("/home/me/picked");
@@ -206,6 +209,7 @@ describe("TerminalCell", () => {
     await flushPromises();
     await w.find('[data-testid="cell-dir-input"]').setValue("/home/me/picked");
     await w.find('[data-testid="cell-dir-go"]').trigger("click");
+    await flushPromises(); // see the devcontainer-status note above
     const term = w.findComponent({ name: "TerminalView" });
     expect(term.exists()).toBe(true);
     expect(term.props("cwd")).toBe("/home/me/picked");
@@ -507,6 +511,7 @@ describe("TerminalCell", () => {
     await flushPromises();
     await w.find('[data-testid="cell-dir-input"]').setValue("/home/me/alpha");
     await w.find('[data-testid="cell-dir-input"]').trigger("keydown.enter");
+    await flushPromises(); // startHere() checks /api/devcontainer/status before emitting start
     w.findComponent({ name: "TerminalView" }).vm.$emit("cwd", "/home/me/alpha");
     await flushPromises();
     expect(w.emitted("record-cwd")?.at(-1)).toEqual(["/home/me/alpha"]);
@@ -550,6 +555,7 @@ describe("TerminalCell", () => {
     await flushPromises();
     await w.find('[data-testid="cell-dir-input"]').setValue("/home/me/fresh");
     await w.find('[data-testid="cell-dir-input"]').trigger("keydown.enter"); // flag = true, no cwd yet
+    await flushPromises(); // startHere() checks /api/devcontainer/status before emitting start
     await w.find(".cell-close").trigger("click"); // teardown must clear the flag
     await flushPromises();
     await w.find('[data-testid="cell-resume-item"]').trigger("click"); // resume an existing session
@@ -588,6 +594,7 @@ describe("TerminalCell", () => {
     await flushPromises();
     await w.find('[data-testid="cell-dir-input"]').setValue("/home/me/picked");
     await w.find('[data-testid="cell-dir-input"]').trigger("keydown.enter");
+    await flushPromises(); // startHere() checks /api/devcontainer/status before emitting start
     await w.find(".cell-close").trigger("click");
     await nextTick();
     expect(w.find('[data-testid="cell-launch"]').exists()).toBe(true);
@@ -599,6 +606,7 @@ describe("TerminalCell", () => {
     await flushPromises();
     await w.find('[data-testid="cell-dir-input"]').setValue("relative/bad/path");
     await w.find('[data-testid="cell-dir-input"]').trigger("keydown.enter");
+    await flushPromises(); // startHere() checks /api/devcontainer/status before emitting start
     // Server rejected the bad path and fell back; it reports the real cwd.
     w.findComponent({ name: "TerminalView" }).vm.$emit("cwd", "/home/me/default");
     await nextTick();
@@ -2776,6 +2784,7 @@ describe("TerminalCell launch target — the OS default shell (#1114)", () => {
     await flushPromises();
     await w.find('[data-testid="cell-dir-input"]').setValue("/home/me/proj");
     await w.find('[data-testid="cell-dir-go"]').trigger("click");
+    await flushPromises(); // startHere() checks /api/devcontainer/status before emitting start
     expect(w.emitted("launch")).toBeUndefined();
     expect(w.emitted("agent")).toEqual([["claude"]]);
   });

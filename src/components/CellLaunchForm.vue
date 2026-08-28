@@ -29,7 +29,8 @@ import { filePickerOpen, pickPaths } from "../composables/pickPaths";
 import { useBusyAction } from "../composables/useBusyAction";
 import { useSessionStop } from "../composables/useSessionStop";
 import { worktreeRequestFailure } from "./cellChromeRules";
-import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS, DEVCONTAINER_UP_TIMEOUT_MS } from "../utils/fetchWithTimeout";
+import { offerDevcontainerIfNeeded } from "../composables/useDevcontainerOffer";
+import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 // What an EMPTY grid cell shows: pick a directory, pick what to run in it, and start — or resume
 // a session that already exists there, run one of its scripts, or isolate the work in a worktree.
@@ -188,9 +189,18 @@ const takenWorktreeAt = (dir: string | null): string | null => {
   return session ? worktreeLimitReason(session) : null;
 };
 
-const startHere = (): void => {
-  if (!takenWorktreeAt(targetDir.value)) emit("start", targetDir.value);
-};
+// Offered here rather than in TerminalCell.vue's startPickedAgent (which every launch of every
+// kind goes through, tests included): scoping it to this one entry point keeps the offer to where
+// it was actually asked for (typing an existing directory in and pressing Start) without making
+// every other launch path pay for an async status round trip it doesn't need. `launchesAgent`
+// guards it because spawn-shell.ts doesn't read the directory's devcontainer flag the way
+// spawn-claude.ts does — offering it for a shell launch would promise something that can't happen.
+async function startHere(): Promise<void> {
+  if (takenWorktreeAt(targetDir.value)) return;
+  const dir = targetDir.value;
+  if (dir && launchesAgent.value) await offerDevcontainerIfNeeded(dir);
+  emit("start", dir);
+}
 
 const {
   dir: mcpGroupDir,
@@ -526,35 +536,13 @@ async function requestWorktree(repoDir: string, task: string): Promise<void> {
       return;
     }
     worktreeTask.value = "";
-    if (isRecord(body) && body.hasDevcontainer === true) await offerDevcontainer(path);
+    // The devcontainer offer (if `body.hasDevcontainer`) happens centrally instead, the moment
+    // this `start` reaches TerminalCell.vue's startPickedAgent — the single place every launch
+    // goes through, worktree row or not. See composables/useDevcontainerOffer.ts.
     await syncMcpGroupsInto(path);
     emit("start", path);
   } catch (e) {
     reportWorktreeFailure(repoDir, requestFailureText(e));
-  }
-}
-
-// Confirmed every time a devcontainer is found (never auto-started): building/starting one is
-// slow and runs arbitrary postCreateCommand shell, so it stays an explicit choice per worktree
-// rather than something the launcher decides on the user's behalf. Declining is not a failure —
-// the worktree still opens, just on the host — so this never reports through worktreeError.
-async function offerDevcontainer(path: string): Promise<void> {
-  const repoDir = targetDir.value;
-  if (!window.confirm(`This worktree has a devcontainer:\n${path}\n\nBuild and start it now?`)) return;
-  try {
-    const res = await fetchWithTimeout(
-      "/api/worktrees/devcontainer-up",
-      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ repoDir, path }) },
-      DEVCONTAINER_UP_TIMEOUT_MS,
-    );
-    if (!res.ok) {
-      const body = await jsonBody(res);
-      window.alert(
-        `Could not start the devcontainer — continuing on the host.\n\n${isRecord(body) && typeof body.output === "string" ? body.output : res.statusText}`,
-      );
-    }
-  } catch (e) {
-    window.alert(`Could not start the devcontainer — continuing on the host.\n\n${requestFailureText(e)}`);
   }
 }
 

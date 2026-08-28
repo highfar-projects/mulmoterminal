@@ -208,6 +208,7 @@ describe("a worktree reached without its row", () => {
     expect(w.find('[data-testid="cell-dir-go"]').attributes("disabled")).toBeUndefined();
     expect(w.find('[data-testid="cell-dir-busy"]').exists()).toBe(false);
     await w.find('[data-testid="cell-dir-input"]').trigger("keydown.enter");
+    await flushPromises(); // startHere() checks /api/devcontainer/status before emitting start
     expect(w.emitted("start")?.[0]).toEqual(["/wt/fix-login"]);
   });
 

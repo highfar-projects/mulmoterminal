@@ -33,6 +33,7 @@ import { mountDropRoutes } from "../routes/drop-routes.js";
 import { mountOpenDirRoute } from "../files/open-dir.js";
 import { mountGitRemoteRoute } from "../git/gitRemote.js";
 import { mountWorktreeRoutes } from "../git/worktree-routes.js";
+import { mountDevcontainerRoutes } from "../config/devcontainer-routes.js";
 import { mountPickFileRoute } from "../files/pick-file.js";
 import { mountCommandSummaryRoute } from "../session/command-summary.js";
 import { mountCostRoute } from "../session/cost.js";
@@ -380,6 +381,9 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
   // per-agent worktrees a cell launches into, so several agents work one repo in
   // isolated working trees.
   mountWorktreeRoutes(app, { isAllowedOrigin: deps.isAllowedOrigin });
+  // /api/devcontainer — detect + build/start a devcontainer for any directory this app can
+  // already reach a git repo from (a worktree or a plain checkout alike), not just worktrees.
+  mountDevcontainerRoutes(app, { isAllowedOrigin: deps.isAllowedOrigin });
   mountRoomRoutes(app, { isAllowedOrigin: deps.isAllowedOrigin });
 
   // POST /api/pick-file opens the OS file dialog and returns the chosen absolute
