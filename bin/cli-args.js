@@ -238,11 +238,12 @@ export function browserUrl(port) {
  * IT, and otherwise say plainly that we stepped aside — including where their layout went, since
  * a silent switch here is #1889 all over again for that one user.
  *
- * Stepping aside costs more than the layout, and anyone widening the cases that reach here should
- * know it: on `http://127.0.0.1:<port>` RemoteHost's Google sign-in is refused as well, because
- * Firebase checks the page's origin against its authorized domains and that project lists
- * `localhost` only (#1900). So this branch is a real degradation of the app, not a cosmetic
- * change of address — which is the argument for keeping it rare rather than for making it quieter.
+ * Stepping aside costs more than the layout, and the note says so: on `http://127.0.0.1:<port>`
+ * RemoteHost's Google sign-in is refused as well, because Firebase checks the page's origin
+ * against its authorized domains and that project lists `localhost` only (#1900). This branch is
+ * a real degradation of the app rather than a cosmetic change of address, and the second failure
+ * would otherwise be found only by trying to pair a phone — which is the shape of #1889 again,
+ * one feature further along.
  *
  * The probe cannot close the window, only narrow it: `::1` is free when asked, and unless the
  * server binds it (a `::1` or `::` bind), a stranger could still take it afterwards. That is the
@@ -256,7 +257,7 @@ export function launchTarget(reachHost, port, localhostIsUnambiguous) {
     const checked = launcherUrl(reachHost, port);
     return {
       url: checked,
-      note: `Something else is already listening on [::1]:${port}, so the browser is being sent to ${checked} — the address that was checked. If your layout and settings look empty, they are filed under http://localhost:${port}.`,
+      note: `Something else is already listening on [::1]:${port}, so the browser is being sent to ${checked} — the address that was checked. If your layout and settings look empty, they are filed under http://localhost:${port}, and the phone's Google sign-in works only there.`,
     };
   }
   const bound = reachHost === V4_LOOPBACK_CLIENTS_DIAL || reachHost === "::1";

@@ -132,6 +132,12 @@ describe("localBrowserUrl", () => {
     expect(notLocalhostReason(34567, lost)).toContain("[::1]:34567");
   });
 
+  // Same two facts the launcher's note carries — a direct `npm run server` start has no launcher
+  // behind it, so this is the only place its operator hears either (#1900).
+  it("also says that phone sign-in only works on localhost", () => {
+    expect(notLocalhostReason(34567, { v6: "taken", v4: "ours" } as const)?.toLowerCase()).toContain("sign-in");
+  });
+
   it("says nothing extra when localhost IS the answer", () => {
     expect(notLocalhostReason(34567, ok)).toBeNull();
   });

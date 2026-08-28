@@ -251,6 +251,14 @@ describe("the URL the browser is opened at", () => {
       expect(note).toContain("http://localhost:34567");
     });
 
+    // The layout is not the only thing left behind on `localhost`: Firebase authorizes that
+    // hostname and not `127.0.0.1`, so phone pairing cannot sign in here either (#1900). Said up
+    // front because the alternative is finding out while trying to pair a phone — #1889's shape,
+    // one feature further along.
+    it("says that phone sign-in does not work on the address it fell back to", () => {
+      expect(target("127.0.0.1").note?.toLowerCase()).toContain("sign-in");
+    });
+
     // A widened bind takes the same branch — the ambiguity is about `localhost`, not about what
     // the server bound, so the reason must not change with the bind.
     it("steps aside for a widened bind too", () => {
