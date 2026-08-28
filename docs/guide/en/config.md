@@ -1190,6 +1190,8 @@ caret notation a terminal uses (`^E`), so you can see what a key will send witho
 `\uXXXX`. With none bound the section still carries one **Send keys to the terminal — Not set**
 row, so the mechanism is visible before you have used it.
 
+![Settings → Keyboard shortcuts with nothing bound: every action marked Not set, and a Send keys to the terminal row carrying the send tag](../images/config-keymap-send-empty-en.png)
+
 ### Binding syntax
 
 `Modifier+Modifier+Key`. The key is matched against the browser's `KeyboardEvent.key` value.

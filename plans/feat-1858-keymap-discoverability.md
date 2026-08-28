@@ -175,6 +175,26 @@ spec が、send と何の関係も無い理由で落ちたことになる。`KEY
 
 コメントと plan の「9 つのアクション」も、同じ理由で数を言わない書き方に直した。
 
+### スクリーンショットを撮って初めて見えたこと
+
+CodeRabbit が「ユーザーが見るものにはスクリーンショットを」と指摘したので、scratch な `HOME` の
+サーバ（`--port 34913`）に puppeteer を当てて両ロケールで撮った。**そこで 2 つ分かった:**
+
+1. **1 回目の 2 枚が byte-identical だった。** ページ内で `select` を触って言語を切り替えたつもりが
+   別のコントロールで、**日本語の画面を 2 枚撮って片方に `-en` と名前を付けていた**。`--lang` も
+   headless では `navigator.language` を動かさない。アプリ自身の保存キー（`ui_language`）を
+   `evaluateOnNewDocument` で入れる形にして解決
+2. **日本語表示では、アクションのラベル 10 個だけが英語のまま**だった（`keymapLabels.ts` の
+   `LABELS` がハードコードの英語で、i18n を通っていない）。この PR が足す `send` の行は i18n を
+   通っているので、**11 行のうち 1 行だけが日本語**という並びになる
+
+2 は隠さずスクリーンショットに写っているものをそのまま出し、[#1894](https://github.com/receptron/mulmoterminal/issues/1894)
+として分けた。**この PR に含めない理由**は「単独で revert できるものは別 PR」というルール —— ラベルの
+i18n 化はこの変更と独立に戻せる。ja のガイドには注記とリンクを置いた。
+
+画像は 2x で撮って 950px へ縮小（`docs/guide/images/config-keymap-send-empty-{en,ja}.png`、
+259KB / 279KB。リポジトリの既存画像は 60KB〜840KB）。
+
 ### ゲート
 
 `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0。

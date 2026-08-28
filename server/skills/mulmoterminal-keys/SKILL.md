@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-keys
-description: Bind keyboard shortcuts and fix keyboard/clipboard behaviour in MulmoTerminal. Writes `keymap`, `copyOnSelect` and `terminalSubmit` in `~/.mulmoterminal/config.json` — the keymap cannot be set from Settings at all (its Keyboard shortcuts section only lists what is bound, `send` included), while the other two have a checkbox and a picker there that this skill can explain instead of writing. Covers zooming a cell, jumping to whichever agent is waiting for you, opening and closing terminals, copy/paste, sending raw bytes to the terminal so a key the shell understands can be reached from a key your keyboard has (Cmd+Right for end-of-line), copying by selecting with no key pressed, and the Enter-vs-newline binding. Use when the user wants a shortcut or hotkey, wants to switch cells or reach a waiting agent without the mouse, wants selecting text to copy it, or reports that Shift+Enter submits their prompt instead of adding a line, that Enter drops to a new line instead of sending, that Ctrl+C stopped interrupting, that a shortcut does nothing, or that on a Mac Cmd+Left / Cmd+Right / Cmd+Delete behave as though the Cmd were ignored — moving or deleting one character, the same as the unmodified key.
+description: Bind keyboard shortcuts and fix keyboard/clipboard behaviour in MulmoTerminal. Writes `keymap`, `copyOnSelect` and `terminalSubmit` in `~/.mulmoterminal/config.json` — the keymap cannot be set from Settings at all (its Keyboard shortcuts section is read-only: it lists every action bound or not, plus a `send` row), while the other two have a checkbox and a picker there that this skill can explain instead of writing. Covers zooming a cell, jumping to whichever agent is waiting for you, opening and closing terminals, copy/paste, sending raw bytes to the terminal so a key the shell understands can be reached from a key your keyboard has (Cmd+Right for end-of-line), copying by selecting with no key pressed, and the Enter-vs-newline binding. Use when the user wants a shortcut or hotkey, wants to switch cells or reach a waiting agent without the mouse, wants selecting text to copy it, or reports that Shift+Enter submits their prompt instead of adding a line, that Enter drops to a new line instead of sending, that Ctrl+C stopped interrupting, that a shortcut does nothing, or that on a Mac Cmd+Left / Cmd+Right / Cmd+Delete behave as though the Cmd were ignored — moving or deleting one character, the same as the unmodified key.
 ---
 
 # Keyboard, shortcuts and clipboard
@@ -78,7 +78,7 @@ Each is checked against the traps below. The guide documents them at
 | Set | Keys | Suits |
 |---|---|---|
 | Minimal | `zoom-toggle: F8`, `next-attention: F9` | Anyone starting out — the two that open the feature up |
-| Arrows | `Alt+ArrowUp/Left/Right/Down` | **The safe cross-platform default; the only one to offer a Mac user unprompted** |
+| Arrows | `Alt+ArrowUp/Left/Right/Down` | **The safe cross-platform default; the only ACTION set to offer a Mac user unprompted.** The `send` starter set below is the other half of a macOS proposal, and the two do not collide — one binds app actions, the other sends bytes |
 | tmux-flavoured | `Alt+z / n / p / a / c / x` | tmux muscle memory — but **not** on macOS |
 | iTerm2-flavoured | `Cmd+Enter`, `Cmd+[` / `]`, `Cmd+d` | Mac users who think in iTerm2 panes |
 
@@ -136,7 +136,7 @@ would be worse than a short one — every other combination either already works
 |---|---|---|
 | **macOS line editing** | `Cmd+ArrowLeft` → `\u0001`, `Cmd+ArrowRight` → `\u0005`, `Cmd+Backspace` → `\u0015` | **The one to lead with on a Mac.** Start of line, end of line, delete to start of line — the habit every other macOS text field has trained. `Cmd+Backspace` is the Mac Delete key; `\u0015` is `Ctrl+U` |
 
-It costs nothing, which is what makes it safe to offer unprompted: those three keystrokes reach the
+It is the one `send` set to offer a Mac user unprompted, pairing with **Arrows** on the action side above. It costs nothing, which is what makes that safe: those three keystrokes reach the
 terminal today as the **bare** arrow or Delete, because the Cmd is dropped. Binding them takes away
 a keystroke nobody was using.
 
