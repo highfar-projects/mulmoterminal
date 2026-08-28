@@ -30,7 +30,7 @@ export function dragSplitter(spec: SplitterDrag): (e: PointerEvent) => void {
     const separator = e.currentTarget instanceof Element ? e.currentTarget : null;
     separator?.setPointerCapture(e.pointerId);
     // Only THIS pointer steers the drag. A second touch or pen is a separate pointer whose
-    // events still bubble here, and subscribing to `pointercancel` above is what makes that
+    // events still bubble here, and the `pointercancel` subscription below is what makes that
     // reachable: a stray finger cancelled by the browser's own scrolling would otherwise end a
     // drag the user is still making.
     const mine = (ev: PointerEvent) => ev.pointerId === e.pointerId;
