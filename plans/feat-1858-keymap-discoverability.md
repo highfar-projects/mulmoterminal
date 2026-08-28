@@ -134,7 +134,7 @@ skill が検証するのでもともと踏まない。README:634 の記録済み
 
 ### テスト
 
-`test/src/components/settings/keyboardShortcutsSection.spec.ts`（7 件）。**空状態を対象にしている**
+`test/src/components/settings/keyboardShortcutsSection.spec.ts`（`d52fb64a` で 7 件、ja の intro を pin した `1f7b28e6` 以降 8 件）。**空状態を対象にしている**
 —— 全ユーザーが最初に居る状態がそれで、そこが #1858 の現場だから。
 
 1 件は日本語ロケール。**キーが片方のロケールに無いと、vue-i18n はキーパスをそのまま描画して何も
@@ -485,6 +485,7 @@ CodeRabbit が frontmatter の書き込み契約が曖昧だと指摘（「4 つ
 なっていた。**
 
 ```text
+# mulmoterminal-keys/SKILL.md だけを見た結果。他の skill については下の表のとおり。
 origin/main    => PARSES OK
 HEAD (pushed)  => ERROR: bad indentation of a mapping entry
 ```
@@ -498,7 +499,8 @@ description は**ハーネスがユーザーの要求と突き合わせる文字
 なるが、緑のまま出荷される。
 
 **掃いたら main にも 2 つあった** —— `mulmoterminal-config`（3 箇所）と `mulmoterminal-dirs`
-（1 箇所）。この PR の前から壊れていた。
+（1 箇所）。**この PR の前から壊れていた**ので、上のコードブロックの `origin/main => PARSES OK` は
+`mulmoterminal-keys` に限った話であって、main 全体が健全だったという意味ではない。
 
 #### テストにした
 
@@ -509,6 +511,27 @@ description は**ハーネスがユーザーの要求と突き合わせる文字
 実際に起きた 3 件すべてを捕まえる。
 
 break-verify: `: ` を 1 つ戻すと 1 red（復元は byte-identical）。
+
+### 検証したら、直した数字の sha が別 PR のものだった
+
+ローカル codex が「plan がテスト 7 件と書いているが実際は 8 件」と指摘（ja の intro を pin した分）。
+直すときに **`515cb848` で 7 件**と書いたが、**この sha は PR #1886（mulmoscript の修正）のもの**で
+このブランチには存在しない。この plan が引用する sha を全部照合して見つけた:
+
+```text
+19a89031  ON THIS BRANCH
+1f7b28e6  ON THIS BRANCH
+515cb848  EXISTS BUT NOT ON THIS BRANCH  <-- wrong to cite here
+5fbb2578  ON THIS BRANCH
+d52fb64a  ON THIS BRANCH
+```
+
+正しくは `d52fb64a` で 7 件。**「数値は sha に紐づけて書く」というこの文書のヘッダーは、
+紐づけ先が正しいことまでは保証しない** —— 引用した sha がブランチ上にあるかは別途照合が要る。
+
+もう 1 件、同じ codex の指摘: YAML の `origin/main => PARSES OK` が `mulmoterminal-keys` に限った
+話なのに全体の話に読めた（同じ節が「main にも 2 つ壊れていた」と書いているので矛盾）。
+コードブロックに但し書きを入れ、掃き取りの段落でも明示した。
 
 ### ゲート
 
