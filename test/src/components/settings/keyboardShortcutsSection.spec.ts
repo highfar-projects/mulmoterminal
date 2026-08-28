@@ -76,6 +76,20 @@ describe("the keyboard shortcuts section, with send bindings", () => {
   ];
   const macLineEditing: Keymap = { send: MAC_LINE_EDITING };
 
+  // The assertions below check the DISPLAY, and `describeBytes` leaves printable text alone — so
+  // `bytes: "^A"` would render "^A" as well and every assertion here would still pass while the
+  // file had stopped testing control bytes at all. Pinning the fixture is what makes the caret
+  // assertions mean something.
+  //
+  // Worth spelling out because the CI reviewer read those caret assertions as the fixture four
+  // separate times. It was wrong about the source each time, and right that nothing proved it.
+  it("uses the real control bytes, not their caret spelling", () => {
+    expect(CTRL_A.codePointAt(0)).toBe(1);
+    expect(CTRL_E.codePointAt(0)).toBe(5);
+    expect(CTRL_A).toHaveLength(1);
+    expect(CTRL_E).toHaveLength(1);
+  });
+
   it("shows the real bindings instead of the placeholder", () => {
     const w = sectionWith(macLineEditing);
 
