@@ -79,11 +79,12 @@ export const en = {
 
     shortcuts: {
       intro:
-        "Read-only. Shortcuts are off until you bind them in {configFile} under {keymapKey} — every key you bind stops reaching the program inside the terminal, so the skill checks a binding against what your agent already uses before writing it. Or see the {guide}.",
+        "Read-only, and everything is listed whether it is bound or not, under {keymapKey}. Two kinds can be bound: MulmoTerminal actions (enlarge, jump to a waiting agent, copy / paste), and key sequences sent to the terminal (on a Mac, Cmd+← for start of line). Every key you bind stops reaching the program inside the terminal, so set them up with the button below — the agent checks each one against your existing bindings and the traps a browser or a Mac adds before writing it. The {guide} has the reference.",
       guide: "guide",
       list: "Keyboard shortcuts",
       notSet: "Not set",
       sendRow: "Send {key} to the terminal",
+      sendNone: "Send keys to the terminal",
       setUp: "Set up shortcuts…",
     },
 

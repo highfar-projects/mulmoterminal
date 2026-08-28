@@ -5,7 +5,7 @@ import { questionPaneEnabled, saveQuestionPaneEnabled } from "../../composables/
 import { terminalSubmitMode, saveTerminalSubmitMode } from "../../composables/terminalSubmitMode";
 import { TERMINAL_SUBMIT_MODES, isTerminalSubmitMode } from "../../../common/terminalSubmit";
 
-// The two key-behaviour settings that are a single value each, so they get a control here rather
+// The key-behaviour settings that are a single value each, so they get a control here rather
 // than the skill the keymap needs. The keymap itself stays read-only in KeyboardShortcutsSection:
 // a binding takes its key away from the program inside the terminal, which is a question about the
 // user's agent, not a toggle.

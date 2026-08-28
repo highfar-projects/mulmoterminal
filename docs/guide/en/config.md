@@ -55,7 +55,7 @@ Settings live in three places: the **settings modal (Settings)**, the **global c
 > | **`/mulmoterminal-dirs`** | A project's colours, its position in the grid and launcher, name badge, terminal font size. Starts from the directories you actually open, reads what you already have, and follows the same pattern for the ones that have none. (Settings → **Configure appearance…** starts this one.) |
 > | **`/mulmoterminal-theme`** | Your own [colour scheme](#custom-themes), appearing in Settings' picker. (Settings → **Create a theme…**) |
 > | **`/mulmoterminal-header`** | [Header buttons and chips](#header), global or per project |
-> | **`/mulmoterminal-keys`** | [`keymap`](#keymap), [`copyOnSelect`](#copy-on-select), [`terminalSubmit`](#terminal-submit) — the fix for "Shift+Enter submits instead of adding a line". (Settings → **Set up shortcuts…**) |
+> | **`/mulmoterminal-keys`** | [`keymap`](#keymap), [`copyOnSelect`](#copy-on-select), [`terminalSubmit`](#terminal-submit) — the fix for "Shift+Enter submits instead of adding a line" — and `questionPaneEnabled`. (Settings → **Set up shortcuts…**) |
 > | **`/mulmoterminal-model`** | [`providers`](#providers), a per-project model, and [`customAgents`](#custom-agents) |
 > | **`/mulmoterminal-notify`** | [Which moments beep or push](#sounds), and what each plays. (Settings → **Configure notifications…**) |
 >
@@ -120,8 +120,8 @@ of the app is still English.
 | **Directory settings** | What each directory's `.mulmoterminal.json` is **actually doing**. Expand a row for the values in force (colors with a swatch), **which file each came from**, **keys dropped in validation**, and **keys this app never reads**. Read-only — "Explain my settings…" starts the `mulmoterminal-config` skill to say why and fix it (→ [When a setting isn't working](#dir-settings-preview)) |
 | **Launch commands** | Commands you can launch besides the agents in a grid cell (`{ label, command }`). A plain shell needs no entry — the launcher's **Shell** toggle opens `$SHELL` unconfigured |
 | **Header buttons and chips** | How many buttons and chips your global config declares, read-only — "built-in" when you have configured none. "Set up header buttons…" starts the `mulmoterminal-header` skill (→ [Customizing the header](#header)) |
-| **Terminal keys** | [Copy on select](#copy-on-select) (`copyOnSelect`, off) and which bytes your Claude reads as **submit** ([Enter — submit vs. newline](#terminal-submit), `terminalSubmit`) |
-| **Keyboard shortcuts** | What is bound to what, read-only. **Everything starts as Not set** — "Set up shortcuts…" starts the `mulmoterminal-keys` skill to bind them in `keymap` (→ [Keyboard shortcuts](#keymap)) |
+| **Terminal keys** | [Copy on select](#copy-on-select) (`copyOnSelect`, off), the question pane (`questionPaneEnabled`), and which bytes your Claude reads as **submit** ([Enter — submit vs. newline](#terminal-submit), `terminalSubmit`) |
+| **Keyboard shortcuts** | Every action and the `send` row, bound or not, read-only. **Everything starts as Not set** — "Set up shortcuts…" starts the `mulmoterminal-keys` skill to bind them in `keymap` (→ [Keyboard shortcuts](#keymap)) |
 | **Voice input** | The language you **dictate in** (your browser's, per-clip detection, or a fixed one). Shown only on a machine that can transcribe |
 | **Models and backends** | The backends a session can run on and whether each can be **reached right now**, read-only. "Add a backend…" starts the `mulmoterminal-model` skill (→ [Using another model](providers.html)) |
 | **MCP servers** | Your own HTTP MCP servers (`userMcpServers`), merged into the **Claude** sessions that have every GUI tool — a cell whose working directory is the **workspace**, and a session the server starts on its own (the phone, a scheduled task) unless it is started in a grid cell's shape, as an issue's seed session is. A cell in a project directory does not get this merge, and neither does Codex (the Claude MCP config **you** wrote — `.mcp.json` and the rest — is read in either directory → [which directory to launch in](basics.html#launch-dir)) |
@@ -1101,7 +1101,8 @@ away from tmux itself. These use `Alt` instead, which tmux leaves alone.
 
 {: .warning }
 > On **macOS** `Alt`+letter does not work — `Option` types an alternate character, so the letter
-> never arrives (see [above](#macos-keys)). Mac users want the arrows version below.
+> never arrives (see [above](#macos-keys)). Mac users want the arrows version below — **its up/down
+> pair**, for the reason given there.
 
 **iTerm2-flavoured** — closest to `Cmd`+`D` splitting a pane. `terminal-new-adjacent` starts a
 shell in the current terminal's directory with no form in between, which is the nearest thing the
@@ -1124,7 +1125,7 @@ grid has to a split. Bind `terminal-new-here` instead if you would rather pick t
 > `Cmd`+`Shift`+`W` works if you want one.
 
 **Arrow keys — the safest cross-platform set.** Arrows are unaffected by the macOS `Option`
-problem and are not browser-reserved, so this one behaves the same everywhere.
+problem and are not browser-reserved.
 
 ```json
 {
@@ -1137,6 +1138,17 @@ problem and are not browser-reserved, so this one behaves the same everywhere.
   }
 }
 ```
+
+{: .warning }
+> **On macOS, take the up/down pair only.** `Option`+`Left` and `Option`+`Right` usually move by
+> word inside a Mac terminal, and a bound action is claimed in the capture phase **before** the
+> terminal sees the key — so binding `zoom-next` / `zoom-prev` to them takes word motion away.
+> `Alt+ArrowUp` and `Alt+ArrowDown` are enough on their own, because `zoom-toggle` and
+> `next-attention` are the two that work without something already enlarged.
+>
+> ```json
+> { "keymap": { "zoom-toggle": "Alt+ArrowUp", "next-attention": "Alt+ArrowDown" } }
+> ```
 
 **Supervising many agents** — one key, pressed repeatedly, to walk everything that wants you:
 awaiting input first, then finished-and-unreviewed, then idle, skipping whatever is mid-turn.
@@ -1180,14 +1192,22 @@ The bytes go to the terminal **the key was pressed in** — the one your cursor 
 enlarged one".
 
 {: .warning }
-> **An action beats a `send` on the same keystroke, always.** They are not decided in the same place:
-> app actions are claimed before the terminal ever sees the key, so the `send` silently never fires.
-> MulmoTerminal **warns** at startup naming both. An empty `"bytes"` is refused outright — it would
+> **An action beats a `send` on the same keystroke — with one exception.** They are not decided in
+> the same place: most app actions are claimed before the terminal ever sees the key, and `paste` is
+> claimed inside the terminal ahead of `send`, so the `send` silently never fires. **`copy` is the
+> exception** — it acts only while something is selected, so with no selection the key falls
+> through and the `send` fires after all.
+> MulmoTerminal **warns** at startup naming both, though the message always names the action as the
+> winner; read it as "these two collide". An empty `"bytes"` is refused outright — it would
 > take the key away from the terminal and put nothing back.
 
 Bound entries are listed in **Settings → Keyboard shortcuts** alongside the actions, written in the
 caret notation a terminal uses (`^E`), so you can see what a key will send without decoding
-`\uXXXX`.
+`\uXXXX`. That is the **display** only — what you write in `bytes` is always the escape
+(`"\u0005"`), never the caret text. With none bound the section still carries one **Send keys to the terminal — Not set**
+row, so the mechanism is visible before you have used it.
+
+![Settings → Keyboard shortcuts with nothing bound: every action marked Not set, and a Send keys to the terminal row carrying the send tag](../images/config-keymap-send-empty-en.png)
 
 ### Binding syntax
 

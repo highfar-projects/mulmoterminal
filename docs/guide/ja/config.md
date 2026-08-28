@@ -55,7 +55,7 @@ description: MulmoTerminal の設定方法。設定モーダル、プロジェ�
 > | **`/mulmoterminal-dirs`** | プロジェクトの色・グリッドとランチャでの位置・名前バッジ・ターミナルの文字サイズ。実際に開いているディレクトリを母集団にし、既にある設定を読んでその規則を、まだ無いディレクトリにも適用します。（Settings → **Configure appearance…** はこれを起動します） |
 > | **`/mulmoterminal-theme`** | 自分の[配色](#custom-themes)を作る。Settings のテーマ選択に並びます（Settings → **Create a theme…**） |
 > | **`/mulmoterminal-header`** | [ヘッダーのボタンとチップ](#header)。global でもプロジェクト単位でも |
-> | **`/mulmoterminal-keys`** | [`keymap`](#keymap)・[`copyOnSelect`](#copy-on-select)・[`terminalSubmit`](#terminal-submit)（「Shift+Enter で改行ではなく送信されてしまう」の対処）（Settings → **Set up shortcuts…**） |
+> | **`/mulmoterminal-keys`** | [`keymap`](#keymap)・[`copyOnSelect`](#copy-on-select)・[`terminalSubmit`](#terminal-submit)（「Shift+Enter で改行ではなく送信されてしまう」の対処）・`questionPaneEnabled`（Settings → **Set up shortcuts…**） |
 > | **`/mulmoterminal-model`** | [`providers`](#providers)、プロジェクトごとのモデル、[`customAgents`](#custom-agents) |
 > | **`/mulmoterminal-notify`** | [どの瞬間に鳴らす・通知するか](#sounds)、それぞれ何を鳴らすか（Settings → **Configure notifications…**） |
 >
@@ -118,8 +118,8 @@ git チェックアウトならその横に `commit a1b2c3d` のチップが並�
 | **Directory settings** | 各ディレクトリの `.mulmoterminal.json` が**実際に何をしているか**。行を開くと、効いている値（色は見本付き）・**どのファイル由来か**・**検証で落ちたキー**・**このアプリが読まないキー**が出ます。読み取り専用 — 「Explain my settings…」で `mulmoterminal-config` スキルが同じものを読み、理由を説明して直します（→ [設定が効かないとき](#dir-settings-preview)） |
 | **Launch commands** | グリッドセルでエージェント以外に起動できるコマンド（`{ label, command }`）。素のシェルは登録不要 — ランチャの **Shell** トグルが無設定で `$SHELL` を開く |
 | **Header buttons and chips** | グローバル設定で宣言しているボタンとチップの数（読み取り専用）。未設定なら「built-in」。「Set up header buttons…」で `mulmoterminal-header` スキルを起動（→ [ヘッダーのカスタマイズ](#header)） |
-| **Terminal keys** | [選ぶだけでコピー](#copy-on-select)（`copyOnSelect`、既定 OFF）と、あなたの Claude が**送信**として読むバイト（[Enter — 送信と改行](#terminal-submit)、`terminalSubmit`） |
-| **Keyboard shortcuts** | 今どのキーに何が割り当たっているかの一覧（読み取り専用）。**既定は全部 Not set** — 「Set up shortcuts…」で `mulmoterminal-keys` スキルが `keymap` に書きます（→ [キーボードショートカット](#keymap)） |
+| **Terminal keys** | [選ぶだけでコピー](#copy-on-select)（`copyOnSelect`、既定 OFF）、質問ペイン（`questionPaneEnabled`）、あなたの Claude が**送信**として読むバイト（[Enter — 送信と改行](#terminal-submit)、`terminalSubmit`） |
+| **Keyboard shortcuts** | 全アクションと `send` の行を、割り当ての有無にかかわらず並べる一覧（読み取り専用）。**既定は全部 Not set** — 「Set up shortcuts…」で `mulmoterminal-keys` スキルが `keymap` に書きます（→ [キーボードショートカット](#keymap)） |
 | **Voice input** | 音声入力で**話す言語**（ブラウザの言語 / 発話ごとの自動検出 / 固定）。文字起こしできるマシンでだけ表示されます |
 | **Models and backends** | セッションを動かせるバックエンドと、**今それぞれ到達できるか**（読み取り専用）。「Add a backend…」で `mulmoterminal-model` スキルを起動（→ [別のモデルで動かす](providers.html)） |
 | **MCP servers** | 自分の HTTP MCP サーバ（`userMcpServers`）。GUI ツールを全部持つ **Claude の**セッション — 作業ディレクトリが**ワークスペース**のセル、およびサーバ自身が起こしたセッション（スマホ・スケジュールタスク。ただし issue の seed セッションはグリッドのセルと同じ形で起こされるため除きます）— にマージされます。プロジェクトディレクトリのセルと Codex には合流しません（`.mcp.json` など**自分で書いた Claude の MCP 設定は、どちらのディレクトリでも読まれます**。→ [どのディレクトリで起動するか](basics.html#launch-dir)） |
@@ -1073,7 +1073,7 @@ PuTTY や iTerm2 が昔からそうなっている挙動で、Windows Terminal �
 
 {: .warning }
 > **macOS では `Alt`+英字は動きません**。`Option` が別の文字を入力するため、英字として届きません
-> （[上の節](#macos-keys)参照）。Mac の方は下の矢印キー版をどうぞ。
+> （[上の節](#macos-keys)参照）。Mac の方は下の矢印キー版の、**上下のペアだけ**をどうぞ（理由はそこに）。
 
 **iTerm2 風** — `Cmd`+`D` のペイン分割に最も近い形です。`terminal-new-adjacent` は今のターミナルの
 作業ディレクトリでシェルを即座に起動する（フォームを挟まない）ので、グリッドにおける「分割」に相当します。
@@ -1096,7 +1096,7 @@ PuTTY や iTerm2 が昔からそうなっている挙動で、Windows Terminal �
 > `Cmd`+`Shift`+`W` なら使えます。
 
 **矢印キー — 最も安全なクロスプラットフォーム構成。** 矢印キーは macOS の `Option` 問題の影響を受けず、
-ブラウザ予約でもないので、どの環境でも同じように動きます。
+ブラウザ予約でもありません。
 
 ```json
 {
@@ -1109,6 +1109,17 @@ PuTTY や iTerm2 が昔からそうなっている挙動で、Windows Terminal �
   }
 }
 ```
+
+{: .warning }
+> **macOS では上下のペアだけにしてください。** Mac のターミナルでは `Option`+`←` / `Option`+`→` が
+> 単語単位の移動として効いていることが多く、割り当てたアクションは capture フェーズで**ターミナルより
+> 先に**キーを奪います。つまり `zoom-next` / `zoom-prev` をそこに割り当てると、単語移動が消えます。
+> `Alt+ArrowUp` と `Alt+ArrowDown` だけで足ります —— 何かを拡大していなくても使えるのは
+> `zoom-toggle` と `next-attention` の 2 つだからです。
+>
+> ```json
+> { "keymap": { "zoom-toggle": "Alt+ArrowUp", "next-attention": "Alt+ArrowDown" } }
+> ```
 
 **多数のエージェントを見張る用途** — 1つのキーを連打して、呼んでいるものを順に巡る構成です。入力待ち →
 完了・未レビュー → idle の順に辿り、作業中のものは飛ばします。
@@ -1151,13 +1162,26 @@ codex も解釈します。制御文字は JSON の書き方（`\uXXXX`）で書
 送り先は**そのキーを押したターミナル**です（「拡大中のセル」ではなく、カーソルのあるセル）。
 
 {: .warning }
-> **同じキーにアクションと `send` を割り当てると、必ずアクションが勝ちます。** 決まる場所が違い、
-> アプリのアクションはターミナルがキーを見る前に奪うためで、`send` は黙って発火しません。
-> 起動時に両方の名前を挙げて**警告**します。`"bytes"` が空のものは受け付けません — キーをターミナルから
-> 奪っておいて何も送らないことになるためです。
+> **同じキーにアクションと `send` を割り当てると、原則アクションが勝ちます —— 例外が 1 つ。**
+> 決まる場所が違い、多くのアクションはターミナルがキーを見る前に奪い、`paste` はターミナルの中で
+> `send` より先に処理されるので、`send` は黙って発火しません。**例外は `copy`** —— 選択がある
+> ときだけ動くので、選択が無ければキーは素通りし、`send` の方が発火します。
+> 起動時に両方の名前を挙げて**警告**しますが、その文言は常にアクションを勝者として書きます。
+> 「この 2 つは衝突している」と読んでください。`"bytes"` が空のものは受け付けません — キーを
+> ターミナルから奪っておいて何も送らないことになるためです。
 
 割り当てた内容は **設定 → キーボードショートカット** にアクションと並んで表示されます。表記は
 ターミナル流のキャレット記法（`^E`）なので、`\uXXXX` を読み解かなくても何が送られるか分かります。
+これは**表示**だけの話で、`bytes` に書くのは常にエスケープ（`"\u0005"`）です。キャレットの文字列を
+書くのではありません。
+1 件も割り当てていなくても「**ターミナルにキー列を送る — 未設定**」の行が 1 つ出るので、使う前から
+この仕組みの存在が分かります。
+
+![設定 → キーボードショートカット。何も割り当てていない状態で、各アクションが「未設定」と並び、最後に「ターミナルにキー列を送る」の行が send のタグ付きで出ている](../images/config-keymap-send-empty-ja.png)
+
+> アクションのラベル（`Enlarge / collapse a terminal` など）が英語のままなのは既知の問題です
+> （[#1894](https://github.com/receptron/mulmoterminal/issues/1894)）。この一覧のラベルだけが
+> i18n を通っていません。
 
 ### 記法
 

@@ -32,8 +32,12 @@ export const keymapRows = (keymap: Partial<Record<KeymapAction, string>>): Keyma
   KEYMAP_ACTIONS.map((action) => ({ action, label: LABELS[action], binding: keymap[action] ?? null }));
 
 // The `send` bindings, which have no fixed list to render: unlike an action, one exists only
-// because the user wrote it, so an unbound row cannot be shown and there is nothing to show at
-// all until they add one.
+// because the user wrote it, so there is no row to show until they add one.
+//
+// That is a fact about the ROWS, and it was read as a fact about the feature — so the section
+// rendered nothing at all for `send` when the list was empty, and the mechanism was invisible to
+// exactly the person looking for it (#1858). The section now names the feature itself in that
+// case; this function stays about the entries.
 export interface SendRow {
   /** Stable and unique per row, for the list's `v-for` key. The binding string cannot serve:
    *  two entries may claim the same keystroke (validation warns, but the config still loads),
