@@ -478,6 +478,38 @@ So ask before binding, and never add one the user did not request」）に反す
 **2 巡目ルールが 2 回連続で自分の価値を証明した**（26 巡目: F キーの言い切り、28 巡目: これ）。
 1 巡で止めていたらどちらも残っていた。
 
+### この PR で一番危なかったもの —— YAML を壊して 14 コミット気づかれなかった
+
+CodeRabbit が frontmatter の書き込み契約が曖昧だと指摘（「4 つ書く」と「3 つは説明するだけ」が
+同じ文にある）。直そうとして frontmatter をパースしてみたら、**そもそも YAML として読めなく
+なっていた。**
+
+```text
+origin/main    => PARSES OK
+HEAD (pushed)  => ERROR: bad indentation of a mapping entry
+```
+
+原因は `: `（コロン+空白）。**引用符の無い YAML スカラーはこれを含められない** —— mapping の
+区切りだから。`19a89031`（1 巡目の修正）で「read-only: it lists every action」と書いたときに壊し、
+**そこから 14 コミット、2 人体制のレビューを通り抜けていた。**
+
+`lint` / `typecheck` / `build` / 全 11549 テストのどれ 1 つとして `SKILL.md` を開いていない。
+description は**ハーネスがユーザーの要求と突き合わせる文字列**なので、壊れると skill が選ばれなく
+なるが、緑のまま出荷される。
+
+**掃いたら main にも 2 つあった** —— `mulmoterminal-config`（3 箇所）と `mulmoterminal-dirs`
+（1 箇所）。この PR の前から壊れていた。
+
+#### テストにした
+
+`test/server/skills/skillFrontmatter.spec.ts`。**YAML パーサは足していない** —— `js-yaml` も
+`yaml` も推移的にあるだけで宣言されておらず、この狭さのチェックのために lockfile を動かすのは
+割に合わない（CLAUDE.md の「warm な node_modules は嘘をつく」）。代わりに**実際に壊れた規則**を
+直接見る: 引用符無しの値に `: ` があるか、`name` がディレクトリ名と一致するか、1 行 1 フィールドか。
+実際に起きた 3 件すべてを捕まえる。
+
+break-verify: `: ` を 1 つ戻すと 1 red（復元は byte-identical）。
+
 ### ゲート
 
 `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0。
