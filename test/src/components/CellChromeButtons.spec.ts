@@ -96,11 +96,31 @@ describe("CellChromeButtons — the file pane toggle", () => {
     expect(w.emitted("toggle-expand")).toBeUndefined();
   });
 
-  // Expand/restore stays first: several specs and the grid select the first `.cell-btn`.
-  it("sits after expand/restore, not before it", () => {
+  // Expand/restore stays first: several specs and the grid select the first `.cell-btn`. The
+  // launch button (#1867) sits between them — it belongs with the cell's own controls rather than
+  // with the panes, which are the enlarged view's.
+  it("sits after expand/restore and the launch button, not before them", () => {
     const buttons = mountButtons(true).findAll(".cell-btn");
     expect(buttons[0].attributes("aria-label")).toBe("Restore terminal");
-    expect(buttons[1].attributes("aria-label")).toBe("Show files");
+    expect(buttons[1].attributes("aria-label")).toBe("Start a terminal in this directory");
+    expect(buttons[2].attributes("aria-label")).toBe("Show files");
+  });
+});
+
+// #1867. The lesson this button was written after: an emit with no entry in `cellChromeBinding`
+// is dropped silently, and the grid waits for something nothing ever sends (the collections
+// button shipped that way in #1573). `cellChromeEventsAreComplete` pins the lists; this pins that
+// the button raises the event at all, and does not act on it itself.
+describe("the launch button", () => {
+  it("emits new-here from a tile as well as an enlarged cell", async () => {
+    for (const expanded of [false, true]) {
+      const w = mount(CellChromeButtons, { props: { expanded } });
+      const btn = w.find('[aria-label="Start a terminal in this directory"]');
+      expect(btn.exists()).toBe(true);
+      await btn.trigger("click");
+      expect(w.emitted("new-here")).toHaveLength(1);
+      expect(w.emitted("toggle-expand")).toBeUndefined();
+    }
   });
 });
 

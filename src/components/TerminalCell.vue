@@ -15,7 +15,7 @@ import DirBadge from "./DirBadge.vue";
 import DirIcon from "./DirIcon.vue";
 import { isCellContext, isCellUsage, type CellContext, type CellUsage } from "./cellPayload";
 import { asTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
-import { customAgentIdOf, type AgentPick, type CustomAgent } from "../../common/customAgents";
+import { customAgentIdOf, customAgentPick, isCustomAgentId, type AgentPick, type CustomAgent } from "../../common/customAgents";
 import { unsavedWork } from "./unsavedWork";
 import { shouldPromptTidy } from "./mergedTidy";
 import { usageBadge } from "./cellDisplay";
@@ -45,7 +45,7 @@ import type { Launcher, LaunchPick } from "./launchers";
 import { shellLauncher } from "./gridTabs";
 import { activityStatus, type AttentionStatus } from "./attentionStatus";
 import { useMissedAttention } from "../composables/useMissedAttention";
-import type { GridCellEmits, GridCellProps } from "./gridCell";
+import type { AgentReport, GridCellEmits, GridCellProps } from "./gridCell";
 import { shouldZoomOnHeaderClick } from "./cellHeaderZoom";
 import {
   CELL_ACTIONS,
@@ -103,6 +103,13 @@ const props = defineProps<
     initialCwd: string | null;
     // The persisted agent for this cell; absent (or "claude") resumes as a normal Claude session.
     initialAgent?: TerminalAgent | null | undefined;
+    // The custom-agent entry this cell was launched from (#1414), when the pick came from OUTSIDE
+    // the cell — the launch panel creates the cell already knowing which wrapper to run. Seeds the
+    // Agent Picker below; `initialAgent` still says which CLI's arguments the wrapper is handed.
+    initialCustomAgent?: string | null | undefined;
+    // The provider/model the launch form picked, when the pick came from OUTSIDE the cell (the
+    // launch panel, #1867). Seeds `launchChoice` below, which is what the connection reads.
+    initialLaunchChoice?: LaunchChoice | null | undefined;
     // Start `initialAgent` in `initialCwd` on mount rather than opening the launcher form. Set by
     // the grid for a cell it already knows what to run — the phone's launch request (#831).
     autoStart?: boolean;
@@ -121,8 +128,6 @@ const props = defineProps<
     // Dirs with a running session in another cell, so the launcher can tint preset
     // chips whose dir is already in use.
     openCwds?: string[];
-    // An added (not the sole entry) launcher: show a close button to dismiss it before launching.
-    cancellable?: boolean;
     // Manual sort mode: show move buttons to swap this cell with its neighbour.
     reorderable?: boolean;
     // Set aside by the user (#992): sunk out of the way, still connected, still holding history.
@@ -140,7 +145,7 @@ const emit = defineEmits<
     // The user picked a configured launcher (shell/codex/…) to run in this empty cell.
     (e: "launch", value: LaunchPick): void;
     // The agent chosen for this fresh launch, so the grid persists it.
-    (e: "agent", value: TerminalAgent): void;
+    (e: "agent", value: AgentReport): void;
     // Set this cell aside, or bring it back. The grid owns the flag; this only asks.
     (e: "park", value: boolean): void;
     // The launch form's "try again" on a config that could not be read. Value-less: the shell owns
@@ -159,7 +164,7 @@ const sessionId = ref<string | null>(props.initialSessionId);
 // What the launch form's AGENT PICKER will start here. "shell" is one of its options and is a
 // LAUNCHER, not an agent: the parent replaces this cell with a launcher cell, so it never becomes
 // the `agent` below.
-const pickedAgent = ref<AgentPick>(asTerminalAgent(props.initialAgent));
+const pickedAgent = ref<AgentPick>(isCustomAgentId(props.initialCustomAgent) ? customAgentPick(props.initialCustomAgent) : asTerminalAgent(props.initialAgent));
 // The custom agent this cell was started from, or null for a built-in (#1414). It rides alongside
 // `agent`, which stays "claude" for a custom one: a wrapper decides which command line starts
 // Claude Code, not what the session IS — see common/customAgents.ts.
@@ -491,14 +496,17 @@ function launchIn(dir: string | null) {
   sessionId.value = null; // new session — the server generates the id
   connectKey.value++;
   launched.value = true;
-  emit("agent", agent.value); // let the grid persist which agent this cell launched
+  // BOTH halves. `agent` is "claude" for a custom pick, so reporting it alone reads to the grid as
+  // "the user switched off the wrapper" — which is what silently dropped `customAgent` on the very
+  // launch that was using it (codex + CodeRabbit, #1890).
+  emit("agent", { agent: agent.value, customAgent: customAgentId.value });
   recordNextCwd = true;
   void loadDiff(); // no-op for a non-worktree dir
 }
 // The provider/model picked in the launch form, for the session this cell is about to
 // start. Null — the usual case — means the directory's own default decides. Kept for the
 // life of the cell so a relaunch in the same cell repeats the choice.
-const launchChoice = ref<LaunchChoice | null>(null);
+const launchChoice = ref<LaunchChoice | null>(props.initialLaunchChoice ?? null);
 
 // Start what the Agent Picker picked, in `dir`. EVERY launch in the form goes through here: the
 // picker decides for the dir field, for a preset chip, and for a worktree alike, and a rule
@@ -528,7 +536,9 @@ onMounted(() => {
 function resumeSession({ id, cwd: dir, agent: resumeAgent }: { id: string; cwd: string | null; agent?: TerminalAgent }) {
   if (resumeAgent) {
     pickedAgent.value = resumeAgent;
-    emit("agent", resumeAgent); // the grid persists which agent this cell runs
+    // A resumed session already exists; it was not started through a wrapper now, so the cell is
+    // no longer running one whatever it was launched from.
+    emit("agent", { agent: resumeAgent, customAgent: null });
   }
   cwd.value = dir;
   sessionId.value = id;
@@ -1755,7 +1765,6 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
         :custom-agents="customAgents ?? []"
         :open-session-ids="openSessionIds"
         :open-cwds="openCwds"
-        :cancellable="cancellable"
         @update:dir="onLaunchDir"
         @update:agent="(value) => (pickedAgent = value)"
         @update:choice="(value) => (launchChoice = value)"

@@ -18,6 +18,7 @@ export const KEYMAP_ACTIONS = [
   "zoom-prev",
   "next-attention",
   "terminal-new",
+  "terminal-new-here",
   "terminal-new-adjacent",
   "terminal-close",
   "copy",

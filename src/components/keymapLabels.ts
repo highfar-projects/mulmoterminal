@@ -10,8 +10,9 @@ const LABELS: Record<KeymapAction, string> = {
   "zoom-next": "Enlarge the next terminal",
   "zoom-prev": "Enlarge the previous terminal",
   "next-attention": "Jump to a terminal that needs you",
-  "terminal-new": "New terminal (at the end)",
-  "terminal-new-adjacent": "New terminal next to this one",
+  "terminal-new": "Open the launch panel",
+  "terminal-new-here": "Open the launch panel on this terminal's directory",
+  "terminal-new-adjacent": "Shell in this terminal's directory, straight away",
   "terminal-close": "Close this terminal",
   // Only acts when the terminal has a selection; with none, the key reaches the shell as it
   // always did — which is what makes Ctrl+C a usable binding here without losing interrupt.
