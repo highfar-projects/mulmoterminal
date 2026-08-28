@@ -78,7 +78,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     id: "nvidia/nemotron-3-super-120b-a12b",
     label: "Nemotron 3 Super 120B",
     contextLength: 1_000_000,
-    pricePerMTok: { input: 0.08, output: 0.45 },
+    pricePerMTok: { input: 0.085, output: 0.4 },
     trials: measured(3, 3, 18),
   },
   {
@@ -86,7 +86,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     id: "qwen/qwen3-235b-a22b-2507",
     label: "Qwen3 235B A22B",
     contextLength: 262_144,
-    pricePerMTok: { input: 0.09, output: 0.55 },
+    pricePerMTok: { input: 0.0875, output: 0.35 },
     trials: measured(3, 3, 16),
   },
   {
@@ -94,7 +94,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     id: "minimax/minimax-m2.7",
     label: "MiniMax M2.7",
     contextLength: 204_800,
-    pricePerMTok: { input: 0.25, output: 1.0 },
+    pricePerMTok: { input: 0.3, output: 1.2 },
     trials: measured(3, 3, 16),
   },
   {
@@ -102,7 +102,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     id: "deepseek/deepseek-v3.2",
     label: "DeepSeek V3.2",
     contextLength: 163_840,
-    pricePerMTok: { input: 0.269, output: 0.4 },
+    pricePerMTok: { input: 0.26, output: 0.38 },
     trials: measured(3, 3, 42),
   },
   {
@@ -118,7 +118,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     id: "deepseek/deepseek-v4-pro",
     label: "DeepSeek V4 Pro",
     contextLength: 1_048_576,
-    pricePerMTok: { input: 0.435, output: 0.87 },
+    pricePerMTok: { input: 0.87, output: 1.74 },
     trials: measured(3, 3, 20),
   },
   {
@@ -126,7 +126,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     id: "deepseek/deepseek-v4-flash",
     label: "DeepSeek V4 Flash",
     contextLength: 1_048_576,
-    pricePerMTok: { input: 0.094, output: 0.188 },
+    pricePerMTok: { input: 0.088606, output: 0.177212 },
     trials: measured(3, 4, 26),
   },
   {
@@ -158,7 +158,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     id: "moonshotai/kimi-k2.6",
     label: "Kimi K2.6",
     contextLength: 262_144,
-    pricePerMTok: { input: 0.684, output: 3.42 },
+    pricePerMTok: { input: 0.95, output: 4.0 },
     trials: measured(3, 3, 46),
   },
   {
@@ -166,7 +166,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     id: "z-ai/glm-5.2",
     label: "GLM 5.2",
     contextLength: 1_048_576,
-    pricePerMTok: { input: 0.819, output: 2.574 },
+    pricePerMTok: { input: 1.19, output: 3.74 },
     trials: measured(3, 3, 21),
   },
   {
@@ -174,7 +174,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     id: "moonshotai/kimi-k2.7-code",
     label: "Kimi K2.7 Code",
     contextLength: 262_144,
-    pricePerMTok: { input: 0.82, output: 3.75 },
+    pricePerMTok: { input: 0.66, output: 3.4 },
     trials: measured(3, 3, 14),
   },
   {
@@ -190,15 +190,15 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     id: "tencent/hy3",
     label: "Tencent Hy3",
     contextLength: 262_144,
-    pricePerMTok: { input: 0.14, output: 0.58 },
+    pricePerMTok: { input: 0.132, output: 0.528 },
     trials: measured(3, 3, 17),
   },
   {
     provider: "openrouter",
     id: "nvidia/nemotron-3-ultra-550b-a55b",
     label: "Nemotron 3 Ultra 550B",
-    contextLength: 524_288, // 512 KiB = 512 * 1024; was 512_288 (a typo)
-    pricePerMTok: { input: 0.6, output: 3.6 },
+    contextLength: 262_144,
+    pricePerMTok: { input: 0.5, output: 2.2 },
     trials: measured(3, 3, 13),
   },
 
@@ -224,7 +224,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     id: "openai/gpt-5.6-luna",
     label: "GPT-5.6 Luna",
     contextLength: 1_050_000,
-    pricePerMTok: { input: 1.0, output: 6.0 },
+    pricePerMTok: { input: 0.2, output: 1.2 },
     trials: measured(3, 3, 27),
   },
   {
@@ -232,7 +232,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     id: "openai/gpt-5.6-luna-pro",
     label: "GPT-5.6 Luna Pro",
     contextLength: 1_050_000,
-    pricePerMTok: { input: 1.0, output: 6.0 },
+    pricePerMTok: { input: 0.2, output: 1.2 },
     trials: measured(3, 3, 69),
   },
   {
@@ -240,7 +240,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     id: "google/gemini-3.6-flash",
     label: "Gemini 3.6 Flash",
     contextLength: 1_048_576,
-    pricePerMTok: { input: 1.5, output: 7.5 },
+    pricePerMTok: { input: 0.75, output: 3.75 },
     trials: measured(3, 3, 16),
   },
   {
@@ -256,7 +256,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     id: "openai/gpt-5.6-terra-pro",
     label: "GPT-5.6 Terra Pro",
     contextLength: 1_050_000,
-    pricePerMTok: { input: 2.5, output: 15.0 },
+    pricePerMTok: { input: 2.0, output: 12.0 },
     trials: measured(3, 3, 38),
   },
 
@@ -303,7 +303,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     id: "mistralai/devstral-2512",
     label: "Devstral 2512",
     contextLength: 262_144,
-    pricePerMTok: { input: 0.4, output: 2.0 },
+    pricePerMTok: { input: 0.44, output: 2.2 },
     trials: unreachable(ACCOUNT_PRIVACY),
   },
 ];
