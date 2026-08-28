@@ -19,10 +19,23 @@ describe("loopbackListenPlan", () => {
     expect(loopbackListenPlan({ address: "127.0.0.1" })).toBeNull();
   });
 
-  it("is not needed for any of 127.0.0.0/8, which is all loopback", () => {
-    for (const address of ["127.0.0.1", "127.0.0.53", "127.1.2.3"]) {
-      expect(loopbackListenPlan({ address })).toBeNull();
+  // This used to assert the opposite — "not needed for any of 127.0.0.0/8, which is all
+  // loopback" — and the premise was the wrong question. Being loopback is not what matters;
+  // answering on 127.0.0.1 is, because guiMcpUrlTemplate and the hooks write that address as a
+  // LITERAL. A socket bound to one specific address accepts connections to that address and no
+  // other, which is how TCP works rather than a platform quirk: measured on this machine, a
+  // server on 192.168.11.12 answers 192.168.11.12 and gives ECONNREFUSED to 127.0.0.1.
+  //
+  // So a server on 127.0.0.53 leaves every local client unable to reach it at all, and planning
+  // no secondary listener is what made that silent. Found by the CI reviewer on #1877.
+  it("IS needed for the rest of 127.0.0.0/8, which does not answer for 127.0.0.1", () => {
+    for (const address of ["127.0.0.2", "127.0.0.53", "127.1.2.3"]) {
+      expect(loopbackListenPlan({ address }), address).toEqual({ address: "127.0.0.1", inUseIsFine: false });
     }
+  });
+
+  it("is still not needed for 127.0.0.1 itself, which is the address in question", () => {
+    expect(loopbackListenPlan({ address: "127.0.0.1" })).toBeNull();
   });
 
   it("IS needed for the IPv6 loopback, which does not serve the v4 one", () => {

@@ -682,11 +682,11 @@ if (!willServeV4Loopback(boundAddress)) return [];     // 守れない約束を�
 | **`127.0.0.2`** | **`[]`** | **secondary を立てず、127.0.0.1 にも応答しない** |
 | `192.168.11.12` | `[]` | 他マシン向け。round 2 の判断 |
 
-#### 直さなかったこと（明記）
+#### 直さなかったこと（明記）→ **iter-12 で撤回して直した**
 
-`127.0.0.2` に bind すると、**ポートが空いていても GUI MCP と hooks はサーバに到達できない** ——
-どちらも 127.0.0.1 をリテラルで dial するため。これは**サーバ側の仮定（127/8 なら v4 loopback を
-serve している）の既存の穴**で、launcher からは塞げない。**報告するだけにして、ここでは直さない。**
+> 当初「`127.0.0.2` に bind すると GUI MCP と hooks が到達できないのはサーバ側の既存の穴。
+> 報告するだけにする」と書いた。**iter-12 で bot に指摘され、撤回した** —— 下の節を参照。
+> launcher に回避策を置くより、1 行のサーバ欠陥を直す方が差分が小さくなる。
 
 #### ミューテーションが死んだ行を見つけた
 
@@ -698,4 +698,50 @@ serve している）の既存の穴**で、launcher からは塞げない。**�
 break-verify: `willServeV4Loopback` のガードを外すと（127.0.0.2 に再び過剰約束）1 red。
 復元は byte-identical。実機回帰: `0:0:0:0:0:0:0:0` と `localhost` は v4 stranger がいれば
 どちらも `already in use` で止まる（従来どおり）。
+
+### iter-12 — スコープ外と判断したものを、判断ごと撤回した
+
+CI Codex は同じ P2 を、今度は**サーバ側**を名指しして再提出した:
+
+> `server/infra/loopback-listener.ts:79` — The existing P2 remains unresolved: `servesV4Loopback()`
+> still treats every IPv4 loopback address as serving the fixed client endpoint.
+
+**bot が正しい。** iter-11 で私は「サーバ側の既存の穴なので報告だけ」と判断したが、その結果
+launcher が**サーバのバグへの回避策**（`willServeV4Loopback`）を抱えていた。回避策を持つより
+1 行を直す方が**差分が小さくなる**。
+
+#### 既存テストが古い信念を明示していた
+
+```js
+it("is not needed for any of 127.0.0.0/8, which is all loopback", () => {
+  for (const address of ["127.0.0.1", "127.0.0.53", "127.1.2.3"]) expect(loopbackListenPlan({ address })).toBeNull();
+});
+```
+
+意図的な決定だったが、**問いが間違っていた**。重要なのは「loopback か」ではなく
+「**127.0.0.1 に応答するか**」—— GUI MCP と hooks がその住所をリテラルで書いているため。
+
+macOS では `127.0.0.2` を bind できない（`EADDRNOTAVAIL`、lo0 に無い）ので、原理そのものを
+別の住所で実測した:
+
+```text
+server bound to: {"address":"192.168.11.12","family":"IPv4"}
+connect 192.168.11.12 -> REACHED
+connect 127.0.0.1     -> ECONNREFUSED   <- 具体 bind は自分の住所にしか応答しない
+```
+
+これは TCP の仕組みであってプラットフォーム差ではない。したがって `127.0.0.53` の
+サーバはローカルクライアントから**まったく到達できない**。
+
+#### 直したのは 1 行、そして launcher が縮んだ
+
+```ts
+- const servesV4Loopback = (address) => isLoopbackAddress(address) && !address.includes(":");
++ const servesV4Loopback = (address) => address === V4_LOOPBACK;
+```
+
+サーバが約束を守るようになったので、**launcher の `willServeV4Loopback` を丸ごと削除**できた。
+正しい層で直すと差分が減る、の実例。
+
+break-verify: `servesV4Loopback` を 127/8 全体に戻すと 1 red。復元は byte-identical。
 

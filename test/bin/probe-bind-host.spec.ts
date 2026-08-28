@@ -217,16 +217,15 @@ describe("the companions a bound address implies", () => {
     expect(companionHostsFor("127.0.0.1")).toEqual([]);
   });
 
-  // And 127.0.0.2 does NOT, which is the correction the CI reviewer forced: the server treats any
-  // 127/8 primary as already serving v4 loopback, so it plans no secondary listener — and a
-  // 127.0.0.2 bind does not answer on 127.0.0.1 either. Reserving that port would be a promise
-  // this launch cannot keep, and could refuse a launch for no benefit.
-  //
-  // The consequence for such a bind — GUI MCP and hooks cannot reach the server at all, free port
-  // or not — is a pre-existing gap in the server's own assumption, reported rather than patched
-  // from the launcher. This test pins the launcher not over-promising, not the gap being closed.
-  it("does not promise the v4 companion for a 127/8 bind the server will not serve it from", () => {
-    expect(companionHostsFor("127.0.0.2")).toEqual([]);
+  // The rest of 127/8 gets it too, and the route to that answer is worth keeping. The CI reviewer
+  // first caught the launcher PROMISING this companion while the server planned no listener for
+  // such a bind — the guard could not keep its word. The launcher was then taught the exception,
+  // and the reviewer pointed at the real defect instead: `servesV4Loopback` in
+  // server/infra/loopback-listener.ts treated every 127/8 primary as already answering for
+  // 127.0.0.1. It does not — a socket bound to one address accepts connections to that address
+  // and no other. Fixing THERE deleted the exception here, which is the layer test.
+  it.each(["127.0.0.2", "127.0.0.53"])("gives the rest of 127/8 the companion the server now serves: %s", (address) => {
+    expect(companionHostsFor(address)).toEqual(["127.0.0.1"]);
   });
 
   // The other half, and the round-2 call that still stands: a specific non-loopback bind was
