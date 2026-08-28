@@ -68,10 +68,7 @@ settings, which is a different fact and is left alone.
 
 ## Deliberately not done
 
-- **No reordering.** Both list sections are commented "cheapest first". The open-models section
-  already violated it before this change (0.037 and 0.094 sit after 0.435), and the frontier
-  section is newly violated by the luna pair falling to 0.2. Reordering changes what the picker
-  shows and should be one decision over both sections, not a side effect of a price refresh.
+- **No reordering beyond the frontier section** — see below.
 - **No automated catalog check.** #1849 proposes one, and the prices are the field that moves
   without anyone touching the repo — this refresh is the evidence. But a test that reaches the
   network on every PR contradicts "tests must run without API keys" and would go red on an
@@ -79,3 +76,36 @@ settings, which is a different fact and is left alone.
   route for failures, not in `yarn test`.
 - **No `pricesCheckedAt` stamp.** Worth having for the same reason `MEASURED_AT` exists, but it
   is a schema addition rather than a data correction.
+
+## Ordering: the frontier section WAS reordered
+
+The first draft of this change left the order alone, on the reading that "cheapest first" was a
+stale comment. That was wrong, and codex-review caught it.
+
+`sortedModels()` (`src/components/modelOption.ts`) orders only by `modelRank`, and
+`Array.prototype.sort` is stable, so the order in `MODEL_PRESETS` **is** the order the picker
+shows within a reliability bucket. `modelOption.ts` states the contract itself: "Within a bucket
+the built-in order is kept — it runs cheapest-first, which is the next thing worth comparing once
+reliability is equal."
+
+The refreshed Luna prices (0.2) left both entries below the 0.3 Flash pair, so the frontier
+section stopped honouring it. Both moved to the head of that section, which now reads
+0.2, 0.2, 0.3, 0.3, 0.75, 2.0, 2.0 — grok-4.5 ahead of gpt-5.6-terra-pro on output, their inputs
+being equal.
+
+### Left alone, and pre-existing
+
+Measured per RELIABILITY BUCKET rather than per section — which is what the picker actually
+groups by — the order was already not ascending before this change:
+
+| bucket | breaks before | breaks after the price refresh, before the reorder |
+|---|---|---|
+| RELIABLE | 2 (`tencent/hy3` 0.14 and `google/gemini-3.5-flash-lite` 0.3 both after `moonshotai/kimi-k3` 3.0) | 6 |
+| UNTESTED | 1 (`openai/gpt-oss-120b` 0.037 after `deepseek/deepseek-v4-flash`) | 1 |
+| TROUBLED | 1 (`mistralai/devstral-2512` after `mistralai/mistral-medium-3-5` 1.5) | 1 |
+
+The frontier reorder above removes the breaks this change introduced. The remaining ones predate
+it and fixing them means reordering ACROSS the section boundaries — `tencent/hy3` and
+`nvidia/nemotron-3-ultra-550b-a55b` would have to move up among the open models, and the UNTESTED
+and TROUBLED entries are interleaved with sections chosen for a different reason. That is a wider
+change than a price refresh should carry, and it should be decided once for the whole list.
