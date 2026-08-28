@@ -15,7 +15,7 @@ import { createServer, type Server } from "node:net";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { bindHostFor, companionHostsFor, launcherReachHost, launcherUrl, probeFailureIsPortInUse } from "../../bin/cli-args.js";
+import { bindHostFor, browserUrl, companionHostsFor, launchTarget, launcherReachHost, launcherUrl, probeFailureIsPortInUse } from "../../bin/cli-args.js";
 import { boundAddress } from "../../server/infra/loopback.js";
 import { BIND_HOST } from "../../server/config/env.js";
 
@@ -138,11 +138,11 @@ describe("the address the launcher uses to reach the server it started", () => {
     expect(launcherReachHost("::")).toBe("::1");
   });
 
-  // The URL names the CONCRETE address, never `localhost`. Printing `localhost` throws away the
-  // precision the reach host just established: measured on macOS, `localhost` resolves to BOTH
-  // `::1` and `127.0.0.1`, so a browser can open the very process the poll avoided. Flagged by
-  // CodeRabbit as a Major on the first head it reviewed after the readiness fix.
-  describe("and the URL it prints for that address", () => {
+  // `launcherUrl` names the CONCRETE address, never `localhost` — that is what it is FOR, and it
+  // is no longer what the browser is opened at (see the browserUrl block below, and #1889). It
+  // survives as the way `boundAddressNote` tells an operator who widened the bind which address
+  // another machine should use.
+  describe("and the way it names that address", () => {
     // launcherUrl now takes the CONCRETE address launcherReachHost produced, so these compose the
     // two the way the launcher does.
     const urlFor = (bindHost: string) => {
@@ -168,7 +168,7 @@ describe("the address the launcher uses to reach the server it started", () => {
     // Asserted through URL rather than against a literal string: `http://<a LAN address>` trips
     // sonarjs/no-clear-text-protocols, and this says the thing that matters anyway — which host
     // and port the launcher will send the user to.
-    it("names the real address when localhost would not reach it", () => {
+    it("names the real address for a bind localhost does not describe", () => {
       const url = new URL(urlFor("192.168.11.12"));
       expect(url.hostname).toBe("192.168.11.12");
       expect(url.port).toBe("34567");
@@ -183,6 +183,79 @@ describe("the address the launcher uses to reach the server it started", () => {
       // `hostname` round-trips WITH the brackets, so this pins the serialized form without
       // spelling a clear-text URL out as a literal.
       expect(new URL(launcherUrl("fd00::1", 34567)).hostname).toBe("[fd00::1]");
+    });
+  });
+});
+
+// The URL the BROWSER gets is a separate question from the address the launcher checked, and
+// #1889 is what giving one answer to both cost: 4.11.0 sent the browser to `http://127.0.0.1:
+// <port>`, `localStorage` is partitioned by origin, and every upgrading user's grid layout came
+// up blank while their sessions were still running in tmux.
+//
+// Nothing here is about which spelling is friendlier. `browserUrl` returns the key the user's
+// state is FILED UNDER, so the test that matters is that a bind — any bind — cannot move it.
+describe("the URL the browser is opened at", () => {
+  it("is localhost, so the origin holding grid_v2 never moves", () => {
+    expect(browserUrl(34567)).toBe("http://localhost:34567");
+  });
+
+  // The whole point: `MULMOTERMINAL_HOST` decides what the server binds and what the launcher
+  // polls, and it must decide NOTHING about where the browser keeps its state. This composes the
+  // launcher's own chain — bindHostFor -> launcherReachHost -> the poll host — and asserts the
+  // browser URL is unmoved by all of it.
+  it("does not follow the bind, whatever the bind is", () => {
+    ["127.0.0.1", "0.0.0.0", "::", "192.168.11.12", "fd00::1"].forEach((bindHost) => {
+      const reach = launcherReachHost(bindHostFor({ MULMOTERMINAL_HOST: bindHost }));
+      expect(reach, `launcherReachHost(${bindHost}) should be nameable`).not.toBeNull();
+      expect(browserUrl(34567), `a ${bindHost} bind moved the browser origin`).toBe("http://localhost:34567");
+    });
+  });
+
+  // Restoring the origin must not cost the operator who widened the bind the address 4.11.0
+  // started telling them — `localhost` is right for this machine and useless to the other one.
+  describe("and what the banner says about that choice", () => {
+    const target = (reach: string) => launchTarget(reach, 34567, true);
+
+    it("says nothing extra for a loopback bind, where the browser URL already said it", () => {
+      ["127.0.0.1", "::1"].forEach((reach) => expect(target(reach).note).toBeNull());
+    });
+
+    it("names the address, and the URL another machine would use, for a widened bind", () => {
+      const { note } = target("192.168.11.12");
+      expect(note).toContain("192.168.11.12");
+      expect(note).toContain(launcherUrl("192.168.11.12", 34567));
+    });
+
+    it("brackets a v6 literal in the note, since it goes through launcherUrl", () => {
+      expect(target("fd00::1").note).toContain("[fd00::1]:34567");
+    });
+  });
+
+  // Codex, reviewing this change, flagged the hole the revert would otherwise re-open: `localhost`
+  // resolves to `::1` as well as `127.0.0.1`, and `companionHostsFor` never asks about `::1` — so
+  // a stranger there could answer the browser. The launcher MEASURES it (localhostReachesOnlyUs)
+  // and this is what it does with a `false`.
+  describe("when something else already answers on the v6 loopback", () => {
+    const target = (reach: string) => launchTarget(reach, 34567, false);
+
+    it("sends the browser to the address that was actually checked, not to localhost", () => {
+      expect(target("127.0.0.1").url).toBe(launcherUrl("127.0.0.1", 34567));
+      expect(target("127.0.0.1").url).not.toContain("localhost");
+    });
+
+    // The silent version of this IS #1889 for that one user: an empty grid and nothing on screen
+    // saying where it went. Stepping aside is fine; doing it quietly is not.
+    it("says why, and where the user's saved state actually is", () => {
+      const { note } = target("127.0.0.1");
+      expect(note).toContain("[::1]:34567");
+      expect(note).toContain("http://localhost:34567");
+    });
+
+    // A widened bind takes the same branch — the ambiguity is about `localhost`, not about what
+    // the server bound, so the reason must not change with the bind.
+    it("steps aside for a widened bind too", () => {
+      expect(target("192.168.11.12").url).toBe(launcherUrl("192.168.11.12", 34567));
+      expect(target("192.168.11.12").note).toContain("[::1]:34567");
     });
   });
 });
