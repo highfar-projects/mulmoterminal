@@ -8,7 +8,7 @@
 // Scope for now: moving the zoom between terminals. That is deliberately the only action a
 // key can reach, because the zoomed cell is the ONLY "which terminal is the user on" state
 // the grid actually has — an un-zoomed grid has no selection to act on.
-import { actionForKey, TERMINAL_SCOPED_ACTIONS, type Keymap, type KeymapAction } from "../../common/keymap";
+import { actionForKey, NEEDS_A_CURRENT_TERMINAL, TERMINAL_SCOPED_ACTIONS, type Keymap, type KeymapAction } from "../../common/keymap";
 
 export type GridShortcut = KeymapAction;
 
@@ -23,15 +23,6 @@ export interface ShortcutKeyEvent {
   metaKey: boolean;
   isComposing?: boolean;
 }
-
-// Actions that act ON a terminal, and so need one the grid can name. The zoomed cell is the
-// only such state the grid has — un-zoomed there is no "current terminal", so these do
-// nothing rather than guessing which cell the user meant. `terminal-new` is exempt: appending
-// a cell needs no subject.
-//
-// `zoom-toggle` and `next-attention` are exempt alongside `terminal-new`: they choose the cell
-// to enlarge themselves, which is exactly what makes them the keyboard's way INTO the zoom.
-const NEEDS_A_CURRENT_TERMINAL: readonly GridShortcut[] = ["zoom-next", "zoom-prev", "terminal-new-adjacent", "terminal-close"];
 
 export function gridShortcutFor(keymap: Keymap, e: ShortcutKeyEvent, zoomed: boolean): GridShortcut | null {
   if (e.type !== "keydown") return null;
