@@ -32,7 +32,7 @@ import { bindSecurityWarning, browserOriginHostnames, createIsAllowedOrigin } fr
 import { serverErrorExit } from "./infra/server-exit.js";
 import { PORT, BIND_HOST, CLAUDE_CWD, MULMOTERMINAL_HOME, SESSION_ID_RE } from "./config/env.js";
 import { boundAddress, isLoopbackBinding } from "./infra/loopback.js";
-import { startLoopbackListener } from "./infra/loopback-listener.js";
+import { startLoopbackListeners } from "./infra/loopback-listener.js";
 import { messageOf } from "./errors.js";
 import { hookSettingsJson } from "./session/hook-settings.js";
 import { mcpConfigJson } from "./session/mcp-config.js";
@@ -531,14 +531,19 @@ mountAppRoutes(app, {
 });
 
 const server = http.createServer(app);
-// The second listener, for the case where the operator bound a specific non-loopback address and
-// everything this server spawns can therefore no longer reach it (#1834). Built unconditionally
-// and wired into the same app, sockets and upgrade routing as the primary, because that wiring
-// happens well before `listen()` tells us which address the OS actually chose; whether it ever
-// serves anything is decided down at the bind, and an http server that never listens costs
-// nothing.
-const loopbackServer = http.createServer(app);
-const listeners: readonly [http.Server, http.Server] = [server, loopbackServer];
+// The extra listeners: one for the case where the operator bound a specific non-loopback address
+// and everything this server spawns can therefore no longer reach it (#1834), one so that
+// `http://localhost:<port>` — the origin the browser files its saved settings under — cannot be
+// answered by anything else on this machine (#1893). Built unconditionally and wired into the same
+// app, sockets and upgrade routing as the primary, because that wiring happens well before
+// `listen()` tells us which address the OS actually chose; whether either ever serves anything is
+// decided down at the bind, and an http server that never listens costs nothing.
+// TWO spares, because there are two loopback addresses to answer for and a bind can need both at
+// once (a specific LAN address serves neither). They are interchangeable — same app, same sockets,
+// same upgrade routing — so loopbackListenPlans decides what each one becomes, and a spare that is
+// never asked for anything simply never listens.
+const loopbackServers = [http.createServer(app), http.createServer(app)] as const;
+const listeners: readonly [http.Server, http.Server, http.Server] = [server, ...loopbackServers];
 pubsub = createPubSub(listeners, isAllowedOrigin);
 
 // Wire the shared file-change publisher (markdown + html live-refresh) against
@@ -987,7 +992,7 @@ server.listen(Number(PORT), BIND_HOST, () => {
   // "can our own sessions still reach us?" — false for BOTH, because a server on `::1` refuses a
   // client dialing 127.0.0.1. Gating this on the warning left `MULMOTERMINAL_HOST=localhost`
   // broken, which is how that wiring mistake showed up here.
-  startLoopbackListener(server, loopbackServer, PORT);
+  startLoopbackListeners(server, loopbackServers, PORT);
   const surviving = tmuxAvailable() ? tmuxListSessionIds() : [];
   const reaped: string[] = [];
   if (tmuxAvailable()) {
