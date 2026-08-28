@@ -28,10 +28,25 @@ Settings has a **Keyboard shortcuts** section, but it is **read-only** — it li
 its current binding, plus a `send` row: one per configured entry, or a single "Not set" placeholder
 when there are none. Point the user at it after writing, as the check.
 
-## Open with a proposal, not a question
+## Open with a proposal, not a question — **on the keymap path only**
 
-Most people reach you from the **Set up shortcuts…** button in Settings, which they pressed
-without a specific binding in mind — the screen told them the feature exists and they want to know
+**First, check which path you are on.** This skill answers two different arrivals, and the flow
+below belongs to one of them:
+
+| the user said | go to |
+|---|---|
+| nothing specific, or arrived via **Set up shortcuts…** | this section |
+| "selecting text doesn't copy" | [`copyOnSelect`](#copyonselect--copy-just-by-selecting) |
+| anything about the question pane | [`questionPaneEnabled`](#questionpaneenabled--answer-a-question-from-a-side-pane) |
+| "Shift+Enter submits", "Enter makes a newline", "Ctrl+C stopped interrupting" | [`terminalSubmit`](#terminalsubmit--enter-vs-newline) |
+
+**Named one of those three? Skip this whole section** and go straight to that setting. Proposing
+shortcuts to someone who came about Enter is both an unwanted detour and a real cost: every binding
+takes a key away from the program in their terminal, and the rule below says never to add one the
+user did not request.
+
+Most people who DO land here reach you from the **Set up shortcuts…** button in Settings, which they
+pressed without a specific binding in mind — the screen told them the feature exists and they want to know
 what it is good for. "What would you like to bind?" hands that question straight back, and it is
 the one they came to have answered.
 

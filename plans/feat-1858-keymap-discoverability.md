@@ -459,6 +459,25 @@ Function Keys で効く。1 つのファイルの中で、前段が言い切り�
 **これは 25 巡目に「No findings」を出したのと同じレビュアーが、26 巡目に出した指摘。**
 1 度 clean が出ても、同じ head をもう 1 度読ませる価値がある、という規約の根拠がそのまま実演された。
 
+### 2 巡目がまた見つけた —— 今度は P2、構造的な欠陥
+
+同じ head の 2 巡目（また「自分の前回の判定を追認するな」と指示）で:
+
+> the new "Open with a proposal" flow is written as the skill's general opening procedure, but this
+> skill is also explicitly invoked for `copyOnSelect`, `questionPaneEnabled`, and `terminalSubmit`
+> symptoms in the frontmatter … For a user saying "Shift+Enter submits instead of adding a line",
+> this sends the agent into unrelated shortcut proposals before the `terminalSubmit` fix.
+
+**私が足した節が無条件だった。** この skill は「Shift+Enter で送信されてしまう」でも起動するのに、
+その人にまず**頼まれてもいないショートカットの提案**を始めることになっていた。しかも
+**skill 自身のルール**（「every binding takes a key away from the program inside the terminal.
+So ask before binding, and never add one the user did not request」）に反する。
+
+節の冒頭に経路の振り分け表を置き、他 3 設定の症状を言った人は**この節を丸ごと飛ばす**と明記した。
+
+**2 巡目ルールが 2 回連続で自分の価値を証明した**（26 巡目: F キーの言い切り、28 巡目: これ）。
+1 巡で止めていたらどちらも残っていた。
+
 ### ゲート
 
 `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0。
