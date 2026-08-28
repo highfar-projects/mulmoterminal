@@ -168,3 +168,20 @@ PR #1886。codex は 1〜3 巡すべて `LGTM`。CodeRabbit は 1 巡目で 1 �
 
 `+1` はレスポンスのアサーションを 1 件足したぶん。M1 が 4→5 に増えたのは、その 1 件が
 「エージェントが読むもの」を pin したから。
+
+### エンドツーエンド検証（`8d65c237`、2026-08-28）
+
+「開いたままのキャンバスが更新される」は**この PR の主張そのもの**なのに、それまで証明していたのは
+「publish が呼ばれる」（unit）と「ファイルが変わる」（実機）の 2 つで、**ブラウザに届くところまでは
+測っていなかった**。届く経路は socket.io（`/ws/pubsub`、`server/infra/pubsub.ts`）なので、
+ブラウザと同じ購読をする node クライアントを繋いで外から測った。
+
+scratch な `HOME` と workspace で 34911 に起動（ユーザーの実サーバ 34567 には触れていない）:
+
+| POST | 受信イベント | ディスク |
+|---|---|---|
+| `{filePath, beatIndex: 1, beat}` | **1 件** —— `plugin:mulmoScript:scriptChanged` / `{"filePath":"stories/canvas.json"}`、**`origin` 無し** | `# BEFORE TWO` → `# AFTER TWO` |
+| `{filePath}`（ただの再表示） | **0 件** | 変化なし |
+
+`origin` がワイヤ上に無いことが、ここで初めて外から確認できた —— 契約が「エージェントの書き込みは
+origin を持たないので全 View が reload する」と言っている、その通りの形で届いている。
