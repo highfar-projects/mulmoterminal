@@ -7,7 +7,14 @@
 // claimed yet, and whatever claims it in between answers under this app's origin (Codex, #1903).
 import { describe, it, expect, vi } from "vitest";
 
-import { announceListening, listeningMessage, localBrowserUrl, notLocalhostReason, type IpcParent } from "../../../server/infra/announce-listening.js";
+import {
+  announceListening,
+  listeningMessage,
+  localBrowserUrl,
+  localhostIsOurs,
+  notLocalhostReason,
+  type IpcParent,
+} from "../../../server/infra/announce-listening.js";
 import type { LoopbackListener, PrimaryListener } from "../../../server/infra/loopback-listener.js";
 
 const primaryOn = (address: string): PrimaryListener => ({ address: () => ({ address }) });
@@ -56,28 +63,28 @@ describe("announceListening", () => {
     expect(events).toEqual(["bound:127.0.0.1", "bound:::1", "announced"]);
   });
 
-  it("reports the v6 loopback as served when the listener took it", async () => {
+  it("reports localhost as ours when the listener took the missing loopback", async () => {
     const { spares, parent, sent } = harness(["ok"]);
     await announceListening(primaryOn("127.0.0.1"), spares, 34567, "127.0.0.1", parent);
-    expect(sent).toEqual([{ type: "listening", port: 34567, address: "127.0.0.1", v6LoopbackServed: true }]);
+    expect(sent).toEqual([{ type: "listening", port: 34567, address: "127.0.0.1", localhostIsOurs: true }]);
   });
 
   // The case the report exists for: the launcher's own probe ran before this process started, so
   // only this side can see a claim made during the boot.
-  it("reports it as NOT served when the bind lost, and still announces", async () => {
+  it("reports localhost as NOT ours when a bind lost, and still announces", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const { events, spares, parent, sent } = harness(["taken"]);
     await announceListening(primaryOn("127.0.0.1"), spares, 34567, "127.0.0.1", parent);
     expect(events).toEqual(["failed:::1", "announced"]);
-    expect(sent).toEqual([{ type: "listening", port: 34567, address: "127.0.0.1", v6LoopbackServed: false }]);
+    expect(sent).toEqual([{ type: "listening", port: 34567, address: "127.0.0.1", localhostIsOurs: false }]);
     warn.mockRestore();
   });
 
   // A `::` bind serves `::1` itself, so there is no plan and nothing to lose.
-  it("reports it as served when the primary bind already answers there", async () => {
+  it("reports localhost as ours when the primary bind already answers there", async () => {
     const { spares, parent, sent } = harness(["ok"]);
     await announceListening(primaryOn("::"), spares, 34567, "::", parent);
-    expect(sent).toEqual([{ type: "listening", port: 34567, address: "::", v6LoopbackServed: true }]);
+    expect(sent).toEqual([{ type: "listening", port: 34567, address: "::", localhostIsOurs: true }]);
   });
 
   // `send` STAYS a function after the parent disconnects, and calling it then kills this process
@@ -147,5 +154,30 @@ describe("localBrowserUrl", () => {
   it("still names an address when the bind reported none at all", () => {
     const none = { v6LoopbackServed: false, v4LoopbackServed: false };
     expect(localBrowserUrl(34567, null, none)).toBe("http://127.0.0.1:34567");
+  });
+});
+
+// `localhost` resolves to EITHER loopback and clients disagree about which they try first, so
+// holding one of the two is not a smaller guarantee — it is none (Codex, #1903).
+describe("localhostIsOurs", () => {
+  it("needs both loopbacks, not either", () => {
+    expect(localhostIsOurs({ v4LoopbackServed: true, v6LoopbackServed: true })).toBe(true);
+    expect(localhostIsOurs({ v4LoopbackServed: true, v6LoopbackServed: false })).toBe(false);
+    expect(localhostIsOurs({ v4LoopbackServed: false, v6LoopbackServed: true })).toBe(false);
+    expect(localhostIsOurs({ v4LoopbackServed: false, v6LoopbackServed: false })).toBe(false);
+  });
+
+  // The reported case: a `::1` primary serves v6 itself, so only the v4 auxiliary can lose — and
+  // an IPv4-preferring client would then reach whatever took it.
+  it("refuses localhost when a ::1 primary lost the v4 bind", () => {
+    const outcome = { v4LoopbackServed: false, v6LoopbackServed: true };
+    expect(localBrowserUrl(34567, "::1", outcome)).toBe("http://[::1]:34567");
+    expect(notLocalhostReason(34567, outcome)).toContain("127.0.0.1:34567");
+  });
+
+  it("names both addresses when both were lost", () => {
+    const reason = notLocalhostReason(34567, { v4LoopbackServed: false, v6LoopbackServed: false });
+    expect(reason).toContain("127.0.0.1:34567");
+    expect(reason).toContain("[::1]:34567");
   });
 });

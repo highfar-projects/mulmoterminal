@@ -12,15 +12,17 @@ export interface IpcParent {
   send?: (message: unknown, handle: undefined, options: undefined, callback: () => void) => unknown;
 }
 
-/** Deliberately NARROWER than `LoopbackOutcome`: the launcher decides one thing from this — may
- *  the browser be sent to `localhost` — and `v4LoopbackServed` answers a question only this
- *  process asks (which URL to print for a direct start). A field nobody reads is a field someone
- *  later reads by mistake. */
+/** Carries the ANSWER the launcher needs, not the inputs it would have to combine.
+ *
+ *  It said `v6LoopbackServed` for one iteration, and that was the wrong shape: `localhost`
+ *  resolves to EITHER loopback, so the question "may a browser be sent there" needs both halves,
+ *  and a wire that reports one half invites the reader to treat it as the whole (Codex, PR #1903).
+ *  One field, answering the one thing the launcher decides. */
 export interface ListeningMessage {
   type: "listening";
   port: number;
   address: string | null;
-  v6LoopbackServed: boolean;
+  localhostIsOurs: boolean;
 }
 
 /** The message a parent gets, built where the answers are known.
@@ -29,16 +31,15 @@ export interface ListeningMessage {
  *  resolves to `::1` here and `127.0.0.1` elsewhere — and a launcher that guesses wrong polls a
  *  stranger and calls it ready (#1876).
  *
- *  `v6LoopbackServed` is the second thing only this side can answer. The launcher probes `::1`
- *  before this process exists, so a process claiming `[::1]:<port>` DURING the boot is invisible
- *  to it — and the launcher would then send a browser to `localhost`, which prefers `::1`
- *  (measured on Chrome), straight into that process under this app's origin. Reported rather than
- *  merely logged for exactly that reason (Codex, PR #1903). */
+ *  `localhostIsOurs` is the second thing only this side can answer. The launcher checks the
+ *  loopbacks before this process exists, so anything claiming one DURING the boot is invisible to
+ *  it — and the launcher would then send a browser to `localhost` straight into that process
+ *  under this app's origin. Reported rather than merely logged for exactly that reason. */
 export const listeningMessage = (port: number, address: string | null, outcome: LoopbackOutcome): ListeningMessage => ({
   type: "listening",
   port,
   address,
-  v6LoopbackServed: outcome.v6LoopbackServed,
+  localhostIsOurs: localhostIsOurs(outcome),
 });
 
 /**
@@ -73,21 +74,41 @@ export const listeningMessage = (port: number, address: string | null, outcome: 
  * address the kernel says we bound, which is the last thing that can be asserted at all.
  */
 export function localBrowserUrl(port: number, boundAddress: string | null, outcome: LoopbackOutcome): string {
-  if (outcome.v6LoopbackServed) return `http://localhost:${port}`;
+  if (localhostIsOurs(outcome)) return `http://localhost:${port}`;
+  // Descending by what is still true. Naming the loopback we DID keep is better than naming the
+  // bind, and naming the wrong one is the defect in miniature: with `::1` ours and `127.0.0.1`
+  // lost, printing `127.0.0.1` sends the reader to the stranger by hand.
   if (outcome.v4LoopbackServed) return `http://127.0.0.1:${port}`;
+  if (outcome.v6LoopbackServed) return withHost(port, "::1");
   if (boundAddress === null) return `http://127.0.0.1:${port}`;
-  // Built through `URL` so an IPv6 literal is bracketed: `http://::1:34567` is not a URL at all.
+  return withHost(port, boundAddress);
+}
+
+/** Built through `URL` so an IPv6 literal is bracketed: `http://::1:34567` is not a URL at all. */
+function withHost(port: number, host: string): string {
   const url = new URL(`http://localhost:${port}`);
-  url.hostname = boundAddress.includes(":") ? `[${boundAddress}]` : boundAddress;
+  url.hostname = host.includes(":") ? `[${host}]` : host;
   return url.origin;
 }
 
+/**
+ * Whether `http://localhost:<port>` can only mean this server.
+ *
+ * BOTH loopbacks, and that is the correction Codex made twice over: `localhost` resolves to
+ * `::1` and to `127.0.0.1`, clients differ on which they try first (Chrome prefers `::1`,
+ * measured), and holding one of the two leaves the other free for anything on this machine to
+ * answer with. Half an answer here is not a smaller guarantee, it is none.
+ */
+export const localhostIsOurs = (outcome: LoopbackOutcome): boolean => outcome.v4LoopbackServed && outcome.v6LoopbackServed;
+
 /** Why the URL above is not `localhost`, or null when it is. Silence would leave an operator
- *  looking at an address they did not expect with nothing to search for. */
-export const notLocalhostReason = (port: number, outcome: LoopbackOutcome): string | null =>
-  outcome.v6LoopbackServed
-    ? null
-    : `[bind] not printing http://localhost:${port} — something else holds [::1]:${port}, and a browser resolving localhost would reach it under this app's saved settings.`;
+ *  looking at an address they did not expect with nothing to search for — so it names the
+ *  address that was lost, which is the one they have to go and free. */
+export function notLocalhostReason(port: number, outcome: LoopbackOutcome): string | null {
+  if (localhostIsOurs(outcome)) return null;
+  const lost = [outcome.v4LoopbackServed ? null : `127.0.0.1:${port}`, outcome.v6LoopbackServed ? null : `[::1]:${port}`].filter((entry) => entry !== null);
+  return `[bind] not printing http://localhost:${port} — something else holds ${lost.join(" and ")}, and a browser resolving localhost would reach it under this app's saved settings.`;
+}
 
 export async function announceListening(
   primary: PrimaryListener,

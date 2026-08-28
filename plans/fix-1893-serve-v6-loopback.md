@@ -231,3 +231,46 @@ Codex（`CHANGES REQUESTED`）:
 > spec が `sonarjs/no-clear-text-protocols` に引っかかった（LAN アドレスの literal URL）。
 > `test/bin/probe-bind-host.spec.ts` が同じ問題を `new URL()` で assert して回避しているので
 > それに合わせた。
+
+## レビュー iter-3 —— 「半分の保証は、小さい保証ではなく無い」
+
+Codex（`CHANGES REQUESTED`）:
+
+> `localBrowserUrl` selects `localhost` when only `v6LoopbackServed` is true. If the primary owns
+> `::1` but the auxiliary `127.0.0.1` bind loses to another process, IPv4-preferring clients can
+> still reach that other process at `localhost:<port>`.
+
+**対称のケースを見落としていた。** `localhost` は v4 と v6 の**どちらにも**解決し、クライアントに
+よってどちらを先に試すかが違う（Chrome は `::1`、他は v4）。片方を持っているだけでは、もう片方は
+誰でも取れるまま残る。**半分の保証は小さい保証ではなく、無い。**
+
+- `localhostIsOurs(outcome) = v4 && v6` を導入し、印字も wire もこれ 1 つで決める
+- `localBrowserUrl` の降り方も直した。以前は「v6 を持っていれば localhost、でなければ
+  127.0.0.1」だったので、**`::1` を持ち v4 を失った状態で 127.0.0.1 を印字**していた ——
+  読者を手ずから相手のプロセスへ送る、欠陥そのものの縮図。いまは「持っている方の loopback」を
+  名乗る
+- 理由の行は**失った側のアドレス**を名指しする（両方失えば両方）。operator が空けに行くのは
+  そこなので
+- wire は `v6LoopbackServed` から `localhostIsOurs` へ。**入力ではなく答えを載せる。**
+  片方だけを wire に出すと、読む側がそれを全体だと扱う余地が残る（iter-2 で私がやった間違い）
+
+### iter-3 の検証
+
+| ミューテーション | 結果 |
+|---|---|
+| `localhostIsOurs` が v6 だけを見る（= 指摘された挙動） | 2 red |
+
+**実機 —— 指摘そのもののケース**（直起動、`MULMOTERMINAL_HOST=::1`、`127.0.0.1:34750` を
+別プロセスが保持）:
+
+```
+[bind] could not also listen on 127.0.0.1:34750 (EADDRINUSE) — … hooks and the GUI MCP will fail …
+mulmoterminal running at http://[::1]:34750
+[bind] not printing http://localhost:34750 — something else holds 127.0.0.1:34750, …
+```
+
+`curl http://127.0.0.1:34750` は `STRANGER-v4` を返し、`[::1]` は我々が 200 を返す。
+`localhost` は名乗らない。
+
+ゲート: `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0、
+`yarn test` **11604 passed / 50 skipped**。

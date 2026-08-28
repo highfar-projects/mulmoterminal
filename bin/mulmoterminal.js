@@ -478,14 +478,14 @@ function runServer(port, probedAddress, localhostIsUnambiguous, noOpen, cwd, onC
     // binding — that is #1876's fix and it stays. The URL asks "where does this user's browser
     // keep its state", and the only answer that does not empty the app is the one it has always
     // been given: see browserUrl.
-    // `serverHoldsV6` is the child's own report and OUTRANKS the probe when present. The probe ran
-    // before the child existed, so it cannot see a process that claimed `[::1]:<port>` during the
-    // boot — only the child knows how its own bind went (Codex, PR #1903). `undefined` means the
-    // child said nothing about it, and then the probe is all there is.
-    const beginReady = (reachHost, serverHoldsV6) => {
+    // `serverSaysLocalhostIsOurs` is the child's own report and OUTRANKS the probe when present.
+    // The probe ran before the child existed, so it cannot see a process that claimed EITHER
+    // loopback during the boot — only the child knows how its own binds went (Codex, PR #1903).
+    // `undefined` means the child said nothing about it, and then the probe is all there is.
+    const beginReady = (reachHost, serverSaysLocalhostIsOurs) => {
       if (readyStarted) return;
       readyStarted = true;
-      const localhostIsOurs = localhostIsUnambiguous && serverHoldsV6 !== false;
+      const localhostIsOurs = localhostIsUnambiguous && serverSaysLocalhostIsOurs !== false;
       const { url, note } = launchTarget(reachHost, port, localhostIsOurs);
       cancelReady = waitUntilReady(port, () => announceReady(url, note, noOpen), { host: reachHost });
     };
@@ -494,7 +494,7 @@ function runServer(port, probedAddress, localhostIsUnambiguous, noOpen, cwd, onC
       const reported = launcherReachHost(msg.address);
       // Absent rather than false when the field is missing, so "an older child said nothing" and
       // "this child could not take it" stay different answers.
-      if (reported) beginReady(reported, typeof msg.v6LoopbackServed === "boolean" ? msg.v6LoopbackServed : undefined);
+      if (reported) beginReady(reported, typeof msg.localhostIsOurs === "boolean" ? msg.localhostIsOurs : undefined);
     });
     // The fallback runs ONLY on an address we can name without asking anyone. Guessing from a
     // NAME is what the child's report exists to replace, and a fallback that guessed anyway just
