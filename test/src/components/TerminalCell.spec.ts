@@ -88,7 +88,6 @@ function mountCell(
     defaultCwd?: string | null;
     presets?: { label: string; path: string }[];
     home?: string | null;
-    cancellable?: boolean;
     openSessionIds?: string[];
     openCwds?: string[];
     expanded?: boolean;
@@ -111,7 +110,6 @@ function mountCell(
       defaultCwd: opts.defaultCwd ?? "/home/me/my-project",
       presets: opts.presets ?? [],
       home: opts.home ?? "/home/me",
-      cancellable: opts.cancellable ?? false,
       openSessionIds: opts.openSessionIds ?? [],
       openCwds: opts.openCwds ?? [],
     },
@@ -236,17 +234,6 @@ describe("TerminalCell", () => {
     await flushPromises();
     expect(body).toContain('"directory":true');
     expect((w.find('[data-testid="cell-dir-input"]').element as HTMLInputElement).value).toBe("/picked/dir");
-  });
-
-  it("shows a cancel ✕ on a cancellable launcher that emits close, but not otherwise", async () => {
-    const plain = mountCell(null, { defaultCwd: "/home/me/default" });
-    await flushPromises();
-    expect(plain.find('[data-testid="cell-launch-cancel"]').exists()).toBe(false);
-
-    const w = mountCell(null, { defaultCwd: "/home/me/default", cancellable: true });
-    await flushPromises();
-    await w.find('[data-testid="cell-launch-cancel"]').trigger("click");
-    expect(w.emitted("close")).toHaveLength(1);
   });
 
   it("lists existing sessions for the dir and resumes one on click", async () => {
@@ -1935,7 +1922,14 @@ describe("TerminalCell", () => {
     const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj", reorderable: true });
     await flushPromises();
     const labels = w.findAll(".cell-header > .cell-actions button").map((b) => b.attributes("aria-label"));
-    expect(labels).toEqual(["Move terminal left", "Move terminal right", "Expand terminal", "Set aside (stays open, keeps its history)", "Close terminal"]);
+    expect(labels).toEqual([
+      "Move terminal left",
+      "Move terminal right",
+      "Expand terminal",
+      "Start a terminal in this directory",
+      "Set aside (stays open, keeps its history)",
+      "Close terminal",
+    ]);
   });
 
   it("drops reorder when the grid is not reorderable", async () => {

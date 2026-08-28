@@ -1,6 +1,7 @@
 import type { RunCommand } from "./runCommand";
 import { dirPriority } from "../../common/dirPriorityOrder";
 import { asTerminalAgent, type BadgedAgent, type TerminalAgent } from "../../common/sessionAgent";
+import { isCustomAgentId } from "../../common/customAgents";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import type { AttentionStatus } from "./attentionStatus";
@@ -46,6 +47,11 @@ export interface Cell {
   // rather than listing the others — a fifth agent reaches every cell site by adding itself to
   // TERMINAL_AGENTS, and cannot be half-added by someone updating one of these lists.
   agent?: BadgedAgent;
+  // The custom-agent entry this cell was launched from (common/customAgents.ts), or absent for a
+  // built-in. It rides ALONGSIDE `agent`, which stays "claude" for a custom one — a wrapper decides
+  // which command line starts Claude Code, not what the session is. Needed on the cell because the
+  // launch panel creates the cell from outside it, so the pick cannot live only in TerminalCell.
+  customAgent?: string;
   // Set aside by the user: still connected and still holding its history, just sunk out of the
   // way (#992). Stored as the ABSENCE of the key when not parked, for the same reason `agent`
   // is — only an absent key survives the JSON a persisted cell round-trips.
@@ -94,31 +100,6 @@ const clampPage = (s: GridState): GridState => ({ ...s, page: Math.min(Math.max(
 const ensureEntry = (s: GridState): GridState =>
   s.cells.length > 0 ? s : { ...s, cells: [{ uid: s.nextUid, session: null, cwd: null }], nextUid: s.nextUid + 1 };
 
-// "+ Terminal": append a launch cell (overflowing into a new page when full), or
-// cancel an already-open launch cell. The sole entry cell is never removed.
-export function addCell(state: GridState): GridState {
-  const last = state.cells[state.cells.length - 1];
-  if (isLaunchCell(last)) {
-    if (state.cells.length <= 1) return state; // the entry cell — nothing to add or cancel
-    return clampPage({ ...state, cells: state.cells.slice(0, -1) }); // cancel the open launch cell
-  }
-  if (runningCount(state.cells) >= MAX_TERMINALS) return state;
-  const uid = state.nextUid;
-  const cells = [...state.cells, { uid, session: null, cwd: null }];
-  // While a cell is zoomed, promote the new one into the enlarged view so the user
-  // launches it there rather than hunting for it in the filmstrip.
-  const expanded = zoomedUid(state) !== null ? uid : state.expanded;
-  return { ...state, cells, nextUid: state.nextUid + 1, page: pageCount(cells.length) - 1, expanded };
-}
-
-// The uid of the trailing launch cell that "+ Terminal" (and the launcher's own close button)
-// cancels, or null when there's nothing to cancel. The sole entry cell is never
-// cancelable, so it's excluded.
-export function cancelableLaunchUid(state: GridState): number | null {
-  const last = state.cells[state.cells.length - 1];
-  return state.cells.length > 1 && last !== undefined && isLaunchCell(last) ? last.uid : null;
-}
-
 export function setSession(state: GridState, uid: number, id: string | null): GridState {
   // Drop the one-shot auto-start flag: the cell has answered. Left set, a cell whose session is
   // later closed would keep counting as occupied while sitting on the launcher form.
@@ -135,7 +116,7 @@ export function setCwd(state: GridState, uid: number, cwd: string): GridState {
 // Claude is stored as the ABSENCE of the field, so a cell written before the field existed and a
 // cell running Claude are the same thing on disk. Used when READING a persisted cell; the writer
 // below has to go further and drop the key entirely.
-const storedCellAgent = (agent: TerminalAgent): Cell["agent"] => (agent === "claude" ? undefined : agent);
+export const storedCellAgent = (agent: TerminalAgent): Cell["agent"] => (agent === "claude" ? undefined : agent);
 
 // Record which agent a cell launched, so a reloaded cell reconnects to the right endpoint.
 export function setCellAgent(state: GridState, uid: number, agent: TerminalAgent): GridState {
@@ -557,6 +538,7 @@ export function parseGridState(raw: string | null): GridState | null {
         cwd: c.cwd,
         launcher: asLauncher(c.launcher),
         ...(agent === undefined ? {} : { agent }),
+        ...(isCustomAgentId(c.customAgent) ? { customAgent: c.customAgent } : {}),
         ...(c.parked === true ? { parked: true as const } : {}),
       };
     });

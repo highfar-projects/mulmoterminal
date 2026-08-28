@@ -5,7 +5,6 @@ import {
   pageSlice,
   resolveCellStatus,
   runningCount,
-  addCell,
   setSession,
   setCwd,
   setCellAgent,
@@ -30,7 +29,6 @@ import {
   orderCells,
   visibleOrdered,
   countByStatus,
-  cancelableLaunchUid,
   zoomedUid,
   visibleCells,
   parseGridState,
@@ -69,53 +67,6 @@ describe("pagination helpers", () => {
   });
   it("runningCount counts non-null sessions", () => {
     expect(runningCount([cell(0, U(0)), cell(1), cell(2, U(2))])).toBe(2);
-  });
-});
-
-describe("addCell", () => {
-  it("appends a launch cell and jumps to its (last) page", () => {
-    const s = addCell(make(running(9)));
-    expect(s.cells).toHaveLength(10);
-    expect(s.cells[9].session).toBeNull();
-    expect(s.page).toBe(1); // overflowed to page 2
-  });
-  it("cancels an open launch cell (but never the sole entry cell)", () => {
-    const open = make([...running(2), cell(2)]);
-    expect(addCell(open).cells).toHaveLength(2);
-    const entryOnly = make([cell(0)]);
-    expect(addCell(entryOnly).cells).toHaveLength(1);
-  });
-  it("does not exceed MAX_TERMINALS", () => {
-    const s = addCell(make(running(81)));
-    expect(runningCount(s.cells)).toBe(81);
-    expect(s.cells).toHaveLength(81);
-  });
-  it("zooms the new cell when a cell is currently zoomed", () => {
-    const s = addCell(make(running(3), { expanded: 1 }));
-    expect(s.cells).toHaveLength(4);
-    expect(s.expanded).toBe(s.cells[3].uid); // the freshly appended cell
-  });
-  it("leaves the grid un-zoomed when nothing was zoomed", () => {
-    expect(addCell(make(running(3))).expanded).toBeNull();
-  });
-  it("does not zoom the new cell when `expanded` is stale (points at no cell)", () => {
-    // zoomedUid treats a dangling `expanded` as not-zoomed, so a new cell must not inherit it.
-    const s = addCell(make(running(2), { expanded: 99 }));
-    expect(s.expanded).toBe(99); // unchanged; zoomedUid() still resolves it to null
-  });
-});
-
-describe("cancelableLaunchUid", () => {
-  const CMD: RunCommand = { source: "script", index: 0, label: "Build", cwd: "/x" };
-  it("is the trailing launch cell's uid when one is open beyond the entry cell", () => {
-    expect(cancelableLaunchUid(make([...running(2), cell(7)]))).toBe(7);
-  });
-  it("is null for the sole entry cell (nothing to cancel)", () => {
-    expect(cancelableLaunchUid(make([cell(0)]))).toBeNull();
-  });
-  it("is null when the last cell is occupied (running session or command)", () => {
-    expect(cancelableLaunchUid(make(running(2)))).toBeNull();
-    expect(cancelableLaunchUid(make([...running(1), { uid: 1, session: null, cwd: null, command: CMD }]))).toBeNull();
   });
 });
 
@@ -385,7 +336,7 @@ describe("nextAttention (jump to a terminal that needs you)", () => {
 
   // The trailing launch cell is not a terminal. It also never reports a status, so without an
   // explicit skip it reads as `idle` and gets picked constantly — including as the cell to
-  // ENLARGE while zoomed. `ensureEntry`/`addCell` mean one is almost always present.
+  // ENLARGE while zoomed. `ensureEntry` means one is almost always present.
   it("never picks the empty launch cell, even when it is the only idle thing left", () => {
     const s = make([cell(0, U(0)), cell(1)]); // one running terminal + the trailing launcher
     expect(nextAttentionUid(s, [0, 1], { 0: "working" }, null)).toBeNull();
@@ -551,11 +502,6 @@ describe("autoStart (a cell told to run on mount)", () => {
     expect(switchPage(make([...running(9), starting(9)], { page: 1 }), 0).cells).toHaveLength(10);
   });
 
-  it("is not the launch cell '+' cancels", () => {
-    expect(cancelableLaunchUid(make([...running(2), starting(2)]))).toBeNull();
-    expect(addCell(make([...running(2), starting(2)])).cells).toHaveLength(4); // appended, not cancelled
-  });
-
   // One-shot: the cell has answered. Left set, closing that session later would leave an empty
   // launcher permanently counted as occupied.
   it("is cleared once the session arrives", () => {
@@ -646,12 +592,6 @@ describe("runCommand (script command cells)", () => {
   it("counts a command cell as running (toward the cap)", () => {
     expect(runningCount([cell(0, U(0)), cmdCell(1), cell(2)])).toBe(2);
   });
-  it("a trailing command cell is not a cancellable launch cell — '+' appends", () => {
-    const s = addCell(make([...running(2), cmdCell(2)]));
-    expect(s.cells).toHaveLength(4); // appended a launch cell, kept the command cell
-    expect(s.cells[3].session).toBeNull();
-    expect(s.cells[3].command).toBeUndefined();
-  });
   it("switchPage keeps a trailing command cell (only abandons an empty launcher)", () => {
     const after = switchPage(make([...running(9), cmdCell(9)], { page: 1 }), 0);
     expect(after.cells).toHaveLength(10);
@@ -667,12 +607,9 @@ describe("launchInCell (persistent launcher cells)", () => {
     expect(s.cells[0].cwd).toBe("/proj");
     expect(s.cells[0].session).toBeNull(); // id arrives later via setSession
   });
-  it("counts a launcher cell as running, and it's not a cancellable launch cell", () => {
+  it("counts a launcher cell as running (an empty launch cell does not)", () => {
     const withLauncher = launchInCell(make([cell(0), cell(1)]), 0, L, "/p");
     expect(runningCount(withLauncher.cells)).toBe(1);
-    // A trailing launcher cell must not read as an empty (cancellable) launch cell.
-    const s = addCell(make([launchInCell(make([cell(0)]), 0, L, "/p").cells[0]]));
-    expect(s.cells).toHaveLength(2);
   });
   it("persists a launcher cell (session + launcher) across parseGridState", () => {
     const withId = setSession(launchInCell(make([cell(0)]), 0, L, "/p"), 0, U(3));

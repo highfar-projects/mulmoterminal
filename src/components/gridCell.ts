@@ -63,7 +63,16 @@ export interface GridCellEmits {
   // that is already enlarged.
   (
     e:
-      "toggle-expand" | "close" | "toggle-files" | "toggle-canvas" | "toggle-tools" | "toggle-collections" | "toggle-github" | "toggle-prompts" | "open-canvas",
+      | "toggle-expand"
+      | "new-here"
+      | "close"
+      | "toggle-files"
+      | "toggle-canvas"
+      | "toggle-tools"
+      | "toggle-collections"
+      | "toggle-github"
+      | "toggle-prompts"
+      | "open-canvas",
   ): void;
   // Swap this cell left (-1) or right (+1) in manual sort mode.
   (e: "move", dir: -1 | 1): void;

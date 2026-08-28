@@ -1051,8 +1051,9 @@ terminal stops receiving**, and only you know whether that trade is worth it for
 | `zoom-next` | Move the enlargement to the **next** terminal in the on-screen order | yes |
 | `zoom-prev` | Same, to the **previous** one | yes |
 | `next-attention` | **Move to the next terminal worth looking at** — awaiting input first, then finished-and-unreviewed, then idle; cells mid-turn are skipped. Cycles. **Never enlarges or collapses**: zoomed it moves which terminal is enlarged, un-zoomed it moves the keyboard focus there (the focused cell lifts), switching page if needed | no |
-| `terminal-new` | Add a terminal at the **end** (same as the toolbar's **New terminal**) | no |
-| `terminal-new-adjacent` | Add a terminal **right after the current one**, inheriting its working directory — the closest thing to "split this terminal" | yes |
+| `terminal-new` | Open the **launch panel** on the default workspace (same as the toolbar's **＋**) | no |
+| `terminal-new-here` | Open the **launch panel** on the current terminal's working directory (same as the **＋** on a terminal's own header). With no terminal in view it falls back to the workspace rather than doing nothing | no |
+| `terminal-new-adjacent` | Start a **shell** in the current terminal's working directory, straight away — no form to fill in. The closest thing to "split this terminal" | yes |
 | `terminal-close` | **Close** the current terminal (same as its close button) | yes |
 | `copy` | **Copy** the terminal's selection. Acts only when something IS selected — with no selection the key reaches the shell untouched, which is what makes `Ctrl+C` bindable here without losing **interrupt** | no |
 | `paste` | **Paste** into the terminal | no |
@@ -1102,9 +1103,9 @@ away from tmux itself. These use `Alt` instead, which tmux leaves alone.
 > On **macOS** `Alt`+letter does not work — `Option` types an alternate character, so the letter
 > never arrives (see [above](#macos-keys)). Mac users want the arrows version below.
 
-**iTerm2-flavoured** — closest to `Cmd`+`D` splitting a pane. `terminal-new-adjacent` opens the
-new terminal next to the current one, inheriting its directory, which is the nearest thing the
-grid has to a split.
+**iTerm2-flavoured** — closest to `Cmd`+`D` splitting a pane. `terminal-new-adjacent` starts a
+shell in the current terminal's directory with no form in between, which is the nearest thing the
+grid has to a split. Bind `terminal-new-here` instead if you would rather pick the agent first.
 
 ```json
 {

@@ -15,7 +15,7 @@ import DirBadge from "./DirBadge.vue";
 import DirIcon from "./DirIcon.vue";
 import { isCellContext, isCellUsage, type CellContext, type CellUsage } from "./cellPayload";
 import { asTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
-import { customAgentIdOf, type AgentPick, type CustomAgent } from "../../common/customAgents";
+import { customAgentIdOf, customAgentPick, isCustomAgentId, type AgentPick, type CustomAgent } from "../../common/customAgents";
 import { unsavedWork } from "./unsavedWork";
 import { shouldPromptTidy } from "./mergedTidy";
 import { usageBadge } from "./cellDisplay";
@@ -103,6 +103,10 @@ const props = defineProps<
     initialCwd: string | null;
     // The persisted agent for this cell; absent (or "claude") resumes as a normal Claude session.
     initialAgent?: TerminalAgent | null | undefined;
+    // The custom-agent entry this cell was launched from (#1414), when the pick came from OUTSIDE
+    // the cell — the launch panel creates the cell already knowing which wrapper to run. Seeds the
+    // Agent Picker below; `initialAgent` still says which CLI's arguments the wrapper is handed.
+    initialCustomAgent?: string | null | undefined;
     // Start `initialAgent` in `initialCwd` on mount rather than opening the launcher form. Set by
     // the grid for a cell it already knows what to run — the phone's launch request (#831).
     autoStart?: boolean;
@@ -121,8 +125,6 @@ const props = defineProps<
     // Dirs with a running session in another cell, so the launcher can tint preset
     // chips whose dir is already in use.
     openCwds?: string[];
-    // An added (not the sole entry) launcher: show a close button to dismiss it before launching.
-    cancellable?: boolean;
     // Manual sort mode: show move buttons to swap this cell with its neighbour.
     reorderable?: boolean;
     // Set aside by the user (#992): sunk out of the way, still connected, still holding history.
@@ -159,7 +161,7 @@ const sessionId = ref<string | null>(props.initialSessionId);
 // What the launch form's AGENT PICKER will start here. "shell" is one of its options and is a
 // LAUNCHER, not an agent: the parent replaces this cell with a launcher cell, so it never becomes
 // the `agent` below.
-const pickedAgent = ref<AgentPick>(asTerminalAgent(props.initialAgent));
+const pickedAgent = ref<AgentPick>(isCustomAgentId(props.initialCustomAgent) ? customAgentPick(props.initialCustomAgent) : asTerminalAgent(props.initialAgent));
 // The custom agent this cell was started from, or null for a built-in (#1414). It rides alongside
 // `agent`, which stays "claude" for a custom one: a wrapper decides which command line starts
 // Claude Code, not what the session IS — see common/customAgents.ts.
@@ -1755,7 +1757,6 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
         :custom-agents="customAgents ?? []"
         :open-session-ids="openSessionIds"
         :open-cwds="openCwds"
-        :cancellable="cancellable"
         @update:dir="onLaunchDir"
         @update:agent="(value) => (pickedAgent = value)"
         @update:choice="(value) => (launchChoice = value)"

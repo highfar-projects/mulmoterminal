@@ -91,7 +91,6 @@ const props = defineProps<{
   expandedUid: number | null;
   // A text row per cell for the cockpit list shown beside the expanded terminal.
   listRows: CockpitRow[];
-  cancelUid: number | null;
   defaultCwd: string | null;
   presets: CwdPreset[];
   // The saved directories could not be read — handed down so the launch form can say so.
@@ -112,7 +111,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   (e: "session" | "cwd", uid: number, value: string): void;
-  (e: "close" | "toggle-expand" | "focus-cell", uid: number): void;
+  (e: "close" | "toggle-expand" | "focus-cell" | "new-here", uid: number): void;
   (e: "run" | "runSpare", uid: number, command: RunCommand): void;
   (e: "launch", uid: number, pick: LaunchPick): void;
   (e: "move", uid: number, dir: -1 | 1): void;
@@ -718,6 +717,7 @@ const gridCellProps = (cell: Cell) => ({
 });
 const gridCellEvents = (cell: Cell) => ({
   "toggle-expand": () => emit("toggle-expand", cell.uid),
+  "new-here": () => emit("new-here", cell.uid),
   // Each carries the cell it was pressed on: a header button answers for ITS terminal, tiled or
   // enlarged, and after #1378 two cells can want different panes.
   "toggle-files": () => toggleFiles(cell.uid),
@@ -1420,6 +1420,7 @@ watch(
           :initial-session-id="cell.session"
           :initial-cwd="cell.cwd"
           :initial-agent="cell.agent"
+          :initial-custom-agent="cell.customAgent"
           :auto-start="cell.autoStart === true"
           :presets="presets"
           :config-unavailable="configUnavailable === true"
@@ -1427,7 +1428,6 @@ watch(
           :custom-agents="customAgents ?? []"
           :open-session-ids="openSessionIds"
           :open-cwds="openCwds"
-          :cancellable="cell.uid === cancelUid"
           :parked="cell.parked === true"
           v-on="gridCellEvents(cell)"
           @park="(on) => emit('park', cell.uid, on)"

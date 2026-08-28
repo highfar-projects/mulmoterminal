@@ -38,7 +38,16 @@ const props = defineProps<{
 const emit = defineEmits<{
   (
     e:
-      "toggle-expand" | "close" | "toggle-files" | "toggle-canvas" | "toggle-tools" | "toggle-collections" | "toggle-github" | "toggle-prompts" | "toggle-park",
+      | "toggle-expand"
+      | "new-here"
+      | "close"
+      | "toggle-files"
+      | "toggle-canvas"
+      | "toggle-tools"
+      | "toggle-collections"
+      | "toggle-github"
+      | "toggle-prompts"
+      | "toggle-park",
   ): void;
 }>();
 
@@ -88,6 +97,19 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
     @click="emit('toggle-expand')"
   >
     <span class="material-symbols-outlined" aria-hidden="true">{{ expanded ? "close_fullscreen" : "open_in_full" }}</span>
+  </button>
+  <!-- Opens the launch panel on THIS terminal's directory (#1867). Not gated on `expanded` like
+       the pane buttons below: the panel sits over the stage rather than splitting the cell's room,
+       so a tile can offer it as usefully as the enlarged view — and "start one here" is the tiled
+       grid's question as much as the enlarged one's. -->
+  <button
+    class="cell-btn"
+    :class="CELL_BTN"
+    title="Start a terminal in this directory"
+    aria-label="Start a terminal in this directory"
+    @click="emit('new-here')"
+  >
+    <span class="material-symbols-outlined" aria-hidden="true">add</span>
   </button>
   <!-- Only while enlarged: the pane splits the enlarged cell's room, which a tiled cell or a
        filmstrip thumbnail does not have. After expand/restore so the first `.cell-btn` keeps
