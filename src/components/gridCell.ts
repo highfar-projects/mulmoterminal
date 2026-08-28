@@ -8,6 +8,7 @@
 // Named once so a fourth cell type gets it by construction rather than by copying, and so a
 // change to what the grid needs cannot land in two of the three.
 import type { AttentionStatus } from "./attentionStatus";
+import type { TerminalAgent } from "../../common/sessionAgent";
 
 // The pane showing beside the ENLARGED cell. One slot, three possible occupants, never two at
 // once — the row is already `roster | terminal | pane`, and a fourth column leaves the terminal
@@ -55,6 +56,15 @@ export interface GridCellProps {
   // Optional here because only TerminalCell needs it non-null (it also prefills the launch form
   // from it, and re-declares it as required for that); the other two only compare it.
   defaultCwd?: string | null;
+}
+
+/** What a cell reports it is RUNNING, both halves. A custom agent is a wrapper around a built-in
+ *  CLI, so `agent` alone cannot say whether the session went through one — and a launch that
+ *  reported only `agent` would look exactly like the user switching away from the wrapper. */
+export interface AgentReport {
+  agent: TerminalAgent;
+  /** The custom-agent entry this launch used, or null for a plain built-in. */
+  customAgent: string | null;
 }
 
 export interface GridCellEmits {

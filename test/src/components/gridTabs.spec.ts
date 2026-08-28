@@ -624,23 +624,35 @@ describe("insertCellAfter and the terminal cap", () => {
 describe("setCellAgent and the custom-agent wrapper", () => {
   const withWrapper = () => make([{ uid: 0, session: null, cwd: "/p", customAgent: "kimi_k3", autoStart: true }]);
 
-  it("drops customAgent when the cell is relaunched as a different agent", () => {
+  // The distinction the caller has to make. A custom pick reports `agent: "claude"` WITH its
+  // wrapper; a plain claude launch reports the same agent with none. An earlier fix cleared on the
+  // agent alone, which could not tell them apart — and so cleared the wrapper on the very launch
+  // that was using it (codex + CodeRabbit, #1890).
+  it("keeps the wrapper when the launch reports one", () => {
+    const s = setCellAgent(withWrapper(), 0, "claude", "kimi_k3");
+    expect(s.cells[0].customAgent).toBe("kimi_k3");
+    expect("agent" in s.cells[0]).toBe(false); // a wrapper still runs Claude Code
+  });
+
+  it("drops it when the launch reports none — the user switched away", () => {
     const s = setCellAgent(withWrapper(), 0, "codex");
     expect(s.cells[0].agent).toBe("codex");
     expect(s.cells[0].customAgent).toBeUndefined();
   });
 
-  it("drops it going back to claude too, where the agent key is absent either way", () => {
+  it("drops it going back to plain claude too, where the agent key is absent either way", () => {
     const s = setCellAgent(withWrapper(), 0, "claude");
     expect("agent" in s.cells[0]).toBe(false);
     expect(s.cells[0].customAgent).toBeUndefined();
   });
 
-  // Persisted cells round-trip through JSON, so the key has to be genuinely gone rather than
-  // present-and-undefined.
-  it("leaves nothing for parseGridState to restore", () => {
-    const started = setSession(setCellAgent(withWrapper(), 0, "codex"), 0, U(5));
-    expect(parseGridState(JSON.stringify(started))?.cells[0].customAgent).toBeUndefined();
+  // Persisted cells round-trip through JSON, so a dropped key has to be genuinely gone rather than
+  // present-and-undefined — and a kept one has to survive.
+  it("round-trips both answers through parseGridState", () => {
+    const dropped = setSession(setCellAgent(withWrapper(), 0, "codex"), 0, U(5));
+    expect(parseGridState(JSON.stringify(dropped))?.cells[0].customAgent).toBeUndefined();
+    const kept = setSession(setCellAgent(withWrapper(), 0, "claude", "kimi_k3"), 0, U(6));
+    expect(parseGridState(JSON.stringify(kept))?.cells[0].customAgent).toBe("kimi_k3");
   });
 });
 

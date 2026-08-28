@@ -69,6 +69,7 @@ import { asTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { router } from "../router";
 import { usePubSub } from "../composables/usePubSub";
 import type { AgentPick } from "../../common/customAgents";
+import type { AgentReport } from "./gridCell";
 import type { LaunchChoice } from "./wsUrl";
 import type { LaunchPick } from "./launchers";
 import { isRecord } from "../../common/isRecord";
@@ -374,7 +375,7 @@ function onAddTerminal() {
 }
 const onSession = (uid: number, id: string) => (state.value = setSession(state.value, uid, id));
 const onCwd = (uid: number, cwd: string) => (state.value = setCwd(state.value, uid, cwd));
-const onAgent = (uid: number, agent: TerminalAgent) => (state.value = setCellAgent(state.value, uid, agent));
+const onAgent = (uid: number, report: AgentReport) => (state.value = setCellAgent(state.value, uid, report.agent, report.customAgent));
 const onPark = (uid: number, parked: boolean) => (state.value = setCellParked(state.value, uid, parked));
 // Pass the on-screen order so closing the zoomed cell stays zoomed on its filmstrip
 // neighbour (previous, or next when it was the first) instead of collapsing the grid.

@@ -79,6 +79,32 @@ describe("LaunchPanel", () => {
     expect(w.emitted("close")).toHaveLength(1);
   });
 
+  // The panel covers only the right of the stage, so focus moves out of it the moment anyone clicks
+  // the grid or the toolbar — and an Escape bound to the <aside> would then never fire. This is the
+  // close path that was claimed before it was true (CodeRabbit, #1890).
+  it("closes on Escape even when focus is outside the panel", async () => {
+    const w = mountPanel();
+    await flushPromises();
+    document.body.focus();
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await flushPromises();
+    expect(w.emitted("close")).toHaveLength(1);
+  });
+
+  // xterm's input surface is a real textarea and Escape is meaningful inside it. Closing the panel
+  // from there would steal the key from the program the user is looking at.
+  it("leaves Escape alone inside a terminal", async () => {
+    const w = mountPanel();
+    await flushPromises();
+    const term = document.createElement("textarea");
+    term.className = "xterm-helper-textarea";
+    document.body.appendChild(term);
+    term.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await flushPromises();
+    expect(w.emitted("close")).toBeUndefined();
+    term.remove();
+  });
+
   it("focuses the directory field so Enter alone can start", async () => {
     const w = mountPanel();
     await flushPromises();

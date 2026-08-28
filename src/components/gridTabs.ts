@@ -127,14 +127,20 @@ export function setCwd(state: GridState, uid: number, cwd: string): GridState {
 export const storedCellAgent = (agent: TerminalAgent): Cell["agent"] => (agent === "claude" ? undefined : agent);
 
 // Record which agent a cell launched, so a reloaded cell reconnects to the right endpoint.
-export function setCellAgent(state: GridState, uid: number, agent: TerminalAgent): GridState {
+export function setCellAgent(state: GridState, uid: number, agent: TerminalAgent, customAgent: string | null = null): GridState {
   // Claude is the ABSENT case, so switching back to it removes the key rather than setting it
   // to undefined — a persisted cell round-trips through JSON, where only the former survives.
-  // `customAgent` goes with it. A wrapper names one command line for ONE agent, so a cell that is
-  // relaunched as something else is no longer running through it — and a stale key would win over
-  // `agent` when the cell reseeds its picker after a reload, reconnecting (say) a live codex
-  // session on Claude's endpoint.
-  const applied = ({ agent: _previous, customAgent: _wrapper, ...rest }: Cell): Cell => (agent === "claude" ? rest : { ...rest, agent });
+  //
+  // `customAgent` is REPLACED, not merely dropped, and the caller has to say which: a custom pick
+  // reports `agent: "claude"` with its wrapper, and a plain claude launch reports the same agent
+  // with none. Clearing on the agent alone cannot tell those apart, and cleared the wrapper on the
+  // very launch that was using it — the live terminal kept it only until the next remount, then
+  // reconnected as the built-in (codex + CodeRabbit, #1890).
+  const applied = ({ agent: _previous, customAgent: _wrapper, ...rest }: Cell): Cell => ({
+    ...rest,
+    ...(agent === "claude" ? {} : { agent }),
+    ...(customAgent === null ? {} : { customAgent }),
+  });
   return { ...state, cells: state.cells.map((c) => (c.uid === uid ? applied(c) : c)) };
 }
 

@@ -45,7 +45,7 @@ import type { Launcher, LaunchPick } from "./launchers";
 import { shellLauncher } from "./gridTabs";
 import { activityStatus, type AttentionStatus } from "./attentionStatus";
 import { useMissedAttention } from "../composables/useMissedAttention";
-import type { GridCellEmits, GridCellProps } from "./gridCell";
+import type { AgentReport, GridCellEmits, GridCellProps } from "./gridCell";
 import { shouldZoomOnHeaderClick } from "./cellHeaderZoom";
 import {
   CELL_ACTIONS,
@@ -145,7 +145,7 @@ const emit = defineEmits<
     // The user picked a configured launcher (shell/codex/…) to run in this empty cell.
     (e: "launch", value: LaunchPick): void;
     // The agent chosen for this fresh launch, so the grid persists it.
-    (e: "agent", value: TerminalAgent): void;
+    (e: "agent", value: AgentReport): void;
     // Set this cell aside, or bring it back. The grid owns the flag; this only asks.
     (e: "park", value: boolean): void;
     // The launch form's "try again" on a config that could not be read. Value-less: the shell owns
@@ -496,7 +496,10 @@ function launchIn(dir: string | null) {
   sessionId.value = null; // new session — the server generates the id
   connectKey.value++;
   launched.value = true;
-  emit("agent", agent.value); // let the grid persist which agent this cell launched
+  // BOTH halves. `agent` is "claude" for a custom pick, so reporting it alone reads to the grid as
+  // "the user switched off the wrapper" — which is what silently dropped `customAgent` on the very
+  // launch that was using it (codex + CodeRabbit, #1890).
+  emit("agent", { agent: agent.value, customAgent: customAgentId.value });
   recordNextCwd = true;
   void loadDiff(); // no-op for a non-worktree dir
 }
@@ -533,7 +536,9 @@ onMounted(() => {
 function resumeSession({ id, cwd: dir, agent: resumeAgent }: { id: string; cwd: string | null; agent?: TerminalAgent }) {
   if (resumeAgent) {
     pickedAgent.value = resumeAgent;
-    emit("agent", resumeAgent); // the grid persists which agent this cell runs
+    // A resumed session already exists; it was not started through a wrapper now, so the cell is
+    // no longer running one whatever it was launched from.
+    emit("agent", { agent: resumeAgent, customAgent: null });
   }
   cwd.value = dir;
   sessionId.value = id;

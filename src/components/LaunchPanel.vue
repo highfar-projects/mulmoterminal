@@ -10,7 +10,7 @@
 //
 // This component owns only what the form edits (dir / agent / model choice) and forwards the four
 // launch intents. Turning an intent into a cell is GridView's job, because only it can place one.
-import { nextTick, onMounted, ref } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import CellLaunchForm from "./CellLaunchForm.vue";
 import type { AgentPick, CustomAgent } from "../../common/customAgents";
 import type { CwdPreset } from "./presets";
@@ -53,6 +53,23 @@ const launchChoice = ref<LaunchChoice | null>(null);
 
 const panel = ref<HTMLElement | null>(null);
 
+// Escape closes it from ANYWHERE, not only from inside the panel. The panel covers the right of
+// the stage and takes focus when it opens, but a click on the uncovered grid or the toolbar moves
+// focus out — and a `@keydown.escape` bound to the <aside> then never fires, which is how "Escape
+// closes it" ended up being said without being true (CodeRabbit, #1890).
+//
+// The terminal is the exception. xterm's input surface is a real textarea and Escape is meaningful
+// inside it (vim, a pager); stealing it there would break the program the user is looking at.
+const XTERM_INPUT_CLASS = "xterm-helper-textarea";
+function onEscape(e: KeyboardEvent) {
+  if (e.key !== "Escape" || e.isComposing) return;
+  const target = e.target;
+  if (target instanceof Element && target.classList.contains(XTERM_INPUT_CLASS)) return;
+  emit("close");
+}
+onMounted(() => window.addEventListener("keydown", onEscape));
+onBeforeUnmount(() => window.removeEventListener("keydown", onEscape));
+
 // The directory field, so Enter alone starts what is picked in the dir that was carried in. The
 // panel opens on a keystroke, and a keyboard path that lands focus nowhere costs a reach for the
 // mouse to use the value it just filled in for you.
@@ -68,7 +85,6 @@ onMounted(async () => {
     class="fixed inset-y-0 right-0 z-[90] flex w-[min(520px,92vw)] flex-col overflow-y-auto border-l border-border bg-base font-sans text-fg shadow-[-8px_0_24px_rgba(0,0,0,0.35)]"
     role="dialog"
     aria-label="Start a terminal"
-    @keydown.escape="emit('close')"
   >
     <CellLaunchForm
       :dir="dir"

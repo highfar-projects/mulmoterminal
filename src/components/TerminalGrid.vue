@@ -52,7 +52,8 @@ import type { AnswerFailure } from "../../common/askQuestion";
 import { createQuestionBox } from "../composables/questionBox";
 import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
 import { isRecord } from "../../common/isRecord";
-import { asTerminalAgent, type SessionAgent, type TerminalAgent } from "../../common/sessionAgent";
+import { asTerminalAgent, type SessionAgent } from "../../common/sessionAgent";
+import type { AgentReport } from "./gridCell";
 import { buildCanvasCard, seedCanvasCard, hasStoredCard, absoluteUnder } from "../composables/canvasOpenFile";
 import { jsonBody } from "../jsonBody";
 import { isUnknownArray } from "../../common/isUnknownArray";
@@ -116,7 +117,7 @@ const emit = defineEmits<{
   (e: "launch", uid: number, pick: LaunchPick): void;
   (e: "move", uid: number, dir: -1 | 1): void;
   (e: "status", uid: number, value: AttentionStatus): void;
-  (e: "agent", uid: number, value: TerminalAgent): void;
+  (e: "agent", uid: number, value: AgentReport): void;
   (e: "park", uid: number, value: boolean): void;
   // Shared preset list events — uid-less since they mutate the one config list.
   (e: "record-cwd" | "remove-preset", value: string): void;
