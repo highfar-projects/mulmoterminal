@@ -745,3 +745,44 @@ connect 127.0.0.1     -> ECONNREFUSED   <- 具体 bind は自分の住所にし�
 
 break-verify: `servesV4Loopback` を 127/8 全体に戻すと 1 red。復元は byte-identical。
 
+### iter-13 — 4 ラウンド擁護した round-2 の判断が、間違いだった
+
+CI Codex の P1:
+
+> Configured specific non-loopback binds still skip the required `127.0.0.1` companion check,
+> allowing local hooks/GUI MCP traffic to be misrouted to an existing loopback listener after
+> the launcher reports ready.
+
+**これは round 2 で下し、round 7・8・11 でも擁護した判断そのもの。4 回擁護して、間違っていた。**
+
+私の論拠は「具体的な非 loopback bind は**他のマシン**に配るために選ばれたのだから、
+ローカル利便性の degrade は目的を損なわない」だった。**その bind の性格を取り違えていた** ——
+MulmoTerminal はどのアドレスで listen しようと **PTY をこのマシンで動かす**。そのセッションの
+GUI MCP は `http://127.0.0.1:<port>` をリテラルで dial する。LAN bind が変えるのは
+「誰がブラウザを開けるか」であって「セッションがどこにあるか」ではない。
+サーバ自身の失敗メッセージもそう言っている ——
+"hooks and the GUI MCP will fail until it is free"。
+
+#### ルールが 1 つに潰れた
+
+```js
+export function companionHostsFor(boundAddress) {
+  const required = boundAddress === V6_UNSPECIFIED ? ["::1", V4_LOOPBACK_CLIENTS_DIAL] : [V4_LOOPBACK_CLIENTS_DIAL];
+  return required.filter((host) => host !== boundAddress);
+}
+```
+
+**`127.0.0.1` は常に必要。** round 8 で導入した `servesOnlyThisMachine` と
+`isLoopbackBindHost`（127/8 の正規表現ごと）は**丸ごと不要になって削除**した。
+間違った原則を守るために書いたコードだった。
+
+実機:
+
+| 条件 | 結果 |
+|---|---|
+| `MULMOTERMINAL_HOST=192.168.11.12`、127.0.0.1 を占有 | `already in use` —— **round 2 からの挙動変更** |
+| 同、stranger なし | `MulmoTerminal is ready` |
+
+break-verify: LAN bind から companion を外す（4 ラウンド守った立場に戻す）と 3 red。
+復元は byte-identical。
+

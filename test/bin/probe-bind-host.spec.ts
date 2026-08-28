@@ -197,55 +197,40 @@ describe("the address the launcher uses to reach the server it started", () => {
 // `::` for all three v6 wildcard spellings, `::1` for `localhost`, `127.0.0.1` for `127.1`. So
 // the comparisons this rests on are exact: the kernel's OUTPUT vocabulary is finite even though
 // its input vocabulary is not.
+// `127.0.0.1` is required for EVERY bind, and arriving there took four rounds of me arguing the
+// opposite. The claim was that a specific non-loopback bind serves OTHER machines, so a degraded
+// local listener costs only convenience. It mischaracterises the bind: MulmoTerminal runs its
+// PTYs on THIS machine whatever address it listens on, and those sessions' GUI MCP dials
+// `http://127.0.0.1:<port>` as a literal. A LAN bind changes who can open the browser, not where
+// the sessions live.
+//
+// Asked about the address the KERNEL reports, never the string that was typed — measured, it
+// returns `::` for every v6 wildcard spelling and `::1` for `localhost`, so these comparisons are
+// exact rather than a list.
 describe("the companions a bound address implies", () => {
-  // A wildcard serves this machine among others, so this machine's own clients must not be
-  // misrouted. `::` needs both loopbacks; `0.0.0.0` serves v4 loopback itself.
-  it("gives a v6 wildcard both loopbacks, and a v4 wildcard the one it does not already serve", () => {
-    expect(companionHostsFor("::")).toEqual(["::1", "127.0.0.1"]);
-    expect(companionHostsFor("0.0.0.0")).toEqual(["127.0.0.1"]);
-  });
-
-  // Loopback-only: the whole purpose is local access, so a misrouted local client leaves nothing.
-  // Every GUI MCP client dials 127.0.0.1 by literal (guiMcpUrlTemplate).
-  // A v6 loopback primary DOES get it, because the server starts a secondary 127.0.0.1 listener
-  // for one (loopbackListenPlan returns a plan) — so the port has to be ours.
-  it.each(["::1", "0:0:0:0:0:0:0:1"])("gives a v6 loopback bind the v4 address GUI MCP clients dial: %s", (address) => {
+  it.each(["0.0.0.0", "::1", "127.0.0.2", "192.168.11.12", "10.0.0.5"])("requires the v4 loopback GUI MCP dials, for %s", (address) => {
     expect(companionHostsFor(address)).toEqual(["127.0.0.1"]);
   });
 
-  it("asks for nothing extra when the bind already IS that address", () => {
+  // Plus `::1` for the v6 wildcard: that is the address the launcher polls and prints for it, and
+  // a specific `::1` socket is MORE specific than a dual-stack bind, so it would win the
+  // connection.
+  it("adds the v6 loopback for a v6 wildcard, which is what it polls and prints", () => {
+    expect(companionHostsFor("::")).toEqual(["::1", "127.0.0.1"]);
+  });
+
+  it("asks for nothing when the bind already IS that address", () => {
     expect(companionHostsFor("127.0.0.1")).toEqual([]);
   });
 
-  // The rest of 127/8 gets it too, and the route to that answer is worth keeping. The CI reviewer
-  // first caught the launcher PROMISING this companion while the server planned no listener for
-  // such a bind — the guard could not keep its word. The launcher was then taught the exception,
-  // and the reviewer pointed at the real defect instead: `servesV4Loopback` in
-  // server/infra/loopback-listener.ts treated every 127/8 primary as already answering for
-  // 127.0.0.1. It does not — a socket bound to one address accepts connections to that address
-  // and no other. Fixing THERE deleted the exception here, which is the layer test.
-  it.each(["127.0.0.2", "127.0.0.53"])("gives the rest of 127/8 the companion the server now serves: %s", (address) => {
-    expect(companionHostsFor(address)).toEqual(["127.0.0.1"]);
+  // The literal is duplicated into bin/ because that is plain JS and cannot import the server's
+  // TypeScript. Pinned against its source the way PORT_IN_USE_EXIT_CODE is.
+  it("agrees with gui-mcp-registration.ts about the address those clients dial", () => {
+    const registration = readFileSync(path.join(REPO_ROOT, "server", "infra", "gui-mcp-registration.ts"), "utf8");
+    expect(registration, "guiMcpUrlTemplate no longer dials 127.0.0.1 by literal — companionHostsFor's reason moved").toMatch(/http:\/\/127\.0\.0\.1:/);
   });
 
-  // The other half, and the round-2 call that still stands: a specific non-loopback bind was
-  // chosen to serve OTHER machines, and that purpose survives a degraded local listener — which
-  // the server warns about. Not the launcher's to veto.
-  it.each(["192.168.11.12", "10.0.0.5", "128.0.0.1"])("asks for nothing extra for a remote-serving bind: %s", (address) => {
-    expect(companionHostsFor(address)).toEqual([]);
-  });
-
-  // The predicate is duplicated into bin/ because that is plain JS. Pinned against its source so
-  // the two cannot drift into disagreeing about what loopback means.
-  it("agrees with server/infra/loopback.ts about what counts as loopback", () => {
-    const loopback = readFileSync(path.join(REPO_ROOT, "server", "infra", "loopback.ts"), "utf8");
-    expect(loopback, "isLoopbackAddress no longer unwraps the ::ffff: mapped form").toContain('startsWith("::ffff:")');
-    expect(loopback, "isLoopbackAddress no longer accepts both ::1 spellings").toContain('"0:0:0:0:0:0:0:1"');
-    expect(loopback, "isLoopbackAddress no longer covers the whole 127.0.0.0/8 block").toContain("^127");
-  });
-
-  // And the reason none of this needs a spelling list: the kernel normalises. Asserted for real,
-  // because it is the premise the whole design rests on.
+  // The premise the whole design rests on, asserted rather than quoted.
   it("is only ever handed a normalised address, because the kernel resolves the spelling", async () => {
     const bound = (host: string) =>
       new Promise<string>((resolve, reject) => {
@@ -262,15 +247,10 @@ describe("the companions a bound address implies", () => {
     expect(await bound("0:0:0:0:0:0:0:1")).toBe("::1");
   });
 
-  // `127.1` normalises to 127.0.0.1 on macOS and Linux and is REJECTED on Windows —
-  // `getaddrinfo ENOTFOUND 127.1`, which is how CI caught this assertion sitting in the block
-  // above as though it were universal. It is a BSD shorthand, not a portable address.
-  //
-  // The production path does not care, and that is worth stating rather than assuming: an
-  // ENOTFOUND is not EADDRINUSE, so probeFailureIsPortInUse says "the probe could not ask",
-  // isPortFree returns free with a null address, no companions are checked, and the server binds
-  // for real and reports the actual errno. Which is the designed behaviour for an address this
-  // machine cannot resolve.
+  // `127.1` normalises on macOS and Linux and is REJECTED on Windows — `getaddrinfo ENOTFOUND`,
+  // which CI caught when this file asserted it as though it were universal. The production path
+  // does not care: ENOTFOUND is not EADDRINUSE, so the probe reports "could not ask", no
+  // companions are checked, and the server binds for real and reports the actual errno.
   it("is not asked to normalise a spelling the platform rejects — that path reports instead", () => {
     expect(probeFailureIsPortInUse({ code: "ENOTFOUND" })).toBe(false);
     expect(companionHostsFor("127.0.0.1")).toEqual([]);

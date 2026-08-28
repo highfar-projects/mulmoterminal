@@ -10,6 +10,7 @@
 // These return a decision; the caller prints and exits. Nothing here reads argv, the
 // environment or the filesystem.
 import { isIP } from "node:net";
+import { join } from "node:path";
 
 // The v4 loopback every local client of this server dials by literal — `guiMcpUrlTemplate` in
 // server/infra/gui-mcp-registration.ts builds `http://127.0.0.1:<port>/api/mcp/...`. Duplicated
@@ -17,26 +18,9 @@ import { isIP } from "node:net";
 // the same way PORT_IN_USE_EXIT_CODE is.
 const V4_LOOPBACK_CLIENTS_DIAL = "127.0.0.1";
 
-// The two addresses a kernel reports for a wildcard bind. Exact, not a list of spellings: these
-// are what `server.address()` RETURNS, and it returns nothing else for an unspecified bind.
-const V4_UNSPECIFIED = "0.0.0.0";
+// What a kernel reports for a v6 wildcard bind. Exact, not a spelling: this is what
+// `server.address()` RETURNS, and it returns nothing else for an unspecified v6 bind.
 const V6_UNSPECIFIED = "::";
-
-// Whether a bind address serves only this machine. Mirrors isLoopbackAddress in
-// server/infra/loopback.ts — the whole 127.0.0.0/8 block, `::1` in both spellings, and the
-// `::ffff:` mapped form — because bin/ is plain JS and cannot import it. A spec pins the two
-// together. Written as a property so a spelling nobody listed (`127.0.0.2`, `::ffff:127.0.0.1`)
-// is covered rather than becoming another review round.
-const LOOPBACK_V4_OCTET = "(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)";
-const LOOPBACK_V4 = new RegExp(`^127\\.${LOOPBACK_V4_OCTET}\\.${LOOPBACK_V4_OCTET}\\.${LOOPBACK_V4_OCTET}$`);
-
-function isLoopbackBindHost(address) {
-  if (!address) return false;
-  const bare = address.startsWith("::ffff:") ? address.slice("::ffff:".length) : address;
-  if (bare === "::1" || bare === "0:0:0:0:0:0:0:1") return true;
-  return LOOPBACK_V4.test(bare);
-}
-import { join } from "node:path";
 
 /** A port a user typed, in either of the two places they can type one. `parseInt` stops at the
  *  first non-digit, so a typo would otherwise launch on a port nobody named — "80x" silently
@@ -117,43 +101,33 @@ export function probeFailureIsPortInUse(err) {
  * Given the address the OS says a bind actually LANDED ON, which other addresses must also be
  * free before this launch is worth starting.
  *
- * It takes the bound address and not the requested string, and that is the whole point. Eight
- * review rounds were spent on spellings — `::` vs `0:0:0:0:0:0:0:0`, `::1` vs its long form,
- * `localhost`, `127.1` — and a host string has no last case. The kernel has none of that
- * problem, because it has already resolved whatever was typed. Measured: `listen(0,
- * "0:0:0:0:0:0:0:0")` reports `::`, `listen(0,"localhost")` reports `::1`, `listen(0,"127.1")`
- * reports `127.0.0.1`. So the comparisons below are exact rather than a list, because the
- * kernel's OUTPUT vocabulary is finite and fixed even though its input vocabulary is not.
+ * `127.0.0.1` ALWAYS, whatever the bind — and getting there took four rounds of me arguing the
+ * opposite. The claim I kept making was that a specific non-loopback bind is chosen to serve
+ * OTHER machines, so a degraded local listener costs only convenience and the server's warning
+ * covers it. That mischaracterises what such a bind is: MulmoTerminal still runs its PTYs on THIS
+ * machine whatever address it listens on, and those sessions' GUI MCP dials `http://127.0.0.1:
+ * <port>` as a literal (`guiMcpUrlTemplate`). A LAN bind changes who can open the browser, not
+ * where the sessions live. So the purpose does not survive after all, and the server's own
+ * failure text says as much: "hooks and the GUI MCP will fail until it is free".
  *
- * server/infra/loopback.ts made the same argument for its own question: "Classifying the
- * requested string cannot be made right … Asking after the fact answers all of them."
+ * `::1` as well for the v6 wildcard, because that is the address the launcher will poll and print
+ * for it, and a specific `::1` socket is MORE SPECIFIC than a dual-stack bind — it would win the
+ * connection.
  *
- * WHICH BINDS GET A COMPANION, by the bind's PURPOSE rather than by the server's volume:
- *
- *   - a wildcard, or any loopback address, serves ONLY this machine (or this machine among
- *     others), so misrouting this machine's own clients leaves the launch with no purpose. Every
- *     GUI MCP client dials `http://127.0.0.1:<port>` by literal (guiMcpUrlTemplate), and for a
- *     `::` primary the server's own loopback listener treats EADDRINUSE as fine and says nothing
- *     — so nobody else will report it.
- *   - a specific NON-loopback bind was chosen to serve other machines, and that purpose survives
- *     a degraded local listener, which the server does warn about. Not the launcher's to veto
- *     (the call declined in round 2, and it still stands).
+ * It takes the bound address and not the requested string, and that is the other half of the
+ * point. Rounds went to spellings — `::` vs `0:0:0:0:0:0:0:0`, `::1` vs its long form,
+ * `localhost`, `127.1` — and a host string has no last case. The kernel has none of that problem:
+ * measured, `listen(0,"0:0:0:0:0:0:0:0")` reports `::` and `listen(0,"localhost")` reports `::1`.
+ * The comparisons below are exact because the kernel's OUTPUT vocabulary is finite even though
+ * its input vocabulary is not. server/infra/loopback.ts made the same argument for its own
+ * question: "asking after the fact answers all of them".
  *
  * The probe/bind race the launcher already lives with is unchanged: this narrows the window, it
  * does not close it.
  */
 export function companionHostsFor(boundAddress) {
-  if (!servesOnlyThisMachine(boundAddress)) return [];
-  const companions = boundAddress === V6_UNSPECIFIED ? ["::1", V4_LOOPBACK_CLIENTS_DIAL] : [V4_LOOPBACK_CLIENTS_DIAL];
-  return companions.filter((host) => host !== boundAddress);
-}
-
-/** Does this bind serve only this machine? A wildcard serves it among others; a loopback address
- *  serves nothing else. Either way, misrouting this machine's own clients leaves the launch with
- *  no purpose. A specific non-loopback address was chosen to serve OTHERS, and that purpose
- *  survives — round 2's call, still standing. */
-function servesOnlyThisMachine(boundAddress) {
-  return boundAddress === V4_UNSPECIFIED || boundAddress === V6_UNSPECIFIED || isLoopbackBindHost(boundAddress);
+  const required = boundAddress === V6_UNSPECIFIED ? ["::1", V4_LOOPBACK_CLIENTS_DIAL] : [V4_LOOPBACK_CLIENTS_DIAL];
+  return required.filter((host) => host !== boundAddress);
 }
 
 /**
