@@ -15,6 +15,7 @@ import {
   runCommand,
   runScriptInNewCell,
   insertCellAfter,
+  MAX_TERMINALS,
   revealCell,
   shellCell,
   sessionCell,
@@ -601,6 +602,25 @@ describe("runCommand (script command cells)", () => {
 // #1867: a wrapper names one command line for ONE agent, so relaunching the cell as something else
 // has to drop it. Left behind it wins over `agent` when the cell reseeds its picker after a reload,
 // which reconnects a live codex session on Claude's endpoint.
+// The cap rule every launch path now leans on: `placeCell` in GridView asks it before it inserts,
+// because `insertCellAfter` returning the state UNCHANGED is otherwise indistinguishable from a
+// successful placement — and a caller that assumes success closes the launch form over a terminal
+// that was never created (codex [P1], #1890).
+describe("insertCellAfter and the terminal cap", () => {
+  it("refuses to insert once MAX_TERMINALS are running, leaving the state alone", () => {
+    const full = make(running(MAX_TERMINALS));
+    const after = insertCellAfter(full, 0, { session: null, cwd: "/p", autoStart: true });
+    expect(after.cells).toHaveLength(MAX_TERMINALS);
+    expect(runningCount(after.cells)).toBe(MAX_TERMINALS);
+    expect(after.nextUid).toBe(full.nextUid); // nothing was minted either
+  });
+
+  it("still inserts one below the cap", () => {
+    const after = insertCellAfter(make(running(MAX_TERMINALS - 1)), 0, { session: null, cwd: "/p", autoStart: true });
+    expect(after.cells).toHaveLength(MAX_TERMINALS);
+  });
+});
+
 describe("setCellAgent and the custom-agent wrapper", () => {
   const withWrapper = () => make([{ uid: 0, session: null, cwd: "/p", customAgent: "kimi_k3", autoStart: true }]);
 

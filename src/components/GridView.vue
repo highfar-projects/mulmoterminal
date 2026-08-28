@@ -438,11 +438,17 @@ let offNewTerminal: (() => void) | null = null;
 // cell mounts only on the page the grid shows. insertCellAfter can only page by the manual index
 // — ordering needs the live status and the directory priorities, which only this component has.
 // Every caller that places a cell someone is waiting on goes through here for that reason.
-function placeCell(afterUid: number, cell: Omit<Cell, "uid">) {
+// Answers whether the cell was actually placed. `insertCellAfter` returns the state UNCHANGED at
+// the cap, so a caller that assumes success closes a form over a launch that never happened — the
+// cap can be reached by another terminal between opening the panel and pressing Start, which is
+// why checking it once at open time is not enough.
+function placeCell(afterUid: number, cell: Omit<Cell, "uid">): boolean {
+  if (runningCount(state.value.cells) >= MAX_TERMINALS) return false;
   const uid = state.value.nextUid; // insertCellAfter gives the new cell this one
   const placed = insertCellAfter(state.value, afterUid, cell);
   const order = orderCells(placed.cells, statusForSort.value, placed.sortMode, priorityByCwd.value).map((c) => c.uid);
   state.value = revealCell(placed, uid, order);
+  return true;
 }
 const openNewTerminal = ({ cwd, afterSlotKey, agent }: NewTerminalRequest) => {
   const match = afterSlotKey?.match(SLOT_UID_RE);
@@ -579,7 +585,9 @@ const placeFromPanel = (cell: Omit<Cell, "uid">) => {
   // Filling it in place is not the alternative it looks like: `autoStart` runs in TerminalCell's
   // `onMounted` and never as a watcher, so a cell already on screen would take the flag and sit there.
   const empty = state.value.cells.find((c) => !isOccupied(c));
-  placeCell(launchPanelOrigin.value ?? NO_ORIGIN_UID, cell);
+  // Nothing placed: the grid filled up while the form was open. Leave the panel exactly as the user
+  // left it rather than closing over work that produced no terminal.
+  if (!placeCell(launchPanelOrigin.value ?? NO_ORIGIN_UID, cell)) return;
   if (empty) state.value = closeCell(state.value, empty.uid);
   closeLaunchPanel();
 };
