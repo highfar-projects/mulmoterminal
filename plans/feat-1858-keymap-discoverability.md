@@ -20,7 +20,7 @@ macOS で `Cmd+←` / `Cmd+→` / `Cmd+Delete` が効かない。正確には **
 **`keymap.send` は画面と skill の両方で「既に知っている人」しか辿り着けない。** 同じ欠陥が
 鏡写しになっていた。
 
-| | 9 つのアクション | `send` |
+| | アクション（9 つ、後に 10） | `send` |
 |---|---|---|
 | **画面** | 未設定でも「未設定」の行が出る | **0 件だと行が 1 つも出ない** |
 | **skill** | スターターセット 4 つ、「発明するな、これを提案しろ」 | **提案の指示が無い。bytes 早見表だけ** |
@@ -72,7 +72,7 @@ skill が検証するのでもともと踏まない。README:634 の記録済み
 
 ### ① 画面 —— `KeyboardShortcutsSection.vue` + i18n
 
-- `sendKeyRows.length === 0` のとき、**9 アクションと同じ行の文法**でプレースホルダを 1 行出す
+- `sendKeyRows.length === 0` のとき、**アクションと同じ行の文法**でプレースホルダを 1 行出す
   （ラベル / 「未設定」 / `send` タグ）。`data-testid="send-none"`
 - intro を書き換え。**割り当てられるものが 2 種類あることを最初に言う**（MulmoTerminal の操作 /
   ターミナルへのキー列送信、macOS の `Cmd+←` を例に）。指す先を設定ファイルから**下のボタン**へ。
@@ -120,7 +120,7 @@ skill が検証するのでもともと踏まない。README:634 の記録済み
 - **#1858 の案 1（macOS で `Cmd+←`/`→`/`Delete` を既定にする）は含めない。** 既定値の変更は
   設定画面とは別物で、単独で revert できるべき。ユーザー判断で見送り
 - **keymap の編集 UI**（#1888、取り下げ済み）
-- 9 アクションのラベルは `keymapLabels.ts` にハードコードの英語（i18n キーではない）。翻訳は別件
+- アクションのラベルは `keymapLabels.ts` にハードコードの英語（i18n キーではない）。翻訳は別件
 
 ## 検証
 
@@ -158,7 +158,24 @@ skill が検証するのでもともと踏まない。README:634 の記録済み
 | 旧 intro `Shortcuts are off until you bind them` | 0 | 0 |
 | 旧 intro の `ショートカットは {configFile}` | 0 | 0 |
 
+### `origin/main` を取り込んで壊れた（そして直した）
+
+レビュー中に #1890（launch panel、#1867）が main に入り、**`KEYMAP_ACTIONS` に 10 個目
+`terminal-new-here` が増えた**。マージした結果、行数を数える 2 件が赤くなった:
+
+```
+expected [ … ] to have a length of 10 but got 11
+expected [ … ] to have a length of 11 but got 12
+```
+
+**壊れたのは私のテストの書き方**で、`9 + 1` / `9 + 2` と**数を書いていた**。`send` の行についての
+spec が、send と何の関係も無い理由で落ちたことになる。`KEYMAP_ACTIONS.length + n` に**導出**する
+形へ変更した —— pin したいのは「プレースホルダは**追加**であって置き換えではない」であって、
+アクションが何個あるかではない。
+
+コメントと plan の「9 つのアクション」も、同じ理由で数を言わない書き方に直した。
+
 ### ゲート
 
 `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0。
-`yarn test` は **11522 passed**（+7、この PR が足したもの）。
+`yarn test` は `d52fb64a` で **11522 passed**（+7、この PR が足したもの）。main（#1890）を取り込んだ後は **11590**。

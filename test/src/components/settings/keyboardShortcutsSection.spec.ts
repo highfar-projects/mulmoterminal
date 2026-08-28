@@ -1,12 +1,12 @@
 // The Keyboard shortcuts section is read-only, so the only thing it can get wrong is what it
 // FAILS to say — and it failed silently for `keymap.send`.
 //
-// #1858: someone on macOS whose Cmd+ArrowLeft did nothing opened this section, saw nine actions
-// each marked "Not set", and found no mention anywhere that keys can be sent to the terminal at
-// all. They cloned the repository and read the source to discover the feature existed. The nine
-// actions render a row whether or not they are bound; `send` rendered rows only for entries that
-// existed, so with none configured the whole mechanism was absent from the one screen meant to
-// show what is configurable.
+// #1858: someone on macOS whose Cmd+ArrowLeft did nothing opened this section, saw every action
+// marked "Not set", and found no mention anywhere that keys can be sent to the terminal at all.
+// They cloned the repository and read the source to discover the feature existed. An action
+// renders a row whether or not it is bound; `send` rendered rows only for entries that existed,
+// so with none configured the whole mechanism was absent from the one screen meant to show what
+// is configurable.
 //
 // So these assertions are about the EMPTY state, which is the state every user starts in.
 import { describe, it, expect } from "vitest";
@@ -15,7 +15,7 @@ import { mount } from "@vue/test-utils";
 import KeyboardShortcutsSection from "../../../../src/components/settings/KeyboardShortcutsSection.vue";
 import { setActiveKeymap } from "../../../../src/composables/activeKeymap";
 import { i18n } from "../../../../src/i18n";
-import type { Keymap } from "../../../../common/keymap";
+import { KEYMAP_ACTIONS, type Keymap } from "../../../../common/keymap";
 
 // Spelled as escapes and named, the way test/common/keymapSend.spec.ts and
 // test/src/components/keymapLabels.spec.ts already do: a raw C0 byte in the source is invisible
@@ -37,7 +37,7 @@ describe("the keyboard shortcuts section, with nothing bound", () => {
     expect(w.get('[data-testid="send-none"]').text()).toContain("Send keys to the terminal");
   });
 
-  it("marks it Not set, in the same grammar as the nine actions", () => {
+  it("marks it Not set, in the same grammar as the actions above it", () => {
     const w = sectionWith({});
 
     const row = w.get('[data-testid="send-none"]').text();
@@ -46,11 +46,13 @@ describe("the keyboard shortcuts section, with nothing bound", () => {
     expect(row).toContain("send");
   });
 
+  // Derived, not counted. Written as `9 + 1` this went red the moment main added a tenth action
+  // (`terminal-new-here`, #1867) — a spec about the SEND row failing for a reason that has nothing
+  // to do with send. What it means to pin is that the placeholder is an ADDITION.
   it("still lists every action, so the empty send row is an addition and not a replacement", () => {
     const w = sectionWith({});
 
-    // 9 actions + the one send placeholder.
-    expect(w.findAll('[role="listitem"]')).toHaveLength(10);
+    expect(w.findAll('[role="listitem"]')).toHaveLength(KEYMAP_ACTIONS.length + 1);
   });
 
   // The intro is what sent the reporter to a text editor: it named the config file and the guide,
@@ -66,12 +68,11 @@ describe("the keyboard shortcuts section, with nothing bound", () => {
 
 describe("the keyboard shortcuts section, with send bindings", () => {
   // The exact pair #1858 asked for: Ctrl+A and Ctrl+E, reached from the keys a Mac keyboard has.
-  const macLineEditing: Keymap = {
-    send: [
-      { key: "Cmd+ArrowLeft", bytes: CTRL_A },
-      { key: "Cmd+ArrowRight", bytes: CTRL_E },
-    ],
-  };
+  const MAC_LINE_EDITING = [
+    { key: "Cmd+ArrowLeft", bytes: CTRL_A },
+    { key: "Cmd+ArrowRight", bytes: CTRL_E },
+  ];
+  const macLineEditing: Keymap = { send: MAC_LINE_EDITING };
 
   it("shows the real bindings instead of the placeholder", () => {
     const w = sectionWith(macLineEditing);
@@ -84,8 +85,8 @@ describe("the keyboard shortcuts section, with send bindings", () => {
     expect(text).toContain("^E");
   });
 
-  it("keeps the placeholder out of the count, so the rows are the nine actions plus each entry", () => {
-    expect(sectionWith(macLineEditing).findAll('[role="listitem"]')).toHaveLength(11);
+  it("keeps the placeholder out of the count, so the rows are every action plus each entry", () => {
+    expect(sectionWith(macLineEditing).findAll('[role="listitem"]')).toHaveLength(KEYMAP_ACTIONS.length + MAC_LINE_EDITING.length);
   });
 });
 

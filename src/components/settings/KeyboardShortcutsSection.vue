@@ -37,7 +37,7 @@ const sendKeyRows = computed(() => sendRows(activeKeymap.value));
       <span v-else class="shrink-0 text-[11px] text-muted">{{ t("settings.shortcuts.notSet") }}</span>
       <code class="shrink-0 font-mono text-[10px] text-muted">{{ row.action }}</code>
     </div>
-    <!-- Nine actions always have a row, bound or not, so an unbound one still says the action
+    <!-- An action always has a row, bound or not, so an unbound one still says the action
          exists. `send` had no such row and vanished when nothing was bound — which is how someone
          looking for "why does Cmd+ArrowLeft do nothing" found no evidence the mechanism is even
          here, and read the source to find out (#1858). One row is the whole fix. -->
