@@ -10,6 +10,7 @@
 import { describe, it, expect, vi } from "vitest";
 
 import {
+  kernelV6WildcardTakesV4,
   loopbackListenPlans,
   startLoopbackListeners,
   type BoundAddress,
@@ -18,8 +19,9 @@ import {
   type PrimaryListener,
 } from "../../../server/infra/loopback-listener.js";
 
-const addressesFor = (bound: BoundAddress): string[] => loopbackListenPlans(bound).map((p) => p.address);
-const planFor = (bound: BoundAddress, address: string): LoopbackPlan | undefined => loopbackListenPlans(bound).find((p) => p.address === address);
+const addressesFor = (bound: BoundAddress, dualStack = false): string[] => loopbackListenPlans(bound, dualStack).map((p) => p.address);
+const planFor = (bound: BoundAddress, address: string, dualStack = false): LoopbackPlan | undefined =>
+  loopbackListenPlans(bound, dualStack).find((p) => p.address === address);
 
 describe("loopbackListenPlans", () => {
   // The default bind. It answers for 127.0.0.1 by being it, and answers for nothing on v6 — which
@@ -45,7 +47,7 @@ describe("loopbackListenPlans", () => {
   // v4, never whether it takes v6 — while its v4 coverage is the thing that has to be attempted.
   it("takes nothing for the v6 wildcard beyond the v4 attempt, whose clash is proof rather than failure", () => {
     expect(addressesFor({ address: "::" })).toEqual(["127.0.0.1"]);
-    expect(planFor({ address: "::" }, "127.0.0.1")?.inUseProvesPrimary).toBe(true);
+    expect(planFor({ address: "::" }, "127.0.0.1", true)?.inUseProvesPrimary).toBe(true);
   });
 
   it("takes both for a specific non-loopback address — the reported case", () => {
@@ -69,16 +71,16 @@ describe("loopbackListenPlans", () => {
   // index.ts creates exactly two spares and startLoopbackListeners hands plan i to spare i.
   it("never asks for more spares than index.ts builds", () => {
     ["127.0.0.1", "127.0.0.2", "0.0.0.0", "::", "::1", "192.168.64.1", "fe80::1"].forEach((address) =>
-      expect(loopbackListenPlans({ address }).length, address).toBeLessThanOrEqual(2),
+      expect(loopbackListenPlans({ address }, false).length, address).toBeLessThanOrEqual(2),
     );
   });
 
   it("says no for a pipe or UNIX socket, which no session url can name", () => {
-    expect(loopbackListenPlans("/tmp/mulmoterminal.sock")).toEqual([]);
+    expect(loopbackListenPlans("/tmp/mulmoterminal.sock", false)).toEqual([]);
   });
 
   it("says no when the server is not listening at all", () => {
-    expect(loopbackListenPlans(null)).toEqual([]);
+    expect(loopbackListenPlans(null, false)).toEqual([]);
   });
 });
 
@@ -174,6 +176,9 @@ describe("startLoopbackListeners", () => {
   });
 });
 
+// Handlers are registered only AFTER the kernel probe resolves, so these await the setup before
+// firing anything — and they inject the kernel answer rather than inheriting the runner's, which
+// would make them assert different things on macOS and on Linux.
 describe("startLoopbackListeners under a v6 wildcard primary", () => {
   const wildcard = (): PrimaryListener => ({ address: () => ({ address: "::" }) });
 
@@ -183,20 +188,26 @@ describe("startLoopbackListeners under a v6 wildcard primary", () => {
     return { handlers, loopback };
   };
 
-  it("says nothing when the port is already taken — that IS the wildcard covering loopback", () => {
+  const startOnDualStack = async (spares: readonly LoopbackListener[]) => startLoopbackListeners(wildcard(), spares, 34567, () => Promise.resolve(true));
+
+  it("says nothing when the port is already taken — that IS the wildcard covering loopback", async () => {
     const a = recorder();
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    startLoopbackListeners(wildcard(), [a.loopback, recorder().loopback], 34567);
+    const pending = startOnDualStack([a.loopback, recorder().loopback]);
+    await Promise.resolve();
     a.handlers[0]?.(Object.assign(new Error("in use"), { code: "EADDRINUSE" }));
+    await pending;
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });
 
-  it("still warns about a failure that is NOT the expected clash", () => {
+  it("still warns about a failure that is NOT the expected clash", async () => {
     const a = recorder();
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    startLoopbackListeners(wildcard(), [a.loopback, recorder().loopback], 34567);
+    const pending = startOnDualStack([a.loopback, recorder().loopback]);
+    await Promise.resolve();
     a.handlers[0]?.(Object.assign(new Error("denied"), { code: "EACCES" }));
+    await pending;
     expect(warn).toHaveBeenCalledTimes(1);
     warn.mockRestore();
   });
@@ -260,10 +271,19 @@ describe("the outcome it reports", () => {
   });
 });
 
-// A `::` primary is dual-stack on most kernels, so its 127.0.0.1 auxiliary clashes with the
-// primary ITSELF. Reading that as a rival suppressed `localhost` for a server that owns both
-// loopbacks (Codex/CodeRabbit, #1903) — and macOS hides it, because there the bind succeeds.
-describe("a clash that proves the primary already covers the address", () => {
+// `net.ipv6.bindv6only=1` makes `::` v6-only, and then a `127.0.0.1` clash is a STRANGER rather
+// than the primary. Guessing which kernel this is has been wrong in both directions, so the answer
+// is measured and passed in (Codex, #1903).
+describe("whether a clash proves the primary", () => {
+  it("is true only for a `::` bind on a kernel whose `::` takes v4", () => {
+    expect(planFor({ address: "::" }, "127.0.0.1", true)?.inUseProvesPrimary).toBe(true);
+    expect(planFor({ address: "::" }, "127.0.0.1", false)?.inUseProvesPrimary).toBe(false);
+  });
+
+  it("is never true for a bind that could not hold the v4 loopback anyway", () => {
+    ["192.168.64.1", "::1", "127.0.0.2"].forEach((address) => expect(planFor({ address }, "127.0.0.1", true)?.inUseProvesPrimary, address).toBe(false));
+  });
+
   const clashing = (): LoopbackListener => {
     let onError: ((err: NodeJS.ErrnoException) => void) | undefined;
     return {
@@ -278,11 +298,41 @@ describe("a clash that proves the primary already covers the address", () => {
     };
   };
 
-  it("counts as ours, not as taken", async () => {
+  it("counts the clash as ours on a dual-stack kernel", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const outcome = await startLoopbackListeners({ address: () => ({ address: "::" }) }, [clashing(), clashing()], 34567);
+    const outcome = await startLoopbackListeners({ address: () => ({ address: "::" }) }, [clashing(), clashing()], 34567, () => Promise.resolve(true));
     expect(outcome).toEqual({ v4: "ours", v6: "ours" });
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  // The reported case. Same clash, same code path, opposite kernel — and here it IS a stranger.
+  it("counts the same clash as taken under bindv6only, and warns", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const outcome = await startLoopbackListeners({ address: () => ({ address: "::" }) }, [clashing(), clashing()], 34567, () => Promise.resolve(false));
+    expect(outcome.v4).toBe("taken");
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  // Only a `::` primary raises the question, so nothing else should pay for the probe.
+  it("does not ask the kernel for a bind that is not the v6 wildcard", async () => {
+    const asked = vi.fn(() => Promise.resolve(true));
+    await startLoopbackListeners({ address: () => ({ address: "127.0.0.1" }) }, [clashing()], 34567, asked);
+    expect(asked).not.toHaveBeenCalled();
+  });
+});
+
+// The probe binds real sockets. Its ANSWER is platform-dependent, so this pins only that it gives
+// one — asserting the value would red the suite on a kernel where no defect exists, which is the
+// trap test/bin/probe-bind-host.spec.ts already documents for the wildcard question.
+describe("kernelV6WildcardTakesV4", () => {
+  it("answers with a boolean rather than throwing or hanging", async () => {
+    expect(typeof (await kernelV6WildcardTakesV4())).toBe("boolean");
+  });
+
+  it("leaves nothing listening behind — it can be asked twice", async () => {
+    await kernelV6WildcardTakesV4();
+    expect(typeof (await kernelV6WildcardTakesV4())).toBe("boolean");
   });
 });

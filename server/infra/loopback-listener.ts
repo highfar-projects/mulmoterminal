@@ -24,6 +24,8 @@
 // It widens nothing: loopback is reachable only from this machine, and it is what an untouched
 // install already serves. The operator asked to ADD an interface, not to remove that one.
 
+import { createServer, type Server } from "node:net";
+
 /** What the OS says the primary listener bound — `server.address()` — and nothing else. Asking
  *  after the fact rather than classifying `MULMOTERMINAL_HOST` is the rule loopback.ts already
  *  states: `localhost`, `127.1` and `127.000.000.001` all mean loopback, and `localhost` can be
@@ -173,14 +175,19 @@ const servesV6Loopback = (address: string): boolean => address === V6_LOOPBACK |
  * Returns at most one plan per address, and never more than two — pinned by a spec, because
  * `startLoopbackListeners` hands plan `i` to spare server `i` and index.ts creates exactly two.
  */
-export function loopbackListenPlans(bound: BoundAddress): LoopbackPlan[] {
+export function loopbackListenPlans(bound: BoundAddress, v6WildcardTakesV4: boolean): LoopbackPlan[] {
   // A string address is a pipe or a UNIX socket, and null is "not listening" — neither is a
   // network bind this can reason about, and neither is reachable by a url a session would build.
   if (bound === null || typeof bound === "string") return [];
   const { address } = bound;
   const plans: LoopbackPlan[] = [];
   if (address !== V4_WILDCARD && !servesV4Loopback(address)) {
-    plans.push({ address: V4_LOOPBACK, inUseProvesPrimary: address === V6_WILDCARD, reason: "sessions" });
+    // A clash proves the primary only where the primary CAN hold this address. `::` does on a
+    // dual-stack kernel and does not under `net.ipv6.bindv6only=1`, and the difference is not a
+    // detail: read the wrong way, an unrelated `127.0.0.1` listener is counted as ourselves and
+    // `localhost` is advertised straight at it (Codex, PR #1903). So the caller MEASURES which
+    // kind of kernel this is — see kernelV6WildcardTakesV4 — rather than assuming.
+    plans.push({ address: V4_LOOPBACK, inUseProvesPrimary: address === V6_WILDCARD && v6WildcardTakesV4, reason: "sessions" });
   }
   // No `inUseProvesPrimary` counterpart here: the only bind that could already hold `[::1]:P` is
   // one that serves the v6 loopback, and those return no plan at all. So EADDRINUSE means
@@ -189,6 +196,50 @@ export function loopbackListenPlans(bound: BoundAddress): LoopbackPlan[] {
     plans.push({ address: V6_LOOPBACK, inUseProvesPrimary: false, reason: "browser" });
   }
   return plans;
+}
+
+/**
+ * Does a `::` bind on THIS kernel also take the v4 loopback?
+ *
+ * `net.ipv6.bindv6only=1` makes `::` v6-only, and every guess about which kind of kernel this is
+ * has been wrong somewhere — this file's history is a list of them. So it is measured, on a PORT
+ * NOBODY ELSE IS USING: bind `[::]:0`, take the ephemeral port the kernel picks, and see whether
+ * `127.0.0.1` on that port is now unavailable. Nothing else can be holding a port the kernel just
+ * handed out, so an `EADDRINUSE` there can only be the wildcard socket itself.
+ *
+ * That is the whole point. The same question asked about the REAL port cannot tell our primary
+ * from a stranger; asked here it can, and the answer transfers because it is a property of the
+ * kernel rather than of the port.
+ *
+ * `false` on any surprise. Wrong towards "not dual-stack" costs a `localhost` origin on a kernel
+ * that would have been fine; wrong the other way hands that origin to whoever holds `127.0.0.1`.
+ */
+/** Resolves the errno a bind failed with, or null when it succeeded. Kept separate so the probe
+ *  below reads as three steps rather than as four levels of callback. */
+function bindOutcome(server: Server, port: number, host: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    server.once("error", (err: NodeJS.ErrnoException) => resolve(err.code ?? "EUNKNOWN"));
+    server.once("listening", () => resolve(null));
+    server.listen(port, host);
+  });
+}
+
+const closeQuietly = (server: Server): Promise<void> => new Promise((resolve) => server.close(() => resolve()));
+
+export async function kernelV6WildcardTakesV4(): Promise<boolean> {
+  const wildcard = createServer();
+  if ((await bindOutcome(wildcard, 0, V6_WILDCARD)) !== null) return false;
+  const bound = wildcard.address();
+  const port = bound !== null && typeof bound !== "string" ? bound.port : null;
+  if (port === null) {
+    await closeQuietly(wildcard);
+    return false;
+  }
+  const v4 = createServer();
+  const errno = await bindOutcome(v4, port, V4_LOOPBACK);
+  if (errno === null) await closeQuietly(v4);
+  await closeQuietly(wildcard);
+  return errno === "EADDRINUSE";
 }
 
 export interface PrimaryListener {
@@ -246,8 +297,16 @@ function startOne(loopback: LoopbackListener, plan: LoopbackPlan, port: string |
  * a wiring mistake rather than a runtime condition, and it would otherwise drop a listener in
  * silence, so it says so.
  */
-export async function startLoopbackListeners(primary: PrimaryListener, spares: readonly LoopbackListener[], port: string | number): Promise<LoopbackOutcome> {
-  const plans = loopbackListenPlans(primary.address());
+export async function startLoopbackListeners(
+  primary: PrimaryListener,
+  spares: readonly LoopbackListener[],
+  port: string | number,
+  v6WildcardTakesV4: () => Promise<boolean> = kernelV6WildcardTakesV4,
+): Promise<LoopbackOutcome> {
+  const bound = primary.address();
+  // Only a `::` primary raises the question, and only then is the probe worth a syscall.
+  const dualStack = bound !== null && typeof bound !== "string" && bound.address === V6_WILDCARD ? await v6WildcardTakesV4() : false;
+  const plans = loopbackListenPlans(bound, dualStack);
   const results = await Promise.all(
     plans.map((plan, i) => {
       const spare = spares[i];

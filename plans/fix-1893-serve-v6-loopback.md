@@ -356,3 +356,59 @@ mulmoterminal running at http://localhost:34765
 CodeRabbit の Minor（MD040、ログの code fence に言語が無い）も対応した。
 
 ゲート: すべて exit 0、`yarn test` **11613 passed / 50 skipped**。
+
+## レビュー iter-6 —— 推測をやめて、カーネルに直接聞く
+
+Codex（`CHANGES REQUESTED`）:
+
+> treats every IPv4 `EADDRINUSE` after a `::` bind as proof of dual-stack ownership. On
+> `net.ipv6.bindv6only=1` hosts, it can instead be an unrelated `127.0.0.1` listener.
+
+**iter-5 の裏返しで、これも正しい。** `inUseProvesPrimary` は「`::` なら dual-stack だろう」と
+いう**推測**だった。#1834 の時点ではその推測が外れても失うのは警告 1 本だったが、いまは
+`localhost` を安全と名乗るかどうかが乗っている。**同じ推測でも、賭け金が変わった。**
+
+保守側に倒す（`::` では常に taken 扱い）案は取らなかった。Linux の dual-stack という**よくある
+構成**で `localhost` origin を黙って失うことになり、それはこの一連の作業が直した不具合そのもの。
+
+代わりに**測る**。`kernelV6WildcardTakesV4()`:
+
+1. `[::]:0` に bind し、カーネルが選んだ ephemeral port を取る
+2. その port の `127.0.0.1` に bind してみる
+3. `EADDRINUSE` → このカーネルの `::` は v4 も取る / 成功 → `bindv6only`
+
+**カーネルが今しがた配ったポートを他人が握っていることはあり得ない**ので、ここでの
+`EADDRINUSE` は wildcard ソケット自身以外にならない。実 port について同じ問いを立てても
+「自分か他人か」を分けられないが、この問いなら分けられる。答えはポートではなく**カーネルの
+性質**なので、そのまま転用できる。
+
+これはこのファイルの元からの流儀（"ATTEMPT the bind and read the answer"）を、推測が残っていた
+最後の 1 箇所に適用しただけ。
+
+驚いたときは `false` を返す。「dual-stack でない」に倒れると本来使えたカーネルで `localhost`
+origin を失うだけだが、逆に倒れると `127.0.0.1` を握っている相手に origin を渡す。
+
+### iter-6 の検証
+
+| ミューテーション | 結果 |
+|---|---|
+| `::` を無条件に dual-stack とみなす（= 指摘された挙動） | 2 red |
+| probe が「どの失敗も dual-stack」と読む | **このカーネルでは観測不能**（v4 bind が別理由で失敗しないと到達しない）。正直に記録する |
+
+**probe をこのマシンで実行**: `:: takes v4 = false`。これは iter-1 の bind マトリクスで
+`::` の補助 v4 bind が**成功**した観測と一致する —— 独立に測った 2 つが同じことを言っている。
+
+**実機（probe 追加後の回帰確認）**
+
+| bind | banner | localhost | 127.0.0.1 | [::1] |
+|---|---|---|---|---|
+| 既定 | `→ http://localhost:34770` | 200 | 200 | 200 |
+| `::` | `→ http://localhost:34771` | 200 | 200 | 200 |
+
+**未検証** —— `bindv6only=1` のカーネル。macOS では作れない。probe の分岐そのものは spec で
+両方向を固定してある。
+
+lint の `sonarjs/no-nested-functions` に触れたので、probe は callback のネストではなく
+`bindOutcome` / `closeQuietly` を使った 3 手順の async として書いた。
+
+ゲート: すべて exit 0、`yarn test` **11619 passed / 50 skipped**。
