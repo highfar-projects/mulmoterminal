@@ -27,7 +27,7 @@ git で確定した変更点:
 
 ## これは #1876 の修正ではない
 
-#1876 の報告された不具合は **二重起動ガードが既定構成で発火しない** こと ——
+Issue #1876 の報告された不具合は **二重起動ガードが既定構成で発火しない** こと ——
 `isPortFree` が `::` を probe するのにサーバは `127.0.0.1` に bind し、bind は同一アドレスと
 しか衝突しないので稼働中インスタンスを検出できない。修正の核は `probe.listen(port, BIND_HOST)`。
 
@@ -191,3 +191,45 @@ widened bind に限らず**既定構成でも**穴がある。
 
 ゲート再実行: `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0、
 `yarn test` **11523 passed / 50 skipped**。
+
+## レビュー iter-2 —— `localhost` が実際にどちらへ行くかを測った
+
+CodeRabbit が Major (CWE-367, TOCTOU) を出した:
+
+> `canBind` closes its successful `[::1]:port` probe before `runServer` starts. … `launchTarget`
+> then opens `http://localhost:<port>`, which can reach that process over IPv6 … A served page
+> could access the existing `localhost` localStorage.
+
+**レースは実在する**（この plan も「窓を狭めるだけで閉じない」と最初から書いている）。
+そこで、判断の土台になる事実を測った —— **同じ port の `127.0.0.1` と `::1` に別々のサーバが
+居るとき、`localhost` はどちらへ行くか。**
+
+Chrome 152 / macOS 26.5.1 arm64、`127.0.0.1` に `OURS-v4`、`::1` に `STRANGER-v6`:
+
+```
+Chrome  http://localhost:39221 -> STRANGER-v6
+```
+
+**Chrome は `::1` を優先する。** つまりこれは稀な取り合いではなく、`::1` に誰かが居れば
+**必ず**そちらが選ばれる。CR の懸念は私の見積もりより重い。同時に、この計測は
+**pre-spawn の `::1` 計測が必須**であることも示している —— 無ければ squatter が
+ブラウザごと `localhost` origin の localStorage を受け取る。
+
+### CR が挙げた 2 つの対処は、どちらもこの repo では悪化する
+
+1. **「reservation を launch まで保持する」** —— 保持したソケットは**ブラウザに応答してしまう**。
+   上の計測どおり Chrome は `::1` を優先するので、launcher が握る空ソケットが本体の代わりに
+   答え、利用者は死んだページを見る。レースを確実な故障に変える。
+2. **「サーバが `::1` を持てないときは具体アドレスを使う」** —— 既定の `127.0.0.1` bind は
+   `::1` を持たないので、**既定構成では二度と `localhost` を使わない**ことになる。それは
+   4.11.0 の挙動そのもの、すなわち全既定利用者にとっての #1889 の再演。
+
+### 本当の close は「サーバが `::1` を serve する」で、別 PR にする
+
+`server/infra/loopback-listener.ts` を 1 プランから複数プランへ広げ、`server/index.ts` の
+listener タプル（`createPubSub` / `mountTerminalWebSockets` が受ける）を 3 本にする変更。
+**全利用者の起動時に bind が 1 本増える**ので、実機確認込みで独立した PR に値する。
+この PR（URL を戻す revert）への相乗りにはしない。→ follow-up issue へ。
+
+窓は「全リリースで一度も聞いていない」から「1 回の probe とブラウザ起動の間」まで狭まり、
+起動時に既に居る squatter は捕まえて理由ごと告げる。それが本 PR の到達点。
