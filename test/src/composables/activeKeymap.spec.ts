@@ -41,7 +41,7 @@ describe("keymapRows", () => {
   it("lists EVERY action, bound or not — an unbound row is how the action is discovered", () => {
     const rows = keymapRows({ "zoom-next": "PageDown" });
     expect(rows.length).toBeGreaterThan(1);
-    expect(rows.every((r) => r.label.length > 0)).toBe(true);
+    expect(rows.every((r) => r.labelKey.length > 0)).toBe(true);
     expect(rows.find((r) => r.action === "zoom-next")?.binding).toBe("PageDown");
     expect(rows.find((r) => r.action === "terminal-close")?.binding).toBeNull();
   });

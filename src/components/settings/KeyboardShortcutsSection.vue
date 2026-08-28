@@ -32,7 +32,7 @@ const sendKeyRows = computed(() => sendRows(activeKeymap.value));
       role="listitem"
       class="flex items-center gap-2 rounded-md border border-border bg-elevated px-2.5 py-1.5"
     >
-      <span class="min-w-0 flex-1 truncate text-[12px] text-fg">{{ row.label }}</span>
+      <span class="min-w-0 flex-1 truncate text-[12px] text-fg">{{ t(row.labelKey) }}</span>
       <code v-if="row.binding" class="shrink-0 rounded border border-border bg-subtle px-1.5 py-0.5 font-mono text-[11px] text-fg">{{ row.binding }}</code>
       <span v-else class="shrink-0 text-[11px] text-muted">{{ t("settings.shortcuts.notSet") }}</span>
       <code class="shrink-0 font-mono text-[10px] text-muted">{{ row.action }}</code>

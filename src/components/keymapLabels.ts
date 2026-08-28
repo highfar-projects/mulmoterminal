@@ -1,35 +1,38 @@
 import { KEYMAP_ACTIONS, type Keymap, type KeymapAction } from "../../common/keymap";
 
-// What each bindable action is called in the settings list.
+// The i18n key naming each bindable action in the settings list.
 //
-// A full Record, not a lookup with a fallback: adding an action to KEYMAP_ACTIONS then fails to
-// compile until it is named here, so a new shortcut can't ship invisible to the one screen that
-// tells the user it exists.
-const LABELS: Record<KeymapAction, string> = {
-  "zoom-toggle": "Enlarge / collapse a terminal",
-  "zoom-next": "Enlarge the next terminal",
-  "zoom-prev": "Enlarge the previous terminal",
-  "next-attention": "Jump to a terminal that needs you",
-  "terminal-new": "Open the launch panel",
-  "terminal-new-here": "Open the launch panel on this terminal's directory",
-  "terminal-new-adjacent": "Shell in this terminal's directory, straight away",
-  "terminal-close": "Close this terminal",
+// A full Record, not a key derived as `settings.shortcuts.actions.${action}`: adding an action to
+// KEYMAP_ACTIONS then fails to compile until it is named here, so a new shortcut can't ship
+// invisible to the one screen that tells the user it exists. A derived key would compile and
+// render its own path at runtime instead (#1894).
+const LABEL_KEYS: Record<KeymapAction, string> = {
+  "zoom-toggle": "settings.shortcuts.actions.zoomToggle",
+  "zoom-next": "settings.shortcuts.actions.zoomNext",
+  "zoom-prev": "settings.shortcuts.actions.zoomPrev",
+  "next-attention": "settings.shortcuts.actions.nextAttention",
+  "terminal-new": "settings.shortcuts.actions.terminalNew",
+  "terminal-new-here": "settings.shortcuts.actions.terminalNewHere",
+  "terminal-new-adjacent": "settings.shortcuts.actions.terminalNewAdjacent",
+  "terminal-close": "settings.shortcuts.actions.terminalClose",
   // Only acts when the terminal has a selection; with none, the key reaches the shell as it
   // always did — which is what makes Ctrl+C a usable binding here without losing interrupt.
-  copy: "Copy the terminal selection",
-  paste: "Paste into the terminal",
+  copy: "settings.shortcuts.actions.copy",
+  paste: "settings.shortcuts.actions.paste",
 };
 
 export interface KeymapRow {
   action: KeymapAction;
-  label: string;
+  /** The i18n key, not the words: this module has no `t`, and the one caller is a component that
+   *  does. Resolving here would freeze the label at the locale in force when the row was built. */
+  labelKey: string;
   // The user's binding, or null when they haven't set one — shown as "Not set" rather than
   // hidden, since an unbound row is how someone discovers the action exists at all.
   binding: string | null;
 }
 
 export const keymapRows = (keymap: Partial<Record<KeymapAction, string>>): KeymapRow[] =>
-  KEYMAP_ACTIONS.map((action) => ({ action, label: LABELS[action], binding: keymap[action] ?? null }));
+  KEYMAP_ACTIONS.map((action) => ({ action, labelKey: LABEL_KEYS[action], binding: keymap[action] ?? null }));
 
 // The `send` bindings, which have no fixed list to render: unlike an action, one exists only
 // because the user wrote it, so there is no row to show until they add one.
