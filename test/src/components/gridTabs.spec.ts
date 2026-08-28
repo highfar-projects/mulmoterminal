@@ -598,6 +598,32 @@ describe("runCommand (script command cells)", () => {
   });
 });
 
+// #1867: a wrapper names one command line for ONE agent, so relaunching the cell as something else
+// has to drop it. Left behind it wins over `agent` when the cell reseeds its picker after a reload,
+// which reconnects a live codex session on Claude's endpoint.
+describe("setCellAgent and the custom-agent wrapper", () => {
+  const withWrapper = () => make([{ uid: 0, session: null, cwd: "/p", customAgent: "kimi_k3", autoStart: true }]);
+
+  it("drops customAgent when the cell is relaunched as a different agent", () => {
+    const s = setCellAgent(withWrapper(), 0, "codex");
+    expect(s.cells[0].agent).toBe("codex");
+    expect(s.cells[0].customAgent).toBeUndefined();
+  });
+
+  it("drops it going back to claude too, where the agent key is absent either way", () => {
+    const s = setCellAgent(withWrapper(), 0, "claude");
+    expect("agent" in s.cells[0]).toBe(false);
+    expect(s.cells[0].customAgent).toBeUndefined();
+  });
+
+  // Persisted cells round-trip through JSON, so the key has to be genuinely gone rather than
+  // present-and-undefined.
+  it("leaves nothing for parseGridState to restore", () => {
+    const started = setSession(setCellAgent(withWrapper(), 0, "codex"), 0, U(5));
+    expect(parseGridState(JSON.stringify(started))?.cells[0].customAgent).toBeUndefined();
+  });
+});
+
 describe("launchInCell (persistent launcher cells)", () => {
   const L = { index: 1, label: "Shell" };
 

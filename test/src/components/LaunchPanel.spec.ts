@@ -46,14 +46,26 @@ describe("LaunchPanel", () => {
     w.findComponent({ name: "CellLaunchForm" }).vm.$emit("update:agent", customAgentPick("kimi_k3"));
     await flushPromises();
     w.findComponent({ name: "CellLaunchForm" }).vm.$emit("start", "/home/me/other");
-    expect(w.emitted("start")?.[0]).toEqual([{ dir: "/home/me/other", pick: customAgentPick("kimi_k3") }]);
+    expect(w.emitted("start")?.[0]).toEqual([{ dir: "/home/me/other", pick: customAgentPick("kimi_k3"), choice: null }]);
+  });
+
+  // Dropping it is silent: the cell starts on the directory's default model and nothing says the
+  // pick went. The in-cell form honoured it, so the panel losing it would be a regression.
+  it("carries the model pick out with the start", async () => {
+    const w = mountPanel();
+    await flushPromises();
+    const form = w.findComponent({ name: "CellLaunchForm" });
+    form.vm.$emit("update:choice", { provider: "openrouter", model: "moonshotai/kimi-k3" });
+    await flushPromises();
+    form.vm.$emit("start", "/home/me/proj");
+    expect(w.emitted("start")?.[0]).toEqual([{ dir: "/home/me/proj", pick: "claude", choice: { provider: "openrouter", model: "moonshotai/kimi-k3" } }]);
   });
 
   it("starts on Claude however the panel was opened", async () => {
     const w = mountPanel();
     await flushPromises();
     w.findComponent({ name: "CellLaunchForm" }).vm.$emit("start", "/home/me/proj");
-    expect(w.emitted("start")?.[0]).toEqual([{ dir: "/home/me/proj", pick: "claude" }]);
+    expect(w.emitted("start")?.[0]).toEqual([{ dir: "/home/me/proj", pick: "claude", choice: null }]);
   });
 
   // The close button lives in the form and is shown only for a `cancellable` one. The panel is

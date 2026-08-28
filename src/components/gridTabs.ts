@@ -1,4 +1,5 @@
 import type { RunCommand } from "./runCommand";
+import type { LaunchChoice } from "./wsUrl";
 import { dirPriority } from "../../common/dirPriorityOrder";
 import { asTerminalAgent, type BadgedAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { isCustomAgentId } from "../../common/customAgents";
@@ -25,7 +26,7 @@ export const isShellLauncher = (l: CellLauncher): l is { shell: true; label: str
 const SHELL_LAUNCHER_LABEL = "shell";
 export const shellLauncher = (): CellLauncher => ({ shell: true, label: SHELL_LAUNCHER_LABEL });
 // A fresh OS-default-shell cell (session arrives from the server, then it persists/reconnects).
-export const shellCell = (cwd: string): Omit<Cell, "uid"> => ({ session: null, cwd, launcher: shellLauncher() });
+export const shellCell = (cwd: string | null): Omit<Cell, "uid"> => ({ session: null, cwd, launcher: shellLauncher() });
 
 // A cell for a session spawned ELSEWHERE and adopted here, which must carry the agent: without the
 // flag the cell reconnects on Claude's endpoint, so a codex session would attach as claude. Claude
@@ -65,6 +66,13 @@ export interface Cell {
   // — parseGridState rebuilds each cell field by field and does not carry it — though, like every
   // other in-flight field, it is written to localStorage in the meantime rather than stripped.
   autoStart?: true;
+  // The provider/model the launch form picked for the session this cell is about to start (#584).
+  // One-shot and NOT restored, exactly like `autoStart`: it describes a launch in flight, and a
+  // reloaded cell either has a session already or is back at the form where the pick is made again.
+  //
+  // On the cell because the launch PANEL is outside it (#1867) — while the form lived in the cell,
+  // the pick never had to leave TerminalCell's own state.
+  launchChoice?: LaunchChoice;
 }
 // How the grid orders its cells. "manual": the user's hand-arranged order (the move buttons);
 // "auto": attention-first, recomputed from each cell's live status; "priority": the rank each
@@ -90,7 +98,7 @@ export const pageSlice = <T>(cells: T[], page: number) => cells.slice(page * PAG
 // those count toward the cap. A cell told to auto-start counts too, in the window before its
 // session id arrives: it is about to run, and `switchPage` discards a trailing LAUNCH cell.
 // A launch cell is the other side of that — the empty launcher, waiting to be told what to run.
-const isOccupied = (c: Cell) => c.session !== null || c.command != null || c.launcher != null || c.autoStart === true;
+export const isOccupied = (c: Cell) => c.session !== null || c.command != null || c.launcher != null || c.autoStart === true;
 const isLaunchCell = (c: Cell | undefined) => !!c && !isOccupied(c);
 export const runningCount = (cells: Cell[]) => cells.filter(isOccupied).length;
 
@@ -122,7 +130,11 @@ export const storedCellAgent = (agent: TerminalAgent): Cell["agent"] => (agent =
 export function setCellAgent(state: GridState, uid: number, agent: TerminalAgent): GridState {
   // Claude is the ABSENT case, so switching back to it removes the key rather than setting it
   // to undefined — a persisted cell round-trips through JSON, where only the former survives.
-  const applied = ({ agent: _previous, ...rest }: Cell): Cell => (agent === "claude" ? rest : { ...rest, agent });
+  // `customAgent` goes with it. A wrapper names one command line for ONE agent, so a cell that is
+  // relaunched as something else is no longer running through it — and a stale key would win over
+  // `agent` when the cell reseeds its picker after a reload, reconnecting (say) a live codex
+  // session on Claude's endpoint.
+  const applied = ({ agent: _previous, customAgent: _wrapper, ...rest }: Cell): Cell => (agent === "claude" ? rest : { ...rest, agent });
   return { ...state, cells: state.cells.map((c) => (c.uid === uid ? applied(c) : c)) };
 }
 

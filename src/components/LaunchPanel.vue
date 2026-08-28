@@ -33,9 +33,10 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  // The Agent Picker's value rides along, which the form's own `start` does not carry: in a cell
-  // the picker's state WAS the cell's, and here the host has to be told what was picked.
-  (e: "start", value: { dir: string | null; pick: AgentPick }): void;
+  // The Agent Picker's value and the model pick ride along, which the form's own `start` does not
+  // carry: in a cell both WERE the cell's own state, and here the host has to be told. Dropping
+  // `choice` is silent — the cell starts on the directory's default and nothing says the pick went.
+  (e: "start", value: { dir: string | null; pick: AgentPick; choice: LaunchChoice | null }): void;
   (e: "resume", value: { id: string; cwd: string | null; agent?: TerminalAgent }): void;
   (e: "run", value: RunCommand): void;
   (e: "launch", value: LaunchPick): void;
@@ -84,7 +85,7 @@ onMounted(async () => {
       @update:dir="(value) => (dir = value)"
       @update:agent="(value) => (pickedAgent = value)"
       @update:choice="(value) => (launchChoice = value)"
-      @start="(value) => emit('start', { dir: value, pick: pickedAgent })"
+      @start="(value) => emit('start', { dir: value, pick: pickedAgent, choice: launchChoice })"
       @resume="(value) => emit('resume', value)"
       @run="(value) => emit('run', value)"
       @launch="(value) => emit('launch', value)"

@@ -24,6 +24,7 @@ import {
   insertCellAfter,
   revealCell,
   shellCell,
+  isOccupied,
   sessionCell,
   launchInCell,
   setSortMode,
@@ -68,6 +69,7 @@ import { asTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { router } from "../router";
 import { usePubSub } from "../composables/usePubSub";
 import type { AgentPick } from "../../common/customAgents";
+import type { LaunchChoice } from "./wsUrl";
 import type { LaunchPick } from "./launchers";
 import { isRecord } from "../../common/isRecord";
 import { isDrawnResult } from "../utils/drawnResult";
@@ -368,8 +370,7 @@ function onAddTerminal() {
     closeLaunchPanel();
     return;
   }
-  if (runningCount(state.value.cells) >= MAX_TERMINALS) return; // surfaced by the disabled button
-  toggleLaunchPanel(null);
+  toggleLaunchPanel(null); // the cap lives there now, so every entry point shares it
 }
 const onSession = (uid: number, id: string) => (state.value = setSession(state.value, uid, id));
 const onCwd = (uid: number, cwd: string) => (state.value = setCwd(state.value, uid, cwd));
@@ -559,6 +560,10 @@ function toggleLaunchPanel(origin: number | null) {
     closeLaunchPanel();
     return;
   }
+  // The cap is checked HERE, not at the toolbar: a cell's own `+` and both shortcuts reach the
+  // panel too, and `insertCellAfter` returns the state unchanged when it is full — so opening the
+  // form at 81 terminals would take a whole launch and then close on nothing.
+  if (runningCount(state.value.cells) >= MAX_TERMINALS) return;
   launchPanelOrigin.value = origin;
   launchPanelOpen.value = true;
 }
@@ -567,10 +572,24 @@ function toggleLaunchPanel(origin: number | null) {
 // (it emits intents and knows nothing about cells); placing one is this component's job, because
 // only it can page to the new cell — see placeCell.
 const placeFromPanel = (cell: Omit<Cell, "uid">) => {
+  // The empty launch cell `ensureEntry` keeps on a fresh grid renders the form and NOTHING else —
+  // no header, so no close button. Launching from the panel puts a real cell beside it rather than
+  // filling it, which would strand that tile for good. Dropped once the grid has something else.
+  //
+  // Filling it in place is not the alternative it looks like: `autoStart` runs in TerminalCell's
+  // `onMounted` and never as a watcher, so a cell already on screen would take the flag and sit there.
+  const empty = state.value.cells.find((c) => !isOccupied(c));
   placeCell(launchPanelOrigin.value ?? NO_ORIGIN_UID, cell);
+  if (empty) state.value = closeCell(state.value, empty.uid);
   closeLaunchPanel();
 };
-const onPanelStart = ({ dir, pick }: { dir: string | null; pick: AgentPick }) => placeFromPanel(cellForPick(dir ?? defaultCwd.value ?? "", pick));
+// `dir` stays NULL when there is none: `""` is falsy, so an autoStart cell built from it passes
+// `isOccupied` and never starts (TerminalCell guards on `initialCwd`), leaving a tile that only
+// looks like a launcher. Null lets the server pick its own default, as the in-cell form did.
+const onPanelStart = ({ dir, pick, choice }: { dir: string | null; pick: AgentPick; choice: LaunchChoice | null }) =>
+  // The model pick rides on the cell, not on the launch call: what starts the session is the cell
+  // MOUNTING, so anything the form decided has to be on the cell by then or it is lost.
+  placeFromPanel({ ...cellForPick(dir ?? defaultCwd.value, pick), ...(choice ? { launchChoice: choice } : {}) });
 const onPanelResume = ({ id, cwd, agent }: { id: string; cwd: string | null; agent?: TerminalAgent }) =>
   placeFromPanel(sessionCell(id, cwd, agent ?? "claude"));
 const onPanelRun = (command: RunCommand) => placeFromPanel({ session: null, cwd: null, command });
@@ -867,6 +886,7 @@ onBeforeUnmount(detachSpawnedChat);
     </footer>
     <LaunchPanel
       v-if="launchPanelOpen"
+      :key="launchPanelOrigin ?? -1"
       :initial-dir="launchPanelDir"
       :default-cwd="defaultCwd"
       :presets="presets"

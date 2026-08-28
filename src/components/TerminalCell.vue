@@ -107,6 +107,9 @@ const props = defineProps<
     // the cell — the launch panel creates the cell already knowing which wrapper to run. Seeds the
     // Agent Picker below; `initialAgent` still says which CLI's arguments the wrapper is handed.
     initialCustomAgent?: string | null | undefined;
+    // The provider/model the launch form picked, when the pick came from OUTSIDE the cell (the
+    // launch panel, #1867). Seeds `launchChoice` below, which is what the connection reads.
+    initialLaunchChoice?: LaunchChoice | null | undefined;
     // Start `initialAgent` in `initialCwd` on mount rather than opening the launcher form. Set by
     // the grid for a cell it already knows what to run — the phone's launch request (#831).
     autoStart?: boolean;
@@ -500,7 +503,7 @@ function launchIn(dir: string | null) {
 // The provider/model picked in the launch form, for the session this cell is about to
 // start. Null — the usual case — means the directory's own default decides. Kept for the
 // life of the cell so a relaunch in the same cell repeats the choice.
-const launchChoice = ref<LaunchChoice | null>(null);
+const launchChoice = ref<LaunchChoice | null>(props.initialLaunchChoice ?? null);
 
 // Start what the Agent Picker picked, in `dir`. EVERY launch in the form goes through here: the
 // picker decides for the dir field, for a preset chip, and for a worktree alike, and a rule

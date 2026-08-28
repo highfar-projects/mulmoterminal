@@ -1421,6 +1421,7 @@ watch(
           :initial-cwd="cell.cwd"
           :initial-agent="cell.agent"
           :initial-custom-agent="cell.customAgent"
+          :initial-launch-choice="cell.launchChoice"
           :auto-start="cell.autoStart === true"
           :presets="presets"
           :config-unavailable="configUnavailable === true"

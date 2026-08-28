@@ -18,7 +18,7 @@ import { asTerminalAgent } from "../../common/sessionAgent";
 // A Record over LAUNCH_AGENTS rather than an if-chain: the chain ended in `shellCell`, so adding an
 // agent to that list without a case here silently opened a SHELL under its name. Now it does not
 // compile.
-export const CELL_FOR_AGENT: Record<LaunchAgent, (cwd: string) => Omit<Cell, "uid">> = {
+export const CELL_FOR_AGENT: Record<LaunchAgent, (cwd: string | null) => Omit<Cell, "uid">> = {
   shell: (cwd) => shellCell(cwd),
   claude: (cwd) => ({ session: null, cwd, autoStart: true }),
   codex: (cwd) => ({ session: null, cwd, agent: "codex", autoStart: true }),
@@ -26,7 +26,7 @@ export const CELL_FOR_AGENT: Record<LaunchAgent, (cwd: string) => Omit<Cell, "ui
   grok: (cwd) => ({ session: null, cwd, agent: "grok", autoStart: true }),
   muse: (cwd) => ({ session: null, cwd, agent: "muse", autoStart: true }),
 };
-export const cellForAgent = (cwd: string, agent: LaunchAgent | undefined): Omit<Cell, "uid"> => (agent ? CELL_FOR_AGENT[agent](cwd) : shellCell(cwd));
+export const cellForAgent = (cwd: string | null, agent: LaunchAgent | undefined): Omit<Cell, "uid"> => (agent ? CELL_FOR_AGENT[agent](cwd) : shellCell(cwd));
 
 // The same question asked with the AGENT PICKER's value, which the built-in list cannot express: a
 // custom agent is a WRAPPER around a built-in CLI, so the cell carries both halves. `customAgent`
@@ -36,7 +36,7 @@ export const cellForAgent = (cwd: string, agent: LaunchAgent | undefined): Omit<
 //
 // Needed because the launch panel creates the cell from OUTSIDE it. While the form lived in the
 // cell, a custom pick never had to leave TerminalCell's own state.
-export const cellForPick = (cwd: string, pick: AgentPick | undefined): Omit<Cell, "uid"> => {
+export const cellForPick = (cwd: string | null, pick: AgentPick | undefined): Omit<Cell, "uid"> => {
   const customAgent = customAgentIdOf(pick);
   if (customAgent === null) return cellForAgent(cwd, isLaunchAgent(pick) ? pick : undefined);
   const agent = storedCellAgent(asTerminalAgent(pick));

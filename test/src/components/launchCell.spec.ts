@@ -61,4 +61,12 @@ describe("cellForPick", () => {
   it("falls back to a shell when nothing is picked", () => {
     expect(cellForPick(CWD, undefined).launcher).toBeDefined();
   });
+
+  // `""` is falsy, so an autoStart cell built from it passes `isOccupied` but never starts —
+  // TerminalCell guards its mount-time launch on `initialCwd`. Null has to survive as null and let
+  // the server pick its own default, which is what the in-cell form did.
+  it("keeps a null directory null rather than coercing it to an empty string", () => {
+    expect(cellForPick(null, "claude").cwd).toBeNull();
+    expect(cellForPick(null, "shell").cwd).toBeNull();
+  });
 });
