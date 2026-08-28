@@ -1064,8 +1064,14 @@ question, so the next question your session asks will already use the new settin
   this is on or off. The switch exists because a pane types into the terminal you are sitting at —
   and on the phone, nobody is at that keyboard.
 
-With the switch off the server publishes nothing at all, so a question never reaches the browser in
-the first place — the pane is not hidden, it has nothing to show.
+What the switch gates is the **offer**: with it off, a question is never sent to the browser, so the
+pane is not hidden — it has nothing to show, and no button could reveal it.
+
+The **close** is sent either way, and deliberately. Turning the switch off in the middle of a
+question would otherwise leave a pane that is already showing buttons with no way to learn the
+dialog had ended: pressing one would send Down and Enter into whatever prompt is underneath. A close
+for a question that was never offered does nothing, and it carries no question text, so this costs
+the off state nothing.
 
 ## Keyboard shortcuts (`keymap`) {#keymap}
 

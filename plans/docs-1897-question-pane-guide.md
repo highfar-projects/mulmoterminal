@@ -80,6 +80,28 @@ codex（2 度目）: 「開くのはこの 2 つだけ」は誤りで、**3 つ�
 すべて含み、しかもどれも `expandedSessionId` で守られているという実装そのものの形。
 「ページを再読み込みしても質問を失わない」という**読者にとっての意味**も同時に言える。
 
+### 3 巡目 —— 「何も publish しない」も絶対の言い方だった
+
+codex（3 度目）: 「OFF なら何も publish しない」は誤り。`shouldPublishQuestion` は
+
+```ts
+isAskQuestionDone(event) || paneEnabled
+```
+
+つまり**止まるのは「質問の提示」だけで、「閉じた」の通知は OFF でも流れる**。理由もコードに
+書いてあった:
+
+> Turning the switch off mid-dialog would otherwise **strand a pane that is already showing
+> buttons**: the dialog closes, nothing says so, and the next click sends Down/Enter into the
+> prompt underneath.
+
+**私の絶対の言い方が、この巡だけで 2 回目**（「開くのはこの 2 つだけ」に続いて）。どちらも
+「全部/何も」と書いて、例外が 1 つあった。**何が gate されているかを書く**形に直した ——
+gate されているのは提示であって、チャネル全体ではない。
+
+閉じた通知が**質問文を含まない**ことも書いた（`askQuestion.ts:77`）。OFF のままの人が
+「切っているのに何か流れているのか」と思わずに済む。
+
 ## 検証
 
 - 節がリンクするアンカー（`copy-on-select` / `keymap` / `question-pane` / `terminal-submit`）が
