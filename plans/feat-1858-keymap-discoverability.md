@@ -429,6 +429,22 @@ frontmatter と冒頭が「`keymap` / `copyOnSelect` / `terminalSubmit` の 3 �
 
 frontmatter に加え、冒頭の「All three settings」は数を言わない形にした。
 
+**そして次の巡で、その修正が半端だと指摘された（5 度目）。** frontmatter は 4 つ列挙したのに、
+同じ文の末尾が「the other **two** have a checkbox and a picker」のままだった。codex が残りの
+全箇所を名指ししてくれたので、まとめて掃いた:
+
+| 場所 | 直す前 |
+|---|---|
+| `SKILL.md` frontmatter 末尾 | 「the other two have a checkbox and a picker」 |
+| `docs/guide/{en,ja}/config.md` の skill 対応表 | `questionPaneEnabled` が無い |
+| 同 Terminal keys の行 | 質問ペインのチェックボックスが無い |
+| `TerminalKeysSection.vue` のコメント | 「The two key-behaviour settings」（実際は 3 つ描画している） |
+| この plan | 「frontmatter を直した」と書いていたが直り切っていなかった |
+
+**掃く過程で、`questionPaneEnabled` が設定ガイドに 1 行も無いことが分かった** —— UI にも skill にも
+`settings-coverage.spec.ts` にもあるのに、ガイドだけ空白。列挙の修正だけこの PR に入れ、節と
+全キー表への追加は [#1897](https://github.com/receptron/mulmoterminal/issues/1897) に分けた。
+
 ### ゲート
 
 `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0。

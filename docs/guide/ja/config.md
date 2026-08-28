@@ -55,7 +55,7 @@ description: MulmoTerminal の設定方法。設定モーダル、プロジェ�
 > | **`/mulmoterminal-dirs`** | プロジェクトの色・グリッドとランチャでの位置・名前バッジ・ターミナルの文字サイズ。実際に開いているディレクトリを母集団にし、既にある設定を読んでその規則を、まだ無いディレクトリにも適用します。（Settings → **Configure appearance…** はこれを起動します） |
 > | **`/mulmoterminal-theme`** | 自分の[配色](#custom-themes)を作る。Settings のテーマ選択に並びます（Settings → **Create a theme…**） |
 > | **`/mulmoterminal-header`** | [ヘッダーのボタンとチップ](#header)。global でもプロジェクト単位でも |
-> | **`/mulmoterminal-keys`** | [`keymap`](#keymap)・[`copyOnSelect`](#copy-on-select)・[`terminalSubmit`](#terminal-submit)（「Shift+Enter で改行ではなく送信されてしまう」の対処）（Settings → **Set up shortcuts…**） |
+> | **`/mulmoterminal-keys`** | [`keymap`](#keymap)・[`copyOnSelect`](#copy-on-select)・[`terminalSubmit`](#terminal-submit)（「Shift+Enter で改行ではなく送信されてしまう」の対処）・`questionPaneEnabled`（Settings → **Set up shortcuts…**） |
 > | **`/mulmoterminal-model`** | [`providers`](#providers)、プロジェクトごとのモデル、[`customAgents`](#custom-agents) |
 > | **`/mulmoterminal-notify`** | [どの瞬間に鳴らす・通知するか](#sounds)、それぞれ何を鳴らすか（Settings → **Configure notifications…**） |
 >
@@ -118,7 +118,7 @@ git チェックアウトならその横に `commit a1b2c3d` のチップが並�
 | **Directory settings** | 各ディレクトリの `.mulmoterminal.json` が**実際に何をしているか**。行を開くと、効いている値（色は見本付き）・**どのファイル由来か**・**検証で落ちたキー**・**このアプリが読まないキー**が出ます。読み取り専用 — 「Explain my settings…」で `mulmoterminal-config` スキルが同じものを読み、理由を説明して直します（→ [設定が効かないとき](#dir-settings-preview)） |
 | **Launch commands** | グリッドセルでエージェント以外に起動できるコマンド（`{ label, command }`）。素のシェルは登録不要 — ランチャの **Shell** トグルが無設定で `$SHELL` を開く |
 | **Header buttons and chips** | グローバル設定で宣言しているボタンとチップの数（読み取り専用）。未設定なら「built-in」。「Set up header buttons…」で `mulmoterminal-header` スキルを起動（→ [ヘッダーのカスタマイズ](#header)） |
-| **Terminal keys** | [選ぶだけでコピー](#copy-on-select)（`copyOnSelect`、既定 OFF）と、あなたの Claude が**送信**として読むバイト（[Enter — 送信と改行](#terminal-submit)、`terminalSubmit`） |
+| **Terminal keys** | [選ぶだけでコピー](#copy-on-select)（`copyOnSelect`、既定 OFF）、質問ペイン（`questionPaneEnabled`）、あなたの Claude が**送信**として読むバイト（[Enter — 送信と改行](#terminal-submit)、`terminalSubmit`） |
 | **Keyboard shortcuts** | 全アクションと `send` の行を、割り当ての有無にかかわらず並べる一覧（読み取り専用）。**既定は全部 Not set** — 「Set up shortcuts…」で `mulmoterminal-keys` スキルが `keymap` に書きます（→ [キーボードショートカット](#keymap)） |
 | **Voice input** | 音声入力で**話す言語**（ブラウザの言語 / 発話ごとの自動検出 / 固定）。文字起こしできるマシンでだけ表示されます |
 | **Models and backends** | セッションを動かせるバックエンドと、**今それぞれ到達できるか**（読み取り専用）。「Add a backend…」で `mulmoterminal-model` スキルを起動（→ [別のモデルで動かす](providers.html)） |

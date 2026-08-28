@@ -55,7 +55,7 @@ Settings live in three places: the **settings modal (Settings)**, the **global c
 > | **`/mulmoterminal-dirs`** | A project's colours, its position in the grid and launcher, name badge, terminal font size. Starts from the directories you actually open, reads what you already have, and follows the same pattern for the ones that have none. (Settings → **Configure appearance…** starts this one.) |
 > | **`/mulmoterminal-theme`** | Your own [colour scheme](#custom-themes), appearing in Settings' picker. (Settings → **Create a theme…**) |
 > | **`/mulmoterminal-header`** | [Header buttons and chips](#header), global or per project |
-> | **`/mulmoterminal-keys`** | [`keymap`](#keymap), [`copyOnSelect`](#copy-on-select), [`terminalSubmit`](#terminal-submit) — the fix for "Shift+Enter submits instead of adding a line". (Settings → **Set up shortcuts…**) |
+> | **`/mulmoterminal-keys`** | [`keymap`](#keymap), [`copyOnSelect`](#copy-on-select), [`terminalSubmit`](#terminal-submit) — the fix for "Shift+Enter submits instead of adding a line" — and `questionPaneEnabled`. (Settings → **Set up shortcuts…**) |
 > | **`/mulmoterminal-model`** | [`providers`](#providers), a per-project model, and [`customAgents`](#custom-agents) |
 > | **`/mulmoterminal-notify`** | [Which moments beep or push](#sounds), and what each plays. (Settings → **Configure notifications…**) |
 >
@@ -120,7 +120,7 @@ of the app is still English.
 | **Directory settings** | What each directory's `.mulmoterminal.json` is **actually doing**. Expand a row for the values in force (colors with a swatch), **which file each came from**, **keys dropped in validation**, and **keys this app never reads**. Read-only — "Explain my settings…" starts the `mulmoterminal-config` skill to say why and fix it (→ [When a setting isn't working](#dir-settings-preview)) |
 | **Launch commands** | Commands you can launch besides the agents in a grid cell (`{ label, command }`). A plain shell needs no entry — the launcher's **Shell** toggle opens `$SHELL` unconfigured |
 | **Header buttons and chips** | How many buttons and chips your global config declares, read-only — "built-in" when you have configured none. "Set up header buttons…" starts the `mulmoterminal-header` skill (→ [Customizing the header](#header)) |
-| **Terminal keys** | [Copy on select](#copy-on-select) (`copyOnSelect`, off) and which bytes your Claude reads as **submit** ([Enter — submit vs. newline](#terminal-submit), `terminalSubmit`) |
+| **Terminal keys** | [Copy on select](#copy-on-select) (`copyOnSelect`, off), the question pane (`questionPaneEnabled`), and which bytes your Claude reads as **submit** ([Enter — submit vs. newline](#terminal-submit), `terminalSubmit`) |
 | **Keyboard shortcuts** | Every action and the `send` row, bound or not, read-only. **Everything starts as Not set** — "Set up shortcuts…" starts the `mulmoterminal-keys` skill to bind them in `keymap` (→ [Keyboard shortcuts](#keymap)) |
 | **Voice input** | The language you **dictate in** (your browser's, per-clip detection, or a fixed one). Shown only on a machine that can transcribe |
 | **Models and backends** | The backends a session can run on and whether each can be **reached right now**, read-only. "Add a backend…" starts the `mulmoterminal-model` skill (→ [Using another model](providers.html)) |
