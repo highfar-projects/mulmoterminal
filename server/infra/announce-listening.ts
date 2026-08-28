@@ -117,7 +117,9 @@ export function notLocalhostReason(port: number, outcome: LoopbackOutcome): stri
   // reported as one — on an IPv4-only host that would accuse a stranger who does not exist.
   const lost = [outcome.v4 === "taken" ? `127.0.0.1:${port}` : null, outcome.v6 === "taken" ? `[::1]:${port}` : null].filter((entry) => entry !== null);
   if (lost.length === 0) return `[bind] not printing http://localhost:${port} — this machine has no loopback address this server could take.`;
-  return `[bind] not printing http://localhost:${port} — something else holds ${lost.join(" and ")}, and a browser resolving localhost would reach it under this app's saved settings.`;
+  // Says the same two things the launcher's note does, because a direct `npm run server` start has
+  // no launcher behind it and this is the only place its operator hears either of them.
+  return `[bind] not printing http://localhost:${port} — something else holds ${lost.join(" and ")}, and a browser resolving localhost would reach it under this app's saved settings. RemoteHost's Google sign-in works only on localhost (#1900).`;
 }
 
 export async function announceListening(

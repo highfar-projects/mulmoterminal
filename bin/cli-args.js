@@ -191,6 +191,20 @@ export function launcherUrl(reachHost, port) {
  * TOP-LEVEL visit to the old origin can see it. A URL that has to be stable is therefore cheaper
  * to keep stable than to migrate.
  *
+ * SECOND, INDEPENDENT reason, and the one this comment was missing: Firebase gates
+ * `signInWithPopup` on the CALLING PAGE'S ORIGIN, against the authorized-domain list of the
+ * project — and RemoteHost's Google sign-in is exactly that call
+ * (`src/components/RemoteHostControl.vue`, against `mulmoserver` in `common/firebaseConfig.ts`).
+ * Reported on #1900: that project authorizes `localhost` and NOT `127.0.0.1`, checked in the
+ * console on 2026-08-28, which is why phone pairing could not sign in on 4.11.0 and can on
+ * 4.12.0. Not verified here — this repo cannot read that project's settings.
+ *
+ * It matters because the two reasons fail INDEPENDENTLY. Someone who solves the storage half —
+ * moves the grid layout server-side, say — would read the paragraph above as the whole
+ * justification and be free to change this string, and the first thing to break would be a
+ * feature nothing in `bin/` mentions. Changing the URL means adding the new loopback address to
+ * that authorized-domain list first.
+ *
  * Reachability is not the reason it is safe; #1834 is. `server/infra/loopback-listener.ts` makes
  * this server serve `127.0.0.1` in EVERY configuration — as the primary bind, or as a second
  * listener when the operator widens it — because eight local callers write that address as a
@@ -224,6 +238,13 @@ export function browserUrl(port) {
  * IT, and otherwise say plainly that we stepped aside — including where their layout went, since
  * a silent switch here is #1889 all over again for that one user.
  *
+ * Stepping aside costs more than the layout, and the note says so: on `http://127.0.0.1:<port>`
+ * RemoteHost's Google sign-in is refused as well, because Firebase checks the page's origin
+ * against its authorized domains and that project lists `localhost` only (#1900). This branch is
+ * a real degradation of the app rather than a cosmetic change of address, and the second failure
+ * would otherwise be found only by trying to pair a phone — which is the shape of #1889 again,
+ * one feature further along.
+ *
  * The probe cannot close the window, only narrow it: `::1` is free when asked, and unless the
  * server binds it (a `::1` or `::` bind), a stranger could still take it afterwards. That is the
  * same probe/bind race `isPortFree` already documents and accepts.
@@ -236,7 +257,7 @@ export function launchTarget(reachHost, port, localhostIsUnambiguous) {
     const checked = launcherUrl(reachHost, port);
     return {
       url: checked,
-      note: `Something else is already listening on [::1]:${port}, so the browser is being sent to ${checked} — the address that was checked. If your layout and settings look empty, they are filed under http://localhost:${port}.`,
+      note: `Something else is already listening on [::1]:${port}, so the browser is being sent to ${checked} — the address that was checked. If your layout and settings look empty, they are filed under http://localhost:${port}, and the phone's Google sign-in works only there.`,
     };
   }
   const bound = reachHost === V4_LOOPBACK_CLIENTS_DIAL || reachHost === "::1";
