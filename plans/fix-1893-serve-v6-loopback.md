@@ -118,3 +118,69 @@ stranger REFUSED: EADDRINUSE
 **未検証** —— IPv6 を持たないマシン。`EADDRNOTAVAIL` の扱いは spec で固定してあるが実機は無い
 （macOS では `::1` を落とせない）。そこでは `localhost` は v4 のみに解決するので、listener が
 立たなくても失うものが無い、というのが設計上の主張。Windows / Linux も未実機（CI 任せ）。
+
+## レビュー iter-1 —— 「先に名乗って、あとから bind していた」
+
+CodeRabbit: 指摘なし。Codex: 1 回目 `LGTM`、同じ head で再実行したら
+`CHANGES REQUESTED`（同一コードで割れた）。内容は正しかった。
+
+> `server/index.ts`: startup publishes the `listening` IPC event before it requests the required
+> `::1` bind, leaving the localhost-origin takeover race open.
+
+**そのとおりだった。** `process.send({type:"listening"})` が `startLoopbackListeners` より前に
+あった。launcher はこのメッセージで banner を出しブラウザを開くので、**まだ我々のものでない
+アドレスへ招待していた**ことになる。「timing ではなく construction で所有する」という本 PR の
+主張が、その一点で成立していなかった。
+
+### 直し方 —— 2 つある
+
+**1. bind が済んでから名乗る。** `startLoopbackListeners` を await 可能にし、announcement は
+その後。`listen()` は `listening` か `error` のどちらか一方を必ず返す（第三の結末が無い）ので
+timeout は置かない —— マイクロ秒で終わるローカル syscall に上限秒数を決める根拠が無く、切れた
+ときにカーネルが今まさに返そうとしている答えを推測することしかできない。
+
+**2. 結果を launcher に伝える。** これが無いと 1 だけでは足りない。launcher の `::1` probe は
+**この process が存在する前**に走るので、**起動中に**横取りする相手を見られない。そこで
+`listening` メッセージに `v6LoopbackServed` を載せ、launcher は自分の probe と child の報告の
+**両方**が肯定したときだけ `localhost` を使う。フィールドが無い（古い child）ときは `undefined`
+で、probe だけの判断に戻る —— 「言わなかった」と「取れなかった」を別の答えとして保つため。
+
+`server/index.ts` が 600 行の上限を超えたので、announcement は
+`server/infra/announce-listening.ts` に切り出した。**順序が意味を持つコードを boot script に
+置いておくと、整理のつもりで動かされる。** 独立モジュールなら 2 手順と理由が 1 か所にある。
+
+### iter-1 の検証
+
+| ミューテーション | 結果 |
+|---|---|
+| bind を待たずに名乗る（= 指摘された挙動） | 2 red |
+| `v6LoopbackServed` を常に true にする | 1 red |
+| parent が disconnect していても送る | 1 red |
+
+**実機 A —— 順序**（既定 bind, port 34730）。ログ行番号で見て bind が banner より前:
+
+```
+15:[bind] also listening on ::1:34730 so http://localhost:<port> can only mean this server
+22:  ✓ MulmoTerminal is ready
+23:  → http://localhost:34730
+```
+
+**実機 B —— 起動中の横取り**（port 34731、launcher の probe が終わったあと 6 秒目で `::1` を
+別プロセスが取る）。この round より前なら launcher は `localhost` を開いていた:
+
+```
+[bind] could not also listen on ::1:34731 (EADDRINUSE) — the browser opens http://localhost:<port> …
+  → http://127.0.0.1:34731
+[mulmoterminal] Something else is already listening on [::1]:34731, so the browser is being sent to
+http://127.0.0.1:34731 … they are filed under http://localhost:34731.
+```
+
+サーバは通常どおり起動（`127.0.0.1` = 200）。2 層が同じ状況について食い違わずに話す。
+
+ゲート再実行: `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0、
+`yarn test` **11593 passed / 50 skipped**。
+
+> `test/bin/probe-bind-host.spec.ts` の source-text ガードが `beginReady(reported)` を閉じ括弧
+> ごと固定していて、引数が増えて red になった。**欠陥ではなく guard の脆さ**で、そのすぐ上の
+> コメントが「この guard は 2 度それで壊れた」と警告していた（今回で 3 度目）。第 1 引数だけを
+> 見る形に緩め、何を守っているのかを書き足した。

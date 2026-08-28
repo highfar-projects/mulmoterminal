@@ -98,6 +98,20 @@ export interface LoopbackPlan {
  *  `browser`: the user's browser is sent to `localhost`, which prefers `::1` (#1889). */
 export type LoopbackReason = "sessions" | "browser";
 
+/** What the caller has to know once the extra listeners have been attempted. */
+export interface LoopbackOutcome {
+  /**
+   * Whether this server answers on `::1` — either because the primary bind already did, or
+   * because the extra listener took it.
+   *
+   * It exists to be REPORTED, not just logged. The launcher decides whether to send the browser
+   * to `localhost`, and until this was reported it decided from a probe taken BEFORE the server
+   * existed — so a process that claimed `[::1]:<port>` during the boot was invisible to it, and
+   * the browser went to that process under this app's origin (Codex, PR #1903).
+   */
+  v6LoopbackServed: boolean;
+}
+
 const WARNING_TEXT: Record<LoopbackReason, string> = {
   sessions: "this machine's own sessions reach the server over loopback, so hooks and the GUI MCP will fail until it is free.",
   browser:
@@ -160,13 +174,23 @@ const START_TEXT: Record<LoopbackReason, string> = {
   browser: "so http://localhost:<port> can only mean this server",
 };
 
-function startOne(loopback: LoopbackListener, plan: LoopbackPlan, port: string | number): void {
-  loopback.once("error", (err: NodeJS.ErrnoException) => {
-    if (plan.inUseIsFine && err.code === "EADDRINUSE") return;
-    console.warn(`\x1b[33m[bind]\x1b[0m could not also listen on ${plan.address}:${port} (${err.code ?? err.message}) — ${WARNING_TEXT[plan.reason]}`);
-  });
-  loopback.listen(Number(port), plan.address, () => {
-    console.log(`[bind] also listening on ${plan.address}:${port} ${START_TEXT[plan.reason]}`);
+/** Resolves true when this listener took its address, false when it could not.
+ *
+ *  `listen()` answers with exactly one of `listening` or `error` — there is no third outcome and
+ *  so no timeout here. A cap would have to choose a duration for a local syscall that takes
+ *  microseconds, and on expiry it could only guess at an answer the kernel is about to give. */
+function startOne(loopback: LoopbackListener, plan: LoopbackPlan, port: string | number): Promise<boolean> {
+  return new Promise((resolve) => {
+    loopback.once("error", (err: NodeJS.ErrnoException) => {
+      if (!(plan.inUseIsFine && err.code === "EADDRINUSE")) {
+        console.warn(`\x1b[33m[bind]\x1b[0m could not also listen on ${plan.address}:${port} (${err.code ?? err.message}) — ${WARNING_TEXT[plan.reason]}`);
+      }
+      resolve(false);
+    });
+    loopback.listen(Number(port), plan.address, () => {
+      console.log(`[bind] also listening on ${plan.address}:${port} ${START_TEXT[plan.reason]}`);
+      resolve(true);
+    });
   });
 }
 
@@ -184,14 +208,21 @@ function startOne(loopback: LoopbackListener, plan: LoopbackPlan, port: string |
  * a wiring mistake rather than a runtime condition, and it would otherwise drop a listener in
  * silence, so it says so.
  */
-export function startLoopbackListeners(primary: PrimaryListener, spares: readonly LoopbackListener[], port: string | number): void {
+export async function startLoopbackListeners(primary: PrimaryListener, spares: readonly LoopbackListener[], port: string | number): Promise<LoopbackOutcome> {
   const plans = loopbackListenPlans(primary.address());
-  plans.forEach((plan, i) => {
-    const spare = spares[i];
-    if (spare === undefined) {
-      console.warn(`\x1b[33m[bind]\x1b[0m no spare server for ${plan.address}:${port} — ${WARNING_TEXT[plan.reason]}`);
-      return;
-    }
-    startOne(spare, plan, port);
-  });
+  const results = await Promise.all(
+    plans.map((plan, i) => {
+      const spare = spares[i];
+      if (spare === undefined) {
+        console.warn(`\x1b[33m[bind]\x1b[0m no spare server for ${plan.address}:${port} — ${WARNING_TEXT[plan.reason]}`);
+        return Promise.resolve(false);
+      }
+      return startOne(spare, plan, port);
+    }),
+  );
+  // No v6 plan means the PRIMARY already answers there — served, with nothing to take. A plan that
+  // failed is the only way this is false, and it is the case the launcher must not send a browser
+  // to `localhost` into.
+  const v6 = plans.findIndex((plan) => plan.address === V6_LOOPBACK);
+  return { v6LoopbackServed: v6 === -1 || results[v6] === true };
 }

@@ -32,7 +32,7 @@ import { bindSecurityWarning, browserOriginHostnames, createIsAllowedOrigin } fr
 import { serverErrorExit } from "./infra/server-exit.js";
 import { PORT, BIND_HOST, CLAUDE_CWD, MULMOTERMINAL_HOME, SESSION_ID_RE } from "./config/env.js";
 import { boundAddress, isLoopbackBinding } from "./infra/loopback.js";
-import { startLoopbackListeners } from "./infra/loopback-listener.js";
+import { announceListening } from "./infra/announce-listening.js";
 import { messageOf } from "./errors.js";
 import { hookSettingsJson } from "./session/hook-settings.js";
 import { mcpConfigJson } from "./session/mcp-config.js";
@@ -967,32 +967,12 @@ server.on("error", (err) => {
 // takes a number — the (port, cb) form we used before accepted either.
 server.listen(Number(PORT), BIND_HOST, () => {
   console.log(`mulmoterminal running at http://localhost:${PORT}`);
-  // The dev supervisor (scripts/dev-server.mjs) resets its crash count on THIS, not on how long
-  // the process lived. Everything above runs before the bind and can take any amount of time, so
-  // elapsed time never proved the port was reached — which is how a slow crash loop stayed
-  // invisible (#1735).
-  //
-  // Three guards, and none is decoration. `process.send` is undefined unless a parent opened an
-  // IPC channel, so this is a no-op under `npx mulmoterminal`. `process.connected` is the one
-  // that matters: after the parent disconnects, `send` STAYS a function, and calling it raises
-  // ERR_IPC_CHANNEL_CLOSED **asynchronously** — measured, it lands as an uncaughtException and
-  // kills the process, so neither `?.` nor a try/catch stops it. That is reachable: Ctrl+C on the
-  // supervisor while this server is still in its ~3s of setup. The callback catches the same
-  // error for a channel that closes between the check and the write.
-  // The ADDRESS goes with it, not just the port, and that is what stops the launcher guessing.
-  // `BIND_HOST` can be a NAME — `localhost` resolves to `::1` here and `127.0.0.1` elsewhere —
-  // and a launcher that guesses wrong polls a stranger and calls it ready (#1876). Only this
-  // process knows what it actually bound. Additive: the dev supervisor keys on `type` alone.
-  if (process.connected) process.send?.({ type: "listening", port: Number(PORT), address: boundAddress(server.address()) }, undefined, undefined, () => {});
+  // Takes the loopback addresses this bind did not, and only then tells the parent — the order,
+  // the guards on the send and the reason each field is on the wire are all in that module.
+  void announceListening(server, loopbackServers, Number(PORT), boundAddress(server.address()), process);
   if (!isLoopbackBinding(server.address())) {
     console.warn(bindSecurityWarning(BIND_HOST, PORT, browserHostnames));
   }
-  // Unconditional, and NOT folded into the branch above: the two ask different questions. That
-  // one is "is this exposed?" — true for a specific LAN address, false for `::1`. This one is
-  // "can our own sessions still reach us?" — false for BOTH, because a server on `::1` refuses a
-  // client dialing 127.0.0.1. Gating this on the warning left `MULMOTERMINAL_HOST=localhost`
-  // broken, which is how that wiring mistake showed up here.
-  startLoopbackListeners(server, loopbackServers, PORT);
   const surviving = tmuxAvailable() ? tmuxListSessionIds() : [];
   const reaped: string[] = [];
   if (tmuxAvailable()) {
