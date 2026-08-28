@@ -59,8 +59,13 @@ const V6_WILDCARD = "::";
  *
  *  And the SAME argument rules out the rest of 127/8. This asked `isLoopbackAddress(address) &&
  *  !address.includes(":")`, which said yes to `127.0.0.2` — but a server bound there refuses
- *  127.0.0.1 exactly as the `::1` one does, so no secondary listener was planned and local
- *  clients could reach nothing at all. Only the literal address answers for itself. */
+ *  127.0.0.1 exactly as the `::1` one does, so no secondary listener was planned and the clients
+ *  that dial the FIXED endpoint could not reach it. Only the literal address answers for itself.
+ *
+ *  Scoped deliberately: something dialing `127.0.0.2` would be served fine. What breaks is the
+ *  side that writes the address as a literal, which is every GUI MCP client. Whether such an
+ *  address can be bound at all is a separate, platform-dependent question — macOS carries only
+ *  127.0.0.1 on lo0, Linux the whole block — while the address MATCHING above is neither. */
 const servesV4Loopback = (address: string): boolean => address === V4_LOOPBACK;
 
 export interface LoopbackPlan {
