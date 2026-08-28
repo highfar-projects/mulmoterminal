@@ -24,12 +24,17 @@ So look first, then offer:
 1. **Read what is already there** — `~/.mulmoterminal/config.json`. Say what is bound now (or that
    nothing is), so the proposal is about what is missing.
 
-   **Reading it is not enough — check it against what you are about to offer.** An ACTION bound to
-   a keystroke beats a `send` on the same one and the `send` silently never fires, so a `send`
-   proposed onto an already-bound keystroke is a change the user accepts and never sees work.
-   Before offering the macOS set, look for an action on `Cmd+ArrowLeft`, `Cmd+ArrowRight` or
-   `Cmd+Backspace`. If one is there, say so and ask whether to move the action, rather than writing
-   an entry that cannot run.
+   **Reading it is not enough — check it against what you are about to offer.** There are two ways
+   a proposed `send` can be accepted by the user and then never fire, and both are silent:
+
+   | what is already on the keystroke | what happens | what to do |
+   |---|---|---|
+   | an **action** | the action wins — the grid claims the key in the capture phase | say so, and ask whether to move the action |
+   | an existing **`send`** | the **earlier entry** wins, because `sendBytesFor` takes the first match | update that entry, never append a second |
+
+   So before offering the macOS set, look for **both kinds** on `Cmd+ArrowLeft`, `Cmd+ArrowRight`
+   and `Cmd+Backspace`. Validation only *warns* about a duplicate claim, so nothing downstream
+   will stop you.
 2. **Guess the platform, and say the guess out loud.** `uname` tells you the machine the SERVER
    runs on — but the keys are pressed in a **browser**, which may be somewhere else: a Mac
    connecting to a Linux host still has a Cmd key, and a Linux desktop pointed at a Mac host does
@@ -167,9 +172,9 @@ already understands from a key the keyboard has; on Linux and Windows `Ctrl+A` a
 directly typeable, so there is no gap to close unprompted. Off macOS, mention `send` and wait for a
 key they name.
 
-The macOS set costs nothing, which is what makes offering it safe — **provided no action is already
-bound to those three keystrokes** (step 1); an action wins and the `send` would never fire. Those
-three keystrokes reach the
+The macOS set costs nothing, which is what makes offering it safe — **provided nothing is already
+on those three keystrokes**, neither an action nor an earlier `send` (step 1); either one wins and
+the new entry would never fire. Those three keystrokes reach the
 terminal today as the **bare** arrow or Delete, because the Cmd is dropped. Binding them takes away
 a keystroke nobody was using.
 

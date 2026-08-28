@@ -327,6 +327,19 @@ codex CI（round 12）が `CHANGES REQUESTED`:
 
 手順 1 に衝突チェックを追加し、スターターセットの「costs nothing」にも条件を付けた。
 
+**そして次の巡で、2 人のレビュアーが独立に同じ穴を指摘した** —— 私が足したチェックは**アクション
+だけ**を見ていて、**既存の `send`** を見ていなかった。`sendBytesFor` は先勝ちなので
+（`common/keymap.ts`: *"First match wins, so a keystroke listed twice uses the earlier entry."*）、
+既存 `send` の後ろに足すと**新しい方が永久に発火しない**。しかも検証は duplicate を warn する
+だけで止めない。
+
+黙って失敗する経路が 2 つあるので、表にした:
+
+| キーストロークに既にあるもの | 何が起きるか | どうするか |
+|---|---|---|
+| **アクション** | アクションが勝つ（capture フェーズで奪う） | 言って、アクションを移すか聞く |
+| 既存の **`send`** | **先に書かれた方**が勝つ | そのエントリを更新する。2 つ目を足さない |
+
 ### ゲート
 
 `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0。
