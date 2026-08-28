@@ -29,7 +29,9 @@ interface Frontmatter {
 
 const frontmatterOf = (skill: string): Frontmatter => {
   const text = readFileSync(join(SKILLS_DIR, skill, "SKILL.md"), "utf8");
-  const match = /^---\n([\s\S]*?)\n---/.exec(text);
+  // The closing `---` is anchored to its own line: unanchored, `---invalid` matched and the
+  // check would have validated a prefix of malformed frontmatter (CodeRabbit on #1892).
+  const match = /^---\n([\s\S]*?)\n---(?:\n|$)/.exec(text);
   if (!match?.[1]) throw new Error(`${skill}/SKILL.md has no --- frontmatter block`);
   const lines = match[1].split("\n").filter((line) => line.trim() !== "");
   const fields = new Map<string, string>();

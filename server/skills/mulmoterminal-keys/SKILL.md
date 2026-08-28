@@ -205,11 +205,15 @@ already understands from a key the keyboard has; on Linux and Windows `Ctrl+A` a
 directly typeable, so there is no gap to close unprompted. Off macOS, mention `send` and wait for a
 key they name.
 
-The macOS set costs nothing, which is what makes offering it safe — **provided nothing is already
-on those three keystrokes**, neither an action nor an earlier `send` (step 1); either one wins and
-the new entry would never fire. Those three keystrokes reach the
-terminal today as the **bare** arrow or Delete, because the Cmd is dropped. Binding them takes away
-a keystroke nobody was using.
+**It is a change, not a free addition** — say so before writing it. Those three keystrokes are not
+dead today: the Cmd is dropped and the **bare** arrow or Delete gets through, so `Cmd+Left` moves
+one character and `Cmd+Delete` erases one. The binding replaces that with line motion, which is the
+point, and is also why the user confirms first.
+
+What makes it safe to *offer* unprompted is that nothing is lost — the behaviour being replaced is
+the one the user is complaining about. **Provided nothing is already on those three keystrokes**,
+neither an action nor an earlier `send` (step 1); either one wins and the new entry would never
+fire.
 
 **Two that look like obvious additions and are not:**
 
