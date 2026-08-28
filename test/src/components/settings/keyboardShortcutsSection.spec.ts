@@ -104,4 +104,15 @@ describe("in Japanese", () => {
     expect(row).toContain("ターミナル");
     expect(row).toContain("未設定");
   });
+
+  // The English intro is pinned above; without this the Japanese one could be reverted to the
+  // config-file wording with every test still green — half a fix shipping as a whole one, which is
+  // the shape of the bug this PR is about.
+  it("points a Japanese reader at the button too, not at the config file", () => {
+    i18n.global.locale.value = "ja";
+
+    const text = sectionWith({}).text();
+    expect(text).not.toContain("~/.mulmoterminal/config.json");
+    expect(text).toContain("下のボタン");
+  });
 });

@@ -411,6 +411,24 @@ grep -rniE "running in (the|your) (cell|terminal)|already uses|what your agent" 
 | 3 | SKILL の Arrows 警告 | 両ガイドの Arrows 節 | 別ファイルまで見なかった |
 | 4 | 誇張を 5 箇所 | spec のコメント | **完全一致で grep した** |
 
+### 日本語の intro が退行してもテストが赤くならなかった（ローカル codex、P3）
+
+en の intro は `toContain("button below")` と `not.toContain("~/.mulmoterminal/config.json")` で
+pin していたが、**ja は placeholder の行しか見ていなかった**。つまり **ja の intro だけを元の
+「設定ファイルを編集しろ」に戻しても全テストが緑**だった —— *半分だけ直したものが、直ったものとして
+出荷される*形で、この PR が扱っているバグと同じ形。
+
+ja にも同じ 2 つを pin した。break-verify: **ja の intro だけを戻すと 1 red**（復元は
+byte-identical）。
+
+### skill が持つ設定は 3 つではなく 4 つだった
+
+frontmatter と冒頭が「`keymap` / `copyOnSelect` / `terminalSubmit` の 3 つ」と書いていたが、
+同じ skill は `questionPaneEnabled` の節も持っており、**`test/server/config/settings-coverage.spec.ts`
+がその設定をこの skill に割り当てている**（`questionPaneEnabled: { ui: true, skill: "mulmoterminal-keys" }`）。
+
+frontmatter に加え、冒頭の「All three settings」は数を言わない形にした。
+
 ### ゲート
 
 `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0。
