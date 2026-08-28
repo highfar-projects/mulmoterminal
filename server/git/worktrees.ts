@@ -322,10 +322,11 @@ export async function createWorktree(
   return serializeCreate(async () => {
     const branch = await uniqueBranch(repo, stem, root);
     const dir = path.join(root, worktreeDirName(branch));
-    // --relative-paths: required for `devcontainer up --mount-git-worktree-common-dir` to work
-    // later (see config/devcontainer-flag.ts) — that flag needs the worktree's .git file to point
-    // at the common dir with a relative path, not an absolute host path a container can't resolve.
-    const res = await git(["worktree", "add", "--relative-paths", "-b", branch, dir, start], repo);
+    // Deliberately absolute (not --relative-paths): the worktree's .git file ends up pointing at
+    // repo/.git/worktrees/<branch> as a literal absolute host path, which resolves correctly
+    // inside a devcontainer regardless of that project's own workspaceFolder/workspaceMount — see
+    // worktreeRepoRootMount below for why a relative pointer can't make the same promise.
+    const res = await git(["worktree", "add", "-b", branch, dir, start], repo);
     if (!res.ok) return null;
     await adoptParentDirConfig(repo, dir);
     // AFTER the config is adopted — the declaration this reads is the one just written — and here
@@ -335,6 +336,28 @@ export async function createWorktree(
     await ensureWorktreeEnv(dir);
     return { path: dir, branch, hasDevcontainer: hasDevcontainerConfig(dir) };
   });
+}
+
+// A `--mount` argument for `devcontainer up` (see config/devcontainer-flag.ts) that puts the repo
+// root a worktree's `.git` file points back to (the parent of `git rev-parse --git-common-dir`)
+// at the same path inside the container as on the host. null for a plain checkout (not a linked
+// worktree) — there the workspace folder already contains its own .git, nothing extra to mount.
+//
+// Only works because the worktree's `.git` pointer is absolute (see createWorktree above): an
+// absolute pointer only needs the repo root mounted at an identical path, independent of wherever
+// the target's own devcontainer.json puts workspaceFolder/workspaceMount. The devcontainer CLI's
+// own `--mount-git-worktree-common-dir` looks like the built-in way to do this, but it only
+// resolves a *relative* `.git` pointer against wherever the worktree itself lands inside the
+// container — and silently produces a bogus path once that location is too shallow to satisfy the
+// traversal (e.g. a devcontainer.json with `workspaceFolder: "/workspace/foo"`), so any git
+// command run inside the container then fails with "not a git repository".
+export async function worktreeRepoRootMount(workspaceFolder: string): Promise<string | null> {
+  const res = await git(["rev-parse", "--path-format=absolute", "--git-common-dir"], workspaceFolder);
+  if (!res.ok) return null;
+  const commonDir = res.stdout.trim();
+  const repoRoot = commonDir.endsWith("/.git") ? commonDir.slice(0, -".git".length - 1) : commonDir;
+  if (repoRoot === workspaceFolder) return null;
+  return `type=bind,source=${repoRoot},target=${repoRoot}`;
 }
 
 // Remove a managed worktree (and prune), optionally deleting its branch. Refuses a

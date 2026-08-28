@@ -209,7 +209,7 @@ function sessionProgram(
   if (devcontainer.enabled) {
     return {
       file: "devcontainer",
-      prefixArgs: ["exec", "--workspace-folder", devcontainer.cwd, "--mount-git-worktree-common-dir", inner.file, ...inner.prefixArgs],
+      prefixArgs: ["exec", "--workspace-folder", devcontainer.cwd, inner.file, ...inner.prefixArgs],
       spawnEnv: env,
       note,
     };

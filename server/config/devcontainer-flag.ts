@@ -12,6 +12,7 @@ import path from "node:path";
 import { DIR_LOCAL_CONFIG_FILE } from "./dir-config.js";
 import { readJsonFile } from "../infra/read-text-file.js";
 import { isRecord } from "../../common/isRecord.js";
+import { worktreeRepoRootMount } from "../git/worktrees.js";
 
 /** Whether `dir` has a devcontainer config, checked the same way the `devcontainer` CLI itself
  *  resolves one (`.devcontainer/devcontainer.json`, else `.devcontainer.json`). */
@@ -25,13 +26,19 @@ export function hasDevcontainerConfig(dir: string): boolean {
 // that hasn't finished in 10 minutes is not going to next second either.
 const DEVCONTAINER_UP_TIMEOUT_MS = 10 * 60_000;
 
-/** Runs `devcontainer up` for the worktree at `dir`. `--mount-git-worktree-common-dir` is required
- *  because `dir` is a git worktree (created with `--relative-paths`, see worktrees.ts) rather than
- *  a plain clone — without it the container can't do git operations against the shared `.git`. */
-export function runDevcontainerUp(dir: string): Promise<{ ok: boolean; output: string }> {
+/** Runs `devcontainer up` for the worktree at `dir`. Needs an explicit `--mount` for the repo root
+ *  `dir`'s `.git` file points back to (see worktreeRepoRootMount) because the workspace folder is
+ *  a git worktree, not a plain clone — without it the container can't do git operations against
+ *  the shared `.git`. Not `--mount-git-worktree-common-dir`: that only resolves a *relative* `.git`
+ *  pointer against wherever the worktree lands inside the container, and silently breaks once the
+ *  target's own devcontainer.json puts workspaceFolder somewhere too shallow for the traversal —
+ *  worktreeRepoRootMount's absolute-pointer approach doesn't have that failure mode. */
+export async function runDevcontainerUp(dir: string): Promise<{ ok: boolean; output: string }> {
+  const mount = await worktreeRepoRootMount(dir);
+  const args = ["up", "--workspace-folder", dir, ...(mount ? ["--mount", mount] : [])];
   return new Promise((resolve) => {
     // eslint-disable-next-line sonarjs/no-os-command-from-path -- 'devcontainer' is a standard tool from PATH, same convention as git() in worktrees.ts; all inputs go through argv (no shell)
-    const child = spawn("devcontainer", ["up", "--workspace-folder", dir, "--mount-git-worktree-common-dir"], {
+    const child = spawn("devcontainer", args, {
       stdio: ["ignore", "pipe", "pipe"],
       timeout: DEVCONTAINER_UP_TIMEOUT_MS,
     });
