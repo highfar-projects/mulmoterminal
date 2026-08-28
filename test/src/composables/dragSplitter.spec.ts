@@ -25,7 +25,8 @@ const start = (el: HTMLElement, handler: (e: PointerEvent) => void, clientX: num
   el.removeEventListener("pointerdown", listener);
 };
 
-const move = (clientX: number) => window.dispatchEvent(new PointerEvent("pointermove", { clientX, bubbles: true }));
+const move = (clientX: number, pointerId = 7) => window.dispatchEvent(new PointerEvent("pointermove", { clientX, pointerId, bubbles: true }));
+const end = (type: string, pointerId = 7) => window.dispatchEvent(new PointerEvent(type, { pointerId, bubbles: true }));
 
 const drag = (over: { size: number }, remember = vi.fn()) => ({
   remember,
@@ -69,7 +70,7 @@ describe("dragSplitter", () => {
     start(el, dragSplitter(spec), 100, 7);
     move(160);
 
-    window.dispatchEvent(new PointerEvent(ending, { pointerId: 7, bubbles: true }));
+    end(ending);
 
     expect(held.has(7)).toBe(false);
     expect(remember).toHaveBeenCalledWith("pane-width", "460");
@@ -85,7 +86,7 @@ describe("dragSplitter", () => {
     start(el, dragSplitter(spec), 100);
     [120, 140, 160].forEach(move);
     expect(remember).not.toHaveBeenCalled();
-    window.dispatchEvent(new PointerEvent("pointerup", { pointerId: 7, bubbles: true }));
+    end("pointerup");
     expect(remember).toHaveBeenCalledTimes(1);
   });
 
@@ -95,10 +96,39 @@ describe("dragSplitter", () => {
     const { spec } = drag({ size: 400 });
     const { el } = separator();
     start(el, dragSplitter(spec), 100);
-    window.dispatchEvent(new PointerEvent("pointerup", { pointerId: 7, bubbles: true }));
+    end("pointerup");
 
     const names = (calls: [string, ...unknown[]][]) => calls.map(([name]) => name).sort();
     expect(names(added.mock.calls)).toEqual(["pointercancel", "pointermove", "pointerup"]);
     expect(names(removed.mock.calls)).toEqual(["pointercancel", "pointermove", "pointerup"]);
+  });
+  // CodeRabbit, on this PR, and independently while reading the diff: subscribing to
+  // `pointercancel` is what makes a SECOND pointer able to end a drag it has nothing to do with —
+  // the browser cancels a stray finger on its own during a scroll.
+  it.each(["pointerup", "pointercancel"])("ignores another pointer's %s", (ending) => {
+    const state = { size: 400 };
+    const remember = vi.fn();
+    const { spec } = drag(state, remember);
+    const { el, held } = separator();
+    start(el, dragSplitter(spec), 100, 7);
+    move(160);
+
+    end(ending, 9);
+
+    expect(remember).not.toHaveBeenCalled();
+    expect(held.has(7)).toBe(true);
+    move(200);
+    expect(state.size).toBe(500);
+  });
+
+  it("ignores another pointer's moves", () => {
+    const state = { size: 400 };
+    const { spec } = drag(state);
+    const { el } = separator();
+    start(el, dragSplitter(spec), 100, 7);
+    move(160, 9);
+    expect(state.size).toBe(400);
+    move(160, 7);
+    expect(state.size).toBe(460);
   });
 });

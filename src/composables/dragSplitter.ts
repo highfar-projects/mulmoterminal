@@ -29,10 +29,18 @@ export function dragSplitter(spec: SplitterDrag): (e: PointerEvent) => void {
     // these listeners whatever they pass over.
     const separator = e.currentTarget instanceof Element ? e.currentTarget : null;
     separator?.setPointerCapture(e.pointerId);
-    const onMove = (ev: PointerEvent) => spec.resize(start, spec.axis(ev) - origin);
+    // Only THIS pointer steers the drag. A second touch or pen is a separate pointer whose
+    // events still bubble here, and subscribing to `pointercancel` above is what makes that
+    // reachable: a stray finger cancelled by the browser's own scrolling would otherwise end a
+    // drag the user is still making.
+    const mine = (ev: PointerEvent) => ev.pointerId === e.pointerId;
+    const onMove = (ev: PointerEvent) => {
+      if (mine(ev)) spec.resize(start, spec.axis(ev) - origin);
+    };
     // `pointercancel` ends it too: a captured pointer that is cancelled sends no `pointerup`,
     // which would strand the drag the same way.
-    const onEnd = () => {
+    const onEnd = (ev: PointerEvent) => {
+      if (!mine(ev)) return;
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onEnd);
       window.removeEventListener("pointercancel", onEnd);

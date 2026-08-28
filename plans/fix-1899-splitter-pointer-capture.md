@@ -47,6 +47,12 @@ Files ペインには iframe の左にファイル一覧の列があるので上
 `pointercancel` でも終了させる —— **キャプチャ中のポインタがキャンセルされると `pointerup` は
 飛んでこない**ので、これが無いと同じ形でドラッグが取り残される。
 
+**このドラッグを操れるのはこのポインタだけ**にした（`pointerId` で `pointermove` /
+`pointerup` / `pointercancel` を選別）。2 本目のタッチやペンは別ポインタで、そのイベントも
+`window` に上がってくる。**`pointercancel` を購読したこと自体がこれを到達可能にする** ——
+ブラウザは自分のスクロール判定で無関係な指をキャンセルするので、選別が無いと
+「ユーザーがまだドラッグ中なのに終了する」経路が新しく生まれる。
+
 あわせて `dragSplitter` を `src/composables/dragSplitter.ts` へ切り出した。バグの規則を
 それ自身のファイルの関数にしてテスト可能にするため（`remember` だけ注入）。**本体は逐語で移動**。
 
@@ -76,13 +82,13 @@ base は `838184c7`（当時の `origin/main`）。そこから分岐した本�
 
 3 本すべての分割バーを実機で駆動（切り出し後のビルド）:
 
-```
+```text
 Resize the roster:          360 -> 480 (drag) -> 480 (release) -> 480 (button UP)  OK
 Resize side pane:           480 -> 589 (drag) -> 589 (release) -> 589 (button UP)  OK
 Resize the thumbnail strip: 150 -> 230 (drag) -> 230 (release) -> 230 (button UP)  OK
 ```
 
-## break-verify（`test/src/composables/dragSplitter.spec.ts`、6 件）
+## break-verify（`test/src/composables/dragSplitter.spec.ts`、9 件）
 
 各回のあと pristine と `diff -q` で byte-identical 復元を確認:
 
@@ -93,6 +99,8 @@ Resize the thumbnail strip: 150 -> 230 (drag) -> 230 (release) -> 230 (button UP
 | キャプチャを解放しない | **2 red** |
 | `pointermove` を外し忘れる | **3 red** |
 | 移動のたびに `remember` する | **2 red** |
+| `onEnd` の `pointerId` 選別を外す | **2 red** |
+| `onMove` の `pointerId` 選別を外す | **1 red** |
 
 ## jsdom には pointer capture が無い
 
@@ -104,4 +112,4 @@ Resize the thumbnail strip: 150 -> 230 (drag) -> 230 (release) -> 230 (button UP
 
 ## ゲート
 
-`format` / `lint` / `typecheck` / `build` / `test` すべて exit **0**、**11621 tests pass**（+6）。
+`format` / `lint` / `typecheck` / `build` / `test` すべて exit **0**、**11624 tests pass**（+9）。
