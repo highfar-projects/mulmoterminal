@@ -367,8 +367,13 @@ describe("the launcher asks the child rather than classifying BIND_HOST", () => 
     expect(launcher).toMatch(/launcherReachHost\(msg\.address\)/);
   });
 
+  // Anchored on the FIRST argument only. `beginReady` grew a second one (the child's own report
+  // about `::1`, #1903) and a closed `\)` made this go red for a reason that was not a defect —
+  // which is the third time this guard has done that, and exactly what the note above warns of.
+  // What it is actually about is that the poll starts from the RESOLVED address, so that is all
+  // it now pins.
   it("starts the readiness check from that resolved address", () => {
-    expect(launcher).toMatch(/beginReady\(reported\)/);
+    expect(launcher).toMatch(/beginReady\(reported\b/);
   });
 
   // The fallback prefers the address the PROBE learned from the kernel, and never passes a raw

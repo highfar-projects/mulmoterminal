@@ -478,16 +478,23 @@ function runServer(port, probedAddress, localhostIsUnambiguous, noOpen, cwd, onC
     // binding — that is #1876's fix and it stays. The URL asks "where does this user's browser
     // keep its state", and the only answer that does not empty the app is the one it has always
     // been given: see browserUrl.
-    const beginReady = (reachHost) => {
+    // `serverSaysLocalhostIsOurs` is the child's own report and OUTRANKS the probe when present.
+    // The probe ran before the child existed, so it cannot see a process that claimed EITHER
+    // loopback during the boot — only the child knows how its own binds went (Codex, PR #1903).
+    // `undefined` means the child said nothing about it, and then the probe is all there is.
+    const beginReady = (reachHost, serverSaysLocalhostIsOurs) => {
       if (readyStarted) return;
       readyStarted = true;
-      const { url, note } = launchTarget(reachHost, port, localhostIsUnambiguous);
+      const localhostIsOurs = localhostIsUnambiguous && serverSaysLocalhostIsOurs !== false;
+      const { url, note } = launchTarget(reachHost, port, localhostIsOurs);
       cancelReady = waitUntilReady(port, () => announceReady(url, note, noOpen), { host: reachHost });
     };
     server.on("message", (msg) => {
       if (!isRecordLike(msg) || msg.type !== "listening" || typeof msg.address !== "string") return;
       const reported = launcherReachHost(msg.address);
-      if (reported) beginReady(reported);
+      // Absent rather than false when the field is missing, so "an older child said nothing" and
+      // "this child could not take it" stay different answers.
+      if (reported) beginReady(reported, typeof msg.localhostIsOurs === "boolean" ? msg.localhostIsOurs : undefined);
     });
     // The fallback runs ONLY on an address we can name without asking anyone. Guessing from a
     // NAME is what the child's report exists to replace, and a fallback that guessed anyway just
@@ -499,7 +506,8 @@ function runServer(port, probedAddress, localhostIsUnambiguous, noOpen, cwd, onC
     // into something connectable; BIND_HOST is the last resort and returns null for a name.
     const guessed = probedAddress ? launcherReachHost(probedAddress) : launcherReachHost(BIND_HOST);
     const fallbackReady = setTimeout(() => {
-      if (guessed) return beginReady(guessed);
+      // No report, so no v6 answer either — the probe is all this path ever had.
+      if (guessed) return beginReady(guessed, undefined);
       if (!readyStarted)
         log(`Started, but ${BIND_HOST} is a name and the server has not reported which address it bound — not guessing. It may still be starting.`);
     }, REPORTED_ADDRESS_GRACE_MS);
