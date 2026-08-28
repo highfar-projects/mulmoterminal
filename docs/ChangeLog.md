@@ -8,6 +8,14 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.12.0 — 2026-08-28
+
+> **Setup guide:** [The launch panel, and getting your grid back](https://receptron.github.io/mulmoterminal/guide/en/v4.12.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.12.0.html))
+
+A same-day fix for an upgrade that emptied the grid, one launch form that opens beside whatever you
+are looking at, a storyboard edit that was silently doing nothing, and OpenRouter prices that had
+drifted from the catalog.
+
 ### The browser opens at `localhost` again, so your grid comes back (#1889)
 
 4.11.0 started opening `http://127.0.0.1:<port>` instead of `http://localhost:<port>`. Nothing
@@ -34,6 +42,48 @@ reach the app from another machine, the banner now names that address on its own
 first of those — so before opening anything, the launcher now tries to take `[::1]:<port>` too. If
 something else already holds it, the browser goes to the address that was actually checked, and the
 banner says so and tells you where your layout is filed.
+
+### One launch form, opening beside what you are looking at (#1867, #1890)
+
+The launch form used to be a cell: pressing `+` appended an empty square at the end of the grid, so
+the thing you were starting appeared as far from your attention as it could get, and in the zoomed
+views it had nowhere to appear at all.
+
+It is now an **overlay at the right edge of the stage**, and it opens the same way in every view
+mode — tiled grid, cockpit roster, filmstrip.
+
+- The toolbar `+` opens it on the **workspace** directory.
+- Every terminal's header gets a `+` that opens it on **that terminal's** directory, which is what
+  the request asked for: starting a second agent where you already are, without retyping a path.
+- `terminal-new` in the keymap now opens the panel. `terminal-new-adjacent` is unchanged — still a
+  shell in this directory, immediately, with no form.
+- A new keymap action, `terminal-new-here`, is the header `+`.
+
+While the panel is open it owns the keyboard, so Escape closes it and typing goes to the form
+rather than to the terminal underneath. Closing it returns focus to whatever opened it.
+
+### `presentMulmoScript` replaced a beat and reported success without writing anything (#1880, #1886)
+
+Calling `presentMulmoScript` with `filePath` + `beatIndex` + `beat` — the documented way to replace
+a single beat — returned a normal 200 with the usual script payload and **left the file unchanged**.
+Nothing in the response told the caller apart from a plain re-display, so an agent editing a
+storyboard would report the edit as done.
+
+Two causes, both in the tool's argument handling: the allowlist dropped `beatIndex` and `beat`
+before the package ever saw them, so the request arrived looking like a re-display; and even once
+written, `script-changed` was not published, so a canvas already showing that file kept the old
+content. New files looked fine because the response opens the file fresh — only in-place edits were
+affected.
+
+### OpenRouter prices in the model picker match the catalog again (#1849, #1887)
+
+`pricePerMTok` is documented as the provider's published price, and 16 of the 27 OpenRouter presets
+had drifted from `openrouter.ai/api/v1/models`, some by more than 2x in either direction —
+`gpt-5.6-luna` read 1.0/6.0 against an actual 0.2/1.2, `deepseek-v4-pro` read half its real price.
+One `contextLength` was double the real window (`nemotron-3-ultra`, 524288 → 262144).
+
+All 27 now agree with the catalog exactly, read on 2026-08-28 and checked programmatically. The
+frontier presets are ordered cheapest-first again, which the price refresh had scrambled.
 
 ## mulmoterminal@4.11.0 — 2026-08-28
 
