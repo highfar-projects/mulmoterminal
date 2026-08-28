@@ -61,8 +61,10 @@ So look first, then offer:
    user who is not corrects you in one word. Asking costs a round trip every time; a wrong guess
    costs a sentence, and only for the people it is wrong about.
 
-   The platform decides what is usable at all: no `F1`–`F12` and no `Option`+letter on macOS, and
-   the Cmd line-editing set below only makes sense on a Mac keyboard.
+   The platform decides what is worth offering: on macOS, `F1`–`F12` arrive only if the user holds
+   `Fn` or has changed the function-key setting (so do not propose them unprompted — see the trap
+   list below), `Option`+letter never matches at all, and the Cmd line-editing set below only makes
+   sense on a Mac keyboard.
 3. **Offer concrete sets rather than a blank question**, and what you offer depends on step 2:
    - **Always** one from the action starter sets — **on macOS, the Up/Down subset of Arrows**, for
      the reason in that set's own row. Name what each key will do in the terminal they are sitting

@@ -445,6 +445,20 @@ frontmatter に加え、冒頭の「All three settings」は数を言わない�
 `settings-coverage.spec.ts` にもあるのに、ガイドだけ空白。列挙の修正だけこの PR に入れ、節と
 全キー表への追加は [#1897](https://github.com/receptron/mulmoterminal/issues/1897) に分けた。
 
+### 「fresh eyes で見ろ」と頼んだら、まだ 1 件あった
+
+同じ head に対する 2 巡目で、ローカル codex に「前回 No findings だったからといって自分を追認せず、
+新しい目で見ろ」と明示して依頼した。**結果、新しい P3 が 1 件出た。**
+
+手順 2 が「macOS では `F1`–`F12` は使えない」と言い切っていたが、**同じ skill の後段（罠リスト）と
+両ガイドは但し書きを持っている** —— 既定では keydown が来ないが、`Fn` かシステム設定の
+Function Keys で効く。1 つのファイルの中で、前段が言い切り、後段が条件付きという状態だった。
+
+前段を後段に合わせた（「`Fn` を押すか設定を変えた場合だけ届くので、unprompted に提案しない」）。
+
+**これは 25 巡目に「No findings」を出したのと同じレビュアーが、26 巡目に出した指摘。**
+1 度 clean が出ても、同じ head をもう 1 度読ませる価値がある、という規約の根拠がそのまま実演された。
+
 ### ゲート
 
 `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0。
