@@ -70,12 +70,30 @@ function onEscape(e: KeyboardEvent) {
 onMounted(() => window.addEventListener("keydown", onEscape));
 onBeforeUnmount(() => window.removeEventListener("keydown", onEscape));
 
+// Where focus was when the panel opened, so closing it can put the cursor back. Taken BEFORE the
+// field below steals it (codex [P2], #1890): a keyboard user who opens the panel from a terminal's
+// `+` and then closes it should be back on that `+`, not dropped on the document with nothing
+// selected and no way to tell where they are.
+let opener: Element | null = null;
+
 // The directory field, so Enter alone starts what is picked in the dir that was carried in. The
 // panel opens on a keystroke, and a keyboard path that lands focus nowhere costs a reach for the
 // mouse to use the value it just filled in for you.
 onMounted(async () => {
+  opener = document.activeElement;
   await nextTick();
   panel.value?.querySelector<HTMLInputElement>('[data-testid="cell-dir-input"]')?.focus();
+});
+
+// Only when focus is still OURS to give back. A launch moves it on purpose (the new terminal takes
+// it), and a click elsewhere means the user has already chosen where they are — putting them back
+// on the `+` in either case would be the same rudeness in the other direction. `isConnected` because
+// the opener can be gone by now: the cell it belonged to may have been replaced by the launch.
+onBeforeUnmount(() => {
+  const leaving = document.activeElement;
+  const ours = leaving === null || leaving === document.body || !!panel.value?.contains(leaving);
+  if (!ours) return;
+  if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
 });
 </script>
 

@@ -105,6 +105,38 @@ describe("LaunchPanel", () => {
     term.remove();
   });
 
+  // A keyboard user who opens the panel from a terminal's `+` and closes it should be back on that
+  // `+`, not dropped on the document (codex [P2], #1890).
+  it("returns focus to whatever opened it when it closes", async () => {
+    const opener = document.createElement("button");
+    document.body.appendChild(opener);
+    opener.focus();
+    const w = mountPanel();
+    await flushPromises();
+    expect(document.activeElement).not.toBe(opener); // the dir field took it
+    w.unmount();
+    await flushPromises();
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
+  });
+
+  // A launch moves focus on purpose, and a click elsewhere means the user has already chosen where
+  // they are. Yanking them back to the opener would be the same rudeness in the other direction.
+  it("leaves focus alone when it has already moved outside the panel", async () => {
+    const opener = document.createElement("button");
+    const elsewhere = document.createElement("input");
+    document.body.append(opener, elsewhere);
+    opener.focus();
+    const w = mountPanel();
+    await flushPromises();
+    elsewhere.focus();
+    w.unmount();
+    await flushPromises();
+    expect(document.activeElement).toBe(elsewhere);
+    opener.remove();
+    elsewhere.remove();
+  });
+
   it("focuses the directory field so Enter alone can start", async () => {
     const w = mountPanel();
     await flushPromises();
