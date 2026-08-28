@@ -19,9 +19,10 @@ import { waitUntilReady } from "./wait-ready.js";
 import {
   bindHostFor,
   chooseCwd,
+  boundAddressNote,
+  browserUrl,
   companionHostsFor,
   launcherReachHost,
-  launcherUrl,
   probeFailureIsPortInUse,
   parsePortArg,
   portInUseAction,
@@ -386,6 +387,25 @@ async function choosePort(requested, explicit) {
   return fallback;
 }
 
+// What the launcher does the moment the server answers: say where it is, and open it there.
+//
+// `url` is where the BROWSER goes and `addressNote` is what was actually bound — two different
+// facts since #1889, and the note is null whenever they would say the same thing.
+function announceReady(url, addressNote, noOpen) {
+  printReadyBanner(url, STOP_COMMAND);
+  // Only for a bind the operator widened: `localhost` is right for THIS machine and says nothing
+  // to the one they opened the port for.
+  if (addressNote) log(addressNote);
+  if (noOpen) return;
+  try {
+    // The command is a hardcoded literal; url is built by browserUrl from a numeric port, so it
+    // is http://localhost:<n>.
+    execSync(`${pickOpenCommand()} ${url}`, { stdio: "pipe" });
+  } catch {
+    log(`Open your browser: ${url}`);
+  }
+}
+
 // Spawn the server on `port` and report the child via `onChild` (so signal
 // handlers target the live process). Resolves only when the server exits because
 // the port was taken at bind time before it became ready — the caller then
@@ -427,26 +447,18 @@ function runServer(port, probedAddress, noOpen, cwd, onChild) {
     let readyStarted = false;
     let cancelReady = () => {};
     // Takes a CONCRETE address — callers resolve first, and a caller that cannot does not call.
+    //
+    // Two different questions, and #1889 is what happens when one answer is given to both. The
+    // POLL asks "did the server we started come up", so it uses the address the child reported
+    // binding — that is #1876's fix and it stays. The URL asks "where does this user's browser
+    // keep its state", and the only answer that does not empty the app is the one it has always
+    // been given: see browserUrl.
     const beginReady = (reachHost) => {
       if (readyStarted) return;
       readyStarted = true;
-      const url = launcherUrl(reachHost, port);
-      cancelReady = waitUntilReady(
-        port,
-        () => {
-          printReadyBanner(url, STOP_COMMAND);
-          if (noOpen) return;
-          try {
-            // The command is a hardcoded literal; url is built by launcherUrl from the address the
-            // child reported and a numeric port, so it is http://<addr>:<n> or http://[<v6>]:<n>.
-
-            execSync(`${pickOpenCommand()} ${url}`, { stdio: "pipe" });
-          } catch {
-            log(`Open your browser: ${url}`);
-          }
-        },
-        { host: reachHost },
-      );
+      const url = browserUrl(port);
+      const addressNote = boundAddressNote(reachHost, port);
+      cancelReady = waitUntilReady(port, () => announceReady(url, addressNote, noOpen), { host: reachHost });
     };
     server.on("message", (msg) => {
       if (!isRecordLike(msg) || msg.type !== "listening" || typeof msg.address !== "string") return;

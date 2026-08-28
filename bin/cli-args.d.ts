@@ -6,6 +6,8 @@ export declare function probeFailureIsPortInUse(err: { code?: string } | null | 
 export declare function companionHostsFor(boundAddress: string): string[];
 export declare function launcherReachHost(bindHost: string): string | null;
 export declare function launcherUrl(reachHost: string, port: number): string;
+export declare function browserUrl(port: number): string;
+export declare function boundAddressNote(reachHost: string, port: number): string | null;
 export declare function chooseCwd(args: string[], env: Record<string, string | undefined>): CwdChoice;
 export declare function portInUseMessage(port: number, explicit: boolean): string;
 export declare function portInUseAction(explicit: boolean, isTTY: boolean | undefined): "ask" | "stop";

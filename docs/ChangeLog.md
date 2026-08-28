@@ -8,6 +8,27 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+### The browser opens at `localhost` again, so your grid comes back (#1889)
+
+4.11.0 started opening `http://127.0.0.1:<port>` instead of `http://localhost:<port>`. Nothing
+errored, and the app came up **empty**: the grid layout, the theme, the font size and eleven other
+preferences live in `localStorage`, which browsers partition by origin, so a different hostname is a
+different drawer. Sessions were all still running in tmux and nothing on screen connected the two.
+
+**If you upgraded to 4.11.0 and your grid was blank, this restores it** — the layout was never
+deleted, only filed under the other hostname, and that is the hostname the launcher opens again.
+
+One thing to know if you rebuilt your grid during 4.11.0: that newer arrangement is on
+`http://127.0.0.1:<port>` and stays there. Open that address directly to get it back. There is no
+way for the app to fetch it for you — measured on Chrome, a page cannot read another origin's
+`localStorage` even through an embedded frame, and `requestStorageAccess()` does not change that.
+
+The port fixes that shipped in 4.11.0 are untouched. The second-instance guard still probes the
+address the server will bind, and the readiness check still polls the address the server reports
+binding — what changed back is only the URL handed to the browser, which is a name your saved state
+is filed under rather than a claim about which socket answered. If you set `MULMOTERMINAL_HOST` to
+reach the app from another machine, the banner now names that address on its own line.
+
 ## mulmoterminal@4.11.0 — 2026-08-28
 
 > **Setup guide:** [Stopping it, and the ports it takes](https://receptron.github.io/mulmoterminal/guide/en/v4.11.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.11.0.html))

@@ -156,13 +156,13 @@ export function launcherReachHost(bindHost) {
   return isIP(bindHost) ? bindHost : null;
 }
 
-/** What to PRINT for a concrete address — never `localhost`.
+/** What to name a concrete address with — never `localhost`, because this one exists to say
+ *  WHICH ADDRESS WAS CHECKED. `launcherReachHost` picks `::1` precisely so an IPv4 listener
+ *  cannot answer for us, and writing `localhost` would hand that choice straight back: measured,
+ *  `localhost` resolves to BOTH `::1` and `127.0.0.1`.
  *
- *  It did say `localhost` for the loopback cases, because that is friendlier. CodeRabbit caught
- *  what that throws away: `launcherReachHost` picks `::1` precisely so an IPv4 listener cannot
- *  answer for us, and printing `localhost` hands the choice straight back — measured, `localhost`
- *  resolves to BOTH `::1` and `127.0.0.1`, so the browser may open the very process the poll was
- *  written to avoid. A URL the user clicks has to name the address that was checked.
+ *  This is no longer what the BROWSER is sent to — see `browserUrl`, and #1889 for why those are
+ *  two different questions.
  *
  *  Built through `URL` so the platform does the escaping: an IPv6 literal has to be bracketed or
  *  `http://::1:34567` is not a URL at all. The brackets go on BEFORE the assignment because the
@@ -172,6 +172,59 @@ export function launcherUrl(reachHost, port) {
   const url = new URL(`http://localhost:${port}`);
   url.hostname = reachHost.includes(":") ? `[${reachHost}]` : reachHost;
   return url.origin;
+}
+
+/**
+ * The URL the BROWSER is opened at — always `localhost`, and that is a COMPATIBILITY constraint,
+ * not a preference about which spelling reads better.
+ *
+ * The grid layout (`grid_v2`), the theme, the font size and eleven other things live in
+ * `localStorage`, which is partitioned by ORIGIN. So this string is not merely an address the
+ * user is sent to; it is the key their state is filed under. Changing it silently empties the
+ * app: 4.11.0 moved it to `http://127.0.0.1:<port>` as part of #1876's review and every upgrading
+ * user's grid came up blank, with their sessions alive in tmux and nothing on screen to say the
+ * layout was one hostname away (#1889).
+ *
+ * And there is no way back for state left on the old origin. Measured on Chrome 152: a hidden
+ * iframe on the old origin reads an EMPTY store (third-party storage partitioning), and
+ * `document.requestStorageAccess()` resolving does not change that — it governs cookies. Only a
+ * TOP-LEVEL visit to the old origin can see it. A URL that has to be stable is therefore cheaper
+ * to keep stable than to migrate.
+ *
+ * Reachability is not the reason it is safe; #1834 is. `server/infra/loopback-listener.ts` makes
+ * this server serve `127.0.0.1` in EVERY configuration — as the primary bind, or as a second
+ * listener when the operator widens it — because eight local callers write that address as a
+ * literal. So `localhost` arrives here whatever `MULMOTERMINAL_HOST` says, falling back to v4
+ * when v6 refuses.
+ *
+ * What this deliberately does NOT do is decide anything about the port PROBE or the readiness
+ * POLL. Those still follow the address the child reports binding, which is what #1876 actually
+ * fixed — the second-instance guard, and a ready banner that was reporting a stranger's 200. The
+ * residual risk restored here is only the one 4.10.1 and every release before it carried: another
+ * APP holding this port on `::1` alone could answer a browser resolving `localhost` that way. A
+ * second MulmoTerminal cannot, because `companionHostsFor` requires `127.0.0.1` free for every
+ * bind before the child is ever spawned.
+ */
+export function browserUrl(port) {
+  return new URL(`http://localhost:${port}`).origin;
+}
+
+/**
+ * The line naming the address actually bound, or null when it says nothing the browser URL did
+ * not already say.
+ *
+ * `browserUrl` sends everyone to `localhost`, which is right for the machine the launcher runs on
+ * and useless to the operator who set `MULMOTERMINAL_HOST` so ANOTHER machine could open the app.
+ * 4.11.0 told them their address by putting it in the banner; keeping that here means restoring
+ * the origin costs them nothing.
+ *
+ * It is asked about the address the kernel REPORTED, so the two loopback spellings below are the
+ * finite output vocabulary `launcherReachHost` already reasons about — not an attempt to classify
+ * what someone typed.
+ */
+export function boundAddressNote(reachHost, port) {
+  if (reachHost === V4_LOOPBACK_CLIENTS_DIAL || reachHost === "::1") return null;
+  return `Bound to ${reachHost} — reachable from another machine at ${launcherUrl(reachHost, port)}`;
 }
 
 /**
