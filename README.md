@@ -1401,8 +1401,8 @@ Favorited collections get their own toolbar buttons.
   zoomed, keys you bind walk the enlargement along the on-screen order without reaching for
   the mouse — **opt-in, nothing is bound by default**, since any bound key is taken from the
   terminal underneath. Press **Set up shortcuts…** in Settings → **Keyboard shortcuts** and an
-  agent writes the `keymap` for you, checking each binding against what is already running in your
-  terminal; that section also lists every action and the `send` row whether bound or not, including the
+  agent writes the `keymap` for you, checking each binding against your existing ones and the traps
+  a browser or a Mac adds; that section also lists every action and the `send` row whether bound or not, including the
   [keys sent straight to the terminal](https://receptron.github.io/mulmoterminal/guide/en/config.html#keymap-send).
   To write it by hand, add a `keymap` to `~/.mulmoterminal/config.json` — see the
   [guide](https://receptron.github.io/mulmoterminal/guide/en/config.html#keymap)

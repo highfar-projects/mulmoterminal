@@ -25,7 +25,8 @@ merge in memory, post the whole thing. Every `keymap` example below shows one se
 readability — none of them is a body to post as-is unless the user genuinely has nothing else bound.
 
 Settings has a **Keyboard shortcuts** section, but it is **read-only** — it lists every action and
-its current binding. Point the user at it after writing, as the check.
+its current binding, plus a `send` row: one per configured entry, or a single "Not set" placeholder
+when there are none. Point the user at it after writing, as the check.
 
 ## Open with a proposal, not a question
 

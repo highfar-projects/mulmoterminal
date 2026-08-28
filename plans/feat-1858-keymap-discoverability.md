@@ -369,6 +369,26 @@ skill に明記した —— keymap の書き込みは常に**完全な** keymap
 | `-keys` | **無かった → この PR で追加** |
 | `-header` | **無い** → 別 skill なので [#1896](https://github.com/receptron/mulmoterminal/issues/1896) に分離 |
 
+### 私が書いた誇張（ローカル codex、P3）—— そして記録した危険が即座に効いた
+
+intro はこう約束していた:
+
+> the agent checks a binding against **what is already running in your terminal** before writing it
+
+**エージェントにそれを調べる手段は無い。** 照合できるのは既存の keymap（`actionForKey` /
+`sendBytesFor` が知っているのは設定された claim だけ）と、プラットフォーム / ブラウザ固有の罠まで。
+vim や claude が何を bind しているかは見えない。
+
+「既にある割り当てと、ブラウザ / Mac 固有の落とし穴と突き合わせる」に直した。en / ja / README の
+3 箇所。
+
+**そして 4 箇所目がスクリーンショットだった。** 2 枚とも同じ文言を焼き込んでいたので撮り直し。
+**1 巡前に「文言を変えたら撮り直しが要る」と書いた危険が、次の巡でそのまま発生した。** 記録して
+おいて良かったし、テストで防げないことの証明にもなっている。
+
+同じ巡で、skill 本文が設定画面を「every action and its current binding」と説明したままだった
+（frontmatter は `send` 行も含むと直してあったのに）。同一ファイル内の不整合。
+
 ### ゲート
 
 `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0。
