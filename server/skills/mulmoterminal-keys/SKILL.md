@@ -63,8 +63,9 @@ Report every claim you found, say which one explains what they are seeing, and c
 one** — after they confirm. Remember the whole-keymap write rule above: post the complete map with
 that single entry removed or moved, never a map containing only your change.
 
-**Named one of the first three? Skip this whole section** and go straight to that setting; the
-Ctrl+C row has its own branch just above. Proposing
+**Named `copyOnSelect`, the question pane, or the Enter/newline symptom? Skip this whole section**
+and go straight to that setting's own one below. Ctrl+C has its own branch just above. Only the
+first row — no specific request, or the **Set up shortcuts…** button — belongs here. Proposing
 shortcuts to someone who came about Enter is both an unwanted detour and a real cost: every binding
 takes a key away from the program in their terminal, and the rule below says never to add one the
 user did not request.
@@ -117,8 +118,8 @@ So look first, then offer:
 
 **On macOS, lead with the `send` line-editing set.** Cmd+Left / Cmd+Right / Cmd+Delete are what a
 Mac user presses out of habit in every other text field; in a terminal the Cmd is dropped and the
-unmodified key gets through — the **bare arrow** for the first two, the **bare Delete** for the
-third, deleting one character instead of the line. So the key appears to half-work rather than to
+unmodified key gets through — the **bare arrow** for `Cmd+Left` and `Cmd+Right`, the **bare Delete**
+for `Cmd+Delete`, deleting one character instead of the line. So the key appears to half-work rather than to
 be unbound, which is harder to diagnose than silence (#1858). If they have not mentioned it, ask whether it bothers them.
 
 ## `keymap` — shortcuts

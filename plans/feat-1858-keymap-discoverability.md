@@ -613,6 +613,21 @@ d52fb64a  ON THIS BRANCH
 動いていない。文書をレビュー下で少しずつ組み替えると、直した箇所の周りに次の不整合が生まれる、
 という形が出ている。
 
+### 数えるのをやめた（CodeRabbit、Minor）
+
+振り分け表の後の「Named one of the **first three**?」が曖昧だと指摘された —— 1 行目は
+「特に何も言っていない人」の総称行なので、「最初の 3 つ」に何が入るかが読み手によってずれる。
+
+**この PR で数を数えて間違えたのは 3 度目**（skill の設定が「3 つ」→ 実は 4 つ、plan の
+「5 箇所」→ 実は 6 箇所、そして今回）。**位置や個数で参照するのをやめて、名前で書く**ことにした:
+
+> Named `copyOnSelect`, the question pane, or the Enter/newline symptom? …
+> Only the first row — no specific request, or the **Set up shortcuts…** button — belongs here.
+
+掃いたら同じファイルにもう 1 つあった（「the **bare arrow** for the first two, the **bare Delete**
+for the third」）ので、そちらも `Cmd+Left` / `Cmd+Right` / `Cmd+Delete` と名前で書いた。
+このファイルに位置参照は残っていない。
+
 ### ゲート
 
 `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0。
