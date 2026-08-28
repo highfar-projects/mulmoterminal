@@ -301,6 +301,32 @@ or not"、ja は「読み取り専用で、割り当ての有無にかかわら�
 **その文言を変えたら撮り直しが要る**。テストでは検出できない —— PNG を読めるものがリポジトリに
 無い。この PR では 1 巡かけて偶然見つかったが、次は見つからないかもしれない。
 
+### false positive を 1 件、証拠つきで却下した
+
+codex CI（round 12）が `CHANGES REQUESTED`:
+
+> The newly required macOS `send` starter path uses caret-display strings (`^A` / `^E`)
+
+**SKILL.md にキャレット文字列は 1 つも無い**（`grep '\^A|\^E|\^U|\^K'` が 0 件）。スターター
+セットも JSON 例も `\u0001` / `\u0005` / `\u0015` を書いている。リポジトリ全体でも
+`"bytes": "^` は 0 件。
+
+キャレット記法は**表示側**のもので、`describeBytes` が `\u0005` を `^E` に変換して設定画面に出す。
+ガイドの 2 箇所はその表示を説明しているだけ（*"without decoding `\uXXXX`"* と書いてある）。
+
+**変更せず、証拠を PR に置いて再確認を求めた。** codex は次の巡で LGTM に転じ、
+*"the skill examples use JSON Unicode escapes for the raw control bytes"* と明記した。
+直していたら、動いている制御バイトを literal な `^E` に壊していた。
+
+### 設定を「読む」だけでは足りない（CodeRabbit）
+
+手順 1 は「今の config を読んで報告しろ」だったが、**読んだ内容を、これから提案するものと
+突き合わせろ**とは書いていなかった。既に `Cmd+ArrowLeft` にアクションが割り当たっていると、
+提案した `send` は**アクションに負けて黙って発火しない** —— ユーザーが承諾したのに一度も
+動かない変更になる。
+
+手順 1 に衝突チェックを追加し、スターターセットの「costs nothing」にも条件を付けた。
+
 ### ゲート
 
 `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0。
