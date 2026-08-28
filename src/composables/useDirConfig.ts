@@ -28,9 +28,13 @@ export interface DirConfig extends DirChrome {
   // Ready for an `<img src>` — this app's /api/dir-icon route, or the remote URL the directory
   // named. The file path itself never reaches the browser, same as the attention sound's.
   iconUrl: string | null;
+  // Whether this directory's sessions run inside its devcontainer rather than on the host
+  // (server/config/devcontainer-flag.ts) — a running cell's header badge is the one consumer
+  // that needs this on the shape every cell already fetches on mount.
+  devcontainer: boolean | null;
 }
 
-const EMPTY: DirConfig = { ...EMPTY_DIR_CHROME, theme: null, colors: null, hasSound: false, iconUrl: null };
+const EMPTY: DirConfig = { ...EMPTY_DIR_CHROME, theme: null, colors: null, hasSound: false, iconUrl: null, devcontainer: null };
 
 // null, not `{}`, when nothing is configured: that is what lets mergeHeaderStatusColors tell
 // "this directory says nothing" from "this directory says exactly nothing applies".
@@ -99,6 +103,7 @@ function parse(c: unknown): DirConfig {
     // Re-checked here for the same reason `fontSize` is re-clamped: this parser is the boundary
     // between the wire and the DOM, and this value goes straight into an `<img src>`.
     iconUrl: isUsableDirIconSrc(c.iconUrl) ? c.iconUrl : null,
+    devcontainer: typeof c.devcontainer === "boolean" ? c.devcontainer : null,
   };
 }
 

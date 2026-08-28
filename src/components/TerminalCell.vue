@@ -1299,6 +1299,20 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                  you read anything. Everything after it says what the cell is DOING; the icon says
                  which project it is, and that is the first question. -->
             <DirIcon :src="dirConfig.iconUrl" />
+            <!-- Whether THIS session runs inside the directory's devcontainer rather than on the
+                 host (server/config/devcontainer-flag.ts) — a fact with no other way to tell from
+                 the terminal output alone, and one whose absence is exactly what let a stale
+                 container go unnoticed for two hours (see hook-socket.ts's fix). Reads straight
+                 off dirConfig rather than the pty's own spawn decision: the two can only drift
+                 while a session outlives a later toggle, which is rare, and the status dot beside
+                 it already accepts that same staleness for its own directory-level facts. -->
+            <span
+              v-if="dirConfig.devcontainer"
+              data-testid="cell-devcontainer-badge"
+              class="material-symbols-outlined flex-none text-[13px] text-dim"
+              title="Running in this directory's devcontainer"
+              >inventory_2</span
+            >
             <span class="cell-dot" :class="[CELL_DOT, statusClass, dotStatusClass, dotMissedClass]" :title="statusLabel" />
             <!-- The path is NOT here any more — it is the lead item on row 2 (see the
                `header-lead` template below). It had `min-w-[16ch]`, a floor of roughly a third of

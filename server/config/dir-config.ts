@@ -120,6 +120,11 @@ export interface PublicDirConfig extends DirChrome {
   // Ready for an `<img src>`: this app's own /api/dir-icon route for a file inside the
   // directory, or the remote URL verbatim. The file PATH stays server-side, like `sound`'s.
   iconUrl: string | null;
+  // Whether this directory's sessions run inside its devcontainer (config/devcontainer-flag.ts) —
+  // also carried on DirConfigExtras for the settings modal's preview, but that shape is fetched
+  // only while the modal is open; a running cell's badge needs it on the shape every cell already
+  // fetches on mount.
+  devcontainer: boolean | null;
 }
 
 /** The directory whose `.mulmoterminal.json` a tool call just wrote, or null for anything else.
@@ -277,6 +282,7 @@ export function publicDirConfig(cwd: string): PublicDirConfig {
     sound,
     sounds,
     icon,
+    devcontainer,
   } = loadDirConfig(cwd);
   return {
     name,
@@ -296,6 +302,7 @@ export function publicDirConfig(cwd: string): PublicDirConfig {
     colors,
     hasSound: sound !== null || Object.keys(sounds).length > 0,
     iconUrl: dirIconUrl(cwd, dirIconFor(cwd, icon)),
+    devcontainer,
   };
 }
 
@@ -390,7 +397,7 @@ export const MISSING_DIR_CONFIG_DETAIL: DirConfigDetail = {
   file: null,
   localFile: null,
   repoFile: null,
-  config: { ...EMPTY_DIR_CHROME, theme: null, colors: null, hasSound: false, iconUrl: null },
+  config: { ...EMPTY_DIR_CHROME, theme: null, colors: null, hasSound: false, iconUrl: null, devcontainer: null },
   extras: EMPTY_DIR_CONFIG_EXTRAS,
   source: EMPTY_DIR_CONFIG_SOURCE,
 };

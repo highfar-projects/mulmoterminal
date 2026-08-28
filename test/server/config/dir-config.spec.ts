@@ -371,6 +371,7 @@ describe("publicDirConfig / dirSoundFor", () => {
       colors: null,
       hasSound: true,
       iconUrl: null,
+      devcontainer: null,
     });
     expect(dirSoundFor(dir, null)).toEqual({ source: "file", path: path.join(dir, "a.mp3") });
     cleanup();
