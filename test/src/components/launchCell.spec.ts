@@ -69,4 +69,14 @@ describe("cellForPick", () => {
     expect(cellForPick(null, "claude").cwd).toBeNull();
     expect(cellForPick(null, "shell").cwd).toBeNull();
   });
+
+  // Null is no more startable than `""` — TerminalCell's mount guard is
+  // `autoStart && !launched && initialCwd`, so BOTH leave a cell that counts against the cap and
+  // never opens a terminal. The shape is pinned here so the caller's refusal has something to
+  // point at: an agent cell with no directory must not be placed (codex [P1], #1890).
+  it("still produces an unstartable shape for an agent with no directory — callers must refuse it", () => {
+    const made = cellForPick(null, "claude");
+    expect(made.autoStart).toBe(true);
+    expect(made.cwd).toBeNull(); // autoStart + falsy cwd = the shape GridView's placeFromPanel rejects
+  });
 });

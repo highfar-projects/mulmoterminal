@@ -584,6 +584,12 @@ const placeFromPanel = (cell: Omit<Cell, "uid">) => {
   //
   // Filling it in place is not the alternative it looks like: `autoStart` runs in TerminalCell's
   // `onMounted` and never as a watcher, so a cell already on screen would take the flag and sit there.
+  // An autoStart cell with no directory is the cap bug wearing a different coat: TerminalCell's
+  // mount guard is `props.autoStart && !launched && props.initialCwd`, so a falsy cwd leaves a cell
+  // that `isOccupied` counts against the cap and that never opens a terminal. Reachable before
+  // `/api/config` answers, when `defaultCwd` is still null (codex [P1], #1890). Refused here rather
+  // than in each caller: this is the one place every panel launch passes through.
+  if (cell.autoStart && !cell.cwd) return;
   const empty = state.value.cells.find((c) => !isOccupied(c));
   // Nothing placed: the grid filled up while the form was open. Leave the panel exactly as the user
   // left it rather than closing over work that produced no terminal.

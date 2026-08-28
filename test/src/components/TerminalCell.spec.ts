@@ -30,7 +30,7 @@ vi.mock("../../../src/composables/usePubSub", () => ({
 vi.mock("../../../src/components/Terminal.vue", () => ({
   default: {
     name: "TerminalView",
-    props: ["sessionId", "connectKey", "cwd", "hideHeader"],
+    props: ["sessionId", "connectKey", "cwd", "hideHeader", "launch", "customAgent", "agent"],
     emits: ["session", "cwd"],
     // Render both of the header's slots so the cell's path menu (header-lead) and its icon
     // buttons (header-actions) are present in the test DOM — but only when the header is
@@ -95,12 +95,18 @@ function mountCell(
     zoomed?: boolean;
     reorderable?: boolean;
     initialAgent?: "claude" | "codex" | "antigravity" | "grok";
+    initialCustomAgent?: string | null;
+    initialLaunchChoice?: { provider?: string | null; model?: string | null } | null;
+    autoStart?: boolean;
   } = {},
 ) {
   return mount(TerminalCell, {
     props: {
       uid: 1,
       ...(opts.initialAgent ? { initialAgent: opts.initialAgent } : {}),
+      ...(opts.initialCustomAgent ? { initialCustomAgent: opts.initialCustomAgent } : {}),
+      ...(opts.initialLaunchChoice ? { initialLaunchChoice: opts.initialLaunchChoice } : {}),
+      ...(opts.autoStart ? { autoStart: true } : {}),
       expanded: opts.expanded ?? false,
       collectionsAvailable: opts.collectionsAvailable ?? false,
       zoomed: opts.zoomed ?? false,
@@ -197,6 +203,28 @@ describe("TerminalCell", () => {
     const term = w.findComponent({ name: "TerminalView" });
     expect(term.exists()).toBe(true);
     expect(term.props("cwd")).toBe("/home/me/picked");
+  });
+
+  // #1867. The launch PANEL is outside the cell, so what it picked has to arrive as a prop or it is
+  // lost — and losing it is silent: the session starts on the directory's default model with
+  // nothing to show the pick went. The panel is the only way to launch now, so this is the path.
+  it("starts an auto-started cell on the model the panel picked", async () => {
+    const choice = { provider: "openrouter", model: "moonshotai/kimi-k3" };
+    const w = mountCell(null, { initialCwd: "/home/me/proj", autoStart: true, initialLaunchChoice: choice });
+    await flushPromises();
+    const term = w.findComponent({ name: "TerminalView" });
+    expect(term.exists()).toBe(true);
+    expect(term.props("launch")).toEqual(choice);
+  });
+
+  // The wrapper rides alongside `agent`, which stays claude for a custom one: a custom agent is a
+  // command line that starts Claude Code, not a different session kind.
+  it("starts an auto-started cell through the custom agent the panel picked", async () => {
+    const w = mountCell(null, { initialCwd: "/home/me/proj", autoStart: true, initialCustomAgent: "kimi_k3" });
+    await flushPromises();
+    const term = w.findComponent({ name: "TerminalView" });
+    expect(term.props("customAgent")).toBe("kimi_k3");
+    expect(term.props("agent")).toBe("claude");
   });
 
   it("launches via the go button next to the field (alternative to Enter)", async () => {
