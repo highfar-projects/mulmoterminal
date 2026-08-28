@@ -39,10 +39,15 @@ below belongs to one of them:
 | "selecting text doesn't copy" | [`copyOnSelect`](#copyonselect--copy-just-by-selecting) |
 | anything about the question pane | [`questionPaneEnabled`](#questionpaneenabled--answer-a-question-from-a-side-pane) |
 | "Shift+Enter submits", "Enter makes a newline" | [`terminalSubmit`](#terminalsubmit--enter-vs-newline) |
-| "Ctrl+C stopped interrupting" | **the keymap, not `terminalSubmit`** — see below |
+| "Ctrl+C stopped interrupting" | **the diagnostic below — not this section, and not `terminalSubmit`** |
 
-**"Ctrl+C stopped interrupting" is a keymap symptom.** Read the whole keymap and find **everything**
-claiming that keystroke, not just one entry:
+### "Ctrl+C stopped interrupting" — diagnose, do not propose
+
+**Skip the proposal flow entirely.** This user has one binding too many, not too few; offering them
+a starter set would add more keys taken from the terminal, which the rule below forbids. The job is
+to find the claim, show it, and remove or move it once they agree.
+
+Read the whole keymap and find **everything** claiming that keystroke, not just one entry:
 
 | what is on `Ctrl+C` | what it does to the interrupt |
 |---|---|
@@ -54,7 +59,12 @@ So "it works sometimes" points at `copy` plus a selection sitting in that cell, 
 points at one of the others. `terminalSubmit` is not involved either way, and changing it would be
 debugging the wrong setting.
 
-**Named one of the first three? Skip this whole section** and go straight to that setting. Proposing
+Report every claim you found, say which one explains what they are seeing, and change **only that
+one** — after they confirm. Remember the whole-keymap write rule above: post the complete map with
+that single entry removed or moved, never a map containing only your change.
+
+**Named one of the first three? Skip this whole section** and go straight to that setting; the
+Ctrl+C row has its own branch just above. Proposing
 shortcuts to someone who came about Enter is both an unwanted detour and a real cost: every binding
 takes a key away from the program in their terminal, and the rule below says never to add one the
 user did not request.
