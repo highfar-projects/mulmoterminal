@@ -389,6 +389,28 @@ vim や claude が何を bind しているかは見えない。
 同じ巡で、skill 本文が設定画面を「every action and its current binding」と説明したままだった
 （frontmatter は `send` 行も含むと直してあったのに）。同一ファイル内の不整合。
 
+### 4 度目の「1 箇所残し」—— 今度は grep の掛け方が原因だった
+
+誇張を en / ja / README / スクリーンショット / skill で直したあと、**spec のコメントが残っていた**
+（*"the thing that can check a binding against what is running in the cell"*）。
+
+**今度は grep の掛け方が悪かった。** 完全一致（`already running in your`）で掃いたので、言い回しの
+違う箇所を拾えなかった。概念で掛け直したら 1 件出た:
+
+```text
+grep -rniE "running in (the|your) (cell|terminal)|already uses|what your agent" src/ test/ server/skills/ docs/ README.md
+```
+
+**教訓の更新**: 「指摘を受けたら grep で全箇所を出す」だけでは足りない。**同じ主張が別の言い方で
+書かれている**ので、フレーズではなく**概念**で掛ける。この PR で 4 回踏んだ:
+
+| 回 | 直した場所 | 残した場所 | なぜ残ったか |
+|---|---|---|---|
+| 1 | skill frontmatter | 画面の文言 | そもそも掃かなかった |
+| 2 | 画面の文言 | ガイド 2 つ + README | 同上（この回から grep を始めた） |
+| 3 | SKILL の Arrows 警告 | 両ガイドの Arrows 節 | 別ファイルまで見なかった |
+| 4 | 誇張を 5 箇所 | spec のコメント | **完全一致で grep した** |
+
 ### ゲート
 
 `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0。

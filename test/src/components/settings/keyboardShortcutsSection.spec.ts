@@ -57,7 +57,9 @@ describe("the keyboard shortcuts section, with nothing bound", () => {
 
   // The intro is what sent the reporter to a text editor: it named the config file and the guide,
   // and never the skill-launch button directly beneath it. The route out of this screen has to be
-  // the button, which is the thing that can check a binding against what is running in the cell.
+  // the button, which is the thing that checks a proposed binding against the keymap already
+  // configured and the traps a browser or a Mac adds. (It cannot see what the shell, vim or claude
+  // binds — nothing here can, and saying otherwise was itself a finding in this PR.)
   it("points at the button rather than at hand-editing the config file", () => {
     const text = sectionWith({}).text();
 
