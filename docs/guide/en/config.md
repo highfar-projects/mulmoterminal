@@ -1055,9 +1055,12 @@ question, so the next question your session asks will already use the new settin
   enlarging that cell later brings the pane up, and so does a reload or a dropped connection
   recovering, which is why you do not lose a question by refreshing the page. It has no button of
   its own; there is nothing to press.
-- **Closing it with Esc is remembered for that one dialog**, so coming back to the cell does not
-  put it up again — you are telling it you will answer in the terminal. The next question in that
-  cell opens normally.
+- **Two different ways for the pane to go, and only one of them is remembered.** When the question
+  itself ends — answered in the terminal, answered in the pane, or cancelled with Esc in the
+  terminal — the pane goes because there is nothing left to answer. **Closing the pane with its own
+  × button** is the other one: that is you saying you will answer in the terminal, so it is
+  remembered for that dialog and returning to the cell does not put it back. Either way the next
+  question in that cell opens normally.
 - **Claude sessions only.** The choices arrive on Claude Code's own tool hooks; a codex or shell cell
   has nothing to publish, so no pane opens there.
 - **This is the pane, not the phone.** MulmoTerminal on a phone answers the same questions whether
