@@ -23,14 +23,24 @@ So look first, then offer:
 
 1. **Read what is already there** — `~/.mulmoterminal/config.json`. Say what is bound now (or that
    nothing is), so the proposal is about what is missing.
-2. **Check the platform** — `uname`. It decides which sets are even usable: no `F1`–`F12` and no
-   `Option`+letter on macOS, and the Cmd line-editing set below only makes sense there.
+2. **Guess the platform, and say the guess out loud.** `uname` tells you the machine the SERVER
+   runs on — but the keys are pressed in a **browser**, which may be somewhere else: a Mac
+   connecting to a Linux host still has a Cmd key, and a Linux desktop pointed at a Mac host does
+   not. Nothing in this app reports the browser's platform, so `uname` is a guess that is right for
+   the usual same-machine setup and wrong for a remote one.
+
+   So do not branch silently. Open with the assumption stated — *"You're on a Mac, so…"* — and a
+   user who is not corrects you in one word. Asking costs a round trip every time; a wrong guess
+   costs a sentence, and only for the people it is wrong about.
+
+   The platform decides what is usable at all: no `F1`–`F12` and no `Option`+letter on macOS, and
+   the Cmd line-editing set below only makes sense on a Mac keyboard.
 3. **Offer concrete sets rather than a blank question**, and what you offer depends on step 2:
    - **Always** one from the action starter sets — **on macOS, the Up/Down subset of Arrows**, for
      the reason in that set's own row. Name what each key will do in the terminal they are sitting
      in, including what it stops doing.
    - **On macOS, also the `send` line-editing set.**
-   - **Off macOS there is no `send` set to offer, and that is not an omission** — see the reason
+   - **Off macOS (as guessed in step 2) there is no `send` set to offer, and that is not an omission** — see the reason
      under the `send` starter set. Say the mechanism exists and what it is for, then build an entry
      from the `bytes` table only if they name a key that is not doing what they want.
 4. **Write only what they pick.** The rule below still holds: every binding takes a key away from
