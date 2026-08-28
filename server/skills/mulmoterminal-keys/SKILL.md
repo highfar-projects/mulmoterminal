@@ -48,8 +48,9 @@ So look first, then offer:
 
 **On macOS, lead with the `send` line-editing set.** Cmd+Left / Cmd+Right / Cmd+Delete are what a
 Mac user presses out of habit in every other text field; in a terminal the Cmd is dropped and the
-bare arrow gets through, so the key appears to half-work rather than to be unbound — which is
-harder to diagnose than silence (#1858). If they have not mentioned it, ask whether it bothers them.
+unmodified key gets through — the **bare arrow** for the first two, the **bare Delete** for the
+third, deleting one character instead of the line. So the key appears to half-work rather than to
+be unbound, which is harder to diagnose than silence (#1858). If they have not mentioned it, ask whether it bothers them.
 
 ## `keymap` — shortcuts
 
