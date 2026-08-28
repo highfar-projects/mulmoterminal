@@ -200,3 +200,35 @@ describe("startLoopbackListeners under a v6 wildcard primary", () => {
     warn.mockRestore();
   });
 });
+
+// The v4 half of the outcome exists only to decide what URL to print when `::1` was lost.
+describe("the outcome it reports", () => {
+  const recorder = (succeed: boolean) => {
+    let onError: ((err: NodeJS.ErrnoException) => void) | undefined;
+    const loopback: LoopbackListener = {
+      once: (_event, handler) => {
+        onError = handler;
+        return undefined;
+      },
+      listen: (_port, _address, onListening) => {
+        if (succeed) onListening();
+        else onError?.(Object.assign(new Error("in use"), { code: "EADDRINUSE" }));
+        return undefined;
+      },
+    };
+    return loopback;
+  };
+
+  it("counts an address the primary already serves as served", async () => {
+    const outcome = await startLoopbackListeners({ address: () => ({ address: "::" }) }, [recorder(true), recorder(true)], 34567);
+    expect(outcome).toEqual({ v6LoopbackServed: true, v4LoopbackServed: true });
+  });
+
+  it("reports each half separately when only one bind lost", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    // A LAN bind plans both; the first spare takes 127.0.0.1 and the second loses ::1.
+    const outcome = await startLoopbackListeners({ address: () => ({ address: "192.168.64.1" }) }, [recorder(true), recorder(false)], 34567);
+    expect(outcome).toEqual({ v6LoopbackServed: false, v4LoopbackServed: true });
+    warn.mockRestore();
+  });
+});

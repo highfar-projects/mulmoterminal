@@ -966,7 +966,6 @@ server.on("error", (err) => {
 // Number(): PORT comes from the environment as a string, and the (port, host, cb) overload
 // takes a number — the (port, cb) form we used before accepted either.
 server.listen(Number(PORT), BIND_HOST, () => {
-  console.log(`mulmoterminal running at http://localhost:${PORT}`);
   // Takes the loopback addresses this bind did not, and only then tells the parent — the order,
   // the guards on the send and the reason each field is on the wire are all in that module.
   void announceListening(server, loopbackServers, Number(PORT), boundAddress(server.address()), process);

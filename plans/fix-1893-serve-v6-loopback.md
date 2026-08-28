@@ -184,3 +184,50 @@ http://127.0.0.1:34731 … they are filed under http://localhost:34731.
 > ごと固定していて、引数が増えて red になった。**欠陥ではなく guard の脆さ**で、そのすぐ上の
 > コメントが「この guard は 2 度それで壊れた」と警告していた（今回で 3 度目）。第 1 引数だけを
 > 見る形に緩め、何を守っているのかを書き足した。
+
+## レビュー iter-2 —— 印字も「答えが出てから」
+
+Codex（`CHANGES REQUESTED`）:
+
+> `server/index.ts` still prints a `localhost` URL before the asynchronous `::1` bind outcome is
+> known. Direct `npm run server` starts have no IPC parent to replace that announcement.
+
+**iter-1 で IPC は直したのに、その隣の `console.log` を見落としていた。** listen callback の
+先頭で `mulmoterminal running at http://localhost:${PORT}` を無条件に出していて、これは
+**launcher の居ない直起動（`yarn dev` / `npm run server`）では operator が持つ唯一の情報**。
+直す対象は「readiness の名乗り」ではなく「**まだ答えの出ていないことを断言する行すべて**」
+だった、というのが本質。
+
+`localBrowserUrl(port, boundAddress, outcome)` を追加し、印字も bind の後に移した。降り方は
+「まだ真であること」の順:
+
+1. `::1` を持っている → `http://localhost:<port>`
+2. 持っていないが `127.0.0.1` は持っている → `http://127.0.0.1:<port>`
+3. どちらも無い → カーネルが報告した bind アドレス（v6 literal は bracket する）
+
+`localhost` を出さなかったときは理由も 1 行出す。黙って別アドレスを出すと、operator は見慣れない
+アドレスを前に検索語すら持たない。
+
+`LoopbackOutcome` に `v4LoopbackServed` を足したが、**wire には載せない**。launcher が決める
+ことは 1 つ（ブラウザを `localhost` へ送ってよいか）だけで、v4 の可否はこの process だけが
+使う。読まれないフィールドは、いつか間違って読まれる。
+
+### iter-2 の検証
+
+| ミューテーション | 結果 |
+|---|---|
+| 常に `localhost` を印字する（= 指摘された挙動） | 4 red |
+
+**実機 —— 直起動**（`npx tsx server/index.ts`、launcher 無し）
+
+| 条件 | 印字 |
+|---|---|
+| `::1` が空、port 34740 | `[bind] also listening on ::1:34740 …` → `mulmoterminal running at http://localhost:34740` |
+| `::1` を他プロセスが保持、port 34741 | `mulmoterminal running at http://127.0.0.1:34741` + `[bind] not printing http://localhost:34741 — something else holds [::1]:34741 …`。サーバは生存（`127.0.0.1` = 200） |
+
+ゲート: `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0、
+`yarn test` **11601 passed / 50 skipped**。
+
+> spec が `sonarjs/no-clear-text-protocols` に引っかかった（LAN アドレスの literal URL）。
+> `test/bin/probe-bind-host.spec.ts` が同じ問題を `new URL()` で assert して回避しているので
+> それに合わせた。

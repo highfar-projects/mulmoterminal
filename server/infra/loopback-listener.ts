@@ -110,6 +110,10 @@ export interface LoopbackOutcome {
    * the browser went to that process under this app's origin (Codex, PR #1903).
    */
   v6LoopbackServed: boolean;
+  /** The same question for `127.0.0.1`. Only used to decide what URL to PRINT when `::1` was
+   *  lost — `localhost` is out at that point, and this says whether the v4 loopback is a truthful
+   *  thing to name instead or whether the bound address is all that is left. */
+  v4LoopbackServed: boolean;
 }
 
 const WARNING_TEXT: Record<LoopbackReason, string> = {
@@ -220,9 +224,12 @@ export async function startLoopbackListeners(primary: PrimaryListener, spares: r
       return startOne(spare, plan, port);
     }),
   );
-  // No v6 plan means the PRIMARY already answers there — served, with nothing to take. A plan that
-  // failed is the only way this is false, and it is the case the launcher must not send a browser
-  // to `localhost` into.
-  const v6 = plans.findIndex((plan) => plan.address === V6_LOOPBACK);
-  return { v6LoopbackServed: v6 === -1 || results[v6] === true };
+  // No plan for an address means the PRIMARY already answers there — served, with nothing to take.
+  // A plan that FAILED is the only way either of these is false, and the v6 one is the case the
+  // launcher must not send a browser to `localhost` into.
+  const served = (address: string): boolean => {
+    const at = plans.findIndex((plan) => plan.address === address);
+    return at === -1 || results[at] === true;
+  };
+  return { v6LoopbackServed: served(V6_LOOPBACK), v4LoopbackServed: served(V4_LOOPBACK) };
 }

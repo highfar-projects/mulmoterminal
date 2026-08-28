@@ -12,6 +12,10 @@ export interface IpcParent {
   send?: (message: unknown, handle: undefined, options: undefined, callback: () => void) => unknown;
 }
 
+/** Deliberately NARROWER than `LoopbackOutcome`: the launcher decides one thing from this — may
+ *  the browser be sent to `localhost` — and `v4LoopbackServed` answers a question only this
+ *  process asks (which URL to print for a direct start). A field nobody reads is a field someone
+ *  later reads by mistake. */
 export interface ListeningMessage {
   type: "listening";
   port: number;
@@ -56,6 +60,35 @@ export const listeningMessage = (port: number, address: string | null, outcome: 
  * supervisor while this server is still in its ~3s of setup. The callback catches the same error
  * for a channel that closes between the check and the write.
  */
+/**
+ * The URL a HUMAN should be given, once the loopback binds have been attempted.
+ *
+ * `localhost` is the one to print — it is the origin the browser files its settings under
+ * (#1889) — but ONLY once this server holds every address it resolves to. Printing it before the
+ * `::1` outcome is known is the same defect as announcing readiness early, and it reaches further:
+ * a direct `npm run server` has no launcher to correct it, so this line is all the operator has
+ * (Codex, PR #1903).
+ *
+ * The fallbacks descend by what is still true: the v4 loopback if we hold it, otherwise the
+ * address the kernel says we bound, which is the last thing that can be asserted at all.
+ */
+export function localBrowserUrl(port: number, boundAddress: string | null, outcome: LoopbackOutcome): string {
+  if (outcome.v6LoopbackServed) return `http://localhost:${port}`;
+  if (outcome.v4LoopbackServed) return `http://127.0.0.1:${port}`;
+  if (boundAddress === null) return `http://127.0.0.1:${port}`;
+  // Built through `URL` so an IPv6 literal is bracketed: `http://::1:34567` is not a URL at all.
+  const url = new URL(`http://localhost:${port}`);
+  url.hostname = boundAddress.includes(":") ? `[${boundAddress}]` : boundAddress;
+  return url.origin;
+}
+
+/** Why the URL above is not `localhost`, or null when it is. Silence would leave an operator
+ *  looking at an address they did not expect with nothing to search for. */
+export const notLocalhostReason = (port: number, outcome: LoopbackOutcome): string | null =>
+  outcome.v6LoopbackServed
+    ? null
+    : `[bind] not printing http://localhost:${port} — something else holds [::1]:${port}, and a browser resolving localhost would reach it under this app's saved settings.`;
+
 export async function announceListening(
   primary: PrimaryListener,
   spares: readonly LoopbackListener[],
@@ -64,6 +97,11 @@ export async function announceListening(
   parent: IpcParent,
 ): Promise<void> {
   const outcome = await startLoopbackListeners(primary, spares, port);
+  // AFTER the binds, for the same reason the IPC message is: this line is what a direct
+  // `npm run server` hands its operator, and there is no launcher behind it to correct.
+  console.log(`mulmoterminal running at ${localBrowserUrl(port, boundAddress, outcome)}`);
+  const reason = notLocalhostReason(port, outcome);
+  if (reason !== null) console.warn(`\x1b[33m${reason}\x1b[0m`);
   if (!parent.connected) return;
   parent.send?.(listeningMessage(port, boundAddress, outcome), undefined, undefined, () => {});
 }

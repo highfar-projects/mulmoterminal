@@ -7,7 +7,7 @@
 // claimed yet, and whatever claims it in between answers under this app's origin (Codex, #1903).
 import { describe, it, expect, vi } from "vitest";
 
-import { announceListening, listeningMessage, type IpcParent } from "../../../server/infra/announce-listening.js";
+import { announceListening, listeningMessage, localBrowserUrl, notLocalhostReason, type IpcParent } from "../../../server/infra/announce-listening.js";
 import type { LoopbackListener, PrimaryListener } from "../../../server/infra/loopback-listener.js";
 
 const primaryOn = (address: string): PrimaryListener => ({ address: () => ({ address }) });
@@ -98,12 +98,54 @@ describe("announceListening", () => {
 describe("listeningMessage", () => {
   // The dev supervisor keys on `type` alone (#1735), so the shape may grow but must not lose it.
   it("always names itself, whatever else it carries", () => {
-    expect(listeningMessage(34567, null, { v6LoopbackServed: false }).type).toBe("listening");
+    expect(listeningMessage(34567, null, { v6LoopbackServed: false, v4LoopbackServed: true }).type).toBe("listening");
   });
 
   // A bind that is a pipe or is not listening reports no address; the launcher falls back rather
   // than guessing from a name.
   it("passes a null address through rather than inventing one", () => {
-    expect(listeningMessage(34567, null, { v6LoopbackServed: true }).address).toBeNull();
+    expect(listeningMessage(34567, null, { v6LoopbackServed: true, v4LoopbackServed: true }).address).toBeNull();
+  });
+});
+
+// What a direct `npm run server` prints is all its operator has — there is no launcher behind it
+// to correct an address, so the line must not be written before the answer is known (#1903).
+describe("localBrowserUrl", () => {
+  const ok = { v6LoopbackServed: true, v4LoopbackServed: true };
+
+  it("names localhost once every address it resolves to is ours", () => {
+    expect(localBrowserUrl(34567, "127.0.0.1", ok)).toBe("http://localhost:34567");
+  });
+
+  // The whole point: `localhost` prefers `::1`, so naming it while a stranger holds that address
+  // sends the operator to the stranger under this app's origin.
+  it("refuses localhost when the v6 loopback was lost, and says why", () => {
+    const lost = { v6LoopbackServed: false, v4LoopbackServed: true };
+    expect(localBrowserUrl(34567, "127.0.0.1", lost)).toBe("http://127.0.0.1:34567");
+    expect(notLocalhostReason(34567, lost)).toContain("[::1]:34567");
+  });
+
+  it("says nothing extra when localhost IS the answer", () => {
+    expect(notLocalhostReason(34567, ok)).toBeNull();
+  });
+
+  // Neither loopback held: the bound address is the last thing that can still be asserted.
+  // Asserted through `URL` rather than against a literal, which trips sonarjs/no-clear-text-
+  // protocols — the same dodge test/bin/probe-bind-host.spec.ts uses, and it pins what matters.
+  it("falls back to the address the kernel reported when neither loopback is ours", () => {
+    const none = { v6LoopbackServed: false, v4LoopbackServed: false };
+    const url = new URL(localBrowserUrl(34567, "192.168.64.1", none));
+    expect(url.hostname).toBe("192.168.64.1");
+    expect(url.port).toBe("34567");
+  });
+
+  it("brackets an IPv6 literal, which is not a URL unbracketed", () => {
+    const none = { v6LoopbackServed: false, v4LoopbackServed: false };
+    expect(new URL(localBrowserUrl(34567, "fd00::1", none)).hostname).toBe("[fd00::1]");
+  });
+
+  it("still names an address when the bind reported none at all", () => {
+    const none = { v6LoopbackServed: false, v4LoopbackServed: false };
+    expect(localBrowserUrl(34567, null, none)).toBe("http://127.0.0.1:34567");
   });
 });
