@@ -25,8 +25,13 @@ So look first, then offer:
    nothing is), so the proposal is about what is missing.
 2. **Check the platform** — `uname`. It decides which sets are even usable: no `F1`–`F12` and no
    `Option`+letter on macOS, and the Cmd line-editing set below only makes sense there.
-3. **Offer two concrete sets, one of each kind** — one from the action starter sets, and one from
-   the `send` starter sets. Name what each key will do in the terminal they are sitting in.
+3. **Offer concrete sets rather than a blank question**, and what you offer depends on step 2:
+   - **Always** one from the action starter sets. Name what each key will do in the terminal they
+     are sitting in.
+   - **On macOS, also the `send` line-editing set.**
+   - **Off macOS there is no `send` set to offer, and that is not an omission** — see the reason
+     under the `send` starter set. Say the mechanism exists and what it is for, then build an entry
+     from the `bytes` table only if they name a key that is not doing what they want.
 4. **Write only what they pick.** The rule below still holds: every binding takes a key away from
    the program inside the terminal, so nothing goes in unasked.
 
@@ -136,7 +141,13 @@ would be worse than a short one — every other combination either already works
 |---|---|---|
 | **macOS line editing** | `Cmd+ArrowLeft` → `\u0001`, `Cmd+ArrowRight` → `\u0005`, `Cmd+Backspace` → `\u0015` | **The one to lead with on a Mac.** Start of line, end of line, delete to start of line — the habit every other macOS text field has trained. `Cmd+Backspace` is the Mac Delete key; `\u0015` is `Ctrl+U` |
 
-It is the one `send` set to offer a Mac user unprompted, pairing with **Arrows** on the action side above. It costs nothing, which is what makes that safe: those three keystrokes reach the
+It is the one `send` set to offer a Mac user unprompted, pairing with **Arrows** on the action side
+above — and **there is no non-macOS equivalent, on purpose.** `send` exists to reach a key the shell
+already understands from a key the keyboard has; on Linux and Windows `Ctrl+A` and `Ctrl+E` are
+directly typeable, so there is no gap to close unprompted. Off macOS, mention `send` and wait for a
+key they name.
+
+The macOS set costs nothing, which is what makes offering it safe: those three keystrokes reach the
 terminal today as the **bare** arrow or Delete, because the Cmd is dropped. Binding them takes away
 a keystroke nobody was using.
 

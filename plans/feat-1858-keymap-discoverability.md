@@ -195,6 +195,21 @@ i18n 化はこの変更と独立に戻せる。ja のガイドには注記とリ
 画像は 2x で撮って 950px へ縮小（`docs/guide/images/config-keymap-send-empty-{en,ja}.png`、
 259KB / 279KB。リポジトリの既存画像は 60KB〜840KB）。
 
+### codex が見つけた、私の手順の内部矛盾
+
+**`CODEX VERDICT: CHANGES REQUESTED`（2 巡目）:**
+
+> The mandated initial `send` proposal remains unconditional although the only `send` starter set
+> is macOS-only, leaving Linux/Windows flows internally contradictory.
+
+正しい。手順 3 が「アクション側と `send` 側から 1 セットずつ提案しろ」と**無条件**に書いてあるのに、
+`send` のスターターセットは macOS 専用の 1 つしかない。Linux / Windows では、**存在しないセットを
+提案するか、指示に従わないか**の二択になる。
+
+手順 3 をプラットフォーム条件付きに直し、**なぜ非 macOS のセットが無いのかを書いた** ——
+`send` は「シェルが理解するキーを、キーボードにあるキーから届かせる」ためのもので、Linux / Windows
+では `Ctrl+A` / `Ctrl+E` がそのまま打てるので**埋めるべき穴が無い**。これは欠落ではなく設計。
+
 ### ゲート
 
 `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0。
