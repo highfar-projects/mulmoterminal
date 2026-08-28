@@ -8,9 +8,10 @@ description: A browser-terminal cockpit for running several AI coding agents (Cl
 
 # MulmoTerminal Guide (English)
 
-> **4.10.1 is out.** A zoomed cell no longer grows a scrollbar that scrolls nothing, and the
-> Prompts pane can be selected and copied with the mouse. Nothing to configure —
-> [what changed and how to tell](v4.10.1.html).
+> **4.11.0 is out.** You can now stop a running server from any terminal or from the browser, and
+> three port bugs that quietly broke local sessions are fixed — `PORT` is read, and the launcher
+> stops before starting a second server on a port that is taken —
+> [what changed and what to do about it](v4.11.0.html).
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching

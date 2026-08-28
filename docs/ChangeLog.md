@@ -8,6 +8,102 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.11.0 — 2026-08-28
+
+> **Setup guide:** [Stopping it, and the ports it takes](https://receptron.github.io/mulmoterminal/guide/en/v4.11.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.11.0.html))
+
+A way to stop the server that works from anywhere, an update badge that can actually appear, three
+port bugs that had been quietly breaking local sessions, the first code for Campaign Mode, and
+shared-app templates that teach a look rather than leaving grey boxes.
+
+### `mulmoterminal stop`, and a Quit button in the browser (#1820, #1823, #1824, #1825)
+
+There was no way to stop a running server other than finding the terminal you started it in. `npx
+mulmoterminal@latest` opens a browser, so that terminal is often the one window you are not looking
+at — and closing the tab leaves the server running.
+
+Three parts, each usable on its own:
+
+- **The process says its own name.** `process.title` is now `mulmoterminal :<port>`, in both the
+  launcher and the server, so `ps` and `pkill` have something to find. The port is in the name
+  because overwriting argv erases `--port` and the install path at the same time, and those were
+  previously the only way to identify the process (#1823).
+- **`mulmoterminal stop` works from any terminal** (#1824). No searching was needed: the server
+  already registers itself in `~/.mulmoterminal/instances/<pid>.json` (#1061), which is how the
+  launcher can say "already running". It sends SIGTERM so the server's own handler runs — the same
+  shutdown Ctrl+C performs — and a new `GET /api/instance` lets the pid be confirmed before
+  signalling it, rather than trusting a stale file.
+- **Settings → Quit MulmoTerminal**, and `POST /api/shutdown` behind it (#1825). MulmoClaude had
+  already answered the same need, so the route name and shape were taken from there rather than
+  invented.
+
+### The update badge can now appear at all (#1821, #1826)
+
+The version check ran once, at boot. Under `npx mulmoterminal@latest` the running version *is* the
+registry's latest at that moment, so the only check that ever ran could structurally only return
+"you are current". A newer version shipping later would make the comparison meaningful — but
+nothing looked again, and a server that runs for days never restarts to find out.
+
+The comparison logic was never broken. What was missing was a second look: the check now repeats
+every three hours, and the UI re-reads the result.
+
+### Three port bugs, all of them local sessions failing to reach the server
+
+**A widened bind cut the server off from its own sessions (#1834, #1838).** Setting
+`MULMOTERMINAL_HOST` to a specific address made hooks fail on every tool call and left the GUI MCP
+stuck on "still connecting". The server now also listens on loopback when the primary bind does not
+serve it, because that is the address its own clients use.
+
+**`PORT` was ignored, and the error message told you to use it (#1857, #1861, #1873).**
+`PORT=34601 npx mulmoterminal` started on 34567; only `--port` had any effect. The same line was
+wrong in the other direction too — the launcher exported its own `PORT` to every terminal in every
+cell, so a dev server started in a cell tried to bind MulmoTerminal's port and died. The chosen port
+now travels to the server as an argument rather than an environment variable, which argv does not
+pass to child processes, and `PORT` is read as a request when you set one.
+
+**The second-instance guard never fired on a default install (#1876, #1877).** The launcher probed
+the `::` wildcard while the server binds `127.0.0.1`, and a bind only collides with the same
+address — so a port a running MulmoTerminal was holding was reported free. The launcher then started
+a server that immediately died, while the readiness check got a 200 from the *other* server and
+printed "MulmoTerminal is ready" over it.
+
+The launcher no longer guesses which address a port means. The child reports what the kernel
+actually bound, over IPC, and every address a launch needs is checked before spawning — including
+the `127.0.0.1` that the GUI MCP dials as a literal, whatever the server was told to bind. The URL
+it prints is the address it checked, never `localhost`, which resolves to either family.
+
+### Campaign Mode, first code (#1815, #1816, #1817, #1837, #1841, #1845)
+
+Groundwork for running a queue of tasks unattended. Nothing is wired up yet — these are the pieces
+the runner will use, each landing with its own tests:
+
+- **Design notes** under `future/`, describing one invariant pipeline and how it sits on the grid
+  (#1816).
+- **A turn-correlation rule moved to `common/`** so the server can use what the browser already
+  knew about whether a finished turn answers what was sent — no behaviour change (#1817).
+- **A task's state machine** — phases, terminal states, and the properties each phase holds (#1837).
+- **A durable record** of what a campaign did, as an append-only log that folds back into per-task
+  state (#1841).
+- **A claim registry** deciding path exclusivity: a normalised identifier, compare-and-set, an
+  expiring term, and an owner token that fences out a stale holder (#1845).
+
+### The deck editor moved, the canvas keeps up with the LLM, and formulas render (#1846, #1853, #1854, #1855, #1884)
+
+`@mulmocast/deck-web` was deprecated in favour of `@mulmocast/beat-editor`, and the mulmocast
+dependencies moved to the 2.x line. This repo never imported either from its own source — they were
+declared to satisfy a plugin's peer range — so the change is a declaration following its plugin.
+
+More visibly: **an LLM rewriting a MulmoScript now updates the canvas you already have open**
+(#1854). The plugin broadcasts its writes and the host forwards them; previously you had to close
+and reopen. With `mulmoscript-plugin` 4.3.0 every beat type is editable, and a single beat can be
+replaced without resending the whole script (#1855).
+
+And **TeX formulas render in a `presentDocument` preview** (#1884). `$…$` and `$$…$$` are drawn as
+MathJax SVG, which is what the Marp deck side of the same document already did — so the two halves
+finally agree. The `$` rule is Pandoc's, so `US$5` and `$5-$10` stay as text. This is a dependency
+bump only; the plugin owns the whole feature, and its stylesheet already reaches this app's shadow
+DOM.
+
 ### The shared-app templates teach a look, not only a declaration
 
 Six of the seven templates carried one line of CSS, and that line was the canvas floor rather than
@@ -47,6 +143,16 @@ for — `uidField` — is used by `project-board`'s `assignments` as well. It sh
 feature; `project-board` was extracted from a board that actually ran, and the one app started from
 `todo-board` was hand-built into `project-board`'s shape before the template existed. Six templates
 remain.
+
+### Documentation
+
+The launch demo videos are embedded in the README and both guides (#1827, #1828), with a poster
+frame so they do not show an empty grey box before playing (#1842, #1847), and placed after the
+getting-started block with a lead-in rather than immediately under the banner (#1839, #1840). The
+README's opening was reordered so the first two screens answer "what is this" and "does it work"
+(#1860), with the GIF ahead of the video because GitHub does not autoplay attached video (#1862).
+
+Dependency updates: #1809, #1865, #1883.
 
 ## mulmoterminal@4.10.1 — 2026-08-20
 
