@@ -229,6 +229,26 @@ event before the terminal"*）、**Arrows を Mac で勧めると、2 つ下の�
   割り当てろ」という既存ルールが要求しているものと一致する
 - 「衝突しない」の主張を「macOS 提案の 2 つの半分は**別のキーを取る**」に置き換えた
 
+### 同じ主張が 5 箇所にあり、1 箇所ずつ直していた
+
+CodeRabbit が skill の frontmatter の「only lists what is bound」を指摘し、私はそこだけ直した。
+**次の巡で codex が、画面そのものの文言に同じ誤りが残っていると指摘した** —— 説明を直して、
+説明されている当のものを直していなかった。
+
+そこで grep して全部掃いた。同じ主張は **5 箇所**にあった:
+
+| 場所 | 直す前 |
+|---|---|
+| `src/i18n/en.ts` | "this lists what is bound under `keymap` now" |
+| `src/i18n/ja.ts` | 「いま `keymap` に割り当てられているものが出ます」 |
+| `docs/guide/en/config.md` の一覧表 | "What is bound to what, read-only" |
+| `docs/guide/ja/config.md` の一覧表 | 「今どのキーに何が割り当たっているかの一覧」 |
+| `README.md` | "that section also lists what is bound now" |
+| `server/skills/…/SKILL.md`（1 巡目で修正済み） | "only lists what is bound" |
+
+**どれも元から誤り**だった —— この節は未設定のアクションも全部並べている。1 箇所ずつ直すのを
+やめて、`grep` で 0 件になるまで掃いた。
+
 ### ゲート
 
 `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0。
