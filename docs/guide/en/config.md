@@ -1192,9 +1192,13 @@ The bytes go to the terminal **the key was pressed in** — the one your cursor 
 enlarged one".
 
 {: .warning }
-> **An action beats a `send` on the same keystroke, always.** They are not decided in the same place:
-> app actions are claimed before the terminal ever sees the key, so the `send` silently never fires.
-> MulmoTerminal **warns** at startup naming both. An empty `"bytes"` is refused outright — it would
+> **An action beats a `send` on the same keystroke — with one exception.** They are not decided in
+> the same place: most app actions are claimed before the terminal ever sees the key, and `paste` is
+> claimed inside the terminal ahead of `send`, so the `send` silently never fires. **`copy` is the
+> exception** — it acts only while something is selected, so with no selection the key falls
+> through and the `send` fires after all.
+> MulmoTerminal **warns** at startup naming both, though the message always names the action as the
+> winner; read it as "these two collide". An empty `"bytes"` is refused outright — it would
 > take the key away from the terminal and put nothing back.
 
 Bound entries are listed in **Settings → Keyboard shortcuts** alongside the actions, written in the

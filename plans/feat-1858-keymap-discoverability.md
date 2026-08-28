@@ -653,6 +653,33 @@ describeBytes(caret text)        = "^A"
 **キャレット文字列に置き換えると新しい 1 件だけが赤くなり、表示のアサーション 2 件を含む
 残り 8 件は緑のまま**だった。盲点の実演。
 
+### 「アクションが必ず勝つ」は overbroad で、元の主張自体が誤っていた（ローカル codex、P2）
+
+私が書いた衝突の表は「アクションが勝つ —— グリッドが capture フェーズでキーを奪うから」と
+書いていた。**`copy` と `paste` については成り立たない。**
+
+`src/composables/gridShortcut.ts`:
+
+> Terminal-scoped actions are decided inside the terminal … **must never reach this handler**
+
+`TERMINAL_SCOPED_ACTIONS = ["copy", "paste"]` はグリッドに到達しない。ターミナル側
+（`useTerminalConnections.ts`）の順序は `clipboardActionFor` → `onSend` で、
+**`clipboardActionFor` は選択が無ければ `copy` に対して null を返す**。
+
+| 同じキーにあるもの | 実際に勝つのは |
+|---|---|
+| `copy`/`paste` 以外のアクション + `send` | アクション（capture フェーズ） |
+| `paste` + `send` | `paste`（ターミナル内で `send` より先） |
+| **`copy` + `send`、選択なし** | **`send`** |
+
+skill の 3 箇所と両ガイドを直した。
+
+**そして元の主張は `common/keymap.ts` のものだった** —— コメントが「every action outranks every
+send binding」と書き、`duplicateWarnings` が**常にアクションを勝者として警告文に書く**。
+つまり `copy` + `send` の人は**起動時に嘘の説明を読む**。これはこの PR より前からの実在の欠陥で、
+別リポジトリ内の別変更なので [#1901](https://github.com/receptron/mulmoterminal/issues/1901)
+に分けた。ガイドには「警告は常にアクションを勝者と書くので、『衝突している』とだけ読め」と添えた。
+
 ### ゲート
 
 `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0。

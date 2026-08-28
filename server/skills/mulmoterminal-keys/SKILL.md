@@ -51,9 +51,10 @@ Read the whole keymap and find **everything** claiming that keystroke, not just 
 
 | what is on `Ctrl+C` | what it does to the interrupt |
 |---|---|
-| any action other than `copy` | takes it **always** — the grid claims the key in the capture phase before the terminal sees it |
-| `copy` | takes it **only while something is selected** — `clipboardActionFor` returns null with no selection, so the terminal sends `^C` exactly as it always did |
-| a `send` entry | replaces it with those bytes |
+| an action other than `copy` / `paste` | takes it **always** — the grid claims the key in the capture phase before the terminal sees it |
+| `paste` | takes it **always** — not through the grid (`gridShortcutFor` skips terminal-scoped actions) but inside the terminal, ahead of `send` |
+| `copy` | takes it **only while something is selected** — `clipboardActionFor` returns null with no selection, so the key falls through |
+| a `send` entry | replaces it with those bytes — **and it is what fires** when `copy` is on the same key with nothing selected |
 
 So "it works sometimes" points at `copy` plus a selection sitting in that cell, and "it never works"
 points at one of the others. `terminalSubmit` is not involved either way, and changing it would be
@@ -85,7 +86,9 @@ So look first, then offer:
 
    | what is already on the keystroke | what happens | what to do |
    |---|---|---|
-   | an **action** | the action wins — the grid claims the key in the capture phase | say so, and ask whether to move the action |
+   | an action other than `copy` / `paste` | it wins — the grid claims the key in the capture phase | say so, and ask whether to move the action |
+   | `paste` | it wins — decided inside the terminal, before `send` | same |
+   | `copy` | it wins **only while something is selected**; with none, `clipboardActionFor` returns null and **your `send` fires** | say which behaviour they get when, and let them choose |
    | an existing **`send`** | the **earlier entry** wins, because `sendBytesFor` takes the first match | update that entry, never append a second |
 
    So before offering the macOS set, look for **both kinds** on `Cmd+ArrowLeft`, `Cmd+ArrowRight`
@@ -262,8 +265,12 @@ For anything else, build the entry from the `bytes` table below rather than from
 | Delete to end of line | `\u000b` | `Ctrl+K` |
 | Escape | `\u001b` | `Esc` |
 
-- **An action beats a `send` on the same keystroke, always.** They are decided in different places
-  and the action is claimed first, so the `send` silently never fires. The server warns at startup.
+- **An action beats a `send` on the same keystroke — except `copy` with nothing selected.** Most
+  actions are claimed by the grid in the capture phase, and `paste` inside the terminal, both ahead
+  of `send`, so the `send` silently never fires. `copy` is the exception: `clipboardActionFor`
+  returns null with no selection, and the `send` fires then. The server warns at startup about the
+  collision, and **its message names the action as the winner even in that case** — so read it as
+  "these two collide", not as a verdict.
 - **Empty `"bytes"` is refused** and stops the server: it would take the key from the terminal and
   put nothing back.
 
