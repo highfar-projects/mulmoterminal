@@ -1101,7 +1101,8 @@ away from tmux itself. These use `Alt` instead, which tmux leaves alone.
 
 {: .warning }
 > On **macOS** `Alt`+letter does not work — `Option` types an alternate character, so the letter
-> never arrives (see [above](#macos-keys)). Mac users want the arrows version below.
+> never arrives (see [above](#macos-keys)). Mac users want the arrows version below — **its up/down
+> pair**, for the reason given there.
 
 **iTerm2-flavoured** — closest to `Cmd`+`D` splitting a pane. `terminal-new-adjacent` starts a
 shell in the current terminal's directory with no form in between, which is the nearest thing the
@@ -1124,7 +1125,7 @@ grid has to a split. Bind `terminal-new-here` instead if you would rather pick t
 > `Cmd`+`Shift`+`W` works if you want one.
 
 **Arrow keys — the safest cross-platform set.** Arrows are unaffected by the macOS `Option`
-problem and are not browser-reserved, so this one behaves the same everywhere.
+problem and are not browser-reserved.
 
 ```json
 {
@@ -1137,6 +1138,17 @@ problem and are not browser-reserved, so this one behaves the same everywhere.
   }
 }
 ```
+
+{: .warning }
+> **On macOS, take the up/down pair only.** `Option`+`Left` and `Option`+`Right` usually move by
+> word inside a Mac terminal, and a bound action is claimed in the capture phase **before** the
+> terminal sees the key — so binding `zoom-next` / `zoom-prev` to them takes word motion away.
+> `Alt+ArrowUp` and `Alt+ArrowDown` are enough on their own, because `zoom-toggle` and
+> `next-attention` are the two that work without something already enlarged.
+>
+> ```json
+> { "keymap": { "zoom-toggle": "Alt+ArrowUp", "next-attention": "Alt+ArrowDown" } }
+> ```
 
 **Supervising many agents** — one key, pressed repeatedly, to walk everything that wants you:
 awaiting input first, then finished-and-unreviewed, then idle, skipping whatever is mid-turn.

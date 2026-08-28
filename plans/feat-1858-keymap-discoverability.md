@@ -260,6 +260,27 @@ CodeRabbit が skill の frontmatter の「only lists what is bound」を指摘�
 **置いた仮定を口に出す**（「Mac ですね、では…」）。違う人は一言で訂正できる。毎回聞けば全員が
 往復のコストを払うが、外れた推測のコストは一文で、外れた人にしかかからない。
 
+### ローカル codex が見つけた、3 度目の「1 箇所だけ直した」
+
+CodeRabbit の Major（Arrows が macOS で単語移動を奪う）を **SKILL.md では直したが、ガイドは
+直していなかった。** ガイドは Mac ユーザーに矢印キー版を勧め、しかも「どの環境でも同じように
+動きます」と書いていた。
+
+これで**同じ形の見落としが 3 回目**:
+
+| 巡 | 直した場所 | 残した場所 |
+|---|---|---|
+| 1 → 2 | skill frontmatter の「only lists what is bound」 | 画面そのものの文言（codex が指摘） |
+| 2 → 3 | 画面の文言 | ガイド 2 つ + README（grep で 5 箇所と判明、一括修正） |
+| 4 → 8 | SKILL の Arrows 警告 | `docs/guide/{en,ja}/config.md` の Arrows 節（ローカル codex が指摘） |
+
+**教訓は毎回同じで、対策も毎回同じ**: 指摘を受けたら、その 1 箇所を直す前に `grep` で同じ主張の
+全箇所を出す。今回も「どの環境でも同じように動きます」で grep して 0 件になるまで掃いた。
+
+両ガイドの矢印キー節に警告ブロックを足した —— macOS では上下のペアだけ、理由（capture フェーズが
+ターミナルより先にキーを奪う）と、そのペアで足りる理由（拡大していなくても使えるのは `zoom-toggle`
+と `next-attention` の 2 つ）付き。
+
 ### ゲート
 
 `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0。
