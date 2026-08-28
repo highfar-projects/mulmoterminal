@@ -224,10 +224,13 @@ dead today: the Cmd is dropped and the **bare** arrow or Delete gets through, so
 one character and `Cmd+Delete` erases one. The binding replaces that with line motion, which is the
 point, and is also why the user confirms first.
 
-What makes it safe to *offer* unprompted is that nothing is lost — the behaviour being replaced is
-the one the user is complaining about. **Provided nothing is already on those three keystrokes**,
-neither an action nor an earlier `send` (step 1); either one wins and the new entry would never
-fire.
+What makes it safe to *offer* unprompted is that **the replaced behaviour stays reachable**: plain
+`Left`, `Right` and `Delete` still move and erase one character, so the binding adds line motion on
+a modifier rather than removing anything from the keyboard. And what it replaces is the behaviour
+the user came to complain about.
+
+**Provided nothing is already on those three keystrokes**, neither an action nor an earlier `send`
+(step 1); either one wins and the new entry would never fire.
 
 **Two that look like obvious additions and are not:**
 
