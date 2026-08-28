@@ -207,13 +207,26 @@ describe("the companions a bound address implies", () => {
 
   // Loopback-only: the whole purpose is local access, so a misrouted local client leaves nothing.
   // Every GUI MCP client dials 127.0.0.1 by literal (guiMcpUrlTemplate).
-  it("gives a loopback bind the v4 address GUI MCP clients dial", () => {
-    expect(companionHostsFor("::1")).toEqual(["127.0.0.1"]);
-    expect(companionHostsFor("127.0.0.2")).toEqual(["127.0.0.1"]);
+  // A v6 loopback primary DOES get it, because the server starts a secondary 127.0.0.1 listener
+  // for one (loopbackListenPlan returns a plan) — so the port has to be ours.
+  it.each(["::1", "0:0:0:0:0:0:0:1"])("gives a v6 loopback bind the v4 address GUI MCP clients dial: %s", (address) => {
+    expect(companionHostsFor(address)).toEqual(["127.0.0.1"]);
   });
 
   it("asks for nothing extra when the bind already IS that address", () => {
     expect(companionHostsFor("127.0.0.1")).toEqual([]);
+  });
+
+  // And 127.0.0.2 does NOT, which is the correction the CI reviewer forced: the server treats any
+  // 127/8 primary as already serving v4 loopback, so it plans no secondary listener — and a
+  // 127.0.0.2 bind does not answer on 127.0.0.1 either. Reserving that port would be a promise
+  // this launch cannot keep, and could refuse a launch for no benefit.
+  //
+  // The consequence for such a bind — GUI MCP and hooks cannot reach the server at all, free port
+  // or not — is a pre-existing gap in the server's own assumption, reported rather than patched
+  // from the launcher. This test pins the launcher not over-promising, not the gap being closed.
+  it("does not promise the v4 companion for a 127/8 bind the server will not serve it from", () => {
+    expect(companionHostsFor("127.0.0.2")).toEqual([]);
   });
 
   // The other half, and the round-2 call that still stands: a specific non-loopback bind was

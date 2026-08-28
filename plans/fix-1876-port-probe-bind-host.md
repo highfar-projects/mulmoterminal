@@ -646,3 +646,56 @@ listen(0, "127.1")           -> {"address":"127.0.0.1"}   ← macOS/Linux のみ
 break-verify: companion を typed string から決める → 1 red、v6 ワイルドカードが `::1` を失う
 → 1 red、fallback が probe の答えを無視する → 1 red。復元は byte-identical。
 
+### iter-11 — guard が守れない約束をしていた（P2）
+
+CI Codex:
+
+> This companion rule promises to protect GUI MCP clients for every IPv4 loopback primary, but
+> `127.0.0.2` does not serve `127.0.0.1`. … `loopbackListenPlan()` treats all `127/8` addresses
+> as already serving the fixed `127.0.0.1` client endpoint and therefore never starts the
+> secondary listener.
+
+正しい。`servesV4Loopback(a) = isLoopbackAddress(a) && !a.includes(":")` は **127/8 全体**に
+true を返すので、`127.0.0.2` に bind したサーバは「もう v4 loopback を serve している」と
+みなされ、secondary listener を立てない。**しかし 127.0.0.2 は 127.0.0.1 に応答しない。**
+つまり私の guard は、サーバが serve しないポートを予約し、しかも空いていなければ
+**利益ゼロで launch を拒否**していた。
+
+（macOS では 127.0.0.2 は lo0 に無く bind すらできない —— `EADDRNOTAVAIL` を実測。
+Linux では 127/8 全体がローカルなので実在するケース。）
+
+#### 直し方 —— 2 つの問いに分けた
+
+```js
+if (!servesOnlyThisMachine(boundAddress)) return [];   // round 2 の判断
+if (!willServeV4Loopback(boundAddress)) return [];     // 守れない約束をしない
+```
+
+`willServeV4Loopback` は `loopbackListenPlan` を鏡写しにしている。結果:
+
+| bound | companion | 理由 |
+|---|---|---|
+| `0.0.0.0` | `["127.0.0.1"]` | ワイルドカードが直接 serve する |
+| `::` | `["::1","127.0.0.1"]` | secondary listener を立てる（しかも黙る） |
+| `::1` | `["127.0.0.1"]` | secondary listener を立てる |
+| `127.0.0.1` | `[]` | それ自身 |
+| **`127.0.0.2`** | **`[]`** | **secondary を立てず、127.0.0.1 にも応答しない** |
+| `192.168.11.12` | `[]` | 他マシン向け。round 2 の判断 |
+
+#### 直さなかったこと（明記）
+
+`127.0.0.2` に bind すると、**ポートが空いていても GUI MCP と hooks はサーバに到達できない** ——
+どちらも 127.0.0.1 をリテラルで dial するため。これは**サーバ側の仮定（127/8 なら v4 loopback を
+serve している）の既存の穴**で、launcher からは塞げない。**報告するだけにして、ここでは直さない。**
+
+#### ミューテーションが死んだ行を見つけた
+
+`willServeV4Loopback` の `if (boundAddress === V4_UNSPECIFIED) return true;` を消しても
+テストが赤くならなかった。テストの穴ではなく **その行が冗長**だった（`0.0.0.0` は loopback
+判定に該当しないので、そのまま `true` に落ちる）。削除して、なぜ特別扱いが要らないかを
+コメントに残した。
+
+break-verify: `willServeV4Loopback` のガードを外すと（127.0.0.2 に再び過剰約束）1 red。
+復元は byte-identical。実機回帰: `0:0:0:0:0:0:0:0` と `localhost` は v4 stranger がいれば
+どちらも `already in use` で止まる（従来どおり）。
+

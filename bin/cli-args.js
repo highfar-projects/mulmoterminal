@@ -143,11 +143,42 @@ export function probeFailureIsPortInUse(err) {
  * does not close it.
  */
 export function companionHostsFor(boundAddress) {
+  if (!servesOnlyThisMachine(boundAddress)) return [];
+  if (!willServeV4Loopback(boundAddress)) return [];
   const companions = boundAddress === V6_UNSPECIFIED ? ["::1", V4_LOOPBACK_CLIENTS_DIAL] : [V4_LOOPBACK_CLIENTS_DIAL];
-  if (boundAddress === V4_UNSPECIFIED || boundAddress === V6_UNSPECIFIED || isLoopbackBindHost(boundAddress)) {
-    return companions.filter((host) => host !== boundAddress);
-  }
-  return [];
+  return companions.filter((host) => host !== boundAddress);
+}
+
+/** Does this bind serve only this machine? A wildcard serves it among others; a loopback address
+ *  serves nothing else. Either way, misrouting this machine's own clients leaves the launch with
+ *  no purpose. A specific non-loopback address was chosen to serve OTHERS, and that purpose
+ *  survives — round 2's call, still standing. */
+function servesOnlyThisMachine(boundAddress) {
+  return boundAddress === V4_UNSPECIFIED || boundAddress === V6_UNSPECIFIED || isLoopbackBindHost(boundAddress);
+}
+
+/** Will the server end up answering on `127.0.0.1` at all? Mirrors loopbackListenPlan: the v4
+ *  wildcard covers it directly (falling through below, since it is not loopback), and otherwise
+ *  the secondary listener supplies it — EXCEPT when
+ *  the server thinks the primary already serves v4 loopback, which it decides with
+ *  `isLoopbackAddress(a) && !a.includes(":")`.
+ *
+ *  That exception is why `127.0.0.2` gets no companion. The server plans no secondary listener
+ *  for it and does not answer on `127.0.0.1` either, so reserving that port would be a promise
+ *  this launch cannot keep — and could refuse a launch for no benefit. Found by the CI reviewer,
+ *  which spotted the guard over-promising.
+ *
+ *  NOTE, and deliberately not fixed here: a `127.0.0.2` bind therefore leaves GUI MCP and hooks
+ *  unable to reach the server AT ALL, free port or not, because they dial `127.0.0.1` by literal.
+ *  That is a pre-existing gap in the server's own assumption (any 127/8 "serves v4 loopback"),
+ *  not something this launcher can paper over, and it is reported rather than patched from here. */
+function willServeV4Loopback(boundAddress) {
+  // No special case for the v4 wildcard, and that is not an oversight: `0.0.0.0` is not a
+  // loopback address, so it falls through to `true` on its own. An explicit early return for it
+  // was here and a mutation proved it changed nothing — dead weight that also reads as though
+  // the two cases differ.
+  const serverThinksPrimaryCoversIt = isLoopbackBindHost(boundAddress) && !boundAddress.includes(":");
+  return !serverThinksPrimaryCoversIt;
 }
 
 /**
