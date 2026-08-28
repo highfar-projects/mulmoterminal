@@ -55,7 +55,7 @@ Settings live in three places: the **settings modal (Settings)**, the **global c
 > | **`/mulmoterminal-dirs`** | A project's colours, its position in the grid and launcher, name badge, terminal font size. Starts from the directories you actually open, reads what you already have, and follows the same pattern for the ones that have none. (Settings → **Configure appearance…** starts this one.) |
 > | **`/mulmoterminal-theme`** | Your own [colour scheme](#custom-themes), appearing in Settings' picker. (Settings → **Create a theme…**) |
 > | **`/mulmoterminal-header`** | [Header buttons and chips](#header), global or per project |
-> | **`/mulmoterminal-keys`** | [`keymap`](#keymap), [`copyOnSelect`](#copy-on-select), [`terminalSubmit`](#terminal-submit) — the fix for "Shift+Enter submits instead of adding a line" — and `questionPaneEnabled`. (Settings → **Set up shortcuts…**) |
+> | **`/mulmoterminal-keys`** | [`keymap`](#keymap), [`copyOnSelect`](#copy-on-select), [`terminalSubmit`](#terminal-submit) — the fix for "Shift+Enter submits instead of adding a line" — and [`questionPaneEnabled`](#question-pane). (Settings → **Set up shortcuts…**) |
 > | **`/mulmoterminal-model`** | [`providers`](#providers), a per-project model, and [`customAgents`](#custom-agents) |
 > | **`/mulmoterminal-notify`** | [Which moments beep or push](#sounds), and what each plays. (Settings → **Configure notifications…**) |
 >
@@ -120,7 +120,7 @@ of the app is still English.
 | **Directory settings** | What each directory's `.mulmoterminal.json` is **actually doing**. Expand a row for the values in force (colors with a swatch), **which file each came from**, **keys dropped in validation**, and **keys this app never reads**. Read-only — "Explain my settings…" starts the `mulmoterminal-config` skill to say why and fix it (→ [When a setting isn't working](#dir-settings-preview)) |
 | **Launch commands** | Commands you can launch besides the agents in a grid cell (`{ label, command }`). A plain shell needs no entry — the launcher's **Shell** toggle opens `$SHELL` unconfigured |
 | **Header buttons and chips** | How many buttons and chips your global config declares, read-only — "built-in" when you have configured none. "Set up header buttons…" starts the `mulmoterminal-header` skill (→ [Customizing the header](#header)) |
-| **Terminal keys** | [Copy on select](#copy-on-select) (`copyOnSelect`, off), the question pane (`questionPaneEnabled`), and which bytes your Claude reads as **submit** ([Enter — submit vs. newline](#terminal-submit), `terminalSubmit`) |
+| **Terminal keys** | [Copy on select](#copy-on-select) (`copyOnSelect`, off), the [question pane](#question-pane) (`questionPaneEnabled`), and which bytes your Claude reads as **submit** ([Enter — submit vs. newline](#terminal-submit), `terminalSubmit`) |
 | **Keyboard shortcuts** | Every action and the `send` row, bound or not, read-only. **Everything starts as Not set** — "Set up shortcuts…" starts the `mulmoterminal-keys` skill to bind them in `keymap` (→ [Keyboard shortcuts](#keymap)) |
 | **Voice input** | The language you **dictate in** (your browser's, per-clip detection, or a fixed one). Shown only on a machine that can transcribe |
 | **Models and backends** | The backends a session can run on and whether each can be **reached right now**, read-only. "Add a backend…" starts the `mulmoterminal-model` skill (→ [Using another model](providers.html)) |
@@ -1028,6 +1028,54 @@ Two things it deliberately does **not** copy, both to protect what you already h
 > keyboard focus. If a drag does not seem to land while you are on `http://<some-ip>:PORT`, that is
 > where to look first. Reaching the app at `http://localhost:PORT` has no such limit.
 
+## Answering from a side pane (`questionPaneEnabled`) {#question-pane}
+
+When a Claude session stops to ask you something — the `AskUserQuestion` dialog you normally answer
+with the arrow keys — the same choices appear as **buttons in a pane beside the enlarged terminal**.
+
+**Off unless you ask for it**, because answering from the pane types into the live dialog: it presses
+the arrow keys and Enter in the terminal on your behalf, and a pane driving your keyboard is not
+something to arrive by default.
+
+```json
+{ "questionPaneEnabled": true }
+```
+
+There is a checkbox in **Settings → Terminal keys**. Unlike [copy-on-select](#copy-on-select), a hand
+edit of the file needs **no restart and no reload** — the server reads this one from disk for each
+question, so the next question your session asks will already use the new setting.
+
+- **The terminal dialog does not go away, and this does not replace it.** The pane is a second way to
+  answer the same dialog, so whichever end you use first wins. If you prefer the keyboard you will
+  never notice the pane is there.
+- **The pane opens by itself on the ENLARGED cell** when that session asks something, and its
+  buttons disappear as soon as the question is answered — in the terminal, in the pane, or with Esc.
+- **A question that arrives while its cell is tiled is not lost.** The rule is not "it opens when
+  the question arrives" but **"the enlarged cell shows the question it is blocked on"** — so
+  enlarging that cell later brings the pane up, and so does a reload or a dropped connection
+  recovering, which is why you do not lose a question by refreshing the page. It has no button of
+  its own; there is nothing to press.
+- **Two different ways for the pane to go, and only one of them is remembered.** When the question
+  itself ends — answered in the terminal, answered in the pane, or cancelled with Esc in the
+  terminal — the pane goes because there is nothing left to answer. **Closing the pane with its own
+  × button** is the other one: that is you saying you will answer in the terminal, so it is
+  remembered for that dialog and returning to the cell does not put it back. Either way the next
+  question in that cell opens normally.
+- **Claude sessions only.** The choices arrive on Claude Code's own tool hooks; a codex or shell cell
+  has nothing to publish, so no pane opens there.
+- **This is the pane, not the phone.** MulmoTerminal on a phone answers the same questions whether
+  this is on or off. The switch exists because a pane types into the terminal you are sitting at —
+  and on the phone, nobody is at that keyboard.
+
+What the switch gates is the **offer**: with it off, a question is never sent to the browser, so the
+pane is not hidden — it has nothing to show, and no button could reveal it.
+
+The **close** is sent either way, and deliberately. Turning the switch off in the middle of a
+question would otherwise leave a pane that is already showing buttons with no way to learn the
+dialog had ended: pressing one would send Down and Enter into whatever prompt is underneath. A close
+for a question that was never offered does nothing, and it carries no question text, so this costs
+the off state nothing.
+
 ## Keyboard shortcuts (`keymap`) {#keymap}
 
 Keyboard shortcuts are **opt-in**. There are no defaults: with no `keymap` in `config.json`, nothing is
@@ -1789,6 +1837,7 @@ What you write here appears in an empty cell's launcher under **OR RUN A SCRIPT*
 | `themes` | Colour schemes you defined; they appear in Settings' theme picker (→ [Make your own colour scheme](#custom-themes)) |
 | `keymap` | User-defined keyboard shortcuts. **Empty by default — nothing is bound** (→ [Keyboard shortcuts](#keymap)) |
 | `copyOnSelect` | Put a mouse selection on the clipboard the moment it settles, with no key pressed. **Off by default** (→ [Copy on select](#copy-on-select)) |
+| `questionPaneEnabled` | Offer a Claude session's question as buttons in a pane beside the enlarged terminal. **Off by default** (→ [Answering from a side pane](#question-pane)) |
 | `prWorkdirFooter` | End a created PR's body with `work in <clone>` (→ [Which clone made this PR](#pr-workdir-footer)). **On by default**; `false` opts out |
 | `appendSystemPrompt` | Have replies end with a summary of what was asked / achieved / not done (→ [Turning off the closing summary](#append-system-prompt)). **On by default**; `false` opts out, and a directory's `.mulmoterminal.json` wins |
 | `cockpitLines` | How many lines each cockpit-roster row shows before clamping (default `2 / 2 / 3` → [Cockpit roster line counts](#cockpit-lines)) |

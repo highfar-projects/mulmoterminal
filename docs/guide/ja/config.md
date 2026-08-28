@@ -55,7 +55,7 @@ description: MulmoTerminal の設定方法。設定モーダル、プロジェ�
 > | **`/mulmoterminal-dirs`** | プロジェクトの色・グリッドとランチャでの位置・名前バッジ・ターミナルの文字サイズ。実際に開いているディレクトリを母集団にし、既にある設定を読んでその規則を、まだ無いディレクトリにも適用します。（Settings → **Configure appearance…** はこれを起動します） |
 > | **`/mulmoterminal-theme`** | 自分の[配色](#custom-themes)を作る。Settings のテーマ選択に並びます（Settings → **Create a theme…**） |
 > | **`/mulmoterminal-header`** | [ヘッダーのボタンとチップ](#header)。global でもプロジェクト単位でも |
-> | **`/mulmoterminal-keys`** | [`keymap`](#keymap)・[`copyOnSelect`](#copy-on-select)・[`terminalSubmit`](#terminal-submit)（「Shift+Enter で改行ではなく送信されてしまう」の対処）・`questionPaneEnabled`（Settings → **Set up shortcuts…**） |
+> | **`/mulmoterminal-keys`** | [`keymap`](#keymap)・[`copyOnSelect`](#copy-on-select)・[`terminalSubmit`](#terminal-submit)（「Shift+Enter で改行ではなく送信されてしまう」の対処）・[`questionPaneEnabled`](#question-pane)（Settings → **Set up shortcuts…**） |
 > | **`/mulmoterminal-model`** | [`providers`](#providers)、プロジェクトごとのモデル、[`customAgents`](#custom-agents) |
 > | **`/mulmoterminal-notify`** | [どの瞬間に鳴らす・通知するか](#sounds)、それぞれ何を鳴らすか（Settings → **Configure notifications…**） |
 >
@@ -118,7 +118,7 @@ git チェックアウトならその横に `commit a1b2c3d` のチップが並�
 | **Directory settings** | 各ディレクトリの `.mulmoterminal.json` が**実際に何をしているか**。行を開くと、効いている値（色は見本付き）・**どのファイル由来か**・**検証で落ちたキー**・**このアプリが読まないキー**が出ます。読み取り専用 — 「Explain my settings…」で `mulmoterminal-config` スキルが同じものを読み、理由を説明して直します（→ [設定が効かないとき](#dir-settings-preview)） |
 | **Launch commands** | グリッドセルでエージェント以外に起動できるコマンド（`{ label, command }`）。素のシェルは登録不要 — ランチャの **Shell** トグルが無設定で `$SHELL` を開く |
 | **Header buttons and chips** | グローバル設定で宣言しているボタンとチップの数（読み取り専用）。未設定なら「built-in」。「Set up header buttons…」で `mulmoterminal-header` スキルを起動（→ [ヘッダーのカスタマイズ](#header)） |
-| **Terminal keys** | [選ぶだけでコピー](#copy-on-select)（`copyOnSelect`、既定 OFF）、質問ペイン（`questionPaneEnabled`）、あなたの Claude が**送信**として読むバイト（[Enter — 送信と改行](#terminal-submit)、`terminalSubmit`） |
+| **Terminal keys** | [選ぶだけでコピー](#copy-on-select)（`copyOnSelect`、既定 OFF）、[質問ペイン](#question-pane)（`questionPaneEnabled`）、あなたの Claude が**送信**として読むバイト（[Enter — 送信と改行](#terminal-submit)、`terminalSubmit`） |
 | **Keyboard shortcuts** | 全アクションと `send` の行を、割り当ての有無にかかわらず並べる一覧（読み取り専用）。**既定は全部 Not set** — 「Set up shortcuts…」で `mulmoterminal-keys` スキルが `keymap` に書きます（→ [キーボードショートカット](#keymap)） |
 | **Voice input** | 音声入力で**話す言語**（ブラウザの言語 / 発話ごとの自動検出 / 固定）。文字起こしできるマシンでだけ表示されます |
 | **Models and backends** | セッションを動かせるバックエンドと、**今それぞれ到達できるか**（読み取り専用）。「Add a backend…」で `mulmoterminal-model` スキルを起動（→ [別のモデルで動かす](providers.html)） |
@@ -1000,6 +1000,49 @@ PuTTY や iTerm2 が昔からそうなっている挙動で、Windows Terminal �
 > フォーカスを持っている必要**があります。`http://<IP>:PORT` で開いていてドラッグしてもコピーされない
 > 場合は、まずここを疑ってください。`http://localhost:PORT` ならこの制限はかかりません。
 
+## サイドペインから答える（`questionPaneEnabled`） {#question-pane}
+
+Claude のセッションが何かを尋ねて止まったとき —— 普段は矢印キーで答える `AskUserQuestion` の
+ダイアログ —— **同じ選択肢が、拡大したターミナルの横のペインにボタンとして**出ます。
+
+**頼まない限り OFF** です。ペインから答えると、**そのダイアログに対して矢印キーと Enter を
+代わりに押す**ためで、キーボードを操作するペインが既定で現れるべきではないからです。
+
+```json
+{ "questionPaneEnabled": true }
+```
+
+**設定 → Terminal keys** にチェックボックスがあります。[選択したらコピー](#copy-on-select) と違い、
+ファイルを手で書き換えた場合も**再起動もリロードも要りません** —— サーバはこの設定を**質問ごとに
+ディスクから読む**ので、次にセッションが尋ねた時点で新しい設定が効きます。
+
+- **ターミナルのダイアログは消えないし、置き換わりもしません。** ペインは同じダイアログに答える
+  もう 1 つの経路なので、先に使ったほうが勝ちます。キーボード派の人はペインの存在に気づきません
+- **ペインが自動で開くのは「拡大しているセル」**です。そのセッションが尋ねた時点で開き、質問が
+  答えられた時点でボタンが消えます —— ターミナルで答えても、ペインで答えても、Esc でも
+- **タイル表示中に来た質問は失われません。** 規則は「質問が来たら開く」ではなく、**「拡大している
+  セルは、そのセッションが止まっている質問を出す」**です。だから後からそのセルを拡大しても開くし、
+  リロードや接続断からの復帰でも開きます —— ページを再読み込みしても質問を失わないのはこのため
+  です。専用のボタンはありません（押すものがありません）
+- **ペインが消え方は 2 通りあり、記憶されるのは片方だけです。** 質問そのものが終わったとき
+  （ターミナルで答えた・ペインで答えた・ターミナルで Esc を押して取り消した）は、答えるものが
+  無くなったので消えます。もう 1 つは**ペインの × ボタンで閉じた**場合で、これは「ターミナルで
+  答える」という意思表示として扱われ、そのダイアログについて記憶されるので、セルに戻っても
+  開き直しません。どちらの場合も、そのセルの次の質問は通常どおり開きます
+- **Claude のセッションだけ**です。選択肢は Claude Code 自身のツールフックから届くので、
+  codex やシェルのセルには publish するものが無く、ペインは開きません
+- **これはペインの話で、スマホの話ではありません。** スマホの MulmoTerminal は、この設定に
+  関係なく同じ質問に答えられます。この設定があるのは、ペインが**あなたが座っているターミナル**に
+  入力するからで、スマホではそのキーボードの前に誰も居ません
+
+この設定が止めるのは**質問の提示**です。OFF のときは質問がブラウザに送られないので、ペインは
+隠れているのではなく**出すものが無い**状態になります（ボタンで開くこともできません）。
+
+**「閉じた」の通知は、OFF でも送られます。**これは意図的です。質問の途中でスイッチを切ると、
+既にボタンを出しているペインが「ダイアログはもう終わった」と知る手段を失い、押した瞬間に下の
+プロンプトへ Down と Enter が入ってしまうためです。提示されなかった質問についての「閉じた」は
+何もしませんし、質問文も含まないので、OFF のままの人には何のコストもありません。
+
 ## キーボードショートカット（`keymap`） {#keymap}
 
 キーボードショートカットは **opt-in** です。既定値はありません。`config.json` に `keymap` が無ければ何も
@@ -1739,6 +1782,7 @@ posted by MulmoTerminal
 | `themes` | 自分で定義した配色。Settings のテーマ選択に並ぶ（→ [自分の配色を作る](#custom-themes)） |
 | `keymap` | ユーザ定義のキーボードショートカット。**既定は空——何も割り当てられていない**（→ [キーボードショートカット](#keymap)） |
 | `copyOnSelect` | マウスで選択し終えた時点で、キーを押さずにクリップボードへ入れる。**既定 OFF**（→ [選択したらコピー](#copy-on-select)） |
+| `questionPaneEnabled` | Claude のセッションの質問を、拡大したターミナルの横のペインにボタンとして出す。**既定 OFF**（→ [サイドペインから答える](#question-pane)） |
 | `prWorkdirFooter` | 作成した PR の本文末尾に `work in <クローン名>` を書く（→ [この PR はどのクローンの作業か](#pr-workdir-footer)）。**既定 ON**、`false` で無効 |
 | `appendSystemPrompt` | 返信の最後に「何を頼まれたか / できたこと / できていないこと」のまとめを書かせる（→ [返信の最後のまとめを切る](#append-system-prompt)）。**既定 ON**、`false` で無効。`.mulmoterminal.json` の指定が優先 |
 | `cockpitLines` | コックピットのロスター各行を何行で打ち切るか（既定 `2 / 2 / 3` → [ロスターの表示行数](#cockpit-lines)） |
