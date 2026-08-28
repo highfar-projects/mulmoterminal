@@ -9,7 +9,18 @@
 //
 // These return a decision; the caller prints and exits. Nothing here reads argv, the
 // environment or the filesystem.
+import { isIP } from "node:net";
 import { join } from "node:path";
+
+// The v4 loopback every local client of this server dials by literal — `guiMcpUrlTemplate` in
+// server/infra/gui-mcp-registration.ts builds `http://127.0.0.1:<port>/api/mcp/...`. Duplicated
+// here because bin/ is plain JS and cannot import the server's TypeScript, and pinned by a spec
+// the same way PORT_IN_USE_EXIT_CODE is.
+const V4_LOOPBACK_CLIENTS_DIAL = "127.0.0.1";
+
+// What a kernel reports for a v6 wildcard bind. Exact, not a spelling: this is what
+// `server.address()` RETURNS, and it returns nothing else for an unspecified v6 bind.
+const V6_UNSPECIFIED = "::";
 
 /** A port a user typed, in either of the two places they can type one. `parseInt` stops at the
  *  first non-digit, so a typo would otherwise launch on a port nobody named — "80x" silently
@@ -41,6 +52,126 @@ export function parsePortArg(args, env, defaultPort) {
   if (at !== -1) return readPort(args[at + 1], "--port");
   if (env.PORT === undefined || env.PORT === "") return { port: defaultPort, explicit: false };
   return readPort(env.PORT, "PORT");
+}
+
+/**
+ * The address the server will bind, and therefore the ONE address a port probe has to try.
+ *
+ * `isPortFree` used to probe with no host — the `::` dual-stack wildcard — and its comment
+ * justified that by saying the server did the same. It did, until the server moved to loopback
+ * by default (b696a967, 2026-07-26) and never touched this file. From then on the probe asked
+ * about an address nothing was listening on, so it answered "free" for a port a running
+ * MulmoTerminal was holding, and the second-instance guard (#611, #653) stopped firing (#1876).
+ *
+ * Measured on macOS: a bind only collides with the SAME address. With 34567 held on
+ * `127.0.0.1`, `listen(34567)`, `listen(34567,'::')` and `listen(34567,'0.0.0.0')` all
+ * succeed; only `listen(34567,'127.0.0.1')` reports EADDRINUSE.
+ *
+ * So this is deliberately NOT a fixed host. Pinning `127.0.0.1` would re-break what #31 fixed —
+ * an operator who widens the bind would go back to missing a peer on the wildcard. The probe
+ * follows whatever the server will do, by reading the same variable the server reads
+ * (`BIND_HOST` in server/config/env.ts). Keep the default in step with that file; a spec
+ * asserts the two agree, the same way PORT_IN_USE_EXIT_CODE is pinned.
+ *
+ * And note what the probe is FOR: not "is anyone using this port", but "will the child's
+ * listen(port, BIND_HOST) succeed". Probing the same address answers exactly that.
+ */
+export function bindHostFor(env) {
+  return env.MULMOTERMINAL_HOST || "127.0.0.1";
+}
+
+/**
+ * A port probe failed. Does that mean the PORT IS TAKEN, or only that the probe could not ask?
+ *
+ * Only `EADDRINUSE` answers the question. Naming a host on the probe (see bindHostFor) made the
+ * other errors reachable for the first time: a `MULMOTERMINAL_HOST` that is not an address on
+ * this machine fails `EADDRNOTAVAIL`, a name that does not resolve fails `ENOTFOUND`, and a
+ * privileged port fails `EACCES`. Folding any of those into "in use" tells the operator to stop
+ * a process that does not exist and to pick a port that was never the problem.
+ *
+ * The honest answer for those is "I could not tell", and the useful behaviour is to let the
+ * launch proceed: the server binds for real and reports the actual errno, which is exactly what
+ * happened before the probe named a host.
+ */
+export function probeFailureIsPortInUse(err) {
+  return Boolean(err) && err.code === "EADDRINUSE";
+}
+
+/**
+ * Given the address the OS says a bind actually LANDED ON, which other addresses must also be
+ * free before this launch is worth starting.
+ *
+ * `127.0.0.1` ALWAYS, whatever the bind — and getting there took four rounds of me arguing the
+ * opposite. The claim I kept making was that a specific non-loopback bind is chosen to serve
+ * OTHER machines, so a degraded local listener costs only convenience and the server's warning
+ * covers it. That mischaracterises what such a bind is: MulmoTerminal still runs its PTYs on THIS
+ * machine whatever address it listens on, and those sessions' GUI MCP dials `http://127.0.0.1:
+ * <port>` as a literal (`guiMcpUrlTemplate`). A LAN bind changes who can open the browser, not
+ * where the sessions live. So the purpose does not survive after all, and the server's own
+ * failure text says as much: "hooks and the GUI MCP will fail until it is free".
+ *
+ * `::1` as well for the v6 wildcard, because that is the address the launcher will poll and print
+ * for it, and a specific `::1` socket is MORE SPECIFIC than a dual-stack bind — it would win the
+ * connection.
+ *
+ * It takes the bound address and not the requested string, and that is the other half of the
+ * point. Rounds went to spellings — `::` vs `0:0:0:0:0:0:0:0`, `::1` vs its long form,
+ * `localhost`, `127.1` — and a host string has no last case. The kernel has none of that problem:
+ * measured, `listen(0,"0:0:0:0:0:0:0:0")` reports `::` and `listen(0,"localhost")` reports `::1`.
+ * The comparisons below are exact because the kernel's OUTPUT vocabulary is finite even though
+ * its input vocabulary is not. server/infra/loopback.ts made the same argument for its own
+ * question: "asking after the fact answers all of them".
+ *
+ * The probe/bind race the launcher already lives with is unchanged: this narrows the window, it
+ * does not close it.
+ */
+export function companionHostsFor(boundAddress) {
+  const required = boundAddress === V6_UNSPECIFIED ? ["::1", V4_LOOPBACK_CLIENTS_DIAL] : [V4_LOOPBACK_CLIENTS_DIAL];
+  return required.filter((host) => host !== boundAddress);
+}
+
+/**
+ * The concrete address the LAUNCHER should connect to, or **null when it cannot know**.
+ *
+ * This is the PERMITTED set, not a list of bad cases, and it got there the hard way: four review
+ * rounds each found a different spelling of `BIND_HOST` that a guess got wrong — the poll
+ * ignoring it, the URL turning `::1` back into `localhost`, `localhost` passing through
+ * unresolved, and then the fallback re-opening that same hole. A host string has no last case
+ * (`127.1`, `127.000.000.001`, a hosts file pointing `localhost` somewhere else), so the rule
+ * is inverted: an address the platform itself calls an IP is usable, the two wildcards map to
+ * the loopback of their own family, and **everything else is null** — reported rather than
+ * guessed at.
+ *
+ * `::` maps to `::1` and not to `127.0.0.1` on purpose: a v4 socket on 127.0.0.1 is MORE
+ * SPECIFIC than a dual-stack bind and wins the connection, so polling v4 could be answered by
+ * the very stranger this exists to avoid.
+ *
+ * The authority for a name is the kernel, not this function, and the launcher asks it the only
+ * way that is exact — the child reports what `server.address()` says it bound. See
+ * server/infra/loopback.ts, which had already written the argument down for its own question.
+ */
+export function launcherReachHost(bindHost) {
+  if (bindHost === "0.0.0.0") return "127.0.0.1";
+  if (bindHost === "::") return "::1";
+  return isIP(bindHost) ? bindHost : null;
+}
+
+/** What to PRINT for a concrete address — never `localhost`.
+ *
+ *  It did say `localhost` for the loopback cases, because that is friendlier. CodeRabbit caught
+ *  what that throws away: `launcherReachHost` picks `::1` precisely so an IPv4 listener cannot
+ *  answer for us, and printing `localhost` hands the choice straight back — measured, `localhost`
+ *  resolves to BOTH `::1` and `127.0.0.1`, so the browser may open the very process the poll was
+ *  written to avoid. A URL the user clicks has to name the address that was checked.
+ *
+ *  Built through `URL` so the platform does the escaping: an IPv6 literal has to be bracketed or
+ *  `http://::1:34567` is not a URL at all. The brackets go on BEFORE the assignment because the
+ *  `hostname` setter silently REJECTS an unbracketed v6 literal — measured: it leaves the
+ *  previous host in place, so the launcher would have printed the base host instead. */
+export function launcherUrl(reachHost, port) {
+  const url = new URL(`http://localhost:${port}`);
+  url.hostname = reachHost.includes(":") ? `[${reachHost}]` : reachHost;
+  return url.origin;
 }
 
 /**

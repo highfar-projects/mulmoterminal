@@ -23,7 +23,6 @@
 //
 // It widens nothing: loopback is reachable only from this machine, and it is what an untouched
 // install already serves. The operator asked to ADD an interface, not to remove that one.
-import { isLoopbackAddress } from "./loopback.js";
 
 /** What the OS says the primary listener bound — `server.address()` — and nothing else. Asking
  *  after the fact rather than classifying `MULMOTERMINAL_HOST` is the rule loopback.ts already
@@ -50,12 +49,24 @@ const V4_WILDCARD = "0.0.0.0";
 // already covers loopback — and if it binds instead, that kernel did not, and the gap just closed.
 const V6_WILDCARD = "::";
 
-/** Whether the primary bind already answers on `127.0.0.1` for certain. The family distinction is
- *  the whole point and is easy to lose: `isLoopbackAddress("::1")` is true and correct, yet a
- *  server bound to `::1` REFUSES a client dialing 127.0.0.1 (measured) — which is why
- *  `MULMOTERMINAL_HOST=localhost` is broken today, since it resolves to `::1` while the GUI MCP
- *  url says `127.0.0.1`. */
-const servesV4Loopback = (address: string): boolean => isLoopbackAddress(address) && !address.includes(":");
+/** Whether the primary bind already answers on `127.0.0.1` for certain — the ONE address local
+ *  clients dial, since `guiMcpUrlTemplate` and the hooks write it as a literal.
+ *
+ *  The family distinction is the whole point and is easy to lose: `isLoopbackAddress("::1")` is
+ *  true and correct, yet a server bound to `::1` REFUSES a client dialing 127.0.0.1 (measured) —
+ *  which is why `MULMOTERMINAL_HOST=localhost` was broken, since it resolves to `::1` while the
+ *  GUI MCP url says `127.0.0.1`.
+ *
+ *  And the SAME argument rules out the rest of 127/8. This asked `isLoopbackAddress(address) &&
+ *  !address.includes(":")`, which said yes to `127.0.0.2` — but a server bound there refuses
+ *  127.0.0.1 exactly as the `::1` one does, so no secondary listener was planned and the clients
+ *  that dial the FIXED endpoint could not reach it. Only the literal address answers for itself.
+ *
+ *  Scoped deliberately: something dialing `127.0.0.2` would be served fine. What breaks is the
+ *  side that writes the address as a literal, which is every GUI MCP client. Whether such an
+ *  address can be bound at all is a separate, platform-dependent question — macOS carries only
+ *  127.0.0.1 on lo0, Linux the whole block — while the address MATCHING above is neither. */
+const servesV4Loopback = (address: string): boolean => address === V4_LOOPBACK;
 
 export interface LoopbackPlan {
   address: string;
