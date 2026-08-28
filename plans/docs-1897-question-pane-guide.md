@@ -38,6 +38,28 @@
 - **#1892 でアンカーが無くてリンクにできなかった 4 箇所**（skill 対応表と Terminal keys の行、
   両言語）をリンクに差し替え
 
+## レビュー指摘（codex、#1905）
+
+> qualify the automatic-opening statement to the currently enlarged cell. A question arriving while
+> its cell is tiled is stored and the pane opens only when that cell is enlarged.
+
+**日本語だけが「ペインは自動で開き」と無条件に書いていた**（英語は "on the enlarged cell" と
+限定していた）。コードで確認したところ指摘どおりで、`TerminalGrid.vue` がその設計を明示している:
+
+> A question that arrived while its cell was **tiled** — or on another page of the grid — still has
+> a session blocked on it, so **enlarging that cell is when to show it**.
+
+`revealQuestion` は `expandedSessionId.value === sessionId` のときだけペインを出す。
+
+**英語側も直した。** 「拡大したセルで開く」とは書いていたが、**タイル表示中に来た質問がどうなるか**
+を書いていなかった —— 読者が一番知りたいのはそこ（失われるのか、どうすれば出るのか）。両言語に
+足したのは 2 つ:
+
+- タイル表示中に来た質問は失われず、**そのセルを拡大した時点で**開く。ペインを開くのはこの 2 つ
+  だけで、専用ボタンは無い（`TerminalGrid.vue` にその理由も書いてある）
+- **Esc で閉じたことはそのダイアログについて記憶される**ので、セルに戻っても開き直さない。
+  次の質問は通常どおり開く
+
 ## 検証
 
 - 節がリンクするアンカー（`copy-on-select` / `keymap` / `question-pane` / `terminal-submit`）が
