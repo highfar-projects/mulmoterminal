@@ -52,6 +52,25 @@ const updated = <T>(key: keyof AppConfig, sanitize: (input: unknown) => T, curre
 - **`mergeConfigUpdate` の挙動そのものは変えない。** 全置換は他の skill（`-theme` / `-model` /
   `-notify`）が既に前提にしている仕様で、変えれば全部が壊れる。直すのは**指示の側**
 
+## リポジトリ自身のテストに捕まった
+
+説明用に書いた JSON ブロックを `{ "buttons": [ { "id": "build", … } ] }` と省略記号で書いたところ、
+**`test/server/config/doc-button-samples.spec.ts` が落ちた。**
+
+このリポジトリには、**ガイドと `-header` skill の中の `buttons` を含む ```json ブロックを全部
+パースして、実バリデータ `sanitizeButtons` に通す** spec がある。省略記号は JSON ではないので
+`JSON.parse` で落ちた。
+
+直したら 2 度目も落ちた —— `"run": "send"` は無効な run type で、ビルドボタンの正しい形は
+`"run": "shell", "cmd": "yarn build"` だった。ガイドに既に検証済みの例があったのでそれに合わせた。
+
+**この spec は良いガード**で、「ドキュメントのサンプルが実際には動かない」を防いでいる。
+自分の説明用サンプルもその対象だと分かっていなかった。
+
+**なお、この失敗に気づく前に一度 red のまま push している。** `yarn test` の直後に
+`echo "test=$?"` を挟んだせいで `&&` チェーンが成功として続いた —— 終了コードを見たつもりで
+`echo` の終了コードを見ていた。
+
 ## 検証
 
 skill は散文なのでテストで赤くできない。確認したのは:

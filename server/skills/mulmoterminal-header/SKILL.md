@@ -27,7 +27,7 @@ there is no filesystem watcher.
 `body[key] !== undefined ? sanitize(body[key]) : current` (`server/config/app-config.ts`), so posting
 
 ```json
-{ "buttons": [ { "id": "build", … } ] }
+{ "buttons": [{ "id": "build", "icon": "build", "label": "Build", "run": "shell", "cmd": "yarn build" }] }
 ```
 
 does not add a button — it **makes that the entire global set**, deleting every other button the
