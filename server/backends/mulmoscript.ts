@@ -126,25 +126,67 @@ function stringQuery(req: Request, name: string): string | null {
 // phase-1 execute, then the host-side `autoGenerateMovie` trigger (the dedup
 // key is the realpath, so re-resolve the wire path). Failures answer as
 // `{ message }` (HTTP 200) so the agent reads them and can self-correct.
+/**
+ * The tool call's body, narrowed to what the package accepts.
+ *
+ * Built from checked fields rather than asserted: every field of `SaveMulmoScriptArgs` is
+ * optional, so a body that is missing or mistypes one is a valid call the package rejects on its
+ * own terms — while an assertion would hand it, say, a numeric `filePath` typed as a string.
+ *
+ * Which is also why leaving a field OUT of this list is silent rather than an error, and why
+ * `beatIndex` / `beat` being absent from it was #1880: the package saw a plain re-display request,
+ * answered "Loaded MulmoScript from …", and changed nothing — indistinguishable from success to
+ * the agent that asked. The tool's own description tells agents to use that pair whenever the user
+ * wants part of a presentation changed, so the path was documented and dead at the same time.
+ *
+ * Its own function so the route can be read at a glance, and so the ONE place that decides what
+ * reaches the package is a thing a test can point at.
+ */
+function saveArgsFrom(body: Record<string, unknown>): SaveMulmoScriptArgs {
+  return {
+    ...(body.script !== undefined ? { script: body.script } : {}),
+    ...(typeof body.filename === "string" ? { filename: body.filename } : {}),
+    ...(typeof body.filePath === "string" ? { filePath: body.filePath } : {}),
+    ...(typeof body.autoGenerateMovie === "boolean" ? { autoGenerateMovie: body.autoGenerateMovie } : {}),
+    ...(typeof body.beatIndex === "number" ? { beatIndex: body.beatIndex } : {}),
+    ...(body.beat !== undefined ? { beat: body.beat } : {}),
+  };
+}
+
 async function handleToolCall(body: Record<string, unknown>, res: Response, instance: MulmoScriptServerOps): Promise<void> {
   const guard = instance.guardStoryWirePath(body.filePath);
   if (guard) {
     res.json({ message: guard.error });
     return;
   }
-  // Built from the checked fields rather than asserted: every field of SaveMulmoScriptArgs is
-  // optional, so a body that is missing or mistypes one is a valid call the package rejects on its
-  // own terms — while the assertion handed it, say, a numeric `filePath` typed as a string.
-  const args: SaveMulmoScriptArgs = {
-    ...(body.script !== undefined ? { script: body.script } : {}),
-    ...(typeof body.filename === "string" ? { filename: body.filename } : {}),
-    ...(typeof body.filePath === "string" ? { filePath: body.filePath } : {}),
-    ...(typeof body.autoGenerateMovie === "boolean" ? { autoGenerateMovie: body.autoGenerateMovie } : {}),
-  };
+  const args = saveArgsFrom(body);
   const outcome = await executeMulmoScriptSave({ files: { artifacts: instance.backend.artifacts } }, args);
   if (!outcome.ok) {
     res.json({ message: outcome.error, instructions: "Acknowledge the error and retry with a valid `script` (new) or an existing `filePath`." });
     return;
+  }
+  // A beat replacement rewrote a file the canvas may ALREADY have open, and the pubsub broadcast
+  // is the only way that canvas hears about it — a new save gets redrawn because the response
+  // tells the agent to display the story, which opens the new file, but replacing one beat of an
+  // open story changes nothing on screen without this (#1880).
+  //
+  // Read off `args`, NOT off `body`, and the difference is not cosmetic: `args` is what the
+  // package was actually handed, so the allowlist above and this condition cannot drift into
+  // disagreeing. Asking `body` again re-derives the same decision twice — and a mutation proved
+  // it, by restoring #1880's dropped allowlist and leaving these broadcasts green, publishing a
+  // change to a file nothing had written.
+  //
+  // `executeMulmoScriptSave` does not report which branch it took, so this is the closest
+  // available fact: the package requires the pair together (it refuses one without the other) and
+  // `outcome.ok` is established, so "both reached it and the save succeeded" is "a beat was
+  // written".
+  //
+  // No `origin`, deliberately. The package's own contract says why: "A View passes its own id on
+  // every write and ignores the echo of its own … An agent write carries no origin, so every View
+  // reloads." This IS an agent write, and inventing an id here would make some View treat our
+  // broadcast as its own echo and skip the reload — the exact silence being fixed.
+  if (args.beatIndex !== undefined && args.beat !== undefined) {
+    instance.publishScriptChanged(outcome.filePath);
   }
   // The save succeeded either way; `movieNote` tells the agent whether the
   // requested background generation actually started. The package only
