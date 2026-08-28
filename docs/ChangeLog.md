@@ -29,6 +29,12 @@ binding — what changed back is only the URL handed to the browser, which is a 
 is filed under rather than a claim about which socket answered. If you set `MULMOTERMINAL_HOST` to
 reach the app from another machine, the banner now names that address on its own line.
 
+`localhost` is used only when the launcher has **checked** that nothing else can answer to it.
+`localhost` resolves to `[::1]` as well as `127.0.0.1`, and the startup probe never asked about the
+first of those — so before opening anything, the launcher now tries to take `[::1]:<port>` too. If
+something else already holds it, the browser goes to the address that was actually checked, and the
+banner says so and tells you where your layout is filed.
+
 ## mulmoterminal@4.11.0 — 2026-08-28
 
 > **Setup guide:** [Stopping it, and the ports it takes](https://receptron.github.io/mulmoterminal/guide/en/v4.11.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.11.0.html))

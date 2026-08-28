@@ -15,7 +15,7 @@ import { createServer, type Server } from "node:net";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { bindHostFor, boundAddressNote, browserUrl, companionHostsFor, launcherReachHost, launcherUrl, probeFailureIsPortInUse } from "../../bin/cli-args.js";
+import { bindHostFor, browserUrl, companionHostsFor, launchTarget, launcherReachHost, launcherUrl, probeFailureIsPortInUse } from "../../bin/cli-args.js";
 import { boundAddress } from "../../server/infra/loopback.js";
 import { BIND_HOST } from "../../server/config/env.js";
 
@@ -213,19 +213,49 @@ describe("the URL the browser is opened at", () => {
 
   // Restoring the origin must not cost the operator who widened the bind the address 4.11.0
   // started telling them — `localhost` is right for this machine and useless to the other one.
-  describe("and the note naming what was actually bound", () => {
-    it("says nothing for a loopback bind, where the browser URL already said it", () => {
-      ["127.0.0.1", "::1"].forEach((reach) => expect(boundAddressNote(reach, 34567)).toBeNull());
+  describe("and what the banner says about that choice", () => {
+    const target = (reach: string) => launchTarget(reach, 34567, true);
+
+    it("says nothing extra for a loopback bind, where the browser URL already said it", () => {
+      ["127.0.0.1", "::1"].forEach((reach) => expect(target(reach).note).toBeNull());
     });
 
     it("names the address, and the URL another machine would use, for a widened bind", () => {
-      const note = boundAddressNote("192.168.11.12", 34567);
+      const { note } = target("192.168.11.12");
       expect(note).toContain("192.168.11.12");
       expect(note).toContain(launcherUrl("192.168.11.12", 34567));
     });
 
     it("brackets a v6 literal in the note, since it goes through launcherUrl", () => {
-      expect(boundAddressNote("fd00::1", 34567)).toContain("[fd00::1]:34567");
+      expect(target("fd00::1").note).toContain("[fd00::1]:34567");
+    });
+  });
+
+  // Codex, reviewing this change, flagged the hole the revert would otherwise re-open: `localhost`
+  // resolves to `::1` as well as `127.0.0.1`, and `companionHostsFor` never asks about `::1` — so
+  // a stranger there could answer the browser. The launcher MEASURES it (localhostReachesOnlyUs)
+  // and this is what it does with a `false`.
+  describe("when something else already answers on the v6 loopback", () => {
+    const target = (reach: string) => launchTarget(reach, 34567, false);
+
+    it("sends the browser to the address that was actually checked, not to localhost", () => {
+      expect(target("127.0.0.1").url).toBe(launcherUrl("127.0.0.1", 34567));
+      expect(target("127.0.0.1").url).not.toContain("localhost");
+    });
+
+    // The silent version of this IS #1889 for that one user: an empty grid and nothing on screen
+    // saying where it went. Stepping aside is fine; doing it quietly is not.
+    it("says why, and where the user's saved state actually is", () => {
+      const { note } = target("127.0.0.1");
+      expect(note).toContain("[::1]:34567");
+      expect(note).toContain("http://localhost:34567");
+    });
+
+    // A widened bind takes the same branch — the ambiguity is about `localhost`, not about what
+    // the server bound, so the reason must not change with the bind.
+    it("steps aside for a widened bind too", () => {
+      expect(target("192.168.11.12").url).toBe(launcherUrl("192.168.11.12", 34567));
+      expect(target("192.168.11.12").note).toContain("[::1]:34567");
     });
   });
 });

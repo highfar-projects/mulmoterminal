@@ -210,21 +210,44 @@ export function browserUrl(port) {
 }
 
 /**
- * The line naming the address actually bound, or null when it says nothing the browser URL did
- * not already say.
+ * Where to send the browser, and what to say about it — as one decision, because the two answers
+ * have to agree.
  *
- * `browserUrl` sends everyone to `localhost`, which is right for the machine the launcher runs on
- * and useless to the operator who set `MULMOTERMINAL_HOST` so ANOTHER machine could open the app.
- * 4.11.0 told them their address by putting it in the banner; keeping that here means restoring
- * the origin costs them nothing.
+ * `localhostIsUnambiguous` is a MEASUREMENT, not a guess: the launcher tried to bind `[::1]:port`
+ * before spawning, so `false` means something else already answers there. That is the hole Codex
+ * flagged on this change and it is real for the DEFAULT bind, not only a widened one —
+ * `companionHostsFor` requires `127.0.0.1` free for every launch but never asks about `::1`, and
+ * `localhost` resolves to BOTH (measured). Sending the browser to `localhost` while a stranger
+ * holds the v6 loopback is exactly the case #1876's review was worried about.
  *
- * It is asked about the address the kernel REPORTED, so the two loopback spellings below are the
- * finite output vocabulary `launcherReachHost` already reasons about — not an attempt to classify
- * what someone typed.
+ * So the rule is: use the name the user's state is filed under WHEN NOTHING ELSE CAN ANSWER TO
+ * IT, and otherwise say plainly that we stepped aside — including where their layout went, since
+ * a silent switch here is #1889 all over again for that one user.
+ *
+ * The probe cannot close the window, only narrow it: `::1` is free when asked, and unless the
+ * server binds it (a `::1` or `::` bind), a stranger could still take it afterwards. That is the
+ * same probe/bind race `isPortFree` already documents and accepts.
+ *
+ * The loopback spellings below are compared against the address the kernel REPORTED, whose output
+ * vocabulary is finite — not against anything a user typed.
  */
-export function boundAddressNote(reachHost, port) {
-  if (reachHost === V4_LOOPBACK_CLIENTS_DIAL || reachHost === "::1") return null;
-  return `Bound to ${reachHost} — reachable from another machine at ${launcherUrl(reachHost, port)}`;
+export function launchTarget(reachHost, port, localhostIsUnambiguous) {
+  if (!localhostIsUnambiguous) {
+    const checked = launcherUrl(reachHost, port);
+    return {
+      url: checked,
+      note: `Something else is already listening on [::1]:${port}, so the browser is being sent to ${checked} — the address that was checked. If your layout and settings look empty, they are filed under http://localhost:${port}.`,
+    };
+  }
+  const bound = reachHost === V4_LOOPBACK_CLIENTS_DIAL || reachHost === "::1";
+  return {
+    url: browserUrl(port),
+    // `browserUrl` sends everyone to `localhost`, which is right for the machine the launcher runs
+    // on and useless to the operator who set `MULMOTERMINAL_HOST` so ANOTHER machine could open
+    // the app. 4.11.0 told them their address by putting it in the banner; saying it here means
+    // restoring the origin costs them nothing.
+    note: bound ? null : `Bound to ${reachHost} — reachable from another machine at ${launcherUrl(reachHost, port)}`,
+  };
 }
 
 /**

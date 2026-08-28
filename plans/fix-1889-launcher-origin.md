@@ -144,3 +144,50 @@ third-party storage partitioning は localStorage にも効き、Storage Access 
 **未検証** —— Windows / Linux での挙動は実機確認していない（macOS 26.5.1 arm64 のみ）。
 ただし変更は URL 文字列の組み立てのみで、probe / bind / poll のプラットフォーム依存部分は
 触っていない。`localhost` の到達性は #1834 の二次 listener に依存し、そちらは既存の仕組み。
+
+## レビュー iter-1 —— Codex の指摘と、それに対する設計変更
+
+`CODEX VERDICT: CHANGES REQUESTED`:
+
+> `browserUrl()` restores the saved-state origin but can open an unrelated service bound to
+> `::1:<port>` when the launcher uses a widened bind. … reserve/serve IPv6 loopback too, or do
+> not auto-open this ambiguous origin.
+
+**妥当で、しかも指摘より範囲が広い。** `companionHostsFor` は全 bind で `127.0.0.1` を必須 probe
+するが `::1` は**一度も聞かない**（既定 `127.0.0.1` bind では companion が空になる）。つまり
+widened bind に限らず**既定構成でも**穴がある。
+
+**採った答え —— 推測をやめて計測する。** spawn の前に `canBind(port, "::1")` を 1 回撃つ
+(`localhostReachesOnlyUs`)。free なら `localhost` は我々にしか届かない（`::1` を我々が取るか、
+誰も取らないかのどちらか）ので `localhost` を開く。誰かが居るなら 4.11.0 と同じ具体アドレスに
+退避し、**なぜ退避したか・利用者の状態がどこにあるか**を 1 行で言う。
+
+- host 文字列を分類せず **bind して聞く**。この file の一貫した流儀に合わせた
+- IPv6 の無いマシンは `EADDRNOTAVAIL` → `probeFailureIsPortInUse` が正しく「使用中でない」と
+  答える。そこでは `localhost` は v4 のみなので曖昧さが無く、結論も正しい
+- **黙って退避しない**のが要点。黙ると、その 1 人にとっては #1889 の再演になる
+- probe/bind のレースは閉じない。窓を狭めるだけで、`isPortFree` が既に認めている同じレース
+
+`boundAddressNote` は `launchTarget` に置き換えた —— URL と注記は必ず一緒に決まる必要があり
+（退避したときは URL 自身がアドレスを名乗るので「bind したのはこれ」の注記は要らない）、
+2 つの関数に分けると食い違い得るため。
+
+`main` が 61 行になり `max-lines-per-function` に触れたので、`choosePort` を `pickPort` +
+薄いラッパに分け、「port・probe したアドレス・`localhost` の一意性」を 1 か所で決めるようにした。
+
+### iter-1 の検証
+
+| ミューテーション | 結果 |
+|---|---|
+| `launchTarget` が `::1` の計測結果を無視する | 3 red |
+
+**実機**（scratch HOME、`--no-open`）—— `::1` を別プロセス（`I am NOT MulmoTerminal` を返す
+素の http サーバ）に握らせて再現:
+
+| 条件 | バナーの URL | 追加行 |
+|---|---|---|
+| `::1` は空、port 34693 | `http://localhost:34693` | なし |
+| `::1` を他プロセスが保持、port 34694 | `http://127.0.0.1:34694` | `Something else is already listening on [::1]:34694 … they are filed under http://localhost:34694.` |
+
+ゲート再実行: `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0、
+`yarn test` **11523 passed / 50 skipped**。
