@@ -120,8 +120,9 @@ Offer to fix what you found, and route to the owning skill for anything they pic
 State these when they matter; they are the ones that cost people an afternoon.
 
 - **Global writes are a partial `POST /api/config` merge.** Write only the keys you are changing.
-  Arrays (`themes`, `providers`, `buttons`, `chips`, `soundKinds`) **replace** rather than append —
-  send them complete, or you delete the rest.
+  Arrays (`themes`, `providers`, `buttons`, `chips`, `soundKinds`, `gitlabHosts`, `prRepos`)
+  **replace** rather than append — send them complete, or you delete the rest. `keymap` is an object
+  and is replaced whole for the same reason.
 - **`<project>/.mulmoterminal.json` applies live, and writing it with your Write/Edit tool is
   itself the reload signal.** There is **no filesystem watcher**: a file the user edits by hand does
   nothing until something re-reads it. Always write it yourself rather than asking them to.

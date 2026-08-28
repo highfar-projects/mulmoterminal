@@ -23,6 +23,29 @@ Global writes are a **partial `POST /api/config` merge** — send only `buttons`
 writes go through your Write/Edit tool, and **writing the file is itself the live-reload signal**;
 there is no filesystem watcher.
 
+**"Partial" is per TOP-LEVEL key, and `buttons` / `chips` are each replaced WHOLE.** The merge is
+`body[key] !== undefined ? sanitize(body[key]) : current` (`server/config/app-config.ts`), so posting
+
+```json
+{ "buttons": [ { "id": "build", … } ] }
+```
+
+does not add a button — it **makes that the entire global set**, deleting every other button the
+user had. Nothing warns, and the reply is a success.
+
+So a global write always sends the **complete** array: read the current one first, add or change
+your entry in memory, and post the whole thing. Every example below shows the entries under
+discussion on their own for readability — none of them is a body to post as-is unless the user
+genuinely has no others.
+
+Three different "replace" rules live here and are easy to run together:
+
+| | |
+|---|---|
+| writing `buttons` to the **global config** | replaces the whole global array — **the one this section is about** |
+| listing `buttons` **at any level** | replaces `DEFAULT_BUTTONS`; the built-ins are not merged in |
+| **project** vs **global** | merged, keyed by `id` — a project adds or overrides without restating |
+
 ## How the two are merged — not the same rule
 
 **Buttons merge by `id`.** Global buttons load first, then the project's: a project button with the
@@ -161,6 +184,9 @@ than `isGitRepo`: a git repo with no remote, or one whose remote is not GitHub, 
 Then check the real header. A button that doesn't appear is nearly always `when` (a non-git
 directory, an agent mismatch) or a `pr` button on a branch with no PR — both are working as
 designed, and both look like a broken config.
+
+- **Every other button vanished** — a partial write. `buttons` is replaced whole; always send the
+  array complete. Same for `chips`.
 
 ## Example — pinning the defaults, globally
 
