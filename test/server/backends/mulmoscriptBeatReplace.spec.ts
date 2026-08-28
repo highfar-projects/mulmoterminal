@@ -11,9 +11,9 @@
 //
 // Which is why these assertions are about the FILE ON DISK and the PUBLISH, never about the
 // response: the response was already correct while the feature did nothing.
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import express from "express";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { routeCall, jsonPost } from "../../helpers/routeCall";
@@ -33,6 +33,9 @@ const script = {
 };
 
 let workspace: string;
+// Every workspace this file made, not just the current one: a test that calls the route twice
+// makes two, and tracking only `workspace` would leave the first behind in the temp dir.
+let workspaces: string[];
 let published: { channel: string; data: unknown }[];
 
 /** A story on disk plus a mounted route, which is the only way to reach `handleToolCall` — it is
@@ -40,6 +43,7 @@ let published: { channel: string; data: unknown }[];
  *  actually calls. */
 const appWithStory = () => {
   workspace = mkdtempSync(join(tmpdir(), "mulmoscript-beat-"));
+  workspaces.push(workspace);
   const stories = join(workspace, "artifacts", "stories");
   mkdirSync(stories, { recursive: true });
   writeFileSync(join(stories, "deck.json"), JSON.stringify(script, null, 2));
@@ -69,6 +73,11 @@ const call = (body: Record<string, unknown>) => routeCall(appWithStory())("/api/
 
 beforeEach(() => {
   published = [];
+  workspaces = [];
+});
+
+afterEach(() => {
+  workspaces.forEach((dir) => rmSync(dir, { recursive: true, force: true }));
 });
 
 describe("presentMulmoScript — replacing one beat", () => {

@@ -10,7 +10,7 @@ MCP ツール `presentMulmoScript` の「ビート差し替え」（`filePath` +
 
 ## 再現（実行中のサーバに対して、2026-08-28 実測）
 
-```
+```text
 POST /api/plugin/presentMulmoScript
   {"filePath":"stories/…json","beatIndex":2,"beat":{…"# REPRO MARKER"…}}
 -> 200、通常の再表示と同じ data.script が返る
