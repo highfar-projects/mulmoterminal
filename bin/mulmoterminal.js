@@ -19,9 +19,9 @@ import { waitUntilReady } from "./wait-ready.js";
 import {
   bindHostFor,
   chooseCwd,
+  launchTarget,
   companionHostsFor,
   launcherReachHost,
-  launcherUrl,
   probeFailureIsPortInUse,
   parsePortArg,
   portInUseAction,
@@ -295,6 +295,24 @@ async function isPortFree(port) {
   return primary;
 }
 
+// Can `localhost` reach anything OTHER than the server this launcher is about to start? (#1889)
+//
+// The browser is sent to `localhost` so a user's saved layout stays where it has always been, and
+// `localhost` resolves to BOTH `::1` and `127.0.0.1` (measured). `isPortFree` already proves
+// `127.0.0.1` is free for every launch — `companionHostsFor` requires it — but nothing asks about
+// `::1`, so a stranger holding the v6 loopback could answer a browser that resolves that way.
+//
+// Asked by BINDING rather than by classifying the host string, which is this file's rule
+// throughout: free means nobody is there, and that is true whether the server is about to take
+// `::1` itself (a `::1` or `::` bind) or leave it empty. Both are answers the browser can only
+// reach us with. A machine with no IPv6 fails EADDRNOTAVAIL, which probeFailureIsPortInUse
+// correctly reports as "not in use" — and there `localhost` is v4-only, so it is unambiguous.
+//
+// Must run BEFORE the server is spawned, or the server's own `::1` listener answers the probe.
+async function localhostReachesOnlyUs(port) {
+  return (await canBind(port, "::1")).free;
+}
+
 function printReadyBanner(url, stopCommand) {
   const bar = "\x1b[32m" + "─".repeat(48) + "\x1b[0m";
   console.log(`\n${bar}`);
@@ -367,7 +385,7 @@ async function confirmNoRunningInstance() {
   log(SECOND_INSTANCE_NOTE);
 }
 
-async function choosePort(requested, explicit) {
+async function pickPort(requested, explicit) {
   const asked = await isPortFree(requested);
   if (asked.free) return { port: requested, address: asked.address };
   // No SILENT fallback: starting a second server on another port without saying so is how
@@ -386,12 +404,39 @@ async function choosePort(requested, explicit) {
   return fallback;
 }
 
+// The port, the address a probe of it landed on, and whether `localhost` can reach anything but us
+// on it — settled together because all three have to be known BEFORE the spawn, which is the only
+// moment `::1` can be asked about honestly (see localhostReachesOnlyUs).
+async function choosePort(requested, explicit) {
+  const chosen = await pickPort(requested, explicit);
+  return { ...chosen, localhostIsUnambiguous: await localhostReachesOnlyUs(chosen.port) };
+}
+
+// What the launcher does the moment the server answers: say where it is, and open it there.
+//
+// `url` is where the BROWSER goes and `note` is what launchTarget wants said about that choice —
+// two different facts since #1889, and the note is null whenever the URL already covers it.
+function announceReady(url, note, noOpen) {
+  printReadyBanner(url, STOP_COMMAND);
+  // Either the address a widened bind serves other machines on, or why the browser was NOT sent
+  // to `localhost`. Null whenever the URL above already said everything.
+  if (note) log(note);
+  if (noOpen) return;
+  try {
+    // The command is a hardcoded literal; url is built by browserUrl from a numeric port, so it
+    // is http://localhost:<n>.
+    execSync(`${pickOpenCommand()} ${url}`, { stdio: "pipe" });
+  } catch {
+    log(`Open your browser: ${url}`);
+  }
+}
+
 // Spawn the server on `port` and report the child via `onChild` (so signal
 // handlers target the live process). Resolves only when the server exits because
 // the port was taken at bind time before it became ready — the caller then
 // reports that and stops. In every other case (clean shutdown, fatal error,
 // or the server simply running) the process exits with the server's code.
-function runServer(port, probedAddress, noOpen, cwd, onChild) {
+function runServer(port, probedAddress, localhostIsUnambiguous, noOpen, cwd, onChild) {
   return new Promise((resolveExit) => {
     log(`Starting MulmoTerminal on port ${port}...`);
     // stderr is piped (and passed through) so a fatal boot error can be inspected once the
@@ -427,26 +472,17 @@ function runServer(port, probedAddress, noOpen, cwd, onChild) {
     let readyStarted = false;
     let cancelReady = () => {};
     // Takes a CONCRETE address — callers resolve first, and a caller that cannot does not call.
+    //
+    // Two different questions, and #1889 is what happens when one answer is given to both. The
+    // POLL asks "did the server we started come up", so it uses the address the child reported
+    // binding — that is #1876's fix and it stays. The URL asks "where does this user's browser
+    // keep its state", and the only answer that does not empty the app is the one it has always
+    // been given: see browserUrl.
     const beginReady = (reachHost) => {
       if (readyStarted) return;
       readyStarted = true;
-      const url = launcherUrl(reachHost, port);
-      cancelReady = waitUntilReady(
-        port,
-        () => {
-          printReadyBanner(url, STOP_COMMAND);
-          if (noOpen) return;
-          try {
-            // The command is a hardcoded literal; url is built by launcherUrl from the address the
-            // child reported and a numeric port, so it is http://<addr>:<n> or http://[<v6>]:<n>.
-
-            execSync(`${pickOpenCommand()} ${url}`, { stdio: "pipe" });
-          } catch {
-            log(`Open your browser: ${url}`);
-          }
-        },
-        { host: reachHost },
-      );
+      const { url, note } = launchTarget(reachHost, port, localhostIsUnambiguous);
+      cancelReady = waitUntilReady(port, () => announceReady(url, note, noOpen), { host: reachHost });
     };
     server.on("message", (msg) => {
       if (!isRecordLike(msg) || msg.type !== "listening" || typeof msg.address !== "string") return;
@@ -613,12 +649,12 @@ async function main() {
   // The address comes back with the port because the PROBE learned it from the kernel, which is
   // the one answer that needs no interpreting (#1876). It is the fallback the readiness poll uses
   // when the child reports nothing.
-  const { port, address: probedAddress } = await choosePort(requestedPort, portExplicit);
+  const { port, address: probedAddress, localhostIsUnambiguous } = await choosePort(requestedPort, portExplicit);
   // Named only now, because the port is half the name — and named at all so that the user who
   // loses this terminal has something to search for (#1820). The server child names itself the
   // same, so `pkill mulmoterminal` reaches whichever half is found first.
   setProcessTitle(port);
-  await runServer(port, probedAddress, noOpen, cwd, (c) => {
+  await runServer(port, probedAddress, localhostIsUnambiguous, noOpen, cwd, (c) => {
     child = c;
   });
   error(portInUseMessage(port, portExplicit));
