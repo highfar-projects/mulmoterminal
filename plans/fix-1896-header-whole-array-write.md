@@ -79,7 +79,44 @@ skill は散文なのでテストで赤くできない。確認したのは:
   `prRepos` / `keymap`）が `app-config.ts` の `updated(...)` 経由であること —— 全部 1 件ヒット
 - 3 つの replace 規則それぞれの根拠（`app-config.ts` / `header-config.ts:51` /
   `header-config.ts:196`）
-- 他の writing skill を掃いた結果、同じ欠落は `-header` だけだった
-  （`-theme` / `-model` / `-notify` / `-config` は既に「complete」と書いている。
-  `-keys` は #1892 で追加済み）
+- 他の writing skill を掃いた結果、`-theme`（`themes`）/ `-model`（`providers` /
+  `customAgents`）/ `-keys`（`keymap`、#1892 で追加済み）は既に「complete を送れ」と書いている
 - `test/server/skills/skillFrontmatter.spec.ts` が緑（frontmatter を壊していない）
+
+## codex review で見つかった追加の欠落 —— `sounds`（PR #1904 レビュー）
+
+上の掃き方が甘かった。`-notify` を「既に complete と書いてある」と数えたが、実際の文面は
+
+> Partial `POST /api/config` merge — write only the keys you are changing, and **send arrays complete**.
+
+で、**`sounds` は配列ではなくオブジェクト**なので、この指示は `sounds` を覆っていなかった。
+`mergeConfigUpdate` は `sounds` も `updated("sounds", sanitizeSounds, …)` で通し、
+`sanitizeSounds` は `out` を**新規に組み直す**（`app-config.ts:384`）。つまり
+
+```json
+{ "sounds": { "waiting": "preset:coin" } }
+```
+
+は **他の kind の音を全部消す**。#1896 と同じ欠陥が、別の skill に残っていた。
+
+**直し方を「列挙」から「原則」に変えた。** 元の直しは配列名を並べた表現で、
+`sounds` が漏れたのはまさにその列挙が伸びなかったからなので、同じ形で 1 語足しても次に同じ穴が開く。
+ルーター側（`-config`）を
+
+- **トップレベルだけが merge。送ったキーは丸ごと置換され、その下は一切 merge されない**
+
+という原則の書き方に変え、配列（13 個）と**オブジェクト**（`sounds` / `keymap` / `repoDirs` /
+`headerStatusColors`）の両方を例として挙げた。**オブジェクトの方が事故る**（map は 1 キー足せる
+ように見える）ことを明記している。
+
+`-notify` 側も「arrays complete」を、`sounds` を名指しで
+「`GET /api/config` で現在の map を読み、そこに足して、丸ごと返せ」に書き換えた。
+
+**オブジェクト値 4 キーの sanitizer が全部「新規に組み直す」ことを確認済み**:
+`sanitizeSounds`（`app-config.ts:384`）/ `sanitizeRepoDirs`（`:350`）/
+`sanitizeKeymap`（`common/keymap.ts:247`）/ `sanitizeHeaderStatusColors`
+（`common/headerStatusColors.ts:100`）。
+
+**`-dirs` は対象外**だった。`headerStatusColors` をグローバルにも書けるとは書いているが、
+グローバルへの**書き込み手順を持たない**（プロジェクトの `.mulmoterminal.json` を書く skill で、
+グローバルは「読む」だけ）ので、`POST` を誤らせる文面が無い。
