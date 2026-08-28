@@ -81,6 +81,18 @@ export const en = {
       intro:
         "Read-only, and everything is listed whether it is bound or not, under {keymapKey}. Two kinds can be bound: MulmoTerminal actions (enlarge, jump to a waiting agent, copy / paste), and key sequences sent to the terminal (on a Mac, Cmd+← for start of line). Every key you bind stops reaching the program inside the terminal, so set them up with the button below — the agent checks each one against your existing bindings and the traps a browser or a Mac adds before writing it. The {guide} has the reference.",
       guide: "guide",
+      actions: {
+        zoomToggle: "Enlarge / collapse a terminal",
+        zoomNext: "Enlarge the next terminal",
+        zoomPrev: "Enlarge the previous terminal",
+        nextAttention: "Jump to a terminal that needs you",
+        terminalNew: "Open the launch panel",
+        terminalNewHere: "Open the launch panel on this terminal's directory",
+        terminalNewAdjacent: "Shell in this terminal's directory, straight away",
+        terminalClose: "Close this terminal",
+        copy: "Copy the terminal selection",
+        paste: "Paste into the terminal",
+      },
       list: "Keyboard shortcuts",
       notSet: "Not set",
       sendRow: "Send {key} to the terminal",
