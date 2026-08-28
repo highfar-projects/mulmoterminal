@@ -549,6 +549,24 @@ d52fb64a  ON THIS BRANCH
 3 は**この巡で一番効いた** —— 前の巡で「frontmatter を守るテスト」を足したのに、そのテスト自身が
 壊れた入力を受け入れる状態だった。
 
+### 私が足した振り分け表が、症状を間違った設定へ送っていた（ローカル codex、P2）
+
+2 巡前に足した経路の振り分け表で、**「Ctrl+C stopped interrupting」を `terminalSubmit` に送って
+いた**。`terminalSubmit` は Enter が送るバイトの話で、Ctrl+C とは無関係。
+
+**実際は `copy` アクションの症状**。`common/terminalClipboard.ts` の `clipboardActionFor`:
+
+> Copy only when there is something to copy. **This is what keeps Ctrl+C usable as INTERRUPT**:
+> with no selection the key is not ours, so the terminal sends `^C` exactly as it always did.
+
+つまり割り込みが失われるのは**選択がある間だけ**で、見るべきは `copy` の割り当てと、そのセルに
+選択が残っていないか。`terminalSubmit` を触れば**間違った設定をデバッグする**ことになる。
+
+行を分け、理由（`clipboardActionFor` の挙動）を添えた。
+
+**症状の出典は frontmatter の "Use when" リスト**で、そこに並んでいたものを表へ写すときに
+`terminalSubmit` の行にまとめてしまった。**列挙を写すときは、写した先の意味が同じか確かめる。**
+
 ### ゲート
 
 `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0。

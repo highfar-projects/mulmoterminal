@@ -38,9 +38,16 @@ below belongs to one of them:
 | nothing specific, or arrived via **Set up shortcuts…** | this section |
 | "selecting text doesn't copy" | [`copyOnSelect`](#copyonselect--copy-just-by-selecting) |
 | anything about the question pane | [`questionPaneEnabled`](#questionpaneenabled--answer-a-question-from-a-side-pane) |
-| "Shift+Enter submits", "Enter makes a newline", "Ctrl+C stopped interrupting" | [`terminalSubmit`](#terminalsubmit--enter-vs-newline) |
+| "Shift+Enter submits", "Enter makes a newline" | [`terminalSubmit`](#terminalsubmit--enter-vs-newline) |
+| "Ctrl+C stopped interrupting" | **the `copy` action, not `terminalSubmit`** — see below |
 
-**Named one of those three? Skip this whole section** and go straight to that setting. Proposing
+**"Ctrl+C stopped interrupting" is a keymap symptom.** `copy` claims the key **only when there is a
+selection** (`clipboardActionFor` returns null with none, so the terminal sends `^C` exactly as it
+always did), which means the interrupt is lost only while something is selected. Look at what
+`copy` is bound to and at whether a selection is sitting in that cell — `terminalSubmit` has
+nothing to do with it and changing it would be debugging the wrong setting.
+
+**Named one of the first three? Skip this whole section** and go straight to that setting. Proposing
 shortcuts to someone who came about Enter is both an unwanted detour and a real cost: every binding
 takes a key away from the program in their terminal, and the rule below says never to add one the
 user did not request.
