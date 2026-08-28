@@ -91,7 +91,7 @@ M1 で赤くなるテストが **1 件 → 4 件**に増えた。
 3 件目として、**`leaves the other beats alone` が no-op でも通っていた** —— 「他が変わっていない」
 は何も起きていないときに自明に真。対象 beat も assert するようにした。
 
-## break-verify
+## break-verify（すべて `bd1df482` のツリーで測定、テストは 7 件）
 
 | ミューテーション | 結果 |
 |---|---|
@@ -122,7 +122,7 @@ POST … {"filePath":"stories/…json","beatIndex":2,"beat":{…"# REPRO MARKER"
 検証に使ったストーリーは元の内容に戻してある。
 
 ゲート: format / lint / typecheck / build / test すべて 0。
-`yarn test` は **11514 passed**（+7、この PR が足したもの）。
+`yarn test` は `bd1df482` で **11514 passed**（+7、この PR が足したもの）。
 
 
 ## レビューループ（`/gh-review-loop`、2026-08-28）
@@ -158,9 +158,13 @@ PR #1886。codex は 1〜3 巡すべて `LGTM`。CodeRabbit は 1 巡目で 1 �
 - **メッセージを「ビートを差し替えた」にすべきか** → スコープ外。`outcome.message` はパッケージの
   もの。エージェントの ground truth は返ってくるスクリプトで、それは上記のテストで pin した
 
-**break-verify の更新（`515cb848` 時点）**
+**break-verify の更新** —— 数値はそれぞれ測定したツリーの sha に紐づける。
 
-レスポンスのアサーションを足したので、M1（allowlist を #1880 に戻す）で赤くなるのが
-**4 件 → 5 件**（全 8 件中）になった。`yarn test` は **11515 passed**。
+| 測定対象の sha | テスト件数 | M1（allowlist を #1880 に戻す） | `yarn test` |
+|---|---|---|---|
+| `bd1df482`（当初の実装） | 7 | 4 red | 11514 passed |
+| `515cb848`（レスポンスのアサーション追加後） | 8 | **5 red** | 11515 passed |
+| `2bad6623`（`origin/main` #1887 をマージ後、再実行） | 8 | 未測定（M1 は `515cb848` で確定） | 11515 passed |
 
-`origin/main`（#1887）を取り込み、マージ結果で全ゲートを再実行。
+`+1` はレスポンスのアサーションを 1 件足したぶん。M1 が 4→5 に増えたのは、その 1 件が
+「エージェントが読むもの」を pin したから。
