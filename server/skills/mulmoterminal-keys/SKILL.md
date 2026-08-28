@@ -26,8 +26,9 @@ So look first, then offer:
 2. **Check the platform** — `uname`. It decides which sets are even usable: no `F1`–`F12` and no
    `Option`+letter on macOS, and the Cmd line-editing set below only makes sense there.
 3. **Offer concrete sets rather than a blank question**, and what you offer depends on step 2:
-   - **Always** one from the action starter sets. Name what each key will do in the terminal they
-     are sitting in.
+   - **Always** one from the action starter sets — **on macOS, the Up/Down subset of Arrows**, for
+     the reason in that set's own row. Name what each key will do in the terminal they are sitting
+     in, including what it stops doing.
    - **On macOS, also the `send` line-editing set.**
    - **Off macOS there is no `send` set to offer, and that is not an omission** — see the reason
      under the `send` starter set. Say the mechanism exists and what it is for, then build an entry
@@ -83,7 +84,7 @@ Each is checked against the traps below. The guide documents them at
 | Set | Keys | Suits |
 |---|---|---|
 | Minimal | `zoom-toggle: F8`, `next-attention: F9` | Anyone starting out — the two that open the feature up |
-| Arrows | `Alt+ArrowUp/Left/Right/Down` | **The safe cross-platform default; the only ACTION set to offer a Mac user unprompted.** The `send` starter set below is the other half of a macOS proposal, and the two do not collide — one binds app actions, the other sends bytes |
+| Arrows | `Alt+ArrowUp/Left/Right/Down` | The safe cross-platform default, and the only ACTION set to offer a Mac user unprompted — **but on macOS bind the UP/DOWN pair only.** `Alt+Left` / `Alt+Right` usually carry word motion in a Mac terminal, and an action claims the keystroke in the capture phase before the terminal sees it, so binding those two takes word motion away. Map the pair you keep to `zoom-toggle` and `next-attention`, which is what the "always bind one of these two" rule needs anyway |
 | tmux-flavoured | `Alt+z / n / p / a / c / x` | tmux muscle memory — but **not** on macOS |
 | iTerm2-flavoured | `Cmd+Enter`, `Cmd+[` / `]`, `Cmd+d` | Mac users who think in iTerm2 panes |
 
@@ -141,8 +142,9 @@ would be worse than a short one — every other combination either already works
 |---|---|---|
 | **macOS line editing** | `Cmd+ArrowLeft` → `\u0001`, `Cmd+ArrowRight` → `\u0005`, `Cmd+Backspace` → `\u0015` | **The one to lead with on a Mac.** Start of line, end of line, delete to start of line — the habit every other macOS text field has trained. `Cmd+Backspace` is the Mac Delete key; `\u0015` is `Ctrl+U` |
 
-It is the one `send` set to offer a Mac user unprompted, pairing with **Arrows** on the action side
-above — and **there is no non-macOS equivalent, on purpose.** `send` exists to reach a key the shell
+It is the one `send` set to offer a Mac user unprompted, pairing with the Up/Down subset of
+**Arrows** on the action side above — the two halves of a macOS proposal claim different keys, which
+is what makes offering both at once safe — and **there is no non-macOS equivalent, on purpose.** `send` exists to reach a key the shell
 already understands from a key the keyboard has; on Linux and Windows `Ctrl+A` and `Ctrl+E` are
 directly typeable, so there is no gap to close unprompted. Off macOS, mention `send` and wait for a
 key they name.

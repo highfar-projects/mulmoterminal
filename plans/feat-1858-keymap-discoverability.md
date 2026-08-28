@@ -163,7 +163,7 @@ skill が検証するのでもともと踏まない。README:634 の記録済み
 レビュー中に #1890（launch panel、#1867）が main に入り、**`KEYMAP_ACTIONS` に 10 個目
 `terminal-new-here` が増えた**。マージした結果、行数を数える 2 件が赤くなった:
 
-```
+```text
 expected [ … ] to have a length of 10 but got 11
 expected [ … ] to have a length of 11 but got 12
 ```
@@ -209,6 +209,25 @@ i18n 化はこの変更と独立に戻せる。ja のガイドには注記とリ
 手順 3 をプラットフォーム条件付きに直し、**なぜ非 macOS のセットが無いのかを書いた** ——
 `send` は「シェルが理解するキーを、キーボードにあるキーから届かせる」ためのもので、Linux / Windows
 では `Ctrl+A` / `Ctrl+E` がそのまま打てるので**埋めるべき穴が無い**。これは欠落ではなく設計。
+
+### CodeRabbit が見つけた、私が作った衝突（Major）
+
+`send` の節に「macOS では `Alt+←`/`Alt+→` は既に単語移動として効いているので、send で縛るな」と
+書いた。**ところが既存の Arrows アクションセットは、その 2 キーをアクションとして割り当てる。**
+
+アクションはグリッドの capture フェーズのハンドラが `stopPropagation()` するので
+（`common/keymap.ts` のコメント: *"the grid's handler runs in the capture phase and stops the
+event before the terminal"*）、**Arrows を Mac で勧めると、2 つ下の節で守れと書いた単語移動を
+その場で奪う**。
+
+しかも私は Arrows の行に「the two do not collide — one binds app actions, the other sends bytes」と
+**自分で書き足していた**。アクションと send は互いに衝突しないが、**アクションとターミナル自身の
+挙動**は衝突する。書いた警告と、書き足した安全宣言が矛盾していた。
+
+- Arrows は macOS では **Up/Down のペアだけ**を割り当てる、と行に明記
+- 残す 2 つを `zoom-toggle` と `next-attention` に対応させる —— 「必ずこの 2 つのどちらかを
+  割り当てろ」という既存ルールが要求しているものと一致する
+- 「衝突しない」の主張を「macOS 提案の 2 つの半分は**別のキーを取る**」に置き換えた
 
 ### ゲート
 
