@@ -482,6 +482,11 @@ function onShortcutKey(e: KeyboardEvent) {
   // exclude, so typing in an editor was reaching the shortcuts (Codex, PR #1193).
   if (!onTerminalsRoute()) return;
   if (showSettings.value) return;
+  // Same reason, and the launch panel is the same kind of thing: while it is open the keyboard is
+  // its own. Without this a grid shortcut bound to Escape runs its action AND leaves the panel
+  // open, because this handler is capture-phase and the panel's is not (codex [P2], #1890). An
+  // early return rather than a swallow — the event goes on to reach the panel.
+  if (launchPanelOpen.value) return;
   const target = e.target instanceof HTMLElement ? e.target : null;
   if (target && isEditableTarget(target.tagName, Array.from(target.classList))) return;
   // A key confirming an IME candidate is the IME's, not a shortcut. `gridShortcutFor` already
