@@ -13,7 +13,7 @@
 **実測（2026-08-28、Chrome 152 / macOS 26.5.1 arm64）** —— 同じ port の `127.0.0.1` に `OURS-v4`、
 `::1` に `STRANGER-v6` を立て `http://localhost:<port>` を開く:
 
-```
+```text
 Chrome  http://localhost:39221 -> STRANGER-v6
 ```
 
@@ -90,7 +90,7 @@ LAN の case は 1 度目に `ipconfig getifaddr en0` が空を返して**実質
 
 **穴が閉じたことの証明** —— サーバ稼働中に別プロセスが `[::1]:34724` を取ろうとする:
 
-```
+```text
 stranger REFUSED: EADDRINUSE
 ```
 
@@ -159,7 +159,7 @@ timeout は置かない —— マイクロ秒で終わるローカル syscall �
 
 **実機 A —— 順序**（既定 bind, port 34730）。ログ行番号で見て bind が banner より前:
 
-```
+```text
 15:[bind] also listening on ::1:34730 so http://localhost:<port> can only mean this server
 22:  ✓ MulmoTerminal is ready
 23:  → http://localhost:34730
@@ -168,7 +168,7 @@ timeout は置かない —— マイクロ秒で終わるローカル syscall �
 **実機 B —— 起動中の横取り**（port 34731、launcher の probe が終わったあと 6 秒目で `::1` を
 別プロセスが取る）。この round より前なら launcher は `localhost` を開いていた:
 
-```
+```text
 [bind] could not also listen on ::1:34731 (EADDRINUSE) — the browser opens http://localhost:<port> …
   → http://127.0.0.1:34731
 [mulmoterminal] Something else is already listening on [::1]:34731, so the browser is being sent to
@@ -263,7 +263,7 @@ Codex（`CHANGES REQUESTED`）:
 **実機 —— 指摘そのもののケース**（直起動、`MULMOTERMINAL_HOST=::1`、`127.0.0.1:34750` を
 別プロセスが保持）:
 
-```
+```text
 [bind] could not also listen on 127.0.0.1:34750 (EADDRINUSE) — … hooks and the GUI MCP will fail …
 mulmoterminal running at http://[::1]:34750
 [bind] not printing http://localhost:34750 — something else holds 127.0.0.1:34750, …
@@ -317,3 +317,42 @@ spec のみ。分類そのもの（errno → 状態）と、そこから先の�
 `mulmoterminal running at http://localhost:34760` → launcher も `→ http://localhost:34760`。
 
 ゲート: すべて exit 0、`yarn test` **11612 passed / 50 skipped**。
+
+## レビュー iter-5 —— 「衝突が答えである」ケースを名前が隠していた
+
+Codex（`CHANGES REQUESTED`、CodeRabbit も同じ箇所に inline）:
+
+> The `::` dual-stack path still classifies the intentionally accepted `127.0.0.1` `EADDRINUSE`
+> as `taken` rather than `ours`, so it unnecessarily suppresses `localhost` even though the
+> primary listener owns both loopbacks.
+
+**そのとおり。** `::` の primary が dual-stack で v4 も取っているカーネルでは、補助の
+`127.0.0.1` bind は **primary 自身**と衝突する。それは「負けた」のではなく「もう持っている」
+ことの証明で、`loopbackListenPlan` のコメントは最初からそう書いていた。iter-4 で 3 状態に
+したとき、この分岐を通していなかった。
+
+**原因の半分は名前だった。** フラグは `inUseIsFine` —— 「fine」は「無視してよい」と読める。
+実際の意味は「**この EADDRINUSE は primary が持っている証拠**」で、無視ではなく `ours` と
+数えるべきもの。`inUseProvesPrimary` に改名し、分類もそこを通す。
+
+### iter-5 の検証
+
+| ミューテーション | 結果 |
+|---|---|
+| dual-stack の衝突を `taken` として扱う（= 指摘された挙動） | 3 red |
+
+**実機（`MULMOTERMINAL_HOST=::`, port 34765）** —— `localhost` を名乗り、3 アドレスとも 200:
+
+```text
+[bind] also listening on 127.0.0.1:34765 so this machine's own sessions can reach the server
+mulmoterminal running at http://localhost:34765
+  → http://localhost:34765
+```
+
+**ただしこの run は衝突経路を通っていない。** macOS の `::` は v4 を取らないので補助 bind が
+**成功**する（測定済み）。衝突が起きるのは dual-stack のカーネル（Linux）だけで、そこは spec で
+固定してある。**macOS で緑になることが、この修正が効いている証拠にはならない**ので明記する。
+
+CodeRabbit の Minor（MD040、ログの code fence に言語が無い）も対応した。
+
+ゲート: すべて exit 0、`yarn test` **11613 passed / 50 skipped**。

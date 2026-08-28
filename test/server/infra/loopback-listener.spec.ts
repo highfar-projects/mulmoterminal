@@ -45,7 +45,7 @@ describe("loopbackListenPlans", () => {
   // v4, never whether it takes v6 — while its v4 coverage is the thing that has to be attempted.
   it("takes nothing for the v6 wildcard beyond the v4 attempt, whose clash is proof rather than failure", () => {
     expect(addressesFor({ address: "::" })).toEqual(["127.0.0.1"]);
-    expect(planFor({ address: "::" }, "127.0.0.1")?.inUseIsFine).toBe(true);
+    expect(planFor({ address: "::" }, "127.0.0.1")?.inUseProvesPrimary).toBe(true);
   });
 
   it("takes both for a specific non-loopback address — the reported case", () => {
@@ -57,7 +57,7 @@ describe("loopbackListenPlans", () => {
   // A clash on `::1` can only be somebody else: every bind that could already hold it produces no
   // v6 plan at all. Treating it as "fine" would silence the one warning #1893 exists to raise.
   it("never excuses a clash on the v6 loopback, whatever the bind", () => {
-    ["127.0.0.1", "0.0.0.0", "192.168.64.1", "127.0.0.2"].forEach((address) => expect(planFor({ address }, "::1")?.inUseIsFine, address).toBe(false));
+    ["127.0.0.1", "0.0.0.0", "192.168.64.1", "127.0.0.2"].forEach((address) => expect(planFor({ address }, "::1")?.inUseProvesPrimary, address).toBe(false));
   });
 
   // The two listeners fail in ways that look identical in a log and are nothing alike to read.
@@ -256,6 +256,33 @@ describe("the outcome it reports", () => {
     const outcome = await startLoopbackListeners({ address: () => ({ address: "127.0.0.1" }) }, [recorder(false, "EACCES")], 34567);
     expect(outcome.v6).toBe("taken");
     expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+});
+
+// A `::` primary is dual-stack on most kernels, so its 127.0.0.1 auxiliary clashes with the
+// primary ITSELF. Reading that as a rival suppressed `localhost` for a server that owns both
+// loopbacks (Codex/CodeRabbit, #1903) — and macOS hides it, because there the bind succeeds.
+describe("a clash that proves the primary already covers the address", () => {
+  const clashing = (): LoopbackListener => {
+    let onError: ((err: NodeJS.ErrnoException) => void) | undefined;
+    return {
+      once: (_event, handler) => {
+        onError = handler;
+        return undefined;
+      },
+      listen: () => {
+        onError?.(Object.assign(new Error("in use"), { code: "EADDRINUSE" }));
+        return undefined;
+      },
+    };
+  };
+
+  it("counts as ours, not as taken", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const outcome = await startLoopbackListeners({ address: () => ({ address: "::" }) }, [clashing(), clashing()], 34567);
+    expect(outcome).toEqual({ v4: "ours", v6: "ours" });
+    expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });
 });

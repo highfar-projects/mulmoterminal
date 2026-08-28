@@ -88,7 +88,16 @@ export interface LoopbackPlan {
    * therefore proof that loopback is already served. Warning there would fire on every correct
    * dual-stack boot, which is how an operator learns to ignore the warning that means something.
    */
-  inUseIsFine: boolean;
+  /**
+   * Whether an `EADDRINUSE` here PROVES the primary already serves this address, rather than
+   * meaning a rival holds it.
+   *
+   * It was called `inUseIsFine`, and that name is what let the bug in: "fine" reads as "ignore
+   * it", so the clash was classified `taken` and `localhost` was suppressed for a `::` bind that
+   * owns both loopbacks (Codex/CodeRabbit, PR #1903). The clash is not something to tolerate —
+   * it is the ANSWER, and the answer is `ours`.
+   */
+  inUseProvesPrimary: boolean;
   /** What this listener is FOR, which is what decides the warning when it cannot be taken. The
    *  two failures look identical in the log and are nothing alike to the person reading it. */
   reason: LoopbackReason;
@@ -171,12 +180,13 @@ export function loopbackListenPlans(bound: BoundAddress): LoopbackPlan[] {
   const { address } = bound;
   const plans: LoopbackPlan[] = [];
   if (address !== V4_WILDCARD && !servesV4Loopback(address)) {
-    plans.push({ address: V4_LOOPBACK, inUseIsFine: address === V6_WILDCARD, reason: "sessions" });
+    plans.push({ address: V4_LOOPBACK, inUseProvesPrimary: address === V6_WILDCARD, reason: "sessions" });
   }
-  // No `inUseIsFine` counterpart here: the only bind that could already hold `[::1]:P` is one that
-  // serves the v6 loopback, and those return no plan at all. So EADDRINUSE means somebody else.
+  // No `inUseProvesPrimary` counterpart here: the only bind that could already hold `[::1]:P` is
+  // one that serves the v6 loopback, and those return no plan at all. So EADDRINUSE means
+  // somebody else.
   if (!servesV6Loopback(address)) {
-    plans.push({ address: V6_LOOPBACK, inUseIsFine: false, reason: "browser" });
+    plans.push({ address: V6_LOOPBACK, inUseProvesPrimary: false, reason: "browser" });
   }
   return plans;
 }
@@ -205,10 +215,12 @@ const START_TEXT: Record<LoopbackReason, string> = {
 function startOne(loopback: LoopbackListener, plan: LoopbackPlan, port: string | number): Promise<LoopbackStatus> {
   return new Promise((resolve) => {
     loopback.once("error", (err: NodeJS.ErrnoException) => {
-      const status = statusFromError(err);
+      // A clash under a dual-stack primary is not a loss — it is the primary itself holding the
+      // address, which is exactly what this listener wanted done.
+      const status: LoopbackStatus = plan.inUseProvesPrimary && err.code === "EADDRINUSE" ? "ours" : statusFromError(err);
       // An address this machine does not have costs nobody anything: no client can dial it, so
       // there is nothing to warn about and nothing to lose. Only a rival gets a warning.
-      if (status === "taken" && !(plan.inUseIsFine && err.code === "EADDRINUSE")) {
+      if (status === "taken") {
         console.warn(`\x1b[33m[bind]\x1b[0m could not also listen on ${plan.address}:${port} (${err.code ?? err.message}) — ${WARNING_TEXT[plan.reason]}`);
       }
       resolve(status);
