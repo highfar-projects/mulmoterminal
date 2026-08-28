@@ -101,6 +101,19 @@ describe("presentMulmoScript — replacing one beat", () => {
     expect(beats[2].image.markdown).toBe("# third");
   });
 
+  // The other half of the ground truth: what the agent is TOLD. The response is the only thing the
+  // caller can read, and before the fix it carried the PRE-write script under a message that reads
+  // like success — so nothing pins that the host returns the post-write load rather than a snapshot
+  // it took earlier. Asserted on the raw text because `res.body`'s fields are `unknown` by design
+  // and the marker is unique in this story; a shape assertion would cost a type guard to prove what
+  // the on-disk assertions already prove.
+  it("returns the updated script to the caller", async () => {
+    const res = await call({ filePath: STORY, beatIndex: 1, beat: beat("REPLACED") });
+
+    expect(res.text).toContain("# REPLACED");
+    expect(res.text).not.toContain("# second");
+  });
+
   // The write is only half of it. A canvas that already has this story open learns about the
   // change from the broadcast and from nothing else — a new save gets redrawn because the response
   // tells the agent to display the story, which opens the new file, but replacing a beat of an
