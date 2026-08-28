@@ -205,22 +205,6 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
   // ── Frontier vendors: cheapest first ─────────────────────────────────────────
   {
     provider: "openrouter",
-    id: "google/gemini-3.5-flash-lite",
-    label: "Gemini 3.5 Flash-Lite",
-    contextLength: 1_048_576,
-    pricePerMTok: { input: 0.3, output: 2.5 },
-    trials: measured(3, 3, 11),
-  },
-  {
-    provider: "openrouter",
-    id: "amazon/nova-2-lite-v1",
-    label: "Nova 2 Lite",
-    contextLength: 1_000_000,
-    pricePerMTok: { input: 0.3, output: 2.5 },
-    trials: measured(2, 3, 20),
-  },
-  {
-    provider: "openrouter",
     id: "openai/gpt-5.6-luna",
     label: "GPT-5.6 Luna",
     contextLength: 1_050_000,
@@ -234,6 +218,22 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     contextLength: 1_050_000,
     pricePerMTok: { input: 0.2, output: 1.2 },
     trials: measured(3, 3, 69),
+  },
+  {
+    provider: "openrouter",
+    id: "google/gemini-3.5-flash-lite",
+    label: "Gemini 3.5 Flash-Lite",
+    contextLength: 1_048_576,
+    pricePerMTok: { input: 0.3, output: 2.5 },
+    trials: measured(3, 3, 11),
+  },
+  {
+    provider: "openrouter",
+    id: "amazon/nova-2-lite-v1",
+    label: "Nova 2 Lite",
+    contextLength: 1_000_000,
+    pricePerMTok: { input: 0.3, output: 2.5 },
+    trials: measured(2, 3, 20),
   },
   {
     provider: "openrouter",
