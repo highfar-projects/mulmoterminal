@@ -39,13 +39,20 @@ below belongs to one of them:
 | "selecting text doesn't copy" | [`copyOnSelect`](#copyonselect--copy-just-by-selecting) |
 | anything about the question pane | [`questionPaneEnabled`](#questionpaneenabled--answer-a-question-from-a-side-pane) |
 | "Shift+Enter submits", "Enter makes a newline" | [`terminalSubmit`](#terminalsubmit--enter-vs-newline) |
-| "Ctrl+C stopped interrupting" | **the `copy` action, not `terminalSubmit`** — see below |
+| "Ctrl+C stopped interrupting" | **the keymap, not `terminalSubmit`** — see below |
 
-**"Ctrl+C stopped interrupting" is a keymap symptom.** `copy` claims the key **only when there is a
-selection** (`clipboardActionFor` returns null with none, so the terminal sends `^C` exactly as it
-always did), which means the interrupt is lost only while something is selected. Look at what
-`copy` is bound to and at whether a selection is sitting in that cell — `terminalSubmit` has
-nothing to do with it and changing it would be debugging the wrong setting.
+**"Ctrl+C stopped interrupting" is a keymap symptom.** Read the whole keymap and find **everything**
+claiming that keystroke, not just one entry:
+
+| what is on `Ctrl+C` | what it does to the interrupt |
+|---|---|
+| any action other than `copy` | takes it **always** — the grid claims the key in the capture phase before the terminal sees it |
+| `copy` | takes it **only while something is selected** — `clipboardActionFor` returns null with no selection, so the terminal sends `^C` exactly as it always did |
+| a `send` entry | replaces it with those bytes |
+
+So "it works sometimes" points at `copy` plus a selection sitting in that cell, and "it never works"
+points at one of the others. `terminalSubmit` is not involved either way, and changing it would be
+debugging the wrong setting.
 
 **Named one of the first three? Skip this whole section** and go straight to that setting. Proposing
 shortcuts to someone who came about Enter is both an unwanted detour and a real cost: every binding
