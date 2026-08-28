@@ -78,8 +78,8 @@ export function localBrowserUrl(port: number, boundAddress: string | null, outco
   // Descending by what is still true. Naming the loopback we DID keep is better than naming the
   // bind, and naming the wrong one is the defect in miniature: with `::1` ours and `127.0.0.1`
   // lost, printing `127.0.0.1` sends the reader to the stranger by hand.
-  if (outcome.v4LoopbackServed) return `http://127.0.0.1:${port}`;
-  if (outcome.v6LoopbackServed) return withHost(port, "::1");
+  if (outcome.v4 === "ours") return `http://127.0.0.1:${port}`;
+  if (outcome.v6 === "ours") return withHost(port, "::1");
   if (boundAddress === null) return `http://127.0.0.1:${port}`;
   return withHost(port, boundAddress);
 }
@@ -99,14 +99,24 @@ function withHost(port: number, host: string): string {
  * measured), and holding one of the two leaves the other free for anything on this machine to
  * answer with. Half an answer here is not a smaller guarantee, it is none.
  */
-export const localhostIsOurs = (outcome: LoopbackOutcome): boolean => outcome.v4LoopbackServed && outcome.v6LoopbackServed;
+export const localhostIsOurs = (outcome: LoopbackOutcome): boolean =>
+  // Nothing a client could reach instead of us …
+  outcome.v4 !== "taken" &&
+  outcome.v6 !== "taken" &&
+  // … and at least one address it can actually reach us at. Both `absent` cannot happen on a host
+  // that has a loopback at all, but a name resolving to nothing is worse than a literal address,
+  // so it is excluded rather than assumed away.
+  (outcome.v4 === "ours" || outcome.v6 === "ours");
 
 /** Why the URL above is not `localhost`, or null when it is. Silence would leave an operator
  *  looking at an address they did not expect with nothing to search for — so it names the
  *  address that was lost, which is the one they have to go and free. */
 export function notLocalhostReason(port: number, outcome: LoopbackOutcome): string | null {
   if (localhostIsOurs(outcome)) return null;
-  const lost = [outcome.v4LoopbackServed ? null : `127.0.0.1:${port}`, outcome.v6LoopbackServed ? null : `[::1]:${port}`].filter((entry) => entry !== null);
+  // Only a `taken` address is somebody else's. An `absent` one is not a rival and must not be
+  // reported as one — on an IPv4-only host that would accuse a stranger who does not exist.
+  const lost = [outcome.v4 === "taken" ? `127.0.0.1:${port}` : null, outcome.v6 === "taken" ? `[::1]:${port}` : null].filter((entry) => entry !== null);
+  if (lost.length === 0) return `[bind] not printing http://localhost:${port} — this machine has no loopback address this server could take.`;
   return `[bind] not printing http://localhost:${port} — something else holds ${lost.join(" and ")}, and a browser resolving localhost would reach it under this app's saved settings.`;
 }
 

@@ -98,6 +98,28 @@ export interface LoopbackPlan {
  *  `browser`: the user's browser is sent to `localhost`, which prefers `::1` (#1889). */
 export type LoopbackReason = "sessions" | "browser";
 
+/**
+ * What became of one loopback address.
+ *
+ * Three states and not a boolean, because "we did not get it" hides the distinction that decides
+ * everything downstream. Only `EADDRINUSE` says somebody else is there; `EADDRNOTAVAIL` /
+ * `EAFNOSUPPORT` say the address does not exist on this machine, and there `localhost` cannot
+ * resolve to it at all — so nothing is at stake and avoiding `localhost` would be a lie told to
+ * an IPv4-only host (Codex, PR #1903).
+ *
+ * `bin/cli-args.js` already states this rule for the port probe — "only EADDRINUSE answers the
+ * question" — and this file was the one place that had not applied it.
+ *
+ *   `ours`   — the primary bind already answers here, or the extra listener took it
+ *   `absent` — this machine has no such address; nothing can answer here, ever
+ *   `taken`  — something else answers here
+ */
+export type LoopbackStatus = "ours" | "absent" | "taken";
+
+/** Errnos that mean the address is not a thing on this machine, rather than not free. */
+const ABSENT_CODES = new Set(["EADDRNOTAVAIL", "EAFNOSUPPORT"]);
+const statusFromError = (err: NodeJS.ErrnoException): LoopbackStatus => (ABSENT_CODES.has(err.code ?? "") ? "absent" : "taken");
+
 /** What the caller has to know once the extra listeners have been attempted. */
 export interface LoopbackOutcome {
   /**
@@ -109,11 +131,8 @@ export interface LoopbackOutcome {
    * existed — so a process that claimed `[::1]:<port>` during the boot was invisible to it, and
    * the browser went to that process under this app's origin (Codex, PR #1903).
    */
-  v6LoopbackServed: boolean;
-  /** The same question for `127.0.0.1`. Only used to decide what URL to PRINT when `::1` was
-   *  lost — `localhost` is out at that point, and this says whether the v4 loopback is a truthful
-   *  thing to name instead or whether the bound address is all that is left. */
-  v4LoopbackServed: boolean;
+  v6: LoopbackStatus;
+  v4: LoopbackStatus;
 }
 
 const WARNING_TEXT: Record<LoopbackReason, string> = {
@@ -183,17 +202,20 @@ const START_TEXT: Record<LoopbackReason, string> = {
  *  `listen()` answers with exactly one of `listening` or `error` — there is no third outcome and
  *  so no timeout here. A cap would have to choose a duration for a local syscall that takes
  *  microseconds, and on expiry it could only guess at an answer the kernel is about to give. */
-function startOne(loopback: LoopbackListener, plan: LoopbackPlan, port: string | number): Promise<boolean> {
+function startOne(loopback: LoopbackListener, plan: LoopbackPlan, port: string | number): Promise<LoopbackStatus> {
   return new Promise((resolve) => {
     loopback.once("error", (err: NodeJS.ErrnoException) => {
-      if (!(plan.inUseIsFine && err.code === "EADDRINUSE")) {
+      const status = statusFromError(err);
+      // An address this machine does not have costs nobody anything: no client can dial it, so
+      // there is nothing to warn about and nothing to lose. Only a rival gets a warning.
+      if (status === "taken" && !(plan.inUseIsFine && err.code === "EADDRINUSE")) {
         console.warn(`\x1b[33m[bind]\x1b[0m could not also listen on ${plan.address}:${port} (${err.code ?? err.message}) — ${WARNING_TEXT[plan.reason]}`);
       }
-      resolve(false);
+      resolve(status);
     });
     loopback.listen(Number(port), plan.address, () => {
       console.log(`[bind] also listening on ${plan.address}:${port} ${START_TEXT[plan.reason]}`);
-      resolve(true);
+      resolve("ours");
     });
   });
 }
@@ -219,17 +241,15 @@ export async function startLoopbackListeners(primary: PrimaryListener, spares: r
       const spare = spares[i];
       if (spare === undefined) {
         console.warn(`\x1b[33m[bind]\x1b[0m no spare server for ${plan.address}:${port} — ${WARNING_TEXT[plan.reason]}`);
-        return Promise.resolve(false);
+        return Promise.resolve<LoopbackStatus>("taken");
       }
       return startOne(spare, plan, port);
     }),
   );
-  // No plan for an address means the PRIMARY already answers there — served, with nothing to take.
-  // A plan that FAILED is the only way either of these is false, and the v6 one is the case the
-  // launcher must not send a browser to `localhost` into.
-  const served = (address: string): boolean => {
+  // No plan for an address means the PRIMARY already answers there — ours, with nothing to take.
+  const statusOf = (address: string): LoopbackStatus => {
     const at = plans.findIndex((plan) => plan.address === address);
-    return at === -1 || results[at] === true;
+    return at === -1 ? "ours" : (results[at] ?? "taken");
   };
-  return { v6LoopbackServed: served(V6_LOOPBACK), v4LoopbackServed: served(V4_LOOPBACK) };
+  return { v6: statusOf(V6_LOOPBACK), v4: statusOf(V4_LOOPBACK) };
 }

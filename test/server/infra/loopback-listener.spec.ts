@@ -149,14 +149,15 @@ describe("startLoopbackListeners", () => {
   });
 
   // A machine with no IPv6 lands here, and it is not a problem there: `localhost` is v4-only, so
-  // nothing was at stake. It still says so rather than failing the boot.
-  it("carries on when the v6 loopback is not an address this machine has", () => {
+  // nothing is at stake and there is no rival to report. This asserted a warning until Codex
+  // pointed out that the warning is an accusation against a stranger who does not exist (#1903).
+  it("carries on SILENTLY when the v6 loopback is not an address this machine has", () => {
     const a = recorder();
     const b = recorder();
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     startLoopbackListeners(fakeServer({ address: "127.0.0.1" }), [a.loopback, b.loopback], 34567);
     expect(() => a.handlers[0]?.(Object.assign(new Error("unavailable"), { code: "EADDRNOTAVAIL" }))).not.toThrow();
-    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });
 
@@ -203,7 +204,7 @@ describe("startLoopbackListeners under a v6 wildcard primary", () => {
 
 // The v4 half of the outcome exists only to decide what URL to print when `::1` was lost.
 describe("the outcome it reports", () => {
-  const recorder = (succeed: boolean) => {
+  const recorder = (succeed: boolean, code = "EADDRINUSE") => {
     let onError: ((err: NodeJS.ErrnoException) => void) | undefined;
     const loopback: LoopbackListener = {
       once: (_event, handler) => {
@@ -212,23 +213,49 @@ describe("the outcome it reports", () => {
       },
       listen: (_port, _address, onListening) => {
         if (succeed) onListening();
-        else onError?.(Object.assign(new Error("in use"), { code: "EADDRINUSE" }));
+        else onError?.(Object.assign(new Error(code), { code }));
         return undefined;
       },
     };
     return loopback;
   };
 
-  it("counts an address the primary already serves as served", async () => {
+  it("counts an address the primary already serves as ours", async () => {
     const outcome = await startLoopbackListeners({ address: () => ({ address: "::" }) }, [recorder(true), recorder(true)], 34567);
-    expect(outcome).toEqual({ v6LoopbackServed: true, v4LoopbackServed: true });
+    expect(outcome).toEqual({ v6: "ours", v4: "ours" });
   });
 
   it("reports each half separately when only one bind lost", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     // A LAN bind plans both; the first spare takes 127.0.0.1 and the second loses ::1.
     const outcome = await startLoopbackListeners({ address: () => ({ address: "192.168.64.1" }) }, [recorder(true), recorder(false)], 34567);
-    expect(outcome).toEqual({ v6LoopbackServed: false, v4LoopbackServed: true });
+    expect(outcome).toEqual({ v6: "taken", v4: "ours" });
+    warn.mockRestore();
+  });
+
+  // Only EADDRINUSE says somebody else is there. An IPv4-only host fails the `::1` bind with
+  // EADDRNOTAVAIL, and calling that "taken" accuses a stranger who does not exist (#1903).
+  it("calls an address this machine does not have `absent`, not `taken`", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const outcome = await startLoopbackListeners({ address: () => ({ address: "127.0.0.1" }) }, [recorder(false, "EADDRNOTAVAIL")], 34567);
+    expect(outcome).toEqual({ v6: "absent", v4: "ours" });
+    // And says nothing: there is no rival to tell the operator about.
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("treats an unsupported address family the same way", async () => {
+    const outcome = await startLoopbackListeners({ address: () => ({ address: "127.0.0.1" }) }, [recorder(false, "EAFNOSUPPORT")], 34567);
+    expect(outcome.v6).toBe("absent");
+  });
+
+  // Anything it cannot classify stays conservative — a refusal we do not understand might still
+  // be an address somebody else can bind.
+  it("keeps an unrecognised failure as taken", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const outcome = await startLoopbackListeners({ address: () => ({ address: "127.0.0.1" }) }, [recorder(false, "EACCES")], 34567);
+    expect(outcome.v6).toBe("taken");
+    expect(warn).toHaveBeenCalledTimes(1);
     warn.mockRestore();
   });
 });

@@ -274,3 +274,46 @@ mulmoterminal running at http://[::1]:34750
 
 ゲート: `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0、
 `yarn test` **11604 passed / 50 skipped**。
+
+## レビュー iter-4 —— 「取られた」と「そもそも無い」は別物
+
+Codex（`CHANGES REQUESTED`）:
+
+> On IPv4-only hosts, `EADDRNOTAVAIL` for `::1` is treated as though another process owns it, so
+> the launcher unnecessarily avoids the safe `localhost` origin and misreports a collision.
+
+**この plan の最初の版が「IPv6 の無いマシンは `EADDRNOTAVAIL` になるが、そこでは `localhost` は
+v4 のみなので実害が無い」と書いていて、コードがそれを実装していなかった。** 主張と実装のずれ。
+
+boolean をやめ、3 状態にした:
+
+| 状態 | 意味 | `localhost` への影響 |
+|---|---|---|
+| `ours` | primary が既に応答するか、補助 listener が取った | 使える |
+| `absent` | このマシンにそのアドレスが無い（`EADDRNOTAVAIL` / `EAFNOSUPPORT`） | **誰も応答できないので無害** |
+| `taken` | 他人が応答する | 使えない |
+
+`localhostIsOurs = v4 !== "taken" && v6 !== "taken" && (どちらかが "ours")`。
+最後の条件は「両方 absent なら `localhost` は何も指さない」ため —— 名前が何も指さない方が、
+リテラルのアドレスより悪い。
+
+`absent` には**警告を出さない**。居ない相手を告発することになるので。理由の行も `taken` の
+アドレスだけを名指しする。
+
+**`bin/cli-args.js` の `probeFailureIsPortInUse` が既に同じ規則を書いていた** ——
+「`EADDRINUSE` だけがこの問いに答える」。repo は答えを知っていて、このファイルだけが
+適用していなかった。#1876 のときと同じ形。
+
+### iter-4 の検証
+
+| ミューテーション | 結果 |
+|---|---|
+| どの失敗も rival として扱う（= 指摘された挙動） | 7 red |
+
+**未検証（実機）** —— IPv4-only ホスト。macOS では `::1` を外せないので `absent` 経路は
+spec のみ。分類そのもの（errno → 状態）と、そこから先の判断は spec で固定してある。
+
+既定ホストでの回帰が無いことは実機で確認: `[bind] also listening on ::1:34760` →
+`mulmoterminal running at http://localhost:34760` → launcher も `→ http://localhost:34760`。
+
+ゲート: すべて exit 0、`yarn test` **11612 passed / 50 skipped**。
