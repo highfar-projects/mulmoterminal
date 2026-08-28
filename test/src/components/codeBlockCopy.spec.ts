@@ -127,3 +127,65 @@ describe("the manual-copy dialog", () => {
     w.unmount();
   });
 });
+
+// #1895. `TerminalCell` styles this button by passing CELL_BTN — the same class every other button
+// in that toolbar row carries — and nothing asserted that it arrived, which is why a dropped class
+// survived from the day the Teleport was added.
+//
+// Every assertion here is on the BUTTON and not on the root, and that is the point rather than a
+// detail: the repair the issue first suggested (fold the Teleport in for a single root) silences
+// the Vue warning and puts the class on the wrapping `<span>`, leaving the button exactly as
+// unstyled as before — `.cell-btn` is a marker with no CSS rule of its own. Measured both ways
+// before choosing. A spec written against `wrapper.classes()` would have passed that repair.
+describe("the class the caller styles this button with", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    document.body.innerHTML = "";
+  });
+
+  const mounted = async (attrs: Record<string, string>) => {
+    const { default: CopyCodeBlock } = await import("../../../src/components/CopyCodeBlock.vue");
+    return mount(CopyCodeBlock, { props: { sessionId: "s", cwd: "/x", agent: "claude" as const }, attrs });
+  };
+
+  // NOT `wrapper.element`. For a multi-root component that is test-utils' own `<div data-v-app>`
+  // container, which never carries the class — so an assertion against it passes whatever the
+  // component does. Both wrapper checks below were written that way first and were vacuous.
+  const rootOf = (w: Awaited<ReturnType<typeof mounted>>): HTMLElement => {
+    const root = (w.element as HTMLElement).firstElementChild;
+    if (!(root instanceof HTMLElement)) throw new Error("the component rendered no element root");
+    return root;
+  };
+
+  it("reaches the button, which is the element it describes", async () => {
+    const w = await mounted({ class: "h-[26px] w-7 bg-transparent" });
+    expect(w.find("button").classes()).toEqual(expect.arrayContaining(["h-[26px]", "w-7", "bg-transparent"]));
+  });
+
+  it("does not land on the wrapper instead — that looks fixed and is not", async () => {
+    const w = await mounted({ class: "bg-transparent" });
+    expect(rootOf(w).classList.contains("bg-transparent")).toBe(false);
+  });
+
+  it("keeps the `cell-btn` marker, which other code selects on", async () => {
+    const w = await mounted({ class: "bg-transparent" });
+    expect(w.find("button").classes()).toContain("cell-btn");
+  });
+
+  // The warning is the symptom rather than the defect, but it fires once per agent cell that
+  // mounts, so a console full of it is how anyone finds this at all.
+  it("mounts without Vue complaining that it could not inherit the attribute", async () => {
+    const warnings: string[] = [];
+    const warn = vi.spyOn(console, "warn").mockImplementation((...args: unknown[]) => void warnings.push(String(args[0])));
+    await mounted({ class: "bg-transparent" });
+    expect(warnings.filter((w) => w.includes("Extraneous non-props attributes"))).toEqual([]);
+    warn.mockRestore();
+  });
+
+  // The wrapper earns its place by positioning the transient note, so it must stay a positioned
+  // box even though it is no longer what the class lands on.
+  it("leaves the wrapper positioned, which the note is placed against", async () => {
+    const w = await mounted({ class: "bg-transparent" });
+    expect(rootOf(w).classList.contains("relative")).toBe(true);
+  });
+});

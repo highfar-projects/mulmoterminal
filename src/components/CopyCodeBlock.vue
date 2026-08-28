@@ -14,6 +14,17 @@ import { MODAL_FOCUSABLE } from "../utils/focusTrap";
 import { modalKeydownHandler } from "../composables/useModalKeyboard";
 import type { TerminalAgent } from "../../common/sessionAgent";
 
+// The caller styles this button — `TerminalCell` passes CELL_BTN, the same class every other
+// button in that toolbar row carries — and the class has to reach the BUTTON, not the wrapper.
+//
+// Two things made that fail silently. The template has two roots (the span and the Teleport), so
+// Vue could not auto-inherit at all and dropped the class with a console warning (#1895). And the
+// obvious repair — folding the Teleport inside the span for a single root — MEASURED as putting
+// the class on the `<span>` instead: the warning goes away and the button stays unstyled, because
+// `.cell-btn` is a marker with no CSS rule of its own. So the target is named explicitly here
+// rather than left to inheritance, which also means a second root can be added back safely.
+defineOptions({ inheritAttrs: false });
+
 const props = defineProps<{ sessionId: string; cwd: string | null; agent: TerminalAgent }>();
 
 const busy = ref(false);
@@ -87,6 +98,7 @@ function closeManual(): void {
 <template>
   <span class="relative inline-flex">
     <button
+      v-bind="$attrs"
       type="button"
       class="cell-btn"
       title="Copy the last code block from this session's latest reply"
