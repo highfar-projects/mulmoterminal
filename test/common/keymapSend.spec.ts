@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { sanitizeKeymap, sendBytesFor, validateKeymap, type Keymap } from "../../common/keymap.js";
+import { clipboardActionFor } from "../../common/terminalClipboard.js";
 
 // #1005 — a key that puts bytes into the terminal instead of running an app action.
 //
@@ -146,6 +147,37 @@ describe("validateKeymap — a send and an action on one keystroke", () => {
     expect(problems[0].reason).toContain("zoom-next");
   });
 
+  // #1901. The warning used to name the action as the winner in every collision, on the strength
+  // of a comment saying "every action outranks every send binding, because the grid's handler runs
+  // in the capture phase". `copy` never reaches that handler — it is TERMINAL_SCOPED, decided by
+  // clipboardActionFor, which returns null with no selection so the send fires. A user with both
+  // on Ctrl+C was told `copy` wins, and then watched the send happen.
+  it("does not claim `copy` wins outright over a send — it depends on the selection", () => {
+    const problems = validateKeymap({ copy: "Ctrl+c", send: [{ key: "Ctrl+c", bytes: CTRL_A }] });
+
+    expect(problems.map((p) => p.action)).toEqual(["send[0]"]);
+    expect(problems[0].reason).toContain("only while text is selected");
+    expect(problems[0].reason).toContain("send[0]");
+    // The old wording, which was the whole defect.
+    expect(problems[0].reason).not.toContain("only `copy` will fire");
+  });
+
+  // `paste` is terminal-scoped too, but unconditional: clipboardActionFor returns it whether or
+  // not anything is selected, and it is decided before the send. So the plain wording is right.
+  it("still says `paste` wins outright over a send", () => {
+    const problems = validateKeymap({ paste: "Ctrl+v", send: [{ key: "Ctrl+v", bytes: CTRL_A }] });
+
+    expect(problems[0].reason).toContain("only `paste` will fire");
+  });
+
+  // Everything that DOES go through the grid keeps the plain wording — the fix is one exception,
+  // not a rewrite of the rule.
+  it("still says a grid action wins outright over a send", () => {
+    const problems = validateKeymap({ "zoom-next": "Ctrl+c", send: [{ key: "Ctrl+c", bytes: CTRL_A }] });
+
+    expect(problems[0].reason).toContain("only `zoom-next` will fire");
+  });
+
   it("warns about the later of two send entries claiming one keystroke", () => {
     const problems = validateKeymap({
       send: [
@@ -183,5 +215,23 @@ describe("sanitizeKeymap — send", () => {
   it("survives the round trip a config takes, so a saved binding still fires", () => {
     const keymap = sanitizeKeymap(JSON.parse(JSON.stringify({ send: [{ key: "Cmd+ArrowRight", bytes: CTRL_E }] })));
     expect(sendBytesFor(keymap, keydown())).toBe(CTRL_E);
+  });
+});
+
+// The warning above is only worth having if it describes what dispatch actually does. These pin
+// the behaviour it claims, in the same file, so the message and the runtime cannot drift apart —
+// which is exactly how #1901 happened: a comment asserted a rule, the message was generated from
+// it, and neither was ever checked against terminalClipboard.
+describe("copy vs send on one keystroke — what actually happens", () => {
+  const KEYMAP: Keymap = { copy: "Ctrl+c", send: [{ key: "Ctrl+c", bytes: CTRL_A }] };
+  const ctrlC = { ...keydown({ key: "c", ctrlKey: true, metaKey: false }), type: "keydown" };
+
+  it("copy takes the key while something is selected", () => {
+    expect(clipboardActionFor(KEYMAP, ctrlC, true)).toBe("copy");
+  });
+
+  it("with nothing selected copy stands aside and the send fires — the case the old warning denied", () => {
+    expect(clipboardActionFor(KEYMAP, ctrlC, false)).toBeNull();
+    expect(sendBytesFor(KEYMAP, ctrlC)).toBe(CTRL_A);
   });
 });

@@ -164,9 +164,17 @@ export function validateKeymap(input: unknown): KeymapProblem[] {
     return [{ action: "keymap", binding: input, reason: "`keymap` must be an object of action -> key binding", fatal: true }];
   }
   const entries = Object.entries(input);
-  // A claim on one keystroke. `rank` is DISPATCH order, so the winner can be named: every action
-  // outranks every send binding, because the grid's handler runs in the capture phase and stops
-  // the event before the terminal — see sendBytesFor.
+  // A claim on one keystroke. `rank` is DISPATCH order, so the winner can be named — with ONE
+  // exception, which is why `kind` is carried alongside it.
+  //
+  // Most actions are claimed by the grid in the capture phase, before the terminal sees the key.
+  // `copy` and `paste` are not (TERMINAL_SCOPED_ACTIONS — gridShortcutFor skips them); they are
+  // decided inside the terminal by clipboardActionFor, which runs ahead of the send handler. So
+  // `paste` still outranks a send.
+  //
+  // `copy` does NOT, unconditionally: clipboardActionFor returns null when nothing is selected —
+  // deliberately, so Ctrl+C stays an interrupt — and the same-key send fires then. Naming `copy`
+  // as the winner there tells the user the opposite of what they will see half the time (#1901).
   const bound = new Map<string, Claim[]>();
   const claim = (parsed: KeyBinding, entry: Claim): void => {
     const key = canonicalBinding(parsed); // as PARSED: "Shift+PageUp" and "shift+pageup" are one keystroke
@@ -182,7 +190,7 @@ export function validateKeymap(input: unknown): KeymapProblem[] {
     if (parsed === null) {
       return [{ action, binding, reason: 'unparseable key binding — expected e.g. "PageDown" or "Shift+PageUp"', fatal: true }];
     }
-    claim(parsed, { label: action, binding, rank: KEYMAP_ACTIONS.indexOf(action) });
+    claim(parsed, { label: action, binding, rank: KEYMAP_ACTIONS.indexOf(action), kind: "action" });
     return [];
   });
   return [...problems, ...duplicateWarnings(bound)];
@@ -192,6 +200,9 @@ interface Claim {
   label: string;
   binding: string;
   rank: number;
+  /** Which side of the dispatch this is. `copy` vs a `send` is the one collision whose winner
+   *  depends on runtime state, and that cannot be read back off `label`. */
+  kind: "action" | "send";
 }
 
 // Everything wrong with the `send` list, claiming the keystrokes that are well-formed.
@@ -214,7 +225,7 @@ function sendProblems(input: unknown, claim: (parsed: KeyBinding, entry: Claim) 
       return [{ action: label, binding: entry.key, reason: "`bytes` is empty — the key would be taken from the terminal and nothing sent", fatal: true }];
     }
     // Ranked after every action, matching who actually wins (see the `bound` comment above).
-    claim(parsed, { label, binding: entry.key, rank: KEYMAP_ACTIONS.length + i });
+    claim(parsed, { label, binding: entry.key, rank: KEYMAP_ACTIONS.length + i, kind: "send" });
     return [];
   });
 }
@@ -229,14 +240,24 @@ function duplicateWarnings(bound: Map<string, Claim[]>): KeymapProblem[] {
     if (claims.length < 2) return [];
     const [winner, ...losers] = [...claims].sort((a, b) => a.rank - b.rank);
     if (!winner) return []; // unreachable: claims.length >= 2 was checked above
-    return losers.map(({ label, binding }) => ({
-      action: label,
-      binding,
-      reason: `same keystroke as \`${winner.label}\` — only \`${winner.label}\` will fire`,
+    return losers.map((loser) => ({
+      action: loser.label,
+      binding: loser.binding,
+      reason: collisionReason(winner, loser),
       fatal: false,
     }));
   });
 }
+
+// What the user will actually see, which is not always a single winner.
+//
+// `copy` acts only while something is SELECTED (clipboardActionFor returns null otherwise, so
+// Ctrl+C keeps working as interrupt), and a send on the same keystroke fires in exactly that gap.
+// Reporting `copy` as the winner would be wrong for every keypress made without a selection.
+const collisionReason = (winner: Claim, loser: Claim): string =>
+  winner.label === "copy" && loser.kind === "send"
+    ? `same keystroke as \`copy\` — \`copy\` acts only while text is selected, and \`${loser.label}\` fires when nothing is`
+    : `same keystroke as \`${winner.label}\` — only \`${winner.label}\` will fire`;
 
 // A binding's identity as a keystroke, for spotting two actions that claim the same one.
 const canonicalBinding = (b: KeyBinding): string => `${b.shift ? "S" : ""}${b.alt ? "A" : ""}${b.ctrl ? "C" : ""}${b.meta ? "M" : ""}|${b.key}`;
