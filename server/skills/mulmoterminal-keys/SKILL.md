@@ -9,6 +9,21 @@ All three settings live in **`~/.mulmoterminal/config.json`**, and each write is
 `POST /api/config` merge** — write only the key you are changing, so the user's other settings
 survive.
 
+**"Partial" means per TOP-LEVEL key, and `keymap` is replaced WHOLE.** The merge is
+`body[key] !== undefined ? sanitize(body[key]) : current` (`server/config/app-config.ts`), so
+posting
+
+```json
+{ "keymap": { "send": [ … ] } }
+```
+
+does not add a `send` to the keymap — it **makes that the entire keymap**, deleting every action
+binding the user had. Nothing warns, and the reply is a success.
+
+So a keymap write always sends the **complete** keymap: what step 1 read, plus the change. Read it,
+merge in memory, post the whole thing. Every `keymap` example below shows one setting on its own for
+readability — none of them is a body to post as-is unless the user genuinely has nothing else bound.
+
 Settings has a **Keyboard shortcuts** section, but it is **read-only** — it lists every action and
 its current binding. Point the user at it after writing, as the check.
 

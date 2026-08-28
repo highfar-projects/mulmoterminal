@@ -340,6 +340,35 @@ codex CI（round 12）が `CHANGES REQUESTED`:
 | **アクション** | アクションが勝つ（capture フェーズで奪う） | 言って、アクションを移すか聞く |
 | 既存の **`send`** | **先に書かれた方**が勝つ | そのエントリを更新する。2 つ目を足さない |
 
+### 一番実害のあった指摘 —— 「partial merge」はキー単位で、`keymap` は全置換（codex CI）
+
+skill の冒頭はこう書いていた:
+
+> each write is a **partial `POST /api/config` merge** — write only the key you are changing, so
+> the user's other settings survive.
+
+トップレベルについては正しい。**`keymap` の中身については誤り。** `server/config/app-config.ts`:
+
+```ts
+const updated = <T>(key: keyof AppConfig, sanitize: (input: unknown) => T, current: T): T =>
+  body[key] !== undefined ? sanitize(body[key]) : current;
+```
+
+`{ "keymap": { "send": [ … ] } }` を POST すると、**それが keymap の全体になり、アクションの
+割り当てが全部消える。** 警告は出ず、レスポンスは成功。
+
+skill に明記した —— keymap の書き込みは常に**完全な** keymap を送る（手順 1 で読んだもの＋変更）。
+以下の例は読みやすさのために 1 設定だけ書いてあるが、**そのまま POST する body ではない**。
+
+**他の skill を掃いた結果**（3 回同じ形の見落としをしたので、今度は先に掃いた）:
+
+| skill | 同じ注意書き |
+|---|---|
+| `-theme` | あり（"The whole array vanished — a partial write. Always send `themes` complete."） |
+| `-model` | あり（`providers` / `customAgents` とも "complete"） |
+| `-keys` | **無かった → この PR で追加** |
+| `-header` | **無い** → 別 skill なので [#1896](https://github.com/receptron/mulmoterminal/issues/1896) に分離 |
+
 ### ゲート
 
 `format` / `lint` / `typecheck` / `build` / `test` すべて exit 0。
