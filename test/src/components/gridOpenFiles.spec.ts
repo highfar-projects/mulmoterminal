@@ -45,6 +45,10 @@ vi.mock("../../../src/components/FilesPane.vue", () => ({
 
 const cell = (uid: number, session: string, cwd: string): Cell => ({ uid, session, cwd });
 
+// One list, so the grid's cells and the routes the guard will accept cannot drift apart.
+const CELLS = [cell(1, "s1", "/work/a"), cell(2, "s2", "/work/b")];
+const SESSIONS = CELLS.map((c) => c.session);
+
 // Mounting the grid on an enlarged SESSION sends three requests before anything in this file has
 // happened: is a question open (`/api/question/<id>`), does it already have a card
 // (`/api/agent/toolResults/<id>`), and what can it draw (`/api/tools`). Nothing here is about any
@@ -52,24 +56,30 @@ const cell = (uid: number, session: string, cwd: string): Cell => ({ uid, sessio
 // no origin under jsdom, which is why the miss left nothing to notice. Each is answered as the
 // quiet case, which is what these tests assume anyway.
 //
-// Matched on the PARSED url, not on its text. Two review rounds found the same shape of hole in a
-// text pattern — first a path suffix (`/api/question/<id>/answer`, a real route in the same
-// module), then a query string (`?extra=`) — because a pattern enumerates the delimiters it
-// excludes instead of saying what a route IS. Parsing states it once: this pathname, and exactly
-// these query keys. Anything else is a request the mount did not used to make, which is the one
-// thing this list exists to notice. Codex iter-2, CodeRabbit iter-3, PR #1913.
-const MOUNT_ROUTES: { path: RegExp; query: string[]; body: () => unknown }[] = [
-  { path: /^\/api\/question\/[^/]+$/, query: [], body: () => ({ question: null }) },
-  { path: /^\/api\/agent\/toolResults\/[^/]+$/, query: [], body: () => ({ toolResults: [] }) },
-  { path: /^\/api\/tools$/, query: ["sessionId"], body: () => ({ groups: [] }) },
+// Matched on the PARSED url, not on its text. Three review rounds found the same shape of hole in
+// a text pattern — a path suffix (`/api/question/<id>/answer`, a real route in the same module),
+// then a query string (`?extra=`), then any value at all for `sessionId` — because a pattern
+// describes the characters it excludes instead of saying what a request IS. Said once here: this
+// pathname, exactly these query keys, and a session THIS GRID ACTUALLY HAS. Anything else is a
+// request the mount did not used to make, which is the one thing this list exists to notice.
+// Codex iter-2 and iter-4, CodeRabbit iter-3, PR #1913.
+//
+// Codex asked for the session to be pinned to `s1`. Measured, that is wrong: one of these tests
+// enlarges the SECOND cell, so `s2` is asked about too and pinning `s1` would fail the spec. The
+// contract that holds is membership — which also rejects the empty `sessionId` that prompted it.
+const lastSegment = (u: URL) => u.pathname.split("/").pop() ?? "";
+const MOUNT_ROUTES: { path: RegExp; query: string[]; session: (u: URL) => string; body: () => unknown }[] = [
+  { path: /^\/api\/question\/[^/]+$/, query: [], session: lastSegment, body: () => ({ question: null }) },
+  { path: /^\/api\/agent\/toolResults\/[^/]+$/, query: [], session: lastSegment, body: () => ({ toolResults: [] }) },
+  { path: /^\/api\/tools$/, query: ["sessionId"], session: (u) => u.searchParams.get("sessionId") ?? "", body: () => ({ groups: [] }) },
 ];
 
 // The base is never used — every request here is relative — but `new URL` needs one to parse at
 // all, and giving it a reserved TLD keeps a mistake from resolving to somewhere real.
 const matchRoute = (url: string) => {
-  const { pathname, searchParams } = new URL(url, "https://spec.invalid");
-  const keys = [...searchParams.keys()].join(",");
-  return MOUNT_ROUTES.find((route) => route.path.test(pathname) && keys === route.query.join(","));
+  const parsed = new URL(url, "https://spec.invalid");
+  const keys = [...parsed.searchParams.keys()].join(",");
+  return MOUNT_ROUTES.find((route) => route.path.test(parsed.pathname) && keys === route.query.join(",") && SESSIONS.includes(route.session(parsed)));
 };
 
 // A fourth request is caught because it is RECORDED here and asserted below. Throwing does not
@@ -91,7 +101,7 @@ const mockApi = () => {
 const mountGrid = () =>
   mount(TerminalGrid, {
     props: {
-      cells: [cell(1, "s1", "/work/a"), cell(2, "s2", "/work/b")],
+      cells: CELLS,
       expandedUid: 1,
       listRows: [],
       cancelUid: null,
