@@ -26,7 +26,7 @@ the user turns this down.
 
 ## Start from a template when one fits
 
-Eight shapes are written out in full — declaration, schemas, and the reasoning behind each key:
+Nine shapes are written out in full — declaration, schemas, and the reasoning behind each key:
 
 - **[templates/salon.md](./templates/salon.md)** — a request that a NAMED PERSON approves, and only
   their own (a salon's bookings, interviews, repairs, review assignments). This is what `assignee`
@@ -37,7 +37,7 @@ Eight shapes are written out in full — declaration, schemas, and the reasoning
   rules.
 - **[templates/survey.md](./templates/survey.md)** — **collecting answers**, with nothing to run out
   of (a survey, a quiz, an application form, a sign-up with no cap). The shortest declaration of the
-  eight, and the shape most often written with a public page and nothing else — so this one is built
+  nine, and the shape most often written with a public page and nothing else — so this one is built
   around its `member` page, which is where the answers are read. It also spells out the three-way
   trade above, and what a tally may and may not claim about values a respondent typed.
 - **[templates/meeting-room.md](./templates/meeting-room.md)** — a bookable unit you can LIST IN
@@ -73,8 +73,19 @@ Eight shapes are written out in full — declaration, schemas, and the reasoning
   here signs in as the owner, so the host's close is enforced by `refIn`, a `transitions` map with no
   exit, and `sealed` together — any one alone is walked around in two writes. Read it for what a
   declaration can and cannot hold when the writer is an agent you handed your sign-in to.
+- **[templates/magazine.md](./templates/magazine.md)** — several writers publishing things to READ,
+  each at its own URL, each signing their own and editing nobody else's (a team blog, a newsletter's
+  back issues, a research log, release notes, a review column). This is what **`views[].article`**
+  is for — the platform draws the article page, so the app declares which fields are the title, the
+  body and the byline, and `idFrom: "slug"` makes the writer's chosen name the document id and
+  freezes it. It is the only sample that states a `protocol` of its own, the only one whose `limit`
+  is a COST — publish works it out in bytes and refuses the declaration when it is too large — and
+  the one that explains why the owner has to hold
+  `participant` on their own collection — `audience` forces `submitOnly`, `submitOnly` closes the
+  writer branch, and an owner who skips it cannot publish at all. Read it before any app where a
+  record is something a stranger is meant to sit and read.
 
-Read the matching one before writing `app.json` by hand. All eight are checked against the real
+Read the matching one before writing `app.json` by hand. All nine are checked against the real
 publish gate by this repository's tests, so what they show is what publishes — and they spend most
 of their length on the traps, which is the part you cannot recover by guessing.
 
