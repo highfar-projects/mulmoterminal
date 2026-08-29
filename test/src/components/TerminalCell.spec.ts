@@ -1162,6 +1162,22 @@ describe("TerminalCell", () => {
     openSpy.mockRestore();
   });
 
+  // #1910: it used to push the /files route, which covers the terminal it was opened from. The
+  // pane belongs to the grid — only that side knows which cell is enlarged and where to put it —
+  // so the menu asks rather than navigates.
+  it("asks the grid for the files pane instead of navigating to the full-screen view", async () => {
+    mockFetchWithGithub(null);
+    const w = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
+    await flushPromises();
+    await w.find(".cell-dir").trigger("click");
+    await w
+      .findAll('[data-testid="cell-path-item"]')
+      .find((b) => itemLabel(b.text()) === "Browse files in the app")
+      ?.trigger("click");
+
+    expect(w.emitted("open-files")).toHaveLength(1);
+  });
+
   it("toggles the path menu and closes it on Escape", async () => {
     mockFetchWithGithub("https://github.com/owner/repo");
     const w = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });

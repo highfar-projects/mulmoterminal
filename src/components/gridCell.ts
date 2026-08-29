@@ -68,9 +68,10 @@ export interface AgentReport {
 }
 
 export interface GridCellEmits {
-  // `open-canvas` is the unread-canvas chip on an UN-expanded cell: enlarge me AND open the
-  // pane, in one gesture. Distinct from `toggle-canvas`, which toggles the pane on the cell
-  // that is already enlarged.
+  // `open-canvas` and `open-files` come from a control on a cell that may be TILED — the
+  // unread-canvas chip, the path menu — and mean: enlarge me AND open that pane, in one gesture.
+  // Their `toggle-` siblings act on the cell as it is, so pressed on a tile they only record what
+  // that cell should show once it IS enlarged (#1378), which is a different thing to ask for.
   (
     e:
       | "toggle-expand"
@@ -82,7 +83,8 @@ export interface GridCellEmits {
       | "toggle-collections"
       | "toggle-github"
       | "toggle-prompts"
-      | "open-canvas",
+      | "open-canvas"
+      | "open-files",
   ): void;
   // Swap this cell left (-1) or right (+1) in manual sort mode.
   (e: "move", dir: -1 | 1): void;
