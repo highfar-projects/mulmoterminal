@@ -22,7 +22,7 @@ import { useUpdateStatus } from "../composables/useUpdateStatus";
 import { useGithubStar } from "../composables/useGithubStar";
 import { useDropdownMenu } from "../composables/useDropdownMenu";
 import { parseTagQuery } from "./wikiTagFilter";
-import type { SortMode, StatusCounts } from "./gridTabs";
+import type { GridArrangement, SortMode, StatusCounts } from "./gridTabs";
 import { gridStatusSummary } from "./gridTabs";
 import { sortModeButton } from "./sortModeButton";
 
@@ -40,8 +40,12 @@ const props = defineProps<{
   // Grid zoom state, so the header can host the roster / strip toggle (shown only while zoomed).
   showViewToggle?: boolean;
   listMode?: boolean;
+  // The tiled grid's own toggle — the opposite visibility condition from the one above: shown
+  // only while NOTHING is zoomed, since the arrangement only means something for tiles.
+  showLayoutToggle?: boolean;
+  arrangement?: GridArrangement;
 }>();
-const emit = defineEmits<{ (e: "add-terminal" | "toggle-sort" | "toggle-view" | "settings"): void }>();
+const emit = defineEmits<{ (e: "add-terminal" | "toggle-sort" | "toggle-view" | "toggle-layout" | "settings"): void }>();
 const sortButton = computed(() => sortModeButton(props.sortMode ?? "manual"));
 
 const route = useRoute();
@@ -272,6 +276,16 @@ function showRooms(): void {
       :title="listMode ? 'Show thumbnail strip' : 'Show list roster'"
       :label="listMode ? 'Show thumbnail strip' : 'Show list roster'"
       @click="emit('toggle-view')"
+    />
+    <!-- Tiled-grid only (the opposite condition from the toggle above): switch the un-zoomed grid
+         between the equal-tracks layout and the card-stack arrangement (min-width tiles that
+         overlap instead of shrinking past it — see gridLayout.ts's stackLayout). -->
+    <LauncherButton
+      v-if="showLayoutToggle"
+      :icon="arrangement === 'stack' ? 'grid_view' : 'view_column'"
+      :title="arrangement === 'stack' ? 'Switch to tiled grid' : 'Switch to card stack'"
+      :label="arrangement === 'stack' ? 'Switch to tiled grid' : 'Switch to card stack'"
+      @click="emit('toggle-layout')"
     />
     <LauncherButton icon="settings" title="Settings" label="Settings" @click="emit('settings')" />
   </header>

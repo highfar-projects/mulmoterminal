@@ -64,12 +64,18 @@ export interface Cell {
 // "auto": attention-first, recomputed from each cell's live status; "priority": the rank each
 // directory declares as `orderPriority` in its .mulmoterminal.json (#876).
 export type SortMode = "manual" | "auto" | "priority";
+// The tiled grid's (un-zoomed) arrangement: "grid" is the equal-tracks CSS grid (gridLayout.ts's
+// trackStyle); "stack" is the card-stack layout (gridLayout.ts's stackLayout) — cards keep a
+// floor width and overlap instead of shrinking past it. Toggled from the header, shown only
+// while nothing is zoomed (see docs/grid-view-modes.md).
+export type GridArrangement = "grid" | "stack";
 export interface GridState {
   cells: Cell[];
   expanded: number | null; // uid of the zoomed cell, or null
   page: number;
   nextUid: number;
   sortMode: SortMode;
+  arrangement: GridArrangement;
 }
 
 export const PAGE_SIZE = 9;
@@ -413,6 +419,10 @@ export function setSortMode(state: GridState, sortMode: SortMode): GridState {
   return { ...state, sortMode };
 }
 
+export function setArrangement(state: GridState, arrangement: GridArrangement): GridState {
+  return { ...state, arrangement };
+}
+
 // Whether moveCell would actually reorder: not off either end, and never swapping a cell past
 // the trailing launch cell (it stays last so "+ Terminal"/cancel keep working on it). Drives the
 // enabled/disabled state of the roster's up/down menu items.
@@ -516,6 +526,9 @@ const isUuid = (s: unknown): s is string => typeof s === "string" && UUID_RE.tes
 // Anything unrecognised falls back to "manual" — including a mode written by a NEWER build
 // that this one doesn't know, where the hand-arranged order is the safe thing to show.
 const asSortMode = (v: unknown): SortMode => (v === "auto" || v === "priority" ? v : "manual");
+// Anything unrecognised (including a mode a newer build wrote that this one doesn't know) falls
+// back to the plain grid — the arrangement every build already knows how to render.
+const asArrangement = (v: unknown): GridArrangement => (v === "stack" ? "stack" : "grid");
 // Keep a persisted launcher only if well-formed; anything else drops to null so a
 // reloaded cell reconnects as a plain (Claude) session instead of a broken launcher.
 const asLauncher = (v: unknown): CellLauncher | null => {
@@ -563,7 +576,9 @@ export function parseGridState(raw: string | null): GridState | null {
     const expandedIdx = running.findIndex((c) => c.uid === storedExpanded);
     const expanded = typeof storedExpanded === "number" && expandedIdx >= 0 ? expandedIdx : null;
     const page = typeof storedPage === "number" && Number.isSafeInteger(storedPage) && storedPage >= 0 ? storedPage : 0;
-    return clampPage(ensureEntry({ cells, expanded, page, nextUid: cells.length, sortMode: asSortMode(parsed.sortMode) }));
+    return clampPage(
+      ensureEntry({ cells, expanded, page, nextUid: cells.length, sortMode: asSortMode(parsed.sortMode), arrangement: asArrangement(parsed.arrangement) }),
+    );
   } catch {
     return null;
   }
@@ -581,7 +596,7 @@ export function migrateLegacy(raw: string | null): GridState | null {
     });
     const { expanded: storedExpanded } = parsed;
     const expanded = typeof storedExpanded === "number" && storedExpanded >= 0 && storedExpanded < cells.length ? (cells[storedExpanded]?.uid ?? null) : null;
-    return clampPage(ensureEntry({ cells, expanded, page: 0, nextUid: cells.length, sortMode: "manual" }));
+    return clampPage(ensureEntry({ cells, expanded, page: 0, nextUid: cells.length, sortMode: "manual", arrangement: "grid" }));
   } catch {
     return null;
   }
@@ -592,7 +607,7 @@ export function initialState(curRaw: string | null, legacyRaw: string | null): {
   if (cur) return { state: cur, migrated: false };
   const migrated = migrateLegacy(legacyRaw);
   if (migrated) return { state: migrated, migrated: true };
-  return { state: ensureEntry({ cells: [], expanded: null, page: 0, nextUid: 0, sortMode: "manual" }), migrated: false };
+  return { state: ensureEntry({ cells: [], expanded: null, page: 0, nextUid: 0, sortMode: "manual", arrangement: "grid" }), migrated: false };
 }
 
 // Which status a cell sorts and tallies by.

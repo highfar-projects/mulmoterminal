@@ -26,6 +26,7 @@ import {
   sessionCell,
   launchInCell,
   setSortMode,
+  setArrangement,
   moveCell,
   moveZoom,
   toggleZoom,
@@ -409,6 +410,9 @@ const onRunSpare = (uid: number, command: RunCommand) => (state.value = runScrip
 const onLaunch = (uid: number, pick: LaunchPick) => (state.value = launchInCell(state.value, uid, pick.launcher, pick.cwd));
 const onMove = (uid: number, dir: -1 | 1) => (state.value = moveCell(state.value, uid, dir));
 const toggleSortMode = () => (state.value = setSortMode(state.value, nextSortMode(state.value.sortMode)));
+// Un-zoomed only (see the toolbar's `showLayoutToggle`) — the arrangement itself is read straight
+// off `state.arrangement` by both the toolbar and TerminalGrid, so there's nothing else to derive.
+const toggleArrangement = () => (state.value = setArrangement(state.value, state.value.arrangement === "stack" ? "grid" : "stack"));
 const switchTo = (page: number) => (state.value = switchPage(state.value, page));
 
 // A script the single view's terminal-header Run menu handed off: run it in a spare
@@ -780,9 +784,12 @@ onBeforeUnmount(detachSpawnedChat);
       :status-counts="statusCounts"
       :show-view-toggle="expandedUid !== null"
       :list-mode="listModeOn"
+      :show-layout-toggle="expandedUid === null"
+      :arrangement="state.arrangement"
       @add-terminal="onAddTerminal"
       @toggle-sort="toggleSortMode"
       @toggle-view="toggleListMode"
+      @toggle-layout="toggleArrangement"
       @settings="showSettings = true"
     />
     <nav
@@ -817,6 +824,7 @@ onBeforeUnmount(detachSpawnedChat);
       :open-session-ids="openSessionIds"
       :open-cwds="openCwds"
       :list-mode="listModeOn"
+      :layout-mode="state.arrangement"
       @session="onSession"
       @agent="onAgent"
       @park="onPark"

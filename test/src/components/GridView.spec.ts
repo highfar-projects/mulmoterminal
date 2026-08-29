@@ -250,6 +250,57 @@ describe("GridView view toggle wiring", () => {
   });
 });
 
+// The tiled grid's own toggle (grid ↔ card-stack) — the opposite visibility condition from the
+// roster/strip toggle above, so it traces the SAME header → GridView → grid wiring with `zoomed`
+// flipped, plus that the choice survives a reload (it is part of the persisted GridState, unlike
+// listMode).
+const LayoutToggleToolbarStub = {
+  name: "AppToolbar",
+  props: ["showLayoutToggle", "arrangement"],
+  emits: ["toggle-layout"],
+  template: '<button class="toggle-layout" @click="$emit(\'toggle-layout\')" />',
+};
+const ArrangementGridStub = { name: "TerminalGrid", props: ["layoutMode", "expandedUid"], template: '<div class="arr-stub" />' };
+
+describe("GridView layout toggle wiring (tiled grid vs card stack)", () => {
+  it("offers the toggle only while nothing is expanded, and flips the grid's arrangement", async () => {
+    localStorage.setItem("grid_v2", JSON.stringify({ cells: [{ uid: 10, session: IDS.idleA, cwd: "/w" }], expanded: null, page: 0, sortMode: "manual" }));
+    const w = mount(GridView, {
+      global: { stubs: { TerminalGrid: ArrangementGridStub, AppToolbar: LayoutToggleToolbarStub, SettingsModal: SettingsStub } },
+    });
+    await flushPromises();
+    const toolbar = w.findComponent(LayoutToggleToolbarStub);
+    const grid = w.findComponent(ArrangementGridStub);
+    expect(toolbar.props("showLayoutToggle")).toBe(true);
+    expect(toolbar.props("arrangement")).toBe("grid");
+    expect(grid.props("layoutMode")).toBe("grid");
+    await toolbar.trigger("click");
+    expect(grid.props("layoutMode")).toBe("stack");
+    expect(toolbar.props("arrangement")).toBe("stack");
+    w.unmount();
+  });
+
+  it("hides the toggle while a cell is expanded", async () => {
+    localStorage.setItem("grid_v2", JSON.stringify({ cells: [{ uid: 10, session: IDS.idleA, cwd: "/w" }], expanded: 10, page: 0, sortMode: "manual" }));
+    const w = mount(GridView, {
+      global: { stubs: { TerminalGrid: ArrangementGridStub, AppToolbar: LayoutToggleToolbarStub, SettingsModal: SettingsStub } },
+    });
+    await flushPromises();
+    expect(w.findComponent(LayoutToggleToolbarStub).props("showLayoutToggle")).toBe(false);
+    w.unmount();
+  });
+
+  it("persists the chosen arrangement across a reload, unlike the ephemeral listMode", async () => {
+    localStorage.setItem("grid_v2", JSON.stringify({ cells: [{ uid: 10, session: IDS.idleA, cwd: "/w" }], expanded: null, page: 0, arrangement: "stack" }));
+    const w = mount(GridView, {
+      global: { stubs: { TerminalGrid: ArrangementGridStub, AppToolbar: LayoutToggleToolbarStub, SettingsModal: SettingsStub } },
+    });
+    await flushPromises();
+    expect(w.findComponent(ArrangementGridStub).props("layoutMode")).toBe("stack");
+    w.unmount();
+  });
+});
+
 describe("GridView guide help (empty state)", () => {
   it("shows the guide footer (ja/en links) when no terminal is running, and hides it once one is", async () => {
     // Empty grid: ensureEntry leaves only the entry launch cell, so runningCount === 0.

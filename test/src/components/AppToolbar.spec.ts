@@ -202,3 +202,35 @@ describe("AppToolbar view-switch grouping", () => {
     expect(group.findAll("button").map((b) => b.attributes("aria-label"))).toEqual(["Grid view", "Collections"]);
   });
 });
+
+// The tiled grid's own toggle (grid ↔ card-stack). The opposite visibility condition from the
+// zoomed roster/strip toggle above — it is GridView's job to pass `expandedUid === null`, so this
+// only has to check the toolbar renders and wires whatever it is handed.
+describe("AppToolbar layout toggle (tiled grid vs card stack)", () => {
+  const mountWith = async (props: { showLayoutToggle?: boolean; arrangement?: "grid" | "stack" }) => {
+    await router.push("/terminals");
+    await settle();
+    const wrapper = mount(AppToolbar, { props, global: { plugins: [router], stubs: { NotificationBell: true, RemoteHostControl: true } } });
+    await settle();
+    return wrapper;
+  };
+
+  it("hides the toggle when not offered", async () => {
+    const wrapper = await mountWith({ showLayoutToggle: false, arrangement: "grid" });
+    expect(wrapper.find('[title="Switch to card stack"]').exists()).toBe(false);
+    expect(wrapper.find('[title="Switch to tiled grid"]').exists()).toBe(false);
+  });
+
+  it("offers to switch to the stack while the plain grid is active", async () => {
+    const wrapper = await mountWith({ showLayoutToggle: true, arrangement: "grid" });
+    expect(wrapper.find('[title="Switch to card stack"]').exists()).toBe(true);
+  });
+
+  it("offers to switch back to the grid while the stack is active, and emits on click", async () => {
+    const wrapper = await mountWith({ showLayoutToggle: true, arrangement: "stack" });
+    const button = wrapper.find('[title="Switch to tiled grid"]');
+    expect(button.exists()).toBe(true);
+    await button.trigger("click");
+    expect(wrapper.emitted("toggle-layout")).toHaveLength(1);
+  });
+});

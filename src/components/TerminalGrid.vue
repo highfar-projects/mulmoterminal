@@ -6,10 +6,10 @@ import LauncherCell from "./LauncherCell.vue";
 import CockpitRowMenu from "./CockpitRowMenu.vue";
 import CockpitHeader from "./CockpitHeader.vue";
 import * as conn from "../composables/useTerminalConnections";
-import { trackStyle, layoutForCount } from "./gridLayout";
+import { trackStyle, layoutForCount, stackGrid } from "./gridLayout";
 import { cockpitLines } from "../composables/cockpitLines";
 import { flipKeyframes, flipPairs, onScreen, FLIP_MS, FLIP_EASING } from "./cellFlip";
-import { canMoveCell, type Cell } from "./gridTabs";
+import { canMoveCell, type Cell, type GridArrangement } from "./gridTabs";
 import type { AttentionStatus } from "./attentionStatus";
 import type { RunCommand } from "./runCommand";
 import type { PrPhase, WorkPhase } from "./rosterPhase";
@@ -109,6 +109,12 @@ const props = defineProps<{
   // While a cell is zoomed: cockpit roster (true) vs thumbnail strip (false). Owned by GridView
   // so the toggle can live in the global toolbar rather than float over the stage.
   listMode: boolean;
+  // The tiled (un-zoomed) grid's own arrangement: the equal-tracks CSS grid, or the card-stack
+  // (gridLayout.ts's stackLayout) that keeps a floor width and overlaps instead of shrinking past
+  // it. Irrelevant while zoomed, like `listMode` is irrelevant un-zoomed. Optional (defaults to
+  // the plain grid) so the many existing mounts of this component that don't care about the
+  // arrangement don't all need updating for it.
+  layoutMode?: GridArrangement;
 }>();
 const emit = defineEmits<{
   (e: "session" | "cwd", uid: number, value: string): void;
@@ -171,6 +177,78 @@ const zoomMain = ref<HTMLElement | null>(null);
 const mounted = ref(false);
 onMounted(() => (mounted.value = true));
 const zoomed = computed(() => props.expandedUid !== null && mounted.value);
+
+// `clientWidth` is the PADDING box (content + padding) — but grid items lay out in the content
+// box alone, which for the tiled grid's own `calc(6px + 1.6%)` horizontal padding is narrower by
+// a few percent of the window. Uncorrected, stackGrid would size a row to fill the wider,
+// padding-inclusive number, overflowing the actual content box by exactly that padding on the
+// right — clipped by `.grid.stack-mode`'s `overflow: hidden` on every row, focused or not. Same
+// idea as useCanvasCardHeight.ts's own `paddingYOf`, the other axis.
+function paddingXOf(element: HTMLElement): number {
+  const style = getComputedStyle(element);
+  const total = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+  return Number.isFinite(total) ? total : 0;
+}
+
+// The tiled grid's own measured (content-box) width, for the card-stack arrangement (stackGrid
+// needs it to decide how many cards fit legibly per row before wrapping). Follows
+// useCanvasCardHeight.ts's idiom (watch the ref, ResizeObserver with a jsdom/no-observer guard,
+// clean up on unmount) rather than a shared composable — this is its only consumer.
+const gridEl = useTemplateRef<HTMLElement>("gridEl");
+const gridWidthPx = ref(0);
+let gridWidthObserver: ResizeObserver | null = null;
+watch(
+  gridEl,
+  (element) => {
+    gridWidthObserver?.disconnect();
+    gridWidthObserver = null;
+    if (!element) return;
+    const measure = () => (gridWidthPx.value = element.clientWidth - paddingXOf(element));
+    if (typeof ResizeObserver === "undefined") {
+      measure();
+      return;
+    }
+    gridWidthObserver = new ResizeObserver(measure);
+    gridWidthObserver.observe(element);
+    measure();
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => gridWidthObserver?.disconnect());
+
+// The card-stack arrangement's own grid — computed only while it's actually in effect, so a
+// plain-grid session never pays for the layout math. `cols` is a genuine CSS grid column count
+// (see `.grid.stack-mode` below): a row auto-wraps once it has that many cards, REGARDLESS of the
+// negative margins overlap applies within it, because grid track sizing comes from the column
+// template, not from the items' own (margin-shrunk) rendered boxes — unlike flex-wrap, which
+// would misjudge where to wrap once overlap changes an item's effective footprint.
+const stackMode = computed(() => (props.layoutMode ?? "grid") === "stack");
+const stackLayout = computed(() => (stackMode.value && !zoomed.value ? stackGrid(gridWidthPx.value, props.cells.length) : null));
+// Fully self-contained rather than relying on `gridStyle` (bound in the same :style array, ahead
+// of this one) leaving anything usable behind: its explicit row count would otherwise still
+// reserve that many real rows no matter how many `grid-auto-rows` would generate instead, and its
+// `gap: 6px` shorthand sets column-gap too, which would add spacing on top of the overlap margin
+// below. `rowGap` is restated here (matching `.grid.stack-mode`'s own CSS) rather than left to
+// that inline leftover, so this object doesn't depend on what `gridStyle` happened to set.
+const stackStyle = computed(() => {
+  const s = stackLayout.value;
+  if (!s) return {};
+  return {
+    gridTemplateColumns: Array.from({ length: s.cols }, () => `${s.cardWidthPx}px`).join(" "),
+    gridTemplateRows: "none",
+    rowGap: "6px",
+    columnGap: "0px",
+  };
+});
+// The first card in each row (index 0, cols, 2*cols, …) starts flush; every other card overlaps
+// the one before it. A `:nth-child` CSS rule can't take `cols` as a variable, so this is a
+// per-item inline style instead of a class — the one place stack mode reaches into what's
+// otherwise CommandCell/LauncherCell/TerminalCell's own unmodified binding.
+function stackItemStyle(index: number) {
+  const s = stackLayout.value;
+  if (!s || index % s.cols === 0) return {};
+  return { marginLeft: `${s.gapPx}px` };
+}
 
 // The file pane beside the enlarged cell. ONE pane, not one per cell: it re-roots to whichever
 // cell is enlarged, so walking the zoom doesn't accumulate editors. WHICH pane a cell has open is
@@ -1400,13 +1478,19 @@ watch(
     <!-- In strip mode the grid IS the thumbnail strip, and its height is the user's (#1077). The
          stylesheet's `flex: 0 0 150px` stays as the default; an inline basis outranks it, and is
          bound only in that mode so it cannot reach the tiled grid or list mode's off-screen one. -->
-    <div class="grid" :style="[gridStyle, zoomed && !listMode ? { flexBasis: `${stripHeight}px` } : {}]">
-      <Teleport v-for="cell in cells" :key="cell.uid" :to="zoomMain" :disabled="!(zoomed && cell.uid === expandedUid)">
-        <CommandCell v-if="cell.command" v-bind="gridCellProps(cell)" :command="cell.command" v-on="gridCellEvents(cell)" />
+    <div
+      ref="gridEl"
+      class="grid"
+      :class="{ 'stack-mode': stackMode && !zoomed }"
+      :style="[gridStyle, stackStyle, zoomed && !listMode ? { flexBasis: `${stripHeight}px` } : {}]"
+    >
+      <Teleport v-for="(cell, index) in cells" :key="cell.uid" :to="zoomMain" :disabled="!(zoomed && cell.uid === expandedUid)">
+        <CommandCell v-if="cell.command" v-bind="gridCellProps(cell)" :style="stackItemStyle(index)" :command="cell.command" v-on="gridCellEvents(cell)" />
         <LauncherCell
           v-else-if="cell.launcher"
           :uid="cell.uid"
           v-bind="gridCellProps(cell)"
+          :style="stackItemStyle(index)"
           :launcher="cell.launcher"
           :session="cell.session"
           :cwd="cell.cwd"
@@ -1417,6 +1501,7 @@ watch(
           v-else
           :uid="cell.uid"
           v-bind="gridCellProps(cell)"
+          :style="stackItemStyle(index)"
           :initial-session-id="cell.session"
           :initial-cwd="cell.cwd"
           :initial-agent="cell.agent"
@@ -1494,6 +1579,34 @@ watch(
 .stage:not(.zoomed) .grid {
   padding: calc(6px + 1.5vh) calc(6px + 1.6%);
 }
+
+/* The card-stack arrangement (TerminalGrid.vue's stackLayout computed, from gridLayout.ts's
+   stackGrid): CSS GRID, not flex — `grid-template-columns` is a literal `Npx Npx …` string built
+   in JS (stackStyle), so a row wraps to the next one automatically once it holds that many cards,
+   REGARDLESS of the negative margins overlap applies within it. Flex-wrap would misjudge that:
+   it decides where to break a line from each item's own (margin-shrunk) footprint, so overlap
+   would pull LATER cards back onto an earlier line instead of landing where stackGrid put them.
+   `grid-auto-rows: 1fr` splits height evenly across however many rows result, the same way the
+   plain grid already splits it across 1fr tracks.
+
+   Overlap itself is still a per-item inline style (TerminalGrid.vue's stackItemStyle), not a CSS
+   rule here: `:nth-child` can't take stackGrid's `cols` as a variable, so which cards start a row
+   (flush) vs. continue one (overlapping the previous card's right edge — plain source order
+   already paints it on top, no z-index needed) has to be decided in JS, per index. What DOES want
+   z-index is a covered card the user actually interacts with, and that is already handled:
+   `.focused` below (the keyboard/click-focused cell) scales up and lifts to z-index 5 regardless
+   of arrangement. */
+.grid.stack-mode {
+  display: grid;
+  grid-auto-rows: 1fr;
+  /* stackGrid's own math already makes every row's cards fit the measured width exactly — this
+     guards only against sub-pixel rounding, not a real fallback path (there is no scrollbar to
+     fall back to: the arrangement exists specifically so terminals never need one). */
+  overflow: hidden;
+}
+/* row-gap: 6px (not written here) comes from TerminalGrid.vue's stackStyle inline style instead —
+   it has to fully own gridTemplateRows/gap regardless of what the plain grid's gridStyle left in
+   the same :style array, so restating it here would only be misleading, always shadowed. */
 
 /* Inert until a cell is zoomed. */
 .zoom-main {
@@ -1596,6 +1709,26 @@ watch(
   transform: scale(var(--focus-zoom));
   z-index: 5;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+}
+
+/* Stack mode's own cards already sit close to the container's own edge (there is no per-cell
+   percentage padding to absorb a scale-up the way the plain grid's tracks have) — the LAST card
+   in a row is exactly as wide as the row itself, so growing it would push its right edge past
+   `.grid.stack-mode`'s own `overflow: hidden` and clip it, focused or not. Overlap already solves
+   what the scale was for here anyway: raising z-index alone un-covers a mid-row card's overlapped
+   edge at its OWN size, with nothing to overflow.
+
+   Overriding the VARIABLE rather than adding a `transform: none` for `.focused` here: CELL_INNER
+   (cellChromeClasses.ts) reads the same `--focus-zoom` to scale its own content by the inverse, so
+   the terminal's canvas doesn't resample when the frame around it grows (#965) — that Tailwind
+   class is keyed off the `.focused` ancestor class alone, not off what that ancestor's transform
+   actually resolves to. A `transform: none` override here left `.focused` on the cell but did
+   nothing to CELL_INNER's own inverse scale, so the FRAME stayed put while the CONTENT still
+   shrank (raised after shipping the transform-only version). Setting the variable itself to `1`
+   cascades to both sides of that pair at once: `scale(1)` outside, `scale(1/1)` inside — neither
+   grows nor shrinks, and the cell is exactly the size it already was. */
+.stage:not(.zoomed) .grid.stack-mode {
+  --focus-zoom: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -22,6 +22,7 @@ import {
   launchInCell,
   canMoveCell,
   setSortMode,
+  setArrangement,
   moveCell,
   moveZoom,
   toggleZoom,
@@ -51,6 +52,7 @@ const make = (cells: Cell[], extra: Partial<GridState> = {}): GridState => ({
   page: 0,
   nextUid: cells.length,
   sortMode: "manual",
+  arrangement: "grid",
   ...extra,
 });
 
@@ -757,6 +759,10 @@ describe("setSortMode / moveCell (manual reorder)", () => {
     expect(setSortMode(make(running(2)), "auto").sortMode).toBe("auto");
     expect(setSortMode(make(running(2), { sortMode: "auto" }), "manual").sortMode).toBe("manual");
   });
+  it("setArrangement flips between grid and stack", () => {
+    expect(setArrangement(make(running(2)), "stack").arrangement).toBe("stack");
+    expect(setArrangement(make(running(2), { arrangement: "stack" }), "grid").arrangement).toBe("grid");
+  });
   it("moveCell swaps a cell with its right/left neighbour", () => {
     const s = make(running(3));
     expect(moveCell(s, 0, 1).cells.map((c) => c.uid)).toEqual([1, 0, 2]); // 0 right
@@ -955,6 +961,12 @@ describe("parseGridState / migrateLegacy / initialState", () => {
     expect(parseGridState(JSON.stringify({ cells }))?.sortMode).toBe("manual"); // absent -> manual
     expect(parseGridState(JSON.stringify({ cells, sortMode: "bogus" }))?.sortMode).toBe("manual"); // invalid -> manual
   });
+  it("round-trips a persisted arrangement and defaults to grid", () => {
+    const cells = [cell(0, U(0))];
+    expect(parseGridState(JSON.stringify({ cells, arrangement: "stack" }))?.arrangement).toBe("stack");
+    expect(parseGridState(JSON.stringify({ cells }))?.arrangement).toBe("grid"); // absent -> grid
+    expect(parseGridState(JSON.stringify({ cells, arrangement: "bogus" }))?.arrangement).toBe("grid"); // invalid -> grid
+  });
   it("constrains a malformed persisted page to a valid integer", () => {
     const cells = Array.from({ length: 18 }, (_, i) => cell(i, U(i))); // 2 pages
     const s = parseGridState(JSON.stringify({ cells, expanded: null, page: 1.5, nextUid: 18 }));
@@ -988,6 +1000,7 @@ describe("parseGridState / migrateLegacy / initialState", () => {
     expect(s.cells.map((c) => c.session)).toEqual([U(0), U(2)]);
     expect(s.cells[1].cwd).toBe("/c");
     expect(s.expanded).toBe(s.cells[1].uid); // old position 1 -> the 2nd running cell
+    expect(s.arrangement).toBe("grid"); // the legacy shape predates the field
   });
   it("initialState prefers current, then legacy, then a fresh entry", () => {
     expect(initialState(JSON.stringify({ cells: [cell(0, U(0))] }), null).migrated).toBe(false);
@@ -996,6 +1009,7 @@ describe("parseGridState / migrateLegacy / initialState", () => {
     const fresh = initialState(null, null);
     expect(fresh.state.cells).toHaveLength(1);
     expect(fresh.state.cells[0].session).toBeNull();
+    expect(fresh.state.arrangement).toBe("grid");
   });
 });
 

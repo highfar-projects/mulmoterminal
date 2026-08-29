@@ -68,7 +68,13 @@ vi.mock("../../../src/components/LauncherCell.vue", () => ({
 
 const cell = (uid: number, session: string | null = null, cwd: string | null = null): Cell => ({ uid, session, cwd });
 const cmdCell = (uid: number, command: NonNullable<Cell["command"]>): Cell => ({ uid, session: null, cwd: null, command });
-const mountGrid = (cells: Cell[], expandedUid: number | null = null, cancelUid: number | null = null, reorderable = false) =>
+const mountGrid = (
+  cells: Cell[],
+  expandedUid: number | null = null,
+  cancelUid: number | null = null,
+  reorderable = false,
+  extra: Record<string, unknown> = {},
+) =>
   mount(TerminalGrid, {
     props: {
       cells,
@@ -83,6 +89,7 @@ const mountGrid = (cells: Cell[], expandedUid: number | null = null, cancelUid: 
       openCwds: [],
       reorderable,
       listMode: true,
+      ...extra,
     },
   });
 const cellsOf = (w: ReturnType<typeof mount>) => w.findAllComponents({ name: "TerminalCell" });
@@ -1029,5 +1036,84 @@ describe("prompts pane beside the enlarged cell", () => {
     const w = mountCockpit([cell(1, "s1", "/proj"), cell(2)], 1, []);
     await togglePrompts(w);
     expect(paneOf(w).props("agent")).toBe("claude");
+  });
+});
+
+// The tiled (un-zoomed) grid's card-stack arrangement (gridLayout.ts's stackGrid). jsdom has no
+// ResizeObserver, so the width-measuring watch (TerminalGrid.vue) takes its single-read fallback
+// path — `element.clientWidth`, which jsdom reports as 0 absent a mock. `mockClientWidth` fakes a
+// real measurement for the tests that need one (row wrapping, per-item overlap); the rest rely on
+// jsdom's default 0, landing on stackGrid's own "not measured yet" branch (cols: 1, floor width).
+describe("TerminalGrid card-stack arrangement", () => {
+  const gridEl = (w: ReturnType<typeof mount>) => w.find(".grid");
+  const originalClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+  const mockClientWidth = (px: number) => Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, value: px });
+
+  afterEach(() => {
+    if (originalClientWidth) Object.defineProperty(HTMLElement.prototype, "clientWidth", originalClientWidth);
+  });
+
+  it("applies the stack-mode class and a grid-template-columns before anything is measured", () => {
+    const w = mountGrid([cell(1), cell(2)], null, null, false, { layoutMode: "stack" });
+    const el = gridEl(w);
+    expect(el.classes()).toContain("stack-mode");
+    expect(el.attributes("style")).toContain("grid-template-columns: 400px");
+  });
+
+  it("stays a plain grid (no stack-mode class or column template) by default", () => {
+    const w = mountGrid([cell(1), cell(2)]);
+    const el = gridEl(w);
+    expect(el.classes()).not.toContain("stack-mode");
+    expect(el.attributes("style")).not.toContain("grid-template-rows: none");
+  });
+
+  it("drops the stack-mode class while zoomed, even with layoutMode stack", async () => {
+    const w = mountGrid([cell(1, "s1"), cell(2)], 1, null, false, { layoutMode: "stack" });
+    await flushPromises(); // `zoomed` waits for onMounted before it turns true (a reload-restored zoom guard)
+    const el = gridEl(w);
+    expect(el.classes()).not.toContain("stack-mode");
+    expect(el.attributes("style")).not.toContain("grid-template-rows: none");
+  });
+
+  // The real point of the arrangement: at a realistic width, more than one column, and every
+  // card after the first IN A ROW gets pulled left to overlap (or spaced, if it fits ample) —
+  // never the row-starting card itself.
+  it("packs multiple columns at a measured width, and overlaps every card but each row's first", async () => {
+    mockClientWidth(900); // stackGrid(900, 4) -> cols: 4 per the gridLayout.spec.ts cross-check
+    const w = mountGrid([cell(1), cell(2), cell(3), cell(4)], null, null, false, { layoutMode: "stack" });
+    await flushPromises(); // the width-measuring watch reacts to the template ref on the next tick
+    const el = gridEl(w);
+    expect(el.attributes("style")).toContain("grid-template-columns: 400px 400px 400px 400px");
+    const cards = cellsOf(w);
+    expect(cards[0].attributes("style") ?? "").not.toContain("margin-left");
+    for (const card of cards.slice(1)) expect(card.attributes("style")).toContain("margin-left");
+  });
+
+  // 6 cells at 900px only fit 4 per row (see gridLayout.spec.ts) — the 5th starts a NEW row and
+  // must not carry the overlap margin of a mid-row card.
+  it("wraps to a new row instead of overlapping past the visibility floor, and the row's first card gets no margin", async () => {
+    mockClientWidth(900);
+    const w = mountGrid([cell(1), cell(2), cell(3), cell(4), cell(5), cell(6)], null, null, false, { layoutMode: "stack" });
+    await flushPromises();
+    const cards = cellsOf(w);
+    expect(cards[4].attributes("style") ?? "").not.toContain("margin-left"); // index 4 == cols, the 2nd row's first card
+    expect(cards[5].attributes("style")).toContain("margin-left"); // continues that row
+  });
+
+  // clientWidth is the PADDING box; grid items lay out in the content box, which is narrower by
+  // `.grid`'s own left+right padding. Uncorrected, a row sized to the wider (padding-inclusive)
+  // number overflows the actual content box on the right — the bug this locks in (raised after
+  // shipping: the front-most card's own right edge was getting clipped).
+  it("subtracts the grid's own left/right padding from the measured width", async () => {
+    mockClientWidth(1000);
+    const getComputedStyleSpy = vi.spyOn(window, "getComputedStyle").mockReturnValue({ paddingLeft: "60px", paddingRight: "40px" } as CSSStyleDeclaration);
+    const w = mountGrid([cell(1), cell(2)], null, null, false, { layoutMode: "stack" });
+    await flushPromises();
+    // Content width is 1000 - 100 = 900 -> stackGrid(900, 2) is still ample (evenShare well over
+    // the floor), so the two cards' widths plus the 6px gap must sum to exactly 900, not 1000.
+    const el = gridEl(w);
+    const width = Number(el.attributes("style")?.match(/grid-template-columns: ([\d.]+)px/)?.[1]);
+    expect(width * 2 + 6).toBeCloseTo(900);
+    getComputedStyleSpy.mockRestore();
   });
 });
