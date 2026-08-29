@@ -98,6 +98,13 @@ instead of two — list it and it works exactly as before:
 Say when you do that: they will then have it twice, once as their button and once in the path menu.
 The menu is fixed and does not know what is on the toolbar.
 
+**Say the other thing too, for this one button.** The label is the same and the destination is not:
+the MENU item opens the file pane beside the enlarged cell (enlarging it first if the cell is
+tiled), while this BUTTON opens the full-screen Files view. Both are correct — `open.files` takes
+whatever path it is given, and the pane can only ever be rooted at the enlarged cell's directory, so
+the button could not be the pane even if it wanted to be. A user who expected the pane and got the
+full screen has hit exactly this, and there is nothing to fix in their config.
+
 ## Propose only buttons that work here
 
 Look at the directory before suggesting anything, and say what you skipped and why:

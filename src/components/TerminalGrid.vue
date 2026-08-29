@@ -396,6 +396,23 @@ async function openCanvasFor(uid: number, enlarge = true, stillWanted?: () => bo
   setRightPane("canvas", uid);
 }
 
+// The same gesture for the files pane: the path menu's "Browse files in the app", which is on
+// every cell whether it is enlarged or not (#1910). It used to open the full-screen view — the
+// pane is what the user is after, and it exists only beside an enlarged cell, so this enlarges.
+//
+// Not a toggle. "Browse files" is "show me", the way `openCanvasFor` is; the header's folder
+// button is the one that closes what it opened.
+//
+// The flush condition is narrower than openCanvasFor's, because less is unmounted: the Canvas
+// always replaces a files pane, while this one moves it only when it is on ANOTHER cell. And
+// `filesOpen` already means "the pane on screen is files" — it reads `paneUid` — so
+// `paneUid !== uid` is exactly "a files pane that is about to be re-rooted".
+async function openFilesFor(uid: number): Promise<void> {
+  if (filesOpen.value && paneUid.value !== uid && (await filesPane.value?.flush()) === false) return;
+  if (props.expandedUid !== uid) emit("toggle-expand", uid);
+  setRightPane("files", uid);
+}
+
 // Show a file the user picked in the Canvas, without the agent having presented it (#1374). The
 // card is written the way the agent's own results arrive, so it is stored, replayed on reload, and
 // collapsed against the agent's card for the same file — see canvasOpenFile.ts.
@@ -725,6 +742,7 @@ const gridCellEvents = (cell: Cell) => ({
   "toggle-files": () => toggleFiles(cell.uid),
   "toggle-canvas": () => toggleRightPane("canvas", cell.uid),
   "open-canvas": () => openCanvasFor(cell.uid),
+  "open-files": () => openFilesFor(cell.uid),
   "toggle-tools": () => toggleRightPane("tools", cell.uid),
   "toggle-prompts": () => toggleRightPane("prompts", cell.uid),
   "toggle-collections": () => toggleRightPane("collections", cell.uid),

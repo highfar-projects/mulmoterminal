@@ -32,7 +32,6 @@ import ModelContextBadge from "./ModelContextBadge.vue";
 import type { LaunchChoice } from "./wsUrl";
 import type { RunCommand } from "./runCommand";
 import { useHeaderButtons } from "../composables/useHeaderButtons";
-import { filesGotoIndex } from "../composables/useFilesView";
 import { openTerminalAt } from "../composables/useNewTerminal";
 import TimelineOverlay from "./TimelineOverlay.vue";
 import CopyCodeBlock from "./CopyCodeBlock.vue";
@@ -625,12 +624,19 @@ function openGithub(suffix: string) {
 }
 
 // The in-app file browser and a new terminal in this directory — the `files` and `terminal` buttons
-// that used to sit on this row. Called through the same helpers the header buttons dispatch to
-// (useHeaderAction), rather than re-implemented, so the menu and a user's own configured button for
-// the same thing cannot drift apart. `afterSlotKey` places the new terminal next to this cell, which
-// is the whole point of "here"; it is this cell's durable-connection slot key (see persist-key).
+// that used to sit on this row.
+//
+// `newTerminalHere` goes through the same helper the header buttons dispatch to (useHeaderAction),
+// rather than being re-implemented, so the menu and a user's own configured button for it cannot
+// drift apart. `afterSlotKey` places the new terminal next to this cell, which is the whole point
+// of "here"; it is this cell's durable-connection slot key (see persist-key).
+//
+// Files deliberately does NOT any more (#1910): it asks the GRID for the pane beside this cell,
+// which is somewhere only the grid can put it. A user's own `open.files` button still opens the
+// full-screen view, and has to — it carries an arbitrary path, while the pane can only ever be
+// rooted at the enlarged cell (see FilesPane's defineExpose contract: it never watches its `cwd`).
 function browseFiles() {
-  filesGotoIndex(cwd.value);
+  emit("open-files");
 }
 function newTerminalHere() {
   if (cwd.value) openTerminalAt(cwd.value, `cell-${props.uid}`);
