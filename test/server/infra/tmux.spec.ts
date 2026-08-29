@@ -15,6 +15,8 @@ import {
   planMsOverride,
   MS_OVERRIDE_ENTRY,
   parseTmuxPanePids,
+  isScrubbedGlobalEnvEntry,
+  tmuxClientUnsetNames,
 } from "../../../server/infra/tmux";
 
 describe("tmuxSessionName", () => {
@@ -226,6 +228,60 @@ describe("parseTmuxEnvironment", () => {
   it("keeps an empty value, and tolerates empty output", () => {
     expect(parseTmuxEnvironment("EMPTY=\n").get("EMPTY")).toBe("");
     expect(parseTmuxEnvironment("").size).toBe(0);
+  });
+});
+
+// What a running tmux server's global environment must not keep. The server outlives every
+// mulmoterminal restart, so a name that got in there once is handed to new panes forever — an
+// upgrade alone does not fix it (#451, #989, #1919).
+//
+// PORT is judged by its VALUE, not by its name: the only one that is ours is the port we are
+// listening on, and a cell that inherits it binds the address we are holding (#1857).
+describe("isScrubbedGlobalEnvEntry", () => {
+  const BOUND = "34601";
+
+  it("scrubs the key we leaked ourselves, and launcher context", () => {
+    expect(isScrubbedGlobalEnvEntry("ANTHROPIC_API_KEY", "sk-ant-x", BOUND)).toBe(true);
+    ["PREFIX", "npm_config_registry", "INIT_CWD"].forEach((name) => expect(isScrubbedGlobalEnvEntry(name, "x", BOUND), name).toBe(true));
+  });
+
+  // NODE_ENV is the deliberate omission (#989): we never read it, so no value under that name is
+  // identifiable as ours and taking it would be the bug #955 refused to introduce. MULMOTERMINAL_PORT
+  // is how a cell finds this server (#1873) and is set per pane, not globally.
+  it("leaves alone what is the user's, and what a session is given on purpose", () => {
+    ["NODE_ENV", "MULMOTERMINAL_PORT", "HOME", "PATH", "CLIENT_PORT", "PORTAL"].forEach((name) =>
+      expect(isScrubbedGlobalEnvEntry(name, BOUND, BOUND), name).toBe(false),
+    );
+  });
+
+  it("takes the port we are listening on, whoever put it there", () => {
+    expect(isScrubbedGlobalEnvEntry("PORT", BOUND, BOUND)).toBe(true);
+  });
+
+  // A tmux server outlives the run that admitted a user's PORT, and the next run may carry no PORT
+  // at all. Judging by "is it what WE are carrying" would take the value away on that restart —
+  // the cell would lose a setting the direct-PTY path keeps (codex-review iter-2).
+  it("keeps a user's PORT across a restart that carries none of its own", () => {
+    expect(isScrubbedGlobalEnvEntry("PORT", "3000", BOUND)).toBe(false);
+  });
+
+  // The accepted limit, pinned so it is a decision rather than a gap: a leftover naming a port we
+  // are not on cannot cost us our address, and nothing tells it from a value the user set.
+  it("leaves a stale value that names some other port", () => {
+    expect(isScrubbedGlobalEnvEntry("PORT", "34567", BOUND)).toBe(false);
+  });
+});
+
+// A running server can be scrubbed; one that does not exist yet cannot. `new-session` starts it and
+// it keeps the client's environment for life, so our own bind port is dropped from the client too.
+describe("tmuxClientUnsetNames", () => {
+  it("drops PORT when what we carry IS the port we bind", () => {
+    expect([...tmuxClientUnsetNames("34719", "34719")]).toEqual(["PORT"]);
+  });
+
+  it("keeps the user's own PORT that --port displaced, and adds nothing when we carry none", () => {
+    expect([...tmuxClientUnsetNames("3000", "34601")]).toEqual([]);
+    expect([...tmuxClientUnsetNames(undefined, "34567")]).toEqual([]);
   });
 });
 

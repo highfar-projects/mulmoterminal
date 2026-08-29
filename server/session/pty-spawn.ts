@@ -13,7 +13,7 @@ import { cwdProblemMessage, diagnoseSpawnCwd, type CwdDiagnosis } from "../infra
 import { withoutUnset } from "./provider-env.js";
 import { PORT, SESSION_ID_RE } from "../config/env.js";
 import { reservedWorktreeEnv } from "../config/worktree-env.js";
-import { tmuxAvailable, tmuxHasSession, tmuxNewSessionArgs, tmuxScrubEnvNames } from "../infra/tmux.js";
+import { ownBindPort, tmuxAvailable, tmuxClientUnsetNames, tmuxHasSession, tmuxNewSessionArgs, tmuxScrubEnvNames } from "../infra/tmux.js";
 
 const PTY_COLS = 120;
 const PTY_ROWS = 30;
@@ -218,7 +218,19 @@ export function ptySpawn(
     // The pane is unaffected: `new-session -c <cwd>` is what places it, and that is still the
     // cell's directory. Starting the server from a safe place is NOT a substitute — the first
     // `new-session` moves it again. tmux 3.6 and earlier do not have this behaviour.
-    return { term: spawnPty("tmux", tmuxNewSessionArgs(sessionId, file, args, cwd, env), TMUX_CLIENT_CWD, unset), tmux: true, reattached };
+    //
+    // `tmuxClientUnsetNames` is added to `unset` for the client alone: when no server is running
+    // this client CREATES one, and the new server keeps whatever environment it was started with for
+    // its whole life — so our own bind port would reach every pane it ever opens (#1919). A PORT that
+    // is NOT ours (`PORT=3000 mulmoterminal --port 34601`) is the user's and still travels (#1873).
+    return {
+      term: spawnPty("tmux", tmuxNewSessionArgs(sessionId, file, args, cwd, env), TMUX_CLIENT_CWD, [
+        ...unset,
+        ...tmuxClientUnsetNames(process.env.PORT, ownBindPort()),
+      ]),
+      tmux: true,
+      reattached,
+    };
   }
   return { term: spawnPty(file, args, cwd, unset, env), tmux: false, reattached };
 }
