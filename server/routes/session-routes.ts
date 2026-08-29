@@ -6,6 +6,7 @@
 // a summarizer, which belongs to the title machinery index.ts still owns.
 import type { Express, Request, Response } from "express";
 import { promises as fs } from "node:fs";
+import path from "node:path";
 import { SESSION_ID_RE } from "../config/env.js";
 import { normalizeAgent, workspaceForRoute } from "./routeParams.js";
 import { hasErrnoCode } from "../errors.js";
@@ -164,6 +165,37 @@ async function setMemo(req: Request<{ id: string }>, res: Response, publishActiv
     console.error("[api] /api/session/:id/memo failed:", err);
     res.status(500).json({ error: "failed to save the memo" });
   }
+}
+
+// Permanently removing a session the "or resume here" list no longer needs to offer — NOT
+// "stop" (#1467), which deliberately keeps the transcript so that same list can offer it again.
+// Claude only, for now: the other four agents' stores live in different shapes and directories
+// (common/agentSessionList.ts), and nothing here reads any of them.
+async function deleteSession(req: Request<{ id: string }>, res: Response) {
+  const { id } = req.params;
+  if (!SESSION_ID_RE.test(id)) return res.status(400).json({ error: "invalid session id" });
+  const cwd = workspaceForRoute(req.query.cwd, res);
+  if (cwd === null) return;
+  // A live session's transcript is still being appended to. Deleting it out from under the
+  // process that owns it does not corrupt anything already written — each line stands alone —
+  // but the file the NEXT line lands in is the one this call just removed, silently starting a
+  // fresh transcript under the same name. Stop it first (the row's other button) rather than
+  // this guessing at what "delete a running session" should mean.
+  if (ptys.has(id)) return res.status(409).json({ error: "stop this session before deleting it" });
+  const file = path.join(projectSessionsDir(cwd), `${id}.jsonl`);
+  try {
+    await fs.unlink(file);
+  } catch (err) {
+    if (hasErrnoCode(err) && err.code === "ENOENT") return res.status(404).json({ error: "no such session" });
+    console.error("[api] DELETE /api/session/:id failed:", err);
+    return res.status(500).json({ error: "failed to delete the session" });
+  }
+  // Best-effort, and after the transcript is already gone either way: an id nothing can resume
+  // to again has no more use for a note about what it was for, but a failed erase here must not
+  // turn an otherwise-successful delete into one the caller is told to retry.
+  await sessionMemosHydrated;
+  await setSessionMemo(id, "").catch(() => {});
+  res.json({ ok: true });
 }
 
 // Attention state (working / waiting / event) for an explicit set of session ids.
@@ -440,6 +472,7 @@ const AGENT_SESSION_LISTS: Record<TerminalAgent, (req: Request, res: Response) =
 export function mountSessionRoutes(app: Express, deps: SessionRouteDeps): void {
   app.get("/api/session/:id", (req, res) => sessionDetail(req, res, deps.freshenRosterTitle));
   app.post("/api/session/:id/memo", (req, res) => setMemo(req, res, deps.publishActivity));
+  app.delete("/api/session/:id", (req, res) => void deleteSession(req, res));
   app.get("/api/activity", activitySnapshot);
   app.get("/api/transcript/timeline", toolTimeline);
   app.get("/api/transcript/prompts", userPrompts);

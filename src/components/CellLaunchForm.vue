@@ -418,6 +418,52 @@ const stoppable = (s: ResumableSession): boolean => !sessionBusy(s) && typeof s.
 
 const { stopping, stopSession } = useSessionStop(() => loadResumable(resumable.value.cwd ?? targetDir.value, listAgent.value ?? "claude"));
 
+// The claim keeping the row's own buttons from firing twice — same rule for both, since a
+// deletion racing a rename (or another deletion) on the SAME row is meaningless in either order.
+const rowBusy = ref<string | null>(null);
+async function refreshResumable(): Promise<void> {
+  await loadResumable(resumable.value.cwd ?? targetDir.value, listAgent.value ?? "claude");
+}
+
+// The server route is Claude-only (server/routes/session-routes.ts) — the other four agents'
+// transcripts live in different shapes and directories, so a delete/rename typed for one of
+// their rows would hit the wrong store or nothing at all.
+const canDeleteOrRename = (): boolean => listAgent.value === "claude";
+
+async function renameSession(s: ResumableSession): Promise<void> {
+  if (!canDeleteOrRename() || rowBusy.value !== null) return;
+  const next = window.prompt("Rename this session", s.title);
+  if (next === null) return; // cancelled
+  rowBusy.value = s.id;
+  try {
+    await fetchWithTimeout(`/api/session/${encodeURIComponent(s.id)}/memo`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: next }),
+    });
+  } catch (err) {
+    console.warn("[session-rename] failed:", err);
+  } finally {
+    rowBusy.value = null;
+    await refreshResumable();
+  }
+}
+
+async function deleteSession(s: ResumableSession): Promise<void> {
+  if (!canDeleteOrRename() || rowBusy.value !== null) return;
+  if (!window.confirm(`Permanently delete "${s.title}"? This cannot be undone.`)) return;
+  rowBusy.value = s.id;
+  try {
+    const cwd = resumable.value.cwd ?? targetDir.value;
+    await fetchWithTimeout(`/api/session/${encodeURIComponent(s.id)}?cwd=${encodeURIComponent(cwd ?? "")}`, { method: "DELETE" });
+  } catch (err) {
+    console.warn("[session-delete] failed:", err);
+  } finally {
+    rowBusy.value = null;
+    await refreshResumable();
+  }
+}
+
 const relativeTime = (ms: number): string => relativeTimeFrom(ms, Date.now());
 
 // What the switch actually does, spelled out for the hover: the MCP SERVER ID it registers and
@@ -988,6 +1034,33 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
             @click="stopSession(s)"
           >
             <span class="material-symbols-outlined" aria-hidden="true">stop_circle</span>
+          </button>
+          <!-- Renaming touches only the memo (server/session/registry.ts's setSessionMemo), never
+               the transcript, so it is offered whether or not the row is running — unlike delete
+               below, which is not. -->
+          <button
+            v-if="canDeleteOrRename()"
+            data-testid="ri-rename"
+            class="flex-none cursor-pointer rounded-md border-none bg-transparent px-1.5 py-1 text-[13px] hover:bg-hover disabled:cursor-progress"
+            :disabled="rowBusy === s.id"
+            title="Rename this session"
+            :aria-label="`Rename the session ${s.title}`"
+            @click="renameSession(s)"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+          </button>
+          <!-- Not while it is running: the row's process is still appending to the very file this
+               would remove — see server/routes/session-routes.ts's deleteSession. Stop it first. -->
+          <button
+            v-if="canDeleteOrRename() && !sessionBusy(s) && !stoppable(s)"
+            data-testid="ri-delete"
+            class="flex-none cursor-pointer rounded-md border-none bg-transparent px-1.5 py-1 text-[13px] hover:bg-[var(--err-hover-bg)] disabled:cursor-progress"
+            :disabled="rowBusy === s.id"
+            title="Delete this session permanently"
+            :aria-label="`Permanently delete the session ${s.title}`"
+            @click="deleteSession(s)"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">delete</span>
           </button>
         </div>
       </div>
