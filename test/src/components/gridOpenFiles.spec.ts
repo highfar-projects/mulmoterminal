@@ -80,9 +80,12 @@ const ALLOWED = new Map<string, { session: string; body: () => unknown }>(
 // Being on the list is not enough, because these watchers follow the ENLARGED cell: a request for
 // any other session is as much a change as an unknown route, and the list alone would wave it
 // through since another test does enlarge that cell. So the mock judges each request against
-// `current` below, and `asked` vs `enlarged` then says the other direction — every cell this test
-// enlarged WAS asked about, so a mount that quietly stops asking is a change too. Both sides are
-// written by the two helpers that move the zoom, so neither can drift from what the test did.
+// `current` below.
+//
+// `asked` then closes the other direction, and it holds URLS rather than session ids on purpose:
+// a session is still "asked about" when two of its three routes are issued, so recording sessions
+// would miss a mount that quietly STOPS making one of them. Compared against exactly the routes
+// the enlarged cells should have produced, both sides derived from what the test actually did.
 const unexpected: string[] = [];
 const asked = new Set<string>();
 const enlarged = new Set<string>();
@@ -99,7 +102,7 @@ const mockApi = () => {
     const url = String(input);
     const route = ALLOWED.get(url);
     if (route?.session === current) {
-      asked.add(route.session);
+      asked.add(url);
       return { ok: true, json: async () => route.body() };
     }
     unexpected.push(url);
@@ -172,7 +175,8 @@ describe("open-files from a cell's path menu", () => {
   afterEach(async () => {
     await flushPromises();
     expect(unexpected).toEqual([]);
-    expect([...asked].sort()).toEqual([...enlarged].sort());
+    const expected = [...ALLOWED].filter(([, route]) => enlarged.has(route.session)).map(([url]) => url);
+    expect([...asked].sort()).toEqual(expected.sort());
   });
 
   it("opens the pane on the enlarged cell without asking to enlarge again", async () => {
