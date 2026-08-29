@@ -64,11 +64,11 @@ const SESSIONS = CELLS.flatMap((c) => c.session ?? []);
 //
 // Built with the `encodeURIComponent` the three callers use, so it stays right for a session id
 // that is not two plain characters.
-const ALLOWED = new Map<string, () => unknown>(
-  SESSIONS.flatMap((id): [string, () => unknown][] => [
-    [`/api/question/${encodeURIComponent(id)}`, () => ({ question: null })],
-    [`/api/agent/toolResults/${encodeURIComponent(id)}`, () => ({ toolResults: [] })],
-    [`/api/tools?sessionId=${encodeURIComponent(id)}`, () => ({ groups: [] })],
+const ALLOWED = new Map<string, { session: string; body: () => unknown }>(
+  SESSIONS.flatMap((id): [string, { session: string; body: () => unknown }][] => [
+    [`/api/question/${encodeURIComponent(id)}`, { session: id, body: () => ({ question: null }) }],
+    [`/api/agent/toolResults/${encodeURIComponent(id)}`, { session: id, body: () => ({ toolResults: [] }) }],
+    [`/api/tools?sessionId=${encodeURIComponent(id)}`, { session: id, body: () => ({ groups: [] }) }],
   ]),
 );
 
@@ -76,20 +76,36 @@ const ALLOWED = new Map<string, () => unknown>(
 // does not work: every mount-time caller catches its own fetch failure (fetchOpenQuestion,
 // hasStoredCard, the tools watcher), so the rejection would be swallowed and the spec would pass
 // knowing nothing about it.
+//
+// `asked` is the second half of the same guard. Being on the list is not enough: these watchers
+// follow the ENLARGED cell, so a request for a session this test never enlarged is as much a
+// change as an unknown route — and the list alone would wave it through, since another test does
+// enlarge that cell. `enlarged` is written by the only two helpers that move the zoom, so the
+// expectation cannot drift from what the test actually did.
 const unexpected: string[] = [];
+const asked = new Set<string>();
+const enlarged = new Set<string>();
 const mockApi = () => {
   unexpected.length = 0;
+  asked.clear();
+  enlarged.clear();
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
-    const body = ALLOWED.get(url);
-    if (body) return { ok: true, json: async () => body() };
+    const route = ALLOWED.get(url);
+    if (route) {
+      asked.add(route.session);
+      return { ok: true, json: async () => route.body() };
+    }
     unexpected.push(url);
     return { ok: false, status: 500, json: async () => ({}) }; // the caller's own failure path, which it handles
   }) as unknown as typeof fetch;
 };
 
-const mountGrid = () =>
-  mount(TerminalGrid, {
+const sessionOf = (uid: number) => CELLS.find((c) => c.uid === uid)?.session ?? "";
+
+const mountGrid = () => {
+  enlarged.add(sessionOf(1));
+  return mount(TerminalGrid, {
     props: {
       cells: CELLS,
       expandedUid: 1,
@@ -106,6 +122,7 @@ const mountGrid = () =>
     },
     attachTo: document.body,
   });
+};
 
 type Grid = ReturnType<typeof mountGrid>;
 const cells = (w: Grid) => w.findAllComponents({ name: "TerminalCell" });
@@ -113,6 +130,7 @@ const filesPane = (w: Grid) => w.findComponent({ name: "FilesPane" });
 
 /** The parent honouring a `toggle-expand`, which is what puts the pane beside the new cell. */
 const applyExpand = async (w: Grid, uid: number) => {
+  enlarged.add(sessionOf(uid));
   await w.setProps({ expandedUid: uid });
   await flushPromises();
 };
@@ -144,6 +162,7 @@ describe("open-files from a cell's path menu", () => {
   afterEach(async () => {
     await flushPromises();
     expect(unexpected).toEqual([]);
+    expect([...asked].sort()).toEqual([...enlarged].sort());
   });
 
   it("opens the pane on the enlarged cell without asking to enlarge again", async () => {
