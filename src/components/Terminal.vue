@@ -389,7 +389,7 @@ function terminate() {
 function readOutput(): string {
   return conn.readBuffer(slotKey);
 }
-defineExpose({ submitText, terminate, readOutput });
+defineExpose({ submitText, terminate, readOutput, showHint });
 
 // Insert text (a path, or space-joined paths) at the terminal cursor via the
 // normal input channel — no trailing CR, so the user reviews and submits.

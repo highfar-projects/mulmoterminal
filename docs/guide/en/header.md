@@ -136,9 +136,9 @@ Side by side with an unconfigured cell — unconfigured on the left, the config 
 
 ---
 
-## 4. The three `run` types {#run}
+## 4. The four `run` types {#run}
 
-`run` decides what a button does. There are only three.
+`run` decides what a button does. There are only four.
 
 ### `run: "input"` — send it to the agent {#run-input}
 
@@ -185,6 +185,25 @@ Pressing it opens a cell like this and shows the output:
 
 > **Write only one per button.** Set several and **only the first** in that order takes effect; the
 > rest are silently ignored.
+
+### `run: "action"` — restart the agent in this cell {#run-action}
+
+Acts on the cell itself. One action so far:
+
+```json
+{ "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart" }
+```
+
+`"restart"` ends the agent process and starts it again **in the same cell, in the same directory, on
+the same conversation** — no going back to the launcher to pick the directory and hunt for the
+session in *or resume here*. This is what makes a changed MCP registration, an edited
+`~/.mulmoterminal/config.json` or an updated plugin take effect: those are read once, when the
+process starts.
+
+> **It costs a resume, and it asks nothing first.** The conversation is read back from its
+> transcript, which costs real tokens, and the agent is killed even mid-turn. There is no built-in
+> Restart button — this and the [`terminal-restart` shortcut](config.html#keymap) are the two ways
+> to have one.
 
 ---
 
