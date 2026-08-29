@@ -22,6 +22,7 @@ import { usageBadge } from "./cellDisplay";
 import { applyActivityPush, cellHeaderText, type ActivityPush } from "./cellActivity";
 import { MEMO_MAX_LENGTH, normalizeMemo } from "../../common/sessionMemo";
 import { preferredLaunchDir, shouldSyncLaunchDir } from "./launchDir";
+import { devcontainerStatus } from "../composables/useDevcontainerOffer";
 import CellLaunchForm from "./CellLaunchForm.vue";
 import GitBranchChip from "./GitBranchChip.vue";
 import WorkItemChip from "./WorkItemChip.vue";
@@ -177,6 +178,26 @@ const cwd = ref<string | null>(props.initialCwd ?? props.defaultCwd);
 // Per-directory overrides (<cwd>/.mulmoterminal.json): pins this cell's terminal
 // palette and shows a project badge. Re-fetched when the effective cwd changes.
 const { config: dirConfig, cellStyle } = useCellChrome(cwd);
+// The running container's Docker NAME (`angry_rubin`, not the image or id) — the badge below
+// says "in a devcontainer", and a `docker exec`/`docker logs` typed by hand needs the name that
+// statement doesn't carry, reassigned on every recreate. Fetched only while dirConfig says this
+// cwd is devcontainer-enabled, mirroring the badge's own v-if so a plain-host cell never pays
+// for the docker call devcontainerStatus makes.
+const devcontainerName = ref<string | null>(null);
+watch(
+  () => [cwd.value, dirConfig.value.devcontainer] as const,
+  async ([currentCwd, enabled]) => {
+    if (!currentCwd || !enabled) {
+      devcontainerName.value = null;
+      return;
+    }
+    const status = await devcontainerStatus(currentCwd);
+    // A stale response landing after cwd (or the flag) moved on must not overwrite whatever the
+    // newer request is about to answer with.
+    if (cwd.value === currentCwd) devcontainerName.value = status?.containerName ?? null;
+  },
+  { immediate: true },
+);
 // Whether this cell IS the workspace, for the header badge. Same lexical comparison the launcher
 // chip makes (`launchChips`), so a cell launched from the WORKSPACE chip is badged WORKSPACE.
 const isWorkspace = computed(() => isSameDirPath(cwd.value, props.defaultCwd));
@@ -1310,7 +1331,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               v-if="dirConfig.devcontainer"
               data-testid="cell-devcontainer-badge"
               class="material-symbols-outlined flex-none text-[13px] text-dim"
-              title="Running in this directory's devcontainer"
+              :title="devcontainerName ? `Running in this directory's devcontainer (${devcontainerName})` : `Running in this directory's devcontainer`"
               >inventory_2</span
             >
             <span class="cell-dot" :class="[CELL_DOT, statusClass, dotStatusClass, dotMissedClass]" :title="statusLabel" />

@@ -23,11 +23,25 @@ const requestFailureText = (e: unknown): string =>
     ? "Timed out waiting for the devcontainer — it may still finish."
     : `Could not reach the server: ${errorMessage(e)}`;
 
-async function devcontainerStatus(cwd: string): Promise<{ hasConfig: boolean; enabled: boolean } | null> {
+export interface DevcontainerStatus {
+  hasConfig: boolean;
+  enabled: boolean;
+  // The running container's Docker name (`angry_rubin`) — null while disabled, or while enabled
+  // but nothing currently answers for it (never built yet, or removed since). Exported alongside
+  // the rest for TerminalCell.vue's badge: the tooltip a `docker exec` typed by hand actually
+  // needs, since the name is reassigned every time the container is recreated.
+  containerName: string | null;
+}
+
+export async function devcontainerStatus(cwd: string): Promise<DevcontainerStatus | null> {
   try {
     const res = await fetchWithTimeout(`/api/devcontainer/status?cwd=${encodeURIComponent(cwd)}`);
     const body = await jsonBody(res);
-    return { hasConfig: isRecord(body) && body.hasConfig === true, enabled: isRecord(body) && body.enabled === true };
+    return {
+      hasConfig: isRecord(body) && body.hasConfig === true,
+      enabled: isRecord(body) && body.enabled === true,
+      containerName: isRecord(body) && typeof body.containerName === "string" ? body.containerName : null,
+    };
   } catch {
     return null; // can't tell — proceed on the host rather than block the launch over a status check
   }

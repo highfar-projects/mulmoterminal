@@ -124,3 +124,37 @@ export function markDevcontainerEnabled(dir: string, workspaceFolder: string | n
   config.devcontainerWorkspaceFolder = workspaceFolder && path.resolve(workspaceFolder) !== path.resolve(dir) ? workspaceFolder : null;
   writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`, "utf8");
 }
+
+// A build (base image pull...) timeout would be the wrong bound here — this is a `docker ps`,
+// not an `up`, and should answer in well under a second or not at all.
+const DEVCONTAINER_NAME_LOOKUP_TIMEOUT_MS = 5_000;
+
+/** The Docker name of `dir`'s running devcontainer (`angry_rubin`, not the image or id) — what a
+ *  `docker exec`/`docker logs` typed by hand actually needs, and the reason the badge that says
+ *  "in devcontainer" (TerminalCell.vue) is otherwise not enough to act on: the name is randomly
+ *  assigned at container CREATION and changes every time the container is recreated, which a
+ *  Dockerfile edit or a stale-mount fix (this app's own hook-socket.ts / claude-credentials.ts
+ *  both needed one) does often enough that remembering it is not reliable.
+ *
+ *  `devcontainer.local_folder` is the label the devcontainers CLI itself writes at `up` time with
+ *  exactly the `--workspace-folder` string this app passed — matching on it rather than guessing
+ *  a name/id keeps this correct across a rebuild without this app tracking one of its own. null
+ *  for "no container answers that label" (never built, or `docker rm`'d since), which reads as
+ *  "not running" rather than as an error — a truthful answer, not a failure. */
+export function runningDevcontainerName(dir: string): Promise<string | null> {
+  const args = ["ps", "--filter", `label=devcontainer.local_folder=${path.resolve(dir)}`, "--format", "{{.Names}}"];
+  return new Promise((resolve) => {
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- 'docker' is a standard tool from PATH, same convention as devcontainer() above
+    const child = spawn("docker", args, { stdio: ["ignore", "pipe", "ignore"], timeout: DEVCONTAINER_NAME_LOOKUP_TIMEOUT_MS });
+    const chunks: Buffer[] = [];
+    child.stdout.on("data", (c: Buffer) => chunks.push(c));
+    child.on("error", () => resolve(null));
+    child.on("close", (code) => {
+      // Multiple names would mean multiple containers share this exact label — devcontenters
+      // shouldn't, and if one somehow does, naming ONE of them as "the" container would be a
+      // guess dressed as an answer.
+      const names = Buffer.concat(chunks).toString("utf8").trim().split("\n").filter(Boolean);
+      resolve(code === 0 && names.length === 1 ? (names[0] ?? null) : null);
+    });
+  });
+}

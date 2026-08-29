@@ -4,7 +4,7 @@
 // checkout alike (worktreeRepoRootMount, used by runDevcontainerUp, doesn't care which).
 import type { Express, Request, Response } from "express";
 import { repoRoot } from "../git/worktrees.js";
-import { hasDevcontainerConfig, markDevcontainerEnabled, runDevcontainerUp } from "./devcontainer-flag.js";
+import { hasDevcontainerConfig, markDevcontainerEnabled, runDevcontainerUp, runningDevcontainerName } from "./devcontainer-flag.js";
 import { loadDirConfig } from "./dir-config.js";
 import { requestOriginAllowed } from "../routes/same-origin-guard.js";
 import { requestBody } from "../routes/requestBody.js";
@@ -16,13 +16,20 @@ interface DevcontainerRouteOptions {
 // Whether `cwd` has a devcontainer config at all, and whether it's already the one every session
 // there runs through (see spawn-claude.ts) — so the launcher knows both whether to offer building
 // it and whether to skip that offer because a previous session here already did.
+//
+// `containerName` rides the same response rather than a route of its own: every caller of this
+// one already has `cwd` in hand and asks it before anything devcontainer-shaped renders, so a
+// second round trip just to name what `enabled: true` already implied would be asking twice for
+// one fact. Looked up only when enabled — a `docker ps` nobody will read is a cost this route
+// otherwise pays on every directory, devcontainer or not.
 async function handleStatus(req: Request, res: Response): Promise<void> {
   const cwd = typeof req.query.cwd === "string" ? req.query.cwd : "";
   if (!cwd) {
-    res.json({ hasConfig: false, enabled: false });
+    res.json({ hasConfig: false, enabled: false, containerName: null });
     return;
   }
-  res.json({ hasConfig: hasDevcontainerConfig(cwd), enabled: loadDirConfig(cwd).devcontainer === true });
+  const enabled = loadDirConfig(cwd).devcontainer === true;
+  res.json({ hasConfig: hasDevcontainerConfig(cwd), enabled, containerName: enabled ? await runningDevcontainerName(cwd) : null });
 }
 
 // Build and start `cwd`'s devcontainer, then mark it so every later spawn there (spawn-claude.ts)
