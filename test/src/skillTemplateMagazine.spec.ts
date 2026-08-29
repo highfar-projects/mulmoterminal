@@ -187,12 +187,14 @@ describe("magazine.md — the desk", () => {
     expect(document.querySelector("#list .note")).toBeNull();
   });
 
-  it("draws them on every row while nobody has looked, and says so", () => {
-    // The third state. Read as "you have none", this takes the controls off the reader's OWN work.
+  it("draws them on NO row while nobody has looked, and says so", () => {
+    // The third state, resolved the safe way round. Drawing them all was shipped once and is what
+    // a writer actually met: an enabled Rewrite on somebody else's article that failed every time.
+    // A control that arrives a moment late is the other kind of wrong, and it does not lie.
     const page = load("views/desk.html");
     page.tell([MINE, THEIRS], viewerUnanswered);
-    expect(buttons("#list button")).toEqual(["Rewrite", "Delete", "Rewrite", "Delete"]);
-    expect(document.querySelector("#list .note")?.textContent).toContain("has not yet said which of these are yours");
+    expect(buttons("#list button")).toEqual([]);
+    expect(document.querySelector("#list .note")?.textContent).toContain("still working out which of these are yours");
   });
 
   it("refuses a URL name that is taken before anything is sent", () => {
@@ -449,6 +451,58 @@ describe("magazine.md — the desk", () => {
     expect(document.querySelector(".editor .msg")?.textContent).toContain("PERMISSION_DENIED");
     expect(document.querySelector(".editor textarea.body")).toBe(body);
     expect(body.disabled).toBe(false);
+  });
+});
+
+describe("magazine.md — the writers' page", () => {
+  it("is narrowed by the DECLARATION, which is what lets the page skip the ownership test", () => {
+    // The binding this page rests on. Take `ownRead` off the view and every assertion below still
+    // passes while the shipped app shows a writer everyone's articles with every control enabled —
+    // which is the failure this template was corrected for. So the declaration is asserted here,
+    // beside the page that assumes it, rather than left to the publish gate that cannot know why.
+    const [, json] = /^## app\.json\n\n```json\n([\s\S]*?)\n```/m.exec(template) ?? [];
+    const app = JSON.parse(json ?? "{}") as { views?: { path?: string; audience?: string; ownRead?: string[]; collections?: string[] }[] };
+    const writers = (app.views ?? []).find((view) => view.path === "views/write.html");
+    expect(`views/write.html: ${writers === undefined ? "not declared" : "declared"}`).toBe("views/write.html: declared");
+    expect(writers?.audience).toBe("participant");
+    expect(writers?.ownRead).toEqual(["articles"]);
+
+    // And the member desk is NOT narrowed — it is the one page handed the whole archive.
+    const desk = (app.views ?? []).find((view) => view.path === "views/desk.html");
+    expect(desk?.audience).toBe("member");
+    expect(desk?.ownRead).toBeUndefined();
+  });
+
+  it("acts on every row it is handed, without asking viewer.mine anything", () => {
+    // The whole of what `ownRead` buys. The read is narrowed to `where(byUid == you)`, so every
+    // delivered row is the reader's — and a page that tested it again would be giving a second
+    // answer to a settled question, one that disagrees for the moment before `mine` lands.
+    const page = load("views/write.html");
+    page.tell([MINE, THEIRS], { me: "ada@example.com", can: CAN });
+    expect(buttons("#list button")).toEqual(["Rewrite", "Delete", "Rewrite", "Delete"]);
+    // …and no third-state notice, because there is no third state on this page.
+    expect(document.querySelector("#list .note")).toBeNull();
+  });
+
+  it("says the others were never fetched, rather than hidden", () => {
+    const page = load("views/write.html");
+    page.tell([MINE], { me: "ada@example.com", can: CAN });
+    expect(document.body.textContent).toContain("never");
+    expect(document.body.textContent).toContain("ownRead");
+  });
+
+  it("claims only what a narrowed list can know about a taken URL name", () => {
+    // It can still catch the reader's own. What it must not do is say a name is free.
+    const page = load("views/write.html");
+    page.tell([MINE], { me: "ada@example.com", can: CAN });
+    const inputs = document.querySelectorAll<HTMLInputElement>("#compose input");
+    const areas = document.querySelectorAll<HTMLTextAreaElement>("#compose textarea");
+    inputs[0].value = "again";
+    inputs[1].value = MINE.id;
+    areas[1].value = "text";
+    document.querySelector<HTMLButtonElement>("#compose .btn")?.click();
+    expect(page.calls.filter((call) => call.kind === "submit")).toEqual([]);
+    expect(document.querySelector("#compose .msg")?.textContent).toContain(`You already published an article at the URL name ${MINE.id}`);
   });
 });
 
