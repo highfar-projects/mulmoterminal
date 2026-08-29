@@ -203,13 +203,35 @@ export function parseTmuxEnvironment(stdout: string): Map<string, string> {
 // see ANTHROPIC_API_KEY, which silently outranks the auth token that aims it there. The
 // settings `env` block cannot express a REMOVAL, and a pane inherits the tmux server's
 // environment rather than ours, so this is where it has to be taken out (#579).
-const SCRUBBED_NAMES = new Set(["ANTHROPIC_API_KEY"]);
+// PORT is scrubbed for a reason NODE_ENV deliberately is NOT (#989): it is a name this server
+// itself reads (config/env.ts — `--port` > `PORT` > 34567), so a PORT in OUR tmux server's global
+// environment is by definition the port mulmoterminal is listening on. Handing that to every pane
+// only tells a dev server to bind the address we already hold, which is #1857 (#1919). A NODE_ENV
+// found there is a value we never consume and cannot be told apart from the user's own, so it
+// stays. A user who exports PORT from their rc keeps it: their rc runs inside the pane.
+const SCRUBBED_NAMES = new Set(["ANTHROPIC_API_KEY", "PORT"]);
+
+// Must this name go from a running server's global environment? Its own pure function so the set
+// is testable without standing up a tmux server.
+export function isScrubbedGlobalEnvName(name: string): boolean {
+  return isLauncherEnvVar(name) || SCRUBBED_NAMES.has(name);
+}
+
+// Dropped from the environment of the tmux CLIENT a spawn runs, because scrubbing a RUNNING server
+// cannot reach the one that does not exist yet: `new-session` starts the server when none is up,
+// and that server inherits the client's environment wholesale — baking our own PORT into every
+// pane it will ever create. Measured: `set-environment` and `has-session` do not start a server,
+// so the client of a spawn is the only way in.
+//
+// Only server CREATION is affected. A pane takes its environment from `new-session -e`, so a
+// directory that reserved PORT for its worktree (#1367) still gets it.
+export const TMUX_CLIENT_UNSET_NAMES: readonly string[] = ["PORT"];
 
 function scrubGlobalEnvironment(): void {
   const r = tmux(["show-environment", "-g"]);
   if (r.status !== 0) return;
   for (const name of parseTmuxEnvironment(r.stdout).keys()) {
-    if (isLauncherEnvVar(name) || SCRUBBED_NAMES.has(name)) tmux(["set-environment", "-g", "-r", name]);
+    if (isScrubbedGlobalEnvName(name)) tmux(["set-environment", "-g", "-r", name]);
   }
 }
 
