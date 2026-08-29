@@ -82,12 +82,14 @@ const ALLOWED = new Map<string, { session: string; body: () => unknown }>(
 // through since another test does enlarge that cell. So the mock judges each request against
 // `current` below.
 //
-// `asked` then closes the other direction, and it holds URLS rather than session ids on purpose:
-// a session is still "asked about" when two of its three routes are issued, so recording sessions
-// would miss a mount that quietly STOPS making one of them. Compared against exactly the routes
-// the enlarged cells should have produced, both sides derived from what the test actually did.
+// `asked` then closes the other direction. It holds URLS rather than session ids, because a
+// session is still "asked about" when two of its three routes are issued — recording sessions
+// would miss a mount that quietly STOPS making one. And it is a LIST rather than a set, because
+// each route is issued exactly once (measured): a set would equally miss a mount that starts
+// making one TWICE, which is what a watcher re-firing looks like. Compared against exactly the
+// routes the enlarged cells should have produced, both sides derived from what the test did.
 const unexpected: string[] = [];
-const asked = new Set<string>();
+const asked: string[] = [];
 const enlarged = new Set<string>();
 // Which cell is enlarged RIGHT NOW, as the test believes. Judged per request rather than over the
 // whole test, because a SET cannot see a stale one: after the zoom moves to the second cell, a
@@ -95,14 +97,14 @@ const enlarged = new Set<string>();
 let current = "";
 const mockApi = () => {
   unexpected.length = 0;
-  asked.clear();
+  asked.length = 0;
   enlarged.clear();
   current = "";
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     const route = ALLOWED.get(url);
     if (route?.session === current) {
-      asked.add(url);
+      asked.push(url);
       return { ok: true, json: async () => route.body() };
     }
     unexpected.push(url);
@@ -176,7 +178,7 @@ describe("open-files from a cell's path menu", () => {
     await flushPromises();
     expect(unexpected).toEqual([]);
     const expected = [...ALLOWED].filter(([, route]) => enlarged.has(route.session)).map(([url]) => url);
-    expect([...asked].sort()).toEqual(expected.sort());
+    expect([...asked].sort()).toEqual(expected.sort()); // a LIST on both sides: a repeat shows up as a repeat
   });
 
   it("opens the pane on the enlarged cell without asking to enlarge again", async () => {
