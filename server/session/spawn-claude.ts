@@ -4,6 +4,7 @@
 import type { WebSocket } from "ws";
 import { CLAUDE_CWD, PORT } from "../config/env.js";
 import { hookSocketPath } from "../infra/hook-socket.js";
+import { devcontainerAuthEnv } from "../infra/claude-credentials.js";
 import { guiMcpEnv, carriesFullGuiMcp, fullGuiAllowedTools } from "./mcp-config.js";
 import { getUserMcpServers, getPrWorkdirFooter, getAppendSystemPrompt, getTerminalSubmit, getCustomAgents } from "../config/config-routes.js";
 import { submitSequenceForAgent } from "../../common/terminalSubmit.js";
@@ -132,6 +133,28 @@ function sessionAddDirs(sessionId: string, configured: string[] | null | undefin
   return dropsDirectory ? [...(configured ?? []), dropsDirectory] : configured;
 }
 
+/** The env a devcontainer session's settings file carries, on top of the provider's own — see
+ *  infra/claude-credentials.ts for why this, and not a mounted credentials file or a
+ *  `devcontainer exec --remote-env` flag, is what gets the host's Claude Code login there. A host
+ *  session is untouched: it already has its own `~/.claude` login. */
+function sessionEnv(providerEnv: Record<string, string>, useDevcontainer: boolean): Record<string, string> {
+  return useDevcontainer ? { ...providerEnv, ...devcontainerAuthEnv() } : providerEnv;
+}
+
+/** The `--settings` payload's `host`/`env`/socket triple, all three driven by the same
+ *  `useDevcontainer` flag — its own function for the reason resolveSessionBackend states: the
+ *  spawn body is at its line budget. A devcontainer session's network namespace can't reach
+ *  `localhost` on the host at all (see infra/hook-socket.ts), so its hook curl is redirected onto
+ *  the socket bind-mounted into the container instead, at the same path it has here. */
+function sessionHookSettings(
+  hookSettingsJson: SpawnDeps["hookSettingsJson"],
+  sessionId: string,
+  providerEnv: Record<string, string>,
+  useDevcontainer: boolean,
+): string {
+  return hookSettingsJson("localhost", sessionId, sessionEnv(providerEnv, useDevcontainer), useDevcontainer ? hookSocketPath(PORT) : undefined);
+}
+
 /**
  * Which custom agent, if any, this session runs — the request's, or the one it was STARTED on.
  *
@@ -238,10 +261,7 @@ export function createClaudeSpawner(deps: SpawnDeps) {
     const { dir, resolved } = resolveSessionBackend({ cwd, sessionId, launch, canResume });
     const addDirs = sessionAddDirs(sessionId, dir.addDirs);
 
-    // A devcontainer session's network namespace can't reach `localhost` on the host at all
-    // (see infra/hook-socket.ts) — its hook curl is redirected onto the socket bind-mounted
-    // into the container instead, at the same path it has here.
-    const hookSettings = deps.hookSettingsJson("localhost", sessionId, resolved.env, dir.devcontainer === true ? hookSocketPath(PORT) : undefined);
+    const hookSettings = sessionHookSettings(deps.hookSettingsJson, sessionId, resolved.env, dir.devcontainer === true);
     const mcpJson = deps.mcpConfigJson(sessionId, "127.0.0.1");
     // File-ized only when it is actually passed (fullGuiMcp), so a cell that never carries
     // the GUI MCP leaves no file behind for reap to clean up.
