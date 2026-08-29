@@ -77,11 +77,12 @@ const ALLOWED = new Map<string, { session: string; body: () => unknown }>(
 // hasStoredCard, the tools watcher), so the rejection would be swallowed and the spec would pass
 // knowing nothing about it.
 //
-// `asked` is the second half of the same guard. Being on the list is not enough: these watchers
-// follow the ENLARGED cell, so a request for a session this test never enlarged is as much a
-// change as an unknown route — and the list alone would wave it through, since another test does
-// enlarge that cell. `enlarged` is written by the only two helpers that move the zoom, so the
-// expectation cannot drift from what the test actually did.
+// Being on the list is not enough, because these watchers follow the ENLARGED cell: a request for
+// any other session is as much a change as an unknown route, and the list alone would wave it
+// through since another test does enlarge that cell. So the mock judges each request against
+// `current` below, and `asked` vs `enlarged` then says the other direction — every cell this test
+// enlarged WAS asked about, so a mount that quietly stops asking is a change too. Both sides are
+// written by the two helpers that move the zoom, so neither can drift from what the test did.
 const unexpected: string[] = [];
 const asked = new Set<string>();
 const enlarged = new Set<string>();
