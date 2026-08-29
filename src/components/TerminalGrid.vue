@@ -624,6 +624,26 @@ function sendToExpandedCell(text: string): boolean {
   return props.expandedUid === null ? false : conn.submitText(`cell-${props.expandedUid}`, text);
 }
 
+// Whether the terminal on screen can be typed into at all. A COMMAND cell's terminal is handed no
+// `persist-key`, so its connection is filed under `ephemeral-<uuid>` and `cell-<uid>` names nothing
+// (Terminal.vue) — offering an insert there would put items in the menu that silently do nothing.
+// Launcher cells DO use `cell-<uid>` and keep it: the question is the connection, not the session.
+// Caught by CodeRabbit on PR #1912.
+const expandedTakesInput = computed(() => props.cells.some((c) => c.uid === props.expandedUid && !c.command));
+
+// A path picked in the files pane's tree, typed at the cursor of the terminal on screen (#1859).
+// `insertText`, not `submitText`: nothing is sent — the user reviews it and adds the sentence it
+// belongs to, the same bargain a drop (#750) and a pasted screenshot (#938) already make.
+//
+// The ENLARGED cell, which is not always the one the pane is rooted at: the pane keeps the cell
+// it is on when a re-root could not be saved out of. That is exactly why it is told `expandedCwd`
+// below — filesRowActions withholds the relative path when the two disagree, and the absolute one
+// is right either way.
+function insertIntoExpandedCell(text: string): void {
+  if (props.expandedUid === null || !expandedTakesInput.value) return;
+  conn.insertText(`cell-${props.expandedUid}`, text);
+}
+
 // Does the enlarged cell's session have the drawing tools? Only the server knows: a grid cell
 // reaches them through the user's own per-folder MCP config, and the server learns which groups
 // a session has from the URLs it connects to.
@@ -1306,11 +1326,14 @@ watch(
           :cwd="paneCwd"
           :initial-state="paneState"
           :canvas-target="expandedUid !== null"
+          :insert-target="expandedTakesInput"
+          :insert-target-cwd="expandedCwd"
           :workspace="defaultCwd"
           :style="{ flex: `0 0 ${paneWidth}px` }"
           class="border-l border-border bg-deep"
           @close="setFilesOpen(false)"
           @open-in-canvas="openFileInCanvas"
+          @insert-text="insertIntoExpandedCell"
         >
           <!-- Which directory the tree is actually rooted at. It normally follows the enlarged
                cell, but declining a re-root leaves it behind — and then this is the only thing
