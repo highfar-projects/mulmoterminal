@@ -176,3 +176,24 @@ describe("sanitizeButtons open.pickFile", () => {
     expect(sanitizeButtons([{ id: "pr", label: "PR", run: "open", open: { pr: true } }])).toEqual([{ id: "pr", label: "PR", run: "open", open: { pr: true } }]);
   });
 });
+
+// `run: "action"` acts on the CELL the terminal is in (#1918). The list of actions is the server's,
+// so a button naming one the client cannot dispatch must not survive the loader — it would draw and
+// then do nothing, which is the failure the payload rule exists to prevent for the other run types.
+describe("sanitizeButtons run:action", () => {
+  it("keeps a button whose action is a known one", () => {
+    expect(sanitizeButtons([{ id: "r", icon: "restart_alt", label: "Restart", run: "action", action: "restart" }])).toEqual([
+      { id: "r", icon: "restart_alt", label: "Restart", run: "action", action: "restart" },
+    ]);
+  });
+  it("drops one naming an unknown action, or none at all", () => {
+    expect(sanitizeButtons([{ id: "r", label: "R", run: "action", action: "reboot" }])).toEqual([]);
+    expect(sanitizeButtons([{ id: "r", label: "R", run: "action" }])).toEqual([]);
+  });
+  it("does not accept another run type's payload in its place", () => {
+    expect(sanitizeButtons([{ id: "r", label: "R", run: "action", cmd: "yarn build" }])).toEqual([]);
+  });
+  it("is not in the default set — nobody gets it who did not write it", () => {
+    expect(DEFAULT_BUTTONS.some((b) => b.run === "action")).toBe(false);
+  });
+});

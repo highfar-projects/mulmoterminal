@@ -680,7 +680,9 @@ and open-on-GitHub (🌐, git repos). Setting `buttons` (at either level) **repl
 set** with your list (it is not merged on top), so listing your own — even a **shorter** one — is how
 you drop, reorder, or swap them.
 A button has an `id`, `label`, and a `run` of `"shell"` (run a command), `"input"` (send text to the
-agent), or `"open"`. An `open` button targets one of `url` / `reveal` (OS file manager) / `files`
+agent), `"open"`, or `"action"` (act on the cell itself — `action: "restart"` ends the agent and
+starts it again in the same cell on the same conversation, which is how an MCP / config / plugin
+change takes effect; it costs a resume and asks nothing first). An `open` button targets one of `url` / `reveal` (OS file manager) / `files`
 (in-app explorer) / `view` (a built-in overlay) / `terminal` (a dir → a new cell running `$SHELL`,
 opened next to the current one) / `pr: true` (open the current branch's PR — the button is hidden when
 there's no open PR) / `pickFile: true` (OS file dialog → insert the path).

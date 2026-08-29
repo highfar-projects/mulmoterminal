@@ -87,6 +87,7 @@ export const ja: Messages = {
         terminalNewHere: "このターミナルのディレクトリで起動パネルを開く",
         terminalNewAdjacent: "このターミナルのディレクトリで、そのままシェルを開く",
         terminalClose: "このターミナルを閉じる",
+        terminalRestart: "このターミナルのエージェントを再起動する",
         copy: "ターミナルの選択範囲をコピー",
         paste: "ターミナルにペースト",
       },

@@ -59,6 +59,7 @@ import { becameCiFailing, EMPTY_SESSION_META, isPrPhase, mergeSessionMeta, type 
 import { notifySound } from "../composables/notifySound";
 import { useGridActivity } from "../composables/useGridActivity";
 import { registerNewTerminalHandler, type NewTerminalRequest } from "../composables/useNewTerminal";
+import { requestCellRestart } from "../composables/useCellRestart";
 import { registerSpawnedChatHandler, type SpawnedChatRequest } from "../composables/useSpawnedChat";
 import { usePendingScript } from "../composables/usePendingScript";
 import { reportActiveTerminals } from "../composables/useUnloadGuard";
@@ -528,17 +529,31 @@ function runShortcut(shortcut: GridShortcut) {
     const target = nextAttentionUid(state.value, order, statusForSort.value, focusedCellUid.value);
     state.value = nextAttention(state.value, order, statusForSort.value, focusedCellUid.value);
     if (target !== null) void nextTick(() => conn.focus(`cell-${target}`));
-  } else if (shortcut === "terminal-new") {
+  } else {
+    runCellShortcut(shortcut, uid);
+  }
+}
+
+// The half that acts on a CELL rather than on the zoom. Its own function so neither grows past
+// what a reader can hold — and past what the complexity rule allows.
+function runCellShortcut(shortcut: GridShortcut, uid: number | null) {
+  if (shortcut === "terminal-new") {
     toggleLaunchPanel(null);
   } else if (shortcut === "terminal-new-here") {
     // No `uid !== null` guard, and so not in NEEDS_A_CURRENT_TERMINAL: with the panel over the
     // stage this works in every view mode, and with no cell to read it simply opens on the default
     // workspace instead of doing nothing.
     toggleLaunchPanel(uid ?? focusedCellUid.value);
-  } else if (shortcut === "terminal-new-adjacent" && uid !== null) {
+  } else if (uid === null) {
+    return; // everything below acts on one terminal, and there is none to name
+  } else if (shortcut === "terminal-new-adjacent") {
     state.value = insertCellAfter(state.value, uid, shellCell(adjacentCwd(uid)));
-  } else if (shortcut === "terminal-close" && uid !== null) {
+  } else if (shortcut === "terminal-close") {
     onClose(uid);
+  } else if (shortcut === "terminal-restart") {
+    // The cell owns its session, so it does the work; a cell still on its launch form declines and
+    // the key does nothing, which is the same answer its header button gives.
+    requestCellRestart(`cell-${uid}`);
   }
 }
 

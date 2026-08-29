@@ -33,6 +33,8 @@ import type { LaunchChoice } from "./wsUrl";
 import type { RunCommand } from "./runCommand";
 import { useHeaderButtons } from "../composables/useHeaderButtons";
 import { openTerminalAt } from "../composables/useNewTerminal";
+import { registerCellRestart } from "../composables/useCellRestart";
+import { reapSessionOnServer, restartSession } from "../composables/restartSession";
 import TimelineOverlay from "./TimelineOverlay.vue";
 import CopyCodeBlock from "./CopyCodeBlock.vue";
 import CockpitHeader from "./CockpitHeader.vue";
@@ -795,7 +797,8 @@ function teardown() {
   termRef.value?.terminate();
   // Reap on the server over HTTP too — the WS `terminate` only reaches the server while
   // the socket is open, so a disconnected cell's close button would otherwise leave its tmux alive.
-  if (id) fetchWithTimeout(`/api/session/${encodeURIComponent(id)}/terminate`, { method: "POST" }).catch(() => {});
+  // Not awaited, unlike the restart's: this cell is going back to its launch form either way.
+  if (id) void reapSessionOnServer(id);
   launched.value = false;
   recordNextCwd = false; // drop any pending fresh-launch record from a torn-down session
   sessionId.value = null;
@@ -821,6 +824,63 @@ function teardown() {
   // The launch form is mounted fresh by the `v-else` this just switched back to, and reads its
   // own lists for the directory above on the way in.
 }
+
+// Restart the agent in this cell (#1918): end the session server-side, then point this same cell
+// at the same session id again. The server has nothing live to attach to, so it spawns a NEW
+// process and resumes the conversation from its transcript — which is what makes a changed MCP
+// registration, config file or plugin take effect. Nothing about the cell changes.
+//
+// `connectKey++` rather than resumeSession(): that one is the launcher ATTACHING to a session
+// someone picked from a list, and it re-emits the agent with `customAgent: null` — which would
+// take a session started through a custom agent off its wrapper (a different model). Bumping the
+// key retargets the slot with everything the cell already holds.
+//
+// No confirmation, even mid-turn: the only ways here are a header button and a shortcut the user
+// put in their own config.
+const restarting = ref(false);
+const RESTART_FAILED_EN = "Couldn't end the old session, so nothing was restarted — try again, or close the cell.";
+async function restart(): Promise<void> {
+  // A worktree removal is running or waiting to be confirmed — that flow owns the pty. A restart
+  // never opens that dialog itself: it discards nothing, so there is nothing to confirm.
+  if (restarting.value || closeConfirm.value || closeBusy.value !== null) return;
+  restarting.value = true;
+  const id = sessionId.value; // what this restart is FOR — the cell can move on while it runs
+  // The reap is a round trip, and a cell can be closed and relaunched inside it. Whatever the
+  // answer, it is then about a session this cell no longer holds: reconnecting would retarget the
+  // REPLACEMENT (at worst one whose id the server has not sent yet, spawning a second session and
+  // orphaning it), and the failure banner would tell a fresh agent that it was not restarted
+  // (codex on #1920, both halves).
+  const stale = (): boolean => !launched.value || sessionId.value !== id;
+  try {
+    const outcome = await restartSession(id, {
+      reap: reapSessionOnServer,
+      reconnect: () => {
+        if (stale()) return;
+        // The turn that was in flight died with the process; the resumed session publishes its own.
+        working.value = false;
+        waiting.value = false;
+        activityEvent.value = null;
+        connectKey.value++;
+      },
+    });
+    // Nothing was reconnected and the old agent is probably still running, which looks identical to
+    // a restart that worked. Say so over the terminal, where the header button's other failures go.
+    if (outcome === "reap-failed" && !stale()) void termRef.value?.showHint(RESTART_FAILED_EN, "restart_alt");
+  } finally {
+    restarting.value = false;
+  }
+}
+
+// Both ways in — a `run: "action"` header button and the `terminal-restart` shortcut — land here.
+// False while this cell is still on its launch form, so the caller can say so rather than leaving
+// a button that silently does nothing.
+onUnmounted(
+  registerCellRestart(`cell-${props.uid}`, () => {
+    if (!launched.value || !sessionId.value) return false;
+    void restart();
+    return true;
+  }),
+);
 
 // Closing a WORKTREE cell offers to keep or remove the room first (never silently
 // discards uncommitted/unpushed work); other cells just tear down.

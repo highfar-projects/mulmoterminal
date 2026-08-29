@@ -85,6 +85,8 @@ function resolveButton(button: HeaderButton, ctx: HeaderContext): ResolvedButton
   if (button.icon) resolved.icon = button.icon;
   if (button.text) resolved.text = substitute(button.text, ctx);
   if (button.open) resolved.open = resolveOpen(button.open, ctx);
+  // Nothing to substitute: an action names a fixed behaviour, not a value.
+  if (button.action) resolved.action = button.action;
   return resolved; // shell `cmd` is deliberately not resolved here — see resolveButtonCommand
 }
 

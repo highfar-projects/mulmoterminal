@@ -144,6 +144,7 @@ binding you add is a key the program inside the terminal (Claude Code, `vim`, `l
 | `terminal-new-here` | Open the launch panel on the current terminal's directory | no |
 | `terminal-new-adjacent` | Start a **shell** in the current terminal's directory, straight away — no form | **yes** |
 | `terminal-close` | Close the current terminal | **yes** |
+| `terminal-restart` | Restart the agent in the current terminal — same cell, same directory, same conversation | **yes** |
 | `copy` | Copy the terminal's selection. Acts **only** when something is selected, so `Ctrl+C` stays usable as interrupt — with no selection the key reaches the program untouched | no |
 | `paste` | Paste into the terminal | no |
 
@@ -194,6 +195,11 @@ Each is checked against the traps below. The guide documents them at
 - Two actions on one keystroke only fires the first. The startup check warns; don't write one.
 - **`terminal-close` ends the session with no confirmation.** Only bind it if asked, and suggest a
   combination they won't hit by accident.
+- **`terminal-restart` also acts with no confirmation, and costs a resume.** It kills the agent
+  mid-turn if it is working, and the conversation is then read back from its transcript — real
+  tokens, not a free reload. Offer it only to someone who says they change MCP servers, config or
+  plugins while sessions are open, and put it somewhere deliberate for the same reason as
+  `terminal-close`.
 
 ### `keymap.send` — raw bytes to the terminal
 

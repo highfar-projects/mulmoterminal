@@ -90,6 +90,7 @@ export const en = {
         terminalNewHere: "Open the launch panel on this terminal's directory",
         terminalNewAdjacent: "Shell in this terminal's directory, straight away",
         terminalClose: "Close this terminal",
+        terminalRestart: "Restart the agent in this terminal",
         copy: "Copy the terminal selection",
         paste: "Paste into the terminal",
       },
