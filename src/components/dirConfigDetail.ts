@@ -149,6 +149,10 @@ function extraRows(extras: Record<string, unknown>): DirConfigRow[] {
   if (typeof extras.devcontainer === "boolean") {
     rows.push({ key: "devcontainer", label: "Devcontainer", value: extras.devcontainer ? "on" : "off", color: null });
   }
+  const devcontainerWorkspaceFolder = asString(extras.devcontainerWorkspaceFolder);
+  if (devcontainerWorkspaceFolder) {
+    rows.push({ key: "devcontainerWorkspaceFolder", label: "Devcontainer path", value: devcontainerWorkspaceFolder, color: null });
+  }
   return rows;
 }
 

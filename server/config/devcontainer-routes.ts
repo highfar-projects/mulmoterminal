@@ -45,7 +45,7 @@ async function handleUp(req: Request, res: Response): Promise<void> {
     return;
   }
   const result = await runDevcontainerUp(cwd);
-  if (result.ok) markDevcontainerEnabled(cwd);
+  if (result.ok) markDevcontainerEnabled(cwd, result.workspaceFolder);
   res.status(result.ok ? 200 : 500).json(result);
 }
 

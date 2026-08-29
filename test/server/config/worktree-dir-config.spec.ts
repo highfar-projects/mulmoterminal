@@ -48,8 +48,19 @@ const PROJECT = {
 // `devcontainer` is here too: it means THIS worktree's own container was actually built and
 // started (config/devcontainer-flag.ts), which a fresh worktree's has not been yet regardless of
 // what its parent project is flagged as — carrying it forward would claim a container is running
-// that never was.
-const DELIBERATELY_NOT_INHERITED = ["sound", "sounds", "addDirs", "buttons", "chips", "skills", "appendSystemPrompt", "devcontainer"];
+// that never was. `devcontainerWorkspaceFolder` is the same fact's other half — the parent's
+// mapping means nothing until this worktree gets its own `devcontainer up`.
+const DELIBERATELY_NOT_INHERITED = [
+  "sound",
+  "sounds",
+  "addDirs",
+  "buttons",
+  "chips",
+  "skills",
+  "appendSystemPrompt",
+  "devcontainer",
+  "devcontainerWorkspaceFolder",
+];
 
 describe("every directory setting is inherited or deliberately not", () => {
   it("accounts for every key the loader reads", () => {

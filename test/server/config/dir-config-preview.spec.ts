@@ -43,6 +43,7 @@ const FIXTURES: Record<string, unknown> = {
   appendSystemPrompt: false,
   worktreeEnv: { PORT: { kind: "port", base: 3000 } },
   devcontainer: true,
+  devcontainerWorkspaceFolder: "/workspaces/proj",
 };
 
 const dirs: string[] = [];

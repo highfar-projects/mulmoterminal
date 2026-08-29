@@ -53,6 +53,7 @@ import {
   dirModelField,
   dirAppendSystemPromptField,
   dirDevcontainerField,
+  dirDevcontainerWorkspaceFolderField,
   dirWorktreeEnvField,
   type ThemeId,
   type HeaderButton,
@@ -105,6 +106,10 @@ export interface DirConfig extends DirChrome {
   // Whether this directory's sessions run inside its .devcontainer (see config/devcontainer-flag.ts
   // and session/spawn-claude.ts). null = no, run on the host as usual.
   devcontainer: boolean | null;
+  // The container-side path that devcontainer mounted this directory at, when it differs from
+  // this directory's own (host) path — see config-schema.ts's dirDevcontainerWorkspaceFolderField
+  // for why a path an agent prints from inside the container needs this to resolve on the host.
+  devcontainerWorkspaceFolder: string | null;
 }
 
 // What the browser receives: the raw sound path stays server-side (streamed via
@@ -188,6 +193,7 @@ const EMPTY: DirConfig = {
   appendSystemPrompt: null,
   worktreeEnv: null,
   devcontainer: null,
+  devcontainerWorkspaceFolder: null,
 };
 
 /** Every layer as ONE object, the more specific winning per top-level key.
@@ -256,6 +262,7 @@ export function loadDirConfig(cwd: string): DirConfig {
       appendSystemPrompt: dirAppendSystemPromptField.parse(raw.appendSystemPrompt),
       worktreeEnv: dirWorktreeEnvField.parse(raw.worktreeEnv),
       devcontainer: dirDevcontainerField.parse(raw.devcontainer),
+      devcontainerWorkspaceFolder: dirDevcontainerWorkspaceFolderField.parse(raw.devcontainerWorkspaceFolder),
     };
   } catch {
     return EMPTY;
@@ -354,7 +361,8 @@ export interface DirConfigDetail {
 const chipLabel = (chip: HeaderChip): string => (typeof chip === "string" ? chip : chip.label);
 
 function dirConfigExtras(cwd: string): DirConfigExtras {
-  const { provider, model, skills, addDirs, appendSystemPrompt, buttons, chips, icon, worktreeEnv, devcontainer } = loadDirConfig(cwd);
+  const { provider, model, skills, addDirs, appendSystemPrompt, buttons, chips, icon, worktreeEnv, devcontainer, devcontainerWorkspaceFolder } =
+    loadDirConfig(cwd);
   return {
     provider,
     model,
@@ -362,6 +370,7 @@ function dirConfigExtras(cwd: string): DirConfigExtras {
     addDirs,
     appendSystemPrompt,
     devcontainer,
+    devcontainerWorkspaceFolder,
     buttonLabels: (buttons ?? []).map((button) => button.label),
     chipLabels: (chips ?? []).map(chipLabel),
     autoIcon: autoIconRef(cwd, icon),

@@ -45,6 +45,26 @@ export function expandTilde(p: string, homeDir: string): string {
   return p;
 }
 
+/** Rewrite an absolute `rel` that names the devcontainer's OWN workspaceFolder back to `base`, the
+ *  host directory it's actually mounted from — see config-schema.ts's
+ *  dirDevcontainerWorkspaceFolderField for why the two can differ.
+ *
+ *  A path THIS gate is asked to contain never originates from the browser typing a container
+ *  path — it comes from a session's own output (a Read/Write tool's absolute path, a `pwd`, a
+ *  stack trace) that a click or a plugin field turned into a request. Every such path was already
+ *  authored FOR that container, so the rewrite belongs here, upstream of resolveContained, rather
+ *  than at each of its callers.
+ *
+ *  A no-op — `rel` unchanged — whenever `containerWorkspaceFolder` is null (no devcontainer, or
+ *  one whose workspaceFolder already matches `base`) or `rel` doesn't start with it; the ordinary
+ *  path-containment rules downstream still apply to whatever comes out. */
+export function rewriteContainerPath(base: string, rel: string, containerWorkspaceFolder: string | null): string {
+  if (!containerWorkspaceFolder) return rel;
+  if (rel === containerWorkspaceFolder) return base;
+  const prefix = containerWorkspaceFolder.endsWith("/") ? containerWorkspaceFolder : `${containerWorkspaceFolder}/`;
+  return rel.startsWith(prefix) ? path.join(base, rel.slice(prefix.length)) : rel;
+}
+
 // Resolve `rel` under `base`; return the absolute path only if it stays within base
 // (reject `..` / absolute escapes). null = escapes the root.
 export function containedPath(base: string, rel: string): string | null {

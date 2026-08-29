@@ -36,6 +36,7 @@ export const DIR_CONFIG_KEYS = [
   "appendSystemPrompt",
   "worktreeEnv",
   "devcontainer",
+  "devcontainerWorkspaceFolder",
 ] as const;
 
 export interface DirConfigSource {
@@ -90,6 +91,9 @@ export interface DirConfigExtras {
   // appendSystemPrompt above: `true` is a fact this file (not the user typing it) recorded, once
   // the launcher actually built and started the container (config/devcontainer-flag.ts).
   devcontainer: boolean | null;
+  // The container-side path devcontainer mounted this directory at, when it differs from this
+  // directory's own — see config-schema.ts's dirDevcontainerWorkspaceFolderField.
+  devcontainerWorkspaceFolder: string | null;
 }
 
 export const EMPTY_DIR_CONFIG_EXTRAS: DirConfigExtras = {
@@ -103,6 +107,7 @@ export const EMPTY_DIR_CONFIG_EXTRAS: DirConfigExtras = {
   autoIcon: null,
   worktreeEnvNames: [],
   devcontainer: null,
+  devcontainerWorkspaceFolder: null,
 };
 
 // "The loader kept nothing for this key" — null/undefined, but also the empty collections the

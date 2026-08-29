@@ -294,6 +294,17 @@ export const dirAppendSystemPromptField = z.boolean().nullable().catch(null);
 // the launcher confirms with the user rather than one every spawn should silently redo.
 export const dirDevcontainerField = z.boolean().nullable().catch(null);
 
+// The container-side path `devcontainer up` mounted this directory at (its `workspaceFolder`,
+// reported back in the CLI's own JSON result) — set alongside dirDevcontainerField, by the same
+// call, for the same reason. Absent unless the target's OWN devcontainer.json names one: the
+// devcontainers CLI convention defaults it to `/workspaces/<repo-name>`, which is almost never the
+// HOST path a worktree or clone actually lives at — a path an agent prints INSIDE the container
+// (Read/Write's absolute paths, a stack trace, `pwd`) is in these terms, not the host's, and
+// server/files/pathContainment.ts rewrites that prefix back to the real directory before
+// containment-checking a clicked file link. null (not the host path) when the two coincide, so
+// "nothing to rewrite" and "rewrite to the same string" aren't a wasted string compare apiece.
+export const dirDevcontainerWorkspaceFolderField = z.string().trim().min(1).nullable().catch(null);
+
 // Which provider/model a directory's sessions run on. Both lenient: a typo must not stop
 // the directory's other settings from loading — resolveProvider reports the real problem
 // at spawn time, where the user sees it.

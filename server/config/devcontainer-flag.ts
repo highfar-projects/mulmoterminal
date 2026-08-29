@@ -27,6 +27,29 @@ export function hasDevcontainerConfig(dir: string): boolean {
 // that hasn't finished in 10 minutes is not going to next second either.
 const DEVCONTAINER_UP_TIMEOUT_MS = 10 * 60_000;
 
+/** The CLI's own JSON result line — on success, the last non-blank line of stdout:
+ *  `{"outcome":"success","containerId":"...","remoteUser":"...","remoteWorkspaceFolder":
+ *  "/workspaces/foo"}`. Read back rather than assumed, because that path is the target's OWN
+ *  devcontainer.json's call — the devcontainers CLI convention defaults it to
+ *  `/workspaces/<repo-name>` when unset, which is almost never `dir` itself. null when the last
+ *  line isn't that JSON (an older CLI, or a failed `up` with nothing to read) — the caller's own
+ *  `ok` is what decides whether that matters. */
+function remoteWorkspaceFolderFrom(output: string): string | null {
+  const lines = output.split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i]?.trim();
+    if (!line) continue;
+    try {
+      const parsed: unknown = JSON.parse(line);
+      if (isRecord(parsed) && typeof parsed.remoteWorkspaceFolder === "string") return parsed.remoteWorkspaceFolder;
+    } catch {
+      // not the JSON line — devcontainer up's stdout carries the build log ahead of it
+    }
+    return null; // the last non-blank line exists and isn't it; nothing further back is either
+  }
+  return null;
+}
+
 /** Runs `devcontainer up` for the worktree at `dir`. Needs an explicit `--mount` for the repo root
  *  `dir`'s `.git` file points back to (see worktreeRepoRootMount) because the workspace folder is
  *  a git worktree, not a plain clone — without it the container can't do git operations against
@@ -34,7 +57,7 @@ const DEVCONTAINER_UP_TIMEOUT_MS = 10 * 60_000;
  *  pointer against wherever the worktree lands inside the container, and silently breaks once the
  *  target's own devcontainer.json puts workspaceFolder somewhere too shallow for the traversal —
  *  worktreeRepoRootMount's absolute-pointer approach doesn't have that failure mode. */
-export async function runDevcontainerUp(dir: string): Promise<{ ok: boolean; output: string }> {
+export async function runDevcontainerUp(dir: string): Promise<{ ok: boolean; output: string; workspaceFolder: string | null }> {
   const mount = await worktreeRepoRootMount(dir);
   // Bind-mounted 1:1 (same path inside as out) so a session spawned into this container later
   // (spawn-claude.ts) can point its hook's curl at exactly the path it already knows — see
@@ -55,15 +78,23 @@ export async function runDevcontainerUp(dir: string): Promise<{ ok: boolean; out
     const chunks: Buffer[] = [];
     child.stdout.on("data", (c: Buffer) => chunks.push(c));
     child.stderr.on("data", (c: Buffer) => chunks.push(c));
-    child.on("error", (err) => resolve({ ok: false, output: String(err) }));
-    child.on("close", (code) => resolve({ ok: code === 0, output: Buffer.concat(chunks).toString("utf8") }));
+    child.on("error", (err) => resolve({ ok: false, output: String(err), workspaceFolder: null }));
+    child.on("close", (code) => {
+      const output = Buffer.concat(chunks).toString("utf8");
+      resolve({ ok: code === 0, output, workspaceFolder: code === 0 ? remoteWorkspaceFolderFrom(output) : null });
+    });
   });
 }
 
 /** Marks `dir` as "run its sessions through `devcontainer exec`" — merged into the worktree's own
  *  `.mulmoterminal.local.json` (never the shared file: this is a per-clone runtime fact, not
- *  something to commit) so a worktree created with `writeInheritedDirConfig`'s colours keeps them. */
-export function markDevcontainerEnabled(dir: string): void {
+ *  something to commit) so a worktree created with `writeInheritedDirConfig`'s colours keeps them.
+ *
+ *  `workspaceFolder` is runDevcontainerUp's own reading of `devcontainer up`'s result — recorded
+ *  only when it differs from `dir` (see config-schema.ts's dirDevcontainerWorkspaceFolderField for
+ *  why the two can differ, and what a mismatch is for), so the common case where a target's
+ *  devcontainer.json doesn't override workspaceFolder writes nothing new. */
+export function markDevcontainerEnabled(dir: string, workspaceFolder: string | null): void {
   const file = path.join(dir, DIR_LOCAL_CONFIG_FILE);
   let config: Record<string, unknown> = {};
   if (existsSync(file)) {
@@ -76,5 +107,6 @@ export function markDevcontainerEnabled(dir: string): void {
     }
   }
   config.devcontainer = true;
+  config.devcontainerWorkspaceFolder = workspaceFolder && path.resolve(workspaceFolder) !== path.resolve(dir) ? workspaceFolder : null;
   writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`, "utf8");
 }

@@ -14,7 +14,8 @@ import type { Express, Request, Response } from "express";
 import os from "node:os";
 import { hasErrnoCode } from "../errors.js";
 import { backupCurrentFile, storeBackup } from "./backup-store.js";
-import { resolveBase, resolveContained } from "./pathContainment.js";
+import { resolveBase, resolveContained, rewriteContainerPath } from "./pathContainment.js";
+import { loadDirConfig } from "../config/dir-config.js";
 import { htmlDoc, jsonHtmlDoc, tableHtmlDoc, delimiterForExtension } from "./renderedDoc.js";
 import { requestBody } from "../routes/requestBody.js";
 
@@ -85,7 +86,11 @@ const browseRel = (req: Request): string => (typeof req.query.path === "string" 
 // Resolve `path` under the request's project base; 403 (and returns null) if it escapes —
 // lexically OR through a symlink. One containment gate shared by every route (read + write).
 function containedFor(req: Request, res: Response, defaultCwd: string): string | null {
-  const abs = resolveContained(browseBase(req, defaultCwd), browseRel(req), os.homedir());
+  const base = browseBase(req, defaultCwd);
+  // A path a devcontainer session printed names ITS OWN workspaceFolder, not `base` on the host —
+  // rewrite it back before containing (see pathContainment.ts's rewriteContainerPath).
+  const rel = rewriteContainerPath(base, browseRel(req), loadDirConfig(base).devcontainerWorkspaceFolder);
+  const abs = resolveContained(base, rel, os.homedir());
   if (!abs) {
     res.status(403).json({ error: "path escapes the project root" });
     return null;

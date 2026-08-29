@@ -24,8 +24,9 @@ import { statFileOr404 } from "./statFileOr404.js";
 import { parseByteRange } from "./byte-range.js";
 import { rawServingPlan } from "./rawServingPlan.js";
 import { streamFileToResponse } from "./streamFile.js";
-import { authorizedServingBase, resolveContained } from "../files/pathContainment.js";
+import { authorizedServingBase, resolveContained, rewriteContainerPath } from "../files/pathContainment.js";
 import { rootForProjectId } from "../infra/project-root.js";
+import { loadDirConfig } from "../config/dir-config.js";
 
 /** Which directory this request may be served from, or the refusal to answer with.
  *
@@ -79,10 +80,13 @@ export function mountFilesRoutes(app: Express, deps: { workspace: string; sessio
       res.status(base.status).json({ error: base.error });
       return;
     }
+    // A path a devcontainer session printed names ITS OWN workspaceFolder, not `base.dir` on the
+    // host — rewrite it back before containing (see pathContainment.ts's rewriteContainerPath).
+    const rewritten = rewriteContainerPath(base.dir, rel, loadDirConfig(base.dir).devcontainerWorkspaceFolder);
     // Contain `path` within the base — tilde-expand, reject `..`/absolute escapes
     // lexically, then symlinks. The same gate the browse routes use, so a path one of them
     // serves is never refused by the other.
-    const abs = resolveContained(base.dir, rel, os.homedir());
+    const abs = resolveContained(base.dir, rewritten, os.homedir());
     if (!abs) {
       res.status(403).json({ error: "path escapes the serving root" });
       return;
