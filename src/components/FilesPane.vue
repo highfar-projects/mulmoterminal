@@ -7,12 +7,13 @@
 //
 // It owns no notion of routes or of being open — the host decides when it exists, and
 // calls `reload()` after a root change it has already cleared with the user.
-import { onBeforeUnmount, onMounted, ref, computed, nextTick, watch } from "vue";
+import { onBeforeUnmount, onMounted, ref, computed, nextTick, useTemplateRef, watch } from "vue";
 import { createEditor, langKindForFilename, type CmEditor } from "./cmEditor";
 import { expandedPaths, restoreOrder } from "./filesTreeState";
 import { isWriteToOpenFile } from "../composables/fileWriteMatch";
 import { usePubSub } from "../composables/usePubSub";
 import { canOpenInCanvas, absoluteUnder } from "../composables/canvasOpenFile";
+import { filesRowActions, type FilesRowAction } from "./filesRowActions";
 import { FILE_WRITE_CHANNEL, isFileWriteEvent } from "../../common/fileWriteChannel";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
@@ -51,9 +52,14 @@ const props = defineProps<{
   requestedPath?: string | null;
   initialState?: FilesPaneState | null;
   canvasTarget?: boolean;
+  // Whether there is a terminal beside this pane to insert a path into, and which directory it
+  // is in. Two props rather than one: the pane can TRAIL that cell after a declined re-root, so
+  // "there is a terminal" and "it is in my directory" are genuinely different questions.
+  insertTarget?: boolean;
+  insertTargetCwd?: string | null;
   workspace?: string | null;
 }>();
-const emit = defineEmits<{ close: []; dirty: [boolean]; "open-in-canvas": [path: string] }>();
+const emit = defineEmits<{ close: []; dirty: [boolean]; "open-in-canvas": [path: string]; "insert-text": [text: string] }>();
 
 const roots = ref<Node[]>([]);
 const treeError = ref<string | null>(null);
@@ -149,6 +155,89 @@ const rows = computed(() => {
   walk(roots.value, 0);
   return out;
 });
+
+// The row menu: right-click a tree row (or Shift+F10 / the Menu key on it) to put its path at
+// the terminal's cursor (#1859). Teleported and fixed-positioned for CockpitRowMenu's reason —
+// the tree scrolls inside an overflow container, which would clip a panel left in place.
+const MENU_WIDTH_PX = 200;
+const MENU_ROW_PX = 30;
+const MENU_PAD_PX = 12;
+const VIEWPORT_MARGIN_PX = 8;
+const KEYBOARD_MENU_INSET_PX = 16;
+
+const rowMenuEl = useTemplateRef<HTMLElement>("rowMenuEl");
+const rowMenu = ref<{ actions: FilesRowAction[]; top: number; left: number } | null>(null);
+// Where the keyboard goes back to when the menu is DISMISSED rather than clicked past: its items
+// are removed with it, and focus left on a removed element drops to the top of the document.
+let rowMenuOpener: HTMLElement | null = null;
+
+const insertTerminal = computed(() => (props.insertTarget ? { cwd: props.insertTargetCwd ?? null } : null));
+
+/** Kept inside the viewport: the pointer can be at the bottom-right corner, and a menu placed
+ *  there would open off-screen with no way to reach its items. */
+function menuPosition(actions: FilesRowAction[], x: number, y: number): { top: number; left: number } {
+  const height = actions.length * MENU_ROW_PX + MENU_PAD_PX;
+  return {
+    left: Math.max(VIEWPORT_MARGIN_PX, Math.min(x, window.innerWidth - MENU_WIDTH_PX - VIEWPORT_MARGIN_PX)),
+    top: Math.max(VIEWPORT_MARGIN_PX, Math.min(y, window.innerHeight - height - VIEWPORT_MARGIN_PX)),
+  };
+}
+
+function openRowMenu(node: Node, event: MouseEvent | KeyboardEvent): void {
+  const actions = filesRowActions({ pathRel: node.path, cwd: props.cwd, terminal: insertTerminal.value });
+  // Nothing to offer — the full-screen view is here on every row, having no terminal to insert
+  // into. Leave the browser's own menu rather than swallowing the gesture for an empty panel.
+  if (actions.length === 0) return;
+  event.preventDefault();
+  rowMenuOpener = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+  // A keyboard opening has no pointer to sit under, so it hangs off the row instead.
+  const rect = rowMenuOpener?.getBoundingClientRect();
+  const x = event instanceof MouseEvent ? event.clientX : (rect?.left ?? 0) + KEYBOARD_MENU_INSET_PX;
+  const y = event instanceof MouseEvent ? event.clientY : (rect?.bottom ?? 0);
+  rowMenu.value = { actions, ...menuPosition(actions, x, y) };
+  window.addEventListener("pointerdown", onMenuOutside);
+  window.addEventListener("keydown", onMenuKeydown);
+  window.addEventListener("scroll", closeRowMenuFromEvent, true);
+}
+
+// `restoreFocus` only where the user did NOT choose somewhere else to be: Escape and picking an
+// item leave the keyboard stranded, while a click outside has already said where focus belongs
+// — and taking it back would also fight the right-click that opens the menu on the NEXT row.
+function closeRowMenu(restoreFocus = false): void {
+  if (!rowMenu.value) return;
+  rowMenu.value = null;
+  window.removeEventListener("pointerdown", onMenuOutside);
+  window.removeEventListener("keydown", onMenuKeydown);
+  window.removeEventListener("scroll", closeRowMenuFromEvent, true);
+  if (restoreFocus) rowMenuOpener?.focus();
+  rowMenuOpener = null;
+}
+
+// A listener is handed the Event as its first argument, which `restoreFocus` would read as true.
+const closeRowMenuFromEvent = (): void => closeRowMenu();
+
+function onMenuOutside(event: PointerEvent): void {
+  const target = event.target instanceof Node ? event.target : null;
+  if (!rowMenuEl.value?.contains(target)) closeRowMenu();
+}
+
+function onMenuKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape") closeRowMenu(true);
+}
+
+// The same menu without a mouse. Both spellings, because the dedicated key exists on few
+// keyboards and Shift+F10 is what the rest of them use.
+function onRowKeydown(node: Node, event: KeyboardEvent): void {
+  if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+  openRowMenu(node, event);
+}
+
+function runRowAction(action: FilesRowAction): void {
+  emit("insert-text", action.text);
+  closeRowMenu(true);
+}
+
+onBeforeUnmount(() => closeRowMenu());
 
 type WriteOutcome = { status: "saved"; version: string | null } | { status: "conflict"; version: string | null } | { status: "error"; message: string };
 
@@ -512,6 +601,8 @@ defineExpose({
           :class="node.path === openPath ? 'bg-hover text-fg' : 'text-secondary hover:bg-hover hover:text-fg'"
           :style="{ paddingLeft: `${8 + depth * 14}px` }"
           @click="openFile(node)"
+          @contextmenu="openRowMenu(node, $event)"
+          @keydown="onRowKeydown(node, $event)"
         >
           <span class="w-3.5 flex-none text-dim">
             <span v-if="node.dir" class="material-symbols-outlined" aria-hidden="true">{{ node.expanded ? "expand_more" : "chevron_right" }}</span>
@@ -550,5 +641,27 @@ defineExpose({
         <div v-show="openPath && !showPreview" ref="editorHost" class="files-editor min-w-0 flex-auto overflow-hidden" />
       </section>
     </div>
+    <Teleport to="body">
+      <div
+        v-if="rowMenu"
+        ref="rowMenuEl"
+        data-testid="files-row-menu"
+        role="menu"
+        class="fixed z-[60] min-w-[200px] rounded-lg border border-border bg-panel p-1.5 text-fg shadow-xl"
+        :style="{ top: `${rowMenu.top}px`, left: `${rowMenu.left}px` }"
+      >
+        <button
+          v-for="action in rowMenu.actions"
+          :key="action.id"
+          type="button"
+          role="menuitem"
+          :data-testid="`files-row-action-${action.id}`"
+          class="flex w-full cursor-pointer items-center gap-2 whitespace-nowrap rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-[13px] text-secondary hover:bg-hover hover:text-fg"
+          @click="runRowAction(action)"
+        >
+          <span class="material-symbols-outlined text-[15px]" aria-hidden="true">{{ action.icon }}</span> {{ action.label }}
+        </button>
+      </div>
+    </Teleport>
   </div>
 </template>

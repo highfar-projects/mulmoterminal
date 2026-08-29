@@ -189,6 +189,11 @@ The header of a running cell has two rows. Together they capture that agent's **
   [replaceable in config](config.html#header)), and **Activity timeline** (tool-call history). The
   connection state appears here only while it is connecting or has failed.
 
+> **Right-click a row in the file tree** to put that file's path at the terminal's cursor —
+> *Insert relative path* or *Insert absolute path*, and `Shift+F10` on the row does the same from
+> the keyboard. Directories work too. The relative one appears only while the tree and the
+> terminal are in the same directory, since that is when it means the same thing at both ends.
+
 > **Status shows up as color.** A bluish border means **working** (thinking), **amber means awaiting input or a
 > permission** (Needs input), a **green ring + glow means a finished, unreviewed turn** (Done — review; the
 > thumbnails and roster rows use that same green), and neutral means idle. A sound plays too, so you know you've been **called without watching
