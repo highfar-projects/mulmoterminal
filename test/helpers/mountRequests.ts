@@ -41,7 +41,10 @@ export function mountRequests(sessions: readonly string[], { strict = false } = 
   );
   const unexpected: string[] = [];
   const asked: string[] = [];
-  const enlarged = new Set<string>();
+  // Every enlargement in ORDER, not the set of sessions: coming back to a cell issues its three
+  // routes a second time, and a set would report that as duplicates — blaming the spec for the
+  // thing the grid is supposed to do.
+  const transitions: string[] = [];
   let current: string | null = null;
 
   const answerable = (route: { session: string }) => !strict || route.session === current;
@@ -50,7 +53,7 @@ export function mountRequests(sessions: readonly string[], { strict = false } = 
     install() {
       unexpected.length = 0;
       asked.length = 0;
-      enlarged.clear();
+      transitions.length = 0;
       current = null;
       // `Parameters<typeof fetch>[0]` rather than `RequestInfo`: this helper is reached from the
       // node-lib test project too, where the DOM lib's alias does not exist.
@@ -66,16 +69,20 @@ export function mountRequests(sessions: readonly string[], { strict = false } = 
       }) as unknown as typeof fetch;
     },
     enlarge(session) {
+      // Only a CHANGE counts, because only a change makes the watcher fire. Told the same cell
+      // twice, the grid asks once, and so does the expectation.
+      if (session === current) return;
       current = session;
-      if (session) enlarged.add(session);
+      if (session) transitions.push(session);
     },
     settled() {
       // A request the mount did not used to make. Recorded rather than thrown, because every
       // caller catches its own fetch failure and would swallow the throw.
       expect(unexpected).toEqual([]);
       if (!strict) return;
-      // Lists on both sides: a missing route shows up as missing, a repeated one as repeated.
-      const expected = [...allowed].filter(([, route]) => enlarged.has(route.session)).map(([url]) => url);
+      // Lists on both sides: a missing route shows up as missing, a repeated one as repeated —
+      // and a session enlarged twice is expected twice.
+      const expected = transitions.flatMap((session) => routesFor(session).map(([url]) => url));
       expect([...asked].sort()).toEqual(expected.sort());
     },
   };

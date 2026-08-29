@@ -121,6 +121,38 @@ describe("mountRequests, strict mode", () => {
     expect(failure(requests.settled)).toContain("/api/question/s1");
   });
 
+  // Coming BACK to a cell issues its routes again, so the expectation has to count enlargements,
+  // not distinct sessions. A set reported the second visit as duplicates.
+  it("expects a revisited session's routes again", async () => {
+    requests.enlarge("s1");
+    await askAll("s1");
+    requests.enlarge("s2");
+    await askAll("s2");
+    requests.enlarge("s1");
+    await askAll("s1");
+    expect(failure(requests.settled)).toBeNull();
+  });
+
+  it("still notices a route missing from the SECOND visit", async () => {
+    requests.enlarge("s1");
+    await askAll("s1");
+    requests.enlarge("s2");
+    await askAll("s2");
+    requests.enlarge("s1");
+    await get("/api/question/s1");
+    await get("/api/agent/toolResults/s1");
+    expect(failure(requests.settled)).toContain("/api/tools?sessionId=s1");
+  });
+
+  // Told the same cell twice with no change between, the grid's watcher does not fire — so the
+  // expectation must not grow either.
+  it("does not count a re-declaration of the cell already enlarged", async () => {
+    requests.enlarge("s1");
+    requests.enlarge("s1");
+    await askAll("s1");
+    expect(failure(requests.settled)).toBeNull();
+  });
+
   it("starts each test over", async () => {
     expect(failure(requests.settled)).toBeNull();
   });
