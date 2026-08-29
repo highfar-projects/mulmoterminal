@@ -3,6 +3,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { h, type VNode } from "vue";
 import TerminalGrid from "../../../src/components/TerminalGrid.vue";
 import type { Cell } from "../../../src/components/gridTabs.js";
+import { mountRequests } from "../../helpers/mountRequests";
 
 // "Browse files in the app" in a cell's path menu (#1910). It reaches the grid as `open-files`,
 // and the grid answers it the way it answers the unread-canvas chip: the pane lives beside an
@@ -51,72 +52,12 @@ const CELLS = [cell(1, "s1", "/work/a"), cell(2, "s2", "/work/b")];
 // route — which is the right answer, not something to assert away. Same idiom as listSlots.
 const SESSIONS = CELLS.flatMap((c) => c.session ?? []);
 
-// Mounting the grid on an enlarged SESSION sends three requests before anything in this file has
-// happened: is a question open, does it already have a card, and what can it draw. Nothing here is
-// about any of those answers — but unmocked they went out for real, failing only because a
-// relative URL has no origin under jsdom, which is why the miss left nothing to notice. Each is
-// answered as the quiet case, which is what these tests assume anyway.
-//
-// Written as a literal SET rather than a pattern. A pattern says what a request may not contain,
-// and every character class left something in that nobody meant — a path suffix, a query suffix,
-// any value for the session, any origin. The set is six strings and it IS the list the mount
-// makes, so anything else is a change by construction — the only question this guard asks.
-//
-// Built with the `encodeURIComponent` the three callers use, so it stays right for a session id
-// that is not two plain characters.
-const ALLOWED = new Map<string, { session: string; body: () => unknown }>(
-  SESSIONS.flatMap((id): [string, { session: string; body: () => unknown }][] => [
-    [`/api/question/${encodeURIComponent(id)}`, { session: id, body: () => ({ question: null }) }],
-    [`/api/agent/toolResults/${encodeURIComponent(id)}`, { session: id, body: () => ({ toolResults: [] }) }],
-    [`/api/tools?sessionId=${encodeURIComponent(id)}`, { session: id, body: () => ({ groups: [] }) }],
-  ]),
-);
-
-// A new request is caught because it is RECORDED here and asserted after every test. Throwing
-// does not work: every mount-time caller catches its own fetch failure (fetchOpenQuestion,
-// hasStoredCard, the tools watcher), so the rejection would be swallowed and the spec would pass
-// knowing nothing about it.
-//
-// Being on the list is not enough, because these watchers follow the ENLARGED cell: a request for
-// any other session is as much a change as an unknown route, and the list alone would wave it
-// through since another test does enlarge that cell. So the mock judges each request against
-// `current` below.
-//
-// `asked` then closes the other direction. It holds URLS rather than session ids, because a
-// session is still "asked about" when two of its three routes are issued — recording sessions
-// would miss a mount that quietly STOPS making one. And it is a LIST rather than a set, because
-// each route is issued exactly once (measured): a set would equally miss a mount that starts
-// making one TWICE, which is what a watcher re-firing looks like. Compared against exactly the
-// routes the enlarged cells should have produced, both sides derived from what the test did.
-const unexpected: string[] = [];
-const asked: string[] = [];
-const enlarged = new Set<string>();
-// Which cell is enlarged RIGHT NOW, as the test believes. Judged per request rather than over the
-// whole test, because a SET cannot see a stale one: after the zoom moves to the second cell, a
-// late request for the first leaves the set exactly as it was.
-let current = "";
-const mockApi = () => {
-  unexpected.length = 0;
-  asked.length = 0;
-  enlarged.clear();
-  current = "";
-  globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
-    const url = String(input);
-    const route = ALLOWED.get(url);
-    if (route?.session === current) {
-      asked.push(url);
-      return { ok: true, json: async () => route.body() };
-    }
-    unexpected.push(url);
-    return { ok: false, status: 500, json: async () => ({}) }; // the caller's own failure path, which it handles
-  }) as unknown as typeof fetch;
-};
+const requests = mountRequests(SESSIONS, { strict: true });
 
 const sessionOf = (uid: number) => CELLS.find((c) => c.uid === uid)?.session ?? "";
 
 const mountGrid = () => {
-  current = sessionOf(1);
-  enlarged.add(current);
+  requests.enlarge(sessionOf(1));
   return mount(TerminalGrid, {
     props: {
       cells: CELLS,
@@ -144,8 +85,7 @@ const filesPane = (w: Grid) => w.findComponent({ name: "FilesPane" });
 const applyExpand = async (w: Grid, uid: number) => {
   // Before the props change, so a request issued during that flush is judged against the cell the
   // zoom is moving TO, and one for the cell it left is the stale request this is here to catch.
-  current = sessionOf(uid);
-  enlarged.add(current);
+  requests.enlarge(sessionOf(uid));
   await w.setProps({ expandedUid: uid });
   await flushPromises();
 };
@@ -153,7 +93,7 @@ const applyExpand = async (w: Grid, uid: number) => {
 describe("open-files from a cell's path menu", () => {
   beforeEach(() => {
     localStorage.clear();
-    mockApi();
+    requests.install();
     flush.mockClear();
     flush.mockResolvedValue(undefined);
     // The zoom-flip watcher asks for the reduced-motion preference the moment `expandedUid`
@@ -176,9 +116,7 @@ describe("open-files from a cell's path menu", () => {
   // the check would pass for the request it exists to catch.
   afterEach(async () => {
     await flushPromises();
-    expect(unexpected).toEqual([]);
-    const expected = [...ALLOWED].filter(([, route]) => enlarged.has(route.session)).map(([url]) => url);
-    expect([...asked].sort()).toEqual(expected.sort()); // a LIST on both sides: a repeat shows up as a repeat
+    requests.settled();
   });
 
   it("opens the pane on the enlarged cell without asking to enlarge again", async () => {
