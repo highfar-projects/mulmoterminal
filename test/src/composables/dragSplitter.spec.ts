@@ -131,4 +131,60 @@ describe("dragSplitter", () => {
     move(160, 7);
     expect(state.size).toBe(460);
   });
+  // Codex, on this PR: two presses on the same 5px bar (two fingers, or a pen over a touch) used
+  // to open two closures with two origins, each resizing from its own baseline and each
+  // persisting on release. The second press takes the drag over instead.
+  it("a second press on the same splitter takes the drag over from the first", () => {
+    const state = { size: 400 };
+    const remember = vi.fn();
+    const { spec } = drag(state, remember);
+    const onDown = dragSplitter(spec);
+    const { el } = separator();
+
+    start(el, onDown, 100, 7);
+    move(160, 7);
+    expect(state.size).toBe(460);
+
+    start(el, onDown, 300, 9); // second finger, same bar
+    expect(remember).toHaveBeenCalledWith("pane-width", "460"); // the first drag was settled
+
+    move(200, 7); // the pointer that no longer owns the drag
+    expect(state.size).toBe(460);
+    move(350, 9);
+    expect(state.size).toBe(510);
+  });
+
+  it("the taken-over drag leaves nothing of its own listening", () => {
+    const state = { size: 400 };
+    const remember = vi.fn();
+    const { spec } = drag(state, remember);
+    const onDown = dragSplitter(spec);
+    const { el } = separator();
+
+    start(el, onDown, 100, 7);
+    start(el, onDown, 300, 9);
+    end("pointerup", 9);
+
+    remember.mockClear();
+    move(999, 7);
+    end("pointerup", 7);
+    expect(remember).not.toHaveBeenCalled();
+    expect(state.size).toBe(400);
+  });
+  it("does not settle a drag twice: a fresh press has nothing to take over", () => {
+    const state = { size: 400 };
+    const remember = vi.fn();
+    const { spec } = drag(state, remember);
+    const onDown = dragSplitter(spec);
+    const { el } = separator();
+
+    start(el, onDown, 100, 7);
+    move(160, 7);
+    end("pointerup", 7);
+    expect(remember).toHaveBeenCalledTimes(1);
+
+    remember.mockClear();
+    start(el, onDown, 300, 9);
+    expect(remember).not.toHaveBeenCalled();
+  });
 });

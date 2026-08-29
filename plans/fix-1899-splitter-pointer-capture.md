@@ -53,6 +53,12 @@ Files ペインには iframe の左にファイル一覧の列があるので上
 ブラウザは自分のスクロール判定で無関係な指をキャンセルするので、選別が無いと
 「ユーザーがまだドラッグ中なのに終了する」経路が新しく生まれる。
 
+**1 本のセパレータで同時に走るドラッグは 1 つだけ**にした。同じ 5px のバーへの 2 回目の
+`pointerdown`（2 本目の指、タッチの上のペン）は、それまで別々の原点を持つ 2 つのクロージャを
+開き、互いの基準で幅を書き合い、それぞれが離されたときに保存していた。**新しい press が
+引き継ぐ**形にしてある —— 無視する形にすると、終了イベントが届かなかったドラッグが
+セパレータを永久に死なせるので、いま直しているバグより悪い失敗になる。
+
 あわせて `dragSplitter` を `src/composables/dragSplitter.ts` へ切り出した。バグの規則を
 それ自身のファイルの関数にしてテスト可能にするため（`remember` だけ注入）。**本体は逐語で移動**。
 
@@ -88,7 +94,7 @@ Resize side pane:           480 -> 589 (drag) -> 589 (release) -> 589 (button UP
 Resize the thumbnail strip: 150 -> 230 (drag) -> 230 (release) -> 230 (button UP)  OK
 ```
 
-## break-verify（`test/src/composables/dragSplitter.spec.ts`、9 件）
+## break-verify（`test/src/composables/dragSplitter.spec.ts`、12 件）
 
 各回のあと pristine と `diff -q` で byte-identical 復元を確認:
 
@@ -101,6 +107,12 @@ Resize the thumbnail strip: 150 -> 230 (drag) -> 230 (release) -> 230 (button UP
 | 移動のたびに `remember` する | **2 red** |
 | `onEnd` の `pointerId` 選別を外す | **2 red** |
 | `onMove` の `pointerId` 選別を外す | **1 red** |
+| 引き継ぎを外す（並行ドラッグを許す） | **2 red** |
+| 引き継ぎ後に再武装しない | **2 red** |
+| `stop` が `live` を消し忘れる | **1 red** |
+
+最後の 1 行は**最初は緑だった** —— 「決着済みのドラッグを二度決着させない」が未カバーだったので、
+その不変条件を pin するテストを足してから赤にしている。
 
 ## jsdom には pointer capture が無い
 
@@ -112,4 +124,4 @@ Resize the thumbnail strip: 150 -> 230 (drag) -> 230 (release) -> 230 (button UP
 
 ## ゲート
 
-`format` / `lint` / `typecheck` / `build` / `test` すべて exit **0**、**11624 tests pass**（+9）。
+`format` / `lint` / `typecheck` / `build` / `test` すべて exit **0**、**11627 tests pass**（+12）。

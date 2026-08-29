@@ -14,7 +14,14 @@ export type SplitterDrag = {
 };
 
 export function dragSplitter(spec: SplitterDrag): (e: PointerEvent) => void {
+  // One drag at a time per separator. A second press — a second finger on the same 5px bar —
+  // would otherwise open a second closure with its own origin, and the two would fight over the
+  // size and each persist it. The new press TAKES OVER rather than being ignored: a drag whose
+  // end never arrived would otherwise leave the separator dead for good, which is a worse
+  // failure than the one being fixed here.
+  let live: (() => void) | null = null;
   return (e) => {
+    live?.();
     const origin = spec.axis(e);
     const start = spec.size();
     // CAPTURE THE POINTER, or an iframe beside the separator eats the drag (#1899).
@@ -40,13 +47,17 @@ export function dragSplitter(spec: SplitterDrag): (e: PointerEvent) => void {
     // `pointercancel` ends it too: a captured pointer that is cancelled sends no `pointerup`,
     // which would strand the drag the same way.
     const onEnd = (ev: PointerEvent) => {
-      if (!mine(ev)) return;
+      if (mine(ev)) stop();
+    };
+    const stop = () => {
+      live = null;
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onEnd);
       window.removeEventListener("pointercancel", onEnd);
       if (separator?.hasPointerCapture(e.pointerId)) separator.releasePointerCapture(e.pointerId);
       spec.remember(spec.key, String(spec.size()));
     };
+    live = stop;
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onEnd);
     window.addEventListener("pointercancel", onEnd);
