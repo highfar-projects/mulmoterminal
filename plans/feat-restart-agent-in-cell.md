@@ -92,11 +92,18 @@ Two things the reap's round trip forces, both found by codex on the PR:
   inside that window; reconnecting then retargets whatever it holds now, and a just-launched
   session whose id the server has not sent yet would go out with `sessionId: null` — spawning a
   SECOND session and orphaning the first. The callback checks `launched` and the captured id.
-- **An unconfirmed reap reconnects nothing, and says so.** A refusal leaves the session in tmux,
-  so reconnecting would attach the very process the restart was asked to replace — while clearing
-  and redrawing the screen, which is exactly what a working restart looks like. The cell puts the
-  reason over the terminal instead (Terminal.vue's hint banner, where the header button's other
-  failures already go), and a second press retries.
+- **A reconnect is guarded by what the cell still is** — the failure banner too, or a stale restart
+  would tell the terminal that REPLACED it that it was not restarted.
+- **An unconfirmed reap reconnects nothing, and says so.** A refusal leaves the session in tmux, so
+  reconnecting would attach the very process the restart was asked to replace — while clearing and
+  redrawing the screen, which is what a working restart looks like. The cell puts the reason over
+  the terminal instead (Terminal.vue's hint banner, where the header button's other failures
+  already go), and a second press retries.
+- **"Confirmed" is the route's post-condition, not its status code.** `POST /terminate` answered
+  `{ ok: true }` however little it managed to end — `tmux kill-session` can fail — so it now answers
+  `ended: !hasTmux(id)` and the client takes only `ended === true`. A body it could not read is not
+  a confirmation either (see jsonBody's own warning). Unconfirmed costs a retry; a false
+  confirmation costs a restart that silently did not happen.
 
 Two callers, one seam: `src/composables/useCellRestart.ts` — a per-slot registry (`cell-<uid>`)
 that TerminalCell registers itself in, mirroring `useNewTerminal`'s seam. A Map rather than the

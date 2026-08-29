@@ -50,8 +50,10 @@ describe("restartSession", () => {
 describe("reapSessionOnServer", () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  const answered = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+
   it("posts to the session's terminate route", async () => {
-    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async () => new Response(null, { status: 200 }));
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async () => answered({ ok: true, ended: true }));
     vi.stubGlobal("fetch", fetchMock);
     expect(await reapSessionOnServer("a/b")).toBe(true);
     const call = fetchMock.mock.calls[0];
@@ -62,7 +64,24 @@ describe("reapSessionOnServer", () => {
   it("reports NOT confirmed on a refusal, so the caller knows the old process may still be there", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response(null, { status: 403 })),
+      vi.fn(async () => answered({ error: "forbidden origin" }, 403)),
+    );
+    expect(await reapSessionOnServer("s1")).toBe(false);
+  });
+
+  // The route answers 200 whether or not it managed to end anything; `ended` is the part that says
+  // which (CodeRabbit on #1920). A 200 alone is not a confirmation, and neither is a body we could
+  // not read — jsonBody hands back `{}` for that, which must not pass for an answer.
+  it("takes only `ended: true` for a confirmation", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => answered({ ok: true, ended: false })),
+    );
+    expect(await reapSessionOnServer("s1")).toBe(false);
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("not json", { status: 200 })),
     );
     expect(await reapSessionOnServer("s1")).toBe(false);
   });

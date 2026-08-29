@@ -83,13 +83,16 @@ describe("mountTmuxRoutes — POST /api/session/:id/terminate", () => {
 
   it("reaps the session and kills a leftover tmux orphan", async () => {
     const reapSession = vi.fn();
-    const killTmux = vi.fn();
-    const { terminate } = mountAndCapture(baseDeps({ reapSession, killTmux, hasTmux: () => true }));
+    let alive = true; // the orphan is there until killTmux takes it
+    const killTmux = vi.fn(() => {
+      alive = false;
+    });
+    const { terminate } = mountAndCapture(baseDeps({ reapSession, killTmux, hasTmux: () => alive }));
     const res = makeRes();
     await terminate({ headers: {}, params: { id: UUID } }, res);
     expect(reapSession).toHaveBeenCalledWith(UUID);
     expect(killTmux).toHaveBeenCalledWith(UUID); // tmux still present after reap → killed directly
-    expect(res.payload).toEqual({ ok: true });
+    expect(res.payload).toEqual({ ok: true, ended: true });
   });
 
   it("does not kill tmux directly when reap already removed it", async () => {
@@ -98,7 +101,19 @@ describe("mountTmuxRoutes — POST /api/session/:id/terminate", () => {
     const res = makeRes();
     await terminate({ headers: {}, params: { id: UUID } }, res);
     expect(killTmux).not.toHaveBeenCalled();
-    expect(res.payload).toEqual({ ok: true });
+    expect(res.payload).toEqual({ ok: true, ended: true });
+  });
+
+  // `ended` is the post-condition, and the only caller that can act on it is the restart: it
+  // reconnects on this answer, and reconnecting to a session that survived ATTACHES the process it
+  // was asked to replace. So a kill that did not take must not read as a 200 that did.
+  it("reports NOT ended when the tmux session outlives the kill", async () => {
+    const killTmux = vi.fn(); // fails silently: the session is still there afterwards
+    const { terminate } = mountAndCapture(baseDeps({ killTmux, hasTmux: () => true }));
+    const res = makeRes();
+    await terminate({ headers: {}, params: { id: UUID } }, res);
+    expect(killTmux).toHaveBeenCalledWith(UUID);
+    expect(res.payload).toEqual({ ok: true, ended: false });
   });
 });
 

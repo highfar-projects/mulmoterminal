@@ -845,14 +845,17 @@ async function restart(): Promise<void> {
   if (restarting.value || closeConfirm.value || closeBusy.value !== null) return;
   restarting.value = true;
   const id = sessionId.value; // what this restart is FOR — the cell can move on while it runs
+  // The reap is a round trip, and a cell can be closed and relaunched inside it. Whatever the
+  // answer, it is then about a session this cell no longer holds: reconnecting would retarget the
+  // REPLACEMENT (at worst one whose id the server has not sent yet, spawning a second session and
+  // orphaning it), and the failure banner would tell a fresh agent that it was not restarted
+  // (codex on #1920, both halves).
+  const stale = (): boolean => !launched.value || sessionId.value !== id;
   try {
     const outcome = await restartSession(id, {
       reap: reapSessionOnServer,
       reconnect: () => {
-        // The reap is a round trip, and a cell can be closed and relaunched inside it. Reconnecting
-        // then retargets whatever the cell holds NOW — at worst a just-launched session whose id the
-        // server has not sent yet, which spawns a second one and orphans the first (codex on #1920).
-        if (!launched.value || sessionId.value !== id) return;
+        if (stale()) return;
         // The turn that was in flight died with the process; the resumed session publishes its own.
         working.value = false;
         waiting.value = false;
@@ -862,7 +865,7 @@ async function restart(): Promise<void> {
     });
     // Nothing was reconnected and the old agent is probably still running, which looks identical to
     // a restart that worked. Say so over the terminal, where the header button's other failures go.
-    if (outcome === "reap-failed") void termRef.value?.showHint(RESTART_FAILED_EN, "restart_alt");
+    if (outcome === "reap-failed" && !stale()) void termRef.value?.showHint(RESTART_FAILED_EN, "restart_alt");
   } finally {
     restarting.value = false;
   }

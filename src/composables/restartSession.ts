@@ -9,6 +9,7 @@
 // is re-read, because nothing is re-started". So a reconnect that overtakes the reap gets the OLD
 // process back, with the old config, and looks exactly like a restart that worked.
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { jsonBody } from "../jsonBody";
 
 /** Everything the restart does to the world, injected so the ordering above can be tested. */
 export interface RestartSteps {
@@ -38,12 +39,23 @@ export async function restartSession(sessionId: string | null, steps: RestartSte
 }
 
 /** The close button's own route (POST /api/session/:id/terminate): it kills the pty and the tmux
- *  session, and kills a tmux session orphaned by an earlier server run even when no pty is live. */
+ *  session, and kills a tmux session orphaned by an earlier server run even when no pty is live.
+ *
+ *  The answer read here is the route's `ended` — its post-condition, "nothing of this session is
+ *  running any more" — not the 2xx, which only says the request was accepted (CodeRabbit on #1920).
+ *  Strictly `=== true`: an unreadable body parses to `{}`, and jsonBody's own warning is that a
+ *  caller recording success must not take that for an answer. Unconfirmed here costs a retry; a
+ *  false confirmation costs a restart that silently did not happen. */
 export async function reapSessionOnServer(sessionId: string): Promise<boolean> {
   try {
     const res = await fetchWithTimeout(`/api/session/${encodeURIComponent(sessionId)}/terminate`, { method: "POST" });
-    if (!res.ok) console.warn(`[restart] terminate ${sessionId} answered HTTP ${res.status}`);
-    return res.ok;
+    if (!res.ok) {
+      console.warn(`[restart] terminate ${sessionId} answered HTTP ${res.status}`);
+      return false;
+    }
+    const ended = (await jsonBody(res)).ended === true;
+    if (!ended) console.warn(`[restart] terminate ${sessionId} did not end the session`);
+    return ended;
   } catch (e) {
     console.warn(`[restart] terminate ${sessionId} failed: ${e instanceof Error ? e.message : String(e)}`);
     return false;

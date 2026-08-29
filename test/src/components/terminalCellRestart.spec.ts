@@ -30,20 +30,22 @@ vi.mock("../../../src/components/Terminal.vue", () => ({
 
 const TERMINATE_RE = /\/api\/session\/[^/?]+\/terminate$/;
 
-let terminate: { resolve: (ok?: boolean) => void; calls: string[] };
+let terminate: { resolve: (ended?: boolean) => void; calls: string[] };
 
 beforeEach(() => {
   hints.length = 0;
   const calls: string[] = [];
-  let release: (ok: boolean) => void = () => {};
+  let release: (ended: boolean) => void = () => {};
   const pending = new Promise<boolean>((r) => (release = r));
-  terminate = { resolve: (ok = true) => release(ok), calls };
+  terminate = { resolve: (ended = true) => release(ended), calls };
   globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
     const u = String(url);
     if (TERMINATE_RE.test(u)) {
       calls.push(`${init?.method} ${u}`);
-      const ok = await pending; // held open, so a test can look at the world mid-restart
-      return { ok, status: ok ? 200 : 403, json: async () => ({ ok }) };
+      // `ended` is the route's post-condition — it answers 200 either way — so a test drives THAT
+      // rather than the status code.
+      const ended = await pending; // held open, so a test can look at the world mid-restart
+      return { ok: true, status: 200, json: async () => ({ ok: true, ended }) };
     }
     if (u.includes("/api/scripts")) return { ok: true, json: async () => ({ cwd: "/home/me/proj", scripts: [] }) };
     if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
@@ -153,6 +155,25 @@ describe("restarting the agent in a cell", () => {
     expect(Number(term(w).props("connectKey"))).toBe(before);
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("restarted");
+    w.unmount();
+  });
+
+  // Same window, the other half: a failed restart must not put its banner on the terminal that
+  // replaced the one it was about — that agent was never restarted and has nothing to be told.
+  it("says nothing to the terminal that replaced the one it was restarting", async () => {
+    const w = mountCell("sess-1");
+    await flushPromises();
+
+    expect(requestCellRestart("cell-7")).toBe(true);
+    await flushPromises();
+    await w.find(".cell-close").trigger("click");
+    await flushPromises();
+    await w.find('[data-testid="cell-chip-launch"]').trigger("click");
+    await flushPromises();
+
+    terminate.resolve(false);
+    await flushPromises();
+    expect(hints).toEqual([]);
     w.unmount();
   });
 
