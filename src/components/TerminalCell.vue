@@ -23,6 +23,7 @@ import { applyActivityPush, cellHeaderText, type ActivityPush } from "./cellActi
 import { MEMO_MAX_LENGTH, normalizeMemo } from "../../common/sessionMemo";
 import { preferredLaunchDir, shouldSyncLaunchDir } from "./launchDir";
 import { devcontainerStatus } from "../composables/useDevcontainerOffer";
+import { clipboardAvailable } from "./codeBlockCopy";
 import CellLaunchForm from "./CellLaunchForm.vue";
 import GitBranchChip from "./GitBranchChip.vue";
 import WorkItemChip from "./WorkItemChip.vue";
@@ -198,6 +199,28 @@ watch(
   },
   { immediate: true },
 );
+// Copying the name, not just showing it in the tooltip: reported live — a `docker exec`/`docker
+// logs` typed by hand is exactly the friction a click should remove, and the name is exactly
+// what devcontainerName already holds, reassigned on every recreate though it is.
+const devcontainerNameCopied = ref(false);
+const devcontainerBadgeTitle = computed(() => {
+  if (devcontainerNameCopied.value) return "Copied";
+  if (!devcontainerName.value) return "Running in this directory's devcontainer";
+  return `Running in this directory's devcontainer (${devcontainerName.value}) — click to copy`;
+});
+let devcontainerCopiedTimer: ReturnType<typeof setTimeout> | null = null;
+async function copyDevcontainerName(): Promise<void> {
+  const name = devcontainerName.value;
+  if (!name || !clipboardAvailable()) return;
+  try {
+    await navigator.clipboard.writeText(name);
+  } catch {
+    return; // best effort — no feedback for a copy that didn't happen
+  }
+  devcontainerNameCopied.value = true;
+  if (devcontainerCopiedTimer) clearTimeout(devcontainerCopiedTimer);
+  devcontainerCopiedTimer = setTimeout(() => (devcontainerNameCopied.value = false), 1500);
+}
 // Whether this cell IS the workspace, for the header badge. Same lexical comparison the launcher
 // chip makes (`launchChips`), so a cell launched from the WORKSPACE chip is badged WORKSPACE.
 const isWorkspace = computed(() => isSameDirPath(cwd.value, props.defaultCwd));
@@ -497,6 +520,7 @@ onUnmounted(() => {
   unsubscribeCanvas?.();
   offReconnect?.();
   if (badgePoll) clearInterval(badgePoll);
+  if (devcontainerCopiedTimer) clearTimeout(devcontainerCopiedTimer);
 });
 
 // Set when the user starts a FRESH session from the launcher, so the next server
@@ -1327,13 +1351,17 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                  off dirConfig rather than the pty's own spawn decision: the two can only drift
                  while a session outlives a later toggle, which is rare, and the status dot beside
                  it already accepts that same staleness for its own directory-level facts. -->
-            <span
+            <button
               v-if="dirConfig.devcontainer"
+              type="button"
               data-testid="cell-devcontainer-badge"
-              class="material-symbols-outlined flex-none text-[13px] text-dim"
-              :title="devcontainerName ? `Running in this directory's devcontainer (${devcontainerName})` : `Running in this directory's devcontainer`"
-              >inventory_2</span
+              class="material-symbols-outlined flex-none border-none bg-transparent p-0 text-[13px] leading-none text-dim"
+              :class="devcontainerName ? 'cursor-pointer hover:text-fg' : 'cursor-default'"
+              :title="devcontainerBadgeTitle"
+              @click.stop="copyDevcontainerName"
             >
+              {{ devcontainerNameCopied ? "check" : "inventory_2" }}
+            </button>
             <span class="cell-dot" :class="[CELL_DOT, statusClass, dotStatusClass, dotMissedClass]" :title="statusLabel" />
             <!-- The path is NOT here any more — it is the lead item on row 2 (see the
                `header-lead` template below). It had `min-w-[16ch]`, a floor of roughly a third of
