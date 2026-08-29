@@ -8,6 +8,7 @@ import CockpitHeader from "./CockpitHeader.vue";
 import * as conn from "../composables/useTerminalConnections";
 import { trackStyle, layoutForCount } from "./gridLayout";
 import { cockpitLines } from "../composables/cockpitLines";
+import { dragSplitter } from "../composables/dragSplitter";
 import { flipKeyframes, flipPairs, onScreen, FLIP_MS, FLIP_EASING } from "./cellFlip";
 import { canMoveCell, type Cell } from "./gridTabs";
 import type { AttentionStatus } from "./attentionStatus";
@@ -907,39 +908,13 @@ function setPaneWidth(width: number, available = rowWidth()): void {
   if (available <= 0) return;
   paneWidth.value = clampPaneWidth(width, available);
 }
-/** One splitter drag: follow the pointer until it is released, then remember where it landed.
- *  Shared by all three separators beside an enlarged cell (#1077).
- *
- *  `resize` — the pointer's travel along the axis turned into a new size — is the caller's,
- *  because the SIGN is the only thing that differs between them and it is the part worth
- *  reading at the call site: a side before its separator grows as the pointer advances, a side
- *  after it shrinks. */
-function dragSplitter(spec: {
-  axis: (e: PointerEvent) => number;
-  size: () => number;
-  resize: (start: number, travel: number) => void;
-  key: string;
-}): (e: PointerEvent) => void {
-  return (e) => {
-    const origin = spec.axis(e);
-    const start = spec.size();
-    const onMove = (ev: PointerEvent) => spec.resize(start, spec.axis(ev) - origin);
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      remember(spec.key, String(spec.size()));
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  };
-}
-
 // Dragging LEFT grows the file pane: it lies AFTER its separator.
 const onSplitterDown = dragSplitter({
   axis: (e) => e.clientX,
   size: () => paneWidth.value,
   resize: (start, travel) => setPaneWidth(start - travel),
   key: PANE_WIDTH_KEY,
+  remember,
 });
 // The keys act on the TERMINAL's width (ArrowLeft shrinks it, growing the pane), which is what
 // splitterKeyWidth speaks — the pane's width is the remainder. Returning null means the key
@@ -1050,6 +1025,7 @@ const onRosterSplitterDown = dragSplitter({
   size: () => rosterWidth.value,
   resize: (start, travel) => setRosterWidth(start + travel),
   key: ROSTER_WIDTH_KEY,
+  remember,
 });
 
 // Dragging DOWN shrinks the strip: it lies AFTER its separator.
@@ -1058,6 +1034,7 @@ const onStripSplitterDown = dragSplitter({
   size: () => stripHeight.value,
   resize: (start, travel) => setStripHeight(start - travel),
   key: STRIP_HEIGHT_KEY,
+  remember,
 });
 
 // The keys speak the TERMINAL's size (the primary), like the file pane's; each stored size is
