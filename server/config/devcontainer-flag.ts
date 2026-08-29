@@ -14,6 +14,7 @@ import { readJsonFile } from "../infra/read-text-file.js";
 import { isRecord } from "../../common/isRecord.js";
 import { worktreeRepoRootMount } from "../git/worktrees.js";
 import { hookSocketDir } from "../infra/hook-socket.js";
+import { DROPS_ROOT, usableRoot as usableDropsRoot } from "../session/session-drops.js";
 
 /** Whether `dir` has a devcontainer config, checked the same way the `devcontainer` CLI itself
  *  resolves one (`.devcontainer/devcontainer.json`, else `.devcontainer.json`). */
@@ -68,7 +69,20 @@ export async function runDevcontainerUp(dir: string): Promise<{ ok: boolean; out
   // container must still come up without it.
   const socketDir = hookSocketDir();
   const socketMount = existsSync(socketDir) ? `type=bind,source=${socketDir},target=${socketDir}` : null;
-  const args = ["up", "--workspace-folder", dir, ...(mount ? ["--mount", mount] : []), ...(socketMount ? ["--mount", socketMount] : [])];
+  // Same 1:1-directory idea, for a dropped file rather than the hook: sessionAddDirs grants a
+  // session `DROPS_ROOT`'s own subdirectory as an `--add-dir`, a HOST path, which resolves to
+  // nothing inside a container unless this root is mounted in too. usableDropsRoot() (not a bare
+  // existsSync) because the root is normally created lazily on a session's first drop — the very
+  // first devcontainer session to receive one would otherwise come up before it exists.
+  const dropsMount = usableDropsRoot() ? `type=bind,source=${DROPS_ROOT},target=${DROPS_ROOT}` : null;
+  const args = [
+    "up",
+    "--workspace-folder",
+    dir,
+    ...(mount ? ["--mount", mount] : []),
+    ...(socketMount ? ["--mount", socketMount] : []),
+    ...(dropsMount ? ["--mount", dropsMount] : []),
+  ];
   return new Promise((resolve) => {
     // eslint-disable-next-line sonarjs/no-os-command-from-path -- 'devcontainer' is a standard tool from PATH, same convention as git() in worktrees.ts; all inputs go through argv (no shell)
     const child = spawn("devcontainer", args, {

@@ -66,8 +66,14 @@ function isPrivateToUs(stat: Stats): boolean {
 }
 
 /** The drops root, created if missing and refused if it is not ours. Re-checked on every use
- *  rather than trusted for having been made by us once. */
-function usableRoot(): string | null {
+ *  rather than trusted for having been made by us once.
+ *
+ *  Exported for config/devcontainer-flag.ts: a devcontainer session runs on the CONTAINER's
+ *  filesystem, so the host-only path `sessionAddDirs` grants it (this root's per-session
+ *  subdirectory) resolves to nothing there unless the root itself is bind-mounted in — same
+ *  shape as infra/hook-socket.ts's hookSocketDir, a stable parent whose contents a session
+ *  creates dynamically after the mount already exists. */
+export function usableRoot(): string | null {
   try {
     // Deliberately NOT `recursive`: that silently accepts a directory that already exists, and
     // one that already exists is exactly the case that has to be inspected instead of assumed.
