@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { h, type VNode } from "vue";
 import TerminalGrid from "../../../src/components/TerminalGrid.vue";
@@ -52,15 +52,21 @@ const cell = (uid: number, session: string, cwd: string): Cell => ({ uid, sessio
 // no origin under jsdom, which is why the miss left nothing to notice. Each is answered as the
 // quiet case, which is what these tests assume anyway.
 //
-// The throw is the point of listing them rather than answering `{}` to everything: a fourth
-// request added to the mount is a spec that says so, instead of one that silently reaches out.
+// Listing them one by one rather than answering `{}` to everything is what makes a FOURTH request
+// visible — but only because it is RECORDED here and asserted below. Throwing does not work:
+// every mount-time caller catches its own fetch failure (fetchOpenQuestion, hasStoredCard, the
+// tools watcher), so the rejection is swallowed and the spec passes knowing nothing about it.
+// Both Codex and CodeRabbit caught that on PR #1913, against the first cut of this file.
+const unexpected: string[] = [];
 const mockApi = () => {
+  unexpected.length = 0;
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.includes("/api/question/")) return { ok: true, json: async () => ({ question: null }) };
     if (url.includes("/api/agent/toolResults/")) return { ok: true, json: async () => ({ toolResults: [] }) };
     if (url.includes("/api/tools")) return { ok: true, json: async () => ({ groups: [] }) };
-    throw new Error(`unmocked request: ${url}`);
+    unexpected.push(url);
+    return { ok: false, status: 500, json: async () => ({}) }; // the caller's own failure path, which it handles
   }) as unknown as typeof fetch;
 };
 
@@ -113,6 +119,13 @@ describe("open-files from a cell's path menu", () => {
         dispatchEvent: () => false,
       })) as typeof window.matchMedia;
     }
+  });
+
+  // Awaited first: a mount effect that fires late would otherwise be read before it has run, and
+  // the check would pass for the request it exists to catch.
+  afterEach(async () => {
+    await flushPromises();
+    expect(unexpected).toEqual([]);
   });
 
   it("opens the pane on the enlarged cell without asking to enlarge again", async () => {
