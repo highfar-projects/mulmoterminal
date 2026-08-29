@@ -121,6 +121,28 @@ describe("a worktree row", () => {
     await flushPromises();
     expect(w.find('[data-testid="wt-note"]').text()).toContain("one agent session");
   });
+
+  // listWorktrees doesn't carry `hasDevcontainer` the way createWorktree's own answer does
+  // (server/git/worktrees.ts), so a fresh start from an EXISTING worktree row has to ask fresh
+  // rather than skip the offer outright — the bug this covers is the offer never being wired to
+  // this entry point at all, not this row's own status shape.
+  it("offers to build the devcontainer before starting a fresh session in an existing worktree", async () => {
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/worktrees")) return { ok: true, json: async () => ({ isGit: true, base: "main", worktrees: [worktree({ session: null })] }) };
+      if (u.includes("/api/devcontainer/status")) return { ok: true, json: async () => ({ hasConfig: true, enabled: false, containerName: null }) };
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ cwd: "/repo", sessions: [] }) };
+      return { ok: true, json: async () => ({}) };
+    }) as unknown as typeof fetch;
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const w = mountForm();
+    await flushPromises();
+    await w.find('[data-testid="worktree-reuse"]').trigger("click");
+    await flushPromises();
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("/wt/fix-login"));
+    // A decline never blocks the launch — the session still starts on the host.
+    expect(w.emitted("start")?.[0]).toEqual(["/wt/fix-login"]);
+  });
 });
 
 // #1527: the native dialog is modal to the USER and to nothing else, and the route spawns one per
@@ -253,6 +275,49 @@ describe("a worktree reached without its row", () => {
     await flushPromises();
     // The workspace chip leads the row, so reach the ordinary directory's by path.
     await launchButtonFor(w, "/repo").trigger("click");
+    await flushPromises(); // selectPreset() checks /api/devcontainer/status before emitting start
+    expect(w.emitted("start")?.[0]).toEqual(["/repo"]);
+  });
+
+  // The bug this covers: selectPreset (the chip's quick-launch) never called offerDevcontainerIfNeeded
+  // at all, so a devcontainer directory launched from a chip silently never offered to build one —
+  // only the typed-path + Go/Enter flow (startHere) did.
+  it("offers to build the devcontainer when a chip points at one", async () => {
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/worktrees")) return { ok: true, json: async () => ({ isGit: true, base: "main", worktrees: [taken()] }) };
+      if (u.includes("/api/devcontainer/status")) return { ok: true, json: async () => ({ hasConfig: true, enabled: false, containerName: null }) };
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ cwd: "/repo", sessions: [] }) };
+      return { ok: true, json: async () => ({}) };
+    }) as unknown as typeof fetch;
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const w = mountForm([], { presets: [{ label: "repo", path: "/repo" }] });
+    await flushPromises();
+    await launchButtonFor(w, "/repo").trigger("click");
+    await flushPromises();
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("/repo"));
+    expect(w.emitted("start")?.[0]).toEqual(["/repo"]);
+  });
+
+  // spawn-shell.ts doesn't read the devcontainer flag the way spawn-claude.ts does — offering one
+  // for a shell chip would promise something that can't happen.
+  it("does not offer a devcontainer for a shell chip", async () => {
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/worktrees")) return { ok: true, json: async () => ({ isGit: true, base: "main", worktrees: [] }) };
+      if (u.includes("/api/devcontainer/status")) return { ok: true, json: async () => ({ hasConfig: true, enabled: false, containerName: null }) };
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ cwd: "/repo", sessions: [] }) };
+      return { ok: true, json: async () => ({}) };
+    }) as unknown as typeof fetch;
+    // .mockClear(): an earlier test's spy on window.confirm is still the live implementation
+    // (nothing in this file restores it), so a fresh spyOn here would inherit its call history and
+    // this "not called AT ALL" assertion would see calls that were never made in THIS test.
+    const confirmSpy = vi.spyOn(window, "confirm").mockClear();
+    const w = mountForm([], { presets: [{ label: "repo", path: "/repo" }], agent: "shell" });
+    await flushPromises();
+    await launchButtonFor(w, "/repo").trigger("click");
+    await flushPromises();
+    expect(confirmSpy).not.toHaveBeenCalled();
     expect(w.emitted("start")?.[0]).toEqual(["/repo"]);
   });
 });
@@ -1005,6 +1070,53 @@ describe("creating a worktree", () => {
 
   // A 200 with no path is not a worktree to launch in, and treating it as one would start the agent
   // in whatever the directory field happens to say.
+  // `hasDevcontainer` rides createWorktree's own answer (server/git/worktrees.ts) — set here so
+  // the offer is asked at all, distinct from the /api/devcontainer/status round trip it triggers.
+  it("offers to build the devcontainer when the fresh worktree carries one", async () => {
+    const upBodies: string[] = [];
+    globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes("/api/worktrees/create"))
+        return { ok: true, json: async () => ({ path: "/wt/fix-login", branch: "agent/fix-login", hasDevcontainer: true }) };
+      if (u.includes("/api/devcontainer/status")) return { ok: true, json: async () => ({ hasConfig: true, enabled: false, containerName: null }) };
+      if (u.includes("/api/devcontainer/up")) {
+        upBodies.push(String(init?.body ?? ""));
+        return { ok: true, json: async () => ({ ok: true }) };
+      }
+      if (u.includes("/api/worktrees")) return { ok: true, json: async () => ({ isGit: true, base: "main", worktrees: [] }) };
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ cwd: "/repo", sessions: [] }) };
+      return { ok: true, json: async () => ({}) };
+    }) as unknown as typeof fetch;
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const w = mountForm();
+    await flushPromises();
+    await beginCreate(w);
+    await flushPromises();
+    expect(upBodies.some((b) => b.includes("/wt/fix-login"))).toBe(true);
+    expect(w.emitted("start")?.at(-1)).toEqual(["/wt/fix-login"]);
+  });
+
+  // `hasDevcontainer: false` (or absent) must not even ask — createWorktree's answer is the fast
+  // guard requestWorktree checks BEFORE the /api/devcontainer/status round trip.
+  it("does not ask about a devcontainer the fresh worktree doesn't have", async () => {
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/worktrees/create"))
+        return { ok: true, json: async () => ({ path: "/wt/fix-login", branch: "agent/fix-login", hasDevcontainer: false }) };
+      if (u.includes("/api/worktrees")) return { ok: true, json: async () => ({ isGit: true, base: "main", worktrees: [] }) };
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ cwd: "/repo", sessions: [] }) };
+      return { ok: true, json: async () => ({}) };
+    }) as unknown as typeof fetch;
+    // .mockClear(): see the same note in "does not offer a devcontainer for a shell chip" above.
+    const confirmSpy = vi.spyOn(window, "confirm").mockClear();
+    const w = mountForm();
+    await flushPromises();
+    await beginCreate(w);
+    await flushPromises();
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(w.emitted("start")?.at(-1)).toEqual(["/wt/fix-login"]);
+  });
+
   it("refuses to launch on an answer that names no worktree", async () => {
     const { finish } = mockHeldCreate({ ok: true, body: { branch: "agent/fix-login" } });
     const w = mountForm();

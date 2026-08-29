@@ -439,6 +439,7 @@ describe("TerminalCell", () => {
     const chip = w.findAll('[data-testid="cell-chip"]').find((c) => c.find('[data-testid="cell-chip-main"]').text() === "proj");
     if (!chip) throw new Error("preset chip not found");
     await chip.find('[data-testid="cell-chip-launch"]').trigger("click");
+    await flushPromises(); // selectPreset() checks /api/devcontainer/status before emitting start
     const term = w.findComponent({ name: "TerminalView" });
     expect(term.exists()).toBe(true);
     expect(term.props("cwd")).toBe("/work/proj");
@@ -2810,5 +2811,93 @@ describe("TerminalCell launch target — the OS default shell (#1114)", () => {
     expect(w.find('[data-testid="cell-model-help"]').exists()).toBe(false);
     await pick(w, "claude");
     expect(w.find('[data-testid="cell-model-help"]').exists()).toBe(true);
+  });
+});
+
+// The badge is a running session's ONLY way back to a devcontainer it was started without —
+// there is no other control in the UI that offers to build one for an already-launched cell
+// (see composables/useDevcontainerOffer.ts, which only ever offers before a NEW session starts).
+describe("the devcontainer badge — building a devcontainer a session was started without", () => {
+  const SESSION_ID = "22222222-2222-2222-2222-222222222222";
+  const badge = (w: ReturnType<typeof mountCell>) => w.find('[data-testid="cell-devcontainer-badge"]');
+
+  type Status = { hasConfig: boolean; enabled: boolean; containerName: string | null };
+
+  // `statusSequence` answers one `/api/devcontainer/status` call each, repeating its last entry —
+  // so a test can say "not built yet" for the initial badge, then "enabled now" for the refetch
+  // buildDevcontainerNow does once the build settles. `/api/devcontainer/up` is held open until
+  // the test calls `finishUp`, the same shape as CellLaunchForm.spec.ts's mockHeldCreate, so a
+  // test can assert on the spinner while a build is still in flight.
+  function mockDevcontainerFetch(statusSequence: Status[]) {
+    let statusCall = 0;
+    let resolveUp: (v: { ok: boolean; status: number; json: () => Promise<unknown> }) => void = () => {};
+    const heldUp = new Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>((r) => (resolveUp = r));
+    globalThis.fetch = vi.fn((url: string) => {
+      const u = String(url);
+      if (u.includes("/api/devcontainer/status")) {
+        const status = statusSequence[Math.min(statusCall, statusSequence.length - 1)];
+        statusCall++;
+        return Promise.resolve({ ok: true, json: async () => status });
+      }
+      if (u.includes("/api/devcontainer/up")) return heldUp;
+      if (u.includes("/api/sessions")) return Promise.resolve({ ok: true, json: async () => ({ sessions: [] }) });
+      return Promise.resolve({ ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) });
+    }) as unknown as typeof fetch;
+    return { finishUp: (answer: { ok: boolean; body: unknown }) => resolveUp({ ok: answer.ok, status: answer.ok ? 200 : 500, json: async () => answer.body }) };
+  }
+
+  beforeEach(() => {
+    vi.spyOn(window, "alert").mockImplementation(() => {});
+  });
+
+  it("shows nothing for a directory with no devcontainer config", async () => {
+    mockDevcontainerFetch([{ hasConfig: false, enabled: false, containerName: null }]);
+    const w = mountCell(SESSION_ID, { initialCwd: "/home/me/plain" });
+    await flushPromises();
+    expect(badge(w).exists()).toBe(false);
+  });
+
+  it("offers to build when a devcontainer exists but this session isn't running in it", async () => {
+    mockDevcontainerFetch([{ hasConfig: true, enabled: false, containerName: null }]);
+    const w = mountCell(SESSION_ID, { initialCwd: "/home/me/proj" });
+    await flushPromises();
+    expect(badge(w).exists()).toBe(true);
+    expect(badge(w).text()).toBe("play_arrow");
+    expect(badge(w).attributes("title")).toContain("click to build");
+  });
+
+  it("builds on click, spins while the build runs, and enables the badge on success", async () => {
+    const { finishUp } = mockDevcontainerFetch([
+      { hasConfig: true, enabled: false, containerName: null },
+      { hasConfig: true, enabled: true, containerName: "angry_rubin" },
+    ]);
+    const w = mountCell(SESSION_ID, { initialCwd: "/home/me/proj" });
+    await flushPromises();
+    await badge(w).trigger("click");
+    await flushPromises();
+    expect(badge(w).text()).toBe("progress_activity");
+    expect(badge(w).attributes("disabled")).toBeDefined();
+
+    finishUp({ ok: true, body: { ok: true } });
+    await flushPromises();
+    expect(badge(w).text()).toBe("inventory_2");
+    expect(badge(w).attributes("title")).toContain("Running in this directory's devcontainer");
+    // The badge enables — this SESSION did not just move into the container underneath it, so the
+    // alert has to say restart rather than implying the running terminal is already inside it.
+    expect(window.alert).toHaveBeenCalledWith(expect.stringContaining("restart"));
+  });
+
+  it("alerts with the build log and leaves the badge clickable again on failure", async () => {
+    const { finishUp } = mockDevcontainerFetch([{ hasConfig: true, enabled: false, containerName: null }]);
+    const w = mountCell(SESSION_ID, { initialCwd: "/home/me/proj" });
+    await flushPromises();
+    await badge(w).trigger("click");
+    await flushPromises();
+
+    finishUp({ ok: false, body: { output: "postCreateCommand exited 1" } });
+    await flushPromises();
+    expect(window.alert).toHaveBeenCalledWith(expect.stringContaining("postCreateCommand exited 1"));
+    expect(badge(w).text()).toBe("play_arrow");
+    expect(badge(w).attributes("disabled")).toBeUndefined();
   });
 });

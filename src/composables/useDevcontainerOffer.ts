@@ -1,17 +1,21 @@
 // Offers to build + start a directory's devcontainer when a NEW session is about to launch there.
-// Currently called only from CellLaunchForm.vue's startHere (typing an existing directory in and
-// pressing Start) — deliberately NOT from TerminalCell.vue's startPickedAgent, which every launch
-// of every kind goes through (including a large synchronous-launch test surface): scoping it to
-// one entry point keeps the async status round trip off every path that doesn't need it. Never
-// asked twice for the same directory once a session there has already answered (server-side
-// `enabled`, see server/config/devcontainer-flag.ts) — extending this to more entry points
-// (a preset chip, a worktree row) later is just calling it from there too.
+// Called from every launch entry point in CellLaunchForm.vue that can carry an agent into a
+// directory — typing a path and pressing Start, a preset chip's quick launch, creating a worktree
+// and opening one fresh — but never from TerminalCell.vue's startPickedAgent (which also covers a
+// large synchronous-launch test surface) nor from a shell launch (spawn-shell.ts doesn't read the
+// devcontainer flag the way spawn-claude.ts does, so offering one there would promise something
+// that can't happen). Never asked twice for the same directory once a session there has already
+// answered (server-side `enabled`, see server/config/devcontainer-flag.ts).
 //
 // Confirmed every time a devcontainer is found and not already in use (never auto-started):
 // building/starting one is slow and runs arbitrary postCreateCommand shell, so it stays an
 // explicit choice rather than something the launcher decides on the user's behalf. Declining, a
 // build failure, or not being able to reach the server at all — none of these block the launch;
 // they all fall through to a plain host session.
+//
+// `buildDevcontainer` below is the bare POST, with no confirm dialog — shared with
+// TerminalCell.vue's devcontainer badge, whose own click IS the explicit choice (recovering from
+// a session that was started before anyone answered the confirm here).
 import { fetchWithTimeout, DEVCONTAINER_UP_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 import { jsonBody } from "../jsonBody";
 import { isRecord } from "../../common/isRecord";
@@ -47,11 +51,13 @@ export async function devcontainerStatus(cwd: string): Promise<DevcontainerStatu
   }
 }
 
-export async function offerDevcontainerIfNeeded(cwd: string): Promise<void> {
-  const status = await devcontainerStatus(cwd);
-  if (!status || !status.hasConfig || status.enabled) return;
+export interface DevcontainerBuildResult {
+  ok: boolean;
+  // The build log tail on failure; empty on success.
+  message: string;
+}
 
-  if (!window.confirm(`This directory has a devcontainer:\n${cwd}\n\nBuild and start it now?`)) return;
+export async function buildDevcontainer(cwd: string): Promise<DevcontainerBuildResult> {
   try {
     const res = await fetchWithTimeout(
       "/api/devcontainer/up",
@@ -60,11 +66,19 @@ export async function offerDevcontainerIfNeeded(cwd: string): Promise<void> {
     );
     if (!res.ok) {
       const body = await jsonBody(res);
-      window.alert(
-        `Could not start the devcontainer — continuing on the host.\n\n${isRecord(body) && typeof body.output === "string" ? body.output : res.statusText}`,
-      );
+      return { ok: false, message: isRecord(body) && typeof body.output === "string" ? body.output : res.statusText };
     }
+    return { ok: true, message: "" };
   } catch (e) {
-    window.alert(`Could not start the devcontainer — continuing on the host.\n\n${requestFailureText(e)}`);
+    return { ok: false, message: requestFailureText(e) };
   }
+}
+
+export async function offerDevcontainerIfNeeded(cwd: string): Promise<void> {
+  const status = await devcontainerStatus(cwd);
+  if (!status || !status.hasConfig || status.enabled) return;
+
+  if (!window.confirm(`This directory has a devcontainer:\n${cwd}\n\nBuild and start it now?`)) return;
+  const result = await buildDevcontainer(cwd);
+  if (!result.ok) window.alert(`Could not start the devcontainer — continuing on the host.\n\n${result.message}`);
 }

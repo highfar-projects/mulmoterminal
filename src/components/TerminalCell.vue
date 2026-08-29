@@ -22,7 +22,7 @@ import { usageBadge } from "./cellDisplay";
 import { applyActivityPush, cellHeaderText, type ActivityPush } from "./cellActivity";
 import { MEMO_MAX_LENGTH, normalizeMemo } from "../../common/sessionMemo";
 import { preferredLaunchDir, shouldSyncLaunchDir } from "./launchDir";
-import { devcontainerStatus } from "../composables/useDevcontainerOffer";
+import { devcontainerStatus, buildDevcontainer, type DevcontainerStatus } from "../composables/useDevcontainerOffer";
 import { clipboardAvailable } from "./codeBlockCopy";
 import CellLaunchForm from "./CellLaunchForm.vue";
 import GitBranchChip from "./GitBranchChip.vue";
@@ -179,36 +179,61 @@ const cwd = ref<string | null>(props.initialCwd ?? props.defaultCwd);
 // Per-directory overrides (<cwd>/.mulmoterminal.json): pins this cell's terminal
 // palette and shows a project badge. Re-fetched when the effective cwd changes.
 const { config: dirConfig, cellStyle } = useCellChrome(cwd);
-// The running container's Docker NAME (`angry_rubin`, not the image or id) — the badge below
-// says "in a devcontainer", and a `docker exec`/`docker logs` typed by hand needs the name that
-// statement doesn't carry, reassigned on every recreate. Fetched only while dirConfig says this
-// cwd is devcontainer-enabled, mirroring the badge's own v-if so a plain-host cell never pays
-// for the docker call devcontainerStatus makes.
-const devcontainerName = ref<string | null>(null);
-watch(
-  () => [cwd.value, dirConfig.value.devcontainer] as const,
-  async ([currentCwd, enabled]) => {
-    if (!currentCwd || !enabled) {
-      devcontainerName.value = null;
-      return;
-    }
-    const status = await devcontainerStatus(currentCwd);
-    // A stale response landing after cwd (or the flag) moved on must not overwrite whatever the
-    // newer request is about to answer with.
-    if (cwd.value === currentCwd) devcontainerName.value = status?.containerName ?? null;
-  },
-  { immediate: true },
-);
+// The server's own answer for this cwd — hasConfig/enabled/containerName — read straight from
+// here rather than from `dirConfig.devcontainer`: that flag is this app's own read of the SAME
+// file (dir-config.ts), but a build triggered from the badge below (buildDevcontainerNow) writes
+// that file without going through the pub/sub channel a config-editing skill uses, so dirConfig
+// would stay stale exactly when this badge most needs to be current. Fetched unconditionally (not
+// gated on dirConfig.devcontainer) because the badge now also has to represent "a devcontainer
+// exists here and nobody has built it yet" — a state dirConfig alone can't distinguish from "no
+// devcontainer at all".
+const devcontainerInfo = ref<DevcontainerStatus | null>(null);
+async function refreshDevcontainerInfo(dir: string | null): Promise<void> {
+  if (!dir) {
+    devcontainerInfo.value = null;
+    return;
+  }
+  const status = await devcontainerStatus(dir);
+  // A stale response landing after cwd moved on must not overwrite whatever the newer request is
+  // about to answer with.
+  if (cwd.value === dir) devcontainerInfo.value = status;
+}
+watch(cwd, (dir) => void refreshDevcontainerInfo(dir), { immediate: true });
+const devcontainerName = computed(() => devcontainerInfo.value?.containerName ?? null);
 // Copying the name, not just showing it in the tooltip: reported live — a `docker exec`/`docker
 // logs` typed by hand is exactly the friction a click should remove, and the name is exactly
 // what devcontainerName already holds, reassigned on every recreate though it is.
 const devcontainerNameCopied = ref(false);
-const devcontainerBadgeTitle = computed(() => {
-  if (devcontainerNameCopied.value) return "Copied";
-  if (!devcontainerName.value) return "Running in this directory's devcontainer";
-  return `Running in this directory's devcontainer (${devcontainerName.value}) — click to copy`;
-});
+// Set while `buildDevcontainerNow` is in flight, so a session started without building (the
+// confirm in useDevcontainerOffer.ts declined, or a launch path that skips the offer entirely)
+// has a way back: the badge itself doubles as "build now" whenever a devcontainer exists but
+// isn't enabled yet, and this drives its spinner + elapsed-time readout since `devcontainer up`
+// gives no progress of its own to relay (server/config/devcontainer-flag.ts buffers it whole).
+const devcontainerBuilding = ref(false);
+const devcontainerBuildElapsed = ref(0);
+let devcontainerBuildTimer: ReturnType<typeof setInterval> | null = null;
 let devcontainerCopiedTimer: ReturnType<typeof setTimeout> | null = null;
+const devcontainerBadgeIcon = computed(() => {
+  if (devcontainerBuilding.value) return "progress_activity";
+  if (devcontainerInfo.value?.enabled) return devcontainerNameCopied.value ? "check" : "inventory_2";
+  return "play_arrow"; // same glyph the launch form's own Start button uses: click to build+start
+});
+// Clickable exactly when the click would DO something: copy a name that exists, or start a build
+// that isn't already running.
+const devcontainerBadgeClickable = computed(() => {
+  if (devcontainerBuilding.value) return false;
+  return devcontainerInfo.value?.enabled ? !!devcontainerName.value : !!devcontainerInfo.value?.hasConfig;
+});
+const devcontainerBadgeTitle = computed(() => {
+  if (devcontainerBuilding.value) return `Building devcontainer… (${devcontainerBuildElapsed.value}s)`;
+  if (devcontainerNameCopied.value) return "Copied";
+  if (devcontainerInfo.value?.enabled) {
+    return devcontainerName.value
+      ? `Running in this directory's devcontainer (${devcontainerName.value}) — click to copy`
+      : "Running in this directory's devcontainer";
+  }
+  return "Devcontainer available for this directory — click to build and start it";
+});
 async function copyDevcontainerName(): Promise<void> {
   const name = devcontainerName.value;
   if (!name || !clipboardAvailable()) return;
@@ -220,6 +245,33 @@ async function copyDevcontainerName(): Promise<void> {
   devcontainerNameCopied.value = true;
   if (devcontainerCopiedTimer) clearTimeout(devcontainerCopiedTimer);
   devcontainerCopiedTimer = setTimeout(() => (devcontainerNameCopied.value = false), 1500);
+}
+// No confirm dialog here — unlike useDevcontainerOffer.ts's offer, clicking this badge (only
+// possible once a devcontainer exists and isn't running) already IS the explicit choice. Marks
+// the directory enabled on success the same way the offer flow does (server/config/
+// devcontainer-flag.ts markDevcontainerEnabled), but this SESSION already started on the host —
+// only a fresh session picks up `devcontainer exec`, so the alert says to restart rather than
+// pretending the running terminal just moved into the container.
+async function buildDevcontainerNow(): Promise<void> {
+  const dir = cwd.value;
+  if (!dir || devcontainerBuilding.value || !devcontainerInfo.value?.hasConfig || devcontainerInfo.value?.enabled) return;
+  devcontainerBuilding.value = true;
+  devcontainerBuildElapsed.value = 0;
+  devcontainerBuildTimer = setInterval(() => (devcontainerBuildElapsed.value += 1), 1000);
+  const result = await buildDevcontainer(dir);
+  devcontainerBuilding.value = false;
+  if (devcontainerBuildTimer) {
+    clearInterval(devcontainerBuildTimer);
+    devcontainerBuildTimer = null;
+  }
+  await refreshDevcontainerInfo(cwd.value);
+  if (!result.ok) window.alert(`Could not build the devcontainer.\n\n${result.message}`);
+  else window.alert("Devcontainer built and enabled for this directory.\n\nClose and restart this session to run inside it.");
+}
+function onDevcontainerBadgeClick(): void {
+  if (!devcontainerBadgeClickable.value) return;
+  if (devcontainerInfo.value?.enabled) void copyDevcontainerName();
+  else void buildDevcontainerNow();
 }
 // Whether this cell IS the workspace, for the header badge. Same lexical comparison the launcher
 // chip makes (`launchChips`), so a cell launched from the WORKSPACE chip is badged WORKSPACE.
@@ -521,6 +573,7 @@ onUnmounted(() => {
   offReconnect?.();
   if (badgePoll) clearInterval(badgePoll);
   if (devcontainerCopiedTimer) clearTimeout(devcontainerCopiedTimer);
+  if (devcontainerBuildTimer) clearInterval(devcontainerBuildTimer);
 });
 
 // Set when the user starts a FRESH session from the launcher, so the next server
@@ -1350,17 +1403,21 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                  container go unnoticed for two hours (see hook-socket.ts's fix). Reads straight
                  off dirConfig rather than the pty's own spawn decision: the two can only drift
                  while a session outlives a later toggle, which is rare, and the status dot beside
-                 it already accepts that same staleness for its own directory-level facts. -->
+                 it already accepts that same staleness for its own directory-level facts. When a
+                 devcontainer exists here but isn't running yet (never built, or built without
+                 this session — see buildDevcontainerNow above), the same badge doubles as the way
+                 back: click to build it now instead of retyping the directory into an empty cell. -->
             <button
-              v-if="dirConfig.devcontainer"
+              v-if="devcontainerInfo?.hasConfig"
               type="button"
               data-testid="cell-devcontainer-badge"
               class="material-symbols-outlined flex-none border-none bg-transparent p-0 text-[13px] leading-none text-dim"
-              :class="devcontainerName ? 'cursor-pointer hover:text-fg' : 'cursor-default'"
+              :class="[devcontainerBadgeClickable ? 'cursor-pointer hover:text-fg' : 'cursor-default', devcontainerBuilding ? 'animate-spin' : '']"
+              :disabled="devcontainerBuilding"
               :title="devcontainerBadgeTitle"
-              @click.stop="copyDevcontainerName"
+              @click.stop="onDevcontainerBadgeClick"
             >
-              {{ devcontainerNameCopied ? "check" : "inventory_2" }}
+              {{ devcontainerBadgeIcon }}
             </button>
             <span class="cell-dot" :class="[CELL_DOT, statusClass, dotStatusClass, dotMissedClass]" :title="statusLabel" />
             <!-- The path is NOT here any more — it is the lead item on row 2 (see the

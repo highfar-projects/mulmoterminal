@@ -327,9 +327,10 @@ async function pickDir(): Promise<void> {
 // The chip's launch button: a one-click quick launch — fill the field and jump straight into a
 // fresh session in that dir. A chip on a worktree somebody is in fills the field without
 // launching, so the reason lands under it rather than nothing happening.
-function selectPreset(p: CwdPreset): void {
+async function selectPreset(p: CwdPreset): Promise<void> {
   if (takenWorktreeAt(p.path)) return fillDir(p.path);
   emit("update:dir", p.path);
+  if (launchesAgent.value) await offerDevcontainerIfNeeded(p.path);
   emit("start", p.path);
 }
 
@@ -582,10 +583,11 @@ async function requestWorktree(repoDir: string, task: string): Promise<void> {
       return;
     }
     worktreeTask.value = "";
-    // The devcontainer offer (if `body.hasDevcontainer`) happens centrally instead, the moment
-    // this `start` reaches TerminalCell.vue's startPickedAgent — the single place every launch
-    // goes through, worktree row or not. See composables/useDevcontainerOffer.ts.
     await syncMcpGroupsInto(path);
+    // `hasDevcontainer` rides createWorktree's own answer (server/git/worktrees.ts) rather than a
+    // second round trip to /api/devcontainer/status for a directory that was just created and
+    // can't have answered the offer yet.
+    if (isRecord(body) && body.hasDevcontainer === true) await offerDevcontainerIfNeeded(path);
     emit("start", path);
   } catch (e) {
     reportWorktreeFailure(repoDir, requestFailureText(e));
@@ -603,8 +605,14 @@ const openWorktree = async (w: Worktree): Promise<void> => {
   if (action === "busy") return;
   await runWorktreeAction(openKey(w), async () => {
     await syncMcpGroupsInto(w.path);
-    if (action === "resume" && w.session) emit("resume", { id: w.session.id, cwd: w.path, agent: w.session.agent });
-    else emit("start", w.path);
+    if (action === "resume" && w.session) {
+      emit("resume", { id: w.session.id, cwd: w.path, agent: w.session.agent });
+      return;
+    }
+    // A fresh session in an existing worktree — listWorktrees doesn't carry hasDevcontainer the
+    // way createWorktree's own answer does, so this asks fresh rather than skipping the offer.
+    await offerDevcontainerIfNeeded(w.path);
+    emit("start", w.path);
   });
 };
 
