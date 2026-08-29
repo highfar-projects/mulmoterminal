@@ -2929,7 +2929,7 @@ describe("the devcontainer badge — building a devcontainer a session was start
       expect(upBodies).toHaveLength(0);
     });
 
-    it("confirms, sends rebuild:true, spins while it runs, and alerts to restart on success", async () => {
+    it("confirms, sends rebuild:true, spins while it runs, and points at Reconnect on success", async () => {
       const { finishUp, upBodies } = mockDevcontainerFetch([{ hasConfig: true, enabled: true, containerName: "angry_rubin" }]);
       vi.spyOn(window, "confirm").mockReturnValue(true);
       const w = mountCell(SESSION_ID, { initialCwd: "/home/me/proj" });
@@ -2943,7 +2943,9 @@ describe("the devcontainer badge — building a devcontainer a session was start
 
       finishUp({ ok: true, body: { ok: true } });
       await flushPromises();
-      expect(window.alert).toHaveBeenCalledWith(expect.stringContaining("restart"));
+      // Rebuilding kills the running session (a normal exit, as far as the server can tell) —
+      // Terminal.vue's own Reconnect button is what actually resumes it, not a relaunch.
+      expect(window.alert).toHaveBeenCalledWith(expect.stringContaining("Reconnect"));
       expect(rebuildBtn(w).attributes("disabled")).toBeUndefined();
     });
 

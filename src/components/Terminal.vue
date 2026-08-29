@@ -304,6 +304,21 @@ watch(
   },
 );
 
+// The manual way back once auto-reconnect has permanently given up on this slot (any
+// exit/error/superseded frame sets sawExit, per reconnectPolicy.ts — a session whose devcontainer
+// was removed out from under it is exactly this: the pty exits, the server reaps it like any
+// other clean exit, and nothing here can tell that apart from one). `retarget` with the SAME
+// target is the same call a resumed session already makes on connectKey (above) — it clears
+// sawExit, drops any pending reconnectTimer, and reconnects, which for a still-on-disk session
+// lands the server on its existing resume-by-transcript path (re-reading the directory's
+// devcontainer flag fresh, so a rebuilt container is picked up with no server changes needed).
+// Excluded for a running `command` (the Run menu's script process): unlike a session, it has no
+// transcript to resume from, so a fresh connection could only ever find it gone.
+function reconnectNow(): void {
+  conn.retarget(slotKey, currentTarget());
+  conn.focus(slotKey);
+}
+
 // Report to the server whether this terminal is the user's actively-viewed pane, so
 // an unfocused grid cell can surface blocked/done and a viewed one stays suppressed.
 const managesAttention = computed(() => terminalManagesAttention(!!props.command, !!props.launcher));
@@ -578,6 +593,22 @@ onUnmounted(() => {
            to stay for the other values: "connecting" is why a terminal is blank, and the error
            state is why it stopped taking input. -->
       <span v-if="status !== 'connected'" data-testid="term-conn-status" class="rounded-[4px] px-2 py-0.5 text-[12px]" :class="statusClass">{{ status }}</span>
+      <!-- Auto-reconnect (reconnectPolicy.ts) gives up for good once this connection has seen an
+           exit/error/superseded frame — a session whose devcontainer was rebuilt out from under it
+           looks exactly like that from here, with no separate state of its own. `command` is left
+           out: a Run-menu script has no transcript to resume, so reconnecting could only find it
+           gone. -->
+      <button
+        v-if="status === 'disconnected' && !command"
+        type="button"
+        data-testid="term-reconnect"
+        class="inline-flex cursor-pointer items-center rounded-[4px] border-0 bg-transparent p-0.5 text-[var(--cell-btn,var(--text-muted))] hover:bg-selected hover:text-fg"
+        title="Reconnect this session"
+        aria-label="Reconnect this session"
+        @click="reconnectNow"
+      >
+        <span class="material-symbols-outlined text-[18px]" aria-hidden="true">refresh</span>
+      </button>
       <RunMenu v-if="runMenu" :cwd="serverCwd" @run="(c) => emit('run', c)" />
       <SkillMenu v-if="runMenu" :cwd="serverCwd" @skill="onSkill" />
       <!-- flex-none: the lead slot beside it now grows and truncates (a path), and without this the

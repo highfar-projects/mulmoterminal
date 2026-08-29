@@ -280,17 +280,24 @@ async function buildDevcontainerNow(): Promise<void> {
 // Confirmed, unlike the initial build above: `--remove-existing-container` (server/config/
 // devcontainer-flag.ts) deletes the CURRENT container first, so anything already running inside
 // it — including, often, this very session — is what the confirm is warning about, not a
-// hypothetical.
+// hypothetical. Points at Terminal.vue's own reconnect button rather than "close and restart":
+// a session killed this way is a normal exit as far as the server is concerned (nothing detects
+// "the container disappeared" specially), so its transcript is still on disk and reconnecting —
+// not relaunching — is what actually resumes it inside the fresh container.
 async function rebuildDevcontainerNow(): Promise<void> {
   if (!devcontainerInfo.value?.enabled) return;
   if (
     !window.confirm(
-      "Rebuild this directory's devcontainer?\n\nThe existing container is removed and rebuilt. Any session already running inside it — including this one — will need to be restarted afterward.",
+      "Rebuild this directory's devcontainer?\n\nThe existing container is removed and rebuilt. Any session already running inside it — including this one — will disconnect, and can be resumed afterward with that terminal's own Reconnect button.",
     )
   ) {
     return;
   }
-  await runDevcontainerBuild(true, () => window.alert("Devcontainer rebuilt.\n\nClose and restart any session running inside it, including this one."));
+  await runDevcontainerBuild(true, () =>
+    window.alert(
+      "Devcontainer rebuilt.\n\nAny session that was running inside it (including this one) disconnected — use its Reconnect button to resume it in the fresh container.",
+    ),
+  );
 }
 function onDevcontainerBadgeClick(): void {
   if (!devcontainerBadgeClickable.value) return;
