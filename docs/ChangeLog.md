@@ -8,6 +8,88 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.13.0 — 2026-08-29
+
+> **Setup guide:** [Files beside the terminal, and a path you can insert](https://receptron.github.io/mulmoterminal/guide/en/v4.13.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.13.0.html))
+
+Browsing files stops taking the whole screen, a file's path can be put where you are typing, every
+keyboard shortcut is finally listed, and a splitter drag no longer gets swallowed by an embedded
+preview.
+
+### "Browse files in the app" opens the pane, not the full-screen view (#1910, #1911)
+
+The path menu's **Browse files in the app** replaced the screen with the full Files view. It now
+opens the file pane **beside the enlarged terminal**, enlarging the cell first if the grid is tiled.
+
+The full-screen view is still what a **header button** you wrote yourself opens (`"run": "open"`
+with `open.files`), and that divergence is deliberate rather than an oversight: a button can carry
+any path, while the pane can only be rooted at the enlarged terminal's directory. One setting, two
+destinations, decided by where you came from.
+
+### Right-click a tree row to insert its path at the terminal's cursor (#1859, #1912)
+
+New menu on any row in the file pane's tree: **Insert relative path** and **Insert absolute path**.
+The text lands at the cursor in the terminal beside it, for the sentence you are already typing —
+`read ` and then the file, instead of typing the path out or fetching it from elsewhere. Relative is
+relative to that terminal's directory.
+
+### Settings lists every keyboard shortcut, bound or not (#1858, #1892, #1894)
+
+**Settings → Keyboard shortcuts** previously showed nothing about what could be bound. It now lists
+every action MulmoTerminal has, each with its binding or `Not set`, plus a `send` row for key
+sequences forwarded to the terminal.
+
+The list is **read-only on purpose**. `keymap` is still written by the `mulmoterminal-keys` skill,
+reached from a **Set up shortcuts…** button in the section — and the section now says what the agent
+does that the screen cannot: it checks each key against your existing bindings and against the ones
+a browser or macOS takes first, which is where a hand-written keymap usually fails. The action
+labels are translated (#1894); they had been the only English left in a Japanese screen.
+
+### A splitter drag is no longer eaten by an iframe (#1899, #1907)
+
+Dragging the bar beside an enlarged terminal **stopped following the pointer** the moment the cursor
+crossed onto a pane's embedded preview, and **releasing there did not end the drag**: the listeners
+stayed armed, so moving back over the page kept resizing with no button held.
+
+Pointer events go to whatever is under the cursor, and nothing inside an iframe reaches the parent
+document — not even on `window` in the capture phase. The drag now **captures the pointer**, so every
+event for it is retargeted to the separator whatever it passes over.
+
+Three more ways a drag can end were closed with it: `pointercancel` (a captured pointer that is
+cancelled sends no `pointerup`), `lostpointercapture` (the browser releases capture implicitly when
+the capturing element leaves the document — the pane closing under a held button, and the only one of
+the three that arrives at the separator rather than at `window`), and a **second press** on the same
+5px bar, which used to open a second drag with its own origin so the two fought over the width.
+
+Worth recording because it is why the report sat unreproduced twice: **the separator tracks the
+pointer 1:1, so while the width is free the cursor never leaves it.** A slow drag never reaches the
+iframe at all. It takes a fast one, or a width already at its floor — or a preview sitting flush
+against the bar, which is the shared-app case the issue was filed from.
+
+### The server serves `::1` as well as `127.0.0.1` (#1893, #1903)
+
+`localhost` resolves to both, and the app answered on only one — so on a machine that resolves IPv6
+first, the address the launcher printed was not the address the browser reached. The server now binds
+both loopbacks, and the startup probe asks the kernel which family it actually got rather than
+inferring it.
+
+### Smaller fixes
+
+- **Copy button on a rendered code block (#1895, #1908)** — `CopyCodeBlock` dropped the `class` it was
+  passed, so the button lost its styling whenever the component had a fragment root.
+- **Collision warning names the right winner (#1901, #1906)** — when `copy` and a `send` binding share
+  a keystroke the warning said only `copy` would fire, which is false: `copy` acts only while text is
+  selected, so `send` is what fires when nothing is.
+- **Header buttons and chips replace, not merge (#1896, #1904)** — writing them through the config API
+  replaces the whole array; the `mulmoterminal-header` skill said "partial merge" and users lost the
+  buttons they already had.
+- **`questionPaneEnabled` is documented (#1897, #1905)** — it existed in the UI, the skills and the
+  coverage test, and in no guide page.
+- **`browserUrl` stays on localhost for two reasons (#1900, #1909)** — both are now written down, along
+  with what to do when the sign-in flow will not complete.
+- **Two grid specs stopped making real requests (#1913, #1916)** — they mounted components without
+  mocking `fetch`, so they hit the live server; the guard is now a shared helper.
+
 ## mulmoterminal@4.12.0 — 2026-08-28
 
 > **Setup guide:** [The launch panel, and getting your grid back](https://receptron.github.io/mulmoterminal/guide/en/v4.12.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.12.0.html))

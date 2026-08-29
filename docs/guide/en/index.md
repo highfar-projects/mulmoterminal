@@ -8,10 +8,9 @@ description: A browser-terminal cockpit for running several AI coding agents (Cl
 
 # MulmoTerminal Guide (English)
 
-> **4.12.0 is out.** If 4.11.0 came up with an empty grid, this brings your layout back — it was
-> filed under a different hostname, not deleted. The launch form now opens as a panel at the right
-> edge, on the directory of whichever terminal you started it from —
-> [what changed and what to do about it](v4.12.0.html).
+> **4.13.0 is out.** Browsing files now opens **beside** the enlarged terminal instead of over it,
+> a right-click on any row puts that file's path at your cursor, and Settings lists every keyboard
+> shortcut whether it is bound or not — [what moved and where to find it](v4.13.0.html).
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching
