@@ -85,14 +85,19 @@ const ALLOWED = new Map<string, { session: string; body: () => unknown }>(
 const unexpected: string[] = [];
 const asked = new Set<string>();
 const enlarged = new Set<string>();
+// Which cell is enlarged RIGHT NOW, as the test believes. Judged per request rather than over the
+// whole test, because a SET cannot see a stale one: after the zoom moves to the second cell, a
+// late request for the first leaves the set exactly as it was.
+let current = "";
 const mockApi = () => {
   unexpected.length = 0;
   asked.clear();
   enlarged.clear();
+  current = "";
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     const route = ALLOWED.get(url);
-    if (route) {
+    if (route?.session === current) {
       asked.add(route.session);
       return { ok: true, json: async () => route.body() };
     }
@@ -104,7 +109,8 @@ const mockApi = () => {
 const sessionOf = (uid: number) => CELLS.find((c) => c.uid === uid)?.session ?? "";
 
 const mountGrid = () => {
-  enlarged.add(sessionOf(1));
+  current = sessionOf(1);
+  enlarged.add(current);
   return mount(TerminalGrid, {
     props: {
       cells: CELLS,
@@ -130,7 +136,10 @@ const filesPane = (w: Grid) => w.findComponent({ name: "FilesPane" });
 
 /** The parent honouring a `toggle-expand`, which is what puts the pane beside the new cell. */
 const applyExpand = async (w: Grid, uid: number) => {
-  enlarged.add(sessionOf(uid));
+  // Before the props change, so a request issued during that flush is judged against the cell the
+  // zoom is moving TO, and one for the cell it left is the stale request this is here to catch.
+  current = sessionOf(uid);
+  enlarged.add(current);
   await w.setProps({ expandedUid: uid });
   await flushPromises();
 };
