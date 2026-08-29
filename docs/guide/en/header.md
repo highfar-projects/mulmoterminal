@@ -66,6 +66,10 @@ button too, write it yourself in [`buttons`](#run) and you get both.
 | `~/.mulmoterminal/config.json` | **every** terminal |
 | `<project>/.mulmoterminal.json` | only cells opened **in that directory** |
 
+**Buttons appear on AGENT cells** — Claude, Codex, Antigravity, Grok, Muse. A terminal started from
+a launcher chip, a Shell cell or a Run command shows none of them: it is your own command line, and
+nothing this app configures is added to it.
+
 Starting per-project is the safer experiment. Create `.mulmoterminal.json` in the project root:
 
 ```json

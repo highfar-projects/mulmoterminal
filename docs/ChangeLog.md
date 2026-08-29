@@ -8,6 +8,81 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.14.0 — 2026-08-30
+
+> **Setup guide:** [Restart an agent without leaving the cell](https://receptron.github.io/mulmoterminal/guide/en/v4.14.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.14.0.html))
+
+An agent can be restarted in place, a shared app can send a participant only their own rows, and a
+`PORT` that an older version baked into the tmux server no longer follows you across upgrades.
+
+### Restart the agent in the cell you are looking at (#1918, #1920)
+
+Changing an MCP server, a plugin or `~/.mulmoterminal/config.json` leaves the agent already running
+in a cell with the old view of the world, and the way back was to close the cell, pick the directory
+and agent again in the launcher, and find the conversation under **or resume here**. There is now a
+restart that keeps all three: same cell, same directory, same conversation.
+
+It is **opt-in on two surfaces** and appears in no cell until you write it in — most people never
+need it. A header button takes the new `run: "action"` type with `"action": "restart"`; the keyboard
+action is `terminal-restart`, which acts on the enlarged terminal. Neither ships in the defaults.
+
+The shape is decided by tmux, and the cost is stated rather than hidden. Reconnecting to a live tmux
+session only **attaches** — nothing is re-read, because nothing is re-started — so a restart has to
+reap the tmux session and let the next connection start a fresh `--resume`. That reads the
+conversation back from its transcript, which spends real tokens; it is not a free reload. It also
+acts immediately, with no confirmation, even mid-turn, the same as `terminal-close`.
+
+No server-side route was added: the mechanism is the close button's existing
+`POST /api/session/:id/terminate`, awaited, followed by a retarget onto the same session id. The
+ordering is the part that breaks silently if inverted — reconnecting first attaches to the tmux
+session that has not been reaped yet, which looks exactly like a restart that did nothing — so it
+lives as a pure function in `src/composables/restartSession.ts`, pinned by a unit spec and a mount
+spec that both go red when the two steps are swapped.
+
+`codex`, `antigravity`, `grok` and `muse` cells take the same path, each resuming its own
+conversation.
+
+### Shared apps: `ownRead` limits a participant's page to their own rows (#1917)
+
+`@receptron/sharedapp` moves to 0.35.0, which adds `ownRead` on a view: the page receives only the
+rows the viewer wrote, instead of every row plus a per-row ownership check. The declaration is not a
+permission — it makes the page **simpler**, dropping the owner test and the third "still deciding"
+state, at the cost of `limit` and of catching a duplicate slug before the row is sent.
+
+The **magazine** template's declaration is deliberately unchanged, and decision 10 in it records why:
+while a handful of people are writing, handing the whole collection to every page is what lets the
+app say "that URL name is taken" *before* the article is sent. It stops being right when the archive
+grows and a page that exists to fix your own article is reading everyone's, bodies included — a read
+that grows with the age of the app.
+
+### A `PORT` left behind in the tmux server no longer steals this app's port (#1919, #1921)
+
+4.11.0 stopped the launcher handing MulmoTerminal's own port to every cell, but could not reach the
+**tmux server**, which outlives every restart of the app: a `PORT` baked into its global environment
+before that fix kept being handed to new panes, so a dev server started in a cell still bound the
+port MulmoTerminal was listening on and the browser dropped. Upgrading did not clear it, and the
+manual `tmux -L mulmoterminal set-environment -gu PORT` is no longer needed.
+
+Measuring the reported case turned up a second route that was live in 4.13.0 and is not in the issue:
+`PORT=<n> mulmoterminal` leaves that value in the server's own environment, so when no tmux server is
+running yet, the first spawn's client **creates** one carrying it — and a tmux server keeps the
+environment it was started with for life.
+
+Both are closed, by one rule: **the only `PORT` taken away is the one this server is listening on.**
+It is scrubbed from a running tmux server's global environment at startup, and never handed to a tmux
+client that might create a server. Anything else under that name stays — `PORT=3000 mulmoterminal
+--port 34601` still puts the user's 3000 in the cells, and a value admitted that way survives a later
+restart that carries no `PORT` of its own, because nothing in the tmux environment distinguishes it
+from a leftover. The accepted limit is stated in the code and pinned by a test: a stale value naming
+some *other* port is left alone, since it cannot cost this server its address.
+
+Verified end to end rather than argued — an isolated server with a real pane reading its own
+environment back, across the leftover, fresh-server, user-value, restart and `worktreeEnv` cases.
+
+### Dependencies (#1922)
+
+`@google/genai` 2.19.0, `zod` 4.5.4, `puppeteer` 25.9.0, `sharp` 0.35.4, `knip` 6.33.0.
+
 ## mulmoterminal@4.13.0 — 2026-08-29
 
 > **Setup guide:** [Files beside the terminal, and a path you can insert](https://receptron.github.io/mulmoterminal/guide/en/v4.13.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.13.0.html))
