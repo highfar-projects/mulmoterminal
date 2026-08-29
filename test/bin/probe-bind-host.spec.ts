@@ -251,6 +251,14 @@ describe("the URL the browser is opened at", () => {
       expect(note).toContain("http://localhost:34567");
     });
 
+    // The layout is not the only thing left behind on `localhost`: Firebase authorizes that
+    // hostname and not `127.0.0.1`, so phone pairing cannot sign in here either (#1900). Said up
+    // front because the alternative is finding out while trying to pair a phone — #1889's shape,
+    // one feature further along.
+    it("says that phone sign-in does not work on the address it fell back to", () => {
+      expect(target("127.0.0.1").note?.toLowerCase()).toContain("sign-in");
+    });
+
     // A widened bind takes the same branch — the ambiguity is about `localhost`, not about what
     // the server bound, so the reason must not change with the bind.
     it("steps aside for a widened bind too", () => {
@@ -367,8 +375,13 @@ describe("the launcher asks the child rather than classifying BIND_HOST", () => 
     expect(launcher).toMatch(/launcherReachHost\(msg\.address\)/);
   });
 
+  // Anchored on the FIRST argument only. `beginReady` grew a second one (the child's own report
+  // about `::1`, #1903) and a closed `\)` made this go red for a reason that was not a defect —
+  // which is the third time this guard has done that, and exactly what the note above warns of.
+  // What it is actually about is that the poll starts from the RESOLVED address, so that is all
+  // it now pins.
   it("starts the readiness check from that resolved address", () => {
-    expect(launcher).toMatch(/beginReady\(reported\)/);
+    expect(launcher).toMatch(/beginReady\(reported\b/);
   });
 
   // The fallback prefers the address the PROBE learned from the kernel, and never passes a raw
