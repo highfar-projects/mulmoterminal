@@ -52,19 +52,27 @@ const cell = (uid: number, session: string, cwd: string): Cell => ({ uid, sessio
 // no origin under jsdom, which is why the miss left nothing to notice. Each is answered as the
 // quiet case, which is what these tests assume anyway.
 //
-// Listing them one by one rather than answering `{}` to everything is what makes a FOURTH request
-// visible — but only because it is RECORDED here and asserted below. Throwing does not work:
-// every mount-time caller catches its own fetch failure (fetchOpenQuestion, hasStoredCard, the
-// tools watcher), so the rejection is swallowed and the spec passes knowing nothing about it.
+// Matched WHOLE, not by prefix: `/api/question/<id>/answer` is a real route in the same module
+// (openQuestion.ts), and an `includes` test would wave it — or any later route under one of these
+// three prefixes — through as though the mount had always made it. Which is the one thing this
+// list exists to notice. Codex, iter-2 on PR #1913.
+const MOUNT_ROUTES: [RegExp, () => unknown][] = [
+  [/^\/api\/question\/[^/]+$/, () => ({ question: null })],
+  [/^\/api\/agent\/toolResults\/[^/]+$/, () => ({ toolResults: [] })],
+  [/^\/api\/tools\?sessionId=[^&]+$/, () => ({ groups: [] })],
+];
+
+// A fourth request is caught because it is RECORDED here and asserted below. Throwing does not
+// work: every mount-time caller catches its own fetch failure (fetchOpenQuestion, hasStoredCard,
+// the tools watcher), so the rejection is swallowed and the spec passes knowing nothing about it.
 // Both Codex and CodeRabbit caught that on PR #1913, against the first cut of this file.
 const unexpected: string[] = [];
 const mockApi = () => {
   unexpected.length = 0;
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
-    if (url.includes("/api/question/")) return { ok: true, json: async () => ({ question: null }) };
-    if (url.includes("/api/agent/toolResults/")) return { ok: true, json: async () => ({ toolResults: [] }) };
-    if (url.includes("/api/tools")) return { ok: true, json: async () => ({ groups: [] }) };
+    const body = MOUNT_ROUTES.find(([route]) => route.test(url))?.[1];
+    if (body) return { ok: true, json: async () => body() };
     unexpected.push(url);
     return { ok: false, status: 500, json: async () => ({}) }; // the caller's own failure path, which it handles
   }) as unknown as typeof fetch;
