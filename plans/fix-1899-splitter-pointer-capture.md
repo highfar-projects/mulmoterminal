@@ -68,6 +68,10 @@ Files ペインには iframe の左にファイル一覧の列があるので上
 正常経路では `stop` 自身の `releasePointerCapture` が `lostpointercapture` を発火させるので、
 **解放より前にそのリスナーを外す**（さもないと毎回 2 度決着する）。
 
+**リスナーの add と remove は 1 か所で対にした**（`bindDrag`）。4 本のうち 1 本を外し忘れる形が
+break-verify で実際に赤くなる欠陥であり、離れた 2 か所が一致し続けることに依存させないため。
+これでドラッグ本体は 20 行以内に収まる。
+
 あわせて `dragSplitter` を `src/composables/dragSplitter.ts` へ切り出した。バグの規則を
 それ自身のファイルの関数にしてテスト可能にするため（`remember` だけ注入）。**本体は逐語で移動**。
 
@@ -122,8 +126,12 @@ Resize the thumbnail strip: 150 -> 230 (drag) -> 230 (release) -> 230 (button UP
 | `lostpointercapture` を購読しない | **1 red** |
 | `lostpointercapture` のリスナーを外さない | **1 red** |
 | `onEnd` から `pointerId` 選別を外す | **3 red** |
+| `unbind` を release の**後**にする | **4 red** |
 
-最後の 1 行は**最初は緑だった** —— 「決着済みのドラッグを二度決着させない」が未カバーだったので、
+最後の行（順序）も**最初は緑だった** —— スタブの `releasePointerCapture` が実ブラウザと違って
+`lostpointercapture` を発火しなかったため、順序が観測できなかった。スタブを実挙動に合わせてから赤にしている。
+
+`stop` が `live` を消し忘れる行も**最初は緑だった** —— 「決着済みのドラッグを二度決着させない」が未カバーだったので、
 その不変条件を pin するテストを足してから赤にしている。
 
 ## jsdom には pointer capture が無い

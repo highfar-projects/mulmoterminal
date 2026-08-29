@@ -10,7 +10,12 @@ const separator = () => {
   const held = new Set<number>();
   Object.assign(el, {
     setPointerCapture: (id: number) => held.add(id),
-    releasePointerCapture: (id: number) => held.delete(id),
+    // A real release fires `lostpointercapture` in turn — which is the whole reason the teardown
+    // has to unbind before it releases. A stub that stays silent cannot show that order at all.
+    releasePointerCapture: (id: number) => {
+      held.delete(id);
+      el.dispatchEvent(new PointerEvent("lostpointercapture", { pointerId: id, bubbles: true }));
+    },
     hasPointerCapture: (id: number) => held.has(id),
   });
   return { el, held };

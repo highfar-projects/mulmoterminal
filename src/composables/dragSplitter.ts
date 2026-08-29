@@ -13,6 +13,26 @@ export type SplitterDrag = {
   remember: (key: string, value: string) => void;
 };
 
+/** Every way this drag hears from the pointer, added and removed as ONE.
+ *
+ *  A drag ends three ways, not two. `pointerup` and `pointercancel` arrive at `window`; the third
+ *  arrives at the separator, because the browser releases capture implicitly when the capturing
+ *  element leaves the document — the pane closing under a held button — and sends neither of the
+ *  other two. Missing any one of them leaves the rest armed with nothing to tear them down, which
+ *  is #1899 by another route, so the pairing lives here rather than in two places that must agree. */
+const bindDrag = (separator: HTMLElement | null, onMove: (e: PointerEvent) => void, onEnd: (e: PointerEvent) => void): (() => void) => {
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onEnd);
+  window.addEventListener("pointercancel", onEnd);
+  separator?.addEventListener("lostpointercapture", onEnd);
+  return () => {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onEnd);
+    window.removeEventListener("pointercancel", onEnd);
+    separator?.removeEventListener("lostpointercapture", onEnd);
+  };
+};
+
 export function dragSplitter(spec: SplitterDrag): (e: PointerEvent) => void {
   // One drag at a time per separator. A second press — a second finger on the same 5px bar —
   // would otherwise open a second closure with its own origin, and the two would fight over the
@@ -31,43 +51,29 @@ export function dragSplitter(spec: SplitterDrag): (e: PointerEvent) => void {
     // separator keeps up with the cursor and stays under it, which hides this; the moment the
     // pointer outruns it (a fast drag, or any drag once the width clamps) the cursor lands on
     // the pane's iframe and BOTH the moves and the release are lost. The drag then never ends:
-    // the listeners below stay on, and moving back over this document resizes with no button
-    // held. Capturing retargets every event for this pointer to the separator, so they reach
-    // these listeners whatever they pass over.
+    // the listeners stay on, and moving back over this document resizes with no button held.
+    // Capturing retargets every event for this pointer to the separator, so they reach those
+    // listeners whatever they pass over.
     const separator = e.currentTarget instanceof HTMLElement ? e.currentTarget : null;
     separator?.setPointerCapture(e.pointerId);
     // Only THIS pointer steers the drag. A second touch or pen is a separate pointer whose
-    // events still bubble here, and the `pointercancel` subscription below is what makes that
-    // reachable: a stray finger cancelled by the browser's own scrolling would otherwise end a
-    // drag the user is still making.
+    // events still bubble here, and subscribing to `pointercancel` is what makes that reachable:
+    // a stray finger cancelled by the browser's own scrolling would otherwise end a drag the
+    // user is still making.
     const mine = (ev: PointerEvent) => ev.pointerId === e.pointerId;
     const onMove = (ev: PointerEvent) => {
       if (mine(ev)) spec.resize(start, spec.axis(ev) - origin);
     };
-    // `pointercancel` ends it too: a captured pointer that is cancelled sends no `pointerup`,
-    // which would strand the drag the same way.
     const onEnd = (ev: PointerEvent) => {
       if (mine(ev)) stop();
     };
+    const unbind = bindDrag(separator, onMove, onEnd);
     const stop = () => {
       live = null;
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onEnd);
-      window.removeEventListener("pointercancel", onEnd);
-      // Removed BEFORE the release below, which fires `lostpointercapture` itself.
-      separator?.removeEventListener("lostpointercapture", onEnd);
+      unbind(); // before the release, which fires `lostpointercapture` in turn
       if (separator?.hasPointerCapture(e.pointerId)) separator.releasePointerCapture(e.pointerId);
       spec.remember(spec.key, String(spec.size()));
     };
     live = stop;
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onEnd);
-    window.addEventListener("pointercancel", onEnd);
-    // The third way a drag ends, and the only one that arrives at the separator rather than at
-    // window: the browser releases capture implicitly when the capturing element leaves the
-    // document — the pane closing under a held button. Neither `pointerup` nor `pointercancel`
-    // follows, so without this the window listeners stay armed with nothing left to tear them
-    // down, which is #1899 again by another route.
-    separator?.addEventListener("lostpointercapture", onEnd);
   };
 }
