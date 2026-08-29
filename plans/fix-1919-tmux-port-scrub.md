@@ -31,16 +31,27 @@ exit 1）。つまりサーバを作るのは `new-session`＝ `ptySpawn` の tm
 
 ## 判断
 
-### D1: `PORT` は scrub してよい。`NODE_ENV`（#989）と違う理由
+### D1: `PORT` は**値**で判断する（名前だけでは決められない）
 
 #989 は「ユーザー自身が export した値と区別できない」ため NODE_ENV を自動 scrub しないと決めた。
-`PORT` はその論法が当たらない: **`PORT` は MulmoTerminal 自身が読む名前**（`server/config/env.ts:8`、
-`--port` > `PORT` > 34567）なので、**我々の** tmux サーバのグローバル環境にある `PORT` は定義上
-「MulmoTerminal が今 listen しているポート」でしかない。それを全セルに配ることは、
+`PORT` は **MulmoTerminal 自身が読む名前**（`server/config/env.ts:20`、`--port` > `PORT` > 34567）
+なので、そこには識別可能な「我々の値」がある —— **今 listen しているポート**。それを全セルに配ることは
 「すでに我々が握っているアドレスを bind しろ」と dev サーバに言うのと同じで、#1857 そのもの。
 
-rc で `export PORT=3000` している人は、セルの rc が同じ値を再設定するので失われない。
-失われるのは `PORT=34601 mulmoterminal` のような**一度きりの前置き**だけ＝ leak そのもの。
+**ただし名前だけで決めると行き過ぎる（codex-review iter-1 の指摘）。** `PORT=3000 mulmoterminal
+--port 34601` では、我々の env の `PORT`（3000）は bind ポート（34601）ではなく**ユーザー自身の値**で、
+#1873 Items 2 がセルに届いてよいと決めたもの。したがって規則は値で書く（`isOwnPort`）:
+
+| tmux グローバル env の値 | 判定 |
+|---|---|
+| bind ポートと同じ | **我々の leak** → 消す |
+| 我々の env の `PORT` と同じ（かつ bind ポートでない） | **ユーザーの値の素通し** → 残す |
+| どちらでもない | 我々が今回置けたはずがない ＝ **旧版の残骸** → 消す |
+
+クライアント側は候補の値が「我々の env の `PORT`」しかないので、同じ規則が
+「`inherited === bound` のときだけ落とす」に縮約される（`tmuxClientUnsetNames`）。
+
+rc で `export PORT=3000` している人は、そもそもセルの rc が同じ値を再設定するので失われない。
 
 ### D2: 起動時 scrub だけでは足りない（issue の提案は 1 の半分）
 
@@ -49,25 +60,34 @@ rc で `export PORT=3000` している人は、セルの rc が同じ値を再�
 の env からも `PORT` を落とす。影響範囲は「新しく作られる tmux サーバが継承する env」だけ:
 ペインの env は `new-session -e` 由来で、そこは触らない（`worktreeEnv` の `PORT` は従来どおり届く）。
 
-### D3: 触らないもの
+### D3: `PORT` を判定するために `infra/tmux.ts` が `config/env.ts` を import する
+
+`infra/` から `config/` を引くのはこのリポジトリで初（既存は全部コメント内の言及だけ）。代替は
+`tmuxAvailable()` の 4 箇所の呼び出し側から bind ポートを渡すことだが、**渡し忘れた経路が黙って
+何も scrub しない**という、この repo の CLAUDE.md が繰り返し警告している形になる。循環は無い
+（`config/env.ts` は node builtins と `port-from-argv` しか引かない）。
+
+### D4: 触らないもの
 
 - **非 tmux 経路（`ptyEnv`）**: そこで落とすと #955 の「PTY サニタイザでユーザー自身の値を奪うのは
   違う」判断を覆すことになる。tmux が無い環境のフォールバックのみで、rc の値は rc が戻す。PR に明記。
 - **`ANTHROPIC_API_KEY` の同型の非対称**（既存サーバなら scrub されるが、新規作成サーバには焼き付く）:
   同じ穴だが挙動の変更範囲が広いので今回は広げない。PR で報告する。
 
-### D4: テストできる形にする
+### D5: テストできる形にする
 
 `scrubGlobalEnvironment()` は tmux を呼ぶので単体テストできない。判断だけを純関数
-`isScrubbedGlobalEnvName(name)` に切り出し、集合の中身をテストする。
+（`isOwnPort` / `isScrubbedGlobalEnvEntry` / `tmuxClientUnsetNames`、いずれもポートを引数で受ける）に
+切り出してテストする。`pty-spawn-env.spec.ts` の tmux モックは `importOriginal` でこれらの純関数だけ
+本物を使う —— 手書きのスタンドインを置くとスタンドインを pin することになるため。
 
 ## 変更
 
 | 変更 | 場所 |
 |---|---|
-| `SCRUBBED_NAMES` に `PORT`、判断を純関数 `isScrubbedGlobalEnvName` に切り出し | `server/infra/tmux.ts` |
-| `TMUX_CLIENT_UNSET_NAMES`（新規作成される tmux サーバに焼き付けない名前） | `server/infra/tmux.ts` |
-| tmux クライアント spawn で `[...unset, ...TMUX_CLIENT_UNSET_NAMES]` | `server/session/pty-spawn.ts` |
+| `isOwnPort` / `isScrubbedGlobalEnvEntry`（値で判断する純関数）、`scrubGlobalEnvironment` を値ごと走査に | `server/infra/tmux.ts` |
+| `tmuxClientUnsetNames`（新規作成される tmux サーバに焼き付けない名前）と `ownPortFacts` | `server/infra/tmux.ts` |
+| tmux クライアント spawn で `[...unset, ...tmuxClientUnsetNames(ownPortFacts())]` | `server/session/pty-spawn.ts` |
 | 純関数のテスト / クライアント env と `-e` の非対称のテスト | `test/server/infra/tmux.spec.ts`, `test/server/session/pty-spawn-env.spec.ts` |
 
 ## 実機検証（2026-08-30）
@@ -83,6 +103,7 @@ scratch `CLAUDE_CWD` で実サーバを起動。**実ペインの env をペイ�
 |---|---|---|
 | **残骸**: 旧版の tmux サーバに `PORT=59999`、`--port 34719` で起動 | ペイン `RAW=[59999]` / global `PORT=59999` | ペイン `RAW=[]` / global `-PORT`（起動時 scrub で回収） |
 | **生きた経路**: tmux サーバ未起動、`PORT=34719 mulmoterminal` | ペイン `RAW=[34719]` / global `PORT=34719` | ペイン `RAW=[]` / global に `PORT` 無し |
+| **ユーザーの値**: `PORT=3000 mulmoterminal --port 34719`（iter-1 で追加） | ペイン `RAW=[3000]` | ペイン `RAW=[3000]` / global `PORT=3000`（**変えない**） |
 | どちらも `MULMOTERMINAL_PORT` | `MT=[34719]` | `MT=[34719]`（変わらず＝セルはサーバを見つけられる） |
 | `worktreeEnv: { PORT: { kind: port, base: 3000 } }` のディレクトリ | — | ペイン `RAW=[3000]`（`-e` は無傷、#1367 は保たれる） |
 
@@ -92,6 +113,21 @@ scratch `CLAUDE_CWD` で実サーバを起動。**実ペインの env をペイ�
   （`env -i … PORT=34567 tmux -L … new-session` → `show-environment -g` に `PORT=34567`）
 - `set-environment` / `has-session` は**サーバを起動しない**（`error connecting to …`, exit 1）
   ＝ サーバを作る経路は `ptySpawn` の tmux クライアントだけ、という前提の裏付け
+
+## codex-review 対応（iter-1、2026-08-30）
+
+`CODEX VERDICT: CHANGES REQUESTED` 1 件、**採用**。
+
+> `server/session/pty-spawn.ts:226` unconditionally removes `PORT` from the tmux client, even when
+> `--port` overrides it and leaves the raw value as a user-provided terminal setting. Preserve that
+> value when it differs from MulmoTerminal's resolved bind port, and cover
+> `PORT=3000 mulmoterminal --port 34601`.
+
+初版の根拠「我々の env の `PORT` は定義上 bind ポート」は **`--port` があると成り立たない**。
+D1 の規則を名前ベースから**値ベース**に書き換え、クライアント側も
+「`inherited === bound` のときだけ落とす」に変更。グローバル側も同じ規則にしないと
+「tmux サーバが先に居たかどうか」で `--port` 時の挙動が割れるため、両方を `isOwnPort` に寄せた。
+実機で `PORT=3000 --port 34719` を測り、ペインが `RAW=[3000]` を保つことを確認（上表）。
 
 ## ゲート
 

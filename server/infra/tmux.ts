@@ -8,6 +8,10 @@
 import { writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
+// The bind port, to tell OUR leaked PORT from the user's own (see isOwnPort). config/ is
+// otherwise above this layer; the alternative was threading the same two values through
+// tmuxAvailable's four call sites, where a path that forgot them would scrub nothing.
+import { PORT } from "../config/env.js";
 import { isLauncherEnvVar } from "./pty-env.js";
 import { spawnCapture, spawnCaptureAsync } from "./spawnCapture.js";
 import { splitLines } from "./split-lines.js";
@@ -203,35 +207,58 @@ export function parseTmuxEnvironment(stdout: string): Map<string, string> {
 // see ANTHROPIC_API_KEY, which silently outranks the auth token that aims it there. The
 // settings `env` block cannot express a REMOVAL, and a pane inherits the tmux server's
 // environment rather than ours, so this is where it has to be taken out (#579).
-// PORT is scrubbed for a reason NODE_ENV deliberately is NOT (#989): it is a name this server
-// itself reads (config/env.ts — `--port` > `PORT` > 34567), so a PORT in OUR tmux server's global
-// environment is by definition the port mulmoterminal is listening on. Handing that to every pane
-// only tells a dev server to bind the address we already hold, which is #1857 (#1919). A NODE_ENV
-// found there is a value we never consume and cannot be told apart from the user's own, so it
-// stays. A user who exports PORT from their rc keeps it: their rc runs inside the pane.
-const SCRUBBED_NAMES = new Set(["ANTHROPIC_API_KEY", "PORT"]);
+const SCRUBBED_NAMES = new Set(["ANTHROPIC_API_KEY"]);
 
-// Must this name go from a running server's global environment? Its own pure function so the set
-// is testable without standing up a tmux server.
-export function isScrubbedGlobalEnvName(name: string): boolean {
-  return isLauncherEnvVar(name) || SCRUBBED_NAMES.has(name);
+/** The two facts the PORT rule is decided against: the port we BIND, and the PORT our own process
+ *  carries. Since #1873 the bind port travels by argv, so the second is the USER's value and the
+ *  two differ exactly when `--port` named a different one. */
+export interface PortFacts {
+  bound: string;
+  inherited: string | undefined;
 }
 
-// Dropped from the environment of the tmux CLIENT a spawn runs, because scrubbing a RUNNING server
-// cannot reach the one that does not exist yet: `new-session` starts the server when none is up,
-// and that server inherits the client's environment wholesale — baking our own PORT into every
-// pane it will ever create. Measured: `set-environment` and `has-session` do not start a server,
-// so the client of a spawn is the only way in.
-//
-// Only server CREATION is affected. A pane takes its environment from `new-session -e`, so a
-// directory that reserved PORT for its worktree (#1367) still gets it.
-export const TMUX_CLIENT_UNSET_NAMES: readonly string[] = ["PORT"];
+/** Read off this process. The rules below take it as an argument instead, so they are testable. */
+export const ownPortFacts = (): PortFacts => ({ bound: String(PORT), inherited: process.env.PORT });
+
+/** Is a PORT found in our tmux server OURS to take away, rather than the user's own value?
+ *
+ *  Ours in two ways. It is the port we are listening on — a pane that inherits it under the name
+ *  every dev server reads is told to bind the address we are holding (#1857). Or it is not what our
+ *  own environment carries, so we cannot be passing it through this run: it is what a version
+ *  before #1873 baked into a tmux server that outlived it, which nothing clears (#1919).
+ *
+ *  `PORT=3000 mulmoterminal --port 34601` is why the NAME cannot decide this on its own, the way it
+ *  does for ANTHROPIC_API_KEY: that 3000 is the user's, has nothing to do with the address we hold,
+ *  and reaches a pane as it did before. NODE_ENV stays for the same reason and has no equivalent
+ *  test — we never read it, so no value under that name is identifiable as ours (#955, #989). */
+export function isOwnPort(value: string, ports: PortFacts): boolean {
+  return value === ports.bound || value !== ports.inherited;
+}
+
+/** Must this entry go from a RUNNING tmux server's global environment? */
+export function isScrubbedGlobalEnvEntry(name: string, value: string, ports: PortFacts): boolean {
+  if (isLauncherEnvVar(name) || SCRUBBED_NAMES.has(name)) return true;
+  return name === "PORT" && isOwnPort(value, ports);
+}
+
+/** What a spawn must drop from the tmux CLIENT's own environment, because scrubbing a RUNNING
+ *  server cannot reach the one that does not exist yet: `new-session` starts the server when none
+ *  is up, and that server keeps the environment it was started with for life — so our own bind port
+ *  would reach every pane it ever opens (#1919). Measured: `set-environment` and `has-session` do
+ *  not start a server, so a spawn's client is the only way in.
+ *
+ *  Only server CREATION is affected. A pane's environment comes from `new-session -e`, so a
+ *  directory that reserved PORT for its worktree (#1367) still gets it. */
+export function tmuxClientUnsetNames(ports: PortFacts): readonly string[] {
+  return ports.inherited === ports.bound ? ["PORT"] : [];
+}
 
 function scrubGlobalEnvironment(): void {
   const r = tmux(["show-environment", "-g"]);
   if (r.status !== 0) return;
-  for (const name of parseTmuxEnvironment(r.stdout).keys()) {
-    if (isScrubbedGlobalEnvName(name)) tmux(["set-environment", "-g", "-r", name]);
+  const ports = ownPortFacts();
+  for (const [name, value] of parseTmuxEnvironment(r.stdout)) {
+    if (isScrubbedGlobalEnvEntry(name, value, ports)) tmux(["set-environment", "-g", "-r", name]);
   }
 }
 

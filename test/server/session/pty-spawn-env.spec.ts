@@ -9,7 +9,11 @@ import path from "node:path";
 const spawn = vi.fn(() => ({ pid: 1, onData: vi.fn(), onExit: vi.fn(), write: vi.fn(), kill: vi.fn() }));
 vi.mock("node-pty", () => ({ default: { spawn: (...args: unknown[]) => spawn(...(args as [])) } }));
 const scrub = vi.fn();
-vi.mock("../../../server/infra/tmux.js", () => ({
+// `importOriginal` keeps the module's PURE parts real — the PORT rule the spawn asks for
+// (tmuxClientUnsetNames/ownPortFacts) is the thing under test below, and a hand-written stand-in
+// would pin the stand-in. Only what shells out to tmux is replaced.
+vi.mock("../../../server/infra/tmux.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/infra/tmux.js")>()),
   tmuxAvailable: () => tmuxOn,
   tmuxHasSession: (id: string) => liveTmuxSessions.has(id),
   // The real one turns `env` into `-e KEY=VALUE` pairs, which is the only way a variable
@@ -19,8 +23,6 @@ vi.mock("../../../server/infra/tmux.js", () => ({
     return ["new-session", id, ...Object.entries(env).flatMap(([key, value]) => ["-e", `${key}=${value}`]), file, ...args];
   },
   tmuxScrubEnvNames: (names: readonly string[]) => scrub(names),
-  // Real value, not a stand-in: what the spawn strips from the tmux CLIENT is the assertion below.
-  TMUX_CLIENT_UNSET_NAMES: ["PORT"],
 }));
 
 // What this directory holds per working tree (#1367). Mocked rather than reserved for real:
@@ -105,49 +107,62 @@ describe("spawnPty — the port a terminal can find this server on", () => {
   });
 });
 
-// A tmux server outlives us and keeps for life whatever environment it was STARTED with, so the
-// pane environment is decided twice: by `new-session -e` (per pane) and by whoever created the
-// server. `PORT=<n> mulmoterminal` put our own bind port into the second one — every cell then
-// told its dev server to bind the address we are listening on, which is #1857 by another route
-// (#1919). Only the client is stripped; the pane's own `-e` values are untouched.
+// A tmux server outlives us and keeps for life whatever environment it was STARTED with, so a pane's
+// environment is decided twice: by `new-session -e` (per pane) and by whoever created the server.
+// `PORT=<n> mulmoterminal` put our own bind port into the second one — every cell then told its dev
+// server to bind the address we are listening on, which is #1857 by another route (#1919).
+//
+// Only the client is stripped, and only when the PORT we carry IS the one we bind: the pane's own
+// `-e` values are untouched, and a PORT that `--port` displaced belongs to the user (#1873).
 describe("ptySpawn — what a tmux server we create is allowed to inherit", () => {
   const argsOf = (call: number = 0): string[] => (spawn.mock.calls[call] as unknown as [string, string[]])[1];
 
   beforeEach(() => {
     tmuxOn = true;
-    vi.stubEnv("PORT", "34601");
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
   });
 
-  it("does not hand our own PORT to the tmux client that may create the server", () => {
+  it("does not hand our own bind port to the tmux client that may create the server", () => {
+    vi.stubEnv("PORT", String(PORT));
     ptySpawn(S1, "claude", [], EXISTING_CWD, true);
     expect(envOf()).not.toHaveProperty("PORT");
   });
 
   it("still unsets what the caller asked for", () => {
+    vi.stubEnv("PORT", String(PORT));
     ptySpawn(S1, "claude", [], EXISTING_CWD, true, { unset: ["ANTHROPIC_API_KEY"] });
     expect(envOf()).not.toHaveProperty("ANTHROPIC_API_KEY");
     expect(envOf()).not.toHaveProperty("PORT");
   });
 
+  // `PORT=3000 mulmoterminal --port <ours>`: that 3000 is the user's own — it is not the address we
+  // are holding, and taking it would be the #955 bug of a sanitizer stealing the user's value.
+  it("passes on a PORT that is not ours, so the user's own value still reaches the pane", () => {
+    vi.stubEnv("PORT", "3000");
+    ptySpawn(S1, "claude", [], EXISTING_CWD, true);
+    expect(envOf().PORT).toBe("3000");
+  });
+
   // The pane's PORT comes from `-e`, which the strip must not reach: a worktree that reserved one
   // (#1367) is a value the user asked for, unlike the one we would have leaked.
   it("leaves a PORT the directory reserved on its way to the pane", () => {
+    vi.stubEnv("PORT", String(PORT));
     reserved = { PORT: "3010" };
     ptySpawn(S1, "claude", [], EXISTING_CWD, true);
     expect(argsOf()).toContain("PORT=3010");
   });
 
   // The deliberate asymmetry (#955, #1873): with no tmux there is no long-lived server to poison,
-  // the pane IS this spawn, and taking the user's own PORT out of it would be the bug #955 refused
-  // to introduce. A pane's own rc restores an exported PORT anyway; a tmux server has no rc.
+  // the pane IS this spawn, and a pane's own rc restores an exported PORT anyway — a tmux server
+  // has no rc.
   it("leaves the non-tmux path alone", () => {
+    vi.stubEnv("PORT", String(PORT));
     tmuxOn = false;
     ptySpawn(S1, "claude", [], EXISTING_CWD, true);
-    expect(envOf().PORT).toBe("34601");
+    expect(envOf().PORT).toBe(String(PORT));
   });
 });
 
