@@ -77,6 +77,16 @@ describe("buildDevcontainer", () => {
     expect(result.ok).toBe(false);
     expect(result.message).toContain("network down");
   });
+
+  it("defaults to rebuild:false, and carries rebuild:true when asked", async () => {
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, status: 200, json: async () => ({ ok: true }) }));
+    vi.stubGlobal("fetch", fetchMock);
+    const bodyOf = (n: number) => JSON.parse(String((fetchMock.mock.calls[n] as unknown as [string, RequestInit] | undefined)?.[1]?.body));
+    await buildDevcontainer("/repo");
+    expect(bodyOf(0)).toEqual({ cwd: "/repo", rebuild: false });
+    await buildDevcontainer("/repo", { rebuild: true });
+    expect(bodyOf(1)).toEqual({ cwd: "/repo", rebuild: true });
+  });
 });
 
 describe("offerDevcontainerIfNeeded", () => {

@@ -37,8 +37,12 @@ async function handleStatus(req: Request, res: Response): Promise<void> {
 // shells out to Docker, so an arbitrary filesystem path is not something to accept on request; a
 // worktree or a plain checkout both work equally (see worktreeRepoRootMount). Slow (a cold image
 // build can run minutes): the caller is expected to wait it out, not poll.
+//
+// `rebuild: true` (TerminalCell.vue's devcontainer badge, once a directory is already enabled)
+// passes `removeExisting` through to runDevcontainerUp — otherwise `up` against an
+// already-running container is just a reattach, not the rebuild the caller asked for.
 async function handleUp(req: Request, res: Response): Promise<void> {
-  const { cwd } = requestBody(req.body);
+  const { cwd, rebuild } = requestBody(req.body);
   if (typeof cwd !== "string" || !cwd) {
     res.status(400).json({ error: "cwd is required" });
     return;
@@ -51,7 +55,7 @@ async function handleUp(req: Request, res: Response): Promise<void> {
     res.status(409).json({ ok: false, error: "no .devcontainer config here" });
     return;
   }
-  const result = await runDevcontainerUp(cwd);
+  const result = await runDevcontainerUp(cwd, { removeExisting: rebuild === true });
   if (result.ok) markDevcontainerEnabled(cwd, result.workspaceFolder);
   res.status(result.ok ? 200 : 500).json(result);
 }

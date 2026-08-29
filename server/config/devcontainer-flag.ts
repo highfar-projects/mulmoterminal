@@ -57,8 +57,17 @@ function remoteWorkspaceFolderFrom(output: string): string | null {
  *  the shared `.git`. Not `--mount-git-worktree-common-dir`: that only resolves a *relative* `.git`
  *  pointer against wherever the worktree lands inside the container, and silently breaks once the
  *  target's own devcontainer.json puts workspaceFolder somewhere too shallow for the traversal —
- *  worktreeRepoRootMount's absolute-pointer approach doesn't have that failure mode. */
-export async function runDevcontainerUp(dir: string): Promise<{ ok: boolean; output: string; workspaceFolder: string | null }> {
+ *  worktreeRepoRootMount's absolute-pointer approach doesn't have that failure mode.
+ *
+ *  `removeExisting`: without it, `up` against a directory that ALREADY has a running container
+ *  just reattaches to that container rather than rebuilding anything — the CLI's own definition of
+ *  "already up". `--remove-existing-container` is what makes this a rebuild (removes the container
+ *  first, then builds and creates a fresh one) rather than a no-op reattach; it's harmless to pass
+ *  when there is nothing running yet, which is why the first, ever build never needs to set it. */
+export async function runDevcontainerUp(
+  dir: string,
+  { removeExisting = false }: { removeExisting?: boolean } = {},
+): Promise<{ ok: boolean; output: string; workspaceFolder: string | null }> {
   const mount = await worktreeRepoRootMount(dir);
   // Bind-mounted 1:1 (same path inside as out) so a session spawned into this container later
   // (spawn-claude.ts) can point its hook's curl at exactly the path it already knows — see
@@ -79,6 +88,7 @@ export async function runDevcontainerUp(dir: string): Promise<{ ok: boolean; out
     "up",
     "--workspace-folder",
     dir,
+    ...(removeExisting ? ["--remove-existing-container"] : []),
     ...(mount ? ["--mount", mount] : []),
     ...(socketMount ? ["--mount", socketMount] : []),
     ...(dropsMount ? ["--mount", dropsMount] : []),

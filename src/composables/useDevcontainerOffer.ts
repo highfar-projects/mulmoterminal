@@ -57,11 +57,14 @@ export interface DevcontainerBuildResult {
   message: string;
 }
 
-export async function buildDevcontainer(cwd: string): Promise<DevcontainerBuildResult> {
+/** `rebuild: true` (TerminalCell.vue's devcontainer badge, once a directory is already enabled)
+ * removes and recreates the existing container — plain `up` against one already running would
+ * just reattach to it, not rebuild anything. */
+export async function buildDevcontainer(cwd: string, { rebuild = false }: { rebuild?: boolean } = {}): Promise<DevcontainerBuildResult> {
   try {
     const res = await fetchWithTimeout(
       "/api/devcontainer/up",
-      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ cwd }) },
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ cwd, rebuild }) },
       DEVCONTAINER_UP_TIMEOUT_MS,
     );
     if (!res.ok) {

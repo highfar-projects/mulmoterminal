@@ -246,6 +246,25 @@ async function copyDevcontainerName(): Promise<void> {
   if (devcontainerCopiedTimer) clearTimeout(devcontainerCopiedTimer);
   devcontainerCopiedTimer = setTimeout(() => (devcontainerNameCopied.value = false), 1500);
 }
+// Shared by the initial build (badge click, not yet enabled) and the rebuild button (already
+// enabled): both are "run `devcontainer up`, wait it out with a spinner, then report" — only the
+// guard, the confirm, and the closing message differ per caller.
+async function runDevcontainerBuild(rebuild: boolean, onDone: (ok: boolean) => void): Promise<void> {
+  const dir = cwd.value;
+  if (!dir || devcontainerBuilding.value) return;
+  devcontainerBuilding.value = true;
+  devcontainerBuildElapsed.value = 0;
+  devcontainerBuildTimer = setInterval(() => (devcontainerBuildElapsed.value += 1), 1000);
+  const result = await buildDevcontainer(dir, { rebuild });
+  devcontainerBuilding.value = false;
+  if (devcontainerBuildTimer) {
+    clearInterval(devcontainerBuildTimer);
+    devcontainerBuildTimer = null;
+  }
+  await refreshDevcontainerInfo(cwd.value);
+  if (!result.ok) window.alert(`Could not ${rebuild ? "rebuild" : "build"} the devcontainer.\n\n${result.message}`);
+  else onDone(result.ok);
+}
 // No confirm dialog here — unlike useDevcontainerOffer.ts's offer, clicking this badge (only
 // possible once a devcontainer exists and isn't running) already IS the explicit choice. Marks
 // the directory enabled on success the same way the offer flow does (server/config/
@@ -253,20 +272,25 @@ async function copyDevcontainerName(): Promise<void> {
 // only a fresh session picks up `devcontainer exec`, so the alert says to restart rather than
 // pretending the running terminal just moved into the container.
 async function buildDevcontainerNow(): Promise<void> {
-  const dir = cwd.value;
-  if (!dir || devcontainerBuilding.value || !devcontainerInfo.value?.hasConfig || devcontainerInfo.value?.enabled) return;
-  devcontainerBuilding.value = true;
-  devcontainerBuildElapsed.value = 0;
-  devcontainerBuildTimer = setInterval(() => (devcontainerBuildElapsed.value += 1), 1000);
-  const result = await buildDevcontainer(dir);
-  devcontainerBuilding.value = false;
-  if (devcontainerBuildTimer) {
-    clearInterval(devcontainerBuildTimer);
-    devcontainerBuildTimer = null;
+  if (!devcontainerInfo.value?.hasConfig || devcontainerInfo.value?.enabled) return;
+  await runDevcontainerBuild(false, () =>
+    window.alert("Devcontainer built and enabled for this directory.\n\nClose and restart this session to run inside it."),
+  );
+}
+// Confirmed, unlike the initial build above: `--remove-existing-container` (server/config/
+// devcontainer-flag.ts) deletes the CURRENT container first, so anything already running inside
+// it — including, often, this very session — is what the confirm is warning about, not a
+// hypothetical.
+async function rebuildDevcontainerNow(): Promise<void> {
+  if (!devcontainerInfo.value?.enabled) return;
+  if (
+    !window.confirm(
+      "Rebuild this directory's devcontainer?\n\nThe existing container is removed and rebuilt. Any session already running inside it — including this one — will need to be restarted afterward.",
+    )
+  ) {
+    return;
   }
-  await refreshDevcontainerInfo(cwd.value);
-  if (!result.ok) window.alert(`Could not build the devcontainer.\n\n${result.message}`);
-  else window.alert("Devcontainer built and enabled for this directory.\n\nClose and restart this session to run inside it.");
+  await runDevcontainerBuild(true, () => window.alert("Devcontainer rebuilt.\n\nClose and restart any session running inside it, including this one."));
 }
 function onDevcontainerBadgeClick(): void {
   if (!devcontainerBadgeClickable.value) return;
@@ -1418,6 +1442,23 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               @click.stop="onDevcontainerBadgeClick"
             >
               {{ devcontainerBadgeIcon }}
+            </button>
+            <!-- The badge above has no way to REBUILD an already-enabled devcontainer — its own
+                 click is taken by copying the container name. A separate button, shown only once
+                 enabled, for the Dockerfile-changed / stale-mount case this app has hit itself
+                 (hook-socket.ts, claude-credentials.ts): `--remove-existing-container` is what
+                 makes `up` rebuild rather than just reattach (server/config/devcontainer-flag.ts). -->
+            <button
+              v-if="devcontainerInfo?.enabled"
+              type="button"
+              data-testid="cell-devcontainer-rebuild"
+              class="material-symbols-outlined flex-none border-none bg-transparent p-0 text-[13px] leading-none text-dim"
+              :class="devcontainerBuilding ? 'cursor-default animate-spin' : 'cursor-pointer hover:text-fg'"
+              :disabled="devcontainerBuilding"
+              title="Rebuild this directory's devcontainer"
+              @click.stop="rebuildDevcontainerNow"
+            >
+              refresh
             </button>
             <span class="cell-dot" :class="[CELL_DOT, statusClass, dotStatusClass, dotMissedClass]" :title="statusLabel" />
             <!-- The path is NOT here any more — it is the lead item on row 2 (see the
