@@ -624,6 +624,13 @@ function sendToExpandedCell(text: string): boolean {
   return props.expandedUid === null ? false : conn.submitText(`cell-${props.expandedUid}`, text);
 }
 
+// Whether the terminal on screen can be typed into at all. A COMMAND cell's terminal is handed no
+// `persist-key`, so its connection is filed under `ephemeral-<uuid>` and `cell-<uid>` names nothing
+// (Terminal.vue) — offering an insert there would put items in the menu that silently do nothing.
+// Launcher cells DO use `cell-<uid>` and keep it: the question is the connection, not the session.
+// Caught by CodeRabbit on PR #1912.
+const expandedTakesInput = computed(() => props.cells.some((c) => c.uid === props.expandedUid && !c.command));
+
 // A path picked in the files pane's tree, typed at the cursor of the terminal on screen (#1859).
 // `insertText`, not `submitText`: nothing is sent — the user reviews it and adds the sentence it
 // belongs to, the same bargain a drop (#750) and a pasted screenshot (#938) already make.
@@ -633,7 +640,7 @@ function sendToExpandedCell(text: string): boolean {
 // below — filesRowActions withholds the relative path when the two disagree, and the absolute one
 // is right either way.
 function insertIntoExpandedCell(text: string): void {
-  if (props.expandedUid === null) return;
+  if (props.expandedUid === null || !expandedTakesInput.value) return;
   conn.insertText(`cell-${props.expandedUid}`, text);
 }
 
@@ -1319,7 +1326,7 @@ watch(
           :cwd="paneCwd"
           :initial-state="paneState"
           :canvas-target="expandedUid !== null"
-          :insert-target="expandedUid !== null"
+          :insert-target="expandedTakesInput"
           :insert-target-cwd="expandedCwd"
           :workspace="defaultCwd"
           :style="{ flex: `0 0 ${paneWidth}px` }"

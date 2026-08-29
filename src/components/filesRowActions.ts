@@ -30,6 +30,13 @@ export interface FilesRowTarget {
 // work, not an icon's.
 const ICON = "attach_file";
 
+// Compared without a trailing separator, because `absoluteUnder` JOINS without doubling one: a
+// root spelled `/proj/` builds the same absolute path as `/proj`, so it has to answer the same
+// here too. The two roots reach this function from different cells, so nothing guarantees one
+// spelling. (CodeRabbit, PR #1912 — no entry point that produces the asymmetry was found, so
+// this is the two halves of the module agreeing rather than a fix for an observed case.)
+const withoutTrailingSeparator = (dir: string): string => (dir.endsWith("/") || dir.endsWith("\\") ? dir.slice(0, -1) : dir);
+
 /**
  * The menu for one row. Empty means no menu at all — the caller leaves the browser's own.
  *
@@ -44,7 +51,7 @@ export function filesRowActions({ pathRel, cwd, terminal }: FilesRowTarget): Fil
   // Only when a relative path means the same thing at the other end. The pane keeps the cell it
   // is on when a re-root could not be saved out of, so the tree and the terminal on screen can
   // be two different projects — and `src/index.ts` would then name a file in the wrong one.
-  if (terminal.cwd === cwd) {
+  if (terminal.cwd !== null && withoutTrailingSeparator(terminal.cwd) === withoutTrailingSeparator(cwd)) {
     actions.push({ id: "insert-relative", label: "Insert relative path", icon: ICON, text: toInsertText([pathRel]) });
   }
   actions.push({ id: "insert-absolute", label: "Insert absolute path", icon: ICON, text: toInsertText([absoluteUnder(cwd, pathRel)]) });

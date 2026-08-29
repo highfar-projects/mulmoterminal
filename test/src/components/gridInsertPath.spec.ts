@@ -25,7 +25,7 @@ vi.mock("../../../src/components/TerminalCell.vue", () => ({
   },
 }));
 vi.mock("../../../src/components/CommandCell.vue", () => ({
-  default: { name: "CommandCell", props: ["expanded", "command"], emits: ["toggle-expand", "close", "move", "status"], template: "<div />" },
+  default: { name: "CommandCell", props: ["expanded", "command"], emits: ["toggle-expand", "open-files", "close", "move", "status"], template: "<div />" },
 }));
 vi.mock("../../../src/components/LauncherCell.vue", () => ({
   default: { name: "LauncherCell", props: ["expanded", "launcher"], emits: ["toggle-expand", "close", "move", "status", "session"], template: "<div />" },
@@ -46,6 +46,7 @@ import TerminalGrid from "../../../src/components/TerminalGrid.vue";
 import type { Cell } from "../../../src/components/gridTabs.js";
 
 const cell = (uid: number, session: string, cwd: string): Cell => ({ uid, session, cwd });
+const commandCell = (uid: number, cwd: string): Cell => ({ uid, session: null, cwd, command: { source: "script", index: 0, label: "build", cwd } });
 
 const mountGrid = () =>
   mount(TerminalGrid, {
@@ -79,6 +80,9 @@ describe("inserting a tree path into the terminal", () => {
   beforeEach(() => {
     localStorage.clear();
     inserted.length = 0;
+    // An enlarged session makes the grid ask whether it has the drawing tools. Nothing here is
+    // about that answer, but a spec must not reach a live API for it.
+    globalThis.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ groups: [] }) })) as unknown as typeof fetch;
     flush.mockClear();
     flush.mockResolvedValue(undefined);
     if (!window.matchMedia) {
@@ -114,6 +118,39 @@ describe("inserting a tree path into the terminal", () => {
     expect(pane(w).props("insertTarget")).toBe(true);
     expect(pane(w).props("cwd")).toBe("/work/a");
     expect(pane(w).props("insertTargetCwd")).toBe("/work/a");
+    w.unmount();
+  });
+
+  // A command cell's terminal is handed no `persist-key`, so it is filed under `ephemeral-<uuid>`
+  // and `cell-<uid>` names nothing. Offering the actions there would be two menu items that
+  // silently do nothing (CodeRabbit, PR #1912).
+  it("offers nothing to insert into a command cell", async () => {
+    const w = mount(TerminalGrid, {
+      props: {
+        cells: [commandCell(1, "/work/a"), cell(2, "s2", "/work/b")],
+        expandedUid: 1,
+        listRows: [],
+        cancelUid: null,
+        defaultCwd: "/work",
+        presets: [],
+        launchers: [],
+        home: "/work",
+        openSessionIds: [],
+        openCwds: [],
+        reorderable: false,
+        listMode: true,
+      },
+      attachTo: document.body,
+    });
+    await flushPromises();
+    w.findAllComponents({ name: "CommandCell" })[0].vm.$emit("open-files");
+    await flushPromises();
+
+    expect(pane(w).props("insertTarget")).toBe(false);
+    // And the handler refuses too, so a stale menu cannot reach a slot that is not there.
+    pane(w).vm.$emit("insert-text", "src ");
+    await flushPromises();
+    expect(inserted).toEqual([]);
     w.unmount();
   });
 

@@ -61,6 +61,20 @@ describe("filesRowActions", () => {
   it("does not double a separator the root already ends with", () => {
     expect(textOf("insert-absolute", { ...here, cwd: "/proj/", terminal: { cwd: "/proj/" } })).toBe("/proj/src/index.ts ");
   });
+
+  // The two roots reach this from different cells, so nothing guarantees one spelling — and
+  // `absoluteUnder` already builds the SAME absolute path from either, so the equality test has
+  // to agree with it. Both asymmetries, since only one of them is the obvious way round.
+  it("reads a root with and without a trailing separator as the same directory", () => {
+    expect(ids({ ...here, cwd: "/proj/", terminal: { cwd: "/proj" } })).toEqual(["insert-relative", "insert-absolute"]);
+    expect(ids({ ...here, cwd: "/proj", terminal: { cwd: "/proj/" } })).toEqual(["insert-relative", "insert-absolute"]);
+    expect(ids({ ...here, cwd: "C:\\proj\\", terminal: { cwd: "C:\\proj" } })).toEqual(["insert-relative", "insert-absolute"]);
+  });
+
+  // ...without collapsing two directories that only LOOK alike after the trim.
+  it("still tells two different directories apart", () => {
+    expect(ids({ ...here, cwd: "/proj/", terminal: { cwd: "/project" } })).toEqual(["insert-absolute"]);
+  });
 });
 
 describe("menuFocusMove", () => {
