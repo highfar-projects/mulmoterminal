@@ -187,4 +187,51 @@ describe("dragSplitter", () => {
     start(el, onDown, 300, 9);
     expect(remember).not.toHaveBeenCalled();
   });
+  // Codex, on this PR: capture can also end WITHOUT a pointerup or a pointercancel — the browser
+  // releases it implicitly when the capturing element leaves the document, e.g. the pane closing
+  // under a held button. The event lands on the separator, not on window.
+  it("ends the drag when the capture is lost implicitly", () => {
+    const state = { size: 400 };
+    const remember = vi.fn();
+    const { spec } = drag(state, remember);
+    const { el } = separator();
+    start(el, dragSplitter(spec), 100, 7);
+    move(160, 7);
+
+    el.dispatchEvent(new PointerEvent("lostpointercapture", { pointerId: 7, bubbles: true }));
+
+    expect(remember).toHaveBeenCalledWith("pane-width", "460");
+    move(300, 7);
+    expect(state.size).toBe(460);
+  });
+
+  it("ignores a lost capture belonging to another pointer", () => {
+    const state = { size: 400 };
+    const remember = vi.fn();
+    const { spec } = drag(state, remember);
+    const { el } = separator();
+    start(el, dragSplitter(spec), 100, 7);
+
+    el.dispatchEvent(new PointerEvent("lostpointercapture", { pointerId: 9, bubbles: true }));
+
+    expect(remember).not.toHaveBeenCalled();
+    move(160, 7);
+    expect(state.size).toBe(460);
+  });
+
+  // The normal path releases the capture itself, which fires `lostpointercapture` in turn. The
+  // separator's listener has to be gone by then or every drag settles twice.
+  it("does not settle again on the lost capture that the release itself fires", () => {
+    const state = { size: 400 };
+    const remember = vi.fn();
+    const { spec } = drag(state, remember);
+    const { el } = separator();
+    start(el, dragSplitter(spec), 100, 7);
+    move(160, 7);
+    end("pointerup", 7);
+    expect(remember).toHaveBeenCalledTimes(1);
+
+    el.dispatchEvent(new PointerEvent("lostpointercapture", { pointerId: 7, bubbles: true }));
+    expect(remember).toHaveBeenCalledTimes(1);
+  });
 });

@@ -59,6 +59,15 @@ Files ペインには iframe の左にファイル一覧の列があるので上
 引き継ぐ**形にしてある —— 無視する形にすると、終了イベントが届かなかったドラッグが
 セパレータを永久に死なせるので、いま直しているバグより悪い失敗になる。
 
+**ドラッグの終わり方は 3 つある。** `pointerup` / `pointercancel` に加えて
+**`lostpointercapture`** —— キャプチャ中の要素が document から外れるとブラウザが暗黙に
+キャプチャを解放する（ボタンを押したままペインが閉じる等）。このときは `pointerup` も
+`pointercancel` も来ないので、購読していないと `window` のリスナーが張られたまま残り、
+**別経路で #1899 が再現する**。これだけは `window` ではなく**セパレータ側**に届く。
+
+正常経路では `stop` 自身の `releasePointerCapture` が `lostpointercapture` を発火させるので、
+**解放より前にそのリスナーを外す**（さもないと毎回 2 度決着する）。
+
 あわせて `dragSplitter` を `src/composables/dragSplitter.ts` へ切り出した。バグの規則を
 それ自身のファイルの関数にしてテスト可能にするため（`remember` だけ注入）。**本体は逐語で移動**。
 
@@ -94,7 +103,7 @@ Resize side pane:           480 -> 589 (drag) -> 589 (release) -> 589 (button UP
 Resize the thumbnail strip: 150 -> 230 (drag) -> 230 (release) -> 230 (button UP)  OK
 ```
 
-## break-verify（`test/src/composables/dragSplitter.spec.ts`、12 件）
+## break-verify（`test/src/composables/dragSplitter.spec.ts`、15 件）
 
 各回のあと pristine と `diff -q` で byte-identical 復元を確認:
 
@@ -110,6 +119,9 @@ Resize the thumbnail strip: 150 -> 230 (drag) -> 230 (release) -> 230 (button UP
 | 引き継ぎを外す（並行ドラッグを許す） | **2 red** |
 | 引き継ぎ後に再武装しない | **2 red** |
 | `stop` が `live` を消し忘れる | **1 red** |
+| `lostpointercapture` を購読しない | **1 red** |
+| `lostpointercapture` のリスナーを外さない | **1 red** |
+| `onEnd` から `pointerId` 選別を外す | **3 red** |
 
 最後の 1 行は**最初は緑だった** —— 「決着済みのドラッグを二度決着させない」が未カバーだったので、
 その不変条件を pin するテストを足してから赤にしている。
@@ -124,4 +136,4 @@ Resize the thumbnail strip: 150 -> 230 (drag) -> 230 (release) -> 230 (button UP
 
 ## ゲート
 
-`format` / `lint` / `typecheck` / `build` / `test` すべて exit **0**、**11627 tests pass**（+12）。
+`format` / `lint` / `typecheck` / `build` / `test` すべて exit **0**、**11676 tests pass**（+15）。`origin/main` を取り込んだ結果で再実行済み。

@@ -34,7 +34,7 @@ export function dragSplitter(spec: SplitterDrag): (e: PointerEvent) => void {
     // the listeners below stay on, and moving back over this document resizes with no button
     // held. Capturing retargets every event for this pointer to the separator, so they reach
     // these listeners whatever they pass over.
-    const separator = e.currentTarget instanceof Element ? e.currentTarget : null;
+    const separator = e.currentTarget instanceof HTMLElement ? e.currentTarget : null;
     separator?.setPointerCapture(e.pointerId);
     // Only THIS pointer steers the drag. A second touch or pen is a separate pointer whose
     // events still bubble here, and the `pointercancel` subscription below is what makes that
@@ -54,6 +54,8 @@ export function dragSplitter(spec: SplitterDrag): (e: PointerEvent) => void {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onEnd);
       window.removeEventListener("pointercancel", onEnd);
+      // Removed BEFORE the release below, which fires `lostpointercapture` itself.
+      separator?.removeEventListener("lostpointercapture", onEnd);
       if (separator?.hasPointerCapture(e.pointerId)) separator.releasePointerCapture(e.pointerId);
       spec.remember(spec.key, String(spec.size()));
     };
@@ -61,5 +63,11 @@ export function dragSplitter(spec: SplitterDrag): (e: PointerEvent) => void {
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onEnd);
     window.addEventListener("pointercancel", onEnd);
+    // The third way a drag ends, and the only one that arrives at the separator rather than at
+    // window: the browser releases capture implicitly when the capturing element leaves the
+    // document — the pane closing under a held button. Neither `pointerup` nor `pointercancel`
+    // follows, so without this the window listeners stay armed with nothing left to tear them
+    // down, which is #1899 again by another route.
+    separator?.addEventListener("lostpointercapture", onEnd);
   };
 }
