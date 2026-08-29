@@ -15,7 +15,6 @@ import {
   planMsOverride,
   MS_OVERRIDE_ENTRY,
   parseTmuxPanePids,
-  isOwnPort,
   isScrubbedGlobalEnvEntry,
   tmuxClientUnsetNames,
 } from "../../../server/infra/tmux";
@@ -236,39 +235,14 @@ describe("parseTmuxEnvironment", () => {
 // mulmoterminal restart, so a name that got in there once is handed to new panes forever — an
 // upgrade alone does not fix it (#451, #989, #1919).
 //
-// PORT is judged by its VALUE, not by its name: ours is the port we are listening on, and a cell
-// that inherits it binds the address we hold (#1857). `PORT=3000 mulmoterminal --port 34601` puts
-// a PORT in our environment that is the user's own, and that one still travels (#1873).
-describe("isOwnPort", () => {
-  // What a plain `mulmoterminal` looks like: nothing under PORT in our own environment, so any
-  // PORT in OUR tmux server is something we put there — this run or a version before #1873.
-  const noneInherited = { bound: "34567", inherited: undefined };
-
-  it("takes the port we are listening on", () => {
-    expect(isOwnPort("34567", noneInherited)).toBe(true);
-    expect(isOwnPort("3000", { bound: "3000", inherited: "3000" })).toBe(true);
-  });
-
-  // The reporter's case (#1919): a tmux server from before the fix, still handing out a port this
-  // server never asked for. Nothing in our environment could have produced it.
-  it("takes a value nothing in our environment could have produced", () => {
-    expect(isOwnPort("59999", noneInherited)).toBe(true);
-    expect(isOwnPort("34567", { bound: "34601", inherited: "3000" })).toBe(true);
-  });
-
-  // The case that stops this being a rule about the NAME: `--port` took the bind port, so the PORT
-  // we are carrying is the user's own and has nothing to do with the address we hold.
-  it("leaves the user's own value that --port displaced", () => {
-    expect(isOwnPort("3000", { bound: "34601", inherited: "3000" })).toBe(false);
-  });
-});
-
+// PORT is judged by its VALUE, not by its name: the only one that is ours is the port we are
+// listening on, and a cell that inherits it binds the address we are holding (#1857).
 describe("isScrubbedGlobalEnvEntry", () => {
-  const ports = { bound: "34567", inherited: undefined };
+  const BOUND = "34601";
 
   it("scrubs the key we leaked ourselves, and launcher context", () => {
-    expect(isScrubbedGlobalEnvEntry("ANTHROPIC_API_KEY", "sk-ant-x", ports)).toBe(true);
-    ["PREFIX", "npm_config_registry", "INIT_CWD"].forEach((name) => expect(isScrubbedGlobalEnvEntry(name, "x", ports), name).toBe(true));
+    expect(isScrubbedGlobalEnvEntry("ANTHROPIC_API_KEY", "sk-ant-x", BOUND)).toBe(true);
+    ["PREFIX", "npm_config_registry", "INIT_CWD"].forEach((name) => expect(isScrubbedGlobalEnvEntry(name, "x", BOUND), name).toBe(true));
   });
 
   // NODE_ENV is the deliberate omission (#989): we never read it, so no value under that name is
@@ -276,13 +250,25 @@ describe("isScrubbedGlobalEnvEntry", () => {
   // is how a cell finds this server (#1873) and is set per pane, not globally.
   it("leaves alone what is the user's, and what a session is given on purpose", () => {
     ["NODE_ENV", "MULMOTERMINAL_PORT", "HOME", "PATH", "CLIENT_PORT", "PORTAL"].forEach((name) =>
-      expect(isScrubbedGlobalEnvEntry(name, "34567", ports), name).toBe(false),
+      expect(isScrubbedGlobalEnvEntry(name, BOUND, BOUND), name).toBe(false),
     );
   });
 
-  it("judges PORT by its value", () => {
-    expect(isScrubbedGlobalEnvEntry("PORT", "34567", ports)).toBe(true);
-    expect(isScrubbedGlobalEnvEntry("PORT", "3000", { bound: "34601", inherited: "3000" })).toBe(false);
+  it("takes the port we are listening on, whoever put it there", () => {
+    expect(isScrubbedGlobalEnvEntry("PORT", BOUND, BOUND)).toBe(true);
+  });
+
+  // A tmux server outlives the run that admitted a user's PORT, and the next run may carry no PORT
+  // at all. Judging by "is it what WE are carrying" would take the value away on that restart —
+  // the cell would lose a setting the direct-PTY path keeps (codex-review iter-2).
+  it("keeps a user's PORT across a restart that carries none of its own", () => {
+    expect(isScrubbedGlobalEnvEntry("PORT", "3000", BOUND)).toBe(false);
+  });
+
+  // The accepted limit, pinned so it is a decision rather than a gap: a leftover naming a port we
+  // are not on cannot cost us our address, and nothing tells it from a value the user set.
+  it("leaves a stale value that names some other port", () => {
+    expect(isScrubbedGlobalEnvEntry("PORT", "34567", BOUND)).toBe(false);
   });
 });
 
@@ -290,12 +276,12 @@ describe("isScrubbedGlobalEnvEntry", () => {
 // it keeps the client's environment for life, so our own bind port is dropped from the client too.
 describe("tmuxClientUnsetNames", () => {
   it("drops PORT when what we carry IS the port we bind", () => {
-    expect([...tmuxClientUnsetNames({ bound: "34719", inherited: "34719" })]).toEqual(["PORT"]);
+    expect([...tmuxClientUnsetNames("34719", "34719")]).toEqual(["PORT"]);
   });
 
   it("keeps the user's own PORT that --port displaced, and adds nothing when we carry none", () => {
-    expect([...tmuxClientUnsetNames({ bound: "34601", inherited: "3000" })]).toEqual([]);
-    expect([...tmuxClientUnsetNames({ bound: "34567", inherited: undefined })]).toEqual([]);
+    expect([...tmuxClientUnsetNames("3000", "34601")]).toEqual([]);
+    expect([...tmuxClientUnsetNames(undefined, "34567")]).toEqual([]);
   });
 });
 

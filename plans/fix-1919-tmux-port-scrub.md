@@ -38,18 +38,30 @@ exit 1）。つまりサーバを作るのは `new-session`＝ `ptySpawn` の tm
 なので、そこには識別可能な「我々の値」がある —— **今 listen しているポート**。それを全セルに配ることは
 「すでに我々が握っているアドレスを bind しろ」と dev サーバに言うのと同じで、#1857 そのもの。
 
-**ただし名前だけで決めると行き過ぎる（codex-review iter-1 の指摘）。** `PORT=3000 mulmoterminal
---port 34601` では、我々の env の `PORT`（3000）は bind ポート（34601）ではなく**ユーザー自身の値**で、
-#1873 Items 2 がセルに届いてよいと決めたもの。したがって規則は値で書く（`isOwnPort`）:
+**ただし名前だけで決めると行き過ぎる（codex-review iter-1）。** `PORT=3000 mulmoterminal --port 34601`
+では、我々の env の `PORT`（3000）は bind ポート（34601）ではなく**ユーザー自身の値**で、
+#1873 Items 2 がセルに届いてよいと決めたもの。
+
+**「残骸」を値から推測しようとするとさらに壊れる（codex-review iter-2）。** 一度
+「ユーザーの値」として通した `PORT=3000` は tmux サーバに残り、次に `PORT` 無しで起動したとき
+「我々の env と違う ＝ 残骸」と判定してしまう。tmux 環境には provenance が無いので、
+**残骸とユーザーの値は区別できない**。
+
+結論としての規則は 1 行:
+
+> **消すのは「今 listen しているポートと同じ値」だけ。**（`isOwnBindPort`）
 
 | tmux グローバル env の値 | 判定 |
 |---|---|
-| bind ポートと同じ | **我々の leak** → 消す |
-| 我々の env の `PORT` と同じ（かつ bind ポートでない） | **ユーザーの値の素通し** → 残す |
-| どちらでもない | 我々が今回置けたはずがない ＝ **旧版の残骸** → 消す |
+| bind ポートと同じ | **我々のもの** → 消す（#1857 の実害はこれだけ） |
+| それ以外 | ユーザーの値と区別できない → **残す** |
 
-クライアント側は候補の値が「我々の env の `PORT`」しかないので、同じ規則が
-「`inherited === bound` のときだけ落とす」に縮約される（`tmuxClientUnsetNames`）。
+クライアント側も同じ関数で、候補は「我々の env の `PORT`」だけなので
+「`inherited === bound` のときだけ落とす」になる（`tmuxClientUnsetNames`）。
+
+**受け入れたコスト**: 旧版の残骸のうち「今のポートと違う値」は回収できない。ただし回収できるのは
+**報告されたケース（残骸＝そのときの bind ポート＝今も同じポートで動かしている）**で、かつ
+**このサーバのアドレスを奪えるのはその値だけ**。別ポートを指す古い値は誰の実害にもならない。
 
 rc で `export PORT=3000` している人は、そもそもセルの rc が同じ値を再設定するので失われない。
 
@@ -85,9 +97,9 @@ rc で `export PORT=3000` している人は、そもそもセルの rc が同�
 
 | 変更 | 場所 |
 |---|---|
-| `isOwnPort` / `isScrubbedGlobalEnvEntry`（値で判断する純関数）、`scrubGlobalEnvironment` を値ごと走査に | `server/infra/tmux.ts` |
-| `tmuxClientUnsetNames`（新規作成される tmux サーバに焼き付けない名前）と `ownPortFacts` | `server/infra/tmux.ts` |
-| tmux クライアント spawn で `[...unset, ...tmuxClientUnsetNames(ownPortFacts())]` | `server/session/pty-spawn.ts` |
+| `isOwnBindPort` / `isScrubbedGlobalEnvEntry`（値で判断する純関数）、`scrubGlobalEnvironment` を値ごと走査に | `server/infra/tmux.ts` |
+| `tmuxClientUnsetNames`（新規作成される tmux サーバに焼き付けない名前）と `ownBindPort` | `server/infra/tmux.ts` |
+| tmux クライアント spawn で `[...unset, ...tmuxClientUnsetNames(process.env.PORT, ownBindPort())]` | `server/session/pty-spawn.ts` |
 | 純関数のテスト / クライアント env と `-e` の非対称のテスト | `test/server/infra/tmux.spec.ts`, `test/server/session/pty-spawn-env.spec.ts` |
 
 ## 実機検証（2026-08-30）
@@ -99,11 +111,14 @@ scratch `CLAUDE_CWD` で実サーバを起動。**実ペインの env をペイ�
 #1873 の測定はこの経路を測れていなかった）。測定後、tmux サーバは kill、ソケット名は復元済み
 （`git diff -- server/infra/tmux.ts` に socket 行が出ないことを確認）。
 
+最終規則（iter-2 後）での測定:
+
 | 条件 | 修正前 | 修正後 |
 |---|---|---|
-| **残骸**: 旧版の tmux サーバに `PORT=59999`、`--port 34719` で起動 | ペイン `RAW=[59999]` / global `PORT=59999` | ペイン `RAW=[]` / global `-PORT`（起動時 scrub で回収） |
+| **残骸**: 旧版の tmux サーバに `PORT=34719`、`--port 34719` で起動 | ペイン `RAW=[34719]` | ペイン `RAW=[]` / global `-PORT`（起動時 scrub で回収） |
 | **生きた経路**: tmux サーバ未起動、`PORT=34719 mulmoterminal` | ペイン `RAW=[34719]` / global `PORT=34719` | ペイン `RAW=[]` / global に `PORT` 無し |
-| **ユーザーの値**: `PORT=3000 mulmoterminal --port 34719`（iter-1 で追加） | ペイン `RAW=[3000]` | ペイン `RAW=[3000]` / global `PORT=3000`（**変えない**） |
+| **ユーザーの値**: `PORT=3000 mulmoterminal --port 34719`（iter-1） | ペイン `RAW=[3000]` | ペイン `RAW=[3000]` / global `PORT=3000`（**変えない**） |
+| **再起動**: global に `PORT=3000` が残る状態で、`PORT` 無し + `--port 34719` で起動（iter-2 の repro） | ペイン `RAW=[3000]` | ペイン `RAW=[3000]`（**奪わない**） |
 | どちらも `MULMOTERMINAL_PORT` | `MT=[34719]` | `MT=[34719]`（変わらず＝セルはサーバを見つけられる） |
 | `worktreeEnv: { PORT: { kind: port, base: 3000 } }` のディレクトリ | — | ペイン `RAW=[3000]`（`-e` は無傷、#1367 は保たれる） |
 
@@ -128,6 +143,20 @@ D1 の規則を名前ベースから**値ベース**に書き換え、クライ�
 「`inherited === bound` のときだけ落とす」に変更。グローバル側も同じ規則にしないと
 「tmux サーバが先に居たかどうか」で `--port` 時の挙動が割れるため、両方を `isOwnPort` に寄せた。
 実機で `PORT=3000 --port 34719` を測り、ペインが `RAW=[3000]` を保つことを確認（上表）。
+
+## codex-review 対応（iter-2、2026-08-30）
+
+`CODEX VERDICT: CHANGES REQUESTED` 1 件、**採用**。
+
+> A user `PORT` that this patch deliberately allows through is not durable across the next
+> MulmoTerminal restart. `PORT=3000 mulmoterminal --port 34601` → tmux サーバに 3000 が残る →
+> `PORT` 無しで再起動すると `inherited` が undefined なので「残骸」と判定して消してしまう。
+
+iter-1 の「我々の env と違う値＝旧版の残骸」という推測が誤り。**tmux 環境に provenance は無く、
+残骸とユーザーの値は原理的に区別できない**。そこで規則を
+「**bind ポートと同じ値だけ消す**」まで単純化し（`isOwnPort` → `isOwnBindPort`、`PortFacts` は不要に）、
+回収できない残骸（別ポートを指す古い値）を**受け入れたコストとして明記＋テストで pin**した。
+再起動 repro を実機で測定（上表）。
 
 ## ゲート
 
