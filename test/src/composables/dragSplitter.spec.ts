@@ -21,7 +21,13 @@ const separator = () => {
   return { el, held };
 };
 
+// Several tests deliberately leave a drag running (that IS what they assert), and a live drag
+// holds three `window` listeners. `restoreAllMocks` does not remove listeners, so without this the
+// file accumulates handlers from every test that ran before it.
+const unsettled = new Set<number>();
+
 const start = (el: HTMLElement, handler: (e: PointerEvent) => void, clientX: number, pointerId = 7) => {
+  unsettled.add(pointerId);
   const listener = (e: Event) => {
     if (e instanceof PointerEvent) handler(e);
   };
@@ -44,7 +50,11 @@ const drag = (over: { size: number }, remember = vi.fn()) => ({
   },
 });
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  unsettled.forEach((id) => window.dispatchEvent(new PointerEvent("pointerup", { pointerId: id, bubbles: true })));
+  unsettled.clear();
+  vi.restoreAllMocks();
+});
 
 describe("dragSplitter", () => {
   it("resizes by the pointer's travel from where the drag started", () => {
