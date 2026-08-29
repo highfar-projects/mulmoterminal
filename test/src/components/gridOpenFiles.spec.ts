@@ -47,52 +47,42 @@ const cell = (uid: number, session: string, cwd: string): Cell => ({ uid, sessio
 
 // One list, so the grid's cells and the routes the guard will accept cannot drift apart.
 const CELLS = [cell(1, "s1", "/work/a"), cell(2, "s2", "/work/b")];
-const SESSIONS = CELLS.map((c) => c.session);
+// `?? []` rather than a cast: `Cell.session` is nullable, and a cell without one contributes no
+// route — which is the right answer, not something to assert away. Same idiom as listSlots.
+const SESSIONS = CELLS.flatMap((c) => c.session ?? []);
 
 // Mounting the grid on an enlarged SESSION sends three requests before anything in this file has
-// happened: is a question open (`/api/question/<id>`), does it already have a card
-// (`/api/agent/toolResults/<id>`), and what can it draw (`/api/tools`). Nothing here is about any
-// of those answers — but unmocked they went out for real, failing only because a relative URL has
-// no origin under jsdom, which is why the miss left nothing to notice. Each is answered as the
-// quiet case, which is what these tests assume anyway.
+// happened: is a question open, does it already have a card, and what can it draw. Nothing here is
+// about any of those answers — but unmocked they went out for real, failing only because a
+// relative URL has no origin under jsdom, which is why the miss left nothing to notice. Each is
+// answered as the quiet case, which is what these tests assume anyway.
 //
-// Matched on the PARSED url, not on its text. Three review rounds found the same shape of hole in
-// a text pattern — a path suffix (`/api/question/<id>/answer`, a real route in the same module),
-// then a query string (`?extra=`), then any value at all for `sessionId` — because a pattern
-// describes the characters it excludes instead of saying what a request IS. Said once here: this
-// pathname, exactly these query keys, and a session THIS GRID ACTUALLY HAS. Anything else is a
-// request the mount did not used to make, which is the one thing this list exists to notice.
-// Codex iter-2 and iter-4, CodeRabbit iter-3, PR #1913.
+// Written as a literal SET rather than a pattern. A pattern says what a request may not contain,
+// and every character class left something in that nobody meant — a path suffix, a query suffix,
+// any value for the session, any origin. The set is six strings and it IS the list the mount
+// makes, so anything else is a change by construction — the only question this guard asks.
 //
-// Codex asked for the session to be pinned to `s1`. Measured, that is wrong: one of these tests
-// enlarges the SECOND cell, so `s2` is asked about too and pinning `s1` would fail the spec. The
-// contract that holds is membership — which also rejects the empty `sessionId` that prompted it.
-const lastSegment = (u: URL) => u.pathname.split("/").pop() ?? "";
-const MOUNT_ROUTES: { path: RegExp; query: string[]; session: (u: URL) => string; body: () => unknown }[] = [
-  { path: /^\/api\/question\/[^/]+$/, query: [], session: lastSegment, body: () => ({ question: null }) },
-  { path: /^\/api\/agent\/toolResults\/[^/]+$/, query: [], session: lastSegment, body: () => ({ toolResults: [] }) },
-  { path: /^\/api\/tools$/, query: ["sessionId"], session: (u) => u.searchParams.get("sessionId") ?? "", body: () => ({ groups: [] }) },
-];
+// Built with the `encodeURIComponent` the three callers use, so it stays right for a session id
+// that is not two plain characters.
+const ALLOWED = new Map<string, () => unknown>(
+  SESSIONS.flatMap((id): [string, () => unknown][] => [
+    [`/api/question/${encodeURIComponent(id)}`, () => ({ question: null })],
+    [`/api/agent/toolResults/${encodeURIComponent(id)}`, () => ({ toolResults: [] })],
+    [`/api/tools?sessionId=${encodeURIComponent(id)}`, () => ({ groups: [] })],
+  ]),
+);
 
-// The base is never used — every request here is relative — but `new URL` needs one to parse at
-// all, and giving it a reserved TLD keeps a mistake from resolving to somewhere real.
-const matchRoute = (url: string) => {
-  const parsed = new URL(url, "https://spec.invalid");
-  const keys = [...parsed.searchParams.keys()].join(",");
-  return MOUNT_ROUTES.find((route) => route.path.test(parsed.pathname) && keys === route.query.join(",") && SESSIONS.includes(route.session(parsed)));
-};
-
-// A fourth request is caught because it is RECORDED here and asserted below. Throwing does not
-// work: every mount-time caller catches its own fetch failure (fetchOpenQuestion, hasStoredCard,
-// the tools watcher), so the rejection is swallowed and the spec passes knowing nothing about it.
-// Both Codex and CodeRabbit caught that on PR #1913, against the first cut of this file.
+// A new request is caught because it is RECORDED here and asserted after every test. Throwing
+// does not work: every mount-time caller catches its own fetch failure (fetchOpenQuestion,
+// hasStoredCard, the tools watcher), so the rejection would be swallowed and the spec would pass
+// knowing nothing about it.
 const unexpected: string[] = [];
 const mockApi = () => {
   unexpected.length = 0;
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
-    const route = matchRoute(url);
-    if (route) return { ok: true, json: async () => route.body() };
+    const body = ALLOWED.get(url);
+    if (body) return { ok: true, json: async () => body() };
     unexpected.push(url);
     return { ok: false, status: 500, json: async () => ({}) }; // the caller's own failure path, which it handles
   }) as unknown as typeof fetch;
