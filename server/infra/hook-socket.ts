@@ -15,14 +15,33 @@
 // --unix-socket <path>` from inside reaches this listener directly, and Node reports no
 // `remoteAddress` for a Unix-socket peer — which isAllowedOrigin already treats as local (that
 // `remoteAddress === undefined` branch exists for exactly this shape of caller).
-import { existsSync, unlinkSync } from "node:fs";
+//
+// The mount is of hookSocketDir(), never of one socket file directly. A dev server restarts often
+// (crash-restart + reload-on-change), and startHookSocketListener below unlinks and recreates the
+// file on every boot — a container that bind-mounted the FILE keeps pointing at that old, now
+// orphaned inode after a restart, and every hook curl inside it fails with connection refused
+// until the container itself is recreated (found live: a running devcontainer session went stale
+// this way after two in-session server restarts). Mounting the DIRECTORY instead shares the
+// directory entry, not a snapshot of one file in it — a name recreated inside an already-mounted
+// directory is visible from the container immediately, no container recreate needed. The
+// directory holds nothing but socket files (see hookSocketPath), unlike MULMOTERMINAL_HOME as a
+// whole, which also carries session-settings.ts's 0600 provider-token files — mounting THAT
+// wholesale into every devcontainer would leak one session's token to every other session's
+// container.
+import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { MULMOTERMINAL_HOME } from "../config/env.js";
 
-/** Where the socket lives — under MULMOTERMINAL_HOME (created at boot before anything spawns
- *  into it) and namespaced by port, so two instances on one machine don't collide. */
+/** The directory bind-mounted into a devcontainer (devcontainer-flag.ts) — never a single socket
+ *  file, see the module doc above for why. */
+export function hookSocketDir(): string {
+  return path.join(MULMOTERMINAL_HOME, "hook-sockets");
+}
+
+/** Where one instance's socket lives, namespaced by port so two instances on one machine don't
+ *  collide. */
 export function hookSocketPath(port: string | number): string {
-  return path.join(MULMOTERMINAL_HOME, `hook-${port}.sock`);
+  return path.join(hookSocketDir(), `${port}.sock`);
 }
 
 /** Only what this needs from the third server, so `http.Server` satisfies it structurally and a
@@ -47,6 +66,7 @@ export interface HookSocketListener {
 export function startHookSocketListener(listener: HookSocketListener, port: string | number): void {
   if (process.platform === "win32") return;
   const socketPath = hookSocketPath(port);
+  mkdirSync(hookSocketDir(), { recursive: true });
   // A socket file left behind by a process that didn't exit cleanly makes the next bind fail
   // with EADDRINUSE even though nothing is listening — remove it first, same as a stale pidfile.
   if (existsSync(socketPath)) {
