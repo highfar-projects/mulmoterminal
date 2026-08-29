@@ -13,7 +13,13 @@ import { CELL_DOT_IDLE, CELL_DOT_WORKING } from "./cellChromeClasses";
 
 // The header colour rides along in the non-blocked branches so two text utilities never race for
 // the same element.
-const HEADER_FG = "text-[var(--cell-header-fg,inherit)]";
+//
+// The fallback is a real token, not the bare CSS keyword `inherit` this used to read: nothing
+// between here and the document root sets `color`, so `inherit` resolved to the UA default —
+// black — and every chip inside an unconfigured idle/working/done header (GitBranchChip's
+// `text-inherit` among them) rendered black-on-dark until this was noticed live. Same fallback
+// cellChromeClasses.ts's CELL_HEADER_INK_DIM already uses for the identical variable.
+const HEADER_FG = "text-[var(--cell-header-fg,var(--text-dim))]";
 
 export const CELL_STATUS = {
   // Idle keeps the per-dir --cell-border override; the active states deliberately replace it.

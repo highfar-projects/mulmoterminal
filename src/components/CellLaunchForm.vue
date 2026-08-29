@@ -1027,7 +1027,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           <button
             v-if="stoppable(s)"
             data-testid="ri-stop"
-            class="flex-none cursor-pointer rounded-md border-none bg-transparent px-1.5 py-1 text-[13px] hover:bg-[var(--err-hover-bg)] disabled:cursor-progress"
+            class="flex-none cursor-pointer rounded-md border-none bg-transparent px-1.5 py-1 text-[13px] text-secondary hover:bg-[var(--err-hover-bg)] hover:text-err-text disabled:cursor-progress"
             :disabled="stopping === s.id"
             title="Stop this session (the conversation is kept)"
             :aria-label="`Stop the session running ${s.title}`"
@@ -1041,7 +1041,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           <button
             v-if="canDeleteOrRename()"
             data-testid="ri-rename"
-            class="flex-none cursor-pointer rounded-md border-none bg-transparent px-1.5 py-1 text-[13px] hover:bg-hover disabled:cursor-progress"
+            class="flex-none cursor-pointer rounded-md border-none bg-transparent px-1.5 py-1 text-[13px] text-secondary hover:bg-hover hover:text-fg disabled:cursor-progress"
             :disabled="rowBusy === s.id"
             title="Rename this session"
             :aria-label="`Rename the session ${s.title}`"
@@ -1054,7 +1054,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           <button
             v-if="canDeleteOrRename() && !sessionBusy(s) && !stoppable(s)"
             data-testid="ri-delete"
-            class="flex-none cursor-pointer rounded-md border-none bg-transparent px-1.5 py-1 text-[13px] hover:bg-[var(--err-hover-bg)] disabled:cursor-progress"
+            class="flex-none cursor-pointer rounded-md border-none bg-transparent px-1.5 py-1 text-[13px] text-secondary hover:bg-[var(--err-hover-bg)] hover:text-err-text disabled:cursor-progress"
             :disabled="rowBusy === s.id"
             title="Delete this session permanently"
             :aria-label="`Permanently delete the session ${s.title}`"
