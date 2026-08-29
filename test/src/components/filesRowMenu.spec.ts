@@ -114,9 +114,44 @@ describe("the files tree's row menu", () => {
     expect(menu()).not.toBeNull();
   });
 
+  // The whole point of the Shift+F10 entrance. Without the focus move the menu renders where a
+  // keyboard user cannot reach it: the items are in a Teleport at the END of the document, a
+  // page of tab stops from the tree they were opened in (Codex, PR #1912).
+  it("is usable from the keyboard end to end: open, move, activate", async () => {
+    const w = await mountPane();
+    const row = w.findAll('[data-testid="files-row"]')[0];
+    await row.trigger("keydown", { key: "F10", shiftKey: true });
+    await flushPromises();
+    expect(document.activeElement).toBe(item("insert-relative"));
+
+    menu()?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    expect(document.activeElement).toBe(item("insert-absolute"));
+    menu()?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    expect(document.activeElement).toBe(item("insert-relative")); // wraps
+
+    (document.activeElement as HTMLElement).click(); // what Enter does on a button
+    await flushPromises();
+    expect(w.emitted("insert-text")).toEqual([["README.md "]]);
+  });
+
   // Focus left on a removed menu item drops the keyboard to the top of the document — the same
   // rule the cell's path menu and the launch panel already follow.
-  it("gives the keyboard back to the row it was opened from", async () => {
+  it("gives the keyboard back to the row when the menu is dismissed", async () => {
+    const w = await mountPane();
+    const row = w.findAll('[data-testid="files-row"]')[0].element as HTMLElement;
+    row.focus();
+    rightClick(row);
+    await flushPromises();
+
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await flushPromises();
+    expect(document.activeElement).toBe(row);
+  });
+
+  // But NOT after an insert. `insertText` ends in `term.focus()`, so the terminal is where the
+  // user is about to type the sentence the path belongs to — taking the keyboard back to the
+  // tree would be the pane undoing the thing it was just asked to do.
+  it("does not take the keyboard back after inserting", async () => {
     const w = await mountPane();
     const row = w.findAll('[data-testid="files-row"]')[0].element as HTMLElement;
     row.focus();
@@ -125,7 +160,7 @@ describe("the files tree's row menu", () => {
 
     item("insert-relative")?.click();
     await flushPromises();
-    expect(document.activeElement).toBe(row);
+    expect(document.activeElement).not.toBe(row);
   });
 
   // ...but NOT when the user has already said where focus belongs by clicking somewhere else.

@@ -1,5 +1,5 @@
-// What a right-click on a file-tree row offers: that row's path, put at the cursor of the
-// terminal beside the pane (#1859). Typing a path by hand was the only way to say "look at this
+// The file-tree row menu's rules: what a right-click on a row offers, and how the keyboard moves
+// through it once it is open (#1859). Typing a path by hand was the only way to say "look at this
 // file" to the agent running next to the tree that already shows it.
 //
 // Pure, and separate from the pane, because every rule here is about a path resolving somewhere
@@ -49,4 +49,21 @@ export function filesRowActions({ pathRel, cwd, terminal }: FilesRowTarget): Fil
   }
   actions.push({ id: "insert-absolute", label: "Insert absolute path", icon: ICON, text: toInsertText([absoluteUnder(cwd, pathRel)]) });
   return actions;
+}
+
+/**
+ * Where the arrow keys move focus inside the open menu, or null for a key that is not ours.
+ *
+ * `at` is the currently focused item's index, or -1 when focus is somewhere else in the menu —
+ * which is why Down and Up answer the two ENDS from there rather than an offset from nowhere.
+ */
+export function menuFocusMove(key: string, at: number, count: number): number | null {
+  if (count === 0) return null;
+  const last = count - 1;
+  if (key === "Home") return 0;
+  if (key === "End") return last;
+  // Wrapping, because a menu this short is faster to leave by going round than by reversing.
+  if (key === "ArrowDown") return at < 0 || at === last ? 0 : at + 1;
+  if (key === "ArrowUp") return at <= 0 ? last : at - 1;
+  return null;
 }

@@ -13,7 +13,7 @@ import { expandedPaths, restoreOrder } from "./filesTreeState";
 import { isWriteToOpenFile } from "../composables/fileWriteMatch";
 import { usePubSub } from "../composables/usePubSub";
 import { canOpenInCanvas, absoluteUnder } from "../composables/canvasOpenFile";
-import { filesRowActions, type FilesRowAction } from "./filesRowActions";
+import { filesRowActions, menuFocusMove, type FilesRowAction } from "./filesRowActions";
 import { FILE_WRITE_CHANNEL, isFileWriteEvent } from "../../common/fileWriteChannel";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
@@ -195,6 +195,10 @@ function openRowMenu(node: Node, event: MouseEvent | KeyboardEvent): void {
   const x = event instanceof MouseEvent ? event.clientX : (rect?.left ?? 0) + KEYBOARD_MENU_INSET_PX;
   const y = event instanceof MouseEvent ? event.clientY : (rect?.bottom ?? 0);
   rowMenu.value = { actions, ...menuPosition(actions, x, y) };
+  // The menu takes the keyboard, the way a native context menu does. Without this the Shift+F10
+  // entrance renders a panel nobody can reach: focus would stay on the row, and the items sit at
+  // the END of the document in a Teleport, a whole page of tab stops away (Codex, PR #1912).
+  void nextTick(() => menuItems()[0]?.focus());
   window.addEventListener("pointerdown", onMenuOutside);
   window.addEventListener("keydown", onMenuKeydown);
   window.addEventListener("scroll", closeRowMenuFromEvent, true);
@@ -216,13 +220,30 @@ function closeRowMenu(restoreFocus = false): void {
 // A listener is handed the Event as its first argument, which `restoreFocus` would read as true.
 const closeRowMenuFromEvent = (): void => closeRowMenu();
 
+const menuItems = (): HTMLElement[] => [...(rowMenuEl.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
+
+/** Arrow keys inside the open menu. Enter and Space need nothing — the items are buttons. */
+function onMenuNav(event: KeyboardEvent): void {
+  const items = menuItems();
+  const active = document.activeElement;
+  const to = menuFocusMove(event.key, active instanceof HTMLElement ? items.indexOf(active) : -1, items.length);
+  if (to === null) return;
+  event.preventDefault();
+  items[to]?.focus();
+}
+
 function onMenuOutside(event: PointerEvent): void {
   const target = event.target instanceof Node ? event.target : null;
   if (!rowMenuEl.value?.contains(target)) closeRowMenu();
 }
 
+// Both ways of saying "not this menu after all". Tab is prevented and handed back to the row
+// rather than let through: the items live in a Teleport at the end of the document, so the tab
+// stop after them is nowhere near the tree the user is in.
 function onMenuKeydown(event: KeyboardEvent): void {
-  if (event.key === "Escape") closeRowMenu(true);
+  if (event.key !== "Escape" && event.key !== "Tab") return;
+  event.preventDefault();
+  closeRowMenu(true);
 }
 
 // The same menu without a mouse. Both spellings, because the dedicated key exists on few
@@ -232,9 +253,12 @@ function onRowKeydown(node: Node, event: KeyboardEvent): void {
   openRowMenu(node, event);
 }
 
+// Emit BEFORE closing, and do not take focus back: the insert ends in `term.focus()` (see
+// useTerminalConnections), and the terminal is where the user is about to type the sentence the
+// path belongs to. Restoring the row here would take the keyboard straight back off them.
 function runRowAction(action: FilesRowAction): void {
   emit("insert-text", action.text);
-  closeRowMenu(true);
+  closeRowMenu();
 }
 
 onBeforeUnmount(() => closeRowMenu());
@@ -649,6 +673,7 @@ defineExpose({
         role="menu"
         class="fixed z-[60] min-w-[200px] rounded-lg border border-border bg-panel p-1.5 text-fg shadow-xl"
         :style="{ top: `${rowMenu.top}px`, left: `${rowMenu.left}px` }"
+        @keydown="onMenuNav"
       >
         <button
           v-for="action in rowMenu.actions"

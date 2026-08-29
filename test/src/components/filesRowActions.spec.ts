@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { filesRowActions } from "../../../src/components/filesRowActions";
+import { filesRowActions, menuFocusMove } from "../../../src/components/filesRowActions";
 
 // What a tree row offers when it is right-clicked (#1859). Every rule here is about a path
 // meaning something DIFFERENT at the other end than it does in the tree, which is why it is a
@@ -60,5 +60,36 @@ describe("filesRowActions", () => {
 
   it("does not double a separator the root already ends with", () => {
     expect(textOf("insert-absolute", { ...here, cwd: "/proj/", terminal: { cwd: "/proj/" } })).toBe("/proj/src/index.ts ");
+  });
+});
+
+describe("menuFocusMove", () => {
+  it("wraps both ways round a two-item menu", () => {
+    expect(menuFocusMove("ArrowDown", 0, 2)).toBe(1);
+    expect(menuFocusMove("ArrowDown", 1, 2)).toBe(0);
+    expect(menuFocusMove("ArrowUp", 1, 2)).toBe(0);
+    expect(menuFocusMove("ArrowUp", 0, 2)).toBe(1);
+  });
+
+  it("answers the two ends when focus is not on an item yet", () => {
+    expect(menuFocusMove("ArrowDown", -1, 3)).toBe(0);
+    expect(menuFocusMove("ArrowUp", -1, 3)).toBe(2);
+  });
+
+  it("jumps to either end", () => {
+    expect(menuFocusMove("Home", 2, 3)).toBe(0);
+    expect(menuFocusMove("End", 0, 3)).toBe(2);
+  });
+
+  it("leaves every other key, and an empty menu, alone", () => {
+    expect(menuFocusMove("Enter", 0, 2)).toBeNull();
+    expect(menuFocusMove("a", 0, 2)).toBeNull();
+    expect(menuFocusMove("ArrowDown", 0, 0)).toBeNull();
+    expect(menuFocusMove("Home", -1, 0)).toBeNull();
+  });
+
+  it("stays put in a one-item menu", () => {
+    expect(menuFocusMove("ArrowDown", 0, 1)).toBe(0);
+    expect(menuFocusMove("ArrowUp", 0, 1)).toBe(0);
   });
 });
