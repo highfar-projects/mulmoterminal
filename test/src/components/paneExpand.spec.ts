@@ -1,6 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
-import { mountRequests } from "../../helpers/mountRequests";
 import { h, type VNode } from "vue";
 import TerminalGrid from "../../../src/components/TerminalGrid.vue";
 import type { Cell } from "../../../src/components/gridTabs.js";
@@ -100,17 +99,6 @@ beforeEach(() => {
     "fetch",
     vi.fn(async () => ({ ok: true, json: async () => ({ groups: ["render"], tools: [] }) })),
   );
-});
-
-// Mounting the grid on an enlarged session asks three /api routes before this file has done
-// anything. Left unmocked they went out for real (they did — every caller catches its own
-// failure, so nothing showed). Not the strict mode: this spec moves the zoom from several
-// places, and closing the network off is what it needs — not bookkeeping it is not about.
-const requests = mountRequests(["s1", "s2"]);
-beforeEach(() => requests.install());
-afterEach(async () => {
-  await flushPromises();
-  requests.settled();
 });
 
 describe("expanding a pane over the terminal", () => {
