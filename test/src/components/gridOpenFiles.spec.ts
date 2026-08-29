@@ -45,6 +45,25 @@ vi.mock("../../../src/components/FilesPane.vue", () => ({
 
 const cell = (uid: number, session: string, cwd: string): Cell => ({ uid, session, cwd });
 
+// Mounting the grid on an enlarged SESSION sends three requests before anything in this file has
+// happened: is a question open (`/api/question/<id>`), does it already have a card
+// (`/api/agent/toolResults/<id>`), and what can it draw (`/api/tools`). Nothing here is about any
+// of those answers — but unmocked they went out for real, failing only because a relative URL has
+// no origin under jsdom, which is why the miss left nothing to notice. Each is answered as the
+// quiet case, which is what these tests assume anyway.
+//
+// The throw is the point of listing them rather than answering `{}` to everything: a fourth
+// request added to the mount is a spec that says so, instead of one that silently reaches out.
+const mockApi = () => {
+  globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("/api/question/")) return { ok: true, json: async () => ({ question: null }) };
+    if (url.includes("/api/agent/toolResults/")) return { ok: true, json: async () => ({ toolResults: [] }) };
+    if (url.includes("/api/tools")) return { ok: true, json: async () => ({ groups: [] }) };
+    throw new Error(`unmocked request: ${url}`);
+  }) as unknown as typeof fetch;
+};
+
 const mountGrid = () =>
   mount(TerminalGrid, {
     props: {
@@ -77,6 +96,7 @@ const applyExpand = async (w: Grid, uid: number) => {
 describe("open-files from a cell's path menu", () => {
   beforeEach(() => {
     localStorage.clear();
+    mockApi();
     flush.mockClear();
     flush.mockResolvedValue(undefined);
     // The zoom-flip watcher asks for the reduced-motion preference the moment `expandedUid`
