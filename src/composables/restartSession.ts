@@ -22,15 +22,19 @@ export type RestartOutcome =
   /** Nothing was running — a cell still on its launch form. */
   | "no-session"
   | "restarted"
-  /** The reap request failed. Reconnected anyway (the old pty may already be gone), but this is
-   *  the case where the new process can turn out to be the old one. */
-  | "reap-unconfirmed";
+  /** The server did not confirm the reap, so nothing was reconnected. The caller has to SAY so. */
+  | "reap-failed";
 
 export async function restartSession(sessionId: string | null, steps: RestartSteps): Promise<RestartOutcome> {
   if (!sessionId) return "no-session";
-  const reaped = await steps.reap(sessionId);
+  // An unconfirmed reap does NOT reconnect (codex on #1920). Both ways the request can fail leave
+  // reconnecting worse than useless: a refusal means the session is untouched and still in tmux, so
+  // `new-session -A` hands back the very process we were asked to replace, and an unreachable server
+  // will not answer the new socket either. Either way the screen would clear and redraw — a restart,
+  // to look at. The caller reports instead, and a second press retries.
+  if (!(await steps.reap(sessionId))) return "reap-failed";
   steps.reconnect();
-  return reaped ? "restarted" : "reap-unconfirmed";
+  return "restarted";
 }
 
 /** The close button's own route (POST /api/session/:id/terminate): it kills the pty and the tmux

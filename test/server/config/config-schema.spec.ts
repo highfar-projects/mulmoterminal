@@ -248,6 +248,8 @@ describe("dirConfigJsonSchema", () => {
     expect(json).toContain('"required":["id","label","run","cmd"]'); // shell needs cmd
     expect(json).toContain('"required":["id","label","run","text"]'); // input needs text
     expect(json).toContain('"required":["id","label","run","open"]'); // open needs open
+    expect(json).toContain('"required":["id","label","run","action"]'); // action needs action
+    expect(json).toContain('"enum":["restart"]'); // …and only the actions the client can dispatch
     expect(json).toContain('"enum":["dir","git","work","ctx","usage","status","diff","tools","env"]'); // chip string = builtin ids only
   });
 

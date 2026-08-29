@@ -838,17 +838,31 @@ function teardown() {
 // No confirmation, even mid-turn: the only ways here are a header button and a shortcut the user
 // put in their own config.
 const restarting = ref(false);
+const RESTART_FAILED_EN = "Couldn't end the old session, so nothing was restarted — try again, or close the cell.";
 async function restart(): Promise<void> {
   // A worktree removal is running or waiting to be confirmed — that flow owns the pty. A restart
   // never opens that dialog itself: it discards nothing, so there is nothing to confirm.
   if (restarting.value || closeConfirm.value || closeBusy.value !== null) return;
   restarting.value = true;
-  // The turn that was in flight died with the process; the resumed session publishes its own.
-  working.value = false;
-  waiting.value = false;
-  activityEvent.value = null;
+  const id = sessionId.value; // what this restart is FOR — the cell can move on while it runs
   try {
-    await restartSession(sessionId.value, { reap: reapSessionOnServer, reconnect: () => connectKey.value++ });
+    const outcome = await restartSession(id, {
+      reap: reapSessionOnServer,
+      reconnect: () => {
+        // The reap is a round trip, and a cell can be closed and relaunched inside it. Reconnecting
+        // then retargets whatever the cell holds NOW — at worst a just-launched session whose id the
+        // server has not sent yet, which spawns a second one and orphans the first (codex on #1920).
+        if (!launched.value || sessionId.value !== id) return;
+        // The turn that was in flight died with the process; the resumed session publishes its own.
+        working.value = false;
+        waiting.value = false;
+        activityEvent.value = null;
+        connectKey.value++;
+      },
+    });
+    // Nothing was reconnected and the old agent is probably still running, which looks identical to
+    // a restart that worked. Say so over the terminal, where the header button's other failures go.
+    if (outcome === "reap-failed") void termRef.value?.showHint(RESTART_FAILED_EN, "restart_alt");
   } finally {
     restarting.value = false;
   }

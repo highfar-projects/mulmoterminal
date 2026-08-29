@@ -69,7 +69,7 @@ who wrote it.
 
 Restart is `teardown()`'s reap followed by a reconnect that keeps everything else:
 
-```
+```text
 await reapSession(id)      // POST /api/session/:id/terminate — awaited (see above)
 connectKey.value++         // Terminal.vue retargets the SAME target → connect() → same id
 ```
@@ -85,6 +85,18 @@ host element), after which `retarget` is a no-op and the cell would go blank.
 
 The ordering rule lives in `src/composables/restartSession.ts` as a pure function over injected
 steps, so the "reap before reconnect" invariant is testable without a server or a DOM.
+
+Two things the reap's round trip forces, both found by codex on the PR:
+
+- **A reconnect is guarded by what the cell still is.** The cell can be closed and relaunched
+  inside that window; reconnecting then retargets whatever it holds now, and a just-launched
+  session whose id the server has not sent yet would go out with `sessionId: null` — spawning a
+  SECOND session and orphaning the first. The callback checks `launched` and the captured id.
+- **An unconfirmed reap reconnects nothing, and says so.** A refusal leaves the session in tmux,
+  so reconnecting would attach the very process the restart was asked to replace — while clearing
+  and redrawing the screen, which is exactly what a working restart looks like. The cell puts the
+  reason over the terminal instead (Terminal.vue's hint banner, where the header button's other
+  failures already go), and a second press retries.
 
 Two callers, one seam: `src/composables/useCellRestart.ts` — a per-slot registry (`cell-<uid>`)
 that TerminalCell registers itself in, mirroring `useNewTerminal`'s seam. A Map rather than the

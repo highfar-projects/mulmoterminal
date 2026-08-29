@@ -37,10 +37,13 @@ describe("restartSession", () => {
     expect(reconnect).not.toHaveBeenCalled();
   });
 
-  it("still reconnects when the reap could not be confirmed, and says so", async () => {
+  // A refused reap leaves the session in tmux, so reconnecting would attach the very process the
+  // restart was asked to replace — while clearing and redrawing the screen, which is what a restart
+  // looks like. Nothing is reconnected; the caller is told (codex on #1920).
+  it("does NOT reconnect when the reap was not confirmed", async () => {
     const reconnect = vi.fn();
-    expect(await restartSession("s1", { reap: async () => false, reconnect })).toBe("reap-unconfirmed");
-    expect(reconnect).toHaveBeenCalledTimes(1);
+    expect(await restartSession("s1", { reap: async () => false, reconnect })).toBe("reap-failed");
+    expect(reconnect).not.toHaveBeenCalled();
   });
 });
 

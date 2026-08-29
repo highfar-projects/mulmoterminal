@@ -435,11 +435,15 @@ const commonButtonFields = {
 };
 
 // Run-discriminated: each run type requires the payload the runtime needs (shell→cmd, input→text,
-// open→open), so the schema matches live acceptance instead of accepting no-op buttons.
+// open→open, action→action), so the schema matches live acceptance instead of accepting no-op
+// buttons. A run type missing here is worse than an unvalidated one: the generated
+// dir-config.schema.json is what the config skills author against, so it would report a button the
+// runtime accepts as invalid (CodeRabbit on #1920).
 const writableHeaderButtonSchema = z.discriminatedUnion("run", [
   z.object({ ...commonButtonFields, run: z.literal("shell"), cmd: nonEmptyText }),
   z.object({ ...commonButtonFields, run: z.literal("input"), text: nonEmptyText }),
   z.object({ ...commonButtonFields, run: z.literal("open"), open: writableOpenTargetSchema }),
+  z.object({ ...commonButtonFields, run: z.literal("action"), action: actionTargetSchema }),
 ]);
 
 // A builtin chip id (the runtime drops any other string), or a custom chip whose label/text the

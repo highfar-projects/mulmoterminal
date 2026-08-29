@@ -7,36 +7,43 @@ vi.mock("../../../src/composables/usePubSub", () => ({
   usePubSub: () => ({ subscribe: () => () => {}, onReconnect: () => () => {} }),
 }));
 
+const hints: string[] = [];
+
 // The stub records `connectKey`, which is the whole client half of a restart: bumping it is what
 // retargets the slot at the same session id, and the server — with nothing live left to attach —
-// spawns a new process that resumes the conversation.
+// spawns a new process that resumes the conversation. `header-actions` is rendered so the cell's
+// own close button is in the DOM, which is how a test can close a cell mid-restart.
 vi.mock("../../../src/components/Terminal.vue", () => ({
   default: {
     name: "TerminalView",
     props: ["sessionId", "connectKey", "cwd", "hideHeader", "launch", "customAgent", "agent"],
     emits: ["session", "cwd"],
-    template: '<div class="stub-term" />',
+    template: '<div class="stub-term"><slot name="header-actions" /></div>',
     methods: {
       terminate() {},
+      showHint(message: string) {
+        hints.push(message);
+      },
     },
   },
 }));
 
 const TERMINATE_RE = /\/api\/session\/[^/?]+\/terminate$/;
 
-let terminate: { resolve: () => void; calls: string[] };
+let terminate: { resolve: (ok?: boolean) => void; calls: string[] };
 
 beforeEach(() => {
+  hints.length = 0;
   const calls: string[] = [];
-  let release = (): void => {};
-  const pending = new Promise<void>((r) => (release = r));
-  terminate = { resolve: () => release(), calls };
+  let release: (ok: boolean) => void = () => {};
+  const pending = new Promise<boolean>((r) => (release = r));
+  terminate = { resolve: (ok = true) => release(ok), calls };
   globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
     const u = String(url);
     if (TERMINATE_RE.test(u)) {
       calls.push(`${init?.method} ${u}`);
-      await pending; // held open, so a test can look at the world mid-restart
-      return { ok: true, json: async () => ({ ok: true }) };
+      const ok = await pending; // held open, so a test can look at the world mid-restart
+      return { ok, status: ok ? 200 : 403, json: async () => ({ ok }) };
     }
     if (u.includes("/api/scripts")) return { ok: true, json: async () => ({ cwd: "/home/me/proj", scripts: [] }) };
     if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
@@ -83,6 +90,69 @@ describe("restarting the agent in a cell", () => {
     expect(Number(term(w).props("connectKey"))).toBe(before + 1);
     // Same conversation, same cell: only the process was replaced.
     expect(term(w).props("sessionId")).toBe("sess-1");
+    expect(hints).toEqual([]);
+    w.unmount();
+  });
+
+  // The reap is a round trip and the cell can move on inside it. Reconnecting then retargets the
+  // slot at whatever the cell holds NOW — and a just-launched session whose id the server has not
+  // sent yet would be reconnected with no id at all, spawning a SECOND session (codex on #1920).
+  it("does not reconnect a session the cell has moved on from", async () => {
+    const w = mountCell("sess-1");
+    await flushPromises();
+    const before = Number(term(w).props("connectKey"));
+
+    expect(requestCellRestart("cell-7")).toBe(true);
+    await flushPromises();
+    term(w).vm.$emit("session", "sess-2"); // the cell is now on another session
+    await flushPromises();
+    const afterSwitch = Number(term(w).props("connectKey"));
+
+    terminate.resolve();
+    await flushPromises();
+    expect(Number(term(w).props("connectKey"))).toBe(afterSwitch);
+    expect(afterSwitch).toBe(before);
+    w.unmount();
+  });
+
+  // The case codex named: closed and REUSED. The relaunched session has no id yet, so a stray
+  // reconnect would go out with `sessionId: null` and start a second one, orphaning this.
+  it("does not reconnect a cell that was closed and relaunched while the reap was in flight", async () => {
+    const w = mountCell("sess-1");
+    await flushPromises();
+
+    expect(requestCellRestart("cell-7")).toBe(true);
+    await flushPromises();
+    await w.find(".cell-close").trigger("click"); // back to the launch form
+    await flushPromises();
+    expect(term(w).exists()).toBe(false);
+
+    await w.find('[data-testid="cell-chip-launch"]').trigger("click"); // start something else here
+    await flushPromises();
+    expect(term(w).props("sessionId")).toBeNull(); // brand new — the server has not named it yet
+    const relaunched = Number(term(w).props("connectKey"));
+
+    terminate.resolve();
+    await flushPromises();
+    expect(Number(term(w).props("connectKey"))).toBe(relaunched);
+    w.unmount();
+  });
+
+  // A refused terminate leaves the old process in tmux. Reconnecting would attach it and redraw —
+  // indistinguishable from a restart that worked, which is why the cell says so instead.
+  it("says so, and reconnects nothing, when the session could not be ended", async () => {
+    const w = mountCell("sess-1");
+    await flushPromises();
+    const before = Number(term(w).props("connectKey"));
+
+    expect(requestCellRestart("cell-7")).toBe(true);
+    await flushPromises();
+    terminate.resolve(false);
+    await flushPromises();
+
+    expect(Number(term(w).props("connectKey"))).toBe(before);
+    expect(hints).toHaveLength(1);
+    expect(hints[0]).toContain("restarted");
     w.unmount();
   });
 
