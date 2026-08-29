@@ -31,11 +31,14 @@ describe("gridShortcutFor", () => {
   });
 
   it("gates the actions that need a subject terminal on being zoomed", () => {
-    const map: Keymap = { "terminal-new-adjacent": "F2", "terminal-close": "F3" };
+    const map: Keymap = { "terminal-new-adjacent": "F2", "terminal-close": "F3", "terminal-restart": "F4" };
     expect(gridShortcutFor(map, key({ key: "F2" }), true)).toBe("terminal-new-adjacent");
     expect(gridShortcutFor(map, key({ key: "F3" }), true)).toBe("terminal-close");
+    // Restarting acts on one running agent, so it needs a terminal the grid can name (#1918).
+    expect(gridShortcutFor(map, key({ key: "F4" }), true)).toBe("terminal-restart");
     expect(gridShortcutFor(map, key({ key: "F2" }), false)).toBeNull();
     expect(gridShortcutFor(map, key({ key: "F3" }), false)).toBeNull();
+    expect(gridShortcutFor(map, key({ key: "F4" }), false)).toBeNull();
   });
 
   it("lets terminal-new work WITHOUT a zoom — appending a cell needs no subject", () => {

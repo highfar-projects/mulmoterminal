@@ -126,7 +126,7 @@ An array, ≤ 32 entries:
 ```
 
 - `id` (**required**, unique — it is also the merge key), `label` (**required**),
-  `run` (**required**): `"shell"` / `"input"` / `"open"`.
+  `run` (**required**): `"shell"` / `"input"` / `"open"` / `"action"`.
 - `icon` — a [Material Symbols](https://fonts.google.com/icons) name (`build`, `folder`,
   `bar_chart`). Prefer it. An `emoji` field exists and wins when both are set, but this project
   ships icons only.
@@ -139,7 +139,31 @@ An array, ≤ 32 entries:
     `view` (`"diff"` / `"prs"` / `"wiki"` / `"collections"` / `"accounting"`) ·
     `terminal` (dir → a new cell running `$SHELL`) · `pr: true` (this branch's PR; the button hides
     when there is none) · `pickFile: true` (OS file dialog → insert the path).
+  - `"action"` → `action` — acts on the cell itself. One value: `"restart"`.
 - `when` — visibility condition (below). `order` — sort key, lower first, unset last.
+
+## `run: "action"` — restart the agent in this cell
+
+```json
+{ "buttons": [{ "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart" }] }
+```
+
+Ends the agent process and starts it again **in the same cell, on the same conversation** — no trip
+back through the launcher. It is what makes a changed MCP registration, an edited
+`~/.mulmoterminal/config.json` or an updated plugin take effect, because those are read once, when
+the process starts.
+
+Three things to say when you offer it:
+
+- **It costs a resume.** The conversation is read back from its transcript, with the token cost that
+  implies. This is not a free "reload".
+- **No confirmation, even mid-turn.** It ends whatever the agent is doing. That is deliberate — the
+  button only exists because someone wrote it — but it means the icon sits next to buttons that are
+  harmless, and it is not.
+- **Nothing else changes**: same directory, same agent, same model, same custom agent.
+
+There is no built-in Restart button and no default binding; this and the `terminal-restart` shortcut
+(the `mulmoterminal-keys` skill) are the two ways to have one.
 
 ## Chips — schema
 

@@ -36,6 +36,17 @@ describe("substitute", () => {
   });
 });
 
+describe("resolveButton run:action", () => {
+  it("carries `action` to the client, which is where it happens", () => {
+    const config: HeaderConfig = { buttons: [{ id: "r", icon: "restart_alt", label: "Restart", run: "action", action: "restart" }], chips: null };
+    expect(resolveHeader(config, ctx()).buttons).toEqual([{ id: "r", icon: "restart_alt", label: "Restart", run: "action", action: "restart" }]);
+  });
+  it("still honours `when`, like every other button", () => {
+    const config: HeaderConfig = { buttons: [{ id: "r", label: "Restart", run: "action", action: "restart", when: "agent == codex" }], chips: null };
+    expect(resolveHeader(config, ctx({ agent: "claude" })).buttons).toEqual([]);
+  });
+});
+
 describe("evalWhen", () => {
   it("treats an empty/absent condition as always visible", () => {
     expect(evalWhen(undefined, ctx())).toBe(true);

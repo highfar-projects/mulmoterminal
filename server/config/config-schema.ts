@@ -40,7 +40,12 @@ import { CUSTOM_AGENT_KINDS, type CustomAgent } from "../../common/customAgents.
 // ---- shared constants ---------------------------------------------------------------------
 
 export const VIEW_TARGETS = ["diff", "prs", "wiki", "collections", "accounting"] as const;
-export const RUN_TYPES = ["shell", "input", "open"] as const;
+// What a `run: "action"` button acts on: the CELL it sits in, not the directory or the session's
+// text. Its own list rather than another `run` type per action, because `run` says how a button
+// acts (type into the session / run a command / open something / act on this cell) — one run type
+// per action name would spend the vocabulary on the first two entries.
+export const ACTION_TARGETS = ["restart"] as const;
+export const RUN_TYPES = ["shell", "input", "open", "action"] as const;
 export const BUILTIN_CHIPS = ["dir", "git", "work", "ctx", "usage", "status", "diff", "tools", "env"] as const;
 
 export const NAME_MAX_CHARS = 40;
@@ -60,11 +65,13 @@ const PALETTE_COLOR_RE = /^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 // is reported instead of silently falling back (useTheme.ts).
 export const themeIdSchema = z.string().regex(CUSTOM_THEME_ID_RE);
 export const viewTargetSchema = z.enum(VIEW_TARGETS);
+export const actionTargetSchema = z.enum(ACTION_TARGETS);
 export const runTypeSchema = z.enum(RUN_TYPES);
 export const builtinChipSchema = z.enum(BUILTIN_CHIPS);
 
 export type ThemeId = z.infer<typeof themeIdSchema>;
 export type ViewTarget = z.infer<typeof viewTargetSchema>;
+export type ActionTarget = z.infer<typeof actionTargetSchema>;
 export type RunType = z.infer<typeof runTypeSchema>;
 export type BuiltinChip = z.infer<typeof builtinChipSchema>;
 
@@ -107,6 +114,7 @@ export const headerButtonSchema = z.object({
   cmd: z.string().optional(),
   text: z.string().optional(),
   open: openTargetSchema.optional(),
+  action: actionTargetSchema.optional(),
   when: z.string().optional(),
   order: z.number().optional(),
 });

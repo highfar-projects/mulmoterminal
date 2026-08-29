@@ -526,6 +526,7 @@ One of them no longer matches its menu item. *Browse files in the app* **in the 
 - `run: "input"` … send `text` to the running Claude/Codex (e.g. `/compact`).
 - `run: "open"` … write ONE per button. Set several and **only the first of this order** takes effect: `pr` (the current branch's PR — the server resolves it into `url`, so it beats a `url` written alongside) / `url` (browser, http/https only) / `reveal` (OS file manager: Finder/Explorer/xdg-open) / `files` (in-app explorer) / `view` (`prs`/`wiki`/`collections`/`accounting`; `diff` is accepted but has no dedicated screen and currently falls back to the files view) / `terminal` (a new terminal cell in that directory) / `pickFile` (OS file dialog, inserts the path).
 - `run: "shell"` … run `cmd` in a command cell (the id is resolved server-side, `${variables}` are shell-escaped, and the command never reaches the browser).
+- `run: "action"` … act on the cell itself. One `action` so far: `"restart"` — end the agent and start it again **in the same cell, on the same conversation**, which is how a changed MCP registration, an edited config or an updated plugin takes effect. It costs a **resume** (the conversation is read back from its transcript, with the token cost that implies) and it asks **nothing** first, even mid-turn. There is no built-in Restart button: this and the `terminal-restart` shortcut are the two ways to have one.
 - `${variables}` … `dir` `dirName` `branch` `repo` `remoteUrl` `ahead` `behind` `dirty` `agent` `model` `task` `session`.
 - `when` … `isGitRepo` / `agent == …` / `repo == …` (`&&` / `||`, with `&&` taking precedence).
 
@@ -1105,6 +1106,7 @@ terminal stops receiving**, and only you know whether that trade is worth it for
 | `terminal-new-here` | Open the **launch panel** on the current terminal's working directory (same as the **＋** on a terminal's own header). With no terminal in view it falls back to the workspace rather than doing nothing | no |
 | `terminal-new-adjacent` | Start a **shell** in the current terminal's working directory, straight away — no form to fill in. The closest thing to "split this terminal" | yes |
 | `terminal-close` | **Close** the current terminal (same as its close button) | yes |
+| `terminal-restart` | **Restart the agent** in the current terminal — same cell, same directory, same conversation. Costs a resume, and interrupts a turn in progress | yes |
 | `copy` | **Copy** the terminal's selection. Acts only when something IS selected — with no selection the key reaches the shell untouched, which is what makes `Ctrl+C` bindable here without losing **interrupt** | no |
 | `paste` | **Paste** into the terminal | no |
 
@@ -1117,6 +1119,11 @@ both ends** instead of wrapping. See [Basics → switching the enlarged terminal
 {: .warning }
 > **`terminal-close` closes immediately, with no confirmation** — the same as clicking the cell's close button, which
 > ends that session. Bind it to something you won't hit by accident.
+
+{: .warning }
+> **`terminal-restart` also acts immediately.** It kills the agent even mid-turn, and the conversation
+> then has to be read back from its transcript — real tokens, not a free reload. It is for the moment
+> you change an MCP server, a config file or a plugin and need the running agent to see it.
 
 ### Ready-made keymaps
 
