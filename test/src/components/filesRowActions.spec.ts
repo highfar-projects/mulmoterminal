@@ -6,10 +6,59 @@ import { filesRowActions, menuFocusMove } from "../../../src/components/filesRow
 // pure function rather than an assertion about a menu.
 
 const ids = (...args: Parameters<typeof filesRowActions>) => filesRowActions(...args).map((a) => a.id);
-const textOf = (id: string, ...args: Parameters<typeof filesRowActions>) => filesRowActions(...args).find((a) => a.id === id)?.text;
+// Narrowed rather than asserted: only the insert entries carry text, which is the whole point of
+// the union — the Canvas one has a path instead.
+const textOf = (id: string, ...args: Parameters<typeof filesRowActions>) => {
+  const action = filesRowActions(...args).find((a) => a.id === id);
+  return action && "text" in action ? action.text : undefined;
+};
+
+// What the Canvas entry is offered on (#1923). The rule is not this module's: it asks
+// canOpenInCanvas — the same gate the pane's own Canvas button is drawn from — so a row can never
+// offer what that button would refuse.
+describe("filesRowActions — the Canvas entry", () => {
+  const WORKSPACE = "/ws";
+  const inProject = { cwd: "/proj", terminal: { cwd: "/proj" }, canvas: { workspace: WORKSPACE } };
+
+  it("offers it on a file a plugin can render, before the inserts", () => {
+    expect(ids({ ...inProject, pathRel: "notes/talk.md" })).toEqual(["open-canvas", "insert-relative", "insert-absolute"]);
+    expect(ids({ ...inProject, pathRel: "site/page.html" })[0]).toBe("open-canvas");
+  });
+
+  // RELATIVE, because `open-in-canvas` already carries that from the pane's own button and the
+  // receiver resolves it against the pane's cwd — an absolute one would be resolved twice.
+  it("carries the row's path relative to the tree root", () => {
+    const action = filesRowActions({ ...inProject, pathRel: "notes/talk.md" }).find((a) => a.id === "open-canvas");
+    expect(action).toEqual({ id: "open-canvas", label: "Open in the Canvas", icon: "space_dashboard", pathRel: "notes/talk.md" });
+  });
+
+  it("offers nothing extra on a file no plugin renders", () => {
+    expect(ids({ ...inProject, pathRel: "src/index.ts" })).toEqual(["insert-relative", "insert-absolute"]);
+  });
+
+  // A story opens only from the WORKSPACE's stories directory: the plugin resolves `stories/…`
+  // against that one root, so a project's own copy is a different file it would not read
+  // (receptron/mulmoclaude#3014).
+  it("offers it on a story in the workspace, and not on one inside a project", () => {
+    const inWorkspace = { cwd: WORKSPACE, terminal: { cwd: WORKSPACE }, canvas: { workspace: WORKSPACE } };
+    expect(ids({ ...inWorkspace, pathRel: "artifacts/stories/deck.json" })[0]).toBe("open-canvas");
+    expect(ids({ ...inProject, pathRel: "artifacts/stories/deck.json" })).toEqual(["insert-relative", "insert-absolute"]);
+  });
+
+  // The full-screen Files view mounts the same pane with no cell to put a Canvas beside.
+  it("offers nothing where there is no cell to draw beside", () => {
+    expect(ids({ ...inProject, pathRel: "notes/talk.md", canvas: null })).toEqual(["insert-relative", "insert-absolute"]);
+  });
+
+  // The two halves are independent: the pane can trail a cell after a declined re-root, which is
+  // why the pane keeps `canvasTarget` and `insertTarget` as separate props.
+  it("stands alone when there is no terminal to insert into", () => {
+    expect(ids({ ...inProject, pathRel: "notes/talk.md", terminal: null })).toEqual(["open-canvas"]);
+  });
+});
 
 describe("filesRowActions", () => {
-  const here = { pathRel: "src/index.ts", cwd: "/proj", terminal: { cwd: "/proj" } };
+  const here = { pathRel: "src/index.ts", cwd: "/proj", terminal: { cwd: "/proj" }, canvas: null };
 
   it("offers both paths when the tree and the terminal are the same directory", () => {
     expect(ids(here)).toEqual(["insert-relative", "insert-absolute"]);
@@ -35,7 +84,7 @@ describe("filesRowActions", () => {
   it("offers nothing without a root, and nothing for an empty path", () => {
     expect(ids({ ...here, cwd: null })).toEqual([]);
     expect(ids({ ...here, pathRel: "" })).toEqual([]);
-    expect(ids({ pathRel: "", cwd: null, terminal: null })).toEqual([]);
+    expect(ids({ pathRel: "", cwd: null, terminal: null, canvas: null })).toEqual([]);
   });
 
   // A directory is a path like any other, and gets no trailing slash: what the agent is being
@@ -54,7 +103,7 @@ describe("filesRowActions", () => {
   });
 
   it("joins a Windows root the way absoluteUnder does, and quotes the result", () => {
-    const win = { pathRel: "docs/x.md", cwd: "C:\\Users\\me", terminal: { cwd: "C:\\Users\\me" } };
+    const win = { pathRel: "docs/x.md", cwd: "C:\\Users\\me", terminal: { cwd: "C:\\Users\\me" }, canvas: null };
     expect(textOf("insert-absolute", win)).toBe("'C:\\Users\\me/docs/x.md' ");
   });
 

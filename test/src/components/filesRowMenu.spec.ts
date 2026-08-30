@@ -29,7 +29,7 @@ function mockFs() {
   }) as unknown as typeof fetch;
 }
 
-type PaneProps = { cwd?: string | null; insertTarget?: boolean; insertTargetCwd?: string | null };
+type PaneProps = { cwd?: string | null; insertTarget?: boolean; insertTargetCwd?: string | null; canvasTarget?: boolean; workspace?: string | null };
 
 const mountPane = async (props: PaneProps = {}) => {
   const w = mount(FilesPane, {
@@ -79,6 +79,30 @@ describe("the files tree's row menu", () => {
     item("insert-absolute")?.click();
     await flushPromises();
     expect(w.emitted("insert-text")).toEqual([["/proj/src "]]);
+  });
+
+  // #1923: the row is where "show me this file" starts, so the entry that opens it in the Canvas
+  // rides the same emit as the pane's own Canvas button — and carries the RELATIVE path, which is
+  // what that button sends and what the receiver resolves against the pane's cwd.
+  it("opens a renderable file in the Canvas from the row, without opening it first", async () => {
+    const w = await mountPane({ canvasTarget: true, workspace: "/ws" });
+    rightClick(w.findAll('[data-testid="files-row"]')[0].element); // README.md
+    await flushPromises();
+
+    expect(labels()).toEqual(["Open in the Canvas", "Insert relative path", "Insert absolute path"]);
+    item("open-canvas")?.click();
+    await flushPromises();
+    expect(w.emitted("open-in-canvas")).toEqual([["README.md"]]);
+    expect(w.emitted("insert-text")).toBeUndefined();
+    expect(menu()).toBeNull();
+  });
+
+  // A directory is not something a plugin renders, so the row keeps the two inserts it had.
+  it("does not offer the Canvas on a row nothing can render", async () => {
+    const w = await mountPane({ canvasTarget: true, workspace: "/ws" });
+    rightClick(w.findAll('[data-testid="files-row"]')[1].element); // src/
+    await flushPromises();
+    expect(labels()).toEqual(["Insert relative path", "Insert absolute path"]);
   });
 
   // The full-screen view mounts the same pane with no terminal beside it. Swallowing the

@@ -184,7 +184,15 @@ function menuPosition(actions: FilesRowAction[], x: number, y: number): { top: n
 }
 
 function openRowMenu(node: Node, event: MouseEvent | KeyboardEvent): void {
-  const actions = filesRowActions({ pathRel: node.path, cwd: props.cwd, terminal: insertTerminal.value });
+  const actions = filesRowActions({
+    pathRel: node.path,
+    cwd: props.cwd,
+    terminal: insertTerminal.value,
+    // The same pair the header's Canvas button is drawn from, so a row can never offer what that
+    // button would refuse — `canvasTarget` is "there is a cell to put a Canvas beside" and the
+    // overlay mount has none.
+    canvas: props.canvasTarget ? { workspace: props.workspace ?? null } : null,
+  });
   // Nothing to offer — the full-screen view is here on every row, having no terminal to insert
   // into. Leave the browser's own menu rather than swallowing the gesture for an empty panel.
   if (actions.length === 0) return;
@@ -257,7 +265,10 @@ function onRowKeydown(node: Node, event: KeyboardEvent): void {
 // useTerminalConnections), and the terminal is where the user is about to type the sentence the
 // path belongs to. Restoring the row here would take the keyboard straight back off them.
 function runRowAction(action: FilesRowAction): void {
-  emit("insert-text", action.text);
+  // The Canvas entry carries the row's path, not text for the terminal — and it goes out on the
+  // SAME emit as the header button, relative to the tree's root, so the receiver resolves it once.
+  if (action.id === "open-canvas") emit("open-in-canvas", action.pathRel);
+  else emit("insert-text", action.text);
   closeRowMenu();
 }
 
