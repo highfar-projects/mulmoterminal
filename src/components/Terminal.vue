@@ -28,6 +28,7 @@ import { useSessionContext } from "../composables/useSessionContext";
 import { runHeaderButton } from "../composables/useHeaderAction";
 import type { RunCommand } from "./runCommand";
 import type { LaunchChoice } from "./wsUrl";
+import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 // `null` => start a fresh session; otherwise resume the given session id.
 // `connectKey` increments on every user action so re-selecting the same
@@ -316,6 +317,40 @@ watch(
 // Excluded for a running `command` (the Run menu's script process): unlike a session, it has no
 // transcript to resume from, so a fresh connection could only ever find it gone.
 function reconnectNow(): void {
+  conn.retarget(slotKey, currentTarget());
+  conn.focus(slotKey);
+}
+
+// The DELIBERATE version of the same recovery, for a session that is still perfectly healthy:
+// some settings (.mcp.json among them) are read by the agent CLI once, at its own process
+// startup, and never again — so picking up a change means getting a genuinely fresh process, not
+// just a fresh connection to the one already running. `useSessionStop.ts`'s
+// `POST /api/session/:id/terminate` already kills the pty + tmux session while leaving the
+// on-disk transcript alone (it exists for the launcher's OTHER-row "stop" button, but the route
+// itself doesn't care whose id it's handed); awaiting it before retargeting matters, not just
+// style — the server only resumes-from-disk once its OWN bookkeeping shows nothing still live for
+// this id, and firing both at once would risk retarget reattaching the very process about to die.
+// Excluded for `command` (no transcript to resume) and `launcher` (a plain shell has no
+// conversation for "keep it, just get a fresh process" to mean anything for).
+const restarting = ref(false);
+async function restartNow(): Promise<void> {
+  const id = props.sessionId;
+  if (!id || restarting.value) return;
+  if (
+    !window.confirm(
+      "Restart this session?\n\nIts conversation is kept — you can continue it once restarted — but anything it is doing right now is interrupted. Use this after changing settings (like .mcp.json) that only take effect for a fresh process.",
+    )
+  ) {
+    return;
+  }
+  restarting.value = true;
+  try {
+    await fetchWithTimeout(`/api/session/${encodeURIComponent(id)}/terminate`, { method: "POST" }, SLOW_COMMAND_TIMEOUT_MS);
+  } catch (err) {
+    console.warn("[terminal] restart failed:", err);
+  } finally {
+    restarting.value = false;
+  }
   conn.retarget(slotKey, currentTarget());
   conn.focus(slotKey);
 }
@@ -609,6 +644,22 @@ onUnmounted(() => {
         @click="reconnectNow"
       >
         <span class="material-symbols-outlined text-[18px]" aria-hidden="true">refresh</span>
+      </button>
+      <!-- The DELIBERATE counterpart, for a session that is perfectly healthy but running against
+           settings (.mcp.json among them) that only apply to a fresh process. `command`/`launcher`
+           are both excluded — see restartNow's own comment for why neither has a conversation
+           worth restarting FOR. -->
+      <button
+        v-if="status === 'connected' && sessionId && !command && !launcher"
+        type="button"
+        data-testid="term-restart"
+        class="inline-flex cursor-pointer items-center rounded-[4px] border-0 bg-transparent p-0.5 text-[var(--cell-btn,var(--text-muted))] hover:bg-selected hover:text-fg disabled:cursor-default disabled:opacity-50"
+        :disabled="restarting"
+        title="Restart this session (picks up settings like .mcp.json that only apply to a fresh process)"
+        aria-label="Restart this session"
+        @click="restartNow"
+      >
+        <span class="material-symbols-outlined text-[18px]" :class="{ 'animate-spin': restarting }" aria-hidden="true">refresh</span>
       </button>
       <RunMenu v-if="runMenu" :cwd="serverCwd" @run="(c) => emit('run', c)" />
       <LaunchConfigMenu v-if="runMenu" :cwd="serverCwd" @run="(c) => emit('run', c)" />
