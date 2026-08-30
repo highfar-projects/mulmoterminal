@@ -37,6 +37,14 @@ export interface RunnableScript {
   command: string;
 }
 
+// Same shape as RunnableScript, deliberately — a .vscode/launch.json configuration
+// (server/files/launchConfigs.ts) is just an index into a different allowlist file.
+export interface RunnableLaunchConfig {
+  index: number;
+  label: string;
+  command: string;
+}
+
 export interface Worktree {
   path: string;
   branch: string | null;
@@ -60,6 +68,13 @@ export interface ResumableList {
 export interface ScriptList {
   scripts: RunnableScript[];
   // The resolved cwd the listed scripts belong to, so the command runs in the dir the list was
+  // fetched for.
+  cwd: string | null;
+}
+
+export interface LaunchConfigList {
+  configs: RunnableLaunchConfig[];
+  // The resolved cwd the listed configs belong to, so the command runs in the dir the list was
   // fetched for.
   cwd: string | null;
 }
@@ -95,6 +110,9 @@ const isResumableSession = (row: unknown): row is ResumableSession =>
   (row.runningKey === undefined || row.runningKey === null || typeof row.runningKey === "string");
 
 const isRunnableScript = (row: unknown): row is RunnableScript =>
+  isRecord(row) && typeof row.index === "number" && typeof row.label === "string" && typeof row.command === "string";
+
+const isRunnableLaunchConfig = (row: unknown): row is RunnableLaunchConfig =>
   isRecord(row) && typeof row.index === "number" && typeof row.label === "string" && typeof row.command === "string";
 
 // The nested `session` too, when present: the row's resume decision reads `id` / `agent` /
@@ -191,6 +209,15 @@ export const useDirScripts = () =>
     (dir) => `/api/scripts?cwd=${encodeURIComponent(dir)}`,
     (body, dir) => ({ scripts: rowsOf(body.scripts, isRunnableScript), cwd: dirOf(body.cwd, dir) }),
     () => ({ scripts: [], cwd: null }),
+  );
+
+// The runnable .vscode/launch.json configurations for a directory — same shape and same two
+// consumers (the launch form's chips, the running terminal's own menu) as useDirScripts.
+export const useDirLaunchConfigs = () =>
+  useDirList<LaunchConfigList>(
+    (dir) => `/api/launch-configs?cwd=${encodeURIComponent(dir)}`,
+    (body, dir) => ({ configs: rowsOf(body.configs, isRunnableLaunchConfig), cwd: dirOf(body.cwd, dir) }),
+    () => ({ configs: [], cwd: null }),
   );
 
 // Per-agent isolation: when the dir is a git repo, the launcher can start an agent in its own

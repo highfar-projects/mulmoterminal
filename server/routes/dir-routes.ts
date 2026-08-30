@@ -14,6 +14,7 @@ import { isNotifyKind } from "../../common/notifyKinds.js";
 import { buildHeaderContext, loadHeaderConfig } from "../config/header-context.js";
 import { headerHasPrButton, resolveHeader } from "../config/header-resolve.js";
 import { loadScripts } from "../files/scripts.js";
+import { loadLaunchConfigs } from "../files/launchConfigs.js";
 import { gitStatus } from "../git/git-status.js";
 import { missingRepoReason, repoForDir } from "../git/forge-support.js";
 import { phaseForRepoBranch } from "../git/prPhase.js";
@@ -115,17 +116,29 @@ function dirIconHandler(req: Request, res: Response): void {
   });
 }
 
+// GRID-ONLY (dev_tool): the `script.json` entries a cell's launcher offers for its chosen
+// directory (?cwd=<dir>, the default workspace when none is named). The browser shows these and
+// sends back only an INDEX + the cwd (see /ws/run), so the file is the allowlist of what can run.
+// The resolved `cwd` is returned so the cell runs the script in the same dir it listed scripts for.
+function handleScripts(req: Request, res: Response): void {
+  const cwd = workspaceForRoute(req.query.cwd, res);
+  if (cwd === null) return;
+  res.json({ cwd, scripts: loadScripts(cwd).map((s, index) => ({ index, label: s.label, command: s.command, cwd: s.cwd })) });
+}
+
+// The `.vscode/launch.json` configurations ?cwd=<dir> can actually run in a plain terminal (no
+// debugger) — see server/files/launchConfigs.ts for which ones that is. Same allowlist shape as
+// /api/scripts: the browser sends back only an INDEX + the cwd (see /ws/run), never the built
+// command.
+function handleLaunchConfigs(req: Request, res: Response): void {
+  const cwd = workspaceForRoute(req.query.cwd, res);
+  if (cwd === null) return;
+  res.json({ cwd, configs: loadLaunchConfigs(cwd).map((c, index) => ({ index, label: c.label, command: c.command, cwd: c.cwd })) });
+}
+
 export function mountDirRoutes(app: Express): void {
-  // GRID-ONLY (dev_tool): the `script.json` entries a cell's launcher offers for its
-  // chosen directory (?cwd=<dir>, the default workspace when none is named). The browser shows
-  // these and sends back only an INDEX + the cwd (see /ws/run), so the file is the
-  // allowlist of what can run. The resolved `cwd` is returned so the cell runs the
-  // script in the same dir it listed scripts for.
-  app.get("/api/scripts", (req, res) => {
-    const cwd = workspaceForRoute(req.query.cwd, res);
-    if (cwd === null) return;
-    res.json({ cwd, scripts: loadScripts(cwd).map((s, index) => ({ index, label: s.label, command: s.command, cwd: s.cwd })) });
-  });
+  app.get("/api/scripts", handleScripts);
+  app.get("/api/launch-configs", handleLaunchConfigs);
 
   // The `.claude/skills` (user + project scope) discoverable for ?cwd=<dir>, so the
   // terminal header's Skill menu can list them — working-dir skills first. Mirrors

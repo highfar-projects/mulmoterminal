@@ -17,6 +17,7 @@ import { getHeaderConfig } from "../config/config-routes.js";
 import { buildHeaderContext, loadHeaderConfig } from "../config/header-context.js";
 import { resolveButtonCommand } from "../config/header-resolve.js";
 import { resolveScript } from "../files/scripts.js";
+import { resolveLaunchConfig } from "../files/launchConfigs.js";
 import { shellQuoteFor } from "../infra/shell-quote.js";
 import { tmuxHasSession } from "../infra/tmux.js";
 import { defaultShellTarget, type LaunchTarget } from "../session/shell-command.js";
@@ -305,6 +306,11 @@ async function resolveButtonRun(url: URL, cwd: string): Promise<{ command: strin
 async function resolveRunTarget(url: URL, cwd: string): Promise<{ command: string; cwd: string } | null> {
   const byButton = await resolveButtonRun(url, cwd);
   if (byButton) return byButton;
+  // Distinguished by which param is present, the same way a button request is told apart from a
+  // script one above — a script.json entry and a launch.json configuration are both just an
+  // INDEX into a different file, so the param name is what says which file to resolve it against.
+  const launchIndex = url.searchParams.get("launchIndex");
+  if (launchIndex !== null) return resolveLaunchConfig(cwd, parseIndexParam(launchIndex));
   return resolveScript(cwd, parseIndexParam(url.searchParams.get("index")));
 }
 

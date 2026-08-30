@@ -80,7 +80,7 @@ describe("a route asked about a directory it cannot use", () => {
   it("applies to the other directory-scoped reads, not just scripts", async () => {
     await withTempDir(async (dir) => {
       const gone = path.join(dir, "deleted-project");
-      for (const route of ["/api/dir-config", "/api/git-status", "/api/skills", "/api/header"]) {
+      for (const route of ["/api/dir-config", "/api/git-status", "/api/skills", "/api/header", "/api/launch-configs"]) {
         const res = await call(`${route}?${new URLSearchParams({ cwd: gone })}`);
         expect(res.status, route).toBe(404);
         expect(res.body.error, route).toContain("no longer exists");

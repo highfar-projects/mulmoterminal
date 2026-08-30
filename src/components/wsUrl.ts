@@ -65,13 +65,14 @@ export function buildTerminalWsUrl(input: TerminalWsUrlInput): string {
 
 export type RunWsUrlInput = { host: string; secure: boolean; cwd?: string | null; size?: TerminalSize | null } & (
   | { index: number } // position in the directory's script.json (the server resolves it)
+  | { launchIndex: number } // position in the directory's .vscode/launch.json (the server resolves it)
   | { buttonId: string; session: string | null; agent: TerminalAgent; model: string | null } // a header run:"shell" button, re-resolved server-side
 );
 
-// The command-terminal endpoint. The browser sends only a REFERENCE — a script INDEX
-// or a header button id (+ the session context to resolve it against) — never a raw
-// command; the server reads the allowlist (<cwd>/script.json or the merged header
-// config), resolves the command, and runs it in <cwd>.
+// The command-terminal endpoint. The browser sends only a REFERENCE — a script INDEX, a launch
+// config INDEX, or a header button id (+ the session context to resolve it against) — never a raw
+// command; the server reads the allowlist (<cwd>/script.json, <cwd>/.vscode/launch.json, or the
+// merged header config), resolves the command, and runs it in <cwd>.
 export function buildRunWsUrl(input: RunWsUrlInput): string {
   const params = new URLSearchParams();
   if ("buttonId" in input) {
@@ -79,6 +80,8 @@ export function buildRunWsUrl(input: RunWsUrlInput): string {
     if (input.session) params.set("session", input.session);
     params.set("agent", input.agent);
     if (input.model) params.set("model", input.model);
+  } else if ("launchIndex" in input) {
+    params.set("launchIndex", String(input.launchIndex));
   } else {
     params.set("index", String(input.index));
   }
@@ -157,12 +160,23 @@ export interface ConnTargetUrlInput {
   launch?: LaunchChoice | null;
 }
 
-// A command cell's endpoint: a script.json entry by index, or a header shell button by id
-// (+ the session context to re-resolve it server-side).
+// A command cell's endpoint: a script.json entry by index, a launch.json configuration by index,
+// or a header shell button by id (+ the session context to re-resolve it server-side).
 function runCommandWsUrl(command: RunCommand, host: string, secure: boolean, size: TerminalSize | null): string {
-  return command.source === "button"
-    ? buildRunWsUrl({ host, secure, size, cwd: command.cwd, buttonId: command.buttonId, session: command.session, agent: command.agent, model: command.model })
-    : buildRunWsUrl({ host, secure, size, cwd: command.cwd, index: command.index });
+  if (command.source === "button") {
+    return buildRunWsUrl({
+      host,
+      secure,
+      size,
+      cwd: command.cwd,
+      buttonId: command.buttonId,
+      session: command.session,
+      agent: command.agent,
+      model: command.model,
+    });
+  }
+  if (command.source === "launch") return buildRunWsUrl({ host, secure, size, cwd: command.cwd, launchIndex: command.index });
+  return buildRunWsUrl({ host, secure, size, cwd: command.cwd, index: command.index });
 }
 
 // Which endpoint a slot connects to. The order is the rule: a Run command is ephemeral and

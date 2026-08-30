@@ -104,6 +104,7 @@
     "firebase": "12.16.0",
     "graphai": "^2.0.18",
     "gui-chat-protocol": "^2.0.0",
+    "jsonc-parser": "^3.3.1",
     "marked": "^18.0.10",
     "material-symbols": "^0.45.10",
     "mulmocast": "^2.12.0",

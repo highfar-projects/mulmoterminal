@@ -18,6 +18,7 @@ import { useGitStatus } from "../composables/useGitStatus";
 import * as conn from "../composables/useTerminalConnections";
 import type { TerminalAgent } from "../../common/sessionAgent";
 import RunMenu from "./RunMenu.vue";
+import LaunchConfigMenu from "./LaunchConfigMenu.vue";
 import SkillMenu from "./SkillMenu.vue";
 import { skillSeed } from "./skillSeed";
 import GitBranchChip from "./GitBranchChip.vue";
@@ -610,6 +611,7 @@ onUnmounted(() => {
         <span class="material-symbols-outlined text-[18px]" aria-hidden="true">refresh</span>
       </button>
       <RunMenu v-if="runMenu" :cwd="serverCwd" @run="(c) => emit('run', c)" />
+      <LaunchConfigMenu v-if="runMenu" :cwd="serverCwd" @run="(c) => emit('run', c)" />
       <SkillMenu v-if="runMenu" :cwd="serverCwd" @skill="onSkill" />
       <!-- flex-none: the lead slot beside it now grows and truncates (a path), and without this the
            actions would shrink to make room and clip their own icons. -->

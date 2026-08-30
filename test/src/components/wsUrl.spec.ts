@@ -50,6 +50,14 @@ describe("buildRunWsUrl", () => {
     expect(new URL(url).searchParams.get("index")).toBe("0");
   });
 
+  it("targets /ws/run with a launch config index (no script index)", () => {
+    const url = buildRunWsUrl({ host: "h", secure: false, cwd: "/work/proj", launchIndex: 1 });
+    const q = new URL(url).searchParams;
+    expect(q.get("launchIndex")).toBe("1");
+    expect(q.get("cwd")).toBe("/work/proj");
+    expect(q.has("index")).toBe(false);
+  });
+
   it("targets /ws/run with a header button id + session context (no index)", () => {
     const url = buildRunWsUrl({ host: "h", secure: false, cwd: "/work/proj", buttonId: "pr", session: "s1", agent: "codex", model: "claude-opus-4-8" });
     const q = new URL(url).searchParams;
@@ -242,6 +250,14 @@ describe("connWsUrl — endpoint precedence", () => {
     const url = connWsUrl(target({ command: { source: "script", index: 3, label: "build", cwd: "/work/proj" } }), null, HOST, false);
     expect(pathOf(url)).toBe("/ws/run");
     expect(new URL(url).searchParams.get("index")).toBe("3");
+  });
+
+  it("sends a launch-config command slot to the run endpoint with launchIndex, not index", () => {
+    const url = connWsUrl(target({ command: { source: "launch", index: 1, label: "Dev server", cwd: "/work/proj" } }), null, HOST, false);
+    expect(pathOf(url)).toBe("/ws/run");
+    const q = new URL(url).searchParams;
+    expect(q.get("launchIndex")).toBe("1");
+    expect(q.has("index")).toBe(false);
   });
 
   // The order matters, not just the mapping: a command slot that also carries a launcher or

@@ -3,7 +3,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useDirColors, useDirIcons, useDirPriorities } from "../composables/useDirConfig";
 import DirIcon from "./DirIcon.vue";
-import { useResumableSessions, useDirScripts, useDirWorktrees, type ResumableSession, type Worktree } from "../composables/useDirLists";
+import { useResumableSessions, useDirScripts, useDirLaunchConfigs, useDirWorktrees, type ResumableSession, type Worktree } from "../composables/useDirLists";
 import { useMcpToolGroups } from "../composables/useMcpToolGroups";
 import { orderByDirPriority } from "../../common/dirPriorityOrder";
 import { CHIP_IDLE, CHIP_RUNNING, CHIP_DOT_RUNNING } from "./dirChipColor";
@@ -161,13 +161,14 @@ const isCwdRunning = (path: string): boolean => runningCwds.value.has(path);
 
 const { value: resumable, loading: resumableLoading, forget: forgetResumable, load: loadResumable } = useResumableSessions();
 const { value: scriptList, loading: scriptsLoading, forget: forgetScripts, load: loadScripts } = useDirScripts();
+const { value: launchConfigList, loading: launchConfigsLoading, forget: forgetLaunchConfigs, load: loadLaunchConfigs } = useDirLaunchConfigs();
 const { value: worktreeList, loading: worktreesLoading, forget: forgetWorktrees, load: loadWorktrees } = useDirWorktrees();
 
-// One row for the three, not one skeleton each: after the reset there is nothing clickable left to
+// One row for the four, not one skeleton each: after the reset there is nothing clickable left to
 // mislabel, so its job is only to say why the space below is empty — and a per-section placeholder
 // would have to invent headings for sections this directory may not have at all (no git repo, no
 // worktree section).
-const dirListsLoading = computed(() => resumableLoading.value || scriptsLoading.value || worktreesLoading.value);
+const dirListsLoading = computed(() => resumableLoading.value || scriptsLoading.value || launchConfigsLoading.value || worktreesLoading.value);
 
 // A worktree can be launched into without touching its row: pasted into the field, or reached by a
 // preset chip (launching in one records it as a recent directory, so worktree paths DO become
@@ -241,6 +242,7 @@ function loadForDir(dir: string | null, agent: TerminalAgent | null): void {
   // `forget` would leave it loading forever.
   void loadResumable(agent === null ? null : dir, agent ?? "claude");
   void loadScripts(dir);
+  void loadLaunchConfigs(dir);
   void loadWorktrees(dir);
   void loadMcpGroups(dir);
 }
@@ -251,6 +253,7 @@ function loadForDir(dir: string | null, agent: TerminalAgent | null): void {
 function forgetForDir(): void {
   forgetResumable();
   forgetScripts();
+  forgetLaunchConfigs();
   forgetWorktrees();
   forgetMcpGroups();
   // The failure belongs to the repository it was refused in — "no such branch: main" said under a
@@ -372,11 +375,17 @@ function launchProgram(index: number): void {
 }
 
 const scriptChips = computed(() => scriptList.value.scripts.map((s) => ({ key: s.index, label: s.label, title: s.command })));
+const launchConfigChips = computed(() => launchConfigList.value.configs.map((c) => ({ key: c.index, label: c.label, title: c.command })));
 const launcherChips = computed(() => (props.launchers ?? []).map((l) => ({ key: l.label, label: l.label, title: l.command })));
 
 function runScript(index: number): void {
   const script = scriptList.value.scripts[index];
   if (script) emit("run", { source: "script", index: script.index, label: script.label, cwd: scriptList.value.cwd ?? targetDir.value });
+}
+
+function runLaunchConfig(index: number): void {
+  const config = launchConfigList.value.configs[index];
+  if (config) emit("run", { source: "launch", index: config.index, label: config.label, cwd: launchConfigList.value.cwd ?? targetDir.value });
 }
 
 // A session somebody is holding — a cell in this grid, a second browser tab, a second
@@ -980,6 +989,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
       </div>
     </div>
     <LaunchChipList heading="or run a script" icon="play_arrow" :chips="scriptChips" @pick="runScript" />
+    <LaunchChipList heading="or run a launch config" icon="rocket_launch" :chips="launchConfigChips" @pick="runLaunchConfig" />
     <LaunchChipList heading="or launch" icon="rocket_launch" :chips="launcherChips" @pick="launchProgram" />
     <!-- The picked agent's OWN conversations. Shell has none, and reaches here with an empty list
          anyway (loadForDir passes it no directory) — the `listAgent` test says so out loud rather
