@@ -38,6 +38,18 @@ export function suppressNextUnloadGuard(): void {
 // real close as before.
 if (import.meta.hot) {
   import.meta.hot.on("vite:beforeFullReload", suppressNextUnloadGuard);
+  // A SEPARATE reload path an idle tab actually hits: Vite's HMR websocket drops (sleep,
+  // a network blip, a backgrounded tab's socket getting throttled), and once it can ping
+  // the dev server again it calls location.reload() directly — with no `vite:beforeFullReload`
+  // in between, so the suppression above never arms and a live terminal turns that into the
+  // browser's native "leave site?" prompt (reported: "a reload dialog shows up after being
+  // idle for a while"). `vite:ws:disconnect` is the one signal Vite fires at the START of that
+  // path, well before the eventual reload (it waits for a successful ping first, which can take
+  // a while) — arming here rather than only right before the reload trades a narrow risk (an
+  // unrelated manual close/reload during that wait window would also go unwarned) for actually
+  // covering the slow, unpredictable wait a real network recovery takes; the same one-shot flag
+  // this file already uses for `vite:beforeFullReload` limits it to a single unload either way.
+  import.meta.hot.on("vite:ws:disconnect", suppressNextUnloadGuard);
 }
 
 // Warn before the tab closes / reloads / navigates away while a terminal is live,
