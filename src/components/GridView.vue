@@ -925,7 +925,6 @@ onBeforeUnmount(detachSpawnedChat);
       :key="launchPanelOrigin ?? -1"
       :initial-dir="launchPanelDir"
       :default-cwd="defaultCwd"
-      :stories-root="storiesRoot"
       :presets="presets"
       :config-unavailable="configUnavailable"
       :launchers="launchers"
