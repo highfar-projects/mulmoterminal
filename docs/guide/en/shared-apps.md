@@ -3,7 +3,7 @@ title: Shared apps — a form, a sign-up sheet or a booking page other people us
 nav_title: Shared apps
 layout: default
 parent: English
-nav_order: 13
+nav_order: 14
 description: Build something several people fill in — a survey, a sign-up sheet, a booking page, a shared board — from a folder on your machine, and hand out a link. What you can build, how to turn the tools on, what the folder looks like, how to publish, and how to take part in somebody else's app.
 ---
 

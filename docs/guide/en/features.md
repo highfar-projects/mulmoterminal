@@ -148,7 +148,7 @@ so a very large unsaved buffer may not get out.
 | Feature | Description |
 |---|---|
 | Header action buttons | Add `input` (send text) / `open` (URL, file manager, in-app views, file picker, new terminal, PR) / `shell` (run a command) via `buttons`, with `${variables}` and `when` conditions |
-| Header display chips | Reorder / hide built-in chips plus custom chips via `chips` (→ [Customizing the header](header.html)) |
+| Header display chips | Reorder / hide built-in chips plus custom chips via `chips` (→ [Header reference](header-reference.html#chips)) |
 | Name badge / colors | Per-directory name and per-element colors in `.mulmoterminal.json` |
 | Launchers / cwd presets / PR repos | Extend launch commands, working-directory suggestions, and cross-repo PR targets in settings |
 | Themes | Midnight / Nord / Daylight / Solarized Light |
