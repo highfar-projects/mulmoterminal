@@ -42,7 +42,16 @@ interface DocSample {
   skills: unknown[] | null;
 }
 
-const arrayField = (raw: Record<string, unknown>, key: string): unknown[] | null => (Array.isArray(raw[key]) ? raw[key] : null);
+// A key that is PRESENT but not an array is the case worth failing on: every loader reads such a
+// value as "unconfigured", so a reader who pastes it gets a config that silently does nothing.
+// `null` stays legal — config.md documents `"chips": null` as "leave the default alone" — and so
+// does an absent key (CodeRabbit, #1937).
+function arrayField(raw: Record<string, unknown>, key: string, file: string): unknown[] | null {
+  const value = raw[key];
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value)) throw new Error(`${file}: "${key}" is documented as ${typeof value}, which every loader reads as unconfigured`);
+  return value;
+}
 
 const HEADER_KEYS = ["buttons", "chips", "skills"];
 
@@ -64,7 +73,7 @@ function docSamples(file: string): DocSample[] {
   for (const m of text.matchAll(/```json\n([\s\S]*?)```/g)) {
     const parsed = parseSample(m[1], file);
     if (!isRecord(parsed)) continue;
-    const sample = { buttons: arrayField(parsed, "buttons"), chips: arrayField(parsed, "chips"), skills: arrayField(parsed, "skills") };
+    const sample = { buttons: arrayField(parsed, "buttons", file), chips: arrayField(parsed, "chips", file), skills: arrayField(parsed, "skills", file) };
     if (sample.buttons || sample.chips || sample.skills) out.push(sample);
   }
   return out;
