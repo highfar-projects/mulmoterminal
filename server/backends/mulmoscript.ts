@@ -274,7 +274,11 @@ async function wirePathMismatch(body: Record<string, unknown>, instance: MulmoSc
   if (typeof expectPath !== "string" || typeof filePath !== "string") return null;
   const root = typeof body.root === "string" ? body.root : undefined;
   const resolved = instance.resolveStory(filePath, root);
-  if (!resolved.ok) return resolved.error;
+  // A path that does not resolve is the DISPATCH's business, not this check's: it answers with the
+  // id it could not find ("unknown stories root \"…\"") where the ops' own text is a bare
+  // "Unknown stories root". Letting it through keeps the more specific sentence, and this function
+  // is left with the one case only it can see — a path that resolves to a DIFFERENT file.
+  if (!resolved.ok) return null;
   const [served, seen] = await Promise.all([realpathOrNull(resolved.absolutePath), realpathOrNull(expectPath)]);
   if (served !== null && seen !== null && served === seen) return null;
   return "that deck is not the file this server serves under that path — the workspace may have moved since MulmoTerminal started; restart it to pick up the new one";

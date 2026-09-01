@@ -426,9 +426,14 @@ async function openFileInCanvas(path: string): Promise<void> {
   const sessionId = expandedSessionId.value;
   if (uid === null || !sessionId) return;
   // The pane's rows are relative to the CELL's cwd; the plugins resolve against the workspace.
-  const card = await buildCanvasCard(absoluteUnder(paneCwd.value, path), storiesRoots.value);
-  if (!card) return; // the button is only shown for files that have one; a stale click is a no-op
-  if (!(await seedCanvasCard(sessionId, card))) return;
+  const result = await buildCanvasCard(absoluteUnder(paneCwd.value, path), storiesRoots.value);
+  // A refusal is the server's sentence about what went wrong — an unregistered root from a card
+  // made under a different launch directory, a workspace that moved since boot. Saying nothing
+  // here is what made those look like a dead button (#1941). `none` stays silent: nothing offers
+  // the action for a file no plugin renders, so it cannot be clicked.
+  if (result.kind === "refused") return void filesPane.value?.showError(result.reason);
+  if (result.kind === "none") return;
+  if (!(await seedCanvasCard(sessionId, result.card))) return;
   // Re-asked after the await, like every other late reply here. openCanvasFor already refuses to
   // reveal the pane on a cell it was not asked for, but `canvasHasCard` is one flag for whichever
   // cell is enlarged: walking the zoom while the write was in flight would otherwise leave the

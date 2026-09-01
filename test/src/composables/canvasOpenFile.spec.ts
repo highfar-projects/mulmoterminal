@@ -266,8 +266,8 @@ describe("buildCanvasCard", () => {
   it("builds a markdown card without asking the server anything", async () => {
     const fetchMock = mockReopen({});
     expect(await buildCanvasCard(`${WS}/docs/design.md`, { workspaces: [WS], rootId: null })).toEqual({
-      toolName: "presentDocument",
-      data: { markdown: "", docPath: `${WS}/docs/design.md` },
+      kind: "card",
+      card: { toolName: "presentDocument", data: { markdown: "", docPath: `${WS}/docs/design.md` } },
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -278,8 +278,8 @@ describe("buildCanvasCard", () => {
   it("reopens a story through the plugin route and carries back what it returned", async () => {
     const fetchMock = mockReopen({ ok: true, script: { title: "Tale" }, filePath: "stories/tale.json", message: "Reopened" });
     expect(await buildCanvasCard(`${WS}/artifacts/stories/tale.json`, { workspaces: [WS], rootId: null })).toEqual({
-      toolName: "presentMulmoScript",
-      data: { script: { title: "Tale" }, filePath: "stories/tale.json" },
+      kind: "card",
+      card: { toolName: "presentMulmoScript", data: { script: { title: "Tale" }, filePath: "stories/tale.json" } },
     });
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/api/plugin/presentMulmoScript");
@@ -295,8 +295,8 @@ describe("buildCanvasCard", () => {
   it("carries the root onto the card, and asks for it by name", async () => {
     const fetchMock = mockReopen({ ok: true, script: { title: "Deck" }, filePath: "stories/myrepo/decks/talk.json", root: "abc123" });
     expect(await buildCanvasCard(`${WS}/myrepo/decks/talk.json`, { workspaces: [WS], rootId: "abc123" })).toEqual({
-      toolName: "presentMulmoScript",
-      data: { script: { title: "Deck" }, filePath: "stories/myrepo/decks/talk.json", root: "abc123" },
+      kind: "card",
+      card: { toolName: "presentMulmoScript", data: { script: { title: "Deck" }, filePath: "stories/myrepo/decks/talk.json", root: "abc123" } },
     });
     const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(JSON.parse(String(init.body))).toEqual({
@@ -307,26 +307,40 @@ describe("buildCanvasCard", () => {
     });
   });
 
-  it("has no card when the dispatch refuses", async () => {
+  // The server's sentence has to reach the caller: collapsing it into "no card" is what made a
+  // refused open look like a dead button (#1941).
+  it("carries the reason back when the dispatch refuses", async () => {
     mockReopen({ ok: false, code: "bad_request", error: 'unknown stories root "gone"' });
-    expect(await buildCanvasCard(`${WS}/myrepo/decks/talk.json`, { workspaces: [WS], rootId: "gone" })).toBeNull();
+    expect(await buildCanvasCard(`${WS}/myrepo/decks/talk.json`, { workspaces: [WS], rootId: "gone" })).toEqual({
+      kind: "refused",
+      reason: 'unknown stories root "gone"',
+    });
+  });
+
+  it("carries the reason back when the server refuses with a status", async () => {
+    mockReopen({ ok: false, code: "bad_request", error: "that deck is not the file this server serves under that path" }, false);
+    expect(await buildCanvasCard(`${WS}/myrepo/decks/talk.json`, { workspaces: [WS], rootId: "abc123" })).toEqual({
+      kind: "refused",
+      reason: "that deck is not the file this server serves under that path",
+    });
   });
 
   // The route narrates a missing or refused file as a 200 with no `data`, so absence of `data`
   // — not the status — is what "cannot open this" looks like.
   it("has no card when the route narrates the file as missing", async () => {
     mockReopen({ message: "Story not found" });
-    expect(await buildCanvasCard(`${WS}/artifacts/stories/gone.json`, { workspaces: [WS], rootId: null })).toBeNull();
+    expect(await buildCanvasCard(`${WS}/artifacts/stories/gone.json`, { workspaces: [WS], rootId: null })).toEqual({ kind: "none" });
   });
 
   it("has no card when the route errors outright", async () => {
     mockReopen({}, false);
-    expect(await buildCanvasCard(`${WS}/artifacts/stories/tale.json`, { workspaces: [WS], rootId: null })).toBeNull();
+    expect(await buildCanvasCard(`${WS}/artifacts/stories/tale.json`, { workspaces: [WS], rootId: null })).toEqual({ kind: "none" });
   });
 
   it("does not reach the server for a file no plugin renders", async () => {
     const fetchMock = mockReopen({});
-    expect(await buildCanvasCard(`${WS}/notes.txt`, { workspaces: [WS], rootId: null })).toBeNull();
+    // Silent by design: nothing offers the action for such a file, so it cannot be clicked.
+    expect(await buildCanvasCard(`${WS}/notes.txt`, { workspaces: [WS], rootId: null })).toEqual({ kind: "none" });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
@@ -342,7 +356,8 @@ describe("the three plugins do not claim each other's files", () => {
     const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true, script: {}, filePath: "stories/tale.json" }) }) as Response);
     vi.stubGlobal("fetch", fetchMock);
     expect(canvasCardForFile(`${WS}/artifacts/stories/tale.json`)).toBeNull(); // no other plugin takes it
-    expect((await buildCanvasCard(`${WS}/artifacts/stories/tale.json`, { workspaces: [WS], rootId: null }))?.toolName).toBe("presentMulmoScript");
+    const built = await buildCanvasCard(`${WS}/artifacts/stories/tale.json`, { workspaces: [WS], rootId: null });
+    expect(built.kind === "card" && built.card.toolName).toBe("presentMulmoScript");
     vi.unstubAllGlobals();
   });
 
@@ -379,7 +394,9 @@ describe("a request that never answers", () => {
     const started = hangUntilAborted();
     const pending = buildCanvasCard("/work/ws/artifacts/stories/tale.json", { workspaces: ["/work/ws"], rootId: null });
     await vi.advanceTimersByTimeAsync(10_000);
-    expect(await pending).toBeNull();
+    // A timeout is a refusal with something to say, not a silent "nothing renders this": the user
+    // clicked and deserves to know the request never landed (#1941).
+    expect(await pending).toEqual({ kind: "refused", reason: "could not reach this server to open the deck" });
     expect(started[0]?.aborted).toBe(true);
   });
 

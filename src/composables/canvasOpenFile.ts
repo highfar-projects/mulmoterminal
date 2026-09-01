@@ -28,6 +28,16 @@ export interface CanvasCard {
   data: Record<string, unknown>;
 }
 
+/** What asking for a card ended in.
+ *
+ *  Three outcomes, not one nullable card: `none` and `refused` used to collapse into `null`, and
+ *  the caller then had nothing to say — a click that the server had answered with a sentence
+ *  looked exactly like a click on a file nothing renders (#1941).
+ *
+ *  `none` stays silent on purpose: nothing offers the action for such a file, so it cannot be
+ *  clicked. `refused` carries what the server said, which is already a sentence about what to do. */
+export type CanvasCardResult = { kind: "card"; card: CanvasCard } | { kind: "refused"; reason: string } | { kind: "none" };
+
 /** Where mulmoScript keeps its stories, under the workspace. Both halves are fixed by the plugin:
  *  the artifacts area is its only file capability, and `stories/` is its wire prefix. */
 const STORY_DIR = "artifacts/stories";
@@ -184,7 +194,7 @@ const REQUEST_TIMEOUT_MS = 10_000;
  * The route narrates a missing or refused file as a 200 with no `data` (its spec pins this), so
  * absence of `data` — not the status — is what "cannot open this" looks like.
  */
-async function reopenStory(ref: StoryRef, expectPath: string): Promise<CanvasCard | null> {
+async function reopenStory(ref: StoryRef, expectPath: string): Promise<CanvasCardResult> {
   try {
     const res = await fetchWithTimeout(
       "/api/plugin/presentMulmoScript",
@@ -195,23 +205,28 @@ async function reopenStory(ref: StoryRef, expectPath: string): Promise<CanvasCar
       { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind: "save", ...ref, expectPath }) },
       REQUEST_TIMEOUT_MS,
     );
+    const body: unknown = await res.json().catch(() => null);
+    // A refusal is a 4xx with `{ok:false, error}` (the dispatch's shape) — the sentence the server
+    // wrote is the whole point of reading it here rather than logging a status code.
+    const refusal = isRecord(body) && typeof body.error === "string" ? body.error : null;
     if (!res.ok) {
       console.error(`[canvasOpenFile] reopen HTTP ${res.status}`);
-      return null;
+      return refusal === null ? { kind: "none" } : { kind: "refused", reason: refusal };
     }
-    const body: unknown = await res.json();
     // The dispatch answers FLAT — `{ok, script, filePath, root}` — where the agent's kind-less tool
     // call answers an envelope `{data}`. Measured, and the difference is not cosmetic: reading
     // `body.data` here built no card at all, so the row's menu entry appeared and clicking it did
     // nothing. The card is assembled from the fields the View needs (`script` + `filePath`, the
     // shape the tool path's `data` has), plus the root the response echoes — which is what keeps
     // two roots' identically-named decks on two cards (canvasIdentity.filePathIdentity).
-    if (!isRecord(body) || body.ok !== true || !isRecord(body.script) || typeof body.filePath !== "string") return null;
+    if (!isRecord(body) || body.ok !== true || !isRecord(body.script) || typeof body.filePath !== "string") {
+      return refusal === null ? { kind: "none" } : { kind: "refused", reason: refusal };
+    }
     const root = typeof body.root === "string" ? { root: body.root } : {};
-    return { toolName: STORY_TOOL, data: { script: body.script, filePath: body.filePath, ...root } };
+    return { kind: "card", card: { toolName: STORY_TOOL, data: { script: body.script, filePath: body.filePath, ...root } } };
   } catch (err) {
     console.error("[canvasOpenFile] reopen failed", err);
-    return null;
+    return { kind: "refused", reason: "could not reach this server to open the deck" };
   }
 }
 
@@ -222,15 +237,15 @@ async function reopenStory(ref: StoryRef, expectPath: string): Promise<CanvasCar
  * story needs the round trip. Callers use THIS and {@link canOpenInCanvas} with the same arguments
  * — a button gated on one path while the card is built from another is a button that does nothing.
  */
-export async function buildCanvasCard(absolutePath: string, roots: StoriesRoots): Promise<CanvasCard | null> {
+export async function buildCanvasCard(absolutePath: string, roots: StoriesRoots): Promise<CanvasCardResult> {
   const direct = canvasCardForFile(absolutePath);
-  if (direct) return direct;
+  if (direct) return { kind: "card", card: direct };
   const ref = storyWirePath(absolutePath, roots);
   // The absolute path travels with the wire path so the SERVER can check the two still name one
   // file. This gate is lexical and cannot realpath; the workspace it compares against was resolved
   // at boot, so the two can part company while the server runs (#1934). Sending what the pane
   // actually showed turns "a different deck opens" into a refusal with a sentence.
-  return ref ? await reopenStory(ref, absolutePath) : null;
+  return ref ? await reopenStory(ref, absolutePath) : { kind: "none" };
 }
 
 /**

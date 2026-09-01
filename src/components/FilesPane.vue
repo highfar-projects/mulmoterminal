@@ -557,6 +557,12 @@ onBeforeUnmount(() => {
 // user" — the pane never watches `cwd` itself, because reacting to it would discard a buffer
 // the host may still be asking about.
 defineExpose({
+  /** Say why an action the pane STARTED could not finish — the Canvas open, whose refusal comes
+   *  back from the server (#1941). Shown where the click happened, in the same place a failed save
+   *  reports: a message the user has to go looking for is one they never read. */
+  showError: (message: string) => {
+    fileError.value = message;
+  },
   /** What this pane looks like right now, for a host that will bring the user back here. */
   snapshot: (): FilesPaneState => ({ openPath: openPath.value, expanded: expandedPaths(roots.value) }),
   reload: async () => {
