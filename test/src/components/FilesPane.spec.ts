@@ -533,8 +533,10 @@ describe("the Canvas button", () => {
   };
 
   const openRow = async (name: string, cwd: string | null, canvasTarget = true, workspace: string | null = null) => {
+    // The pane takes the pair now (#1933); these cases are all the pre-named-root world, where the
+    // workspace's own stories directory is the only root there is.
     withEntry(name);
-    const w = mount(FilesPane, { props: { cwd, canvasTarget, workspace } });
+    const w = mount(FilesPane, { props: { cwd, canvasTarget, storiesRoots: { workspace, rootId: null } } });
     await flushPromises();
     await w.findAll('[data-testid="files-row"]')[0].trigger("click");
     await flushPromises();

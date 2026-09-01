@@ -29,6 +29,8 @@ import {
 } from "@mulmoclaude/mulmoscript-plugin/server";
 import type { SaveMulmoScriptArgs } from "@mulmoclaude/mulmoscript-plugin";
 import { artifactsFileOps } from "./artifacts.js";
+import { createFileOps } from "./fileOps.js";
+import { storiesRootId } from "./storiesRoot.js";
 import { isRecord } from "../../common/isRecord.js";
 
 /** Pubsub channel the extracted View subscribes to for generation progress —
@@ -80,8 +82,25 @@ async function writeFileAtomic(absolutePath: string, data: string | Uint8Array):
  *  then. `isFfmpegAvailable` is overridable for tests; the default is the
  *  async PATH probe above. */
 export function initMulmoScriptBackend(deps: { workspace: string; pubsub: PubSubLike | null; isFfmpegAvailable?: () => boolean | undefined }): void {
+  // One named root: the WORKSPACE — which the launcher sets to the directory the user ran the
+  // command in. A root is a SUBTREE, so this one covers every repository beneath it, and a deck
+  // can live next to the notes it was written from instead of in the workspace's own stories
+  // directory (receptron/mulmoclaude#3014). The plugin strips the `stories/` segment before it
+  // reaches this FileOps, so `stories/myrepo/decks/talk.json` reads AND writes
+  // `<workspace>/myrepo/decks/talk.json` — one addressing rule for both sides (#3020).
+  const workspaceRootId = storiesRootId(deps.workspace);
   ops = createMulmoScriptServerOps({
     storiesDir: path.resolve(deps.workspace, "artifacts", "stories"),
+    extraRoots: { [workspaceRootId]: deps.workspace },
+    // Registration is the containment boundary and it is checked FIRST, so answering here for an
+    // id we never registered would still not widen what is addressable. The guard is the `===`.
+    artifactsFor: (root) => (root === workspaceRootId ? createFileOps(() => deps.workspace, "mulmo-stories-root") : null),
+    // This host keeps no per-session generation state: `onGenerationEvent` below drops
+    // `chatSessionId` and publishes to pubsub, and nothing keys pending work on
+    // `(kind, filePath, key)`. So two roots cannot collapse into one entry here, and the plugin's
+    // fail-closed default — written for MulmoClaude's session store — would refuse generation in a
+    // named root for a danger this host does not have.
+    rootScopedGenerationState: true,
     artifacts: artifactsFileOps,
     writeFileAtomic,
     isFfmpegAvailable: deps.isFfmpegAvailable ?? (() => ffmpegAvailable),

@@ -28,6 +28,7 @@ import { type TerminalSubmitMode } from "../../common/terminalSubmit.js";
 import { launchOptions } from "./launch-options.js";
 import { worktreesRootDir } from "./worktree-task.js";
 import { canonicalPath } from "../infra/canonical-path.js";
+import { storiesRootId } from "../backends/storiesRoot.js";
 import { badArrayField, badNullableArrayField, badObjectField } from "./config-body.js";
 import { setDeclaredGitlabHosts } from "../git/forge-host.js";
 import { getUpdateStatus } from "./update-status.js";
@@ -344,7 +345,11 @@ export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsC
     // lexically, and the cwd it matches it to came from `git worktree list` — i.e. realpathed. A
     // MULMOTERMINAL_HOME behind a symlink would otherwise never match, and the feature would
     // silently do nothing.
-    res.json({ ...configResponse(), home: os.homedir(), worktreesRoot: canonicalPath(worktreesRootDir()) });
+    // `storiesRootId` rides along for the same reason as `worktreesRoot`: a runtime fact about THIS
+    // server that the browser cannot work out. It is the id the mulmoScript plugin knows the
+    // workspace subtree by (backends/storiesRoot.ts), and a card carries it — so the browser needs
+    // the exact value this server registered, not a rule it re-derives and could drift on.
+    res.json({ ...configResponse(), home: os.homedir(), worktreesRoot: canonicalPath(worktreesRootDir()), storiesRootId: storiesRootId(claudeCwd) });
   });
 
   // The update notice for the header's "update available" badge, from the check the server runs

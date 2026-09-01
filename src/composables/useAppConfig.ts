@@ -86,6 +86,10 @@ const home = ref<string | null>(null);
 // A SINGLETON for the same reason as `home`: only `loadConfig` writes it, and a component that
 // calls useAppConfig() without loading would otherwise hold a copy that stays null forever.
 const worktreesRoot = ref<string | null>(null);
+// The id the mulmoScript plugin knows this server's workspace SUBTREE by (#1933). Read, never
+// derived: a Canvas card carries it, and a rule the browser re-computed could drift from the one
+// the server registered — which would mint cards naming a root nothing serves.
+const storiesRootId = ref<string | null>(null);
 
 // The initial /api/config while it is still in flight, so a launch that lands first can wait for
 // the root rather than decide without it (Codex on #1543). Null when nothing is loading — then
@@ -581,6 +585,7 @@ function createConfigReader({ defaultCwd, snapshotVersion, adoptServerPresets, m
       defaultCwd.value = typeof c.cwd === "string" ? c.cwd : null;
       home.value = typeof c.home === "string" ? c.home : null;
       worktreesRoot.value = typeof c.worktreesRoot === "string" ? c.worktreesRoot : null;
+      storiesRootId.value = typeof c.storiesRootId === "string" ? c.storiesRootId : null;
       adoptServerPresets(c.cwdPresets, version);
       adoptSoundConfig(c);
       pushEnabled.value = c.pushEnabled === true;
@@ -713,6 +718,7 @@ export function useAppConfig() {
 
   return {
     defaultCwd,
+    storiesRootId,
     home,
     presets,
     configUnavailable,

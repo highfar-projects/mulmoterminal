@@ -12,7 +12,7 @@ import { createEditor, langKindForFilename, type CmEditor } from "./cmEditor";
 import { expandedPaths, restoreOrder } from "./filesTreeState";
 import { isWriteToOpenFile } from "../composables/fileWriteMatch";
 import { usePubSub } from "../composables/usePubSub";
-import { canOpenInCanvas, absoluteUnder } from "../composables/canvasOpenFile";
+import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composables/canvasOpenFile";
 import { filesRowActions, menuFocusMove, type FilesRowAction } from "./filesRowActions";
 import { FILE_WRITE_CHANNEL, isFileWriteEvent } from "../../common/fileWriteChannel";
 import { isRecord } from "../../common/isRecord";
@@ -57,7 +57,9 @@ const props = defineProps<{
   // "there is a terminal" and "it is in my directory" are genuinely different questions.
   insertTarget?: boolean;
   insertTargetCwd?: string | null;
-  workspace?: string | null;
+  // Where stories live, as one value: the workspace path alone cannot address a deck kept beside
+  // its notes — that needs the id this server registered the subtree under (#1933).
+  storiesRoots?: StoriesRoots;
 }>();
 const emit = defineEmits<{ close: []; dirty: [boolean]; "open-in-canvas": [path: string]; "insert-text": [text: string] }>();
 
@@ -80,7 +82,9 @@ const isMarkdown = computed(() => langKindForFilename(openName.value) === "markd
 // Gated on the path the CARD will carry, not the row's relative one: a cell whose directory has a
 // dot segment (`~/.config/proj`) makes `p.html` pass here and the joined path fail the plugin's
 // own guard, which is a button that does nothing when pressed.
-const canvasOpenable = computed(() => canOpenInCanvas(openPath.value ? absoluteUnder(props.cwd, openPath.value) : null, props.workspace ?? null));
+const NO_ROOTS: StoriesRoots = { workspace: null, rootId: null };
+const storiesRoots = computed<StoriesRoots>(() => props.storiesRoots ?? NO_ROOTS);
+const canvasOpenable = computed(() => canOpenInCanvas(openPath.value ? absoluteUnder(props.cwd, openPath.value) : null, storiesRoots.value));
 
 const editorHost = ref<HTMLDivElement>();
 let editor: CmEditor | null = null;
@@ -191,7 +195,7 @@ function openRowMenu(node: Node, event: MouseEvent | KeyboardEvent): void {
     // The same pair the header's Canvas button is drawn from, so a row can never offer what that
     // button would refuse — `canvasTarget` is "there is a cell to put a Canvas beside" and the
     // overlay mount has none.
-    canvas: props.canvasTarget ? { workspace: props.workspace ?? null } : null,
+    canvas: props.canvasTarget ? { roots: storiesRoots.value } : null,
   });
   // Nothing to offer — the full-screen view is here on every row, having no terminal to insert
   // into. Leave the browser's own menu rather than swallowing the gesture for an empty panel.
