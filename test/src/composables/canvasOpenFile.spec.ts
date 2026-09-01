@@ -285,7 +285,9 @@ describe("buildCanvasCard", () => {
     expect(url).toBe("/api/plugin/presentMulmoScript");
     // `kind: "save"` — the reopen the DISPATCH serves, which is the only shape that carries a root.
     // The kind-less body is the agent's tool call and is deliberately root-blind.
-    expect(JSON.parse(String(init.body))).toEqual({ kind: "save", filePath: "stories/tale.json" });
+    // `expectPath` is the absolute path the pane showed: the server compares it with what the wire
+    // path resolves to, because the browser's own check is lexical and cannot see a moved workspace.
+    expect(JSON.parse(String(init.body))).toEqual({ kind: "save", filePath: "stories/tale.json", expectPath: `${WS}/artifacts/stories/tale.json` });
   });
 
   // The root travels on the card, because that is what keeps two roots' identically-named decks on
@@ -297,7 +299,12 @@ describe("buildCanvasCard", () => {
       data: { script: { title: "Deck" }, filePath: "stories/myrepo/decks/talk.json", root: "abc123" },
     });
     const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
-    expect(JSON.parse(String(init.body))).toEqual({ kind: "save", filePath: "stories/myrepo/decks/talk.json", root: "abc123" });
+    expect(JSON.parse(String(init.body))).toEqual({
+      kind: "save",
+      filePath: "stories/myrepo/decks/talk.json",
+      root: "abc123",
+      expectPath: `${WS}/myrepo/decks/talk.json`,
+    });
   });
 
   it("has no card when the dispatch refuses", async () => {

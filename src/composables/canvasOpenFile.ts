@@ -184,7 +184,7 @@ const REQUEST_TIMEOUT_MS = 10_000;
  * The route narrates a missing or refused file as a 200 with no `data` (its spec pins this), so
  * absence of `data` — not the status — is what "cannot open this" looks like.
  */
-async function reopenStory(ref: StoryRef): Promise<CanvasCard | null> {
+async function reopenStory(ref: StoryRef, expectPath: string): Promise<CanvasCard | null> {
   try {
     const res = await fetchWithTimeout(
       "/api/plugin/presentMulmoScript",
@@ -192,7 +192,7 @@ async function reopenStory(ref: StoryRef): Promise<CanvasCard | null> {
       // only shape that carries a root. The kind-less body is the AGENT's tool call, which is
       // deliberately root-blind: `root` is not in the tool schema, so a model cannot name one
       // (receptron/mulmoclaude#3015). A browser asking for a deck it can see is not that caller.
-      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind: "save", ...ref }) },
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind: "save", ...ref, expectPath }) },
       REQUEST_TIMEOUT_MS,
     );
     if (!res.ok) {
@@ -226,7 +226,11 @@ export async function buildCanvasCard(absolutePath: string, roots: StoriesRoots)
   const direct = canvasCardForFile(absolutePath);
   if (direct) return direct;
   const ref = storyWirePath(absolutePath, roots);
-  return ref ? await reopenStory(ref) : null;
+  // The absolute path travels with the wire path so the SERVER can check the two still name one
+  // file. This gate is lexical and cannot realpath; the workspace it compares against was resolved
+  // at boot, so the two can part company while the server runs (#1934). Sending what the pane
+  // actually showed turns "a different deck opens" into a refusal with a sentence.
+  return ref ? await reopenStory(ref, absolutePath) : null;
 }
 
 /**

@@ -252,6 +252,42 @@ async function handleToolCall(body: Record<string, unknown>, res: Response, inst
   });
 }
 
+/**
+ * Why the browser's own containment check cannot be the authority, and what stands in for it.
+ *
+ * The client decides whether to OFFER the Canvas from a lexical prefix test — it has no realpath.
+ * The named root, meanwhile, is the directory this server resolved at boot and the plugin caches
+ * that resolution. Those two can part company while the server runs: retarget the workspace
+ * symlink and the file tree lists the NEW directory while the plugin still serves the old one, so
+ * `stories/decks/talk.json` names one file on screen and a DIFFERENT file with the same relative
+ * path on disk. Opening the wrong deck without saying so is the failure this whole feature has
+ * been avoiding (Codex P1 iter-6 on #1934).
+ *
+ * So the browser sends the absolute path it actually saw, and the authority — the side that CAN
+ * realpath — checks that the wire path still names that same file. A mismatch is refused with a
+ * sentence rather than answered with the other file. `expectPath` is optional: a request without
+ * it (the agent's own tool call) is unaffected.
+ */
+async function wirePathMismatch(body: Record<string, unknown>, instance: MulmoScriptServerOps): Promise<string | null> {
+  const expectPath = body.expectPath;
+  const filePath = body.filePath;
+  if (typeof expectPath !== "string" || typeof filePath !== "string") return null;
+  const root = typeof body.root === "string" ? body.root : undefined;
+  const resolved = instance.resolveStory(filePath, root);
+  if (!resolved.ok) return resolved.error;
+  const [served, seen] = await Promise.all([realpathOrNull(resolved.absolutePath), realpathOrNull(expectPath)]);
+  if (served !== null && seen !== null && served === seen) return null;
+  return "that deck is not the file this server serves under that path — the workspace may have moved since MulmoTerminal started; restart it to pick up the new one";
+}
+
+const realpathOrNull = async (p: string): Promise<string | null> => {
+  try {
+    return await fs.realpath(p);
+  } catch {
+    return null;
+  }
+};
+
 /** Intercept POST /api/plugin/presentMulmoScript for both the View's dispatch
  *  (`kind` present → the package's kind router) and the tool-call (no `kind`).
  *  Handles everything itself — MUST be registered BEFORE mountAllRoutes so the
@@ -271,6 +307,11 @@ export function mountMulmoScriptDispatchRoute(app: Express): void {
     }
     const body: Record<string, unknown> = isRecord(req.body) ? req.body : {};
     try {
+      const mismatch = await wirePathMismatch(body, ops);
+      if (mismatch) {
+        res.status(400).json({ ok: false, code: "bad_request", error: mismatch });
+        return;
+      }
       if (typeof body.kind === "string") {
         res.json(await dispatchHandler(body));
       } else {
