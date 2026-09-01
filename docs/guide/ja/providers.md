@@ -3,7 +3,7 @@ title: Claude Code を別のモデルで動かす（OpenRouter / ローカル）
 nav_title: 他のモデル
 layout: default
 parent: 日本語
-nav_order: 14
+nav_order: 15
 description: OpenRouter などの Anthropic 互換バックエンドを登録して、Claude Code を Claude 以外のモデルで動かす手順。
 ---
 

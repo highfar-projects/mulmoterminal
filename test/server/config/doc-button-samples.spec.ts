@@ -46,7 +46,15 @@ function buttonSamples(file: string): unknown[][] {
   return out;
 }
 
-const FILES = ["docs/guide/en/config.md", "docs/guide/ja/config.md", "server/skills/mulmoterminal-header/SKILL.md"];
+const FILES = [
+  "docs/guide/en/config.md",
+  "docs/guide/ja/config.md",
+  "docs/guide/en/header.md",
+  "docs/guide/ja/header.md",
+  "docs/guide/en/header-reference.md",
+  "docs/guide/ja/header-reference.md",
+  "server/skills/mulmoterminal-header/SKILL.md",
+];
 
 describe("documented button samples survive the real validator", () => {
   for (const file of FILES) {
