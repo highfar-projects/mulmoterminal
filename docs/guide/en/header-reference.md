@@ -222,6 +222,9 @@ Writing `dir` / `status` / `tools` is not an error; it is silently ignored.
 { "label": "Which managed worktree this cell is in", "text": "task ${task}", "when": "task != " }
 ```
 
+The `env staging` on the right-hand cell of
+[the screenshot on the beginner's page](header.html#icon-label) is exactly this.
+
 > **Once you write `chips`, list everything you want.** The list you write becomes the whole set, so
 > dropping `work` also drops the PR / issue display.
 

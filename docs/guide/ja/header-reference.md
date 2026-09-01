@@ -217,6 +217,9 @@ description: MulmoTerminal のヘッダー設定を書くときに引くペー�
 { "label": "Which managed worktree this cell is in", "text": "task ${task}", "when": "task != " }
 ```
 
+[入門ページのスクリーンショット](header.html#icon-label)の右のセルにある `env staging` が、
+このカスタムチップです。
+
 > **`chips` を書いたら、欲しいものは全部書いてください。** 書いたリストがそのまま全部になるので、
 > `work` を落とすと PR / issue の表示も消えます。
 
