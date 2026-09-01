@@ -143,7 +143,7 @@ Go・Java/Kotlin・C/C++/Objective-C・PHP・SQL は、その種類を最初に�
 | 機能 | 説明 |
 |---|---|
 | ヘッダーの操作ボタン | `buttons` で `input`（テキスト送信）/ `open`（URL・ファイルマネージャ・アプリ内ビュー・ファイル選択・新規端末・PR）/ `shell`（コマンド実行）を追加。`${変数}` と `when` 条件付き |
-| ヘッダーの表示チップ | `chips` で組み込みチップの並べ替え・非表示 + カスタムチップ（→ [ヘッダーのカスタマイズ](header.html)） |
+| ヘッダーの表示チップ | `chips` で組み込みチップの並べ替え・非表示 + カスタムチップ（→ [ヘッダーのリファレンス](header-reference.html#chips)） |
 | 名前バッジ / 色 | `.mulmoterminal.json` でディレクトリごとに名前・各所の色 |
 | ランチャ / cwd presets / PR repos | 設定で起動コマンド・作業ディレクトリ候補・横断 PR 対象を拡張 |
 | テーマ | Midnight / Nord / Daylight / Solarized Light |
