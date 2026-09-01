@@ -45,6 +45,24 @@ describe("LaunchAgentPicker", () => {
     expect(localStorage.getItem("mt-launch-agent")).toBe("codex");
   });
 
+  // The primary interaction on a non-default-only surface is choosing Claude — which is exactly the
+  // value that stops the control qualifying to exist. Unmounting it under the pointer drops a
+  // keyboard user on <body> mid-gesture, so it stays until focus actually leaves.
+  it("stays put while it holds focus, even once the value is back to the default", async () => {
+    launchAgent.value = "muse";
+    const w = mount(LaunchAgentPicker, { props: { nonDefaultOnly: true, description: "which agent" } });
+    await flushPromises();
+    await w.get(PICKER).trigger("focusin");
+    await w.get("select").setValue("claude");
+    await flushPromises();
+    expect(w.find(PICKER).exists()).toBe(true);
+
+    // And stands down as soon as focus leaves for good — which is when the user asked it to.
+    await w.get(PICKER).trigger("focusout");
+    await flushPromises();
+    expect(w.find(PICKER).exists()).toBe(false);
+  });
+
   it("offers every agent a seeded chat can run, and no shell", () => {
     const w = mount(LaunchAgentPicker, { props: { description: "which agent" } });
     const values = w.findAll("option").map((o) => o.attributes("value"));

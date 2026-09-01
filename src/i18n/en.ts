@@ -329,7 +329,7 @@ export const en = {
       what: "One new terminal opens in the grid, and {agent} starts there — it asks you a few questions and edits your config file itself.",
       howToStop: "To stop, close that terminal with its close button — the session ends there. Settings reopens from the toolbar whenever you want it.",
       launchWith: "Launch with",
-      launchWithAria: "Agent this skill will run in",
+      launchWithAria: "Agent to start this skill with — the same choice collection chats use",
       cancel: "Cancel",
       start: "Start",
     },

@@ -15,7 +15,7 @@
 // The words come from the HOST. Only the Settings modal is translated (src/i18n/en.ts) and this is
 // used on both sides of that edge, so a `t()` in here would drag the collection surfaces into a
 // half-migrated bundle (#1566).
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { launchAgent } from "../composables/useChatLauncher";
 import { BUILTIN_AGENT_OPTIONS } from "./agentPicker";
 
@@ -29,13 +29,26 @@ const props = defineProps<{
   nonDefaultOnly?: boolean;
 }>();
 
-const shown = computed(() => props.nonDefaultOnly !== true || launchAgent.value !== "claude");
+// Held open while the control has focus, whatever the value became. Without it the primary
+// interaction destroys its own control: `nonDefaultOnly` means choosing Claude is the moment the
+// picker stops qualifying to exist, so it unmounts the instant the choice lands and a keyboard
+// user is dropped on <body> mid-gesture. `focusout` fires when focus leaves for good, which is
+// when standing down is what the user asked for.
+const focused = ref(false);
+const shown = computed(() => props.nonDefaultOnly !== true || launchAgent.value !== "claude" || focused.value);
 </script>
 
 <template>
   <!-- A <label> wrapper rather than a loose span beside the select: it gives the visible words the
        accessible name for free, and makes them a second hit target for the same control. -->
-  <label v-if="shown" class="flex flex-none items-center gap-1.5" data-testid="launch-agent-picker" :title="description">
+  <label
+    v-if="shown"
+    class="flex flex-none items-center gap-1.5"
+    data-testid="launch-agent-picker"
+    :title="description"
+    @focusin="focused = true"
+    @focusout="focused = false"
+  >
     <span v-if="label" class="text-[11px] uppercase tracking-[0.05em] text-dim">{{ label }}</span>
     <span v-else class="material-symbols-outlined text-[14px] text-dim" aria-hidden="true">rocket_launch</span>
     <!-- Not SELECT_CONTROL: that is sized for settings forms (w-full, taller padding); this sits on
