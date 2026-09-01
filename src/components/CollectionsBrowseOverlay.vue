@@ -24,8 +24,7 @@ import {
 } from "../composables/useCollectionBrowse";
 import { useShortcuts } from "../composables/useShortcuts";
 import type { Shortcut } from "../../common/shortcuts";
-import { launchAgent } from "../composables/useChatLauncher";
-import { BUILTIN_AGENT_OPTIONS } from "./agentPicker";
+import LaunchAgentPicker from "./LaunchAgentPicker.vue";
 
 // Navigation is the toolbar's job (the Chat tab closes this; Collections / favorite
 // tabs switch what it shows), so the overlay itself carries no chrome — it just fills
@@ -125,16 +124,10 @@ useEscapeToClose(isOpen, close);
         </div>
       </template>
       <div class="ml-auto flex flex-none items-center gap-2">
-        <span class="text-[11px] uppercase tracking-[0.05em] text-dim">Launch with</span>
-        <!-- Not SELECT_CONTROL: that is sized for settings forms (w-full, taller padding); this
-             sits on a thin toolbar row beside py-[3px] chips and matches their height instead. -->
-        <select
-          v-model="launchAgent"
-          aria-label="Agent that chats started from collections run"
-          class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] font-sans text-[12px] text-fg focus:border-accent focus:outline-none"
-        >
-          <option v-for="o in BUILTIN_AGENT_OPTIONS" :key="o.agent" :value="o.agent">{{ o.label }}</option>
-        </select>
+        <!-- ALWAYS here, unlike the same picker in a cell's Collections pane. This is where the
+             choice is made, and a control that hides itself while it holds its default leaves no
+             way to leave that default. -->
+        <LaunchAgentPicker label="Launch with" description="Agent that chats started from collections run" />
       </div>
     </div>
     <div class="min-h-0 flex-1">
