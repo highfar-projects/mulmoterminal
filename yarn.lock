@@ -1924,10 +1924,10 @@
     js-yaml "^5.4.1"
     marked "^18.0.11"
 
-"@mulmoclaude/mulmoscript-plugin@^4.5.0":
-  version "4.5.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/mulmoscript-plugin/-/mulmoscript-plugin-4.5.0.tgz#754a5f866764fe20c12e3d024ae60ec9b3bc011f"
-  integrity sha512-APZasqYO+rJcKcO/+aG8tu6jZugfJ5UJ+tFtxJKJlkahyHnphuXEEokJoL7OMoT3VelcroEO7lnFajUwrtkoXw==
+"@mulmoclaude/mulmoscript-plugin@^4.5.1":
+  version "4.5.1"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/mulmoscript-plugin/-/mulmoscript-plugin-4.5.1.tgz#8b0c4d462cabd70c206a996e8203a7350e6212c1"
+  integrity sha512-RnUKWSDRg23lPsc5CEpOLy9dkKSGc6MK/pVmColgpiRnPozLYCoQHOh9Cu64c2TUZ5qJ3P04aZbGJcMbsUKP5A==
   dependencies:
     "@mulmoclaude/common" "^1.2.0"
 
