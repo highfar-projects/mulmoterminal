@@ -150,6 +150,19 @@ describe("storyWirePath — the workspace subtree", () => {
     expect(storyWirePath("/artifacts/stories/x.json", { workspace: "/", rootId: "abc123" })).toEqual({ filePath: "stories/x.json" });
   });
 
+  // `dirPathKey` TRIMS, so a directory whose last component ends in a space lost it the moment the
+  // workspace was keyed on its own — and then nothing under it matched, the workspace's own stories
+  // directory included (Codex P2 on #1934, a regression this PR introduced). Both roots are pinned
+  // because one rule now answers for both.
+  it("recognises a workspace whose last component ends in a space", () => {
+    const WS_SPACE = "/work/ws ";
+    expect(storyWirePath("/work/ws /myrepo/deck.json", { workspace: WS_SPACE, rootId: "abc123" })).toEqual({
+      filePath: "stories/myrepo/deck.json",
+      root: "abc123",
+    });
+    expect(storyWirePath("/work/ws /artifacts/stories/x.json", { workspace: WS_SPACE, rootId: "abc123" })).toEqual({ filePath: "stories/x.json" });
+  });
+
   it("recognises a Windows drive root and a UNC share root", () => {
     expect(storyWirePath("C:\\myrepo\\decks\\talk.json", { workspace: "C:\\", rootId: "abc123" })).toEqual({
       filePath: "stories/myrepo/decks/talk.json",
