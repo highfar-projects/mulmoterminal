@@ -62,7 +62,7 @@ description: MulmoTerminal のヘッダー設定を書くときに引くペー�
 `${braneh}` のような打ち間違いは、**空文字になりません**。`${braneh}` という文字列がそのまま
 画面に出ます。
 
-```
+```text
 表示: ${braneh} main    ← 左が打ち間違い、右が ${branch}
 ```
 
@@ -99,8 +99,8 @@ description: MulmoTerminal のヘッダー設定を書くときに引くペー�
 | `!isGitRepo` | git リポジトリで**ない**とき | `!isGitRepo` |
 | `変数 == 値` | 一致するとき | `agent == claude` |
 | `変数 != 値` | 一致しないとき | `agent != codex` |
-| `変数 != `（**右辺を空**に） | その変数に**値があるとき** | `repo != ` |
-| `変数 == `（右辺を空に） | その変数が**空のとき** | `task == ` |
+| `変数 !=`（**右辺に何も書かない**） | その変数に**値があるとき** | `repo !=` |
+| `変数 ==`（右辺に何も書かない） | その変数が**空のとき** | `task ==` |
 
 `&&` と `||` で繋げられます（`&&` が優先）。
 
@@ -122,21 +122,22 @@ description: MulmoTerminal のヘッダー設定を書くときに引くペー�
 
 ### 右辺を空にする —— 「値があるか」を聞く {#when-empty}
 
-`repo != ` は「`${repo}` が空でない」＝**リポジトリ名が解決できた**という意味です。
+`repo !=` は「`${repo}` が空でない」＝**リポジトリ名が解決できた**という意味です。
 `when` でいちばん実用的な形で、[空になる条件がある 6 つの変数](#vars-list)
 （`branch` `repo` `remoteUrl` `model` `task` `session`）に効きます。
 
 `ahead` / `behind` / `dirty` は**空になりません**（値が無いときは `0`）。数を見たいなら
-`dirty != 0` のように書きます。`dirty != ` は常に真です。
+`dirty != 0` のように書きます。`dirty !=` は常に真です。
 
-演算子の右に何も無ければ「空文字と比べる」という意味になるので、末尾のスペースは飾りです。
-`"repo != "` と `"repo !="` は同じ条件です。
+演算子の右に何も無ければ「空文字と比べる」という意味になります。前後の空白は無視されるので、
+`"repo !="` と `"repo != "`（末尾にスペース）はまったく同じ条件です。下の JSON は後者で書いています。
 
 #### 例: GitHub を開くボタン {#when-github}
 
-「git リポジトリか」と「GitHub の repo 名が取れるか」は**別の質問**です。`when: "isGitRepo"` で
-出し分けると、リモートが無いリポジトリでも・GitHub 以外のリモートでもボタンが出て、`${repo}` が
-空に解決され、`https://github.com/` という死んだリンクになります。正しくはこう:
+「git リポジトリか」と「リポジトリ名が取れるか」は**別の質問**です。`when: "isGitRepo"` で出し分けると、
+リモートが無いリポジトリや、**GitHub・GitLab 以外のホスト**のリポジトリでもボタンが出ます。そこでは
+`${repo}` が空に解決されるので、`https://github.com/` という死んだリンクになります。
+`repo !=` なら、リポジトリ名が取れたときにだけ出ます:
 
 ```json
 {
@@ -149,11 +150,12 @@ description: MulmoTerminal のヘッダー設定を書くときに引くペー�
 }
 ```
 
-> GitLab のリモートでは `${repo}` が `gitlab.example.com/team/api` のように**ホストを含む**形に
-> なります（[変数の表](#vars-list)）。上のボタンは GitHub のリモート向けです。ホストが混在する
-> 環境では `when` に `repo != ` ではなく `remoteUrl == …` や `repo == owner/name` のように
-> 具体的に書くか、ヘッダー左の[パスメニュー](header.html#path-menu)（リモートを見て自分で
-> 出し分けます）を使ってください。
+> **上のボタンは GitHub のリモート専用です。** GitLab のリモートでは `${repo}` は空になりません
+> —— `gitlab.example.com/team/api` のように**ホストを含む**値になる（[変数の表](#vars-list)）ので、
+> `repo !=` は真になり、URL は `https://github.com/gitlab.example.com/team/api` という誤ったリンクに
+> なります。ホストが混在する環境では `repo == owner/name` のようにリポジトリを名指しするか、
+> ヘッダー左の[パスメニュー](header.html#path-menu)（リモートを見て自分で出し分けます）を
+> 使ってください。
 
 ### `when` はセキュリティの境界ではありません {#when-security}
 
@@ -192,15 +194,15 @@ description: MulmoTerminal のヘッダー設定を書くときに引くペー�
 
 ### 効くのは 6 つだけ {#builtin-chips}
 
-| id | 出るもの | |
+| id | 出るもの | `chips` で制御できるか |
 |---|---|---|
-| `git` | ブランチと未保存の数（`⎇ main ●1`） | ✅ 制御できます |
-| `work` | このセルがやっている PR / issue（`#977 → #966`） | ✅ |
-| `diff` | worktree の差分バッジ（`+2 ●5`） | ✅ [worktree のセルで、変更があるときだけ](worktree.html#diff-badge) |
-| `ctx` | モデルとコンテキスト使用率 | ✅ エージェントが報告してから |
-| `usage` | レート制限の消費率 | ✅ 同上 |
-| `env` | このワーキングツリーに配られた値。ポートは `:3010` でクリックでき、それ以外はそのまま表示 | ✅ [プロジェクトが `worktreeEnv` を宣言しているときだけ](config.html#worktree-env) |
-| `dir` / `status` / `tools` | プロジェクトバッジ / 状態ドット / ツール履歴 | ❌ **構造なので、書いても効かず、書かなくても消えません** |
+| `git` | ブランチと未保存の数（`⎇ main ●1`） | できます |
+| `work` | このセルがやっている PR / issue（`#977 → #966`） | できます |
+| `diff` | worktree の差分バッジ（`+2 ●5`） | できます（[worktree のセルで、変更があるときだけ](worktree.html#diff-badge)） |
+| `ctx` | モデルとコンテキスト使用率 | できます（エージェントが報告してから） |
+| `usage` | レート制限の消費率 | できます（同上） |
+| `env` | このワーキングツリーに配られた値。ポートは `:3010` でクリックでき、それ以外はそのまま表示 | できます（[プロジェクトが `worktreeEnv` を宣言しているときだけ](config.html#worktree-env)） |
+| `dir` / `status` / `tools` | プロジェクトバッジ / 状態ドット / ツール履歴 | **できません** —— 構造なので、書いても効かず、書かなくても消えません |
 
 `dir` / `status` / `tools` を書いてもエラーにはならず、黙って無視されます。
 
@@ -222,7 +224,7 @@ description: MulmoTerminal のヘッダー設定を書くときに引くペー�
 
 ## 5. Skill メニューを絞り込む {#skills}
 
-ヘッダーの **⚡ Skill** は、そのディレクトリで使えるスキルを一覧します（プロジェクトの
+ヘッダーの **Skill**（稲妻のアイコン）は、そのディレクトリで使えるスキルを一覧します（プロジェクトの
 `.claude/skills` が先、次に `~/.claude/skills`。それぞれの中はアルファベット順で、同じ slug が
 両方にあればプロジェクト側が勝ちます）。選ぶと**今のセッション**でそれを実行します
 （Claude は `/<slug>`、他のエージェントは `Use the "<slug>" skill.`）。
@@ -278,6 +280,7 @@ description: MulmoTerminal のヘッダー設定を書くときに引くペー�
 - `buttons` を書いた時点で**既定の 2 つは消える**ので、上の 1 行目・2 行目で自分で並べ直しています。
 - `chips` も**書いたリストが全部**です。`work` を落とせば PR / issue の表示も消えます。
 - `skills` はプロジェクト専用のキーです。global に書いても無視されます。
+- `gh` は **GitHub のリモート専用**です（→ [GitHub を開くボタン](#when-github)）。
 
 ### global に置く形（`~/.mulmoterminal/config.json`） {#recipe-global}
 
@@ -317,7 +320,7 @@ description: MulmoTerminal のヘッダー設定を書くときに引くペー�
 
 ### worktree のセルにだけ出す {#recipe-worktree}
 
-`task` は[管理下の worktree](worktree.html) でだけ値を持つので、`task != ` が
+`task` は[管理下の worktree](worktree.html) でだけ値を持つので、`task !=` が
 「このセルは worktree か」の判定になります。
 
 ```json

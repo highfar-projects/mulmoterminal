@@ -36,7 +36,7 @@ Here is a cell with nothing configured. The header has two rows.
 | Row 2, right | the **Skill** dropdown and a row of **icon buttons** | [`buttons`](#first-button) lands here |
 
 **The right-hand side of row 2 is what you customize.** Of the small icons to the right of
-`⚡ Skill` above, the leftmost paperclip is the only default button (**Insert a file path**); the
+**Skill** (the lightning-bolt icon) above, the leftmost paperclip is the only default button (**Insert a file path**); the
 rest are fixed app controls.
 
 > **There are only two default buttons** — **Insert a file path**, and **Open this branch's PR**

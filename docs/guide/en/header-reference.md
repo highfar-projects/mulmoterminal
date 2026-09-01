@@ -63,7 +63,7 @@ itself never disappears).
 A typo like `${braneh}` does **not** become an empty string. The text `${braneh}` is what you see on
 screen.
 
-```
+```text
 shown: ${braneh} main    ← the typo on the left, ${branch} on the right
 ```
 
@@ -101,8 +101,8 @@ no condition).
 | `!isGitRepo` | **not** in a git repository | `!isGitRepo` |
 | `var == value` | equal | `agent == claude` |
 | `var != value` | not equal | `agent != codex` |
-| `var != ` (**empty** right-hand side) | the variable **has a value** | `repo != ` |
-| `var == ` (empty right-hand side) | the variable is **empty** | `task == ` |
+| `var !=` (**nothing** after the operator) | the variable **has a value** | `repo !=` |
+| `var ==` (nothing after the operator) | the variable is **empty** | `task ==` |
 
 Combine with `&&` and `||` (`&&` binds tighter).
 
@@ -124,23 +124,24 @@ Combine with `&&` and `||` (`&&` binds tighter).
 
 ### An empty right-hand side asks "is there a value?" {#when-empty}
 
-`repo != ` means "`${repo}` is not empty" — that is, **a repository name resolved**. It is the most
+`repo !=` means "`${repo}` is not empty" — that is, **a repository name resolved**. It is the most
 useful form in practice, and it applies to the
 [six variables that can be empty](#vars-list): `branch`, `repo`, `remoteUrl`, `model`, `task`,
 `session`.
 
 `ahead` / `behind` / `dirty` are **never empty** (they are `0` when there is nothing), so compare
-them to a number: `dirty != 0`. `dirty != ` is always true.
+them to a number: `dirty != 0`. `dirty !=` is always true.
 
-Nothing after the operator means "compare against the empty string", so the trailing space is
-cosmetic: `"repo != "` and `"repo !="` are the same condition.
+Nothing after the operator means "compare against the empty string", and whitespace around it is
+ignored — so `"repo !="` and `"repo != "` (with a trailing space) are exactly the same condition.
+The JSON below is written in the second form.
 
 #### Example: an Open-on-GitHub button {#when-github}
 
-"Is this a git repository?" and "can a GitHub repo name be resolved?" are **different questions**.
+"Is this a git repository?" and "can a repository name be resolved?" are **different questions**.
 Gate the button with `when: "isGitRepo"` and it also appears in a repository with no remote, or one
-whose remote is not GitHub — where `${repo}` resolves to empty and the link is a dead
-`https://github.com/`. The right condition is:
+**on a host that is neither GitHub nor GitLab** — where `${repo}` resolves to empty and the link is a
+dead `https://github.com/`. `repo !=` shows it only when a repository name resolved:
 
 ```json
 {
@@ -153,10 +154,12 @@ whose remote is not GitHub — where `${repo}` resolves to empty and the link is
 }
 ```
 
-> On a GitLab remote `${repo}` carries the host — `gitlab.example.com/team/api` (see
-> [the variable table](#vars-list)) — so the button above is for GitHub remotes. Where the hosts are
-> mixed, be specific (`repo == owner/name`, or a `remoteUrl` comparison), or use the
-> [path menu](header.html#path-menu) on the left of the header, which decides from the remote itself.
+> **The button above is for GitHub remotes only.** On a GitLab remote `${repo}` is *not* empty — it
+> carries the host, `gitlab.example.com/team/api` (see [the variable table](#vars-list)) — so
+> `repo !=` is true and the URL comes out as the wrong
+> `https://github.com/gitlab.example.com/team/api`. Where the hosts are mixed, name the repository
+> (`repo == owner/name`), or use the [path menu](header.html#path-menu) on the left of the header,
+> which decides from the remote itself.
 
 ### `when` is not a security boundary {#when-security}
 
@@ -196,15 +199,15 @@ stays.
 
 ### Only six of them actually respond {#builtin-chips}
 
-| id | Shows | |
+| id | Shows | Controlled by `chips`? |
 |---|---|---|
-| `git` | branch and unsaved count (`⎇ main ●1`) | ✅ you control it |
-| `work` | the PR / issue this cell is on (`#977 → #966`) | ✅ |
-| `diff` | the worktree diff badge (`+2 ●5`) | ✅ [worktree cells with changes only](worktree.html#diff-badge) |
-| `ctx` | model and context usage | ✅ once the agent reports it |
-| `usage` | rate-limit consumption | ✅ same |
-| `env` | the values this working tree was reserved — a port shows as a clickable `:3010`, anything else as its text | ✅ [only where the project declares `worktreeEnv`](config.html#worktree-env) |
-| `dir` / `status` / `tools` | project badge / status dot / tool timeline | ❌ **structural — listing them does nothing, omitting them hides nothing** |
+| `git` | branch and unsaved count (`⎇ main ●1`) | yes |
+| `work` | the PR / issue this cell is on (`#977 → #966`) | yes |
+| `diff` | the worktree diff badge (`+2 ●5`) | yes ([worktree cells with changes only](worktree.html#diff-badge)) |
+| `ctx` | model and context usage | yes (once the agent reports it) |
+| `usage` | rate-limit consumption | yes (same) |
+| `env` | the values this working tree was reserved — a port shows as a clickable `:3010`, anything else as its text | yes ([only where the project declares `worktreeEnv`](config.html#worktree-env)) |
+| `dir` / `status` / `tools` | project badge / status dot / tool timeline | **no** — structural: listing them does nothing, omitting them hides nothing |
 
 Writing `dir` / `status` / `tools` is not an error; it is silently ignored.
 
@@ -226,7 +229,7 @@ Writing `dir` / `status` / `tools` is not an error; it is silently ignored.
 
 ## 5. Filtering the Skill menu {#skills}
 
-The header's **⚡ Skill** lists the skills available in that directory (the project's
+The header's **Skill** menu (the lightning-bolt icon) lists the skills available in that directory (the project's
 `.claude/skills` first, then `~/.claude/skills`; alphabetical within each group, and a project
 skill shadows a user one of the same slug). Picking one runs it **in the current session**
 (`/<slug>` for Claude, `Use the "<slug>" skill.` for the other agents).
@@ -282,6 +285,7 @@ Three things to remember about it:
 - Writing `buttons` **removes the two defaults**, which is why the first two lines put them back.
 - `chips` is likewise **the whole list**. Drop `work` and the PR / issue display goes with it.
 - `skills` is a per-project key; in the global config it is ignored.
+- `gh` is for **GitHub remotes only** (→ [an Open-on-GitHub button](#when-github)).
 
 ### The same thing split into the global file (`~/.mulmoterminal/config.json`) {#recipe-global}
 
@@ -321,7 +325,7 @@ What `!isGitRepo` is for — offer to make it one, only where it isn't.
 
 ### Only in worktree cells {#recipe-worktree}
 
-`task` has a value only inside a [managed worktree](worktree.html), so `task != ` is the test for
+`task` has a value only inside a [managed worktree](worktree.html), so `task !=` is the test for
 "is this cell one".
 
 ```json

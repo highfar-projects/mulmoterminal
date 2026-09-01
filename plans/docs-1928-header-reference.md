@@ -26,18 +26,20 @@ Issue: #1928
 ## 実装に合わせて足した 4 つ
 
 1. **`when` の記法が半分しか書かれていなかった。** `!isGitRepo` / `key != value` /
-   **右辺を空にする `repo != `**（＝「解決できる値がある」）/ **括弧は使えない** を追加。
+   **右辺を空にする `repo !=`**（＝「解決できる値がある」）/ **括弧は使えない** を追加。
    括弧はエラーにならず、`(isGitRepo` が未知の語として false になり**黙って消える**ので、
    書いておかないと気づけない。
-2. **`repo != ` が実用上いちばん効く。** GitHub を開くボタンを `isGitRepo` で出し分けると、
-   remote が無いリポジトリや GitHub 以外の remote でもボタンが出て `https://github.com/` という
-   死んだリンクになる。「git リポジトリか」と「repo 名が取れるか」は別の質問である、という節を作った。
-   GitLab では `${repo}` が `host/owner/repo` になる（`server/git/forge-support.ts`）ことも明記した。
+2. **`repo !=` が実用上いちばん効く。** GitHub を開くボタンを `isGitRepo` で出し分けると、
+   remote が無いリポジトリや **GitHub・GitLab 以外のホスト**のリポジトリでもボタンが出て
+   `https://github.com/` という死んだリンクになる。「git リポジトリか」と「repo 名が取れるか」は
+   別の質問である、という節を作った。**GitLab は空にならない** —— `${repo}` は
+   `host/owner/repo`（`server/git/forge-support.ts` の `actionableRepo`）なので `repo !=` は真になり、
+   URL のほうが誤りになる。この例は GitHub のリモート専用だと明記した。
 3. **未知の `${変数}` はリテラルで残る**（`header-resolve.ts:33` の意図的な設計）。`when` は逆に
    fail closed で消える。この非対称を「表示は間違いが見える側に、条件は安全な側に」として書いた。
 4. **変数 12 個の表**（issue は 13 個としているが、`varValue` のテーブルは 12 個）。
    意味・例・**空になる条件**の 3 列。`ahead` / `behind` / `dirty` は数値なので**空にならない**
-   （`0` になる）ことが `!= ` の使い分けに効くので明示した。`isGitRepo` は変数ではない、も。
+   （`0` になる）ことが `!=` の使い分けに効くので明示した。`isGitRepo` は変数ではない、も。
 
 ## レシピ集
 
@@ -53,9 +55,9 @@ global とプロジェクトへの分け方、`!isGitRepo` 用、worktree 用の
 - **回帰させないよう CI に載せた。** `test/server/config/doc-button-samples.spec.ts` の `FILES` に
   `header.md` × 2 と `header-reference.md` × 2 を追加（従来は config.md と SKILL.md だけだった）。
 - **`when` / `substitute` の記述はすべて実装で実行して確かめた**（`agent == "claude"` は false、
-  `repo != ` と `repo !=` は同値、括弧付きは false、`${braneh}` はリテラル、など）。
+  `repo !=` と `repo !=` は同値、括弧付きは false、`${braneh}` はリテラル、など）。
 - **Jekyll でビルド**し、新ページが生成されること・サイドバーが header の直後に並ぶこと・
-  インラインコードの `repo != ` の末尾スペースが HTML に残ることを確認。
+  インラインコードの `repo !=` の末尾スペースが HTML に残ることを確認。
 - 内部リンクを全数チェックし、ページとアンカーがすべて解決することを確認。
 
 ## やらなかったこと
