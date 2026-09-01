@@ -90,7 +90,7 @@ const worktreesRoot = ref<string | null>(null);
 // carries, and the CANONICAL path to compare a file against. Read, never derived — an id the
 // browser re-computed could drift from the one the server registered, and a non-canonical path
 // would stop matching the moment the workspace was reached through a symlink.
-const storiesRoot = ref<{ id: string; path: string } | null>(null);
+const storiesRoot = ref<{ id: string; paths: string[] } | null>(null);
 
 // The initial /api/config while it is still in flight, so a launch that lands first can wait for
 // the root rather than decide without it (Codex on #1543). Null when nothing is loading — then
@@ -171,6 +171,15 @@ function readLegacyRecents(): string[] {
 const listOf = <T>(value: unknown, isEntry: (entry: unknown) => entry is T): T[] => (isUnknownArray(value) ? value.filter(isEntry) : []);
 
 const stringsOf = (value: unknown): string[] => (Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : []);
+/** The named stories root off the wire: an id plus EVERY spelling of the workspace (the launched
+ *  one and the resolved one). Both travel because both reach the Files pane, and the browser's
+ *  containment check is lexical (#1934). Anything malformed reads as "no named root". */
+function readStoriesRoot(value: unknown): { id: string; paths: string[] } | null {
+  if (!isRecord(value) || typeof value.id !== "string" || !Array.isArray(value.paths)) return null;
+  const paths = value.paths.filter((path): path is string => typeof path === "string");
+  return paths.length > 0 ? { id: value.id, paths } : null;
+}
+
 const isCwdPreset = (value: unknown): value is CwdPreset => isRecord(value) && typeof value.label === "string" && typeof value.path === "string";
 const isQuickCommand = (value: unknown): value is QuickCommand => isRecord(value) && typeof value.label === "string" && typeof value.text === "string";
 const isUserMcpServer = (value: unknown): value is UserMcpServer => isRecord(value) && typeof value.id === "string" && typeof value.url === "string";
@@ -586,10 +595,7 @@ function createConfigReader({ defaultCwd, snapshotVersion, adoptServerPresets, m
       defaultCwd.value = typeof c.cwd === "string" ? c.cwd : null;
       home.value = typeof c.home === "string" ? c.home : null;
       worktreesRoot.value = typeof c.worktreesRoot === "string" ? c.worktreesRoot : null;
-      storiesRoot.value =
-        isRecord(c.storiesRoot) && typeof c.storiesRoot.id === "string" && typeof c.storiesRoot.path === "string"
-          ? { id: c.storiesRoot.id, path: c.storiesRoot.path }
-          : null;
+      storiesRoot.value = readStoriesRoot(c.storiesRoot);
       adoptServerPresets(c.cwdPresets, version);
       adoptSoundConfig(c);
       pushEnabled.value = c.pushEnabled === true;

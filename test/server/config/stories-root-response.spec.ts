@@ -24,13 +24,33 @@ describe("the registered stories root", () => {
     mkdirSync(real);
     initArtifactsBackend({ workspace: real });
     initMulmoScriptBackend({ workspace: real, pubsub: null });
-    expect(registeredStoriesRoot()).toEqual({ id: storiesRootId(real), path: expect.stringContaining("real-ws") });
+    const root = registeredStoriesRoot();
+    expect(root?.id).toBe(storiesRootId(real));
+    // Every spelling names the same directory. On macOS even a plain temp path has two — `/var` is
+    // itself a symlink to `/private/var` — which is exactly why the browser is handed the set.
+    expect(root?.paths.length).toBeGreaterThan(0);
+    expect(root?.paths.every((p) => p.endsWith("real-ws"))).toBe(true);
+    expect(new Set(root?.paths).size).toBe(root?.paths.length); // deduped
   });
 
   // The reason it is captured rather than recomputed: `storiesRootId` realpaths, so a workspace
   // reached through a symlink answers with the TARGET — and retargeting that symlink while the
   // server runs would otherwise change the id the browser is handed, while the plugin keeps
   // serving the one it registered at boot.
+  // Both spellings, because both reach the Files pane and the browser's check is lexical: the
+  // launched one through a cell's cwd, the resolved one through `git worktree list` (#1934 iter-5).
+  it("carries the launched spelling as well as the resolved one", () => {
+    const real = path.join(base, "real-ws");
+    const link = path.join(base, "ws-link");
+    mkdirSync(real);
+    symlinkSync(real, link);
+    initArtifactsBackend({ workspace: link });
+    initMulmoScriptBackend({ workspace: link, pubsub: null });
+    const root = registeredStoriesRoot();
+    expect(root?.paths).toContain(link);
+    expect(root?.paths.some((p) => p.includes("real-ws") && !p.includes("ws-link"))).toBe(true);
+  });
+
   it("does not follow a symlink retargeted after boot", () => {
     const first = path.join(base, "first");
     const second = path.join(base, "second");

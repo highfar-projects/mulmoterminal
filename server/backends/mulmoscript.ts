@@ -49,13 +49,13 @@ interface PubSubLike {
 
 let ops: MulmoScriptServerOps | null = null;
 /** The named stories root this server actually registered with the plugin, or null before boot. */
-let registeredRoot: { id: string; path: string } | null = null;
+let registeredRoot: { id: string; paths: string[] } | null = null;
 
-/** What the browser is told about the named stories root: the id a Canvas card must carry, and the
- *  canonical path it compares a file against. The REGISTERED value, never re-derived — see
- *  initMulmoScriptBackend. Null until the backend is initialised, which reads as "no named root"
- *  and is exactly the behaviour before #1933. */
-export const registeredStoriesRoot = (): { id: string; path: string } | null => registeredRoot;
+/** What the browser is told about the named stories root: the id a Canvas card must carry, and
+ *  every spelling of the workspace it may compare a file against. The REGISTERED value, never
+ *  re-derived — see initMulmoScriptBackend. Null until the backend is initialised, which reads as
+ *  "no named root" and is exactly the behaviour before #1933. */
+export const registeredStoriesRoot = (): { id: string; paths: readonly string[] } | null => registeredRoot;
 let dispatchHandler: MulmoScriptDispatchHandler | null = null;
 
 // undefined = probe not finished yet; the ops treat that as "assume available"
@@ -104,7 +104,11 @@ export function initMulmoScriptBackend(deps: { workspace: string; pubsub: PubSub
   // hands the browser.
   const workspaceRootPath = canonicalPath(deps.workspace);
   const workspaceRootId = storiesRootId(workspaceRootPath);
-  registeredRoot = { id: workspaceRootId, path: workspaceRootPath };
+  // BOTH spellings travel to the browser: the one the user launched with reaches the Files pane
+  // through a cell's cwd, and the resolved one reaches it through `git worktree list`. The client
+  // gate is lexical, so knowing only one hides the Canvas entry for every deck under the other
+  // (Codex P1 iter-5 on #1934). The plugin still resolves against the canonical directory.
+  registeredRoot = { id: workspaceRootId, paths: [...new Set([deps.workspace, workspaceRootPath])] };
   ops = createMulmoScriptServerOps({
     storiesDir: path.resolve(deps.workspace, "artifacts", "stories"),
     extraRoots: { [workspaceRootId]: workspaceRootPath },

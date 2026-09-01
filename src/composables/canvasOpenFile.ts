@@ -39,7 +39,15 @@ const STORY_DIR = "artifacts/stories";
  *  mint cards naming a root nothing registered. Null where the config has not arrived yet, which
  *  reads as "only the workspace's own stories directory", i.e. exactly the pre-#1933 behaviour. */
 export interface StoriesRoots {
-  workspace: string | null;
+  /** Every spelling this workspace is known by — the one the user launched with AND the resolved
+   *  one, because BOTH reach the Files pane. A cell opened from the launcher carries the spelling
+   *  the user typed; one opened in a git worktree carries the realpathed spelling `git worktree
+   *  list` reports. `dirPathKey` is lexical (a browser cannot realpath), so a gate that knew only
+   *  one of them hid the Canvas entry for every deck under the other (Codex P1 iter-5 on #1934).
+   *
+   *  Only a GATE: the server re-checks containment with a realpath when the card is built, so a
+   *  spelling accepted here that names something else still opens nothing. */
+  workspaces: readonly string[];
   rootId: string | null;
 }
 
@@ -111,8 +119,8 @@ export function absoluteUnder(cwd: string | null, relative: string): string {
  * lets through still yields no card.
  */
 export function storyWirePath(absolutePath: string, roots: StoriesRoots): StoryRef | null {
-  const { workspace, rootId } = roots;
-  if (!workspace) return null;
+  const { workspaces, rootId } = roots;
+  if (workspaces.length === 0) return null;
   const key = dirPathKey(absolutePath);
   if (!key.endsWith(".json")) return null;
   // The workspace's own stories directory FIRST, and it answers without a root. It sits INSIDE the
@@ -131,13 +139,22 @@ export function storyWirePath(absolutePath: string, roots: StoriesRoots): StoryR
     return keyed === "" || keyed.endsWith("/") ? keyed : `${keyed}/`;
   };
   const under = (prefix: string): string | null => (prefix !== "" && key.startsWith(prefix) ? key.slice(prefix.length) : null);
-  const inDefault = under(prefixOf(joinPath(workspace, STORY_DIR)));
+  /** The first spelling that contains the file, as its relative tail. The tail is the same
+   *  whichever spelling matched — they name one directory. */
+  const underAny = (dirOf: (workspace: string) => string): string | null => {
+    for (const workspace of workspaces) {
+      const tail = under(prefixOf(dirOf(workspace)));
+      if (tail) return tail;
+    }
+    return null;
+  };
+  const inDefault = underAny((workspace) => joinPath(workspace, STORY_DIR));
   if (inDefault) return { filePath: `stories/${inDefault}` };
   // Anywhere else under the workspace, which is the whole point: a deck kept beside the notes it
   // was written from. Needs the id this server registered — without it the subtree is unaddressable
   // and this answers null, which is what every caller did before the named root existed.
   if (!rootId) return null;
-  const inWorkspace = under(prefixOf(workspace));
+  const inWorkspace = underAny((workspace) => workspace);
   return inWorkspace ? { filePath: `stories/${inWorkspace}`, root: rootId } : null;
 }
 
@@ -146,7 +163,7 @@ export function storyWirePath(absolutePath: string, roots: StoriesRoots): StoryR
  *
  * `workspace` is only consulted for stories; markdown and html are judged wherever they live.
  */
-export const canOpenInCanvas = (path: string | null, roots: StoriesRoots = { workspace: null, rootId: null }): boolean =>
+export const canOpenInCanvas = (path: string | null, roots: StoriesRoots = { workspaces: [], rootId: null }): boolean =>
   path !== null && (canvasCardForFile(path) !== null || storyWirePath(path, roots) !== null);
 
 /**

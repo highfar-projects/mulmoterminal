@@ -96,7 +96,7 @@ const props = defineProps<{
   defaultCwd: string | null;
   /** The workspace subtree the mulmoScript plugin serves stories from (#1933), read from
    *  `/api/config`: the id a card carries, and the CANONICAL path to compare a file against. */
-  storiesRoot?: { id: string; path: string } | null;
+  storiesRoot?: { id: string; paths: string[] } | null;
   presets: CwdPreset[];
   // The saved directories could not be read — handed down so the launch form can say so.
   configUnavailable?: boolean;
@@ -465,10 +465,10 @@ const expandedCwd = computed(() => props.cells.find((c) => c.uid === props.expan
 
 // The pair every "can the Canvas show this file" question is decided against. Both halves come
 // from the server: the id because a card carries it, and the path because it is CANONICAL — the
-// browser compares lexically, so the raw `defaultCwd` would stop matching a workspace reached
-// through a symlink. Absent (config not in yet) reads as "no story anywhere", which is what every
-// caller did before the named root existed.
-const storiesRoots = computed<StoriesRoots>(() => ({ workspace: props.storiesRoot?.path ?? null, rootId: props.storiesRoot?.id ?? null }));
+// browser compares lexically and BOTH spellings of the workspace reach the file tree. Absent
+// (config not in yet) reads as "no story anywhere", which is what every caller did before the
+// named root existed.
+const storiesRoots = computed<StoriesRoots>(() => ({ workspaces: props.storiesRoot?.paths ?? [], rootId: props.storiesRoot?.id ?? null }));
 
 // The enlarged cell's session — what Canvas and Tools read. Null for a cell with no session
 // yet (a launcher, a command cell), which both panes already render as empty.
