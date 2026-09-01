@@ -31,6 +31,7 @@ import type { SaveMulmoScriptArgs } from "@mulmoclaude/mulmoscript-plugin";
 import { artifactsFileOps } from "./artifacts.js";
 import { createFileOps } from "./fileOps.js";
 import { storiesRootId } from "./storiesRoot.js";
+import { canonicalPath } from "../infra/canonical-path.js";
 import { isRecord } from "../../common/isRecord.js";
 
 /** Pubsub channel the extracted View subscribes to for generation progress —
@@ -47,6 +48,14 @@ interface PubSubLike {
 }
 
 let ops: MulmoScriptServerOps | null = null;
+/** The named stories root this server actually registered with the plugin, or null before boot. */
+let registeredRoot: { id: string; path: string } | null = null;
+
+/** What the browser is told about the named stories root: the id a Canvas card must carry, and the
+ *  canonical path it compares a file against. The REGISTERED value, never re-derived — see
+ *  initMulmoScriptBackend. Null until the backend is initialised, which reads as "no named root"
+ *  and is exactly the behaviour before #1933. */
+export const registeredStoriesRoot = (): { id: string; path: string } | null => registeredRoot;
 let dispatchHandler: MulmoScriptDispatchHandler | null = null;
 
 // undefined = probe not finished yet; the ops treat that as "assume available"
@@ -88,13 +97,20 @@ export function initMulmoScriptBackend(deps: { workspace: string; pubsub: PubSub
   // directory (receptron/mulmoclaude#3014). The plugin strips the `stories/` segment before it
   // reaches this FileOps, so `stories/myrepo/decks/talk.json` reads AND writes
   // `<workspace>/myrepo/decks/talk.json` — one addressing rule for both sides (#3020).
-  const workspaceRootId = storiesRootId(deps.workspace);
+  // Canonicalised ONCE, and the id derived from that same value: `storiesRootId` realpaths, so
+  // recomputing it later (a config request, say) can answer differently the moment a workspace
+  // symlink is retargeted — and an id the plugin never registered is a `bad_request` on every card
+  // that carries it (CodeRabbit on #1934). What was registered is what `registeredStoriesRoot`
+  // hands the browser.
+  const workspaceRootPath = canonicalPath(deps.workspace);
+  const workspaceRootId = storiesRootId(workspaceRootPath);
+  registeredRoot = { id: workspaceRootId, path: workspaceRootPath };
   ops = createMulmoScriptServerOps({
     storiesDir: path.resolve(deps.workspace, "artifacts", "stories"),
-    extraRoots: { [workspaceRootId]: deps.workspace },
+    extraRoots: { [workspaceRootId]: workspaceRootPath },
     // Registration is the containment boundary and it is checked FIRST, so answering here for an
     // id we never registered would still not widen what is addressable. The guard is the `===`.
-    artifactsFor: (root) => (root === workspaceRootId ? createFileOps(() => deps.workspace, "mulmo-stories-root") : null),
+    artifactsFor: (root) => (root === workspaceRootId ? createFileOps(() => workspaceRootPath, "mulmo-stories-root") : null),
     // This host keeps no per-session generation state: `onGenerationEvent` below drops
     // `chatSessionId` and publishes to pubsub, and nothing keys pending work on
     // `(kind, filePath, key)`. So two roots cannot collapse into one entry here, and the plugin's
