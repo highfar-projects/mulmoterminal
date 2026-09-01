@@ -18,7 +18,7 @@ const textOf = (id: string, ...args: Parameters<typeof filesRowActions>) => {
 // offer what that button would refuse.
 describe("filesRowActions — the Canvas entry", () => {
   const WORKSPACE = "/ws";
-  const inProject = { cwd: "/proj", terminal: { cwd: "/proj" }, canvas: { workspace: WORKSPACE } };
+  const inProject = { cwd: "/proj", terminal: { cwd: "/proj" }, canvas: { roots: { workspaces: [WORKSPACE], rootId: null } } };
 
   it("offers it on a file a plugin can render, before the inserts", () => {
     expect(ids({ ...inProject, pathRel: "notes/talk.md" })).toEqual(["open-canvas", "insert-relative", "insert-absolute"]);
@@ -40,7 +40,7 @@ describe("filesRowActions — the Canvas entry", () => {
   // against that one root, so a project's own copy is a different file it would not read
   // (receptron/mulmoclaude#3014).
   it("offers it on a story in the workspace, and not on one inside a project", () => {
-    const inWorkspace = { cwd: WORKSPACE, terminal: { cwd: WORKSPACE }, canvas: { workspace: WORKSPACE } };
+    const inWorkspace = { cwd: WORKSPACE, terminal: { cwd: WORKSPACE }, canvas: { roots: { workspaces: [WORKSPACE], rootId: null } } };
     expect(ids({ ...inWorkspace, pathRel: "artifacts/stories/deck.json" })[0]).toBe("open-canvas");
     expect(ids({ ...inProject, pathRel: "artifacts/stories/deck.json" })).toEqual(["insert-relative", "insert-absolute"]);
   });

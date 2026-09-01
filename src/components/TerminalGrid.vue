@@ -55,7 +55,7 @@ import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
 import { isRecord } from "../../common/isRecord";
 import { asTerminalAgent, type SessionAgent } from "../../common/sessionAgent";
 import type { AgentReport } from "./gridCell";
-import { buildCanvasCard, seedCanvasCard, hasStoredCard, absoluteUnder } from "../composables/canvasOpenFile";
+import { buildCanvasCard, seedCanvasCard, hasStoredCard, absoluteUnder, type StoriesRoots } from "../composables/canvasOpenFile";
 import { jsonBody } from "../jsonBody";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
@@ -94,6 +94,9 @@ const props = defineProps<{
   // A text row per cell for the cockpit list shown beside the expanded terminal.
   listRows: CockpitRow[];
   defaultCwd: string | null;
+  /** The workspace subtree the mulmoScript plugin serves stories from (#1933), read from
+   *  `/api/config`: the id a card carries, and the CANONICAL path to compare a file against. */
+  storiesRoot?: { id: string; paths: string[] } | null;
   presets: CwdPreset[];
   // The saved directories could not be read — handed down so the launch form can say so.
   configUnavailable?: boolean;
@@ -423,7 +426,7 @@ async function openFileInCanvas(path: string): Promise<void> {
   const sessionId = expandedSessionId.value;
   if (uid === null || !sessionId) return;
   // The pane's rows are relative to the CELL's cwd; the plugins resolve against the workspace.
-  const card = await buildCanvasCard(absoluteUnder(paneCwd.value, path), props.defaultCwd);
+  const card = await buildCanvasCard(absoluteUnder(paneCwd.value, path), storiesRoots.value);
   if (!card) return; // the button is only shown for files that have one; a stale click is a no-op
   if (!(await seedCanvasCard(sessionId, card))) return;
   // Re-asked after the await, like every other late reply here. openCanvasFor already refuses to
@@ -459,6 +462,13 @@ async function toggleRightPane(pane: RightPane, uid: number | null = props.expan
 // The enlarged cell's project dir — what the pane browses. A cell that hasn't reported one yet
 // (a launcher, a session still starting) falls back to the grid's default.
 const expandedCwd = computed(() => props.cells.find((c) => c.uid === props.expandedUid)?.cwd ?? props.defaultCwd);
+
+// The pair every "can the Canvas show this file" question is decided against. Both halves come
+// from the server: the id because a card carries it, and the path because it is CANONICAL — the
+// browser compares lexically and BOTH spellings of the workspace reach the file tree. Absent
+// (config not in yet) reads as "no story anywhere", which is what every caller did before the
+// named root existed.
+const storiesRoots = computed<StoriesRoots>(() => ({ workspaces: props.storiesRoot?.paths ?? [], rootId: props.storiesRoot?.id ?? null }));
 
 // The enlarged cell's session — what Canvas and Tools read. Null for a cell with no session
 // yet (a launcher, a command cell), which both panes already render as empty.
@@ -1305,7 +1315,7 @@ watch(
           :canvas-target="expandedUid !== null"
           :insert-target="expandedTakesInput"
           :insert-target-cwd="expandedCwd"
-          :workspace="defaultCwd"
+          :stories-roots="storiesRoots"
           :style="{ flex: `0 0 ${paneWidth}px` }"
           class="border-l border-border bg-deep"
           @close="setFilesOpen(false)"

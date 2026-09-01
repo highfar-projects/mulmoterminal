@@ -29,6 +29,9 @@ import {
 } from "@mulmoclaude/mulmoscript-plugin/server";
 import type { SaveMulmoScriptArgs } from "@mulmoclaude/mulmoscript-plugin";
 import { artifactsFileOps } from "./artifacts.js";
+import { createFileOps } from "./fileOps.js";
+import { storiesRootId } from "./storiesRoot.js";
+import { canonicalPath } from "../infra/canonical-path.js";
 import { isRecord } from "../../common/isRecord.js";
 
 /** Pubsub channel the extracted View subscribes to for generation progress —
@@ -45,6 +48,14 @@ interface PubSubLike {
 }
 
 let ops: MulmoScriptServerOps | null = null;
+/** The named stories root this server actually registered with the plugin, or null before boot. */
+let registeredRoot: { id: string; paths: string[] } | null = null;
+
+/** What the browser is told about the named stories root: the id a Canvas card must carry, and
+ *  every spelling of the workspace it may compare a file against. The REGISTERED value, never
+ *  re-derived — see initMulmoScriptBackend. Null until the backend is initialised, which reads as
+ *  "no named root" and is exactly the behaviour before #1933. */
+export const registeredStoriesRoot = (): { id: string; paths: readonly string[] } | null => registeredRoot;
 let dispatchHandler: MulmoScriptDispatchHandler | null = null;
 
 // undefined = probe not finished yet; the ops treat that as "assume available"
@@ -80,8 +91,36 @@ async function writeFileAtomic(absolutePath: string, data: string | Uint8Array):
  *  then. `isFfmpegAvailable` is overridable for tests; the default is the
  *  async PATH probe above. */
 export function initMulmoScriptBackend(deps: { workspace: string; pubsub: PubSubLike | null; isFfmpegAvailable?: () => boolean | undefined }): void {
+  // One named root: the WORKSPACE — which the launcher sets to the directory the user ran the
+  // command in. A root is a SUBTREE, so this one covers every repository beneath it, and a deck
+  // can live next to the notes it was written from instead of in the workspace's own stories
+  // directory (receptron/mulmoclaude#3014). The plugin strips the `stories/` segment before it
+  // reaches this FileOps, so `stories/myrepo/decks/talk.json` reads AND writes
+  // `<workspace>/myrepo/decks/talk.json` — one addressing rule for both sides (#3020).
+  // Canonicalised ONCE, and the id derived from that same value: `storiesRootId` realpaths, so
+  // recomputing it later (a config request, say) can answer differently the moment a workspace
+  // symlink is retargeted — and an id the plugin never registered is a `bad_request` on every card
+  // that carries it (CodeRabbit on #1934). What was registered is what `registeredStoriesRoot`
+  // hands the browser.
+  const workspaceRootPath = canonicalPath(deps.workspace);
+  const workspaceRootId = storiesRootId(workspaceRootPath);
+  // BOTH spellings travel to the browser: the one the user launched with reaches the Files pane
+  // through a cell's cwd, and the resolved one reaches it through `git worktree list`. The client
+  // gate is lexical, so knowing only one hides the Canvas entry for every deck under the other
+  // (Codex P1 iter-5 on #1934). The plugin still resolves against the canonical directory.
+  registeredRoot = { id: workspaceRootId, paths: [...new Set([deps.workspace, workspaceRootPath])] };
   ops = createMulmoScriptServerOps({
     storiesDir: path.resolve(deps.workspace, "artifacts", "stories"),
+    extraRoots: { [workspaceRootId]: workspaceRootPath },
+    // Registration is the containment boundary and it is checked FIRST, so answering here for an
+    // id we never registered would still not widen what is addressable. The guard is the `===`.
+    artifactsFor: (root) => (root === workspaceRootId ? createFileOps(() => workspaceRootPath, "mulmo-stories-root") : null),
+    // This host keeps no per-session generation state: `onGenerationEvent` below drops
+    // `chatSessionId` and publishes to pubsub, and nothing keys pending work on
+    // `(kind, filePath, key)`. So two roots cannot collapse into one entry here, and the plugin's
+    // fail-closed default — written for MulmoClaude's session store — would refuse generation in a
+    // named root for a danger this host does not have.
+    rootScopedGenerationState: true,
     artifacts: artifactsFileOps,
     writeFileAtomic,
     isFfmpegAvailable: deps.isFfmpegAvailable ?? (() => ffmpegAvailable),
@@ -213,6 +252,42 @@ async function handleToolCall(body: Record<string, unknown>, res: Response, inst
   });
 }
 
+/**
+ * Why the browser's own containment check cannot be the authority, and what stands in for it.
+ *
+ * The client decides whether to OFFER the Canvas from a lexical prefix test — it has no realpath.
+ * The named root, meanwhile, is the directory this server resolved at boot and the plugin caches
+ * that resolution. Those two can part company while the server runs: retarget the workspace
+ * symlink and the file tree lists the NEW directory while the plugin still serves the old one, so
+ * `stories/decks/talk.json` names one file on screen and a DIFFERENT file with the same relative
+ * path on disk. Opening the wrong deck without saying so is the failure this whole feature has
+ * been avoiding (Codex P1 iter-6 on #1934).
+ *
+ * So the browser sends the absolute path it actually saw, and the authority — the side that CAN
+ * realpath — checks that the wire path still names that same file. A mismatch is refused with a
+ * sentence rather than answered with the other file. `expectPath` is optional: a request without
+ * it (the agent's own tool call) is unaffected.
+ */
+async function wirePathMismatch(body: Record<string, unknown>, instance: MulmoScriptServerOps): Promise<string | null> {
+  const expectPath = body.expectPath;
+  const filePath = body.filePath;
+  if (typeof expectPath !== "string" || typeof filePath !== "string") return null;
+  const root = typeof body.root === "string" ? body.root : undefined;
+  const resolved = instance.resolveStory(filePath, root);
+  if (!resolved.ok) return resolved.error;
+  const [served, seen] = await Promise.all([realpathOrNull(resolved.absolutePath), realpathOrNull(expectPath)]);
+  if (served !== null && seen !== null && served === seen) return null;
+  return "that deck is not the file this server serves under that path — the workspace may have moved since MulmoTerminal started; restart it to pick up the new one";
+}
+
+const realpathOrNull = async (p: string): Promise<string | null> => {
+  try {
+    return await fs.realpath(p);
+  } catch {
+    return null;
+  }
+};
+
 /** Intercept POST /api/plugin/presentMulmoScript for both the View's dispatch
  *  (`kind` present → the package's kind router) and the tool-call (no `kind`).
  *  Handles everything itself — MUST be registered BEFORE mountAllRoutes so the
@@ -232,6 +307,11 @@ export function mountMulmoScriptDispatchRoute(app: Express): void {
     }
     const body: Record<string, unknown> = isRecord(req.body) ? req.body : {};
     try {
+      const mismatch = await wirePathMismatch(body, ops);
+      if (mismatch) {
+        res.status(400).json({ ok: false, code: "bad_request", error: mismatch });
+        return;
+      }
       if (typeof body.kind === "string") {
         res.json(await dispatchHandler(body));
       } else {

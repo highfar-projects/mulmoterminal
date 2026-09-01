@@ -44,6 +44,22 @@ describe("filePathIdentity", () => {
     expect(filePathIdentity({ data: { filePath: "stories/demo.json", script: {} } })).toBe("stories/demo.json");
   });
 
+  // #3014's third collision point, closed here: the workspace subtree is a named stories root
+  // (#1933), so one wire path can name two files. Folding on the path alone put a repository's
+  // deck and the workspace's into ONE card.
+  it("tells two roots' identically-named decks apart", () => {
+    const inRepo = filePathIdentity({ data: { filePath: "stories/deck.json", root: "abc123", script: {} } });
+    const inWorkspace = filePathIdentity({ data: { filePath: "stories/deck.json", script: {} } });
+    expect(inRepo).not.toBe(inWorkspace);
+    expect(filePathIdentity({ data: { filePath: "stories/deck.json", root: "def456", script: {} } })).not.toBe(inRepo);
+  });
+
+  // A card written before roots existed carries no `root`, and must keep folding against the
+  // default-root card the agent writes today — otherwise every pre-#1933 card doubles.
+  it("folds a rootless payload the way it always did", () => {
+    expect(filePathIdentity({ data: { filePath: "stories/demo.json" } })).toBe(filePathIdentity({ data: { filePath: "stories/demo.json", script: {} } }));
+  });
+
   it("gives two different artifacts two different identities", () => {
     const one = filePathIdentity({ data: { filePath: "artifacts/html/a.html" } });
     const two = filePathIdentity({ data: { filePath: "artifacts/html/b.html" } });

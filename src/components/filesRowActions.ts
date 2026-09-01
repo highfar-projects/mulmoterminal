@@ -5,7 +5,7 @@
 // Pure, and separate from the pane, because every rule here is about a path resolving somewhere
 // OTHER than where it was clicked — which is precisely what a DOM test would not catch.
 import { toInsertText } from "./dropPaths";
-import { absoluteUnder, canOpenInCanvas } from "../composables/canvasOpenFile";
+import { absoluteUnder, canOpenInCanvas, type StoriesRoots } from "../composables/canvasOpenFile";
 
 interface RowActionChrome {
   label: string;
@@ -40,8 +40,8 @@ export interface FilesRowTarget {
   /** Where a Canvas could be opened, or null where there is no cell to put one beside. Separate
    *  from `terminal` because the pane keeps its own two props for these: it can trail a cell after
    *  a declined re-root, so "a terminal to insert into" and "a cell to draw beside" genuinely part
-   *  company. `workspace` is consulted for stories only (see canOpenInCanvas). */
-  canvas: { workspace: string | null } | null;
+   *  company. `roots` is consulted for stories only (see canOpenInCanvas). */
+  canvas: { roots: StoriesRoots } | null;
 }
 
 // The same icon for both, and it is the one the header's "Insert a file path" button already
@@ -78,7 +78,7 @@ export function filesRowActions({ pathRel, cwd, terminal, canvas }: FilesRowTarg
   // one, reporting success for a file that then renders nothing (canvasOpenFile.ts says so at
   // length). Which is also why a mulmoScript inside a PROJECT is absent — the plugin resolves
   // stories against the workspace alone (receptron/mulmoclaude#3014).
-  if (canvas && canOpenInCanvas(absoluteUnder(cwd, pathRel), canvas.workspace)) {
+  if (canvas && canOpenInCanvas(absoluteUnder(cwd, pathRel), canvas.roots)) {
     actions.push({ id: "open-canvas", label: "Open in the Canvas", icon: CANVAS_ICON, pathRel });
   }
   if (terminal === null) return actions;

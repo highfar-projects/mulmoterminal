@@ -32,6 +32,32 @@ export interface CanvasCard {
  *  the artifacts area is its only file capability, and `stories/` is its wire prefix. */
 const STORY_DIR = "artifacts/stories";
 
+/** Where stories can live, as this server serves them.
+ *
+ *  `rootId` is the id the plugin knows the WORKSPACE SUBTREE by — served on `/api/config`, never
+ *  re-derived here: a card carries it, and a browser rule that drifted from the server's would
+ *  mint cards naming a root nothing registered. Null where the config has not arrived yet, which
+ *  reads as "only the workspace's own stories directory", i.e. exactly the pre-#1933 behaviour. */
+export interface StoriesRoots {
+  /** Every spelling this workspace is known by — the one the user launched with AND the resolved
+   *  one, because BOTH reach the Files pane. A cell opened from the launcher carries the spelling
+   *  the user typed; one opened in a git worktree carries the realpathed spelling `git worktree
+   *  list` reports. `dirPathKey` is lexical (a browser cannot realpath), so a gate that knew only
+   *  one of them hid the Canvas entry for every deck under the other (Codex P1 iter-5 on #1934).
+   *
+   *  Only a GATE: the server re-checks containment with a realpath when the card is built, so a
+   *  spelling accepted here that names something else still opens nothing. */
+  workspaces: readonly string[];
+  rootId: string | null;
+}
+
+/** A story as the wire addresses it: the path, plus which root it is relative to (absent = the
+ *  workspace's own `artifacts/stories`, the only one before #1933). */
+export interface StoryRef {
+  filePath: string;
+  root?: string;
+}
+
 /**
  * The Canvas card that renders `path`, or null when no plugin here can show it.
  *
@@ -92,13 +118,44 @@ export function absoluteUnder(cwd: string | null, relative: string): string {
  * the reopen below runs the plugin's own guard and a realpath check server-side, so a path this
  * lets through still yields no card.
  */
-export function storyWirePath(absolutePath: string, workspace: string | null): string | null {
-  if (!workspace) return null;
-  const root = dirPathKey(`${workspace}/${STORY_DIR}`);
+export function storyWirePath(absolutePath: string, roots: StoriesRoots): StoryRef | null {
+  const { workspaces, rootId } = roots;
+  if (workspaces.length === 0) return null;
   const key = dirPathKey(absolutePath);
-  if (!root || !key.startsWith(`${root}/`)) return null;
-  const relative = key.slice(root.length + 1);
-  return relative.endsWith(".json") ? `stories/${relative}` : null;
+  if (!key.endsWith(".json")) return null;
+  // The workspace's own stories directory FIRST, and it answers without a root. It sits INSIDE the
+  // named root's subtree, so both could name the same file — as `stories/x.json` and as
+  // `stories/artifacts/stories/x.json` — and the two spellings are two identities, hence two cards
+  // for one deck. Deciding the narrower one first means only one spelling is ever minted.
+  // ONE rule for what "under this directory" means, because two goes wrong twice: `dirPathKey`
+  // TRIMS its input (a trailing space in the last component is eaten — Codex P2) and answers a root
+  // directory as `/`, `C:/` or `//server/share`, which already carry the separator (Codex P1). So a
+  // prefix is keyed from a spelling that always ENDS in one — the trailing separator protects the
+  // space, and the key that comes back is normalised into exactly one.
+  const endsWithSeparator = (dir: string): boolean => /[/\\]$/.test(dir);
+  const joinPath = (dir: string, rel: string): string => (endsWithSeparator(dir) ? `${dir}${rel}` : `${dir}/${rel}`);
+  const prefixOf = (dir: string): string => {
+    const keyed = dirPathKey(endsWithSeparator(dir) ? dir : `${dir}/`);
+    return keyed === "" || keyed.endsWith("/") ? keyed : `${keyed}/`;
+  };
+  const under = (prefix: string): string | null => (prefix !== "" && key.startsWith(prefix) ? key.slice(prefix.length) : null);
+  /** The first spelling that contains the file, as its relative tail. The tail is the same
+   *  whichever spelling matched — they name one directory. */
+  const underAny = (dirOf: (workspace: string) => string): string | null => {
+    for (const workspace of workspaces) {
+      const tail = under(prefixOf(dirOf(workspace)));
+      if (tail) return tail;
+    }
+    return null;
+  };
+  const inDefault = underAny((workspace) => joinPath(workspace, STORY_DIR));
+  if (inDefault) return { filePath: `stories/${inDefault}` };
+  // Anywhere else under the workspace, which is the whole point: a deck kept beside the notes it
+  // was written from. Needs the id this server registered — without it the subtree is unaddressable
+  // and this answers null, which is what every caller did before the named root existed.
+  if (!rootId) return null;
+  const inWorkspace = underAny((workspace) => workspace);
+  return inWorkspace ? { filePath: `stories/${inWorkspace}`, root: rootId } : null;
 }
 
 /**
@@ -106,8 +163,8 @@ export function storyWirePath(absolutePath: string, workspace: string | null): s
  *
  * `workspace` is only consulted for stories; markdown and html are judged wherever they live.
  */
-export const canOpenInCanvas = (path: string | null, workspace: string | null = null): boolean =>
-  path !== null && (canvasCardForFile(path) !== null || storyWirePath(path, workspace) !== null);
+export const canOpenInCanvas = (path: string | null, roots: StoriesRoots = { workspaces: [], rootId: null }): boolean =>
+  path !== null && (canvasCardForFile(path) !== null || storyWirePath(path, roots) !== null);
 
 /**
  * Longer than the shared default because the reopen reads and schema-completes a whole script,
@@ -127,11 +184,15 @@ const REQUEST_TIMEOUT_MS = 10_000;
  * The route narrates a missing or refused file as a 200 with no `data` (its spec pins this), so
  * absence of `data` — not the status — is what "cannot open this" looks like.
  */
-async function reopenStory(wirePath: string): Promise<CanvasCard | null> {
+async function reopenStory(ref: StoryRef, expectPath: string): Promise<CanvasCard | null> {
   try {
     const res = await fetchWithTimeout(
       "/api/plugin/presentMulmoScript",
-      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ filePath: wirePath }) },
+      // `kind: "save"` with a `filePath` and no `script` is the package's REOPEN — and it is the
+      // only shape that carries a root. The kind-less body is the AGENT's tool call, which is
+      // deliberately root-blind: `root` is not in the tool schema, so a model cannot name one
+      // (receptron/mulmoclaude#3015). A browser asking for a deck it can see is not that caller.
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind: "save", ...ref, expectPath }) },
       REQUEST_TIMEOUT_MS,
     );
     if (!res.ok) {
@@ -139,8 +200,15 @@ async function reopenStory(wirePath: string): Promise<CanvasCard | null> {
       return null;
     }
     const body: unknown = await res.json();
-    if (!isRecord(body) || !isRecord(body.data)) return null;
-    return { toolName: STORY_TOOL, data: body.data };
+    // The dispatch answers FLAT — `{ok, script, filePath, root}` — where the agent's kind-less tool
+    // call answers an envelope `{data}`. Measured, and the difference is not cosmetic: reading
+    // `body.data` here built no card at all, so the row's menu entry appeared and clicking it did
+    // nothing. The card is assembled from the fields the View needs (`script` + `filePath`, the
+    // shape the tool path's `data` has), plus the root the response echoes — which is what keeps
+    // two roots' identically-named decks on two cards (canvasIdentity.filePathIdentity).
+    if (!isRecord(body) || body.ok !== true || !isRecord(body.script) || typeof body.filePath !== "string") return null;
+    const root = typeof body.root === "string" ? { root: body.root } : {};
+    return { toolName: STORY_TOOL, data: { script: body.script, filePath: body.filePath, ...root } };
   } catch (err) {
     console.error("[canvasOpenFile] reopen failed", err);
     return null;
@@ -154,11 +222,15 @@ async function reopenStory(wirePath: string): Promise<CanvasCard | null> {
  * story needs the round trip. Callers use THIS and {@link canOpenInCanvas} with the same arguments
  * — a button gated on one path while the card is built from another is a button that does nothing.
  */
-export async function buildCanvasCard(absolutePath: string, workspace: string | null): Promise<CanvasCard | null> {
+export async function buildCanvasCard(absolutePath: string, roots: StoriesRoots): Promise<CanvasCard | null> {
   const direct = canvasCardForFile(absolutePath);
   if (direct) return direct;
-  const wirePath = storyWirePath(absolutePath, workspace);
-  return wirePath ? await reopenStory(wirePath) : null;
+  const ref = storyWirePath(absolutePath, roots);
+  // The absolute path travels with the wire path so the SERVER can check the two still name one
+  // file. This gate is lexical and cannot realpath; the workspace it compares against was resolved
+  // at boot, so the two can part company while the server runs (#1934). Sending what the pane
+  // actually showed turns "a different deck opens" into a refusal with a sentence.
+  return ref ? await reopenStory(ref, absolutePath) : null;
 }
 
 /**
