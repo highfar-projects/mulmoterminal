@@ -119,15 +119,26 @@ export function storyWirePath(absolutePath: string, roots: StoriesRoots): StoryR
   // named root's subtree, so both could name the same file — as `stories/x.json` and as
   // `stories/artifacts/stories/x.json` — and the two spellings are two identities, hence two cards
   // for one deck. Deciding the narrower one first means only one spelling is ever minted.
-  const defaultRoot = dirPathKey(`${workspace}/${STORY_DIR}`);
-  const under = (root: string | null): string | null => (root && key.startsWith(`${root}/`) ? key.slice(root.length + 1) : null);
-  const inDefault = under(defaultRoot);
+  // Built from the KEY, never by joining the raw path: `dirPathKey` answers a root directory as
+  // `/`, `C:/` or `//server/share`, and the first two already end with the separator. Joining
+  // another one made `//artifacts/stories`, which reads back as a UNC share root — so on a server
+  // launched at the filesystem root NOTHING was a story, the workspace's own directory included
+  // (Codex P1 on #1934; the default-root half of it predates this PR).
+  const wsKey = dirPathKey(workspace);
+  const withSeparator = (rootKey: string): string => (rootKey.endsWith("/") ? rootKey : `${rootKey}/`);
+  const joinKey = (rootKey: string, rel: string): string => `${withSeparator(rootKey)}${rel}`;
+  const under = (rootKey: string | null): string | null => {
+    if (!rootKey) return null;
+    const base = joinKey(rootKey, "");
+    return key.startsWith(base) ? key.slice(base.length) : null;
+  };
+  const inDefault = under(wsKey && joinKey(wsKey, STORY_DIR));
   if (inDefault) return { filePath: `stories/${inDefault}` };
   // Anywhere else under the workspace, which is the whole point: a deck kept beside the notes it
   // was written from. Needs the id this server registered — without it the subtree is unaddressable
   // and this answers null, which is what every caller did before the named root existed.
   if (!rootId) return null;
-  const inWorkspace = under(dirPathKey(workspace));
+  const inWorkspace = under(wsKey);
   return inWorkspace ? { filePath: `stories/${inWorkspace}`, root: rootId } : null;
 }
 

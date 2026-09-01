@@ -330,6 +330,15 @@ function mountCwdPresetRoutes(app: Express, onCwdPresetsChanged?: CwdPresetsChan
   }
 }
 
+/** Where the mulmoScript plugin serves stories from, for the browser.
+ *
+ *  Both halves are facts about THIS server that a browser cannot work out — the same reason
+ *  `worktreesRoot` rides along on the same response. The `id` is what a Canvas card carries and
+ *  what the plugin registered the subtree under; the `path` is CANONICAL because the browser can
+ *  only compare lexically (`dirPathKey`), so the raw `cwd` would stop matching the paths the file
+ *  tree reports the moment the workspace was reached through a symlink (CodeRabbit on #1934). */
+const storiesRootFor = (claudeCwd: string): { id: string; path: string } => ({ id: storiesRootId(claudeCwd), path: canonicalPath(claudeCwd) });
+
 export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsChanged?: CwdPresetsChanged): void {
   // The live config as the API exposes it, so a client (e.g. a settings UI) can read back
   // everything it can write — buttons/chips included — and round-trip it.
@@ -349,7 +358,7 @@ export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsC
     // server that the browser cannot work out. It is the id the mulmoScript plugin knows the
     // workspace subtree by (backends/storiesRoot.ts), and a card carries it — so the browser needs
     // the exact value this server registered, not a rule it re-derives and could drift on.
-    res.json({ ...configResponse(), home: os.homedir(), worktreesRoot: canonicalPath(worktreesRootDir()), storiesRootId: storiesRootId(claudeCwd) });
+    res.json({ ...configResponse(), home: os.homedir(), worktreesRoot: canonicalPath(worktreesRootDir()), storiesRoot: storiesRootFor(claudeCwd) });
   });
 
   // The update notice for the header's "update available" badge, from the check the server runs

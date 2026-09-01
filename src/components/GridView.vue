@@ -464,7 +464,7 @@ onMounted(() => (offNewTerminal = registerNewTerminalHandler(openNewTerminal)));
 onBeforeUnmount(detachNewTerminal);
 
 // Server config: the default workspace dir + the auto-recorded dir presets + sound.
-const { defaultCwd, storiesRootId, home, presets, configUnavailable, launchers, customAgents, loadConfig, recordPreset, removePreset } = useAppConfig();
+const { defaultCwd, storiesRoot, home, presets, configUnavailable, launchers, customAgents, loadConfig, recordPreset, removePreset } = useAppConfig();
 const showSettings = ref(false);
 onMounted(loadConfig);
 
@@ -890,7 +890,7 @@ onBeforeUnmount(detachSpawnedChat);
       :expanded-uid="expandedUid"
       :list-rows="listRows"
       :default-cwd="defaultCwd"
-      :stories-root-id="storiesRootId"
+      :stories-root="storiesRoot"
       :presets="presets"
       :config-unavailable="configUnavailable"
       :launchers="launchers"
@@ -925,7 +925,7 @@ onBeforeUnmount(detachSpawnedChat);
       :key="launchPanelOrigin ?? -1"
       :initial-dir="launchPanelDir"
       :default-cwd="defaultCwd"
-      :stories-root-id="storiesRootId"
+      :stories-root="storiesRoot"
       :presets="presets"
       :config-unavailable="configUnavailable"
       :launchers="launchers"

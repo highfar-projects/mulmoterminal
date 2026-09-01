@@ -138,6 +138,29 @@ describe("storyWirePath — the workspace subtree", () => {
     expect(storyWirePath(`${WS}/myrepo/decks/talk.json`, { workspace: WS, rootId: null })).toBeNull();
   });
 
+  // A workspace that IS a root directory: `dirPathKey` answers `/`, `C:/` or `//server/share`, and
+  // the first two already carry the separator. Joining another one made `//artifacts/stories` —
+  // read back as a UNC share root — so nothing under such a workspace was a story at all
+  // (Codex P1 on #1934). The default-root half of that predates the named root.
+  it("recognises a workspace that is a filesystem root", () => {
+    expect(storyWirePath("/myrepo/decks/talk.json", { workspace: "/", rootId: "abc123" })).toEqual({
+      filePath: "stories/myrepo/decks/talk.json",
+      root: "abc123",
+    });
+    expect(storyWirePath("/artifacts/stories/x.json", { workspace: "/", rootId: "abc123" })).toEqual({ filePath: "stories/x.json" });
+  });
+
+  it("recognises a Windows drive root and a UNC share root", () => {
+    expect(storyWirePath("C:\\myrepo\\decks\\talk.json", { workspace: "C:\\", rootId: "abc123" })).toEqual({
+      filePath: "stories/myrepo/decks/talk.json",
+      root: "abc123",
+    });
+    expect(storyWirePath("//server/share/myrepo/talk.json", { workspace: "//server/share", rootId: "abc123" })).toEqual({
+      filePath: "stories/myrepo/talk.json",
+      root: "abc123",
+    });
+  });
+
   it("stops at the workspace boundary", () => {
     expect(storyWirePath("/work/elsewhere/deck.json", ROOTS)).toBeNull();
   });

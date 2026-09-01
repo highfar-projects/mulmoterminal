@@ -94,9 +94,9 @@ const props = defineProps<{
   // A text row per cell for the cockpit list shown beside the expanded terminal.
   listRows: CockpitRow[];
   defaultCwd: string | null;
-  /** The id the mulmoScript plugin knows the workspace subtree by (#1933) — read from
-   *  `/api/config`, so a deck kept beside its notes can be addressed at all. */
-  storiesRootId?: string | null;
+  /** The workspace subtree the mulmoScript plugin serves stories from (#1933), read from
+   *  `/api/config`: the id a card carries, and the CANONICAL path to compare a file against. */
+  storiesRoot?: { id: string; path: string } | null;
   presets: CwdPreset[];
   // The saved directories could not be read — handed down so the launch form can say so.
   configUnavailable?: boolean;
@@ -463,10 +463,12 @@ async function toggleRightPane(pane: RightPane, uid: number | null = props.expan
 // (a launcher, a session still starting) falls back to the grid's default.
 const expandedCwd = computed(() => props.cells.find((c) => c.uid === props.expandedUid)?.cwd ?? props.defaultCwd);
 
-// The pair every "can the Canvas show this file" question is decided against: the workspace, and
-// the id its subtree is registered under. Together, because a path without the id addresses only
-// the workspace's own stories directory (#1933).
-const storiesRoots = computed<StoriesRoots>(() => ({ workspace: props.defaultCwd, rootId: props.storiesRootId ?? null }));
+// The pair every "can the Canvas show this file" question is decided against. Both halves come
+// from the server: the id because a card carries it, and the path because it is CANONICAL — the
+// browser compares lexically, so the raw `defaultCwd` would stop matching a workspace reached
+// through a symlink. Absent (config not in yet) reads as "no story anywhere", which is what every
+// caller did before the named root existed.
+const storiesRoots = computed<StoriesRoots>(() => ({ workspace: props.storiesRoot?.path ?? null, rootId: props.storiesRoot?.id ?? null }));
 
 // The enlarged cell's session — what Canvas and Tools read. Null for a cell with no session
 // yet (a launcher, a command cell), which both panes already render as empty.
