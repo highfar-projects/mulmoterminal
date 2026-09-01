@@ -54,6 +54,11 @@ global とプロジェクトへの分け方、`!isGitRepo` 用、worktree 用の
   （`dirConfigJsonSchema()`）にも通した。
 - **回帰させないよう CI に載せた。** `test/server/config/doc-button-samples.spec.ts` の `FILES` に
   `header.md` × 2 と `header-reference.md` × 2 を追加（従来は config.md と SKILL.md だけだった）。
+  さらに、`buttons` しか見ていなかった検証を `chips`（`sanitizeChips` が 1 件も落とさない）と
+  `skills`（`dirSkillsField` が trim / dedup / cap で書き換えない）にも広げた —— レシピ集は
+  chips だけ・skills だけのサンプルを含むので、従来の抽出条件では素通りしていた（Codex 指摘）。
+  3 つのアサーションはミューテーションで実際に落ちることを確認済み（`git` → `gti`、
+  slug の重複、末尾コンマの JSON）。
 - **`when` / `substitute` の記述はすべて実装で実行して確かめた**（`agent == "claude"` は false、
   `repo !=` と `repo !=` は同値、括弧付きは false、`${braneh}` はリテラル、など）。
 - **Jekyll でビルド**し、新ページが生成されること・サイドバーが header の直後に並ぶこと・
