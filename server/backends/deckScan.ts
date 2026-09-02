@@ -14,6 +14,11 @@ export const MAX_DECKS = 50;
 /** The file is read whole to be parsed, so it needs a ceiling (CLAUDE.md's large-file rule). A
  *  mulmoScript past this is not one a person is picking out of a dropdown. */
 export const MAX_DECK_BYTES = 2 * 1024 * 1024;
+/** How many `.json` files may be OPENED, which is the cost this endpoint actually incurs — the
+ *  deck limit bounds only what is found, and a repository can hold thousands of JSON files that
+ *  are not decks (measured: 2827 within the depth limit in one real workspace). Without this, a
+ *  tree full of configuration is read in full on every directory change (Codex on #1950). */
+export const MAX_CANDIDATES = 500;
 
 /** Directories that cannot hold a deck a person wrote. Skipping them is most of the walk's cost. */
 const SKIPPED_DIRS = new Set([".git", "node_modules", "dist", "lib", "build", "out", "coverage", ".next", ".cache", ".venv", "__pycache__"]);
@@ -68,18 +73,26 @@ const readDeck = async (absolute: string): Promise<unknown | null> => {
   }
 };
 
-/** One directory's decks (up to `room` of them) and the subdirectories worth descending into. */
-async function decksIn(dir: string, root: string, room: number): Promise<{ decks: DeckEntry[]; subdirs: string[] }> {
+/** One directory's decks and the subdirectories worth descending into. `budget` caps BOTH what may
+ *  be found and what may be opened, and the second is returned so the caller can keep spending it
+ *  across directories. */
+async function decksIn(
+  dir: string,
+  root: string,
+  budget: { decks: number; opened: number },
+): Promise<{ decks: DeckEntry[]; opened: number; subdirs: string[] }> {
   const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
   const decks: DeckEntry[] = [];
+  let opened = 0;
   for (const file of inNameOrder(entries.filter((e) => e.isFile() && e.name.endsWith(".json")))) {
-    if (decks.length >= room) break;
+    if (decks.length >= budget.decks || opened >= budget.opened) break;
+    opened += 1;
     const absolute = path.join(dir, file.name);
     const parsed = await readDeck(absolute);
     if (isDeckObject(parsed)) decks.push({ path: path.relative(root, absolute), label: deckLabel(parsed, file.name) });
   }
   const subdirs = inNameOrder(entries.filter((e) => e.isDirectory() && !isSkippedDir(e.name))).map((e) => path.join(dir, e.name));
-  return { decks, subdirs };
+  return { decks, opened, subdirs };
 }
 
 /**
@@ -93,23 +106,27 @@ async function decksIn(dir: string, root: string, room: number): Promise<{ decks
  * the first subdirectory, then…" puts a `zzz.json` beside the root ahead of `aaa/talk.json`
  * (Codex on #1950).
  *
- * The cap is what makes the order matter at all: it stops the walk early, so on a large tree most
- * files are never read. Collecting everything and truncating afterwards would make the kept set a
- * clean prefix of the sorted output, at the price of parsing every JSON in the tree.
+ * TWO budgets, because they bound different things: `MAX_DECKS` is how many can be shown, and
+ * `MAX_CANDIDATES` is how many files may be opened to find them. Only the second bounds the cost
+ * of a repository that holds thousands of JSON files and no decks. Both make the order matter —
+ * whichever runs out first, what survives is decided by where the walk had got to.
  *
  * Errors on any single directory or file are skipped rather than thrown: a menu that renders
  * nothing because one subdirectory is unreadable is worse than one missing that subdirectory.
  */
 export async function scanDecks(root: string): Promise<DeckEntry[]> {
   const found: DeckEntry[] = [];
+  let opened = 0;
   let frontier = [root];
-  for (let depth = 0; depth <= MAX_DEPTH && frontier.length > 0 && found.length < MAX_DECKS; depth++) {
+  const spent = () => found.length >= MAX_DECKS || opened >= MAX_CANDIDATES;
+  for (let depth = 0; depth <= MAX_DEPTH && frontier.length > 0 && !spent(); depth++) {
     const next: string[] = [];
     for (const dir of frontier) {
-      if (found.length >= MAX_DECKS) break;
-      const { decks, subdirs } = await decksIn(dir, root, MAX_DECKS - found.length);
-      found.push(...decks);
-      next.push(...subdirs);
+      if (spent()) break;
+      const result = await decksIn(dir, root, { decks: MAX_DECKS - found.length, opened: MAX_CANDIDATES - opened });
+      found.push(...result.decks);
+      opened += result.opened;
+      next.push(...result.subdirs);
     }
     frontier = next;
   }

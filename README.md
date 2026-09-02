@@ -1065,8 +1065,9 @@ tokens and works while the agent is busy.
 **What it lists:** every `.json` under the terminal's directory that is actually a mulmoScript —
 the marker inside the file, not the extension, so `package.json` and friends never appear. Each
 is named by the script's own `title`, or by its file name when it has none. The walk is bounded:
-**4 directories deep, 50 decks, 2 MB per file**, skipping `node_modules`, `.git`, `dist`, `lib`,
-`build`, `out`, `coverage` and hidden directories.
+**4 directories deep, 50 decks, 500 files opened, 2 MB per file**, skipping `node_modules`,
+`.git`, `dist`, `lib`, `build`, `out`, `coverage` and hidden directories. The file limit is the
+one that matters in a repository holding thousands of JSON files that are not decks.
 
 **Where the decks have to live:** under the workspace MulmoTerminal was started in, which is the
 directory it serves stories from. A cell opened outside it shows no button, because nothing it

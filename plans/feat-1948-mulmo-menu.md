@@ -51,6 +51,7 @@ tuning:
 |---|---|---|
 | depth | 4 | a deck kept for a human to find is near the top |
 | results | 50 | a menu, not a file browser |
+| files opened | 500 | the deck limit bounds what is FOUND; only this bounds the cost of a tree full of JSON that is not decks |
 | skipped dirs | `node_modules`, `.git`, `dist`, `lib`, `build`, `.next`, `coverage`, `out`, `.cache` | none of them holds a deck a person wrote |
 | file size | 2 MB | read whole, so it needs a ceiling (CLAUDE.md's large-file rule) |
 

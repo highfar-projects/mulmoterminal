@@ -4,7 +4,18 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { scanDecks, isSkippedDir, isDeckObject, deckLabel, byPath, inNameOrder, MAX_DEPTH, MAX_DECKS, MAX_DECK_BYTES } from "../../../server/backends/deckScan";
+import {
+  scanDecks,
+  isSkippedDir,
+  isDeckObject,
+  deckLabel,
+  byPath,
+  inNameOrder,
+  MAX_DEPTH,
+  MAX_DECKS,
+  MAX_DECK_BYTES,
+  MAX_CANDIDATES,
+} from "../../../server/backends/deckScan";
 
 const deck = (title?: string) => JSON.stringify({ $mulmocast: { version: "1.1" }, ...(title === undefined ? {} : { title }), beats: [{ text: "a" }] });
 
@@ -107,6 +118,31 @@ describe("the bounds are stated, not incidental", () => {
     expect(MAX_DEPTH).toBe(4);
     expect(MAX_DECKS).toBe(50);
     expect(MAX_DECK_BYTES).toBe(2 * 1024 * 1024);
+    expect(MAX_CANDIDATES).toBe(500);
+  });
+
+  // The deck limit bounds what is FOUND; only this one bounds what is opened. A repository can
+  // hold thousands of JSON files and no decks at all, and without a candidate budget every one of
+  // them is read on every directory change (Codex on #1950).
+  it("stops opening files once the candidate budget is spent, even with no deck found yet", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "deckbudget-"));
+    try {
+      // Named to sort BEFORE the deck, so the budget is spent on them first.
+      await Promise.all(
+        Array.from({ length: MAX_CANDIDATES }, (_, i) =>
+          writeFile(path.join(root, `a${String(i).padStart(4, "0")}.json`), JSON.stringify({ compilerOptions: {} })),
+        ),
+      );
+      await writeFile(path.join(root, "zzz-deck.json"), deck("Never reached"));
+      expect(await scanDecks(root)).toEqual([]);
+
+      // The control: one fewer candidate and the same deck IS found, so the empty answer above is
+      // the budget and not something else about the directory.
+      await rm(path.join(root, "a0000.json"));
+      expect((await scanDecks(root)).map((d) => d.label)).toEqual(["Never reached"]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   // The visit order decides WHICH decks survive the cap, not merely how the answer is arranged —
