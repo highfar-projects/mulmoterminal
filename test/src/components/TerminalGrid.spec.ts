@@ -1008,6 +1008,47 @@ describe("open-in-canvas", () => {
     expect(paneStub.showError).not.toHaveBeenCalled();
   });
 
+  // Same cell, same tree, but NOT the same pane: `v-if` unmounts the pane on close, so closing and
+  // reopening while the reopen is in flight leaves a fresh instance at an identical uid and cwd.
+  // A guard on those two alone reads that as "the pane that asked is still here" and writes a
+  // sentence into a pane the user has since thrown away and rebuilt (Codex on #1942).
+  it("does not put a late refusal in a pane that was closed and reopened", async () => {
+    const held: Array<() => void> = [];
+    globalThis.fetch = vi.fn((url: RequestInfo | URL) => {
+      const u = String(url);
+      const ok = (body: unknown) => ({ ok: true, json: async () => body }) as unknown as Response;
+      if (u.includes("/api/plugin/presentMulmoScript")) {
+        return new Promise<Response>((resolve) => held.push(() => resolve(ok({ ok: false, code: "not_found", error: "File not found: stories/x.json" }))));
+      }
+      if (u.includes("/api/agent/toolResults/")) return Promise.resolve(ok({ toolResults: [] }));
+      return Promise.resolve(ok({ tools: [] }));
+    }) as unknown as typeof fetch;
+
+    const w = await gridWithPaneOpen();
+    await w.setProps({ storiesRoot: { id: "root-a", paths: ["/work/a"] } });
+    paneStub.showError.mockClear();
+    const asked = w.findComponent({ name: "FilesPane" });
+    asked.vm.$emit("open-in-canvas", "artifacts/stories/x.json");
+    await flushPromises();
+    expect(held.length).toBeGreaterThan(0); // the reopen IS in flight
+
+    // Closed, then reopened on the SAME cell — the uid and the cwd are unchanged by design.
+    asked.vm.$emit("close");
+    await flushPromises();
+    expect(w.findComponent({ name: "FilesPane" }).exists()).toBe(false);
+    await w
+      .findAllComponents({ name: "TerminalCell" })
+      .find((c) => c.props("expanded"))
+      ?.vm.$emit("toggle-files");
+    await flushPromises();
+    const reopened = w.findComponent({ name: "FilesPane" });
+    expect(reopened.exists()).toBe(true);
+
+    held.forEach((release) => release());
+    await flushPromises();
+    expect(paneStub.showError).not.toHaveBeenCalled();
+  });
+
   // The positive half of the guard above, and the reason it is a separate test: the suppression one
   // asserts `showError` was NOT called, so a `showPaneError` that suppressed EVERYTHING would pass
   // it. Nothing at this level proved the sentence ever reaches the pane at all (Codex on #1942).

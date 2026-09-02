@@ -416,14 +416,22 @@ async function openFilesFor(uid: number): Promise<void> {
   setRightPane("files", uid);
 }
 
+/** What a refusal has to come back to for it to be worth showing. */
+type PaneIdentity = { uid: number | null; cwd: string | null; pane: FilesPaneInstance | null };
+
 /** Put a refusal in the pane that ASKED for it, or nowhere.
  *
  *  Nowhere is the right answer when that pane is gone: the user closed it or walked to another
  *  cell, and a message about a file they are no longer looking at is worse than none. What must
- *  not happen is the middle case — the pane is still open, rooted somewhere else, and takes a
- *  sentence about a tree it is not showing. */
-function showPaneError(askedFrom: { uid: number | null; cwd: string | null }, reason: string): void {
+ *  not happen is the middle case — a pane is still open and takes a sentence it did not ask for.
+ *
+ *  The INSTANCE, not just where it sits. `v-if` unmounts the pane on close, so closing and
+ *  reopening on the same cell gives a fresh pane at an identical uid and cwd — which a check on
+ *  those two alone reads as the original still being there (Codex on #1942). Comparing the
+ *  instance costs nothing and cannot be fooled by a location that repeats. */
+function showPaneError(askedFrom: PaneIdentity, reason: string): void {
   if (paneUid.value !== askedFrom.uid || paneCwd.value !== askedFrom.cwd || !filesOpen.value) return;
+  if (filesPane.value !== askedFrom.pane) return;
   filesPane.value?.showError(reason);
 }
 
@@ -440,7 +448,7 @@ async function openFileInCanvas(path: string): Promise<void> {
   // to another cell while it is in flight — the re-root watcher then points `filesPane` at a
   // different tree, and a refusal written there names a file that pane is not showing (Codex on
   // #1942). Held as values, compared after, the way the seed's own `sessionId` check already is.
-  const askedFrom = { uid: paneUid.value, cwd: paneCwd.value };
+  const askedFrom: PaneIdentity = { uid: paneUid.value, cwd: paneCwd.value, pane: filesPane.value };
   // The pane's rows are relative to the CELL's cwd; the plugins resolve against the workspace.
   const result = await buildCanvasCard(absoluteUnder(paneCwd.value, path), storiesRoots.value);
   // A refusal is the server's sentence about what went wrong — an unregistered root from a card
@@ -818,7 +826,8 @@ const canvasUnavailable = computed<"no-session" | "no-canvas-mcp" | null>(() => 
   if (canvasChecked.value && !canvasOpenable.value) return "no-canvas-mcp";
   return null;
 });
-const filesPane = ref<InstanceType<typeof FilesPane> | null>(null);
+type FilesPaneInstance = InstanceType<typeof FilesPane>;
+const filesPane = ref<FilesPaneInstance | null>(null);
 // What the pane looked like in each cell, so coming back to a terminal doesn't mean opening
 // the same three directories again. Saved state only — the buffer went to disk on the way out
 // (or to the backup store), so there is nothing unsaved to carry.
