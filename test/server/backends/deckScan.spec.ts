@@ -188,6 +188,28 @@ describe("the bounds are stated, not incidental", () => {
     }
   });
 
+  // The boundary Codex asked to see covered: ONE directory holding far more candidates than the
+  // budget. The listing itself is not bounded (it cannot be, without giving up name order — see
+  // MAX_DIRECTORIES), but everything after it is, and the answer must still be the deterministic
+  // prefix rather than whatever the disk offered first.
+  it("answers a single directory holding more candidates than the budget", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "deckfanout-"));
+    try {
+      const budget = { ...DEFAULT_SCAN_BUDGET, candidates: 20, decks: 5 };
+      await Promise.all(Array.from({ length: 200 }, (_, i) => writeFile(path.join(root, `f${String(i).padStart(3, "0")}.json`), deck(`F${i}`))));
+      const found = await scanDecks(root, budget);
+      expect(found).toHaveLength(5); // the deck budget, reached before the candidate budget
+      expect(found.map((d) => d.path)).toEqual(["f000.json", "f001.json", "f002.json", "f003.json", "f004.json"]);
+
+      // …and when the candidates run out first, the answer stops there rather than reaching deeper
+      // into the same listing.
+      const stingy = await scanDecks(root, { ...DEFAULT_SCAN_BUDGET, candidates: 3, decks: 50 });
+      expect(stingy.map((d) => d.path)).toEqual(["f000.json", "f001.json", "f002.json"]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   // Read whole to be parsed, so the ceiling is what keeps a huge file from being read at all.
   it("skips a file past the size ceiling", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "deckbig-"));

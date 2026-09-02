@@ -116,6 +116,11 @@ async function decksIn(
   const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
   const decks: DeckEntry[] = [];
   let opened = 0;
+  // The loop's own `break` is what bounds the opening — a slice here would be a second copy of the
+  // same limit that no test could tell from its absence. What is NOT bounded is the sort above it,
+  // deliberately: measured on 50,000 `.json` files in one directory it costs 18 ms, against 10 ms
+  // for a hand-rolled k-smallest selection, and 8 ms does not buy twenty lines of index arithmetic
+  // in the middle of this (Codex on #1950).
   for (const file of inNameOrder(entries.filter((e) => e.isFile() && e.name.endsWith(".json")))) {
     if (decks.length >= budget.decks || opened >= budget.opened) break;
     opened += 1;
