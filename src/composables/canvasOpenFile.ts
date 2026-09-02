@@ -212,9 +212,13 @@ async function reopenStory(ref: StoryRef, expectPath: string): Promise<CanvasCar
       REQUEST_TIMEOUT_MS,
     );
     const body: unknown = await res.json().catch(() => null);
-    // A refusal is a 4xx with `{ok:false, error}` (the dispatch's shape) — the sentence the server
-    // wrote is the whole point of reading it here rather than logging a status code.
-    // Blank counts as ABSENT, not as a sentence. `??` only catches null, so an `error: ""` from any
+    // The sentence the server wrote, which is the whole reason to read the body rather than log a
+    // status. The status does NOT tell the two kinds of refusal apart: the realpath mismatch is a
+    // 400, an unknown root is a 200 carrying `{ok:false, error}` — both measured, and pinned in
+    // `test/server/backends/mulmoscript-expect-path.spec.ts`. Hence a refusal is read off the body
+    // on both branches below.
+    //
+    // Blank counts as ABSENT, not as a sentence: `??` only catches null, so an `error: ""` from any
     // layer between us and the plugin would survive to `showError`, where the pane renders it under
     // `v-if="fileError"` — i.e. nothing at all, which is the dead button this whole change removes
     // (CodeRabbit on #1942).
