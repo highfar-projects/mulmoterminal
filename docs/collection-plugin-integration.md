@@ -125,6 +125,20 @@ wire the engine against the shared `workspaceRoot` using the **same path layout*
 | `archiveDir` | `archive` |
 | `isPresetSlug(slug)` | `slug.startsWith("mc-") && slug.length > 3` |
 
+Two of those are **conditional here and unconditional in MulmoClaude**, because MulmoClaude serves one
+root and this app serves several (`server/infra/project-root.ts`). Both answer `null` for a saved
+project, which is what keeps `~`-scoped collections unreachable from a project and stops a stray
+`data/skills` file shadowing the skill a repo commits:
+
+| Host path | Answers the real path for | Otherwise |
+|---|---|---|
+| `userSkillsDir(root)` | the managed mulmoclaude workspace (`~/mulmoclaude`) | `null` |
+| `skillsStagingDir(root)` | any workspace — `~/mulmoclaude` **or** the one this server serves (`CLAUDE_CWD`) | `null` |
+
+`skillsStagingDir` takes both because a staged collection's `views/*.html` exists only in
+`data/skills/<slug>/`, and the two roots are the same path only by coincidence: asking about
+`~/mulmoclaude` alone 404'd every custom view in a workspace launched from anywhere else (#1925).
+
 ---
 
 ## Gap analysis (updated for `0.5.1`)

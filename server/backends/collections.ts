@@ -76,6 +76,7 @@ import { isManagedWorkspace } from "./workspaceSetup.js";
 import {
   errorStatus,
   initProjectRoots,
+  isWorkspaceRoot,
   projectId,
   projectRootKey,
   projectRootsConfigured,
@@ -144,7 +145,7 @@ export function initCollectionsBackend(deps: { workspace: string; knownProjects?
       projectSkillsDir,
       // <root>/feeds — feed registry root.
       feedsRoot: (root) => path.join(root, "feeds"),
-      // <root>/data/skills — project-skills staging, and ONLY for the managed workspace.
+      // <root>/data/skills — project-skills staging, and ONLY for a WORKSPACE.
       //
       // Staging exists to route around the `.claude/` permission gate: the agent writes drafts
       // to a plain data dir and a bridge mirrors the allowlisted files into `.claude/skills`.
@@ -155,7 +156,25 @@ export function initCollectionsBackend(deps: { workspace: string; knownProjects?
       //
       // `null` is what core 3.1.0 added for exactly this: the engine then skips the staging
       // base rather than being handed a path that must never match.
-      skillsStagingDir: (root) => (isManagedWorkspace(root) ? path.join(root, "data", "skills") : null),
+      //
+      // TWO roots are a workspace, and asking only the first one 404'd every staged custom view
+      // (#1925). `isManagedWorkspace` answers "is this path `~/mulmoclaude`", which is what
+      // MulmoClaude's workspace always is — but OURS is `CLAUDE_CWD`, the directory the launcher
+      // was started in (bin/cli-args.js `chooseCwd` → `serverSpawnEnv`). When those differ, a
+      // collection MulmoClaude staged into that directory has its `views/*.html` in `data/skills`
+      // and NOTHING in `.claude/skills` (only SKILL.md / schema.json / templates are mirrored), so
+      // dropping the staging base left the read with a base that never holds the file.
+      //
+      // A UNION, not a replacement: where the two roots are the same path — the ordinary setup —
+      // this answers exactly what it answered before, and `~/mulmoclaude` keeps its staging even
+      // when it is merely one of the saved projects. A saved project that is neither still gets
+      // `null`, so the shadowing guarantee above is untouched.
+      //
+      // Reads only. `stagedSkillAuthoring` (server/infra/collection-tool.ts) stays on
+      // `isManagedWorkspace`, so the guide the agent is served and the directory `putSchema`
+      // writes to are unchanged — core's `authoringTarget` lets `false` win over a staging path,
+      // which is the "anything else is direct" combination it documents.
+      skillsStagingDir: (root) => (isManagedWorkspace(root) || isWorkspaceRoot(root) ? path.join(root, "data", "skills") : null),
       // Workspace-relative archive dir (removed collections move here).
       archiveDir: "archive",
       // <root>/config/collections-registries.json — extra Discover registries
