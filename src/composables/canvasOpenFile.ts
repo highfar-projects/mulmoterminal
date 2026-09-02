@@ -214,7 +214,11 @@ async function reopenStory(ref: StoryRef, expectPath: string): Promise<CanvasCar
     const body: unknown = await res.json().catch(() => null);
     // A refusal is a 4xx with `{ok:false, error}` (the dispatch's shape) — the sentence the server
     // wrote is the whole point of reading it here rather than logging a status code.
-    const refusal = isRecord(body) && typeof body.error === "string" ? body.error : null;
+    // Blank counts as ABSENT, not as a sentence. `??` only catches null, so an `error: ""` from any
+    // layer between us and the plugin would survive to `showError`, where the pane renders it under
+    // `v-if="fileError"` — i.e. nothing at all, which is the dead button this whole change removes
+    // (CodeRabbit on #1942).
+    const refusal = isRecord(body) && typeof body.error === "string" && body.error.trim() !== "" ? body.error : null;
     if (!res.ok) {
       console.error(`[canvasOpenFile] reopen HTTP ${res.status}`);
       return { kind: "refused", reason: refusal ?? REOPEN_FAILED_EN };

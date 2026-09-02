@@ -346,6 +346,17 @@ describe("buildCanvasCard", () => {
     });
   });
 
+  // A blank `error` is the same nothing as a missing one, and `??` does not catch it: it would
+  // reach `showError`, which the pane renders under `v-if` — so the click would look ignored, the
+  // exact failure this change removes (CodeRabbit on #1942).
+  it("says something when the reason is blank", async () => {
+    mockReopen({ ok: false, code: "bad_request", error: "   " }, false);
+    expect(await buildCanvasCard(`${WS}/artifacts/stories/tale.json`, { workspaces: [WS], rootId: null })).toEqual({
+      kind: "refused",
+      reason: "could not open this deck — the server did not say why",
+    });
+  });
+
   it("says something when the body is not JSON at all", async () => {
     vi.stubGlobal(
       "fetch",
