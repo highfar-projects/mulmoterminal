@@ -986,6 +986,10 @@ describe("open-in-canvas", () => {
     paneStub.showError.mockClear();
     w.findComponent({ name: "FilesPane" }).vm.$emit("open-in-canvas", "artifacts/stories/x.json");
     await flushPromises();
+    // The reopen IS in flight. Without this the test passes when nothing was ever requested —
+    // `showError` is not called either way, which is the shape of a test that cannot fail
+    // (CodeRabbit on #1942).
+    expect(held.length).toBeGreaterThan(0);
 
     // The zoom moves AND the new cell opens its own Files pane — the case that actually
     // misattributes. With no pane on the new cell there is nothing to write into, so the guard

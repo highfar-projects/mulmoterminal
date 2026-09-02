@@ -64,6 +64,21 @@ describe("the wire path must still name the file the browser saw", () => {
     expect(String(res.body.error)).toMatch(/not the file this server serves/);
   });
 
+  // The handoff this check DEPENDS on: a path that does not resolve is left to the dispatch, which
+  // names the id it could not find. Without this, `wirePathMismatch` could go back to answering
+  // first and the browser would show the generic fallback instead — and only a client test that
+  // MOCKS the good shape would notice, i.e. nothing would (Codex on #1942).
+  it("lets the dispatch name the root it does not know", async () => {
+    const res = await routeCall(app)(
+      "/api/plugin/presentMulmoScript",
+      jsonPost({ kind: "save", filePath: "stories/decks/talk.json", root: "never-registered", expectPath: path.join(base, "ws", "decks", "talk.json") }),
+    );
+    expect(res.body.ok).toBe(false);
+    expect(String(res.body.error)).toContain('unknown stories root "never-registered"');
+    // NOT this check's own sentence: it must not answer for a root nothing registered.
+    expect(String(res.body.error)).not.toMatch(/not the file this server serves/);
+  });
+
   // The agent's own tool call sends no `expectPath`, and must keep working exactly as it did.
   it("leaves a request without expectPath alone", async () => {
     const res = await routeCall(app)(
