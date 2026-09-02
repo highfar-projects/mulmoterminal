@@ -7,7 +7,7 @@
 // real directory does not test anything: this machine's filesystem happens to return these names
 // in order already, so the same test passed with the ordering removed — a test that cannot fail.
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -39,5 +39,39 @@ describe("the count limit under a filesystem that answers in another order", () 
 
   it("keeps the first decks BY NAME, not the ones the directory listed first", async () => {
     expect((await scanDecks(root)).map((d) => d.path)).toEqual(names.slice(0, MAX_DECKS));
+  });
+});
+
+// The rule the cap enforces is SHALLOWER FIRST, then by path. With a limit on how many can be
+// shown, a deck one directory down is worth more than one four directories down, whatever their
+// names — and "files, then all the way into the first subdirectory, then the next" does not give
+// that (Codex on #1950).
+//
+// Laid out so the two orders CANNOT agree: 45 decks in `aaa/` (depth 1), 20 more in `aaa/deep/`
+// (depth 2), 10 in `zzz/` (depth 1), cap 50. Level order takes all of `aaa/` and then 5 from
+// `zzz/`; depth-first takes all of `aaa/` and then 5 from `aaa/deep/`, never reaching `zzz/`.
+describe("what the count limit gives up", () => {
+  let root = "";
+  const decksIn = (dir: string, n: number, tag: string) =>
+    Array.from({ length: n }, (_, i) => writeFile(path.join(dir, `${tag}${String(i).padStart(3, "0")}.json`), deck(`${tag} ${i}`)));
+
+  beforeAll(async () => {
+    root = await mkdtemp(path.join(tmpdir(), "deckdepth-"));
+    await mkdir(path.join(root, "aaa", "deep"), { recursive: true });
+    await mkdir(path.join(root, "zzz"), { recursive: true });
+    await Promise.all([
+      ...decksIn(path.join(root, "aaa"), 45, "a"),
+      ...decksIn(path.join(root, "aaa", "deep"), 20, "d"),
+      ...decksIn(path.join(root, "zzz"), 10, "z"),
+    ]);
+  });
+  afterAll(async () => rm(root, { recursive: true, force: true }));
+
+  it("spends the last of the limit on the shallower directory, not on the deeper one it was already in", async () => {
+    const found = await scanDecks(root);
+    expect(found).toHaveLength(MAX_DECKS);
+    const depths = found.map((d) => d.path.split(path.sep).length);
+    expect(Math.max(...depths)).toBe(2); // nothing from `aaa/deep`
+    expect(found.filter((d) => d.path.startsWith(`zzz${path.sep}`))).toHaveLength(5);
   });
 });

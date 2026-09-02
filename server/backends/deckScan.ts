@@ -68,29 +68,50 @@ const readDeck = async (absolute: string): Promise<unknown | null> => {
   }
 };
 
-/** The decks under `root`, depth- and count-bounded. Errors on any single directory or file are
- *  skipped rather than thrown: a menu that renders nothing because one subdirectory is unreadable
- *  is worse than a menu missing that subdirectory. */
+/** One directory's decks (up to `room` of them) and the subdirectories worth descending into. */
+async function decksIn(dir: string, root: string, room: number): Promise<{ decks: DeckEntry[]; subdirs: string[] }> {
+  const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+  const decks: DeckEntry[] = [];
+  for (const file of inNameOrder(entries.filter((e) => e.isFile() && e.name.endsWith(".json")))) {
+    if (decks.length >= room) break;
+    const absolute = path.join(dir, file.name);
+    const parsed = await readDeck(absolute);
+    if (isDeckObject(parsed)) decks.push({ path: path.relative(root, absolute), label: deckLabel(parsed, file.name) });
+  }
+  const subdirs = inNameOrder(entries.filter((e) => e.isDirectory() && !isSkippedDir(e.name))).map((e) => path.join(dir, e.name));
+  return { decks, subdirs };
+}
+
+/**
+ * The decks under `root`, depth- and count-bounded.
+ *
+ * **Shallower first, then by path** — and that is a rule about WHICH decks survive the count
+ * limit, not about how the answer is arranged (the answer is sorted by path either way). Breadth
+ * first rather than the obvious recursion, for two reasons that pull the same way: with a cap, the
+ * deck a person is looking for is the one near the top of the repository, not one four directories
+ * down; and the level order is the only one that can be stated in a line, where "files, then into
+ * the first subdirectory, then…" puts a `zzz.json` beside the root ahead of `aaa/talk.json`
+ * (Codex on #1950).
+ *
+ * The cap is what makes the order matter at all: it stops the walk early, so on a large tree most
+ * files are never read. Collecting everything and truncating afterwards would make the kept set a
+ * clean prefix of the sorted output, at the price of parsing every JSON in the tree.
+ *
+ * Errors on any single directory or file are skipped rather than thrown: a menu that renders
+ * nothing because one subdirectory is unreadable is worse than one missing that subdirectory.
+ */
 export async function scanDecks(root: string): Promise<DeckEntry[]> {
   const found: DeckEntry[] = [];
-
-  const walk = async (dir: string, depth: number): Promise<void> => {
-    if (depth > MAX_DEPTH || found.length >= MAX_DECKS) return;
-    const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
-    const dirs = inNameOrder(entries.filter((e) => e.isDirectory() && !isSkippedDir(e.name)));
-    const files = inNameOrder(entries.filter((e) => e.isFile() && e.name.endsWith(".json")));
-    for (const file of files) {
-      if (found.length >= MAX_DECKS) return;
-      const absolute = path.join(dir, file.name);
-      const parsed = await readDeck(absolute);
-      if (isDeckObject(parsed)) found.push({ path: path.relative(root, absolute), label: deckLabel(parsed, file.name) });
+  let frontier = [root];
+  for (let depth = 0; depth <= MAX_DEPTH && frontier.length > 0 && found.length < MAX_DECKS; depth++) {
+    const next: string[] = [];
+    for (const dir of frontier) {
+      if (found.length >= MAX_DECKS) break;
+      const { decks, subdirs } = await decksIn(dir, root, MAX_DECKS - found.length);
+      found.push(...decks);
+      next.push(...subdirs);
     }
-    for (const sub of dirs) {
-      if (found.length >= MAX_DECKS) return;
-      await walk(path.join(dir, sub.name), depth + 1);
-    }
-  };
-
-  await walk(root, 0);
+    frontier = next;
+  }
   return found.sort(byPath);
 }
