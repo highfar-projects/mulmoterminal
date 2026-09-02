@@ -20,7 +20,7 @@ import type { TerminalAgent } from "../../common/sessionAgent";
 import RunMenu from "./RunMenu.vue";
 import SkillMenu from "./SkillMenu.vue";
 import MulmoMenu from "./MulmoMenu.vue";
-import { buildCanvasCard, seedCanvasCard } from "../composables/canvasOpenFile";
+import { buildCanvasCard, seedCanvasCard, storiesRootsFrom } from "../composables/canvasOpenFile";
 import { useAppConfig } from "../composables/useAppConfig";
 import { skillSeed } from "./skillSeed";
 import GitBranchChip from "./GitBranchChip.vue";
@@ -202,7 +202,7 @@ function onSkill(slug: string): void {
   conn.submitText(slotKey, skillSeed(slug, props.agent ?? "claude"));
 }
 
-const { storiesRoot } = useAppConfig();
+const { storiesRoots } = useAppConfig();
 
 // A deck picked from the Mulmo menu. The card is built by the SAME function the file tree's row
 // menu uses, so the wire path, the named root and the server's `expectPath` check are one
@@ -215,7 +215,7 @@ const { storiesRoot } = useAppConfig();
 async function onDeck(absolutePath: string): Promise<void> {
   const session = props.sessionId;
   if (!session) return void showHint(DECK_NO_SESSION_EN, DECK_ICON);
-  const result = await buildCanvasCard(absolutePath, { workspaces: storiesRoot.value?.paths ?? [], rootId: storiesRoot.value?.id ?? null });
+  const result = await buildCanvasCard(absolutePath, storiesRootsFrom(storiesRoots.value));
   if (result.kind !== "card") return void showHint(result.kind === "refused" ? result.reason : DECK_UNSUPPORTED_EN, DECK_ICON);
   // Re-asked after the await, like every other late reply here: the cell can be handed a different
   // session while the reopen is in flight, and seeding the card onto the new one would put a deck

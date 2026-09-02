@@ -90,7 +90,7 @@ const worktreesRoot = ref<string | null>(null);
 // carries, and the CANONICAL path to compare a file against. Read, never derived — an id the
 // browser re-computed could drift from the one the server registered, and a non-canonical path
 // would stop matching the moment the workspace was reached through a symlink.
-const storiesRoot = ref<{ id: string; paths: string[] } | null>(null);
+const storiesRoots = ref<Array<{ id: string; paths: string[] }>>([]);
 
 // The initial /api/config while it is still in flight, so a launch that lands first can wait for
 // the root rather than decide without it (Codex on #1543). Null when nothing is loading — then
@@ -178,6 +178,14 @@ function readStoriesRoot(value: unknown): { id: string; paths: string[] } | null
   if (!isRecord(value) || typeof value.id !== "string" || !Array.isArray(value.paths)) return null;
   const paths = value.paths.filter((path): path is string => typeof path === "string");
   return paths.length > 0 ? { id: value.id, paths } : null;
+}
+
+/** Every directory the server serves stories from (#1951). The WORKSPACE is the first entry — the
+ *  server registers it first and the browser's default-stories rule needs to know which one it is,
+ *  so the order is part of the contract rather than a coincidence. */
+function readStoriesRoots(value: unknown): Array<{ id: string; paths: string[] }> {
+  if (!Array.isArray(value)) return [];
+  return value.map(readStoriesRoot).filter((root): root is { id: string; paths: string[] } => root !== null);
 }
 
 const isCwdPreset = (value: unknown): value is CwdPreset => isRecord(value) && typeof value.label === "string" && typeof value.path === "string";
@@ -595,7 +603,7 @@ function createConfigReader({ defaultCwd, snapshotVersion, adoptServerPresets, m
       defaultCwd.value = typeof c.cwd === "string" ? c.cwd : null;
       home.value = typeof c.home === "string" ? c.home : null;
       worktreesRoot.value = typeof c.worktreesRoot === "string" ? c.worktreesRoot : null;
-      storiesRoot.value = readStoriesRoot(c.storiesRoot);
+      storiesRoots.value = readStoriesRoots(c.storiesRoots);
       adoptServerPresets(c.cwdPresets, version);
       adoptSoundConfig(c);
       pushEnabled.value = c.pushEnabled === true;
@@ -728,7 +736,7 @@ export function useAppConfig() {
 
   return {
     defaultCwd,
-    storiesRoot,
+    storiesRoots,
     home,
     presets,
     configUnavailable,

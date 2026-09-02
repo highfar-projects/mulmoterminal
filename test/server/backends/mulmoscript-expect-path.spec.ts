@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { initArtifactsBackend } from "../../../server/backends/artifacts";
 import { initMulmoScriptBackend, mountMulmoScriptDispatchRoute } from "../../../server/backends/mulmoscript";
-import { registeredStoriesRoot } from "../../../server/backends/mulmoscript";
+import { registeredStoriesRoots } from "../../../server/backends/mulmoscript";
 import { routeCall, jsonPost } from "../../helpers/routeCall";
 
 // The browser decides whether to OFFER the Canvas from a LEXICAL prefix test — it cannot realpath.
@@ -37,7 +37,7 @@ describe("the wire path must still name the file the browser saw", () => {
   afterEach(() => rmSync(base, { recursive: true, force: true }));
 
   it("opens the deck when the two agree", async () => {
-    const root = registeredStoriesRoot();
+    const root = registeredStoriesRoots()[0];
     const res = await routeCall(app)(
       "/api/plugin/presentMulmoScript",
       jsonPost({ kind: "save", filePath: "stories/decks/talk.json", root: root?.id, expectPath: path.join(base, "ws", "decks", "talk.json") }),
@@ -55,7 +55,7 @@ describe("the wire path must still name the file the browser saw", () => {
     unlinkSync(path.join(base, "ws"));
     symlinkSync(second, path.join(base, "ws"));
 
-    const root = registeredStoriesRoot();
+    const root = registeredStoriesRoots()[0];
     const res = await routeCall(app)(
       "/api/plugin/presentMulmoScript",
       jsonPost({ kind: "save", filePath: "stories/decks/talk.json", root: root?.id, expectPath: path.join(base, "ws", "decks", "talk.json") }),
@@ -100,7 +100,7 @@ describe("the wire path must still name the file the browser saw", () => {
   it("leaves a request without expectPath alone", async () => {
     const res = await routeCall(app)(
       "/api/plugin/presentMulmoScript",
-      jsonPost({ kind: "save", filePath: "stories/decks/talk.json", root: registeredStoriesRoot()?.id }),
+      jsonPost({ kind: "save", filePath: "stories/decks/talk.json", root: registeredStoriesRoots()[0]?.id }),
     );
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);

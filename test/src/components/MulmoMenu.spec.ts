@@ -6,7 +6,7 @@ import { useAppConfig } from "../../../src/composables/useAppConfig";
 // `storiesRoot` is a module-level singleton in useAppConfig, so setting it here is what a loaded
 // /api/config does for the real app.
 const setRoot = (root: { id: string; paths: string[] } | null) => {
-  useAppConfig().storiesRoot.value = root;
+  useAppConfig().storiesRoots.value = root === null ? [] : [root];
 };
 
 const answerWith = (decks: unknown) => {

@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, symlinkSync, rmSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { initMulmoScriptBackend, registeredStoriesRoot } from "../../../server/backends/mulmoscript";
+import { initMulmoScriptBackend, registeredStoriesRoots } from "../../../server/backends/mulmoscript";
 import { initArtifactsBackend } from "../../../server/backends/artifacts";
 import { storiesRootId } from "../../../server/backends/storiesRoot";
 
@@ -24,12 +24,12 @@ describe("the registered stories root", () => {
     mkdirSync(real);
     initArtifactsBackend({ workspace: real });
     initMulmoScriptBackend({ workspace: real, pubsub: null });
-    const root = registeredStoriesRoot();
+    const root = registeredStoriesRoots()[0];
     expect(root?.id).toBe(storiesRootId(real));
     // Every spelling names the same directory. On macOS even a plain temp path has two — `/var` is
     // itself a symlink to `/private/var` — which is exactly why the browser is handed the set.
     expect(root?.paths.length).toBeGreaterThan(0);
-    expect(root?.paths.every((p) => p.endsWith("real-ws"))).toBe(true);
+    expect(root?.paths.every((spelling: string) => spelling.endsWith("real-ws"))).toBe(true);
     expect(new Set(root?.paths).size).toBe(root?.paths.length); // deduped
   });
 
@@ -46,9 +46,9 @@ describe("the registered stories root", () => {
     symlinkSync(real, link);
     initArtifactsBackend({ workspace: link });
     initMulmoScriptBackend({ workspace: link, pubsub: null });
-    const root = registeredStoriesRoot();
+    const root = registeredStoriesRoots()[0];
     expect(root?.paths).toContain(link);
-    expect(root?.paths.some((p) => p.includes("real-ws") && !p.includes("ws-link"))).toBe(true);
+    expect(root?.paths.some((spelling: string) => spelling.includes("real-ws") && !spelling.includes("ws-link"))).toBe(true);
   });
 
   it("does not follow a symlink retargeted after boot", () => {
@@ -60,12 +60,12 @@ describe("the registered stories root", () => {
     symlinkSync(first, link);
     initArtifactsBackend({ workspace: link });
     initMulmoScriptBackend({ workspace: link, pubsub: null });
-    const atBoot = registeredStoriesRoot();
+    const atBoot = registeredStoriesRoots()[0];
 
     unlinkSync(link);
     symlinkSync(second, link);
 
-    expect(registeredStoriesRoot()).toEqual(atBoot);
+    expect(registeredStoriesRoots()[0]).toEqual(atBoot);
     expect(atBoot?.id).not.toBe(storiesRootId(link)); // what re-deriving would now answer
   });
 });

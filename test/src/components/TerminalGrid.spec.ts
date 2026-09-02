@@ -986,7 +986,7 @@ describe("open-in-canvas", () => {
     const w = await gridWithPaneOpen();
     // The grid must know a stories root, or nothing is a story and the refusal under test never
     // happens — the test would pass with the guard removed, which is how it read on the first try.
-    await w.setProps({ storiesRoot: { id: "root-a", paths: ["/work/a"] } });
+    await w.setProps({ storiesRoots: [{ id: "root-a", paths: ["/work/a"] }] });
     paneStub.showError.mockClear();
     w.findComponent({ name: "FilesPane" }).vm.$emit("open-in-canvas", "artifacts/stories/x.json");
     await flushPromises();
@@ -1028,7 +1028,7 @@ describe("open-in-canvas", () => {
     }) as unknown as typeof fetch;
 
     const w = await gridWithPaneOpen();
-    await w.setProps({ storiesRoot: { id: "root-a", paths: ["/work/a"] } });
+    await w.setProps({ storiesRoots: [{ id: "root-a", paths: ["/work/a"] }] });
     paneStub.showError.mockClear();
     const asked = w.findComponent({ name: "FilesPane" });
     asked.vm.$emit("open-in-canvas", "artifacts/stories/x.json");
@@ -1065,7 +1065,7 @@ describe("open-in-canvas", () => {
     }) as unknown as typeof fetch;
 
     const w = await gridWithPaneOpen();
-    await w.setProps({ storiesRoot: { id: "root-a", paths: ["/work/a"] } });
+    await w.setProps({ storiesRoots: [{ id: "root-a", paths: ["/work/a"] }] });
     paneStub.showError.mockClear();
     w.findComponent({ name: "FilesPane" }).vm.$emit("open-in-canvas", "artifacts/stories/x.json");
     await flushPromises();

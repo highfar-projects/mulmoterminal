@@ -598,9 +598,10 @@ Two sources, and it never searches your disk:
 - A path that is not a mulmoScript (no `$mulmocast`), or is not there, is dropped silently — the
   menu would open it and the server would refuse.
 - Each deck is named by its own `title`, falling back to the file name. At most 50 entries.
-- The menu appears on **agent cells** only, and only under the workspace MulmoTerminal was started
-  in — that is the directory it serves decks from. Any other deck is still one right-click away in
-  the file tree (**Open in the Canvas**).
+- The menu appears on **agent cells** only, and only under a directory MulmoTerminal serves decks
+  from: the workspace it was started in, plus every directory in your launcher's saved list. Those
+  are read **once at startup**, so a repository opened for the first time needs a restart. Any other
+  deck is still one right-click away in the file tree (**Open in the Canvas**).
 
 ### Closing summary for this directory (`appendSystemPrompt`)
 

@@ -31,6 +31,7 @@ import type { SaveMulmoScriptArgs } from "@mulmoclaude/mulmoscript-plugin";
 import { artifactsFileOps } from "./artifacts.js";
 import { createFileOps } from "./fileOps.js";
 import { storiesRootId } from "./storiesRoot.js";
+import { uniqueRootPaths } from "./storiesRootSet.js";
 import { canonicalPath } from "../infra/canonical-path.js";
 import { isRecord } from "../../common/isRecord.js";
 
@@ -49,13 +50,13 @@ interface PubSubLike {
 
 let ops: MulmoScriptServerOps | null = null;
 /** The named stories root this server actually registered with the plugin, or null before boot. */
-let registeredRoot: { id: string; paths: string[] } | null = null;
+let registeredRoots: Array<{ id: string; paths: string[] }> = [];
 
 /** What the browser is told about the named stories root: the id a Canvas card must carry, and
  *  every spelling of the workspace it may compare a file against. The REGISTERED value, never
  *  re-derived — see initMulmoScriptBackend. Null until the backend is initialised, which reads as
  *  "no named root" and is exactly the behaviour before #1933. */
-export const registeredStoriesRoot = (): { id: string; paths: readonly string[] } | null => registeredRoot;
+export const registeredStoriesRoots = (): ReadonlyArray<{ id: string; paths: readonly string[] }> => registeredRoots;
 let dispatchHandler: MulmoScriptDispatchHandler | null = null;
 
 // undefined = probe not finished yet; the ops treat that as "assume available"
@@ -90,7 +91,12 @@ async function writeFileAtomic(absolutePath: string, data: string | Uint8Array):
  *  (server/index.ts), after initArtifactsBackend — the routes below 503 until
  *  then. `isFfmpegAvailable` is overridable for tests; the default is the
  *  async PATH probe above. */
-export function initMulmoScriptBackend(deps: { workspace: string; pubsub: PubSubLike | null; isFfmpegAvailable?: () => boolean | undefined }): void {
+export function initMulmoScriptBackend(deps: {
+  workspace: string;
+  extraRoots?: readonly string[];
+  pubsub: PubSubLike | null;
+  isFfmpegAvailable?: () => boolean | undefined;
+}): void {
   // One named root: the WORKSPACE — which the launcher sets to the directory the user ran the
   // command in. A root is a SUBTREE, so this one covers every repository beneath it, and a deck
   // can live next to the notes it was written from instead of in the workspace's own stories
@@ -102,19 +108,32 @@ export function initMulmoScriptBackend(deps: { workspace: string; pubsub: PubSub
   // symlink is retargeted — and an id the plugin never registered is a `bad_request` on every card
   // that carries it (CodeRabbit on #1934). What was registered is what `registeredStoriesRoot`
   // hands the browser.
-  const workspaceRootPath = canonicalPath(deps.workspace);
-  const workspaceRootId = storiesRootId(workspaceRootPath);
+  // Every directory the user launches in, not just the workspace (#1951). A deck kept in an
+  // ordinary repository was found and correctly refused, because nothing outside the one
+  // registered root can be opened at all.
+  //
+  // Registered ONCE, here, because `createMulmoScriptServerOps` copies `extraRoots` into its own
+  // map at construction AND is documented as one instance per process — it owns the in-flight
+  // movie/PDF dedup sets and the generation-state tracker. Adding a root later means a new
+  // instance, which means throwing those away mid-render. So the set is what boot knows, and a
+  // directory first opened afterwards needs a restart. That trade is the plan's option A.
+  const rootPaths = uniqueRootPaths([deps.workspace, ...(deps.extraRoots ?? [])]);
+  const idFor = new Map(rootPaths.map((dir) => [canonicalPath(dir), storiesRootId(canonicalPath(dir))]));
+  const dirForId = new Map([...idFor].map(([dir, id]) => [id, dir]));
   // BOTH spellings travel to the browser: the one the user launched with reaches the Files pane
   // through a cell's cwd, and the resolved one reaches it through `git worktree list`. The client
   // gate is lexical, so knowing only one hides the Canvas entry for every deck under the other
   // (Codex P1 iter-5 on #1934). The plugin still resolves against the canonical directory.
-  registeredRoot = { id: workspaceRootId, paths: [...new Set([deps.workspace, workspaceRootPath])] };
+  registeredRoots = rootPaths.map((dir) => ({ id: storiesRootId(canonicalPath(dir)), paths: [...new Set([dir, canonicalPath(dir)])] }));
   ops = createMulmoScriptServerOps({
     storiesDir: path.resolve(deps.workspace, "artifacts", "stories"),
-    extraRoots: { [workspaceRootId]: workspaceRootPath },
+    extraRoots: Object.fromEntries([...dirForId].map(([id, dir]) => [id, dir])),
     // Registration is the containment boundary and it is checked FIRST, so answering here for an
-    // id we never registered would still not widen what is addressable. The guard is the `===`.
-    artifactsFor: (root) => (root === workspaceRootId ? createFileOps(() => workspaceRootPath, "mulmo-stories-root") : null),
+    // id we never registered would still not widen what is addressable. The guard is the lookup.
+    artifactsFor: (root) => {
+      const dir = dirForId.get(root);
+      return dir === undefined ? null : createFileOps(() => dir, "mulmo-stories-root");
+    },
     // This host keeps no per-session generation state: `onGenerationEvent` below drops
     // `chatSessionId` and publishes to pubsub, and nothing keys pending work on
     // `(kind, filePath, key)`. So two roots cannot collapse into one entry here, and the plugin's
