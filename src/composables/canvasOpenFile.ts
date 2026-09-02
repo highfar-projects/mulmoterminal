@@ -197,8 +197,13 @@ const REOPEN_FAILED_EN = "could not open this deck — the server did not say wh
  * logic this route already runs. What comes back is what the agent's own tool call produces,
  * including the normalized `filePath` that `filePathIdentity` collapses the two cards on.
  *
- * The route narrates a missing or refused file as a 200 with no `data` (its spec pins this), so
- * absence of `data` — not the status — is what "cannot open this" looks like.
+ * A refusal can arrive under EITHER status, so the body is what has to be read: the realpath
+ * mismatch is a 400, an unknown root or a missing file is a 200 carrying `{ok:false, error}`, and a
+ * proxy in between can answer neither shape. Measured, and pinned in
+ * `test/server/backends/mulmoscript-expect-path.spec.ts`. Do not simplify this to a status check —
+ * on a 200 that would drop the sentence, and on a 4xx it would drop the only sentence there is
+ * (CodeRabbit on #1942; an older version of this comment described a `data` envelope that the
+ * dispatch does not use at all).
  */
 async function reopenStory(ref: StoryRef, expectPath: string): Promise<CanvasCardResult> {
   try {
