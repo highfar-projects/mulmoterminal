@@ -1500,6 +1500,7 @@ watch(
           @record-cwd="(c) => emit('record-cwd', c)"
           @remove-preset="(path) => emit('remove-preset', path)"
           @retry-config="emit('retry-config')"
+          @canvas="openCanvasFor(cell.uid)"
           @run="(cmd) => emit('run', cell.uid, cmd)"
           @run-spare="(cmd) => emit('runSpare', cell.uid, cmd)"
           @launch="(pick) => emit('launch', cell.uid, pick)"

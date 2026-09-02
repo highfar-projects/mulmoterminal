@@ -101,7 +101,8 @@ the same two behind **[GraphAI](https://github.com/receptron/graphai)**. [More �
   command-output explanations — so a wall of parallel agents stays legible.
 - **Make it yours.** Per-directory **themes, colors, and name badges** (`prod` in red,
   `staging` in amber), a configurable header (buttons + info chips), custom attention sounds,
-  and Run / Skill menus to launch a project's scripts and `.claude/skills` right inside a cell.
+  and Run / Skill / Mulmo menus to launch a project's scripts, `.claude/skills` and decks right
+  inside a cell.
 
 ![MulmoTerminal's grid view — four live Claude sessions running side by side, each in its own color-coded project](https://raw.githubusercontent.com/receptron/mulmoterminal/main/docs/guide/images/grid-2x2-live.png)
 
@@ -369,6 +370,7 @@ The launcher detects it and prints the exact, OS-appropriate removal command; ru
 - [Running](#running)
 - [Scripts (Run menu)](#scripts-run-menu)
 - [Skills (Skill menu)](#skills-skill-menu)
+- [Decks (Mulmo menu)](#decks-mulmo-menu)
 - [Files view (browse & edit)](#files-view-browse--edit)
 - [Git worktrees & pull requests](#git-worktrees--pull-requests)
 - [Cost & token usage](#cost--token-usage)
@@ -1043,6 +1045,32 @@ it to show everything.
 // <dir>/.mulmoterminal.json
 { "skills": ["review-diff", "commit-msg"] }
 ```
+
+---
+
+## Decks (Mulmo menu)
+
+Beside **⚡ Skill ▾** is **⊞ Mulmo ▾** — the decks (mulmoScript presentations) kept in the
+open project, one click from the **Canvas**. It appears **only when there are decks to show**
+(nothing found, no button), like the two menus next to it.
+
+Picking one shows it in the Canvas beside that cell, enlarging the cell first if it was tiled.
+Nothing is typed into the session and the agent is not asked: this is a viewer, so it costs no
+tokens and works while the agent is busy.
+
+**What it lists:** every `.json` under the terminal's directory that is actually a mulmoScript —
+the marker inside the file, not the extension, so `package.json` and friends never appear. Each
+is named by the script's own `title`, or by its file name when it has none. The walk is bounded:
+**4 directories deep, 50 decks, 2 MB per file**, skipping `node_modules`, `.git`, `dist`, `lib`,
+`build`, `out`, `coverage` and hidden directories.
+
+**Where the decks have to live:** under the workspace MulmoTerminal was started in, which is the
+directory it serves stories from. A cell opened outside it shows no button, because nothing it
+could list could be opened. The same decks are also reachable from the file tree — right-click a
+row and choose **Open in the Canvas**.
+
+If a deck cannot be opened (it was deleted, or the workspace moved since startup), the cell says
+why rather than doing nothing.
 
 Each menu item shows the skill's id, with its `SKILL.md` `description` as the hover
 tooltip. A directory (or workspace) without any `.claude/skills` simply shows no

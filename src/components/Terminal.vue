@@ -19,6 +19,9 @@ import * as conn from "../composables/useTerminalConnections";
 import type { TerminalAgent } from "../../common/sessionAgent";
 import RunMenu from "./RunMenu.vue";
 import SkillMenu from "./SkillMenu.vue";
+import MulmoMenu from "./MulmoMenu.vue";
+import { buildCanvasCard, seedCanvasCard } from "../composables/canvasOpenFile";
+import { useAppConfig } from "../composables/useAppConfig";
 import { skillSeed } from "./skillSeed";
 import GitBranchChip from "./GitBranchChip.vue";
 import WorktreeEnvChip from "./WorktreeEnvChip.vue";
@@ -91,15 +94,20 @@ const emit = defineEmits<{
   (e: "session" | "cwd", value: string): void;
   (e: "exit", exitCode: number | null): void;
   (e: "run", command: RunCommand): void;
-  // The user typed (or pasted) into this terminal. Output the server writes back never fires it.
+  // `input`: the user typed (or pasted) into this terminal. Output the server writes back never
+  // fires it.
   //
-  // DECLARING this one is load-bearing. xterm keeps a hidden <textarea> that fires a NATIVE
+  // DECLARING `input` is load-bearing. xterm keeps a hidden <textarea> that fires a NATIVE
   // `input` event on every keystroke and all through IME composition, and it bubbles to this
   // component's root — but a declared emit is excluded from fallthrough, so a parent's `@input`
   // binds to the component event alone. Remove the declaration and that same `@input` silently
   // becomes a native listener, firing on composition and bypassing the pointer/focus filtering in
   // terminalUserInput that is the entire reason this event exists. Pinned by a spec.
-  (e: "input"): void;
+  //
+  // `canvas`: a deck from the Mulmo menu was seeded onto this session's Canvas and is waiting to
+  // be shown. The card is already written when this fires; the grid owns the right pane, so
+  // revealing it is the only part this component cannot do itself (#1948).
+  (e: "input" | "canvas"): void;
 }>();
 
 // The durable runtime (socket + xterm) lives in the manager, keyed by a stable slot
@@ -192,6 +200,29 @@ function onHeaderButton(button: HeaderButton): void {
 // like a script): type its invocation and submit, exactly like a `run:"input"` button.
 function onSkill(slug: string): void {
   conn.submitText(slotKey, skillSeed(slug, props.agent ?? "claude"));
+}
+
+const { storiesRoot } = useAppConfig();
+
+// A deck picked from the Mulmo menu. The card is built by the SAME function the file tree's row
+// menu uses, so the wire path, the named root and the server's `expectPath` check are one
+// implementation rather than two that agree today (#1948).
+//
+// A refusal goes to this terminal's hint, not to a Files pane: the click was on the header, which
+// is where `runHeaderButton` already reports what it could not do. `none` cannot happen for a deck
+// the menu offered — it is gated on `canOpenInCanvas` — but it is a refusal here rather than a
+// silence, because a click that was offered must never look ignored (#1941).
+async function onDeck(absolutePath: string): Promise<void> {
+  const session = props.sessionId;
+  if (!session) return void showHint(DECK_NO_SESSION_EN, DECK_ICON);
+  const result = await buildCanvasCard(absolutePath, { workspaces: storiesRoot.value?.paths ?? [], rootId: storiesRoot.value?.id ?? null });
+  if (result.kind !== "card") return void showHint(result.kind === "refused" ? result.reason : DECK_UNSUPPORTED_EN, DECK_ICON);
+  // Re-asked after the await, like every other late reply here: the cell can be handed a different
+  // session while the reopen is in flight, and seeding the card onto the new one would put a deck
+  // nobody asked for on someone else's Canvas.
+  if (props.sessionId !== session) return;
+  if (!(await seedCanvasCard(session, result.card))) return void showHint(DECK_SEED_FAILED_EN, DECK_ICON);
+  if (props.sessionId === session) emit("canvas");
 }
 
 // Git status chip — single view only. In the grid the embedding TerminalCell shows
@@ -424,6 +455,13 @@ function onDrop(e: DragEvent) {
 const DROP_UPLOADING_EN = "Sending the dropped file to the terminal…";
 // The path hint would send the user to the file picker, which cannot help when the problem is
 // that nothing is running to receive the file.
+// The Mulmo menu's three ways to end without a Canvas. All say what to do next, because the button
+// was OFFERED — the user has already been told this deck can be shown (#1941).
+const DECK_ICON = "space_dashboard";
+const DECK_NO_SESSION_EN = "Start the terminal first — a deck is shown beside a running session.";
+const DECK_UNSUPPORTED_EN = "this server cannot show that deck — it is outside the directory it serves stories from";
+const DECK_SEED_FAILED_EN = "could not put the deck on the Canvas — the server did not accept it";
+
 const DROP_NO_SESSION_EN = "Start the terminal first — there's no session yet to send the file to.";
 // A saved file belongs to the session it was uploaded for, which is the only one granted its
 // directory — so a path from before a session change names something this terminal cannot read.
@@ -580,6 +618,7 @@ onUnmounted(() => {
       <span v-if="status !== 'connected'" data-testid="term-conn-status" class="rounded-[4px] px-2 py-0.5 text-[12px]" :class="statusClass">{{ status }}</span>
       <RunMenu v-if="runMenu" :cwd="serverCwd" @run="(c) => emit('run', c)" />
       <SkillMenu v-if="runMenu" :cwd="serverCwd" @skill="onSkill" />
+      <MulmoMenu v-if="runMenu" :cwd="serverCwd" @deck="onDeck" />
       <!-- flex-none: the lead slot beside it now grows and truncates (a path), and without this the
            actions would shrink to make room and clip their own icons. -->
       <div class="ml-auto inline-flex flex-none items-center gap-1">
