@@ -46,10 +46,12 @@ export interface DeckEntry {
 
 /** Code-unit order, not `localeCompare`: what the server answers must not depend on the machine's
  *  locale, or two people listing one workspace see two orders. */
-export const byLabel = (a: DeckEntry, b: DeckEntry): number => {
-  if (a.label === b.label) return a.path < b.path ? -1 : 1;
-  return a.label < b.label ? -1 : 1;
-};
+export function byName(a: string, b: string): number {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
+}
+
+export const byLabel = (a: DeckEntry, b: DeckEntry): number => (a.label === b.label ? byName(a.path, b.path) : byName(a.label, b.label));
 
 const readDeck = async (absolute: string): Promise<unknown | null> => {
   try {
@@ -67,11 +69,21 @@ const deckAt = async (absolute: string): Promise<DeckEntry | null> => {
   return isDeckObject(parsed) ? { path: absolute, label: deckLabel(parsed, path.basename(absolute)) } : null;
 };
 
-/** The decks in the workspace's own stories directory — one listing, no recursion. */
-async function storiesDecks(workspace: string): Promise<DeckEntry[]> {
+/** The decks in the workspace's own stories directory — one listing, no recursion.
+ *
+ *  Capped BY FILE NAME before anything is opened. The menu shows at most `MAX_DECKS`, so reading
+ *  every file in a stories directory that has grown to hundreds only to discard most of them is
+ *  work nobody asked for — and it is all `Promise.all`, so they open at once (Codex on #1950).
+ *  The cost is that past the cap the survivors are the first by FILE name rather than by title;
+ *  the title is inside the file, and choosing by it means opening all of them. */
+async function storiesDecks(workspace: string, limit: number): Promise<DeckEntry[]> {
   const dir = path.join(workspace, STORIES_DIR);
   const names = await readdir(dir).catch(() => []);
-  const found = await Promise.all(names.filter((name) => name.endsWith(".json")).map((name) => deckAt(path.join(dir, name))));
+  const candidates = names
+    .filter((name) => name.endsWith(".json"))
+    .sort(byName)
+    .slice(0, limit);
+  const found = await Promise.all(candidates.map((name) => deckAt(path.join(dir, name))));
   return found.filter((deck): deck is DeckEntry => deck !== null);
 }
 
@@ -89,7 +101,7 @@ async function declaredDecks(cwd: string, declared: readonly string[]): Promise<
  * names the same deck) and capped.
  */
 export async function listDecks(workspace: string, cwd: string, declared: readonly string[]): Promise<DeckEntry[]> {
-  const [stories, own] = await Promise.all([storiesDecks(workspace), declaredDecks(cwd, declared)]);
+  const [stories, own] = await Promise.all([storiesDecks(workspace, MAX_DECKS), declaredDecks(cwd, declared)]);
   const byPath = new Map<string, DeckEntry>();
   [...stories, ...own].forEach((deck) => byPath.set(deck.path, deck));
   return [...byPath.values()].sort(byLabel).slice(0, MAX_DECKS);

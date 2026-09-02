@@ -65,7 +65,7 @@ safe. Two `readdir`s and a config read need none of it.
 
 | bound | value | why |
 |---|---|---|
-| decks shown | 50 | a menu, not a file browser — reached only by a workspace with an unusual number of decks |
+| decks shown | 50 | a menu, not a file browser — reached only by a workspace with an unusual number of decks. Applied to the stories directory's file NAMES, before anything is opened: a directory grown to hundreds should not be read in full to discard most of it |
 | file size | 2 MB | read whole to be parsed (CLAUDE.md's large-file rule) |
 | declared entries | 50 | a config key, capped like `skills` beside it |
 

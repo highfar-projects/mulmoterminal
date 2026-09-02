@@ -8,7 +8,7 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { listDecks, isDeckObject, deckLabel, byLabel, STORIES_DIR, MAX_DECKS, MAX_DECK_BYTES } from "../../../server/backends/deckList";
+import { listDecks, isDeckObject, deckLabel, byLabel, byName, STORIES_DIR, MAX_DECKS, MAX_DECK_BYTES } from "../../../server/backends/deckList";
 
 const deck = (title?: string) => JSON.stringify({ $mulmocast: { version: "1.1" }, ...(title === undefined ? {} : { title }), beats: [{ text: "a" }] });
 
@@ -107,16 +107,31 @@ describe("the bounds that are left", () => {
     expect(MAX_DECK_BYTES).toBe(2 * 1024 * 1024);
   });
 
-  it("stops at the count limit", async () => {
+  it("orders names in code-unit order, not the machine's locale", () => {
+    expect(["b", "A", "a", "B"].sort(byName)).toEqual(["A", "B", "a", "b"]);
+  });
+
+  // The cap is applied to the NAMES, before anything is opened: reading a stories directory grown
+  // to hundreds only to discard most of them is work nobody asked for, and it is all `Promise.all`
+  // so they open at once (Codex on #1950).
+  //
+  // Laid out so "capped before reading" and "capped after reading" cannot agree — the titles run in
+  // the OPPOSITE order to the file names, so choosing by file name keeps the LAST titles, and
+  // reading everything and choosing by title would keep the first.
+  it("stops at the count limit, having opened only that many", async () => {
     const ws = await mkdtemp(path.join(tmpdir(), "deckcap-"));
+    const total = MAX_DECKS + 10;
     try {
       await mkdir(path.join(ws, STORIES_DIR), { recursive: true });
       await Promise.all(
-        Array.from({ length: MAX_DECKS + 10 }, (_, i) =>
-          writeFile(path.join(ws, STORIES_DIR, `d${String(i).padStart(3, "0")}.json`), deck(`D${String(i).padStart(3, "0")}`)),
+        Array.from({ length: total }, (_, i) =>
+          writeFile(path.join(ws, STORIES_DIR, `d${String(i).padStart(3, "0")}.json`), deck(`T${String(total - 1 - i).padStart(3, "0")}`)),
         ),
       );
-      expect(await listDecks(ws, ws, [])).toHaveLength(MAX_DECKS);
+      const found = await listDecks(ws, ws, []);
+      expect(found).toHaveLength(MAX_DECKS);
+      expect(found[0]?.label).toBe(`T${String(total - MAX_DECKS).padStart(3, "0")}`);
+      expect(found.at(-1)?.label).toBe(`T${String(total - 1).padStart(3, "0")}`);
     } finally {
       await rm(ws, { recursive: true, force: true });
     }
