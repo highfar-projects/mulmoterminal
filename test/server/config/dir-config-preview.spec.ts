@@ -37,6 +37,7 @@ const FIXTURES: Record<string, unknown> = {
   buttons: [{ id: "b1", label: "Deploy", run: "shell", cmd: "make deploy" }],
   chips: ["git"],
   skills: ["review"],
+  decks: ["decks/talk.json"],
   provider: "openrouter",
   model: "opus",
   addDirs: ["./sibling"], // created below — a path that doesn't exist is dropped by the loader

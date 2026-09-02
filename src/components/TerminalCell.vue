@@ -151,7 +151,10 @@ const emit = defineEmits<
     (e: "park", value: boolean): void;
     // The launch form's "try again" on a config that could not be read. Value-less: the shell owns
     // the read, this only asks for another one.
-    (e: "retry-config"): void;
+    //
+    // `canvas`: the Mulmo menu put a deck on this cell's Canvas and it wants showing. The grid owns
+    // the right pane; this only forwards the ask (#1948).
+    (e: "retry-config" | "canvas"): void;
   }
 >();
 
@@ -1527,6 +1530,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
           @input="onTerminalInput"
           @cwd="onServerCwd"
           @run="(cmd) => emit('runSpare', cmd)"
+          @canvas="emit('canvas')"
         >
           <!-- Row 2 — actions on the SESSION, gathered onto the terminal's header row beside the
              ones Terminal.vue puts there itself (Run, Skills, the configured header buttons,

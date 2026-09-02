@@ -415,8 +415,9 @@ Two consequences for this skill:
 ### Other keys in this file
 
 `buttons` / `chips` → `mulmoterminal-header`. `provider` / `model` → `mulmoterminal-model`.
-`sound` / `sounds` → `mulmoterminal-notify`. `skills` (the header Skill menu's allowlist and order)
-and `appendSystemPrompt` (this directory's closing-summary override) → `mulmoterminal-config`.
+`sound` / `sounds` → `mulmoterminal-notify`. `skills` (the header Skill menu's allowlist and order),
+`decks` (the header Mulmo menu's decks) and `appendSystemPrompt` (this directory's closing-summary
+override) → `mulmoterminal-config`.
 **Preserve them when you merge** — this skill writes appearance keys and must not drop the rest.
 
 ## Example — continuing a convention

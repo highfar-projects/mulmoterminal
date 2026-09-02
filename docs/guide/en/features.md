@@ -132,6 +132,7 @@ so a very large unsaved buffer may not get out.
 | Screenshot paste | **Paste an image** straight into the terminal: it is saved where a dropped file goes and its **absolute path is inserted**. Saves the trip through a file — a screenshot never has to be written somewhere and picked back up. PNG / JPEG / GIF / WebP; pasting text is unchanged |
 | Script execution | Run a command from that directory's `script.json`. From a running session's **Run** menu it launches in **a spare cell next door**, so the conversation isn't interrupted (an empty cell's launcher runs it in place) |
 | Skill menu (**Run a skill in the current session**) | Lists the skills available in that directory (`.claude/skills`); picking one runs its `/<slug>` **in the current session**. Working-dir skills show first; narrow the list with `skills` in `.mulmoterminal.json` |
+| Mulmo menu (**Show a deck from this directory**) | Lists this project's mulmoScript **decks** and shows the picked one in the **Canvas** beside the cell. A viewer: nothing is typed into the session and the agent is not asked, so it costs no tokens. Two named sources and no search — the workspace's `artifacts/stories`, plus the paths you list in `decks` in `.mulmoterminal.json`. Only under the workspace stories are served from; any other deck is still reachable from the file tree's **Open in the Canvas** |
 | Git actions | One click from a worktree cell: **commit (ask Claude) / push / Open PR** |
 | Copy & paste | **`copyOnSelect`** copies the moment you finish selecting (off by default), and copy / paste can be bound to keys (`keymap`). Both are opt-in, because a bound key stops reaching the program inside the terminal ([config](config.html#copy-on-select)) |
 | Summarize output (AI) | Pass terminal output to `claude -p` and summarize **errors / warnings / cause / how to fix** |
@@ -142,6 +143,8 @@ so a very large unsaved buffer may not get out.
 | Voice input | Dictate into the prompt via microphone transcription. Settings picks **the language you dictate in** (per browser) — your browser's, per-clip detection, or a fixed one; speaking a language the mic isn't expecting comes back **translated** into the one it is |
 | MCP servers | Join your own HTTP MCP servers to sessions via the MCP SERVERS setting |
 | `/mulmoterminal-bug-report` | Something looks broken? The bundled skill hears the symptom, checks whether it is actually configuration or by design (reading your real config and version), searches the existing issues, and only then helps you file one — with the environment collected and secrets masked |
+
+![A cell header with the Mulmo dropdown open beside the Skill menu, listing two decks — one declared by the project, one from the workspace's stories directory](../images/mulmo-menu.png)
 
 ## 4. Extend — a DSL to fit you
 

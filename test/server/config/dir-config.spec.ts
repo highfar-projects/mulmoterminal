@@ -38,6 +38,7 @@ const EMPTY = {
   buttons: null,
   chips: null,
   skills: null,
+  decks: null,
   provider: null,
   model: null,
   addDirs: null,
@@ -143,6 +144,7 @@ describe("loadDirConfig", () => {
       theme: "nord",
       sound: "./a.mp3",
       skills: ["  review  ", "commit", "review", ""],
+      decks: ["  decks/talk.json  ", "decks/talk.json", ""],
       appendSystemPrompt: false,
       // One good variable and two the loader must drop ON THEIR OWN: a name no shell could
       // export, and a privileged port. Dropping the whole block would take PORT with them.
@@ -171,6 +173,7 @@ describe("loadDirConfig", () => {
       buttons: null,
       chips: null,
       skills: ["review", "commit"], // trimmed, deduped, empties dropped
+      decks: ["decks/talk.json"], // the same treatment
       provider: null,
       model: null,
       addDirs: null,
@@ -487,6 +490,7 @@ describe("dirConfigDetail", () => {
       provider: null,
       model: null,
       skills: null,
+      decks: null,
       addDirs: null,
       appendSystemPrompt: null,
       buttonLabels: [],

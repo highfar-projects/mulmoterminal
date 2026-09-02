@@ -43,7 +43,9 @@ const TINTED_COLOR_KEYS = ["badgeColor", "headerColor", "headerTextColor", "cell
 
 // Deliberately absent: `sound` / `sounds` point at a file inside the parent directory that the
 // worktree has no copy of, and `addDirs` resolves relative to the config's OWN directory — copied
-// verbatim it would silently grant a different set of directories.
+// verbatim it would silently grant a different set of directories. `buttons` / `chips` / `skills` /
+// `decks` are the header's own contents, which a worktree composes for itself; a worktree still
+// gets the workspace's stories directory in its Mulmo menu, so that one is not left empty.
 
 /** Each status entry's colours rotated, written in the object form the config accepts. Entries the
  *  project did not set stay unset, so the worktree's file says what the project's said. */

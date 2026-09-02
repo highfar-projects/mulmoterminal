@@ -314,6 +314,21 @@ export const dirSkillsField = z
   .nullable()
   .catch(null);
 
+// The decks this directory offers in the header's Mulmo menu (#1948): paths relative to the file,
+// each naming a mulmoScript kept inside the repository. Declared rather than discovered, because
+// searching a workspace for anything that parses as a deck finds mostly other repositories' test
+// fixtures — measured at 217 of 250 in one real workspace. Trimmed, deduped, capped; null when
+// unset, which means "only the workspace's own stories directory".
+export const MAX_DECK_DECLARATIONS = 50;
+export const dirDecksField = z
+  .array(z.string())
+  .transform((arr) => {
+    const cleaned = [...new Set(arr.map((s) => s.trim()).filter(Boolean))].slice(0, MAX_DECK_DECLARATIONS);
+    return cleaned.length ? cleaned : null;
+  })
+  .nullable()
+  .catch(null);
+
 // Extra directories a session may read/edit — Claude Code's `--add-dir` (#908), the
 // terminal-side answer to opening several folders in one VS Code workspace. Relative
 // entries resolve against the directory holding the config, which is what a reader of
@@ -511,6 +526,9 @@ const writableDirConfigSchema = z.object({
   chips: z.array(writableHeaderChipSchema).max(MAX_CHIPS).optional(),
   // Header Skill-menu allowlist: show only these skill slugs, in this order. Omit to show all.
   skills: z.array(nonEmptyText).max(MAX_SKILL_FILTER).optional(),
+  // Header Mulmo-menu decks: paths, relative to this file, of mulmoScripts kept in this
+  // repository. The workspace's own `artifacts/stories` is always offered; this adds to it.
+  decks: z.array(nonEmptyText).max(MAX_DECK_DECLARATIONS).optional(),
   // Which backend this directory's sessions run on (#579). `provider` names an entry in the
   // global config's `providers`; `model` alone picks a different model on Anthropic itself.
   provider: nonEmptyText.optional(),

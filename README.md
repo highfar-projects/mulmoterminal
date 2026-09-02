@@ -101,7 +101,8 @@ the same two behind **[GraphAI](https://github.com/receptron/graphai)**. [More �
   command-output explanations — so a wall of parallel agents stays legible.
 - **Make it yours.** Per-directory **themes, colors, and name badges** (`prod` in red,
   `staging` in amber), a configurable header (buttons + info chips), custom attention sounds,
-  and Run / Skill menus to launch a project's scripts and `.claude/skills` right inside a cell.
+  and Run / Skill / Mulmo menus to launch a project's scripts, `.claude/skills` and decks right
+  inside a cell.
 
 ![MulmoTerminal's grid view — four live Claude sessions running side by side, each in its own color-coded project](https://raw.githubusercontent.com/receptron/mulmoterminal/main/docs/guide/images/grid-2x2-live.png)
 
@@ -369,6 +370,7 @@ The launcher detects it and prints the exact, OS-appropriate removal command; ru
 - [Running](#running)
 - [Scripts (Run menu)](#scripts-run-menu)
 - [Skills (Skill menu)](#skills-skill-menu)
+- [Decks (Mulmo menu)](#decks-mulmo-menu)
 - [Files view (browse & edit)](#files-view-browse--edit)
 - [Git worktrees & pull requests](#git-worktrees--pull-requests)
 - [Cost & token usage](#cost--token-usage)
@@ -1047,6 +1049,46 @@ it to show everything.
 Each menu item shows the skill's id, with its `SKILL.md` `description` as the hover
 tooltip. A directory (or workspace) without any `.claude/skills` simply shows no
 button. Skills are discovered read-only; the menu never creates or edits them.
+
+---
+
+## Decks (Mulmo menu)
+
+Beside **⚡ Skill ▾** is **⊞ Mulmo ▾** — the decks (mulmoScript presentations) this project offers,
+one click from the **Canvas**. It appears **only when there are decks to show** (none, no button),
+like the two menus next to it.
+
+Picking one shows it in the Canvas beside that cell, enlarging the cell first if it was tiled.
+Nothing is typed into the session and the agent is not asked: this is a viewer, so it costs no
+tokens and works while the agent is busy.
+
+**Two sources, both named — the menu never searches your disk:**
+
+1. **`artifacts/stories/` under the workspace** — where the plugin keeps the decks an agent makes.
+   Always offered, nothing to configure.
+2. **Decks you list yourself**, for one kept inside a repository:
+
+```jsonc
+// <dir>/.mulmoterminal.json
+{ "decks": ["decks/launch.json", "docs/talks/retro.json"] }
+```
+
+Paths are relative to that file and must stay **inside its directory** — `../elsewhere.json` and
+absolute paths are dropped, because a config file travels with a clone. Each deck is named by its
+own `title`, or by its file name when it has none.
+
+**Why you list them rather than the menu finding them:** a search does find them — along with
+everything else on disk that happens to parse as a deck. Measured on a real workspace: **250 files
+matched, 33 were the user's own decks and 217 were a checked-out repository's test fixtures and
+samples.** A menu is a short list of things you chose.
+
+**Where the decks have to live:** under the workspace MulmoTerminal was started in, which is the
+directory it serves stories from. A cell opened outside it shows no button, because nothing it
+could list could be opened. Any deck you can see in the file tree is also reachable there — right-click
+a row and choose **Open in the Canvas** — with no configuration at all.
+
+If a deck cannot be opened (it was deleted, or the workspace moved since startup), the cell says
+why rather than doing nothing.
 
 ---
 
