@@ -8,9 +8,10 @@ description: A browser-terminal cockpit for running several AI coding agents (Cl
 
 # MulmoTerminal Guide (English)
 
-> **4.14.0 is out.** An agent can now be **restarted in the cell you are looking at** — same
-> directory, same conversation — from a header button or a key you bind, and a `PORT` left behind in
-> tmux no longer steals the app's own port — [what changed and how to turn it on](v4.14.0.html).
+> **4.15.0 is out.** A mulmoScript **deck kept in your repository** can now be opened in the Canvas
+> without asking the agent — right-click it in the file tree, or name it once and pick it from the new
+> **Mulmo** header menu — and a collection's chat finally shows which agent it will start —
+> [what changed and how to turn it on](v4.15.0.html).
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching

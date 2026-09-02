@@ -8,6 +8,68 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.15.0 — 2026-09-03
+
+> **Setup guide:** [4.15.0 — Show a deck from your repository](https://receptron.github.io/mulmoterminal/guide/en/v4.15.0.html)
+
+### Open a mulmoScript deck in the Canvas — four PRs, one story
+
+A presentation deck kept in a repository could only be opened by asking the agent to do it, one
+turn at a time. It can now be opened directly, from three places, and the deck stays the file in
+your repository — editing it in the Canvas edits that file.
+
+- **[#1924](https://github.com/receptron/mulmoterminal/pull/1924) — right-click a row in the file
+  tree.** The row menu gained **Open in the Canvas**, offered for the files a plugin can actually
+  render. It works in any cell that has a Canvas beside it, including a plain shell cell.
+- **[#1934](https://github.com/receptron/mulmoterminal/pull/1934) — decks anywhere under the
+  workspace.** Until now the mulmoScript plugin served stories from `artifacts/stories` alone, so a
+  deck kept beside the code it is about could not be opened at all. The workspace subtree is now
+  registered as a named stories root, which is what lets a deck live in the repository. Two decks
+  of the same name in different roots stay two separate Canvas cards.
+- **[#1942](https://github.com/receptron/mulmoterminal/pull/1942) — a refusal now says why.** A
+  click the server refused looked exactly like a dead button. The reason it gives — the deck was
+  deleted, the workspace moved since startup — is now shown in the Files pane, announced through a
+  live region so a screen reader gets it too.
+- **[#1950](https://github.com/receptron/mulmoterminal/pull/1950) — the `Mulmo` header menu.** A
+  dropdown beside **Run** and **Skill**, listing this project's decks. Picking one shows it in the
+  Canvas without a turn spent asking the agent, which means it costs no tokens and works while the
+  agent is busy. Two sources and **no search of your disk**: the workspace's own `artifacts/stories`,
+  plus the paths you list in a new per-project `decks` key. A search was built first and deleted —
+  in a real workspace it found 250 decks, of which 217 were a checked-out repository's test
+  fixtures.
+
+### Collections: see and change which agent a chat starts
+
+- **[#1940](https://github.com/receptron/mulmoterminal/pull/1940)** — the agent a collection's chat
+  launches (`launchAgent`) is global and persistent, but could only be seen in one dropdown in the
+  Collections overlay. Set it to something other than Claude once and every chat started from a
+  screen without that dropdown used it — which produced a real "why is Meta Muse starting?" report
+  that was configuration, not a bug. A shared picker now appears in the in-cell Collections pane
+  header and in Settings' skill-launch dialog, and stays out of the way while the value is `claude`.
+- **[#1946](https://github.com/receptron/mulmoterminal/pull/1946)** — the chat modal covers the
+  screen and blurs what is behind it, so the picker was invisible at the one moment it is needed.
+  It now fills the footer slot the plugin opened for it (`@mulmoclaude/collection-plugin` 4.6.0).
+
+### Fixes
+
+- **[#1952](https://github.com/receptron/mulmoterminal/pull/1952)** — reloading a tab with a custom
+  theme left the terminal's own background on Midnight's dark blue while the rest of the chrome
+  took the custom colours. The xterm palette is now repainted when the config arrives, rather than
+  being decided from a theme list that is still empty at mount.
+
+### Under the hood
+
+- **[#1936](https://github.com/receptron/mulmoterminal/pull/1936)** — `@mulmoclaude/mulmoscript-plugin`
+  4.5.1, which stops a spurious warning on startup.
+- **[#1937](https://github.com/receptron/mulmoterminal/pull/1937)** — the guide's header page split
+  into an introduction and a reference, with `when` and the substitution variables corrected against
+  the implementation.
+- **[#1947](https://github.com/receptron/mulmoterminal/pull/1947)**,
+  **[#1954](https://github.com/receptron/mulmoterminal/pull/1954)** — two test fixes: the string a
+  seeded spawn hands each agent is now pinned, and a Windows CI check that measured elapsed time now
+  asks whether a retry happened instead.
+- **[#1949](https://github.com/receptron/mulmoterminal/pull/1949)** — dependency update.
+
 ## mulmoterminal@4.14.0 — 2026-08-30
 
 > **Setup guide:** [Restart an agent without leaving the cell](https://receptron.github.io/mulmoterminal/guide/en/v4.14.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.14.0.html))

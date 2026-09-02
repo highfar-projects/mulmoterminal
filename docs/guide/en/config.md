@@ -577,6 +577,31 @@ show everything.**
 
 - Skill names (slugs) must start alphanumeric and contain only `a-z 0-9 - _`; a slug that doesn't resolve is ignored.
 
+### Mulmo menu decks (`decks`) {#decks}
+
+The header's **Mulmo** button (beside Skill) shows a mulmoScript **deck** in the Canvas next to the
+cell, without asking the agent — a viewer, so it costs no tokens.
+
+Two sources, and it never searches your disk:
+
+1. **`artifacts/stories/` under the workspace** — where the plugin puts the decks an agent makes.
+   Always offered, nothing to configure.
+2. **`decks`** — paths, relative to this file, of decks kept inside the repository.
+
+```json
+{ "decks": ["decks/launch.json", "docs/talks/retro.json"] }
+```
+
+- Paths must stay **inside the directory that declares them**. `../other-project/deck.json` and
+  absolute paths are dropped: a config file travels with a clone, so a declaration names a deck in
+  *this* repository.
+- A path that is not a mulmoScript (no `$mulmocast`), or is not there, is dropped silently — the
+  menu would open it and the server would refuse.
+- Each deck is named by its own `title`, falling back to the file name. At most 50 entries.
+- The menu appears on **agent cells** only, and only under the workspace MulmoTerminal was started
+  in — that is the directory it serves decks from. Any other deck is still one right-click away in
+  the file tree (**Open in the Canvas**).
+
 ### Closing summary for this directory (`appendSystemPrompt`)
 
 ```json
