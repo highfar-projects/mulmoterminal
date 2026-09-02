@@ -680,7 +680,11 @@ defineExpose({
             Overwrite anyway
           </button>
         </div>
-        <p v-if="fileError" class="p-4 text-[13px] text-err">{{ fileError }}</p>
+        <!-- `role="alert"`, like the conflict banner above it: every message here lands AFTER an
+             action the user started (a save, a read, a Canvas open that the server refused), so a
+             reader who is not looking at this pane learns nothing without a live region — which is
+             the same dead-button silence #1941 removed for everyone else. -->
+        <p v-if="fileError" role="alert" data-testid="files-error" class="p-4 text-[13px] text-err">{{ fileError }}</p>
         <p v-if="!openPath" class="m-auto p-4 text-[13px] text-muted">Select a file to view or edit.</p>
         <iframe v-show="openPath && showPreview" class="flex-auto border-0 bg-white" :src="previewSrc" sandbox="" title="Markdown preview" />
         <div v-show="openPath && !showPreview" ref="editorHost" class="files-editor min-w-0 flex-auto overflow-hidden" />
