@@ -18,6 +18,7 @@ import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { asSelfContainmentReport, type SelfContainmentReport, type SelfContainmentSeverity } from "../../common/collectionPortability";
 import type { ShortcutKind } from "../../common/shortcuts";
 import SharedAppPreview from "./SharedAppPreview.vue";
+import LaunchAgentPicker from "./LaunchAgentPicker.vue";
 import SharedAppAccessPanel from "./SharedAppAccessPanel.vue";
 import { isRecord } from "../../common/isRecord";
 
@@ -322,6 +323,15 @@ useCollectionTeleportTarget(probe);
                a second strip of chrome directly beneath this one was two toolbars saying different
                halves of one thing. Empty, and so invisible, whenever the preview is not up. -->
           <div ref="pickerSlot" class="flex min-w-0 items-center gap-2"></div>
+          <!-- Which agent an action or a template card in here will start (#1938). It appears only
+               while that is NOT claude, so the default costs this crowded bar nothing — and the
+               surface that lets you change it (the Collections overlay) is not always the one you
+               are looking at when you press a chat button.
+
+               It carries `flex-none` of its own, so what gives way first when the bar is tight is
+               the preview's `min-w-0` page picker beside it: this one is an icon and a short word
+               wide, and stops meaning anything the moment it is clipped. -->
+          <LaunchAgentPicker non-default-only description="Chats started from these collections run this agent" />
         </div>
         <!-- Expand then close, in that order and with the same icons and classes as the Tools and
              Canvas headers: the panes share one slot, so the same control must be in the same
