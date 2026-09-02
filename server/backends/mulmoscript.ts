@@ -117,14 +117,30 @@ export function initMulmoScriptBackend(deps: {
   // movie/PDF dedup sets and the generation-state tracker. Adding a root later means a new
   // instance, which means throwing those away mid-render. So the set is what boot knows, and a
   // directory first opened afterwards needs a restart. That trade is the plan's option A.
-  const rootPaths = uniqueRootPaths([deps.workspace, ...(deps.extraRoots ?? [])]);
-  const idFor = new Map(rootPaths.map((dir) => [canonicalPath(dir), storiesRootId(canonicalPath(dir))]));
-  const dirForId = new Map([...idFor].map(([dir, id]) => [id, dir]));
+  // Grouped by the CANONICAL path, which is the key the id is derived from. Deduplicating by the
+  // lexical path is not enough: a preset that is a symlink to the workspace resolves to a different
+  // string and realpaths to the same directory, so it registered a SECOND root carrying the FIRST
+  // one's id — two entries, one id, and one of the two directories silently dropped from
+  // `extraRoots`. Found by reading this back rather than by a review bot.
+  //
+  // Merging them is also the right answer for the browser: the spellings become one root's `paths`,
+  // which is exactly what the workspace's own two spellings already are.
+  const byCanonical = new Map<string, { id: string; paths: string[] }>();
+  for (const dir of uniqueRootPaths([deps.workspace, ...(deps.extraRoots ?? [])])) {
+    const canonical = canonicalPath(dir);
+    const seen = byCanonical.get(canonical);
+    if (seen) {
+      if (!seen.paths.includes(dir)) seen.paths.push(dir);
+      continue;
+    }
+    byCanonical.set(canonical, { id: storiesRootId(canonical), paths: [...new Set([dir, canonical])] });
+  }
+  const dirForId = new Map([...byCanonical].map(([canonical, root]) => [root.id, canonical]));
   // BOTH spellings travel to the browser: the one the user launched with reaches the Files pane
   // through a cell's cwd, and the resolved one reaches it through `git worktree list`. The client
   // gate is lexical, so knowing only one hides the Canvas entry for every deck under the other
   // (Codex P1 iter-5 on #1934). The plugin still resolves against the canonical directory.
-  registeredRoots = rootPaths.map((dir) => ({ id: storiesRootId(canonicalPath(dir)), paths: [...new Set([dir, canonicalPath(dir)])] }));
+  registeredRoots = [...byCanonical.values()];
   ops = createMulmoScriptServerOps({
     storiesDir: path.resolve(deps.workspace, "artifacts", "stories"),
     extraRoots: Object.fromEntries([...dirForId].map(([id, dir]) => [id, dir])),
