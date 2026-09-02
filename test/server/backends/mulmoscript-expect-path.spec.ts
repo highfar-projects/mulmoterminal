@@ -84,6 +84,18 @@ describe("the wire path must still name the file the browser saw", () => {
     expect(String(res.body.error)).not.toMatch(/not the file this server serves/);
   });
 
+  // Handing an unresolvable path to the dispatch hands it EVERY unresolvable path, not just an
+  // unknown root — containment failures too. This pins the plugin's half of that: it is the side
+  // that must still refuse, and this check no longer stands in front of it.
+  it("still refuses a path that escapes the stories area", async () => {
+    const res = await routeCall(app)(
+      "/api/plugin/presentMulmoScript",
+      jsonPost({ kind: "save", filePath: "stories/../../../etc/passwd", expectPath: "/etc/passwd" }),
+    );
+    expect(res.body.ok).not.toBe(true);
+    expect(res.body.script).toBeUndefined();
+  });
+
   // The agent's own tool call sends no `expectPath`, and must keep working exactly as it did.
   it("leaves a request without expectPath alone", async () => {
     const res = await routeCall(app)(
