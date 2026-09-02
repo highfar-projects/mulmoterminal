@@ -125,6 +125,33 @@ wire the engine against the shared `workspaceRoot` using the **same path layout*
 | `archiveDir` | `archive` |
 | `isPresetSlug(slug)` | `slug.startsWith("mc-") && slug.length > 3` |
 
+Two of those are **conditional here and unconditional in MulmoClaude**, because MulmoClaude serves one
+root and this app serves several (`server/infra/project-root.ts`). Both answer `null` for a saved
+project, which is what keeps `~`-scoped collections unreachable from a project and stops a stray
+`data/skills` file shadowing the skill a repo commits:
+
+| Host path | Answers the real path for | Otherwise |
+|---|---|---|
+| `userSkillsDir(root)` | the managed mulmoclaude workspace (`~/mulmoclaude`) | `null` |
+| `skillsStagingDir(root)` | `~/mulmoclaude`, **or** the workspace this server serves (`CLAUDE_CWD`) once a staged collection (`data/skills/<slug>/schema.json`) is actually there | `null` |
+
+`skillsStagingDir` takes the second root because a staged collection's `views/*.html` exists only
+in `data/skills/<slug>/`, and the two roots are the same path only by coincidence: asking about
+`~/mulmoclaude` alone 404'd every custom view in a workspace launched from anywhere else (#1925).
+It asks for a staged collection to be there because `CLAUDE_CWD` is often somebody's git
+repository — one with none answers exactly as it did before, so nothing grows a second copy of a
+skill definition there. The evidence is the `<slug>/schema.json`, not the directory: `data/skills`
+is a name a repo can own for its own reasons, and core's own `canonicalBase` looks for the same
+file before it treats a staging tree as authoritative.
+
+`stagedSkillAuthoring` (a `manageCollection` factory dep) is **deliberately not passed at all**.
+Core's `authoringTarget` falls through to `skillsStagingDir` unless the host hands it a literal
+`false`, so where the agent is told to author follows from the binding above rather than from a
+second decision. That matters because the binding's answer MOVES — a workspace gains its first
+staged collection the moment MulmoClaude writes one — while a factory dep is frozen when the tool
+instance is built. A frozen `false` beside a live staging path is the silent failure: the agent
+authors into `.claude/skills` while the read prefers staging, so its edit never appears.
+
 ---
 
 ## Gap analysis (updated for `0.5.1`)

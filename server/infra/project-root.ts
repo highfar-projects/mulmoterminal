@@ -22,6 +22,7 @@ import path from "node:path";
 import type { Request } from "express";
 import { describeValue } from "../../common/readString.js";
 import { lastSegment } from "../../common/pathSegments.js";
+import { isSameRealPath } from "./canonical-path.js";
 
 /** A root, in the shape the collection engine's options already take, so it can be passed
  *  straight through as `opts` rather than unpacked at every call site. */
@@ -90,6 +91,20 @@ function requireWorkspace(): string {
     throw new Error("project roots are not configured — call initProjectRoots({ workspace }) at boot");
   }
   return workspace;
+}
+
+/** Is this root the workspace this server serves, rather than one of the saved projects?
+ *
+ *  A separate question from `isManagedWorkspace`, which asks whether a path IS `~/mulmoclaude`.
+ *  The workspace is `CLAUDE_CWD` — the directory the launcher was started in — and the two are
+ *  only the same path by coincidence, so a caller that means "the workspace" must ask this one.
+ *
+ *  `isSameRealPath` because the root arrives from a saved preset, which may spell the same
+ *  directory with different casing, a trailing separator, or through a symlink. False when
+ *  nothing is bound yet: with no workspace, no root is it.
+ */
+export function isWorkspaceRoot(root: string): boolean {
+  return workspace !== null && isSameRealPath(root, workspace);
 }
 
 /** The opaque id for a root. A truncated digest: stable across restarts (nothing is stored),

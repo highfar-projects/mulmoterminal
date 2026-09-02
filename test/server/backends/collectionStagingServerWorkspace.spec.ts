@@ -1,0 +1,176 @@
+// @vitest-environment node
+//
+// A staged collection's `views/*.html` lives ONLY in `data/skills/<slug>/` — the mirror into
+// `.claude/skills/<slug>/` carries SKILL.md, schema.json and templates and nothing else. So the
+// engine's staging base is not an optimisation there: drop it and the read is left with a
+// directory that never holds the file, which is a 404 on every custom view (#1925).
+//
+// Which roots get that base is what this file pins. MulmoClaude's workspace is always
+// `~/mulmoclaude`; ours is `CLAUDE_CWD`, the directory the launcher was started in, and the two
+// are the same path only by coincidence. Both are a workspace and both must read staging — while
+// a SAVED PROJECT must still get none, because there a stray `data/skills` file would shadow the
+// skill the repo actually commits.
+//
+// The workspace here HAS a staging tree. A launch directory that has none keeps answering exactly
+// as it did before — that half is collectionStagingUnstagedWorkspace.spec.ts, which needs its own
+// file because `configureCollectionHost` binds one workspace per process.
+//
+// Each case gets its own slug rather than writing fixtures inside a test, so no assertion here
+// depends on the order the others ran in.
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { readCustomViewHtml, loadCollection } from "@mulmoclaude/core/collection/server";
+
+import { initCollectionsBackend } from "../../../server/backends/collections.js";
+import { manageCollectionHandlerFor } from "../../../server/infra/collection-tool.js";
+import { makeTempDir } from "../../support/tempDir";
+
+const schemaFor = (slug: string) => ({
+  title: slug,
+  icon: "star",
+  dataPath: `data/${slug}/items`,
+  primaryKey: "id",
+  fields: { id: { type: "string", label: "ID", primary: true, required: true } },
+  views: [{ id: "v1", file: "views/v1.html", label: "Custom", capabilities: ["read"] }],
+});
+
+/** The skill dir discovery anchors on. `viewBody` is null for a staged collection — nothing
+ *  mirrors `views/` there, which is the whole reason the staging base has to be reachable. */
+function writeSkillDir(root: string, slug: string, viewBody: string | null): void {
+  const skillDir = path.join(root, ".claude", "skills", slug);
+  mkdirSync(skillDir, { recursive: true });
+  writeFileSync(path.join(skillDir, "SKILL.md"), `# ${slug}`);
+  writeFileSync(path.join(skillDir, "schema.json"), JSON.stringify(schemaFor(slug)));
+  if (viewBody !== null) {
+    mkdirSync(path.join(skillDir, "views"), { recursive: true });
+    writeFileSync(path.join(skillDir, "views", "v1.html"), viewBody);
+  }
+  mkdirSync(path.join(root, "data", slug, "items"), { recursive: true });
+}
+
+/** The staging tree a staged-authoring host produces: the schema AND the view HTML. */
+function writeStagingDir(root: string, slug: string, viewBody: string): void {
+  const staging = path.join(root, "data", "skills", slug);
+  mkdirSync(path.join(staging, "views"), { recursive: true });
+  writeFileSync(path.join(staging, "schema.json"), JSON.stringify(schemaFor(slug)));
+  writeFileSync(path.join(staging, "views", "v1.html"), viewBody);
+}
+
+async function readView(root: string, slug: string): Promise<string | null> {
+  const collection = await loadCollection(slug, { workspaceRoot: root });
+  if (!collection) throw new Error(`fixture collection '${slug}' did not load for ${root}`);
+  // The signature the issue reported: `detail` resolves the collection fine, and only the view
+  // file 404s. Asserted here so a failure below cannot be read as "the fixture never loaded".
+  expect(collection.source).toBe("project");
+  return readCustomViewHtml(collection, "views/v1.html", { workspaceRoot: root });
+}
+
+describe("staged custom views are readable from every workspace, and from no project", () => {
+  const savedWorkspaceEnv = process.env.MULMOCLAUDE_WORKSPACE_PATH;
+  // `~/mulmoclaude` — the root MulmoClaude serves, which this server may not be running in.
+  let managed = "";
+  // CLAUDE_CWD — the directory THIS server was launched in, and the workspace it serves.
+  let workspace = "";
+  let project = "";
+
+  // ONE binding for the file: `configureCollectionHost` refuses a second call with a different
+  // host, deliberately — silently redirecting later filesystem work to another workspace would be
+  // a bug, not a feature. So the roots are built once and each test only reads.
+  beforeAll(() => {
+    managed = makeTempDir("mt-staged-managed-");
+    workspace = makeTempDir("mt-staged-workspace-");
+    project = makeTempDir("mt-staged-project-");
+
+    // Both workspaces hold the staged layout: no `views/` in the skill dir, the HTML in staging.
+    writeSkillDir(managed, "tasks", null);
+    writeStagingDir(managed, "tasks", "<body>managed staged view</body>");
+    writeSkillDir(workspace, "tasks", null);
+    writeStagingDir(workspace, "tasks", "<body>workspace staged view</body>");
+
+    // A second collection in the workspace, this one with a copy in BOTH places.
+    writeSkillDir(workspace, "mirrored", "<body>workspace mirror copy</body>");
+    writeStagingDir(workspace, "mirrored", "<body>workspace staged copy</body>");
+
+    // A collection that is NOT staged — committed direct — with a stale staging view left beside
+    // it and no staging schema of its own. Built in BOTH workspaces, because the point of the
+    // assertion below is that they answer the same.
+    for (const root of [managed, workspace]) {
+      writeSkillDir(root, "unstaged", "<body>committed direct view</body>");
+      mkdirSync(path.join(root, "data", "skills", "unstaged", "views"), { recursive: true });
+      writeFileSync(path.join(root, "data", "skills", "unstaged", "views", "v1.html"), "<body>STALE STAGED</body>");
+    }
+
+    // The project holds the layout a repo commits — plus a stray staging copy.
+    writeSkillDir(project, "tasks", "<body>committed view</body>");
+    writeStagingDir(project, "tasks", "<body>STRAY</body>");
+
+    // `isManagedWorkspace` compares against this, so a temp dir can stand in for ~/mulmoclaude.
+    // Deliberately NOT the workspace below: that divergence is the whole bug.
+    process.env.MULMOCLAUDE_WORKSPACE_PATH = managed;
+    initCollectionsBackend({ workspace, knownProjects: () => [{ label: "project", path: project }] });
+  });
+
+  afterAll(() => {
+    if (savedWorkspaceEnv === undefined) delete process.env.MULMOCLAUDE_WORKSPACE_PATH;
+    else process.env.MULMOCLAUDE_WORKSPACE_PATH = savedWorkspaceEnv;
+  });
+
+  // The regression. Before #1925 the staging base was handed out only for `~/mulmoclaude`, so a
+  // server launched anywhere else could not read the views in the workspace it was serving —
+  // while MulmoClaude, pointed at the same directory, rendered them.
+  it("reads the staged view from the workspace this server serves", async () => {
+    expect(await readView(workspace, "tasks")).toContain("workspace staged view");
+  });
+
+  // A union, not a replacement: `~/mulmoclaude` keeps its staging even when this server is
+  // running somewhere else and merely knows it as another root.
+  it("still reads the staged view from the managed mulmoclaude workspace", async () => {
+    expect(await readView(managed, "tasks")).toContain("managed staged view");
+  });
+
+  // The precedence, and the reason it is safe: reads and writes name the SAME directory. A root
+  // that preferred staging while telling the agent to author directly would serve a stale staged
+  // view instead of the one just written to `.claude/skills`, silently — so the two knobs are
+  // derived from one predicate (`skillsStagingDirFor`), and this asserts both ends of it rather
+  // than the read alone.
+  it("reads and authors in the same place — staging — when the mirror holds a copy too", async () => {
+    const html = await readView(workspace, "mirrored");
+    expect(html).toContain("workspace staged copy");
+    expect(html).not.toContain("workspace mirror copy");
+
+    // Asserted on the INSTRUCTION, not the string: the direct variant still says the words
+    // "data/skills" — in the sentence telling the agent never to write there.
+    const docs = await manageCollectionHandlerFor(workspace)({ action: "schemaDocs", topic: "Anatomy of a collection skill" });
+    expect(docs).toContain("Author under `data/skills/<slug>/`");
+    expect(docs).not.toContain("Author under `.claude/skills/<slug>/`");
+  });
+
+  // KNOWN LIMITATION, pinned so it is discoverable rather than folklore — see #1957.
+  //
+  // Core prepends the staging base PER ROOT: `readSourceAwareFile` builds `<staging>/<slug>` for
+  // every project-scope collection without checking that THAT slug is staged. So in a staged
+  // workspace, a stale `data/skills/<slug>/views/*.html` wins over the committed one even for a
+  // collection with no staged schema of its own.
+  //
+  // Asserted on BOTH roots on purpose. `~/mulmoclaude` is untouched by #1925's fix and answers
+  // the same, which is what says this is core's rule rather than a second one introduced for the
+  // workspace this server serves. It cannot be fixed from this repo: the host binding is
+  // `skillsStagingDir(workspaceRoot) => string | null` and never sees the slug, so the per-slug
+  // decision has to move into core's read (its delete path already makes it, in `canonicalBase`).
+  it("prepends staging per root, not per slug — the same in either workspace (#1957)", async () => {
+    for (const root of [managed, workspace]) {
+      expect(await readView(root, "unstaged")).toContain("STALE STAGED");
+    }
+  });
+
+  // The guarantee that must survive the widening. A saved project is not a workspace: it has no
+  // bridge and no permission gate to route around, so its `data/skills` is not a source — and the
+  // engine reads staging FIRST, so handing one out here would let a stray file win over the skill
+  // the repo commits.
+  it("does not let a stray data/skills view shadow a project's committed one", async () => {
+    const html = await readView(project, "tasks");
+    expect(html).toContain("committed view");
+    expect(html).not.toContain("STRAY");
+  });
+});
