@@ -4,7 +4,6 @@
 // managed root (~/.mulmoterminal/worktrees/<repo>-<hash>/<task>) so the repo dir
 // stays clean and we only ever remove paths WE created. The pure helpers (slug /
 // parse / paths) are split out for unit tests; the rest shell out to git.
-import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
@@ -13,6 +12,7 @@ import { mulmoterminalHome } from "../infra/mulmoterminal-home.js";
 import { canonicalPath } from "../infra/canonical-path.js";
 import { ensureWorktreeEnv } from "../config/worktree-env.js";
 import { splitLines } from "../infra/split-lines.js";
+import { runTool } from "./run-tool.js";
 import { DIR_CONFIG_FILE, DIR_LOCAL_CONFIG_FILE } from "../config/dir-config.js";
 import { writeInheritedDirConfig } from "../config/worktree-dir-config.js";
 import { hasDevcontainerConfig } from "../config/devcontainer-flag.js";
@@ -100,21 +100,15 @@ const GIT_TIMEOUT_MS = 120_000;
 
 // Run git with argv (no shell) in `cwd`; resolve { ok, stdout } — never reject, so
 // a missing git / non-repo dir is just `ok:false` and the caller falls back.
-export function git(args: string[], cwd?: string, timeoutMs: number = GIT_TIMEOUT_MS): Promise<{ ok: boolean; stdout: string }> {
-  return new Promise((resolve) => {
-    // eslint-disable-next-line sonarjs/no-os-command-from-path -- 'git' is a standard tool from PATH in this local dev server; all inputs go through argv (no shell)
-    const child = spawn("git", cwd ? ["-C", cwd, ...args] : args, { stdio: ["ignore", "pipe", "pipe"], timeout: timeoutMs });
-    // Collect bytes and decode ONCE: a chunk can split a multibyte UTF-8 character, and
-    // per-chunk toString() would turn a non-ASCII path/message into replacement chars.
-    const chunks: Buffer[] = [];
-    child.stdout.on("data", (c: Buffer) => chunks.push(c));
-    // stderr is not returned, but it MUST still be drained: git blocks on a full stderr
-    // pipe (a repo that prints thousands of lfs/hook warnings easily exceeds the 64KB
-    // buffer), so an unread pipe deadlocks the whole call. Discard the bytes, keep reading.
-    child.stderr.on("data", () => {});
-    child.on("error", () => resolve({ ok: false, stdout: "" }));
-    child.on("close", (code) => resolve({ ok: code === 0, stdout: Buffer.concat(chunks).toString("utf8") }));
-  });
+//
+// The deadline lives in runTool, which kills the whole tree and settles on time. This used
+// to spawn with Node's `timeout` option, which signals git alone: the `sh` + `git-lfs
+// filter-process` it started survived, kept the stdio pipes open so `close` never fired, and
+// the promise never settled at all. stderr is still read (an unread pipe deadlocks git) but
+// not kept.
+export async function git(args: string[], cwd?: string, timeoutMs: number = GIT_TIMEOUT_MS): Promise<{ ok: boolean; stdout: string }> {
+  const res = await runTool("git", cwd ? ["-C", cwd, ...args] : args, { timeoutMs });
+  return { ok: res.ok, stdout: res.stdout };
 }
 
 // The current working tree's root, or null if `dir` isn't inside a git work tree.
